@@ -1,0 +1,272 @@
+###########################################################################
+# $Id: Makefile.desc,v 1.4 2001/08/24 03:02:25 samurai Exp $
+# $Author: samurai $
+# $Date: 2001/08/24 03:02:25 $
+# $Locker:  $
+# $Revision: 1.4 $
+#
+# Created:  1/1/99 by Charles Chiou
+# Comments:
+# Status:
+# Bugs:
+#
+# Copyright (c) 1999 Selfsoft Corp. All rights reserved.
+###########################################################################
+
+SRC_DIR =		src
+HDR_DIR =		include
+SOBJ_DIR =		obj
+DOBJ_DIR =		dllobj
+
+############
+# Base Util
+############
+
+UTIL_SRCS =	$(SRC_DIR)/debug.c \
+		$(SRC_DIR)/argproc.c \
+		$(SRC_DIR)/Error.cxx \
+		$(SRC_DIR)/Mutex.cxx \
+		$(SRC_DIR)/Condition.cxx \
+		$(SRC_DIR)/Monitor.cxx \
+		$(SRC_DIR)/Barrier.cxx \
+		$(SRC_DIR)/BaseObject.cxx \
+		$(SRC_DIR)/Void.cxx \
+		$(SRC_DIR)/Boolean.cxx \
+		$(SRC_DIR)/ByteUtil.cxx \
+		$(SRC_DIR)/Exception.cxx \
+		$(SRC_DIR)/String.cxx \
+		$(SRC_DIR)/StringTokenizer.cxx \
+		$(SRC_DIR)/ThreadException.cxx \
+		$(SRC_DIR)/Thread.cxx \
+		$(SRC_DIR)/ArrayException.cxx \
+		$(SRC_DIR)/Stack.cxx \
+		$(SRC_DIR)/Queue.cxx \
+		$(SRC_DIR)/Collection.cxx \
+		$(SRC_DIR)/BufferedArray.cxx \
+		$(SRC_DIR)/Slist.cxx \
+		$(SRC_DIR)/Dlist.cxx \
+		$(SRC_DIR)/HashTable.cxx \
+		$(SRC_DIR)/Tree.cxx \
+		$(SRC_DIR)/Matrix.cxx \
+		$(SRC_DIR)/Graph.cxx \
+		$(SRC_DIR)/IOException.cxx \
+		$(SRC_DIR)/File.cxx \
+		$(SRC_DIR)/Hex.cxx \
+		$(SRC_DIR)/Base64.cxx \
+		$(SRC_DIR)/UU.cxx \
+		$(SRC_DIR)/Checksum.cxx \
+		$(SRC_DIR)/Adler32.cxx \
+		$(SRC_DIR)/CRC32.cxx \
+		$(SRC_DIR)/Date.cxx \
+		$(SRC_DIR)/TimeZone.cxx \
+		$(SRC_DIR)/Calendar.cxx \
+		$(SRC_DIR)/Config.cxx \
+		$(SRC_DIR)/DllManager.cxx \
+		$(SRC_DIR)/Event.cxx \
+		$(SRC_DIR)/Timer.cxx \
+		$(SRC_DIR)/BigInteger.cxx \
+		$(SRC_DIR)/Inet.cxx \
+		$(SRC_DIR)/Packet.cxx \
+		$(SRC_DIR)/Socket.cxx \
+		$(SRC_DIR)/Main.cxx
+
+UTIL_HDRS =	$(HDR_DIR)/basecfg.h \
+		$(HDR_DIR)/utilapi.h \
+		$(HDR_DIR)/debug.h \
+		$(HDR_DIR)/argproc.h \
+		$(HDR_DIR)/PtrReference.hxx \
+		$(HDR_DIR)/Error.hxx \
+		$(HDR_DIR)/BaseRuntimeClass.hxx \
+		$(HDR_DIR)/ThreadId.hxx \
+		$(HDR_DIR)/Mutex.hxx \
+		$(HDR_DIR)/Condition.hxx \
+		$(HDR_DIR)/Monitor.hxx \
+		$(HDR_DIR)/Barrier.hxx \
+		$(HDR_DIR)/BaseObject.hxx \
+		$(HDR_DIR)/Void.hxx \
+		$(HDR_DIR)/Boolean.hxx \
+		$(HDR_DIR)/Pair.hxx \
+		$(HDR_DIR)/ByteUtil.hxx \
+		$(HDR_DIR)/Exception.hxx \
+		$(HDR_DIR)/String.hxx \
+		$(HDR_DIR)/StringTokenizer.hxx \
+		$(HDR_DIR)/ThreadException.hxx \
+		$(HDR_DIR)/Thread.hxx \
+		$(HDR_DIR)/ArrayException.hxx \
+		$(HDR_DIR)/Stack.hxx \
+		$(HDR_DIR)/Queue.hxx \
+		$(HDR_DIR)/Collection.hxx \
+		$(HDR_DIR)/BufferedArray.hxx \
+		$(HDR_DIR)/Slist.hxx \
+		$(HDR_DIR)/Dlist.hxx \
+		$(HDR_DIR)/HashTable.hxx \
+		$(HDR_DIR)/Tree.hxx \
+		$(HDR_DIR)/Matrix.hxx \
+		$(HDR_DIR)/Graph.hxx \
+		$(HDR_DIR)/IOException.hxx \
+		$(HDR_DIR)/File.hxx \
+		$(HDR_DIR)/Hex.hxx \
+		$(HDR_DIR)/Base64.hxx \
+		$(HDR_DIR)/UU.hxx \
+		$(HDR_DIR)/Checksum.hxx \
+		$(HDR_DIR)/Adler32.hxx \
+		$(HDR_DIR)/CRC32.hxx \
+		$(HDR_DIR)/Date.hxx \
+		$(HDR_DIR)/TimeZone.hxx \
+		$(HDR_DIR)/Calendar.hxx \
+		$(HDR_DIR)/Config.hxx \
+		$(HDR_DIR)/DllManager.hxx \
+		$(HDR_DIR)/Event.hxx \
+		$(HDR_DIR)/Timer.hxx \
+		$(HDR_DIR)/BigInteger.hxx \
+		$(HDR_DIR)/Inet.hxx \
+		$(HDR_DIR)/Packet.hxx \
+		$(HDR_DIR)/Socket.hxx \
+		$(HDR_DIR)/Main.hxx
+
+UTIL_OBJS =	$(SOBJ_DIR)/debug.o \
+		$(SOBJ_DIR)/argproc.o \
+		$(SOBJ_DIR)/Error.o \
+		$(SOBJ_DIR)/Mutex.o \
+		$(SOBJ_DIR)/Condition.o \
+		$(SOBJ_DIR)/Monitor.o \
+		$(SOBJ_DIR)/Barrier.o \
+		$(SOBJ_DIR)/BaseObject.o \
+		$(SOBJ_DIR)/Void.o \
+		$(SOBJ_DIR)/Boolean.o \
+		$(SOBJ_DIR)/ByteUtil.o \
+		$(SOBJ_DIR)/Exception.o \
+		$(SOBJ_DIR)/String.o \
+		$(SOBJ_DIR)/StringTokenizer.o \
+		$(SOBJ_DIR)/ThreadException.o \
+		$(SOBJ_DIR)/Thread.o \
+		$(SOBJ_DIR)/ArrayException.o \
+		$(SOBJ_DIR)/Stack.o \
+		$(SOBJ_DIR)/Queue.o \
+		$(SOBJ_DIR)/Collection.o \
+		$(SOBJ_DIR)/BufferedArray.o \
+		$(SOBJ_DIR)/Slist.o \
+		$(SOBJ_DIR)/Dlist.o \
+		$(SOBJ_DIR)/HashTable.o \
+		$(SOBJ_DIR)/Tree.o \
+		$(SOBJ_DIR)/Matrix.o \
+		$(SOBJ_DIR)/Graph.o \
+		$(SOBJ_DIR)/IOException.o \
+		$(SOBJ_DIR)/File.o \
+		$(SOBJ_DIR)/Hex.o \
+		$(SOBJ_DIR)/Base64.o \
+		$(SOBJ_DIR)/UU.o \
+		$(SOBJ_DIR)/Checksum.o \
+		$(SOBJ_DIR)/Adler32.o \
+		$(SOBJ_DIR)/CRC32.o \
+		$(SOBJ_DIR)/Date.o \
+		$(SOBJ_DIR)/TimeZone.o \
+		$(SOBJ_DIR)/Calendar.o \
+		$(SOBJ_DIR)/Config.o \
+		$(SOBJ_DIR)/DllManager.o \
+		$(SOBJ_DIR)/Event.o \
+		$(SOBJ_DIR)/Timer.o \
+		$(SOBJ_DIR)/BigInteger.o \
+		$(SOBJ_DIR)/Inet.o \
+		$(SOBJ_DIR)/Packet.o \
+		$(SOBJ_DIR)/Socket.o \
+		$(SOBJ_DIR)/Main.o
+
+UTIL_DLL_OBJS =	$(DOBJ_DIR)/debug.o \
+		$(DOBJ_DIR)/argproc.o \
+		$(DOBJ_DIR)/Error.o \
+		$(DOBJ_DIR)/Mutex.o \
+		$(DOBJ_DIR)/Condition.o \
+		$(DOBJ_DIR)/Monitor.o \
+		$(DOBJ_DIR)/Barrier.o \
+		$(DOBJ_DIR)/BaseObject.o \
+		$(DOBJ_DIR)/Void.o \
+		$(DOBJ_DIR)/Boolean.o \
+		$(DOBJ_DIR)/ByteUtil.o \
+		$(DOBJ_DIR)/Exception.o \
+		$(DOBJ_DIR)/String.o \
+		$(DOBJ_DIR)/StringTokenizer.o \
+		$(DOBJ_DIR)/ThreadException.o \
+		$(DOBJ_DIR)/Thread.o \
+		$(DOBJ_DIR)/ArrayException.o \
+		$(DOBJ_DIR)/Stack.o \
+		$(DOBJ_DIR)/Queue.o \
+		$(DOBJ_DIR)/Collection.o \
+		$(DOBJ_DIR)/BufferedArray.o \
+		$(DOBJ_DIR)/Slist.o \
+		$(DOBJ_DIR)/Dlist.o \
+		$(DOBJ_DIR)/HashTable.o \
+		$(DOBJ_DIR)/Tree.o \
+		$(DOBJ_DIR)/Matrix.o \
+		$(DOBJ_DIR)/Graph.o \
+		$(DOBJ_DIR)/IOException.o \
+		$(DOBJ_DIR)/File.o \
+		$(DOBJ_DIR)/Hex.o \
+		$(DOBJ_DIR)/Base64.o \
+		$(DOBJ_DIR)/UU.o \
+		$(DOBJ_DIR)/Checksum.o \
+		$(DOBJ_DIR)/Adler32.o \
+		$(DOBJ_DIR)/CRC32.o \
+		$(DOBJ_DIR)/Date.o \
+		$(DOBJ_DIR)/TimeZone.o \
+		$(DOBJ_DIR)/Calendar.o \
+		$(DOBJ_DIR)/Config.o \
+		$(DOBJ_DIR)/DllManager.o \
+		$(DOBJ_DIR)/Event.o \
+		$(DOBJ_DIR)/Timer.o \
+		$(DOBJ_DIR)/BigInteger.o \
+		$(DOBJ_DIR)/Inet.o \
+		$(DOBJ_DIR)/Packet.o \
+		$(DOBJ_DIR)/Socket.o \
+		$(DOBJ_DIR)/Main.o
+
+###########
+# Adv Util
+###########
+
+ADV_SRCS =	$(SRC_DIR)/WorkerPool.cxx \
+		$(SRC_DIR)/ThreadWorkerPool.cxx
+
+ADV_HDRS =	$(HDR_DIR)/WorkerPool.hxx \
+		$(HDR_DIR)/ThreadWorkerPool.hxx
+
+ADV_OBJS =	$(SOBJ_DIR)/WorkerPool.o \
+		$(SOBJ_DIR)/ThreadWorkerPool.o
+
+ADV_DLL_OBJS =	$(DOBJ_DIR)/WorkerPool.o \
+		$(DOBJ_DIR)/ThreadWorkerPool.o
+
+
+#############
+# Test Suite
+#############
+
+TESTSUITE_SRCS =	$(SRC_DIR)/TestSuite.cxx \
+			$(SRC_DIR)/MiscTest.cxx \
+			$(SRC_DIR)/CollectionTest.cxx \
+			$(SRC_DIR)/CodecTest.cxx \
+			$(SRC_DIR)/TimeTest.cxx \
+			$(SRC_DIR)/ThreadTest.cxx
+
+TESTSUITE_OBJS =	$(SOBJ_DIR)/TestSuite.o \
+			$(SOBJ_DIR)/MiscTest.o \
+			$(SOBJ_DIR)/CollectionTest.o \
+			$(SOBJ_DIR)/CodecTest.o \
+			$(SOBJ_DIR)/TimeTest.o \
+			$(SOBJ_DIR)/ThreadTest.o
+
+TESTSUITE_DLL_OBJS =	$(DOBJ_DIR)/TestSuite.o \
+			$(DOBJ_DIR)/MiscTest.o \
+			$(DOBJ_DIR)/CollectionTest.o \
+			$(DOBJ_DIR)/CodecTest.o \
+			$(DOBJ_DIR)/TimeTest.o \
+			$(DOBJ_DIR)/ThreadTest.o
+
+TMPS =
+
+SRCS =		$(UTIL_SRCS) \
+		$(ADV_SRCS) \
+		$(TESTSUITE_SRCS)
+
+HDRS =		$(UTIL_HDRS) \
+		$(ADV_HDRS)

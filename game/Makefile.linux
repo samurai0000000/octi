@@ -1,0 +1,118 @@
+###########################################################################
+# $Id: Makefile.linux,v 1.5 2001/08/16 04:20:43 samurai Exp $
+# $Author: samurai $
+# $Date: 2001/08/16 04:20:43 $
+# $Locker:  $
+# $Revision: 1.5 $
+#
+# Created:  1/1/99 by Charles Chiou
+# Comments:
+# Status:
+# Bugs:
+#
+# Copyright (c) 1999 Selfsoft Corp. All rights reserved.
+###########################################################################
+
+include Makefile.desc
+
+UTIL_HDR_DIR =          ../util/include
+
+LOCAL_LIBRARIES =	libss_util.a
+LOCAL_INCLUDES =	-I$(HDR_DIR) -I$(UTIL_HDR_DIR)
+LOCAL_DEFINES =
+
+AR =			ar clq
+CC =    	        gcc
+CXX =           	g++
+LN =			ln -s
+MKDIR =			mkdir
+MV =			mv -f
+RANLIB =		ranlib
+RM =			rm -rf
+
+CPPFLAGS =
+CCOPTIONS =		-fpic
+CDEBUGFLAGS =		-g -D_DEBUG -D_VERBOSE
+CXXOPTIONS =		-fPIC -fexceptions
+CXXDEBUGFLAGS =		-g -Wall -D_DEBUG
+STD_DEFINES =		-D__i386__ -D_LINUX
+CXXSTD_DEFINES =	$(STD_DEFINES)
+THREADED_DEFINES =	-D_MIT_POSIX_THREADS -D_USE_THREADS -D_REENTRANT
+DEFINES =               $(THREADED_DEFINES) $(LOCAL_DEFINES)
+ALLDEFINES =		$(ALLINCLUDES) $(STD_DEFINES) $(EXTRA_DEFINES) \
+			$(PROTO_DEFINES) $(THREADS_DEFINES) $(MODULE_DEFINES) \
+			$(DEFINES)
+CXXDEFINES =		$(CXXINCLUDES) $(CXXSTD_DEFINES) \
+			$(THREADS_CXXDEFINES) $(CXXEXTRA_DEFINES) $(DEFINES)
+ALLINCLUDES =		$(INCLUDES) $(EXTRA_INCLUDES) $(STD_INCLUDES)
+CFLAGS =		$(CDEBUGFLAGS) $(CCOPTIONS) $(ALLDEFINES)
+CXXFLAGS =		$(CXXDEBUGFLAGS) $(CXXOPTIONS) $(CXXDEFINES)
+LDPOSTLIB =
+SYS_LIBRARIES =		-lpthread -ldl
+EXTRA_LIBRARIES =
+EXTRA_LDOPTIONS =
+LOCAL_LDFLAGS =
+DEPLIBS =               $(LOCAL_LIBRARIES)
+LDLIBS =                $(LDPOSTLIB) $(SYS_LIBRARIES) \
+                        $(EXTRA_LIBRARIES)
+CCLDOPTIONS =
+CXXLDOPTIONS =          $(CXXDEBUGFLAGS) $(CXXOPTIONS) \
+                        $(EXTRA_LDOPTIONS)
+SHLIBLDFLAGS =		-shared
+
+INCLUDES =		$(LOCAL_INCLUDES) \
+			$(STL_INCLUDE) \
+			$(PLATFORM_INCLUDES)
+
+CCLINK =	        $(CC)
+CXXLINK =       	$(CXX)
+CCCOMPILE =		$(CC) $(CFLAGS) $(ALLINCLUDES) 
+CXXCOMPILE =		$(CXX) $(CXXFLAGS) $(ALLINCLUDES) 
+DEPEND =		$(CXX) -DMAKEDEPEND -M $(ALLDEFINES) $(DEPEND_DEFINES)
+
+##########
+
+LIBRARIES =	libss_game.a \
+		libss_Dgame.so.1 \
+
+PROGRAMS =
+
+ifeq ($(wildcard .depend),.depend)
+all: $(SOBJ_DIR) $(SRCS) $(HDRS) $(LIBRARIES) $(PROGRAMS)
+include .depend
+else
+all:
+	@echo Please run \'make depend\' first
+endif
+
+$(SOBJ_DIR):
+	$(MKDIR) $@
+
+$(SOBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	$(CCCOMPILE) -c $< -o $@
+
+$(SOBJ_DIR)/%.o: $(SRC_DIR)/%.cxx
+	$(CXXCOMPILE) -c $< -o $@
+
+libss_game.a: $(OBJS) $(EXTRALIBRARYDEPS)
+	$(RM) $@
+	$(AR) $@ $(OBJS)
+	$(RANLIB) $@
+
+libss_Dgame.so.1: $(OBJS) $(EXTRALIBRARYDEPS)
+	$(RM) $@~
+	@SONAME=`echo $@ | sed 's/\.[\.]*$$//'`; set -x; \
+	(cd .; $(CC) -o ./$@~ $(SHLIBLDFLAGS) -Wl,-soname,$$SONAME $(OBJS) $(REQUIREDLIBS) -lc); \
+	$(RM) $$SONAME; $(LN) $@ $$SONAME; true
+	$(RM) $@
+	$(MV) $@~ $@
+	$(RM) libss_Dgame.so
+	$(LN) $@ libss_Dgame.so
+
+clean:
+	$(RM) $(PROGRAMS) $(LIBRARIES) $(TMPS) $(SOBJ_DIR) $(DOBJ_DIR) *.CKP *.ln *.BAK *.bak *.o *.obj *~ core errs lib*.* moc_*.cpp .emacs_* tags TAGS make.log MakeOut "#"* *.idb *.pdb *.pch *.exp .depend*
+
+depend: $(SRCS) $(HDRS)
+	$(DEPEND) $(SRCS) > .depend.tmp
+	cat .depend.tmp | sed -e "s/^\w*.o:/$(SOBJ_DIR)\/&/" > .depend
+	$(RM) .depend.tmp

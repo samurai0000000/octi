@@ -1,0 +1,50 @@
+###########################################################################
+# $Id: Makefile.desc,v 1.4 2001/08/24 03:01:14 samurai Exp $
+# $Author: samurai $
+# $Date: 2001/08/24 03:01:14 $
+# $Locker:  $
+# $Revision: 1.4 $
+#
+# Created:  1/1/99 by Charles Chiou
+# Comments:
+# Status:
+# Bugs:
+#
+# Copyright (c) 1999 Selfsoft Corp. All rights reserved.
+###########################################################################
+
+SRC_DIR =	src
+HDR_DIR =	include
+SOBJ_DIR =	obj
+DOBJ_DIR =	dllobj
+
+TMPS =
+
+SRCS =		$(SRC_DIR)/AISearchAlgorithm.cxx \
+		$(SRC_DIR)/TranspositionTable.cxx \
+		$(SRC_DIR)/AlphaBetaSearch.cxx \
+		$(SRC_DIR)/ERSearch.cxx \
+		$(SRC_DIR)/ThreadAlphaBetaSearch.cxx \
+		$(SRC_DIR)/MPIAlphaBetaSearch.cxx \
+
+HDRS =		$(HDR_DIR)/aiapi.h \
+		$(HDR_DIR)/AISearchAlgorithm.hxx \
+		$(HDR_DIR)/TranspositionTable.hxx \
+		$(HDR_DIR)/AlphaBetaSearch.hxx \
+		$(HDR_DIR)/ERSearch.hxx \
+		$(HDR_DIR)/ThreadAlphaBetaSearch.hxx \
+		$(HDR_DIR)/MPIAlphaBetaSearch.hxx
+
+OBJS =		$(SOBJ_DIR)/AISearchAlgorithm.o \
+		$(SOBJ_DIR)/TranspositionTable.o \
+		$(SOBJ_DIR)/AlphaBetaSearch.o \
+		$(SOBJ_DIR)/ERSearch.o \
+		$(SOBJ_DIR)/ThreadAlphaBetaSearch.o \
+		$(SOBJ_DIR)/MPIAlphaBetaSearch.o
+
+DLL_OBJS =	$(DOBJ_DIR)/AISearchAlgorithm.o \
+		$(DOBJ_DIR)/TranspositionTable.o \
+		$(DOBJ_DIR)/AlphaBetaSearch.o \
+		$(DOBJ_DIR)/ERSearch.o \
+		$(DOBJ_DIR)/ThreadAlphaBetaSearch.o \
+		$(DOBJ_DIR)/MPIAlphaBetaSearch.o

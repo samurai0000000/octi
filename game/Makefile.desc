@@ -1,0 +1,42 @@
+###########################################################################
+# $Id: Makefile.desc,v 1.3 2001/08/16 02:21:24 samurai Exp $
+# $Author: samurai $
+# $Date: 2001/08/16 02:21:24 $
+# $Locker:  $
+# $Revision: 1.3 $
+#
+# Created:  1/1/99 by Charles Chiou
+# Comments:
+# Status:
+# Bugs:
+#
+# Copyright (c) 1999 Selfsoft Corp. All rights reserved.
+###########################################################################
+
+SRC_DIR =	src
+HDR_DIR =	include
+SOBJ_DIR =	obj
+DOBJ_DIR =	dllobj
+
+TMPS =
+
+SRCS =		$(SRC_DIR)/GameExceptions.cxx \
+		$(SRC_DIR)/GameClient.cxx \
+		$(SRC_DIR)/GameServer.cxx \
+		$(SRC_DIR)/GameSession.cxx
+
+HDRS =		$(HDR_DIR)/gameapi.h \
+		$(HDR_DIR)/GameExceptions.hxx \
+		$(HDR_DIR)/GameClient.hxx \
+		$(HDR_DIR)/GameServer.hxx \
+		$(HDR_DIR)/GameSession.hxx
+
+OBJS =		$(SOBJ_DIR)/GameExceptions.o \
+		$(SOBJ_DIR)/GameClient.o \
+		$(SOBJ_DIR)/GameServer.o \
+		$(SOBJ_DIR)/GameSession.o
+
+DLL_OBJS =	$(DOBJ_DIR)/GameExceptions.o \
+		$(DOBJ_DIR)/GameClient.o \
+		$(DOBJ_DIR)/GameServer.o \
+		$(DOBJ_DIR)/GameSession.o

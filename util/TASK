@@ -1,0 +1,15 @@
+Needs testing:
+	Matrix
+
+Incomplete:
+	debug
+	Graph
+	Tree
+	File
+	Thread
+	Monitor
+	Calendar
+	TimeZone
+
+BUGS:
+  something is wrong with BufferedArray!!!!

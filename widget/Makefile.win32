@@ -1,0 +1,137 @@
+###########################################################################
+# $Id: Makefile.win32,v 1.3 2001/08/16 04:10:24 samurai Exp $
+# $Author: samurai $
+# $Date: 2001/08/16 04:10:24 $
+# $Locker:  $
+# $Revision: 1.3 $
+#
+# Created:  1/1/99 by Charles Chiou
+# Comments:
+# Status:
+# Bugs:
+#
+# Copyright (c) 1999 Selfsoft Corp. All rights reserved.
+###########################################################################
+
+include Makefile.desc
+
+QT_DIR =	$(SYSTEMDRIVE)/qt
+UTIL_HDR_DIR =	../util/include
+
+LOCAL_LIBRARIES =	libss_widget.lib
+LOCAL_INCLUDES =	-I$(HDR_DIR) -I$(UTIL_HDR_DIR)
+LOCAL_DEFINES =		-DQT_DLL
+GUI_LIBRARIES =		-LIBPATH:$(QTDIR)-lib libqt.lib
+PLATFORM_INCLUDES =	-I$(QT_DIR)/include
+
+AR =
+CC =    	        cl -nologo
+CCCOMPILE =		$(CC) $(CFLAGS) $(ALLINCLUDES)
+CCLINK =	        link -nologo
+CXX =           	cl -nologo
+CXXCOMPILE =		$(CXX) $(CXXFLAGS) $(ALLINCLUDES)
+CXXLINK =       	link -nologo
+DEPEND =		gcc -DMAKEDEPEND -M $(ALLDEFINES) $(DEPEND_DEFINES)
+LN =
+MKDIR =			mkdir
+MOC =			moc
+MV =			mv
+RANLIB =		lib -nologo
+RM =			rm -rf
+UIC =			uic
+
+CPPFLAGS =
+CCOPTIONS =		-D_CONSOLE -D_MBCS -W3 -GX -O2 -MD
+CDEBUGFLAGS =		-D_DEBUG -D_VERBOSE -Zi
+CXXOPTIONS =		-D_CONSOLE -D_MBCS -W3 -GX -O2 -MD
+CXXDEBUGFLAGS =		-D_DEBUG -D_VERBOSE -Zi
+STD_DEFINES =		-D__i386__ -D_WIN32
+CXXSTD_DEFINES =	$(STD_DEFINES)
+THREADED_DEFINES =	-D_USE_THREADS -D_REENTRANT
+DEFINES =               $(THREADED_DEFINES) $(LOCAL_DEFINES)
+ALLDEFINES =		$(ALLINCLUDES) $(STD_DEFINES) $(EXTRA_DEFINES) \
+			$(PROTO_DEFINES) $(THREADS_DEFINES) $(MODULE_DEFINES) \
+			$(DEFINES)
+CXXDEFINES =		$(CXXINCLUDES) $(CXXSTD_DEFINES) \
+			$(THREADS_CXXDEFINES) $(CXXEXTRA_DEFINES) $(DEFINES)
+ALLINCLUDES =		$(INCLUDES) $(EXTRA_INCLUDES) $(STD_INCLUDES)
+CFLAGS =		$(CDEBUGFLAGS) $(CCOPTIONS) $(ALLDEFINES)
+CXXFLAGS =		$(CXXDEBUGFLAGS) $(CXXOPTIONS) $(CXXDEFINES)
+LDPOSTLIB =
+SYS_LIBRARIES =		kernel32.lib user32.lib gdi32.lib winspool.lib \
+			comdlg32.lib advapi32.lib shell32.lib ole32.lib \
+			oleaut32.lib uuid.lib odbc32.lib odbccp32.lib winmm.lib
+EXTRA_LIBRARIES =
+EXTRA_LDOPTIONS =
+LOCAL_LDFLAGS =
+DEPLIBS =               $(LOCAL_LIBRARIES)
+LDLIBS =                $(LDPOSTLIB) $(SYS_LIBRARIES) \
+                        $(EXTRA_LIBRARIES)
+
+SHLIBLDFLAGS =
+
+INCLUDES =		$(LOCAL_INCLUDES) \
+			$(STL_INCLUDE) \
+			$(PLATFORM_INCLUDES)
+
+##########
+
+LIBRARIES =	libss_widget.lib
+
+PROGRAMS =
+
+ifeq ($(wildcard .depend),.depend)
+all: $(SOBJ_DIR) $(DOBJ_DIR) $(SRCS) $(HDRS) $(LIBRARIES) $(PROGRAMS)
+include .depend
+else
+all:
+	@echo Please run \'make depend\' first
+endif
+
+$(SOBJ_DIR):
+	$(MKDIR) $@
+
+$(DOBJ_DIR):
+	$(MKDIR) $@
+
+$(SOBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	$(CCCOMPILE) -c $< -Fo$@
+
+$(DOBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	$(CCCOMPILE) -DWIDGET_DYN_LIB_EXPORTS -c $< -Fo$@
+
+$(SOBJ_DIR)/%.o: $(SRC_DIR)/%.cxx
+	$(CXXCOMPILE) -c $< -Fo$@
+
+$(DOBJ_DIR)/%.o: $(SRC_DIR)/%.cxx
+	$(CXXCOMPILE) -DWIDGET_DYN_LIB_EXPORTS -c $< -Fo$@
+
+moc_%.cpp: $(HDR_DIR)/%.hxx
+	@NAMESPACE="__USING_NAMESPACE\(SELFSOFT\);"; \
+	echo "#include \"widgetapi.h\"" > $@; \
+	$(MOC) $< | sed -e "s/const char \*$*/$$NAMESPACE&/" >> $@
+
+$(SOBJ_DIR)/moc_%.o: moc_%.cpp
+	$(CXXCOMPILE) -c $< -Fo$@
+
+$(DOBJ_DIR)/moc_%.o: moc_%.cpp
+	$(CXXCOMPILE) -DWIDGET_DYN_LIB_EXPORTS -c $< -Fo$@
+
+$(HDR_DIR)/%.hxx: $(UI_DIR)/%.ui
+	$(UIC) $< -o $@
+
+$(SRC_DIR)/%.cxx: $(UI_DIR)/%.ui $(HDR_DIR)/%.hxx
+	$(UIC) $< -impl $*.hxx -o $@
+
+libss_widget.lib: $(OBJS) $(EXTRALIBRARYDEPS)
+	$(RM) $@
+	$(RANLIB) $(OBJS) -OUT:$@
+
+clean:
+	$(RM) $(PROGRAMS) $(LIBRARIES) $(TMPS) $(SOBJ_DIR) $(DOBJ_DIR) *.CKP *.ln *.BAK *.bak *~ *.o *.obj core errs lib*.* moc_*.cpp .emacs_* tags TAGS make.log MakeOut "#"* *.idb *.pdb *.pch *.exp .depend*
+
+depend: $(SRCS) $(HDRS)
+	$(DEPEND) $(SRCS) > .depend.tmp
+	cat .depend.tmp | sed -e "s/^\w*.o:/$(SOBJ_DIR)\/&/" > .depend
+	cat .depend.tmp | sed -e "s/^\w*.o:/$(DOBJ_DIR)\/&/" >> .depend
+	$(RM) .depend.tmp

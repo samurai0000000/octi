@@ -1,0 +1,132 @@
+###########################################################################
+# $Id: Makefile.win32,v 1.3 2001/08/16 03:47:51 samurai Exp $
+# $Author: samurai $
+# $Date: 2001/08/16 03:47:51 $
+# $Locker:  $
+# $Revision: 1.3 $
+#
+# Created:  1/1/99 by Charles Chiou
+# Comments:
+# Status:
+# Bugs:
+#
+# Copyright (c) 1999 Selfsoft Corp. All rights reserved.
+###########################################################################
+
+include Makefile.desc
+
+LOCAL_LIBRARIES =	libss_util.lib
+LOCAL_INCLUDES =	-I$(HDR_DIR)
+LOCAL_DEFINES =
+
+AR =
+CC =    	        cl -nologo
+CCCOMPILE =		$(CC) $(CFLAGS) $(ALLINCLUDES)
+CCLINK =	        link -nologo
+CXX =           	cl -nologo
+CXXCOMPILE =		$(CXX) $(CXXFLAGS) $(ALLINCLUDES)
+CXXLINK =       	link -nologo
+DEPEND =		gcc -DMAKEDEPEND -M $(ALLDEFINES) $(DEPEND_DEFINES)
+LN =
+MKDIR =			mkdir
+MV =			mv
+RANLIB =		lib -nologo
+RM =			rm -rf
+
+CPPFLAGS =
+CCOPTIONS =		-D_CONSOLE -D_MBCS -W3 -GX -O2 -MD
+CDEBUGFLAGS =		-D_DEBUG -D_VERBOSE -Zi
+CXXOPTIONS =		-D_CONSOLE -D_MBCS -W3 -GX -O2 -MD
+CXXDEBUGFLAGS =		-D_DEBUG -D_VERBOSE -Zi
+STD_DEFINES =		-D__i386__ -D_WIN32
+CXXSTD_DEFINES =	$(STD_DEFINES)
+THREADED_DEFINES =	-D_USE_THREADS -D_REENTRANT
+DEFINES =               $(THREADED_DEFINES) $(LOCAL_DEFINES)
+ALLDEFINES =		$(ALLINCLUDES) $(STD_DEFINES) $(EXTRA_DEFINES) \
+			$(PROTO_DEFINES) $(THREADS_DEFINES) $(MODULE_DEFINES) \
+			$(DEFINES)
+CXXDEFINES =		$(CXXINCLUDES) $(CXXSTD_DEFINES) \
+			$(THREADS_CXXDEFINES) $(CXXEXTRA_DEFINES) $(DEFINES)
+ALLINCLUDES =		$(INCLUDES) $(EXTRA_INCLUDES) $(STD_INCLUDES)
+CFLAGS =		$(CDEBUGFLAGS) $(CCOPTIONS) $(ALLDEFINES)
+CXXFLAGS =		$(CXXDEBUGFLAGS) $(CXXOPTIONS) $(CXXDEFINES)
+LDPOSTLIB =
+SYS_LIBRARIES =		kernel32.lib user32.lib gdi32.lib winspool.lib \
+			comdlg32.lib advapi32.lib shell32.lib ole32.lib \
+			oleaut32.lib uuid.lib odbc32.lib odbccp32.lib winmm.lib
+EXTRA_LIBRARIES =
+EXTRA_LDOPTIONS =
+LOCAL_LDFLAGS =
+DEPLIBS =               $(LOCAL_LIBRARIES)
+LDLIBS =                $(LDPOSTLIB) $(SYS_LIBRARIES) \
+                        $(EXTRA_LIBRARIES)
+
+SHLIBLDFLAGS =
+
+INCLUDES =		$(LOCAL_INCLUDES) \
+			$(STL_INCLUDE) \
+			$(PLATFORM_INCLUDES)
+
+##########
+
+LIBRARIES =	libss_util.lib \
+		libss_Dutil.dll \
+		libss_advutil.lib \
+		libss_Dadvutil.dll
+
+PROGRAMS =	utiltestsuite.exe
+
+ifeq ($(wildcard .depend),.depend)
+all: $(SOBJ_DIR) $(DOBJ_DIR) $(SRCS) $(HDRS) $(LIBRARIES) $(PROGRAMS)
+include .depend
+else
+all:
+	@echo Please run \'make depend\' first
+endif
+
+$(SOBJ_DIR):
+	$(MKDIR) $@
+
+$(DOBJ_DIR):
+	$(MKDIR) $@
+
+$(SOBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	$(CCCOMPILE) -c $< -Fo$@
+
+$(DOBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	$(CCCOMPILE) -DUTIL_DYN_LIB_EXPORTS -c $< -Fo$@
+
+$(SOBJ_DIR)/%.o: $(SRC_DIR)/%.cxx
+	$(CXXCOMPILE) -c $< -Fo$@
+
+$(DOBJ_DIR)/%.o: $(SRC_DIR)/%.cxx
+	$(CXXCOMPILE) -DUTIL_DYN_LIB_EXPORTS -c $< -Fo$@
+
+utiltestsuite.exe: $(TESTSUITE_OBJS) $(DEPLIBS)
+	$(RM) $@
+	$(CXXLINK) -OUT:$@ -SUBSYSTEM:CONSOLE -MACHINE:I386 $(TESTSUITE_OBJS) $(LOCAL_LIBRARIES) $(LDLIBS) $(EXTRA_LOAD_FLAGS)
+
+libss_util.lib: $(UTIL_OBJS) $(EXTRALIBRARYDEPS)
+	$(RM) $@
+	$(RANLIB) $(UTIL_OBJS) -OUT:$@
+
+libss_Dutil.dll: $(UTIL_DLL_OBJS) $(EXTRALIBRARYDEPS)
+	$(RM) $@
+	$(CXXLINK) -DLL -MACHINE:I386 -FORCE $(UTIL_DLL_OBJS) -OUT:$@
+
+libss_advutil.lib: $(ADV_OBJS) $(EXTRALIBRARYDEPS)
+	$(RM) $@
+	$(RANLIB) $(ADV_OBJS) -OUT:$@
+
+libss_Dadvutil.dll: $(ADV_DLL_OBJS) $(EXTRALIBRARYDEPS)
+	$(RM) $@
+	$(CXXLINK) -DLL -MACHINE:I386 -FORCE $(ADV_DLL_OBJS) -OUT:$@
+
+clean:
+	$(RM) $(PROGRAMS) $(LIBRARIES) $(TMPS) $(SOBJ_DIR) $(DOBJ_DIR) *.CKP *.ln *.BAK *.bak *.o *.obj *~ core errs lib*.* moc_*.cpp .emacs_* tags TAGS make.log MakeOut "#"* *.idb *.pdb *.pch *.exp .depend*
+
+depend: $(SRCS) $(HDRS)
+	$(DEPEND) $(SRCS) > .depend.tmp
+	cat .depend.tmp | sed -e "s/^\w*.o:/$(SOBJ_DIR)\/&/" > .depend
+	cat .depend.tmp | sed -e "s/^\w*.o:/$(DOBJ_DIR)\/&/" >> .depend
+	$(RM) .depend.tmp
