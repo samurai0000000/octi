@@ -1,0 +1,161 @@
+###########################################################################
+# $Id: Makefile.linux,v 1.3 2001/08/16 02:21:50 samurai Exp $
+# $Author: samurai $
+# $Date: 2001/08/16 02:21:50 $
+# $Locker:  $
+# $Revision: 1.3 $
+#
+# Created:  1/1/99 by Charles Chiou
+# Comments:
+# Status:
+# Bugs:
+#
+# Copyright (c) 1999 Selfsoft Corp. All rights reserved.
+###########################################################################
+
+include Makefile.desc
+
+QT_DIR =		/usr/lib/qt-2.3.0
+UI_DIR =		ui
+UTIL_HDR_DIR =          ../util/include
+UTIL_BIN_DIR =		../util
+GAME_HDR_DIR =		../game/include
+GAME_BIN_DIR =		../game
+AI_HDR_DIR =		../ai/include
+AI_BIN_DIR =		../ai
+WIDGET_HDR_DIR =	../widget/include
+WIDGET_BIN_DIR =	../widget
+
+LOCAL_LIBRARIES =	libss_octi.a
+LOCAL_INCLUDES =	-I$(HDR_DIR) -I$(UTIL_HDR_DIR) -I$(GAME_HDR_DIR) -I$(AI_HDR_DIR) -I$(WIDGET_HDR_DIR)
+LOCAL_DEFINES =
+GUI_LIBRARIES =		-L$(QT_DIR)/lib -lqt
+PLATFORM_INCLUDES =	-I$(QT_DIR)/include
+
+AR =			ar clq
+CC =    	        gcc
+CXX =           	g++
+LN =			ln -s
+MKDIR =			mkdir
+MOC =			$(QT_DIR)/bin/moc
+MV =			mv -f
+RANLIB =		ranlib
+RM =			rm -rf
+UIC =			uic
+
+CPPFLAGS =
+CCOPTIONS =		-fpic
+CDEBUGFLAGS =		-g -D_DEBUG -D_VERBOSE
+CXXOPTIONS =		-fPIC -fexceptions
+CXXDEBUGFLAGS =		-g -Wall -D_DEBUG
+STD_DEFINES =		-D__i386__ -D_LINUX
+CXXSTD_DEFINES =	$(STD_DEFINES)
+THREADED_DEFINES =	-D_MIT_POSIX_THREADS -D_USE_THREADS -D_REENTRANT
+DEFINES =               $(THREADED_DEFINES) $(LOCAL_DEFINES)
+ALLDEFINES =		$(ALLINCLUDES) $(STD_DEFINES) $(EXTRA_DEFINES) \
+			$(PROTO_DEFINES) $(THREADS_DEFINES) $(MODULE_DEFINES) \
+			$(DEFINES)
+CXXDEFINES =		$(CXXINCLUDES) $(CXXSTD_DEFINES) \
+			$(THREADS_CXXDEFINES) $(CXXEXTRA_DEFINES) $(DEFINES)
+ALLINCLUDES =		$(INCLUDES) $(EXTRA_INCLUDES) $(STD_INCLUDES)
+CFLAGS =		$(CDEBUGFLAGS) $(CCOPTIONS) $(ALLDEFINES)
+CXXFLAGS =		$(CXXDEBUGFLAGS) $(CXXOPTIONS) $(CXXDEFINES)
+LDPOSTLIB =
+SYS_LIBRARIES =		-lpthread -ldl
+EXTRA_LIBRARIES =	$(WIDGET_BIN_DIR)/libss_widget.a \
+			$(GAME_BIN_DIR)/libss_game.a \
+			$(AI_BIN_DIR)/libss_ai.a \
+			$(UTIL_BIN_DIR)/libss_util.a \
+			$(UTIL_BIN_DIR)/libss_advutil.a
+EXTRA_LDOPTIONS =
+LOCAL_LDFLAGS =
+DEPLIBS =               $(LOCAL_LIBRARIES)
+LDLIBS =                $(LDPOSTLIB) $(SYS_LIBRARIES) \
+                        $(EXTRA_LIBRARIES)
+CCLDOPTIONS =
+CXXLDOPTIONS =          $(CXXDEBUGFLAGS) $(CXXOPTIONS) \
+                        $(EXTRA_LDOPTIONS)
+SHLIBLDFLAGS =		-shared
+
+INCLUDES =		$(LOCAL_INCLUDES) \
+			$(STL_INCLUDE) \
+			$(PLATFORM_INCLUDES)
+
+CCLINK =	        $(CC)
+CXXLINK =       	$(CXX)
+CCCOMPILE =		$(CC) $(CFLAGS) $(ALLINCLUDES) 
+CXXCOMPILE =		$(CXX) $(CXXFLAGS) $(ALLINCLUDES) 
+DEPEND =		$(CXX) -DMAKEDEPEND -M $(ALLDEFINES) $(DEPEND_DEFINES)
+
+##########
+
+LIBRARIES =	libss_octi.so.1 \
+		libss_octi.a
+
+PROGRAMS =	octi \
+		octiagent \
+		octitrainer
+
+ifeq ($(wildcard .depend),.depend)
+all: $(SOBJ_DIR) $(SRCS) $(HDRS) $(LIBRARIES) $(PROGRAMS)
+include .depend
+else
+all:
+	@echo Please run \'make depend\' first
+endif
+
+$(SOBJ_DIR):
+	$(MKDIR) $@
+
+$(SOBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	$(CCCOMPILE) -c $< -o $@
+
+$(SOBJ_DIR)/%.o: $(SRC_DIR)/%.cxx
+	$(CXXCOMPILE) -c $< -o $@
+
+moc_%.cpp: $(HDR_DIR)/%.hxx
+	$(MOC) $< -o $@
+
+$(SOBJ_DIR)/moc_%.o: moc_%.cpp
+	$(CXXCOMPILE) -c $< -o $@
+
+$(HDR_DIR)/%.hxx: $(UI_DIR)/%.ui
+	$(UIC) $< -o $@
+
+$(SRC_DIR)/%.cxx: $(UI_DIR)/%.ui $(HDR_DIR)/%.hxx
+	$(UIC) $< -impl $*.hxx -o $@
+
+octi: $(GUI_OBJS) $(OCTI_OBJS) $(SOBJ_DIR)/Octi2PlayerGameSearchState.o $(APP_OBJS)
+	$(RM) $@
+	$(CXXLINK) -o $@ $(CXXLDOPTIONS) $(GUI_OBJS) $(OCTI_OBJS) $(SOBJ_DIR)/Octi2PlayerGameSearchState.o $(APP_OBJS) $(LOCAL_LIBRARIES) $(GUI_LIBRARIES) $(LDLIBS) $(EXTRA_LOAD_FLAGS)
+
+octiagent: $(AGENT_OBJS) $(EXTRA_LIBRARIES)
+	$(RM) $@
+	$(CXXLINK) -o $@ $(CXXLDOPTIONS) $(AGENT_OBJS) $(LOCAL_LIBRARIES) $(LDLIBS) $(EXTRA_LOAD_FLAGS)
+
+octitrainer: $(GUI_OBJS) $(TRAIN_OBJS) $(SOBJ_DIR)/Octi2PlayerGameSearchState.o $(OCTI_OBJS)
+	$(RM) $@
+	$(CXXLINK) -o $@ $(CXXLDOPTIONS) $(GUI_OBJS) $(TRAIN_OBJS) $(SOBJ_DIR)/Octi2PlayerGameSearchState.o $(OCTI_OBJS) $(LOCAL_LIBRARIES) $(GUI_LIBRARIES) $(LDLIBS) $(EXTRA_LOAD_FLAGS)
+
+libss_octi.a: $(OCTI_OBJS) $(EXTRALIBRARYDEPS)
+	$(RM) $@
+	$(AR) $@ $(OCTI_OBJS)
+	$(RANLIB) $@
+
+libss_octi.so.1: $(OCTI_OBJS) $(EXTRALIBRARYDEPS)
+	$(RM) $@~
+	@SONAME=`echo $@ | sed 's/\.[\.]*$$//'`; set -x; \
+	(cd .; $(CC) -o ./$@~ $(SHLIBLDFLAGS) -Wl,-soname,$$SONAME $(OCTI_OBJS) $(REQUIREDLIBS) -lc); \
+	$(RM) $$SONAME; $(LN) $@ $$SONAME; true
+	$(RM) $@
+	$(MV) $@~ $@
+	$(RM) libss_octi.so
+	$(LN) $@ libss_octi.so
+
+clean:
+	$(RM) $(PROGRAMS) $(LIBRARIES) $(TMPS) $(SOBJ_DIR) $(DOBJ_DIR) *.CKP *.ln *.BAK *.bak *.o *.obj *~ core errs lib*.* moc_*.cpp .emacs_* tags TAGS make.log MakeOut "#"* *.idb *.pdb *.pch *.exp .depend*
+
+depend: $(SRCS) $(HDRS)
+	$(DEPEND) $(SRCS) > .depend.tmp
+	cat .depend.tmp | sed -e "s/^\w*.o:/$(SOBJ_DIR)\/&/" > .depend
+	$(RM) .depend.tmp

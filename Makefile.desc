@@ -1,0 +1,194 @@
+###########################################################################
+# $Id: Makefile.desc,v 1.4 2001/08/16 02:21:50 samurai Exp $
+# $Author: samurai $
+# $Date: 2001/08/16 02:21:50 $
+# $Locker:  $
+# $Revision: 1.4 $
+#
+# Created:  1/1/99 by Charles Chiou
+# Comments:
+# Status:
+# Bugs:
+#
+# Copyright (c) 1999 Selfsoft Corp. All rights reserved.
+###########################################################################
+
+SRC_DIR =	src
+HDR_DIR =	include
+UI_DIR =	ui
+SOBJ_DIR =	obj
+DOBJ_DIR =	dllobj
+
+# OCTI base classes
+
+OCTI_SRCS =	$(SRC_DIR)/OctiPod.cxx \
+		$(SRC_DIR)/OctiSquare.cxx \
+		$(SRC_DIR)/OctiGame.cxx \
+		$(SRC_DIR)/OctiGameRandom.cxx \
+		$(SRC_DIR)/OctiBoard.cxx \
+		$(SRC_DIR)/OctiMove.cxx \
+		$(SRC_DIR)/OctiGameFileHandler.cxx
+
+OCTI_HDRS =	$(HDR_DIR)/octiapi.h \
+		$(HDR_DIR)/OctiDefs.hxx \
+		$(HDR_DIR)/OctiPod.hxx \
+		$(HDR_DIR)/OctiSquare.hxx \
+		$(HDR_DIR)/OctiSquareImpl.hxx \
+		$(HDR_DIR)/OctiGame.hxx \
+		$(HDR_DIR)/OctiGameImpl.hxx \
+		$(HDR_DIR)/OctiBoard.hxx \
+		$(HDR_DIR)/OctiMove.hxx \
+		$(HDR_DIR)/OctiGameFileHandler.hxx
+
+OCTI_OBJS =	$(SOBJ_DIR)/OctiPod.o \
+		$(SOBJ_DIR)/OctiSquare.o \
+		$(SOBJ_DIR)/OctiGame.o \
+		$(SOBJ_DIR)/OctiGameRandom.o \
+		$(SOBJ_DIR)/OctiBoard.o \
+		$(SOBJ_DIR)/OctiMove.o \
+		$(SOBJ_DIR)/OctiGameFileHandler.o
+
+OCTI_DLL_OBJS =	$(DOBJ_DIR)/OctiPod.o \
+		$(DOBJ_DIR)/OctiSquare.o \
+		$(DOBJ_DIR)/OctiGame.o \
+		$(DOBJ_DIR)/OctiGameRandom.o \
+		$(DOBJ_DIR)/OctiBoard.o \
+		$(DOBJ_DIR)/OctiMove.o \
+		$(DOBJ_DIR)/OctiGameFileHandler.o
+
+# UIC base classes
+
+BGUI_SRCS =	$(SRC_DIR)/OctiGameSelectDialogBase.cxx \
+		$(SRC_DIR)/OctiPreferencesDialogBase.cxx
+
+BGUI_HDRS =	$(HDR_DIR)/OctiGameSelectDialogBase.hxx \
+		$(HDR_DIR)/OctiPreferencesDialogBase.hxx
+
+BGUI_OBJS =	$(SOBJ_DIR)/OctiGameSelectDialogBase.o \
+		$(SOBJ_DIR)/moc_OctiGameSelectDialogBase.o \
+			$(SOBJ_DIR)/OctiPreferencesDialogBase.o \
+			$(SOBJ_DIR)/moc_OctiPreferencesDialogBase.o
+
+BGUI_DLL_OBJS =	$(DOBJ_DIR)/OctiGameSelectDialogBase.o \
+		$(DOBJ_DIR)/moc_OctiGameSelectDialogBase.o \
+			$(DOBJ_DIR)/OctiPreferencesDialogBase.o \
+			$(DOBJ_DIR)/moc_OctiPreferencesDialogBase.o
+
+# UIC implementation classes
+
+GUI_SRCS =	$(BGUI_SRCS) \
+		$(SRC_DIR)/OctiWidgetColors.cxx \
+		$(SRC_DIR)/OctiWidgetOptions.cxx \
+		$(SRC_DIR)/OctiSquareDispWidget.cxx \
+		$(SRC_DIR)/OctiStatDispWidget.cxx \
+		$(SRC_DIR)/OctiBoardDispWidget.cxx \
+		$(SRC_DIR)/OctiGameSelectDialog.cxx \
+		$(SRC_DIR)/OctiPreferencesDialog.cxx \
+		$(SRC_DIR)/OctiBoardFrame.cxx \
+		$(SRC_DIR)/OctiMainWindow.cxx \
+		$(SRC_DIR)/OctiTrainerWindow.cxx \
+		$(SRC_DIR)/octiAppMain.cxx
+
+GUI_HDRS =	$(BGUI_HDRS) \
+		$(HDR_DIR)/OctiWidgetColors.hxx \
+		$(HDR_DIR)/OctiWidgetOptions.hxx \
+		$(HDR_DIR)/OctiSquareDispWidget.hxx \
+		$(HDR_DIR)/OctiStatDispWidget.hxx \
+		$(HDR_DIR)/OctiBoardDispWidget.hxx \
+		$(HDR_DIR)/OctiGameSelectDialog.hxx \
+		$(HDR_DIR)/OctiPreferencesDialog.hxx \
+		$(HDR_DIR)/OctiBoardFrame.hxx \
+		$(HDR_DIR)/OctiMainWindow.hxx \
+		$(HDR_DIR)/OctiTrainerWindow.hxx
+
+GUI_OBJS =	$(BGUI_OBJS) \
+		$(SOBJ_DIR)/OctiWidgetColors.o \
+		$(SOBJ_DIR)/OctiWidgetOptions.o \
+			$(SOBJ_DIR)/OctiSquareDispWidget.o \
+			$(SOBJ_DIR)/moc_OctiSquareDispWidget.o \
+		$(SOBJ_DIR)/OctiStatDispWidget.o \
+		$(SOBJ_DIR)/moc_OctiStatDispWidget.o \
+			$(SOBJ_DIR)/OctiBoardDispWidget.o \
+			$(SOBJ_DIR)/moc_OctiBoardDispWidget.o \
+		$(SOBJ_DIR)/OctiGameSelectDialog.o \
+		$(SOBJ_DIR)/moc_OctiGameSelectDialog.o \
+			$(SOBJ_DIR)/OctiPreferencesDialog.o \
+			$(SOBJ_DIR)/moc_OctiPreferencesDialog.o \
+		$(SOBJ_DIR)/OctiBoardFrame.o \
+		$(SOBJ_DIR)/moc_OctiBoardFrame.o \
+			$(SOBJ_DIR)/OctiMainWindow.o \
+			$(SOBJ_DIR)/moc_OctiMainWindow.o \
+		$(SOBJ_DIR)/OctiTrainerWindow.o \
+		$(SOBJ_DIR)/moc_OctiTrainerWindow.o
+
+GUI_DLL_OBJS =	$(BGUI_DLL_OBJS) \
+		$(DOBJ_DIR)/OctiWidgetColors.o \
+		$(DOBJ_DIR)/OctiWidgetOptions.o \
+			$(DOBJ_DIR)/OctiSquareDispWidget.o \
+			$(DOBJ_DIR)/moc_OctiSquareDispWidget.o \
+		$(DOBJ_DIR)/OctiStatDispWidget.o \
+		$(DOBJ_DIR)/moc_OctiStatDispWidget.o \
+			$(DOBJ_DIR)/OctiBoardDispWidget.o \
+			$(DOBJ_DIR)/moc_OctiBoardDispWidget.o \
+		$(DOBJ_DIR)/OctiGameSelectDialog.o \
+		$(DOBJ_DIR)/moc_OctiGameSelectDialog.o \
+			$(DOBJ_DIR)/OctiPreferencesDialog.o \
+			$(DOBJ_DIR)/moc_OctiPreferencesDialog.o \
+		$(DOBJ_DIR)/OctiBoardFrame.o \
+		$(DOBJ_DIR)/moc_OctiBoardFrame.o \
+			$(DOBJ_DIR)/OctiMainWindow.o \
+			$(DOBJ_DIR)/moc_OctiMainWindow.o \
+		$(DOBJ_DIR)/OctiTrainerWindow.o \
+		$(DOBJ_DIR)/moc_OctiTrainerWindow.o
+
+# OCTI AI classes
+
+AGENT_SRCS =	$(SRC_DIR)/Octi2PlayerGameSearchState.cxx \
+		$(SRC_DIR)/OctiAgent.cxx \
+		$(SRC_DIR)/octiAgentMain.cxx
+
+AGENT_HDRS =	$(HDR_DIR)/Octi2PlayerGameSearchState.hxx \
+		$(HDR_DIR)/OctiAgent.hxx
+
+AGENT_OBJS =		$(SOBJ_DIR)/Octi2PlayerGameSearchState.o \
+			$(SOBJ_DIR)/OctiAgent.o \
+			$(SOBJ_DIR)/octiAgentMain.o
+
+AGENT_DLL_OBJS =	$(DOBJ_DIR)/Octi2PlayerGameSearchState.o \
+			$(DOBJ_DIR)/OctiAgent.o \
+			$(DOBJ_DIR)/octiAgentMain.o
+
+# OCTI trainer classes
+
+TRAIN_SRCS =	$(SRC_DIR)/octiTrainer.cxx
+
+TRAIN_HDRS =
+
+TRAIN_OBJS =		$(SOBJ_DIR)/octiTrainer.o
+
+TRAIN_DLL_OBJS =	$(DOBJ_DIR)/octiTrainer.o
+
+# OCTI application classes
+
+APP_SRCS = 	$(SRC_DIR)/octiAppMain.cxx
+
+APP_HDRS =
+
+APP_OBJS =	$(SOBJ_DIR)/octiAppMain.o
+
+APP_DLL_OBJS =	$(DOBJ_DIR)/octiAppMain.o
+
+# ALL
+
+TMPS =		$(BGUI_SRCS) $(BGUI_HDRS)
+
+SRCS =		$(OCTI_SRCS) \
+		$(GUI_SRCS) \
+		$(AGENT_SRCS) \
+		$(TRAIN_SRCS)
+
+HDRS =		$(OCTI_HDRS) \
+		$(GUI_HDRS) \
+		$(AGENT_HDRS) \
+		$(TRAIN_HDRS)
+
