@@ -16,7 +16,7 @@
 
 #define _AIAPI_IMPL_
 
-#include <iostream.h>
+#include <iostream>
 #include "debug.h"
 #include "Error.hxx"
 #include "Date.hxx"
@@ -51,7 +51,7 @@ const SearchState *AlphaBetaSearch::search(MinMaxSearchType type,
   Ptr<SearchState> best;
   int depth;
   unsigned timeStamp;
-  
+
   if(_speculateThread != NULL) {
     _speculateThread->join(1000);
     if(_speculateOn) {
@@ -229,7 +229,7 @@ float AlphaBetaSearch::alphabeta(MinMaxSearchType type,
   if(tte) {
     state->prioritize(TTE_BESTMOVE(tte));
   }
-  
+
   if(type == MM_SEARCH_MAX) {
     g = START_ALPHA_VAL;
     a = alpha;

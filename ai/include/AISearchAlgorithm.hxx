@@ -17,7 +17,7 @@
 #ifndef _AISEARCHALGORITHM_HXX_
 #define _AISEARCHALGORITHM_HXX_
 
-#include <iostream.h>
+#include <iostream>
 #include "aiapi.h"
 #include "BaseObject.hxx"
 #include "Thread.hxx"

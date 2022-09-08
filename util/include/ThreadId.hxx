@@ -16,7 +16,7 @@
 #ifndef _THREADID_HXX_
 #define _THREADID_HXX_
 
-#include <iostream.h>
+#include <iostream>
 #include "utilapi.h"
 #include "PtrReference.hxx"
 
@@ -57,7 +57,7 @@ public:
 #elif defined(__USE_POSIXTHREAD__)
   operator pthread_t () const;
 #endif
-  
+
 private:
 
   friend class Thread;
@@ -92,7 +92,7 @@ inline ThreadId::ThreadId(DWORD id, HANDLE handle) {
 inline boolean ThreadId::operator==(const ThreadId &id) const {
   return _id == id._id;
 }
-    
+
 inline boolean ThreadId::operator!=(const ThreadId &id) const {
   return !(*this == id);
 }
@@ -121,7 +121,7 @@ inline boolean ThreadId::operator==(const ThreadId &id) const {
     return pthread_equal(_id, id._id);
   } else if (_nullId == TRUE && id._nullId == TRUE) {
     return TRUE;
-  } 
+  }
 
   return FALSE;
 }

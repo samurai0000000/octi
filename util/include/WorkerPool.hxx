@@ -17,7 +17,7 @@
 #ifndef _WORKERPOOL_HXX_
 #define _WORKERPOOL_HXX_
 
-#include <iostream.h>
+#include <iostream>
 #include "BaseObject.hxx"
 #include "String.hxx"
 #include "Queue.hxx"

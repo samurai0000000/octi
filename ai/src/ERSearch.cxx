@@ -16,7 +16,7 @@
 
 #define _AIAPI_IMPL_
 
-#include <iostream.h>
+#include <iostream>
 #include "debug.h"
 #include "Date.hxx"
 #include "ERSearch.hxx"

@@ -51,7 +51,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-#include <iostream.h>
+#include <iostream>
 #include "utilapi.h"
 #include "BaseObject.hxx"
 #include "Exception.hxx"
@@ -73,9 +73,9 @@ public:
 };
 
 class UTILAPI String : public BaseObject {
-  
+
   DECLARE_RUNTIME_SERIALIZABLE(String);
-  
+
 public:
 
   // Constructors and destructor.

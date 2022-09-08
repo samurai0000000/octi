@@ -1,2 +1,4 @@
 .depend.tmp
 .depend
+.swp
+build/

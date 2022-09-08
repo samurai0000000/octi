@@ -13,7 +13,7 @@
  * Copyright (c) 1999 Selfsoft Corp. All rights reserved.
  *************************************************************************/
 
-#include <iostream.h>
+#include <iostream>
 #include "argproc.h"
 #include "String.hxx"
 #include "Stack.hxx"

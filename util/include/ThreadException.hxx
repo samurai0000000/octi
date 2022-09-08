@@ -22,45 +22,47 @@
 #ifndef _THREADEXCEPTION_HXX_
 #define _THREADEXCEPTION_HXX_
 
-#include <iostream.h>
+#include <iostream>
 #include "utilapi.h"
 #include "PtrReference.hxx"
 #include "BaseRuntimeClass.hxx"
+
+using namespace std;
 
 __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI ThreadException {
 
 public:
-  
+
   ThreadException();
   ThreadException(const char *msg);
   ThreadException(const ThreadException &e);
   virtual ~ThreadException();
-  
+
   ThreadException &operator=(const ThreadException &e);
   const char *getMessage() const;
   friend ostream &operator<<(ostream &out, const ThreadException &e);
-  
+
 private:
-  
+
   char *_msg;
 
 };
 
 class UTILAPI InterruptedException : public ThreadException {
-  
+
 public:
-  
+
   InterruptedException();
   InterruptedException(const char *msg);
 
 };
 
 class UTILAPI IllegalMonitorStateException : public ThreadException {
-  
+
 public:
-  
+
   IllegalMonitorStateException();
   IllegalMonitorStateException(const char *msg);
 

@@ -16,31 +16,31 @@
 #ifndef _EXCEPTION_HXX_
 #define _EXCEPTION_HXX_
 
-#include <iostream.h>
+#include <iostream>
 #include "utilapi.h"
 #include "BaseObject.hxx"
 
 __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI Exception : public BaseObject {
-  
+
   DECLARE_RUNTIME_SERIALIZABLE(Exception);
-  
+
 public:
-  
+
   Exception();
   Exception(const char *msg);
   Exception(const Exception &e);
   virtual ~Exception();
-  
+
   Exception &operator=(const Exception &e);
   const char *getMessage() const;
   friend ostream &operator<<(ostream &out, const Exception &e);
-  
+
 private:
-  
+
   char *_msg;
-  
+
 };
 
 __END_NAMESPACE(SELFSOFT);

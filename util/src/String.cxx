@@ -16,7 +16,6 @@
 #define _UTILAPI_IMPL_
 
 #include <stdio.h>
-#include <iomanip.h>
 #include "Error.hxx"
 #include "String.hxx"
 

@@ -29,6 +29,8 @@
 
 #include "utilapi.h"
 
+using namespace std;
+
 __BEGIN_NAMESPACE(SELFSOFT);
 
 // The error handler function prototype.

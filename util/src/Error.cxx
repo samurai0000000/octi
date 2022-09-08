@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <iostream.h>
+#include <iostream>
 #include "Error.hxx"
 
 #define MAX_ERRMSG_LEN 1024
@@ -40,7 +40,7 @@ static errhndl_fn GS_fatalhndl = default_fatal_warning_handler;
 void Error::warning (const char *fmt, ...) {
   va_list args;
   char msg[MAX_ERRMSG_LEN];
-  
+
   va_start(args, fmt);
   vsprintf(msg, fmt,  args);
   (*GS_warnhndl) (msg);
@@ -49,7 +49,7 @@ void Error::warning (const char *fmt, ...) {
 void Error::fatal (const char *fmt, ...) {
   va_list args;
   char msg[MAX_ERRMSG_LEN];
-  
+
   va_start(args, fmt);
   vsprintf(msg, fmt,  args);
   (*GS_fatalhndl) (msg);
@@ -73,6 +73,6 @@ errhndl_fn Error::setFatalErrorHandler(errhndl_fn fn) {
   errhndl_fn old = GS_fatalhndl;
   GS_fatalhndl = fn;
   return old;
-} 
+}
 
 __END_NAMESPACE(SELFSOFT);

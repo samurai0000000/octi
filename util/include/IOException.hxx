@@ -16,7 +16,7 @@
 #ifndef _IOEXCEPTION_HXX_
 #define _IOEXCEPTION_HXX_
 
-#include <iostream.h>
+#include <iostream>
 #include "utilapi.h"
 #include "Exception.hxx"
 
@@ -26,14 +26,14 @@ __BEGIN_NAMESPACE(SELFSOFT);
  * The base class of all IO-related exceptions.
  */
 class UTILAPI IOException : public Exception {
-  
+
   DECLARE_RUNTIME_SERIALIZABLE(IOException);
-  
+
 public:
-  
+
   IOException();
   IOException(const char *msg);
-  
+
 };
 
 /**
@@ -44,7 +44,7 @@ class UTILAPI FileNotFoundException : public IOException {
   DECLARE_RUNTIME_SERIALIZABLE(FileNotFoundException);
 
 public:
-  
+
   FileNotFoundException();
   FileNotFoundException(const char *msg);
 

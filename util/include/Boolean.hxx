@@ -19,7 +19,7 @@
 #ifndef _BOOLEAN_HXX_
 #define _BOOLEAN_HXX_
 
-#include <iostream.h>
+#include <iostream>
 #include "utilapi.h"
 #include "BaseObject.hxx"
 
