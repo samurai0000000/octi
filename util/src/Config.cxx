@@ -22,6 +22,31 @@ __BEGIN_NAMESPACE(SELFSOFT);
 IMPLEMENT_RUNTIME_SERIALIZABLE(ConfigEntry, BaseObject, 1);
 IMPLEMENT_RUNTIME_SERIALIZABLE(Config, BaseObject, 1);
 
+ConfigEntry::ConfigEntry()
+{
+
+}
+
+ConfigEntry::~ConfigEntry()
+{
+
+}
+
+Config::Config()
+{
+    reset();
+}
+
+Config::~Config()
+{
+
+}
+
+void Config::reset()
+{
+    _entries.clear();
+}
+
 __END_NAMESPACE(SELFSOFT);
 
 /*

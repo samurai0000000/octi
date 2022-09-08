@@ -28,6 +28,16 @@ IMPLEMENT_RUNTIME_SERIALIZABLE(BigInteger, BaseObject, 1);
 ///////////////////////////////////////////////////////////////////////////
 // Generic implementation in C++
 
+BigInteger::BigInteger()
+{
+
+}
+
+BigInteger::~BigInteger()
+{
+
+}
+
 #endif
 
 __END_NAMESPACE(SELFSOFT);

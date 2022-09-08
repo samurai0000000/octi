@@ -25,3 +25,8 @@ build/Makefile: build.pro
 	@mkdir -p build
 	@cd build && qmake ../build.pro
 
+.PHONY: run
+
+run: build/octi
+	@cd build && ./octi
+

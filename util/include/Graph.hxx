@@ -194,9 +194,9 @@ protected:
 /**
  * Directed graph with adjacency matrix data structure.
  */
-class UTILAPI MatirxDiGraph : public MatrixGraph, public DiGraph {
+class UTILAPI MatrixDiGraph : public MatrixGraph, public DiGraph {
 
-    DECLARE_RUNTIME_SERIALIZABLE(MatirxDiGraph);
+    DECLARE_RUNTIME_SERIALIZABLE(MatrixDiGraph);
 
 public:
 

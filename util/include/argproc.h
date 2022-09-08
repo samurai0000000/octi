@@ -78,7 +78,7 @@ __END_C_DECLS
 
 /*
  * Local variables:
- * mode: C++
+ * mode: C
  * c-file-style: "BSD"
  * c-basic-offset: 4
  * tab-width: 4

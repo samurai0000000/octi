@@ -21,6 +21,11 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 IMPLEMENT_RUNTIME_SERIALIZABLE(TimeZone, BaseObject, 1);
 
+TimeZone::TimeZone()
+{
+
+}
+
 __END_NAMESPACE(SELFSOFT);
 
 /*

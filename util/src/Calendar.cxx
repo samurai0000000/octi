@@ -21,6 +21,21 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 IMPLEMENT_RUNTIME_SERIALIZABLE(Calendar, BaseObject, 1);
 
+Calendar::Calendar()
+{
+
+}
+
+Calendar::~Calendar()
+{
+
+}
+
+const char *Calendar::toString() const
+{
+    return NULL;
+}
+
 __END_NAMESPACE(SELFSOFT);
 
 /*

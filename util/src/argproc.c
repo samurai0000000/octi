@@ -33,7 +33,7 @@ int check_all_digit_str(const char *str) {
     if(*str == '\0') {
         return 0;
     }
-  
+
     for(; *str != '\0'; str++) {
         if(!isdigit(*str)) {
             return 0;
@@ -58,7 +58,7 @@ long time_unit_to_mult_factor(char *units) {
 
 int parse_args(int argc, char *argv[], arg *arg_list[],
                int arg_list_size, int warn_unused) {
- 
+
     int i, j, k, off;
     int type, num_args, num_args_matched, this_arg_matched;
     char *arg_ptr = NULL;
@@ -78,7 +78,7 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
     if(arg_ptr && strcmp(arg_ptr, ".exe") == 0) {
         *arg_ptr = '\0';
     }
-  
+
     for(i = 1; i < argc;) {
         arg_ptr = argv[i];
         num_args_matched = 0;
@@ -89,10 +89,10 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
                     break;
                 }
             }
-      
+
             /* found a match, gather args */
             if(j < arg_list_size) {
-	
+
                 /* if the list of no flag arguments have already been matched
                    and warned_unused is enabled, then print the error message
                    and cause the program to exit; otherwise, just ignore and discard
@@ -102,7 +102,7 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
                             argv[0], arg_list[j]->value[0]);
                     return -1;
                 }
-	
+
                 k = i;
                 if(arg_list[j]->type & IS_MULTI) {
                     while(argv[k] != NULL && !is_arg(argv[k])) {
@@ -113,7 +113,7 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
                         k++;
                     }
                 }
-	
+
                 arg_list[j]->value = &argv[i];
                 arg_list[j]->num_args = k - i;
                 i = k;
@@ -127,13 +127,13 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
                 if(arg_list[j]->flag == NULL) {
                     continue;
                 }
-	
+
                 /* scan to the first differing char */
                 off = 0;
                 while(arg_ptr[off] && arg_list[j]->flag[off] == arg_ptr[off]) {
                     off++;
                 }
-	
+
                 /* if not a complete match, allow plurals (-library, -libraries) */
                 this_arg_matched = 0;
                 if(arg_list[j]->flag[off] != arg_ptr[off]) {
@@ -155,12 +155,12 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
                         num_args_matched++;
                         this_arg_matched = 1;
                     }
-	
+
                     /* this -flag matched multiple times */
                     if(num_args_matched > 1) {
                         break;
                     }
-	
+
                     /* gather args */
                     if(this_arg_matched) {
                         if(arg_list[j]->type & USED_ARG) {
@@ -169,9 +169,9 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
                             return -1;
                         }
                         arg_list[j]->type |= USED_ARG;   /* Flag arg as already used. */
-	  
+
                         k = i + 1;
-	  
+
                         if(arg_list[j]->type & NO_ARG) {
                             /* skip if no arguments are expected. */
                         } else if(arg_list[j]->type & IS_MULTI) {
@@ -186,20 +186,20 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
                                     k++;
                                 }
                             }
-	    
+
                             /* skip just one arg */
                             if(argv[k] != NULL && !is_arg(argv[k])) {
                                 k++;
                             }
                         }
-	  
+
                         arg_list[j]->value = &argv[i + 1];
                         arg_list[j]->num_args = k - i - 1;
                         i = k;
                     }
                 }
             }
-      
+
             /* not matched, warn only when warn_unused is true */
             if(num_args_matched != 1) {
                 if(warn_unused && num_args_matched == 0) {
@@ -207,20 +207,20 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
                             argv[0], arg_ptr);
                     return -1;
                 }
-      
+
                 if(num_args_matched > 1) {
                     fprintf(stderr, "%s: flag specified multiple times: '%s'. "
                             "See -help.\n", argv[0], arg_ptr);
                     return -1;
                 }
-      
+
                 i++;
                 while(argv[i] && !is_arg(argv[i])) {
                     i++;
                 }
             }
         }
-    
+
         /* see if there are special args: -help, -version */
         for(i = 0; i < arg_list_size; i++) {
             if((arg_list[i]->type & HELP_ARG) && arg_list[i]->num_args != -1) {
@@ -234,7 +234,7 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
                 return -1;
             }
         }
-  
+
         /* see if the args violate any conditions placed on the flag */
         for(i = 0; i < arg_list_size; i++) {
             arg_list[i]->type &= ~USED_ARG; /* In case parse_args is called twice. */
@@ -251,7 +251,7 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
                 } else if ((type & NO_ARG) == 0 && num_args == 0) {
                     goto missing_arg;
                 }
-      
+
                 if(type & NUMB_ARG) {
                     for(j = 0; j < num_args; j++) {
                         if(!check_all_digit_str(arg_list[i]->value[j])) {
@@ -260,7 +260,7 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
                     }
                 }
                 break;
-      
+
             case TIME_ARG:
                 if(num_args > 0) {
                     if(!check_all_digit_str(arg_list[i]->value[0])) {
@@ -283,7 +283,7 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
                     goto missing_arg;
                 }
                 break;
-      
+
             default:
                 if(type & NO_ARG) {
                     if((type & IS_OPT) == 0 && num_args == -1) {
@@ -297,27 +297,27 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
         }
 
         return 0;
-    
+
     required_param:
         fprintf(stderr, "%s: the parameter '%s' is required. See -help.\n",
                 argv[0], arg_list[i]->flag ? arg_list[i]->flag : "");
         return -1;
-  
+
     missing_arg:
         fprintf(stderr, "%s: missing argument(s) after '%s'. See -help.\n",
                 argv[0], arg_list[i]->flag ? arg_list[i]->flag : "");
         return -1;
-  
+
     extra_arg:
         fprintf(stderr, "%s: extra argument after '%s'. See -help.\n",
                 argv[0], arg_list[i]->flag ? arg_list[i]->flag : "");
         return -1;
-  
+
     bad_arg:
         fprintf(stderr, "%s: invalid argument after '%s'. See -help.\n",
                 argv[0], arg_list[i]->flag ? arg_list[i]->flag : "");
         return -1;
-  
+
     bad_time:
         fprintf(stderr, "%s: expecting sec|min|hour|day for '%s' See -help..\n",
                 argv[0], arg_list[i]->flag ? arg_list[i]->flag : "");
@@ -330,7 +330,7 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
         char *ptr, *word;
         int *lens;
 #define ZLEN(x) (((x) > 0) ? (x) : 0)
-  
+
         fprintf(stderr, "usage: %s\n", argv0);
         max_len = 0;
         lens = (int *)malloc(sizeof(int) * arg_list_size);
@@ -425,7 +425,7 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
 
     long arg_to_seconds(arg *arg_el) {
         long secs, mult_factor;
-  
+
         if(arg_el->num_args <= 0) {
             return 0;
         }
@@ -443,7 +443,7 @@ int parse_args(int argc, char *argv[], arg *arg_list[],
 
 /*
  * Local variables:
- * mode: C++
+ * mode: C
  * c-file-style: "BSD"
  * c-basic-offset: 4
  * tab-width: 4

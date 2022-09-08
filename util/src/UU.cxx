@@ -34,6 +34,16 @@ static const char s_HEX_MAP[] = {
     'c', 'd', 'e', 'f'
 };
 
+UUEncoder::UUEncoder()
+{
+    reset();
+}
+
+UUEncoder::~UUEncoder()
+{
+
+}
+
 void UUEncoder::update(byte b) {
     char c;
     c = s_HEX_MAP[b >> 4];
@@ -52,6 +62,24 @@ void UUEncoder::update(byte b) {
     }
 }
 
+void UUEncoder::update(const byte *s, int len)
+{
+    throw Exception("Unimplemented");
+}
+
+void UUEncoder::reset()
+{
+    _upperCase = 0;
+    _lineBreak = 0;
+    _linePointer = 0;
+    _encoded = "";
+}
+
+const char *UUEncoder::getEncoded()
+{
+    throw Exception("Unimplemented");
+}
+
 inline byte getHalfByte(char c) throw(UUEncodeFormatException) {
     int i = tolower(c);
     if(i >= '0' && i <= '9') {
@@ -61,6 +89,16 @@ inline byte getHalfByte(char c) throw(UUEncodeFormatException) {
     } else {
         throw UUEncodeFormatException("Invalid hex encoding");
     }
+}
+
+UUDecoder::UUDecoder()
+{
+    reset();
+}
+
+UUDecoder::~UUDecoder()
+{
+
 }
 
 void UUDecoder::update(char c) throw(UUEncodeFormatException) {
@@ -78,6 +116,29 @@ void UUDecoder::update(char c) throw(UUEncodeFormatException) {
         byte b = (getHalfByte(_hexChars[0]) << 4) | getHalfByte(_hexChars[1]);
         _decoded.append(b);
     }
+}
+
+void UUDecoder::update(const char *s, int len) throw(UUEncodeFormatException)
+{
+    throw Exception("Unimplemented");
+}
+
+void UUDecoder::reset()
+{
+    _hexChars[0] = 0;
+    _hexChars[1] = 0;
+    _hexCharsIndex = 0;
+    _decoded.clear();
+}
+
+const byte *UUDecoder::getDecoded() throw(UUEncodeFormatException)
+{
+    throw Exception("Unimplemented");
+}
+
+int UUDecoder::getDecodedLength() const
+{
+    throw Exception("Unimplemented");
 }
 
 __END_NAMESPACE(SELFSOFT);

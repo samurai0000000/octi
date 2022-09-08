@@ -50,7 +50,7 @@ public:
     virtual boolean operator<=(const BaseObject &object) const;
     virtual boolean operator>(const BaseObject &object) const;
     virtual boolean operator<(const BaseObject &object) const;
-  
+
     // Class identifications and representations
     virtual operator const char *() const;
     virtual const char *toString() const;

@@ -88,6 +88,8 @@ public:
     static Calendar *getInstance();
     static Calendar *getInstance(const TimeZone &zone);
 
+    ~Calendar();
+
     Date getTime() const;
     void setTime(const Date &date);
 
@@ -131,7 +133,7 @@ public:
     int getLeastMaximum(CAL_FIELD field) const;
     int getActualMinimum(CAL_FIELD field) const;
     int getActualMaximum(CAL_FIELD field) const;
-  
+
     const char *toString() const;
 
 protected:
@@ -141,7 +143,7 @@ protected:
 
     void computeTime() const;
     void computeFields() const;
-  
+
     long getTimeInMillis() const;
     void setTimeInMillis(long millis);
 

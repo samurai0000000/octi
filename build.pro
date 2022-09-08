@@ -3,6 +3,7 @@
 # Copyright (C) 2022, Charles Chiou
 
 TEMPLATE = subdirs
-SUBDIRS += ai/ai.pro game/game.pro util/util.pro widget/widget.pro octi.pro
+SUBDIRS += ai game util widget
+CONFIG += ordered
+SUBDIRS += octi.pro
 
-octi.depends = ai/ai.pro game/game.pro util/util.pro widget/widget.pro

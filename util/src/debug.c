@@ -30,7 +30,7 @@ void _Assert(char *file, unsigned int line) {
 
 /*
  * Local variables:
- * mode: C++
+ * mode: C
  * c-file-style: "BSD"
  * c-basic-offset: 4
  * tab-width: 4
