@@ -31,7 +31,7 @@ void Matrix<T>::init(int rows, int cols, T *data) {
     ASSERT(data == NULL);
   }
 
-  empty();
+  //empty();
 
   _rows = rows;
   _cols = cols;
@@ -42,7 +42,7 @@ void Matrix<T>::init(int rows, int cols, T *data) {
     _data[i] = new T[_cols];
   }
 
-  if(newData != NULL) {
+  if(data != NULL) {
     for(i = 0; i < _rows; i++)
       memcpy(_data[i], data[i], cols * sizeof(T));
   }
@@ -172,7 +172,7 @@ boolean Matrix<T>::operator!=(const Matrix<T> &matrix)const
     return FALSE;
   }
 
-  if(matirx._rows != _rows || matrix._cols != _cols) {
+  if(matrix._rows != _rows || matrix._cols != _cols) {
     return TRUE;
   }
 
@@ -191,10 +191,10 @@ template <class T>
 void Matrix<T>::nullify() {
   if(_data != NULL) {
     for(int i = 0; i < _rows; i++) {
-      delete [] m_data[i];
+      delete [] _data[i];
     }
-    
-    delete [] m_data;
+
+    delete [] _data;
     _data = NULL;
     _rows = _cols = 0;
   }
@@ -205,7 +205,7 @@ Matrix<T> &Matrix<T>::operator=(const T value) {
   for(int i = 0; i < _rows; i++) {
     T *ptr = _data[i];
     for(int j = 0; j < _cols; j++) {
-      *ptr++ = t;
+      *ptr++ = value;
     }
   }
 
@@ -217,7 +217,7 @@ void Matrix<T>::swapRows(int row1, int row2) {
   ASSERT(_data != NULL);
   ASSERT(row1 >= 0 && row1 < _rows);
   ASSERT(row2 >= 0 && row2 < _rows);
-  
+
   if(row1 != row2) {
     T *ptr = _data[row1];
     _data[row1] = _data[row2];
@@ -236,7 +236,7 @@ void Matrix<T>::swapCols(int col1, int col2) {
     for(int i = 0; i < _rows; i++) {
       tmp = _data[i][col1];
       _data[i][col1] = tmp;
-      _data[i][col1] = data[i][col2];
+      _data[i][col1] = _data[i][col2];
       _data[i][col2] = tmp;
     }
   }
@@ -248,14 +248,14 @@ Matrix<T> Matrix<T>::add(const Matrix<T> &matrix) const throw(MatrixException) {
      _cols == 0 || matrix._cols != _cols) {
     throw MatrixException("Incompatible matrices");
   }
-  
+
   Matrix<T> ret(_rows, _cols);
-  for(int i = 0; i < rows; i++) {
-    for( int j = 0; j < cols; j++ ) {
+  for(int i = 0; i < _rows; i++) {
+    for( int j = 0; j < _cols; j++ ) {
       ret._data[i][j] = _data[i][j] + matrix._data[i][j];
     }
   }
-  
+
   return ret;
 }
 
@@ -268,8 +268,8 @@ Matrix<T> Matrix<T>::subtract(const Matrix<T> &matrix) const
   }
 
   Matrix<T> ret(_rows, _cols);
-  for(int i = 0; i < rows; i++) {
-    for(int j = 0; j < cols; j++) {
+  for(int i = 0; i < _rows; i++) {
+    for(int j = 0; j < _cols; j++) {
       ret._data[i][j] = _data[i][j] - matrix._data[i][j];
     }
   }
@@ -328,8 +328,8 @@ Matrix<T> Matrix<T>::componentWiseMultiply(const Matrix<T> &matrix) const
   }
 
   Matrix<T> ret(_rows, _cols);
-  for(int i = 0; i < rows; i++) {
-    for(int j = 0; j < cols; j++) {
+  for(int i = 0; i < _rows; i++) {
+    for(int j = 0; j < _cols; j++) {
       ret._data[i][j] = _data[i][j] * matrix._data[i][j];
     }
   }
@@ -345,8 +345,8 @@ Matrix<T> Matrix<T>::transpose() const throw(MatrixException) {
 
   Matrix<T> ret(*this);
 
-  for(int i = 0; i < rows; i++) {
-    for(int j = 0; j < cols; j++) {
+  for(int i = 0; i < _rows; i++) {
+    for(int j = 0; j < _cols; j++) {
       ret._data[j][i] = _data[i][j];
     }
   }
@@ -357,7 +357,7 @@ Matrix<T> Matrix<T>::transpose() const throw(MatrixException) {
 template <class T>
 Matrix<T> Matrix<T>::invert() const throw(MatrixException) {
   if(isNull()) {
-    throw DSPBoundaryException("Inverting null matrix");
+    throw MatrixException("Inverting null matrix");
   }
 
   if(!isSquareMatrix()) {
@@ -387,11 +387,11 @@ Matrix<T> Matrix<T>::submatrix(int row, int col, int rows, int cols) const
     throw MatrixException("Null Matrix");
   }
 
-  if(row < 0 || rows < 1 || row + rows > m_rows) {
+  if(row < 0 || rows < 1 || row + rows > _rows) {
     throw MatrixException("Row out of range");
   }
 
-  if(col < 0 || cols < 1 || col + cols > m_cols) {
+  if(col < 0 || cols < 1 || col + cols > _cols) {
     throw MatrixException("Column out of range");
   }
 
@@ -409,8 +409,8 @@ Matrix<T> Matrix<T>::submatrix(int row, int col, int rows, int cols) const
 ///////////////////////////////////////////////////////////////////////////
 //
 // Matrix<Type> transform(
-//    const Matrix<Type>& m1, 
-//    const Matrix<Type>& t1, 
+//    const Matrix<Type>& m1,
+//    const Matrix<Type>& t1,
 //    const Matrix<Type>& t2 )
 //   Transform matrix by multiplying submatrices by transform blocks.
 //
@@ -453,7 +453,7 @@ Matrix<T> Matrix<T>::transform(const Matrix<T> &t1, const Matrix<T> &t2) const
 	  for(k = 0; k < N; k++) {
 	    sum += t1._data[i][k] * _data[u + k][v + j];
 	  }
-	  
+
 	  tmp._data[i][j] = sum;
 	}
       }

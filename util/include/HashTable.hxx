@@ -59,6 +59,9 @@ public:
   boolean hasSameKey(const Key &key) const;
   boolean hasSameValue(const Value &value) const;
 
+  Key _key;
+  Value _value;
+
 };
 
 
@@ -73,7 +76,7 @@ extern UTILAPI const unsigned long G_HashTablePrimeListLength;
  * Bucket[0]
  * Bucket[1] -> <Key, Value> -> <Key, Value> -> ... -> <Key, Value>
  * ...
- * 
+ *
  * Bucket[n] -> <Key, Value> -> <Key, Value> -> ... -> <Key, Value>
  *
  * The setBucketSize() method allows the bucket size to be changed. As a
@@ -130,12 +133,12 @@ public:
 
   HashTableKeyIterator();
   HashTableKeyIterator(const HashTable<Key, Value> &hashTable);
-  
+
   HashTableKeyIterator<Key, Value> &operator=(const HashTable<Key, Value> &hashTable);
 
   boolean isNotNull() const;
   boolean isNextNotNull() const;
-  
+
   const Key *first();
   const Key *current();
   const Key *next();
@@ -143,7 +146,7 @@ public:
 
 private:
 
-  Ptr<SlistIterator<Ptr<HashTable<Key, Value>::HashElementType> > > it;
+  Ptr<SlistIterator<Ptr< HashElement<Key, Value> > > > it;
 
 };
 
@@ -155,20 +158,20 @@ public:
 
   HashTableValueIterator();
   HashTableValueIterator(const HashTable<Key, Value> &hashTable);
-  
+
   HashTableValueIterator<Key, Value> &operator=(const HashTable<Key, Value> &hashTable);
 
   boolean isNotNull() const;
   boolean isNextNotNull() const;
-  
+
   const Value *first();
   const Value *current();
   const Value *next();
   const Value *last();
 
 private:
-  
-  Ptr<SlistIterator<Ptr<HashTable<Key, Value>::HashElementType> > > it;
+
+  Ptr<SlistIterator<Ptr< HashElement<Key, Value> > > > it;
 
 };
 
@@ -177,13 +180,13 @@ private:
 
 template <class Key, class Value>
 inline HashElement<Key, Value>::HashElement(const Key &key, const Value &value) {
-  _name = key;
+  _key = key;
   _value = value;
 }
 
 template <class Key, class Value>
 inline const Key &HashElement<Key, Value>::getKey() const {
-  return _name;
+  return _key;
 }
 
 template <class Key, class Value>
@@ -193,7 +196,7 @@ inline const Value &HashElement<Key, Value>::getValue() const {
 
 template <class Key, class Value>
 inline boolean HashElement<Key, Value>::hasSameKey(const Key &key) const {
-  return _name == key;
+  return _key == key;
 }
 
 template <class Key, class Value>
@@ -236,7 +239,7 @@ inline void HashTable<Key, Value>::setBucketSize(unsigned long bucketSize) {
       _bucket = newBucket;
     } else {
       // Rehash to the new bucket
-      Ptr<SlistIterator<Ptr<HashElementType> > > it = 
+      Ptr<SlistIterator<Ptr<HashElementType> > > it =
 	(SlistIterator<Ptr<HashElementType> > *) _seqList.getIterator();
       while(it->isNextNotNull()) {
 	Ptr<HashElementType> node = *(Ptr<HashElementType> *) it->next();
@@ -246,7 +249,7 @@ inline void HashTable<Key, Value>::setBucketSize(unsigned long bucketSize) {
 
 	list->append(node);                   // Chain to the bucket list
       }
-      
+
       delete [] _bucket;
       _bucket = newBucket;
     }
@@ -353,7 +356,7 @@ inline boolean HashTable<Key, Value>::containsValue(const Value &value) const {
     (SlistIterator<Ptr<HashElementType> > *) _seqList.getIterator();
   while(it->isNextNotNull()) {
     Ptr<HashElementType> node = *(Ptr<HashElementType> *) it->next();
-    
+
     if(node->hasSameValue(value)) {
       return TRUE;
     }
@@ -399,12 +402,12 @@ inline HashTableKeyIterator<Key, Value>::HashTableKeyIterator() {
 
 template <class Key, class Value>
 inline HashTableKeyIterator<Key, Value>::HashTableKeyIterator(const HashTable<Key, Value> &hashTable) {
-  it = (SlistIterator<Ptr<HashTable<Key, Value>::HashElementType> > *) hashTable._seqList.getIterator();
+  it = (SlistIterator<Ptr< HashElement<Key, Value> > > *) hashTable._seqList.getIterator();
 }
 
 template <class Key, class Value>
 inline HashTableKeyIterator<Key, Value> &HashTableKeyIterator<Key, Value>::operator=(const HashTable<Key, Value> &hashTable) {
-  it = (SlistIterator<Ptr<HashTable<Key, Value>::HashElementType> > *) hashTable._seqList.getIterator();
+  it = (SlistIterator<Ptr< HashElement<Key, Value> > > *) hashTable._seqList.getIterator();
   return *this;
 }
 
@@ -420,22 +423,22 @@ inline boolean HashTableKeyIterator<Key, Value>::isNextNotNull() const {
 
 template <class Key, class Value>
 inline const Key *HashTableKeyIterator<Key, Value>::first() {
-  return &(*(Ptr<HashTable<Key, Value>::HashElementType> *) it->first())->getKey();
+  return &(*(Ptr< HashElement<Key, Value> > *) it->first())->getKey();
 }
 
 template <class Key, class Value>
 inline const Key *HashTableKeyIterator<Key, Value>::current() {
-  return &(*(Ptr<HashTable<Key, Value>::HashElementType> *) it->current())->getKey();
+  return &(*(Ptr< HashElement<Key, Value> > *) it->current())->getKey();
 }
 
 template <class Key, class Value>
 inline const Key *HashTableKeyIterator<Key, Value>::next() {
-  return &(*(Ptr<HashTable<Key, Value>::HashElementType> *) it->next())->getKey();
+  return &(*(Ptr< HashElement<Key, Value> > *) it->next())->getKey();
 }
 
 template <class Key, class Value>
 inline const Key *HashTableKeyIterator<Key, Value>::last() {
-  return &(*(Ptr<HashTable<Key, Value>::HashElementType> *) it->last())->getKey();
+  return &(*(Ptr< HashElement<Key, Value> > *) it->last())->getKey();
 }
 
 template <class Key, class Value>
@@ -445,12 +448,12 @@ inline HashTableValueIterator<Key, Value>::HashTableValueIterator() {
 
 template <class Key, class Value>
 inline HashTableValueIterator<Key, Value>::HashTableValueIterator(const HashTable<Key, Value> &hashTable) {
-  it = (SlistIterator<Ptr<HashTable<Key, Value>::HashElementType> > *) hashTable._seqList.getIterator();
+  it = (SlistIterator<Ptr< HashElement<Key, Value> > > *) hashTable._seqList.getIterator();
 }
 
 template <class Key, class Value>
 HashTableValueIterator<Key, Value> &HashTableValueIterator<Key, Value>::operator=(const HashTable<Key, Value> &hashTable) {
-  it = (SlistIterator<Ptr<HashTable<Key, Value>::HashElementType> > *) it._seqList.getIterator();
+  it = (SlistIterator<Ptr< HashElement<Key, Value> > > *) it._seqList.getIterator();
   return *this;
 }
 
@@ -466,22 +469,22 @@ inline boolean HashTableValueIterator<Key, Value>::isNextNotNull() const {
 
 template <class Key, class Value>
 inline const Value *HashTableValueIterator<Key, Value>::first() {
-  return &(*(Ptr<HashTable<Key, Value>::HashElementType> *) it->first())->getValue();
+  return &(*(Ptr< HashElement<Key, Value> > *) it->first())->getValue();
 }
 
 template <class Key, class Value>
 inline const Value *HashTableValueIterator<Key, Value>::current() {
-  return &(*(Ptr<HashTable<Key, Value>::HashElementType> *) it->current())->getValue();
+  return &(*(Ptr< HashElement<Key, Value> > *) it->current())->getValue();
 }
 
 template <class Key, class Value>
 inline const Value *HashTableValueIterator<Key, Value>::next() {
-  return &(*(Ptr<HashTable<Key, Value>::HashElementType> *) it->next())->getValue();
+  return &(*(Ptr< HashElement<Key, Value> > *) it->next())->getValue();
 }
 
 template <class Key, class Value>
 inline const Value *HashTableValueIterator<Key, Value>::last() {
-  return &(*(Ptr<HashTable<Key, Value>::HashElementType> *) it->last())->getValue();
+  return &(*(Ptr< HashElement<Key, Value> > *) it->last())->getValue();
 }
 
 __END_NAMESPACE(SELFSOFT);

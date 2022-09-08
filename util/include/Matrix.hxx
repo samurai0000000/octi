@@ -98,7 +98,7 @@ private:
   void init(int rows, int cols, T *data = NULL);
 
   T *_data;
-  
+
   int _rows;
   int _cols;
 
@@ -139,7 +139,7 @@ inline Matrix<T>::Matrix(const Matrix<T> &matrix) {
 template <class T>
 Matrix<T> &Matrix<T>::operator=(const Matrix<T> &matrix) {
   if(&matrix != this) {
-    init(matrix._rows, matirx._cols, matrix._data);
+    init(matrix._rows, matrix._cols, matrix._data);
   }
 
   return *this;
@@ -151,8 +151,8 @@ inline Matrix<T>::~Matrix() {
 }
 
 template <class T>
-inline Matrix<T> &Matrix<T>::setSize(int rows, int cols) { 
-  init(rows, cols); 
+inline Matrix<T> &Matrix<T>::setSize(int rows, int cols) {
+  init(rows, cols);
   return *this;
 }
 
@@ -201,7 +201,7 @@ inline Matrix<T> Matrix<T>::operator*(const Matrix<T>& matrix) const
 }
 
 template <class T>
-Matrix<T> Matrix<T>::operator*(const T &multipler) const
+Matrix<T> Matrix<T>::operator*(const T &multiplier) const
   throw(MatrixException) {
   return multiply(multiplier);
 }
@@ -213,13 +213,13 @@ inline Matrix<T> Matrix<T>::operator<<(const Matrix<T> &matrix) const
 }
 
 template <class T>
-Matrix<T> multiply(const T &multipler, const Matrix<T> &matrix)
+Matrix<T> multiply(const T &multiplier, const Matrix<T> &matrix)
   throw(MatrixException) {
   return matrix.multiply(multiplier);
 }
 
 template <class T>
-Matrix<T> operator*(const T &multipler, const Matrix<T> &matrix)
+Matrix<T> operator*(const T &multiplier, const Matrix<T> &matrix)
   throw(MatrixException) {
   return matrix.multiply(multiplier);
 }

@@ -56,7 +56,7 @@ private:
 
 template <class T>
 class Dlist : public AbstractList<T> {
-  
+
 public:
 
   Dlist();
@@ -110,7 +110,7 @@ public:
 
   DlistIterator();
   DlistIterator(const Dlist<T> &list);
-  
+
   DlistIterator<T> &operator=(const Dlist<T> &list);
 
   boolean isNotNull() const;
@@ -123,7 +123,7 @@ public:
   const T *next();
   const T *last();
 
-private:  
+private:
 
   const Dlist<T> *_list;
   DlistNode<T> *_current, *_prev, *_next;
@@ -161,7 +161,7 @@ template <class T> inline Dlist<T> &Dlist<T>::operator=(const Dlist<T> &list) {
     _size++;
     _last->_data = node->_data;
     _last->_prev = _last->_next = NULL;
-    
+
     while((node = node->_next) != NULL) {
       _last->_next = new DlistNode<T>();
       _size++;
@@ -222,7 +222,7 @@ template <class T> inline boolean Dlist<T>::append(const T *data, int len) {
     _last = node;
   } else {
     newfirst->_prev = _last;
-    _last->_next = newfirst;    
+    _last->_next = newfirst;
     _last = node;
   }
 
@@ -354,7 +354,7 @@ template <class T> inline boolean Dlist<T>::prepend(const Dlist<T> &list) {
     }
     _first = newfirst;
   }
-  
+
   return TRUE;
 }
 
@@ -364,7 +364,7 @@ template <class T> inline boolean Dlist<T>::insert(const T &datum, int pos) {
   if(pos == 0) {
     node = new DlistNode<T>();
     _size++;
-    
+
     node->_data = datum;
     node->_next = _first;
     node->_prev = NULL;
@@ -395,10 +395,10 @@ template <class T> inline boolean Dlist<T>::insert(const T &datum, int pos) {
 	current = current->_prev;
       }
     }
-    
+
     node = new DlistNode<T>();
     _size++;
-    
+
     node->_data = datum;
     node->_next = current;
     node->_prev = current->_prev;
@@ -459,7 +459,7 @@ template <class T> inline boolean Dlist<T>::insert(const T *data, int len,
 	current = current->_prev;
       }
     }
-    
+
     for(i = 0; i < len; i++) {
       if(newfirst == NULL) {
 	newfirst = node = new DlistNode<T>();
@@ -474,7 +474,7 @@ template <class T> inline boolean Dlist<T>::insert(const T *data, int len,
 	node->_data = data[i];
       }
     }
-    
+
     node->_next = current;
     newfirst->_prev = current->_prev;
     current->_prev->_next = newfirst;
@@ -484,7 +484,7 @@ template <class T> inline boolean Dlist<T>::insert(const T *data, int len,
   return TRUE;
 }
 
-template <class T> inline boolean Dlist<T>::insert(Dlist<T> &data, int pos) {
+template <class T> inline boolean Dlist<T>::insert(Dlist<T> &list, int pos) {
   DlistNode<T> *scan, *node = NULL, *newfirst = NULL;
   int i;
 
@@ -532,7 +532,7 @@ template <class T> inline boolean Dlist<T>::insert(Dlist<T> &data, int pos) {
 	current = current->_prev;
       }
     }
-    
+
     for(scan = list._first; scan != NULL; scan = scan->_next) {
       if(newfirst == NULL) {
 	newfirst = node = new DlistNode<T>();
@@ -547,7 +547,7 @@ template <class T> inline boolean Dlist<T>::insert(Dlist<T> &data, int pos) {
 	node->_data = scan->_data;
       }
     }
-    
+
     node->_next = current;
     newfirst->_prev = current->_prev;
     current->_prev->_next = newfirst;
@@ -581,7 +581,7 @@ template <class T> inline boolean Dlist<T>::remove(int pos1, int pos2) {
   } else {
     endRemove = _first;
   }
-    
+
   for(i = pos1; i <= pos2; i++) {
     if(endRemove == NULL) {
       throw DlistException("pos out of bounds");
@@ -632,7 +632,7 @@ template <class T> inline boolean Dlist<T>::removeElement(const T &datum,
     }
   }
 
-  return FALSE; 
+  return FALSE;
 }
 
 template <class T> inline boolean Dlist<T>::removeFirst() {
@@ -651,7 +651,7 @@ template <class T> inline boolean Dlist<T>::removeFirst() {
     delete node;
     _size--;
   }
-  
+
   return TRUE;
 }
 
@@ -782,7 +782,7 @@ template <class T> inline int Dlist<T>::lastIndexOf(const T &datum) const {
 
     node = node->_prev;
   }
-  
+
   return -1;
 }
 
@@ -791,7 +791,7 @@ template <class T> inline int Dlist<T>::size() const {
 
   /*
     int len = 0;
-  
+
     for(DlistNode<T> *node = _first; node != NULL; node = node->_next) {
     len++;
     }

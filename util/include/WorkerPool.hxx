@@ -42,6 +42,8 @@ public:
 
 };
 
+class WorkerPool;
+
 /**
  * The worker class is an interface for classes that implements primitives
  * for supporting distributed or parallel work.

@@ -57,7 +57,7 @@ private:
 
 template <class T>
 class Slist : public AbstractList<T> {
-  
+
 public:
 
   Slist();
@@ -111,7 +111,7 @@ public:
 
   SlistIterator();
   SlistIterator(const Slist<T> &list);
-  
+
   SlistIterator<T> &operator=(const Slist<T> &list);
 
   boolean isNotNull() const;
@@ -122,7 +122,7 @@ public:
   const T *next();
   const T *last();
 
-private:  
+private:
 
   const Slist<T> *_list;
   SlistNode<T> *_current, *_next;
@@ -154,13 +154,13 @@ template <class T> inline Slist<T> &Slist<T>::operator=(const Slist<T> &list) {
 
   clear();
   SlistNode<T> *node = list._first;
-    
+
   if(node != NULL) {
     _first = _last = new SlistNode<T>();
     _size++;
     _last->_data = node->_data;
     _last->_next = NULL;
-    
+
     while((node = node->_next) != NULL) {
       _last->_next = new SlistNode<T>();
       _size++;
@@ -353,7 +353,7 @@ template <class T> inline boolean Slist<T>::insert(const T &datum, int pos) {
   } else {
     SlistNode<T> *current, *previous;
     current = previous = _first;
-    
+
     for(int i = 0; i < pos; i++) {
       if(current == NULL) {
 	throw SlistException("pos out of bounds");
@@ -361,10 +361,10 @@ template <class T> inline boolean Slist<T>::insert(const T &datum, int pos) {
       previous = current;
       current = current->_next;
     }
-    
+
     node = new SlistNode<T>();
     _size++;
-    
+
     node->_data = datum;
     node->_next = current;
     previous->_next = node;
@@ -404,7 +404,7 @@ template <class T> inline boolean Slist<T>::insert(const T *data, int len,
   } else {
     SlistNode<T> *current, *previous;
     current = previous = _first;
-    
+
     for(i = 0; i < pos; i++) {
       if(current == NULL) {
 	throw SlistException("pos out of bounds");
@@ -412,7 +412,7 @@ template <class T> inline boolean Slist<T>::insert(const T *data, int len,
       previous = current;
       current = current->_next;
     }
-    
+
     for(i = 0; i < len; i++) {
       if(newfirst == NULL) {
 	newfirst = node = new SlistNode<T>();
@@ -425,7 +425,7 @@ template <class T> inline boolean Slist<T>::insert(const T *data, int len,
 	node->_data = data[i];
       }
     }
-    
+
     node->_next = current;
     previous->_next = newfirst;
   }
@@ -433,7 +433,7 @@ template <class T> inline boolean Slist<T>::insert(const T *data, int len,
   return TRUE;
 }
 
-template <class T> inline boolean Slist<T>::insert(Slist<T> &data, int pos) {
+template <class T> inline boolean Slist<T>::insert(Slist<T> &list, int pos) {
   SlistNode<T> *scan, *node = NULL, *newfirst = NULL;
   int i;
 
@@ -462,7 +462,7 @@ template <class T> inline boolean Slist<T>::insert(Slist<T> &data, int pos) {
   } else {
     SlistNode<T> *current, *previous;
     current = previous = _first;
-    
+
     for(i = 0; i < pos; i++) {
       if(current == NULL) {
 	throw SlistException("pos out of bounds");
@@ -470,7 +470,7 @@ template <class T> inline boolean Slist<T>::insert(Slist<T> &data, int pos) {
       previous = current;
       current = current->_next;
     }
-    
+
     for(scan = list._first; scan != NULL; scan = scan->_next) {
       if(newfirst == NULL) {
 	newfirst = node = new SlistNode<T>();
@@ -483,7 +483,7 @@ template <class T> inline boolean Slist<T>::insert(Slist<T> &data, int pos) {
 	node->_data = scan->_data;
       }
     }
-    
+
     node->_next = current;
     previous->_next = newfirst;
   }
@@ -515,7 +515,7 @@ template <class T> inline boolean Slist<T>::remove(int pos1, int pos2) {
   } else {
     endRemove = _first;
   }
-    
+
   for(i = pos1; i <= pos2; i++) {
     if(endRemove == NULL) {
       throw SlistException("pos out of bounds");
@@ -683,7 +683,7 @@ template <class T> inline int Slist<T>::lastIndexOf(const T &datum) const {
       return index;
     }
   }
-  
+
   return -1;
 }
 
@@ -692,12 +692,12 @@ template <class T> inline int Slist<T>::size() const {
 
   /*
     int len = 0;
-  
+
     for(SlistNode<T> *node = _first; node != NULL; node = node->_next) {
     len++;
     }
 
-    return len; 
+    return len
   */
 }
 

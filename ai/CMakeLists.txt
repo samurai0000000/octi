@@ -11,9 +11,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include
 		)
 add_library(ss_ai SHARED
 		src/AISearchAlgorithm.cxx
-#		src/AlphaBetaSearch.cxx
-#		src/ERSearch.cxx
+		src/AlphaBetaSearch.cxx
+		src/ERSearch.cxx
 		src/MPIAlphaBetaSearch.cxx
-#		src/ThreadAlphaBetaSearch.cxx
-#		src/TranspositionTable.cxx
+		src/ThreadAlphaBetaSearch.cxx
+		src/TranspositionTable.cxx
 	)
