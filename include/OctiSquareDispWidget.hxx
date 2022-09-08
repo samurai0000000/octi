@@ -27,100 +27,110 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 extern OCTIAPI void paint_pod_at(QPainter &p, int sqsize, boolean invert,
-				 OctiPod pod, int x, int y,
-				 QBitmap *mask = NULL, boolean fillMask = TRUE);
+                                 OctiPod pod, int x, int y,
+                                 QBitmap *mask = NULL, boolean fillMask = TRUE);
 
 class OCTIAPI OctiSquareDispWidget : public QWidget,
-				     protected OctiBoardListener {
-  
-  Q_OBJECT;
-  
+                                     protected OctiBoardListener {
+
+    Q_OBJECT;
+
 public:
-  
-  OctiSquareDispWidget(QWidget *parent = NULL, const char *name = NULL, WFlags f = 0);
-  ~OctiSquareDispWidget();
 
-  void setShowInverted(boolean inverted);
-  boolean isShowInverted() const;
-  void setDisplaySquare(int x, int y, boolean forceload = FALSE);
+    OctiSquareDispWidget(QWidget *parent = NULL, const char *name = NULL, WFlags f = 0);
+    ~OctiSquareDispWidget();
 
-  int getSelectedPods(OctiPod pods[]) const;
-  OctiPlayer getSelectedPodsOwner() const;
+    void setShowInverted(boolean inverted);
+    boolean isShowInverted() const;
+    void setDisplaySquare(int x, int y, boolean forceload = FALSE);
+
+    int getSelectedPods(OctiPod pods[]) const;
+    OctiPlayer getSelectedPodsOwner() const;
 
 private:
 
-  friend class OctiBoardDispWidget;
-  friend class OctiBoardWidget;
+    friend class OctiBoardDispWidget;
+    friend class OctiBoardWidget;
 
-  void setBoard(OctiBoard *board);
-  void setSquareSize(int size);
-  
-protected:
-
-  void paintEvent(QPaintEvent *pe);
-  void mousePressEvent(QMouseEvent *e);
-  void mouseReleaseEvent(QMouseEvent *e);
-  void mouseMoveEvent(QMouseEvent *e);
-  void dragEnterEvent(QDragEnterEvent *e);
-  void dragMoveEvent(QDragMoveEvent *e);
-  void dragLeaveEvent(QDragLeaveEvent *e);
-  void dropEvent(QDropEvent *e);
+    void setBoard(OctiBoard *board);
+    void setSquareSize(int size);
 
 protected:
 
-  void gameChanged(OctiBoard *src, OctiGame *oldGame, OctiGame *newGame);
-  void boardUpdated(OctiBoard *src, const OctiMove *move, boolean undo);
+    void paintEvent(QPaintEvent *pe);
+    void mousePressEvent(QMouseEvent *e);
+    void mouseReleaseEvent(QMouseEvent *e);
+    void mouseMoveEvent(QMouseEvent *e);
+    void dragEnterEvent(QDragEnterEvent *e);
+    void dragMoveEvent(QDragMoveEvent *e);
+    void dragLeaveEvent(QDragLeaveEvent *e);
+    void dropEvent(QDropEvent *e);
+
+protected:
+
+    void gameChanged(OctiBoard *src, OctiGame *oldGame, OctiGame *newGame);
+    void boardUpdated(OctiBoard *src, const OctiMove *move, boolean undo);
 
 private:
 
-  int getSquareLoc(int x, int y);
+    int getSquareLoc(int x, int y);
 
 private:
 
-  OctiBoard *_board;
-  OctiPod _pods[7];
-  int _numPods;
-  boolean _selected[7];
-  boolean _showInverted;
-  int _squareSize;
-  int _x, _y;
-  int _highlightSqr;
-  OctiDir _highlightDir;
-  int _supressSqr;
-  OctiDir _supressDir;
-  boolean _supressOn;
-  QPoint _pressPos;
+    OctiBoard *_board;
+    OctiPod _pods[7];
+    int _numPods;
+    boolean _selected[7];
+    boolean _showInverted;
+    int _squareSize;
+    int _x, _y;
+    int _highlightSqr;
+    OctiDir _highlightDir;
+    int _supressSqr;
+    OctiDir _supressDir;
+    boolean _supressOn;
+    QPoint _pressPos;
 
 };
 
 // Inline functions
 
 inline void OctiSquareDispWidget::setBoard(OctiBoard *board) {
-  if(board != NULL && _board != board) {
-    if(_board != NULL) {
-      _board->removeOctiBoardListener(this);
+    if(board != NULL && _board != board) {
+        if(_board != NULL) {
+            _board->removeOctiBoardListener(this);
+        }
+        _board = board;
+        _board->addOctiBoardListener(this);
     }
-    _board = board;
-    _board->addOctiBoardListener(this);
-  }
 }
 
 inline void OctiSquareDispWidget::setShowInverted(boolean inverted) {
-  if(_showInverted != inverted) {
-    _showInverted = inverted;
-    repaint();
-  }
+    if(_showInverted != inverted) {
+        _showInverted = inverted;
+        repaint();
+    }
 }
 
 inline boolean OctiSquareDispWidget::isShowInverted() const {
-  return _showInverted;
+    return _showInverted;
 }
 
 inline void OctiSquareDispWidget::setSquareSize(int size) {
-  _squareSize = size;
-  repaint();
+    _squareSize = size;
+    repaint();
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

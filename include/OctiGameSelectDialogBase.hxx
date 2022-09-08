@@ -1,19 +1,19 @@
 /****************************************************************************
-** Form interface generated from reading ui file 'ui/OctiGameSelectDialogBase.ui'
-**
-** Created: Thu Aug 1 17:35:11 2002
-**      by:  The User Interface Compiler (uic)
-**
-** WARNING! All changes made in this file will be lost!
-****************************************************************************/
+ ** Form interface generated from reading ui file 'ui/OctiGameSelectDialogBase.ui'
+ **
+ ** Created: Thu Aug 1 17:35:11 2002
+ **      by:  The User Interface Compiler (uic)
+ **
+ ** WARNING! All changes made in this file will be lost!
+ ****************************************************************************/
 #ifndef OCTIGAMESELECTDIALOGBASE_H
 #define OCTIGAMESELECTDIALOGBASE_H
 
 #include <qvariant.h>
 #include <qdialog.h>
-class QVBoxLayout; 
-class QHBoxLayout; 
-class QGridLayout; 
+class QVBoxLayout;
+class QHBoxLayout;
+class QGridLayout;
 class QButtonGroup;
 class QCheckBox;
 class QComboBox;
@@ -22,10 +22,11 @@ class QPushButton;
 class QRadioButton;
 
 class OctiGameSelectDialogBase : public QDialog
-{ 
+{
     Q_OBJECT
 
 public:
+
     OctiGameSelectDialogBase( QWidget* parent = 0, const char* name = 0, bool modal = FALSE, WFlags fl = 0 );
     ~OctiGameSelectDialogBase();
 
@@ -52,3 +53,13 @@ protected:
 };
 
 #endif // OCTIGAMESELECTDIALOGBASE_H
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

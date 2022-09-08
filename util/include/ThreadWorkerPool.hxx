@@ -26,67 +26,77 @@ class UTILAPI ThreadWorker : public Worker, public Thread {
 
 public:
 
-  ThreadWorker();
-  ~ThreadWorker();
+    ThreadWorker();
+    ~ThreadWorker();
 
-  // Implements the Runnable interface
-  void run();
+    // Implements the Runnable interface
+    void run();
 
 protected:
 
-  // Implements the Worker interface
-  void serviceWorkUnit(WorkUnit &unit, void *args);
+    // Implements the Worker interface
+    void serviceWorkUnit(WorkUnit &unit, void *args);
 
 private:
 
-  friend class ThreadWorkerPool;
+    friend class ThreadWorkerPool;
 
-  void stopRun();
+    void stopRun();
 
 private:
 
-  boolean _running;
-  WorkUnit *_unit;
-  void *_args;
+    boolean _running;
+    WorkUnit *_unit;
+    void *_args;
 
 };
 
 class UTILAPI ThreadWorkerPool : public WorkerPool {
 
-  DECLARE_RUNTIME_DISCOVERABLE(ThreadWorkerPool);
+    DECLARE_RUNTIME_DISCOVERABLE(ThreadWorkerPool);
 
 public:
 
-  ThreadWorkerPool(int poolsize);
+    ThreadWorkerPool(int poolsize);
 
 protected:
 
-  void initWorkers();
-  void destroyWorkers();
+    void initWorkers();
+    void destroyWorkers();
 
 private:
   
-  ThreadGroup _thrGroup;
+    ThreadGroup _thrGroup;
 
 };
 
 // Inline functions
 
 inline ThreadWorker::ThreadWorker() {
-  _unit = NULL;
-  _args = NULL;
-  _running = FALSE;
+    _unit = NULL;
+    _args = NULL;
+    _running = FALSE;
 }
 
 inline ThreadWorker::~ThreadWorker() {
-  stopRun();
+    stopRun();
 }
 
 inline ThreadWorkerPool::ThreadWorkerPool(int poolsize)
-  : WorkerPool(poolsize), _thrGroup("ThreadWorkerPool") {
-  initWorkers();
+    : WorkerPool(poolsize), _thrGroup("ThreadWorkerPool") {
+    initWorkers();
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

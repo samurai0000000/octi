@@ -24,3 +24,13 @@ int main(int argc, char *argv[])
  * indent-tabs-mode: nil
  * End:
  */
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

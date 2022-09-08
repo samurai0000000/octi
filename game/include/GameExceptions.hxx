@@ -24,70 +24,80 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class GAMEAPI IllegalMoveSyntaxException : public Exception {
 
-  DECLARE_RUNTIME_SERIALIZABLE(IllegalMoveSyntaxException);
+    DECLARE_RUNTIME_SERIALIZABLE(IllegalMoveSyntaxException);
 
 public:
 
-  IllegalMoveSyntaxException();
-  IllegalMoveSyntaxException(const char *msg);
+    IllegalMoveSyntaxException();
+    IllegalMoveSyntaxException(const char *msg);
 
 };
 
 class GAMEAPI IllegalMoveException : public Exception {
 
-  DECLARE_RUNTIME_SERIALIZABLE(IllegalMoveException);
+    DECLARE_RUNTIME_SERIALIZABLE(IllegalMoveException);
 
 public:
 
-  IllegalMoveException();
-  IllegalMoveException(const char *msg);
+    IllegalMoveException();
+    IllegalMoveException(const char *msg);
 
 };
 
 
 class GAMEAPI GameSessionException : public Exception {
 
-  DECLARE_RUNTIME_SERIALIZABLE(GameSessionException);
+    DECLARE_RUNTIME_SERIALIZABLE(GameSessionException);
 
 public:
 
-  GameSessionException();
-  GameSessionException(const char *msg);
+    GameSessionException();
+    GameSessionException(const char *msg);
 
 };
 
 // Inline functions
 
 inline IllegalMoveSyntaxException::IllegalMoveSyntaxException()
-  : Exception() {
+    : Exception() {
 
 }
 
 inline IllegalMoveSyntaxException::IllegalMoveSyntaxException(const char *msg)
-  : Exception(msg) {
+    : Exception(msg) {
 
 }
 
 inline IllegalMoveException::IllegalMoveException()
-  : Exception()  {
+    : Exception()  {
 
 }
 
 inline IllegalMoveException::IllegalMoveException(const char *msg)
-  : Exception(msg)  {
+    : Exception(msg)  {
 
 }
 
 inline GameSessionException::GameSessionException()
-  : Exception() {
+    : Exception() {
 
 }
 
 inline GameSessionException::GameSessionException(const char *msg)
-  : Exception(msg) {
+    : Exception(msg) {
 
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

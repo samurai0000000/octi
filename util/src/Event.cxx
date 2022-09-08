@@ -23,26 +23,36 @@ IMPLEMENT_RUNTIME_SERIALIZABLE(EventObject, BaseObject, 1);
 IMPLEMENT_RUNTIME_DISCOVERABLE(EventListenerList, BaseObject);
 
 void EventListenerList::addEventListener(EventListener *listener) {
-  if(listener == NULL) {
-    return;
-  }
-
-  int size = _listeners.size();
-  for(int i = 0; i < size; i++) {
-    if(getListenerAt(i) == listener) {
-      return;
+    if(listener == NULL) {
+        return;
     }
-  }
 
-  _listeners.append(Void(listener));
+    int size = _listeners.size();
+    for(int i = 0; i < size; i++) {
+        if(getListenerAt(i) == listener) {
+            return;
+        }
+    }
+
+    _listeners.append(Void(listener));
 }
 
 void EventListenerList::removeEventListener(EventListener *listener) {
-  if(listener == NULL) {
-    return;
-  }
+    if(listener == NULL) {
+        return;
+    }
 
-  _listeners.removeElement(Void(listener));
+    _listeners.removeElement(Void(listener));
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

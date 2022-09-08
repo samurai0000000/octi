@@ -26,55 +26,65 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI StringTokenizer : public BaseObject {
 
-  DECLARE_RUNTIME_SERIALIZABLE(StringTokenizer);
+    DECLARE_RUNTIME_SERIALIZABLE(StringTokenizer);
 
 public:
 
-  StringTokenizer(const char *s = NULL,
-		  const char *delims = DEFAULT_DELIMETERS);
-  ~StringTokenizer();
+    StringTokenizer(const char *s = NULL,
+                    const char *delims = DEFAULT_DELIMETERS);
+    ~StringTokenizer();
 
-  void setString(const char *s);
-  void setDelimeters(const char *delims = DEFAULT_DELIMETERS);
+    void setString(const char *s);
+    void setDelimeters(const char *delims = DEFAULT_DELIMETERS);
 
-  const char *getString() const;
-  const char *getDelimeters() const;
+    const char *getString() const;
+    const char *getDelimeters() const;
 
-  const char *nextToken();
-  int countTokens() const;
-  void reset();
-
-private:
-
-  boolean isDelimeter(char c) const;
+    const char *nextToken();
+    int countTokens() const;
+    void reset();
 
 private:
 
-  char *_string;
-  char *_delims;
-  char _token[MAX_TOKEN_BUFFER];
+    boolean isDelimeter(char c) const;
 
-  int _prevIdx;
-  int _curIdx;
+private:
+
+    char *_string;
+    char *_delims;
+    char _token[MAX_TOKEN_BUFFER];
+
+    int _prevIdx;
+    int _curIdx;
 
 };
 
 // Inline functions.
 
 inline StringTokenizer::StringTokenizer(const char *s, const char *delims) {
-  _string = _delims = NULL;
-  setDelimeters(delims);
-  setString(s);
+    _string = _delims = NULL;
+    setDelimeters(delims);
+    setString(s);
 }
 
 inline const char *StringTokenizer::getString() const {
-  return _string;
+    return _string;
 }
 
 inline const char *StringTokenizer::getDelimeters() const {
-  return _delims;
+    return _delims;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

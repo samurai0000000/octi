@@ -26,11 +26,21 @@ class UTILAPI Pair : public BaseObject {
 
 public:
 
-  Name _name;
-  Value _value;
+    Name _name;
+    Value _value;
 
 };
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

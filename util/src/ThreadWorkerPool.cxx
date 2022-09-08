@@ -28,50 +28,60 @@ __BEGIN_NAMESPACE(SELFSOFT);
 IMPLEMENT_RUNTIME_DISCOVERABLE(ThreadWorkerPool, WorkerPool);
 
 void ThreadWorker::serviceWorkUnit(WorkUnit &unit, void *args) {
-  synchronized(*this, {
-    _unit = &unit;
-    _args = args;
-    notify();
-  });
+    synchronized(*this, {
+            _unit = &unit;
+            _args = args;
+            notify();
+        });
 }
 
 void ThreadWorker::run() {
-  _running = TRUE;
-  while(_running) {
-    try {
-      synchronized(*this, {
-	wait(DEFAULT_THR_WAIT_TIMEOUT);
-	if(_unit != NULL) {
-	  try {
-	    _unit->doWork(_args);
-	  } catch(...) {
-	    Error::warning("error occured on servicing unit\n");
-	  }
-	}
-      });
-    } catch(InterruptedException e) {
+    _running = TRUE;
+    while(_running) {
+        try {
+            synchronized(*this, {
+                    wait(DEFAULT_THR_WAIT_TIMEOUT);
+                    if(_unit != NULL) {
+                        try {
+                            _unit->doWork(_args);
+                        } catch(...) {
+                            Error::warning("error occured on servicing unit\n");
+                        }
+                    }
+                });
+        } catch(InterruptedException e) {
+        }
     }
-  }
 }
 
 void ThreadWorker::stopRun() {
-  _running = FALSE;
-  interrupt();
-  join();
+    _running = FALSE;
+    interrupt();
+    join();
 }
 
 void ThreadWorkerPool::initWorkers() {
-  for(int i = 0; i < _poolsize; i++) {
-    ThreadWorker *w = new ThreadWorker();
-    w->start();
-    _workers[i] = w;
-    _freeWorkers.append(_workers[i]);
-  }
+    for(int i = 0; i < _poolsize; i++) {
+        ThreadWorker *w = new ThreadWorker();
+        w->start();
+        _workers[i] = w;
+        _freeWorkers.append(_workers[i]);
+    }
 }
 
 void ThreadWorkerPool::destroyWorkers() {
-  synchronized(*this, {
-    // Unfinished
-  });
+    synchronized(*this, {
+            // Unfinished
+        });
 }
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

@@ -1,11 +1,11 @@
 /****************************************************************************
-** Form implementation generated from reading ui file 'ui/OctiPreferencesDialogBase.ui'
-**
-** Created: Thu Aug 1 17:35:12 2002
-**      by:  The User Interface Compiler (uic)
-**
-** WARNING! All changes made in this file will be lost!
-****************************************************************************/
+ ** Form implementation generated from reading ui file 'ui/OctiPreferencesDialogBase.ui'
+ **
+ ** Created: Thu Aug 1 17:35:12 2002
+ **      by:  The User Interface Compiler (uic)
+ **
+ ** WARNING! All changes made in this file will be lost!
+ ****************************************************************************/
 #include "OctiPreferencesDialogBase.hxx"
 
 #include <qvariant.h>
@@ -34,7 +34,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     : QDialog( parent, name, modal, fl )
 {
     if ( !name )
-	setName( "OctiPreferencesDialogBase" );
+        setName( "OctiPreferencesDialogBase" );
     resize( 624, 356 ); 
     setCaption( trUtf8( "OctiPreferencesDialogBase" ) );
     setSizeGripEnabled( TRUE );
@@ -358,3 +358,13 @@ OctiPreferencesDialogBase::~OctiPreferencesDialogBase()
     // no need to delete child widgets, Qt does it all for us
 }
 
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

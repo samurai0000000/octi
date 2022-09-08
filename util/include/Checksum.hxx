@@ -35,38 +35,48 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI Checksum : public BaseObject {
 
-  DECLARE_RUNTIME_DISCOVERABLE(Checksum);
+    DECLARE_RUNTIME_DISCOVERABLE(Checksum);
 
 public:
 
-  Checksum();
+    Checksum();
 
-  virtual void update(byte b) = 0;
-  virtual void update(byte *b, int len) = 0;
+    virtual void update(byte b) = 0;
+    virtual void update(byte *b, int len) = 0;
   
-  virtual void reset();
-  virtual word32 value() const = 0;
-  virtual word32 length() const = 0;
+    virtual void reset();
+    virtual word32 value() const = 0;
+    virtual word32 length() const = 0;
 
 protected:
   
-  word32 _value;
-  word32 _length;
+    word32 _value;
+    word32 _length;
 
 };
 
 // Inline functions
 
 inline Checksum::Checksum() {
-  _value = 0;
-  _length = 0;
+    _value = 0;
+    _length = 0;
 }
 
 inline void Checksum::reset() {
-  _value = 0;
-  _length = 0;
+    _value = 0;
+    _length = 0;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

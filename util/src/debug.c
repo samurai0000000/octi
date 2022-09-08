@@ -22,8 +22,18 @@
 #include "utilapi.h"
 
 void _Assert(char *file, unsigned int line) {
-  fflush(NULL);
-  fprintf(stderr, "\nAssertion failed: %s, line %u\n", file, line);
-  fflush(stderr);
-  abort();
+    fflush(NULL);
+    fprintf(stderr, "\nAssertion failed: %s, line %u\n", file, line);
+    fflush(stderr);
+    abort();
 }
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

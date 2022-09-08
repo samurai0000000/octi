@@ -23,34 +23,44 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI CRC32 : public Checksum {
 
-  DECLARE_RUNTIME_SERIALIZABLE(CRC32);
+    DECLARE_RUNTIME_SERIALIZABLE(CRC32);
 
 public:
 
-  void update(byte b);
-  void update(byte *b, int len);
+    void update(byte b);
+    void update(byte *b, int len);
   
-  void reset();
-  word32 value() const;
-  word32 length() const;
+    void reset();
+    word32 value() const;
+    word32 length() const;
 
 private:
 
-  static word32 _s_CRCTable[];
+    static word32 _s_CRCTable[];
 
 };
 
 // Inline functions
 
 void CRC32::reset() {
-  _value = 0;
-  _length = 0;
+    _value = 0;
+    _length = 0;
 }
 
 inline word32 CRC32::length() const {
-  return _length;
+    return _length;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

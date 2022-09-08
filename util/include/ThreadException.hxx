@@ -31,22 +31,22 @@ using namespace std;
 
 __BEGIN_NAMESPACE(SELFSOFT);
 
-class UTILAPI ThreadException {
+class UTILAPI ThreadException : public Root {
 
 public:
 
-  ThreadException();
-  ThreadException(const char *msg);
-  ThreadException(const ThreadException &e);
-  virtual ~ThreadException();
+    ThreadException();
+    ThreadException(const char *msg);
+    ThreadException(const ThreadException &e);
+    virtual ~ThreadException();
 
-  ThreadException &operator=(const ThreadException &e);
-  const char *getMessage() const;
-  friend ostream &operator<<(ostream &out, const ThreadException &e);
+    ThreadException &operator=(const ThreadException &e);
+    const char *getMessage() const;
+    friend ostream &operator<<(ostream &out, const ThreadException &e);
 
 private:
 
-  char *_msg;
+    char *_msg;
 
 };
 
@@ -54,8 +54,8 @@ class UTILAPI InterruptedException : public ThreadException {
 
 public:
 
-  InterruptedException();
-  InterruptedException(const char *msg);
+    InterruptedException();
+    InterruptedException(const char *msg);
 
 };
 
@@ -63,8 +63,8 @@ class UTILAPI IllegalMonitorStateException : public ThreadException {
 
 public:
 
-  IllegalMonitorStateException();
-  IllegalMonitorStateException(const char *msg);
+    IllegalMonitorStateException();
+    IllegalMonitorStateException(const char *msg);
 
 };
 
@@ -72,8 +72,8 @@ class UTILAPI IllegalThreadStateException : public ThreadException {
 
 public:
 
-  IllegalThreadStateException();
-  IllegalThreadStateException(const char *msg);
+    IllegalThreadStateException();
+    IllegalThreadStateException(const char *msg);
 
 };
 
@@ -81,8 +81,8 @@ class UTILAPI ThreadDeathException : public ThreadException {
 
 public:
 
-  ThreadDeathException();
-  ThreadDeathException(const char *msg);
+    ThreadDeathException();
+    ThreadDeathException(const char *msg);
 
 };
 
@@ -123,3 +123,13 @@ inline ThreadDeathException::ThreadDeathException(const char *msg) : ThreadExcep
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

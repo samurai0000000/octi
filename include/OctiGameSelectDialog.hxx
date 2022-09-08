@@ -25,23 +25,33 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class OCTIAPI OctiGameSelectDialog : public OctiGameSelectDialogBase {
 
-  Q_OBJECT;
-  
+    Q_OBJECT;
+
 public:
 
-  OctiGameSelectDialog(QWidget* parent = 0, const char* name = 0, bool modal = TRUE, WFlags fl = 0);
-  
-  ~OctiGameSelectDialog();
+    OctiGameSelectDialog(QWidget* parent = 0, const char* name = 0, bool modal = TRUE, WFlags fl = 0);
 
-  OctiGameMode getGameMode() const;
-  OctiGameBases getGameBases() const;
-  boolean useSuperProngs() const;
-  boolean edgeless() const;
-  boolean useTimeLimit() const;
-  int getTimeLimit() const;  // In seconds
+    ~OctiGameSelectDialog();
+
+    OctiGameMode getGameMode() const;
+    OctiGameBases getGameBases() const;
+    boolean useSuperProngs() const;
+    boolean edgeless() const;
+    boolean useTimeLimit() const;
+    int getTimeLimit() const;  // In seconds
 
 };
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

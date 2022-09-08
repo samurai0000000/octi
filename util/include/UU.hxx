@@ -30,12 +30,12 @@ __BEGIN_NAMESPACE(SELFSOFT);
  */
 class UTILAPI UUEncodeFormatException : public Exception {
 
-  DECLARE_RUNTIME_SERIALIZABLE(UUEncodeFormatException);
+    DECLARE_RUNTIME_SERIALIZABLE(UUEncodeFormatException);
   
 public:
   
-  UUEncodeFormatException();
-  UUEncodeFormatException(const char *msg);
+    UUEncodeFormatException();
+    UUEncodeFormatException(const char *msg);
 
 };
 
@@ -44,54 +44,54 @@ public:
  */
 class UTILAPI UUEncoder : public ByteEncoder {
 
-  DECLARE_RUNTIME_SERIALIZABLE(UUEncoder);
+    DECLARE_RUNTIME_SERIALIZABLE(UUEncoder);
   
 public:
   
-  UUEncoder();
-  ~UUEncoder();
+    UUEncoder();
+    ~UUEncoder();
   
-  void update(byte b);
-  void update(const byte *b, int len);
-  void reset();
+    void update(byte b);
+    void update(const byte *b, int len);
+    void reset();
   
-  void setUpperCase(const boolean toUpperCase);
-  boolean isUpperCase() const;
-  void setLineBreakAt(int lineBreak);
-  int getLineBreakAt() const;
+    void setUpperCase(const boolean toUpperCase);
+    boolean isUpperCase() const;
+    void setLineBreakAt(int lineBreak);
+    int getLineBreakAt() const;
   
-  const char *getEncoded();
+    const char *getEncoded();
 
 private:
   
-  boolean _upperCase;
-  int _lineBreak;
-  int _linePointer;
-  String _encoded;
+    boolean _upperCase;
+    int _lineBreak;
+    int _linePointer;
+    String _encoded;
 
 };
 
 
 class UTILAPI UUDecoder : public ByteDecoder {
 
-  DECLARE_RUNTIME_SERIALIZABLE(UUDecoder);
+    DECLARE_RUNTIME_SERIALIZABLE(UUDecoder);
   
 public:
 
-  UUDecoder();
-  ~UUDecoder();
+    UUDecoder();
+    ~UUDecoder();
 
-  void update(char c) throw(UUEncodeFormatException);
-  void update(const char *s, int len) throw(UUEncodeFormatException);
-  void reset();
-  const byte *getDecoded() throw(UUEncodeFormatException);
-  int getDecodedLength() const;
+    void update(char c) throw(UUEncodeFormatException);
+    void update(const char *s, int len) throw(UUEncodeFormatException);
+    void reset();
+    const byte *getDecoded() throw(UUEncodeFormatException);
+    int getDecodedLength() const;
 
 private:
 
-  char _hexChars[2];
-  int _hexCharsIndex;
-  BufferedArray<byte> _decoded;
+    char _hexChars[2];
+    int _hexCharsIndex;
+    BufferedArray<byte> _decoded;
 
 };
 
@@ -102,10 +102,20 @@ inline UUEncodeFormatException::UUEncodeFormatException() : Exception(){
 }
 
 inline UUEncodeFormatException::UUEncodeFormatException(const char *msg)
-  : Exception(msg) {
+    : Exception(msg) {
 
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

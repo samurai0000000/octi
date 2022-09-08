@@ -22,12 +22,12 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI Gf : public BaseObject {
 
-  DECLARE_RUNTIME_SERIALIZBLE(Gf);
+    DECLARE_RUNTIME_SERIALIZBLE(Gf);
   
 public:
 
-  Gf();
-  ~Gf();
+    Gf();
+    ~Gf();
 
 private:
 
@@ -36,3 +36,13 @@ private:
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

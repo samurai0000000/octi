@@ -26,69 +26,79 @@ IMPLEMENT_RUNTIME_SERIALIZABLE(TimerEvent, BaseObject, 1);
 IMPLEMENT_RUNTIME_SERIALIZABLE(Timer, BaseObject, 1);
 
 void TimerTick::run() {
-  unsigned long delay = _timer->getDelay();
-  unsigned long currentTime = Date::currentTimeMillis();
-  unsigned long nextTime;
+    unsigned long delay = _timer->getDelay();
+    unsigned long currentTime = Date::currentTimeMillis();
+    unsigned long nextTime;
 
-  _running = true;
+    _running = true;
 
-  while(_running) {
-    try {
-      nextTime = currentTime + delay;
-      unsigned long waitTime = nextTime - Date::currentTimeMillis();
-      currentTime = nextTime;
-      if(waitTime > 0) {
-	Thread::sleep(waitTime);
-      } else {
-	// The target listener cannot keep up with the ticks.
-	// Coalesce the firings.
-	Thread::sleep(1);
-	do {
-	  currentTime += delay;
-	} while(currentTime < Date::currentTimeMillis());
-      }
-      _timer->tick(this);
-    } catch(InterruptedException e) {
+    while(_running) {
+        try {
+            nextTime = currentTime + delay;
+            unsigned long waitTime = nextTime - Date::currentTimeMillis();
+            currentTime = nextTime;
+            if(waitTime > 0) {
+                Thread::sleep(waitTime);
+            } else {
+                // The target listener cannot keep up with the ticks.
+                // Coalesce the firings.
+                Thread::sleep(1);
+                do {
+                    currentTime += delay;
+                } while(currentTime < Date::currentTimeMillis());
+            }
+            _timer->tick(this);
+        } catch(InterruptedException e) {
+        }
     }
-  }
 }
 
 void TimerTick::stopTick() {
-  synchronized(*this, {
-    _running = false;
-    interrupt();
-  });
+    synchronized(*this, {
+            _running = false;
+            interrupt();
+        });
 }
 
 void Timer::start() {
-  if(_tick == NULL) {
-    _tick = new TimerTick(this);
-    _tick->start();
-  }
+    if(_tick == NULL) {
+        _tick = new TimerTick(this);
+        _tick->start();
+    }
 }
 
 void Timer::stop() {
-  if(_tick != NULL) {
-    _tick->stopTick();
-    _tick = NULL;
-  }
+    if(_tick != NULL) {
+        _tick->stopTick();
+        _tick = NULL;
+    }
 }
 
 void Timer::restart() {
-  stop();
-  start();
+    stop();
+    start();
 }
 
 void Timer::fireTimeTick() {
-  TimerEvent e(this);
-  for(int i = _listeners.getNumListeners() - 1; i >= 0; i--) {
-    TimerListener *listener = (TimerListener *) _listeners.getListenerAt(i);
-    listener->timeTick(&e);
-  }
+    TimerEvent e(this);
+    for(int i = _listeners.getNumListeners() - 1; i >= 0; i--) {
+        TimerListener *listener = (TimerListener *) _listeners.getListenerAt(i);
+        listener->timeTick(&e);
+    }
 }
 
 void Timer::tick(BaseObject *source) {
-  fireTimeTick();
+    fireTimeTick();
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

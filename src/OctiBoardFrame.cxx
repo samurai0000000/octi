@@ -23,12 +23,12 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 OctiBoardFrame::OctiBoardFrame(QWidget *parent, const char *name, WFlags f)
-  : QFrame(parent, name, f) {
-  _bw = new OctiBoardWidget(this);
+    : QFrame(parent, name, f) {
+    _bw = new OctiBoardWidget(this);
 
-  QVBoxLayout *vlayout1 = new QVBoxLayout(this);
-  vlayout1->addWidget(_bw);
-  setFrameStyle(StyledPanel | Sunken);
+    QVBoxLayout *vlayout1 = new QVBoxLayout(this);
+    vlayout1->addWidget(_bw);
+    setFrameStyle(StyledPanel | Sunken);
 }
 
 OctiBoardFrame::~OctiBoardFrame() {
@@ -37,3 +37,12 @@ OctiBoardFrame::~OctiBoardFrame() {
 
 __END_NAMESPACE(SELFSOFT);
 
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

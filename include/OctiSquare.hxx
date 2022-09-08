@@ -31,36 +31,46 @@ __BEGIN_NAMESPACE(SELFSOFT);
  * operators are available as utility methods for a game-logic controller
  * class.
  */
-class OCTIAPI OctiSquare {
+class OCTIAPI OctiSquare : public Root {
 
 public:
 
-  virtual void clear() = 0;  
-  virtual void addPod(OctiPod pod) = 0;
-  virtual void removePod(OctiPod pod) = 0;
-  virtual boolean containsPod(OctiPod pod) const = 0;
+    virtual void clear() = 0;
+    virtual void addPod(OctiPod pod) = 0;
+    virtual void removePod(OctiPod pod) = 0;
+    virtual boolean containsPod(OctiPod pod) const = 0;
 
-  virtual int getNumPods() const = 0;
-  virtual OctiPod *getPodAt(int index) const = 0;
-  virtual boolean isEmpty() const = 0;
-  virtual boolean isEmptyWithout(const Slist<OctiPod> &ghostPods) const = 0;
-  virtual OctiSquareType getType() const = 0;
-  
-  virtual boolean isCaptured() const = 0;
-  virtual boolean isCapturedBy(OctiPlayer player) const = 0;
-  virtual boolean hasEnemyOf(OctiPlayer player) const = 0;
-  virtual boolean isEnemyOf(OctiPlayer player) const = 0;
+    virtual int getNumPods() const = 0;
+    virtual OctiPod *getPodAt(int index) const = 0;
+    virtual boolean isEmpty() const = 0;
+    virtual boolean isEmptyWithout(const Slist<OctiPod> &ghostPods) const = 0;
+    virtual OctiSquareType getType() const = 0;
 
-  virtual boolean hasSameMaterialsAs(const OctiSquare &sq) const = 0;
+    virtual boolean isCaptured() const = 0;
+    virtual boolean isCapturedBy(OctiPlayer player) const = 0;
+    virtual boolean hasEnemyOf(OctiPlayer player) const = 0;
+    virtual boolean isEnemyOf(OctiPlayer player) const = 0;
 
-  // Get the location of this square on the OCTI board
-  virtual int getLocId() const = 0;
-  virtual void getLocXY(int &x, int &y) const = 0;
-  virtual int getLocX() const = 0;
-  virtual int getLocY() const = 0;
+    virtual boolean hasSameMaterialsAs(const OctiSquare &sq) const = 0;
+
+    // Get the location of this square on the OCTI board
+    virtual int getLocId() const = 0;
+    virtual void getLocXY(int &x, int &y) const = 0;
+    virtual int getLocX() const = 0;
+    virtual int getLocY() const = 0;
 
 };
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

@@ -23,8 +23,8 @@
 
 __BEGIN_NAMESPACE(SELFSOFT);
 
-class OCTIAPI OctiPreferencesDialog : public OctiPreferencesDialogBase { 
-  Q_OBJECT;
+class OCTIAPI OctiPreferencesDialog : public OctiPreferencesDialogBase {
+    Q_OBJECT;
 
 public:
 
@@ -36,3 +36,13 @@ public:
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

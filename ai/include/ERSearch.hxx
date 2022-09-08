@@ -31,12 +31,12 @@ __BEGIN_NAMESPACE(SELFSOFT);
  */
 class AIAPI ERSearchParameters : public SearchParameters {
 
-  DECLARE_RUNTIME_SERIALIZABLE(ERSearchParameters);
+    DECLARE_RUNTIME_SERIALIZABLE(ERSearchParameters);
 
 public:
 
-  ERSearchParameters();
-  ~ERSearchParameters();
+    ERSearchParameters();
+    ~ERSearchParameters();
 
 };
 
@@ -46,21 +46,21 @@ public:
 class AIAPI ERSearch : public MinMaxAlgorithm {
 
   
-  DECLARE_RUNTIME_DISCOVERABLE(ERSearch);
+    DECLARE_RUNTIME_DISCOVERABLE(ERSearch);
   
 public:
 
-  ERSearch(unsigned long tableSize = DEFAULT_ER_TRANSTAB_SIZE);
-  ~ERSearch();
+    ERSearch(unsigned long tableSize = DEFAULT_ER_TRANSTAB_SIZE);
+    ~ERSearch();
 
-  const SearchState *searchMax(SearchState *state,
-			       const SearchParameters *params = NULL);
-  const SearchState *searchMin(SearchState *state,
-			       const SearchParameters *params = NULL);
+    const SearchState *searchMax(SearchState *state,
+                                 const SearchParameters *params = NULL);
+    const SearchState *searchMin(SearchState *state,
+                                 const SearchParameters *params = NULL);
   
-  void printLastSearchStatistics(ostream &out) const;
-  void printTotalStatistics(ostream &out) const;
-  void resetStatistics();
+    void printLastSearchStatistics(ostream &out) const;
+    void printTotalStatistics(ostream &out) const;
+    void resetStatistics();
 
 
 };
@@ -90,3 +90,13 @@ inline void ERSearch::resetStatistics() {
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

@@ -33,12 +33,12 @@ __BEGIN_NAMESPACE(SELFSOFT);
  */
 class UTILAPI Base64FormatException : public Exception {
 
-  DECLARE_RUNTIME_SERIALIZABLE(Base64FormatException);
+    DECLARE_RUNTIME_SERIALIZABLE(Base64FormatException);
   
 public:
   
-  Base64FormatException();
-  Base64FormatException(const char *msg);
+    Base64FormatException();
+    Base64FormatException(const char *msg);
   
 };
 
@@ -53,30 +53,30 @@ public:
  */
 class UTILAPI Base64Encoder : public ByteEncoder {
 
-  DECLARE_RUNTIME_SERIALIZABLE(Base64Encoder);
+    DECLARE_RUNTIME_SERIALIZABLE(Base64Encoder);
   
 public:
   
-  Base64Encoder();
-  ~Base64Encoder();
+    Base64Encoder();
+    ~Base64Encoder();
   
-  void update(byte b);
-  void update(const byte *b, int len);
-  void reset();
+    void update(byte b);
+    void update(const byte *b, int len);
+    void reset();
   
-  void setLineBreakAt(int lineBreak);
-  int getLineBreakAt() const;
+    void setLineBreakAt(int lineBreak);
+    int getLineBreakAt() const;
   
-  const char *getEncoded();
+    const char *getEncoded();
 
 private:
   
-  int _lineBreak;
-  int _linePointer;
-  String _encoded;
-  byte _buffer[3];
-  int _bufferPointer;
-  boolean _padded;
+    int _lineBreak;
+    int _linePointer;
+    String _encoded;
+    byte _buffer[3];
+    int _bufferPointer;
+    boolean _padded;
 
 };
 
@@ -85,49 +85,49 @@ private:
  */
 class UTILAPI Base64Decoder : public ByteDecoder {
 
-  DECLARE_RUNTIME_SERIALIZABLE(Base64Decoder);
+    DECLARE_RUNTIME_SERIALIZABLE(Base64Decoder);
 
 public:
   
-  Base64Decoder();
-  ~Base64Decoder();
+    Base64Decoder();
+    ~Base64Decoder();
 
-  void update(char c) throw(Base64FormatException);
-  void update(const char *s, int len) throw(Base64FormatException);
-  void reset();
-  const byte *getDecoded() throw(Base64FormatException);
-  int getDecodedLength() const;
+    void update(char c) throw(Base64FormatException);
+    void update(const char *s, int len) throw(Base64FormatException);
+    void reset();
+    const byte *getDecoded() throw(Base64FormatException);
+    int getDecodedLength() const;
 
 private:
   
-  char _base64Chars[4];
-  int _base64CharsIndex;
-  BufferedArray<byte> _decoded;
-  boolean _padded;
-  boolean _isFinal;
+    char _base64Chars[4];
+    int _base64CharsIndex;
+    BufferedArray<byte> _decoded;
+    boolean _padded;
+    boolean _isFinal;
   
 };
 
 // Inline functions for Base64FormatException class are below.
 
 inline void Base64Encoder::update(const byte *b, int len) {
-  ASSERT(b != NULL);
-  ASSERT(len >= 0);
-  for(int i = 0; i < len; i++) {
-    update(b[i]);
-  }
+    ASSERT(b != NULL);
+    ASSERT(len >= 0);
+    for(int i = 0; i < len; i++) {
+        update(b[i]);
+    }
 }
 
 inline Base64FormatException::Base64FormatException() : Exception() {
 }
 
 inline Base64FormatException::Base64FormatException(const char *msg)
-  : Exception(msg) {
+    : Exception(msg) {
 }
 
 inline Base64Encoder::Base64Encoder() {
-  _lineBreak = 0;
-  reset();
+    _lineBreak = 0;
+    reset();
 }
 
 inline Base64Encoder::~Base64Encoder() {
@@ -135,24 +135,24 @@ inline Base64Encoder::~Base64Encoder() {
 }
 
 inline void Base64Encoder::reset() {
-  memset(_buffer, 0, 3);
-  _bufferPointer = -1;
-  _linePointer = 0;
-  _encoded = (char *) NULL;
-  _padded = FALSE;
+    memset(_buffer, 0, 3);
+    _bufferPointer = -1;
+    _linePointer = 0;
+    _encoded = (char *) NULL;
+    _padded = FALSE;
 }
 
 inline void Base64Encoder::setLineBreakAt(int lineBreak) {
-  ASSERT(lineBreak > 0);
-  _lineBreak = lineBreak;
+    ASSERT(lineBreak > 0);
+    _lineBreak = lineBreak;
 }
 
 inline int Base64Encoder::getLineBreakAt() const {
-  return _lineBreak;
+    return _lineBreak;
 }
 
 inline Base64Decoder::Base64Decoder() {
-  reset();
+    reset();
 }
 
 inline Base64Decoder::~Base64Decoder() {
@@ -160,25 +160,35 @@ inline Base64Decoder::~Base64Decoder() {
 }
 
 inline void Base64Decoder::reset() {
-  _base64CharsIndex = 0;
-  _decoded.clear();
-  _padded = FALSE;
-  _isFinal = FALSE;
+    _base64CharsIndex = 0;
+    _decoded.clear();
+    _padded = FALSE;
+    _isFinal = FALSE;
 }
 
 inline void Base64Decoder::update(const char *s, int len)
-  throw(Base64FormatException) {
-  ASSERT(s != NULL);
-  ASSERT(len >= 0);
-  for(int i = 0; i < len; i++) {
-    update(s[i]);
-  }
+    throw(Base64FormatException) {
+    ASSERT(s != NULL);
+    ASSERT(len >= 0);
+    for(int i = 0; i < len; i++) {
+        update(s[i]);
+    }
 }
 
 inline int Base64Decoder::getDecodedLength() const {
-  return _decoded.size();
+    return _decoded.size();
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

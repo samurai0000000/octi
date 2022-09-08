@@ -40,13 +40,23 @@ class UTILAPI Error {
 
 public:
 
-  static void warning(const char *fmt, ...);
-  static void fatal(const char *fmt, ...);
-  static errhndl_fn setWarningHandler(errhndl_fn fn);
-  static errhndl_fn setFatalErrorHandler(errhndl_fn fn);
+static void warning(const char *fmt, ...);
+static void fatal(const char *fmt, ...);
+static errhndl_fn setWarningHandler(errhndl_fn fn);
+static errhndl_fn setFatalErrorHandler(errhndl_fn fn);
 
 };
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

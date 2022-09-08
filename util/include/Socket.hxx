@@ -27,40 +27,40 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI Socket : public BaseObject {
 
-  DECLARE_RUNTIME_DISCOVERABLE(Socket);
+    DECLARE_RUNTIME_DISCOVERABLE(Socket);
 
 protected:
 
-  Socket() throw(IOException);
+    Socket() throw(IOException);
   
-  void open();
+    void open();
 
 public:
 
-  Socket(InetAddress &addr, int port) throw(IOException);
-  Socket(InetAddress &addr, int port, InetAddress &localAddr, int localPort)
-    throw(IOException);
-  Socket(const char *host, int port) throw(IOException);
-  Socket(const char *host, int port, const char *localAddr, int localPort)
-    throw(IOException);
-  ~Socket();
+    Socket(InetAddress &addr, int port) throw(IOException);
+    Socket(InetAddress &addr, int port, InetAddress &localAddr, int localPort)
+        throw(IOException);
+    Socket(const char *host, int port) throw(IOException);
+    Socket(const char *host, int port, const char *localAddr, int localPort)
+        throw(IOException);
+    ~Socket();
 
 private:
 
-  String _hostName;
-  int _port;
-  int _sock;
+    String _hostName;
+    int _port;
+    int _sock;
 
 };
 
 class UTILAPI ServerSocket : public BaseObject {
 
-  DECLARE_RUNTIME_DISCOVERABLE(ServerSocket);
+    DECLARE_RUNTIME_DISCOVERABLE(ServerSocket);
 
 public:
 
-  ServerSocket();
-  ~ServerSocket();
+    ServerSocket();
+    ~ServerSocket();
 
 private:
 
@@ -103,3 +103,13 @@ inline ServerSocket::~ServerSocket() {
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

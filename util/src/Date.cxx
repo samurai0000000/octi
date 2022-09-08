@@ -30,32 +30,42 @@ IMPLEMENT_RUNTIME_SERIALIZABLE(Date, BaseObject, 1);
 
 void Date::captureCurrentTime() {
 #ifdef _WIN32
-  struct _timeb buffer;
-  _ftime(&buffer);
-  _time = buffer.time;
+    struct _timeb buffer;
+    _ftime(&buffer);
+    _time = buffer.time;
 #else
-  struct timeval tv;
-  gettimeofday(&tv, 0);
-  _time = tv.tv_sec;
+    struct timeval tv;
+    gettimeofday(&tv, 0);
+    _time = tv.tv_sec;
 #endif
 }
 
 unsigned long Date::currentTimeMillis() {
-  unsigned long t;
+    unsigned long t;
 
 #ifdef _WIN32
-  struct _timeb buffer;
-  _ftime(&buffer);
-  t = buffer.time * 1000;
-  t += buffer.millitm;
+    struct _timeb buffer;
+    _ftime(&buffer);
+    t = buffer.time * 1000;
+    t += buffer.millitm;
 #else
-  struct timeval tv;
-  gettimeofday(&tv, 0);
-  t = tv.tv_sec * 1000;
-  t += (tv.tv_usec / 1000);
+    struct timeval tv;
+    gettimeofday(&tv, 0);
+    t = tv.tv_sec * 1000;
+    t += (tv.tv_usec / 1000);
 #endif
 
-  return t;
+    return t;
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

@@ -58,12 +58,12 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI DllException : public Exception {
 
-  DECLARE_RUNTIME_SERIALIZABLE(DllException);
+    DECLARE_RUNTIME_SERIALIZABLE(DllException);
 
 public:
 
-  DllException();
-  DllException(const char *msg);
+    DllException();
+    DllException(const char *msg);
 
 };
 
@@ -71,63 +71,63 @@ class DllManager;
 
 class UTILAPI Dll : public BaseObject {
 
-  DECLARE_RUNTIME_DISCOVERABLE(Dll);
+    DECLARE_RUNTIME_DISCOVERABLE(Dll);
 
 public:
 
-  ~Dll();
+    ~Dll();
 
-  void *getSymbol(const char *symbol) throw(DllException);
+    void *getSymbol(const char *symbol) throw(DllException);
 
 private:
 
-  friend class DllManager;
+    friend class DllManager;
 
-  static Dll *createDllObject(const char *libraryName, const char *libraryPath)
-    throw(DllException);
-  Dll();
+    static Dll *createDllObject(const char *libraryName, const char *libraryPath)
+        throw(DllException);
+    Dll();
 
 #ifdef __USE_WIN_DLL__
-  HINSTANCE _dlhandle;
+    HINSTANCE _dlhandle;
 #else
-  void *_dlhandle;
+    void *_dlhandle;
 #endif
 
-  String _libraryName;
-  String _libraryPath;
-  HashTable<String, Void> _symbolTable;
+    String _libraryName;
+    String _libraryPath;
+    HashTable<String, Void> _symbolTable;
 
 };
 
 class UTILAPI DllManager : public BaseObject {
 
-  DECLARE_RUNTIME_DISCOVERABLE(DllManager);
+    DECLARE_RUNTIME_DISCOVERABLE(DllManager);
 
 public:
   
-  DllManager();
-  ~DllManager();
+    DllManager();
+    ~DllManager();
   
-  boolean loadLibrary(const char *library);
-  boolean unloadLibrary(const char *library);
-  boolean isLibraryLoaded(const char *library) const;
+    boolean loadLibrary(const char *library);
+    boolean unloadLibrary(const char *library);
+    boolean isLibraryLoaded(const char *library) const;
 
-  void *getSymbol(const char *library, const char *symbol);
-  const char *getErrorMessage() const;
+    void *getSymbol(const char *library, const char *symbol);
+    const char *getErrorMessage() const;
 
-  boolean addSearchPath(const char *path);
-  boolean removeSearchPath(const char *path);
-  Slist<String> getSearchPaths() const;
+    boolean addSearchPath(const char *path);
+    boolean removeSearchPath(const char *path);
+    Slist<String> getSearchPaths() const;
 
 protected:
 
-  void loadSystemSearchPaths();
-  Dll *getDll(const char *library);
+    void loadSystemSearchPaths();
+    Dll *getDll(const char *library);
 
-  HashTable<String, Ptr<Dll> >  _libraryTable;
-  Slist<String> _systemSearchPaths;
-  Slist<String> _userSearchPaths;
-  String _lastErrMsg;
+    HashTable<String, Ptr<Dll> >  _libraryTable;
+    Slist<String> _systemSearchPaths;
+    Slist<String> _userSearchPaths;
+    String _lastErrMsg;
 
 };
 
@@ -146,7 +146,7 @@ inline Dll::Dll() : _symbolTable(hashString) {
 }
 
 inline DllManager::DllManager() : _libraryTable(hashString) {
-  loadSystemSearchPaths();
+    loadSystemSearchPaths();
 }
 
 inline DllManager::~DllManager() {
@@ -154,34 +154,44 @@ inline DllManager::~DllManager() {
 }
 
 inline boolean DllManager::loadLibrary(const char *library) {
-  return getDll(library) != NULL;
+    return getDll(library) != NULL;
 }
 
 inline const char *DllManager::getErrorMessage() const {
-  return _lastErrMsg;
+    return _lastErrMsg;
 }
 
 inline boolean DllManager::addSearchPath(const char *path) {
-  if(_userSearchPaths.firstIndexOf(path) >= 0) {
-    return FALSE;
-  }
+    if(_userSearchPaths.firstIndexOf(path) >= 0) {
+        return FALSE;
+    }
 
-  if(path != NULL && strcmp(path, ".") != 0) {
-    _userSearchPaths.append(path);
-  }
-  return TRUE;
+    if(path != NULL && strcmp(path, ".") != 0) {
+        _userSearchPaths.append(path);
+    }
+    return TRUE;
 }
 
 inline boolean DllManager::removeSearchPath(const char *path) {
-  return _userSearchPaths.removeElement(path);
+    return _userSearchPaths.removeElement(path);
 }
 
 inline Slist<String> DllManager::getSearchPaths() const {
-  Slist<String> searchPaths(_systemSearchPaths);
-  searchPaths.append(_userSearchPaths);
-  return searchPaths;
+    Slist<String> searchPaths(_systemSearchPaths);
+    searchPaths.append(_userSearchPaths);
+    return searchPaths;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

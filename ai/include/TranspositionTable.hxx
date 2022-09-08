@@ -36,16 +36,16 @@ class TranspositionTable;
  */
 typedef struct _TranspositionTableEntry {
   
-  int depth;
-  byte flag;
-  float xxx;
-  float yyy;
-  unsigned long zzz;
+    int depth;
+    byte flag;
+    float xxx;
+    float yyy;
+    unsigned long zzz;
 
-  // Don't modify the below variables directly,
-  // The TranspositionTable class manages them.
-  word32 checksum;
-  boolean stale;
+    // Don't modify the below variables directly,
+    // The TranspositionTable class manages them.
+    word32 checksum;
+    boolean stale;
 
 } TranspositionTableEntry;
 
@@ -64,33 +64,43 @@ typedef struct _TranspositionTableEntry {
  */
 class AIAPI TranspositionTable : public BaseObject {
   
-  DECLARE_RUNTIME_DISCOVERABLE(TranspositionTable);
+    DECLARE_RUNTIME_DISCOVERABLE(TranspositionTable);
   
 public:
   
-  // If the size argument to the constructor is zero, then the constructor
-  // does its best to allocate as much memory as possible without causing
-  // trashing to virtual (swap) memory.
-  TranspositionTable(int size = 0);
-  ~TranspositionTable();
+    // If the size argument to the constructor is zero, then the constructor
+    // does its best to allocate as much memory as possible without causing
+    // trashing to virtual (swap) memory.
+    TranspositionTable(int size = 0);
+    ~TranspositionTable();
   
-  // The fetch() and store() methods
-  // store() automatically takes care of depth relevance, ie. if
-  // an entry is requested to be stored but the original entry contains
-  // greater depth, then the store request is ignored.
-  const TranspositionTableEntry *fetch(const SearchState *state) const;
-  void store(const SearchState *state, const TranspositionTableEntry *tte);
+    // The fetch() and store() methods
+    // store() automatically takes care of depth relevance, ie. if
+    // an entry is requested to be stored but the original entry contains
+    // greater depth, then the store request is ignored.
+    const TranspositionTableEntry *fetch(const SearchState *state) const;
+    void store(const SearchState *state, const TranspositionTableEntry *tte);
   
-  void setAllStale();
-  void clearAll();
+    void setAllStale();
+    void clearAll();
 
 protected:
   
-  int _size;
-  TranspositionTableEntry *_entries;
+    int _size;
+    TranspositionTableEntry *_entries;
   
 };
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

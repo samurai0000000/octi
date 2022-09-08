@@ -24,3 +24,13 @@ IMPLEMENT_RUNTIME_SERIALIZABLE(IllegalMoveException, Exception, 1);
 IMPLEMENT_RUNTIME_SERIALIZABLE(GameSessionException, Exception, 1);
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

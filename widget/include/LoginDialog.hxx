@@ -25,27 +25,37 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class WIDGETAPI LoginDialog : public LoginDialogBase {
 
-  Q_OBJECT;
+    Q_OBJECT;
 
 public:
   
-  LoginDialog(QWidget *parent = 0, const char *name = 0, bool modal = TRUE, WFlags fl = 0);
-  ~LoginDialog();
+    LoginDialog(QWidget *parent = 0, const char *name = 0, bool modal = TRUE, WFlags fl = 0);
+    ~LoginDialog();
 
-  const char *getLogin() const;
-  const char *getPassword() const;
+    const char *getLogin() const;
+    const char *getPassword() const;
 
 protected slots:
 
-  void accept();
+    void accept();
   
 private:
 
-  String _login;
-  String _password;
+    String _login;
+    String _password;
 
 };
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

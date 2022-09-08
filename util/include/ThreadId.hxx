@@ -36,38 +36,38 @@ class UTILAPI ThreadId : public PtrReference {
 
 public:
 
-  ThreadId();
+    ThreadId();
 
 #if defined(__USE_WINTHREAD__)
-  ThreadId(DWORD threadId, HANDLE handle);
+    ThreadId(DWORD threadId, HANDLE handle);
 #elif defined(__USE_POSIXTHREAD__)
-  ThreadId(pthread_t id);
+    ThreadId(pthread_t id);
 #endif
 
-  ~ThreadId();
+    ~ThreadId();
 
-  boolean operator!=(const ThreadId &id) const;
-  boolean operator==(const ThreadId &id) const;
+    boolean operator!=(const ThreadId &id) const;
+    boolean operator==(const ThreadId &id) const;
 
   
-  static ThreadId self();
+    static ThreadId self();
 
 #if defined(__USE_WINTHREAD__)
-  operator DWORD () const;
+    operator DWORD () const;
 #elif defined(__USE_POSIXTHREAD__)
-  operator pthread_t () const;
+    operator pthread_t () const;
 #endif
 
 private:
 
-  friend class Thread;
+    friend class Thread;
 
 #if defined(__USE_WINTHREAD__)
-  HANDLE _handle;
-  DWORD _id;
+    HANDLE _handle;
+    DWORD _id;
 #elif defined(__USE_POSIXTHREAD__)
-  pthread_t _id;
-  boolean _nullId;
+    pthread_t _id;
+    boolean _nullId;
 #endif
 
 };
@@ -85,53 +85,53 @@ inline ThreadId::~ThreadId() {
 #if defined(__USE_WINTHREAD__)
 
 inline ThreadId::ThreadId(DWORD id, HANDLE handle) {
-  _id  = id;
-  _handle = handle;
+    _id  = id;
+    _handle = handle;
 }
 
 inline boolean ThreadId::operator==(const ThreadId &id) const {
-  return _id == id._id;
+    return _id == id._id;
 }
 
 inline boolean ThreadId::operator!=(const ThreadId &id) const {
-  return !(*this == id);
+    return !(*this == id);
 }
 
 inline ThreadId::operator DWORD() const {
-  return _id;
+    return _id;
 }
 
 inline ThreadId ThreadId::self() {
-  return ThreadId(GetCurrentThreadId(), GetCurrentThread());
+    return ThreadId(GetCurrentThreadId(), GetCurrentThread());
 }
 
 #elif defined(__USE_POSIXTHREAD__)
 
 inline ThreadId::ThreadId(pthread_t id) {
-  _id = id;
-  _nullId = FALSE;
+    _id = id;
+    _nullId = FALSE;
 }
 
 inline boolean ThreadId::operator!=(const ThreadId &id) const {
-  return !(*this == id);
+    return !(*this == id);
 }
 
 inline boolean ThreadId::operator==(const ThreadId &id) const {
-  if(_nullId == FALSE && id._nullId == FALSE) {
-    return pthread_equal(_id, id._id);
-  } else if (_nullId == TRUE && id._nullId == TRUE) {
-    return TRUE;
-  }
+    if(_nullId == FALSE && id._nullId == FALSE) {
+        return pthread_equal(_id, id._id);
+    } else if (_nullId == TRUE && id._nullId == TRUE) {
+        return TRUE;
+    }
 
-  return FALSE;
+    return FALSE;
 }
 
 inline ThreadId ThreadId::self() {
-  return ThreadId(pthread_self());
+    return ThreadId(pthread_self());
 }
 
 inline ThreadId::operator pthread_t() const {
-  return _id;
+    return _id;
 }
 
 #endif
@@ -139,3 +139,13 @@ inline ThreadId::operator pthread_t() const {
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

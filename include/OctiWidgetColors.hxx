@@ -22,64 +22,74 @@
 
 __BEGIN_NAMESPACE(SELFSOFT);
 
-class OCTIAPI OctiWidgetColors {
+class OCTIAPI OctiWidgetColors : public Root {
 
 public:
 
-  OctiWidgetColors();
-  ~OctiWidgetColors();
+    OctiWidgetColors();
+    ~OctiWidgetColors();
 
-  QColor &getLineColor();
-  QColor &getLabelColor();
-  QColor &getSquareColor();
-  QColor &getAPodColor();
-  QColor &getBPodColor();
-  QColor &getCPodColor();
-  QColor &getDPodColor();
+    QColor &getLineColor();
+    QColor &getLabelColor();
+    QColor &getSquareColor();
+    QColor &getAPodColor();
+    QColor &getBPodColor();
+    QColor &getCPodColor();
+    QColor &getDPodColor();
 
 private:
 
-  QColor _lineColor;
-  QColor _labelColor;
-  QColor _squareColor;
-  QColor _contrastColor;
-  QColor _aPodColor;
-  QColor _bPodColor;
-  QColor _cPodColor;
-  QColor _dPodColor;
+    QColor _lineColor;
+    QColor _labelColor;
+    QColor _squareColor;
+    QColor _contrastColor;
+    QColor _aPodColor;
+    QColor _bPodColor;
+    QColor _cPodColor;
+    QColor _dPodColor;
 
 };
 
 // Inline functions
 
 inline QColor &OctiWidgetColors::getLineColor() {
-  return _lineColor;
+    return _lineColor;
 }
 
 inline QColor &OctiWidgetColors::getLabelColor() {
-  return _labelColor;
+    return _labelColor;
 }
 
 inline QColor &OctiWidgetColors::getSquareColor() {
-  return _squareColor;
+    return _squareColor;
 }
 
 inline QColor &OctiWidgetColors::getAPodColor() {
-  return _aPodColor;
+    return _aPodColor;
 }
 
 inline QColor &OctiWidgetColors::getBPodColor() {
-  return _bPodColor;
+    return _bPodColor;
 }
 
 inline QColor &OctiWidgetColors::getCPodColor() {
-  return _cPodColor;
+    return _cPodColor;
 }
 
 inline QColor &OctiWidgetColors::getDPodColor() {
-  return _dPodColor;
+    return _dPodColor;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

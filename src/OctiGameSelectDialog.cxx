@@ -29,12 +29,12 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 OctiGameSelectDialog::OctiGameSelectDialog(QWidget* parent, const char* name, bool modal, WFlags fl) : OctiGameSelectDialogBase( parent, name, modal, fl) {
-  timeLimitComboBox->insertItem( tr( "10 min." ) );
-  timeLimitComboBox->insertItem( tr( "15 min." ) );
-  timeLimitComboBox->insertItem( tr( "20 min." ) );
-  timeLimitComboBox->insertItem( tr( "30 min." ) );
-  timeLimitComboBox->insertItem( tr( "45 min." ) );
-  timeLimitComboBox->insertItem( tr( "60 min." ) );
+    timeLimitComboBox->insertItem( tr( "10 min." ) );
+    timeLimitComboBox->insertItem( tr( "15 min." ) );
+    timeLimitComboBox->insertItem( tr( "20 min." ) );
+    timeLimitComboBox->insertItem( tr( "30 min." ) );
+    timeLimitComboBox->insertItem( tr( "45 min." ) );
+    timeLimitComboBox->insertItem( tr( "60 min." ) );
 }
 
 OctiGameSelectDialog::~OctiGameSelectDialog() {
@@ -42,39 +42,49 @@ OctiGameSelectDialog::~OctiGameSelectDialog() {
 }
 
 OctiGameMode OctiGameSelectDialog::getGameMode() const {
-  return twoPlayerButton->isOn() ? GAME_MODE_2 : GAME_MODE_4; 
+    return twoPlayerButton->isOn() ? GAME_MODE_2 : GAME_MODE_4; 
 }
 
 OctiGameBases OctiGameSelectDialog::getGameBases() const {
-  return threeBaseGameButton->isOn() ? GAME_BASES_3 : GAME_BASES_1;
+    return threeBaseGameButton->isOn() ? GAME_BASES_3 : GAME_BASES_1;
 }
 
 boolean OctiGameSelectDialog::useSuperProngs() const {
-  return superProngCheckBox->isOn();
+    return superProngCheckBox->isOn();
 }
 
 boolean OctiGameSelectDialog::edgeless() const {
-  return edgelessCheckBox->isOn();
+    return edgelessCheckBox->isOn();
 }
 
 boolean OctiGameSelectDialog::useTimeLimit() const {
-  return useTimeLimitCheckBox->isOn();
+    return useTimeLimitCheckBox->isOn();
 }
 
 int OctiGameSelectDialog::getTimeLimit() const {
-  if(useTimeLimitCheckBox->isOn()) {
-    switch(timeLimitComboBox->currentItem()) {
-    case 0:   return  600; break;  // 10 min.
-    case 1:   return  900; break;  // 15 min.
-    case 2:   return 1200; break;  // 20 min.
-    case 3:   return 1800; break;  // 30 min.
-    case 4:   return 2700; break;  // 45 min.
-    case 5:   return 3600; break;  // 60 min.
-    default:  return 0;
+    if(useTimeLimitCheckBox->isOn()) {
+        switch(timeLimitComboBox->currentItem()) {
+        case 0:   return  600; break;  // 10 min.
+        case 1:   return  900; break;  // 15 min.
+        case 2:   return 1200; break;  // 20 min.
+        case 3:   return 1800; break;  // 30 min.
+        case 4:   return 2700; break;  // 45 min.
+        case 5:   return 3600; break;  // 60 min.
+        default:  return 0;
+        }
     }
-  }
 
-  return 0;
+    return 0;
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

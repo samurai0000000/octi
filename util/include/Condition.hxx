@@ -43,34 +43,34 @@ class UTILAPI Synchronized : public PtrReference {
 
 public:
   
-  Synchronized(Mutex &mutex);
-  Synchronized(RecursiveMutex &mutex);
-  Synchronized(Monitor &monitor, boolean internal = FALSE);
-  Synchronized(BaseObject &object);
+    Synchronized(Mutex &mutex);
+    Synchronized(RecursiveMutex &mutex);
+    Synchronized(Monitor &monitor, boolean internal = FALSE);
+    Synchronized(BaseObject &object);
 
-  ~Synchronized();
+    ~Synchronized();
 
 private:
 
-  typedef enum _SyncClass {
-    MUTEX,
-    RECURSIVE_MUTEX,
-    MONITOR,
-    OBJECT
-  } SyncClass;
+    typedef enum _SyncClass {
+        MUTEX,
+        RECURSIVE_MUTEX,
+        MONITOR,
+        OBJECT
+    } SyncClass;
   
-  typedef struct _SyncObject {
-    SyncClass sclass;
+    typedef struct _SyncObject {
+        SyncClass sclass;
 
-    union {
-      Mutex *mutex;
-      RecursiveMutex *rmutex;
-      Monitor *monitor;
-      BaseObject *object;
-    } object;
-  } SyncObject;
+        union {
+            Mutex *mutex;
+            RecursiveMutex *rmutex;
+            Monitor *monitor;
+            BaseObject *object;
+        } object;
+    } SyncObject;
 
-  SyncObject _sync;
+    SyncObject _sync;
 
 };
 
@@ -78,46 +78,46 @@ class UTILAPI Condition : public PtrReference {
 
 public:
   
-  Condition(RecursiveMutex &mutex);
-  ~Condition();
+    Condition(RecursiveMutex &mutex);
+    ~Condition();
 
-  void wait() throw(InterruptedException);
-  void wait(long timeout) throw(InterruptedException);
-  void signal();
-  void broadcast();
-
-private:
-
-  Condition(const Condition &condition);
-  Condition &operator=(const Condition &condition);
+    void wait() throw(InterruptedException);
+    void wait(long timeout) throw(InterruptedException);
+    void signal();
+    void broadcast();
 
 private:
 
-  RecursiveMutex &_mutex;
+    Condition(const Condition &condition);
+    Condition &operator=(const Condition &condition);
+
+private:
+
+    RecursiveMutex &_mutex;
 
 #if defined(__USE_WINTHREAD__)
-  typedef struct cond_thread_list {
-    struct cond_thread_list *next;
-    DWORD id;
-  } cond_thread_list_t;
+    typedef struct cond_thread_list {
+        struct cond_thread_list *next;
+        DWORD id;
+    } cond_thread_list_t;
 
-  typedef struct {
-    HANDLE cond;
-    RecursiveMutex list_mutex;
-    cond_thread_list_t *list_hd;
-    cond_thread_list_t *list_tl;
-    cond_thread_list_t *released;
-  } cond_t;
+    typedef struct {
+        HANDLE cond;
+        RecursiveMutex list_mutex;
+        cond_thread_list_t *list_hd;
+        cond_thread_list_t *list_tl;
+        cond_thread_list_t *released;
+    } cond_t;
   
-  static int win_cond_wait(cond_t *cond, RecursiveMutex &mutex);
-  static int win_cond_timedwait(cond_t *cond, RecursiveMutex &mutex, long timeout);
-  static int win_cond_signal(cond_t *cond);
-  static int win_cond_broadcast(cond_t *cond);
+    static int win_cond_wait(cond_t *cond, RecursiveMutex &mutex);
+    static int win_cond_timedwait(cond_t *cond, RecursiveMutex &mutex, long timeout);
+    static int win_cond_signal(cond_t *cond);
+    static int win_cond_broadcast(cond_t *cond);
 
-  cond_t _cond;
+    cond_t _cond;
 
 #elif defined(__USE_POSIXTHREAD__)
-  pthread_cond_t _cond;
+    pthread_cond_t _cond;
 #endif
 
 };
@@ -126,27 +126,27 @@ private:
 
 inline Condition::Condition(RecursiveMutex &mutex) : _mutex(mutex) {
 #if defined(__USE_WINTHREAD__)
-  _cond.cond = CreateEvent(NULL, TRUE, FALSE, NULL);
-  _cond.list_hd = NULL;
-  _cond.list_tl = NULL;
-  _cond.released = NULL;
+    _cond.cond = CreateEvent(NULL, TRUE, FALSE, NULL);
+    _cond.list_hd = NULL;
+    _cond.list_tl = NULL;
+    _cond.released = NULL;
 #elif defined(__USE_POSIXTHREAD__)
-  pthread_cond_init(&_cond, NULL);
+    pthread_cond_init(&_cond, NULL);
 #endif
 }
 
 inline Condition::~Condition() {
 #if defined(__USE_WINTHREAD_)
-  CloseHandle(_cond.cond);
+    CloseHandle(_cond.cond);
 #elif defined(__USE_POSIXTHREAD__)
-  pthread_cond_destroy(&_cond);
+    pthread_cond_destroy(&_cond);
 #endif
 }
 
 #if defined(__USE_WINTHREAD__)
 
 inline int Condition::win_cond_wait(cond_t *cond, RecursiveMutex &mutex) {
-  return Condition::win_cond_timedwait(cond, mutex, INFINITE);
+    return Condition::win_cond_timedwait(cond, mutex, INFINITE);
 }
 
 #endif
@@ -154,3 +154,13 @@ inline int Condition::win_cond_wait(cond_t *cond, RecursiveMutex &mutex) {
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

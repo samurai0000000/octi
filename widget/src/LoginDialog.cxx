@@ -36,17 +36,27 @@ LoginDialog::~LoginDialog() {
 }
 
 const char *LoginDialog::getLogin() const {
-  return _login;
+    return _login;
 }
 
 const char *LoginDialog::getPassword() const {
-  return _password;
+    return _password;
 }
 
 void LoginDialog::accept() {
-  _login = loginLineEdit->text();
-  _password = passwordLineEdit->text();
-  QDialog::accept();
+    _login = loginLineEdit->text();
+    _password = passwordLineEdit->text();
+    QDialog::accept();
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

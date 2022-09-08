@@ -23,72 +23,82 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI Void : public BaseObject {
 
-  DECLARE_RUNTIME_DISCOVERABLE(Void);
+    DECLARE_RUNTIME_DISCOVERABLE(Void);
 
 public:
 
-  Void();
-  Void(void *ptr);
-  ~Void();
+    Void();
+    Void(void *ptr);
+    ~Void();
 
-  void *getPointer();
-  void setPointer(void *ptr);
+    void *getPointer();
+    void setPointer(void *ptr);
 
-  operator void *();
+    operator void *();
 
-  void *operator=(const Void &v);
-  void *operator=(void *ptr);
-  boolean operator==(const Void &v) const;
-  boolean operator==(void *ptr) const;
+    void *operator=(const Void &v);
+    void *operator=(void *ptr);
+    boolean operator==(const Void &v) const;
+    boolean operator==(void *ptr) const;
 
 private:
 
-  void *_ptr;
+    void *_ptr;
 
 };
 
 // Inline functions
 
 inline Void::Void() {
-  _ptr = NULL;
+    _ptr = NULL;
 }
 
 inline Void::Void(void *ptr) {
-  _ptr = ptr;
+    _ptr = ptr;
 }
 
 inline Void::~Void() {
-  _ptr = NULL;
+    _ptr = NULL;
 }
 
 inline void *Void::getPointer() {
-  return _ptr;
+    return _ptr;
 }
 
 inline void Void::setPointer(void *ptr) {
-  _ptr = ptr;
+    _ptr = ptr;
 }
 
 inline Void::operator void *() {
-  return _ptr;
+    return _ptr;
 }
 
 inline void *Void::operator=(const Void &v) {
-  return (_ptr = v._ptr);
+    return (_ptr = v._ptr);
 }
 
 inline void *Void::operator=(void *ptr) {
-  return (_ptr = ptr);
+    return (_ptr = ptr);
 }
 
 inline boolean Void::operator==(const Void &v) const {
-  return _ptr == v._ptr;
+    return _ptr == v._ptr;
 }
 
 inline boolean Void::operator==(void *ptr) const {
-  return _ptr == ptr;
+    return _ptr == ptr;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

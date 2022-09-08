@@ -34,12 +34,12 @@ class UTILAPI Timer;
  */
 class UTILAPI TimerEvent : public EventObject {
 
-  DECLARE_RUNTIME_SERIALIZABLE(TimerEvent);
+    DECLARE_RUNTIME_SERIALIZABLE(TimerEvent);
 
 public:
 
-  TimerEvent();
-  TimerEvent(const BaseObject *source);
+    TimerEvent();
+    TimerEvent(const BaseObject *source);
 
 };
 
@@ -50,7 +50,7 @@ class UTILAPI TimerListener : public EventListener {
 
 public:
 
-  virtual void timeTick(TimerEvent *e) = 0;
+    virtual void timeTick(TimerEvent *e) = 0;
 
 };
 
@@ -59,22 +59,22 @@ public:
  */
 class UTILAPI TimerTick : public Thread {
 
-  DECLARE_RUNTIME_DISCOVERABLE(TimerTick);
+    DECLARE_RUNTIME_DISCOVERABLE(TimerTick);
 
 public:
 
-  TimerTick(Timer *timer);
-  ~TimerTick();
+    TimerTick(Timer *timer);
+    ~TimerTick();
   
-  void run();
-  void stopTick();
+    void run();
+    void stopTick();
 
 private:
 
-  friend class Timer;
+    friend class Timer;
 
-  Timer *_timer;
-  boolean _running;
+    Timer *_timer;
+    boolean _running;
 
 };
 
@@ -84,40 +84,40 @@ private:
  */
 class UTILAPI Timer : public BaseObject {
 
-  DECLARE_RUNTIME_SERIALIZABLE(Timer);
+    DECLARE_RUNTIME_SERIALIZABLE(Timer);
 
 public:
 
-  Timer(unsigned long delay = DEFAULT_DELAY);
-  ~Timer();
+    Timer(unsigned long delay = DEFAULT_DELAY);
+    ~Timer();
 
-  void addTimerListener(TimerListener *listener);
-  void removeTimerListener(TimerListener *listener);
+    void addTimerListener(TimerListener *listener);
+    void removeTimerListener(TimerListener *listener);
   
-  void setDelay(unsigned long delay);
-  unsigned long getDelay() const;
-  void setRepeat(boolean repeat);
-  boolean isRepeat() const;
+    void setDelay(unsigned long delay);
+    unsigned long getDelay() const;
+    void setRepeat(boolean repeat);
+    boolean isRepeat() const;
 
-  boolean isRunning() const;
+    boolean isRunning() const;
 
-  void start();
-  void stop();
-  void restart();
-
-private:
-
-  friend class TimerTick;
-
-  void fireTimeTick();
-  void tick(BaseObject *source);
+    void start();
+    void stop();
+    void restart();
 
 private:
 
-  Ptr<TimerTick> _tick;
-  EventListenerList _listeners;
-  unsigned long _delay;
-  boolean _isRepeat;
+    friend class TimerTick;
+
+    void fireTimeTick();
+    void tick(BaseObject *source);
+
+private:
+
+    Ptr<TimerTick> _tick;
+    EventListenerList _listeners;
+    unsigned long _delay;
+    boolean _isRepeat;
 
 };
 
@@ -132,8 +132,8 @@ inline TimerEvent::TimerEvent(const BaseObject *source) : EventObject(source)  {
 }
 
 inline TimerTick::TimerTick(Timer *timer) : Thread("TIMER") {
-  _timer = timer;
-  _running = false;
+    _timer = timer;
+    _running = false;
 }
 
 inline TimerTick::~TimerTick() {
@@ -141,7 +141,7 @@ inline TimerTick::~TimerTick() {
 }
 
 inline Timer::Timer(unsigned long delay) {
-  _delay = delay;
+    _delay = delay;
 }
 
 inline Timer::~Timer() {
@@ -149,37 +149,47 @@ inline Timer::~Timer() {
 }
 
 inline void Timer::addTimerListener(TimerListener *listener) {
-  synchronized(_listeners, {
-    _listeners.addEventListener(listener);
-  });
+    synchronized(_listeners, {
+            _listeners.addEventListener(listener);
+        });
 }
 
 inline void Timer::removeTimerListener(TimerListener *listener) {
-  synchronized(_listeners, {
-    _listeners.removeEventListener(listener);
-  });
+    synchronized(_listeners, {
+            _listeners.removeEventListener(listener);
+        });
 }
 
 inline void Timer::setDelay(unsigned long delay) {
-  _delay = delay;
+    _delay = delay;
 }
 
 inline unsigned long Timer::getDelay() const {
-  return _delay;
+    return _delay;
 }
 
 inline void Timer::setRepeat(boolean repeat) {
-  _isRepeat = repeat;
+    _isRepeat = repeat;
 }
 
 inline boolean Timer::isRepeat() const {
-  return _isRepeat;
+    return _isRepeat;
 }
 
 inline boolean Timer::isRunning() const {
-  return _tick != NULL;
+    return _tick != NULL;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

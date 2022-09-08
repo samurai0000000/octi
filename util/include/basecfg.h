@@ -75,7 +75,7 @@ typedef unsigned long dword;
 #define FALSE 0
 #define false FALSE
 
-#if defined(__i386__) || defined(__i486__) || defined(__i586__) || \
+#if defined(__i386__) || defined(__i486__) || defined(__i586__) ||  \
     defined(__i686__) || defined(__alpha__) || defined(__arm__)
 #define IS_LITTLE_ENDIAN
 #else  /* Most other CPUs */
@@ -168,3 +168,13 @@ typedef unsigned long dword;
 #endif /* __cplusplus */
 
 #endif /* !_BASECFG_H_ */
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

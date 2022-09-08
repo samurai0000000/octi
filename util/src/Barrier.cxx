@@ -21,20 +21,30 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 void Barrier::wait() {
-  _mutex.lock();
+    _mutex.lock();
 
-  if(++_count >= _nthrs) {
-    /* The count of threads reaching the barrier has reached nthrs. */
-    /* Wake up all other threads. */
-    _cond.broadcast();
-    _count = 0;  /* Reset the count to zero. */
-  } else {
-    /* Block on the condition indifinitely until the last thread to reach */
-    /* the barrier to perform a broadcast. */
-    _cond.wait();
-  }
+    if(++_count >= _nthrs) {
+        /* The count of threads reaching the barrier has reached nthrs. */
+        /* Wake up all other threads. */
+        _cond.broadcast();
+        _count = 0;  /* Reset the count to zero. */
+    } else {
+        /* Block on the condition indifinitely until the last thread to reach */
+        /* the barrier to perform a broadcast. */
+        _cond.wait();
+    }
 
-  _mutex.unlock();
+    _mutex.unlock();
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

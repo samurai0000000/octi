@@ -23,3 +23,13 @@ IMPLEMENT_RUNTIME_DISCOVERABLE(ByteEncoder, BaseObject);
 IMPLEMENT_RUNTIME_DISCOVERABLE(ByteDecoder, BaseObject);
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

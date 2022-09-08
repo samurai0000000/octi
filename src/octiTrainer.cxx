@@ -27,35 +27,44 @@
 __USING_NAMESPACE(SELFSOFT);
 
 static arg version_arg = {
-  "-version", NULL, -1, VERS_ARG, NULL,
-  "Version info"
+    "-version", NULL, -1, VERS_ARG, NULL,
+    "Version info"
 };
 
 static arg help_arg = {
-  "-help",  NULL, -1, HELP_ARG, NULL,
-  "This is a training-by-example program for OCTI. "
-  "See more information about OCTI on http://www.octi.net"
+    "-help",  NULL, -1, HELP_ARG, NULL,
+    "This is a training-by-example program for OCTI. "
+    "See more information about OCTI on http://www.octi.net"
 };
 
 static arg *arg_list[] = {
-  &version_arg,
-  &help_arg
+    &version_arg,
+    &help_arg
 };
 
 static int arg_list_size = sizeof(arg_list) / sizeof(arg_list[0]);
 
 int main(int argc, char **argv) {
-  if(parse_args(argc, argv, arg_list, arg_list_size, 1) != 0) {
-    exit(-1);
-  }
+    if(parse_args(argc, argv, arg_list, arg_list_size, 1) != 0) {
+        exit(-1);
+    }
 
-  QApplication qApp(argc, argv);
+    QApplication qApp(argc, argv);
 
-  InitOctiOptionsModel();
-  OctiTrainerWindow trainer;
-  qApp.setMainWidget(&trainer);
-  trainer.show();
+    InitOctiOptionsModel();
+    OctiTrainerWindow trainer;
+    qApp.setMainWidget(&trainer);
+    trainer.show();
   
-  return qApp.exec();
+    return qApp.exec();
 }
 
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

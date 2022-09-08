@@ -28,52 +28,62 @@ boolean Main::G_started = FALSE;
 Main *Main::G_impl = NULL;
 
 int Main::start(int argc, char **argv) {
-  int retcode;
+    int retcode;
 
-  if(G_started) {
-    Error::fatal("Main::start() entered twice");
-  } else {
-    G_started = TRUE;
-  }
-  
-  if(G_impl != NULL) {
-    try {
-      retcode = G_impl->main(argc, argv);
-    } catch(Exception e) {
-      Error::fatal("uncaught exception in Main: %s", e.getMessage());
-      retcode = 1;
-    } catch(...) {
-      Error::fatal("exception in Main: unknown");
-      retcode = 2;
+    if(G_started) {
+        Error::fatal("Main::start() entered twice");
+    } else {
+        G_started = TRUE;
     }
-  }
+  
+    if(G_impl != NULL) {
+        try {
+            retcode = G_impl->main(argc, argv);
+        } catch(Exception e) {
+            Error::fatal("uncaught exception in Main: %s", e.getMessage());
+            retcode = 1;
+        } catch(...) {
+            Error::fatal("exception in Main: unknown");
+            retcode = 2;
+        }
+    }
 
-  return retcode;
+    return retcode;
 }
 
 Main::Main() {
-  if(G_impl == NULL) {
-    // Initialize for the first time
-  }
+    if(G_impl == NULL) {
+        // Initialize for the first time
+    }
 
-  if(G_started) {
-    Error::fatal("attempt to create another instance of subclass of Main\n"
-		 "while one is already executing");
-  }
+    if(G_started) {
+        Error::fatal("attempt to create another instance of subclass of Main\n"
+                     "while one is already executing");
+    }
   
-  if(G_impl != NULL) {
-    Error::warning("more than once instance of subclass of Main created\n"
-		   "registering this one for start-up, previous instances\n"
-		   "will be ignored!\n");
-  }
+    if(G_impl != NULL) {
+        Error::warning("more than once instance of subclass of Main created\n"
+                       "registering this one for start-up, previous instances\n"
+                       "will be ignored!\n");
+    }
 
-  G_impl = this;
+    G_impl = this;
 }
 
 Main::~Main() {
-  if(G_impl == this) {
-    // Cleanup system resources
-  }
+    if(G_impl == this) {
+        // Cleanup system resources
+    }
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

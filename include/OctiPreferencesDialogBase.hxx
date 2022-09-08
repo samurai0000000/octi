@@ -1,19 +1,19 @@
 /****************************************************************************
-** Form interface generated from reading ui file 'ui/OctiPreferencesDialogBase.ui'
-**
-** Created: Thu Aug 1 17:35:11 2002
-**      by:  The User Interface Compiler (uic)
-**
-** WARNING! All changes made in this file will be lost!
-****************************************************************************/
+ ** Form interface generated from reading ui file 'ui/OctiPreferencesDialogBase.ui'
+ **
+ ** Created: Thu Aug 1 17:35:11 2002
+ **      by:  The User Interface Compiler (uic)
+ **
+ ** WARNING! All changes made in this file will be lost!
+ ****************************************************************************/
 #ifndef OCTIPREFERENCESDIALOGBASE_H
 #define OCTIPREFERENCESDIALOGBASE_H
 
 #include <qvariant.h>
 #include <qdialog.h>
-class QVBoxLayout; 
-class QHBoxLayout; 
-class QGridLayout; 
+class QVBoxLayout;
+class QHBoxLayout;
+class QGridLayout;
 class QButtonGroup;
 class QCheckBox;
 class QGroupBox;
@@ -26,7 +26,7 @@ class QTabWidget;
 class QWidget;
 
 class OctiPreferencesDialogBase : public QDialog
-{ 
+{
     Q_OBJECT
 
 public:
@@ -109,3 +109,13 @@ protected:
 };
 
 #endif // OCTIPREFERENCESDIALOGBASE_H
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

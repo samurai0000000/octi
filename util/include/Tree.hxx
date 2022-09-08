@@ -24,12 +24,12 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI TreeException : public Exception {
 
-  DECLARE_RUNTIME_SERIALIZABLE(TreeException);
+    DECLARE_RUNTIME_SERIALIZABLE(TreeException);
 
 public:
 
-  TreeException();
-  TreeException(const char *msg);
+    TreeException();
+    TreeException(const char *msg);
 
 };
 
@@ -56,3 +56,13 @@ inline TreeException::TreeException(const char *msg) : Exception(msg) {
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

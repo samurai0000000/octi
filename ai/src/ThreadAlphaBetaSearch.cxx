@@ -23,31 +23,31 @@ __BEGIN_NAMESPACE(SELFSOFT);
 IMPLEMENT_RUNTIME_DISCOVERABLE(ThreadAlphaBetaSearch, AlphaBetaSearch);
 
 void ThreadAlphaBetaSearch::setPoolSize(int poolSize) {
-  if(_pool == NULL) {
-    _pool = new ThreadWorkerPool(poolSize);
-  }
+    if(_pool == NULL) {
+        _pool = new ThreadWorkerPool(poolSize);
+    }
 }
 
 float ThreadAlphaBetaSearch::maxValue(SearchState *state, int depth, int cutoffDepth,
-				      float alpha, float beta, Ptr<SearchState> path[]) {
-  /*
-  ASSERT(state != NULL);
-  SearchState *current;
-  float eval;
+                                      float alpha, float beta, Ptr<SearchState> path[]) {
+    /*
+      ASSERT(state != NULL);
+      SearchState *current;
+      float eval;
 
-  if(depth > cutoffDepth || state->isTerminal()) {
-    eval = state->evaluate();
-    _lastStatesEvaluated++;
-    return eval;
-  }
+      if(depth > cutoffDepth || state->isTerminal()) {
+      eval = state->evaluate();
+      _lastStatesEvaluated++;
+      return eval;
+      }
 
-  Ptr<SearchState> localPath[MAX_DEPTH];
+      Ptr<SearchState> localPath[MAX_DEPTH];
 
-  state->expand();
-  _lastStatesExpanded++;
-  current = state->getHeadSuccessors();
-  while(current != NULL && !isTimeUp()) {
-    if(_pool != NULL) {
+      state->expand();
+      _lastStatesExpanded++;
+      current = state->getHeadSuccessors();
+      while(current != NULL && !isTimeUp()) {
+      if(_pool != NULL) {
       WorkUnitArg arg;
       arg.type = THR_AB_CALL_MIN;
       arg.state = state;
@@ -56,57 +56,57 @@ float ThreadAlphaBetaSearch::maxValue(SearchState *state, int depth, int cutoffD
       arg.alpha = alpha;
       arg.beta = beta;
       arg.path = localPath;
-#ifdef _DEBUG
+      #ifdef _DEBUG
       cout << "pool->doWork()" << endl;
-#endif
+      #endif
       _pool->doWork(*this, &arg);
       eval = arg.eval;
-    } else {
+      } else {
       eval = minValue(current, depth + 1, cutoffDepth,
-		      alpha, beta, localPath);
-    }
+      alpha, beta, localPath);
+      }
 
-    if(eval > alpha) {
+      if(eval > alpha) {
       alpha = eval;
       if(alpha < beta) {
-	localPath[depth] = (SearchState *) current->clone();
-	for(int p = depth; p <= cutoffDepth; p++) {
+      localPath[depth] = (SearchState *) current->clone();
+      for(int p = depth; p <= cutoffDepth; p++) {
 	  path[p] = localPath[p];
-	}
       }
-    }
+      }
+      }
     
-    if(alpha >= beta) {
+      if(alpha >= beta) {
       current->collapse();
       return beta;
-    }
+      }
     
-    current->collapse();
-    current = current->getNext();
-  }
-  */
-  return alpha;
+      current->collapse();
+      current = current->getNext();
+      }
+    */
+    return alpha;
 }
 
 float ThreadAlphaBetaSearch::minValue(SearchState *state, int depth, int cutoffDepth,
-				      float alpha, float beta, Ptr<SearchState> path[]) {
-  /*
-  SearchState *current;
-  float eval;
+                                      float alpha, float beta, Ptr<SearchState> path[]) {
+    /*
+      SearchState *current;
+      float eval;
 
-  if(depth > cutoffDepth || state->isTerminal()) {
-    eval = state->evaluate();
-    _lastStatesEvaluated++;
-    return eval;
-  }
+      if(depth > cutoffDepth || state->isTerminal()) {
+      eval = state->evaluate();
+      _lastStatesEvaluated++;
+      return eval;
+      }
 
-  Ptr<SearchState> localPath[MAX_DEPTH];
+      Ptr<SearchState> localPath[MAX_DEPTH];
   
-  state->expand();
-  _lastStatesExpanded++;
-  current = state->getHeadSuccessors();
-  while(current != NULL && !isTimeUp()) {
-    if(_pool != NULL) {
+      state->expand();
+      _lastStatesExpanded++;
+      current = state->getHeadSuccessors();
+      while(current != NULL && !isTimeUp()) {
+      if(_pool != NULL) {
       WorkUnitArg arg;
       arg.type = THR_AB_CALL_MIN;
       arg.state = state;
@@ -115,56 +115,66 @@ float ThreadAlphaBetaSearch::minValue(SearchState *state, int depth, int cutoffD
       arg.alpha = alpha;
       arg.beta = beta;
       arg.path = localPath;
-#ifdef _DEBUG
+      #ifdef _DEBUG
       cout << "pool->doWork()" << endl;
-#endif
+      #endif
       _pool->doWork(*this, &arg);
       eval = arg.eval;
-    } else {
+      } else {
       eval = maxValue(current, depth + 1, cutoffDepth,
-		      alpha, beta, localPath);
-    }
+      alpha, beta, localPath);
+      }
 
-    if(eval < beta) {
+      if(eval < beta) {
       beta = eval;
       if(beta > alpha) {
-	localPath[depth] = (SearchState *) current->clone();
-	for(int p = depth; p <= cutoffDepth; p++) {
+      localPath[depth] = (SearchState *) current->clone();
+      for(int p = depth; p <= cutoffDepth; p++) {
 	  path[p] = localPath[p];
-	}
       }
-    }
+      }
+      }
 
-    if(beta <= alpha) {
+      if(beta <= alpha) {
       current->collapse();
       return alpha;
-    }
+      }
 
-    current->collapse();
-    current = current->getNext();
-  }
-  */
-  return beta;
+      current->collapse();
+      current = current->getNext();
+      }
+    */
+    return beta;
 }
 
 // Called by a thread from the free thread pool
 void ThreadAlphaBetaSearch::doWork(void *args) {
-  ASSERT(args != NULL);
+    ASSERT(args != NULL);
 
 #ifdef _DEBUG
-  cout << "doWork()" << endl;
+    cout << "doWork()" << endl;
 #endif
 
-  WorkUnitArg *thrABarg = (WorkUnitArg *) args;
-  if(thrABarg->type == THR_AB_CALL_MAX) {
-    thrABarg->eval =
-      maxValue(thrABarg->state, thrABarg->depth, thrABarg->cutoffDepth,
-	       thrABarg->alpha, thrABarg->beta, thrABarg->path);
-  } else {
-    thrABarg->eval =
-      minValue(thrABarg->state, thrABarg->depth, thrABarg->cutoffDepth,
-	       thrABarg->alpha, thrABarg->beta, thrABarg->path);
-  }
+    WorkUnitArg *thrABarg = (WorkUnitArg *) args;
+    if(thrABarg->type == THR_AB_CALL_MAX) {
+        thrABarg->eval =
+            maxValue(thrABarg->state, thrABarg->depth, thrABarg->cutoffDepth,
+                     thrABarg->alpha, thrABarg->beta, thrABarg->path);
+    } else {
+        thrABarg->eval =
+            minValue(thrABarg->state, thrABarg->depth, thrABarg->cutoffDepth,
+                     thrABarg->alpha, thrABarg->beta, thrABarg->path);
+    }
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

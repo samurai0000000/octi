@@ -39,183 +39,193 @@ extern UTILAPI boolean IsTrueFalse(const char *s);
 
 class UTILAPI Boolean : public BaseObject {
 
-  DECLARE_RUNTIME_SERIALIZABLE(Boolean);
+    DECLARE_RUNTIME_SERIALIZABLE(Boolean);
 
 public:
 
-  Boolean();  // Default constructor (value = FALSE).
-  Boolean(boolean b);
-  ~Boolean();
+    Boolean();  // Default constructor (value = FALSE).
+    Boolean(boolean b);
+    ~Boolean();
 
-  // Straight assignment.
-  boolean value() const;
-  void value(boolean b);
-  Boolean &operator=(const Boolean &b);
-  Boolean &operator=(boolean b);
+    // Straight assignment.
+    boolean value() const;
+    void value(boolean b);
+    Boolean &operator=(const Boolean &b);
+    Boolean &operator=(boolean b);
 
-  // Logical and bitwise AND.
-  boolean operator&&(const Boolean &b) const;
-  boolean operator&&(boolean b) const;
-  boolean operator&(const Boolean &b) const;
-  boolean operator&(boolean b) const;
-  Boolean &operator&=(const Boolean &b);
-  Boolean &operator&=(boolean b);
+    // Logical and bitwise AND.
+    boolean operator&&(const Boolean &b) const;
+    boolean operator&&(boolean b) const;
+    boolean operator&(const Boolean &b) const;
+    boolean operator&(boolean b) const;
+    Boolean &operator&=(const Boolean &b);
+    Boolean &operator&=(boolean b);
 
-  // Logical and bitwise OR.
-  boolean operator||(const Boolean &b) const;
-  boolean operator||(boolean b) const;
-  boolean operator|(const Boolean &b) const;
-  boolean operator|(boolean b) const;
-  Boolean &operator|=(const Boolean &b);
-  Boolean &operator|=(boolean b);
+    // Logical and bitwise OR.
+    boolean operator||(const Boolean &b) const;
+    boolean operator||(boolean b) const;
+    boolean operator|(const Boolean &b) const;
+    boolean operator|(boolean b) const;
+    Boolean &operator|=(const Boolean &b);
+    Boolean &operator|=(boolean b);
 
-  // Logical XOR.
-  boolean operator^(const Boolean &b) const;
-  boolean operator^(boolean b) const;
-  Boolean &operator^=(const Boolean &b);
-  Boolean &operator^=(boolean b);
+    // Logical XOR.
+    boolean operator^(const Boolean &b) const;
+    boolean operator^(boolean b) const;
+    Boolean &operator^=(const Boolean &b);
+    Boolean &operator^=(boolean b);
 
-  // Comparison
-  boolean operator==(const Boolean &b) const;
-  boolean operator==(boolean b) const;
-  boolean operator!=(const Boolean &b) const;
-  boolean operator!=(boolean b) const;
+    // Comparison
+    boolean operator==(const Boolean &b) const;
+    boolean operator==(boolean b) const;
+    boolean operator!=(const Boolean &b) const;
+    boolean operator!=(boolean b) const;
 
-  // Logical NOT.
-  boolean operator!() const;
+    // Logical NOT.
+    boolean operator!() const;
 
-  friend ostream &operator<<(ostream &os, const Boolean &b);
+    friend ostream &operator<<(ostream &os, const Boolean &b);
 
 private:
 
-  boolean _b;
+    boolean _b;
 
 };
 
 // Inline functions for class are below here.
 
 inline Boolean::Boolean() {
-  _b = FALSE;
+    _b = FALSE;
 }
 
 inline Boolean::Boolean(boolean b) {
-  _b = (b == TRUE);
+    _b = (b == TRUE);
 }
 
 inline Boolean::~Boolean() {
 }
 
 inline boolean Boolean::value() const {
-  return _b;
+    return _b;
 }
 
 inline void Boolean::value(boolean b) {
-  _b = (b == TRUE);
+    _b = (b == TRUE);
 }
 
 inline Boolean &Boolean::operator=(const Boolean &b) {
-  _b = b.value();
-  return *this;
+    _b = b.value();
+    return *this;
 }
 
 inline Boolean &Boolean::operator=(boolean b) {
-  _b = (b == TRUE);
-  return *this;
+    _b = (b == TRUE);
+    return *this;
 }
 
 inline boolean Boolean::operator&&(const Boolean &b) const {
-  return _b && b.value();
+    return _b && b.value();
 }
 
 inline boolean Boolean::operator&&(boolean b) const {
-  return _b && b;
+    return _b && b;
 }
 
 inline boolean Boolean::operator&(const Boolean &b) const {
-  return _b & b.value();
+    return _b & b.value();
 }
 
 inline boolean Boolean::operator&(boolean b) const {
-  return _b & b;
+    return _b & b;
 }
 
 inline Boolean &Boolean::operator&=(const Boolean &b) {
-  _b &= b.value();
-  return *this;
+    _b &= b.value();
+    return *this;
 }
 
 inline Boolean &Boolean::operator&=(boolean b) {
-  _b &= b;
-  return *this;
+    _b &= b;
+    return *this;
 }
 
 inline boolean Boolean::operator||(const Boolean &b) const {
-  return _b || b.value();
+    return _b || b.value();
 }
 
 inline boolean Boolean::operator||(boolean b) const {
-  return _b || b;
+    return _b || b;
 }
 inline boolean Boolean::operator|(const Boolean &b) const {
-  return _b | b.value();
+    return _b | b.value();
 }
 
 inline boolean Boolean::operator|(boolean b) const {
-  return _b | b;
+    return _b | b;
 }
 
 inline Boolean &Boolean::operator|=(const Boolean &b) {
-  _b |= b.value();
-  return *this;
+    _b |= b.value();
+    return *this;
 }
 
 inline Boolean &Boolean::operator|=(boolean b) {
-  _b |= b;
-  return *this;
+    _b |= b;
+    return *this;
 }
 
 inline boolean Boolean::operator^(const Boolean &b) const {
-  return _b ^ b.value();
+    return _b ^ b.value();
 }
 
 inline boolean Boolean::operator^(boolean b) const {
-  return _b ^ b;
+    return _b ^ b;
 }
 
 inline Boolean &Boolean::operator^=(const Boolean &b) {
-  _b ^= b.value();
-  return *this;
+    _b ^= b.value();
+    return *this;
 }
 
 inline Boolean &Boolean::operator^=(boolean b) {
-  _b ^= b;
-  return *this;
+    _b ^= b;
+    return *this;
 }
 
 inline boolean Boolean::operator==(const Boolean &b) const {
-  return _b == b.value();
+    return _b == b.value();
 }
 
 inline boolean Boolean::operator==(boolean b) const {
-  return _b == b;
+    return _b == b;
 }
 
 inline boolean Boolean::operator!=(const Boolean &b) const {
-  return _b != b.value();
+    return _b != b.value();
 }
 
 inline boolean Boolean::operator!=(boolean b) const {
-  return _b != b;
+    return _b != b;
 }
 
 inline boolean Boolean::operator!() const {
-  return !_b;
+    return !_b;
 }
 
 inline ostream &operator<<(ostream &o, const Boolean &b) {
-  return o << (b.value() ? "TRUE" : "FALSE");
+    return o << (b.value() ? "TRUE" : "FALSE");
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

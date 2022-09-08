@@ -38,36 +38,46 @@ class UTILAPI Monitor : public PtrReference {
 
 public:
 
-  Monitor();
-  ~Monitor();
+    Monitor();
+    ~Monitor();
 
-  void wait() throw(InterruptedException, IllegalMonitorStateException);
-  void wait(long timeout) throw(InterruptedException, IllegalMonitorStateException);
-  void notify() throw(IllegalMonitorStateException);
-  void notifyAll() throw(IllegalMonitorStateException);
-
-private:
-
-  Monitor(const Monitor &monitor);
-  Monitor &operator=(const Monitor &monitor);
-
-  void validateMutexOwner(const char *caller)
-    throw(IllegalMonitorStateException);
+    void wait() throw(InterruptedException, IllegalMonitorStateException);
+    void wait(long timeout) throw(InterruptedException, IllegalMonitorStateException);
+    void notify() throw(IllegalMonitorStateException);
+    void notifyAll() throw(IllegalMonitorStateException);
 
 private:
 
-  friend class Synchronized;
-  friend class Condition;
+    Monitor(const Monitor &monitor);
+    Monitor &operator=(const Monitor &monitor);
 
-  void lock(boolean internal) throw(ThreadException);
-  void unlock() throw(ThreadException);
+    void validateMutexOwner(const char *caller)
+        throw(IllegalMonitorStateException);
 
-  RecursiveMutex _mutex;
-  Condition _cond;
-  boolean _internal;
+private:
+
+    friend class Synchronized;
+    friend class Condition;
+
+    void lock(boolean internal) throw(ThreadException);
+    void unlock() throw(ThreadException);
+
+    RecursiveMutex _mutex;
+    Condition _cond;
+    boolean _internal;
 
 };
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

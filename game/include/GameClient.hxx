@@ -25,12 +25,12 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class GAMEAPI GameClient : public BaseObject {
 
-  DECLARE_RUNTIME_DISCOVERABLE(GameClient);
+    DECLARE_RUNTIME_DISCOVERABLE(GameClient);
 
 public:
 
-  GameClient();
-  ~GameClient();
+    GameClient();
+    ~GameClient();
 
 private:
 
@@ -49,3 +49,13 @@ inline GameClient::~GameClient() {
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

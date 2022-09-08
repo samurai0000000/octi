@@ -24,15 +24,15 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI InetAddress : public BaseObject {
   
-  DECLARE_RUNTIME_DISCOVERABLE(InetAddress);
+    DECLARE_RUNTIME_DISCOVERABLE(InetAddress);
 
 public:
 
-  InetAddress();
-  ~InetAddress();
+    InetAddress();
+    ~InetAddress();
 
-  const char *getHostName() const;
-  const char *getHostAddress() const;
+    const char *getHostName() const;
+    const char *getHostAddress() const;
 
 private:
 
@@ -51,3 +51,13 @@ inline InetAddress::~InetAddress() {
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

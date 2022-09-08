@@ -1,11 +1,11 @@
 /****************************************************************************
-** Form implementation generated from reading ui file 'ui/OctiGameSelectDialogBase.ui'
-**
-** Created: Thu Aug 1 17:35:11 2002
-**      by:  The User Interface Compiler (uic)
-**
-** WARNING! All changes made in this file will be lost!
-****************************************************************************/
+ ** Form implementation generated from reading ui file 'ui/OctiGameSelectDialogBase.ui'
+ **
+ ** Created: Thu Aug 1 17:35:11 2002
+ **      by:  The User Interface Compiler (uic)
+ **
+ ** WARNING! All changes made in this file will be lost!
+ ****************************************************************************/
 #include "OctiGameSelectDialogBase.hxx"
 
 #include <qvariant.h>
@@ -30,7 +30,7 @@ OctiGameSelectDialogBase::OctiGameSelectDialogBase( QWidget* parent,  const char
     : QDialog( parent, name, modal, fl )
 {
     if ( !name )
-	setName( "OctiGameSelectDialogBase" );
+        setName( "OctiGameSelectDialogBase" );
     resize( 499, 279 ); 
     setCaption( trUtf8( "New OCTI Game" ) );
     setSizeGripEnabled( TRUE );
@@ -127,3 +127,12 @@ OctiGameSelectDialogBase::~OctiGameSelectDialogBase()
     // no need to delete child widgets, Qt does it all for us
 }
 
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

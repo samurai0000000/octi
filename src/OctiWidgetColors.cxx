@@ -30,14 +30,14 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 OctiWidgetColors::OctiWidgetColors() :
-  _lineColor(DEFAULT_WC_LINE),
-  _labelColor(DEFAULT_WC_LABEL),
-  _squareColor(DEFAULT_WC_SQUARE),
-  _contrastColor(DEFAULT_WC_CONTRAST),
-  _aPodColor(DEFAULT_WC_APOD),
-  _bPodColor(DEFAULT_WC_BPOD),
-  _cPodColor(DEFAULT_WC_CPOD),
-  _dPodColor(DEFAULT_WC_DPOD) {
+    _lineColor(DEFAULT_WC_LINE),
+    _labelColor(DEFAULT_WC_LABEL),
+    _squareColor(DEFAULT_WC_SQUARE),
+    _contrastColor(DEFAULT_WC_CONTRAST),
+    _aPodColor(DEFAULT_WC_APOD),
+    _bPodColor(DEFAULT_WC_BPOD),
+    _cPodColor(DEFAULT_WC_CPOD),
+    _dPodColor(DEFAULT_WC_DPOD) {
 
 }
 
@@ -47,3 +47,13 @@ OctiWidgetColors::~OctiWidgetColors() {
 
 __END_NAMESPACE(SELFSOFT);
 
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

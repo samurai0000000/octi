@@ -23,15 +23,15 @@ __BEGIN_NAMESPACE(SELFSOFT);
 OctiOptionsModel *G_OctiOptions = NULL;
 
 void InitOctiOptionsModel() {
-  G_OctiOptions = new OctiOptionsModel();
+    G_OctiOptions = new OctiOptionsModel();
 }
 
 OctiOptionsModel::OctiOptionsModel() {
-  _mode = GAME_MODE_2;
-  _useSuperProngs = FALSE;
-  _useEdgelessBoard = FALSE;
-  _isServerEnabled = TRUE;
-  _serverListeningPort = 5570;
+    _mode = GAME_MODE_2;
+    _useSuperProngs = FALSE;
+    _useEdgelessBoard = FALSE;
+    _isServerEnabled = TRUE;
+    _serverListeningPort = 5570;
 }
 
 OctiOptionsModel::~OctiOptionsModel() {
@@ -39,3 +39,13 @@ OctiOptionsModel::~OctiOptionsModel() {
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

@@ -27,27 +27,37 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class OCTIAPI OctiBoardFrame : public QFrame {
 
-  Q_OBJECT;
+    Q_OBJECT;
 
 public:
-  
-  OctiBoardFrame(QWidget *parent = NULL, const char *name = NULL, WFlags f = 0);
-  ~OctiBoardFrame();
 
-  OctiBoard *getBoard();
+    OctiBoardFrame(QWidget *parent = NULL, const char *name = NULL, WFlags f = 0);
+    ~OctiBoardFrame();
+
+    OctiBoard *getBoard();
 
 private:
 
-  OctiBoardWidget *_bw;
+    OctiBoardWidget *_bw;
 
 };
 
 // Inline functions
 
 inline OctiBoard *OctiBoardFrame::getBoard() {
-  return _bw->getBoard();
+    return _bw->getBoard();
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

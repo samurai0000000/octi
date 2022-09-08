@@ -20,9 +20,9 @@
 __USING_NAMESPACE(SELFSOFT);
 
 void doDateTest() {
-  Date date;
+    Date date;
 
-  cout << "Number of seconds: " << date.getTime() << endl;
+    cout << "Number of seconds: " << date.getTime() << endl;
 }
 
 void doCalendarTest() {
@@ -32,3 +32,13 @@ void doCalendarTest() {
 void doTimeZoneTest() {
 
 }
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

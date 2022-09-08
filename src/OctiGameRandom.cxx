@@ -27,30 +27,40 @@ struct octiboard_t {
 };
 
 void Octi2PlayerGame::randomize() {
-  reset();
-  start(PLAYER_A);
-  move("33+b");
-  move("37+e");
-  move("33");
-  move("37");
-  move("33+c");
-  move("37+d");
-  move("53+a");
-  move("57+f");
-  move("33b+g");
-  move("37d+f");
-  move("73+h");
-  move("37df-46,37e-36");
-  move("53a+f");
-  move("57f-35");
-  move("33c-43,33bg-44");
-  move("36e+c");
-  move("53af-54");
-  move("35f+d");
+    reset();
+    start(PLAYER_A);
+    move("33+b");
+    move("37+e");
+    move("33");
+    move("37");
+    move("33+c");
+    move("37+d");
+    move("53+a");
+    move("57+f");
+    move("33b+g");
+    move("37d+f");
+    move("73+h");
+    move("37df-46,37e-36");
+    move("53a+f");
+    move("57f-35");
+    move("33c-43,33bg-44");
+    move("36e+c");
+    move("53af-54");
+    move("35f+d");
 }
 
 void Octi4PlayerGame::randomize() {
-  // NOT YET IMPLEMENTED
+    // NOT YET IMPLEMENTED
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

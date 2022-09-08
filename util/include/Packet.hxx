@@ -24,12 +24,12 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI Packet : public BaseObject {
 
-  DECLARE_RUNTIME_DISCOVERABLE(Packet);
+    DECLARE_RUNTIME_DISCOVERABLE(Packet);
 
 public:
 
-  Packet();
-  ~Packet();
+    Packet();
+    ~Packet();
 
 private:
 
@@ -49,3 +49,13 @@ inline Packet::~Packet() {
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

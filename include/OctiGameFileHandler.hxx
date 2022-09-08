@@ -30,3 +30,13 @@ extern OCTIAPI void SaveOcti(const char *path, OctiBoard *board) throw(IOExcepti
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

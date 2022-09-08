@@ -27,12 +27,12 @@ __BEGIN_NAMESPACE(SELFSOFT);
  */
 class UTILAPI IOException : public Exception {
 
-  DECLARE_RUNTIME_SERIALIZABLE(IOException);
+    DECLARE_RUNTIME_SERIALIZABLE(IOException);
 
 public:
 
-  IOException();
-  IOException(const char *msg);
+    IOException();
+    IOException(const char *msg);
 
 };
 
@@ -41,12 +41,12 @@ public:
  */
 class UTILAPI FileNotFoundException : public IOException {
 
-  DECLARE_RUNTIME_SERIALIZABLE(FileNotFoundException);
+    DECLARE_RUNTIME_SERIALIZABLE(FileNotFoundException);
 
 public:
 
-  FileNotFoundException();
-  FileNotFoundException(const char *msg);
+    FileNotFoundException();
+    FileNotFoundException(const char *msg);
 
 };
 
@@ -71,3 +71,13 @@ inline FileNotFoundException::FileNotFoundException(const char *msg) : IOExcepti
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

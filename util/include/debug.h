@@ -23,11 +23,11 @@
 #endif
 
 #ifdef _DEBUG
-#define ASSERT(X)                       \
-        if(X) {                         \
-        } else {                        \
-          _Assert(__FILE__, __LINE__);  \
-        }
+#define ASSERT(X)                               \
+    if(X) {                                     \
+    } else {                                    \
+        _Assert(__FILE__, __LINE__);            \
+    }
 #else
 #define ASSERT(X)
 #endif
@@ -39,3 +39,13 @@ extern UTILAPI void _Assert(char *file, unsigned int line);
 __END_C_DECLS
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

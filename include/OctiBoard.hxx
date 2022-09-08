@@ -36,11 +36,11 @@ class OCTIAPI OctiBoard;
 class OCTIAPI OctiBoardListener : public EventListener {
 
 public:
-  
-  virtual void gameChanged(OctiBoard *src,
-			   OctiGame *oldGame, OctiGame *newGame) = 0;
-  virtual void boardUpdated(OctiBoard *src, const OctiMove *move,
-			    boolean undo) = 0;
+
+    virtual void gameChanged(OctiBoard *src,
+                             OctiGame *oldGame, OctiGame *newGame) = 0;
+    virtual void boardUpdated(OctiBoard *src, const OctiMove *move,
+                              boolean undo) = 0;
 
 };
 
@@ -59,92 +59,102 @@ public:
  */
 class OCTIAPI OctiBoard : public BaseObject {
 
-  DECLARE_RUNTIME_SERIALIZABLE(OctiBoard);
+    DECLARE_RUNTIME_SERIALIZABLE(OctiBoard);
 
 public:
 
-  OctiBoard();
-  ~OctiBoard();
+    OctiBoard();
+    ~OctiBoard();
 
-  void setGameMode(OctiGameMode mode, boolean useSuperProngs = FALSE,
-		   boolean useEdgelessBoard = FALSE);
-  OctiGameMode getGameMode() const;
-  OctiGame *getGame();
+    void setGameMode(OctiGameMode mode, boolean useSuperProngs = FALSE,
+                     boolean useEdgelessBoard = FALSE);
+    OctiGameMode getGameMode() const;
+    OctiGame *getGame();
 
-  void addOctiBoardListener(OctiBoardListener *listener);
-  void removeOctiBoardListener(OctiBoardListener *listener);
+    void addOctiBoardListener(OctiBoardListener *listener);
+    void removeOctiBoardListener(OctiBoardListener *listener);
 
-  OctiSquare &squareAt(int x, int y);
+    OctiSquare &squareAt(int x, int y);
 
-  int getNumFreePods(OctiPlayer player) const;
-  int getNumCapturedPods(OctiPlayer player) const;
-  int getNumFreeProngs(OctiPlayer player) const;
-  int getNumFreeSuperProngs(OctiPlayer player) const;
-  boolean canLiberate(OctiPlayer player) const;
+    int getNumFreePods(OctiPlayer player) const;
+    int getNumCapturedPods(OctiPlayer player) const;
+    int getNumFreeProngs(OctiPlayer player) const;
+    int getNumFreeSuperProngs(OctiPlayer player) const;
+    boolean canLiberate(OctiPlayer player) const;
 
-  friend ostream &operator<<(ostream &out, const OctiBoard &board);
-
-private:
-
-  friend class OctiGameBaseImpl;
-  friend class Octi2PlayerGame;
-  friend class Octi4PlayerGame;
-
-  void clear();
-  void allocateSquares(OctiGameMode mode);
-  void deallocateSquares();
-
-  void boardUpdated(const OctiMove *move, boolean undo);
-  void gameChanged(OctiGame *oldGame, OctiGame *newGame);
+    friend ostream &operator<<(ostream &out, const OctiBoard &board);
 
 private:
 
-  boolean _areSquaresAllocated;
-  OctiSquare *_boardSquares[9][9];
-  OctiGameMode _mode;
-  OctiGame *_game;
-  EventListenerList _listeners;
-  
+    friend class OctiGameBaseImpl;
+    friend class Octi2PlayerGame;
+    friend class Octi4PlayerGame;
+
+    void clear();
+    void allocateSquares(OctiGameMode mode);
+    void deallocateSquares();
+
+    void boardUpdated(const OctiMove *move, boolean undo);
+    void gameChanged(OctiGame *oldGame, OctiGame *newGame);
+
+private:
+
+    boolean _areSquaresAllocated;
+    OctiSquare *_boardSquares[9][9];
+    OctiGameMode _mode;
+    OctiGame *_game;
+    EventListenerList _listeners;
+
 };
 
 // Inline functions
 
 inline OctiGameMode OctiBoard::getGameMode() const {
-  return _mode;
+    return _mode;
 }
 
 inline OctiGame *OctiBoard::getGame() {
-  return _game;
+    return _game;
 }
 
 inline void OctiBoard::addOctiBoardListener(OctiBoardListener *listener) {
-  _listeners.addEventListener(listener);  
+    _listeners.addEventListener(listener);
 }
 
 inline void OctiBoard::removeOctiBoardListener(OctiBoardListener *listener) {
-  _listeners.removeEventListener(listener);
+    _listeners.removeEventListener(listener);
 }
 
 inline OctiSquare &OctiBoard::squareAt(int x, int y) {
-  return *_boardSquares[x][y];
+    return *_boardSquares[x][y];
 }
 
 inline void OctiBoard::boardUpdated(const OctiMove *move, boolean undo) {
-  for(int i = _listeners.getNumListeners() - 1; i >= 0; i--) {
-    OctiBoardListener *listener =
-      (OctiBoardListener *) _listeners.getListenerAt(i);
-    listener->boardUpdated(this, move, undo);
-  }
+    for(int i = _listeners.getNumListeners() - 1; i >= 0; i--) {
+        OctiBoardListener *listener =
+            (OctiBoardListener *) _listeners.getListenerAt(i);
+        listener->boardUpdated(this, move, undo);
+    }
 }
 
 inline void OctiBoard::gameChanged(OctiGame *oldGame, OctiGame *newGame) {
-  for(int i = _listeners.getNumListeners() - 1; i >= 0; i--) {
-    OctiBoardListener *listener =
-      (OctiBoardListener *) _listeners.getListenerAt(i);
-    listener->gameChanged(this, oldGame, newGame);
-  }
+    for(int i = _listeners.getNumListeners() - 1; i >= 0; i--) {
+        OctiBoardListener *listener =
+            (OctiBoardListener *) _listeners.getListenerAt(i);
+        listener->gameChanged(this, oldGame, newGame);
+    }
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

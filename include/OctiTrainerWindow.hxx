@@ -26,34 +26,44 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class OCTIAPI OctiTrainerWindow : public QMainWindow {
 
-  Q_OBJECT;
+    Q_OBJECT;
 
 public:
-  
-  OctiTrainerWindow(QWidget * parent = 0, const char *name = 0, WFlags f = WType_TopLevel);
-  ~OctiTrainerWindow();
+
+    OctiTrainerWindow(QWidget * parent = 0, const char *name = 0, WFlags f = WType_TopLevel);
+    ~OctiTrainerWindow();
 
 protected slots:
 
-  void rand();
-  void cont();
-  void stat();
-  void analyzeCF();
-  void analyzeNN();
-  void about();
-  void moveSelected(int i);
+    void rand();
+    void cont();
+    void stat();
+    void analyzeCF();
+    void analyzeNN();
+    void about();
+    void moveSelected(int i);
 
 private:
 
-  QToolBar *_toolbar;
-  QPopupMenu *_windowsMenu;
-  QListBox *_listbox;
-  OctiBoardWidget *_bw;
-  boolean _moved;
-  int _lastitem;
+    QToolBar *_toolbar;
+    QPopupMenu *_windowsMenu;
+    QListBox *_listbox;
+    OctiBoardWidget *_bw;
+    boolean _moved;
+    int _lastitem;
 
 };
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

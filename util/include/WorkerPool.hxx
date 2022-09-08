@@ -26,19 +26,19 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 enum WorkerStatus {
-  WK_IDLE,
-  WK_BUSY
+    WK_IDLE,
+    WK_BUSY
 };
 
 /**
  * The WorkUnit interface is to be implemented by classes that have work that
  * could be divided into units for distributed or parallel computation.
  */
-class UTILAPI WorkUnit {
+class UTILAPI WorkUnit : public Root {
 
 public:
 
-  virtual void doWork(void *args) = 0;
+    virtual void doWork(void *args) = 0;
 
 };
 
@@ -55,33 +55,33 @@ class UTILAPI Worker : public PtrReference {
 
 public:
 
-  Worker(const char *name = NULL);
-  ~Worker();
+    Worker(const char *name = NULL);
+    ~Worker();
 
-  WorkerStatus getCurrentStatus() const;
+    WorkerStatus getCurrentStatus() const;
 
 protected:
 
-  // To be overridden by the implementing class
-  virtual void serviceWorkUnit(WorkUnit &unit, void *args) = 0;
+    // To be overridden by the implementing class
+    virtual void serviceWorkUnit(WorkUnit &unit, void *args) = 0;
 
 private:
 
-  friend class WorkerPool;
+    friend class WorkerPool;
 
-  // Methos called by the WorkerPool class
-  void setPoolAssociation(WorkerPool *pool);
-  void assignWork(WorkUnit &unit, void *args);
+    // Methos called by the WorkerPool class
+    void setPoolAssociation(WorkerPool *pool);
+    void assignWork(WorkUnit &unit, void *args);
 
-  WorkerPool *_pool;
-  WorkerStatus _status;
-  unsigned long _createTime;
-  unsigned long _idleTime;
-  unsigned long _busyTime;
+    WorkerPool *_pool;
+    WorkerStatus _status;
+    unsigned long _createTime;
+    unsigned long _idleTime;
+    unsigned long _busyTime;
 
 protected:
 
-  String _name;
+    String _name;
 
 };
 
@@ -101,54 +101,54 @@ protected:
  */
 class UTILAPI WorkerPool : public BaseObject {
 
-  DECLARE_RUNTIME_DISCOVERABLE(WorkerPool);
+    DECLARE_RUNTIME_DISCOVERABLE(WorkerPool);
 
 public:
 
-  WorkerPool(int poolsize);
-  virtual ~WorkerPool();
+    WorkerPool(int poolsize);
+    virtual ~WorkerPool();
 
-  int getNumWorkers() const;
-  int getNumIdleWorkers() const;
-  int getNumBusyWorkers() const;
+    int getNumWorkers() const;
+    int getNumIdleWorkers() const;
+    int getNumBusyWorkers() const;
 
-  void doWork(WorkUnit &unit, void *args);
+    void doWork(WorkUnit &unit, void *args);
 
 protected:
 
-  // To be overridden by the implementing class
-  virtual void initWorkers() = 0;
-  virtual void destroyWorkers() = 0;
+    // To be overridden by the implementing class
+    virtual void initWorkers() = 0;
+    virtual void destroyWorkers() = 0;
 
 private:
 
-  friend class Worker;
+    friend class Worker;
 
-  // Call back functions from the Worker class
-  void workerBeginService(Ptr<Worker> worker);
-  void workerEndService(Ptr<Worker> worker);
+    // Call back functions from the Worker class
+    void workerBeginService(Ptr<Worker> worker);
+    void workerEndService(Ptr<Worker> worker);
 
-  // Internal Worker class management
-  void dispatchWork(WorkUnit &unit, void *args);
+    // Internal Worker class management
+    void dispatchWork(WorkUnit &unit, void *args);
 
 protected:
 
-  Ptr<Worker> *_workers;              // All registered workers
-  Slist<Ptr<Worker> > _busyWorkers;   // Busy worker list
-  Queue<Ptr<Worker> > _freeWorkers;   // Idle worker queue
+    Ptr<Worker> *_workers;              // All registered workers
+    Slist<Ptr<Worker> > _busyWorkers;   // Busy worker list
+    Queue<Ptr<Worker> > _freeWorkers;   // Idle worker queue
 
-  int _poolsize;
-  int _numIdleWorkers;
-  int _numBusyWorkers;
-  int _numWorkUnitsServiced;
-  int _totalServiceTime;
+    int _poolsize;
+    int _numIdleWorkers;
+    int _numBusyWorkers;
+    int _numWorkUnitsServiced;
+    int _totalServiceTime;
 
 };
 
 // Inline functions
 
 inline Worker::Worker(const char *name) {
-  _name = name;
+    _name = name;
 }
 
 inline Worker::~Worker() {
@@ -156,40 +156,50 @@ inline Worker::~Worker() {
 }
 
 inline WorkerStatus Worker::getCurrentStatus() const {
-  return _status;
+    return _status;
 }
 
 inline void Worker::setPoolAssociation(WorkerPool *pool) {
-  _pool = pool;
+    _pool = pool;
 }
 
 inline WorkerPool::~WorkerPool() {
-  if(_workers != NULL) {
-    delete [] _workers;
-  }
+    if(_workers != NULL) {
+        delete [] _workers;
+    }
 }
 
 inline int WorkerPool::getNumWorkers() const {
-  WorkerPool *self = (WorkerPool *) (const WorkerPool *) this;
-  synchronized(*self, {
-    return _poolsize;
-  });
+    WorkerPool *self = (WorkerPool *) (const WorkerPool *) this;
+    synchronized(*self, {
+            return _poolsize;
+        });
 }
 
 inline int WorkerPool::getNumIdleWorkers() const {
-  WorkerPool *self = (WorkerPool *) (const WorkerPool *) this;
-  synchronized(*self, {
-    return _numIdleWorkers;
-  });
+    WorkerPool *self = (WorkerPool *) (const WorkerPool *) this;
+    synchronized(*self, {
+            return _numIdleWorkers;
+        });
 }
 
 inline int WorkerPool::getNumBusyWorkers() const {
-  WorkerPool *self = (WorkerPool *) (const WorkerPool *) this;
-  synchronized(*self, {
-    return _numBusyWorkers;
-  });
+    WorkerPool *self = (WorkerPool *) (const WorkerPool *) this;
+    synchronized(*self, {
+            return _numBusyWorkers;
+        });
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

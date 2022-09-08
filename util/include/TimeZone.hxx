@@ -24,38 +24,38 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 enum TZ_FORMAT {
-  SHORT = 0,
-  LONG  = 1
+    SHORT = 0,
+    LONG  = 1
 };
 
 class UTILAPI TimeZone : public BaseObject {
 
-  DECLARE_RUNTIME_SERIALIZABLE(TimeZone);
+    DECLARE_RUNTIME_SERIALIZABLE(TimeZone);
 
 public:
 
-  TimeZone();
+    TimeZone();
 
-  // Note: getTimeZone() and getDefault() creates a new instance of TimeZone
-  // which must be explicitly freed when no longer in use.
-  static TimeZone *getTimeZone(const String &Id);
-  static TimeZone *getDefault();
+    // Note: getTimeZone() and getDefault() creates a new instance of TimeZone
+    // which must be explicitly freed when no longer in use.
+    static TimeZone *getTimeZone(const String &Id);
+    static TimeZone *getDefault();
 
-  int getOffset(int era, int year, int month,
-		int day, int dayOfWeek, int milliseconds) const;
-  void setRawOffset(int offsetMillis);
-  int getRawOffset() const;
+    int getOffset(int era, int year, int month,
+                  int day, int dayOfWeek, int milliseconds) const;
+    void setRawOffset(int offsetMillis);
+    int getRawOffset() const;
 
-  String getId() const;
-  void setID(const String &Id);
+    String getId() const;
+    void setID(const String &Id);
 
-  String getDisplayName(boolean daylight = FALSE, TZ_FORMAT = SHORT) const;
-  boolean useDaylightTime() const;
-  boolean inDaylightTime(const Date &date) const;
+    String getDisplayName(boolean daylight = FALSE, TZ_FORMAT = SHORT) const;
+    boolean useDaylightTime() const;
+    boolean inDaylightTime(const Date &date) const;
 
-  Slist<String> getAvailableIds(int rawOffset = 0) const;
+    Slist<String> getAvailableIds(int rawOffset = 0) const;
   
-  boolean hasSameRules(const TimeZone &other) const;
+    boolean hasSameRules(const TimeZone &other) const;
 
 protected:
 
@@ -64,3 +64,13 @@ protected:
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

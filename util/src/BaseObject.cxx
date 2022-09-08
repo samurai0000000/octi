@@ -26,120 +26,130 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 const BaseRuntimeClass *BaseObject::CS_classBaseObject =
-new BaseRuntimeClass("BaseObject", sizeof(class BaseObject), 
-		     NULL, NULL);
+    new BaseRuntimeClass("BaseObject", sizeof(class BaseObject), 
+                         NULL, NULL);
 
 BaseObject::BaseObject() {
-  _monitor = NULL;
+    _monitor = NULL;
 }
 
 BaseObject::BaseObject(const BaseObject &object) {
-  _monitor = NULL;
+    _monitor = NULL;
 }
 
 BaseObject::~BaseObject() {
-  if(_monitor) {
-    delete _monitor;
-  }
+    if(_monitor) {
+        delete _monitor;
+    }
 }
 
 boolean BaseObject::operator==(const BaseObject &object) const {
-  return (this == &object);
+    return (this == &object);
 }
 
 boolean BaseObject::operator<(const BaseObject &object) const {
-  return (this < &object);
+    return (this < &object);
 }
 
 BaseObject *BaseObject::clone() const {
-  Error::warning("clone() not implemented");
-  return 0;
+    Error::warning("clone() not implemented");
+    return 0;
 }
 
 const char *BaseObject::toString() const {
-  String s;
-  s.format("(%s *) 0x%08x", this->getRuntimeClass()->getClassName(), (void *) this);
-  return s;
+    String s;
+    s.format("(%s *) 0x%08x", this->getRuntimeClass()->getClassName(), (void *) this);
+    return s;
 }
 
 const BaseRuntimeClass *BaseObject::getRuntimeClass() const {
-  return BASERUNTIME_CLASS(BaseObject);
+    return BASERUNTIME_CLASS(BaseObject);
 }
 
 const BaseRuntimeClass *BaseObject::_getParentClass() {
-  return NULL;
+    return NULL;
 }
 
 boolean BaseObject::isKindOf(const BaseRuntimeClass *rclass) const {
-  if(rclass == NULL) {
-    return FALSE;
-  }
-
-  for(const BaseRuntimeClass *target = getRuntimeClass(); target;
-      target = target->getParentClass()) {
-    if(target == rclass) {
-      return TRUE;
+    if(rclass == NULL) {
+        return FALSE;
     }
-  }
 
-  return FALSE;
+    for(const BaseRuntimeClass *target = getRuntimeClass(); target;
+        target = target->getParentClass()) {
+        if(target == rclass) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
 }
 
 boolean BaseObject::isKindOf(const char *className) const {
-  if(className == NULL) {
-    return FALSE;
-  }
-
-  for(const BaseRuntimeClass *target = getRuntimeClass(); target;
-      target = target->getParentClass()) {
-    if(strcmp(target->getClassName(), className) == 0) {
-      return TRUE;
+    if(className == NULL) {
+        return FALSE;
     }
-  }
 
-  return FALSE;
+    for(const BaseRuntimeClass *target = getRuntimeClass(); target;
+        target = target->getParentClass()) {
+        if(strcmp(target->getClassName(), className) == 0) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
 }
 
 boolean BaseObject::isInstanceOf(const BaseRuntimeClass *rclass) const {
-  return rclass != NULL && getRuntimeClass() == rclass;
+    return rclass != NULL && getRuntimeClass() == rclass;
 }
 
 boolean BaseObject::isInstanceOf(const char *className) const {
-  if(className == NULL) {
-    return FALSE;
-  }
+    if(className == NULL) {
+        return FALSE;
+    }
 
-  return (strcmp(getRuntimeClass()->getClassName(), className) == 0);
+    return (strcmp(getRuntimeClass()->getClassName(), className) == 0);
 }
 
 boolean BaseObject::isSerializable(const BaseRuntimeClass *rclass) const {
-  return FALSE;
+    return FALSE;
 }
 
 void BaseObject::wait() throw(InterruptedException) {
-  ensureMonitorInit();
-  _monitor->wait();
+    ensureMonitorInit();
+    _monitor->wait();
 }
 
 void BaseObject::wait(long timeout) throw(InterruptedException) {
-  ensureMonitorInit();
-  _monitor->wait(timeout);
+    ensureMonitorInit();
+    _monitor->wait(timeout);
 }
 
 void BaseObject::notify() throw(IllegalMonitorStateException) {
-  ensureMonitorInit();
-  _monitor->notify();
+    ensureMonitorInit();
+    _monitor->notify();
 }
 
 void BaseObject::notifyAll() throw(IllegalMonitorStateException) {
-  ensureMonitorInit();
-  _monitor->notifyAll();
+    ensureMonitorInit();
+    _monitor->notifyAll();
 }
 
 void BaseObject::ensureMonitorInit() {
-  if(_monitor == NULL) {
-    _monitor = new Monitor();
-  }
+    if(_monitor == NULL) {
+        _monitor = new Monitor();
+    }
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

@@ -50,10 +50,10 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 typedef enum {
-  THREAD_NEW        = 0,
-  THREAD_RUNNING    = 1,
-  THREAD_SUSPENDED  = 2,
-  THREAD_DEAD       = 3
+    THREAD_NEW        = 0,
+    THREAD_RUNNING    = 1,
+    THREAD_SUSPENDED  = 2,
+    THREAD_DEAD       = 3
 } THREAD_STATE;
 
 typedef void *(*ThreadFunc)(void *);
@@ -69,11 +69,11 @@ class Thread;
  * class and implement the run() method.
  *
  */
-class UTILAPI Runnable {
+class UTILAPI Runnable : public Root {
 
 public:
 
-  virtual void run() = 0;
+    virtual void run() = 0;
 
 };
 
@@ -83,29 +83,29 @@ public:
  */
 class ThreadGroupSet : public BaseObject {
 
-  DECLARE_RUNTIME_DISCOVERABLE(ThreadGroupSet);
+    DECLARE_RUNTIME_DISCOVERABLE(ThreadGroupSet);
 
 public:
 
-  ThreadGroupSet();
-  ThreadGroupSet(const ThreadGroupSet &groupSet);
-  ~ThreadGroupSet();
+    ThreadGroupSet();
+    ThreadGroupSet(const ThreadGroupSet &groupSet);
+    ~ThreadGroupSet();
 
-  ThreadGroupSet &operator=(const ThreadGroupSet &groupSet);
-  ThreadGroupSet &operator+=(const ThreadGroupSet &groupSet);
+    ThreadGroupSet &operator=(const ThreadGroupSet &groupSet);
+    ThreadGroupSet &operator+=(const ThreadGroupSet &groupSet);
 
-  ThreadGroup &operator[](int i);
-  int length() const;
+    ThreadGroup &operator[](int i);
+    int length() const;
 
 private:
 
-  friend class ThreadGroup;
+    friend class ThreadGroup;
 
-  void addGroup(ThreadGroup *group);
-  void removeGroup(ThreadGroup *group);
-  
-  ThreadGroup **_groups;
-  int _numGroups;
+    void addGroup(ThreadGroup *group);
+    void removeGroup(ThreadGroup *group);
+
+    ThreadGroup **_groups;
+    int _numGroups;
 
 };
 
@@ -115,29 +115,29 @@ private:
  */
 class ThreadSet : public BaseObject {
 
-  DECLARE_RUNTIME_DISCOVERABLE(ThreadSet);
+    DECLARE_RUNTIME_DISCOVERABLE(ThreadSet);
 
 public:
 
-  ThreadSet();
-  ThreadSet(const ThreadSet &threadSet);
-  ~ThreadSet();
+    ThreadSet();
+    ThreadSet(const ThreadSet &threadSet);
+    ~ThreadSet();
 
-  ThreadSet &operator=(const ThreadSet &threadSet);
-  ThreadSet &operator+=(const ThreadSet &threadSet);
+    ThreadSet &operator=(const ThreadSet &threadSet);
+    ThreadSet &operator+=(const ThreadSet &threadSet);
 
-  Thread &operator[](int i);
-  int length() const;
+    Thread &operator[](int i);
+    int length() const;
 
 private:
 
-  friend class ThreadGroup;
+    friend class ThreadGroup;
 
-  void addThread(Thread *thread);
-  void removeThread(Thread *thread);
+    void addThread(Thread *thread);
+    void removeThread(Thread *thread);
 
-  Thread **_threads;
-  int _numThreads;
+    Thread **_threads;
+    int _numThreads;
 
 };
 
@@ -147,97 +147,97 @@ private:
  */
 class UTILAPI ThreadGroup : public BaseObject {
 
-  DECLARE_RUNTIME_DISCOVERABLE(ThreadGroup);
+    DECLARE_RUNTIME_DISCOVERABLE(ThreadGroup);
 
 public:
 
-  ThreadGroup();
-  ThreadGroup(const char* name);
-  ThreadGroup(ThreadGroup *parent, const char* name);
+    ThreadGroup();
+    ThreadGroup(const char* name);
+    ThreadGroup(ThreadGroup *parent, const char* name);
 
-  ~ThreadGroup();
-  
-  ThreadGroup *getParent();
- 
-  void setName(const char *name);
-  const char *getName() const;
- 
-  void setDaemon(boolean daemon);
-  boolean isDaemon() const;
-  
+    ~ThreadGroup();
+
+    ThreadGroup *getParent();
+
+    void setName(const char *name);
+    const char *getName() const;
+
+    void setDaemon(boolean daemon);
+    boolean isDaemon() const;
+
 #if defined(__USE_THREAD_FORCESTOP__)
-  void stop();
+    void stop();
 #endif
-  void resume();
-  void suspend();
-  
-  void setMaxPriority(int priority);
-  int getMaxPriority() const;
+    void resume();
+    void suspend();
 
-  void destroy() throw(IllegalThreadStateException);
-  boolean isDestroyed() const;
-  
-  int activeCount() const;
-  int activeGroupCount() const;
-  
-  boolean isParentOf(const ThreadGroup &group) const;
+    void setMaxPriority(int priority);
+    int getMaxPriority() const;
 
-  ThreadSet enumerateThreads(boolean recursive = FALSE);
-  ThreadGroupSet enumerateGroups(boolean recursive = FALSE);
+    void destroy() throw(IllegalThreadStateException);
+    boolean isDestroyed() const;
 
-private:
+    int activeCount() const;
+    int activeGroupCount() const;
 
-  static ThreadGroupSet s_allThreadGroups;
-  static ThreadGroup s_mainThreadGroup;
-  static ThreadGroup s_systemThreadGroup;
+    boolean isParentOf(const ThreadGroup &group) const;
+
+    ThreadSet enumerateThreads(boolean recursive = FALSE);
+    ThreadGroupSet enumerateGroups(boolean recursive = FALSE);
 
 private:
 
-  friend class Thread;
+    static ThreadGroupSet s_allThreadGroups;
+    static ThreadGroup s_mainThreadGroup;
+    static ThreadGroup s_systemThreadGroup;
 
-  void addGroup(ThreadGroup *group) throw(IllegalThreadStateException);
-  void removeGroup(ThreadGroup *group) throw(IllegalThreadStateException);
-  void add(Thread *thread) throw(IllegalThreadStateException);
-  void remove(Thread *thread) throw(IllegalThreadStateException);
+private:
 
-  void initialize(ThreadGroup *parent, const char *name);
+    friend class Thread;
 
-  RecursiveMutex _mutex;
+    void addGroup(ThreadGroup *group) throw(IllegalThreadStateException);
+    void removeGroup(ThreadGroup *group) throw(IllegalThreadStateException);
+    void add(Thread *thread) throw(IllegalThreadStateException);
+    void remove(Thread *thread) throw(IllegalThreadStateException);
 
-  ThreadGroup *_parent;
-  String _name;
-  boolean _daemon;
-  boolean _destroyed;
-  int _maxPriority;
+    void initialize(ThreadGroup *parent, const char *name);
 
-  ThreadSet _threads;
-  ThreadGroupSet _childGroups;
-  
+    RecursiveMutex _mutex;
+
+    ThreadGroup *_parent;
+    String _name;
+    boolean _daemon;
+    boolean _destroyed;
+    int _maxPriority;
+
+    ThreadSet _threads;
+    ThreadGroupSet _childGroups;
+
 };
 
 /**
  * Thread local variables.
  */
 class UTILAPI ThreadLocal : public BaseObject {
-  
-  DECLARE_RUNTIME_DISCOVERABLE(ThreadLocal);
-  
+
+    DECLARE_RUNTIME_DISCOVERABLE(ThreadLocal);
+
 public:
-  
-  ThreadLocal();
-  ~ThreadLocal();
-  
-  void set(void *value);
-  void *get();
-  
+
+    ThreadLocal();
+    ~ThreadLocal();
+
+    void set(void *value);
+    void *get();
+
 private:
-  
+
 #if defined(__USE_WINTHREAD__)
-  DWORD _key;
+    DWORD _key;
 #elif defined(__USE_POSIXTHREAD__)
-  pthread_key_t _key;
+    pthread_key_t _key;
 #endif
-  
+
 };
 
 /**
@@ -245,134 +245,134 @@ private:
  *
  */
 class UTILAPI Thread : public BaseObject {
-  
-  DECLARE_RUNTIME_DISCOVERABLE(Thread);
-   
+
+    DECLARE_RUNTIME_DISCOVERABLE(Thread);
+
 public:
-   
-  Thread();
-  Thread(const char *name);
-  Thread(ThreadFunc startfunc, void *args = NULL, const char *name = NULL);
-  Thread(Runnable &target, const char *name = NULL);
-  Thread(ThreadGroup &group);
-  Thread(ThreadGroup &group, const char *name);
-  Thread(ThreadGroup &group, ThreadFunc startfunc, void *args = NULL,
-	 const char *name = NULL);
-  Thread(ThreadGroup &group, Runnable &target, const char *name = NULL);
-  
-  ~Thread();
-  
-  void start() throw(IllegalThreadStateException);   // Starts the thread
+
+    Thread();
+    Thread(const char *name);
+    Thread(ThreadFunc startfunc, void *args = NULL, const char *name = NULL);
+    Thread(Runnable &target, const char *name = NULL);
+    Thread(ThreadGroup &group);
+    Thread(ThreadGroup &group, const char *name);
+    Thread(ThreadGroup &group, ThreadFunc startfunc, void *args = NULL,
+           const char *name = NULL);
+    Thread(ThreadGroup &group, Runnable &target, const char *name = NULL);
+
+    ~Thread();
+
+    void start() throw(IllegalThreadStateException);   // Starts the thread
 #if defined(__USE_THREAD_FORCESTOP__)
-  void stop() throw(IllegalThreadStateException);    // Stops the thread
+    void stop() throw(IllegalThreadStateException);    // Stops the thread
 #endif
-  void suspend() throw(IllegalThreadStateException); // Suspends the thread
-  void resume() throw(IllegalThreadStateException);  // Resumes the thread
-  
-  void join() throw(InterruptedException);  // Waits for thread termination
-  void join(long timeout) throw(InterruptedException);  // Waits for thread termination with timeout
-  
-  void interrupt();  // Interrupts the thread
+    void suspend() throw(IllegalThreadStateException); // Suspends the thread
+    void resume() throw(IllegalThreadStateException);  // Resumes the thread
 
-  static void sleep(long timeout) throw(InterruptedException);
-  static void yield();
-  
-  void setPriority(int priority);
-  int getPriority() const;
-  
-  boolean isAlive() const;
-  
-  const char *getName() const;
-  void setName(const char *name);
-  ThreadId getThreadId() const;
-  
-  ThreadGroup *getThreadGroup();
+    void join() throw(InterruptedException);  // Waits for thread termination
+    void join(long timeout) throw(InterruptedException);  // Waits for thread termination with timeout
 
-  static void dumpThreadUsage();
+    void interrupt();  // Interrupts the thread
+
+    static void sleep(long timeout) throw(InterruptedException);
+    static void yield();
+
+    void setPriority(int priority);
+    int getPriority() const;
+
+    boolean isAlive() const;
+
+    const char *getName() const;
+    void setName(const char *name);
+    ThreadId getThreadId() const;
+
+    ThreadGroup *getThreadGroup();
+
+    static void dumpThreadUsage();
 
 public:
 
-  // Gets and sets the default stack size used to initialize a thread
-  static void setDefaultThreadStackSize(int stackSize);
-  static int getDefaultThreadStackSize();
+    // Gets and sets the default stack size used to initialize a thread
+    static void setDefaultThreadStackSize(int stackSize);
+    static int getDefaultThreadStackSize();
 
 protected:
 
-  // The run function is the execution path of the thread if this class
-  // was constructed with the empty constructor.
-  // Derived classes should implement this function for its own needs.
-  virtual void run();
-  
-private:
-
-  friend class Monitor;
-
-  // Entry point function after a native thread has been created
-  static void *startRun(void *args);
-
-  // Function that starts the execution of the thread in Thread::run method
-  static void *startThreadRun(void *args);
-  // Function that starts the execution of the thread in Runnable::run method
-  static void *startRunnableRun(void *args);
-
-  void initialize(ThreadGroup *group, const char *name);  
-  void threadStarted();
-  void threadExited();
-
-  void checkRunningStatus();
-  void setMonitor(Monitor *monitor);
-  Monitor *getMonitor();
-
-  static void checkRunningStatusStatic();
-  static void setMonitorStatic(Monitor *monitor);
+    // The run function is the execution path of the thread if this class
+    // was constructed with the empty constructor.
+    // Derived classes should implement this function for its own needs.
+    virtual void run();
 
 private:
-  
-  // Main thread initializtion constructor
-  Thread(ThreadId id);
-  // Orphaned thread constructor
-  Thread(Thread &thread);
 
-  // System and TSS
-  static Thread s_mainThread;
-  static ThreadLocal s_systemThreadLocal;
-  static int s_defaultStackSize;
+    friend class Monitor;
+
+    // Entry point function after a native thread has been created
+    static void *startRun(void *args);
+
+    // Function that starts the execution of the thread in Thread::run method
+    static void *startThreadRun(void *args);
+    // Function that starts the execution of the thread in Runnable::run method
+    static void *startRunnableRun(void *args);
+
+    void initialize(ThreadGroup *group, const char *name);
+    void threadStarted();
+    void threadExited();
+
+    void checkRunningStatus();
+    void setMonitor(Monitor *monitor);
+    Monitor *getMonitor();
+
+    static void checkRunningStatusStatic();
+    static void setMonitorStatic(Monitor *monitor);
+
+private:
+
+    // Main thread initializtion constructor
+    Thread(ThreadId id);
+    // Orphaned thread constructor
+    Thread(Thread &thread);
+
+    // System and TSS
+    static Thread s_mainThread;
+    static ThreadLocal s_systemThreadLocal;
+    static int s_defaultStackSize;
 
 private:
 
 #if defined(__USE_WINTHREAD__)
-  DWORD _thread;
-  HANDLE _handle;
+    DWORD _thread;
+    HANDLE _handle;
 #elif defined(__USE_POSIXTHREAD__)
-  pthread_t _thread;
+    pthread_t _thread;
 #endif
 
-  typedef struct _StartRunArg {
-    Mutex mutex;
-    Thread *thread;
-  } StartRunArg;
-  
-  ThreadFunc _startfunc;        // The start function
-  void *_args;                  // Arguments to the start function
-  StartRunArg *_startRunArg;    // Arguments to the static thread entry func
+    typedef struct _StartRunArg {
+        Mutex mutex;
+        Thread *thread;
+    } StartRunArg;
 
-  ThreadGroup *_group;           // The group this thread belongs to
-  ThreadId _threadId;           // The thread ID
-  String _name;                 // The name of the thread
-  THREAD_STATE _state;          // The state of the thread
+    ThreadFunc _startfunc;        // The start function
+    void *_args;                  // Arguments to the start function
+    StartRunArg *_startRunArg;    // Arguments to the static thread entry func
 
-  boolean _orphaned;
-  boolean _terminated;
-  boolean _suspended;
+    ThreadGroup *_group;           // The group this thread belongs to
+    ThreadId _threadId;           // The thread ID
+    String _name;                 // The name of the thread
+    THREAD_STATE _state;          // The state of the thread
 
-  RecursiveMutex _threadBeginMutex;
-  Condition _threadBeginCondition;
-  RecursiveMutex _resumeMutex;
-  Condition _resumeCondition;
-  RecursiveMutex _joinMutex;
-  Condition _joinCondition;
-  Mutex _monitorMutex;
-  Monitor *_monitor;
+    boolean _orphaned;
+    boolean _terminated;
+    boolean _suspended;
+
+    RecursiveMutex _threadBeginMutex;
+    Condition _threadBeginCondition;
+    RecursiveMutex _resumeMutex;
+    Condition _resumeCondition;
+    RecursiveMutex _joinMutex;
+    Condition _joinCondition;
+    Mutex _monitorMutex;
+    Monitor *_monitor;
 
 };
 
@@ -383,44 +383,44 @@ inline ThreadGroupSet::ThreadGroupSet() : _groups(NULL), _numGroups(0) {
 }
 
 inline ThreadGroupSet::ThreadGroupSet(const ThreadGroupSet &groupSet) : _groups(NULL), _numGroups(0) {
-  operator=(groupSet);
+    operator=(groupSet);
 }
 
 inline ThreadGroupSet::~ThreadGroupSet() {
-  if(_groups) {
-    free(_groups);
-  }
+    if(_groups) {
+        free(_groups);
+    }
 }
 
 inline ThreadGroupSet &ThreadGroupSet::operator=(const ThreadGroupSet &groupSet) {
-  if(_groups != NULL) {
-    free(_groups);
-  }
+    if(_groups != NULL) {
+        free(_groups);
+    }
 
-  _numGroups = groupSet._numGroups;
-  if(_numGroups > 0) {
-    _groups = (ThreadGroup **) calloc(_numGroups, sizeof(ThreadGroup *));
-    memcpy(_groups, groupSet._groups, _numGroups * sizeof(ThreadGroup *));
-  }
+    _numGroups = groupSet._numGroups;
+    if(_numGroups > 0) {
+        _groups = (ThreadGroup **) calloc(_numGroups, sizeof(ThreadGroup *));
+        memcpy(_groups, groupSet._groups, _numGroups * sizeof(ThreadGroup *));
+    }
 
-  return *this;
+    return *this;
 }
 
 inline ThreadGroupSet &ThreadGroupSet::operator+=(const ThreadGroupSet &groupSet) {
-  for(int i = 0; i < groupSet._numGroups; i++) {
-    addGroup(groupSet._groups[i]);
-  }
+    for(int i = 0; i < groupSet._numGroups; i++) {
+        addGroup(groupSet._groups[i]);
+    }
 
-  return *this;
+    return *this;
 }
 
 inline ThreadGroup &ThreadGroupSet::operator[](int i) {
-  ASSERT(i >= 0 && i <= _numGroups);
-  return *_groups[i];
+    ASSERT(i >= 0 && i <= _numGroups);
+    return *_groups[i];
 }
 
 inline int ThreadGroupSet::length() const {
-  return _numGroups;
+    return _numGroups;
 }
 
 inline ThreadSet::ThreadSet() : _threads(NULL), _numThreads(0) {
@@ -428,120 +428,120 @@ inline ThreadSet::ThreadSet() : _threads(NULL), _numThreads(0) {
 }
 
 inline ThreadSet::ThreadSet(const ThreadSet &threadSet) : _threads(NULL), _numThreads(0) {
-  operator=(threadSet);
+    operator=(threadSet);
 }
 
 inline ThreadSet::~ThreadSet() {
-  if(_threads) {
-    free(_threads);
-  }
+    if(_threads) {
+        free(_threads);
+    }
 }
 
 inline ThreadSet &ThreadSet::operator=(const ThreadSet &threadSet) {
-  if(_threads != NULL) {
-    free(_threads);
-  }
+    if(_threads != NULL) {
+        free(_threads);
+    }
 
-  _numThreads = threadSet._numThreads;
-  if(_numThreads > 0) {
-    _threads = (Thread **) calloc(_numThreads, sizeof(Thread *));
-    memcpy(_threads, threadSet._threads, _numThreads * sizeof(Thread *));
-  }
+    _numThreads = threadSet._numThreads;
+    if(_numThreads > 0) {
+        _threads = (Thread **) calloc(_numThreads, sizeof(Thread *));
+        memcpy(_threads, threadSet._threads, _numThreads * sizeof(Thread *));
+    }
 
-  return *this;
+    return *this;
 }
 
 inline ThreadSet &ThreadSet::operator+=(const ThreadSet &threadSet) {
-  for(int i = 0; i < threadSet._numThreads; i++) {
-    addThread(threadSet._threads[i]);
-  }
+    for(int i = 0; i < threadSet._numThreads; i++) {
+        addThread(threadSet._threads[i]);
+    }
 
-  return *this;
+    return *this;
 }
 
 inline Thread &ThreadSet::operator[](int i) {
-  ASSERT(i >= 0 && i <= _numThreads);
-  return *_threads[i];
+    ASSERT(i >= 0 && i <= _numThreads);
+    return *_threads[i];
 }
 
 inline int ThreadSet::length() const {
-  return _numThreads;
+    return _numThreads;
 }
 
 inline ThreadGroup::ThreadGroup() {
-  initialize(NULL, NULL);
+    initialize(NULL, NULL);
 }
 
 inline ThreadGroup::ThreadGroup(const char* name) {
-  initialize(NULL, name);
+    initialize(NULL, name);
 }
 
 inline ThreadGroup::ThreadGroup(ThreadGroup *parent, const char* name) {
-  initialize(parent, name);
+    initialize(parent, name);
 }
 
 inline ThreadGroup *ThreadGroup::getParent() {
-  return _parent;
+    return _parent;
 }
 
 inline void ThreadGroup::setName(const char *name) {
-  _name = name;
+    _name = name;
 }
 
 inline const char *ThreadGroup::getName() const {
-  return _name;
+    return _name;
 }
- 
+
 inline void ThreadGroup::setDaemon(boolean daemon) {
-  _daemon = daemon;
+    _daemon = daemon;
 }
 
 inline boolean ThreadGroup::isDaemon() const {
-  return _daemon;
+    return _daemon;
 }
 
 inline ThreadLocal::ThreadLocal() {
 #if defined(__USE_WINTHREAD__)
-  _key = TlsAlloc();
+    _key = TlsAlloc();
 #elif defined(__USE_POSIXTHREAD__)
-  pthread_key_create(&_key, NULL);
+    pthread_key_create(&_key, NULL);
 #endif
 }
 
 inline ThreadLocal::~ThreadLocal() {
 #if defined(__USE_WINTHREAD__)
-  TlsFree(_key);
+    TlsFree(_key);
 #elif defined(__USE_POSIXTHREAD__)
-  pthread_key_delete(_key);
+    pthread_key_delete(_key);
 #endif
 }
 
 inline void ThreadLocal::set(void *value) {
 #if defined(__USE_WINTHREAD__)
-  TlsSetValue(_key, value);
+    TlsSetValue(_key, value);
 #elif defined(__USE_POSIXTHREAD__)
-  pthread_setspecific(_key, value);
+    pthread_setspecific(_key, value);
 #endif
 }
 
 inline void *ThreadLocal::get() {
 #if defined(__USE_WINTHREAD__)
-  return TlsGetValue(_key);
+    return TlsGetValue(_key);
 #elif defined(__USE_POSIXTHREAD__)
-  return pthread_getspecific(_key);
+    return pthread_getspecific(_key);
 #endif
 }
 
 inline void Thread::yield() {
-  checkRunningStatusStatic();
+    checkRunningStatusStatic();
 
 #if defined(__USE_WINTHREAD__)
-  Yield();
+    Yield();
 #elif defined(__USE_POSIXTHREAD__)
-  sched_yield();
+    sched_yield();
 #endif
-  
-  checkRunningStatusStatic();
+
+    checkRunningStatusStatic();
 }
 
 inline void Thread::run() {
@@ -549,33 +549,43 @@ inline void Thread::run() {
 }
 
 inline void Thread::join() throw(InterruptedException) {
-  join(0);
+    join(0);
 }
 
 inline void Thread::setDefaultThreadStackSize(int stackSize) {
-  s_defaultStackSize = (stackSize > 0 ? stackSize : 0);
+    s_defaultStackSize = (stackSize > 0 ? stackSize : 0);
 }
 
 inline int Thread::getDefaultThreadStackSize() {
-  return s_defaultStackSize;
+    return s_defaultStackSize;
 }
 
 inline const char *Thread::getName() const {
-  return _name;
+    return _name;
 }
 
 inline void Thread::setName(const char *name) {
-  _name = name;
+    _name = name;
 }
 
 inline ThreadId Thread::getThreadId() const {
-  return ThreadId::self();
+    return ThreadId::self();
 }
 
 inline ThreadGroup *Thread::getThreadGroup() {
-  return _group;
+    return _group;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

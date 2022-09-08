@@ -24,25 +24,35 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI Exception : public BaseObject {
 
-  DECLARE_RUNTIME_SERIALIZABLE(Exception);
+    DECLARE_RUNTIME_SERIALIZABLE(Exception);
 
 public:
 
-  Exception();
-  Exception(const char *msg);
-  Exception(const Exception &e);
-  virtual ~Exception();
+    Exception();
+    Exception(const char *msg);
+    Exception(const Exception &e);
+    virtual ~Exception();
 
-  Exception &operator=(const Exception &e);
-  const char *getMessage() const;
-  friend ostream &operator<<(ostream &out, const Exception &e);
+    Exception &operator=(const Exception &e);
+    const char *getMessage() const;
+    friend ostream &operator<<(ostream &out, const Exception &e);
 
 private:
 
-  char *_msg;
+    char *_msg;
 
 };
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

@@ -26,56 +26,66 @@ __BEGIN_NAMESPACE(SELFSOFT);
 IMPLEMENT_RUNTIME_DISCOVERABLE(WorkerPool, BaseObject);
 
 void Worker::assignWork(WorkUnit &unit, void *args) {
-  Ptr<Worker> worker(this);
-  _pool->workerBeginService(worker);
-  serviceWorkUnit(unit, args);
-  _pool->workerEndService(worker);
+    Ptr<Worker> worker(this);
+    _pool->workerBeginService(worker);
+    serviceWorkUnit(unit, args);
+    _pool->workerEndService(worker);
 }
 
 WorkerPool::WorkerPool(int poolsize) {
-  _poolsize = poolsize;
-  _workers = new Ptr<Worker>[poolsize];
+    _poolsize = poolsize;
+    _workers = new Ptr<Worker>[poolsize];
 }
 
 void WorkerPool::doWork(WorkUnit &unit, void *args) {
-  dispatchWork(unit, args);
+    dispatchWork(unit, args);
 }
 
 void WorkerPool::dispatchWork(WorkUnit &unit, void *args) {
-  Ptr<Worker> avbWorker;
+    Ptr<Worker> avbWorker;
 
-  synchronized(_freeWorkers, {
-    if(_freeWorkers.size() <= 0) {
-      _freeWorkers.wait();  // Wait on the free queue to have one available
-    }
+    synchronized(_freeWorkers, {
+            if(_freeWorkers.size() <= 0) {
+                _freeWorkers.wait();  // Wait on the free queue to have one available
+            }
 
-    _freeWorkers.remove(avbWorker);
-  });
+            _freeWorkers.remove(avbWorker);
+        });
 
-  ASSERT(avbWorker != NULL);
-  avbWorker->assignWork(unit, args);
+    ASSERT(avbWorker != NULL);
+    avbWorker->assignWork(unit, args);
 }
 
 void WorkerPool::workerBeginService(Ptr<Worker> worker) {
-  synchronized(_busyWorkers, {
-    // Add the worker to the busy list
-    _busyWorkers.append(worker);
-    _busyWorkers.notify();
-  });
+    synchronized(_busyWorkers, {
+            // Add the worker to the busy list
+            _busyWorkers.append(worker);
+            _busyWorkers.notify();
+        });
 }
 
 void WorkerPool::workerEndService(Ptr<Worker> worker) {
-  synchronized(_busyWorkers, {
-    // Remove the worker from the busy list
-    _busyWorkers.removeElement(worker);
-    _busyWorkers.notify();
-  });
+    synchronized(_busyWorkers, {
+            // Remove the worker from the busy list
+            _busyWorkers.removeElement(worker);
+            _busyWorkers.notify();
+        });
 
-  synchronized(_freeWorkers, {
-    // Add the worker to the free queue
-    _freeWorkers.append(worker);
-    _freeWorkers.notify();
-  });
+    synchronized(_freeWorkers, {
+            // Add the worker to the free queue
+            _freeWorkers.append(worker);
+            _freeWorkers.notify();
+        });
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

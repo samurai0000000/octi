@@ -28,27 +28,27 @@
 
 __BEGIN_NAMESPACE(SELFSOFT);
 
-class UTILAPI PtrReference {
+class UTILAPI PtrReference : public Root {
 
 public:
 
-  PtrReference();
-  void increaseReference() const;
-  void decreaseReference() const;
+    PtrReference();
+    void increaseReference() const;
+    void decreaseReference() const;
 
 protected:
 
-  virtual ~PtrReference();
+    virtual ~PtrReference();
 
-  int numReferences() const;
+    int numReferences() const;
 
-  // Implement the zeroReferences method to override the default
-  // behaviour ("delete this").
-  virtual void zeroReferences();
+    // Implement the zeroReferences method to override the default
+    // behaviour ("delete this").
+    virtual void zeroReferences();
 
 private:
 
-  int _numReferences;
+    int _numReferences;
 
 };
 
@@ -56,35 +56,35 @@ private:
 // on locally allocated data structures.
 
 template <class T>
-class UTILAPI Ptr {
+class UTILAPI Ptr : public Root {
 
 public:
 
-  Ptr();
-  Ptr(const T *ptr);
-  Ptr(const Ptr<T> &ptr);
-  ~Ptr();
+    Ptr();
+    Ptr(const T *ptr);
+    Ptr(const Ptr<T> &ptr);
+    ~Ptr();
 
-  Ptr<T> &operator=(const T *ptr);
-  Ptr<T> &operator=(const Ptr<T> &ptr);
-  const T *operator->() const;
-  T *operator->();
-  const T *ptr() const;
-  T *ptr();
+    Ptr<T> &operator=(const T *ptr);
+    Ptr<T> &operator=(const Ptr<T> &ptr);
+    const T *operator->() const;
+    T *operator->();
+    const T *ptr() const;
+    T *ptr();
 
-  operator const T *() const;
-  operator T *();
+    operator const T *() const;
+    operator T *();
 
 private:
-  
-  const T *_ptr;
+
+    const T *_ptr;
 
 };
 
 // Inline functions for PtrReference class are below here.
 
 inline PtrReference::PtrReference() {
-  _numReferences = 0;
+    _numReferences = 0;
 }
 
 inline PtrReference::~PtrReference() {
@@ -92,101 +92,111 @@ inline PtrReference::~PtrReference() {
 }
 
 inline void PtrReference::increaseReference() const {
-  PtrReference *self = (PtrReference *) this;
-  self->_numReferences++;
+    PtrReference *self = (PtrReference *) this;
+    self->_numReferences++;
 }
 
 inline void PtrReference::decreaseReference() const {
-  PtrReference *self = (PtrReference *) this;
-  if(--self->_numReferences == 0) {
-    self->zeroReferences();
-  }
+    PtrReference *self = (PtrReference *) this;
+    if(--self->_numReferences == 0) {
+        self->zeroReferences();
+    }
 }
 
 inline int PtrReference::numReferences() const {
-  return _numReferences;
+    return _numReferences;
 }
 
 inline void PtrReference::zeroReferences() {
-  delete this;
+    delete this;
 }
 
 // Inline functions for Ptr class are below here.
 
 template <class T> inline Ptr<T>::Ptr() {
-  _ptr = NULL;
+    _ptr = NULL;
 }
 
 template <class T> inline Ptr<T>::Ptr(const T *ptr) {
-  if((_ptr = ptr) != NULL) {
-    ptr->increaseReference();
-  }
+    if((_ptr = ptr) != NULL) {
+        ptr->increaseReference();
+    }
 }
 
 template <class T> inline Ptr<T>::Ptr(const Ptr<T> &ptr) {
-  if((_ptr = ptr._ptr) != NULL) {
-    ptr->increaseReference();
-  }
+    if((_ptr = ptr._ptr) != NULL) {
+        ptr->increaseReference();
+    }
 }
 
 template <class T> inline Ptr<T>::~Ptr() {
-  if(_ptr != NULL) {
-    _ptr->decreaseReference();
-  }
+    if(_ptr != NULL) {
+        _ptr->decreaseReference();
+    }
 }
 
 template <class T> inline Ptr<T> &Ptr<T>::operator=(const T *ptr) {
-  const PtrReference *old = _ptr;
-  _ptr = ptr;
-  if(_ptr != old) {
-    if(_ptr != NULL) {
-      _ptr->increaseReference();
+    const PtrReference *old = _ptr;
+    _ptr = ptr;
+    if(_ptr != old) {
+        if(_ptr != NULL) {
+            _ptr->increaseReference();
+        }
+        if(old != NULL){
+            old->decreaseReference();
+        }
     }
-    if(old != NULL){
-      old->decreaseReference();
-    }
-  }
-  return *this;
+    return *this;
 }
 
 template <class T> inline Ptr<T> &Ptr<T>::operator=(const Ptr<T> &ptr) {
-  const PtrReference *old = _ptr;
-  _ptr = ptr._ptr;
-  if(_ptr != old) {
-    if(_ptr != NULL) {
-      _ptr->increaseReference();
+    const PtrReference *old = _ptr;
+    _ptr = ptr._ptr;
+    if(_ptr != old) {
+        if(_ptr != NULL) {
+            _ptr->increaseReference();
+        }
+        if(old != NULL){
+            old->decreaseReference();
+        }
     }
-    if(old != NULL){
-      old->decreaseReference();
-    }
-  }
-  return *this;
+    return *this;
 }
 
 template <class T> inline const T *Ptr<T>::operator->() const {
-  return _ptr;
+    return _ptr;
 }
 
 template <class T> inline T *Ptr<T>::operator->() {
-  return (T *) _ptr;
+    return (T *) _ptr;
 }
 
 template <class T> inline const T *Ptr<T>::ptr() const {
-  return _ptr;
+    return _ptr;
 }
 
 template <class T> inline T *Ptr<T>::ptr() {
-  return (T *) _ptr;
+    return (T *) _ptr;
 }
 
 template <class T> inline Ptr<T>::operator const T *() const {
-  return _ptr;
+    return _ptr;
 }
 
 template <class T> inline Ptr<T>::operator T *() {
-  return (T *) _ptr;
+    return (T *) _ptr;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

@@ -22,37 +22,37 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI BigInteger : public BaseObject {
 
-  DECLARE_RUNTIME_SERIALIZABLE(BigInteger);
+    DECLARE_RUNTIME_SERIALIZABLE(BigInteger);
 
 public:
 
-  BigInteger();
-  BigInteger(const BigInteger &bigInteger);
-  BigInteger(const char *string);
-  ~BigInteger();
+    BigInteger();
+    BigInteger(const BigInteger &bigInteger);
+    BigInteger(const char *string);
+    ~BigInteger();
 
-  // Assignment operators
-  BigInteger &operator=(const BigInteger &bigInteter);
+    // Assignment operators
+    BigInteger &operator=(const BigInteger &bigInteter);
 
-  // Comparison operators
-  boolean operator==(const BigInteger &bigInteger);
-  boolean operator!=(const BigInteger &bigInteger);
-  boolean operator>(const BigInteger &bigInteger);
-  boolean operator>=(const BigInteger &bigInteger);
-  boolean operator<(const BigInteger &bigInteger);
-  boolean operator<=(const BigInteger &bigInteger);
+    // Comparison operators
+    boolean operator==(const BigInteger &bigInteger);
+    boolean operator!=(const BigInteger &bigInteger);
+    boolean operator>(const BigInteger &bigInteger);
+    boolean operator>=(const BigInteger &bigInteger);
+    boolean operator<(const BigInteger &bigInteger);
+    boolean operator<=(const BigInteger &bigInteger);
 
-  BigInteger operator+(const BigInteger &bigInteger) const;
-  BigInteger operator-(const BigInteger &bigInteger) const;
-  BigInteger operator*(const BigInteger &bigInteger) const;
-  BigInteger operator/(const BigInteger &bigInteger) const;
-  BigInteger operator%(const BigInteger &bigInteger) const;
+    BigInteger operator+(const BigInteger &bigInteger) const;
+    BigInteger operator-(const BigInteger &bigInteger) const;
+    BigInteger operator*(const BigInteger &bigInteger) const;
+    BigInteger operator/(const BigInteger &bigInteger) const;
+    BigInteger operator%(const BigInteger &bigInteger) const;
   
-  BigInteger &operator+=(const BigInteger &bigInteger);
-  BigInteger &operator-=(const BigInteger &bigInteger);
-  BigInteger &operator*=(const BigInteger &bigInteger);
-  BigInteger &operator/=(const BigInteger &bigInteger);
-  BigInteger &operator%=(const BigInteger &bigInteger);
+    BigInteger &operator+=(const BigInteger &bigInteger);
+    BigInteger &operator-=(const BigInteger &bigInteger);
+    BigInteger &operator*=(const BigInteger &bigInteger);
+    BigInteger &operator/=(const BigInteger &bigInteger);
+    BigInteger &operator%=(const BigInteger &bigInteger);
 
 private:
 
@@ -61,30 +61,40 @@ private:
 // Inline functions
 
 inline BigInteger &BigInteger::operator+=(const BigInteger &bigInteger) {
-  *this = operator+(bigInteger);
-  return *this;
+    *this = operator+(bigInteger);
+    return *this;
 }
 
 inline BigInteger &BigInteger::operator-=(const BigInteger &bigInteger) {
-  *this = operator-(bigInteger);
-  return *this;
+    *this = operator-(bigInteger);
+    return *this;
 }
 
 inline BigInteger &BigInteger::operator*=(const BigInteger &bigInteger) {
-  *this = operator*(bigInteger);
-  return *this;
+    *this = operator*(bigInteger);
+    return *this;
 }
 
 inline BigInteger &BigInteger::operator/=(const BigInteger &bigInteger) {
-  *this = operator/(bigInteger);
-  return *this;
+    *this = operator/(bigInteger);
+    return *this;
 }
 
 inline BigInteger &BigInteger::operator%=(const BigInteger &bigInteger) {
-  *this = operator%(bigInteger);
-  return *this;
+    *this = operator%(bigInteger);
+    return *this;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

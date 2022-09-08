@@ -27,13 +27,13 @@ IMPLEMENT_RUNTIME_SERIALIZABLE(ERSearchParameters, SearchParameters, 1);
 IMPLEMENT_RUNTIME_DISCOVERABLE(ERSearch, BaseObject);
 
 const SearchState *ERSearch::searchMax(SearchState *state,
-				       const SearchParameters *params) {
-  return NULL;
+                                       const SearchParameters *params) {
+    return NULL;
 }
 
 const SearchState *ERSearch::searchMin(SearchState *state,
-				       const SearchParameters *params) {
-  return NULL;
+                                       const SearchParameters *params) {
+    return NULL;
 }
 
 void ERSearch::printLastSearchStatistics(ostream &out) const {
@@ -45,3 +45,13 @@ void ERSearch::printTotalStatistics(ostream &out) const {
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

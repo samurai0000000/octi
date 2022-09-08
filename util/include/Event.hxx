@@ -33,18 +33,18 @@ __BEGIN_NAMESPACE(SELFSOFT);
  */
 class UTILAPI EventObject : public BaseObject {
 
-  DECLARE_RUNTIME_SERIALIZABLE(EventObject);
+    DECLARE_RUNTIME_SERIALIZABLE(EventObject);
 
 public:
 
-  EventObject();
-  EventObject(const BaseObject *source);
+    EventObject();
+    EventObject(const BaseObject *source);
 
-  const BaseObject *getSource() const;
+    const BaseObject *getSource() const;
 
 protected:
 
-  const BaseObject *_source;
+    const BaseObject *_source;
 
 };
 
@@ -60,37 +60,37 @@ class UTILAPI EventListener {
  */
 class UTILAPI EventListenerList : public BaseObject {
 
-  DECLARE_RUNTIME_DISCOVERABLE(EventListenerList);
+    DECLARE_RUNTIME_DISCOVERABLE(EventListenerList);
 
 public:
 
-  EventListenerList();
-  ~EventListenerList();
+    EventListenerList();
+    ~EventListenerList();
 
-  void addEventListener(EventListener *listener);
-  void removeEventListener(EventListener *listener);
+    void addEventListener(EventListener *listener);
+    void removeEventListener(EventListener *listener);
 
-  int getNumListeners() const;
-  EventListener *getListenerAt(int index);
+    int getNumListeners() const;
+    EventListener *getListenerAt(int index);
   
 private:
 
-  BufferedArray<Void> _listeners;
+    BufferedArray<Void> _listeners;
 
 };
 
 // Inline functions
 
 inline EventObject::EventObject() {
-  _source = NULL;
+    _source = NULL;
 }
 
 inline EventObject::EventObject(const BaseObject *source) {
-  _source = source;
+    _source = source;
 }
 
 inline const BaseObject *EventObject::getSource() const {
-  return _source;
+    return _source;
 }
 
 
@@ -103,16 +103,26 @@ inline EventListenerList::~EventListenerList() {
 }
 
 inline int EventListenerList::getNumListeners() const {
-  return _listeners.size();
+    return _listeners.size();
 }
 
 
 inline EventListener *EventListenerList::getListenerAt(int index) {
-  Void v = _listeners[index];
-  EventListener *listener = (EventListener *) v.getPointer();
-  return listener;
+    Void v = _listeners[index];
+    EventListener *listener = (EventListener *) v.getPointer();
+    return listener;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

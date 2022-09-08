@@ -36,26 +36,26 @@ class UTILAPI Barrier : public PtrReference {
 
 public:
 
-  Barrier(int nthrs);
-  ~Barrier();
+    Barrier(int nthrs);
+    ~Barrier();
 
-  void wait();
+    void wait();
 
 private:
 
-  int _nthrs;
-  int _count;
-  Condition _cond;
-  Mutex _lock;
-  RecursiveMutex _mutex;
+    int _nthrs;
+    int _count;
+    Condition _cond;
+    Mutex _lock;
+    RecursiveMutex _mutex;
 
 };
 
 // Inline functions
 
 inline Barrier::Barrier(int nthrs) : _cond(_mutex) {
-  _nthrs = nthrs;
-  _count = 0;
+    _nthrs = nthrs;
+    _count = 0;
 }
 
 inline Barrier::~Barrier() {
@@ -65,3 +65,13 @@ inline Barrier::~Barrier() {
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

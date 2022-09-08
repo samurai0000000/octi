@@ -23,66 +23,76 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 class AIAPI ThreadAlphaBetaSearch : public AlphaBetaSearch,
-				    private WorkUnit {
+                                    private WorkUnit {
 
-  DECLARE_RUNTIME_DISCOVERABLE(ThreadAlphaBetaSearch);
+    DECLARE_RUNTIME_DISCOVERABLE(ThreadAlphaBetaSearch);
 
 public:
 
-  ThreadAlphaBetaSearch();
-  ~ThreadAlphaBetaSearch();
+    ThreadAlphaBetaSearch();
+    ~ThreadAlphaBetaSearch();
 
-  // The setPoolSize() method should be called only once after the object
-  // is constructed. Subsequent calls have no effect.
-  void setPoolSize(int poolSize);
+    // The setPoolSize() method should be called only once after the object
+    // is constructed. Subsequent calls have no effect.
+    void setPoolSize(int poolSize);
 
 protected:
 
-  enum ThreadAlphaBetaCallType {
-    THR_AB_CALL_MAX,
-    THR_AB_CALL_MIN,
-  };
+    enum ThreadAlphaBetaCallType {
+        THR_AB_CALL_MAX,
+        THR_AB_CALL_MIN,
+    };
 
-  typedef struct _WorkUnitArg {
-    // Argument data
-    ThreadAlphaBetaCallType type;
-    SearchState *state;
-    int depth;
-    int cutoffDepth;
-    float alpha;
-    float beta;
-    Ptr<SearchState> *path;
-    // Return data
-    float eval;
-  } WorkUnitArg;
+    typedef struct _WorkUnitArg {
+        // Argument data
+        ThreadAlphaBetaCallType type;
+        SearchState *state;
+        int depth;
+        int cutoffDepth;
+        float alpha;
+        float beta;
+        Ptr<SearchState> *path;
+        // Return data
+        float eval;
+    } WorkUnitArg;
 
-  float maxValue(SearchState *state, int depth, int cutoffDepth,
-		 float alpha, float beta, Ptr<SearchState> path[]);
-  float minValue(SearchState *state, int depth, int cutoffDepth,
-		 float alpha, float beta, Ptr<SearchState> path[]);
+    float maxValue(SearchState *state, int depth, int cutoffDepth,
+                   float alpha, float beta, Ptr<SearchState> path[]);
+    float minValue(SearchState *state, int depth, int cutoffDepth,
+                   float alpha, float beta, Ptr<SearchState> path[]);
 private:
 
-  // Implement the WorkUnit interface
-  void doWork(void *args);
+    // Implement the WorkUnit interface
+    void doWork(void *args);
 
 private:
 
-  ThreadWorkerPool *_pool;
+    ThreadWorkerPool *_pool;
 
 };
 
 // Inline functions
 
 inline ThreadAlphaBetaSearch::ThreadAlphaBetaSearch() {
-  _pool = NULL;
+    _pool = NULL;
 }
 
 inline ThreadAlphaBetaSearch::~ThreadAlphaBetaSearch() {
-  if(_pool) {
-    delete _pool;
-  }
+    if(_pool) {
+        delete _pool;
+    }
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

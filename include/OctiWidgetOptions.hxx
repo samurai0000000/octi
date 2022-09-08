@@ -27,34 +27,44 @@ class OCTIAPI OctiOptionsModel;
 extern OctiOptionsModel *G_OctiOptions;
 extern void InitOctiOptionsModel();
 
-class OCTIAPI OctiOptionsModel {
+class OCTIAPI OctiOptionsModel : public Root {
 
 public:
 
-  OctiOptionsModel();
-  ~OctiOptionsModel();
+    OctiOptionsModel();
+    ~OctiOptionsModel();
 
-  OctiWidgetColors &getWidgetColors();
+    OctiWidgetColors &getWidgetColors();
 
 private:
 
-  OctiGameMode _mode;
-  boolean _useSuperProngs;
-  boolean _useEdgelessBoard;
+    OctiGameMode _mode;
+    boolean _useSuperProngs;
+    boolean _useEdgelessBoard;
 
-  boolean _isServerEnabled;
-  int _serverListeningPort;
+    boolean _isServerEnabled;
+    int _serverListeningPort;
 
-  OctiWidgetColors _colors;
-  
+    OctiWidgetColors _colors;
+
 };
 
 // Inline functions
 
 inline OctiWidgetColors &OctiOptionsModel::getWidgetColors() {
-  return _colors;
+    return _colors;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

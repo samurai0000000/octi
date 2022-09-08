@@ -37,39 +37,39 @@ __BEGIN_NAMESPACE(SELFSOFT);
  */
 class OCTIAPI OctiMoveOp : public BaseObject {
 
-  DECLARE_RUNTIME_SERIALIZABLE(OctiMoveOp);
+    DECLARE_RUNTIME_SERIALIZABLE(OctiMoveOp);
 
 public:
 
-  int x0, y0;                // Original coordinate for pod
-  OctiPod pod;               // Pod and its configuration
-  int x1, y1;                // Destination coordinate
-  boolean capture;           // Capture during move
-  OctiDir prongAddDir;       // Addition of prong during move
-  OctiDir prongRemoveDir;    // Subtraction of prong during move
-  boolean addSuperProng;     // Denotes adding a super prong
-  boolean removeSuperProng;  // Denotes subtracting a super prong
-  
-  /* This part is filled later by the game control. */
-  /* Mainly for undo/redo purposes. */
-  Slist<OctiPod> capturedPods;
-  OctiPod liberatedPod;
-  OctiPlayer liberatedFromPlayer;
+    int x0, y0;                // Original coordinate for pod
+    OctiPod pod;               // Pod and its configuration
+    int x1, y1;                // Destination coordinate
+    boolean capture;           // Capture during move
+    OctiDir prongAddDir;       // Addition of prong during move
+    OctiDir prongRemoveDir;    // Subtraction of prong during move
+    boolean addSuperProng;     // Denotes adding a super prong
+    boolean removeSuperProng;  // Denotes subtracting a super prong
+
+    /* This part is filled later by the game control. */
+    /* Mainly for undo/redo purposes. */
+    Slist<OctiPod> capturedPods;
+    OctiPod liberatedPod;
+    OctiPlayer liberatedFromPlayer;
 
 public:
 
-  OctiMoveOp();
-  OctiMoveOp(const OctiMoveOp &op);
-  ~OctiMoveOp();
+    OctiMoveOp();
+    OctiMoveOp(const OctiMoveOp &op);
+    ~OctiMoveOp();
 
-  boolean operator==(const OctiMoveOp &op) const;
-  OctiMoveOp &operator=(const OctiMoveOp &op);
-  
+    boolean operator==(const OctiMoveOp &op) const;
+    OctiMoveOp &operator=(const OctiMoveOp &op);
+
 private:
 
-  friend class OctiMove;
+    friend class OctiMove;
 
-  void reset();
+    void reset();
 
 };
 
@@ -95,83 +95,83 @@ private:
  */
 class OCTIAPI OctiMove : public BaseObject {
 
-  DECLARE_RUNTIME_SERIALIZABLE(OctiMove);
+    DECLARE_RUNTIME_SERIALIZABLE(OctiMove);
 
 public:
 
-  OctiMove();
-  OctiMove(const OctiMove &move);
-  OctiMove(const Dlist<Ptr<OctiMoveOp> > &ops) throw(IllegalMoveSyntaxException);
-  OctiMove(const char *s) throw(IllegalMoveSyntaxException);
-  ~OctiMove();
+    OctiMove();
+    OctiMove(const OctiMove &move);
+    OctiMove(const Dlist<Ptr<OctiMoveOp> > &ops) throw(IllegalMoveSyntaxException);
+    OctiMove(const char *s) throw(IllegalMoveSyntaxException);
+    ~OctiMove();
 
-  OctiMove &operator=(const OctiMove &move);
+    OctiMove &operator=(const OctiMove &move);
 
-  Dlist<Ptr<OctiMoveOp> > getOps();
-  int getSourceX() const;
-  int getSourceY() const;
-  const char *getNotation() const;
-
-private:
-
-  void nextState();
-  int peekMove();
+    Dlist<Ptr<OctiMoveOp> > getOps();
+    int getSourceX() const;
+    int getSourceY() const;
+    const char *getNotation() const;
 
 private:
 
-  enum FSMState {
-    S_START   =  0,
-    S_READX0  =  1,
-    S_READY0  =  2,
-    S_ADDRMV1 =  3,
-    S_RHALF   =  4,
-    S_ADDRMV2 =  5,
-    S_RCOMP   =  6,
-    S_MOVE    =  7,
-    S_READX1  =  8,
-    S_READY1  =  9,
-    S_FINISH  = 10,
-    S_ERROR   = 11,
-  };
-
-  enum CharType {
-    T_NUM = 0,  // Numeric coordinate
-    T_PRO = 1,  // Prong designation
-    T_ARP = 2,  // Add/remove prong operations
-    T_MOV = 3,  // Move pod operation
-    T_SUP = 4,  // Super prong designation
-    T_CAP = 5,  // Capture operation
-    T_COM = 6,  // Comma, multiple moves
-    T_WHI = 7,  // White spaces
-    T_TER = 8,  // Terminate
-    T_ERR = 9   // Error
-  };
+    void nextState();
+    int peekMove();
 
 private:
-  
-  String _notation;
 
-  Dlist<Ptr<OctiMoveOp> > _ops;
+    enum FSMState {
+        S_START   =  0,
+        S_READX0  =  1,
+        S_READY0  =  2,
+        S_ADDRMV1 =  3,
+        S_RHALF   =  4,
+        S_ADDRMV2 =  5,
+        S_RCOMP   =  6,
+        S_MOVE    =  7,
+        S_READX1  =  8,
+        S_READY1  =  9,
+        S_FINISH  = 10,
+        S_ERROR   = 11,
+    };
 
-  FSMState _state;
-  int _x;
-  int _y;
-  const char *_proc_s;
-  int _proc_index;
-  int _proc_s_length;
-  Ptr<OctiMoveOp>  _current;
-  boolean _lastAddRemoveIsAdd;
+    enum CharType {
+        T_NUM = 0,  // Numeric coordinate
+        T_PRO = 1,  // Prong designation
+        T_ARP = 2,  // Add/remove prong operations
+        T_MOV = 3,  // Move pod operation
+        T_SUP = 4,  // Super prong designation
+        T_CAP = 5,  // Capture operation
+        T_COM = 6,  // Comma, multiple moves
+        T_WHI = 7,  // White spaces
+        T_TER = 8,  // Terminate
+        T_ERR = 9   // Error
+    };
+
+private:
+
+    String _notation;
+
+    Dlist<Ptr<OctiMoveOp> > _ops;
+
+    FSMState _state;
+    int _x;
+    int _y;
+    const char *_proc_s;
+    int _proc_index;
+    int _proc_s_length;
+    Ptr<OctiMoveOp>  _current;
+    boolean _lastAddRemoveIsAdd;
 
 };
 
 // Inline functions
 
 inline OctiMoveOp::OctiMoveOp() {
-  reset();
+    reset();
 }
 
 inline OctiMoveOp::OctiMoveOp(const OctiMoveOp &op) {
-  operator=(op);
+    operator=(op);
 }
 
 inline OctiMoveOp::~OctiMoveOp() {
@@ -179,51 +179,51 @@ inline OctiMoveOp::~OctiMoveOp() {
 }
 
 inline void OctiMoveOp::reset() {
-  x0 = -1;
-  y0 = -1;
-  x1 = -1;
-  y1 = -1;
-  pod = OctiPod::EMPTY_POD;
-  capture = FALSE;
-  prongAddDir = DIR_UNDEF;
-  prongRemoveDir = DIR_UNDEF;
-  addSuperProng = FALSE;
-  removeSuperProng = FALSE;
-  capturedPods.clear();
-  liberatedPod = OctiPod::EMPTY_POD;
-  liberatedFromPlayer = PLAYER_UNDEF;
+    x0 = -1;
+    y0 = -1;
+    x1 = -1;
+    y1 = -1;
+    pod = OctiPod::EMPTY_POD;
+    capture = FALSE;
+    prongAddDir = DIR_UNDEF;
+    prongRemoveDir = DIR_UNDEF;
+    addSuperProng = FALSE;
+    removeSuperProng = FALSE;
+    capturedPods.clear();
+    liberatedPod = OctiPod::EMPTY_POD;
+    liberatedFromPlayer = PLAYER_UNDEF;
 }
 
 inline boolean OctiMoveOp::operator==(const OctiMoveOp &op) const {
-  return
-    (x0 == op.x0) &&
-    (y0 == op.y0) &&
-    (x1 == op.x1) &&
-    (y1 == op.y1) &&
-    (capture == op.capture) &&
-    (prongAddDir == op.prongAddDir) &&
-    (prongRemoveDir == op.prongRemoveDir) &&
-    (addSuperProng == op.addSuperProng) &&
-    (removeSuperProng == op.removeSuperProng) &&
-    (capturedPods == capturedPods) &&
-    (liberatedFromPlayer == op.liberatedFromPlayer);
+    return
+        (x0 == op.x0) &&
+        (y0 == op.y0) &&
+        (x1 == op.x1) &&
+        (y1 == op.y1) &&
+        (capture == op.capture) &&
+        (prongAddDir == op.prongAddDir) &&
+        (prongRemoveDir == op.prongRemoveDir) &&
+        (addSuperProng == op.addSuperProng) &&
+        (removeSuperProng == op.removeSuperProng) &&
+        (capturedPods == capturedPods) &&
+        (liberatedFromPlayer == op.liberatedFromPlayer);
 }
 
 inline OctiMoveOp &OctiMoveOp::operator=(const OctiMoveOp &op) {
-  x0 = op.x0;
-  y0 = op.y0;
-  pod = op.pod;
-  x1 = op.x1;
-  y1 = op.y1;
-  capture = op.capture;
-  prongAddDir = op.prongAddDir;
-  prongRemoveDir = op.prongRemoveDir;
-  addSuperProng = op.addSuperProng;
-  removeSuperProng = op.removeSuperProng;
-  capturedPods = op.capturedPods;
-  liberatedFromPlayer = op.liberatedFromPlayer;
-  
-  return *this;
+    x0 = op.x0;
+    y0 = op.y0;
+    pod = op.pod;
+    x1 = op.x1;
+    y1 = op.y1;
+    capture = op.capture;
+    prongAddDir = op.prongAddDir;
+    prongRemoveDir = op.prongRemoveDir;
+    addSuperProng = op.addSuperProng;
+    removeSuperProng = op.removeSuperProng;
+    capturedPods = op.capturedPods;
+    liberatedFromPlayer = op.liberatedFromPlayer;
+
+    return *this;
 }
 
 inline OctiMove::OctiMove() {
@@ -231,7 +231,7 @@ inline OctiMove::OctiMove() {
 }
 
 inline OctiMove::OctiMove(const OctiMove &move) {
-  operator=(move);
+    operator=(move);
 }
 
 inline OctiMove::~OctiMove() {
@@ -239,37 +239,47 @@ inline OctiMove::~OctiMove() {
 }
 
 inline OctiMove &OctiMove::operator=(const OctiMove &move) {
-  _notation = move._notation;
-  _ops.clear();
+    _notation = move._notation;
+    _ops.clear();
 
-  _x = move._x;
-  _y = move._y;
-  Ptr<DlistIterator<Ptr<OctiMoveOp> > > it = (DlistIterator<Ptr<OctiMoveOp> > *) move._ops.getIterator();
-  for(it->first(); it->isNotNull(); it->next()) {
-    _current = new OctiMoveOp(*it->current()->ptr());
-    _ops.append(_current);
-  }
-  _current = NULL;
+    _x = move._x;
+    _y = move._y;
+    Ptr<DlistIterator<Ptr<OctiMoveOp> > > it = (DlistIterator<Ptr<OctiMoveOp> > *) move._ops.getIterator();
+    for(it->first(); it->isNotNull(); it->next()) {
+        _current = new OctiMoveOp(*it->current()->ptr());
+        _ops.append(_current);
+    }
+    _current = NULL;
 
-  return *this;
+    return *this;
 }
 
 inline Dlist<Ptr<OctiMoveOp> > OctiMove::getOps() {
-  return _ops;
+    return _ops;
 }
 
 inline int OctiMove::getSourceX() const {
-  return _x;
+    return _x;
 }
 
 inline int OctiMove::getSourceY() const {
-  return _y;
+    return _y;
 }
 
 inline const char *OctiMove::getNotation() const {
-  return _notation;
+    return _notation;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

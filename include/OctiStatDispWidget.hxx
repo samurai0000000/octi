@@ -24,89 +24,99 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 class OCTIAPI OctiStatDispWidget : public QWidget,
-				   protected OctiBoardListener {
+                                   protected OctiBoardListener {
 
-  Q_OBJECT;
+    Q_OBJECT;
 
 public:
 
-  OctiStatDispWidget(QWidget *parent = NULL, const char *name = NULL, WFlags f = 0);
-  ~OctiStatDispWidget();
+    OctiStatDispWidget(QWidget *parent = NULL, const char *name = NULL, WFlags f = 0);
+    ~OctiStatDispWidget();
 
-  void setPlayer(OctiPlayer player, boolean inverted = FALSE);
+    void setPlayer(OctiPlayer player, boolean inverted = FALSE);
 
 private:
 
-  friend class OctiBoardDispWidget;
-  friend class OctiBoardWidget;
+    friend class OctiBoardDispWidget;
+    friend class OctiBoardWidget;
 
-  void setBoard(OctiBoard *board);
-  void setSquareSize(int size);
+    void setBoard(OctiBoard *board);
+    void setSquareSize(int size);
 
 protected:
 
-  void paintEvent(QPaintEvent *pe);
-  void resizeEvent(QResizeEvent *e);
-  void mousePressEvent(QMouseEvent *e);
-  void mouseReleaseEvent(QMouseEvent *e);
-  void mouseMoveEvent(QMouseEvent *e);
-  void dragEnterEvent(QDragEnterEvent *e);
-  void dragMoveEvent(QDragMoveEvent *e);
-  void dragLeaveEvent(QDragLeaveEvent *e);
-  void dropEvent(QDropEvent *e);
+    void paintEvent(QPaintEvent *pe);
+    void resizeEvent(QResizeEvent *e);
+    void mousePressEvent(QMouseEvent *e);
+    void mouseReleaseEvent(QMouseEvent *e);
+    void mouseMoveEvent(QMouseEvent *e);
+    void dragEnterEvent(QDragEnterEvent *e);
+    void dragMoveEvent(QDragMoveEvent *e);
+    void dragLeaveEvent(QDragLeaveEvent *e);
+    void dropEvent(QDropEvent *e);
 
 protected:
 
-  void gameChanged(OctiBoard *src, OctiGame *oldGame, OctiGame *newGame);
-  void boardUpdated(OctiBoard *src, const OctiMove *move, boolean undo);
+    void gameChanged(OctiBoard *src, OctiGame *oldGame, OctiGame *newGame);
+    void boardUpdated(OctiBoard *src, const OctiMove *move, boolean undo);
 
 private:
-  
-  void calcRects();
+
+    void calcRects();
 
 private:
-  
-  OctiBoard *_board;
-  OctiPlayer _player;
-  int _squareSize;
-  int _nfprong;
-  int _nfpod;
-  int _ncpod;
-  boolean _showInverted;
 
-  QPoint _pressPos;
-  QRect _prongRect;
-  QRect _freePodRect;
-  QRect _jailPodRect;
-  boolean _highlightJail;
+    OctiBoard *_board;
+    OctiPlayer _player;
+    int _squareSize;
+    int _nfprong;
+    int _nfpod;
+    int _ncpod;
+    boolean _showInverted;
+
+    QPoint _pressPos;
+    QRect _prongRect;
+    QRect _freePodRect;
+    QRect _jailPodRect;
+    boolean _highlightJail;
 
 };
 
 // Inline functions
 
 inline void OctiStatDispWidget::setBoard(OctiBoard *board) {
-  if(board != NULL && _board != board) {
-    if(_board != NULL) {
-      _board->removeOctiBoardListener(this);
+    if(board != NULL && _board != board) {
+        if(_board != NULL) {
+            _board->removeOctiBoardListener(this);
+        }
+        _board = board;
+        _board->addOctiBoardListener(this);
     }
-    _board = board;
-    _board->addOctiBoardListener(this);
-  }
 }
 
 inline void OctiStatDispWidget::setPlayer(OctiPlayer player, boolean inverted) {
-  if(_player != player || _showInverted != inverted) {
-    _player = player;
-    _showInverted = inverted;
-    repaint();
-  }
+    if(_player != player || _showInverted != inverted) {
+        _player = player;
+        _showInverted = inverted;
+        repaint();
+    }
 }
 
 inline void OctiStatDispWidget::setSquareSize(int size) {
-  _squareSize = size;
-  calcRects();
-  repaint();
+    _squareSize = size;
+    calcRects();
+    repaint();
 }
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

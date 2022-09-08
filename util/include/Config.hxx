@@ -27,44 +27,54 @@ class Config;
 
 class UTILAPI ConfigEntry : public BaseObject {
 
-  DECLARE_RUNTIME_SERIALIZABLE(ConfigEntry);
+    DECLARE_RUNTIME_SERIALIZABLE(ConfigEntry);
 
 public:
 
-  ConfigEntry();
-  ~ConfigEntry();
+    ConfigEntry();
+    ~ConfigEntry();
 
 private:
 
-  friend class Config;
+    friend class Config;
 
-  String comments;
-  String variableName;
-  String rawValue;
-  String realValue;
+    String comments;
+    String variableName;
+    String rawValue;
+    String realValue;
 
 };
 
 class UTILAPI Config : public BaseObject {
 
-  DECLARE_RUNTIME_SERIALIZABLE(Config);
+    DECLARE_RUNTIME_SERIALIZABLE(Config);
 
 public:
 
-  Config();
-  ~Config();
+    Config();
+    ~Config();
 
-  boolean readFromFile(const char *file);
-  boolean saveToFile(const char *file);
+    boolean readFromFile(const char *file);
+    boolean saveToFile(const char *file);
 
-  void reset();
+    void reset();
 
 private:
 
-  Dlist<ConfigEntry> _entries;
+    Dlist<ConfigEntry> _entries;
 
 };
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

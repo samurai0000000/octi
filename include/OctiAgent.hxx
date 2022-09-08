@@ -35,97 +35,107 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 enum OctiAgentSearchAlgorithm {
-  OASA_SEQ_ALPHABETA,
-  OASA_THREAD_ALPHABETA,
-  OASA_MPI_ALPHABETA,
-  OASA_SEQ_ER
+    OASA_SEQ_ALPHABETA,
+    OASA_THREAD_ALPHABETA,
+    OASA_MPI_ALPHABETA,
+    OASA_SEQ_ER
 };
 
 class OCTIAPI OctiAgent : public BaseObject, private OctiBoardListener,
-			  private OctiGameListener {
-  
-  DECLARE_RUNTIME_DISCOVERABLE(OctiAgent);
+                          private OctiGameListener {
+
+    DECLARE_RUNTIME_DISCOVERABLE(OctiAgent);
 
 public:
 
-  OctiAgent(OctiAgentSearchAlgorithm alg, int hashsize);
-  ~OctiAgent();
+    OctiAgent(OctiAgentSearchAlgorithm alg, int hashsize);
+    ~OctiAgent();
 
-  void setParameters(boolean iterative, int depth, unsigned long timeout);
-  int execute();
+    void setParameters(boolean iterative, int depth, unsigned long timeout);
+    int execute();
 
-  void setSpeculateOn(boolean speculate) {
-    _speculate = speculate;
-  }
-
-private:
-  
-  void gameChanged(OctiBoard *src, OctiGame *oldGame, OctiGame *newGame);
-  void boardUpdated(OctiBoard *src, const OctiMove *move, boolean undo);
-  void gameResetted(OctiGame *src);
-  void gameStarted(OctiGame *src);
-  void gameResigned(OctiGame *src);
-  void gameUpdated(OctiGame *src);
-  void gameOver(OctiGame *src);
-  void canUndo(OctiGame *src, int steps);
-  void canRedo(OctiGame *src, int steps);
-  void canMakeMove(OctiGame *src, boolean b);
-  void canCancelMove(OctiGame *src, boolean b);
-  void canPauseGame(OctiGame *src, boolean b);
-  void canResign(OctiGame *src, boolean b);
+    void setSpeculateOn(boolean speculate) {
+        _speculate = speculate;
+    }
 
 private:
 
-  OctiBoard _board;
-  OctiGame *_game;
+    void gameChanged(OctiBoard *src, OctiGame *oldGame, OctiGame *newGame);
+    void boardUpdated(OctiBoard *src, const OctiMove *move, boolean undo);
+    void gameResetted(OctiGame *src);
+    void gameStarted(OctiGame *src);
+    void gameResigned(OctiGame *src);
+    void gameUpdated(OctiGame *src);
+    void gameOver(OctiGame *src);
+    void canUndo(OctiGame *src, int steps);
+    void canRedo(OctiGame *src, int steps);
+    void canMakeMove(OctiGame *src, boolean b);
+    void canCancelMove(OctiGame *src, boolean b);
+    void canPauseGame(OctiGame *src, boolean b);
+    void canResign(OctiGame *src, boolean b);
 
-  MinMaxAlgorithm *_alg;
-  AlphaBetaSearchParameters _params;
-  boolean _speculate;
+private:
+
+    OctiBoard _board;
+    OctiGame *_game;
+
+    MinMaxAlgorithm *_alg;
+    AlphaBetaSearchParameters _params;
+    boolean _speculate;
 
 };
 
 // Inline functions
 
 inline OctiAgent::OctiAgent(OctiAgentSearchAlgorithm alg, int hashsize) {
-  switch(alg) {
-  case OASA_THREAD_ALPHABETA:
-    _alg = new ThreadAlphaBetaSearch();
-    ((ThreadAlphaBetaSearch *) _alg)->setPoolSize(2);
-    break;
-  case OASA_MPI_ALPHABETA:
-    // _alg = new MPIAlphaBetaSearch();
-    break;
-  case OASA_SEQ_ER:
-    _alg = new ERSearch();
-    break;
-  case OASA_SEQ_ALPHABETA:
-  default:
-    _alg = new AlphaBetaSearch(hashsize);
-    break;
-  }
+    switch(alg) {
+    case OASA_THREAD_ALPHABETA:
+        _alg = new ThreadAlphaBetaSearch();
+        ((ThreadAlphaBetaSearch *) _alg)->setPoolSize(2);
+        break;
+    case OASA_MPI_ALPHABETA:
+        // _alg = new MPIAlphaBetaSearch();
+        break;
+    case OASA_SEQ_ER:
+        _alg = new ERSearch();
+        break;
+    case OASA_SEQ_ALPHABETA:
+    default:
+        _alg = new AlphaBetaSearch(hashsize);
+        break;
+    }
 
-  _game = _board.getGame();
-  _board.addOctiBoardListener(this);
+    _game = _board.getGame();
+    _board.addOctiBoardListener(this);
 }
 
 inline OctiAgent::~OctiAgent() {
-  if(_alg) {
-    delete _alg;
-  }
-  _board.removeOctiBoardListener(this);
-  if(_game) {
-    _game->removeOctiGameListener(this);
-  }
+    if(_alg) {
+        delete _alg;
+    }
+    _board.removeOctiBoardListener(this);
+    if(_game) {
+        _game->removeOctiGameListener(this);
+    }
 }
 
 inline void OctiAgent::setParameters(boolean iterative, int depth,
-				     unsigned long timeout) {
-  _params.iterative = iterative;
-  _params.depth = depth;
-  _params.timeout = timeout;
+                                     unsigned long timeout) {
+    _params.iterative = iterative;
+    _params.depth = depth;
+    _params.timeout = timeout;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

@@ -24,62 +24,72 @@ __BEGIN_NAMESPACE(SELFSOFT);
 IMPLEMENT_RUNTIME_SERIALIZABLE(Exception, BaseObject, 1);
 
 Exception::Exception() {
-  _msg = NULL;
+    _msg = NULL;
 }
 
 Exception::Exception(const char *msg) {
-  if(msg == NULL) {
-    _msg = NULL;
-  } else {
-    int len = strlen(msg);
-    _msg = (char *) malloc(len + 1);
-    memcpy(_msg, msg, len);
-    _msg[len] = '\0';
-  }
+    if(msg == NULL) {
+        _msg = NULL;
+    } else {
+        int len = strlen(msg);
+        _msg = (char *) malloc(len + 1);
+        memcpy(_msg, msg, len);
+        _msg[len] = '\0';
+    }
 }
 
 Exception::Exception(const Exception &e) {
-  if(e._msg == NULL) {
-    _msg = NULL;
-  } else {
-    int len = strlen(e._msg);
-    _msg = (char *) malloc(len + 1);
-    memcpy(_msg, e._msg, len);
-    _msg[len] = '\0';
-  }
+    if(e._msg == NULL) {
+        _msg = NULL;
+    } else {
+        int len = strlen(e._msg);
+        _msg = (char *) malloc(len + 1);
+        memcpy(_msg, e._msg, len);
+        _msg[len] = '\0';
+    }
 }
 
 Exception::~Exception() {
-  if(_msg) {
-    free(_msg);
-  }
+    if(_msg) {
+        free(_msg);
+    }
 }
 
 Exception &Exception::operator=(const Exception &e) {
-  if(this != &e) {
-    if(_msg) {
-      free(_msg);
-    }
+    if(this != &e) {
+        if(_msg) {
+            free(_msg);
+        }
     
-    if(e._msg == NULL) {
-      _msg = NULL;
-    } else {
-      int len = strlen(e._msg);
-      _msg = (char *) malloc(len + 1);
-      memcpy(_msg, e._msg, len);
-      _msg[len] = '\0';
+        if(e._msg == NULL) {
+            _msg = NULL;
+        } else {
+            int len = strlen(e._msg);
+            _msg = (char *) malloc(len + 1);
+            memcpy(_msg, e._msg, len);
+            _msg[len] = '\0';
+        }
     }
-  }
 
-  return *this;
+    return *this;
 }
 
 const char *Exception::getMessage() const {
-  return _msg;
+    return _msg;
 }
 
 ostream &operator<<(ostream &o, const Exception &e) {
-  return o << e._msg;
+    return o << e._msg;
 }
 
 __END_NAMESPACE(SELFSOFT);
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

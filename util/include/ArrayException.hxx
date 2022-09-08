@@ -22,12 +22,12 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI ArrayException : public Exception {
 
-  DECLARE_RUNTIME_SERIALIZABLE(ArrayException);
+    DECLARE_RUNTIME_SERIALIZABLE(ArrayException);
 
 public:
 
-  ArrayException();
-  ArrayException(const char *msg);
+    ArrayException();
+    ArrayException(const char *msg);
 
 };
 
@@ -44,3 +44,13 @@ inline ArrayException::ArrayException(const char *msg) : Exception(msg) {
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

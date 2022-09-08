@@ -22,38 +22,48 @@ __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI Adler32 : public Checksum {
 
-  DECLARE_RUNTIME_SERIALIZABLE(Adler32);
+    DECLARE_RUNTIME_SERIALIZABLE(Adler32);
 
 public:
 
-  void update(byte b);
-  void update(byte *b, int len);
+    void update(byte b);
+    void update(byte *b, int len);
   
-  void reset();
-  word32 value() const;
-  word32 length() const;
+    void reset();
+    word32 value() const;
+    word32 length() const;
 
 private:
 
-  static word32 s_updateBytes(word32 adler, byte *buf, int len);
+    static word32 s_updateBytes(word32 adler, byte *buf, int len);
 
 };
 
 // Inline functions
 
 inline void Adler32::reset() {
-  _value = 0;
-  _length = 0;
+    _value = 0;
+    _length = 0;
 }
 
 inline word32 Adler32::value() const {
-  return _value;
+    return _value;
 }
 
 inline word32 Adler32::length() const {
-  return _length;
+    return _length;
 }
 
 __END_NAMESPACE(SELFSOFT);
 
 #endif
+
+/*
+ * Local variables:
+ * mode: C++
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */
