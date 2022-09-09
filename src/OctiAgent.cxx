@@ -16,7 +16,7 @@
 
 #define _OCTIAPI_IMPL_
 
-#include <iostream.h>
+#include <iostream>
 #include "Error.hxx"
 #include "OctiAgent.hxx"
 #include "OctiGameFileHandler.hxx"

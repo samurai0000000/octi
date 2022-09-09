@@ -17,7 +17,7 @@
 #ifndef _OCTIBOARD_HXX_
 #define _OCTIBOARD_HXX_
 
-#include <iostream.h>
+#include <iostream>
 #include "BaseObject.hxx"
 #include "Event.hxx"
 #include "OctiDefs.hxx"

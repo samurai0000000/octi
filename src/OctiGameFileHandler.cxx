@@ -16,7 +16,7 @@
 
 #define _OCTIAPI_IMPL_
 
-#include <fstream.h>
+#include <fstream>
 #include "debug.h"
 #include "Boolean.hxx"
 #include "OctiGameFileHandler.hxx"

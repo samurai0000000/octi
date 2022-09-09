@@ -20,7 +20,7 @@
 #include <qapplication.h>
 #include "argproc.h"
 #include "OctiWidgetOptions.hxx"
-#include "OctiMainWindow.hxx"
+//#include "OctiMainWindow.hxx"
 
 __USING_NAMESPACE(SELFSOFT);
 
@@ -42,19 +42,20 @@ static arg *arg_list[] = {
 
 static int arg_list_size = sizeof(arg_list) / sizeof(arg_list[0]);
 
-int main(int argc, char **argv) {
+int main(int argc, char *argv[])
+{
     if(parse_args(argc, argv, arg_list, arg_list_size, 1) != 0) {
         exit(-1);
     }
 
-    QApplication qApp(argc, argv);
+    QApplication app(argc, argv);
 
     InitOctiOptionsModel();
-    OctiMainWindow window;
-    qApp.setMainWidget(&window);
-    window.show();
-  
-    return qApp.exec();
+    //OctiMainWindow window;
+    //app.setMainWidget(&window);
+    //window.show();
+
+    return app.exec();
 }
 
 /*

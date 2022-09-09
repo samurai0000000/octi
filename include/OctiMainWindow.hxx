@@ -19,9 +19,9 @@
 
 #include <qtoolbar.h>
 #include <qtoolbutton.h>
-#include <qpopupmenu.h>
+//#include <qpopupmenu.h>
 #include <qmenubar.h>
-#include <qworkspace.h>
+//#include <qworkspace.h>
 #include <qmainwindow.h>
 #include "OctiGame.hxx"
 #include "OctiBoardFrame.hxx"
