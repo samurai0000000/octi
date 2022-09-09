@@ -107,7 +107,7 @@ inline GameSession::GameSession() {
 }
 
 inline GameSession::~GameSession() {
-  
+
 }
 
 inline GameSessionState GameSession::getSessionState() const {

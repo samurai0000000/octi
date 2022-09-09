@@ -38,7 +38,7 @@ static const char *dlerror() {
                   GetLastError(),
                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                   (LPTSTR) &lpMsgBuf, 0, NULL);
-  
+
     msg = (char *) lpMsgBuf;
     LocalFree(lpMsgBuf);
     return msg;
@@ -61,7 +61,7 @@ Dll *Dll::createDllObject(const char *libraryName, const char *libraryPath)
 #else
     void *dlhandle = dlopen(libraryFile, RTLD_LAZY);
 #endif
-  
+
     if(dlhandle != NULL) {
         newDll = new Dll();
         newDll->_dlhandle = dlhandle;
@@ -187,7 +187,7 @@ Dll *DllManager::getDll(const char *library) {
         while(it->isNextNotNull()) {
             libraryPath = *it->next();
             if(!libraryPath.endsWith(FILE_SEPARATOR)) {
-                libraryPath.append(FILE_SEPARATOR); 
+                libraryPath.append(FILE_SEPARATOR);
             }
 
             try {
@@ -206,9 +206,9 @@ Dll *DllManager::getDll(const char *library) {
         while(it->isNextNotNull()) {
             libraryPath = *it->next();
             if(!libraryPath.endsWith(FILE_SEPARATOR)) {
-                libraryPath.append(FILE_SEPARATOR); 
+                libraryPath.append(FILE_SEPARATOR);
             }
-      
+
             try {
                 dll = Dll::createDllObject(libraryName, libraryPath);
                 if(!dll) {

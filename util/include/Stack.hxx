@@ -39,7 +39,7 @@ public:
     int pop(T &item);
 
     void clear();
-  
+
     boolean isFull() const;
     boolean isEmpty() const;
 
@@ -89,7 +89,7 @@ template <class T> inline int Stack<T>::pop(T &item) {
     if(isEmpty()) {
         return -1;
     }
-  
+
     item = _stack[_top--];
     return 0;
 }

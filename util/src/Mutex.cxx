@@ -47,7 +47,7 @@ void RecursiveMutex::lock(int count) throw(ThreadException) {
     boolean locked = FALSE;
     while(!locked) {
         _safeguard.lock();  // Lock the safety mutex
-    
+
         if(_count == 0) {
             // No locks on the mutex yet, safe to proceed
             _count = count;
@@ -62,83 +62,84 @@ void RecursiveMutex::lock(int count) throw(ThreadException) {
 #endif
 
 #if defined(__USE_WINTHREAD__)
-            if(ret == WAIT_ABANDONED) {
+            if(ret == WAIT_ABANDONED)
 #elif defined(__USE_POSIXTHREAD__)
-                if(ret != 0) {
+            if(ret != 0)
 #endif
-                    try {
-                        _safeguard.unlock();
-                    } catch(...) {
-                        Error::warning("Unable to unlock safeguard mutex in "
-                                       "RecursiveMutex::lock()");
-                    }
-	
-                    throw ThreadException("Undetermined error in RecursiveMutex::lock()");;
-                }     
-            } else if(_owner == ThreadId::self()) {
-                // This mutex has been locked by the same thread before, simply
-                // increase the count and return
-                _count += count;
-                locked = TRUE;
+            {
+                try {
+                    _safeguard.unlock();
+                } catch(...) {
+                    Error::warning("Unable to unlock safeguard mutex in "
+                                   "RecursiveMutex::lock()");
+                }
+
+                throw ThreadException("Undetermined error in RecursiveMutex::lock()");;
             }
-    
-            _safeguard.unlock();  // Unlock the safety mutex
-    
-            if(!locked) {
-                // If a lock on the critical section was not obtained, then wait for the
-                // lock and quickly unlock it and re-attempt to lock
-#if defined(__USE_WINTHREAD__)
-                WaitForSingleObject(_critical, INFINITE);
-                ReleaseMutex(_critical);
-#elif defined(__USE_POSIXTHREAD__)
-                pthread_mutex_lock(&_critical);
-                pthread_mutex_unlock(&_critical);
-#endif
-            }
+        } else if(_owner == ThreadId::self()) {
+            // This mutex has been locked by the same thread before, simply
+            // increase the count and return
+            _count += count;
+            locked = TRUE;
         }
 
-    }
+        _safeguard.unlock();  // Unlock the safety mutex
 
-    void RecursiveMutex::unlock() throw(ThreadException) {
-        boolean unlocked = FALSE;
-        _safeguard.lock();
-
-        if(--_count == 0) {
-            _owner = ThreadId();
+        if(!locked) {
+            // If a lock on the critical section was not obtained, then wait
+            // for the lock and quickly unlock it and re-attempt to lock
 #if defined(__USE_WINTHREAD__)
+            WaitForSingleObject(_critical, INFINITE);
             ReleaseMutex(_critical);
 #elif defined(__USE_POSIXTHREAD__)
+            pthread_mutex_lock(&_critical);
             pthread_mutex_unlock(&_critical);
 #endif
-            unlocked = TRUE;
         }
+    }
 
-        _safeguard.unlock();
-  
-        if(unlocked) {
+}
+
+void RecursiveMutex::unlock() throw(ThreadException) {
+    boolean unlocked = FALSE;
+    _safeguard.lock();
+
+    if(--_count == 0) {
+        _owner = ThreadId();
 #if defined(__USE_WINTHREAD__)
-            Yield();
+        ReleaseMutex(_critical);
 #elif defined(__USE_POSIXTHREAD__)
-            sched_yield();
+        pthread_mutex_unlock(&_critical);
 #endif
-        }
+        unlocked = TRUE;
     }
 
-    ThreadId RecursiveMutex::getOwnerId() const {
-        RecursiveMutex *rmt = (RecursiveMutex *) this;
-        rmt->_safeguard.lock();
+    _safeguard.unlock();
 
-        ThreadId id;
-        if(_count > 0) {
-            id = _owner;
-        }
+    if(unlocked) {
+#if defined(__USE_WINTHREAD__)
+        Yield();
+#elif defined(__USE_POSIXTHREAD__)
+        sched_yield();
+#endif
+    }
+}
 
-        rmt->_safeguard.unlock();
-  
-        return id;
+ThreadId RecursiveMutex::getOwnerId() const {
+    RecursiveMutex *rmt = (RecursiveMutex *) this;
+    rmt->_safeguard.lock();
+
+    ThreadId id;
+    if(_count > 0) {
+        id = _owner;
     }
 
-    __END_NAMESPACE(SELFSOFT);
+    rmt->_safeguard.unlock();
+
+    return id;
+}
+
+__END_NAMESPACE(SELFSOFT);
 
 /*
  * Local variables:

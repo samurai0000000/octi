@@ -64,7 +64,6 @@ const char *OnOffStr(const Boolean &b) {
 }
 
 boolean IsZeroOne(const char *s) {
-  
     if(s == NULL) {
         return FALSE;
     }

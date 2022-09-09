@@ -72,7 +72,7 @@ public:
 
     int getNumListeners() const;
     EventListener *getListenerAt(int index);
-  
+
 private:
 
     BufferedArray<Void> _listeners;

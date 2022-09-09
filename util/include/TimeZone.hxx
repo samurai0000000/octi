@@ -54,7 +54,7 @@ public:
     boolean inDaylightTime(const Date &date) const;
 
     Slist<String> getAvailableIds(int rawOffset = 0) const;
-  
+
     boolean hasSameRules(const TimeZone &other) const;
 
 protected:

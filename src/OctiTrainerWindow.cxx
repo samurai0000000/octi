@@ -59,7 +59,7 @@ OctiTrainerWindow::OctiTrainerWindow(QWidget * parent, const char *name, WFlags 
     // Initialize toolbar
     _toolbar = new QToolBar(this, "Tool Bar");
     addToolBar(_toolbar, "Tool Bar", Top, TRUE);
-  
+
     QToolButton *tbRand
         = new QToolButton(exitIcon, "Randomize", QString::null,
                           this, SLOT(rand()), _toolbar, "generate a random board");
@@ -90,7 +90,7 @@ OctiTrainerWindow::OctiTrainerWindow(QWidget * parent, const char *name, WFlags 
     trainer->insertItem("&Continue", this, SLOT(cont()), CTRL+Key_C);
     trainer->insertItem("&Statistics", this, SLOT(stat()), CTRL+Key_S);
     trainer->insertItem("&Quit", qApp, SLOT(closeAllWindows()), CTRL+Key_Q);
-  
+
     QPopupMenu *analyze = new QPopupMenu(this);
     menuBar()->insertItem("&Analyze", analyze);
     analyze->insertItem("&Curve-Fitting", this, SLOT(analyzeCF()));
@@ -99,7 +99,7 @@ OctiTrainerWindow::OctiTrainerWindow(QWidget * parent, const char *name, WFlags 
     menuBar()->insertSeparator();
     QPopupMenu *help = new QPopupMenu(this);
     menuBar()->insertItem("&Help", help);
-  
+
     help->insertItem("&About", this, SLOT(about()), Key_F1);
     help->insertSeparator();
     help->insertItem("What's &This", this, SLOT(whatsThis()), SHIFT+Key_F1);
@@ -203,7 +203,7 @@ void OctiTrainerWindow::moveSelected(int i) {
             _bw->getBoard()->getGame()->undo();
             _moved = FALSE;
         }
-    
+
         if(i != 0) {
             try {
                 OctiMove m(_listbox->currentText());

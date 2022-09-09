@@ -100,11 +100,11 @@ String &String::operator=(const char *s) {
     } else {
         _length = strlen(s);
         ensureCapacity(_length + 1);
-    
+
         memcpy(_string, s, _length);
         _string[_length] = '\0';
     }
-  
+
     return *this;
 }
 
@@ -137,7 +137,7 @@ String &String::operator+=(const char *s) {
         int copylength = strlen(s);
         int newlength = _length + copylength;
         ensureCapacity(newlength + 1);
-    
+
         memcpy(_string + _length, s, copylength);
         _string[_length = newlength] = '\0';
     }
@@ -182,7 +182,7 @@ void String::prepend(const char *s) {
         int copylength = strlen(s);
         int newlength = _length + copylength;
         ensureCapacity(newlength + 1);
-    
+
         memmove(&_string[copylength], _string, _length + 1);
         memcpy(_string, s, copylength);
         _length = newlength;
@@ -193,7 +193,7 @@ void String::prepend(const String &string) {
     int copylength = string._length;
     int newlength = _length + copylength;
     ensureCapacity(newlength + 1);
-  
+
     memmove(&_string[copylength], _string, _length + 1);
     memcpy(_string, string._string, copylength);
     _length = newlength;
@@ -277,7 +277,7 @@ int String::indexOf(char c, int pos) const {
     checkBounds(pos);
     int idx;
     for(idx = pos; idx < _length && _string[idx] != c; idx++);
-  
+
     return (idx >= _length || _string[idx] != c) ? -1 : idx;
 }
 
@@ -285,18 +285,18 @@ int String::indexOf(const char *s) const {
     if(s == NULL) {
         return -1;
     }
-  
+
     char *pidx = strstr(_string, s);
     return pidx == NULL ? -1 : pidx - _string;
 }
 
 int String::indexOf(const char *s, int pos) const {
     checkBounds(pos);
-  
+
     if(s == NULL) {
         return -1;
     }
-  
+
     char *pidx = strstr(_string + pos, s);
     return pidx == NULL ? -1 : pidx - _string;
 }
@@ -305,18 +305,18 @@ int String::indexOf(const String &string) const {
     if(string._string[0] == '\0') {
         return -1;
     }
-  
+
     char *pidx = strstr(_string, string._string);
     return pidx == NULL ? -1 : pidx - _string;
 }
 
 int String::indexOf(const String &string, int pos) const {
     checkBounds(pos);
-  
+
     if(string._string[0] == '\0') {
         return -1;
     }
-  
+
     char *pidx = strstr(_string + pos, string._string);
     return pidx == NULL ? -1 : pidx - _string;
 }
@@ -324,7 +324,7 @@ int String::indexOf(const String &string, int pos) const {
 int String::lastIndexOf(char c) const {
     int idx;
     for(idx = _length - 1; idx >= 0 && _string[idx] != c; idx--);
-  
+
     return (idx < 0 || _string[idx] != c) ? -1 : idx;
 }
 
@@ -332,7 +332,7 @@ int String::lastIndexOf(char c, int pos) const {
     checkBounds(pos);
     int idx;
     for(idx = pos; idx >= 0 && _string[idx] != c; idx--);
-  
+
     return (idx < 0 || _string[idx] != c) ? -1 : idx;
 }
 
@@ -340,7 +340,7 @@ int String::lastIndexOf(const char *s) const {
     if(s == NULL) {
         return -1;
     }
-  
+
     char *pidx;
     for(int i = _length - 1; i >= 0; i--) {
         if((pidx = strstr(&_string[i], s)) != NULL) {
@@ -436,7 +436,7 @@ String String::getTrimmed() const {
     for(start = 0; (start < _length) && (_string[start] <= ' '); start++);
     for(end = _length - 1; (end > start) && (_string[end] <= ' '); end--);
 
-    return ((start > 0) || (end < _length)) ? 
+    return ((start > 0) || (end < _length)) ?
         substring(start, end) : String(_string);
 }
 

@@ -34,12 +34,12 @@ __BEGIN_NAMESPACE(SELFSOFT);
 class UTILAPI Base64FormatException : public Exception {
 
     DECLARE_RUNTIME_SERIALIZABLE(Base64FormatException);
-  
+
 public:
-  
+
     Base64FormatException();
     Base64FormatException(const char *msg);
-  
+
 };
 
 /**
@@ -54,23 +54,23 @@ public:
 class UTILAPI Base64Encoder : public ByteEncoder {
 
     DECLARE_RUNTIME_SERIALIZABLE(Base64Encoder);
-  
+
 public:
-  
+
     Base64Encoder();
     ~Base64Encoder();
-  
+
     void update(byte b);
     void update(const byte *b, int len);
     void reset();
-  
+
     void setLineBreakAt(int lineBreak);
     int getLineBreakAt() const;
-  
+
     const char *getEncoded();
 
 private:
-  
+
     int _lineBreak;
     int _linePointer;
     String _encoded;
@@ -88,7 +88,7 @@ class UTILAPI Base64Decoder : public ByteDecoder {
     DECLARE_RUNTIME_SERIALIZABLE(Base64Decoder);
 
 public:
-  
+
     Base64Decoder();
     ~Base64Decoder();
 
@@ -99,13 +99,13 @@ public:
     int getDecodedLength() const;
 
 private:
-  
+
     char _base64Chars[4];
     int _base64CharsIndex;
     BufferedArray<byte> _decoded;
     boolean _padded;
     boolean _isFinal;
-  
+
 };
 
 // Inline functions for Base64FormatException class are below.

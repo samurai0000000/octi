@@ -31,9 +31,9 @@ __BEGIN_NAMESPACE(SELFSOFT);
 class UTILAPI HexFormatException : public Exception {
 
     DECLARE_RUNTIME_SERIALIZABLE(HexFormatException);
-  
+
 public:
-  
+
     HexFormatException();
     HexFormatException(const char *msg);
 
@@ -48,25 +48,25 @@ public:
 class UTILAPI HexEncoder : public ByteEncoder {
 
     DECLARE_RUNTIME_SERIALIZABLE(HexEncoder);
-  
+
 public:
-  
+
     HexEncoder();
     ~HexEncoder();
-  
+
     void update(byte b);
     void update(const byte *b, int len);
     void reset();
-  
+
     void setUpperCase(const boolean toUpperCase);
     boolean isUpperCase() const;
     void setLineBreakAt(int lineBreak);
     int getLineBreakAt() const;
-  
+
     const char *getEncoded();
 
 private:
-  
+
     boolean _upperCase;
     int _lineBreak;
     int _linePointer;
@@ -78,7 +78,7 @@ private:
 class UTILAPI HexDecoder : public ByteDecoder {
 
     DECLARE_RUNTIME_SERIALIZABLE(HexDecoder);
-  
+
 public:
 
     HexDecoder();

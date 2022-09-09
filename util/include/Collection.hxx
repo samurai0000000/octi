@@ -53,7 +53,7 @@ public:
 
     virtual boolean isNotNull() const = 0;
     virtual boolean isNextNotNull() const = 0;
-  
+
     virtual const T *first() = 0;
     virtual const T *current() = 0;
     virtual const T *next() = 0;
@@ -71,7 +71,7 @@ public:
 
     virtual boolean isNotNull() const = 0;
     virtual boolean isNextNotNull() const = 0;
-  
+
     virtual const Key *first() = 0;
     virtual const Key *current() = 0;
     virtual const Key *next() = 0;
@@ -89,7 +89,7 @@ public:
 
     virtual boolean isNotNull() const = 0;
     virtual boolean isNextNotNull() const = 0;
-  
+
     virtual const Value *first() = 0;
     virtual const Value *current() = 0;
     virtual const Value *next() = 0;
@@ -155,7 +155,7 @@ public:
     virtual boolean put(const Key &key, const Value &value) = 0;
     virtual const Value *get(const Key &key) const = 0;
     virtual boolean remove(const Key &key) = 0;
-  
+
     virtual boolean containsKey(const Key &key) const = 0;
     virtual boolean containsValue(const Value &value) const = 0;
 

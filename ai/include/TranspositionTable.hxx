@@ -35,7 +35,7 @@ class TranspositionTable;
  * Their usage is algorithm dependent...
  */
 typedef struct _TranspositionTableEntry {
-  
+
     int depth;
     byte flag;
     float xxx;
@@ -63,32 +63,32 @@ typedef struct _TranspositionTableEntry {
  *
  */
 class AIAPI TranspositionTable : public BaseObject {
-  
+
     DECLARE_RUNTIME_DISCOVERABLE(TranspositionTable);
-  
+
 public:
-  
+
     // If the size argument to the constructor is zero, then the constructor
     // does its best to allocate as much memory as possible without causing
     // trashing to virtual (swap) memory.
     TranspositionTable(int size = 0);
     ~TranspositionTable();
-  
+
     // The fetch() and store() methods
     // store() automatically takes care of depth relevance, ie. if
     // an entry is requested to be stored but the original entry contains
     // greater depth, then the store request is ignored.
     const TranspositionTableEntry *fetch(const SearchState *state) const;
     void store(const SearchState *state, const TranspositionTableEntry *tte);
-  
+
     void setAllStale();
     void clearAll();
 
 protected:
-  
+
     int _size;
     TranspositionTableEntry *_entries;
-  
+
 };
 
 __END_NAMESPACE(SELFSOFT);

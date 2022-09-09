@@ -65,7 +65,7 @@ protected:
     void destroyWorkers();
 
 private:
-  
+
     ThreadGroup _thrGroup;
 
 };

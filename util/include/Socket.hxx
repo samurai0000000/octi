@@ -32,7 +32,7 @@ class UTILAPI Socket : public BaseObject {
 protected:
 
     Socket() throw(IOException);
-  
+
     void open();
 
 public:

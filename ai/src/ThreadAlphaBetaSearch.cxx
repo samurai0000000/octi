@@ -75,12 +75,12 @@ float ThreadAlphaBetaSearch::maxValue(SearchState *state, int depth, int cutoffD
       }
       }
       }
-    
+
       if(alpha >= beta) {
       current->collapse();
       return beta;
       }
-    
+
       current->collapse();
       current = current->getNext();
       }
@@ -101,7 +101,7 @@ float ThreadAlphaBetaSearch::minValue(SearchState *state, int depth, int cutoffD
       }
 
       Ptr<SearchState> localPath[MAX_DEPTH];
-  
+
       state->expand();
       _lastStatesExpanded++;
       current = state->getHeadSuccessors();

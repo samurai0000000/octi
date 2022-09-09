@@ -23,7 +23,7 @@ __BEGIN_NAMESPACE(SELFSOFT);
 class UTILAPI Gf : public BaseObject {
 
     DECLARE_RUNTIME_SERIALIZBLE(Gf);
-  
+
 public:
 
     Gf();

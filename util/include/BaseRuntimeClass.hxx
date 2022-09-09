@@ -106,7 +106,7 @@ public:
     const BaseRuntimeClass *getParentClass() const;
 
 private:
-  
+
     friend class BaseObject;
 
     BaseObject *createObject();

@@ -77,7 +77,7 @@ const char *StringTokenizer::nextToken() {
     for(_prevIdx = _curIdx;
         !isDelimeter(_string[_curIdx]) && _string[_curIdx] != '\0';
         _curIdx++);
-  
+
     if(_curIdx == _prevIdx) {
         return NULL;
     }

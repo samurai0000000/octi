@@ -65,7 +65,7 @@ public:
 
     TimerTick(Timer *timer);
     ~TimerTick();
-  
+
     void run();
     void stopTick();
 
@@ -93,7 +93,7 @@ public:
 
     void addTimerListener(TimerListener *listener);
     void removeTimerListener(TimerListener *listener);
-  
+
     void setDelay(unsigned long delay);
     unsigned long getDelay() const;
     void setRepeat(boolean repeat);

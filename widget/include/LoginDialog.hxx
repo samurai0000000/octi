@@ -28,7 +28,7 @@ class WIDGETAPI LoginDialog : public LoginDialogBase {
     Q_OBJECT;
 
 public:
-  
+
     LoginDialog(QWidget *parent = 0, const char *name = 0, bool modal = TRUE, WFlags fl = 0);
     ~LoginDialog();
 
@@ -38,7 +38,7 @@ public:
 protected slots:
 
     void accept();
-  
+
 private:
 
     String _login;

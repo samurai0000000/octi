@@ -219,7 +219,7 @@ float AlphaBetaSearch::alphabeta(MinMaxSearchType type,
     if(depth <= 0 || state->isTerminal()) {
         _lastStatesEvaluated++;
         return state->evaluate();
-    } 
+    }
 
     // Traverse the child states
     state->expand();
@@ -307,7 +307,7 @@ void AlphaBetaSearch::printLastSearchStatistics(ostream &out) const {
 }
 
 void AlphaBetaSearch::printTotalStatistics(ostream &out) const {
-    out << "total search time = " << ((float) _totalSearchTime / 1000.0) 
+    out << "total search time = " << ((float) _totalSearchTime / 1000.0)
         << " sec " << endl;
     out << "total states expanded = " << _totalStatesExpanded << endl;
     out << "total states evaluated = " << _totalStatesEvaluated << endl;

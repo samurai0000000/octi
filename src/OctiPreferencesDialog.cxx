@@ -34,7 +34,7 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 OctiPreferencesDialog::OctiPreferencesDialog(QWidget *parent, const char *name, bool modal, WFlags fl) : OctiPreferencesDialogBase(parent, name, modal, fl) {
-  
+
 }
 
 OctiPreferencesDialog::~OctiPreferencesDialog() {

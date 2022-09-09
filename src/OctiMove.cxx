@@ -30,7 +30,7 @@ static OctiDir get_dir_value_of(char c) {
     } else if(c >= 'a' && c <= 'h') {
         return (OctiDir) (c - 'a');
     }
-  
+
     return DIR_UNDEF;
 }
 
@@ -104,7 +104,7 @@ void OctiMove::nextState() {
             break;
         }
     }
-	
+
     // Ignore white spaces
     if(t == T_WHI) {
         _proc_index++;
@@ -116,7 +116,7 @@ void OctiMove::nextState() {
         _state = S_ERROR;
         return;
     }
-  
+
     // State transitions
     switch(_state) {
     case S_START:
@@ -307,7 +307,7 @@ void OctiMove::nextState() {
         }
         break;
     }
-	
+
     _proc_index++;
 }
 
@@ -318,7 +318,7 @@ int OctiMove::peekMove() {
     for(i = _proc_index + 1; i < _proc_s_length &&
             (_proc_s[i] == ' ' || _proc_s[i] == '\t' || _proc_s[i] == '\n');
         i++);
-  
+
     if(i <= _proc_s_length) {
         if(_proc_s[i] >= '0' && _proc_s[i] <= '9') {
             return 0;
@@ -327,7 +327,7 @@ int OctiMove::peekMove() {
             return 1;
         }
     }
-  
+
     return -1;
 }
 
@@ -393,7 +393,7 @@ OctiMove::OctiMove(const Dlist<Ptr<OctiMoveOp> > &ops)
               firstop->y0 >= 0 && firstop->y0 < 9 &&
               firstop->x1 >= 0 && firstop->x1 < 9 &&
               firstop->y1 >= 0 && firstop->y1 < 9 &&
-              (firstop->x0 != firstop->x1 || firstop->y0 != firstop->y1) && 
+              (firstop->x0 != firstop->x1 || firstop->y0 != firstop->y1) &&
               firstop->prongAddDir == DIR_UNDEF &&
               firstop->prongRemoveDir == DIR_UNDEF &&
               firstop->addSuperProng == FALSE &&
@@ -421,7 +421,7 @@ OctiMove::OctiMove(const Dlist<Ptr<OctiMoveOp> > &ops)
                op->y0 >= 0 && op->y0 < 9 &&
                op->x1 >= 0 && op->x1 < 9 &&
                op->y1 >= 0 && op->y1 < 9 &&
-               (op->x0 != op->x1 || op->y0 != op->y1) && 
+               (op->x0 != op->x1 || op->y0 != op->y1) &&
                op->prongAddDir == DIR_UNDEF &&
                op->prongRemoveDir == DIR_UNDEF &&
                op->addSuperProng == FALSE &&
@@ -439,7 +439,7 @@ OctiMove::OctiMove(const Dlist<Ptr<OctiMoveOp> > &ops)
                       op->y0 >= 0 && op->y0 < 9 &&
                       op->x1 >= 0 && op->x1 < 9 &&
                       op->y1 >= 0 && op->y1 < 9 &&
-                      (op->x0 != op->x1 || op->y0 != op->y1) && 
+                      (op->x0 != op->x1 || op->y0 != op->y1) &&
                       op->prongAddDir == DIR_UNDEF &&
                       op->prongRemoveDir == DIR_UNDEF &&
                       op->addSuperProng == FALSE &&

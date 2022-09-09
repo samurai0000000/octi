@@ -33,17 +33,17 @@ void OctiPod::addProng(OctiDir dir, boolean superProng) {
 
     p = superProng ? SUPER_PRONG : NORMAL_PRONG;
     shift = (dir << 1);  // dir * 2
-  
+
     // Mask the bit first
     _config &= (~((0x3) << shift));
-  
+
     // OR to final
     _config |= (p << shift);
 }
 
 void OctiPod::removeProng(OctiDir dir) {
     int shift;
-  
+
     shift = (dir << 1);  // dir * 2
     _config &= (~((0x3) << shift));
 }

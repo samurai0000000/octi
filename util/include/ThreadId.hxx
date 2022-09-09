@@ -49,7 +49,7 @@ public:
     boolean operator!=(const ThreadId &id) const;
     boolean operator==(const ThreadId &id) const;
 
-  
+
     static ThreadId self();
 
 #if defined(__USE_WINTHREAD__)

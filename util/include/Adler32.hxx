@@ -28,7 +28,7 @@ public:
 
     void update(byte b);
     void update(byte *b, int len);
-  
+
     void reset();
     word32 value() const;
     word32 length() const;

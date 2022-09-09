@@ -104,10 +104,10 @@ class UTILAPI DllManager : public BaseObject {
     DECLARE_RUNTIME_DISCOVERABLE(DllManager);
 
 public:
-  
+
     DllManager();
     ~DllManager();
-  
+
     boolean loadLibrary(const char *library);
     boolean unloadLibrary(const char *library);
     boolean isLibraryLoaded(const char *library) const;

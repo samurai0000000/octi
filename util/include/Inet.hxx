@@ -23,7 +23,7 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 class UTILAPI InetAddress : public BaseObject {
-  
+
     DECLARE_RUNTIME_DISCOVERABLE(InetAddress);
 
 public:

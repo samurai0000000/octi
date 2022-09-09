@@ -126,7 +126,7 @@ typedef struct _AddProngTransition {
     OctiPod pod;
     Location loc;
     OctiDir addDir;
-  
+
     _AddProngTransition &operator=(const _AddProngTransition &trans);
     boolean operator==(const _AddProngTransition &trans) const;
 } AddProngTransition;
@@ -151,7 +151,7 @@ typedef struct _MovePodTransition {
     OctiPod pod;
     Location src;
     Location dest;
-  
+
     _MovePodTransition &operator=(const _MovePodTransition &trans);
     boolean operator==(const _MovePodTransition &trans) const;
 } MovePodTransition;
@@ -161,7 +161,7 @@ typedef struct _MovePodTransition {
  */
 typedef struct _CaptureTransition {
     Location loc;
-  
+
     _CaptureTransition &operator=(const _CaptureTransition &trans);
     boolean operator==(const _CaptureTransition &trans) const;
 } CaptureTransition;
@@ -179,9 +179,9 @@ enum TransitionType {
  * A data structure for holding transition ops.
  */
 class OCTIAPI TransitionOp : public PtrReference {
-  
+
 public:
-  
+
     TransitionOp();
     TransitionOp(const TransitionOp &trans);
     TransitionOp(const AddPodTransition &addPodTrans);
@@ -190,10 +190,10 @@ public:
     TransitionOp(const MovePodTransition &movePodTrans);
     TransitionOp(const CaptureTransition &captureTrans);
     ~TransitionOp();
-  
+
     boolean operator==(const TransitionOp &trans) const;
     TransitionOp &operator=(const TransitionOp &trans);
-  
+
     TransitionType getTransitionType() const;
     const AddPodTransition *getAddPodTransition() const;
     const AddProngTransition *getAddProngTransition() const;
@@ -202,7 +202,7 @@ public:
     const CaptureTransition *getCaptureTransition() const;
 
 private:
-   
+
     TransitionType _type;
     union {
         AddPodTransition *addPodTrans;
@@ -249,7 +249,7 @@ public:
     // Override SearchState
     const char *getDescription() const;
     float evaluate() const;
-    boolean isTerminal() const;  
+    boolean isTerminal() const;
     void printState(ostream &out) const;
 
     boolean operator==(const BaseObject &object) const;
@@ -340,7 +340,7 @@ private:
     float _eval;
     boolean _terminalTested;
     float _terminalValue;
-  
+
     // Transition opeators
     Slist<TransitionOp> _trans;
 
@@ -383,7 +383,7 @@ inline boolean MJCMap::tryMarkOD(int x, int y) {
         _rows[x] |= s_MASK_OD_COLUMN[y];
         return TRUE;
     }
-  
+
     return FALSE;
 }
 
@@ -392,7 +392,7 @@ inline boolean MJCMap::tryMarkJC(int x, int y) {
         _rows[x] |= s_MASK_JC_COLUMN[y];
         return TRUE;
     }
-  
+
     return FALSE;
 }
 
@@ -593,7 +593,7 @@ inline const CaptureTransition *TransitionOp::getCaptureTransition() const {
 }
 
 inline Octi2PlayerGameSearchState::Octi2PlayerGameSearchState() {
-  
+
 }
 
 inline Octi2PlayerGameSearchState::~Octi2PlayerGameSearchState() {

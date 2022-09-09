@@ -62,7 +62,7 @@ void paint_pod_at(QPainter &p, int sqsize, boolean invert,
                       x - sp2, y - sp3);
 
     prongRect.setPoints(4, -sp1, -sp4, sp1, -sp4, sp1, 0, -sp1, 0);
-  
+
     m.translate(x, y);
     if(invert) {
         m.rotate(180);
@@ -351,11 +351,11 @@ void OctiSquareDispWidget::paintEvent(QPaintEvent *pe) {
         p.drawLine(x, yOrig + _squareSize * i,
                    x + _squareSize, yOrig + _squareSize * i);
     }
-  
+
     for(i = 0; i < 7; i++) {
         y = yOrig + _squareSize * i;
         yc = y + (_squareSize >> 1);
-    
+
         if((_y == 2 && (_x == 2 || _x == 4 || _x == 6)) ||
            (_y == 6 && (_x == 2 || _x == 4 || _x == 6))) {
             // Draw home squares
@@ -457,7 +457,7 @@ void OctiSquareDispWidget::mouseMoveEvent(QMouseEvent *e) {
                     pixmap.fill();
                     QPainter p(&pixmap);
                     p.drawRect(rect);
-	  
+
                     QTextDrag *drag = new QTextDrag("REPOSITION", this);
                     drag->setPixmap(pixmap, rect.center());
                     drag->dragMove();
@@ -477,7 +477,7 @@ void OctiSquareDispWidget::dragMoveEvent(QDragMoveEvent *e) {
 
         QString s;
         QTextDrag::decode(e, s);
-    
+
         if(s == "REPOSITION") {
             _supressOn = TRUE;
         }
@@ -488,7 +488,7 @@ void OctiSquareDispWidget::dragMoveEvent(QDragMoveEvent *e) {
             int yc = yOrig + (_squareSize >> 1);
             int sqr;
             OctiDir dir;
-      
+
             if(prong_pos(_squareSize, _showInverted, sqr, dir,
                          xc, yc, e->pos().x(), e->pos().y())) {
                 if(_board->getGame()->getPlayerToMove() == (OctiPlayer) _pods[sqr].getType() &&
@@ -518,14 +518,14 @@ void OctiSquareDispWidget::dropEvent(QDropEvent *e) {
 
         QString s;
         QTextDrag::decode(e, s);
-    
+
         if(s == "REPOSITION" || s == "PRONG") {
             int xc = (width() >> 1);
             int yOrig = (height() >> 1) - (_squareSize << 2);
             int yc = yOrig + (_squareSize >> 1);
             int sqr;
             OctiDir dir;
-      
+
             if(prong_pos(_squareSize, _showInverted, sqr, dir,
                          xc, yc, e->pos().x(), e->pos().y())) {
                 if(_board->getGame()->getPlayerToMove() == (OctiPlayer) _pods[sqr].getType() &&

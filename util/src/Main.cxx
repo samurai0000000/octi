@@ -35,7 +35,7 @@ int Main::start(int argc, char **argv) {
     } else {
         G_started = TRUE;
     }
-  
+
     if(G_impl != NULL) {
         try {
             retcode = G_impl->main(argc, argv);
@@ -60,7 +60,7 @@ Main::Main() {
         Error::fatal("attempt to create another instance of subclass of Main\n"
                      "while one is already executing");
     }
-  
+
     if(G_impl != NULL) {
         Error::warning("more than once instance of subclass of Main created\n"
                        "registering this one for start-up, previous instances\n"

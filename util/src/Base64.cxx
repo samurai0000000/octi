@@ -31,7 +31,7 @@ static const char s_BASE64_MAP[] = {
     'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
     'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
     'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
-    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',   
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
     'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
     'w', 'x', 'y', 'z', '0', '1', '2', '3',
     '4', '5', '6', '7', '8', '9', '+', '/'
@@ -70,7 +70,7 @@ void Base64Encoder::update(byte b) {
             _encoded += LINE_SEPARATOR;
             _linePointer = 0;
         }
-    
+
         _bufferPointer = -1;
     }
 }
@@ -88,7 +88,7 @@ const char *Base64Encoder::getEncoded() {
                                   (_buffer[1] & 0xf0) >> 4];
             pad[2] = s_BASE64_MAP[(_buffer[1] & 0x0f) << 2];
         }
-    
+
         _encoded += pad;
         _padded = TRUE;
     }
@@ -120,7 +120,7 @@ inline byte conv(int c) throw(Base64FormatException) {
             return (byte) 0x0;
         default:
             throw Base64FormatException("Invalid base64 encoding");
-        }  
+        }
     }
 }
 
@@ -172,12 +172,12 @@ const byte *Base64Decoder::getDecoded() throw(Base64FormatException) {
         if(!_padded || _base64CharsIndex != 4) {
             throw Base64FormatException("Illegal padding");
         }
-    
+
         int padding = 0;
         for(int p = 3; p >= 0 && _base64Chars[p] == '='; p--) {
             padding++;
         }
-    
+
         if(padding > 2) {
             throw Base64FormatException("Illegal padding");
         }

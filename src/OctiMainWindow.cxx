@@ -72,7 +72,7 @@ OctiMainWindow::OctiMainWindow(QWidget * parent, const char *name, WFlags f) : _
     // Initialize toolbar
     _toolbar = new QToolBar(this, "Tool Bar");
     addToolBar(_toolbar, "Tool Bar", Top, TRUE);
-  
+
     _gameNew = new QToolButton(QPixmap(tb_new_xpm), "New Game", QString::null,
                                this, SLOT(newGame()), _toolbar, "new game");
     _gameLoad = new QToolButton(QPixmap(tb_open_xpm) , "Load Game", QString::null,
@@ -104,7 +104,7 @@ OctiMainWindow::OctiMainWindow(QWidget * parent, const char *name, WFlags f) : _
     _appExit = new QToolButton(QPixmap(tb_exit_xpm), "Exit Application", QString::null,
                                qApp, SLOT(closeAllWindows()),
                                _toolbar, "exit application");
-  
+
 #ifndef QT_NO_PRINTER
     _gamePrint->setEnabled(FALSE);
 #endif
@@ -119,7 +119,7 @@ OctiMainWindow::OctiMainWindow(QWidget * parent, const char *name, WFlags f) : _
 
     ////////////////////////////////////////////////////////////////////////
     // Help messages
-  
+
     QWhatsThis::add(_gameNew, G_OMW_GAME_NEW_TEXT);
     QWhatsThis::add(_gameLoad, G_OMW_GAME_LOAD_TEXT);
     QWhatsThis::add(_gameSave, G_OMW_GAME_SAVE_TEXT);
@@ -149,9 +149,9 @@ OctiMainWindow::OctiMainWindow(QWidget * parent, const char *name, WFlags f) : _
     game->insertItem("Resign", this, SLOT(resign()));
     game->insertSeparator();
     game->insertItem(QPixmap(tb_winclose_xpm), "&Close", this, SLOT(close()), CTRL+Key_W);
-  
+
     game->insertItem(QPixmap(tb_exit_xpm), "&Quit", qApp, SLOT(closeAllWindows()), CTRL+Key_Q);
-  
+
     QPopupMenu *settings = new QPopupMenu(this);
     menuBar()->insertItem("&Settings", settings);
     settings->insertItem("&Client Connect", this, SLOT(client()), CTRL+Key_C);
@@ -163,11 +163,11 @@ OctiMainWindow::OctiMainWindow(QWidget * parent, const char *name, WFlags f) : _
     _windowsMenu->setCheckable(TRUE);
     connect(_windowsMenu, SIGNAL(aboutToShow()), this, SLOT(windowsMenuAboutToShow()));
     menuBar()->insertItem("&Windows", _windowsMenu);
-  
+
     menuBar()->insertSeparator();
     QPopupMenu *help = new QPopupMenu(this);
     menuBar()->insertItem("&Help", help);
-  
+
     help->insertItem("&About", this, SLOT(about()), Key_F1);
     help->insertSeparator();
     help->insertItem("What's &This", this, SLOT(whatsThis()), SHIFT+Key_F1);
@@ -179,7 +179,7 @@ OctiMainWindow::OctiMainWindow(QWidget * parent, const char *name, WFlags f) : _
     _ws = new QWorkspace(vb);
     connect(_ws, SIGNAL(windowActivated(QWidget *)), this, SLOT(windowActivated(QWidget *)));
     setCentralWidget(vb);
-  
+
     statusBar()->message("Ready", 2000);
     setMinimumWidth(700);
     setMinimumHeight(600);
@@ -192,7 +192,7 @@ OctiMainWindow::~OctiMainWindow() {
 void OctiMainWindow::newGame() {
     OctiGameSelectDialog d;
     d.show();
-  
+
     if(d.result() == QDialog::Rejected) {
         return;
     }

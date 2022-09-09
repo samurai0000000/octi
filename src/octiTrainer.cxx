@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     OctiTrainerWindow trainer;
     qApp.setMainWidget(&trainer);
     trainer.show();
-  
+
     return qApp.exec();
 }
 

@@ -58,7 +58,7 @@ ThreadException &ThreadException::operator=(const ThreadException &e) {
         if(_msg) {
             free(_msg);
         }
-    
+
         if(e._msg == NULL) {
             _msg = NULL;
         } else {

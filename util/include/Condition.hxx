@@ -42,7 +42,7 @@ class BaseObject;
 class UTILAPI Synchronized : public PtrReference {
 
 public:
-  
+
     Synchronized(Mutex &mutex);
     Synchronized(RecursiveMutex &mutex);
     Synchronized(Monitor &monitor, boolean internal = FALSE);
@@ -58,7 +58,7 @@ private:
         MONITOR,
         OBJECT
     } SyncClass;
-  
+
     typedef struct _SyncObject {
         SyncClass sclass;
 
@@ -77,7 +77,7 @@ private:
 class UTILAPI Condition : public PtrReference {
 
 public:
-  
+
     Condition(RecursiveMutex &mutex);
     ~Condition();
 
@@ -108,7 +108,7 @@ private:
         cond_thread_list_t *list_tl;
         cond_thread_list_t *released;
     } cond_t;
-  
+
     static int win_cond_wait(cond_t *cond, RecursiveMutex &mutex);
     static int win_cond_timedwait(cond_t *cond, RecursiveMutex &mutex, long timeout);
     static int win_cond_signal(cond_t *cond);

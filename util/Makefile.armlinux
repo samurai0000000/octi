@@ -64,8 +64,8 @@ INCLUDES =		$(LOCAL_INCLUDES) \
 
 CCLINK =	        $(CC)
 CXXLINK =       	$(CXX)
-CCCOMPILE =		$(CC) $(CFLAGS) $(ALLINCLUDES) 
-CXXCOMPILE =		$(CXX) $(CXXFLAGS) $(ALLINCLUDES) 
+CCCOMPILE =		$(CC) $(CFLAGS) $(ALLINCLUDES)
+CXXCOMPILE =		$(CXX) $(CXXFLAGS) $(ALLINCLUDES)
 DEPEND =		$(CXX) -DMAKEDEPEND -M $(ALLDEFINES) $(DEPEND_DEFINES)
 
 ##########
@@ -135,4 +135,3 @@ depend: $(SRCS) $(HDRS)
 	$(DEPEND) $(SRCS) > .depend.tmp
 	cat .depend.tmp | sed -e "s/^\w*.o:/$(SOBJ_DIR)\/&/" > .depend
 	$(RM) .depend.tmp
-

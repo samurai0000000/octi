@@ -45,7 +45,7 @@ public:
             }
             cout << "Thread Id(" << _id << ") = " << c << endl;
         }
-    
+
         synchronized(sig, {
                 cout << "Thread Id(" << _id << ") waiting" << endl;
                 sig.wait(12000);
@@ -54,9 +54,9 @@ public:
 
         cout << "Thread Id(" << _id << ") ended" << endl;
     };
-  
+
 private:
-  
+
     int _id;
     int _interval;
     static int count;
@@ -108,9 +108,9 @@ public:
 
         cout << "Thread Id(" << _id << ") ended" << endl;
     };
-  
+
 private:
-  
+
     int _id;
     int _interval;
     Barrier *_barrier;
@@ -158,7 +158,7 @@ void doThreadTest() {
                 cout << "notifyAll" << endl;
                 sig.notifyAll();
             });
-    
+
         t2.join();
         t3.join();
     } catch(Exception e) {

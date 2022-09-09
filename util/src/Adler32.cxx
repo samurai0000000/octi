@@ -53,11 +53,11 @@ word32 Adler32::s_updateBytes(word32 adler, byte *buf, int len) {
     word32 s2 = (adler >> 16) & 0xffff;
     unsigned int k;
     unsigned int l = len;
-  
+
     if(buf == 0) {
         return 0x1L;
     }
-  
+
     while(l > 0) {
         k = l < ADLER_NMAX ? len : ADLER_NMAX;
         l -= k;
@@ -72,7 +72,7 @@ word32 Adler32::s_updateBytes(word32 adler, byte *buf, int len) {
                 s2 += s1;
             } while(--k);
         }
-    
+
         s1 %= ADLER_BASE;
         s2 %= ADLER_BASE;
     }

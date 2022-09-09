@@ -62,7 +62,7 @@ void Monitor::wait() throw(InterruptedException, IllegalMonitorStateException) {
 void Monitor::wait(long timeout) throw(InterruptedException, IllegalMonitorStateException) {
     Thread::checkRunningStatusStatic();
     validateMutexOwner("wait(timeout)");
-  
+
     Thread::setMonitorStatic(this);
     try {
         _cond.wait(timeout);
@@ -71,7 +71,7 @@ void Monitor::wait(long timeout) throw(InterruptedException, IllegalMonitorState
         Thread::checkRunningStatusStatic();
         throw;
     }
-  
+
     Thread::setMonitorStatic(NULL);
     Thread::checkRunningStatusStatic();
 }

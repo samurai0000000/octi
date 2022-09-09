@@ -50,7 +50,7 @@ enum arg_type_enum {
 };
 
 typedef struct _arg {
-    char *flag;     /* The name of the flag. If NULL then all arguments 
+    char *flag;     /* The name of the flag. If NULL then all arguments
                        with no preceeding '-' are saved here.           */
     char **value;   /* The storage of parsed arguments.                 */
     int num_args;   /* The number of arguments retrieved.

@@ -64,7 +64,7 @@ void doAbstractListTest(AbstractList<char> &list) {
         VERIFY_LIST_RESULT(list, "abcbadcba");
         list.insert("cc", 2, 2);
         VERIFY_LIST_RESULT(list, "abcccbadcba");
-    
+
         list.removeFirst();
         VERIFY_LIST_RESULT(list, "bcccbadcba");
         list.removeLast();
@@ -108,7 +108,7 @@ void doAbstractListTest(AbstractList<char> &list) {
             cout << "failed for lastIndexOf('a'), result = " << idx << endl;
             return;
         }
-    
+
         list.clear();
         VERIFY_LIST_RESULT(list, "");
 
@@ -172,7 +172,7 @@ void doHashTableTest() {
         cout << *itK->next() << endl;
     }
 
-    Ptr<HashTableValueIterator<int, int> > itV = 
+    Ptr<HashTableValueIterator<int, int> > itV =
         (HashTableValueIterator<int, int> *) htbl.getValueIterator();
     while(itV->isNextNotNull()) {
         cout << *itV->next() << endl;
@@ -208,7 +208,7 @@ void doHashTableTest() {
         cout << *itK->next() << endl;
     }
 
-    itV = 
+    itV =
         (HashTableValueIterator<int, int> *) htbl.getValueIterator();
     while(itV->isNextNotNull()) {
         cout << *itV->next() << endl;

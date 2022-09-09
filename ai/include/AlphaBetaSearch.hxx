@@ -58,7 +58,7 @@ public:
  * A sequential implementation of the alpha-beta search algorithm.
  */
 class AIAPI AlphaBetaSearch : public MinMaxAlgorithm {
-  
+
     DECLARE_RUNTIME_DISCOVERABLE(AlphaBetaSearch);
 
 public:
@@ -76,7 +76,7 @@ public:
     void speculateMin(SearchState *state,
                       const SearchParameters *params = NULL);
     void stopSpeculation();
-  
+
 
     void printLastSearchStatistics(ostream &out) const;
     void printTotalStatistics(ostream &out) const;
@@ -110,10 +110,10 @@ protected:
     Ptr<Thread> _speculateThread;
 
 protected:
-  
+
     TranspositionTable _tbl;
     Ptr<SearchState> _best;
-  
+
     // Algorithm accounting information
     int _numMinCalls;
     int _numMaxCalls;

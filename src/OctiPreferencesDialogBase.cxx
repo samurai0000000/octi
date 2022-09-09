@@ -23,8 +23,8 @@
 #include <qtooltip.h>
 #include <qwhatsthis.h>
 
-/* 
- *  Constructs a OctiPreferencesDialogBase which is a child of 'parent', with the 
+/*
+ *  Constructs a OctiPreferencesDialogBase which is a child of 'parent', with the
  *  name 'name' and widget flags set to 'f'.
  *
  *  The dialog will by default be modeless, unless you set 'modal' to
@@ -35,17 +35,17 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
 {
     if ( !name )
         setName( "OctiPreferencesDialogBase" );
-    resize( 624, 356 ); 
+    resize( 624, 356 );
     setCaption( trUtf8( "OctiPreferencesDialogBase" ) );
     setSizeGripEnabled( TRUE );
-    OctiPreferencesDialogBaseLayout = new QVBoxLayout( this, 11, 6, "OctiPreferencesDialogBaseLayout"); 
+    OctiPreferencesDialogBaseLayout = new QVBoxLayout( this, 11, 6, "OctiPreferencesDialogBaseLayout");
 
     tabWidget = new QTabWidget( this, "tabWidget" );
 
     Widget2 = new QWidget( tabWidget, "Widget2" );
 
     GroupBox1 = new QGroupBox( Widget2, "GroupBox1" );
-    GroupBox1->setGeometry( QRect( 40, 20, 69, 192 ) ); 
+    GroupBox1->setGeometry( QRect( 40, 20, 69, 192 ) );
     GroupBox1->setTitle( trUtf8( "Colors" ) );
     GroupBox1->setColumnLayout(0, Qt::Vertical );
     GroupBox1->layout()->setSpacing( 6 );
@@ -87,7 +87,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     tabWidget->insertTab( Widget2, trUtf8( "Appearances" ) );
 
     Widget3 = new QWidget( tabWidget, "Widget3" );
-    Widget3Layout = new QGridLayout( Widget3, 1, 1, 11, 6, "Widget3Layout"); 
+    Widget3Layout = new QGridLayout( Widget3, 1, 1, 11, 6, "Widget3Layout");
 
     GroupBox3 = new QGroupBox( Widget3, "GroupBox3" );
     GroupBox3->setTitle( trUtf8( "Hash Table" ) );
@@ -106,7 +106,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     CheckBox8->setText( trUtf8( "Check Collision" ) );
     GroupBox3Layout->addWidget( CheckBox8 );
 
-    Layout8 = new QHBoxLayout( 0, 0, 6, "Layout8"); 
+    Layout8 = new QHBoxLayout( 0, 0, 6, "Layout8");
 
     TextLabel12 = new QLabel( GroupBox3, "TextLabel12" );
     TextLabel12->setText( trUtf8( "Memory (KB)" ) );
@@ -156,7 +156,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     ButtonGroup2Layout->addWidget( RadioButton4 );
     ButtonGroup1Layout->addWidget( ButtonGroup2 );
 
-    Layout4 = new QHBoxLayout( 0, 0, 6, "Layout4"); 
+    Layout4 = new QHBoxLayout( 0, 0, 6, "Layout4");
 
     TextLabel10 = new QLabel( ButtonGroup1, "TextLabel10" );
     TextLabel10->setEnabled( TRUE );
@@ -186,7 +186,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     CheckBox6->setChecked( TRUE );
     GroupBox4Layout->addWidget( CheckBox6 );
 
-    Layout9 = new QHBoxLayout( 0, 0, 6, "Layout9"); 
+    Layout9 = new QHBoxLayout( 0, 0, 6, "Layout9");
 
     CheckBox7 = new QCheckBox( GroupBox4, "CheckBox7" );
     CheckBox7->setText( trUtf8( "Timeout (seconds)" ) );
@@ -201,7 +201,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     Layout9->addItem( spacer_3 );
     GroupBox4Layout->addLayout( Layout9 );
 
-    Layout10 = new QHBoxLayout( 0, 0, 6, "Layout10"); 
+    Layout10 = new QHBoxLayout( 0, 0, 6, "Layout10");
 
     TextLabel11 = new QLabel( GroupBox4, "TextLabel11" );
     TextLabel11->setText( trUtf8( "Depth Limit" ) );
@@ -218,9 +218,9 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     tabWidget->insertTab( Widget3, trUtf8( "AI Parameters" ) );
 
     tab = new QWidget( tabWidget, "tab" );
-    tabLayout = new QVBoxLayout( tab, 11, 6, "tabLayout"); 
+    tabLayout = new QVBoxLayout( tab, 11, 6, "tabLayout");
 
-    Layout20 = new QHBoxLayout( 0, 0, 6, "Layout20"); 
+    Layout20 = new QHBoxLayout( 0, 0, 6, "Layout20");
 
     GroupBox5 = new QGroupBox( tab, "GroupBox5" );
     GroupBox5->setTitle( trUtf8( "OCTI Server Settings" ) );
@@ -230,7 +230,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     GroupBox5Layout = new QVBoxLayout( GroupBox5->layout() );
     GroupBox5Layout->setAlignment( Qt::AlignTop );
 
-    Layout15 = new QHBoxLayout( 0, 0, 6, "Layout15"); 
+    Layout15 = new QHBoxLayout( 0, 0, 6, "Layout15");
     QSpacerItem* spacer_5 = new QSpacerItem( 20, 20, QSizePolicy::Expanding, QSizePolicy::Minimum );
     Layout15->addItem( spacer_5 );
 
@@ -242,7 +242,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     Layout15->addWidget( LineEdit2 );
     GroupBox5Layout->addLayout( Layout15 );
 
-    Layout16 = new QHBoxLayout( 0, 0, 6, "Layout16"); 
+    Layout16 = new QHBoxLayout( 0, 0, 6, "Layout16");
     QSpacerItem* spacer_6 = new QSpacerItem( 20, 20, QSizePolicy::Expanding, QSizePolicy::Minimum );
     Layout16->addItem( spacer_6 );
 
@@ -258,7 +258,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     Layout20->addItem( spacer_7 );
     tabLayout->addLayout( Layout20 );
 
-    Layout21 = new QHBoxLayout( 0, 0, 6, "Layout21"); 
+    Layout21 = new QHBoxLayout( 0, 0, 6, "Layout21");
 
     GroupBox6 = new QGroupBox( tab, "GroupBox6" );
     GroupBox6->setTitle( trUtf8( "Local Server Settings (For Incoming Connections)" ) );
@@ -268,7 +268,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     GroupBox6Layout = new QVBoxLayout( GroupBox6->layout() );
     GroupBox6Layout->setAlignment( Qt::AlignTop );
 
-    Layout19 = new QHBoxLayout( 0, 0, 6, "Layout19"); 
+    Layout19 = new QHBoxLayout( 0, 0, 6, "Layout19");
     QSpacerItem* spacer_8 = new QSpacerItem( 20, 20, QSizePolicy::Expanding, QSizePolicy::Minimum );
     Layout19->addItem( spacer_8 );
 
@@ -279,7 +279,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     Layout19->addItem( spacer_9 );
     GroupBox6Layout->addLayout( Layout19 );
 
-    Layout17 = new QHBoxLayout( 0, 0, 6, "Layout17"); 
+    Layout17 = new QHBoxLayout( 0, 0, 6, "Layout17");
     QSpacerItem* spacer_10 = new QSpacerItem( 20, 20, QSizePolicy::Expanding, QSizePolicy::Minimum );
     Layout17->addItem( spacer_10 );
 
@@ -291,7 +291,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     Layout17->addWidget( LineEdit4 );
     GroupBox6Layout->addLayout( Layout17 );
 
-    Layout18 = new QHBoxLayout( 0, 0, 6, "Layout18"); 
+    Layout18 = new QHBoxLayout( 0, 0, 6, "Layout18");
     QSpacerItem* spacer_11 = new QSpacerItem( 20, 20, QSizePolicy::Expanding, QSizePolicy::Minimum );
     Layout18->addItem( spacer_11 );
 
@@ -312,7 +312,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     tabWidget->insertTab( tab_2, trUtf8( "Personal Settings" ) );
     OctiPreferencesDialogBaseLayout->addWidget( tabWidget );
 
-    Layout1 = new QHBoxLayout( 0, 0, 6, "Layout1"); 
+    Layout1 = new QHBoxLayout( 0, 0, 6, "Layout1");
 
     buttonHelp = new QPushButton( this, "buttonHelp" );
     buttonHelp->setText( trUtf8( "&Help" ) );
@@ -350,7 +350,7 @@ OctiPreferencesDialogBase::OctiPreferencesDialogBase( QWidget* parent,  const ch
     connect( CheckBox5, SIGNAL( toggled(bool) ), CheckBox8, SLOT( setEnabled(bool) ) );
 }
 
-/*  
+/*
  *  Destroys the object and frees any allocated resources
  */
 OctiPreferencesDialogBase::~OctiPreferencesDialogBase()

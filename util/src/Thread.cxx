@@ -42,10 +42,10 @@ void ThreadGroupSet::addGroup(ThreadGroup *group) {
             if(group == NULL) {
                 return;
             }
-    
+
             int i;
             for(i = 0; i < _numGroups && _groups[i] != group; i++);
-    
+
             if(i >= _numGroups) {
                 ThreadGroup **newGroups = (ThreadGroup **) calloc(_numGroups + 1, sizeof(ThreadGroup *));
                 memcpy(newGroups, _groups, _numGroups * sizeof(ThreadGroup *));
@@ -67,7 +67,7 @@ void ThreadGroupSet::removeGroup(ThreadGroup *group) {
 
             int i;
             for(i = 0; i < _numGroups && _groups[i] != group; i++);
-    
+
             if(i < _numGroups) {
                 ThreadGroup **newGroups = NULL;
                 if(_numGroups - 1 > 0) {
@@ -98,7 +98,7 @@ void ThreadSet::addThread(Thread *thread) {
 
             int i;
             for(i = 0; i < _numThreads && _threads[i] != thread; i++);
-    
+
             if(i >= _numThreads) {
                 Thread **newThreads = (Thread **) calloc(_numThreads + 1, sizeof(Thread *));
                 memcpy(newThreads, _threads, _numThreads * sizeof(Thread *));
@@ -120,7 +120,7 @@ void ThreadSet::removeThread(Thread *thread) {
 
             int i;
             for(i = 0; i < _numThreads && _threads[i] != thread; i++);
-    
+
             if(i < _numThreads) {
                 Thread **newThreads = NULL;
                 if(_numThreads - 1 > 0) {
@@ -160,7 +160,7 @@ void ThreadGroup::initialize(ThreadGroup *parent, const char *name) {
     _daemon = (parent == NULL ? FALSE : parent->_daemon);
     _destroyed = FALSE;
     _maxPriority = (parent == NULL ? MAX_THREAD_PRIORITY : parent->_maxPriority);
-  
+
     if(parent != NULL) {
         _parent->addGroup(this);
     }
@@ -175,7 +175,7 @@ void ThreadGroup::addGroup(ThreadGroup *group) throw(IllegalThreadStateException
             if(_destroyed) {
                 throw IllegalThreadStateException("ThreadGroup destroyed");
             }
-    
+
             _childGroups.addGroup(group);
         });
 }
@@ -185,7 +185,7 @@ void ThreadGroup::removeGroup(ThreadGroup *group) throw(IllegalThreadStateExcept
             if(_destroyed) {
                 throw IllegalThreadStateException("ThreadGroup destroyed");
             }
-    
+
             _childGroups.removeGroup(group);
         });
 }
@@ -282,7 +282,7 @@ void ThreadGroup::destroy() throw(IllegalThreadStateException) {
                 msg.format("Thread(s) still active: %d", _threads.length());
                 throw IllegalThreadStateException(msg);
             }
-    
+
             _destroyed = TRUE;
             _threads = ThreadSet();
             _childGroups = ThreadGroupSet();
@@ -477,7 +477,7 @@ Thread::Thread(const char *name) : _threadBeginCondition(_threadBeginMutex),
 }
 
 Thread::Thread(ThreadFunc startfunc, void *args, const char *name) :
-    _threadBeginCondition(_threadBeginMutex), 
+    _threadBeginCondition(_threadBeginMutex),
     _resumeCondition(_resumeMutex),
     _joinCondition(_joinMutex) {
     _startfunc = startfunc;
@@ -637,10 +637,10 @@ void Thread::threadExited() {
             synchronized(_resumeMutex, {
                     _state = THREAD_DEAD;
                     _joinCondition.broadcast();
-      
+
                     ASSERT(_group != NULL);
                     _group->remove(this);
-      
+
                     s_systemThreadLocal.set(NULL);
                 });
         });
@@ -815,7 +815,7 @@ void Thread::sleep(long timeout) throw(InterruptedException) {
     Sleep(timeout);
 #elif defined(__USE_POSIXTHREAD__)
     usleep(timeout * 1000);
-#endif  
+#endif
 
     checkRunningStatusStatic();
 }
@@ -886,11 +886,11 @@ void Thread::setMonitorStatic(Monitor *monitor) {
     }
 }
 
-// Dumps all the thread groups and threads to the 
+// Dumps all the thread groups and threads to the
 void Thread::dumpThreadUsage() {
     synchronized(ThreadGroup::s_allThreadGroups, {
             ThreadGroupSet allGroups = ThreadGroup::s_allThreadGroups;
-    
+
             cout << "--- Active Thread dump ---" << endl;
             for(int i = 0; i < allGroups.length(); i++) {
                 cout << allGroups[i].getName() << ":" << endl;

@@ -71,7 +71,7 @@ int OctiAgent::execute() {
             prompt = "think";
             sim = TRUE;
         }
-    
+
         if(prompt == "think") {
             cout << "Thinking..." << endl;
             String mstr;
@@ -100,11 +100,11 @@ int OctiAgent::execute() {
                     result = (Octi2PlayerGameSearchState *)
                         _alg->searchMin(&search, &_params);
                 }
-	
+
                 if(result == NULL) {
                     Error::fatal("Search algorithm returned: result == NULL");
                 }
-	
+
                 _alg->printLastSearchStatistics(cout);
                 _alg->printTotalStatistics(cout);
                 mstr = result->getDescription();

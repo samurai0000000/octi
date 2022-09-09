@@ -128,7 +128,7 @@ void SearchState::addSuccessors(SearchState *successors) {
     if(successors == NULL) {
         return;
     }
-  
+
     if(_headSuccessors == NULL) {
         _headSuccessors = successors;
         successors->_prev = NULL;

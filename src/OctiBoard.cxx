@@ -246,7 +246,7 @@ ostream &operator<<(ostream &out, const OctiBoard &board) {
                 pc_count[owner]++;
             }
         }
-		
+
         // Print grid level 1
         for(x = 0; x < 9; x++) {
             out << "| ";
@@ -256,7 +256,7 @@ ostream &operator<<(ostream &out, const OctiBoard &board) {
             out << " ";
         }
         out << "|" << endl;
-	    
+
         // Print grid level 2
         for(x = 0; x < 9; x++) {
             out << "| ";
@@ -266,7 +266,7 @@ ostream &operator<<(ostream &out, const OctiBoard &board) {
             out << " ";
         }
         out << "|" << endl;
-	    
+
         // Print grid level 1
         for(x = 0; x < 9; x++) {
             out << "| ";

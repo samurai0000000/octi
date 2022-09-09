@@ -6,4 +6,3 @@ TEMPLATE = subdirs
 SUBDIRS += ai game util widget
 CONFIG += ordered
 SUBDIRS += octi.pro
-

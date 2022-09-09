@@ -53,7 +53,7 @@ void doStringTest() {
     VERIFY_STRING(String("xyz"), "xyz");
     VERIFY_STRING(String('a'), "a");
     VERIFY_STRING(String(s), "abc");
-  
+
     VERIFY_STRING(s + 'x', "abcx");
     VERIFY_STRING(s + "xy", "abcxy");
     VERIFY_STRING(s + s, "abcabc");
@@ -114,11 +114,11 @@ void doStringTest() {
     } else if(s.contains("shit", 25)) {
         FAIL_STR_IDX("contains(\"shit\", 25)");
     }
-  
+
     VERIFY_STRING(s.before(5), "defab");
     VERIFY_STRING(s.after(5), "abcabceavdeshitfabcdefjkicdefbcdef");
     VERIFY_STRING(s.substring(10, 20), "bceavdeshit");
-  
+
     s = "   whaT a bAbe!   ";
     s.trim();
     VERIFY_STRING(s, "whaT a bAbe!");

@@ -120,7 +120,7 @@ inline word32 reverseEndian(word32 w32) {
         w32 >> 24               |
         (w32 >> 8) & 0x0000ff00 |
         (w32 << 8) & 0x00ff0000 |
-        w32 << 24; 
+        w32 << 24;
 }
 
 inline void reverseEndian(word32 *w32, int len) {

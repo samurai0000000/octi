@@ -128,7 +128,7 @@ void OctiBoardDispWidget::paintNormal(QPainter &p) {
     p.setFont(QFont("times", (int) (_squareSize * 0.5), QFont::Bold));
     p.setPen(QPen(colors.getLineColor()));
     p.drawRect(_xOffset, _yOffset, _boardSize, _boardSize);
-    
+
     // Draw y-axis labels
     for(i = 1; i <= 9; i++) {
         y = i * _squareSize + _yOffset;
@@ -139,7 +139,7 @@ void OctiBoardDispWidget::paintNormal(QPainter &p) {
         p.drawText(_xOffset, y - _squareSize, _squareSize, _squareSize,
                    AlignCenter, QString(QChar('0' + 10 - i)));
     }
-    
+
     // Draw x-axis labels
     y = 10 * _squareSize + _yOffset;
     for(i = 1; i <= 9; i++) {
@@ -151,7 +151,7 @@ void OctiBoardDispWidget::paintNormal(QPainter &p) {
         p.drawText(x, y - _squareSize, _squareSize, _squareSize,
                    AlignCenter, QString(QChar('0' + i)));
     }
-    
+
     // Fill the unmarked label
     p.setFont(QFont("times", (int) (_squareSize * 0.25)));
     p.setPen(QPen(colors.getLabelColor()));
@@ -170,7 +170,7 @@ void OctiBoardDispWidget::paintNormal(QPainter &p) {
             x = _squareSize * j + _squareSize + _xOffset;
             yc = y + (_squareSize >> 1);
             xc = x + (_squareSize >> 1);
-	
+
             if((i == 2 && (j == 2 || j == 4 || j == 6)) ||
                (i == 6 && (j == 2 || j == 4 || j == 6))) {
                 // Draw home squares
@@ -211,7 +211,7 @@ void OctiBoardDispWidget::paintInverted(QPainter &p) {
     p.setFont(QFont("times", (int) (_squareSize * 0.5), QFont::Bold));
     p.setPen(QPen(colors.getLineColor()));
     p.drawRect(_xOffset, _yOffset, _boardSize, _boardSize);
-    
+
     // Draw y-axis labels
     for(i = 1; i <= 9; i++) {
         y = i * _squareSize + _yOffset;
@@ -222,7 +222,7 @@ void OctiBoardDispWidget::paintInverted(QPainter &p) {
         p.drawText(_xOffset, y, _squareSize, _squareSize, AlignCenter,
                    QString(QChar('0' + i)));
     }
-    
+
     // Draw x-axis labels
     y = _yOffset;
     for(i = 1; i <= 9; i++) {
@@ -234,7 +234,7 @@ void OctiBoardDispWidget::paintInverted(QPainter &p) {
         p.drawText(x, y, _squareSize, _squareSize, AlignCenter,
                    QString(QChar('0' + i)));
     }
-    
+
     // Fill the unmarked label
     p.setFont(QFont("times", (int) (_squareSize * 0.25)));
     p.setPen(QPen(colors.getLabelColor()));
@@ -252,7 +252,7 @@ void OctiBoardDispWidget::paintInverted(QPainter &p) {
             x = _squareSize * j + _squareSize + _xOffset;
             yc = y + (_squareSize >> 1);
             xc = x + (_squareSize >> 1);
-	
+
             if((i == 2 && (j == 2 || j == 4 || j == 6)) ||
                (i == 6 && (j == 2 || j == 4 || j == 6))) {
                 // Draw home squares
@@ -483,7 +483,7 @@ void OctiBoardDispWidget::getGridPos(int x, int y, int &gridX, int &gridY) {
 boolean OctiBoardDispWidget::acceptAddPodAt(int targetX, int targetY) const {
     OctiGameMode gameMode = _board->getGameMode();
     OctiPlayer playerToMove = _board->getGame()->getPlayerToMove();
-  
+
     if(gameMode == GAME_MODE_2) {
         if(playerToMove == PLAYER_A) {
             if(targetY == 2 && (targetX == 2 || targetX == 4 || targetX == 6)) {
@@ -527,7 +527,7 @@ int OctiBoardDispWidget::acceptMovePodsAt(int targetX, int targetY,
     int startY = hop.y;
     int xdisplacement = targetX - startX;
     int ydisplacement = targetY - startY;
-  
+
     if((startX == targetX && startY == targetY) ||
        targetSquare->hasEnemyOf(playerToMove)) {
         return 0;
@@ -677,7 +677,7 @@ void OctiBoardDispWidget::mouseMoveEvent(QMouseEvent *e) {
 
                 DispSquareMark mark = _map.getMark(gridX, gridY);
                 QString s;
-	
+
                 if(mark == DSM_JUMP) {
                     _supressOn = TRUE;
                     _supressX = gridX;
@@ -899,7 +899,7 @@ OctiBoardWidget::OctiBoardWidget(QWidget *parent, const char *name, WFlags f) : 
 
     QHBoxLayout *hlayout1 = new QHBoxLayout(this);
     QVBoxLayout *vlayout1 = new QVBoxLayout();
-  
+
     hlayout1->addWidget(_boardDisp, 10);
     hlayout1->addWidget(_squareDisp, 1);
     hlayout1->addLayout(vlayout1, 4);

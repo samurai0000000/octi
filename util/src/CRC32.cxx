@@ -42,7 +42,7 @@ word32 CRC32::value() const {
     word32 length = _length;
     word32 finalvalue = _value;
     while(length > 0) {
-        finalvalue = (finalvalue << 8) ^ 
+        finalvalue = (finalvalue << 8) ^
             _s_CRCTable[((finalvalue >> 24) ^ length) & 0xff];
         length >>= 8;
     }

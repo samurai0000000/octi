@@ -26,7 +26,7 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 const BaseRuntimeClass *BaseObject::CS_classBaseObject =
-    new BaseRuntimeClass("BaseObject", sizeof(class BaseObject), 
+    new BaseRuntimeClass("BaseObject", sizeof(class BaseObject),
                          NULL, NULL);
 
 BaseObject::BaseObject() {

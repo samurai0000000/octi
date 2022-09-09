@@ -138,7 +138,7 @@ int Condition::win_cond_timedwait(cond_t *cond, RecursiveMutex &mutex, long time
         cond->list_mutex.unlock();
 
     } while(!is_released);
- 
+
     WaitForSingleObject(mutex._critical, INFINITE);
 
     return ret;
@@ -194,7 +194,7 @@ void Condition::wait(long timeout) throw(InterruptedException) {
         _mutex._owner = ThreadId();
     }
 
-#if defined(__USE_POSIXTHREAD__)  
+#if defined(__USE_POSIXTHREAD__)
     struct timespec abstime;
     if(timeout > 0) {
         struct timeval tv;
@@ -223,7 +223,7 @@ void Condition::wait(long timeout) throw(InterruptedException) {
             ret = pthread_cond_timedwait(&_cond, &_mutex._critical, &abstime);
         }
 #endif
-    
+
         // Handle possible error in wait
         if(ret != 0) {
             try {
@@ -245,7 +245,7 @@ void Condition::wait(long timeout) throw(InterruptedException) {
                 return;
             }
 #endif
-      
+
             throw InterruptedException();
         }
         break;

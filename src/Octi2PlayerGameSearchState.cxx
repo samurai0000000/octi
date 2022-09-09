@@ -123,7 +123,7 @@ TransitionOp &TransitionOp::operator=(const TransitionOp &trans) {
             delete _u.captureTrans;
             break;
         }
-    
+
         switch(trans._type) {
         case TRANS_ADD_POD:
             _u.addPodTrans = new AddPodTransition();
@@ -182,8 +182,8 @@ O2PGSS::Octi2PlayerGameSearchState(const Octi2PlayerGameSearchState *state) {
     _freeSuperProngs[1] = copy->_freeSuperProngs[1];
     _capturedPods[0] = copy->_capturedPods[0];
     _capturedPods[1] = copy->_capturedPods[1];
-  
-    Ptr<SlistIterator<ValidSquare> > iterator = 
+
+    Ptr<SlistIterator<ValidSquare> > iterator =
         (SlistIterator<ValidSquare> *) copy->_validSquares.getIterator();
     const ValidSquare *current;
     const Octi2PlayerSquare *square;
@@ -207,7 +207,7 @@ O2PGSS::Octi2PlayerGameSearchState(OctiBoard *board) {
     int x, y;
     OctiSquare *square;
     OctiGame *game = board->getGame();
-  
+
     _playerToMove = game->getPlayerToMove();
     _freePods[0] = game->getNumFreePods(PLAYER_A);
     _freePods[1] = game->getNumFreePods(PLAYER_B);
@@ -253,9 +253,9 @@ O2PGSS::Octi2PlayerGameSearchState(Octi2PlayerGameSearchState *parent,
     _eval = 0.0;
     _terminalTested = FALSE;
     _terminalValue = 0.0;
-  
+
     // Copy the transition operators that contains a "TRANS_CAPTURE" type
-    Ptr<SlistIterator<TransitionOp> > iterator = 
+    Ptr<SlistIterator<TransitionOp> > iterator =
         (SlistIterator<TransitionOp> *) copy->_trans.getIterator();
     const TransitionOp *current;
 
@@ -287,10 +287,10 @@ O2PGSS::Octi2PlayerGameSearchState(Octi2PlayerGameSearchState *parent,
     MJCMap map;
     int i;
     for(i = 0; i < statesCount; i++) {
-        Ptr<SlistIterator<TransitionOp> > iterator = 
+        Ptr<SlistIterator<TransitionOp> > iterator =
             (SlistIterator<TransitionOp> *) states[i]->_trans.getIterator();
         const TransitionOp *current;
-    
+
         for(iterator->first(); iterator->isNotNull(); iterator->next()) {
             current = iterator->current();
             if(current->getTransitionType() == TRANS_CAPTURE) {
@@ -331,7 +331,7 @@ void O2PGSS::expandState() {
 
     enumerateAddPodPlys();
 
-    Ptr<SlistIterator<ValidSquare> > iterator = 
+    Ptr<SlistIterator<ValidSquare> > iterator =
         (SlistIterator<ValidSquare> *) _validSquares.getIterator();
     for(iterator->first(); iterator->isNotNull(); iterator->next()) {
         current = iterator->current();
@@ -376,52 +376,52 @@ void O2PGSS::enumerateAddPodPlys() {
     boolean canAddFree;
     boolean canLiberate;
     Octi2PlayerGameSearchState *s;
-  
+
     square22Cap = (_squares[2][2] == NULL) ? FALSE : _squares[2][2]->isCaptured();
     square42Cap = (_squares[4][2] == NULL) ? FALSE : _squares[4][2]->isCaptured();
     square62Cap = (_squares[6][2] == NULL) ? FALSE : _squares[6][2]->isCaptured();
     square26Cap = (_squares[2][6] == NULL) ? FALSE : _squares[2][6]->isCaptured();
     square46Cap = (_squares[4][6] == NULL) ? FALSE : _squares[4][6]->isCaptured();
     square66Cap = (_squares[6][6] == NULL) ? FALSE : _squares[6][6]->isCaptured();
-  
+
     canAddFree = (_freePods[_playerToMove - 1] > 0);
     canLiberate = (_capturedPods[_playerToMove - 1] > 0);
-  
+
     if((_playerToMove == PLAYER_A && !square22Cap && canAddFree) ||
        (_playerToMove == PLAYER_B && square22Cap && (canAddFree || canLiberate))) {
         s = new Octi2PlayerGameSearchState(this, s_STR_ADDPOD_MOVES[0]);
         s->addPodTransitionOp(2, 2);
         appendAddPodState(s);
     }
-  
+
     if((_playerToMove == PLAYER_A && !square42Cap && canAddFree) ||
        (_playerToMove == PLAYER_B && square42Cap && (canAddFree || canLiberate))) {
         s = new Octi2PlayerGameSearchState(this, s_STR_ADDPOD_MOVES[1]);
         s->addPodTransitionOp(4, 2);
         appendAddPodState(s);
     }
-  
+
     if((_playerToMove == PLAYER_A && !square62Cap && canAddFree) ||
        (_playerToMove == PLAYER_B && square62Cap && (canAddFree || canLiberate))) {
         s = new Octi2PlayerGameSearchState(this, s_STR_ADDPOD_MOVES[2]);
         s->addPodTransitionOp(6, 2);
         appendAddPodState(s);
     }
-  
+
     if((_playerToMove == PLAYER_A && square26Cap && (canAddFree || canLiberate)) ||
        (_playerToMove == PLAYER_B && !square26Cap && canAddFree)) {
         s = new Octi2PlayerGameSearchState(this, s_STR_ADDPOD_MOVES[3]);
         s->addPodTransitionOp(2, 6);
         appendAddPodState(s);
     }
-  
+
     if((_playerToMove == PLAYER_A && square46Cap && (canAddFree || canLiberate)) ||
        (_playerToMove == PLAYER_B && !square46Cap && canAddFree)) {
         s = new Octi2PlayerGameSearchState(this, s_STR_ADDPOD_MOVES[4]);
         s->addPodTransitionOp(4, 6);
         appendAddPodState(s);
     }
-  
+
     if((_playerToMove == PLAYER_A && square66Cap && (canAddFree || canLiberate)) ||
        (_playerToMove == PLAYER_B && !square66Cap && canAddFree)) {
         s = new Octi2PlayerGameSearchState(this, s_STR_ADDPOD_MOVES[5]);
@@ -493,7 +493,7 @@ void O2PGSS::enumerateMovePodPlys(int x, int y, OctiPod pod) {
         s->movePodTransitionOp(x, y, pod, x, y + 1);
         appendMoveJumpCaptureState(s);
     }
-	
+
     // North East
     if(pod.prongAt(DIR_NE) != 0 && x + 1 < 9 && y + 1 < 9 &&
        (_squares[x + 1][y + 1] == NULL ||
@@ -506,7 +506,7 @@ void O2PGSS::enumerateMovePodPlys(int x, int y, OctiPod pod) {
         s->movePodTransitionOp(x, y, pod, x + 1, y + 1);
         appendMoveJumpCaptureState(s);
     }
-	
+
     // East
     if(pod.prongAt(DIR_E) != 0 && x + 1 < 9 &&
        (_squares[x + 1][y] == NULL ||
@@ -519,7 +519,7 @@ void O2PGSS::enumerateMovePodPlys(int x, int y, OctiPod pod) {
         s->movePodTransitionOp(x, y, pod, x + 1, y);
         appendMoveJumpCaptureState(s);
     }
-	
+
     // South East
     if(pod.prongAt(DIR_SE) != 0 && x + 1 < 9 && y - 1 >= 0 &&
        (_squares[x + 1][y - 1] == NULL ||
@@ -532,7 +532,7 @@ void O2PGSS::enumerateMovePodPlys(int x, int y, OctiPod pod) {
         s->movePodTransitionOp(x, y, pod, x + 1, y - 1);
         appendMoveJumpCaptureState(s);
     }
-	
+
     // South
     if(pod.prongAt(DIR_S) != 0 && y - 1 >= 0 &&
        (_squares[x][y - 1] == NULL ||
@@ -545,7 +545,7 @@ void O2PGSS::enumerateMovePodPlys(int x, int y, OctiPod pod) {
         s->movePodTransitionOp(x, y, pod, x, y - 1);
         appendMoveJumpCaptureState(s);
     }
-	
+
     // South West
     if(pod.prongAt(DIR_SW) != 0 && x - 1 >= 0 && y - 1 >= 0 &&
        (_squares[x - 1][y - 1] == NULL ||
@@ -558,7 +558,7 @@ void O2PGSS::enumerateMovePodPlys(int x, int y, OctiPod pod) {
         s->movePodTransitionOp(x, y, pod, x - 1, y - 1);
         appendMoveJumpCaptureState(s);
     }
-	
+
     // West
     if(pod.prongAt(DIR_W) != 0 && x - 1 >= 0 &&
        (_squares[x - 1][y] == NULL ||
@@ -571,7 +571,7 @@ void O2PGSS::enumerateMovePodPlys(int x, int y, OctiPod pod) {
         s->movePodTransitionOp(x, y, pod, x - 1, y);
         appendMoveJumpCaptureState(s);
     }
-	
+
     // North West
     if(pod.prongAt(DIR_NW) != 0 && x - 1 >= 0 && y + 1 < 9 &&
        (_squares[x - 1][y + 1] == NULL ||
@@ -675,7 +675,7 @@ void O2PGSS::recursiveEnumerateJumpPodPlys(int srcX, int srcY,
         appendMoveJumpCaptureState(s);
         recursiveEnumerateJumpPodPlys(srcX, srcY, x + 2, y, pod,
                                       (const char *) buf, map, s);
-    
+
         // With capture
         buf = prevJumpStr;
         buf += '-';
@@ -716,7 +716,7 @@ void O2PGSS::recursiveEnumerateJumpPodPlys(int srcX, int srcY,
         appendMoveJumpCaptureState(s);
         recursiveEnumerateJumpPodPlys(srcX, srcY, x + 2, y - 2, pod,
                                       (const char *) buf, map, s);
-    
+
         map->tryUnmarkJC(x + 1, y - 1);
     }
 
@@ -856,7 +856,7 @@ void O2PGSS::enumerateCompositePlys(int x, int y, CompositeMove *cm,
     if(cmCount >= 2) {
         while(!carry) {
             buf = (const char *) NULL;
-		
+
             // Combine the results
             statesCount = 0;
             states[0] = states[1] = states[2] =
@@ -893,11 +893,11 @@ void O2PGSS::enumerateCompositePlys(int x, int y, CompositeMove *cm,
                     current[i] =
                         (Octi2PlayerGameSearchState *) head[i];
                 }
-		    
+
                 if(current[i] == tail[i]->_next) {
                     current[i] = NULL;
                 }
-		    
+
                 // Carry
                 if(current[i] == head[i]) {
                     carry = TRUE;
@@ -965,7 +965,7 @@ void O2PGSS::syncState() {
     if(_trans.size() > 0) {
         // copy from parent first
         copyInternalStatesFromParent();
-    
+
         // Reset evaluation
         _evaled = FALSE;
         _eval = 0.0;
@@ -973,10 +973,10 @@ void O2PGSS::syncState() {
         _terminalValue = 0.0;
 
         // apply the transition operations
-        Ptr<SlistIterator<TransitionOp> > iterator = 
+        Ptr<SlistIterator<TransitionOp> > iterator =
             (SlistIterator<TransitionOp> *) _trans.getIterator();
         const TransitionOp *op;
-    
+
         for(iterator->first(); iterator->isNotNull(); iterator->next()) {
             op = iterator->current();
             switch(op->getTransitionType()) {
@@ -1020,7 +1020,7 @@ void O2PGSS::syncState() {
 void O2PGSS::addPod(int x, int y) {
     boolean canLiberate = false;
     OctiPlayer player = (OctiPlayer) (_playerToMove % 2 + 1);
-  
+
     if(_squares[x][y] == NULL) {
         if((x == 2 || x == 4 || x == 6) && (y == 2)) {
             _squares[x][y] = new Octi2PlayerSquare(A_HOME_SQUARE, x, y);
@@ -1031,7 +1031,7 @@ void O2PGSS::addPod(int x, int y) {
         }
         appendValidSquare(x, y);
     }
-  
+
     if(x == 2 || x == 4 || x == 6) {
         if(player == PLAYER_A && y == 6) {
             canLiberate = TRUE;
@@ -1039,7 +1039,7 @@ void O2PGSS::addPod(int x, int y) {
             canLiberate = TRUE;
         }
     }
-  
+
     _squares[x][y]->addPod(OctiPod((OctiPodType) player));
     if(canLiberate && _capturedPods[player - 1] != 0) {
         _capturedPods[player - 1]--;
@@ -1053,7 +1053,7 @@ void O2PGSS::addProng(int x, int y, OctiPod pod, OctiDir dir) {
     OctiPod *matchPod;
     int numPods;
     OctiPlayer player = (OctiPlayer) (_playerToMove % 2 + 1);
-  
+
     numPods = _squares[x][y]->getNumPods();
 
     for(k = numPods - 1; k >= 0; k--) {
@@ -1072,7 +1072,7 @@ void O2PGSS::repositionProng(int x, int y, OctiPod pod,
     OctiPod *matchPod;
     int numPods;
     OctiPlayer player = (OctiPlayer) (_playerToMove % 2 + 1);
-  
+
     numPods = _squares[x][y]->getNumPods();
 
     for(k = numPods - 1; k >= 0; k--) {
@@ -1129,7 +1129,7 @@ void O2PGSS::capture(int x, int y) {
 
     numCapPods = _squares[x][y]->getNumPods();
     numCapProngs = 0;
-    numCapSuperProngs = 0;	
+    numCapSuperProngs = 0;
     capType = _squares[x][y]->getPodAt(0)->getType();
 
     for(k = numCapPods - 1; k >= 0; k--) {
@@ -1174,9 +1174,9 @@ void O2PGSS::copyInternalStatesFromParent() {
     _freeSuperProngs[1] = copy->_freeSuperProngs[1];
     _capturedPods[0] = copy->_capturedPods[0];
     _capturedPods[1] = copy->_capturedPods[1];
-  
+
     // Copy squares and pods
-    Ptr<SlistIterator<ValidSquare> > iterator = 
+    Ptr<SlistIterator<ValidSquare> > iterator =
         (SlistIterator<ValidSquare> *) copy->_validSquares.getIterator();
     const ValidSquare *current;
     const Octi2PlayerSquare *square;
@@ -1270,7 +1270,7 @@ void O2PGSS::orderListAndUpdateSuccessors() {
     addSuccessors(_headMoveJumpCaptureStates);
     addSuccessors(_headAddProngStates);
     addSuccessors(_headAddPodStates);
-  
+
     // Set the temporary pointers to null
     _headAddPodStates = NULL;
     _tailAddPodStates = NULL;
@@ -1538,7 +1538,7 @@ float O2PGSS::evaluate() const {
     aDistance1 = aDistance2 = aDistance3 =
         bDistance1 = bDistance2 = bDistance3 = 99999;
 
-    Ptr<SlistIterator<ValidSquare> > iterator = 
+    Ptr<SlistIterator<ValidSquare> > iterator =
         (SlistIterator<ValidSquare> *) _validSquares.getIterator();
     for(iterator->first(); iterator->isNotNull(); iterator->next()) {
         current = iterator->current();
@@ -1551,12 +1551,12 @@ float O2PGSS::evaluate() const {
         for(k = numPods - 1; k >= 0; k--) {
             pod = *square->getPodAt(k);
             map.reset();
-		
+
             mob.numProngs = 0;
             mob.reachableSquares = 0;
             mob.capturableEnemyPods = 0;
             mob.capturableEnemyProngs = 0;
-		
+
             // Go North
             prong = pod.prongAt(DIR_N);
             if(prong != NO_PRONG) {
@@ -1568,7 +1568,7 @@ float O2PGSS::evaluate() const {
                 mob.reachableSquares++;
                 map.tryMarkOD(x, y + 1);
             }
-		
+
             // Go North East
             prong = pod.prongAt(DIR_NE);
             if(prong != NO_PRONG) {
@@ -1580,7 +1580,7 @@ float O2PGSS::evaluate() const {
                 mob.reachableSquares++;
                 map.tryMarkOD(x + 1, y + 1);
             }
-		
+
             // Go East
             prong = pod.prongAt(DIR_E);
             if(prong != NO_PRONG) {
@@ -1592,7 +1592,7 @@ float O2PGSS::evaluate() const {
                 mob.reachableSquares++;
                 map.tryMarkOD(x + 1, y);
             }
-		
+
             // Go South East
             prong = pod.prongAt(DIR_SE);
             if(prong != NO_PRONG) {
@@ -1604,7 +1604,7 @@ float O2PGSS::evaluate() const {
                 mob.reachableSquares++;
                 map.tryMarkOD(x + 1, y - 1);
             }
-		
+
             // Go South
             prong = pod.prongAt(DIR_S);
             if(prong != NO_PRONG) {
@@ -1616,7 +1616,7 @@ float O2PGSS::evaluate() const {
                 mob.reachableSquares++;
                 map.tryMarkOD(x, y - 1);
             }
-		
+
             // Go South West
             prong = pod.prongAt(DIR_SW);
             if(prong != NO_PRONG) {
@@ -1628,7 +1628,7 @@ float O2PGSS::evaluate() const {
                 mob.reachableSquares++;
                 map.tryMarkOD(x - 1, y - 1);
             }
-		
+
             // Go West
             prong = pod.prongAt(DIR_W);
             if(prong != NO_PRONG) {
@@ -1640,7 +1640,7 @@ float O2PGSS::evaluate() const {
                 mob.reachableSquares++;
                 map.tryMarkOD(x - 1, y);
             }
-		
+
             // Go North West
             prong = pod.prongAt(DIR_NW);
             if(prong != NO_PRONG) {
@@ -1654,7 +1654,7 @@ float O2PGSS::evaluate() const {
             }
 
             //evaluateJumpCapture(x, y, (OctiPodType) type, pod, &mob, &map);
-		
+
             // Calculate the distances to the enemy squares
             // and minimize
             switch(type) {
@@ -1675,7 +1675,7 @@ float O2PGSS::evaluate() const {
                 bDistance3 = (distance < bDistance3) ? distance : bDistance3;
                 break;
             }
-		
+
             // Tally the result
             switch(type) {
             case A_POD:
@@ -1701,7 +1701,7 @@ float O2PGSS::evaluate() const {
         MINOR_WEIGHT_RESERVE *
         (MINOR_WEIGHT_POD * (aPodsInReserve - bPodsInReserve) +
          MINOR_WEIGHT_PRONG * (aProngsInReserve - bProngsInReserve));
-  
+
     mobility = aMobility - bMobility;
 
     if(_playerToMove == PLAYER_A) {
@@ -1711,7 +1711,7 @@ float O2PGSS::evaluate() const {
         aThreatToCapturePods = 0;
         aThreatToCaptureProngs = 0;
     }
-  
+
     threat =
         MINOR_WEIGHT_THREAT_POD *
         (aThreatToCapturePods - bThreatToCapturePods) +
@@ -1757,7 +1757,7 @@ boolean O2PGSS::isTerminal() const {
               (_squares[6][6] != NULL && _squares[6][6]->isCaptured())) {
         self->_terminalValue = TERMINAL_POSITIVE;  // B loses
     }
-	
+
     self->_terminalTested = TRUE;
     return _terminalValue != 0.0;
 }
@@ -1792,7 +1792,7 @@ unsigned long O2PGSS::hashCode() const {
 
     register unsigned long h = 0;
 
-    Ptr<SlistIterator<ValidSquare> > iterator = 
+    Ptr<SlistIterator<ValidSquare> > iterator =
         (SlistIterator<ValidSquare> *) self->_validSquares.getIterator();
     const ValidSquare *current;
     const Octi2PlayerSquare *square;
@@ -1834,7 +1834,7 @@ word32 O2PGSS::hashChecksum() const {
 
     register unsigned long h = 0;
 
-    Ptr<SlistIterator<ValidSquare> > iterator = 
+    Ptr<SlistIterator<ValidSquare> > iterator =
         (SlistIterator<ValidSquare> *) self->_validSquares.getIterator();
     const ValidSquare *current;
     const Octi2PlayerSquare *square;
@@ -1893,7 +1893,7 @@ void O2PGSS::printState(ostream &out) const {
                 prongs[x][l] = 0;
             }
         }
-    
+
         for(x = 0; x < 9; x++) {
             if(_squares[x][y] != NULL) {
                 numPods = _squares[x][y]->getNumPods();
@@ -1924,7 +1924,7 @@ void O2PGSS::printState(ostream &out) const {
             out << " ";
         }
         out << "|" << endl;
-	    
+
         // Print grid level 2
         for(x = 0; x < 9; x++) {
             out << "| ";
@@ -1934,7 +1934,7 @@ void O2PGSS::printState(ostream &out) const {
             out << " ";
         }
         out << "|" << endl;
-	    
+
         // Print grid level 1
         for(x = 0; x < 9; x++) {
             out << "| ";
@@ -1968,12 +1968,12 @@ boolean O2PGSS::operator==(const BaseObject &object) const {
         (_freeSuperProngs[1] == other->_freeSuperProngs[1]) &&
         (_capturedPods[0] == other->_capturedPods[0]) &&
         (_capturedPods[1] == other->_capturedPods[1]);
-  
+
     if(!check1) {
         return FALSE;
     }
 
-    Ptr<SlistIterator<ValidSquare> > iterator = 
+    Ptr<SlistIterator<ValidSquare> > iterator =
         (SlistIterator<ValidSquare> *) other->_validSquares.getIterator();
     const ValidSquare *current;
     const Octi2PlayerSquare *square;

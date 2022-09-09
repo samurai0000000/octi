@@ -45,9 +45,9 @@ public:
  */
 class AIAPI ERSearch : public MinMaxAlgorithm {
 
-  
+
     DECLARE_RUNTIME_DISCOVERABLE(ERSearch);
-  
+
 public:
 
     ERSearch(unsigned long tableSize = DEFAULT_ER_TRANSTAB_SIZE);
@@ -57,7 +57,7 @@ public:
                                  const SearchParameters *params = NULL);
     const SearchState *searchMin(SearchState *state,
                                  const SearchParameters *params = NULL);
-  
+
     void printLastSearchStatistics(ostream &out) const;
     void printTotalStatistics(ostream &out) const;
     void resetStatistics();

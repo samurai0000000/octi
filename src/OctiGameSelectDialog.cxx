@@ -42,7 +42,7 @@ OctiGameSelectDialog::~OctiGameSelectDialog() {
 }
 
 OctiGameMode OctiGameSelectDialog::getGameMode() const {
-    return twoPlayerButton->isOn() ? GAME_MODE_2 : GAME_MODE_4; 
+    return twoPlayerButton->isOn() ? GAME_MODE_2 : GAME_MODE_4;
 }
 
 OctiGameBases OctiGameSelectDialog::getGameBases() const {

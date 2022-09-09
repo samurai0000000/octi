@@ -12,7 +12,7 @@
  *     not provide much array manipulation functions as normally expected
  *     from arrays. There is no mechanism for pattern matching for data
  *     stored in this object.
- * 
+ *
  *     If the template class T is not a primitive data type, then there is a
  *     penalty (can be heavy if the object is large!) for invoking the class
  *     object constructor everytime there is an assignment.
@@ -80,7 +80,7 @@ public:
 
     ListIterator<T> *getIterator() const;
     void clear();
-  
+
     int capacity() const;
     void doubleCapacity();
     void expandCapacity(int size);
@@ -102,7 +102,7 @@ protected:
     size_t _sizeT;
 
 private:
-  
+
     void checkBounds(int pos) const throw(ArrayException);
     void checkBounds(int pos1, int pos2) const throw(ArrayException);
 
@@ -332,7 +332,7 @@ boolean BufferedArray<T>::insert(const T *data, int len, int pos) {
         return append(data, len);
     } else {
         checkBounds(pos);
-    
+
         if(data != NULL) {
             ensureCapacity(_length + len);
             memmove(&_data[pos + len], &_data[pos], (_length - pos) * _sizeT);
@@ -352,7 +352,7 @@ boolean BufferedArray<T>::insert(const BufferedArray<T> &data, int pos) {
         return append(data);
     } else {
         checkBounds(pos);
-    
+
         if(data._length != 0) {
             ensureCapacity(_length + data._length);
             memmove(&_data[pos + data._length], &_data[pos],
@@ -363,7 +363,7 @@ boolean BufferedArray<T>::insert(const BufferedArray<T> &data, int pos) {
             return FALSE;
         }
     }
-  
+
     return TRUE;
 }
 

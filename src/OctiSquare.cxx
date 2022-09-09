@@ -50,13 +50,13 @@ void OctiSquareBaseImpl::removePod(OctiPod pod) {
 
 boolean OctiSquareBaseImpl::containsPod(OctiPod pod) const {
     int i;
-  
+
     for(i = 0; i < _numPods; i++) {
         if(_pods[i]->hasSameConfig(pod)) {
             return TRUE;
         }
     }
-  
+
     return FALSE;
 }
 
@@ -80,7 +80,7 @@ boolean OctiSquareBaseImpl::hasSameMaterialsAs(const OctiSquare &sq) const {
     if(_numPods != sqb->_numPods) {
         return FALSE;
     }
-  
+
     int i, j, match;
     OctiPod tmp[7];
 
@@ -106,7 +106,7 @@ boolean Octi2PlayerSquare::isCapturedBy(OctiPlayer player) const {
     if(_numPods == 0 || _type == NEUTRAL_SQUARE) {
         return FALSE;
     }
-  
+
     return ((int) _pods[0]->getType() == (int) player);
 }
 
@@ -114,13 +114,13 @@ boolean Octi2PlayerSquare::isCaptured() const {
     if(_numPods == 0 || _type == NEUTRAL_SQUARE) {
         return FALSE;
     }
-  
+
     return ((int) _pods[0]->getType()) != ((int) _type);
 }
 
 boolean Octi2PlayerSquare::hasEnemyOf(OctiPlayer player) const {
     OctiPodType podType;
-  
+
     if(_numPods > 0) {
         podType =  _pods[0]->getType();
         switch(player) {
@@ -130,7 +130,7 @@ boolean Octi2PlayerSquare::hasEnemyOf(OctiPlayer player) const {
             return podType == A_POD;
         }
     }
-  
+
     return FALSE;
 }
 
@@ -143,7 +143,7 @@ boolean Octi2PlayerSquare::isEnemyOf(OctiPlayer player) const {
             return _type == A_HOME_SQUARE;
         }
     }
-  
+
     return FALSE;
 }
 
@@ -151,7 +151,7 @@ boolean Octi4PlayerSquare::isCapturedBy(OctiPlayer player) const {
     if(_numPods == 0 || _type == NEUTRAL_SQUARE) {
         return FALSE;
     }
-  
+
     return ((int) _pods[0]->getType() == (int) player);
 }
 

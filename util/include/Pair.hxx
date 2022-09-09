@@ -22,7 +22,7 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 template <class Name, class Value>
-class UTILAPI Pair : public BaseObject {  
+class UTILAPI Pair : public BaseObject {
 
 public:
 

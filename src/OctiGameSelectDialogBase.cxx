@@ -19,8 +19,8 @@
 #include <qtooltip.h>
 #include <qwhatsthis.h>
 
-/* 
- *  Constructs a OctiGameSelectDialogBase which is a child of 'parent', with the 
+/*
+ *  Constructs a OctiGameSelectDialogBase which is a child of 'parent', with the
  *  name 'name' and widget flags set to 'f'.
  *
  *  The dialog will by default be modeless, unless you set 'modal' to
@@ -31,12 +31,12 @@ OctiGameSelectDialogBase::OctiGameSelectDialogBase( QWidget* parent,  const char
 {
     if ( !name )
         setName( "OctiGameSelectDialogBase" );
-    resize( 499, 279 ); 
+    resize( 499, 279 );
     setCaption( trUtf8( "New OCTI Game" ) );
     setSizeGripEnabled( TRUE );
-    OctiGameSelectDialogBaseLayout = new QGridLayout( this, 1, 1, 11, 6, "OctiGameSelectDialogBaseLayout"); 
+    OctiGameSelectDialogBaseLayout = new QGridLayout( this, 1, 1, 11, 6, "OctiGameSelectDialogBaseLayout");
 
-    Layout1 = new QHBoxLayout( 0, 0, 6, "Layout1"); 
+    Layout1 = new QHBoxLayout( 0, 0, 6, "Layout1");
 
     buttonHelp = new QPushButton( this, "buttonHelp" );
     buttonHelp->setText( trUtf8( "&Help" ) );
@@ -62,11 +62,11 @@ OctiGameSelectDialogBase::OctiGameSelectDialogBase( QWidget* parent,  const char
     ButtonGroup1->setTitle( trUtf8( "Game Type" ) );
 
     fourPlayerButton = new QRadioButton( ButtonGroup1, "fourPlayerButton" );
-    fourPlayerButton->setGeometry( QRect( 210, 20, 100, 19 ) ); 
+    fourPlayerButton->setGeometry( QRect( 210, 20, 100, 19 ) );
     fourPlayerButton->setText( trUtf8( "Four Players" ) );
 
     twoPlayerButton = new QRadioButton( ButtonGroup1, "twoPlayerButton" );
-    twoPlayerButton->setGeometry( QRect( 50, 20, 100, 19 ) ); 
+    twoPlayerButton->setGeometry( QRect( 50, 20, 100, 19 ) );
     twoPlayerButton->setText( trUtf8( "Two Players" ) );
     twoPlayerButton->setChecked( TRUE );
 
@@ -76,13 +76,13 @@ OctiGameSelectDialogBase::OctiGameSelectDialogBase( QWidget* parent,  const char
     GroupBox3->setTitle( trUtf8( "Time Limit" ) );
 
     useTimeLimitCheckBox = new QCheckBox( GroupBox3, "useTimeLimitCheckBox" );
-    useTimeLimitCheckBox->setGeometry( QRect( 50, 20, 110, 19 ) ); 
+    useTimeLimitCheckBox->setGeometry( QRect( 50, 20, 110, 19 ) );
     useTimeLimitCheckBox->setText( trUtf8( "Use Time Limit" ) );
     useTimeLimitCheckBox->setChecked( FALSE );
 
     timeLimitComboBox = new QComboBox( FALSE, GroupBox3, "timeLimitComboBox" );
     timeLimitComboBox->setEnabled( FALSE );
-    timeLimitComboBox->setGeometry( QRect( 210, 20, 120, 20 ) ); 
+    timeLimitComboBox->setGeometry( QRect( 210, 20, 120, 20 ) );
 
     OctiGameSelectDialogBaseLayout->addWidget( GroupBox3, 3, 0 );
 
@@ -90,12 +90,12 @@ OctiGameSelectDialogBase::OctiGameSelectDialogBase( QWidget* parent,  const char
     ButtonGroup2->setTitle( trUtf8( "Capture Bases" ) );
 
     threeBaseGameButton = new QRadioButton( ButtonGroup2, "threeBaseGameButton" );
-    threeBaseGameButton->setGeometry( QRect( 210, 20, 100, 19 ) ); 
+    threeBaseGameButton->setGeometry( QRect( 210, 20, 100, 19 ) );
     threeBaseGameButton->setText( trUtf8( "3 Base Game" ) );
     threeBaseGameButton->setChecked( TRUE );
 
     oneBaseGameButton = new QRadioButton( ButtonGroup2, "oneBaseGameButton" );
-    oneBaseGameButton->setGeometry( QRect( 50, 20, 100, 19 ) ); 
+    oneBaseGameButton->setGeometry( QRect( 50, 20, 100, 19 ) );
     oneBaseGameButton->setText( trUtf8( "1 Base Game" ) );
 
     OctiGameSelectDialogBaseLayout->addWidget( ButtonGroup2, 1, 0 );
@@ -104,11 +104,11 @@ OctiGameSelectDialogBase::OctiGameSelectDialogBase( QWidget* parent,  const char
     GroupBox1->setTitle( trUtf8( "Options" ) );
 
     edgelessCheckBox = new QCheckBox( GroupBox1, "edgelessCheckBox" );
-    edgelessCheckBox->setGeometry( QRect( 210, 20, 100, 19 ) ); 
+    edgelessCheckBox->setGeometry( QRect( 210, 20, 100, 19 ) );
     edgelessCheckBox->setText( trUtf8( "Edgeless" ) );
 
     superProngCheckBox = new QCheckBox( GroupBox1, "superProngCheckBox" );
-    superProngCheckBox->setGeometry( QRect( 50, 20, 120, 19 ) ); 
+    superProngCheckBox->setGeometry( QRect( 50, 20, 120, 19 ) );
     superProngCheckBox->setText( trUtf8( "Use Super Prong" ) );
 
     OctiGameSelectDialogBaseLayout->addWidget( GroupBox1, 2, 0 );
@@ -119,7 +119,7 @@ OctiGameSelectDialogBase::OctiGameSelectDialogBase( QWidget* parent,  const char
     connect( useTimeLimitCheckBox, SIGNAL( toggled(bool) ), timeLimitComboBox, SLOT( setEnabled(bool) ) );
 }
 
-/*  
+/*
  *  Destroys the object and frees any allocated resources
  */
 OctiGameSelectDialogBase::~OctiGameSelectDialogBase()

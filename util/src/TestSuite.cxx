@@ -179,7 +179,7 @@ void doRuntimeTest() {
     intStack.pop(a);
     intStack.pop(b);
     cout << a << " " << b << endl;
-  
+
     Stack<Ptr<BaseObject> > objStack;
     Ptr<BaseObject> object1 = new String("hello");
     cout << object1->getRuntimeClass()->getClassName() << endl;

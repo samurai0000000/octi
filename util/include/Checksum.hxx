@@ -43,13 +43,13 @@ public:
 
     virtual void update(byte b) = 0;
     virtual void update(byte *b, int len) = 0;
-  
+
     virtual void reset();
     virtual word32 value() const = 0;
     virtual word32 length() const = 0;
 
 protected:
-  
+
     word32 _value;
     word32 _length;
 

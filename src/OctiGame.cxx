@@ -46,17 +46,17 @@ void OctiGameBaseImpl::reset() {
     _capPods[1] = 0;
     _capPods[2] = 0;
     _capPods[3] = 0;
-  
+
     _freeProngs[0] = 0;
     _freeProngs[1] = 0;
     _freeProngs[2] = 0;
     _freeProngs[3] = 0;
-  
+
     _freeSuperProngs[0] = 0;
     _freeSuperProngs[1] = 0;
     _freeSuperProngs[2] = 0;
     _freeSuperProngs[3] = 0;
-  
+
     initGameCondition();
 
     _isStarted = false;
@@ -135,7 +135,7 @@ void OctiGameBaseImpl::makeMove(OctiPlayer player, OctiMove &move, boolean redo)
         if(sourceX == op->x0 && sourceY == op->y0) {
             _cannotJumpOverSquares.clear();
         }
-	    
+
         if(op->prongAddDir != DIR_UNDEF) {
             try {
                 doAddRemoveProng(player, op);
@@ -236,7 +236,7 @@ void OctiGameBaseImpl::doAddRemoveProng(OctiPlayer player, Ptr<OctiMoveOp> op)
         String msg;
         msg.format("square[%d, %d] is empty", op->x0 + 1, op->y0 + 1);
         throw IllegalMoveException(msg);
-    }	
+    }
 
     for(int i = numPods - 1; i >= 0; i--) {
         pod = square->getPodAt(i);
@@ -264,7 +264,7 @@ void OctiGameBaseImpl::doAddRemoveProng(OctiPlayer player, Ptr<OctiMoveOp> op)
                 } else {
                     passRemoveProngTest = TRUE;
                 }
-		    
+
                 // Continue test and if passed, perform the operation
                 if(passRemoveProngTest &&
                    ((op->addSuperProng && testFreeSuperProngs > 0) ||
@@ -369,7 +369,7 @@ void OctiGameBaseImpl::doMovePod(OctiPlayer player, Ptr<OctiMoveOp> op)
             ydisplacement -= 9;
         }
     }
-  
+
     if((xdisplacement > 2 || xdisplacement < -2) ||
        (ydisplacement > 2 || ydisplacement < -2)) {
         throw IllegalMoveException("moving beyond range");
@@ -435,7 +435,7 @@ void OctiGameBaseImpl::doMovePod(OctiPlayer player, Ptr<OctiMoveOp> op)
         movePod = *startSquare->getPodAt(i);
         if(((int) movePod.getType() == (int) player) &&
            movePod.hasSameConfig(op->pod) &&
-           movePod.prongAt(dir) != NO_PRONG) { 
+           movePod.prongAt(dir) != NO_PRONG) {
             // Do the move and update
             startSquare->removePod(movePod);
             targetSquare->addPod(movePod);
@@ -525,7 +525,7 @@ void OctiGameBaseImpl::undoAddRemoveProng(OctiPlayer player, Ptr<OctiMoveOp> op)
             return;  // Done.
         }
     }
-	
+
     throw IllegalMoveException("no valid pods found in square");
 }
 
@@ -563,7 +563,7 @@ void OctiGameBaseImpl::undoAddPod(OctiPlayer player, Ptr<OctiMoveOp> op)
             return;  // Done.
         }
     }
-	
+
     throw IllegalMoveException("no valid pods found in square");
 }
 
@@ -597,7 +597,7 @@ void OctiGameBaseImpl::undoMovePod(OctiPlayer player, Ptr<OctiMoveOp> op)
             if(op->capture) {
                 xdisplacement = op->x1 - op->x0;
                 ydisplacement = op->y1 - op->y0;
-		    
+
                 if(_edgeless) {
                     if(xdisplacement < -2) {
                         xdisplacement += 9;
@@ -623,7 +623,7 @@ void OctiGameBaseImpl::undoMovePod(OctiPlayer player, Ptr<OctiMoveOp> op)
                     }
 
                     jumpSquare->addPod(op->capturedPods[j]);
-			
+
                     for(k = 0; k < 8; k++) {
                         t = op->capturedPods[j].prongAt((OctiDir) k);
                         if(t == NORMAL_PRONG) {
@@ -638,7 +638,7 @@ void OctiGameBaseImpl::undoMovePod(OctiPlayer player, Ptr<OctiMoveOp> op)
             return;  // Done.
         }
     }
-	
+
     throw IllegalMoveException("no valid pods found in square");
 }
 
@@ -646,11 +646,11 @@ void OctiGameBaseImpl::undo() {
     OctiMove move;
     Ptr<OctiMoveOp> op;
     Dlist<Ptr<OctiMoveOp> > ops;
-  
+
     if(!_moveStack.isEmpty()) {
         _moveStack.pop(move);
         ops = move.getOps();
-    
+
         prevPlayer();
 
         Ptr<DlistIterator<Ptr<OctiMoveOp> > > iterator =
@@ -669,7 +669,7 @@ void OctiGameBaseImpl::undo() {
                 Error::warning("Error in undo \"%s\": %s\n", move.getNotation(), e.getMessage());
             }
         }
-    
+
         _redoStack.push(move);
 
         if(_isOver) {
@@ -726,7 +726,7 @@ void OctiGameBaseImpl::lockPrepare() throw(IllegalMoveException) {
         listener->canResign(this, FALSE);
     }
 }
-					   
+
 void OctiGameBaseImpl::unlockPrepare() throw(IllegalMoveException) {
     _prepare = FALSE;
 
@@ -821,7 +821,7 @@ void OctiGameBaseImpl::prepareReposition(int x, int y, OctiPod pod, OctiDir srcD
     _preparedMoveOps.append(op);
     try {
         _preparedMove = OctiMove(_preparedMoveOps);
-    
+
         lockPrepare();
         _board->boardUpdated(&_preparedMove, FALSE);
     } catch(IllegalMoveSyntaxException e) {
@@ -892,7 +892,7 @@ void OctiGameBaseImpl::prepareHops(int x, int y, OctiPod pod, Dlist<OctiHop> hop
 }
 
 void OctiGameBaseImpl::prepareCapture(int x, int y) {
-    boolean origLock = isPrepareLocked(); 
+    boolean origLock = isPrepareLocked();
     lockPrepare();
     try {
     } catch(IllegalMoveException e) {
@@ -969,13 +969,13 @@ void Octi2PlayerGame::initGameCondition() {
     // Initialize the player pods
     _freePods[0] = MODE_2_INIT_FREE_PODS - 3;
     _freePods[1] = MODE_2_INIT_FREE_PODS - 3;
-  
+
     // Initialize the free prongs
     _freeProngs[0] = MODE_2_INIT_FREE_PRONGS;
     _freeProngs[1] = MODE_2_INIT_FREE_PRONGS;
     _freeSuperProngs[0] = _useSuperProngs ? MODE_2_INIT_FREE_SUPERPRONGS : 0;
     _freeSuperProngs[1] = _useSuperProngs ? MODE_2_INIT_FREE_SUPERPRONGS : 0;
-  
+
     // Insert 3 pods of each player into his square
     _board->squareAt(2, 2).addPod(OctiPod(A_POD));
     _board->squareAt(4, 2).addPod(OctiPod(A_POD));
@@ -1001,7 +1001,7 @@ boolean Octi2PlayerGame::liberate(OctiPlayer player, Ptr<OctiMoveOp> op,
         pod = op->liberatedPod;
         return TRUE;
     }
-  
+
     return FALSE;
 }
 
@@ -1023,7 +1023,7 @@ void Octi4PlayerGame::initGameCondition() {
     _freePods[1] = MODE_4_INIT_FREE_PODS - 1;
     _freePods[2] = MODE_4_INIT_FREE_PODS - 1;
     _freePods[3] = MODE_4_INIT_FREE_PODS - 1;
-  
+
     // Initialize the free prongs
     _freeProngs[0] = MODE_4_INIT_FREE_PRONGS;
     _freeProngs[1] = MODE_4_INIT_FREE_PRONGS;
@@ -1033,7 +1033,7 @@ void Octi4PlayerGame::initGameCondition() {
     _freeSuperProngs[1] = _useSuperProngs ? MODE_4_INIT_FREE_SUPERPRONGS : 0;
     _freeSuperProngs[2] = _useSuperProngs ? MODE_4_INIT_FREE_SUPERPRONGS : 0;
     _freeSuperProngs[3] = _useSuperProngs ? MODE_4_INIT_FREE_SUPERPRONGS : 0;
-  
+
     // Insert pods of each player into his square
 
     _board->squareAt(2, 2).addPod(OctiPod(A_POD));
@@ -1055,7 +1055,7 @@ boolean Octi4PlayerGame::liberate(OctiPlayer player, Ptr<OctiMoveOp> op,
     OctiPod liberatedPod;
     OctiPlayer takenFrom1 = PLAYER_UNDEF;
     OctiPlayer takenFrom2 = PLAYER_UNDEF;
-	
+
     switch(player) {
     case PLAYER_A:
         takenFrom1 = PLAYER_B;
