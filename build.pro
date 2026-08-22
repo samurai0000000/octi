@@ -3,6 +3,6 @@
 # Copyright (C) 2022, Charles Chiou
 
 TEMPLATE = subdirs
-SUBDIRS += ai game util widget
+SUBDIRS += util ai game
 CONFIG += ordered
 SUBDIRS += octi.pro

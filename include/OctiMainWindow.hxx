@@ -1,28 +1,14 @@
-/*************************************************************************
- * $Id: OctiMainWindow.hxx,v 1.3 2001/07/31 05:11:04 samurai Exp $
- * $Author: samurai $
- * $Date: 2001/07/31 05:11:04 $
- * $Locker:  $
- * $Revision: 1.3 $
- *
- * Created: 12/20/00 by Charles Chiou
- * Comments:
- * Status:
- * Bugs:
- *
- * Work done while a student at Yale University.
- * Copyright (c) 2000 Selfsoft Corp. All rights reserved.
- *************************************************************************/
-
 #ifndef _OCTIMAINWINDOW_HXX_
 #define _OCTIMAINWINDOW_HXX_
 
-#include <qtoolbar.h>
-#include <qtoolbutton.h>
-//#include <qpopupmenu.h>
-#include <qmenubar.h>
-//#include <qworkspace.h>
-#include <qmainwindow.h>
+#include "qt2compat.h"
+#include <QMainWindow>
+#include <QMdiArea>
+#include <QMdiSubWindow>
+#include <QMenu>
+#include <QToolBar>
+#include <QToolButton>
+#include <QPrinter>
 #include "OctiGame.hxx"
 #include "OctiBoardFrame.hxx"
 
@@ -36,7 +22,8 @@ class OCTIAPI OctiMainWindow : public QMainWindow,
 
 public:
 
-    OctiMainWindow(QWidget * parent = 0, const char *name = 0, WFlags f = WType_TopLevel);
+    OctiMainWindow(QWidget *parent = 0, const char *name = 0,
+                   Qt::WindowFlags f = Qt::Window);
     ~OctiMainWindow();
 
 protected slots:
@@ -45,7 +32,7 @@ protected slots:
     void load();
     void save();
     void saveAs();
-    void close();
+    void closeGame();
     void print();
     void undo();
     void redo();
@@ -58,8 +45,8 @@ protected slots:
     void client();
     void server();
     void windowsMenuAboutToShow();
-    void windowsMenuActivated(int id);
-    void windowActivated(QWidget *w);
+    void windowsMenuActivated();
+    void windowActivated(QMdiSubWindow *w);
     void windowDestroyed();
 
 private:
@@ -78,12 +65,14 @@ private:
     void canPauseGame(OctiGame *src, boolean b);
     void canResign(OctiGame *src, boolean b);
 
+    OctiBoardFrame *activeBoardFrame() const;
+
 private:
 
     int _windowCount;
-    QWorkspace *_ws;
+    QMdiArea *_ws;
     QToolBar *_toolbar;
-    QPopupMenu *_windowsMenu;
+    QMenu *_windowsMenu;
     QToolButton *_gameNew;
     QToolButton *_gameLoad;
     QToolButton *_gameSave;
@@ -105,13 +94,3 @@ private:
 __END_NAMESPACE(SELFSOFT);
 
 #endif
-
-/*
- * Local variables:
- * mode: C++
- * c-file-style: "BSD"
- * c-basic-offset: 4
- * tab-width: 4
- * indent-tabs-mode: nil
- * End:
- */

@@ -1,41 +1,26 @@
 /*************************************************************************
  * $Id: OctiMainWindow.cxx,v 1.5 2001/08/16 02:21:50 samurai Exp $
- * $Author: samurai $
- * $Date: 2001/08/16 02:21:50 $
- * $Locker:  $
- * $Revision: 1.5 $
- *
- * Created: 12/20/00 by Charles Chiou
- * Comments:
- * Status:
- * Bugs:
- *
- * Work done while a student at Yale University.
- * Copyright (c) 2000 Selfsoft Corp. All rights reserved.
+ * Ported from Qt 2 to Qt 5.
  *************************************************************************/
 
 #define _OCTIAPI_IMPL_
 
-#include <qimage.h>
-#include <qpixmap.h>
-#include <qkeycode.h>
-#include <qmovie.h>
-#include <qmultilineedit.h>
-#include <qfile.h>
-#include <qfiledialog.h>
-#include <qlabel.h>
-#include <qstatusbar.h>
-#include <qmessagebox.h>
-#include <qprinter.h>
-#include <qapplication.h>
-#include <qpushbutton.h>
-#include <qaccel.h>
-#include <qtextstream.h>
-#include <qpainter.h>
-#include <qpaintdevicemetrics.h>
-#include <qwhatsthis.h>
-#include <qobjectlist.h>
-#include <qvbox.h>
+#include "qt2compat.h"
+#include <QImage>
+#include <QPixmap>
+#include <QFileDialog>
+#include <QLabel>
+#include <QStatusBar>
+#include <QMessageBox>
+#include <QPrinter>
+#include <QApplication>
+#include <QPushButton>
+#include <QTextStream>
+#include <QPainter>
+#include <QWhatsThis>
+#include <QMenuBar>
+#include <QAction>
+#include <iostream>
 #include "LoginDialog.hxx"
 #include "OctiMainWindow.hxx"
 #include "OctiGameSelectDialog.hxx"
@@ -50,7 +35,6 @@
 #include "xpm/tb/tb_ok.xpm"
 #include "xpm/tb/tb_cancel.xpm"
 #include "xpm/tb/tb_exit.xpm"
-#include "xpm/tb/tb_prefs.xpm"
 #include "octiuires/icon_octi.xpm"
 
 __BEGIN_NAMESPACE(SELFSOFT);
@@ -66,181 +50,175 @@ const char *G_OMW_GAME_SAVE_TEXT =
     "Click on this button to save the octi game into a file.\n\n"
     "You can also select the <em>Save</em> command from the Game menu";
 
-OctiMainWindow::OctiMainWindow(QWidget * parent, const char *name, WFlags f) : _windowCount(0) {
+OctiMainWindow::OctiMainWindow(QWidget *parent, const char *name, Qt::WindowFlags f)
+    : QMainWindow(parent, f), _windowCount(0)
+{
+    qt2InitWidget(this, name ? name : "OctiMainWindow");
+    setWindowTitle("OCTI");
+    setWindowIcon(QIcon(QPixmap(icon_octi_xpm)));
 
-    /////////////////////////////////////////////////////////////////////////
-    // Initialize toolbar
-    _toolbar = new QToolBar(this, "Tool Bar");
-    addToolBar(_toolbar, "Tool Bar", Top, TRUE);
+    _toolbar = new QToolBar(tr("Tool Bar"), this);
+    addToolBar(Qt::TopToolBarArea, _toolbar);
 
-    _gameNew = new QToolButton(QPixmap(tb_new_xpm), "New Game", QString::null,
-                               this, SLOT(newGame()), _toolbar, "new game");
-    _gameLoad = new QToolButton(QPixmap(tb_open_xpm) , "Load Game", QString::null,
-                                this, SLOT(load()), _toolbar, "load game");
-    _gameSave = new QToolButton(QPixmap(tb_save_xpm), "Save Game", QString::null,
-                                this, SLOT(save()), _toolbar, "save game");
-    _winClose = new QToolButton(QPixmap(tb_winclose_xpm), "Close Game", QString::null,
-                                this, SLOT(close()), _toolbar, "close game");
+    _gameNew = qt2ToolButton(QPixmap(tb_new_xpm), tr("New Game"),
+                             this, SLOT(newGame()), _toolbar);
+    _gameLoad = qt2ToolButton(QPixmap(tb_open_xpm), tr("Load Game"),
+                              this, SLOT(load()), _toolbar);
+    _gameSave = qt2ToolButton(QPixmap(tb_save_xpm), tr("Save Game"),
+                              this, SLOT(save()), _toolbar);
+    _winClose = qt2ToolButton(QPixmap(tb_winclose_xpm), tr("Close Game"),
+                              this, SLOT(closeGame()), _toolbar);
 #ifndef QT_NO_PRINTER
     _printer = new QPrinter;
-    _gamePrint = new QToolButton(QPixmap(tb_print_xpm), "Print Game", QString::null,
-                                 this, SLOT(print()), _toolbar, "print game");
+    _gamePrint = qt2ToolButton(QPixmap(tb_print_xpm), tr("Print Game"),
+                               this, SLOT(print()), _toolbar);
 #endif
     _toolbar->addSeparator();
-    _gameUndo = new QToolButton(QPixmap(tb_undo_xpm), "Undo Move", QString::null,
-                                this, SLOT(undo()), _toolbar, "undo move");
-    _gameRedo = new QToolButton(QPixmap(tb_redo_xpm), "Redo Move", QString::null,
-                                this, SLOT(redo()), _toolbar, "redo move");
+    _gameUndo = qt2ToolButton(QPixmap(tb_undo_xpm), tr("Undo Move"),
+                              this, SLOT(undo()), _toolbar);
+    _gameRedo = qt2ToolButton(QPixmap(tb_redo_xpm), tr("Redo Move"),
+                              this, SLOT(redo()), _toolbar);
     _toolbar->addSeparator();
-    _gameMove = new QToolButton(QPixmap(tb_ok_xpm), "Make Move", QString::null,
-                                this, SLOT(move()), _toolbar, "make move");
-    _gameCancel = new QToolButton(QPixmap(tb_cancel_xpm), "Cancel Move", QString::null,
-                                  this, SLOT(cancel()), _toolbar, "cancel move");
-    _gamePause = new QToolButton(QPixmap(), "Pause Game", QString::null,
-                                 this, SLOT(pause()), _toolbar, "pause game");
-    _gameResign = new QToolButton(QPixmap(),"Resign Game", QString::null,
-                                  this, SLOT(resign()), _toolbar, "resign");
+    _gameMove = qt2ToolButton(QPixmap(tb_ok_xpm), tr("Make Move"),
+                              this, SLOT(move()), _toolbar);
+    _gameCancel = qt2ToolButton(QPixmap(tb_cancel_xpm), tr("Cancel Move"),
+                                this, SLOT(cancel()), _toolbar);
+    _gamePause = qt2ToolButton(QPixmap(), tr("Pause Game"),
+                               this, SLOT(pause()), _toolbar);
+    _gameResign = qt2ToolButton(QPixmap(), tr("Resign Game"),
+                                this, SLOT(resign()), _toolbar);
     _toolbar->addSeparator();
-    _appExit = new QToolButton(QPixmap(tb_exit_xpm), "Exit Application", QString::null,
-                               qApp, SLOT(closeAllWindows()),
-                               _toolbar, "exit application");
+    _appExit = qt2ToolButton(QPixmap(tb_exit_xpm), tr("Exit Application"),
+                             qApp, SLOT(closeAllWindows()), _toolbar);
 
 #ifndef QT_NO_PRINTER
-    _gamePrint->setEnabled(FALSE);
+    _gamePrint->setEnabled(false);
 #endif
-    _gameUndo->setEnabled(FALSE);
-    _gameRedo->setEnabled(FALSE);
-    _gameMove->setEnabled(FALSE);
-    _gameCancel->setEnabled(FALSE);
-    _gamePause->setEnabled(FALSE);
-    _gameResign->setEnabled(FALSE);
+    _gameUndo->setEnabled(false);
+    _gameRedo->setEnabled(false);
+    _gameMove->setEnabled(false);
+    _gameCancel->setEnabled(false);
+    _gamePause->setEnabled(false);
+    _gameResign->setEnabled(false);
 
-    (void)QWhatsThis::whatsThisButton(_toolbar);
+    _toolbar->addAction(QWhatsThis::createAction(this));
 
-    ////////////////////////////////////////////////////////////////////////
-    // Help messages
+    _gameNew->setWhatsThis(G_OMW_GAME_NEW_TEXT);
+    _gameLoad->setWhatsThis(G_OMW_GAME_LOAD_TEXT);
+    _gameSave->setWhatsThis(G_OMW_GAME_SAVE_TEXT);
 
-    QWhatsThis::add(_gameNew, G_OMW_GAME_NEW_TEXT);
-    QWhatsThis::add(_gameLoad, G_OMW_GAME_LOAD_TEXT);
-    QWhatsThis::add(_gameSave, G_OMW_GAME_SAVE_TEXT);
+    QMenu *game = menuBar()->addMenu(tr("&Game"));
+    game->addAction(QIcon(QPixmap(tb_new_xpm)), tr("&New"), this, SLOT(newGame()),
+                    QKeySequence::New);
+    game->addAction(QIcon(QPixmap(tb_open_xpm)), tr("&Load"), this, SLOT(load()),
+                    QKeySequence::Open);
+    game->addAction(QIcon(QPixmap(tb_save_xpm)), tr("&Save"), this, SLOT(save()),
+                    QKeySequence::Save);
+    game->addAction(QIcon(QPixmap(tb_save_xpm)), tr("Save &as..."), this, SLOT(saveAs()));
 #ifndef QT_NO_PRINTER
-    //QWhatsThis::add(filePrint, G_OMW_FILE_SAVE_TEXT);
+    game->addSeparator();
+    game->addAction(QIcon(QPixmap(tb_print_xpm)), tr("&Print"), this, SLOT(print()),
+                    QKeySequence::Print);
 #endif
+    game->addSeparator();
+    game->addAction(QIcon(QPixmap(tb_undo_xpm)), tr("&Undo"), this, SLOT(undo()),
+                    QKeySequence::Undo);
+    game->addAction(QIcon(QPixmap(tb_redo_xpm)), tr("&Redo"), this, SLOT(redo()),
+                    QKeySequence::Redo);
+    game->addSeparator();
+    game->addAction(QIcon(QPixmap(tb_ok_xpm)), tr("&Make Move"), this, SLOT(move()));
+    game->addAction(QIcon(QPixmap(tb_cancel_xpm)), tr("&Cancel Move"), this, SLOT(cancel()));
+    game->addAction(tr("&Pause Game"), this, SLOT(pause()));
+    game->addAction(tr("Resign"), this, SLOT(resign()));
+    game->addSeparator();
+    game->addAction(QIcon(QPixmap(tb_winclose_xpm)), tr("&Close"), this, SLOT(closeGame()),
+                    QKeySequence::Close);
+    game->addAction(QIcon(QPixmap(tb_exit_xpm)), tr("&Quit"), qApp, SLOT(closeAllWindows()),
+                    QKeySequence::Quit);
 
-    ////////////////////////////////////////////////////////////////////////
-    // Initialize the menu bar
-    QPopupMenu *game = new QPopupMenu(this);
-    menuBar()->insertItem("&Game", game);
-    game->insertItem(QPixmap(tb_new_xpm), "&New", this, SLOT(newGame()), CTRL+Key_N);
-    game->insertItem(QPixmap(tb_open_xpm), "&Load", this, SLOT(load()), CTRL+Key_O);
-    game->insertItem(QPixmap(tb_save_xpm), "&Save", this, SLOT(save()), CTRL+Key_S);
-    game->insertItem(QPixmap(tb_save_xpm), "Save &as...", this, SLOT(saveAs()));
-#ifndef QT_NO_PRINTER
-    game->insertSeparator();
-    game->insertItem(QPixmap(tb_print_xpm), "&Print", this, SLOT(print()), CTRL+Key_P);
-#endif
-    game->insertSeparator();
-    game->insertItem(QPixmap(tb_undo_xpm), "&Undo", this, SLOT(undo()), CTRL+Key_Z);
-    game->insertItem(QPixmap(tb_redo_xpm), "&Redo", this, SLOT(undo()), CTRL+Key_R);
-    game->insertSeparator();
-    game->insertItem(QPixmap(tb_ok_xpm), "&Make Move", this, SLOT(move()));
-    game->insertItem(QPixmap(tb_cancel_xpm), "&Cancel Move", this, SLOT(cancel()));
-    game->insertItem("&Paue Game", this, SLOT(pause()));
-    game->insertItem("Resign", this, SLOT(resign()));
-    game->insertSeparator();
-    game->insertItem(QPixmap(tb_winclose_xpm), "&Close", this, SLOT(close()), CTRL+Key_W);
+    QMenu *settings = menuBar()->addMenu(tr("&Settings"));
+    settings->addAction(tr("&Client Connect"), this, SLOT(client()));
+    settings->addAction(tr("Start Server"), this, SLOT(server()));
+    settings->addSeparator();
+    settings->addAction(tr("&Preferences"), this, SLOT(pref()));
 
-    game->insertItem(QPixmap(tb_exit_xpm), "&Quit", qApp, SLOT(closeAllWindows()), CTRL+Key_Q);
-
-    QPopupMenu *settings = new QPopupMenu(this);
-    menuBar()->insertItem("&Settings", settings);
-    settings->insertItem("&Client Connect", this, SLOT(client()), CTRL+Key_C);
-    settings->insertItem("Start Server", this, SLOT(server()));
-    settings->insertSeparator();
-    settings->insertItem("&Preferences", this, SLOT(pref()));
-
-    _windowsMenu = new QPopupMenu(this);
-    _windowsMenu->setCheckable(TRUE);
+    _windowsMenu = menuBar()->addMenu(tr("&Windows"));
     connect(_windowsMenu, SIGNAL(aboutToShow()), this, SLOT(windowsMenuAboutToShow()));
-    menuBar()->insertItem("&Windows", _windowsMenu);
 
-    menuBar()->insertSeparator();
-    QPopupMenu *help = new QPopupMenu(this);
-    menuBar()->insertItem("&Help", help);
+    QMenu *help = menuBar()->addMenu(tr("&Help"));
+    help->addAction(tr("&About"), this, SLOT(about()), QKeySequence::HelpContents);
+    help->addSeparator();
+    help->addAction(QWhatsThis::createAction(this));
 
-    help->insertItem("&About", this, SLOT(about()), Key_F1);
-    help->insertSeparator();
-    help->insertItem("What's &This", this, SLOT(whatsThis()), SHIFT+Key_F1);
+    _ws = new QMdiArea(this);
+    _ws->setViewMode(QMdiArea::SubWindowView);
+    connect(_ws, SIGNAL(subWindowActivated(QMdiSubWindow *)),
+            this, SLOT(windowActivated(QMdiSubWindow *)));
+    setCentralWidget(_ws);
 
-    /////////////////////////////////////////////////////////////////////////
-    // Layout the rest
-    QVBox *vb = new QVBox(this);
-    vb->setFrameStyle(QFrame::StyledPanel | QFrame::Sunken);
-    _ws = new QWorkspace(vb);
-    connect(_ws, SIGNAL(windowActivated(QWidget *)), this, SLOT(windowActivated(QWidget *)));
-    setCentralWidget(vb);
-
-    statusBar()->message("Ready", 2000);
+    statusBar()->showMessage(tr("Ready"), 2000);
     setMinimumWidth(700);
     setMinimumHeight(600);
 }
 
 OctiMainWindow::~OctiMainWindow() {
-    _windowCount = -1;  // Prevent the tool button setEnabled() to be called...
+    _windowCount = -1;
+}
+
+OctiBoardFrame *OctiMainWindow::activeBoardFrame() const {
+    QMdiSubWindow *sub = _ws->activeSubWindow();
+    if(!sub) {
+        return NULL;
+    }
+    return qobject_cast<OctiBoardFrame *>(sub->widget());
 }
 
 void OctiMainWindow::newGame() {
-    OctiGameSelectDialog d;
-    d.show();
-
-    if(d.result() == QDialog::Rejected) {
+    OctiGameSelectDialog d(this);
+    if(d.exec() != QDialog::Accepted) {
         return;
     }
 
-    OctiBoardFrame *f = new OctiBoardFrame(_ws, 0, WDestructiveClose);
-    /*
-      connect(f, SIGNAL( message(const QString &, int)), statusBar(),
-	  SLOT( message(const QString &, int)));
-    */
+    OctiBoardFrame *f = new OctiBoardFrame;
+    f->setAttribute(Qt::WA_DeleteOnClose);
+    QMdiSubWindow *sub = _ws->addSubWindow(f);
     connect(f, SIGNAL(destroyed()), this, SLOT(windowDestroyed()));
-    f->setCaption("Untitled Game");
-    f->setIcon(QPixmap(icon_octi_xpm));
+    sub->setWindowTitle(tr("Untitled Game"));
+    sub->setWindowIcon(QIcon(QPixmap(icon_octi_xpm)));
 
-    // Start game
     OctiBoard *board = f->getBoard();
     board->setGameMode(d.getGameMode(), d.useSuperProngs(), d.edgeless());
     board->getGame()->addOctiGameListener(this);
     board->getGame()->start();
 
-    if(_ws->windowList().isEmpty()) {
-        f->showMaximized();
+    if(_ws->subWindowList().count() <= 1) {
+        sub->showMaximized();
     } else {
-        f->show();
+        sub->show();
     }
 
-#ifndef QT_NO_PRINTER
-    _gamePrint->setEnabled(TRUE);
     _windowCount++;
+#ifndef QT_NO_PRINTER
+    _gamePrint->setEnabled(true);
 #endif
 }
 
 void OctiMainWindow::load() {
-    QFileDialog d(this, "Load Game", TRUE);
-    d.show();
+    QFileDialog::getOpenFileName(this, tr("Load Game"));
 }
 
 void OctiMainWindow::save() {
-    QFileDialog d(this, "Save Game", TRUE);
-    d.show();
+    QFileDialog::getSaveFileName(this, tr("Save Game"));
 }
 
 void OctiMainWindow::saveAs() {
-    QFileDialog d(this, "Save Game As", TRUE);
-    d.show();
+    QFileDialog::getSaveFileName(this, tr("Save Game As"));
 }
 
-void OctiMainWindow::close() {
-
+void OctiMainWindow::closeGame() {
+    if(QMdiSubWindow *sub = _ws->activeSubWindow()) {
+        sub->close();
+    }
 }
 
 void OctiMainWindow::print() {
@@ -248,7 +226,7 @@ void OctiMainWindow::print() {
 }
 
 void OctiMainWindow::undo() {
-    OctiBoardFrame *f = (OctiBoardFrame *) _ws->activeWindow();
+    OctiBoardFrame *f = activeBoardFrame();
     if(f != NULL) {
         try {
             f->getBoard()->getGame()->undo();
@@ -259,7 +237,7 @@ void OctiMainWindow::undo() {
 }
 
 void OctiMainWindow::redo() {
-    OctiBoardFrame *f = (OctiBoardFrame *) _ws->activeWindow();
+    OctiBoardFrame *f = activeBoardFrame();
     if(f != NULL) {
         try {
             f->getBoard()->getGame()->redo();
@@ -270,7 +248,7 @@ void OctiMainWindow::redo() {
 }
 
 void OctiMainWindow::move() {
-    OctiBoardFrame *f = (OctiBoardFrame *) _ws->activeWindow();
+    OctiBoardFrame *f = activeBoardFrame();
     if(f != NULL) {
         try {
             f->getBoard()->getGame()->commitPreparedMove();
@@ -281,7 +259,7 @@ void OctiMainWindow::move() {
 }
 
 void OctiMainWindow::cancel() {
-    OctiBoardFrame *f = (OctiBoardFrame *) _ws->activeWindow();
+    OctiBoardFrame *f = activeBoardFrame();
     if(f != NULL) {
         try {
             f->getBoard()->getGame()->rollbackPreparedMove();
@@ -300,25 +278,20 @@ void OctiMainWindow::resign() {
 }
 
 void OctiMainWindow::about() {
-
+    QMessageBox::about(this, tr("About OCTI"),
+                       tr("OCTI\n"
+                          "A revival of the 2001 Selfsoft OCTI client.\n"
+                          "Originally written by Charles Chiou."));
 }
 
 void OctiMainWindow::pref() {
-    OctiPreferencesDialog d(this, NULL, TRUE);
-    d.show();
-
-    if(d.result() == QDialog::Rejected) {
-        return;
-    }
+    OctiPreferencesDialog d(this);
+    d.exec();
 }
 
 void OctiMainWindow::client() {
-    LoginDialog d(this, NULL, TRUE);
-    d.show();
-
-    if(d.result() == QDialog::Rejected) {
-        return;
-    }
+    LoginDialog d(this);
+    d.exec();
 }
 
 void OctiMainWindow::server() {
@@ -327,31 +300,43 @@ void OctiMainWindow::server() {
 
 void OctiMainWindow::windowsMenuAboutToShow() {
     _windowsMenu->clear();
-    int cascadeId = _windowsMenu->insertItem("&Cascade", _ws, SLOT(cascade()));
-    int tileId = _windowsMenu->insertItem("&Tile", _ws, SLOT(tile()));
-    if(_ws->windowList().isEmpty()) {
-        _windowsMenu->setItemEnabled(cascadeId, FALSE);
-        _windowsMenu->setItemEnabled(tileId, FALSE);
-    }
-    _windowsMenu->insertSeparator();
-    QWidgetList windows = _ws->windowList();
-    for(int i = 0; i < int (windows.count()); ++i) {
-        int id = _windowsMenu->insertItem(windows.at(i)->caption(),
-                                          this, SLOT(windowsMenuActivated(int)));
-        _windowsMenu->setItemParameter(id, i);
-        _windowsMenu->setItemChecked(id, _ws->activeWindow() == windows.at(i));
-    }
-}
-
-void OctiMainWindow::windowsMenuActivated(int id) {
-    QWidget *w = _ws->windowList().at(id);
-    if(w) {
-        w->setFocus();
+    QAction *cascadeAct = _windowsMenu->addAction(tr("&Cascade"), _ws, SLOT(cascadeSubWindows()));
+    QAction *tileAct = _windowsMenu->addAction(tr("&Tile"), _ws, SLOT(tileSubWindows()));
+    bool hasWindows = !_ws->subWindowList().isEmpty();
+    cascadeAct->setEnabled(hasWindows);
+    tileAct->setEnabled(hasWindows);
+    _windowsMenu->addSeparator();
+    QList<QMdiSubWindow *> windows = _ws->subWindowList();
+    for(int i = 0; i < windows.count(); ++i) {
+        QAction *a = _windowsMenu->addAction(windows.at(i)->windowTitle());
+        a->setCheckable(true);
+        a->setChecked(_ws->activeSubWindow() == windows.at(i));
+        a->setData(i);
+        connect(a, SIGNAL(triggered()), this, SLOT(windowsMenuActivated()));
     }
 }
 
-void OctiMainWindow::windowActivated(QWidget *w) {
-    OctiGame *game = ((OctiBoardFrame *) w)->getBoard()->getGame();
+void OctiMainWindow::windowsMenuActivated() {
+    QAction *a = qobject_cast<QAction *>(sender());
+    if(!a) {
+        return;
+    }
+    int id = a->data().toInt();
+    QList<QMdiSubWindow *> windows = _ws->subWindowList();
+    if(id >= 0 && id < windows.count()) {
+        windows.at(id)->setFocus();
+    }
+}
+
+void OctiMainWindow::windowActivated(QMdiSubWindow *w) {
+    if(!w) {
+        return;
+    }
+    OctiBoardFrame *frame = qobject_cast<OctiBoardFrame *>(w->widget());
+    if(!frame) {
+        return;
+    }
+    OctiGame *game = frame->getBoard()->getGame();
     _gameUndo->setEnabled(game->isUndoAllowed() > 0);
     _gameRedo->setEnabled(game->isRedoAllowed() > 0);
     _gameMove->setEnabled(game->isMakeMoveAllowed());
@@ -363,14 +348,14 @@ void OctiMainWindow::windowActivated(QWidget *w) {
 void OctiMainWindow::windowDestroyed() {
     if(--_windowCount == 0) {
 #ifndef QT_NO_PRINTER
-        _gamePrint->setEnabled(FALSE);
+        _gamePrint->setEnabled(false);
 #endif
-        _gameUndo->setEnabled(FALSE);
-        _gameRedo->setEnabled(FALSE);
-        _gameMove->setEnabled(FALSE);
-        _gameCancel->setEnabled(FALSE);
-        _gamePause->setEnabled(FALSE);
-        _gameResign->setEnabled(FALSE);
+        _gameUndo->setEnabled(false);
+        _gameRedo->setEnabled(false);
+        _gameMove->setEnabled(false);
+        _gameCancel->setEnabled(false);
+        _gamePause->setEnabled(false);
+        _gameResign->setEnabled(false);
     }
 }
 
@@ -406,28 +391,28 @@ void OctiMainWindow::gameOver(OctiGame *src) {
 }
 
 void OctiMainWindow::canUndo(OctiGame *src, int steps) {
-    OctiBoardFrame *f = (OctiBoardFrame *) _ws->activeWindow();
+    OctiBoardFrame *f = activeBoardFrame();
     if(f != NULL && f->getBoard()->getGame() == src) {
         _gameUndo->setEnabled(steps > 0);
     }
 }
 
 void OctiMainWindow::canRedo(OctiGame *src, int steps) {
-    OctiBoardFrame *f = (OctiBoardFrame *) _ws->activeWindow();
+    OctiBoardFrame *f = activeBoardFrame();
     if(f != NULL && f->getBoard()->getGame() == src) {
         _gameRedo->setEnabled(steps > 0);
     }
 }
 
 void OctiMainWindow::canMakeMove(OctiGame *src, boolean b) {
-    OctiBoardFrame *f = (OctiBoardFrame *) _ws->activeWindow();
+    OctiBoardFrame *f = activeBoardFrame();
     if(f != NULL && f->getBoard()->getGame() == src) {
         _gameMove->setEnabled(b);
     }
 }
 
 void OctiMainWindow::canCancelMove(OctiGame *src, boolean b) {
-    OctiBoardFrame *f = (OctiBoardFrame *) _ws->activeWindow();
+    OctiBoardFrame *f = activeBoardFrame();
     if(f != NULL && f->getBoard()->getGame() == src) {
         _gameCancel->setEnabled(b);
     }
@@ -442,13 +427,3 @@ void OctiMainWindow::canResign(OctiGame *src, boolean b) {
 }
 
 __END_NAMESPACE(SELFSOFT);
-
-/*
- * Local variables:
- * mode: C++
- * c-file-style: "BSD"
- * c-basic-offset: 4
- * tab-width: 4
- * indent-tabs-mode: nil
- * End:
- */

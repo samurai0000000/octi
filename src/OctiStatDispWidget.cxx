@@ -16,9 +16,8 @@
 
 #define _OCTIAPI_IMPL_
 
+#include "qt2compat.h"
 #include <qpainter.h>
-#include <qdragobject.h>
-#include <qdropsite.h>
 #include "OctiWidgetColors.hxx"
 #include "OctiWidgetOptions.hxx"
 #include "OctiStatDispWidget.hxx"
@@ -26,7 +25,8 @@
 
 __BEGIN_NAMESPACE(SELFSOFT);
 
-OctiStatDispWidget::OctiStatDispWidget(QWidget *parent, const char *name, WFlags f) : QWidget(parent, name, f) {
+OctiStatDispWidget::OctiStatDispWidget(QWidget *parent, const char *name, WFlags f) : QWidget(parent, f) {
+    qt2InitWidget(this, name);
     _board = NULL;
     _player = PLAYER_UNDEF;
     _squareSize = 0;
@@ -93,7 +93,7 @@ void OctiStatDispWidget::paintEvent(QPaintEvent *e) {
 
     // Draw free prongs
     p.setPen(QPen(colors.getLineColor()));
-    p.setBrush(QBrush(white));
+    p.setBrush(QBrush(Qt::white));
     QPointArray rectangle;
     rectangle.setPoints(4,
                         xc1 - sp1, yc1 - sp4,
@@ -129,7 +129,7 @@ void OctiStatDispWidget::paintEvent(QPaintEvent *e) {
     yc3 = (int) (height() * 0.667);
     if(_board->canLiberate(_player)) {
         p.setPen(QPen(colors.getLineColor()));
-        p.setBrush(NoBrush);
+        p.setBrush(Qt::NoBrush);
         p.drawRect(xc3 - (int) (_squareSize * 0.45), yc3 - (int) (_squareSize * 0.45), _squareSize, _squareSize);
     } else {
         p.setPen(QPen(colors.getLineColor(), 2));
@@ -142,8 +142,8 @@ void OctiStatDispWidget::paintEvent(QPaintEvent *e) {
     }
 
     if(_highlightJail) {
-        p.setBrush(NoBrush);
-        p.setPen(QPen(red, 2));
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(Qt::red, 2));
         p.drawRect(xc3 - (int) (_squareSize * 0.45), yc3 - (int) (_squareSize * 0.45), _squareSize, _squareSize);
     }
 
@@ -166,7 +166,7 @@ void OctiStatDispWidget::mouseReleaseEvent(QMouseEvent *e) {
 }
 
 void OctiStatDispWidget::mouseMoveEvent(QMouseEvent *e) {
-    if((e->state() & LeftButton) &&
+    if((e->buttons() & Qt::LeftButton) &&
        _player == _board->getGame()->getPlayerToMove()) {
         if(QABS(e->pos().x() - _pressPos.x()) >= 3 ||
            QABS(e->pos().y() - _pressPos.y()) >= 3) {
@@ -224,12 +224,12 @@ void OctiStatDispWidget::dragMoveEvent(QDragMoveEvent *e) {
             if(x > x0 && x < x1 && y > y0 && y < y1) {
                 if(_highlightJail == FALSE) {
                     _highlightJail = TRUE;
-                    repaint(FALSE);
+                    update();
                 }
             } else {
                 if(_highlightJail == TRUE) {
                     _highlightJail = FALSE;
-                    repaint(TRUE);
+                    repaint();
                 }
             }
         }
@@ -239,14 +239,14 @@ void OctiStatDispWidget::dragMoveEvent(QDragMoveEvent *e) {
 void OctiStatDispWidget::dragLeaveEvent(QDragLeaveEvent *e) {
     if(_highlightJail == TRUE) {
         _highlightJail = FALSE;
-        repaint(TRUE);
+        repaint();
     }
 }
 
 void OctiStatDispWidget::dropEvent(QDropEvent *e) {
     if(_highlightJail == TRUE) {
         _highlightJail = FALSE;
-        repaint(TRUE);
+        repaint();
     }
 }
 

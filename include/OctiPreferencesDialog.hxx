@@ -17,6 +17,7 @@
 #ifndef __OCTIPREFERENCESDIALOG_HXX_
 #define __OCTIPREFERENCESDIALOG_HXX_
 
+#include "qt2compat.h"
 #include "octiapi.h"
 #include "OctiDefs.hxx"
 #include "OctiPreferencesDialogBase.hxx"

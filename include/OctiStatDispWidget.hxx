@@ -17,8 +17,8 @@
 #ifndef _OCTISTATDISPWIDGET_HXX_
 #define _OCTISTATDISPWIDGET_HXX_
 
+#include "qt2compat.h"
 #include <qframe.h>
-#include "OctiBoard.hxx"
 #include "OctiSquareDispWidget.hxx"
 
 __BEGIN_NAMESPACE(SELFSOFT);

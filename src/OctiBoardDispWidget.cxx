@@ -16,11 +16,10 @@
 
 #define _OCTIAPI_IMPL_
 
+#include "qt2compat.h"
 #include <qlayout.h>
 #include <qpainter.h>
 #include <qpen.h>
-#include <qdragobject.h>
-#include <qdropsite.h>
 #include "OctiWidgetColors.hxx"
 #include "OctiWidgetOptions.hxx"
 #include "OctiBoardDispWidget.hxx"
@@ -29,7 +28,8 @@
 
 __BEGIN_NAMESPACE(SELFSOFT);
 
-OctiBoardDispWidget::OctiBoardDispWidget(QWidget *parent, const char *name, WFlags f) : QWidget(parent, name, f) {
+OctiBoardDispWidget::OctiBoardDispWidget(QWidget *parent, const char *name, WFlags f) : QWidget(parent, f) {
+    qt2InitWidget(this, name);
     int i;
     _showInverted = FALSE;
     _animate = TRUE;
@@ -60,7 +60,7 @@ OctiBoardDispWidget::~OctiBoardDispWidget() {
 void OctiBoardDispWidget::setShowInverted(boolean inverted) {
     if(_showInverted != inverted) {
         _showInverted = inverted;
-        repaint(FALSE);
+        update();
         if(_sqrDisp) {
             _sqrDisp->setShowInverted(inverted);
         }
@@ -102,9 +102,9 @@ int OctiBoardDispWidget::heightForWidth(int w) const {
 
 void OctiBoardDispWidget::paintEvent(QPaintEvent *e) {
     QPixmap pm(size());
-    pm.fill(backgroundColor());
+    pm.fill(qt2BackgroundColor(this));
     QPainter p;
-    p.begin(&pm, this);
+    p.begin(&pm);
     if(!_showInverted) {
         paintNormal(p);
         paintNormalPods(p);
@@ -137,7 +137,7 @@ void OctiBoardDispWidget::paintNormal(QPainter &p) {
         p.drawRect(_xOffset, y - _squareSize, _squareSize, _squareSize);
         p.setPen(QPen(colors.getLabelColor()));
         p.drawText(_xOffset, y - _squareSize, _squareSize, _squareSize,
-                   AlignCenter, QString(QChar('0' + 10 - i)));
+                   Qt::AlignCenter, QString(QChar('0' + 10 - i)));
     }
 
     // Draw x-axis labels
@@ -149,7 +149,7 @@ void OctiBoardDispWidget::paintNormal(QPainter &p) {
         p.drawRect(x, y - _squareSize, _squareSize, _squareSize);
         p.setPen(QPen(colors.getLabelColor()));
         p.drawText(x, y - _squareSize, _squareSize, _squareSize,
-                   AlignCenter, QString(QChar('0' + i)));
+                   Qt::AlignCenter, QString(QChar('0' + i)));
     }
 
     // Fill the unmarked label
@@ -159,7 +159,7 @@ void OctiBoardDispWidget::paintNormal(QPainter &p) {
     p.drawRect(_xOffset, 9 * _squareSize + _yOffset, _squareSize + 1, _squareSize);
     p.setPen(QPen(colors.getLabelColor()));
     p.drawText(_xOffset, 9 * _squareSize + _yOffset, _squareSize, _squareSize,
-               AlignCenter, QString("FLIP"));
+               Qt::AlignCenter, QString("FLIP"));
 
 
     // Draw each square
@@ -178,12 +178,12 @@ void OctiBoardDispWidget::paintNormal(QPainter &p) {
                 p.setBrush(QBrush(colors.getLineColor()));
                 p.drawRect(x, y, _squareSize, _squareSize);
                 p.setPen(QPen(colors.getSquareColor()));
-                p.drawText(x, y, _squareSize, _squareSize, AlignCenter,
+                p.drawText(x, y, _squareSize, _squareSize, Qt::AlignCenter,
                            QString("OCTI"));
             } else {
                 // Draw dash lines in each square
                 p.setPen(QPen(colors.getLineColor()));
-                p.setBrush(NoBrush);
+                p.setBrush(Qt::NoBrush);
                 p.drawRect(x, y, _squareSize + 1, _squareSize + 1);
                 p.drawLine(xc, y, xc, y + _sl);
                 p.drawLine(xc, y + _squareSize, xc, y + _squareSize - _sl);
@@ -219,7 +219,7 @@ void OctiBoardDispWidget::paintInverted(QPainter &p) {
         p.setBrush(QBrush(colors.getSquareColor()));
         p.drawRect(_xOffset, y, _squareSize, _squareSize);
         p.setPen(QPen(colors.getLabelColor()));
-        p.drawText(_xOffset, y, _squareSize, _squareSize, AlignCenter,
+        p.drawText(_xOffset, y, _squareSize, _squareSize, Qt::AlignCenter,
                    QString(QChar('0' + i)));
     }
 
@@ -231,7 +231,7 @@ void OctiBoardDispWidget::paintInverted(QPainter &p) {
         p.setBrush(QBrush(colors.getSquareColor()));
         p.drawRect(x, y, _squareSize, _squareSize);
         p.setPen(QPen(colors.getLabelColor()));
-        p.drawText(x, y, _squareSize, _squareSize, AlignCenter,
+        p.drawText(x, y, _squareSize, _squareSize, Qt::AlignCenter,
                    QString(QChar('0' + i)));
     }
 
@@ -241,7 +241,7 @@ void OctiBoardDispWidget::paintInverted(QPainter &p) {
     p.setBrush(QBrush(colors.getSquareColor()));
     p.drawRect(_xOffset, _yOffset, _squareSize + 1, _squareSize);
     p.setPen(QPen(colors.getLabelColor()));
-    p.drawText(_xOffset, _yOffset, _squareSize, _squareSize, AlignCenter,
+    p.drawText(_xOffset, _yOffset, _squareSize, _squareSize, Qt::AlignCenter,
                QString("FLIP"));
 
     // Draw each square
@@ -260,12 +260,12 @@ void OctiBoardDispWidget::paintInverted(QPainter &p) {
                 p.setBrush(QBrush(colors.getLineColor()));
                 p.drawRect(x, y, _squareSize, _squareSize);
                 p.setPen(QPen(colors.getSquareColor()));
-                p.drawText(x, y, _squareSize, _squareSize, AlignCenter,
+                p.drawText(x, y, _squareSize, _squareSize, Qt::AlignCenter,
                            QString("OCTI"));
             } else {
                 // Draw dash lines in each square
                 p.setPen(QPen(colors.getLineColor()));
-                p.setBrush(NoBrush);
+                p.setBrush(Qt::NoBrush);
                 p.drawRect(x, y, _squareSize + 1, _squareSize + 1);
                 p.drawLine(xc, y, xc, y + _sl);
                 p.drawLine(xc, y + _squareSize, xc, y + _squareSize - _sl);
@@ -288,7 +288,7 @@ void OctiBoardDispWidget::plotNormalMove(QPainter &p) {
     int i, j, x, y;
 
     if(_move != NULL) {
-        p.setPen(QPen(yellow, (int) (_squareSize * 0.05), DashLine));
+        p.setPen(QPen(Qt::yellow, (int) (_squareSize * 0.05), Qt::DashLine));
         int xc0, yc0, xc1, yc1;
         Ptr<OctiMoveOp> op;
         Dlist<Ptr<OctiMoveOp> > ops = _move->getOps();
@@ -308,24 +308,24 @@ void OctiBoardDispWidget::plotNormalMove(QPainter &p) {
     }
 
     // Draw highlighted squares
-    p.setBrush(NoBrush);
+    p.setBrush(Qt::NoBrush);
     for(i = 0; i < 9; i++) {
         for(j = 0; j < 9; j++) {
             y = _squareSize * (8 - i) + _yOffset;
             x = _squareSize * j + _squareSize + _xOffset;
             if(_highlightX == j && _highlightY == i &&
                _map.getMark(j, i) != DSM_JUMP) {
-                p.setPen(QPen(yellow, 2));
+                p.setPen(QPen(Qt::yellow, 2));
                 p.drawRect(x + 2, y + 2, _squareSize - 2, _squareSize - 2);
             } else {
                 switch(_map.getMark(j, i)) {
                 case DSM_HOP:
                 case DSM_DEST:
-                    p.setPen(QPen(yellow, 2));
+                    p.setPen(QPen(Qt::yellow, 2));
                     p.drawRect(x + 2, y + 2, _squareSize - 2, _squareSize - 2);
                     break;
                 case DSM_JUMP:
-                    p.setPen(QPen(red, 2));
+                    p.setPen(QPen(Qt::red, 2));
                     p.drawRect(x + 2, y + 2, _squareSize - 2, _squareSize - 2);
                     break;
                 }
@@ -338,7 +338,7 @@ void OctiBoardDispWidget::plotInvertedMove(QPainter &p) {
     int i, j, x, y;
 
     if(_move != NULL) {
-        p.setPen(QPen(yellow, (int) (_squareSize * 0.05), DashLine));
+        p.setPen(QPen(Qt::yellow, (int) (_squareSize * 0.05), Qt::DashLine));
         int xc0, yc0, xc1, yc1;
         Ptr<OctiMoveOp> op;
         Dlist<Ptr<OctiMoveOp> > ops = _move->getOps();
@@ -358,23 +358,23 @@ void OctiBoardDispWidget::plotInvertedMove(QPainter &p) {
     }
 
     // Draw highlighted squares
-    p.setBrush(NoBrush);
+    p.setBrush(Qt::NoBrush);
     for(i = 0; i < 9; i++) {
         for(j = 0; j < 9; j++) {
             y = _squareSize * i + _squareSize + _yOffset;
             x = _squareSize * j + _squareSize + _xOffset;
             if(_highlightX == j && _highlightY == i) {
-                p.setPen(QPen(yellow, 2));
+                p.setPen(QPen(Qt::yellow, 2));
                 p.drawRect(x + 2, y + 2, _squareSize - 2, _squareSize - 2);
             } else {
                 switch(_map.getMark(j, i)) {
                 case DSM_HOP:
                 case DSM_DEST:
-                    p.setPen(QPen(yellow, 2));
+                    p.setPen(QPen(Qt::yellow, 2));
                     p.drawRect(x + 2, y + 2, _squareSize - 2, _squareSize - 2);
                     break;
                 case DSM_JUMP:
-                    p.setPen(QPen(red, 2));
+                    p.setPen(QPen(Qt::red, 2));
                     p.drawRect(x + 2, y + 2, _squareSize - 2, _squareSize - 2);
                     break;
                 }
@@ -632,7 +632,7 @@ void OctiBoardDispWidget::mouseReleaseEvent(QMouseEvent *e) {
             _highlightX = gridX;
             _highlightY = gridY;
             _move = NULL;
-            repaint(FALSE);
+            update();
         } else if(gridX == -1 && gridY == -1) {
             setShowInverted(!_showInverted);
         }
@@ -640,7 +640,7 @@ void OctiBoardDispWidget::mouseReleaseEvent(QMouseEvent *e) {
 }
 
 void OctiBoardDispWidget::mouseMoveEvent(QMouseEvent *e) {
-    if(e->state() & LeftButton) {
+    if(e->buttons() & Qt::LeftButton) {
         if(QABS(e->pos().x() - _pressPos.x()) >= 3 ||
            QABS(e->pos().y() - _pressPos.y()) >= 3) {
             int overlapoffet = (int) (_squareSize * 0.05);
@@ -656,7 +656,7 @@ void OctiBoardDispWidget::mouseMoveEvent(QMouseEvent *e) {
                 _highlightX = gridX;
                 _highlightY = gridY;
                 updateGeneralizedPod();
-                repaint(FALSE);
+                update();
             }
 
             if(gridX > -1 && gridX < 9 && gridY > -1 && gridY < 9 &&
@@ -682,7 +682,7 @@ void OctiBoardDispWidget::mouseMoveEvent(QMouseEvent *e) {
                     _supressOn = TRUE;
                     _supressX = gridX;
                     _supressY = gridY;
-                    repaint(FALSE);
+                    update();
 
                     s = "CAPTURE";
                     QTextDrag *drag = new QTextDrag(s, this);
@@ -692,7 +692,7 @@ void OctiBoardDispWidget::mouseMoveEvent(QMouseEvent *e) {
                     _supressOn = TRUE;
                     _supressX = gridX;
                     _supressY = gridY;
-                    repaint(FALSE);
+                    update();
 
                     s = "MOVE";
                     QTextDrag *drag = new QTextDrag(s, this);
@@ -723,7 +723,7 @@ void OctiBoardDispWidget::dragMoveEvent(QDragMoveEvent *e) {
                 _sqrDisp->setDisplaySquare(targetX, targetY);
                 _map.clearHops();
                 _map.markDest(targetX, targetY);
-                repaint(FALSE);
+                update();
             }
         } else if(s == "MOVE") {
             int jumpX, jumpY;
@@ -731,11 +731,11 @@ void OctiBoardDispWidget::dragMoveEvent(QDragMoveEvent *e) {
             if(acceptMove == 1) {
                 _map.clearHops();
                 _map.markDest(targetX, targetY);
-                repaint(FALSE);
+                update();
             } else if(acceptMove == 2) {
                 _map.markJump(jumpX, jumpY);
                 _map.markHop(targetX, targetY);
-                repaint(FALSE);
+                update();
             }
         }
     }
@@ -743,7 +743,7 @@ void OctiBoardDispWidget::dragMoveEvent(QDragMoveEvent *e) {
 
 void OctiBoardDispWidget::dragLeaveEvent(QDragLeaveEvent *e) {
     _map.clearHops();
-    repaint(FALSE);
+    update();
 }
 
 void OctiBoardDispWidget::dropEvent(QDropEvent *e) {
@@ -794,7 +794,7 @@ void OctiBoardDispWidget::dropEvent(QDropEvent *e) {
 
     _map.clearHops();
     _supressOn = FALSE;
-    repaint(FALSE);
+    update();
 }
 
 void OctiBoardDispWidget::gameChanged(OctiBoard *src, OctiGame *oldGame, OctiGame *newGame) {
@@ -881,10 +881,11 @@ void OctiBoardDispWidget::boardUpdated(OctiBoard *src, const OctiMove *move,
             }
         }
     }
-    repaint(FALSE);
+    update();
 }
 
-OctiBoardWidget::OctiBoardWidget(QWidget *parent, const char *name, WFlags f) : QWidget(parent, name, f) {
+OctiBoardWidget::OctiBoardWidget(QWidget *parent, const char *name, WFlags f) : QWidget(parent, f) {
+    qt2InitWidget(this, name);
     _squareDisp = new OctiSquareDispWidget(this);
     _statDisp1 = new OctiStatDispWidget(this);
     _statDisp2 = new OctiStatDispWidget(this);
@@ -917,12 +918,6 @@ OctiBoardWidget::OctiBoardWidget(QWidget *parent, const char *name, WFlags f) : 
 }
 
 OctiBoardWidget::~OctiBoardWidget() {
-    delete _squareDisp;
-    delete _statDisp1;
-    delete _statDisp2;
-    delete _statDisp3;
-    delete _statDisp4;
-    delete _boardDisp;
 }
 
 __END_NAMESPACE(SELFSOFT);

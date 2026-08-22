@@ -17,10 +17,11 @@
 #define _VERSION_STRING_ "v1.0a " _GENERAL_COPY_TM_MESSAGE_
 
 #include <stdio.h>
-#include <qapplication.h>
+#include <stdlib.h>
+#include <QApplication>
 #include "argproc.h"
 #include "OctiWidgetOptions.hxx"
-//#include "OctiMainWindow.hxx"
+#include "OctiMainWindow.hxx"
 
 __USING_NAMESPACE(SELFSOFT);
 
@@ -51,9 +52,8 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     InitOctiOptionsModel();
-    //OctiMainWindow window;
-    //app.setMainWidget(&window);
-    //window.show();
+    OctiMainWindow window;
+    window.show();
 
     return app.exec();
 }

@@ -17,6 +17,7 @@
 #ifndef _OCTIGAMESELECTDIALOG_HXX_
 #define _OCTIGAMESELECTDIALOG_HXX_
 
+#include "qt2compat.h"
 #include "octiapi.h"
 #include "OctiDefs.hxx"
 #include "OctiGameSelectDialogBase.hxx"

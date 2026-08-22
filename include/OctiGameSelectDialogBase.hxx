@@ -1,25 +1,16 @@
-/****************************************************************************
- ** Form interface generated from reading ui file 'ui/OctiGameSelectDialogBase.ui'
- **
- ** Created: Thu Aug 1 17:35:11 2002
- **      by:  The User Interface Compiler (uic)
- **
- ** WARNING! All changes made in this file will be lost!
- ****************************************************************************/
 #ifndef OCTIGAMESELECTDIALOGBASE_H
 #define OCTIGAMESELECTDIALOGBASE_H
 
-#include <qvariant.h>
-#include <qdialog.h>
-class QVBoxLayout;
-class QHBoxLayout;
-class QGridLayout;
-class QButtonGroup;
-class QCheckBox;
-class QComboBox;
-class QGroupBox;
-class QPushButton;
-class QRadioButton;
+#include "qt2compat.h"
+#include "basecfg.h"
+#include <QDialog>
+#include <QGroupBox>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QPushButton>
+#include <QRadioButton>
+#include <QGridLayout>
+#include <QHBoxLayout>
 
 class OctiGameSelectDialogBase : public QDialog
 {
@@ -27,39 +18,29 @@ class OctiGameSelectDialogBase : public QDialog
 
 public:
 
-    OctiGameSelectDialogBase( QWidget* parent = 0, const char* name = 0, bool modal = FALSE, WFlags fl = 0 );
+    OctiGameSelectDialogBase(QWidget *parent = 0, const char *name = 0,
+                             bool modal = false, WFlags fl = Qt::WindowFlags());
     ~OctiGameSelectDialogBase();
 
-    QPushButton* buttonHelp;
-    QPushButton* buttonOk;
-    QPushButton* buttonCancel;
-    QButtonGroup* ButtonGroup1;
-    QRadioButton* fourPlayerButton;
-    QRadioButton* twoPlayerButton;
-    QGroupBox* GroupBox3;
-    QCheckBox* useTimeLimitCheckBox;
-    QComboBox* timeLimitComboBox;
-    QButtonGroup* ButtonGroup2;
-    QRadioButton* threeBaseGameButton;
-    QRadioButton* oneBaseGameButton;
-    QGroupBox* GroupBox1;
-    QCheckBox* edgelessCheckBox;
-    QCheckBox* superProngCheckBox;
-
+    QPushButton *buttonHelp;
+    QPushButton *buttonOk;
+    QPushButton *buttonCancel;
+    QGroupBox *ButtonGroup1;
+    QRadioButton *fourPlayerButton;
+    QRadioButton *twoPlayerButton;
+    QGroupBox *GroupBox3;
+    QCheckBox *useTimeLimitCheckBox;
+    QComboBox *timeLimitComboBox;
+    QGroupBox *ButtonGroup2;
+    QRadioButton *threeBaseGameButton;
+    QRadioButton *oneBaseGameButton;
+    QGroupBox *GroupBox1;
+    QCheckBox *edgelessCheckBox;
+    QCheckBox *superProngCheckBox;
 
 protected:
-    QGridLayout* OctiGameSelectDialogBaseLayout;
-    QHBoxLayout* Layout1;
+    QGridLayout *OctiGameSelectDialogBaseLayout;
+    QHBoxLayout *Layout1;
 };
 
-#endif // OCTIGAMESELECTDIALOGBASE_H
-
-/*
- * Local variables:
- * mode: C++
- * c-file-style: "BSD"
- * c-basic-offset: 4
- * tab-width: 4
- * indent-tabs-mode: nil
- * End:
- */
+#endif

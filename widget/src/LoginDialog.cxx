@@ -44,8 +44,8 @@ const char *LoginDialog::getPassword() const {
 }
 
 void LoginDialog::accept() {
-    _login = loginLineEdit->text();
-    _password = passwordLineEdit->text();
+    _login = loginLineEdit->text().toUtf8().constData();
+    _password = passwordLineEdit->text().toUtf8().constData();
     QDialog::accept();
 }
 

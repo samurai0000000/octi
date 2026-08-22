@@ -29,12 +29,12 @@
 __BEGIN_NAMESPACE(SELFSOFT);
 
 OctiGameSelectDialog::OctiGameSelectDialog(QWidget* parent, const char* name, bool modal, WFlags fl) : OctiGameSelectDialogBase( parent, name, modal, fl) {
-    timeLimitComboBox->insertItem( tr( "10 min." ) );
-    timeLimitComboBox->insertItem( tr( "15 min." ) );
-    timeLimitComboBox->insertItem( tr( "20 min." ) );
-    timeLimitComboBox->insertItem( tr( "30 min." ) );
-    timeLimitComboBox->insertItem( tr( "45 min." ) );
-    timeLimitComboBox->insertItem( tr( "60 min." ) );
+    timeLimitComboBox->addItem( tr( "10 min." ) );
+    timeLimitComboBox->addItem( tr( "15 min." ) );
+    timeLimitComboBox->addItem( tr( "20 min." ) );
+    timeLimitComboBox->addItem( tr( "30 min." ) );
+    timeLimitComboBox->addItem( tr( "45 min." ) );
+    timeLimitComboBox->addItem( tr( "60 min." ) );
 }
 
 OctiGameSelectDialog::~OctiGameSelectDialog() {
@@ -42,28 +42,28 @@ OctiGameSelectDialog::~OctiGameSelectDialog() {
 }
 
 OctiGameMode OctiGameSelectDialog::getGameMode() const {
-    return twoPlayerButton->isOn() ? GAME_MODE_2 : GAME_MODE_4;
+    return twoPlayerButton->isChecked() ? GAME_MODE_2 : GAME_MODE_4;
 }
 
 OctiGameBases OctiGameSelectDialog::getGameBases() const {
-    return threeBaseGameButton->isOn() ? GAME_BASES_3 : GAME_BASES_1;
+    return threeBaseGameButton->isChecked() ? GAME_BASES_3 : GAME_BASES_1;
 }
 
 boolean OctiGameSelectDialog::useSuperProngs() const {
-    return superProngCheckBox->isOn();
+    return superProngCheckBox->isChecked();
 }
 
 boolean OctiGameSelectDialog::edgeless() const {
-    return edgelessCheckBox->isOn();
+    return edgelessCheckBox->isChecked();
 }
 
 boolean OctiGameSelectDialog::useTimeLimit() const {
-    return useTimeLimitCheckBox->isOn();
+    return useTimeLimitCheckBox->isChecked();
 }
 
 int OctiGameSelectDialog::getTimeLimit() const {
-    if(useTimeLimitCheckBox->isOn()) {
-        switch(timeLimitComboBox->currentItem()) {
+    if(useTimeLimitCheckBox->isChecked()) {
+        switch(timeLimitComboBox->currentIndex()) {
         case 0:   return  600; break;  // 10 min.
         case 1:   return  900; break;  // 15 min.
         case 2:   return 1200; break;  // 20 min.

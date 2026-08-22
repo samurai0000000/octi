@@ -16,10 +16,8 @@
 
 #define _OCTIAPI_IMPL_
 
-#include <qwmatrix.h>
+#include "qt2compat.h"
 #include <qpainter.h>
-#include <qdragobject.h>
-#include <qdropsite.h>
 #include "OctiWidgetColors.hxx"
 #include "OctiWidgetOptions.hxx"
 #include "OctiSquareDispWidget.hxx"
@@ -241,7 +239,8 @@ boolean prong_pos(int sqsize, boolean invert,
     return FALSE;
 }
 
-OctiSquareDispWidget::OctiSquareDispWidget(QWidget *parent, const char *name, WFlags f) : QWidget(parent, name, f) {
+OctiSquareDispWidget::OctiSquareDispWidget(QWidget *parent, const char *name, WFlags f) : QWidget(parent, f) {
+    qt2InitWidget(this, name);
     _board = NULL;
     _numPods = 0;
     _squareSize = 0;
@@ -283,7 +282,7 @@ void OctiSquareDispWidget::setDisplaySquare(int x, int y, boolean forceload) {
             }
         }
 
-        repaint(FALSE);
+        update();
     }
 }
 
@@ -335,9 +334,9 @@ void OctiSquareDispWidget::paintEvent(QPaintEvent *pe) {
     int sl = (int) (_squareSize * 0.100);
     int i, x, y, xc, yc, yOrig;
     QPixmap pm(size());
-    pm.fill(backgroundColor());
+    pm.fill(qt2BackgroundColor(this));
     QPainter p;
-    p.begin(&pm, this);
+    p.begin(&pm);
     p.setFont(QFont("times", (int) (_squareSize * 0.35), QFont::Bold));
 
     xc = (width() >> 1);
@@ -363,9 +362,9 @@ void OctiSquareDispWidget::paintEvent(QPaintEvent *pe) {
             p.setBrush(QBrush(colors.getLineColor()));
             p.drawRect(x, y, _squareSize, _squareSize);
             p.setPen(QPen(colors.getSquareColor()));
-            p.drawText(x, y, _squareSize, _squareSize, AlignCenter,
+            p.drawText(x, y, _squareSize, _squareSize, Qt::AlignCenter,
                        QString("OCTI"));
-            p.setPen(QPen(gray));
+            p.setPen(QPen(Qt::gray));
             p.drawLine(x, y, x + _squareSize, y);
         } else {
             // Draw dash lines
@@ -389,8 +388,8 @@ void OctiSquareDispWidget::paintEvent(QPaintEvent *pe) {
                                     xc, yc);
         }
         if(_selected[i]) {
-            p.setPen(QPen(yellow, 2));
-            p.setBrush(NoBrush);
+            p.setPen(QPen(Qt::yellow, 2));
+            p.setBrush(Qt::NoBrush);
             p.drawRect(x + 1, y + 1, _squareSize - 1, _squareSize - 1);
         }
 
@@ -416,7 +415,7 @@ void OctiSquareDispWidget::paintEvent(QPaintEvent *pe) {
     str += ", ";
     str += ('1' + _y);
     str += "]";
-    p.drawText(x, y, _squareSize, _squareSize, AlignCenter, str);
+    p.drawText(x, y, _squareSize, _squareSize, Qt::AlignCenter, str);
 
     p.end();
     bitBlt(this, 0, 0, &pm);
@@ -430,12 +429,12 @@ void OctiSquareDispWidget::mouseReleaseEvent(QMouseEvent *e) {
     int loc = getSquareLoc(e->pos().x(), e->pos().y());
     if(loc > - 1 && loc < _numPods) {
         _selected[loc] = !_selected[loc];
-        repaint(FALSE);
+        update();
     }
 }
 
 void OctiSquareDispWidget::mouseMoveEvent(QMouseEvent *e) {
-    if(e->state() & LeftButton) {
+    if(e->buttons() & Qt::LeftButton) {
         if(QABS(e->pos().x() - _pressPos.x()) >= 3 ||
            QABS(e->pos().y() - _pressPos.y()) >= 3) {
             int xc = (width() >> 1);
@@ -496,7 +495,7 @@ void OctiSquareDispWidget::dragMoveEvent(QDragMoveEvent *e) {
                    (sqr != _highlightSqr || dir != _highlightDir)) {
                     _highlightSqr = sqr;
                     _highlightDir = dir;
-                    repaint(FALSE);
+                    update();
                 }
             }
         }
@@ -508,7 +507,7 @@ void OctiSquareDispWidget::dragLeaveEvent(QDragLeaveEvent *e) {
         _highlightSqr = -1;
         _highlightDir = DIR_UNDEF;
         _supressOn = FALSE;
-        repaint(FALSE);
+        update();
     }
 }
 
@@ -544,7 +543,7 @@ void OctiSquareDispWidget::dropEvent(QDropEvent *e) {
         _highlightSqr = -1;
         _highlightDir = DIR_UNDEF;
         _supressOn = FALSE;
-        repaint(FALSE);
+        update();
     }
 }
 

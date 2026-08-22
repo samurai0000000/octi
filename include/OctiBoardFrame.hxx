@@ -17,8 +17,8 @@
 #ifndef _OCTIBOARDFRAME_HXX_
 #define _OCTIBOARDFRAME_HXX_
 
+#include "qt2compat.h"
 #include <qframe.h>
-#include "OctiBoard.hxx"
 #include "OctiSquareDispWidget.hxx"
 #include "OctiBoardDispWidget.hxx"
 #include "OctiStatDispWidget.hxx"

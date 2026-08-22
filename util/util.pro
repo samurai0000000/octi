@@ -2,10 +2,11 @@
 #
 # Copyright (C) 2022, Charles Chiou
 
-QT +=
-CONFIG += dll
+QT -= gui
+CONFIG += shared
 TARGET = ../ss_util
 TEMPLATE = lib
+include(../common.pri)
 INCLUDEPATH += include
 SOURCES += \
 	src/Adler32.cxx \
@@ -20,9 +21,7 @@ SOURCES += \
 	src/ByteUtil.cxx \
 	src/Calendar.cxx \
 	src/Checksum.cxx \
-	src/CodecTest.cxx \
 	src/Collection.cxx \
-	src/CollectionTest.cxx \
 	src/Condition.cxx \
 	src/Config.cxx \
 	src/CRC32.cxx \
@@ -41,7 +40,6 @@ SOURCES += \
 	src/IOException.cxx \
 	src/Main.cxx \
 	src/Matrix.cxx \
-	src/MiscTest.cxx \
 	src/Monitor.cxx \
 	src/Mutex.cxx \
 	src/Packet.cxx \
@@ -51,15 +49,13 @@ SOURCES += \
 	src/Stack.cxx \
 	src/String.cxx \
 	src/StringTokenizer.cxx \
-	src/TestSuite.cxx \
 	src/Thread.cxx \
 	src/ThreadException.cxx \
-	src/ThreadTest.cxx \
 	src/ThreadWorkerPool.cxx \
 	src/Timer.cxx \
-	src/TimeTest.cxx \
 	src/TimeZone.cxx \
 	src/Tree.cxx \
 	src/UU.cxx \
 	src/Void.cxx \
 	src/WorkerPool.cxx
+HEADERS += include/basecfg.h

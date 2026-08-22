@@ -2,11 +2,13 @@
 #
 # Copyright (C) 2022, Charles Chiou
 
-QT +=
-CONFIG += dll
+QT -= gui
+CONFIG += shared
 TARGET = ../ss_ai
 TEMPLATE = lib
+include(../common.pri)
 INCLUDEPATH += include ../util/include
+LIBS += -L.. -lss_util
 SOURCES += \
 	src/AISearchAlgorithm.cxx \
 	src/AlphaBetaSearch.cxx \

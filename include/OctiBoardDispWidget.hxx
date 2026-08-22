@@ -17,9 +17,8 @@
 #ifndef _OCTIBOARDDISPWIDGET_HXX_
 #define _OCTIBOARDDISPWIDGET_HXX_
 
+#include "qt2compat.h"
 #include <qframe.h>
-#include <qbitmap.h>
-#include <qpixmap.h>
 #include "OctiPod.hxx"
 #include "BufferedArray.hxx"
 #include "OctiSquare.hxx"

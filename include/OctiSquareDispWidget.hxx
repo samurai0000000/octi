@@ -17,9 +17,9 @@
 #ifndef _OCTISQUAREDISPWIDGET_HXX_
 #define _OCTISQUAREDISPWIDGET_HXX_
 
+#include "qt2compat.h"
+#include <qpainter.h>
 #include <qbitmap.h>
-#include <qpixmap.h>
-#include <qframe.h>
 #include "OctiPod.hxx"
 #include "OctiSquare.hxx"
 #include "OctiBoard.hxx"

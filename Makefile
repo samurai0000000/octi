@@ -1,32 +1,14 @@
-# Makefile
-#
-# Copyright (C) 2022, Charles Chiou
+# Convenience wrapper. Prefer an out-of-tree qmake build in ./build
+BUILDDIR := build
 
-TARGETS = 	build/octi
+.PHONY: all run clean
 
-.PHONY: default clean distclean
+all:
+	mkdir -p $(BUILDDIR)
+	cd $(BUILDDIR) && qmake ../build.pro && $(MAKE)
 
-default: $(TARGETS)
+run: all
+	cd $(BUILDDIR) && ./octi
 
 clean:
-	@[ -f build/Makefile ] && $(MAKE) --no-print-directory -C build clean
-	@[ -d build ] && rm -f build/octi build/lib*.so*
-
-distclean:
-	@echo DISTCLEAN
-	@rm -rf build
-
-.PHONY: build/octi
-
-build/octi: build/Makefile
-	@$(MAKE) --no-print-directory -C build
-
-build/Makefile: build.pro
-	@mkdir -p build
-	@cd build && qmake ../build.pro
-
-.PHONY: run
-
-run: build/octi
-	@cd build && ./octi
-
+	$(MAKE) -C $(BUILDDIR) clean

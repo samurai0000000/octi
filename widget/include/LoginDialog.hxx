@@ -17,6 +17,7 @@
 #ifndef _LOGINDIALOG_HXX_
 #define _LOGINDIALOG_HXX_
 
+#include "qt2compat.h"
 #include "String.hxx"
 #include "widgetapi.h"
 #include "LoginDialogBase.hxx"

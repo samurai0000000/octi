@@ -16,19 +16,20 @@
 
 #define _OCTIAPI_IMPL_
 
+#include "qt2compat.h"
 #include <qlayout.h>
-#include "OctiGame.hxx"
 #include "OctiBoardFrame.hxx"
 
 __BEGIN_NAMESPACE(SELFSOFT);
 
 OctiBoardFrame::OctiBoardFrame(QWidget *parent, const char *name, WFlags f)
-    : QFrame(parent, name, f) {
+    : QFrame(parent, f) {
+    qt2InitWidget(this, name);
     _bw = new OctiBoardWidget(this);
 
     QVBoxLayout *vlayout1 = new QVBoxLayout(this);
     vlayout1->addWidget(_bw);
-    setFrameStyle(StyledPanel | Sunken);
+    setFrameStyle(QFrame::StyledPanel | QFrame::Sunken);
 }
 
 OctiBoardFrame::~OctiBoardFrame() {

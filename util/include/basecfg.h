@@ -17,6 +17,22 @@
 #define _BASECFG_H_
 
 #include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+#include <iostream>
+#include <fstream>
+using std::ostream;
+using std::istream;
+using std::ifstream;
+using std::ofstream;
+using std::cout;
+using std::cerr;
+using std::cin;
+using std::endl;
+using std::flush;
+using std::ios;
+#endif
 
 /***************************/
 /* Default version string. */
@@ -28,59 +44,45 @@
 /*********************/
 /* Type definitions. */
 /*********************/
-typedef unsigned char boolean;
-typedef unsigned char byte;
-typedef unsigned short word16;
-typedef short int16;
-#ifdef __alpha
-#ifdef _MSC_VER
-typedef unsigned long word32;
-typedef long int32;
-#else  /* __alpha && _MSC_VER */
-typedef unsigned int word32;
-typedef int int32;
-#endif /* __alpha && _MSC_VER */
-#else  /* !__alpha */
-typedef unsigned long word32;
-typedef long int32;
-#endif /* __alpha */
+typedef uint8_t boolean;
+typedef uint8_t byte;
+typedef uint16_t word16;
+typedef int16_t int16;
+typedef uint32_t word32;
+typedef int32_t int32;
 
-#if defined(__GNUC__) || defined(__MWERKS__)
 #define __HAS_WORD64__
-typedef unsigned long long word64;
-typedef long long int64;
-#define WORD64STR(s) s##LL
-#elif defined(_MSC_VER) || defined(__BCPLUSPLUS__)
-#define __HAS_WORD64__
-typedef unsigned __int64 word64;
-typedef __int64 int64;
+typedef uint64_t word64;
+typedef int64_t int64;
+#if defined(_MSC_VER)
 #define WORD64STR(s) s##ui64
-#endif  /* __GNUC__ ... */
-
-// word should have the same size as the CPU registers
-// dword should be twice as big as word
-#if (defined(__GNUC__) && !defined(__alpha)) || defined(__MWERKS__)
-typedef unsigned long word;
-typedef unsigned long long dword;
-#elif defined(_MSC_VER) || defined(__BCPLUSPLUS__)
-typedef unsigned __int32 word;
-typedef unsigned __int64 dword;
 #else
-typedef unsigned int word;
-typedef unsigned long dword;
+#define WORD64STR(s) s##ULL
 #endif
 
-#define TRUE 1
-#define true TRUE
-#define FALSE 0
-#define false FALSE
+typedef uintptr_t word;
+typedef uint64_t dword;
 
-#if defined(__i386__) || defined(__i486__) || defined(__i586__) ||  \
-    defined(__i686__) || defined(__alpha__) || defined(__arm__)
+#define TRUE 1
+#define FALSE 0
+#ifndef __cplusplus
+#ifndef true
+#define true 1
+#define false 0
+#endif
+#endif
+
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #define IS_LITTLE_ENDIAN
-#else  /* Most other CPUs */
+#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 #define IS_BIG_ENDIAN
-#endif /* 386, 486, ... */
+#elif defined(__i386__) || defined(__i486__) || defined(__i586__) || \
+      defined(__i686__) || defined(__x86_64__) || defined(__amd64__) || \
+      defined(__alpha__) || defined(__arm__) || defined(__aarch64__)
+#define IS_LITTLE_ENDIAN
+#else
+#define IS_BIG_ENDIAN
+#endif
 
 /**********************************************/
 /* Language-dependent prototype declarations. */
