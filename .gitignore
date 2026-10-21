@@ -2,3 +2,15 @@
 .depend
 .swp
 build/
+core/build/
+server/build/
+desktop/build/
+android/.gradle/
+android/.kotlin/
+android/local.properties
+android/build/
+android/app/build/
+plan/
+.cursor
+.agents
+.claude
