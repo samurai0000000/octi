@@ -1,6 +1,6 @@
 # OCTI
 
-**Version: 2.0.0**
+**Version: 2.0.1**
 
 An open-source platform for playing **OCTI** and **OCTI for Kids (OFK)**—combining an Android mobile client, a Qt desktop client for Linux (X11) and Windows, a shared C++17 core engine with an AI opponent, a real-time multiplayer and matchmaking server, and a web-based game archive.
 
@@ -44,5 +44,7 @@ Full rules, board diagrams, and variant specifications are available in [`doc/oc
 | Path | Description |
 | :--- | :--- |
 | [`doc/octi_game_instructions.md`](doc/octi_game_instructions.md) | Complete OCTI rules, setup, four-player rules, player options, and illustrated board examples |
+| [`doc/octi_for_kids_instructions.md`](doc/octi_for_kids_instructions.md) | Official OCTI for Kids (6×7 board) rules, setup, and board diagram |
+| [`doc/octi_notation.md`](doc/octi_notation.md) | Formal EBNF ply move syntax, canonical normalization, `.octi` game transcript format, and OCTI-FEN position snapshot specification |
 | [`doc/octi_game_instructions.pdf`](doc/octi_game_instructions.pdf) | Searchable OCR-processed PDF of the original OCTI instruction leaflet |
 | [`doc/octi_game_instructions.png`](doc/octi_game_instructions.png) | High-resolution scan of the original OCTI instruction leaflet |

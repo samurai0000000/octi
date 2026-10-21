@@ -5,8 +5,18 @@
  */
 
 #include "OctiCore.hxx"
+#include "OctiDefs.hxx"
+#include "OctiExceptions.hxx"
+#include "OctiMove.hxx"
+#include "OctiPod.hxx"
+#include "OctiSquare.hxx"
+#include "OctiBoard.hxx"
+#include "OctiGame.hxx"
 #include "Version.hxx"
+#include <rapidcheck.h>
+#include <sstream>
 #include <string>
+#include <vector>
 #include <CppUTest/CommandLineTestRunner.h>
 #include <CppUTest/TestHarness.h>
 
@@ -17,7 +27,7 @@ TEST_GROUP(OctiCoreTest)
 TEST(OctiCoreTest, VersionAndBuildBanner)
 {
     octi::OctiCore core;
-     (void)core;
+    (void)core;
     STRCMP_EQUAL(OCTI_VERSION_STRING, octi::OctiCore::versionString());
 
     std::string banner = octi::OctiCore::buildBanner("octi_core");
@@ -28,8 +38,1449 @@ TEST(OctiCoreTest, VersionAndBuildBanner)
     CHECK_TRUE(fallbackBanner.find("octi version ") != std::string::npos);
 }
 
+TEST_GROUP(OctiPodTest)
+{
+};
+
+TEST(OctiPodTest, DefaultConstructionAndClear)
+{
+    octi::OctiPod pod;
+    CHECK_EQUAL(octi::POD_UNDEF, pod.getType());
+    CHECK_EQUAL(0, pod.getNumProngs());
+    CHECK_EQUAL(0, pod.getNumNormalProngs());
+    CHECK_EQUAL(0, pod.getNumSuperProngs());
+    CHECK_FALSE(pod.hasSuperProng());
+    STRCMP_EQUAL("", pod.getConfigString().c_str());
+
+    pod.setType(octi::A_POD);
+    pod.addProng(octi::DIR_N, false);
+    CHECK_EQUAL(1, pod.getNumProngs());
+
+    pod.clear();
+    CHECK_EQUAL(octi::POD_UNDEF, pod.getType());
+    CHECK_EQUAL(0, pod.getNumProngs());
+    STRCMP_EQUAL("", pod.getConfigString().c_str());
+}
+
+TEST(OctiPodTest, OwnerTypeManipulation)
+{
+    octi::OctiPod pod(octi::B_POD);
+    CHECK_EQUAL(octi::B_POD, pod.getType());
+
+    pod.setType(octi::C_POD);
+    CHECK_EQUAL(octi::C_POD, pod.getType());
+
+    pod.setType(octi::D_POD);
+    CHECK_EQUAL(octi::D_POD, pod.getType());
+
+    pod.setType(octi::A_POD);
+    CHECK_EQUAL(octi::A_POD, pod.getType());
+}
+
+TEST(OctiPodTest, ProngAddRemoveAndInspection)
+{
+    octi::OctiPod pod(octi::A_POD);
+
+    pod.addProng(octi::DIR_N, false);
+    pod.addProng(octi::DIR_E, false);
+    pod.addProng(octi::DIR_S, false);
+
+    CHECK_EQUAL(octi::NORMAL_PRONG, pod.prongAt(octi::DIR_N));
+    CHECK_EQUAL(octi::NO_PRONG, pod.prongAt(octi::DIR_NE));
+    CHECK_EQUAL(octi::NORMAL_PRONG, pod.prongAt(octi::DIR_E));
+    CHECK_EQUAL(octi::NORMAL_PRONG, pod.prongAt(octi::DIR_S));
+    CHECK_EQUAL(3, pod.getNumProngs());
+    CHECK_EQUAL(3, pod.getNumNormalProngs());
+    CHECK_EQUAL(0, pod.getNumSuperProngs());
+    STRCMP_EQUAL("ace", pod.getConfigString().c_str());
+
+    pod.removeProng(octi::DIR_E);
+    CHECK_EQUAL(octi::NO_PRONG, pod.prongAt(octi::DIR_E));
+    CHECK_EQUAL(2, pod.getNumProngs());
+    STRCMP_EQUAL("ae", pod.getConfigString().c_str());
+}
+
+TEST(OctiPodTest, SuperProngHandling)
+{
+    octi::OctiPod pod(octi::B_POD);
+
+    pod.addProng(octi::DIR_N, false);
+    pod.addProng(octi::DIR_E, true); // superprong at East
+    CHECK_TRUE(pod.hasSuperProng());
+    CHECK_EQUAL(octi::SUPER_PRONG, pod.prongAt(octi::DIR_E));
+    CHECK_EQUAL(2, pod.getNumProngs());
+    CHECK_EQUAL(1, pod.getNumNormalProngs());
+    CHECK_EQUAL(1, pod.getNumSuperProngs());
+    STRCMP_EQUAL("ac!", pod.getConfigString().c_str());
+
+    pod.removeProng(octi::DIR_E);
+    CHECK_FALSE(pod.hasSuperProng());
+    CHECK_EQUAL(1, pod.getNumProngs());
+    CHECK_EQUAL(1, pod.getNumNormalProngs());
+    CHECK_EQUAL(0, pod.getNumSuperProngs());
+    STRCMP_EQUAL("a", pod.getConfigString().c_str());
+}
+
+TEST(OctiPodTest, WeightComparisonAndStrictOrdering)
+{
+    octi::OctiPod p0(octi::A_POD); // 0 prongs
+    octi::OctiPod p1(octi::A_POD); // 1 prong
+    p1.addProng(octi::DIR_N, false);
+    octi::OctiPod p1s(octi::A_POD); // 1 superprong
+    p1s.addProng(octi::DIR_N, true);
+    octi::OctiPod p2(octi::A_POD); // 2 normal prongs
+    p2.addProng(octi::DIR_N, false);
+    p2.addProng(octi::DIR_E, false);
+
+    CHECK_TRUE(p0 < p1);
+    CHECK_TRUE(p1 < p1s);
+    CHECK_TRUE(p1s < p2);
+    CHECK_TRUE(p0 <= p1);
+    CHECK_TRUE(p2 > p1);
+    CHECK_TRUE(p2 >= p1s);
+    CHECK_TRUE(p1 == p1);
+    CHECK_FALSE(p1 != p1);
+    CHECK_TRUE(p1 != p2);
+}
+
+TEST(OctiPodTest, StreamOutputOperator)
+{
+    octi::OctiPod podA(octi::A_POD);
+    podA.addProng(octi::DIR_N, false);
+    podA.addProng(octi::DIR_NE, true);
+
+    std::ostringstream ss;
+    ss << podA;
+    STRCMP_EQUAL("Aab!", ss.str().c_str());
+
+    octi::OctiPod undefPod;
+    std::ostringstream ssUndef;
+    ssUndef << undefPod;
+    STRCMP_EQUAL("?", ssUndef.str().c_str());
+}
+
+TEST(OctiPodTest, BoundaryAllProngsSuperAndNormal)
+{
+    octi::OctiPod allNormal(octi::A_POD);
+    for (int d = octi::DIR_N; d <= octi::DIR_NW; ++d) {
+        allNormal.addProng(static_cast<octi::OctiDir>(d), false);
+    }
+    CHECK_EQUAL(8, allNormal.getNumProngs());
+    CHECK_EQUAL(8, allNormal.getNumNormalProngs());
+    CHECK_EQUAL(0, allNormal.getNumSuperProngs());
+    STRCMP_EQUAL("abcdefgh", allNormal.getConfigString().c_str());
+
+    octi::OctiPod allSuper(octi::B_POD);
+    for (int d = octi::DIR_N; d <= octi::DIR_NW; ++d) {
+        allSuper.addProng(static_cast<octi::OctiDir>(d), true);
+    }
+    CHECK_EQUAL(8, allSuper.getNumProngs());
+    CHECK_EQUAL(0, allSuper.getNumNormalProngs());
+    CHECK_EQUAL(8, allSuper.getNumSuperProngs());
+    STRCMP_EQUAL("a!b!c!d!e!f!g!h!", allSuper.getConfigString().c_str());
+}
+
+TEST(OctiPodTest, RapidCheckProngConfigurationInvariants)
+{
+    IGNORE_ALL_LEAKS_IN_TEST();
+    bool passed = rc::check("OctiPod random prong configurations", []() {
+        auto ownerVal = *rc::gen::inRange(0, 5);
+        octi::OctiPodType owner = static_cast<octi::OctiPodType>(ownerVal);
+        octi::OctiPod pod(owner);
+
+        int normalCount = 0;
+        int superCount = 0;
+
+        for (int d = octi::DIR_N; d <= octi::DIR_NW; ++d) {
+            auto pchoice = *rc::gen::inRange(0, 3); // 0=none, 1=normal, 2=super
+            octi::OctiDir dir = static_cast<octi::OctiDir>(d);
+            if (pchoice == 1) {
+                pod.addProng(dir, false);
+                normalCount++;
+            } else if (pchoice == 2) {
+                pod.addProng(dir, true);
+                superCount++;
+            }
+        }
+
+        RC_ASSERT(pod.getType() == owner);
+        RC_ASSERT(pod.getNumNormalProngs() == normalCount);
+        RC_ASSERT(pod.getNumSuperProngs() == superCount);
+        RC_ASSERT(pod.getNumProngs() == normalCount + superCount);
+        RC_ASSERT(pod.hasSuperProng() == (superCount > 0));
+
+        // Roundtrip via raw config
+        octi::OctiPod pod2(pod.rawConfig());
+        RC_ASSERT(pod == pod2);
+        RC_ASSERT(pod.getConfigString() == pod2.getConfigString());
+    });
+
+    CHECK_TRUE(passed);
+}
+
+TEST_GROUP(OctiSquareTest)
+{
+};
+
+TEST(OctiSquareTest, InitialConfigurationAndAccessors)
+{
+    octi::OctiSquare sq(octi::GAME_MODE_2, octi::A_HOME_SQUARE, 2, 2);
+    CHECK_EQUAL(octi::GAME_MODE_2, sq.getGameMode());
+    CHECK_EQUAL(octi::A_HOME_SQUARE, sq.getType());
+    CHECK_EQUAL(2, sq.getLocX());
+    CHECK_EQUAL(2, sq.getLocY());
+    CHECK_EQUAL(33, sq.getLocId());
+    int x = -1, y = -1;
+    sq.getLocXY(x, y);
+    CHECK_EQUAL(2, x);
+    CHECK_EQUAL(2, y);
+    CHECK_TRUE(sq.isEmpty());
+    CHECK_EQUAL(0, sq.getNumPods());
+}
+
+TEST(OctiSquareTest, AddRemovePodsStacking)
+{
+    octi::OctiSquare sq(octi::GAME_MODE_2, octi::NEUTRAL_SQUARE, 4, 4);
+
+    octi::OctiPod pod1(octi::A_POD);
+    pod1.addProng(octi::DIR_N, false);
+    octi::OctiPod pod2(octi::A_POD);
+    pod2.addProng(octi::DIR_E, false);
+
+    sq.addPod(pod1);
+    sq.addPod(pod2);
+
+    CHECK_FALSE(sq.isEmpty());
+    CHECK_EQUAL(2, sq.getNumPods());
+    CHECK_TRUE(sq.containsPod(pod1));
+    CHECK_TRUE(sq.containsPod(pod2));
+    CHECK_TRUE(sq.getPodAt(0) == pod1);
+    CHECK_TRUE(sq.getPodAt(1) == pod2);
+
+    CHECK_TRUE(sq.removePod(pod2));
+    CHECK_EQUAL(1, sq.getNumPods());
+    CHECK_FALSE(sq.containsPod(pod2));
+    CHECK_TRUE(sq.containsPod(pod1));
+
+    CHECK_FALSE(sq.removePod(pod2)); // already removed
+}
+
+TEST(OctiSquareTest, EmptyWithoutGhostPods)
+{
+    // Fixes Legacy Bug #1
+    octi::OctiSquare sq(octi::GAME_MODE_2, octi::NEUTRAL_SQUARE, 3, 3);
+    octi::OctiPod pA(octi::A_POD);
+    octi::OctiPod pB(octi::A_POD);
+    pB.addProng(octi::DIR_N, false);
+
+    sq.addPod(pA);
+    sq.addPod(pB);
+
+    // Empty ghostPods -> not empty without them
+    CHECK_FALSE(sq.isEmptyWithout({}));
+
+    // Partial ghostPods (only pA) -> not empty without (pB still present)
+    CHECK_FALSE(sq.isEmptyWithout({pA}));
+
+    // Full ghostPods matching both -> empty without them
+    CHECK_TRUE(sq.isEmptyWithout({pA, pB}));
+
+    // Ghost pod that isn't on square -> not empty without
+    octi::OctiPod pC(octi::B_POD);
+    CHECK_FALSE(sq.isEmptyWithout({pA, pC}));
+}
+
+TEST(OctiSquareTest, IsCapturedMode2)
+{
+    // Fixes Legacy Bug #7
+    octi::OctiSquare aHome(octi::GAME_MODE_2, octi::A_HOME_SQUARE, 2, 2); // 33
+    CHECK_FALSE(aHome.isCaptured());
+
+    // Occupied by friendly pod -> not captured
+    octi::OctiPod podA(octi::A_POD);
+    aHome.addPod(podA);
+    CHECK_FALSE(aHome.isCaptured());
+    CHECK_FALSE(aHome.isCapturedBy(octi::PLAYER_B));
+
+    // Enemy pod enters -> captured!
+    octi::OctiPod podB(octi::B_POD);
+    aHome.addPod(podB);
+    CHECK_TRUE(aHome.isCaptured());
+    CHECK_TRUE(aHome.isCapturedBy(octi::PLAYER_B));
+    CHECK_FALSE(aHome.isCapturedBy(octi::PLAYER_A));
+
+    // Neutral square occupied by enemy pod is never "captured" as a home base
+    octi::OctiSquare neutralSq(octi::GAME_MODE_2, octi::NEUTRAL_SQUARE, 4, 4);
+    neutralSq.addPod(podB);
+    CHECK_FALSE(neutralSq.isCaptured());
+}
+
+TEST(OctiSquareTest, IsCapturedMode4)
+{
+    // 4-Player Partnership: Team A & C vs Team B & D
+    octi::OctiSquare aHome(octi::GAME_MODE_4, octi::A_HOME_SQUARE, 2, 2); // 33
+
+    octi::OctiPod podC(octi::C_POD); // ally of A
+    aHome.addPod(podC);
+    CHECK_FALSE(aHome.isCaptured()); // Allied pod does NOT capture team's base
+
+    octi::OctiPod podD(octi::D_POD); // enemy of A & C
+    aHome.addPod(podD);
+    CHECK_TRUE(aHome.isCaptured());
+    CHECK_TRUE(aHome.isCapturedBy(octi::PLAYER_D));
+    CHECK_TRUE(aHome.isCapturedByTeamOf(octi::PLAYER_B));
+    CHECK_FALSE(aHome.isCapturedByTeamOf(octi::PLAYER_A));
+}
+
+TEST(OctiSquareTest, IsCapturedModeOFK)
+{
+    // OCTI for Kids: row 2 bases (22, 32, 42, 52) vs row 6 bases (26, 36, 46, 56)
+    octi::OctiSquare ofkSq(octi::GAME_MODE_OFK, octi::B_HOME_SQUARE, 1, 5); // 26
+    octi::OctiPod podA(octi::A_POD);
+    ofkSq.addPod(podA);
+
+    CHECK_TRUE(ofkSq.isCaptured());
+    CHECK_TRUE(ofkSq.isCapturedBy(octi::PLAYER_A));
+}
+
+TEST(OctiSquareTest, HasEnemyOfAndIsEnemyOf)
+{
+    octi::OctiSquare sq(octi::GAME_MODE_2, octi::B_HOME_SQUARE, 2, 6); // 37
+    CHECK_TRUE(sq.isEnemyOf(octi::PLAYER_A));
+    CHECK_FALSE(sq.isEnemyOf(octi::PLAYER_B));
+
+    octi::OctiPod podB(octi::B_POD);
+    sq.addPod(podB);
+    CHECK_TRUE(sq.hasEnemyOf(octi::PLAYER_A));
+    CHECK_FALSE(sq.hasEnemyOf(octi::PLAYER_B));
+}
+
+TEST(OctiSquareTest, HasSameMaterialsAs)
+{
+    octi::OctiSquare s1(octi::GAME_MODE_2, octi::NEUTRAL_SQUARE, 0, 0);
+    octi::OctiSquare s2(octi::GAME_MODE_2, octi::NEUTRAL_SQUARE, 1, 1);
+
+    octi::OctiPod p1(octi::A_POD);
+    octi::OctiPod p2(octi::B_POD);
+
+    s1.addPod(p1);
+    s1.addPod(p2);
+
+    s2.addPod(p2);
+    s2.addPod(p1);
+
+    CHECK_TRUE(s1.hasSameMaterialsAs(s2));
+
+    s2.addPod(p1);
+    CHECK_FALSE(s1.hasSameMaterialsAs(s2));
+}
+
+TEST(OctiSquareTest, BoundaryFullStackAndEmpty)
+{
+    octi::OctiSquare sq(octi::GAME_MODE_4, octi::NEUTRAL_SQUARE, 4, 4);
+    for (int i = 0; i < 8; ++i) {
+        octi::OctiPod p(octi::A_POD);
+        p.addProng(static_cast<octi::OctiDir>(i), false);
+        sq.addPod(p);
+    }
+    CHECK_EQUAL(8, sq.getNumPods());
+
+    sq.clear();
+    CHECK_EQUAL(0, sq.getNumPods());
+    CHECK_TRUE(sq.isEmpty());
+}
+
+TEST(OctiSquareTest, FaultOutOfBoundsPodAccess)
+{
+    octi::OctiSquare sq(octi::GAME_MODE_2, octi::NEUTRAL_SQUARE, 0, 0);
+    CHECK_THROWS(std::out_of_range, sq.getPodAt(0));
+    CHECK_THROWS(std::out_of_range, sq.podAt(-1));
+}
+
+TEST_GROUP(OctiMoveTest)
+{
+};
+
+TEST(OctiMoveTest, ParsePodPlacementAndExplicitLiberation)
+{
+    // Reserve placement
+    octi::OctiMove m1("33");
+    CHECK_EQUAL(1, m1.size());
+    const auto &ops1 = m1.getOps();
+    CHECK_EQUAL(2, ops1[0].x0);
+    CHECK_EQUAL(2, ops1[0].y0);
+    CHECK_TRUE(ops1[0].addPod);
+    CHECK_FALSE(ops1[0].liberate);
+    STRCMP_EQUAL("33", m1.asString().c_str());
+
+    // Explicit liberation
+    octi::OctiMove m2("37*");
+    CHECK_EQUAL(1, m2.size());
+    const auto &ops2 = m2.getOps();
+    CHECK_EQUAL(2, ops2[0].x0);
+    CHECK_EQUAL(6, ops2[0].y0);
+    CHECK_TRUE(ops2[0].addPod);
+    CHECK_TRUE(ops2[0].liberate);
+    STRCMP_EQUAL("37*", m2.asString().c_str());
+}
+
+TEST(OctiMoveTest, ParseProngAddNormalAndSuper)
+{
+    octi::OctiMove m1("33+b");
+    CHECK_EQUAL(1, m1.size());
+    const auto &ops1 = m1.getOps();
+    CHECK_EQUAL(octi::DIR_NE, ops1[0].addProngDir);
+    CHECK_FALSE(ops1[0].superProng);
+    CHECK_EQUAL(0, ops1[0].pod.getNumProngs());
+    STRCMP_EQUAL("33+b", m1.asString().c_str());
+
+    octi::OctiMove m2("33b+a!");
+    CHECK_EQUAL(1, m2.size());
+    const auto &ops2 = m2.getOps();
+    CHECK_EQUAL(octi::DIR_N, ops2[0].addProngDir);
+    CHECK_TRUE(ops2[0].superProng);
+    CHECK_EQUAL(1, ops2[0].pod.getNumProngs());
+    CHECK_EQUAL(octi::NORMAL_PRONG, ops2[0].pod.prongAt(octi::DIR_NE));
+    STRCMP_EQUAL("33b+a!", m2.asString().c_str());
+}
+
+TEST(OctiMoveTest, ParseProngRepositionCanonicalAndReversed)
+{
+    // Canonical input: +b-a
+    octi::OctiMove m1("33a+b-a");
+    CHECK_EQUAL(1, m1.size());
+    const auto &ops1 = m1.getOps();
+    CHECK_EQUAL(octi::DIR_NE, ops1[0].addProngDir);
+    CHECK_EQUAL(octi::DIR_N, ops1[0].rmProngDir);
+    STRCMP_EQUAL("33a+b-a", m1.asString().c_str());
+
+    // Reversed input: -a+b -> canonicalizes to +b-a
+    octi::OctiMove m2("33a-a+b");
+    CHECK_EQUAL(1, m2.size());
+    const auto &ops2 = m2.getOps();
+    CHECK_EQUAL(octi::DIR_NE, ops2[0].addProngDir);
+    CHECK_EQUAL(octi::DIR_N, ops2[0].rmProngDir);
+    STRCMP_EQUAL("33a+b-a", m2.asString().c_str());
+}
+
+TEST(OctiMoveTest, ParseSingleStepMoveAndMultiHopJump)
+{
+    // Single step
+    octi::OctiMove m1("33a-34");
+    CHECK_EQUAL(1, m1.size());
+    const auto &ops1 = m1.getOps();
+    CHECK_EQUAL(1, ops1[0].hops.size());
+    CHECK_EQUAL(2, ops1[0].hops[0].x);
+    CHECK_EQUAL(3, ops1[0].hops[0].y);
+    CHECK_FALSE(ops1[0].hops[0].capture);
+    STRCMP_EQUAL("33a-34", m1.asString().c_str());
+
+    // Single jump with capture
+    octi::OctiMove m2("33a-35x");
+    CHECK_EQUAL(1, m2.size());
+    const auto &ops2 = m2.getOps();
+    CHECK_EQUAL(1, ops2[0].hops.size());
+    CHECK_EQUAL(2, ops2[0].hops[0].x);
+    CHECK_EQUAL(4, ops2[0].hops[0].y);
+    CHECK_TRUE(ops2[0].hops[0].capture);
+    STRCMP_EQUAL("33a-35x", m2.asString().c_str());
+
+    // Multi-hop jump
+    octi::OctiMove m3("33ac-35x-55");
+    CHECK_EQUAL(1, m3.size());
+    const auto &ops3 = m3.getOps();
+    CHECK_EQUAL(2, ops3[0].hops.size());
+    CHECK_EQUAL(2, ops3[0].hops[0].x);
+    CHECK_EQUAL(4, ops3[0].hops[0].y);
+    CHECK_TRUE(ops3[0].hops[0].capture);
+    CHECK_EQUAL(4, ops3[0].hops[1].x);
+    CHECK_EQUAL(4, ops3[0].hops[1].y);
+    CHECK_FALSE(ops3[0].hops[1].capture);
+    STRCMP_EQUAL("33ac-35x-55", m3.asString().c_str());
+}
+
+TEST(OctiMoveTest, ParseCompositeStackMoves)
+{
+    octi::OctiMove m("37df-46,37e-36");
+    CHECK_EQUAL(2, m.size());
+    const auto &ops = m.getOps();
+    CHECK_EQUAL(2, ops[0].x0);
+    CHECK_EQUAL(6, ops[0].y0);
+    CHECK_EQUAL(2, ops[1].x0);
+    CHECK_EQUAL(6, ops[1].y0);
+    STRCMP_EQUAL("37df-46,37e-36", m.asString().c_str());
+}
+
+TEST(OctiMoveTest, ParseSuperprongBonusMovePrelude)
+{
+    octi::OctiMove m("33a!-34;34a!+b");
+    CHECK_EQUAL(2, m.size());
+    const auto &ops = m.getOps();
+    CHECK_TRUE(ops[0].isSuperProngBonusMove);
+    CHECK_FALSE(ops[1].isSuperProngBonusMove);
+    STRCMP_EQUAL("33a!-34;34a!+b", m.asString().c_str());
+
+    octi::OctiMove m2("33a!-34;34a!-35;35a+c");
+    CHECK_EQUAL(3, m2.size());
+    CHECK_TRUE(m2.getOps()[0].isSuperProngBonusMove);
+    CHECK_TRUE(m2.getOps()[1].isSuperProngBonusMove);
+    CHECK_FALSE(m2.getOps()[2].isSuperProngBonusMove);
+    STRCMP_EQUAL("33a!-34;34a!-35;35a+c", m2.asString().c_str());
+}
+
+TEST(OctiMoveTest, ConstructFromOpsVector)
+{
+    octi::OctiMoveOp op;
+    op.x0 = 2;
+    op.y0 = 2;
+    op.pod.addProng(octi::DIR_N, false);
+    octi::OctiHop hop;
+    hop.x = 2;
+    hop.y = 3;
+    hop.capture = false;
+    op.hops.push_back(hop);
+
+    octi::OctiMove move({op});
+    CHECK_EQUAL(1, move.size());
+    STRCMP_EQUAL("33a-34", move.asString().c_str());
+}
+
+TEST(OctiMoveTest, FaultNullAndEmptyString)
+{
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove(nullptr));
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove(""));
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("   \t  "));
+}
+
+TEST(OctiMoveTest, FaultInvalidCoordinates)
+{
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("00"));
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("90"));
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("3a"));
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("3"));
+}
+
+TEST(OctiMoveTest, FaultDuplicateProngsInConfig)
+{
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("33aa+b"));
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("33a!a+b"));
+}
+
+TEST(OctiMoveTest, FaultProngAddAlreadyExisting)
+{
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("33a+a"));
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("33a!+a"));
+}
+
+TEST(OctiMoveTest, FaultProngRepositionIllegalOperations)
+{
+    // Identical add and remove directions
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("33a+a-a"));
+
+    // Removing non-existent prong
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("33a+b-c"));
+
+    // Repositioning superprong is forbidden
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("33a!+b-a"));
+
+    // Adding superprong in reposition is forbidden
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("33a+b!-a"));
+}
+
+TEST(OctiMoveTest, FaultCompositeMismatchSourceCoordinates)
+{
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("33a-34,34a-35"));
+}
+
+TEST(OctiMoveTest, FaultCompositeMixingProngOrPodOps)
+{
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("33a-34,33+b"));
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("33,33a-34"));
+}
+
+TEST(OctiMoveTest, FaultSuperprongPreludeSyntaxErrors)
+{
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove(";33+b"));
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, octi::OctiMove("33a!-34;"));
+    CHECK_THROWS(octi::IllegalMoveSyntaxException,
+                 octi::OctiMove("33a!-34;34a!-35;35a!-36;36a+b")); // >2 bonus moves
+}
+
+TEST(OctiMoveTest, RapidCheckMoveCanonicalRoundTrip)
+{
+    IGNORE_ALL_LEAKS_IN_TEST();
+    bool passed = rc::check("OctiMove canonical round trip", []() {
+        // Generate random valid moves across different kinds:
+        auto kind = *rc::gen::inRange(0, 4); // 0=place, 1=addProng, 2=reposition, 3=hop
+        int x0 = *rc::gen::inRange(0, 9);
+        int y0 = *rc::gen::inRange(0, 9);
+
+        octi::OctiMoveOp op;
+        op.x0 = x0;
+        op.y0 = y0;
+
+        if (kind == 0) {
+            // Pod place
+            op.addPod = true;
+            op.liberate = *rc::gen::arbitrary<bool>();
+        } else if (kind == 1) {
+            // Prong add
+            op.addProngDir = static_cast<octi::OctiDir>(*rc::gen::inRange(0, 8));
+            op.superProng = *rc::gen::arbitrary<bool>();
+        } else if (kind == 2) {
+            // Reposition
+            int add = *rc::gen::inRange(0, 8);
+            int rm = *rc::gen::inRange(0, 7);
+            if (rm >= add) rm++;
+            op.addProngDir = static_cast<octi::OctiDir>(add);
+            op.rmProngDir = static_cast<octi::OctiDir>(rm);
+            op.pod.addProng(op.rmProngDir, false); // pod must have rmDir
+        } else {
+            // Hop
+            op.pod.addProng(octi::DIR_N, false);
+            octi::OctiHop h;
+            h.x = *rc::gen::inRange(0, 9);
+            h.y = *rc::gen::inRange(0, 9);
+            h.capture = *rc::gen::arbitrary<bool>();
+            op.hops.push_back(h);
+        }
+
+        octi::OctiMove m({op});
+        std::string s = m.asString();
+        octi::OctiMove mFromStr(s);
+
+        RC_ASSERT(m == mFromStr);
+        RC_ASSERT(m.asString() == mFromStr.asString());
+    });
+
+    CHECK_TRUE(passed);
+}
+
+TEST(OctiMoveTest, RapidCheckFuzzParserRobustness)
+{
+    IGNORE_ALL_LEAKS_IN_TEST();
+    bool passed = rc::check("OctiMove fuzz parser robustness", []() {
+        std::string fuzz = *rc::gen::arbitrary<std::string>();
+        try {
+            octi::OctiMove m(fuzz);
+            // If parsed, serialization must not throw or crash
+            std::string s = m.asString();
+            octi::OctiMove m2(s);
+            RC_ASSERT(m == m2);
+        } catch (const octi::IllegalMoveSyntaxException &) {
+            // Expected rejection of malformed input
+        }
+    });
+
+    CHECK_TRUE(passed);
+}
+
+// ---------------------------------------------------------------------------
+// OctiBoardTest
+// ---------------------------------------------------------------------------
+
+class MockBoardListener : public octi::OctiBoardListener {
+public:
+    int updatedCount = 0;
+    int gameChangedCount = 0;
+    void boardUpdated(octi::OctiBoard *board, const octi::OctiMove *move) override {
+        (void)board; (void)move;
+        updatedCount++;
+    }
+    void gameChanged(octi::OctiBoard *board, octi::OctiGame *oldGame, octi::OctiGame *newGame) override {
+        (void)board; (void)oldGame; (void)newGame;
+        gameChangedCount++;
+    }
+};
+
+TEST_GROUP(OctiBoardTest)
+{
+};
+
+TEST(OctiBoardTest, BoardDimensionsAndModes)
+{
+    octi::OctiBoard b2(octi::GAME_MODE_2);
+    CHECK_EQUAL(9, b2.getBoardWidth());
+    CHECK_EQUAL(9, b2.getBoardHeight());
+    CHECK_EQUAL(octi::GAME_MODE_2, b2.getGameMode());
+
+    octi::OctiBoard b4(octi::GAME_MODE_4);
+    CHECK_EQUAL(9, b4.getBoardWidth());
+    CHECK_EQUAL(9, b4.getBoardHeight());
+    CHECK_EQUAL(octi::GAME_MODE_4, b4.getGameMode());
+
+    octi::OctiBoard bOfk(octi::GAME_MODE_OFK);
+    CHECK_EQUAL(6, bOfk.getBoardWidth());
+    CHECK_EQUAL(7, bOfk.getBoardHeight());
+    CHECK_EQUAL(octi::GAME_MODE_OFK, bOfk.getGameMode());
+}
+
+TEST(OctiBoardTest, SquareTypesAndCoordinates)
+{
+    octi::OctiBoard b2(octi::GAME_MODE_2);
+    CHECK_EQUAL(octi::A_HOME_SQUARE, b2.squareAt(2, 2).getType());
+    CHECK_EQUAL(octi::A_HOME_SQUARE, b2.squareAt(4, 2).getType());
+    CHECK_EQUAL(octi::A_HOME_SQUARE, b2.squareAt(6, 2).getType());
+    CHECK_EQUAL(octi::B_HOME_SQUARE, b2.squareAt(2, 6).getType());
+    CHECK_EQUAL(octi::B_HOME_SQUARE, b2.squareAt(4, 6).getType());
+    CHECK_EQUAL(octi::B_HOME_SQUARE, b2.squareAt(6, 6).getType());
+    CHECK_EQUAL(octi::NEUTRAL_SQUARE, b2.squareAt(0, 0).getType());
+
+    CHECK_THROWS(octi::IllegalMoveException, b2.squareAt(-1, 0));
+    CHECK_THROWS(octi::IllegalMoveException, b2.squareAt(9, 9));
+
+    octi::OctiBoard b4(octi::GAME_MODE_4);
+    CHECK_EQUAL(octi::A_HOME_SQUARE, b4.squareAt(2, 2).getType());
+    CHECK_EQUAL(octi::B_HOME_SQUARE, b4.squareAt(2, 6).getType());
+    CHECK_EQUAL(octi::C_HOME_SQUARE, b4.squareAt(6, 6).getType());
+    CHECK_EQUAL(octi::D_HOME_SQUARE, b4.squareAt(6, 2).getType());
+    CHECK_EQUAL(octi::NEUTRAL_OCTI_SQUARE, b4.squareAt(4, 2).getType());
+    CHECK_EQUAL(octi::NEUTRAL_OCTI_SQUARE, b4.squareAt(4, 6).getType());
+
+    octi::OctiBoard bOfk(octi::GAME_MODE_OFK);
+    CHECK_EQUAL(octi::A_HOME_SQUARE, bOfk.squareAt(1, 1).getType());
+    CHECK_EQUAL(octi::A_HOME_SQUARE, bOfk.squareAt(4, 1).getType());
+    CHECK_EQUAL(octi::B_HOME_SQUARE, bOfk.squareAt(1, 5).getType());
+    CHECK_EQUAL(octi::B_HOME_SQUARE, bOfk.squareAt(4, 5).getType());
+    CHECK_THROWS(octi::IllegalMoveException, bOfk.squareAt(6, 0));
+    CHECK_THROWS(octi::IllegalMoveException, bOfk.squareAt(0, 7));
+}
+
+TEST(OctiBoardTest, CanLiberateLogic)
+{
+    octi::OctiBoard b2(octi::GAME_MODE_2);
+    CHECK_FALSE(b2.canLiberate(octi::PLAYER_A));
+    CHECK_FALSE(b2.canLiberate(octi::PLAYER_B));
+
+    b2.squareAt(2, 6).addPod(octi::OctiPod(octi::A_POD));
+    CHECK_TRUE(b2.canLiberate(octi::PLAYER_A));
+    CHECK_FALSE(b2.canLiberate(octi::PLAYER_B));
+
+    octi::OctiBoard bOfk(octi::GAME_MODE_OFK);
+    bOfk.squareAt(1, 5).addPod(octi::OctiPod(octi::A_POD));
+    CHECK_FALSE(bOfk.canLiberate(octi::PLAYER_A));
+
+    octi::OctiBoard b4(octi::GAME_MODE_4);
+    CHECK_FALSE(b4.canLiberate(octi::PLAYER_A));
+    b4.squareAt(4, 2).addPod(octi::OctiPod(octi::A_POD));
+    CHECK_TRUE(b4.canLiberate(octi::PLAYER_A));
+}
+
+TEST(OctiBoardTest, BoardListenerNotifications)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    MockBoardListener listener;
+    board.addBoardListener(&listener);
+
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    game->move("33+b");
+    CHECK_EQUAL(1, listener.updatedCount);
+
+    board.setGameMode(octi::GAME_MODE_OFK);
+    CHECK_EQUAL(1, listener.gameChangedCount);
+
+    board.removeBoardListener(&listener);
+}
+
+TEST(OctiBoardTest, AsciiStreamOutput)
+{
+    octi::OctiBoard b2(octi::GAME_MODE_2);
+    std::ostringstream ssOccupied;
+    ssOccupied << b2;
+    std::string sOcc = ssOccupied.str();
+    CHECK_TRUE(sOcc.find("A:") != std::string::npos);
+
+    b2.clear();
+    std::ostringstream ss2;
+    ss2 << b2;
+    std::string s2 = ss2.str();
+    CHECK_TRUE(s2.find("(A)") != std::string::npos);
+    CHECK_TRUE(s2.find("(B)") != std::string::npos);
+
+    octi::OctiBoard bOfk(octi::GAME_MODE_OFK);
+    std::ostringstream ssOfk;
+    ssOfk << bOfk;
+    std::string sOfk = ssOfk.str();
+    CHECK_TRUE(sOfk.find("6") != std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// Octi2PlayerGameTest
+// ---------------------------------------------------------------------------
+
+TEST_GROUP(Octi2PlayerGameTest)
+{
+};
+
+TEST(Octi2PlayerGameTest, ResetAndInitialReserves)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->reset();
+    game->start(octi::PLAYER_A);
+
+    CHECK_TRUE(game->isGameStarted());
+    CHECK_FALSE(game->isGameOver());
+    CHECK_EQUAL(octi::PLAYER_A, game->getTurn());
+    CHECK_EQUAL(4, game->getFreePods(octi::PLAYER_A));
+    CHECK_EQUAL(4, game->getFreePods(octi::PLAYER_B));
+    CHECK_EQUAL(0, game->getCapturedPods(octi::PLAYER_A));
+    CHECK_EQUAL(0, game->getCapturedPods(octi::PLAYER_B));
+    CHECK_EQUAL(25, game->getFreeProngs(octi::PLAYER_A));
+    CHECK_EQUAL(25, game->getFreeProngs(octi::PLAYER_B));
+    CHECK_EQUAL(0, game->getFreeSuperProngs(octi::PLAYER_A));
+    CHECK_EQUAL(0, game->getFreeSuperProngs(octi::PLAYER_B));
+}
+
+TEST(Octi2PlayerGameTest, TurnOptionI_AddNormalAndSuperProng)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2, true /* useSuperProngs */);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    CHECK_EQUAL(24, game->getFreeProngs(octi::PLAYER_A));
+    CHECK_EQUAL(1, game->getFreeSuperProngs(octi::PLAYER_A));
+
+    game->move("33+b");
+    CHECK_EQUAL(23, game->getFreeProngs(octi::PLAYER_A));
+    CHECK_EQUAL(octi::PLAYER_B, game->getTurn());
+    CHECK_EQUAL(octi::NORMAL_PRONG, board.squareAt(2, 2).getPodAt(0).prongAt(octi::DIR_NE));
+
+    game->move("37+e!");
+    CHECK_EQUAL(0, game->getFreeSuperProngs(octi::PLAYER_B));
+    CHECK_EQUAL(octi::PLAYER_A, game->getTurn());
+    CHECK_EQUAL(octi::SUPER_PRONG, board.squareAt(2, 6).getPodAt(0).prongAt(octi::DIR_S));
+}
+
+TEST(Octi2PlayerGameTest, TurnOptionII_RepositionNormalProng)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    game->move("33+b");
+    game->move("37+e");
+    game->move("33b+c-b");
+    CHECK_EQUAL(octi::NO_PRONG, board.squareAt(2, 2).getPodAt(0).prongAt(octi::DIR_NE));
+    CHECK_EQUAL(octi::NORMAL_PRONG, board.squareAt(2, 2).getPodAt(0).prongAt(octi::DIR_E));
+}
+
+TEST(Octi2PlayerGameTest, TurnOptionII_RejectSuperProngReposition)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2, true);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    game->move("33+b!");
+    game->move("37+e");
+
+    CHECK_THROWS(std::runtime_error, game->move("33b!+c-b"));
+}
+
+TEST(Octi2PlayerGameTest, TurnOptionIII_Distance1Move)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    game->move("33+a");
+    game->move("37+e");
+    game->move("33a-34");
+    CHECK_EQUAL(0, board.squareAt(2, 2).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(2, 3).getNumPods());
+
+    game->move("57+d");
+    CHECK_THROWS(octi::IllegalMoveException, game->move("34a-35x"));
+}
+
+TEST(Octi2PlayerGameTest, TurnOptionIV_Distance2JumpAndCapture)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    game->move("33+a");
+    game->move("37+e");
+    game->move("53+c");
+    game->move("37e-36");
+    game->move("53c+b");
+    game->move("36e-35");
+    game->move("53bc+d");
+    game->move("35e-34");
+
+    CHECK_EQUAL(1, board.squareAt(2, 3).getNumPods());
+    CHECK_EQUAL(0, game->getCapturedPods(octi::PLAYER_B));
+    int prongsBefore = game->getFreeProngs(octi::PLAYER_A);
+
+    game->move("33a-35x");
+    CHECK_EQUAL(0, board.squareAt(2, 3).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(2, 4).getNumPods());
+    CHECK_EQUAL(1, game->getCapturedPods(octi::PLAYER_B));
+    CHECK_EQUAL(prongsBefore + 1, game->getFreeProngs(octi::PLAYER_A));
+}
+
+TEST(Octi2PlayerGameTest, TurnOptionV_ReservePodAndLiberation)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    CHECK_EQUAL(4, game->getFreePods(octi::PLAYER_A));
+    game->move("33");
+    CHECK_EQUAL(3, game->getFreePods(octi::PLAYER_A));
+    CHECK_EQUAL(2, board.squareAt(2, 2).getNumPods());
+
+    // Occupy enemy base 37 and liberate
+    board.squareAt(2, 6).clear();
+    board.squareAt(2, 6).addPod(octi::OctiPod(octi::A_POD));
+    octi::OctiGameSnapshot snap = game->captureSnapshot();
+    snap.players[octi::PLAYER_A].capturedPods = 1;
+    game->restoreSnapshot(snap);
+
+    game->move("57+e"); // B moves on 57
+    game->move("37*");  // A explicitly liberates onto 37
+    CHECK_EQUAL(0, game->getCapturedPods(octi::PLAYER_A));
+}
+
+TEST(Octi2PlayerGameTest, UndoRedoStack)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    std::string fen0 = board.toPositionString();
+    game->move("33+b");
+    std::string fen1 = board.toPositionString();
+    game->move("37+e");
+    std::string fen2 = board.toPositionString();
+
+    CHECK_TRUE(game->canUndo());
+    game->undo();
+    CHECK_EQUAL(fen1, board.toPositionString());
+
+    game->undo();
+    CHECK_EQUAL(fen0, board.toPositionString());
+    CHECK_FALSE(game->canUndo());
+
+    CHECK_TRUE(game->canRedo());
+    game->redo();
+    CHECK_EQUAL(fen1, board.toPositionString());
+
+    game->redo();
+    CHECK_EQUAL(fen2, board.toPositionString());
+    CHECK_FALSE(game->canRedo());
+}
+
+TEST(Octi2PlayerGameTest, VictoryConditions)
+{
+    octi::OctiBoard b1(octi::GAME_MODE_2, false, false, octi::GAME_BASES_1);
+    octi::OctiGame *g1 = b1.getGame();
+    g1->start(octi::PLAYER_A);
+
+    b1.squareAt(2, 6).addPod(octi::OctiPod(octi::A_POD));
+    g1->move("33+b");
+    CHECK_TRUE(g1->isGameOver());
+    CHECK_EQUAL(octi::PLAYER_A, g1->getWinner());
+
+    octi::OctiBoard bResign(octi::GAME_MODE_2);
+    octi::OctiGame *gResign = bResign.getGame();
+    gResign->start(octi::PLAYER_A);
+    gResign->resign(octi::PLAYER_A);
+    CHECK_TRUE(gResign->isGameOver());
+    CHECK_TRUE(gResign->isGameResigned());
+    CHECK_EQUAL(octi::PLAYER_B, gResign->getWinner());
+}
+
+TEST(Octi2PlayerGameTest, PreparatoryWorkflow)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    CHECK_FALSE(game->hasPreparedMove());
+    game->prepareAddProng(2, 2, octi::OctiPod(octi::A_POD), octi::DIR_NE, false);
+    CHECK_TRUE(game->hasPreparedMove());
+    STRCMP_EQUAL("33+b", game->getPreparedMoveString().c_str());
+
+    game->rollbackPreparedMove();
+    CHECK_FALSE(game->hasPreparedMove());
+    STRCMP_EQUAL("", game->getPreparedMoveString().c_str());
+
+    game->prepareAddProng(2, 2, octi::OctiPod(octi::A_POD), octi::DIR_NE, false);
+    game->commitPreparedMove();
+    CHECK_FALSE(game->hasPreparedMove());
+    CHECK_EQUAL(octi::PLAYER_B, game->getTurn());
+    CHECK_EQUAL(1, game->getNumMoves());
+}
+
+// ---------------------------------------------------------------------------
+// Octi4PlayerGameTest
+// ---------------------------------------------------------------------------
+
+TEST_GROUP(Octi4PlayerGameTest)
+{
+};
+
+TEST(Octi4PlayerGameTest, SetupAndCyclicTurns)
+{
+    octi::OctiBoard board(octi::GAME_MODE_4);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    CHECK_EQUAL(octi::PLAYER_A, game->getTurn());
+    game->move("33+a");
+    CHECK_EQUAL(octi::PLAYER_B, game->getTurn());
+    game->move("37+e");
+    CHECK_EQUAL(octi::PLAYER_C, game->getTurn());
+    game->move("77+e");
+    CHECK_EQUAL(octi::PLAYER_D, game->getTurn());
+    game->move("73+a");
+    CHECK_EQUAL(octi::PLAYER_A, game->getTurn());
+}
+
+TEST(Octi4PlayerGameTest, AlliedStacking)
+{
+    octi::OctiBoard board(octi::GAME_MODE_4);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    // Allied pod stacking: Player A and Player C are partners
+    board.squareAt(2, 2).addPod(octi::OctiPod(octi::C_POD));
+    CHECK_EQUAL(2, board.squareAt(2, 2).getNumPods());
+    CHECK_FALSE(board.squareAt(2, 2).hasEnemyOf(octi::PLAYER_A));
+    CHECK_FALSE(board.squareAt(2, 2).hasEnemyOf(octi::PLAYER_C));
+}
+
+TEST(Octi4PlayerGameTest, HomeBaseEliminationAndTurnSkipping)
+{
+    octi::OctiBoard board(octi::GAME_MODE_4);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    // Enemy A occupies B's home base (37)
+    board.squareAt(2, 6).addPod(octi::OctiPod(octi::A_POD));
+    game->move("33+b"); // End of A's turn checks 4P elimination -> B eliminated!
+
+    CHECK_TRUE(game->isPlayerEliminated(octi::PLAYER_B));
+    CHECK_FALSE(game->isPlayerEliminated(octi::PLAYER_A));
+    CHECK_FALSE(game->isPlayerEliminated(octi::PLAYER_C));
+    CHECK_FALSE(game->isPlayerEliminated(octi::PLAYER_D));
+
+    // B's turn is skipped, next is C!
+    CHECK_EQUAL(octi::PLAYER_C, game->getTurn());
+}
+
+// ---------------------------------------------------------------------------
+// OctiForKidsGameTest
+// ---------------------------------------------------------------------------
+
+TEST_GROUP(OctiForKidsGameTest)
+{
+};
+
+TEST(OctiForKidsGameTest, DimensionsAndPodSetup)
+{
+    octi::OctiBoard board(octi::GAME_MODE_OFK);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    CHECK_EQUAL(6, board.getBoardWidth());
+    CHECK_EQUAL(7, board.getBoardHeight());
+    CHECK_EQUAL(0, game->getFreePods(octi::PLAYER_A));
+    CHECK_EQUAL(12, game->getFreeProngs(octi::PLAYER_A));
+    CHECK_EQUAL(0, game->getFreeSuperProngs(octi::PLAYER_A));
+
+    // Pods on 22, 32, 42, 52 and 26, 36, 46, 56
+    CHECK_EQUAL(1, board.squareAt(1, 1).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(2, 1).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(3, 1).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(4, 1).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(1, 5).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(2, 5).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(3, 5).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(4, 5).getNumPods());
+}
+
+TEST(OctiForKidsGameTest, DisallowPodPlacementAndReposition)
+{
+    octi::OctiBoard board(octi::GAME_MODE_OFK);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    CHECK_THROWS(octi::IllegalMoveException, game->move("22"));
+
+    game->move("22+a");
+    game->move("26+e");
+    CHECK_THROWS(octi::IllegalMoveException, game->move("22a+b-a"));
+}
+
+TEST(OctiForKidsGameTest, DisallowStacking)
+{
+    octi::OctiBoard board(octi::GAME_MODE_OFK);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    game->move("22+c");
+    game->move("26+e");
+    // Move East to 32 where friendly pod already sits -> forbidden in OFK!
+    CHECK_THROWS(octi::IllegalMoveException, game->move("22c-32"));
+}
+
+TEST(OctiForKidsGameTest, SingleBaseVictory)
+{
+    octi::OctiBoard board(octi::GAME_MODE_OFK);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    board.squareAt(1, 5).addPod(octi::OctiPod(octi::A_POD)); // A occupies B's base 26
+    game->move("22+a");
+    CHECK_TRUE(game->isGameOver());
+    CHECK_EQUAL(octi::PLAYER_A, game->getWinner());
+}
+
+// ---------------------------------------------------------------------------
+// OctiRulebookExamplesTest
+// ---------------------------------------------------------------------------
+
+TEST_GROUP(OctiRulebookExamplesTest)
+{
+};
+
+TEST(OctiRulebookExamplesTest, Example1_MovingStackedPods)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    // Setup 3 pods at 33:
+    // Bottom: ↖→ (h, c)
+    // Middle: ↑ (a)
+    // Top: ↖ (h)
+    board.squareAt(2, 2).clear();
+    octi::OctiPod pBottom(octi::A_POD);
+    pBottom.addProng(octi::DIR_NW, false);
+    pBottom.addProng(octi::DIR_E, false);
+    octi::OctiPod pMiddle(octi::A_POD);
+    pMiddle.addProng(octi::DIR_N, false);
+    octi::OctiPod pTop(octi::A_POD);
+    pTop.addProng(octi::DIR_NW, false);
+
+    board.squareAt(2, 2).addPod(pBottom);
+    board.squareAt(2, 2).addPod(pMiddle);
+    board.squareAt(2, 2).addPod(pTop);
+
+    // Top moves to 24 (A), Middle moves to 34 (B), Bottom stays at 33
+    // Composite move notation: "33h-24,33a-34"
+    game->move("33h-24,33a-34");
+    CHECK_EQUAL(1, board.squareAt(1, 3).getNumPods()); // 24
+    CHECK_EQUAL(1, board.squareAt(2, 3).getNumPods()); // 34
+    CHECK_EQUAL(1, board.squareAt(2, 2).getNumPods()); // 33 (bottom pod remained)
+}
+
+TEST(OctiRulebookExamplesTest, Example2_JumpingWithStackedPods)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    // Setup Illustrated Example 2 from doc/octi_game_instructions.md
+    // Bottom pod jumps to A then B, top pod jumps to B then C
+    board.clear();
+    octi::OctiPod pBottom(octi::A_POD);
+    pBottom.addProng(octi::DIR_NW, false); // h
+    pBottom.addProng(octi::DIR_E, false);  // c
+    octi::OctiPod pTop(octi::A_POD);
+    pTop.addProng(octi::DIR_N, false);     // a
+
+    board.squareAt(2, 0).addPod(pBottom); // 31
+    board.squareAt(2, 0).addPod(pTop);
+
+    // Stationary pods on jumped squares
+    board.squareAt(1, 1).addPod(octi::OctiPod(octi::B_POD)); // 22
+    board.squareAt(2, 1).addPod(octi::OctiPod(octi::A_POD)); // 32
+    board.squareAt(1, 2).addPod(octi::OctiPod(octi::A_POD)); // 23
+    board.squareAt(2, 3).addPod(octi::OctiPod(octi::B_POD)); // 34
+
+    // Bottom pod jumps 31 -> 13 -> 33
+    // Top pod jumps 31 -> 33 -> 35
+    game->move("31ch-13-33,31a-33-35");
+    CHECK_EQUAL(1, board.squareAt(2, 2).getNumPods()); // 33
+    CHECK_EQUAL(1, board.squareAt(2, 4).getNumPods()); // 35
+}
+
+TEST(OctiRulebookExamplesTest, Example3_EdgelessMovesAndJumps)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2, false, true /* edgeless */);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    // Pod at (0, 8) [19] with ↖ moves wrap-around to (8, 0) [91]
+    board.clear();
+    octi::OctiPod p1(octi::A_POD);
+    p1.addProng(octi::DIR_NW, false);
+    board.squareAt(0, 8).addPod(p1);
+
+    game->move("19h-91");
+    CHECK_EQUAL(0, board.squareAt(0, 8).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(8, 0).getNumPods());
+}
+
+TEST(OctiRulebookExamplesTest, Randomize18PlySequence)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->randomize();
+
+    CHECK_EQUAL(18, game->getNumMoves());
+    CHECK_TRUE(game->isGameStarted());
+    CHECK_FALSE(game->isGameOver());
+    CHECK_EQUAL(octi::PLAYER_A, game->getTurn());
+}
+
+// ---------------------------------------------------------------------------
+// OctiSerializationTest
+// ---------------------------------------------------------------------------
+
+TEST_GROUP(OctiSerializationTest)
+{
+};
+
+TEST(OctiSerializationTest, OctiFenRoundTrip2Player)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    std::string fenStart = board.toPositionString();
+    STRCMP_EQUAL("2:3:0:0:P:A:-:0:4,0,25,0:4,0,25,0:A33,A53,A73,B37,B57,B77", fenStart.c_str());
+
+    octi::OctiBoard checkBoard;
+    checkBoard.fromPositionString(fenStart);
+    STRCMP_EQUAL(fenStart.c_str(), checkBoard.toPositionString().c_str());
+}
+
+TEST(OctiSerializationTest, OctiFenRoundTripOFK)
+{
+    octi::OctiBoard board(octi::GAME_MODE_OFK);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    std::string fenStart = board.toPositionString();
+    STRCMP_EQUAL("OFK:1:0:0:P:A:-:0:0,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56", fenStart.c_str());
+
+    octi::OctiBoard checkBoard;
+    checkBoard.fromPositionString(fenStart);
+    STRCMP_EQUAL(fenStart.c_str(), checkBoard.toPositionString().c_str());
+}
+
+TEST(OctiSerializationTest, GameTranscriptMinimalAndAnnotated)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    game->move("33+b");
+    game->move("37+e");
+    game->move("33");
+    game->move("37");
+
+    std::string minimal = board.serializeGame();
+    CHECK_TRUE(minimal.find("MOVES: 4") != std::string::npos);
+
+    octi::OctiBoard replayMinimal;
+    replayMinimal.deserializeGame(minimal);
+    CHECK_EQUAL(4, replayMinimal.getGame()->getNumMoves());
+    CHECK_EQUAL(board.toPositionString(), replayMinimal.toPositionString());
+
+    // Annotated transcript with metadata
+    std::string annotated =
+        "; OCTI Game Transcript v2.0\n"
+        "GAME_MODE: 2\n"
+        "GAME_BASES: 3\n"
+        "USE_SUPER_PRONGS: No\n"
+        "USE_EDGELESS_BOARD: No\n"
+        "START_PLAYER: A\n"
+        "STATUS: IN_PROGRESS\n"
+        "WINNER: NONE\n"
+        "EVENT: Test Tournament\n"
+        "TIME_CONTROL: 600+5\n"
+        "MOVES: 4\n"
+        "1. A 33+b { clk=600000 emt=1200 eval=0.15 depth=12 }\n"
+        "1. B 37+e { clk=598500 emt=2100 eval=-0.10 depth=11 }\n"
+        "2. A 33 { clk=595200 emt=800 }\n"
+        "2. B 37 { clk=596000 emt=1400 }\n";
+
+    octi::OctiBoard replayAnnotated;
+    replayAnnotated.deserializeGame(annotated);
+    CHECK_EQUAL(4, replayAnnotated.getGame()->getNumMoves());
+    CHECK_EQUAL(board.toPositionString(), replayAnnotated.toPositionString());
+}
+
+// ---------------------------------------------------------------------------
+// RapidCheckStateProperties
+// ---------------------------------------------------------------------------
+
+TEST_GROUP(RapidCheckStateProperties)
+{
+};
+
+TEST(RapidCheckStateProperties, RandomLegalMoveWalk2P)
+{
+    IGNORE_ALL_LEAKS_IN_TEST();
+    bool passed = rc::check("OctiGame 2P random legal move walk", []() {
+        octi::OctiBoard board(octi::GAME_MODE_2);
+        octi::OctiGame *game = board.getGame();
+        RC_ASSERT(game != nullptr);
+        game->start(octi::PLAYER_A);
+
+        std::string initialFen = board.toPositionString();
+        int numSteps = *rc::gen::inRange(5, 16);
+
+        for (int step = 0; step < numSteps; step++) {
+            if (game->isGameOver()) {
+                break;
+            }
+            std::vector<octi::OctiMove> legalMoves = game->generateLegalMoves();
+            if (legalMoves.empty()) {
+                break;
+            }
+            int moveIdx = *rc::gen::inRange(0, static_cast<int>(legalMoves.size()));
+            const octi::OctiMove &selected = legalMoves[moveIdx];
+
+            game->move(selected);
+
+            std::string fenAfter = board.toPositionString();
+            octi::OctiBoard checkBoard;
+            checkBoard.fromPositionString(fenAfter);
+            RC_ASSERT(checkBoard.toPositionString() == fenAfter);
+        }
+
+        std::string transcript = board.serializeGame();
+        octi::OctiBoard replayBoard;
+        replayBoard.deserializeGame(transcript);
+        RC_ASSERT(replayBoard.toPositionString() == board.toPositionString());
+        RC_ASSERT(replayBoard.getGame()->getNumMoves() == game->getNumMoves());
+        RC_ASSERT(replayBoard.getGame()->getTurn() == game->getTurn());
+
+        int movesMade = game->getNumMoves();
+        for (int u = 0; u < movesMade; u++) {
+            game->undo();
+        }
+        RC_ASSERT(board.toPositionString() == initialFen);
+
+        for (int r = 0; r < movesMade; r++) {
+            game->redo();
+        }
+        RC_ASSERT(board.toPositionString() == replayBoard.toPositionString());
+    });
+    CHECK_TRUE(passed);
+}
+
+TEST(RapidCheckStateProperties, RandomLegalMoveWalk4P)
+{
+    IGNORE_ALL_LEAKS_IN_TEST();
+    bool passed = rc::check("OctiGame 4P random legal move walk", []() {
+        octi::OctiBoard board(octi::GAME_MODE_4);
+        octi::OctiGame *game = board.getGame();
+        RC_ASSERT(game != nullptr);
+        game->start(octi::PLAYER_A);
+
+        std::string initialFen = board.toPositionString();
+        int numSteps = *rc::gen::inRange(4, 12);
+
+        for (int step = 0; step < numSteps; step++) {
+            if (game->isGameOver()) {
+                break;
+            }
+            std::vector<octi::OctiMove> legalMoves = game->generateLegalMoves();
+            if (legalMoves.empty()) {
+                break;
+            }
+            int moveIdx = *rc::gen::inRange(0, static_cast<int>(legalMoves.size()));
+            const octi::OctiMove &selected = legalMoves[moveIdx];
+
+            game->move(selected);
+
+            std::string fenAfter = board.toPositionString();
+            octi::OctiBoard checkBoard;
+            checkBoard.fromPositionString(fenAfter);
+            RC_ASSERT(checkBoard.toPositionString() == fenAfter);
+        }
+
+        std::string transcript = board.serializeGame();
+        octi::OctiBoard replayBoard;
+        replayBoard.deserializeGame(transcript);
+        RC_ASSERT(replayBoard.toPositionString() == board.toPositionString());
+
+        int movesMade = game->getNumMoves();
+        for (int u = 0; u < movesMade; u++) {
+            game->undo();
+        }
+        RC_ASSERT(board.toPositionString() == initialFen);
+
+        for (int r = 0; r < movesMade; r++) {
+            game->redo();
+        }
+        RC_ASSERT(board.toPositionString() == replayBoard.toPositionString());
+    });
+    CHECK_TRUE(passed);
+}
+
+TEST(RapidCheckStateProperties, RandomLegalMoveWalkOFK)
+{
+    IGNORE_ALL_LEAKS_IN_TEST();
+    bool passed = rc::check("OctiGame OFK random legal move walk", []() {
+        octi::OctiBoard board(octi::GAME_MODE_OFK);
+        octi::OctiGame *game = board.getGame();
+        RC_ASSERT(game != nullptr);
+        game->start(octi::PLAYER_A);
+
+        std::string initialFen = board.toPositionString();
+        int numSteps = *rc::gen::inRange(4, 12);
+
+        for (int step = 0; step < numSteps; step++) {
+            if (game->isGameOver()) {
+                break;
+            }
+            std::vector<octi::OctiMove> legalMoves = game->generateLegalMoves();
+            if (legalMoves.empty()) {
+                break;
+            }
+            int moveIdx = *rc::gen::inRange(0, static_cast<int>(legalMoves.size()));
+            const octi::OctiMove &selected = legalMoves[moveIdx];
+
+            game->move(selected);
+
+            std::string fenAfter = board.toPositionString();
+            octi::OctiBoard checkBoard;
+            checkBoard.fromPositionString(fenAfter);
+            RC_ASSERT(checkBoard.toPositionString() == fenAfter);
+        }
+
+        std::string transcript = board.serializeGame();
+        octi::OctiBoard replayBoard;
+        replayBoard.deserializeGame(transcript);
+        RC_ASSERT(replayBoard.toPositionString() == board.toPositionString());
+
+        int movesMade = game->getNumMoves();
+        for (int u = 0; u < movesMade; u++) {
+            game->undo();
+        }
+        RC_ASSERT(board.toPositionString() == initialFen);
+
+        for (int r = 0; r < movesMade; r++) {
+            game->redo();
+        }
+        RC_ASSERT(board.toPositionString() == replayBoard.toPositionString());
+    });
+    CHECK_TRUE(passed);
+}
+
 int main(int argc, char **argv)
 {
+    MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
 

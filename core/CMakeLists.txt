@@ -60,6 +60,11 @@ configure_file(
 
 add_library(octi_core STATIC
     src/OctiCore.cxx
+    src/OctiPod.cxx
+    src/OctiSquare.cxx
+    src/OctiMove.cxx
+    src/OctiBoard.cxx
+    src/OctiGame.cxx
 )
 
 target_include_directories(octi_core PUBLIC
@@ -70,6 +75,7 @@ target_include_directories(octi_core PUBLIC
 if(OCTI_CORE_BUILD_TESTS AND NOT WIN32)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(CPPUTEST REQUIRED cpputest)
+    find_library(RAPIDCHECK_LIBRARY rapidcheck REQUIRED)
 
     add_executable(test_octi_core
         test/TestOctiCore.cxx
@@ -86,5 +92,6 @@ if(OCTI_CORE_BUILD_TESTS AND NOT WIN32)
     target_link_libraries(test_octi_core PRIVATE
         octi_core
         ${CPPUTEST_LIBRARIES}
+        ${RAPIDCHECK_LIBRARY}
     )
 endif()
