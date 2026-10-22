@@ -36,6 +36,7 @@ endif
 test: all
 	@./$(BUILD_DIR)/test_server_foundation
 	@./$(BUILD_DIR)/test_account_and_oidc
+	@./$(BUILD_DIR)/test_game_room_and_matchmaking
 
 clean:
 	@if [ -d $(BUILD_DIR) ] && [ -f $(BUILD_DIR)/Makefile ]; then \

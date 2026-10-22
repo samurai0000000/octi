@@ -54,6 +54,9 @@ add_library(octi_server_lib STATIC
     src/ServerApp.cxx
     src/OidcVerifier.cxx
     src/AccountStore.cxx
+    src/EloCalculator.cxx
+    src/MatchmakingQueue.cxx
+    src/GameRoomManager.cxx
 )
 
 target_include_directories(octi_server_lib PUBLIC
@@ -115,6 +118,24 @@ target_link_directories(test_account_and_oidc PRIVATE
 )
 
 target_link_libraries(test_account_and_oidc PRIVATE
+    octi_server_lib
+    ${CPPUTEST_LIBRARIES}
+    ${RAPIDCHECK_LIBRARY}
+)
+
+add_executable(test_game_room_and_matchmaking
+    test/TestGameRoomAndMatchmaking.cxx
+)
+
+target_include_directories(test_game_room_and_matchmaking PRIVATE
+    ${CPPUTEST_INCLUDE_DIRS}
+)
+
+target_link_directories(test_game_room_and_matchmaking PRIVATE
+    ${CPPUTEST_LIBRARY_DIRS}
+)
+
+target_link_libraries(test_game_room_and_matchmaking PRIVATE
     octi_server_lib
     ${CPPUTEST_LIBRARIES}
     ${RAPIDCHECK_LIBRARY}
