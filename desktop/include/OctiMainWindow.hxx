@@ -20,6 +20,7 @@
 #include <QListWidget>
 #include <QMainWindow>
 #include <QPlainTextEdit>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTimer>
@@ -37,6 +38,8 @@
 #include "OctiTheme.hxx"
 #include "P2pVoiceEngine.hxx"
 #include "QtCompat.hxx"
+#include "selfupdate/QtSelfUpdateBridge.hxx"
+#include "selfupdate/SelfUpdateController.hxx"
 
 namespace octi {
 
@@ -176,6 +179,28 @@ public:
     /* ---- Offscreen Screenshot Capture ---- */
     QImage renderWindowToImage(int width = 1440, int height = 900);
 
+    /* ---- Self-Update Control & Status ---- */
+    static selfupdate::CheckerConfig defaultSelfUpdateConfig();
+    selfupdate::SelfUpdateController *selfUpdateController() const;
+    std::shared_ptr<selfupdate::SelfUpdateController>
+    selfUpdateControllerShared() const;
+    void setSelfUpdateController(
+        std::shared_ptr<selfupdate::SelfUpdateController> controller);
+
+    void checkForAppUpdates(bool isManualCheck = false);
+    void triggerAppUpdateDownloadAndInstall();
+    void cancelAppUpdateDownload();
+    void dismissAppUpdateBanner();
+
+    const selfupdate::UpdateState &currentSelfUpdateState() const;
+    bool isUpdateBannerVisible() const;
+    QString updateBannerText() const;
+    QString checkUpdateButtonText() const;
+    bool wasQuitRequestedByUpdate() const;
+
+    void registerUpdateDialog(SelfUpdateDialog *dlg);
+    void unregisterUpdateDialog(SelfUpdateDialog *dlg);
+
 protected:
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
@@ -187,6 +212,10 @@ private:
     void refreshMoveHistoryAndFenUi();
     void updateProposalBannerUi();
     void updateVoiceControlUi();
+    void bindSelfUpdateController();
+    void handleSelfUpdateStateChanged(const selfupdate::UpdateState &state);
+    void handleSelfUpdateQuitRequested();
+    void updateSelfUpdateBannerUi();
 
     ClientConfigStore _configStore;
     std::unique_ptr<OctiNetworkClient> _netClient;
@@ -265,6 +294,21 @@ private:
     QPushButton *_joinLeaveVoiceBtn;
     QPushButton *_holdToTalkBtn;
     QLabel *_voiceStatusLabel;
+
+    /* ---- Self-Update Subsystem ---- */
+    std::shared_ptr<selfupdate::SelfUpdateController> _updateController;
+    selfupdate::UpdateState _currentUpdateState;
+    SelfUpdateDialog *_activeUpdateDialog;
+    bool _updateBannerDismissed;
+    bool _quitRequestedByUpdate;
+
+    QPushButton *_checkUpdateBtn;
+    QWidget *_updateBannerWidget;
+    QLabel *_updateBannerLabel;
+    QProgressBar *_updateBannerProgressBar;
+    QPushButton *_updateActionBtn;
+    QPushButton *_updateDetailsBtn;
+    QPushButton *_updateDismissBtn;
 };
 
 } // namespace octi

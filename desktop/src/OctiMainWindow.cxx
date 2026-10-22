@@ -15,6 +15,7 @@
 #include <QVBoxLayout>
 #include "OctiCore.hxx"
 #include "OctiMainWindow.hxx"
+#include "selfupdate/UpdateInstaller.hxx"
 
 namespace octi {
 
@@ -192,8 +193,25 @@ OctiMainWindow::OctiMainWindow(
       _sendGameChatBtn(nullptr),
       _joinLeaveVoiceBtn(nullptr),
       _holdToTalkBtn(nullptr),
-      _voiceStatusLabel(nullptr)
+      _voiceStatusLabel(nullptr),
+      _updateController(nullptr),
+      _currentUpdateState(),
+      _activeUpdateDialog(nullptr),
+      _updateBannerDismissed(false),
+      _quitRequestedByUpdate(false),
+      _checkUpdateBtn(nullptr),
+      _updateBannerWidget(nullptr),
+      _updateBannerLabel(nullptr),
+      _updateBannerProgressBar(nullptr),
+      _updateActionBtn(nullptr),
+      _updateDetailsBtn(nullptr),
+      _updateDismissBtn(nullptr)
 {
+    selfupdate::UpdateInstaller::cleanupStaleBackup();
+    _updateController = std::make_shared<selfupdate::SelfUpdateController>(
+        defaultSelfUpdateConfig());
+    bindSelfUpdateController();
+
     _voiceEngine->setHardwareAudioEnabled(false);
 
     std::string loadErr;
@@ -287,8 +305,35 @@ OctiMainWindow::OctiMainWindow(
     topRow2->addStretch(1);
     topRow2->addWidget(_archiveBtn);
     topRow2->addWidget(_leaderboardBtn);
+    _checkUpdateBtn = new QPushButton("Check for Updates", topBar);
+    topRow2->addWidget(_checkUpdateBtn);
     topBarOuter->addLayout(topRow2);
     rootLayout->addWidget(topBar);
+
+    /* ---- Inline Self-Update Notification Banner ---- */
+    _updateBannerWidget = new QWidget(central);
+    QHBoxLayout *bannerLayout = new QHBoxLayout(_updateBannerWidget);
+    bannerLayout->setContentsMargins(10, 4, 10, 4);
+    bannerLayout->setSpacing(8);
+
+    _updateBannerLabel = new QLabel(_updateBannerWidget);
+    _updateBannerProgressBar = new QProgressBar(_updateBannerWidget);
+    _updateBannerProgressBar->setFixedSize(140, 16);
+    _updateBannerProgressBar->setVisible(false);
+
+    _updateActionBtn = new QPushButton("Download && Update", _updateBannerWidget);
+    _updateDetailsBtn = new QPushButton("Release Details...", _updateBannerWidget);
+    _updateDismissBtn = new QPushButton("Dismiss", _updateBannerWidget);
+
+    bannerLayout->addWidget(_updateBannerLabel);
+    bannerLayout->addWidget(_updateBannerProgressBar);
+    bannerLayout->addStretch(1);
+    bannerLayout->addWidget(_updateActionBtn);
+    bannerLayout->addWidget(_updateDetailsBtn);
+    bannerLayout->addWidget(_updateDismissBtn);
+
+    _updateBannerWidget->setVisible(false);
+    rootLayout->addWidget(_updateBannerWidget);
 
     /* ---- Center View Stack (Board Page vs Lobby View) ---- */
     _viewStack = new QStackedWidget(central);
@@ -638,6 +683,24 @@ OctiMainWindow::OctiMainWindow(
         dlg.exec();
     });
 
+    QObject::connect(_checkUpdateBtn, &QPushButton::clicked, [this]() {
+        SelfUpdateDialog dlg(_updateController, _theme, this);
+        if (_currentUpdateState.phase == selfupdate::UpdatePhase::Idle) {
+            checkForAppUpdates(true);
+        }
+        dlg.exec();
+    });
+    QObject::connect(_updateActionBtn, &QPushButton::clicked, [this]() {
+        triggerAppUpdateDownloadAndInstall();
+    });
+    QObject::connect(_updateDetailsBtn, &QPushButton::clicked, [this]() {
+        SelfUpdateDialog dlg(_updateController, _theme, this);
+        dlg.exec();
+    });
+    QObject::connect(_updateDismissBtn, &QPushButton::clicked, [this]() {
+        dismissAppUpdateBanner();
+    });
+
     installEventFilter(this);
     setTheme(_theme);
     updateTopBarLabels();
@@ -648,6 +711,13 @@ OctiMainWindow::OctiMainWindow(
 
 OctiMainWindow::~OctiMainWindow()
 {
+    if (_updateController) {
+        _updateController->setStateCallback(nullptr);
+        _updateController->setQuitCallback(nullptr);
+        _updateController->setUiDispatcher(nullptr);
+        _updateController->cancel();
+        _updateController.reset();
+    }
     leaveOnlineRoom();
     if (_netClient) {
         _netClient->stopEventStreams();
@@ -1906,6 +1976,307 @@ void OctiMainWindow::updateVoiceControlUi()
             QString("Voice: Connected • Mic Muted (%1 peer(s))")
                 .arg(static_cast<int>(_voiceEngine->activePeerCount())));
         _holdToTalkBtn->setText("Hold to Talk [V]");
+    }
+}
+
+/* ---- Self-Update Control & Status ---- */
+
+selfupdate::CheckerConfig OctiMainWindow::defaultSelfUpdateConfig()
+{
+    selfupdate::CheckerConfig cfg;
+    cfg.applicationId = "com.selfso.octi";
+    cfg.installedVersionName = OctiCore::versionString();
+    cfg.installedVersionCode =
+        selfupdate::UpdateManifest::parseVersionCode(cfg.installedVersionName);
+    cfg.manifestUrl = selfupdate::UpdateManifest::DEFAULT_MANIFEST_URL;
+    return cfg;
+}
+
+selfupdate::SelfUpdateController *OctiMainWindow::selfUpdateController() const
+{
+    return _updateController.get();
+}
+
+std::shared_ptr<selfupdate::SelfUpdateController>
+OctiMainWindow::selfUpdateControllerShared() const
+{
+    return _updateController;
+}
+
+void OctiMainWindow::setSelfUpdateController(
+    std::shared_ptr<selfupdate::SelfUpdateController> controller)
+{
+    if (_updateController) {
+        _updateController->setStateCallback(nullptr);
+        _updateController->setQuitCallback(nullptr);
+        _updateController->setUiDispatcher(nullptr);
+        _updateController->cancel();
+    }
+    _quitRequestedByUpdate = false;
+    _updateController = std::move(controller);
+    if (_updateController) {
+        bindSelfUpdateController();
+    }
+}
+
+void OctiMainWindow::checkForAppUpdates(bool isManualCheck)
+{
+    _updateBannerDismissed = false;
+    _quitRequestedByUpdate = false;
+    _currentUpdateState.phase = selfupdate::UpdatePhase::Checking;
+    _currentUpdateState.isManualCheck = isManualCheck;
+    if (_updateController) {
+        _updateController->checkForUpdates(isManualCheck);
+    }
+}
+
+void OctiMainWindow::triggerAppUpdateDownloadAndInstall()
+{
+    if (!_updateController) {
+        return;
+    }
+    if (_currentUpdateState.phase == selfupdate::UpdatePhase::ReadyToInstall) {
+        _updateController->installStagedPackage();
+    } else {
+        _updateController->downloadAndInstall();
+    }
+}
+
+void OctiMainWindow::cancelAppUpdateDownload()
+{
+    if (_updateController) {
+        _updateController->cancel();
+    }
+}
+
+void OctiMainWindow::dismissAppUpdateBanner()
+{
+    _updateBannerDismissed = true;
+    if (_updateBannerWidget) {
+        _updateBannerWidget->setVisible(false);
+    }
+    if (_updateController) {
+        _updateController->dismiss();
+    }
+    _currentUpdateState.phase = selfupdate::UpdatePhase::Idle;
+}
+
+const selfupdate::UpdateState &OctiMainWindow::currentSelfUpdateState() const
+{
+    return _currentUpdateState;
+}
+
+bool OctiMainWindow::isUpdateBannerVisible() const
+{
+    return _updateBannerWidget && !_updateBannerWidget->isHidden();
+}
+
+QString OctiMainWindow::updateBannerText() const
+{
+    return _updateBannerLabel ? _updateBannerLabel->text() : QString();
+}
+
+QString OctiMainWindow::checkUpdateButtonText() const
+{
+    return _checkUpdateBtn ? _checkUpdateBtn->text() : QString();
+}
+
+bool OctiMainWindow::wasQuitRequestedByUpdate() const
+{
+    return _quitRequestedByUpdate;
+}
+
+void OctiMainWindow::registerUpdateDialog(SelfUpdateDialog *dlg)
+{
+    _activeUpdateDialog = dlg;
+}
+
+void OctiMainWindow::unregisterUpdateDialog(SelfUpdateDialog *dlg)
+{
+    if (_activeUpdateDialog == dlg) {
+        _activeUpdateDialog = nullptr;
+    }
+}
+
+void OctiMainWindow::bindSelfUpdateController()
+{
+    if (!_updateController) {
+        return;
+    }
+    _updateController->setUiDispatcher([this](std::function<void()> task) {
+        _dispatcher.post(std::move(task));
+    });
+    _updateController->setStateCallback(
+        [this](const selfupdate::UpdateState &st) {
+            handleSelfUpdateStateChanged(st);
+        });
+    _updateController->setQuitCallback([this]() {
+        handleSelfUpdateQuitRequested();
+    });
+    _currentUpdateState = _updateController->state();
+    updateSelfUpdateBannerUi();
+}
+
+void OctiMainWindow::handleSelfUpdateStateChanged(
+    const selfupdate::UpdateState &state)
+{
+    _currentUpdateState = state;
+    updateSelfUpdateBannerUi();
+    if (_activeUpdateDialog != nullptr) {
+        _activeUpdateDialog->applyUpdateState(state);
+    }
+}
+
+void OctiMainWindow::handleSelfUpdateQuitRequested()
+{
+    _quitRequestedByUpdate = true;
+    if (_activeUpdateDialog != nullptr) {
+        _activeUpdateDialog->accept();
+    }
+    leaveOnlineRoom();
+    if (_netClient) {
+        _netClient->stopEventStreams();
+    }
+    close();
+    if (QCoreApplication::instance()) {
+        QCoreApplication::instance()->quit();
+    }
+}
+
+void OctiMainWindow::updateSelfUpdateBannerUi()
+{
+    if (_checkUpdateBtn) {
+        if (_currentUpdateState.phase == selfupdate::UpdatePhase::Available ||
+            _currentUpdateState.phase == selfupdate::UpdatePhase::ReadyToInstall) {
+            _checkUpdateBtn->setText(
+                QString("Update Available (v%1)")
+                    .arg(QString::fromStdString(
+                        _currentUpdateState.manifest.versionName)));
+        } else {
+            _checkUpdateBtn->setText("Check for Updates");
+        }
+    }
+
+    bool shouldShowBanner = false;
+    if (!_updateBannerDismissed) {
+        switch (_currentUpdateState.phase) {
+        case selfupdate::UpdatePhase::Available:
+        case selfupdate::UpdatePhase::Downloading:
+        case selfupdate::UpdatePhase::ReadyToInstall:
+        case selfupdate::UpdatePhase::Installing:
+        case selfupdate::UpdatePhase::Relaunching:
+            shouldShowBanner = true;
+            break;
+        case selfupdate::UpdatePhase::UpToDate:
+            if (_currentUpdateState.isManualCheck) {
+                shouldShowBanner = true;
+            }
+            break;
+        case selfupdate::UpdatePhase::Error:
+            if (_currentUpdateState.isManualCheck ||
+                !_currentUpdateState.manifest.packageUrl.empty()) {
+                shouldShowBanner = true;
+            }
+            break;
+        case selfupdate::UpdatePhase::Idle:
+        default:
+            shouldShowBanner = false;
+            break;
+        }
+    }
+
+    if (!_updateBannerWidget) {
+        return;
+    }
+
+    _updateBannerWidget->setVisible(shouldShowBanner);
+    if (!shouldShowBanner) {
+        return;
+    }
+
+    int pct = 0;
+    double frac = _currentUpdateState.progressFraction();
+    if (frac >= 0.0) {
+        pct = std::clamp(static_cast<int>(frac * 100.0), 0, 100);
+    }
+
+    switch (_currentUpdateState.phase) {
+    case selfupdate::UpdatePhase::Available:
+        _updateBannerLabel->setText(
+            QString("OCTI Desktop v%1 is available!")
+                .arg(QString::fromStdString(
+                    _currentUpdateState.manifest.versionName)));
+        _updateBannerProgressBar->setVisible(false);
+        _updateActionBtn->setVisible(true);
+        _updateActionBtn->setEnabled(true);
+        _updateActionBtn->setText("Download && Update");
+        break;
+
+    case selfupdate::UpdatePhase::Downloading:
+        _updateBannerLabel->setText(
+            QString("Downloading OCTI update (%1%)...").arg(pct));
+        _updateBannerProgressBar->setVisible(true);
+        _updateBannerProgressBar->setValue(pct);
+        _updateActionBtn->setVisible(true);
+        _updateActionBtn->setEnabled(false);
+        _updateActionBtn->setText("Downloading...");
+        break;
+
+    case selfupdate::UpdatePhase::ReadyToInstall:
+        _updateBannerLabel->setText(
+            QString("OCTI Desktop v%1 ready to install.")
+                .arg(QString::fromStdString(
+                    _currentUpdateState.manifest.versionName)));
+        _updateBannerProgressBar->setVisible(false);
+        _updateActionBtn->setVisible(true);
+        _updateActionBtn->setEnabled(true);
+        _updateActionBtn->setText("Install && Relaunch");
+        break;
+
+    case selfupdate::UpdatePhase::Installing:
+        _updateBannerLabel->setText("Installing update...");
+        _updateBannerProgressBar->setVisible(false);
+        _updateActionBtn->setVisible(true);
+        _updateActionBtn->setEnabled(false);
+        _updateActionBtn->setText("Installing...");
+        break;
+
+    case selfupdate::UpdatePhase::Relaunching:
+        _updateBannerLabel->setText("Relaunching OCTI Desktop...");
+        _updateBannerProgressBar->setVisible(false);
+        _updateActionBtn->setVisible(false);
+        break;
+
+    case selfupdate::UpdatePhase::UpToDate:
+        _updateBannerLabel->setText(
+            QString("OCTI Desktop v%1 is up to date.")
+                .arg(QString::fromStdString(
+                    _currentUpdateState.installedVersionName.empty()
+                        ? OctiCore::versionString()
+                        : _currentUpdateState.installedVersionName)));
+        _updateBannerProgressBar->setVisible(false);
+        _updateActionBtn->setVisible(false);
+        break;
+
+    case selfupdate::UpdatePhase::Error:
+        _updateBannerLabel->setText(
+            QString("Update error: %1")
+                .arg(QString::fromStdString(_currentUpdateState.errorMessage)));
+        _updateBannerProgressBar->setVisible(false);
+        if (!_currentUpdateState.manifest.packageUrl.empty()) {
+            _updateActionBtn->setVisible(true);
+            _updateActionBtn->setEnabled(true);
+            _updateActionBtn->setText("Retry Update");
+        } else {
+            _updateActionBtn->setVisible(false);
+        }
+        break;
+
+    case selfupdate::UpdatePhase::Idle:
+    default:
+        _updateBannerProgressBar->setVisible(false);
+        _updateActionBtn->setVisible(false);
+        break;
     }
 }
 

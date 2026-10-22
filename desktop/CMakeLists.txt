@@ -52,6 +52,16 @@ if(NOT EXISTS "${OCTI_THIRD_PARTY_DIR}/cpp-httplib/httplib.h" OR
         "third_party submodules missing; run: git submodule update --init --recursive")
 endif()
 
+set(OCTI_SELFUPDATE_CMAKE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../selfupdate/windows/selfupdate.cmake"
+    CACHE FILEPATH "Path to selfupdate/windows/selfupdate.cmake"
+)
+if(NOT EXISTS "${OCTI_SELFUPDATE_CMAKE}")
+    message(FATAL_ERROR
+        "selfupdate CMake module not found at ${OCTI_SELFUPDATE_CMAKE}")
+endif()
+include("${OCTI_SELFUPDATE_CMAKE}")
+
 set(OCTI_DESKTOP_LIB_SOURCES
     src/OctiTheme.cxx
     src/OctiBoardGeometry.cxx
@@ -79,6 +89,7 @@ if(WIN32)
     add_library(octi_desktop_lib STATIC
         ${OCTI_DESKTOP_LIB_SOURCES}
     )
+    selfupdate_target_sources(octi_desktop_lib)
 
     target_include_directories(octi_desktop_lib PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -249,6 +260,7 @@ else()
     add_library(octi_desktop_lib STATIC
         ${OCTI_DESKTOP_LIB_SOURCES}
     )
+    selfupdate_target_sources(octi_desktop_lib)
 
     target_include_directories(octi_desktop_lib PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include

@@ -117,6 +117,7 @@ Section "Uninstall"
     SetShellVarContext all
 
     Delete "$INSTDIR\octi.exe"
+    Delete "$INSTDIR\octi.exe.old"
     Delete "$INSTDIR\octi.ico"
     Delete "$INSTDIR\Qt6Core.dll"
     Delete "$INSTDIR\Qt6Gui.dll"

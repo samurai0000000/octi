@@ -45,6 +45,13 @@
 #include "OctiNetworkClient.hxx"
 #include "P2pVoiceEngine.hxx"
 
+#include "selfupdate/Sha256.hxx"
+#include "selfupdate/UpdateInstaller.hxx"
+#include "selfupdate/UpdateManifest.hxx"
+#include "selfupdate/SelfUpdateController.hxx"
+
+#include <rapidcheck.h>
+
 #include <CppUTest/CommandLineTestRunner.h>
 #include <CppUTest/TestHarness.h>
 
@@ -581,7 +588,8 @@ TEST(DesktopAppIntegrationTest,
     CHECK_TRUE(winB.joinOnlineVoice());
     CHECK_TRUE(winA.voiceEngine()->initiatePeerOffer(uuidB));
 
-    for (int i = 0; i < 40 && !winB.voiceEngine()->isPeerConnected(uuidA); ++i) {
+    for (int i = 0; i < 40 && (!winA.voiceEngine()->isPeerConnected(uuidB) ||
+                               !winB.voiceEngine()->isPeerConnected(uuidA)); ++i) {
         winA.pumpUiEvents();
         winB.pumpUiEvents();
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -1006,6 +1014,8 @@ TEST(DesktopAppIntegrationTest, WindowsBundleAndNsisInstallerMatchReadmeVersion)
                std::string::npos);
     CHECK_TRUE(nsiContent.find("RequestExecutionLevel admin") !=
                std::string::npos);
+    CHECK_TRUE(nsiContent.find("Delete \"$INSTDIR\\octi.exe.old\"") !=
+               std::string::npos);
     CHECK_TRUE(nsiContent.find("MUI_ICON") != std::string::npos);
     CHECK_TRUE(nsiContent.find("MUI_UNICON") != std::string::npos);
     CHECK_TRUE(nsiContent.find("resources/octi.ico") != std::string::npos);
@@ -1070,6 +1080,396 @@ TEST(DesktopAppIntegrationTest, WindowsBundleAndNsisInstallerMatchReadmeVersion)
                std::string::npos);
     CHECK_TRUE(stdcppBytes.find("__cxa_thread_atexit") !=
                std::string::npos);
+
+    /* Verify octi.exe imports WINHTTP.dll and VERSION.dll and embeds endpoint and appId */
+    std::string octiExePath = winBuildDir + "/octi.exe";
+    std::ifstream exeIn(octiExePath, std::ios::binary);
+    CHECK_TRUE_TEXT(exeIn.good(), octiExePath.c_str());
+    std::string exeBytes((std::istreambuf_iterator<char>(exeIn)),
+                         std::istreambuf_iterator<char>());
+    std::string exeBytesLower = exeBytes;
+    std::transform(exeBytesLower.begin(), exeBytesLower.end(),
+                   exeBytesLower.begin(),
+                   [](unsigned char c) {
+                       return static_cast<char>(std::tolower(c));
+                   });
+    CHECK_TRUE(exeBytesLower.find("winhttp.dll") != std::string::npos);
+    CHECK_TRUE(exeBytesLower.find("version.dll") != std::string::npos);
+    CHECK_TRUE(exeBytes.find("https://www.selfso.com/software/windows/") !=
+               std::string::npos);
+    CHECK_TRUE(exeBytes.find("com.selfso.octi") != std::string::npos);
+}
+
+TEST(DesktopAppIntegrationTest, DesktopSelfUpdateEndToEndAndFaultInjection)
+{
+    /* 1. Default Config & Stale .old Backup Cleanup */
+    auto defCfg = OctiMainWindow::defaultSelfUpdateConfig();
+    STRCMP_EQUAL("com.selfso.octi", defCfg.applicationId.c_str());
+    STRCMP_EQUAL(OctiCore::versionString(),
+                 defCfg.installedVersionName.c_str());
+    LONGS_EQUAL(20004, defCfg.installedVersionCode);
+    STRCMP_EQUAL("https://www.selfso.com/software/windows/",
+                 defCfg.manifestUrl.c_str());
+
+    char tmpTemplate[] = "/tmp/octi_selfupdate_XXXXXX";
+    char *tmpDir = mkdtemp(tmpTemplate);
+    CHECK_TRUE(tmpDir != nullptr);
+    std::string tmpDirStr = tmpDir;
+    struct TmpDirGuard {
+        std::string path;
+        ~TmpDirGuard() {
+            if (!path.empty()) {
+                std::filesystem::remove_all(path);
+            }
+        }
+    } dirGuard{tmpDirStr};
+
+    {
+        std::ofstream f1(tmpDirStr + "/octi.exe");
+        f1 << "octi-binary";
+    }
+    {
+        std::ofstream f2(tmpDirStr + "/octi.exe.old");
+        f2 << "octi-old-binary";
+    }
+    CHECK_TRUE(std::filesystem::exists(tmpDirStr + "/octi.exe"));
+    CHECK_TRUE(std::filesystem::exists(tmpDirStr + "/octi.exe.old"));
+    CHECK_TRUE(selfupdate::UpdateInstaller::cleanupStaleBackup(tmpDirStr + "/octi.exe"));
+    CHECK_TRUE(std::filesystem::exists(tmpDirStr + "/octi.exe"));
+    CHECK_FALSE(std::filesystem::exists(tmpDirStr + "/octi.exe.old"));
+
+    /* 2. Loopback HTTP Server Setup */
+    httplib::Server server;
+    std::atomic<int> versionStatus{200};
+    std::string versionJsonBody;
+    std::atomic<int> packageStatus{200};
+    std::string packageBody;
+
+    server.Get("/software/windows/version.json",
+               [&](const httplib::Request &, httplib::Response &res) {
+                   res.status = versionStatus.load();
+                   if (res.status == 200) {
+                       res.set_content(versionJsonBody, "application/json");
+                   } else {
+                       res.set_content("HTTP 500 Internal Server Error", "text/plain");
+                   }
+               });
+
+    server.Get("/software/windows/octi/octi-setup.exe",
+               [&](const httplib::Request &, httplib::Response &res) {
+                   res.status = packageStatus.load();
+                   if (res.status == 200) {
+                       res.set_content(packageBody, "application/octet-stream");
+                   } else {
+                       res.set_content("HTTP 404 Not Found", "text/plain");
+                   }
+               });
+
+    int httpPort = server.bind_to_any_port("127.0.0.1");
+    CHECK_TRUE(httpPort > 0);
+    std::thread serverThread([&]() {
+        server.listen_after_bind();
+    });
+    server.wait_until_ready();
+    struct ServerGuard {
+        httplib::Server &srv;
+        std::thread &th;
+        ~ServerGuard() {
+            srv.stop();
+            if (th.joinable()) {
+                th.join();
+            }
+        }
+    } serverGuard{server, serverThread};
+
+    OctiMainWindow win(nullptr, tmpDirStr + "/octi_config.json", true);
+    win.resize(1440, 900);
+    win.show();
+    win.pumpUiEvents();
+
+    auto pumpUntil = [&](std::function<bool()> cond, int timeoutMs = 5000) -> bool {
+        auto start = std::chrono::steady_clock::now();
+        while (std::chrono::duration_cast<std::chrono::milliseconds>(
+                   std::chrono::steady_clock::now() - start).count() < timeoutMs) {
+            win.pumpUiEvents();
+            if (cond()) {
+                return true;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        win.pumpUiEvents();
+        return cond();
+    };
+
+    selfupdate::CheckerConfig testCfg;
+    testCfg.applicationId = "com.selfso.octi";
+    testCfg.installedVersionName = OctiCore::versionString();
+    testCfg.installedVersionCode = 20004;
+    testCfg.manifestUrl = "http://127.0.0.1:" + std::to_string(httpPort) + "/software/windows/";
+
+    selfupdate::InstallOptions installOpts;
+    installOpts.currentExePath = tmpDirStr + "/octi.exe";
+    installOpts.targetExePath = tmpDirStr + "/octi.exe";
+    installOpts.dryRun = true;
+
+    std::string stagingDir = tmpDirStr + "/staging";
+    std::filesystem::create_directories(stagingDir);
+
+    win.setSelfUpdateController(
+        std::make_shared<selfupdate::SelfUpdateController>(
+            testCfg, installOpts, stagingDir));
+
+    /* 3. Silent Background Startup Check (UpToDate & Error) vs. Manual Check Banner */
+    nlohmann::json upToDateDoc;
+    upToDateDoc["applicationId"] = "com.selfso.octi";
+    upToDateDoc["versionName"] = OctiCore::versionString();
+    upToDateDoc["versionCode"] = 20004;
+    upToDateDoc["installMode"] = "installer";
+    upToDateDoc["packageUrl"] = "octi/octi-setup.exe";
+    upToDateDoc["sha256"] = "0000000000000000000000000000000000000000000000000000000000000000";
+    upToDateDoc["sizeBytes"] = 100;
+    upToDateDoc["releaseNotes"] = "OCTI is up to date.";
+    versionJsonBody = upToDateDoc.dump();
+    versionStatus = 200;
+
+    win.checkForAppUpdates(false);
+    CHECK_TRUE(pumpUntil([&]() {
+        return win.currentSelfUpdateState().phase == selfupdate::UpdatePhase::UpToDate &&
+               !win.currentSelfUpdateState().isManualCheck;
+    }));
+    CHECK_FALSE(win.isUpdateBannerVisible());
+    STRCMP_EQUAL("Check for Updates", win.checkUpdateButtonText().toUtf8().constData());
+
+    win.checkForAppUpdates(true);
+    CHECK_TRUE(pumpUntil([&]() {
+        return win.currentSelfUpdateState().phase == selfupdate::UpdatePhase::UpToDate &&
+               win.currentSelfUpdateState().isManualCheck;
+    }));
+    CHECK_TRUE(win.isUpdateBannerVisible());
+    CHECK_TRUE(win.updateBannerText().contains("up to date", Qt::CaseInsensitive));
+    win.dismissAppUpdateBanner();
+    win.pumpUiEvents();
+    CHECK_FALSE(win.isUpdateBannerVisible());
+    LONGS_EQUAL(static_cast<int>(selfupdate::UpdatePhase::Idle),
+                static_cast<int>(win.currentSelfUpdateState().phase));
+
+    /* Offline / 500 error check */
+    versionStatus = 500;
+
+    win.checkForAppUpdates(false);
+    CHECK_TRUE(pumpUntil([&]() {
+        return win.currentSelfUpdateState().phase == selfupdate::UpdatePhase::Error &&
+               !win.currentSelfUpdateState().isManualCheck;
+    }));
+    CHECK_FALSE(win.isUpdateBannerVisible());
+
+    win.checkForAppUpdates(true);
+    CHECK_TRUE(pumpUntil([&]() {
+        return win.currentSelfUpdateState().phase == selfupdate::UpdatePhase::Error &&
+               win.currentSelfUpdateState().isManualCheck;
+    }));
+    CHECK_TRUE(win.isUpdateBannerVisible());
+
+    /* 4. Nominal Update Available (2.0.4 -> 9.9.9), Banner, SelfUpdateDialog, Screenshots, Download & Install */
+    std::string fakeInstaller(32768, 'M');
+    fakeInstaller[0] = 'M';
+    fakeInstaller[1] = 'Z';
+    std::string expectedSha = selfupdate::Sha256::hashHex(fakeInstaller);
+    packageBody = fakeInstaller;
+    packageStatus = 200;
+
+    nlohmann::json availDoc;
+    availDoc["applicationId"] = "com.selfso.octi";
+    availDoc["versionName"] = "9.9.9";
+    availDoc["versionCode"] = 90909;
+    availDoc["installMode"] = "installer";
+    availDoc["installerArgs"] = "/S";
+    availDoc["executableName"] = "octi.exe";
+    availDoc["arch"] = "x86_64";
+    availDoc["minOs"] = "Windows 10 (64-bit)+";
+    availDoc["packageUrl"] = "octi/octi-setup.exe";
+    availDoc["sha256"] = expectedSha;
+    availDoc["sizeBytes"] = 32768;
+    availDoc["releaseNotes"] =
+        "OCTI v9.9.9 Release Notes:\n- Self-update integration via WinHTTP\n- Streaming RFC 6234 SHA-256 verification";
+    versionJsonBody = availDoc.dump();
+    versionStatus = 200;
+
+    win.checkForAppUpdates(false);
+    CHECK_TRUE(pumpUntil([&]() {
+        return win.currentSelfUpdateState().phase == selfupdate::UpdatePhase::Available;
+    }));
+    CHECK_TRUE(win.isUpdateBannerVisible());
+    STRCMP_EQUAL("Update Available (v9.9.9)", win.checkUpdateButtonText().toUtf8().constData());
+    CHECK_TRUE(win.updateBannerText().contains("9.9.9"));
+
+    SelfUpdateDialog dlg(win.selfUpdateControllerShared(), ThemeId::OBSIDIAN_BRASS, &win);
+    dlg.resize(640, 480);
+    dlg.show();
+    win.pumpUiEvents();
+
+    STRCMP_EQUAL("UPDATE AVAILABLE", dlg.phaseBadgeText().toUtf8().constData());
+    CHECK_TRUE(dlg.versionSummaryText().contains("2.0.4"));
+    CHECK_TRUE(dlg.versionSummaryText().contains("9.9.9"));
+    CHECK_TRUE(dlg.releaseNotesText().contains("Streaming RFC 6234 SHA-256 verification"));
+    CHECK_TRUE(dlg.metadataSummaryText().contains("Setup Installer"));
+    CHECK_TRUE(dlg.metadataSummaryText().contains("x86_64"));
+    CHECK_TRUE(dlg.isDownloadInstallButtonEnabled());
+    CHECK_FALSE(dlg.isCancelButtonEnabled());
+
+    QString artifactDir =
+        QString::fromUtf8(OCTI_REPO_ROOT_DIR) +
+        "/plan/plan_octi_windows_selfupdate.artifacts";
+    QDir().mkpath(artifactDir);
+
+    QString bannerShotPath = artifactDir + "/selfupdate_banner_obsidian.png";
+    QString dlgObsidianShotPath = artifactDir + "/selfupdate_dialog_obsidian.png";
+    QString dlgRosewoodShotPath = artifactDir + "/selfupdate_dialog_rosewood.png";
+
+    QImage bannerImg = win.renderWindowToImage(1440, 900);
+    CHECK_TRUE(bannerImg.save(bannerShotPath));
+
+    QImage dlgObsidianImg = dlg.grab().toImage();
+    CHECK_TRUE(dlgObsidianImg.save(dlgObsidianShotPath));
+
+    dlg.setTheme(ThemeId::ROSEWOOD_IVORY);
+    win.pumpUiEvents();
+    QImage dlgRosewoodImg = dlg.grab().toImage();
+    CHECK_TRUE(dlgRosewoodImg.save(dlgRosewoodShotPath));
+    dlg.setTheme(ThemeId::OBSIDIAN_BRASS);
+    win.pumpUiEvents();
+
+    CHECK_TRUE(QFileInfo(bannerShotPath).size() > 10000);
+    CHECK_TRUE(QFileInfo(dlgObsidianShotPath).size() > 10000);
+    CHECK_TRUE(QFileInfo(dlgRosewoodShotPath).size() > 10000);
+
+    dlg.triggerDownloadAndInstall();
+    CHECK_TRUE(pumpUntil([&]() {
+        return win.wasQuitRequestedByUpdate() &&
+               win.currentSelfUpdateState().phase == selfupdate::UpdatePhase::Relaunching;
+    }));
+
+    CHECK_TRUE(win.selfUpdateController()->lastInstallResult().success);
+    std::string stagedPath = win.currentSelfUpdateState().stagedPackagePath;
+    CHECK_TRUE(std::filesystem::exists(stagedPath));
+    LONGS_EQUAL(32768, std::filesystem::file_size(stagedPath));
+    CHECK_FALSE(std::filesystem::exists(stagedPath + ".part"));
+
+    std::string trampPath = win.selfUpdateController()->lastInstallResult().trampolineScriptPath;
+    CHECK_TRUE(std::filesystem::exists(trampPath));
+    std::ifstream trampIn(trampPath);
+    std::string trampContent((std::istreambuf_iterator<char>(trampIn)),
+                             std::istreambuf_iterator<char>());
+    CHECK_TRUE(trampContent.find("/S") != std::string::npos);
+    CHECK_TRUE(trampContent.find("octi.exe") != std::string::npos);
+
+    /* 5. Fault Injection: Corrupted Payload Triggers SHA-256 Digest Mismatch, Unlinks .part, and Aborts Install */
+    std::string corruptedInstaller = fakeInstaller;
+    corruptedInstaller[123] ^= 0xFF;
+    packageBody = corruptedInstaller;
+
+    std::string faultStagingDir = tmpDirStr + "/fault_staging";
+    std::filesystem::create_directories(faultStagingDir);
+
+    win.setSelfUpdateController(
+        std::make_shared<selfupdate::SelfUpdateController>(
+            testCfg, installOpts, faultStagingDir));
+
+    win.checkForAppUpdates(true);
+    CHECK_TRUE(pumpUntil([&]() {
+        return win.currentSelfUpdateState().phase == selfupdate::UpdatePhase::Available;
+    }));
+
+    win.triggerAppUpdateDownloadAndInstall();
+    CHECK_TRUE(pumpUntil([&]() {
+        return win.currentSelfUpdateState().phase == selfupdate::UpdatePhase::Error;
+    }));
+
+    CHECK_TRUE(win.currentSelfUpdateState().errorMessage.find("SHA-256") != std::string::npos);
+    CHECK_FALSE(win.wasQuitRequestedByUpdate());
+    CHECK_TRUE(win.isUpdateBannerVisible());
+    CHECK_FALSE(std::filesystem::exists(faultStagingDir + "/octi-setup.exe.part"));
+    CHECK_FALSE(std::filesystem::exists(faultStagingDir + "/octi-setup.exe"));
+
+    server.stop();
+    if (serverThread.joinable()) {
+        serverThread.join();
+    }
+
+    /* 6. RapidCheck Property Test */
+    bool ok = rc::check(
+        "Semantic version comparison, versionCode, isNewerThan, and SelfUpdateDialog invariants",
+        []() {
+            int majA = *rc::gen::inRange(0, 50);
+            int minA = *rc::gen::inRange(0, 50);
+            int patA = *rc::gen::inRange(0, 50);
+            int majB = *rc::gen::inRange(0, 50);
+            int minB = *rc::gen::inRange(0, 50);
+            int patB = *rc::gen::inRange(0, 50);
+
+            std::string verA = std::to_string(majA) + "." + std::to_string(minA) + "." + std::to_string(patA);
+            std::string verB = std::to_string(majB) + "." + std::to_string(minB) + "." + std::to_string(patB);
+
+            int64_t codeA = selfupdate::UpdateManifest::parseVersionCode(verA);
+            RC_ASSERT(codeA == static_cast<int64_t>(majA) * 10000 + static_cast<int64_t>(minA) * 100 + static_cast<int64_t>(patA));
+
+            int cmp = selfupdate::UpdateManifest::compareVersions(verA, verB);
+            int expectedCmp = 0;
+            if (majA != majB) {
+                expectedCmp = majA > majB ? 1 : -1;
+            } else if (minA != minB) {
+                expectedCmp = minA > minB ? 1 : -1;
+            } else if (patA != patB) {
+                expectedCmp = patA > patB ? 1 : -1;
+            }
+            RC_ASSERT(cmp == expectedCmp);
+
+            selfupdate::UpdateManifest mf;
+            mf.versionName = verA;
+            mf.versionCode = codeA;
+            int64_t codeB = selfupdate::UpdateManifest::parseVersionCode(verB);
+            bool isNewer = mf.isNewerThan(verB, codeB);
+            RC_ASSERT(isNewer == (expectedCmp > 0));
+
+            selfupdate::UpdateState st;
+            st.installedVersionName = verB;
+            st.installedVersionCode = codeB;
+            st.manifest = mf;
+
+            SelfUpdateDialog propDlg(nullptr, ThemeId::OBSIDIAN_BRASS, nullptr);
+
+            st.phase = selfupdate::UpdatePhase::Idle;
+            propDlg.applyUpdateState(st);
+            RC_ASSERT(propDlg.phaseBadgeText() == "IDLE");
+            RC_ASSERT(propDlg.progressPercent() == 0);
+            RC_ASSERT(!propDlg.isDownloadInstallButtonEnabled());
+            RC_ASSERT(!propDlg.isCancelButtonEnabled());
+
+            st.phase = selfupdate::UpdatePhase::Available;
+            propDlg.applyUpdateState(st);
+            RC_ASSERT(propDlg.phaseBadgeText() == "UPDATE AVAILABLE");
+            RC_ASSERT(propDlg.isDownloadInstallButtonEnabled());
+            RC_ASSERT(!propDlg.isCancelButtonEnabled());
+            RC_ASSERT(propDlg.versionSummaryText().contains(QString::fromStdString(verB)));
+            RC_ASSERT(propDlg.versionSummaryText().contains(QString::fromStdString(verA)));
+
+            st.phase = selfupdate::UpdatePhase::UpToDate;
+            propDlg.applyUpdateState(st);
+            RC_ASSERT(propDlg.phaseBadgeText() == "UP TO DATE");
+            RC_ASSERT(propDlg.progressPercent() == 100);
+            RC_ASSERT(!propDlg.isDownloadInstallButtonEnabled());
+
+            st.phase = selfupdate::UpdatePhase::Error;
+            st.errorMessage = "Simulated error";
+            propDlg.applyUpdateState(st);
+            RC_ASSERT(propDlg.phaseBadgeText() == "UPDATE ERROR");
+            RC_ASSERT(propDlg.statusText().contains("Simulated error"));
+
+            return true;
+        });
+    CHECK_TRUE(ok);
+
+    std::filesystem::remove_all(tmpDirStr);
 }
 
 extern "C" const char *__lsan_default_suppressions()

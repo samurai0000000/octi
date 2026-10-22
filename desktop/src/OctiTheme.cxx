@@ -227,8 +227,10 @@ QString buildAppStyleSheet(ThemeId id)
         "QPushButton:hover { background-color: %5; color: %1; }\n"
         "QPushButton:disabled { color: %6; border-color: %6; }\n"
         "QLineEdit, QComboBox, QSpinBox, QTextEdit, QListWidget, QTableWidget { background-color: %1; color: %2; border: 1px solid %4; border-radius: 4px; padding: 4px; }\n"
-        "QLabel { background: transparent; color: %2; }\n"
+        "QLabel { background: transparent; color: %2; border: none; }\n"
         "QCheckBox { color: %2; spacing: 6px; }\n"
+        "QProgressBar { background-color: %1; color: %2; border: 1px solid %4; border-radius: 4px; text-align: center; font-weight: bold; }\n"
+        "QProgressBar::chunk { background-color: %5; border-radius: 3px; }\n"
     )
     .arg(p.windowBg.name())
     .arg(p.textPrimary.name())

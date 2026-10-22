@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTableWidget>
@@ -28,8 +29,12 @@
 #include "OctiNetworkClient.hxx"
 #include "OctiTheme.hxx"
 #include "QtCompat.hxx"
+#include "selfupdate/QtSelfUpdateBridge.hxx"
+#include "selfupdate/SelfUpdateController.hxx"
 
 namespace octi {
+
+class OctiMainWindow;
 
 enum class LocalPlayType {
     PASS_AND_PLAY = 0,
@@ -509,6 +514,52 @@ private:
     std::string _transcript;
     bool _rematchRequested;
     std::function<void()> _onRematchCallback;
+};
+
+class SelfUpdateDialog : public QDialog {
+public:
+    explicit SelfUpdateDialog(
+        std::shared_ptr<selfupdate::SelfUpdateController> controller,
+        ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+        QWidget *parent = nullptr);
+    ~SelfUpdateDialog() override;
+
+    void setTheme(ThemeId theme);
+    ThemeId theme() const;
+
+    void applyUpdateState(const selfupdate::UpdateState &state);
+    const selfupdate::UpdateState &currentUpdateState() const;
+
+    void triggerCheckForUpdates();
+    void triggerDownloadAndInstall();
+    void triggerCancelDownload();
+
+    QString phaseBadgeText() const;
+    QString versionSummaryText() const;
+    QString releaseNotesText() const;
+    QString metadataSummaryText() const;
+    QString statusText() const;
+    int progressPercent() const;
+    bool isDownloadInstallButtonEnabled() const;
+    bool isCancelButtonEnabled() const;
+
+private:
+    std::shared_ptr<selfupdate::SelfUpdateController> _controller;
+    OctiMainWindow *_ownerWindow;
+    bool _boundStandalone;
+    ThemeId _theme;
+    selfupdate::UpdateState _currentState;
+
+    QLabel *_phaseBadgeLabel;
+    QLabel *_versionSummaryLabel;
+    QLabel *_metadataLabel;
+    QPlainTextEdit *_releaseNotesView;
+    QProgressBar *_progressBar;
+    QLabel *_statusLabel;
+    QPushButton *_checkBtn;
+    QPushButton *_downloadInstallBtn;
+    QPushButton *_cancelBtn;
+    QPushButton *_closeBtn;
 };
 
 } // namespace octi

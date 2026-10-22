@@ -7,7 +7,9 @@
 #include <iostream>
 #include <string>
 #include <QApplication>
+#include <QTimer>
 #include "OctiMainWindow.hxx"
+#include "selfupdate/UpdateInstaller.hxx"
 
 int main(int argc, char *argv[])
 {
@@ -31,11 +33,18 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    selfupdate::UpdateInstaller::cleanupStaleBackup();
+
     QApplication app(argc, argv);
     app.setWindowIcon(octi::createOctiAppIcon());
     octi::OctiMainWindow window(
         nullptr, cliArgs.configPath, cliArgs.startOffline);
     window.show();
+    if (!cliArgs.startOffline) {
+        QTimer::singleShot(0, [&window]() {
+            window.checkForAppUpdates(false);
+        });
+    }
     return app.exec();
 }
 
