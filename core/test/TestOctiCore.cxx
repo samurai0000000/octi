@@ -12,6 +12,7 @@
 #include "OctiSquare.hxx"
 #include "OctiBoard.hxx"
 #include "OctiGame.hxx"
+#include "OctiBotEngine.hxx"
 #include "Version.hxx"
 #include <rapidcheck.h>
 #include <initializer_list>
@@ -1773,6 +1774,206 @@ TEST(OctiGhostPodTest, GeneratedMovesAcceptedAndReversibleOFK)
     IGNORE_ALL_LEAKS_IN_TEST();
     CHECK_TRUE(ghostTestGeneratedMovesAcceptedProperty(
                    octi::GAME_MODE_OFK, "OFK every generated move is accepted and reversible"));
+}
+
+// ---------------------------------------------------------------------------
+// OctiBotEngineCoreTest
+// ---------------------------------------------------------------------------
+
+TEST_GROUP(OctiBotEngineCoreTest)
+{
+};
+
+TEST(OctiBotEngineCoreTest, CanonicalServerHostAndPortConstants)
+{
+    STRCMP_EQUAL("trumpet.selfso.com", octi::OCTI_SERVER_HOST);
+    LONGS_EQUAL(6874, octi::OCTI_SERVER_PORT);
+}
+
+TEST(OctiBotEngineCoreTest, ImmediateOnePlyWinningBaseCaptureAllDifficulties)
+{
+    for (octi::BotDifficulty diff : {
+             octi::BotDifficulty::CASUAL,
+             octi::BotDifficulty::TACTICAL,
+             octi::BotDifficulty::MASTER }) {
+        octi::OctiBoard board(octi::GAME_MODE_2, false, false, octi::GAME_BASES_1);
+        octi::OctiGame *game = board.getGame();
+        game->start(octi::PLAYER_A);
+        board.clear();
+
+        // Player A pod at 36 (0-based (2, 5)) with North prong 'a' can step onto B's base 37 (0-based (2, 6)) to win immediately
+        octi::OctiPod podA(octi::A_POD);
+        podA.addProng(octi::DIR_N, false);
+        board.squareAt(2, 5).addPod(podA);
+
+        octi::OctiPod podB(octi::B_POD);
+        board.squareAt(6, 6).addPod(podB);
+
+        std::string fenBefore = board.toPositionString();
+        octi::OctiBotEngine bot(diff, 0x12345678ULL);
+        octi::BotSearchStats stats;
+        std::string moveStr = bot.chooseMove(board, &stats);
+
+        // Input board must not be mutated
+        STRCMP_EQUAL(fenBefore.c_str(), board.toPositionString().c_str());
+        STRCMP_EQUAL("36a-37", moveStr.c_str());
+        CHECK_TRUE(stats.nodesVisited > 0);
+
+        game->move(moveStr);
+        CHECK_TRUE(game->isGameOver());
+        CHECK_EQUAL(octi::PLAYER_A, game->getWinner());
+    }
+}
+
+TEST(OctiBotEngineCoreTest, OnePlyThreatDefenseBlocksImmediateLoss)
+{
+    for (octi::BotDifficulty diff : {
+             octi::BotDifficulty::CASUAL,
+             octi::BotDifficulty::TACTICAL,
+             octi::BotDifficulty::MASTER }) {
+        octi::OctiBoard board(octi::GAME_MODE_2, false, false, octi::GAME_BASES_1);
+        octi::OctiGame *game = board.getGame();
+        game->start(octi::PLAYER_A);
+        board.clear();
+
+        // Player B has a pod at 34 (0-based (2, 3)) with South prong 'e' threatening A's home base 33 (0-based (2, 2)).
+        // Player A has a pod at 35 (0-based (2, 4)) with South prong 'e' that can jump over 34 to 33 capturing B's threatening pod ("35e-33x").
+        octi::OctiPod podA(octi::A_POD);
+        podA.addProng(octi::DIR_S, false);
+        board.squareAt(2, 4).addPod(podA);
+
+        octi::OctiPod podB(octi::B_POD);
+        podB.addProng(octi::DIR_S, false);
+        board.squareAt(2, 3).addPod(podB);
+
+        octi::OctiPod podB2(octi::B_POD);
+        board.squareAt(6, 6).addPod(podB2);
+
+        octi::OctiBotEngine bot(diff, 0xCAFEBABEULL);
+        std::string moveStr = bot.chooseMove(board);
+        STRCMP_EQUAL("35e-33x", moveStr.c_str());
+    }
+}
+
+TEST(OctiBotEngineCoreTest, LegalMoveSelectionAcrossAllModesAndVariants)
+{
+    struct VariantCase {
+        octi::OctiGameMode mode;
+        bool superProngs;
+        bool edgeless;
+        octi::OctiGameBases bases;
+    };
+    const VariantCase cases[] = {
+        { octi::GAME_MODE_2,   false, false, octi::GAME_BASES_3 },
+        { octi::GAME_MODE_2,   true,  true,  octi::GAME_BASES_1 },
+        { octi::GAME_MODE_4,   true,  false, octi::GAME_BASES_3 },
+        { octi::GAME_MODE_OFK, false, true,  octi::GAME_BASES_1 },
+    };
+
+    for (const auto &vc : cases) {
+        for (octi::BotDifficulty diff : {
+                 octi::BotDifficulty::CASUAL,
+                 octi::BotDifficulty::TACTICAL,
+                 octi::BotDifficulty::MASTER }) {
+            octi::OctiBoard board(vc.mode, vc.superProngs, vc.edgeless, vc.bases);
+            octi::OctiGame *game = board.getGame();
+            game->start(octi::PLAYER_A);
+
+            octi::OctiBotEngine bot(diff, 0x99887766ULL);
+            bot.setTimeBudgetMs(60);
+            LONGS_EQUAL(static_cast<int>(diff), static_cast<int>(bot.difficulty()));
+            CHECK_EQUAL(60, bot.timeBudgetMs());
+
+            for (int ply = 0; ply < 4 && !game->isGameOver(); ++ply) {
+                std::string beforeFen = board.toPositionString();
+                std::vector<octi::OctiMove> legal = game->generateLegalMoves();
+                octi::BotSearchStats stats;
+                std::string chosen = bot.chooseMove(board, &stats);
+                STRCMP_EQUAL(beforeFen.c_str(), board.toPositionString().c_str());
+                CHECK_FALSE(chosen.empty());
+
+                octi::OctiMove parsed(chosen);
+                bool foundInLegal = false;
+                for (const auto &m : legal) {
+                    if (m.asString() == parsed.asString()) {
+                        foundInLegal = true;
+                        break;
+                    }
+                }
+                CHECK_TRUE(foundInLegal);
+                game->move(parsed);
+            }
+        }
+    }
+}
+
+TEST(OctiBotEngineCoreTest, BoundaryFinishedOrUnstartedGameReturnsEmpty)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiBotEngine bot(octi::BotDifficulty::TACTICAL);
+
+    // Not started yet
+    STRCMP_EQUAL("", bot.chooseMove(board).c_str());
+
+    // Resigned / finished game
+    board.getGame()->start(octi::PLAYER_A);
+    board.getGame()->resign(octi::PLAYER_A);
+    STRCMP_EQUAL("", bot.chooseMove(board).c_str());
+}
+
+TEST(OctiBotEngineCoreTest, RapidCheckBotAlwaysSelectsLegalMoveWithoutMutatingBoard)
+{
+    IGNORE_ALL_LEAKS_IN_TEST();
+    bool passed = rc::check("OctiBotEngine always returns a legal move without mutating board", []() {
+        int modePick = *rc::gen::inRange(0, 3);
+        octi::OctiGameMode mode = (modePick == 0) ? octi::GAME_MODE_2 :
+                                  (modePick == 1) ? octi::GAME_MODE_4 : octi::GAME_MODE_OFK;
+        bool useSuper = (mode != octi::GAME_MODE_OFK) && *rc::gen::arbitrary<bool>();
+        bool useEdgeless = *rc::gen::arbitrary<bool>();
+        octi::OctiBoard board(mode, useSuper, useEdgeless);
+        octi::OctiGame *game = board.getGame();
+        game->start(octi::PLAYER_A);
+
+        int preSteps = *rc::gen::inRange(0, 6);
+        for (int i = 0; i < preSteps && !game->isGameOver(); ++i) {
+            auto legal = game->generateLegalMoves();
+            if (legal.empty()) {
+                break;
+            }
+            int idx = *rc::gen::inRange(0, static_cast<int>(legal.size()));
+            game->move(legal[static_cast<std::size_t>(idx)]);
+        }
+
+        int diffPick = *rc::gen::inRange(1, 4);
+        octi::OctiBotEngine bot(static_cast<octi::BotDifficulty>(diffPick), 0xABCDEFULL);
+        bot.setTimeBudgetMs(25);
+
+        std::string fenBefore = board.toPositionString();
+        std::string chosen = bot.chooseMove(board);
+        RC_ASSERT(board.toPositionString() == fenBefore);
+
+        if (game->isGameOver()) {
+            RC_ASSERT(chosen.empty());
+        } else {
+            auto legal = game->generateLegalMoves();
+            if (legal.empty()) {
+                RC_ASSERT(chosen.empty());
+            } else {
+                RC_ASSERT(!chosen.empty());
+                octi::OctiMove parsed(chosen);
+                bool isLegal = false;
+                for (const auto &m : legal) {
+                    if (m.asString() == parsed.asString()) {
+                        isLegal = true;
+                        break;
+                    }
+                }
+                RC_ASSERT(isLegal);
+                game->move(parsed);
+            }
+        }
+    });
+    CHECK_TRUE(passed);
 }
 
 int main(int argc, char **argv)

@@ -5,10 +5,11 @@
 ##
 
 SHELL := /bin/bash
+VERSION := $(shell sed -n 's/^.*\*\{2\}Version:[[:space:]]*\([0-9]\+\.[0-9]\+\.[0-9]\+\)\*\{2\}.*$$/\1/p' README.md)
 JAVA_HOME ?= $(shell ls -d "$$HOME"/.jdks/jdk-* 2>/dev/null | tail -n 1)
 export JAVA_HOME
 
-.PHONY: all core server desktop linux windows android test clean distclean
+.PHONY: all core server desktop linux windows installer android test clean distclean
 
 all: core server desktop android
 
@@ -27,6 +28,9 @@ linux:
 windows:
 	@$(MAKE) -C desktop windows
 
+installer:
+	@$(MAKE) -C desktop installer
+
 android:
 	@if [ -d android ] && [ -x android/gradlew ]; then \
 		cd android && ./gradlew assembleDebug; \
@@ -35,6 +39,7 @@ android:
 test:
 	@$(MAKE) -C core test
 	@$(MAKE) -C server test
+	@$(MAKE) -C desktop test
 	@if [ -d android ] && [ -x android/gradlew ]; then \
 		cd android && ./gradlew testDebugUnitTest; \
 	fi

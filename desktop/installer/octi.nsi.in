@@ -1,0 +1,147 @@
+;
+; octi.nsi.in
+;
+; Copyright (C) 2026, Charles Chiou
+;
+
+!include "MUI2.nsh"
+
+Name "OCTI Desktop Player @PROJECT_VERSION@"
+OutFile "@CMAKE_CURRENT_BINARY_DIR@/octi-setup-@PROJECT_VERSION@.exe"
+InstallDir "$PROGRAMFILES64\OCTI"
+InstallDirRegKey HKLM "Software\Selfso\OCTI" "InstallDir"
+RequestExecutionLevel admin
+Unicode True
+SetCompressor zlib
+BrandingText "OCTI Desktop Player v@PROJECT_VERSION@"
+
+VIProductVersion "@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@.0"
+VIAddVersionKey "ProductName" "OCTI Desktop Player"
+VIAddVersionKey "CompanyName" "Charles Chiou"
+VIAddVersionKey "LegalCopyright" "Copyright (C) 2026, Charles Chiou"
+VIAddVersionKey "FileDescription" "OCTI Desktop Player Setup"
+VIAddVersionKey "FileVersion" "@PROJECT_VERSION@"
+VIAddVersionKey "ProductVersion" "@PROJECT_VERSION@"
+
+!define MUI_ABORTWARNING
+!define MUI_ICON "@CMAKE_CURRENT_SOURCE_DIR@/resources/octi.ico"
+!define MUI_UNICON "@CMAKE_CURRENT_SOURCE_DIR@/resources/octi.ico"
+!define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_BITMAP "@CMAKE_CURRENT_SOURCE_DIR@/resources/nsis_header.bmp"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "@CMAKE_CURRENT_SOURCE_DIR@/resources/nsis_welcome.bmp"
+!define MUI_UNWELCOMEFINISHPAGE_BITMAP "@CMAKE_CURRENT_SOURCE_DIR@/resources/nsis_welcome.bmp"
+
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+!define MUI_FINISHPAGE_RUN "$INSTDIR\octi.exe"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch OCTI Desktop Player"
+!insertmacro MUI_PAGE_FINISH
+
+!insertmacro MUI_UNPAGE_WELCOME
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+!insertmacro MUI_UNPAGE_FINISH
+
+!insertmacro MUI_LANGUAGE "English"
+
+Function .onInit
+    SetRegView 64
+    SetShellVarContext all
+FunctionEnd
+
+Function un.onInit
+    SetRegView 64
+    SetShellVarContext all
+FunctionEnd
+
+Section "OCTI Desktop Player" SecMain
+    SectionIn RO
+    SetRegView 64
+
+    ; Clean up any prior per-user AppData installation if present
+    SetShellVarContext current
+    Delete "$DESKTOP\OCTI.lnk"
+    Delete "$SMPROGRAMS\OCTI\OCTI.lnk"
+    Delete "$SMPROGRAMS\OCTI\Uninstall OCTI.lnk"
+    RMDir "$SMPROGRAMS\OCTI"
+    RMDir /r "$LOCALAPPDATA\Programs\OCTI"
+    DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\OCTI"
+    DeleteRegKey HKCU "Software\Selfso\OCTI"
+
+    ; Formal 64-bit Program Files installation
+    SetShellVarContext all
+    SetOutPath "$INSTDIR"
+    File "@CMAKE_CURRENT_BINARY_DIR@/octi.exe"
+    File "@CMAKE_CURRENT_SOURCE_DIR@/resources/octi.ico"
+    File "@CMAKE_CURRENT_BINARY_DIR@/Qt6Core.dll"
+    File "@CMAKE_CURRENT_BINARY_DIR@/Qt6Gui.dll"
+    File "@CMAKE_CURRENT_BINARY_DIR@/Qt6Widgets.dll"
+    File "@CMAKE_CURRENT_BINARY_DIR@/libstdc++-6.dll"
+    File "@CMAKE_CURRENT_BINARY_DIR@/libgcc_s_seh-1.dll"
+    File "@CMAKE_CURRENT_BINARY_DIR@/libwinpthread-1.dll"
+
+    SetOutPath "$INSTDIR\platforms"
+    File "@CMAKE_CURRENT_BINARY_DIR@/platforms/qwindows.dll"
+    File "@CMAKE_CURRENT_BINARY_DIR@/platforms/qdirect2d.dll"
+    File "@CMAKE_CURRENT_BINARY_DIR@/platforms/qminimal.dll"
+    File "@CMAKE_CURRENT_BINARY_DIR@/platforms/qoffscreen.dll"
+
+    SetOutPath "$INSTDIR\styles"
+    File "@CMAKE_CURRENT_BINARY_DIR@/styles/qmodernwindowsstyle.dll"
+
+    SetOutPath "$INSTDIR"
+    WriteRegStr HKLM "Software\Selfso\OCTI" "InstallDir" "$INSTDIR"
+    WriteRegStr HKLM "Software\Selfso\OCTI" "Version" "@PROJECT_VERSION@"
+    WriteUninstaller "$INSTDIR\Uninstall.exe"
+
+    CreateDirectory "$SMPROGRAMS\OCTI"
+    CreateShortcut "$SMPROGRAMS\OCTI\OCTI.lnk" "$INSTDIR\octi.exe" "" "$INSTDIR\octi.exe" 0
+    CreateShortcut "$SMPROGRAMS\OCTI\Uninstall OCTI.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\Uninstall.exe" 0
+    CreateShortcut "$DESKTOP\OCTI.lnk" "$INSTDIR\octi.exe" "" "$INSTDIR\octi.exe" 0
+
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OCTI" "DisplayName" "OCTI Desktop Player"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OCTI" "DisplayVersion" "@PROJECT_VERSION@"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OCTI" "Publisher" "Charles Chiou"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OCTI" "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OCTI" "QuietUninstallString" "$\"$INSTDIR\Uninstall.exe$\" /S"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OCTI" "DisplayIcon" "$INSTDIR\octi.exe,0"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OCTI" "InstallLocation" "$INSTDIR"
+    WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OCTI" "EstimatedSize" 41500
+    WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OCTI" "NoModify" 1
+    WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OCTI" "NoRepair" 1
+SectionEnd
+
+Section "Uninstall"
+    SetRegView 64
+    SetShellVarContext all
+
+    Delete "$INSTDIR\octi.exe"
+    Delete "$INSTDIR\octi.ico"
+    Delete "$INSTDIR\Qt6Core.dll"
+    Delete "$INSTDIR\Qt6Gui.dll"
+    Delete "$INSTDIR\Qt6Widgets.dll"
+    Delete "$INSTDIR\libstdc++-6.dll"
+    Delete "$INSTDIR\libgcc_s_seh-1.dll"
+    Delete "$INSTDIR\libwinpthread-1.dll"
+    Delete "$INSTDIR\Uninstall.exe"
+
+    Delete "$INSTDIR\platforms\qwindows.dll"
+    Delete "$INSTDIR\platforms\qdirect2d.dll"
+    Delete "$INSTDIR\platforms\qminimal.dll"
+    Delete "$INSTDIR\platforms\qoffscreen.dll"
+    RMDir "$INSTDIR\platforms"
+
+    Delete "$INSTDIR\styles\qmodernwindowsstyle.dll"
+    RMDir "$INSTDIR\styles"
+
+    Delete "$DESKTOP\OCTI.lnk"
+    Delete "$SMPROGRAMS\OCTI\OCTI.lnk"
+    Delete "$SMPROGRAMS\OCTI\Uninstall OCTI.lnk"
+    RMDir "$SMPROGRAMS\OCTI"
+
+    RMDir "$INSTDIR"
+
+    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OCTI"
+    DeleteRegKey HKLM "Software\Selfso\OCTI"
+SectionEnd

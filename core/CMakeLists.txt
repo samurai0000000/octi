@@ -65,6 +65,7 @@ add_library(octi_core STATIC
     src/OctiMove.cxx
     src/OctiBoard.cxx
     src/OctiGame.cxx
+    src/OctiBotEngine.cxx
 )
 
 target_include_directories(octi_core PUBLIC

@@ -4,27 +4,37 @@
  * Copyright (C) 2026, Charles Chiou
  */
 
-#include "OctiCore.hxx"
-#include <cstring>
 #include <iostream>
+#include <string>
 #include <QApplication>
-#include <QWidget>
+#include "OctiMainWindow.hxx"
 
 int main(int argc, char *argv[])
 {
-    for (int i = 1; i < argc; ++i) {
-        if (argv[i] != nullptr &&
-            (std::strcmp(argv[i], "--version") == 0 ||
-             std::strcmp(argv[i], "-v") == 0)) {
-            std::cout << octi::OctiCore::buildBanner("octi");
-            return 0;
-        }
+    octi::DesktopCliArgs cliArgs;
+    std::string errMsg;
+    if (!octi::DesktopCliArgs::parse(
+            argc, const_cast<const char * const *>(argv), cliArgs, errMsg)) {
+        std::cerr << "Error: " << errMsg << "\n"
+                  << octi::DesktopCliArgs::usageBanner(
+                         argc > 0 ? argv[0] : "octi");
+        return 1;
+    }
+
+    if (cliArgs.showVersion) {
+        std::cout << octi::DesktopCliArgs::versionBanner();
+        return 0;
+    }
+    if (cliArgs.showHelp) {
+        std::cout << octi::DesktopCliArgs::usageBanner(
+            argc > 0 ? argv[0] : "octi");
+        return 0;
     }
 
     QApplication app(argc, argv);
-    QWidget window;
-    window.setWindowTitle(
-        QString("OCTI v%1").arg(octi::OctiCore::versionString()));
+    app.setWindowIcon(octi::createOctiAppIcon());
+    octi::OctiMainWindow window(
+        nullptr, cliArgs.configPath, cliArgs.startOffline);
     window.show();
     return app.exec();
 }

@@ -23,6 +23,7 @@ else()
 endif()
 
 option(OCTI_SERVER_SANITIZE "Build with AddressSanitizer and UBSan" OFF)
+option(OCTI_SERVER_BUILD_TESTS "Build octi_server executable and test suite" ON)
 if(OCTI_SERVER_SANITIZE AND NOT MSVC)
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer
                         -fno-sanitize-recover=undefined)
@@ -36,11 +37,13 @@ if(NOT TARGET octi_core)
 endif()
 
 find_package(Threads REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(CPPUTEST REQUIRED cpputest)
 find_package(OpenSSL REQUIRED)
 find_package(SQLite3 REQUIRED)
-find_library(RAPIDCHECK_LIBRARY rapidcheck REQUIRED)
+if(OCTI_SERVER_BUILD_TESTS)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(CPPUTEST REQUIRED cpputest)
+    find_library(RAPIDCHECK_LIBRARY rapidcheck REQUIRED)
+endif()
 
 # Third-party header-only libraries are git submodules (never loose files).
 set(OCTI_THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party")
@@ -82,6 +85,7 @@ target_link_libraries(octi_server_lib PUBLIC
     SQLite::SQLite3
 )
 
+if(OCTI_SERVER_BUILD_TESTS)
 add_executable(octi_server
     src/Main.cxx
 )
@@ -165,3 +169,4 @@ add_dependencies(test_octi_http_server_integration octi_server)
 target_compile_definitions(test_octi_http_server_integration PRIVATE
     OCTI_SERVER_BINARY="$<TARGET_FILE:octi_server>"
 )
+endif()

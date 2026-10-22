@@ -464,7 +464,7 @@ std::string ServerApp::usageBanner(const char *progName)
     std::ostringstream oss;
     oss << "Usage: " << name << " --db <path> [options]\n"
         << "Options:\n"
-        << "  -p, --port <port>      Listen port (0..65535, 0 = ephemeral, default: 8888)\n"
+        << "  -p, --port <port>      Listen port (0..65535, 0 = ephemeral, default: 6874)\n"
         << "      --bind <address>   Listen address (default: 127.0.0.1)\n"
         << "      --db <path>        SQLite database file (required; created 0600)\n"
         << "      --oidc-config <f>  JSON file with per-provider OIDC client ids\n"

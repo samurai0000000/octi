@@ -1213,13 +1213,14 @@ void OctiGame::undo()
     }
 
     OctiGameSnapshot currentSnap = captureSnapshot();
+    if (!_history.empty()) {
+        currentSnap.lastPlayer = _history.back().first;
+        currentSnap.lastMove = _history.back().second;
+        _history.pop_back();
+    }
     OctiGameSnapshot prevSnap = _undoStack.back();
     _undoStack.pop_back();
     _redoStack.push_back(currentSnap);
-
-    if (!_history.empty()) {
-        _history.pop_back();
-    }
 
     restoreSnapshot(prevSnap);
 

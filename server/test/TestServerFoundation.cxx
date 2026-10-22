@@ -23,7 +23,7 @@ TEST(ServerFoundationTest, NominalDefaultConfigAndRun)
     const char *argv[] = { "octi_server" };
     CHECK_TRUE(app.parseArgs(1, argv, errMsg));
     STRCMP_EQUAL("", errMsg.c_str());
-    LONGS_EQUAL(8888, app.config().port);
+    LONGS_EQUAL(6874, app.config().port);
     STRCMP_EQUAL("127.0.0.1", app.config().bindAddress.c_str());
     STRCMP_EQUAL("", app.config().dbPath.c_str());
     STRCMP_EQUAL("", app.config().oidcConfigPath.c_str());
@@ -53,7 +53,7 @@ TEST(ServerFoundationTest, NominalNewOptionsAreParsed)
     /* Parsing again starts from the defaults. */
     const char *again[] = { "octi_server", "--db", "x.db" };
     CHECK_TRUE(app.parseArgs(3, again, errMsg));
-    LONGS_EQUAL(8888, app.config().port);
+    LONGS_EQUAL(6874, app.config().port);
     STRCMP_EQUAL("127.0.0.1", app.config().bindAddress.c_str());
     STRCMP_EQUAL("", app.config().oidcConfigPath.c_str());
 }
