@@ -166,3 +166,21 @@ Visit our website: www.OCTI.net
 
 > **⚠ WARNING: CHOKING HAZARD** - small parts.  
 > Not for children under 3 years.
+
+---
+
+## Appendix A: OCTI Project Interpretations
+
+The rule text above is reproduced verbatim from the original rule book. Where it is silent or ambiguous, this project's engines (C++ `octi_core` and the Android Java engine) apply the interpretations below.
+
+### A.1 Looping jump onto the starting square
+
+**Situation.** A pod jumps in a multi-jump chain that lands back on the square it started from, while other pods of the same stack remain on that square (stationary stack-mates).
+
+**Ambiguity.** "A jumping pod must land in an empty square immediately behind the jumped pod" can be read literally, in which case the starting square is not empty while a stack-mate remains on it. Other rules point the other way: "any number of friendly pods may stack together", "A stack may jump to the same destination", and "Stacked pods ignore each other when moving or jumping".
+
+**Interpretation.** Pods in the same stack ignore each other. For the jumping pod, the whole starting stack counts as vacated on the starting square only, so the pod may land back there and rejoin the pods that stayed. This applies to the jump-landing check and to the check that a jumped square holds a stationary pod.
+
+**Scope.**
+- Every other square is judged by plain emptiness. A friendly pod elsewhere on the board, even one with identical prongs, is never treated as vacated.
+- In OCTI for Kids, stacking is forbidden, so no stack-mates exist and this case cannot arise.

@@ -14,8 +14,10 @@
 #include "OctiGame.hxx"
 #include "Version.hxx"
 #include <rapidcheck.h>
+#include <initializer_list>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 #include <CppUTest/CommandLineTestRunner.h>
 #include <CppUTest/TestHarness.h>
@@ -1476,6 +1478,301 @@ TEST(RapidCheckStateProperties, RandomLegalMoveWalkOFK)
         RC_ASSERT(board.toPositionString() == replayBoard.toPositionString());
     });
     CHECK_TRUE(passed);
+}
+
+// ---------------------------------------------------------------------------
+// OctiGhostPodTest
+//
+// Ghost (vacated) pods exist only on the moving stack's own starting square.
+// A different square that merely holds an own pod with identical prongs must
+// be treated as an ordinary occupied square for jump-over and landing checks.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Each scenario is evaluated twice (as separate tests) so that a failure in
+// generateLegalMoves() cannot mask a failure in move() and vice versa.
+enum GhostAspect {
+    GHOST_ASPECT_GENERATOR,
+    GHOST_ASPECT_MOVE
+};
+
+octi::OctiPod ghostTestPod(octi::OctiPodType type,
+                           std::initializer_list<octi::OctiDir> prongs)
+{
+    octi::OctiPod pod(type);
+    for (octi::OctiDir d : prongs) {
+        pod.addProng(d, false);
+    }
+    return pod;
+}
+
+octi::OctiMove ghostTestJump(int x0, int y0, const octi::OctiPod &pod,
+                             std::initializer_list<std::pair<int, int> > hops)
+{
+    octi::OctiMoveOp op;
+    op.x0 = x0;
+    op.y0 = y0;
+    op.pod = pod;
+    for (const auto &h : hops) {
+        octi::OctiHop hop;
+        hop.x = h.first;
+        hop.y = h.second;
+        hop.capture = false;
+        op.hops.push_back(hop);
+    }
+    return octi::OctiMove(std::vector<octi::OctiMoveOp>{op});
+}
+
+bool ghostTestContains(const std::vector<octi::OctiMove> &moves,
+                       const octi::OctiMove &m)
+{
+    for (const auto &candidate : moves) {
+        if (candidate == m) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Applies m through move(); returns true when accepted, false when the engine
+// raised IllegalMoveException.
+bool ghostTestAccepts(octi::OctiGame *game, const octi::OctiMove &m)
+{
+    try {
+        game->move(m);
+    } catch (const octi::IllegalMoveException &) {
+        return false;
+    }
+    return true;
+}
+
+// (i) Landing on a DIFFERENT square holding an identical own pod is illegal.
+void ghostTestLandingOnIdenticalOwnPod(octi::OctiGameMode mode, GhostAspect aspect)
+{
+    octi::OctiBoard board(mode);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+    board.clear();
+
+    const octi::OctiPod mover = ghostTestPod(octi::A_POD, {octi::DIR_E});
+    board.squareAt(0, 3).addPod(mover);                                // mover
+    board.squareAt(1, 3).addPod(ghostTestPod(octi::A_POD, {}));        // jumped
+    board.squareAt(2, 3).addPod(mover);                                // identical, NOT vacated
+
+    const std::string before = board.toPositionString();
+    const octi::OctiMove jump = ghostTestJump(0, 3, mover, {{2, 3}});
+
+    const bool generated = ghostTestContains(game->generateLegalMoves(), jump);
+    const bool accepted = ghostTestAccepts(game, jump);
+    const std::string after = board.toPositionString();
+
+    if (aspect == GHOST_ASPECT_GENERATOR) {
+        CHECK_TEXT(!generated, "generateLegalMoves() emitted a jump landing on an identical own pod");
+    } else {
+        CHECK_TEXT(!accepted, "move() accepted a jump landing on an identical own pod");
+        STRCMP_EQUAL(before.c_str(), after.c_str());
+    }
+}
+
+// (ii) Jumping OVER a DIFFERENT square holding an identical own pod is legal
+// when the landing square is empty.
+void ghostTestJumpOverIdenticalOwnPod(octi::OctiGameMode mode, GhostAspect aspect)
+{
+    octi::OctiBoard board(mode);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+    board.clear();
+
+    const octi::OctiPod mover = ghostTestPod(octi::A_POD, {octi::DIR_E});
+    board.squareAt(0, 3).addPod(mover);   // mover
+    board.squareAt(1, 3).addPod(mover);   // jumped: identical own pod, stationary
+
+    const octi::OctiMove jump = ghostTestJump(0, 3, mover, {{2, 3}});
+
+    const bool generated = ghostTestContains(game->generateLegalMoves(), jump);
+    const bool accepted = ghostTestAccepts(game, jump);
+
+    if (aspect == GHOST_ASPECT_GENERATOR) {
+        CHECK_TEXT(generated, "generateLegalMoves() omitted a jump over an identical own pod");
+    } else {
+        CHECK_TEXT(accepted, "move() rejected a jump over an identical own pod");
+        CHECK_EQUAL(0, board.squareAt(0, 3).getNumPods());
+        CHECK_EQUAL(1, board.squareAt(1, 3).getNumPods());
+        CHECK_EQUAL(1, board.squareAt(2, 3).getNumPods());
+    }
+}
+
+// (iii) Looping back to the vacated start square stays legal.
+void ghostTestLoopBackToVacatedStart(octi::OctiGameMode mode, GhostAspect aspect)
+{
+    octi::OctiBoard board(mode);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+    board.clear();
+
+    const octi::OctiPod mover =
+        ghostTestPod(octi::A_POD, {octi::DIR_E, octi::DIR_N, octi::DIR_SW});
+    board.squareAt(1, 3).addPod(mover);                                // start
+    board.squareAt(2, 3).addPod(ghostTestPod(octi::A_POD, {}));        // jumped by E hop
+    board.squareAt(3, 4).addPod(ghostTestPod(octi::A_POD, {}));        // jumped by N hop
+    board.squareAt(2, 4).addPod(ghostTestPod(octi::A_POD, {}));        // jumped by SW hop
+
+    const octi::OctiMove loop = ghostTestJump(1, 3, mover, {{3, 3}, {3, 5}, {1, 3}});
+
+    const bool generated = ghostTestContains(game->generateLegalMoves(), loop);
+    const bool accepted = ghostTestAccepts(game, loop);
+
+    if (aspect == GHOST_ASPECT_GENERATOR) {
+        CHECK_TEXT(generated, "generateLegalMoves() omitted a loop back to the vacated start square");
+    } else {
+        CHECK_TEXT(accepted, "move() rejected a loop back to the vacated start square");
+        CHECK_EQUAL(1, board.squareAt(1, 3).getNumPods());
+        CHECK_EQUAL(0, board.squareAt(3, 3).getNumPods());
+        CHECK_EQUAL(0, board.squareAt(3, 5).getNumPods());
+    }
+}
+
+// Composite stack move: two identical pods on one start square both jump to
+// the same destination over one stationary pod (rulebook: "A stack may jump
+// to the same destination"). Stacks do not exist in OCTI for Kids.
+void ghostTestStackJumpsToSameDestination(octi::OctiGameMode mode)
+{
+    octi::OctiBoard board(mode);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+    board.clear();
+
+    const octi::OctiPod mover = ghostTestPod(octi::A_POD, {octi::DIR_E});
+    board.squareAt(0, 3).addPod(mover);
+    board.squareAt(0, 3).addPod(mover);
+    board.squareAt(1, 3).addPod(ghostTestPod(octi::A_POD, {}));
+
+    octi::OctiMoveOp op;
+    op.x0 = 0;
+    op.y0 = 3;
+    op.pod = mover;
+    octi::OctiHop hop;
+    hop.x = 2;
+    hop.y = 3;
+    hop.capture = false;
+    op.hops.push_back(hop);
+    const octi::OctiMove both(std::vector<octi::OctiMoveOp>{op, op});
+
+    const bool accepted = ghostTestAccepts(game, both);
+    CHECK_TEXT(accepted, "move() rejected a stack jumping to the same destination");
+    if (accepted) {
+        CHECK_EQUAL(0, board.squareAt(0, 3).getNumPods());
+        CHECK_EQUAL(1, board.squareAt(1, 3).getNumPods());
+        CHECK_EQUAL(2, board.squareAt(2, 3).getNumPods());
+    }
+}
+
+// (iv) Every generated legal move must be accepted by move() and must be
+// fully reversible (position string and transcript restored by undo()).
+bool ghostTestGeneratedMovesAcceptedProperty(octi::OctiGameMode mode, const char *label)
+{
+    return rc::check(label, [mode]() {
+        octi::OctiBoard board(mode);
+        octi::OctiGame *game = board.getGame();
+        RC_ASSERT(game != nullptr);
+        game->start(octi::PLAYER_A);
+
+        const int numSteps = *rc::gen::inRange(5, 16);
+        for (int step = 0; step < numSteps; step++) {
+            if (game->isGameOver()) {
+                break;
+            }
+            std::vector<octi::OctiMove> legalMoves = game->generateLegalMoves();
+            if (legalMoves.empty()) {
+                break;
+            }
+
+            const std::string fenBefore = board.toPositionString();
+            const std::string transcriptBefore = board.serializeGame();
+            const int movesBefore = game->getNumMoves();
+
+            for (const auto &m : legalMoves) {
+                bool accepted = true;
+                std::string reason;
+                try {
+                    game->move(m);
+                } catch (const octi::IllegalMoveException &e) {
+                    accepted = false;
+                    reason = e.what();
+                }
+                if (!accepted) {
+                    RC_LOG() << "step " << step << " move " << m.asString()
+                             << " rejected: " << reason << std::endl
+                             << "position: " << fenBefore << std::endl;
+                }
+                RC_ASSERT(accepted);
+                RC_ASSERT(game->getNumMoves() == movesBefore + 1);
+                game->undo();
+                RC_ASSERT(game->getNumMoves() == movesBefore);
+                RC_ASSERT(board.toPositionString() == fenBefore);
+                RC_ASSERT(board.serializeGame() == transcriptBefore);
+            }
+
+            const int moveIdx = *rc::gen::inRange(0, static_cast<int>(legalMoves.size()));
+            game->move(legalMoves[static_cast<std::size_t>(moveIdx)]);
+        }
+    });
+}
+
+} // namespace
+
+TEST_GROUP(OctiGhostPodTest)
+{
+};
+
+#define GHOST_TEST_ALL_MODES(scenarioName, scenarioFn)                         \
+    TEST(OctiGhostPodTest, scenarioName##Generator2P)                          \
+    { scenarioFn(octi::GAME_MODE_2, GHOST_ASPECT_GENERATOR); }                 \
+    TEST(OctiGhostPodTest, scenarioName##Generator4P)                          \
+    { scenarioFn(octi::GAME_MODE_4, GHOST_ASPECT_GENERATOR); }                 \
+    TEST(OctiGhostPodTest, scenarioName##GeneratorOFK)                         \
+    { scenarioFn(octi::GAME_MODE_OFK, GHOST_ASPECT_GENERATOR); }               \
+    TEST(OctiGhostPodTest, scenarioName##Move2P)                               \
+    { scenarioFn(octi::GAME_MODE_2, GHOST_ASPECT_MOVE); }                      \
+    TEST(OctiGhostPodTest, scenarioName##Move4P)                               \
+    { scenarioFn(octi::GAME_MODE_4, GHOST_ASPECT_MOVE); }                      \
+    TEST(OctiGhostPodTest, scenarioName##MoveOFK)                              \
+    { scenarioFn(octi::GAME_MODE_OFK, GHOST_ASPECT_MOVE); }
+
+GHOST_TEST_ALL_MODES(LandingOnIdenticalOwnPod, ghostTestLandingOnIdenticalOwnPod)
+GHOST_TEST_ALL_MODES(JumpOverIdenticalOwnPod, ghostTestJumpOverIdenticalOwnPod)
+GHOST_TEST_ALL_MODES(LoopBackToVacatedStart, ghostTestLoopBackToVacatedStart)
+
+TEST(OctiGhostPodTest, StackJumpsToSameDestination2P)
+{
+    ghostTestStackJumpsToSameDestination(octi::GAME_MODE_2);
+}
+
+TEST(OctiGhostPodTest, StackJumpsToSameDestination4P)
+{
+    ghostTestStackJumpsToSameDestination(octi::GAME_MODE_4);
+}
+
+TEST(OctiGhostPodTest, GeneratedMovesAcceptedAndReversible2P)
+{
+    IGNORE_ALL_LEAKS_IN_TEST();
+    CHECK_TRUE(ghostTestGeneratedMovesAcceptedProperty(
+                   octi::GAME_MODE_2, "2P every generated move is accepted and reversible"));
+}
+
+TEST(OctiGhostPodTest, GeneratedMovesAcceptedAndReversible4P)
+{
+    IGNORE_ALL_LEAKS_IN_TEST();
+    CHECK_TRUE(ghostTestGeneratedMovesAcceptedProperty(
+                   octi::GAME_MODE_4, "4P every generated move is accepted and reversible"));
+}
+
+TEST(OctiGhostPodTest, GeneratedMovesAcceptedAndReversibleOFK)
+{
+    IGNORE_ALL_LEAKS_IN_TEST();
+    CHECK_TRUE(ghostTestGeneratedMovesAcceptedProperty(
+                   octi::GAME_MODE_OFK, "OFK every generated move is accepted and reversible"));
 }
 
 int main(int argc, char **argv)

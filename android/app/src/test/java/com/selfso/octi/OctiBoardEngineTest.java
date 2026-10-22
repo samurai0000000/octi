@@ -1237,6 +1237,232 @@ public class OctiBoardEngineTest {
     }
 
     // -------------------------------------------------------------------------
+    // Ghost-pod regression tests
+    //
+    // Ghost (vacated) pods exist only on the moving stack's own starting
+    // square. A different square that merely holds an own pod with identical
+    // prongs must be treated as an ordinary occupied square for jump-over and
+    // landing checks.
+    // -------------------------------------------------------------------------
+
+    private static final OctiGameMode[] GHOST_MODES = {
+        OctiGameMode.GAME_MODE_2, OctiGameMode.GAME_MODE_4, OctiGameMode.GAME_MODE_OFK
+    };
+
+    private static OctiPod ghostPod(OctiPodType type, OctiDir... prongs) {
+        OctiPod pod = new OctiPod(type);
+        for (OctiDir d : prongs) {
+            pod.addProng(d, false);
+        }
+        return pod;
+    }
+
+    private static OctiMoveOp ghostJumpOp(int x0, int y0, OctiPod pod, int[][] hops) {
+        OctiMoveOp op = new OctiMoveOp();
+        op.x0 = x0;
+        op.y0 = y0;
+        op.pod = pod.copy();
+        for (int[] h : hops) {
+            op.hops.add(new OctiHop(h[0], h[1], false));
+        }
+        return op;
+    }
+
+    private static OctiMove ghostJump(int x0, int y0, OctiPod pod, int[][] hops) {
+        return new OctiMove(Collections.singletonList(ghostJumpOp(x0, y0, pod, hops)));
+    }
+
+    private static boolean ghostAccepts(OctiGame game, OctiMove m) {
+        try {
+            game.move(m);
+        } catch (IllegalMoveException e) {
+            return false;
+        }
+        return true;
+    }
+
+    private static void collectGhostFailures(OctiGameMode mode, List<String> failures,
+                                             List<String> allFailures) {
+        for (String f : failures) {
+            allFailures.add(mode + ": " + f);
+        }
+    }
+
+    // (i) Landing on a DIFFERENT square holding an identical own pod is illegal.
+    @Test
+    public void testGhostPodLandingOnIdenticalOwnPodIsIllegal() {
+        List<String> allFailures = new ArrayList<>();
+        for (OctiGameMode mode : GHOST_MODES) {
+            OctiBoard board = new OctiBoard(mode);
+            OctiGame game = board.getGame();
+            game.start(OctiPlayer.PLAYER_A);
+            board.clear();
+
+            OctiPod mover = ghostPod(OctiPodType.A_POD, OctiDir.DIR_E);
+            board.squareAt(0, 3).addPod(mover.copy());
+            board.squareAt(1, 3).addPod(ghostPod(OctiPodType.A_POD));
+            board.squareAt(2, 3).addPod(mover.copy());
+
+            String before = board.toPositionString();
+            OctiMove jump = ghostJump(0, 3, mover, new int[][] {{2, 3}});
+
+            List<String> failures = new ArrayList<>();
+            if (game.generateLegalMoves().contains(jump)) {
+                failures.add("generateLegalMoves() emitted a jump landing on an identical own pod");
+            }
+            if (ghostAccepts(game, jump)) {
+                failures.add("move() accepted a jump landing on an identical own pod");
+            } else if (!before.equals(board.toPositionString())) {
+                failures.add("rejected move() changed the position");
+            }
+            collectGhostFailures(mode, failures, allFailures);
+        }
+        assertTrue(allFailures.toString(), allFailures.isEmpty());
+    }
+
+    // (ii) Jumping OVER a DIFFERENT square holding an identical own pod is legal
+    // when the landing square is empty.
+    @Test
+    public void testGhostPodJumpOverIdenticalOwnPodIsLegal() {
+        List<String> allFailures = new ArrayList<>();
+        for (OctiGameMode mode : GHOST_MODES) {
+            OctiBoard board = new OctiBoard(mode);
+            OctiGame game = board.getGame();
+            game.start(OctiPlayer.PLAYER_A);
+            board.clear();
+
+            OctiPod mover = ghostPod(OctiPodType.A_POD, OctiDir.DIR_E);
+            board.squareAt(0, 3).addPod(mover.copy());
+            board.squareAt(1, 3).addPod(mover.copy());
+
+            OctiMove jump = ghostJump(0, 3, mover, new int[][] {{2, 3}});
+
+            List<String> failures = new ArrayList<>();
+            if (!game.generateLegalMoves().contains(jump)) {
+                failures.add("generateLegalMoves() omitted a jump over an identical own pod");
+            }
+            if (!ghostAccepts(game, jump)) {
+                failures.add("move() rejected a jump over an identical own pod");
+            } else if (board.squareAt(0, 3).getNumPods() != 0
+                    || board.squareAt(1, 3).getNumPods() != 1
+                    || board.squareAt(2, 3).getNumPods() != 1) {
+                failures.add("unexpected pod counts after jump over identical own pod");
+            }
+            collectGhostFailures(mode, failures, allFailures);
+        }
+        assertTrue(allFailures.toString(), allFailures.isEmpty());
+    }
+
+    // (iii) Looping back to the vacated start square stays legal.
+    @Test
+    public void testGhostPodLoopBackToVacatedStartStaysLegal() {
+        List<String> allFailures = new ArrayList<>();
+        for (OctiGameMode mode : GHOST_MODES) {
+            OctiBoard board = new OctiBoard(mode);
+            OctiGame game = board.getGame();
+            game.start(OctiPlayer.PLAYER_A);
+            board.clear();
+
+            OctiPod mover = ghostPod(OctiPodType.A_POD,
+                    OctiDir.DIR_E, OctiDir.DIR_N, OctiDir.DIR_SW);
+            board.squareAt(1, 3).addPod(mover.copy());
+            board.squareAt(2, 3).addPod(ghostPod(OctiPodType.A_POD));
+            board.squareAt(3, 4).addPod(ghostPod(OctiPodType.A_POD));
+            board.squareAt(2, 4).addPod(ghostPod(OctiPodType.A_POD));
+
+            OctiMove loop = ghostJump(1, 3, mover, new int[][] {{3, 3}, {3, 5}, {1, 3}});
+
+            List<String> failures = new ArrayList<>();
+            if (!game.generateLegalMoves().contains(loop)) {
+                failures.add("generateLegalMoves() omitted a loop back to the vacated start square");
+            }
+            if (!ghostAccepts(game, loop)) {
+                failures.add("move() rejected a loop back to the vacated start square");
+            } else if (board.squareAt(1, 3).getNumPods() != 1
+                    || board.squareAt(3, 3).getNumPods() != 0
+                    || board.squareAt(3, 5).getNumPods() != 0) {
+                failures.add("unexpected pod counts after loop back to start");
+            }
+            collectGhostFailures(mode, failures, allFailures);
+        }
+        assertTrue(allFailures.toString(), allFailures.isEmpty());
+    }
+
+    // Composite stack move: two identical pods on one start square both jump to
+    // the same destination over one stationary pod. Stacks do not exist in
+    // OCTI for Kids.
+    @Test
+    public void testGhostPodStackJumpsToSameDestination() {
+        OctiGameMode[] stackModes = {OctiGameMode.GAME_MODE_2, OctiGameMode.GAME_MODE_4};
+        for (OctiGameMode mode : stackModes) {
+            OctiBoard board = new OctiBoard(mode);
+            OctiGame game = board.getGame();
+            game.start(OctiPlayer.PLAYER_A);
+            board.clear();
+
+            OctiPod mover = ghostPod(OctiPodType.A_POD, OctiDir.DIR_E);
+            board.squareAt(0, 3).addPod(mover.copy());
+            board.squareAt(0, 3).addPod(mover.copy());
+            board.squareAt(1, 3).addPod(ghostPod(OctiPodType.A_POD));
+
+            OctiMoveOp op = ghostJumpOp(0, 3, mover, new int[][] {{2, 3}});
+            OctiMove both = new OctiMove(Arrays.asList(op, new OctiMoveOp(op)));
+
+            assertTrue(mode + ": move() rejected a stack jumping to the same destination",
+                    ghostAccepts(game, both));
+            assertEquals(0, board.squareAt(0, 3).getNumPods());
+            assertEquals(1, board.squareAt(1, 3).getNumPods());
+            assertEquals(2, board.squareAt(2, 3).getNumPods());
+        }
+    }
+
+    // (iv) Every generated legal move must be accepted by move() and must be
+    // fully reversible (position string and transcript restored by undo()).
+    @Test
+    public void testGhostPodGeneratedMovesAcceptedAndReversible() {
+        for (OctiGameMode mode : GHOST_MODES) {
+            Random rand = new Random(20260622L + mode.ordinal());
+            for (int gameIdx = 0; gameIdx < 150; gameIdx++) {
+                OctiBoard board = new OctiBoard(mode);
+                OctiGame game = board.getGame();
+                game.start(OctiPlayer.PLAYER_A);
+
+                int numSteps = 5 + rand.nextInt(11);
+                for (int step = 0; step < numSteps; step++) {
+                    if (game.isGameOver()) {
+                        break;
+                    }
+                    List<OctiMove> legalMoves = game.generateLegalMoves();
+                    if (legalMoves.isEmpty()) {
+                        break;
+                    }
+
+                    String fenBefore = board.toPositionString();
+                    String transcriptBefore = board.serializeGame();
+                    int movesBefore = game.getNumMoves();
+
+                    for (OctiMove m : legalMoves) {
+                        String context = mode + " game " + gameIdx + " step " + step
+                                + " move " + m.asString() + " position " + fenBefore;
+                        try {
+                            game.move(m);
+                        } catch (IllegalMoveException e) {
+                            fail(context + " rejected: " + e.getMessage());
+                        }
+                        assertEquals(context, movesBefore + 1, game.getNumMoves());
+                        game.undo();
+                        assertEquals(context, movesBefore, game.getNumMoves());
+                        assertEquals(context, fenBefore, board.toPositionString());
+                        assertEquals(context, transcriptBefore, board.serializeGame());
+                    }
+
+                    game.move(legalMoves.get(rand.nextInt(legalMoves.size())));
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Exception Assert Helpers
     // -------------------------------------------------------------------------
 

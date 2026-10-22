@@ -14,6 +14,19 @@
 
 namespace octi {
 
+// Ghost (vacated) pods exist only on the moving stack's own starting square.
+// Every other square is judged by plain emptiness so that an own pod with
+// identical prongs elsewhere on the board is never mistaken for a vacated pod.
+static inline bool isEmptyForJump(const OctiSquare &sq, int x, int y,
+                                  int startX, int startY,
+                                  const std::vector<OctiPod> &ghostPods)
+{
+    if (x == startX && y == startY) {
+        return sq.isEmptyWithout(ghostPods);
+    }
+    return sq.isEmpty();
+}
+
 static inline bool findStepDelta(int cx, int cy, int tx, int ty,
                                  bool edgeless, int width, int height,
                                  int &outDx, int &outDy)
@@ -929,7 +942,7 @@ void OctiGame::applyMoveOps(const std::vector<OctiMoveOp> &ops)
                 jumpedSquaresThisPod.push_back(jCoord);
 
                 OctiSquare &jumpedSq = _board->squareAt(jx, jy);
-                if (jumpedSq.isEmptyWithout(ghostPods)) {
+                if (isEmptyForJump(jumpedSq, jx, jy, sx, sy, ghostPods)) {
                     throw IllegalMoveException("cannot jump square without stationary pods");
                 }
 
@@ -943,7 +956,7 @@ void OctiGame::applyMoveOps(const std::vector<OctiMoveOp> &ops)
                 }
 
                 OctiSquare &landingSq = _board->squareAt(hop.x, hop.y);
-                if (!landingSq.isEmptyWithout(ghostPods)) {
+                if (!isEmptyForJump(landingSq, hop.x, hop.y, sx, sy, ghostPods)) {
                     throw IllegalMoveException("landing square must be empty of stationary pods");
                 }
 
@@ -1397,12 +1410,12 @@ static void dfsJumpChains(const OctiBoard *board,
         }
 
         const OctiSquare &jumpedSq = board->squareAt(jx, jy);
-        if (jumpedSq.isEmptyWithout(ghostPods)) {
+        if (isEmptyForJump(jumpedSq, jx, jy, sx, sy, ghostPods)) {
             continue;
         }
 
         const OctiSquare &landSq = board->squareAt(lx, ly);
-        if (!landSq.isEmptyWithout(ghostPods)) {
+        if (!isEmptyForJump(landSq, lx, ly, sx, sy, ghostPods)) {
             continue;
         }
 

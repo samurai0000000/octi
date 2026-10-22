@@ -473,6 +473,18 @@ public class OctiGame {
         notifyUndoRedoStatusChanged();
     }
 
+    // Ghost (vacated) pods exist only on the moving stack's own starting square.
+    // Every other square is judged by plain emptiness so that an own pod with
+    // identical prongs elsewhere on the board is never mistaken for a vacated pod.
+    private static boolean isEmptyForJump(OctiSquare sq, int x, int y,
+                                          int startX, int startY,
+                                          List<OctiPod> ghostPods) {
+        if (x == startX && y == startY) {
+            return sq.isEmptyWithout(ghostPods);
+        }
+        return sq.isEmpty();
+    }
+
     private static boolean findStepDelta(int cx, int cy, int tx, int ty,
                                          boolean edgeless, int width, int height,
                                          int[] outDelta) {
@@ -994,7 +1006,7 @@ public class OctiGame {
                     jumpedSquaresThisPod.add(jCoord);
 
                     OctiSquare jumpedSq = board.squareAt(jx, jy);
-                    if (jumpedSq.isEmptyWithout(ghostPods)) {
+                    if (isEmptyForJump(jumpedSq, jx, jy, sx, sy, ghostPods)) {
                         throw new IllegalMoveException("cannot jump square without stationary pods");
                     }
 
@@ -1008,7 +1020,7 @@ public class OctiGame {
                     }
 
                     OctiSquare landingSq = board.squareAt(hop.x, hop.y);
-                    if (!landingSq.isEmptyWithout(ghostPods)) {
+                    if (!isEmptyForJump(landingSq, hop.x, hop.y, sx, sy, ghostPods)) {
                         throw new IllegalMoveException("landing square must be empty of stationary pods");
                     }
 
@@ -1447,12 +1459,12 @@ public class OctiGame {
             }
 
             OctiSquare jumpedSq = board.squareAt(jx, jy);
-            if (jumpedSq.isEmptyWithout(ghostPods)) {
+            if (isEmptyForJump(jumpedSq, jx, jy, sx, sy, ghostPods)) {
                 continue;
             }
 
             OctiSquare landSq = board.squareAt(lx, ly);
-            if (!landSq.isEmptyWithout(ghostPods)) {
+            if (!isEmptyForJump(landSq, lx, ly, sx, sy, ghostPods)) {
                 continue;
             }
 
