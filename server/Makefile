@@ -37,6 +37,7 @@ test: all
 	@./$(BUILD_DIR)/test_server_foundation
 	@./$(BUILD_DIR)/test_account_and_oidc
 	@./$(BUILD_DIR)/test_game_room_and_matchmaking
+	@./$(BUILD_DIR)/test_octi_http_server_integration
 
 clean:
 	@if [ -d $(BUILD_DIR) ] && [ -f $(BUILD_DIR)/Makefile ]; then \

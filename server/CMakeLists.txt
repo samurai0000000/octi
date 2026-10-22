@@ -57,6 +57,8 @@ add_library(octi_server_lib STATIC
     src/EloCalculator.cxx
     src/MatchmakingQueue.cxx
     src/GameRoomManager.cxx
+    src/OctiHttpServer.cxx
+    src/WebUi.cxx
 )
 
 target_include_directories(octi_server_lib PUBLIC
@@ -139,4 +141,27 @@ target_link_libraries(test_game_room_and_matchmaking PRIVATE
     octi_server_lib
     ${CPPUTEST_LIBRARIES}
     ${RAPIDCHECK_LIBRARY}
+)
+
+add_executable(test_octi_http_server_integration
+    test/TestOctiHttpServerIntegration.cxx
+)
+
+target_include_directories(test_octi_http_server_integration PRIVATE
+    ${CPPUTEST_INCLUDE_DIRS}
+)
+
+target_link_directories(test_octi_http_server_integration PRIVATE
+    ${CPPUTEST_LIBRARY_DIRS}
+)
+
+target_link_libraries(test_octi_http_server_integration PRIVATE
+    octi_server_lib
+    ${CPPUTEST_LIBRARIES}
+)
+
+# The integration suite also launches the real octi_server binary.
+add_dependencies(test_octi_http_server_integration octi_server)
+target_compile_definitions(test_octi_http_server_integration PRIVATE
+    OCTI_SERVER_BINARY="$<TARGET_FILE:octi_server>"
 )
