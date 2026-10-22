@@ -22,7 +22,8 @@ endif
 .PHONY: all clean distclean test
 
 all:
-	@if [ -f .gitmodules ]; then \
+	@if [ -f ../.gitmodules ] && { [ ! -f ../third_party/cpp-httplib/httplib.h ] || \
+		[ ! -f ../third_party/json/include/nlohmann/json.hpp ]; }; then \
 		git submodule update --init --recursive; \
 	fi
 	@mkdir -p $(BUILD_DIR)
@@ -34,6 +35,7 @@ endif
 
 test: all
 	@./$(BUILD_DIR)/test_server_foundation
+	@./$(BUILD_DIR)/test_account_and_oidc
 
 clean:
 	@if [ -d $(BUILD_DIR) ] && [ -f $(BUILD_DIR)/Makefile ]; then \

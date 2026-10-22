@@ -38,18 +38,43 @@ endif()
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(CPPUTEST REQUIRED cpputest)
+find_package(OpenSSL REQUIRED)
+find_package(SQLite3 REQUIRED)
+find_library(RAPIDCHECK_LIBRARY rapidcheck REQUIRED)
+
+# Third-party header-only libraries are git submodules (never loose files).
+set(OCTI_THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party")
+if(NOT EXISTS "${OCTI_THIRD_PARTY_DIR}/cpp-httplib/httplib.h" OR
+   NOT EXISTS "${OCTI_THIRD_PARTY_DIR}/json/include/nlohmann/json.hpp")
+    message(FATAL_ERROR
+        "third_party submodules missing; run: git submodule update --init --recursive")
+endif()
 
 add_library(octi_server_lib STATIC
     src/ServerApp.cxx
+    src/OidcVerifier.cxx
+    src/AccountStore.cxx
 )
 
 target_include_directories(octi_server_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+target_include_directories(octi_server_lib SYSTEM PUBLIC
+    ${OCTI_THIRD_PARTY_DIR}/cpp-httplib
+    ${OCTI_THIRD_PARTY_DIR}/json/include
+)
+
+target_compile_definitions(octi_server_lib PUBLIC
+    CPPHTTPLIB_OPENSSL_SUPPORT
+)
+
 target_link_libraries(octi_server_lib PUBLIC
     octi_core
     Threads::Threads
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    SQLite::SQLite3
 )
 
 add_executable(octi_server
@@ -75,4 +100,22 @@ target_link_directories(test_server_foundation PRIVATE
 target_link_libraries(test_server_foundation PRIVATE
     octi_server_lib
     ${CPPUTEST_LIBRARIES}
+)
+
+add_executable(test_account_and_oidc
+    test/TestAccountAndOidc.cxx
+)
+
+target_include_directories(test_account_and_oidc PRIVATE
+    ${CPPUTEST_INCLUDE_DIRS}
+)
+
+target_link_directories(test_account_and_oidc PRIVATE
+    ${CPPUTEST_LIBRARY_DIRS}
+)
+
+target_link_libraries(test_account_and_oidc PRIVATE
+    octi_server_lib
+    ${CPPUTEST_LIBRARIES}
+    ${RAPIDCHECK_LIBRARY}
 )
