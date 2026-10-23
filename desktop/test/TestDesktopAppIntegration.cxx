@@ -1104,10 +1104,12 @@ TEST(DesktopAppIntegrationTest, DesktopSelfUpdateEndToEndAndFaultInjection)
 {
     /* 1. Default Config & Stale .old Backup Cleanup */
     auto defCfg = OctiMainWindow::defaultSelfUpdateConfig();
+    const int64_t expectedVerCode =
+        selfupdate::UpdateManifest::parseVersionCode(OctiCore::versionString());
     STRCMP_EQUAL("com.selfso.octi", defCfg.applicationId.c_str());
     STRCMP_EQUAL(OctiCore::versionString(),
                  defCfg.installedVersionName.c_str());
-    LONGS_EQUAL(20004, defCfg.installedVersionCode);
+    LONGS_EQUAL(expectedVerCode, defCfg.installedVersionCode);
     STRCMP_EQUAL("https://www.selfso.com/software/windows/",
                  defCfg.manifestUrl.c_str());
 
@@ -1204,7 +1206,7 @@ TEST(DesktopAppIntegrationTest, DesktopSelfUpdateEndToEndAndFaultInjection)
     selfupdate::CheckerConfig testCfg;
     testCfg.applicationId = "com.selfso.octi";
     testCfg.installedVersionName = OctiCore::versionString();
-    testCfg.installedVersionCode = 20004;
+    testCfg.installedVersionCode = expectedVerCode;
     testCfg.manifestUrl = "http://127.0.0.1:" + std::to_string(httpPort) + "/software/windows/";
 
     selfupdate::InstallOptions installOpts;
@@ -1223,7 +1225,7 @@ TEST(DesktopAppIntegrationTest, DesktopSelfUpdateEndToEndAndFaultInjection)
     nlohmann::json upToDateDoc;
     upToDateDoc["applicationId"] = "com.selfso.octi";
     upToDateDoc["versionName"] = OctiCore::versionString();
-    upToDateDoc["versionCode"] = 20004;
+    upToDateDoc["versionCode"] = expectedVerCode;
     upToDateDoc["installMode"] = "installer";
     upToDateDoc["packageUrl"] = "octi/octi-setup.exe";
     upToDateDoc["sha256"] = "0000000000000000000000000000000000000000000000000000000000000000";
@@ -1309,7 +1311,8 @@ TEST(DesktopAppIntegrationTest, DesktopSelfUpdateEndToEndAndFaultInjection)
     win.pumpUiEvents();
 
     STRCMP_EQUAL("UPDATE AVAILABLE", dlg.phaseBadgeText().toUtf8().constData());
-    CHECK_TRUE(dlg.versionSummaryText().contains("2.0.4"));
+    CHECK_TRUE(dlg.versionSummaryText().contains(
+        QString::fromUtf8(OctiCore::versionString())));
     CHECK_TRUE(dlg.versionSummaryText().contains("9.9.9"));
     CHECK_TRUE(dlg.releaseNotesText().contains("Streaming RFC 6234 SHA-256 verification"));
     CHECK_TRUE(dlg.metadataSummaryText().contains("Setup Installer"));
@@ -1319,8 +1322,11 @@ TEST(DesktopAppIntegrationTest, DesktopSelfUpdateEndToEndAndFaultInjection)
 
     QString artifactDir =
         QString::fromUtf8(OCTI_REPO_ROOT_DIR) +
-        "/plan/plan_octi_windows_selfupdate.artifacts";
-    QDir().mkpath(artifactDir);
+        "/plan/done/plan_octi_windows_selfupdate.artifacts";
+    if (!QDir(artifactDir).exists()) {
+        artifactDir = QString::fromUtf8(tmpDirStr.c_str()) + "/artifacts";
+        QDir().mkpath(artifactDir);
+    }
 
     QString bannerShotPath = artifactDir + "/selfupdate_banner_obsidian.png";
     QString dlgObsidianShotPath = artifactDir + "/selfupdate_dialog_obsidian.png";

@@ -1,3 +1,9 @@
+/*
+ * settings.gradle.kts
+ *
+ * Copyright (C) 2026, Charles Chiou
+ */
+
 pluginManagement {
     repositories {
         google {
@@ -21,3 +27,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "OctiAndroid"
 include(":app")
+include(":selfupdate")
+project(":selfupdate").projectDir = file("../../selfupdate/android")

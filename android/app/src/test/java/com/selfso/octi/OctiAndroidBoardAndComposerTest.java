@@ -1,0 +1,845 @@
+/*
+ * OctiAndroidBoardAndComposerTest.java
+ *
+ * Copyright (C) 2026, Charles Chiou
+ */
+
+package com.selfso.octi;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import org.junit.Test;
+
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * Envelope 1 JUnit 4 + 500-trial Seeded Property-Based Qualification Suite covering:
+ * - Hard-coded endpoint constants in {@link OctiDefs}
+ * - Luxury Adaptive Launcher Icon XML drawables and {@link OctiAppIconRenderer} (512x512 PNG export)
+ * - Dual luxury themes ({@link OctiThemeId}, {@link OctiPalette})
+ * - 4-Quadrant Board Geometry ({@link OctiBoardGeometry})
+ * - Smart Auto-Commit & Confirm-All Touch Move Composer ({@link OctiMoveComposer})
+ * - 2D Tabletop Board Renderer ({@link OctiBoardRenderer})
+ * - On-Device Alpha-Beta AI Bot ({@link OctiBotEngine})
+ * - Procedural 16 kHz PCM Sound Synthesizer ({@link OctiSoundSynth})
+ */
+public class OctiAndroidBoardAndComposerTest {
+
+    private static File resolveRepoRoot() {
+        File cwd = new File(System.getProperty("user.dir", ".")).getAbsoluteFile();
+        File cur = cwd;
+        while (cur != null) {
+            if (new File(cur, "plan/plan_octi_android.md").exists()
+                    || (new File(cur, "android").isDirectory() && new File(cur, "core").isDirectory())) {
+                return cur;
+            }
+            cur = cur.getParentFile();
+        }
+        return cwd;
+    }
+
+    private static OctiBoard createStartedBoard(OctiGameMode mode,
+                                                boolean superProngs,
+                                                boolean edgeless,
+                                                OctiGameBases bases) {
+        OctiBoard board = new OctiBoard(mode, superProngs, edgeless, bases);
+        board.getGame().start(OctiPlayer.PLAYER_A);
+        return board;
+    }
+
+    private static OctiBoard createStartedBoard(OctiGameMode mode) {
+        OctiGameBases bases = (mode == OctiGameMode.GAME_MODE_OFK)
+                ? OctiGameBases.GAME_BASES_1
+                : OctiGameBases.GAME_BASES_3;
+        return createStartedBoard(mode, false, false, bases);
+    }
+
+    private static List<String> legalMoveStrings(OctiBoard board) {
+        List<String> list = new ArrayList<>();
+        if (board != null && board.getGame() != null
+                && board.getGame().isGameStarted()
+                && !board.getGame().isGameOver()) {
+            for (OctiMove mv : board.getGame().generateLegalMoves()) {
+                list.add(mv.asString());
+            }
+        }
+        return list;
+    }
+
+    // -------------------------------------------------------------------------
+    // 1. Canonical Endpoint Constants & Luxury Adaptive Icon Verification
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testCanonicalServerHostAndPortConstants() {
+        assertEquals("trumpet.selfso.com", OctiDefs.OCTI_SERVER_HOST);
+        assertEquals(6874, OctiDefs.OCTI_SERVER_PORT);
+    }
+
+    @Test
+    public void testAdaptiveLauncherIconXmlDrawablesAnd512PngExport() throws Exception {
+        File repoRoot = resolveRepoRoot();
+        File resDir = new File(repoRoot, "android/app/src/main/res");
+
+        File bgXml = new File(resDir, "drawable/ic_launcher_background.xml");
+        File fgXml = new File(resDir, "drawable/ic_launcher_foreground.xml");
+        File monoXml = new File(resDir, "drawable/ic_launcher_monochrome.xml");
+        File mipmapXml = new File(resDir, "mipmap-anydpi-v26/ic_launcher.xml");
+        File mipmapRoundXml = new File(resDir, "mipmap-anydpi-v26/ic_launcher_round.xml");
+
+        assertTrue("ic_launcher_background.xml must exist", bgXml.isFile());
+        assertTrue("ic_launcher_foreground.xml must exist", fgXml.isFile());
+        assertTrue("ic_launcher_monochrome.xml must exist", monoXml.isFile());
+        assertTrue("ic_launcher.xml must exist", mipmapXml.isFile());
+        assertTrue("ic_launcher_round.xml must exist", mipmapRoundXml.isFile());
+
+        String bgContent = new String(Files.readAllBytes(bgXml.toPath()), StandardCharsets.UTF_8);
+        String fgContent = new String(Files.readAllBytes(fgXml.toPath()), StandardCharsets.UTF_8);
+        String monoContent = new String(Files.readAllBytes(monoXml.toPath()), StandardCharsets.UTF_8);
+        String mipmapContent = new String(Files.readAllBytes(mipmapXml.toPath()), StandardCharsets.UTF_8);
+
+        assertTrue(bgContent.contains("C8A253"));
+        assertTrue(fgContent.contains("10B981"));
+        assertTrue(fgContent.contains("FDE047"));
+        assertTrue(monoContent.contains("<vector"));
+        assertTrue(mipmapContent.contains("@drawable/ic_launcher_monochrome"));
+
+        int[] pixels = OctiAppIconRenderer.renderPixels(512);
+        assertEquals(512 * 512, pixels.length);
+
+        Set<Integer> distinctColors = new HashSet<>();
+        for (int px : pixels) {
+            distinctColors.add(px);
+        }
+        for (int y = 128; y < 384; y++) {
+            for (int x = 128; x < 384; x++) {
+                assertEquals("Interior icon pixel must be fully opaque",
+                        0xFF000000, pixels[y * 512 + x] & 0xFF000000);
+            }
+        }
+        assertTrue("Rendered 512x512 icon must have rich multi-layer shading (>500 colors)",
+                distinctColors.size() > 500);
+
+        File artifactDir = new File(repoRoot, "plan/done/plan_octi_android.md").exists()
+                ? new File(repoRoot, "plan/done/plan_octi_android.artifacts")
+                : new File(repoRoot, "plan/plan_octi_android.artifacts");
+        File artifactPng = new File(artifactDir, "octi_app_icon_512.png");
+        OctiAppIconRenderer.writePng(512, artifactPng);
+        assertTrue("Exported PNG must exist", artifactPng.isFile());
+        assertTrue("Exported PNG must be non-empty (>4 KB)", artifactPng.length() > 4096);
+
+        byte[] pngBytes = Files.readAllBytes(artifactPng.toPath());
+        assertEquals((byte) 0x89, pngBytes[0]);
+        assertEquals((byte) 0x50, pngBytes[1]);
+        assertEquals((byte) 0x4E, pngBytes[2]);
+        assertEquals((byte) 0x47, pngBytes[3]);
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. Dual Luxury Theme Palettes (Obsidian & Brass + Rosewood & Ivory)
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testDualLuxuryThemePalettesMatchDesktopSpec() {
+        OctiPalette obsidian = OctiPalette.forTheme(OctiThemeId.OBSIDIAN_BRASS);
+        assertEquals(OctiThemeId.OBSIDIAN_BRASS, obsidian.themeId);
+        assertEquals(0xFF0B0F17, obsidian.windowBg);
+        assertEquals(0xFF141B29, obsidian.panelCardBg);
+        assertEquals(0xFFB49148, obsidian.panelCardBorder);
+        assertEquals(0xFFC8A253, obsidian.accentBrass);
+        assertEquals(0xFF151E30, obsidian.gridCellDark);
+        assertEquals(0xFF1D2940, obsidian.gridCellLight);
+        assertEquals(0xFF10B981, obsidian.podFill(OctiPlayer.PLAYER_A));
+        assertEquals(0xFFF43F5E, obsidian.podFill(OctiPlayer.PLAYER_B));
+        assertEquals(0xFF3B82F6, obsidian.podFill(OctiPlayer.PLAYER_C));
+        assertEquals(0xFFF59E0B, obsidian.podFill(OctiPlayer.PLAYER_D));
+
+        OctiPalette rosewood = OctiPalette.forTheme(OctiThemeId.ROSEWOOD_IVORY);
+        assertEquals(OctiThemeId.ROSEWOOD_IVORY, rosewood.themeId);
+        assertEquals(0xFF2A1812, rosewood.windowBg);
+        assertEquals(0xFF3E241B, rosewood.panelCardBg);
+        assertEquals(0xFFCEA660, rosewood.panelCardBorder);
+        assertEquals(0xFF623626, rosewood.gridCellDark);
+        assertEquals(0xFF7C4832, rosewood.gridCellLight);
+        assertEquals(0xFFEEE4CC, rosewood.podRim(OctiPlayer.PLAYER_A));
+        assertEquals(0xFFEEE4CC, rosewood.podRim(OctiPlayer.PLAYER_B));
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. 4-Quadrant Board Geometry, Seat Auto-Rotation & Compass Hit-Testing
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testSeatAutoRotationAndClockwiseCycling() {
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_0,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_A));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_180,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_B));
+
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_0,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_OFK, OctiPlayer.PLAYER_A));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_180,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_OFK, OctiPlayer.PLAYER_B));
+
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_0,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_A));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_90,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_B));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_180,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_C));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_270,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_D));
+
+        OctiBoardGeometry.BoardRotation r = OctiBoardGeometry.BoardRotation.ROT_0;
+        r = OctiBoardGeometry.nextRotationClockwise(r);
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_90, r);
+        r = OctiBoardGeometry.nextRotationClockwise(r);
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_180, r);
+        r = OctiBoardGeometry.nextRotationClockwise(r);
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_270, r);
+        r = OctiBoardGeometry.nextRotationClockwise(r);
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_0, r);
+    }
+
+    @Test
+    public void testCoordinateRoundTripAndOrientationAcrossAllRotations() {
+        int[][] grids = {{9, 9}, {6, 7}};
+        for (int[] grid : grids) {
+            int gw = grid[0];
+            int gh = grid[1];
+            for (OctiBoardGeometry.BoardRotation rot : OctiBoardGeometry.BoardRotation.values()) {
+                OctiBoardGeometry geom = new OctiBoardGeometry(gw, gh, 900.0, 900.0, rot);
+                int[] outXY = new int[2];
+                for (int x = 1; x <= gw; x++) {
+                    for (int y = 1; y <= gh; y++) {
+                        double[] center = geom.squareCenter(x, y);
+                        assertTrue(geom.screenToSquare(center[0], center[1], outXY));
+                        assertEquals("X mismatch under " + rot, x, outXY[0]);
+                        assertEquals("Y mismatch under " + rot, y, outXY[1]);
+                    }
+                }
+            }
+        }
+
+        // Verify Seat A home (3,3) is near bottom in ROT_0 and near top in ROT_180
+        OctiBoardGeometry geom0 = new OctiBoardGeometry(9, 9, 800.0, 800.0,
+                OctiBoardGeometry.BoardRotation.ROT_0);
+        OctiBoardGeometry geom180 = new OctiBoardGeometry(9, 9, 800.0, 800.0,
+                OctiBoardGeometry.BoardRotation.ROT_180);
+        assertTrue(geom0.squareCenter(3, 3)[1] > geom0.squareCenter(3, 7)[1]);
+        assertTrue(geom180.squareCenter(3, 7)[1] > geom180.squareCenter(3, 3)[1]);
+    }
+
+    @Test
+    public void testCompassSectorHitTestingAcrossAllRotations() {
+        OctiDir[] dirs = {
+            OctiDir.DIR_N, OctiDir.DIR_NE, OctiDir.DIR_E, OctiDir.DIR_SE,
+            OctiDir.DIR_S, OctiDir.DIR_SW, OctiDir.DIR_W, OctiDir.DIR_NW
+        };
+        for (OctiBoardGeometry.BoardRotation rot : OctiBoardGeometry.BoardRotation.values()) {
+            OctiBoardGeometry geom = new OctiBoardGeometry(9, 9, 800.0, 800.0, rot);
+            double cx = 400.0;
+            double cy = 400.0;
+            double innerR = 16.0;
+            double outerR = 64.0;
+            double sampleR = 40.0;
+
+            for (OctiDir dir : dirs) {
+                double[] uv = geom.dirUnitVectorScreen(dir);
+                double tx = cx + uv[0] * sampleR;
+                double ty = cy + uv[1] * sampleR;
+                OctiDir hit = geom.hitTestCompassSector(cx, cy, innerR, outerR, tx, ty);
+                assertEquals("Direction hit-test mismatch for " + dir + " at " + rot, dir, hit);
+            }
+
+            // Inside inner dead-zone or outside outer radius returns DIR_UNDEF
+            assertEquals(OctiDir.DIR_UNDEF, geom.hitTestCompassSector(cx, cy, innerR, outerR, cx + 4.0, cy));
+            assertEquals(OctiDir.DIR_UNDEF, geom.hitTestCompassSector(cx, cy, innerR, outerR, cx + 90.0, cy));
+        }
+    }
+
+    @Test
+    public void testStackFanBoundary1To7PodsHitTesting() {
+        OctiBoardGeometry geom = new OctiBoardGeometry(9, 9, 900.0, 900.0,
+                OctiBoardGeometry.BoardRotation.ROT_0);
+        int[][] testSquares = {{1, 1}, {5, 5}, {9, 9}};
+        for (int[] sq : testSquares) {
+            for (int numPods = 1; numPods <= 7; numPods++) {
+                for (int slot = 0; slot < numPods; slot++) {
+                    double[] rect = geom.stackFanSlotRect(sq[0], sq[1], numPods, slot);
+                    assertNotNull(rect);
+                    double midX = rect[0] + rect[2] * 0.5;
+                    double midY = rect[1] + rect[3] * 0.5;
+                    int hitSlot = geom.hitTestStackFanSlot(sq[0], sq[1], numPods, midX, midY);
+                    assertEquals("Failed Stack Fan slot hit for numPods=" + numPods + " slot=" + slot,
+                            slot, hitSlot);
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. Smart Auto-Commit & Confirm-All Touch Move Composer
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testComposerSmartAutoCommitVsConfirmAllForPodAndProngOps() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+        AtomicReference<String> lastCommitted = new AtomicReference<>();
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        composer.setMoveCommitListener(lastCommitted::set);
+
+        // 1. Smart Auto-Commit (default confirmAllMoves = false): Adding a prong to (3,3) auto-commits immediately
+        assertFalse(composer.isConfirmAllMoves());
+        assertTrue(composer.beginAddProngFromReserve(false));
+        assertTrue(composer.dropOnCompassSector(3, 3, 0, OctiDir.DIR_N));
+        assertEquals("33+a", lastCommitted.get());
+        assertEquals(OctiPlayer.PLAYER_B, game.getTurn());
+
+        // 2. Confirm-All mode: Adding a pod for Player B on (5,7) pauses for confirmation
+        lastCommitted.set(null);
+        composer.setConfirmAllMoves(true);
+        assertTrue(composer.beginAddPodFromReserve());
+        assertTrue(composer.dropOnSquare(5, 7));
+        assertNull("Confirm-All must pause before committing", lastCommitted.get());
+        assertTrue(composer.shouldPauseForConfirmation());
+        assertEquals("57", composer.getStagedMoveNotation());
+        assertTrue(composer.commitMove());
+        assertEquals("57", lastCommitted.get());
+        assertEquals(OctiPlayer.PLAYER_A, game.getTurn());
+
+        // 3. Reposition prong on (3,3) from N (a) to NE (b) under Smart Auto-Commit
+        composer.setConfirmAllMoves(false);
+        lastCommitted.set(null);
+        assertTrue(composer.beginRepositionProng(3, 3, 0, OctiDir.DIR_N));
+        assertTrue(composer.dropOnCompassSector(3, 3, 0, OctiDir.DIR_NE));
+        assertTrue(lastCommitted.get().contains("+b") && lastCommitted.get().contains("-a"));
+        assertEquals(OctiPlayer.PLAYER_B, game.getTurn());
+
+        // 4. Single step by Player A after Player B adds a prong
+        assertTrue(composer.beginAddProngFromReserve(false));
+        assertTrue(composer.dropOnCompassSector(3, 7, 0, OctiDir.DIR_S));
+        assertEquals("37+e", lastCommitted.get());
+        assertEquals(OctiPlayer.PLAYER_A, game.getTurn());
+
+        // Player A steps (3,3) -> (4,4) (NE)
+        lastCommitted.set(null);
+        assertTrue(composer.beginMoveOrJumpPod(3, 3, 0, false));
+        assertTrue(composer.dropOnSquare(4, 4));
+        assertTrue(lastCommitted.get().endsWith("-44"));
+    }
+
+    @Test
+    public void testComposerMultiHopJumpAndSelectiveCaptureToggle() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+        game.move("33+a");
+        game.move("37+e");
+        game.move("53+c");
+        game.move("37e-36");
+        game.move("53c+b");
+        game.move("36e-35");
+        game.move("53bc+d");
+        game.move("35e-34");
+
+        // Now A is at (3,3) with N prong, B is at (3,4). Jump (3,3) -> (3,5) crosses occupied (3,4)!
+        AtomicReference<String> committed = new AtomicReference<>();
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        composer.setMoveCommitListener(committed::set);
+
+        assertTrue(composer.beginMoveOrJumpPod(3, 3, 0, false));
+        assertTrue(composer.dropOnSquare(3, 5));
+
+        // Because the jump crossed an occupied square where capture is optional in 2P,
+        // Smart Auto-Commit MUST pause so the player can toggle capture vs non-capture!
+        assertNull("Jump over occupied square must pause for capture confirmation", committed.get());
+        assertTrue(composer.shouldPauseForConfirmation());
+        assertTrue(composer.getStagedMoveNotation().endsWith("-35x"));
+
+        // Toggle capture off -> no trailing 'x'
+        assertTrue(composer.toggleHopCapture(0));
+        assertTrue(composer.getStagedMoveNotation().endsWith("-35"));
+
+        // Toggle capture back on -> trailing 'x'
+        assertTrue(composer.toggleCaptureAtSquare(3, 4));
+        assertTrue(composer.getStagedMoveNotation().endsWith("-35x"));
+
+        assertTrue(composer.commitMove());
+        assertNotNull(committed.get());
+        assertTrue(committed.get().endsWith("-35x"));
+        assertEquals(1, game.getCapturedPods(OctiPlayer.PLAYER_B));
+    }
+
+    @Test
+    public void testComposerLiberatePodFromCapturedPool() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+
+        // Set up Player A occupying Player B's home square (3,7) with 1 captured pod in Player A's captured pool
+        board.squareAt(2, 6).clear();
+        board.squareAt(2, 6).addPod(new OctiPod(OctiPodType.A_POD));
+        OctiGameSnapshot snap = game.captureSnapshot();
+        snap.players[OctiPlayer.PLAYER_A.getValue()].capturedPods = 1;
+        game.restoreSnapshot(snap);
+
+        assertEquals(OctiPlayer.PLAYER_A, game.getTurn());
+        assertEquals(1, game.getCapturedPods(OctiPlayer.PLAYER_A));
+        assertTrue(board.canLiberate(OctiPlayer.PLAYER_A));
+
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        List<int[]> libSquares = composer.legalPodDropSquares(true);
+        assertFalse("Must have legal liberation squares", libSquares.isEmpty());
+
+        AtomicReference<String> committed = new AtomicReference<>();
+        composer.setMoveCommitListener(committed::set);
+        int[] target = libSquares.get(0);
+        assertTrue(composer.beginLiberatePodFromReserve());
+        assertTrue(composer.dropOnSquare(target[0], target[1]));
+        assertEquals(target[0] + "" + target[1] + "*", committed.get());
+        assertEquals(0, game.getCapturedPods(OctiPlayer.PLAYER_A));
+    }
+
+    @Test
+    public void testComposerStackFanAndCompositeMultiPodMove() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+        game.move("33+c"); // A adds E prong at 3,3
+        game.move("37+c"); // B adds E prong at 3,7
+        game.move("53+a"); // A adds N prong at 5,3
+        game.move("57+e"); // B adds S prong at 5,7
+        game.move("33c-43"); // A steps 3,3 -> 4,3
+        game.move("37c-47"); // B steps 3,7 -> 4,7
+        game.move("43c-53"); // A steps 4,3 -> 5,3 (now (5,3) has 2 pods: one with E, one with N)
+        game.move("47c-57"); // B steps 4,7 -> 5,7
+        game.move("53a+c"); // A adds E prong to the N-pod so both pods on (5,3) have E prong
+        game.move("57e+c"); // B adds E prong
+
+        assertEquals(2, board.squareAt(4, 2).getNumPods());
+
+        // Moving a single pod from the 2-pod square pauses because the other pod on (5,3) can join a composite move
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        composer.openStackFan(5, 3);
+        assertTrue(composer.isStackFanOpen());
+        composer.selectStackPodIndex(0);
+        assertEquals(0, composer.getSelectedStackPodIndex());
+
+        assertTrue(composer.beginMoveOrJumpPod(5, 3, 0, false));
+        assertTrue(composer.dropOnSquare(6, 3));
+        assertTrue("Single pod move from multi-pod square with another movable pod must pause for composite option",
+                composer.shouldPauseForConfirmation());
+        assertTrue(composer.commitMove());
+    }
+
+    @Test
+    public void testComposerWholeStackMove() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+        game.move("33+c");
+        game.move("37+c");
+        game.move("53+c");
+        game.move("57+c");
+        game.move("33c-43");
+        game.move("37c-47");
+        game.move("43c-53"); // Now (5,3) has two identical pods with 'c' (E) prong!
+        game.move("47c-57");
+
+        AtomicReference<String> committed = new AtomicReference<>();
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        composer.setMoveCommitListener(committed::set);
+
+        assertTrue(composer.beginMoveOrJumpPod(5, 3, 0, true));
+        assertTrue(composer.dropOnSquare(6, 3));
+        assertNotNull(committed.get());
+        assertTrue(committed.get().contains(","));
+        assertEquals(2, board.squareAt(5, 2).getNumPods());
+    }
+
+    @Test
+    public void testComposerSuperProng8thProngBonusMove() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2, true, false, OctiGameBases.GAME_BASES_3);
+        OctiGame game = board.getGame();
+        AtomicReference<String> committed = new AtomicReference<>();
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        composer.setMoveCommitListener(committed::set);
+
+        OctiDir[] firstSevenDirs = {
+            OctiDir.DIR_N, OctiDir.DIR_NE, OctiDir.DIR_E, OctiDir.DIR_SE,
+            OctiDir.DIR_S, OctiDir.DIR_SW, OctiDir.DIR_W
+        };
+        for (OctiDir d : firstSevenDirs) {
+            assertTrue(composer.beginAddProngFromReserve(false));
+            assertTrue(composer.dropOnCompassSector(3, 3, 0, d));
+            assertTrue(composer.beginAddProngFromReserve(false));
+            assertTrue(composer.dropOnCompassSector(3, 7, 0, d));
+        }
+        assertEquals(7, board.squareAt(2, 2).getPodAt(0).getNumProngs());
+
+        committed.set(null);
+
+        // Adding the 8th prong as a superprong ('h!') triggers the bonus move state
+        assertTrue(composer.beginAddProngFromReserve(true));
+        assertTrue(composer.dropOnCompassSector(3, 3, 0, OctiDir.DIR_NW));
+        assertTrue("8th prong as superprong must pause for bonus move", composer.isAwaitingSuperProngBonusMove());
+        assertTrue(composer.shouldPauseForConfirmation());
+        assertNull(committed.get());
+
+        // Perform the bonus move step (3,3) -> (3,4) and commit
+        assertTrue(composer.beginMoveOrJumpPod(3, 3, 0, false));
+        assertTrue(composer.dropOnSquare(3, 4));
+        if (composer.shouldPauseForConfirmation()) {
+            assertTrue(composer.commitMove());
+        }
+        assertNotNull(committed.get());
+        assertEquals(OctiPlayer.PLAYER_B, game.getTurn());
+        assertEquals(1, board.squareAt(2, 3).getNumPods());
+    }
+
+    @Test
+    public void testEdgelessWrapAroundStepAndJump() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2, false, true, OctiGameBases.GAME_BASES_3);
+        OctiGame game = board.getGame();
+        game.move("33+g"); // W prong
+        game.move("37+c");
+        game.move("33g-23");
+        game.move("37c-47");
+        game.move("23g-13");
+        game.move("47c-57");
+
+        AtomicReference<String> committed = new AtomicReference<>();
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        composer.setMoveCommitListener(committed::set);
+
+        assertTrue(composer.beginMoveOrJumpPod(1, 3, 0, false));
+        assertTrue(composer.dropOnSquare(9, 3));
+        assertNotNull(committed.get());
+        assertTrue(committed.get().endsWith("-93"));
+        assertEquals(1, board.squareAt(8, 2).getNumPods());
+    }
+
+    @Test
+    public void testFaultInjectionIllegalDropsAndRollbackLeaveBoardUnchanged() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_OFK);
+        OctiGame game = board.getGame();
+        String initialPos = board.toPositionString();
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+
+        // 1. Attempt to drag an enemy pod (Player B pod on (2,6) during Player A's turn)
+        composer.beginMoveOrJumpPod(2, 6, 0, false);
+        assertFalse(composer.dropOnSquare(2, 5));
+        assertEquals(initialPos, board.toPositionString());
+
+        // 2. Attempt to add a backward prong in OFK (Player A cannot add South 'e' prong in OFK)
+        assertTrue(composer.beginAddProngFromReserve(false));
+        assertFalse(composer.dropOnCompassSector(2, 2, 0, OctiDir.DIR_S));
+        composer.rollbackMove();
+        assertEquals(initialPos, board.toPositionString());
+
+        // 3. In OFK, reserve pod placement is forbidden; in 2P, dropping a reserve pod on a non-home square (4,4) is rejected
+        assertFalse(composer.beginAddPodFromReserve());
+        OctiBoard board2p = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        String initial2p = board2p.toPositionString();
+        OctiMoveComposer comp2p = new OctiMoveComposer(board2p);
+        assertTrue(comp2p.beginAddPodFromReserve());
+        assertFalse(comp2p.dropOnSquare(4, 4));
+        comp2p.rollbackMove();
+        assertEquals(initial2p, board2p.toPositionString());
+
+        // 4. Stage a valid move in Confirm-All mode, then rollbackMove()
+        composer.setConfirmAllMoves(true);
+        assertTrue(composer.beginAddProngFromReserve(false));
+        assertTrue(composer.dropOnCompassSector(2, 2, 0, OctiDir.DIR_N));
+        assertEquals("22+a", composer.getStagedMoveNotation());
+        composer.rollbackMove();
+        assertEquals("", composer.getStagedMoveNotation());
+        assertEquals(initialPos, board.toPositionString());
+        assertEquals(OctiPlayer.PLAYER_A, game.getTurn());
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. On-Device AI Bot Engine (CASUAL, TACTICAL, MASTER)
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testBotEngineFindsImmediateWinningBaseCaptureAndHandlesTerminalBoard() {
+        // Construct a position where Player A is 1 jump away from capturing Player B's home base (3,7)
+        // in 1-base capture victory mode.
+        OctiBoard winBoard = createStartedBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_1);
+        OctiGame winGame = winBoard.getGame();
+        winGame.move("33+a");
+        winGame.move("37+e");
+        winGame.move("33a-34");
+        winGame.move("37e-36"); // B leaves (3,7) empty and stands on (3,6)
+        winGame.move("34a-35");
+        winGame.move("57+a");
+
+        // Now it is Player A's turn: A at (3,5) with N prong can jump over B at (3,6) onto B's home base (3,7) for instant win!
+        OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
+        OctiBotEngine.BotSearchStats stats = new OctiBotEngine.BotSearchStats();
+        String chosen = bot.chooseMove(winBoard, stats);
+        assertTrue("Bot must choose winning jump onto (3,7), got: " + chosen,
+                chosen.contains("35") && chosen.contains("-37"));
+        assertTrue(stats.nodesVisited > 0);
+
+        winGame.move(chosen);
+        assertTrue(winGame.isGameOver());
+        assertEquals(OctiPlayer.PLAYER_A, winGame.getWinner());
+
+        // On a terminal/finished board, chooseMove must return "" cleanly
+        assertEquals("", bot.chooseMove(winBoard, stats));
+    }
+
+    @Test
+    public void testBotEngineAcrossAllModesVariantsAndDifficulties() {
+        OctiGameMode[] modes = {
+            OctiGameMode.GAME_MODE_2,
+            OctiGameMode.GAME_MODE_4,
+            OctiGameMode.GAME_MODE_OFK
+        };
+        for (OctiGameMode mode : modes) {
+            for (OctiBotEngine.BotDifficulty diff : OctiBotEngine.BotDifficulty.values()) {
+                OctiGameBases bases = (mode == OctiGameMode.GAME_MODE_OFK)
+                        ? OctiGameBases.GAME_BASES_1
+                        : OctiGameBases.GAME_BASES_3;
+                OctiBoard board = createStartedBoard(mode, mode != OctiGameMode.GAME_MODE_OFK, false, bases);
+                OctiBotEngine bot = new OctiBotEngine(diff);
+                OctiBotEngine.BotSearchStats stats = new OctiBotEngine.BotSearchStats();
+                String snapshotBefore = board.toPositionString();
+                String move = bot.chooseMove(board, stats);
+                assertEquals("Bot must never mutate caller's board", snapshotBefore, board.toPositionString());
+                assertFalse("Bot must return non-empty move on non-terminal board", move.isEmpty());
+                List<String> legal = legalMoveStrings(board);
+                assertTrue("Bot move '" + move + "' must be in generateLegalMoves()", legal.contains(move));
+                board.getGame().move(move);
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 6. Procedural 16 kHz PCM Sound Synthesizer
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testSoundSynthWaveformsAndMuteToggle() {
+        assertEquals(16000, OctiSoundSynth.SAMPLE_RATE);
+        OctiSoundSynth synth = new OctiSoundSynth();
+        AtomicInteger playbackCount = new AtomicInteger(0);
+        synth.setPlaybackCallback(pcm -> {
+            assertTrue(pcm.length > 400);
+            playbackCount.incrementAndGet();
+        });
+
+        for (OctiSoundSynth.SoundCue cue : OctiSoundSynth.SoundCue.values()) {
+            short[] pcm = synth.synthesizeCuePcm(cue);
+            assertNotNull(pcm);
+            assertTrue("PCM buffer must have positive length for " + cue, pcm.length >= 600);
+            long sumSq = 0;
+            int peak = 0;
+            for (short s : pcm) {
+                int abs = Math.abs((int) s);
+                if (abs > peak) {
+                    peak = abs;
+                }
+                sumSq += (long) s * (long) s;
+            }
+            double rms = Math.sqrt((double) sumSq / pcm.length);
+            assertTrue("Waveform peak must be audible for " + cue, peak > 1500);
+            assertTrue("Waveform RMS must be non-trivial for " + cue, rms > 150.0);
+
+            synth.triggerCue(cue);
+        }
+        assertEquals(OctiSoundSynth.SoundCue.values().length, playbackCount.get());
+
+        // Muting suppresses playback callback
+        synth.setMuted(true);
+        assertTrue(synth.isMuted());
+        synth.triggerCue(OctiSoundSynth.SoundCue.POD_CAPTURE);
+        assertEquals(OctiSoundSynth.SoundCue.values().length, playbackCount.get());
+    }
+
+    // -------------------------------------------------------------------------
+    // 7. 2D Tabletop Board Renderer Across Both Themes & Variants
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testBoardRendererAcrossThemesRotationsAndOverlays() {
+        OctiBoard board2p = createStartedBoard(
+                OctiGameMode.GAME_MODE_2, true, true, OctiGameBases.GAME_BASES_3);
+        board2p.getGame().move("33+a");
+        board2p.getGame().move("37+e");
+        board2p.getGame().move("53+b!");
+
+        OctiMoveComposer composer = new OctiMoveComposer(board2p);
+        composer.setConfirmAllMoves(true);
+        composer.beginAddProngFromReserve(false);
+        composer.dropOnCompassSector(5, 7, 0, OctiDir.DIR_S);
+
+        for (OctiThemeId theme : OctiThemeId.values()) {
+            for (OctiBoardGeometry.BoardRotation rot : OctiBoardGeometry.BoardRotation.values()) {
+                int[] pixels = OctiBoardRenderer.renderBoardPixels(
+                        board2p, composer, theme, rot, 360, 360);
+                assertEquals(360 * 360, pixels.length);
+                Set<Integer> unique = new HashSet<>();
+                for (int px : pixels) {
+                    unique.add(px);
+                }
+                assertTrue("Rendered board must contain rich visual elements", unique.size() > 64);
+            }
+        }
+
+        OctiBoard board4p = createStartedBoard(OctiGameMode.GAME_MODE_4);
+        int[] px4p = OctiBoardRenderer.renderBoardPixels(
+                board4p, null, OctiThemeId.OBSIDIAN_BRASS,
+                OctiBoardGeometry.BoardRotation.ROT_90, 360, 360);
+        assertEquals(360 * 360, px4p.length);
+
+        OctiBoard boardOfk = createStartedBoard(OctiGameMode.GAME_MODE_OFK);
+        int[] pxOfk = OctiBoardRenderer.renderBoardPixels(
+                boardOfk, null, OctiThemeId.ROSEWOOD_IVORY,
+                OctiBoardGeometry.BoardRotation.ROT_180, 360, 360);
+        assertEquals(360 * 360, pxOfk.length);
+    }
+
+    // -------------------------------------------------------------------------
+    // 8. 500-Trial Seeded Property-Based Fuzzing Suite
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testProperty500TrialsGeometryComposerAndBotInvariants() {
+        Random rng = new Random(0x0C712026L);
+        OctiDir[] allDirs = {
+            OctiDir.DIR_N, OctiDir.DIR_NE, OctiDir.DIR_E, OctiDir.DIR_SE,
+            OctiDir.DIR_S, OctiDir.DIR_SW, OctiDir.DIR_W, OctiDir.DIR_NW
+        };
+        OctiBoardGeometry.BoardRotation[] allRots = OctiBoardGeometry.BoardRotation.values();
+
+        OctiBoard board = createStartedBoard(
+                OctiGameMode.GAME_MODE_2, true, false, OctiGameBases.GAME_BASES_3);
+        List<String> committedByComposer = new ArrayList<>();
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        composer.setMoveCommitListener(committedByComposer::add);
+        OctiBotEngine casualBot = new OctiBotEngine(OctiBotEngine.BotDifficulty.CASUAL);
+
+        int[] outXY = new int[2];
+
+        for (int trial = 0; trial < 500; trial++) {
+            // Property A: Bijective squareCenter <-> screenToSquare and dirUnitVectorScreen <-> hitTestCompassSector
+            boolean ofkGrid = rng.nextBoolean();
+            int gw = ofkGrid ? 6 : 9;
+            int gh = ofkGrid ? 7 : 9;
+            double vw = 240.0 + rng.nextDouble() * 1400.0;
+            double vh = 240.0 + rng.nextDouble() * 1400.0;
+            OctiBoardGeometry.BoardRotation rot = allRots[rng.nextInt(allRots.length)];
+            OctiBoardGeometry geom = new OctiBoardGeometry(gw, gh, vw, vh, rot);
+
+            int sx = 1 + rng.nextInt(gw);
+            int sy = 1 + rng.nextInt(gh);
+            double[] sqRect = geom.squareRect(sx, sy);
+            // Sample a random interior point inside [15%..85%] of the square
+            double px = sqRect[0] + sqRect[2] * (0.15 + rng.nextDouble() * 0.70);
+            double py = sqRect[1] + sqRect[3] * (0.15 + rng.nextDouble() * 0.70);
+            assertTrue("Trial " + trial + ": interior point must hit square", geom.screenToSquare(px, py, outXY));
+            assertEquals("Trial " + trial + ": X mismatch", sx, outXY[0]);
+            assertEquals("Trial " + trial + ": Y mismatch", sy, outXY[1]);
+
+            OctiDir expectedDir = allDirs[rng.nextInt(allDirs.length)];
+            double[] uv = geom.dirUnitVectorScreen(expectedDir);
+            // Perturb angle within +/- 15 degrees (well inside the 45-degree sector)
+            double jitterRad = Math.toRadians((rng.nextDouble() - 0.5) * 30.0);
+            double cosJ = Math.cos(jitterRad);
+            double sinJ = Math.sin(jitterRad);
+            double jx = uv[0] * cosJ - uv[1] * sinJ;
+            double jy = uv[0] * sinJ + uv[1] * cosJ;
+            double radius = 25.0 + rng.nextDouble() * 30.0;
+            OctiDir actualDir = geom.hitTestCompassSector(200.0, 200.0, 15.0, 65.0,
+                    200.0 + jx * radius, 200.0 + jy * radius);
+            assertEquals("Trial " + trial + ": compass sector mismatch", expectedDir, actualDir);
+
+            // Property B: Random composer interactions never corrupt OctiBoard state,
+            // and any move committed by OctiMoveComposer is strictly legal.
+            if (board.getGame().isGameOver() || trial % 25 == 0) {
+                OctiGameMode mode = (trial % 3 == 0) ? OctiGameMode.GAME_MODE_OFK
+                        : ((trial % 3 == 1) ? OctiGameMode.GAME_MODE_4 : OctiGameMode.GAME_MODE_2);
+                OctiGameBases bases = (mode == OctiGameMode.GAME_MODE_OFK)
+                        ? OctiGameBases.GAME_BASES_1
+                        : OctiGameBases.GAME_BASES_3;
+                board = createStartedBoard(mode, mode != OctiGameMode.GAME_MODE_OFK, trial % 6 == 0, bases);
+                composer.setBoard(board);
+            }
+
+            List<String> legalBefore = legalMoveStrings(board);
+            if (legalBefore.isEmpty()) {
+                continue;
+            }
+            committedByComposer.clear();
+            composer.setConfirmAllMoves(rng.nextBoolean());
+
+            int action = rng.nextInt(5);
+            int rx = 1 + rng.nextInt(board.getBoardWidth());
+            int ry = 1 + rng.nextInt(board.getBoardHeight());
+            OctiDir rDir = allDirs[rng.nextInt(allDirs.length)];
+
+            if (action == 0) {
+                if (composer.beginAddPodFromReserve()) {
+                    composer.dropOnSquare(rx, ry);
+                }
+            } else if (action == 1) {
+                if (composer.beginAddProngFromReserve(rng.nextBoolean())) {
+                    composer.dropOnCompassSector(rx, ry, 0, rDir);
+                }
+            } else if (action == 2) {
+                if (composer.beginMoveOrJumpPod(rx, ry, 0, rng.nextBoolean())) {
+                    int tx = 1 + rng.nextInt(board.getBoardWidth());
+                    int ty = 1 + rng.nextInt(board.getBoardHeight());
+                    composer.dropOnSquare(tx, ty);
+                }
+            } else if (action == 3) {
+                if (composer.beginRepositionProng(rx, ry, 0, rDir)) {
+                    OctiDir dstDir = allDirs[rng.nextInt(allDirs.length)];
+                    composer.dropOnCompassSector(rx, ry, 0, dstDir);
+                }
+            } else {
+                composer.rollbackMove();
+            }
+
+            if (composer.shouldPauseForConfirmation() && rng.nextBoolean()) {
+                composer.commitMove();
+            } else if (composer.shouldPauseForConfirmation()
+                    || composer.getDragKind() != OctiMoveComposer.DragKind.NONE) {
+                composer.rollbackMove();
+            }
+
+            for (String cm : committedByComposer) {
+                assertTrue("Trial " + trial + ": composer committed illegal move '" + cm + "'",
+                        legalBefore.contains(cm));
+            }
+
+            // Property C: Periodically verify OctiBotEngine chooses a legal move without mutating board
+            if (trial % 10 == 0 && !board.getGame().isGameOver()) {
+                String snap = board.toPositionString();
+                List<String> legalNow = legalMoveStrings(board);
+                if (!legalNow.isEmpty()) {
+                    String botMove = casualBot.chooseMove(board, null);
+                    assertEquals("Trial " + trial + ": bot mutated board", snap, board.toPositionString());
+                    assertTrue("Trial " + trial + ": bot chose illegal move '" + botMove + "'",
+                            legalNow.contains(botMove));
+                    board.getGame().move(botMove);
+                    composer.refreshLegalMoves();
+                }
+            }
+        }
+    }
+}

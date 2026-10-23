@@ -1,10 +1,179 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    ic_launcher_foreground.xml
+
+    Copyright (C) 2026, Charles Chiou
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- 1. Drop shadow octagon (#88000000 offset +1.5dp, +2.5dp) -->
     <path
-        android:fillColor="#F59E0B"
-        android:pathData="M44,30L64,30L78,44L78,64L64,78L44,78L30,64L30,44Z" />
+        android:fillColor="#88000000"
+        android:pathData="M46.5,35.5L64.5,35.5L77.5,48.5L77.5,66.5L64.5,79.5L46.5,79.5L33.5,66.5L33.5,48.5Z" />
+
+    <!-- 2. Metallic Silver-Steel Normal Prongs (NE, E, SE, SW, W, NW) within 21..87 safe zone -->
+    <!-- East (E) Normal Prong -->
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="M71.0,51.6L82.2,52.2L85.8,54.0L82.2,55.8L71.0,56.4Z"
+        android:strokeColor="#0F172A"
+        android:strokeWidth="0.6" />
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M71.0,51.6L82.2,52.2L85.8,54.0L71.0,54.0Z" />
+
+    <!-- West (W) Normal Prong -->
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="M37.0,51.6L25.8,52.2L22.2,54.0L25.8,55.8L37.0,56.4Z"
+        android:strokeColor="#0F172A"
+        android:strokeWidth="0.6" />
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M37.0,51.6L25.8,52.2L22.2,54.0L37.0,54.0Z" />
+
+    <!-- North-East (NE) Normal Prong -->
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="M64.4,40.2L73.2,32.2L76.6,31.4L75.8,34.8L67.8,43.6Z"
+        android:strokeColor="#0F172A"
+        android:strokeWidth="0.6" />
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M64.4,40.2L73.2,32.2L76.6,31.4L66.1,41.9Z" />
+
+    <!-- South-West (SW) Normal Prong -->
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="M40.2,64.4L32.2,73.2L31.4,76.6L34.8,75.8L43.6,67.8Z"
+        android:strokeColor="#0F172A"
+        android:strokeWidth="0.6" />
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M40.2,64.4L32.2,73.2L31.4,76.6L41.9,66.1Z" />
+
+    <!-- South-East (SE) Normal Prong -->
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="M67.8,64.4L75.8,73.2L76.6,76.6L73.2,75.8L64.4,67.8Z"
+        android:strokeColor="#0F172A"
+        android:strokeWidth="0.6" />
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M67.8,64.4L75.8,73.2L76.6,76.6L66.1,66.1Z" />
+
+    <!-- North-West (NW) Normal Prong -->
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="M43.6,40.2L34.8,32.2L31.4,31.4L32.2,34.8L40.2,43.6Z"
+        android:strokeColor="#0F172A"
+        android:strokeWidth="0.6" />
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M43.6,40.2L34.8,32.2L31.4,31.4L41.9,41.9Z" />
+
+    <!-- 3. Crowned Golden-Diamond Superprong (!) Protruding North (N) with Double-Chevron Wings & Starburst -->
+    <!-- Outer starburst aura -->
+    <path
+        android:fillColor="#55FDE047"
+        android:pathData="M54.0,21.0L56.8,26.2L62.0,25.0L58.4,29.8L60.2,35.6L47.8,35.6L49.6,29.8L46.0,25.0L51.2,26.2Z" />
+    <!-- Main superprong diamond shaft & double-chevron wings -->
+    <path
+        android:pathData="M50.5,37.0L47.2,31.2L50.4,30.2L48.0,26.6L54.0,21.4L60.0,26.6L57.6,30.2L60.8,31.2L57.5,37.0Z"
+        android:strokeColor="#FEF9C3"
+        android:strokeWidth="0.8">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="58"
+                android:endY="37"
+                android:startX="50"
+                android:startY="21"
+                android:type="linear">
+                <item android:color="#FFFEF9C3" android:offset="0.0" />
+                <item android:color="#FFFDE047" android:offset="0.55" />
+                <item android:color="#FFD97706" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Superprong specular left facet -->
+    <path
+        android:fillColor="#FEF9C3"
+        android:pathData="M54.0,21.4L48.0,26.6L50.4,30.2L47.2,31.2L50.5,37.0L54.0,37.0Z" />
+
+    <!-- 4. Outer Brushed Brass Octagonal Rim (#E4C070 -> #8C6523) -->
+    <path
+        android:pathData="M45.0,33.0L63.0,33.0L75.0,45.0L75.0,63.0L63.0,75.0L45.0,75.0L33.0,63.0L33.0,45.0Z"
+        android:strokeColor="#FEF08A"
+        android:strokeWidth="1.0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="75"
+                android:endY="75"
+                android:startX="33"
+                android:startY="33"
+                android:type="linear">
+                <item android:color="#FFFEF08A" android:offset="0.0" />
+                <item android:color="#FFE4C070" android:offset="0.4" />
+                <item android:color="#FF8C6523" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 5. Inner Faceted Emerald Jade Octagonal Pod Body (#10B981 -> #047857) -->
+    <path
+        android:pathData="M46.6,36.4L61.4,36.4L71.6,46.6L71.6,61.4L61.4,71.6L46.6,71.6L36.4,61.4L36.4,46.6Z"
+        android:strokeColor="#6EE7B7"
+        android:strokeWidth="0.9">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="50"
+                android:centerY="49"
+                android:gradientRadius="22"
+                android:type="radial">
+                <item android:color="#FF6EE7B7" android:offset="0.0" />
+                <item android:color="#FF10B981" android:offset="0.48" />
+                <item android:color="#FF047857" android:offset="0.85" />
+                <item android:color="#FF064E3B" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 6. 8 Recessed Dark Socket Notches on the Pod Collar (a..h) -->
+    <path
+        android:fillColor="#0B0F17"
+        android:pathData="
+            M52.4,34.0h3.2v2.4h-3.2z
+            M52.4,71.6h3.2v2.4h-3.2z
+            M71.6,52.4h2.4v3.2h-2.4z
+            M34.0,52.4h2.4v3.2h-2.4z
+            M65.8,39.8l1.8,1.8l-1.8,1.8l-1.8,-1.8z
+            M42.2,39.8l1.8,1.8l-1.8,1.8l-1.8,-1.8z
+            M65.8,64.6l1.8,1.8l-1.8,1.8l-1.8,-1.8z
+            M42.2,64.6l1.8,1.8l-1.8,1.8l-1.8,-1.8z"
+        android:strokeColor="#FDE68A"
+        android:strokeWidth="0.4" />
+
+    <!-- 7. Inner Specular Jewel Bevel (#6EE7B7) -->
+    <path
+        android:fillColor="#226EE7B7"
+        android:pathData="M48.8,41.2L59.2,41.2L66.8,48.8L66.8,59.2L59.2,66.8L48.8,66.8L41.2,59.2L41.2,48.8Z"
+        android:strokeColor="#6EE7B7"
+        android:strokeWidth="0.8" />
+
+    <!-- 8. Central Brass Compass Rose Medallion (#FDE68A) -->
+    <path
+        android:fillColor="#FDE68A"
+        android:pathData="M54.0,43.5L56.3,51.0L64.5,54.0L56.3,57.0L54.0,64.5L51.7,57.0L43.5,54.0L51.7,51.0Z"
+        android:strokeColor="#8C6523"
+        android:strokeWidth="0.6" />
+    <path
+        android:fillColor="#064E3B"
+        android:pathData="M51.8,51.8h4.4v4.4h-4.4z"
+        android:strokeColor="#FEF9C3"
+        android:strokeWidth="0.5" />
 </vector>
