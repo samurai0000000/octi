@@ -1,0 +1,38 @@
+#!/bin/sh
+#
+# postinst
+#
+# Copyright (C) 2026, Charles Chiou
+#
+
+set -e
+
+if [ "$1" = "configure" ]; then
+    if ! getent group octi >/dev/null 2>&1; then
+        addgroup --system octi
+    fi
+    if ! getent passwd octi >/dev/null 2>&1; then
+        adduser --system --ingroup octi --home /var/lib/octi \
+            --no-create-home --shell /usr/sbin/nologin \
+            --gecos "OCTI Multiplayer Server" octi
+    fi
+
+    install -d -m 0700 -o octi -g octi /var/lib/octi
+    install -d -m 0750 -o root -g octi /etc/octi
+    if [ -f /etc/octi/oidc.json ]; then
+        chown octi:octi /etc/octi/oidc.json
+        chmod 0600 /etc/octi/oidc.json
+    fi
+
+    if [ -d /run/systemd/system ]; then
+        systemctl --system daemon-reload >/dev/null || true
+        systemctl enable octi-server.service >/dev/null || true
+        if systemctl is-active --quiet octi-server.service; then
+            systemctl restart octi-server.service || true
+        else
+            systemctl start octi-server.service || true
+        fi
+    fi
+fi
+
+exit 0

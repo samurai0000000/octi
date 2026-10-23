@@ -83,15 +83,7 @@ SsoOnboardingDialog::SsoOnboardingDialog(OctiNetworkClient *netClient,
     title->setStyleSheet("font-size: 18px; font-weight: bold;");
     root->addWidget(title);
 
-    _serverBadgeLabel = new QLabel(
-        QString("Server: %1:%2 (Read-Only Canonical Endpoint)")
-            .arg(QString::fromUtf8(OCTI_SERVER_HOST))
-            .arg(OCTI_SERVER_PORT),
-        this);
-    _serverBadgeLabel->setObjectName("canonicalServerBadge");
-    _serverBadgeLabel->setStyleSheet(
-        "padding: 6px 10px; border-radius: 6px; font-weight: bold;");
-    root->addWidget(_serverBadgeLabel);
+    _serverBadgeLabel = nullptr;
 
     QGroupBox *browserGroup = new QGroupBox("1-Click Browser SSO Sign-In", this);
     QHBoxLayout *browserRow = new QHBoxLayout(browserGroup);
@@ -166,8 +158,7 @@ SsoOnboardingDialog::SsoOnboardingDialog(OctiNetworkClient *netClient,
     _step2Container->setVisible(false);
     root->addWidget(_step2Container);
 
-    _statusLabel = new QLabel(
-        "Ready to authenticate with trumpet.selfso.com:6874.", this);
+    _statusLabel = new QLabel("Ready to authenticate.", this);
     _statusLabel->setWordWrap(true);
     root->addWidget(_statusLabel);
 

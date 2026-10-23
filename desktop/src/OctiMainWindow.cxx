@@ -232,10 +232,8 @@ OctiMainWindow::OctiMainWindow(
 
     setWindowIcon(createOctiAppIcon());
     setWindowTitle(
-        QString("OCTI Desktop Player v%1 — %2:%3")
-            .arg(QString::fromUtf8(OctiCore::versionString()))
-            .arg(QString::fromUtf8(OCTI_SERVER_HOST))
-            .arg(OCTI_SERVER_PORT));
+        QString("OCTI Desktop Player v%1")
+            .arg(QString::fromUtf8(OctiCore::versionString())));
     resize(1440, 900);
 
     QWidget *central = new QWidget(this);
@@ -1875,11 +1873,7 @@ void OctiMainWindow::updateTopBarLabels()
         QString stateStr = _offlineMode
                                ? "Offline Mode"
                                : (_authenticated ? "Connected" : "Ready");
-        _serverStatusLabel->setText(
-            QString("%1:%2 • %3")
-                .arg(QString::fromUtf8(OCTI_SERVER_HOST))
-                .arg(OCTI_SERVER_PORT)
-                .arg(stateStr));
+        _serverStatusLabel->setText(stateStr);
     }
     if (_profileBadgeLabel) {
         if (_authenticated) {

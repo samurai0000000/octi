@@ -1,0 +1,14 @@
+#!/bin/sh
+#
+# prerm
+#
+# Copyright (C) 2026, Charles Chiou
+#
+
+set -e
+
+if [ "$1" = "remove" ] && [ -d /run/systemd/system ]; then
+    systemctl --no-reload disable --now octi-server.service >/dev/null 2>&1 || true
+fi
+
+exit 0

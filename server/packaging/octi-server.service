@@ -1,0 +1,32 @@
+#
+# octi-server.service
+#
+# Copyright (C) 2026, Charles Chiou
+#
+
+[Unit]
+Description=OCTI Multiplayer, SSO & Game Archive Server
+Documentation=https://www.selfso.com/projects/octi/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=octi
+Group=octi
+WorkingDirectory=/var/lib/octi
+EnvironmentFile=-/etc/default/octi-server
+ExecStart=/usr/sbin/octi-server --bind ${OCTI_BIND_ADDRESS} --port ${OCTI_PORT} --db ${OCTI_DB_PATH} --oidc-config ${OCTI_OIDC_CONFIG}
+KillSignal=SIGTERM
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/octi
+ReadOnlyPaths=/etc/octi
+
+[Install]
+WantedBy=multi-user.target

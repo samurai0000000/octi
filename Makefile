@@ -9,7 +9,7 @@ VERSION := $(shell sed -n 's/^.*\*\{2\}Version:[[:space:]]*\([0-9]\+\.[0-9]\+\.[
 JAVA_HOME ?= $(shell ls -d "$$HOME"/.jdks/jdk-* 2>/dev/null | tail -n 1)
 export JAVA_HOME
 
-.PHONY: all core server desktop linux windows installer android test clean distclean
+.PHONY: all core server desktop deb linux windows installer android test clean distclean
 
 all: core server desktop android
 
@@ -18,6 +18,9 @@ core:
 
 server:
 	@$(MAKE) -C server all
+
+deb:
+	@$(MAKE) -C server deb
 
 desktop:
 	@$(MAKE) -C desktop all

@@ -115,6 +115,32 @@ public class OctiAndroidAppIntegrationTest {
             assertFalse(savedJson.contains("server_port"));
             assertFalse(savedJson.contains("evil.example.com"));
         }
+
+        File userDir = new File(System.getProperty("user.dir", "."));
+        File lobbyFile = new File(userDir, "src/main/java/com/selfso/octi/ui/LobbyScreen.kt");
+        if (!lobbyFile.exists()) {
+            lobbyFile = new File(userDir, "app/src/main/java/com/selfso/octi/ui/LobbyScreen.kt");
+        }
+        File dialogsFile = new File(userDir, "src/main/java/com/selfso/octi/ui/OctiDialogs.kt");
+        if (!dialogsFile.exists()) {
+            dialogsFile = new File(userDir, "app/src/main/java/com/selfso/octi/ui/OctiDialogs.kt");
+        }
+        assertTrue("LobbyScreen.kt exists at " + lobbyFile.getAbsolutePath(), lobbyFile.exists());
+        assertTrue("OctiDialogs.kt exists at " + dialogsFile.getAbsolutePath(), dialogsFile.exists());
+
+        String lobbyCode = new String(Files.readAllBytes(lobbyFile.toPath()), StandardCharsets.UTF_8);
+        String dialogsCode = new String(Files.readAllBytes(dialogsFile.toPath()), StandardCharsets.UTF_8);
+        String[] forbidden = new String[] {
+            "Endpoint:",
+            "Server:",
+            "canonicalServerEndpoint()",
+            "trumpet.selfso.com",
+            "6874"
+        };
+        for (String target : forbidden) {
+            assertFalse("LobbyScreen.kt must not contain " + target, lobbyCode.contains(target));
+            assertFalse("OctiDialogs.kt must not contain " + target, dialogsCode.contains(target));
+        }
     }
 
     @Test

@@ -1,0 +1,11 @@
+#
+# /etc/default/octi-server
+#
+# Copyright (C) 2026, Charles Chiou
+#
+
+# Configuration for octi-server.service
+OCTI_BIND_ADDRESS=0.0.0.0
+OCTI_PORT=6874
+OCTI_DB_PATH=/var/lib/octi/octi.db
+OCTI_OIDC_CONFIG=/etc/octi/oidc.json

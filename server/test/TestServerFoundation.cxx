@@ -7,10 +7,48 @@
 #include "ServerApp.hxx"
 #include "OctiCore.hxx"
 #include "Version.hxx"
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <memory>
 #include <sstream>
 #include <string>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <CppUTest/CommandLineTestRunner.h>
 #include <CppUTest/TestHarness.h>
+
+#ifndef OCTI_SERVER_DEB_PATH
+#define OCTI_SERVER_DEB_PATH ""
+#endif
+
+static std::string runCmd(const std::string &cmd)
+{
+    FILE *pipe = popen(cmd.c_str(), "r");
+    if (!pipe) {
+        return "";
+    }
+    char buf[512];
+    std::string result;
+    while (fgets(buf, sizeof(buf), pipe) != nullptr) {
+        result += buf;
+    }
+    pclose(pipe);
+    while (!result.empty() && (result.back() == '\n' || result.back() == '\r')) {
+        result.pop_back();
+    }
+    return result;
+}
+
+static std::string readFile(const std::string &path)
+{
+    std::ifstream ifs(path);
+    if (!ifs.is_open()) {
+        return "";
+    }
+    return std::string((std::istreambuf_iterator<char>(ifs)),
+                       std::istreambuf_iterator<char>());
+}
 
 TEST_GROUP(ServerFoundationTest)
 {
@@ -140,6 +178,82 @@ TEST(ServerFoundationTest, FaultInvalidArgsAndPorts)
     const char *argvNoOidc[] = { "octi_server", "--oidc-config" };
     CHECK_FALSE(app.parseArgs(2, argvNoOidc, errMsg));
     CHECK_TRUE(errMsg.find("Missing value for --oidc-config") != std::string::npos);
+}
+
+TEST(ServerFoundationTest, DebPackageMatchesReadmeVersionAndSystemdSpec)
+{
+    std::string debPath = OCTI_SERVER_DEB_PATH;
+    CHECK_FALSE_TEXT(debPath.empty(), "OCTI_SERVER_DEB_PATH must not be empty");
+
+    struct stat st;
+    CHECK_EQUAL_TEXT(0, stat(debPath.c_str(), &st), "Debian package must exist");
+    CHECK_TRUE(st.st_size > 0);
+
+    const std::string expectedFileName =
+        std::string("octi-server_") + octi::OctiCore::versionString() + "_amd64.deb";
+    CHECK_TRUE_TEXT(debPath.find(expectedFileName) != std::string::npos, debPath.c_str());
+
+    std::string pkg = runCmd("dpkg-deb -f '" + debPath + "' Package");
+    STRCMP_EQUAL("octi-server", pkg.c_str());
+
+    std::string ver = runCmd("dpkg-deb -f '" + debPath + "' Version");
+    STRCMP_EQUAL(octi::OctiCore::versionString(), ver.c_str());
+
+    std::string arch = runCmd("dpkg-deb -f '" + debPath + "' Architecture");
+    STRCMP_EQUAL("amd64", arch.c_str());
+
+    std::string deps = runCmd("dpkg-deb -f '" + debPath + "' Depends");
+    CHECK_TRUE(deps.find("libssl3t64") != std::string::npos);
+    CHECK_TRUE(deps.find("libsqlite3-0") != std::string::npos);
+    CHECK_TRUE(deps.find("libc6") != std::string::npos);
+    CHECK_TRUE(deps.find("adduser") != std::string::npos);
+
+    char tmpDirTemplate[] = "/tmp/octi_deb_test_XXXXXX";
+    char *tmpDir = mkdtemp(tmpDirTemplate);
+    CHECK_TRUE(tmpDir != nullptr);
+    std::string tmpDirStr(tmpDir);
+
+    runCmd("mkdir -p '" + tmpDirStr + "/DEBIAN' && dpkg-deb -e '" + debPath + "' '" + tmpDirStr + "/DEBIAN'");
+    runCmd("mkdir -p '" + tmpDirStr + "/root' && dpkg-deb -x '" + debPath + "' '" + tmpDirStr + "/root'");
+
+    std::string conffiles = readFile(tmpDirStr + "/DEBIAN/conffiles");
+    CHECK_TRUE(conffiles.find("/etc/default/octi-server") != std::string::npos);
+    CHECK_TRUE(conffiles.find("/etc/octi/oidc.json") != std::string::npos);
+
+    struct stat scriptSt;
+    CHECK_EQUAL(0, stat((tmpDirStr + "/DEBIAN/postinst").c_str(), &scriptSt));
+    CHECK_TRUE((scriptSt.st_mode & 0111) != 0);
+    CHECK_EQUAL(0, stat((tmpDirStr + "/DEBIAN/prerm").c_str(), &scriptSt));
+    CHECK_TRUE((scriptSt.st_mode & 0111) != 0);
+    CHECK_EQUAL(0, stat((tmpDirStr + "/DEBIAN/postrm").c_str(), &scriptSt));
+    CHECK_TRUE((scriptSt.st_mode & 0111) != 0);
+
+    std::string binPath = tmpDirStr + "/root/usr/sbin/octi-server";
+    struct stat binSt;
+    CHECK_EQUAL(0, stat(binPath.c_str(), &binSt));
+    CHECK_TRUE((binSt.st_mode & 0111) != 0);
+
+    std::string verOutput = runCmd("'" + binPath + "' --version");
+    CHECK_TRUE(verOutput.find(octi::OctiCore::versionString()) != std::string::npos);
+
+    std::string svcContent = readFile(tmpDirStr + "/root/lib/systemd/system/octi-server.service");
+    CHECK_TRUE(svcContent.find("ExecStart=/usr/sbin/octi-server") != std::string::npos);
+    CHECK_TRUE(svcContent.find("User=octi") != std::string::npos);
+    CHECK_TRUE(svcContent.find("Group=octi") != std::string::npos);
+    CHECK_TRUE(svcContent.find("KillSignal=SIGTERM") != std::string::npos);
+    CHECK_TRUE(svcContent.find("EnvironmentFile=-/etc/default/octi-server") != std::string::npos);
+
+    std::string defaultContent = readFile(tmpDirStr + "/root/etc/default/octi-server");
+    CHECK_TRUE(defaultContent.find("OCTI_PORT=6874") != std::string::npos);
+    CHECK_TRUE(defaultContent.find("OCTI_DB_PATH=/var/lib/octi/octi.db") != std::string::npos);
+
+    std::string oidcPath = tmpDirStr + "/root/etc/octi/oidc.json";
+    octi::OidcConfig parsedConfig;
+    std::string oidcErr;
+    CHECK_TRUE(octi::ServerApp::loadOidcConfig(oidcPath, parsedConfig, oidcErr));
+    STRCMP_EQUAL("", oidcErr.c_str());
+
+    runCmd("rm -rf '" + tmpDirStr + "'");
 }
 
 int main(int argc, char **argv)

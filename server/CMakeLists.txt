@@ -94,6 +94,30 @@ target_link_libraries(octi_server PRIVATE
     octi_server_lib
 )
 
+if(UNIX AND NOT APPLE AND NOT OCTI_SERVER_SANITIZE)
+    set(OCTI_SERVER_DEB_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/octi-server_${PROJECT_VERSION}_amd64.deb")
+    add_custom_command(
+        OUTPUT "${OCTI_SERVER_DEB_OUTPUT}"
+        COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/packaging/build_deb.sh"
+                "$<TARGET_FILE:octi_server>"
+                "${PROJECT_VERSION}"
+                "${CMAKE_CURRENT_BINARY_DIR}"
+                "amd64"
+        DEPENDS octi_server
+                "${CMAKE_CURRENT_SOURCE_DIR}/packaging/build_deb.sh"
+                "${CMAKE_CURRENT_SOURCE_DIR}/packaging/octi-server.service"
+                "${CMAKE_CURRENT_SOURCE_DIR}/packaging/octi-server.default"
+                "${CMAKE_CURRENT_SOURCE_DIR}/packaging/oidc.json"
+                "${CMAKE_CURRENT_SOURCE_DIR}/packaging/conffiles"
+                "${CMAKE_CURRENT_SOURCE_DIR}/packaging/postinst"
+                "${CMAKE_CURRENT_SOURCE_DIR}/packaging/prerm"
+                "${CMAKE_CURRENT_SOURCE_DIR}/packaging/postrm"
+        COMMENT "Generating Debian package: ${OCTI_SERVER_DEB_OUTPUT}"
+        VERBATIM
+    )
+    add_custom_target(octi_server_deb ALL DEPENDS "${OCTI_SERVER_DEB_OUTPUT}")
+endif()
+
 add_executable(test_server_foundation
     test/TestServerFoundation.cxx
 )
@@ -109,6 +133,22 @@ target_link_directories(test_server_foundation PRIVATE
 target_link_libraries(test_server_foundation PRIVATE
     octi_server_lib
     ${CPPUTEST_LIBRARIES}
+)
+
+add_dependencies(test_server_foundation octi_server)
+if(TARGET octi_server_deb)
+    add_dependencies(test_server_foundation octi_server_deb)
+endif()
+
+if(OCTI_SERVER_SANITIZE)
+    set(_DEB_LOOKUP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build/octi-server_${PROJECT_VERSION}_amd64.deb")
+else()
+    set(_DEB_LOOKUP_PATH "${CMAKE_CURRENT_BINARY_DIR}/octi-server_${PROJECT_VERSION}_amd64.deb")
+endif()
+
+target_compile_definitions(test_server_foundation PRIVATE
+    OCTI_SERVER_BINARY="$<TARGET_FILE:octi_server>"
+    OCTI_SERVER_DEB_PATH="${_DEB_LOOKUP_PATH}"
 )
 
 add_executable(test_account_and_oidc

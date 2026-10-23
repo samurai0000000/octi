@@ -19,7 +19,7 @@ BUILD_DIR := build/asan
 CMAKE_FLAGS := -DCMAKE_BUILD_TYPE=Debug -DOCTI_SERVER_SANITIZE=ON
 endif
 
-.PHONY: all clean distclean test
+.PHONY: all clean distclean test deb
 
 all:
 	@if [ -f ../.gitmodules ] && { [ ! -f ../third_party/cpp-httplib/httplib.h ] || \
@@ -33,7 +33,19 @@ ifeq ($(SANITIZE),1)
 endif
 	@$(MAKE) -C $(BUILD_DIR) -j$(NUM_PROCS)
 
+deb:
+	@if [ "$(SANITIZE)" = "1" ]; then \
+		$(MAKE) SANITIZE=0 all; \
+	else \
+		$(MAKE) all; \
+	fi
+
 test: all
+ifeq ($(SANITIZE),1)
+	@if ! ls build/octi-server_*.deb 1>/dev/null 2>&1; then \
+		$(MAKE) SANITIZE=0 deb; \
+	fi
+endif
 	@./$(BUILD_DIR)/test_server_foundation
 	@./$(BUILD_DIR)/test_account_and_oidc
 	@./$(BUILD_DIR)/test_game_room_and_matchmaking

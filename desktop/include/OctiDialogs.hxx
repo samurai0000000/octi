@@ -56,8 +56,8 @@ struct LocalGameConfig {
 
 /*
  * 1. SsoOnboardingDialog:
- *    - Displays hard-coded read-only server badge ("Server: trumpet.selfso.com:6874")
- *      with zero editable host/port inputs.
+ *    - Connects to hard-coded canonical endpoint with zero host/port displayed
+ *      in the GUI and zero editable host/port inputs.
  *    - 5 SSO providers (Google, Apple, Microsoft, Facebook, LINE).
  *    - Browser loopback OAuth listener + manual token paste fallback.
  *    - Step-2 first-login handle setup when HTTP 201 Created (isNewAccount).

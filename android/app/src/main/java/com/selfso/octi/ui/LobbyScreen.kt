@@ -41,7 +41,7 @@ import com.selfso.octi.ui.theme.OctiTheme
 
 /**
  * Online Lobby, Custom Table Browser, Elo Quick-Play Matchmaking Queue,
- * and Live Lobby Chat screen for `trumpet.selfso.com:6874`.
+ * and Live Lobby Chat screen.
  *
  * Strictly zero editable server host or port fields are exposed.
  */
@@ -82,11 +82,6 @@ fun LobbyScreen(
                             text = "OCTI Online Arena",
                             style = MaterialTheme.typography.titleLarge,
                             color = OctiTheme.colors.accentBrass
-                        )
-                        Text(
-                            text = "Endpoint: ${OctiAppViewModel.canonicalServerEndpoint()}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = OctiTheme.colors.textSecondary
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

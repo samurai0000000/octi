@@ -197,11 +197,6 @@ fun SsoSignInDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Server: ${OctiAppViewModel.canonicalServerEndpoint()}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = OctiTheme.colors.textSecondary
-                )
                 if (!onboardingRequired) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         CANONICAL_SSO_PROVIDERS.forEach { (id, label) ->

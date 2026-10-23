@@ -342,14 +342,18 @@ TEST(DesktopAppIntegrationTest, HardCodedEndpointAndCliOptionGuard)
 
     /* 3. Default OctiMainWindow and SsoOnboardingDialog bind to trumpet.selfso.com:6874 */
     std::string cfgPath = "/tmp/octi_default_win_test.json";
-    OctiMainWindow defaultWin(nullptr, cfgPath, true);
+    OctiMainWindow defaultWin(nullptr, cfgPath, false);
     STRCMP_EQUAL("trumpet.selfso.com", defaultWin.netClient()->host().c_str());
     LONGS_EQUAL(6874, defaultWin.netClient()->port());
-    CHECK_TRUE(defaultWin.serverStatusText().contains("trumpet.selfso.com:6874"));
+    CHECK_FALSE(defaultWin.windowTitle().contains("trumpet.selfso.com"));
+    CHECK_FALSE(defaultWin.windowTitle().contains("6874"));
+    CHECK_FALSE(defaultWin.serverStatusText().contains("trumpet.selfso.com"));
+    CHECK_FALSE(defaultWin.serverStatusText().contains("6874"));
+    CHECK_TRUE(defaultWin.serverStatusText() == "Ready");
     CHECK_FALSE(defaultWin.hasEditableServerOrPortField());
 
     SsoOnboardingDialog ssoDlg(defaultWin.netClient());
-    CHECK_TRUE(ssoDlg.serverBadgeText().contains("trumpet.selfso.com:6874"));
+    CHECK_TRUE(ssoDlg.serverBadgeText().isEmpty());
     CHECK_FALSE(ssoDlg.hasEditableServerOrPortField());
     std::remove(cfgPath.c_str());
 }
@@ -370,7 +374,7 @@ TEST(DesktopAppIntegrationTest,
     /* 1. Player A: Browser loopback OAuth sign-in -> 201 Created -> Step-2 Handle */
     {
         SsoOnboardingDialog dlgA(winA.netClient(), winA.configStore());
-        CHECK_TRUE(dlgA.serverBadgeText().contains("trumpet.selfso.com:6874"));
+        CHECK_TRUE(dlgA.serverBadgeText().isEmpty());
         CHECK_FALSE(dlgA.hasEditableServerOrPortField());
 
         CHECK_TRUE(dlgA.startBrowserLoopbackFlow("google", false));
