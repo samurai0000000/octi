@@ -71,6 +71,10 @@ struct HttpServerConfig {
      * every enabled provider. Client ids are not secrets.
      */
     std::map<std::string, std::vector<std::string> > providerClientIds;
+
+    /* Wire protocol versioning and compatibility gate. */
+    int protocolVersion = OCTI_PROTOCOL_VERSION;
+    int minProtocolVersion = OCTI_MIN_PROTOCOL_VERSION;
 };
 
 /*

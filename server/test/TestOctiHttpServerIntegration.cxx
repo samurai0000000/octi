@@ -19,6 +19,7 @@
 #include "EloCalculator.hxx"
 #include "GameRoomManager.hxx"
 #include "OctiBoard.hxx"
+#include "OctiCore.hxx"
 #include "OctiGame.hxx"
 #include "OctiHttpServer.hxx"
 #include "OidcVerifier.hxx"
@@ -263,29 +264,33 @@ public:
     }
 
     Reply post(const std::string &path, const std::string &token,
-               const Json &body) const
+               const Json &body,
+               const httplib::Headers &extra = httplib::Headers()) const
     {
-        return raw("POST", path, token, body.dump(), "application/json");
+        return raw("POST", path, token, body.dump(), "application/json", extra);
     }
 
     Reply patch(const std::string &path, const std::string &token,
-                const Json &body) const
+                const Json &body,
+                const httplib::Headers &extra = httplib::Headers()) const
     {
-        return raw("PATCH", path, token, body.dump(), "application/json");
+        return raw("PATCH", path, token, body.dump(), "application/json", extra);
     }
 
-    Reply del(const std::string &path, const std::string &token) const
+    Reply del(const std::string &path, const std::string &token,
+              const httplib::Headers &extra = httplib::Headers()) const
     {
         httplib::Client cli = client();
-        return wrap(cli.Delete(path, headersFor(token, httplib::Headers())));
+        return wrap(cli.Delete(path, headersFor(token, extra)));
     }
 
     Reply raw(const std::string &method, const std::string &path,
               const std::string &token, const std::string &body,
-              const std::string &contentType) const
+              const std::string &contentType,
+              const httplib::Headers &extra = httplib::Headers()) const
     {
         httplib::Client cli = client();
-        httplib::Headers h = headersFor(token, httplib::Headers());
+        httplib::Headers h = headersFor(token, extra);
         if (method == "PATCH") {
             return wrap(cli.Patch(path, h, body, contentType));
         }
@@ -901,7 +906,7 @@ TEST(OctiHttpServerIntegrationTest, CleanShutdownLeavesNoThreadsBehind)
 
     env->server->stop();                 /* with a stream still open */
     CHECK_TRUE(sse.waitFinished(5000));
-    CHECK_TRUE(sse.data().find("event: shutdown") != std::string::npos);
+    CHECK_TRUE(sse.data().find("event: reconnect") != std::string::npos);
     CHECK_EQUAL(0, env->server->activeStreams());
     sse.stop();
     env.reset();
@@ -2598,6 +2603,158 @@ TEST(OctiHttpServerIntegrationTest, SseStreamIsBoundedInTimeAndAsksToReconnect)
     idle.stop();
 }
 
+TEST(OctiHttpServerIntegrationTest, ProtocolV1GoldenContract)
+{
+    /* 1. Health endpoint exposes protocol_version and min_protocol_version */
+    Reply h = http().get("/api/v1/health");
+    EXPECT_STATUS(200, h);
+    STRCMP_EQUAL("ok", h.json.value("status", "").c_str());
+    STRCMP_EQUAL(OctiCore::versionString(), h.json.value("version", "").c_str());
+    CHECK_EQUAL(1, h.json.value("protocol_version", 0));
+    CHECK_EQUAL(1, h.json.value("min_protocol_version", 0));
+    CHECK_TRUE(h.json.value("uptime_sec", -1) >= 0);
+    CHECK_TRUE(h.json.value("active_tables", -1) >= 0);
+    CHECK_TRUE(h.json.value("online_players", -1) >= 0);
+
+    /* 2. Endpoints work seamlessly when X-Octi-Protocol-Version is omitted (default=1) */
+    User a = signIn("google", "sub-golden-a", "Alice Golden");
+    Reply prof1 = http().get("/api/v1/profile/me", a.token);
+    EXPECT_STATUS(200, prof1);
+    STRCMP_EQUAL(a.uuid.c_str(), prof1.json.value("uuid", "").c_str());
+
+    Reply mm1 = http().get("/api/v1/matchmaking/status", a.token);
+    EXPECT_STATUS(200, mm1);
+    CHECK_FALSE(mm1.json.value("queued", true));
+
+    Reply tbls1 = http().get("/api/v1/tables", a.token);
+    EXPECT_STATUS(200, tbls1);
+    CHECK_TRUE(tbls1.json["tables"].is_array());
+
+    /* 3. Endpoints work seamlessly when X-Octi-Protocol-Version: 1 is explicitly attached */
+    httplib::Headers proto1;
+    proto1.insert(std::make_pair("X-Octi-Protocol-Version", "1"));
+
+    Reply prof2 = http().get("/api/v1/profile/me", a.token, proto1);
+    EXPECT_STATUS(200, prof2);
+    STRCMP_EQUAL(a.uuid.c_str(), prof2.json.value("uuid", "").c_str());
+
+    Reply tblCreate = http().post(
+        "/api/v1/tables", a.token,
+        Json{{"name", "Golden Table"}, {"mode", "2P"}}, proto1);
+    EXPECT_STATUS(201, tblCreate);
+    CHECK_TRUE(tblCreate.json.value("ok", false));
+    std::string roomId = tblCreate.json.value("room_id", "");
+    CHECK_FALSE(roomId.empty());
+
+    Reply tblView = http().get("/api/v1/games/" + roomId, a.token, proto1);
+    EXPECT_STATUS(200, tblView);
+    STRCMP_EQUAL("WAITING_FOR_PLAYERS", tblView.json.value("phase", "").c_str());
+
+    /* Player B signs in and joins with protocol header */
+    Reply ssoB = http().post(
+        "/api/v1/auth/sso", "",
+        Json{{"provider", "apple"},
+             {"id_token", makeToken("apple", "sub-golden-b", "Bob Golden")}},
+        proto1);
+    EXPECT_STATUS(201, ssoB);
+    User b;
+    b.token = ssoB.json.value("session_token", "");
+    b.uuid = ssoB.json["profile"].value("uuid", "");
+
+    Reply joinB = http().post("/api/v1/tables/" + roomId + "/join", b.token,
+                              Json::object(), proto1);
+    EXPECT_STATUS(200, joinB);
+    CHECK_TRUE(joinB.json.value("game_started", false));
+
+    /* Submit a legal move with protocol header */
+    Reply mv = http().post("/api/v1/games/" + roomId + "/move", a.token,
+                           Json{{"move", "33+b"}}, proto1);
+    EXPECT_STATUS(200, mv);
+    STRCMP_EQUAL("33+b", mv.json.value("move", "").c_str());
+
+    /* Poll events with protocol header */
+    Reply evs = http().get("/api/v1/games/" + roomId + "/events?since_seq=0",
+                           a.token, proto1);
+    EXPECT_STATUS(200, evs);
+    CHECK_TRUE(evs.json["events"].is_array());
+    CHECK_TRUE(evs.json["events"].size() >= 1);
+}
+
+TEST(OctiHttpServerIntegrationTest, ProtocolVersionGateRejectsOutdatedClientsWith426)
+{
+    HttpServerConfig cfg = testConfig();
+    cfg.protocolVersion = 2;
+    cfg.minProtocolVersion = 2;
+    startEnv(cfg, true, nullptr);
+
+    /* 1. Health endpoint is bypassed and reports configured versions */
+    Reply h = http().get("/api/v1/health");
+    EXPECT_STATUS(200, h);
+    CHECK_EQUAL(2, h.json.value("protocol_version", 0));
+    CHECK_EQUAL(2, h.json.value("min_protocol_version", 0));
+
+    /* Health with outdated protocol header is still allowed */
+    httplib::Headers v1Header;
+    v1Header.insert(std::make_pair("X-Octi-Protocol-Version", "1"));
+    Reply h1 = http().get("/api/v1/health", "", v1Header);
+    EXPECT_STATUS(200, h1);
+
+    /* 2. Requests without X-Octi-Protocol-Version default to 1, rejected with 426 */
+    Reply rNoHeader = http().get("/api/v1/tables");
+    EXPECT_STATUS(426, rNoHeader);
+    STRCMP_EQUAL("UPGRADE_REQUIRED", rNoHeader.json.value("error", "").c_str());
+    STRCMP_EQUAL("client protocol version is outdated; please upgrade OCTI",
+                 rNoHeader.json.value("message", "").c_str());
+    CHECK_EQUAL(2, rNoHeader.json.value("protocol_version", 0));
+    CHECK_EQUAL(2, rNoHeader.json.value("min_protocol_version", 0));
+
+    /* 3. Requests with X-Octi-Protocol-Version: 1 rejected with 426 */
+    Reply rV1 = http().get("/api/v1/tables", "", v1Header);
+    EXPECT_STATUS(426, rV1);
+    STRCMP_EQUAL("UPGRADE_REQUIRED", rV1.json.value("error", "").c_str());
+    CHECK_EQUAL(2, rV1.json.value("min_protocol_version", 0));
+
+    Reply rAuthV1 = http().post(
+        "/api/v1/auth/sso", "",
+        Json{{"provider", "google"},
+             {"id_token", makeToken("google", "sub-gate-a", "Alice Gate")}},
+        v1Header);
+    EXPECT_STATUS(426, rAuthV1);
+
+    Reply rMmV1 = http().get("/api/v1/matchmaking/status", "", v1Header);
+    EXPECT_STATUS(426, rMmV1);
+
+    /* 4. Requests with X-Octi-Protocol-Version: 2 are accepted */
+    httplib::Headers v2Header;
+    v2Header.insert(std::make_pair("X-Octi-Protocol-Version", "2"));
+    Reply rV2 = http().get("/api/v1/tables", "", v2Header);
+    EXPECT_STATUS(200, rV2);
+
+    Reply rAuthV2 = http().post(
+        "/api/v1/auth/sso", "",
+        Json{{"provider", "google"},
+             {"id_token", makeToken("google", "sub-gate-a", "Alice Gate")}},
+        v2Header);
+    EXPECT_STATUS(201, rAuthV2);
+
+    /* Higher protocol version (e.g. 3 >= min 2) is accepted */
+    httplib::Headers v3Header;
+    v3Header.insert(std::make_pair("X-Octi-Protocol-Version", "3"));
+    Reply rV3 = http().get("/api/v1/tables", "", v3Header);
+    EXPECT_STATUS(200, rV3);
+
+    /* 5. Malformed X-Octi-Protocol-Version headers return 400 INVALID_PROTOCOL_VERSION */
+    const char *badHeaders[] = {"abc", "0", "-1", "-100", "1.5", "99999999999999999999", ""};
+    for (size_t i = 0; i < sizeof(badHeaders) / sizeof(badHeaders[0]); ++i) {
+        httplib::Headers badH;
+        badH.insert(std::make_pair("X-Octi-Protocol-Version", badHeaders[i]));
+        Reply rBad = http().get("/api/v1/tables", "", badH);
+        EXPECT_STATUS(400, rBad);
+        STRCMP_EQUAL("INVALID_PROTOCOL_VERSION",
+                     rBad.json.value("error", "").c_str());
+    }
+}
+
 /* ================================================================== */
 /* ServerApp: options and a real process-style run                     */
 /* ================================================================== */
@@ -2805,7 +2962,7 @@ public:
         }
     }
 
-    bool start(const std::string &db)
+    bool start(const std::string &db, int explicitPort = 0)
     {
         int fds[2];
         if (::pipe(fds) != 0) {
@@ -2813,6 +2970,8 @@ public:
         }
         _pid = ::fork();
         if (_pid < 0) {
+            ::close(fds[0]);
+            ::close(fds[1]);
             return false;
         }
         if (_pid == 0) {
@@ -2820,13 +2979,16 @@ public:
             ::dup2(fds[1], STDERR_FILENO);
             ::close(fds[0]);
             ::close(fds[1]);
-            const char *argv[] = {OCTI_SERVER_BINARY, "--port", "0", "--bind",
+            std::string portStr = std::to_string(explicitPort);
+            const char *argv[] = {OCTI_SERVER_BINARY, "--port", portStr.c_str(), "--bind",
                                   "127.0.0.1", "--db", db.c_str(), nullptr};
             ::execv(OCTI_SERVER_BINARY, const_cast<char *const *>(argv));
             ::_exit(127);
         }
         ::close(fds[1]);
         _fd = fds[0];
+        _port = 0;
+        _output.clear();
         const std::string needle = "listening on 127.0.0.1:";
         for (int i = 0; i < 1000 && _port == 0; ++i) {
             readAvailable(10);
@@ -2841,6 +3003,9 @@ public:
     /* Signals the server and waits for it; returns the raw wait status. */
     int stopWith(int sig, int timeoutMs)
     {
+        if (_pid < 0) {
+            return -1;
+        }
         ::kill(_pid, sig);
         int status = -1;
         for (int i = 0; i < timeoutMs / 10; ++i) {
@@ -2848,6 +3013,10 @@ public:
             if (r == _pid) {
                 _pid = -1;
                 readAvailable(10);
+                if (_fd >= 0) {
+                    ::close(_fd);
+                    _fd = -1;
+                }
                 return status;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -2918,6 +3087,128 @@ TEST(ServerFoundationHttpTest, RealBinaryServesAndExitsZeroOnSigint)
         CHECK_TRUE(WIFEXITED(status));
         CHECK_EQUAL(0, WEXITSTATUS(status));
     }
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+}
+
+TEST(ServerFoundationHttpTest, SubprocessRestartPreservesOngoingGameAndSseStream)
+{
+    char tmpl[] = "/tmp/octi_subproc_XXXXXX";
+    CHECK_TRUE(mkdtemp(tmpl) != nullptr);
+    std::string dir = tmpl;
+    std::string db = dir + "/subproc.db";
+
+    std::string aliceToken;
+    std::string bobToken;
+    {
+        AccountStore store;
+        std::string err;
+        CHECK_TRUE(store.openOrCreate(db, err));
+        VerifiedClaims c1;
+        c1.provider = "google";
+        c1.sub = "sub-alice";
+        c1.name = "Alice Anders";
+        LoginResult r1 = store.loginWithSso(c1, "test");
+        CHECK_TRUE(r1.ok);
+        aliceToken = r1.sessionToken;
+
+        VerifiedClaims c2;
+        c2.provider = "apple";
+        c2.sub = "sub-bob";
+        c2.name = "Bob Brown";
+        LoginResult r2 = store.loginWithSso(c2, "test");
+        CHECK_TRUE(r2.ok);
+        bobToken = r2.sessionToken;
+        store.close();
+    }
+
+    int port = 0;
+    std::string roomId;
+
+    /* Phase 1: Launch subprocess, start game, make first move, open SSE stream */
+    {
+        RealServer srv;
+        CHECK_TRUE_TEXT(srv.start(db, 0), srv.output().c_str());
+        port = srv.port();
+        CHECK_TRUE(port > 0);
+
+        Http http(port);
+        Reply rTbl = http.post("/api/v1/tables", aliceToken,
+                               Json{{"name", "SubprocTest"}});
+        EXPECT_STATUS(201, rTbl);
+        roomId = rTbl.json.value("room_id", "");
+        CHECK_FALSE(roomId.empty());
+
+        Reply rJoin = http.post("/api/v1/tables/" + roomId + "/join", bobToken,
+                                Json::object());
+        EXPECT_STATUS(200, rJoin);
+        CHECK_TRUE(rJoin.json.value("game_started", false));
+
+        SseClient sse;
+        sse.start(port, "/api/v1/games/" + roomId + "/events", aliceToken);
+        CHECK_TRUE(sse.waitFor("retry: 3000", 3000));
+
+        /* Alice makes the first move: add prong 'b' to pod 33 */
+        Reply rMv = http.post("/api/v1/games/" + roomId + "/move", aliceToken,
+                              Json{{"move", "33+b"}});
+        EXPECT_STATUS(200, rMv);
+        STRCMP_EQUAL("33+b", rMv.json.value("move", "").c_str());
+        CHECK_TRUE(sse.waitFor("33+b", 3000));
+
+        /* Shutdown server with SIGTERM; stream must receive event: reconnect */
+        int status = srv.stopWith(SIGTERM, 5000);
+        CHECK_TRUE_TEXT(WIFEXITED(status), srv.output().c_str());
+        CHECK_EQUAL(0, WEXITSTATUS(status));
+        CHECK_TRUE(srv.output().find("octi_server stopped") != std::string::npos);
+
+        CHECK_TRUE(sse.waitFinished(5000));
+        CHECK_TRUE(sse.data().find("event: reconnect") != std::string::npos);
+        sse.stop();
+    }
+
+    /* Phase 2: Relaunch subprocess on same port and DB; state & stream resume */
+    {
+        RealServer srv;
+        CHECK_TRUE_TEXT(srv.start(db, port), srv.output().c_str());
+        CHECK_EQUAL(port, srv.port());
+
+        Http http(port);
+        Reply rGame = http.get("/api/v1/games/" + roomId, aliceToken);
+        EXPECT_STATUS(200, rGame);
+        STRCMP_EQUAL("IN_PROGRESS", rGame.json.value("phase", "").c_str());
+        CHECK_EQUAL(2, rGame.json.value("turn_seat", 0));
+        CHECK_EQUAL(1, rGame.json.value("ply_count", 0));
+
+        /* Reconnect SSE stream specifying Last-Event-ID */
+        httplib::Headers sseHeaders;
+        sseHeaders.insert(std::make_pair("Last-Event-ID", "2"));
+        SseClient sse;
+        sse.start(port, "/api/v1/games/" + roomId + "/events", bobToken, sseHeaders);
+        CHECK_TRUE(sse.waitFor("retry: 3000", 3000));
+
+        /* Bob makes the second move: add prong 'e' to pod 37 */
+        Reply rMv2 = http.post("/api/v1/games/" + roomId + "/move", bobToken,
+                               Json{{"move", "37+e"}});
+        EXPECT_STATUS(200, rMv2);
+        STRCMP_EQUAL("37+e", rMv2.json.value("move", "").c_str());
+        CHECK_TRUE(sse.waitFor("37+e", 3000));
+
+        /* Alice resigns to end the game */
+        Reply rResign = http.post("/api/v1/games/" + roomId + "/resign", aliceToken,
+                                  Json::object());
+        EXPECT_STATUS(200, rResign);
+        CHECK_TRUE(sse.waitFor("P2_WIN", 3000));
+
+        Reply rFinal = http.get("/api/v1/games/" + roomId, aliceToken);
+        EXPECT_STATUS(200, rFinal);
+        STRCMP_EQUAL("FINISHED", rFinal.json.value("phase", "").c_str());
+
+        int status = srv.stopWith(SIGTERM, 5000);
+        CHECK_TRUE_TEXT(WIFEXITED(status), srv.output().c_str());
+        CHECK_EQUAL(0, WEXITSTATUS(status));
+        sse.stop();
+    }
+
     std::error_code ec;
     std::filesystem::remove_all(dir, ec);
 }

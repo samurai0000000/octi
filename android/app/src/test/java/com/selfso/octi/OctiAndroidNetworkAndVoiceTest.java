@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.attribute.PosixFilePermission;
 import java.security.MessageDigest;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -705,36 +706,198 @@ public class OctiAndroidNetworkAndVoiceTest {
         }
     }
 
+    @Test
+    public void testProtocolVersionConstantsAndHealthInfoParsing() {
+        assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
+        assertEquals(1, OctiDefs.OCTI_MIN_PROTOCOL_VERSION);
+
+        OctiNetworkClient.HealthInfo info = new OctiNetworkClient.HealthInfo();
+        assertEquals(OctiDefs.OCTI_PROTOCOL_VERSION, info.protocolVersion);
+        assertEquals(OctiDefs.OCTI_MIN_PROTOCOL_VERSION, info.minProtocolVersion);
+
+        Map<String, Object> fakeJson = new HashMap<>();
+        fakeJson.put("status", "ok");
+        fakeJson.put("version", "2.0.7");
+        fakeJson.put("protocol_version", 1);
+        fakeJson.put("min_protocol_version", 1);
+
+        info.protocolVersion = OctiMiniJson.getInt(fakeJson, "protocol_version", OctiDefs.OCTI_PROTOCOL_VERSION);
+        info.minProtocolVersion = OctiMiniJson.getInt(fakeJson, "min_protocol_version", OctiDefs.OCTI_MIN_PROTOCOL_VERSION);
+        assertEquals(1, info.protocolVersion);
+        assertEquals(1, info.minProtocolVersion);
+    }
+
+    @Test
+    public void testLiveServerRestartPreservesGameSseAndAllowsMoveContinuation() throws Exception {
+        startLiveServer();
+        int fixedPort = _serverPort;
+
+        String aliceUuid = "11111111-1111-4111-8111-111111111111";
+        String bobUuid = "22222222-2222-4222-8222-222222222222";
+        String aliceToken = "tok-live-alice-restart-0001";
+        String bobToken = "tok-live-bob-restart-0002";
+
+        seedLivePlayer(1, aliceUuid, "AliceRestart", aliceToken, "google", "sub-al-restart", null, null);
+        seedLivePlayer(2, bobUuid, "BobRestart", bobToken, "apple", "sub-bob-restart", null, null);
+
+        try (OctiNetworkClient clientA = OctiNetworkClient.forHermeticTest(fixedPort);
+             OctiNetworkClient clientB = OctiNetworkClient.forHermeticTest(fixedPort)) {
+
+            clientA.setSessionToken(aliceToken);
+            clientB.setSessionToken(bobToken);
+
+            OctiNetworkClient.CreateTableRequest req = new OctiNetworkClient.CreateTableRequest();
+            req.mode = "2P";
+            req.bases = 3;
+            req.timeControlEnabled = true;
+            req.initialMs = 600000L;
+            req.incrementMs = 0L;
+
+            OctiNetworkClient.ApiResult<OctiNetworkClient.CreateTableResponse> created = clientA.createTable(req);
+            assertTrue("createTable failed: " + created.errorMessage, created.ok);
+            String roomId = created.data.roomId;
+
+            OctiNetworkClient.ApiResult<OctiNetworkClient.JoinTableResponse> joined = clientB.joinTable(roomId, 2, "");
+            assertTrue("joinTable failed: " + joined.errorMessage, joined.ok);
+            assertTrue(joined.data.gameStarted);
+
+            List<OctiNetworkClient.SseEvent> eventsA = new CopyOnWriteArrayList<>();
+            List<OctiNetworkClient.SseEvent> eventsB = new CopyOnWriteArrayList<>();
+
+            clientA.startGameEventStream(roomId, eventsA::add);
+            clientB.startGameEventStream(roomId, eventsB::add);
+
+            long waitDeadline = System.currentTimeMillis() + 3000L;
+            while (System.currentTimeMillis() < waitDeadline &&
+                    (!clientA.isGameEventStreamActive() || !clientB.isGameEventStreamActive())) {
+                Thread.sleep(20L);
+            }
+            assertTrue(clientA.isGameEventStreamActive());
+            assertTrue(clientB.isGameEventStreamActive());
+
+            // Move 1: Alice moves "73+a"
+            OctiNetworkClient.ApiResult<OctiNetworkClient.MoveSubmitData> m1 = clientA.submitMove(roomId, "73+a");
+            assertTrue("Move 1 failed: " + m1.errorMessage, m1.ok);
+
+            boolean seenM1 = false;
+            long m1Deadline = System.currentTimeMillis() + 3000L;
+            while (System.currentTimeMillis() < m1Deadline) {
+                for (OctiNetworkClient.SseEvent ev : eventsB) {
+                    if (ev.dataJson.contains("73+a")) {
+                        seenM1 = true;
+                        break;
+                    }
+                }
+                if (seenM1) break;
+                Thread.sleep(20L);
+            }
+            assertTrue("Bob must receive Move 1 over SSE", seenM1);
+
+            // Move 2: Bob moves "77+e"
+            OctiNetworkClient.ApiResult<OctiNetworkClient.MoveSubmitData> m2 = clientB.submitMove(roomId, "77+e");
+            assertTrue("Move 2 failed: " + m2.errorMessage, m2.ok);
+
+            boolean seenM2 = false;
+            long m2Deadline = System.currentTimeMillis() + 3000L;
+            while (System.currentTimeMillis() < m2Deadline) {
+                for (OctiNetworkClient.SseEvent ev : eventsA) {
+                    if (ev.dataJson.contains("77+e")) {
+                        seenM2 = true;
+                        break;
+                    }
+                }
+                if (seenM2) break;
+                Thread.sleep(20L);
+            }
+            assertTrue("Alice must receive Move 2 over SSE", seenM2);
+
+            OctiNetworkClient.ApiResult<OctiNetworkClient.GameViewData> viewBefore = clientA.fetchGameView(roomId);
+            assertTrue(viewBefore.ok);
+            assertEquals(1, viewBefore.data.turnSeat);
+            assertEquals(2, viewBefore.data.plyCount);
+
+            // Stop server subprocess!
+            stopLiveServer();
+
+            // Relaunch server subprocess on the exact same port and SQLite DB!
+            startLiveServer(fixedPort);
+
+            // SSE streams stay active and auto-reconnect
+            long reconnectDeadline = System.currentTimeMillis() + 3000L;
+            while (System.currentTimeMillis() < reconnectDeadline &&
+                    (!clientA.isGameEventStreamActive() || !clientB.isGameEventStreamActive())) {
+                Thread.sleep(20L);
+            }
+            assertTrue(clientA.isGameEventStreamActive());
+            assertTrue(clientB.isGameEventStreamActive());
+
+            // Move 3: Alice submits next move "73a-74" after server restart
+            OctiNetworkClient.ApiResult<OctiNetworkClient.MoveSubmitData> m3 = clientA.submitMove(roomId, "73a-74");
+            assertTrue("Move 3 after restart failed: " + m3.errorMessage, m3.ok);
+
+            boolean seenM3 = false;
+            long m3Deadline = System.currentTimeMillis() + 3000L;
+            while (System.currentTimeMillis() < m3Deadline) {
+                for (OctiNetworkClient.SseEvent ev : eventsB) {
+                    if (ev.dataJson.contains("73a-74")) {
+                        seenM3 = true;
+                        break;
+                    }
+                }
+                if (seenM3) break;
+                Thread.sleep(20L);
+            }
+            assertTrue("Bob's auto-reconnected SSE stream must receive Move 3 after server restart", seenM3);
+
+            OctiNetworkClient.ApiResult<OctiNetworkClient.GameViewData> viewAfter = clientA.fetchGameView(roomId);
+            assertTrue(viewAfter.ok);
+            assertEquals(3, viewAfter.data.plyCount);
+            assertEquals(2, viewAfter.data.turnSeat);
+            assertTrue(viewAfter.data.seats.get(0).clockMs > 0);
+
+            clientA.stopEventStreams();
+            clientB.stopEventStreams();
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Live octi_server process management & SQLite seeding helpers
     // -----------------------------------------------------------------------
 
     private void startLiveServer() throws Exception {
+        startLiveServer(0);
+    }
+
+    private void startLiveServer(int fixedPort) throws Exception {
         File serverBin = findServerBinary();
         assertNotNull("octi_server binary must exist under ../server/build/octi_server", serverBin);
         assertTrue("octi_server binary must be executable", serverBin.canExecute());
 
-        _sqliteDbFile = new File(_tempDir, "live_octi.db");
+        if (_sqliteDbFile == null) {
+            _sqliteDbFile = new File(_tempDir, "live_octi.db");
+        }
         File oidcConfigFile = new File(_tempDir, "oidc_config.json");
-        String oidcJson = "{\n"
-                + "  \"providers\": {\n"
-                + "    \"google\": { \"client_ids\": [\"octi-google-client\"] },\n"
-                + "    \"apple\": { \"client_ids\": [\"octi-apple-client\"] },\n"
-                + "    \"microsoft\": { \"client_ids\": [\"octi-ms-client\"] },\n"
-                + "    \"facebook\": { \"client_ids\": [\"octi-fb-client\"], \"app_secret\": \"fb-test-secret\" },\n"
-                + "    \"line\": { \"client_ids\": [\"octi-line-client\"] }\n"
-                + "  }\n"
-                + "}\n";
-        Files.write(oidcConfigFile.toPath(), oidcJson.getBytes(StandardCharsets.UTF_8));
-        oidcConfigFile.setReadable(false, false);
-        oidcConfigFile.setReadable(true, true);
-        oidcConfigFile.setWritable(false, false);
-        oidcConfigFile.setWritable(true, true);
+        if (!oidcConfigFile.exists()) {
+            String oidcJson = "{\n"
+                    + "  \"providers\": {\n"
+                    + "    \"google\": { \"client_ids\": [\"octi-google-client\"] },\n"
+                    + "    \"apple\": { \"client_ids\": [\"octi-apple-client\"] },\n"
+                    + "    \"microsoft\": { \"client_ids\": [\"octi-ms-client\"] },\n"
+                    + "    \"facebook\": { \"client_ids\": [\"octi-fb-client\"], \"app_secret\": \"fb-test-secret\" },\n"
+                    + "    \"line\": { \"client_ids\": [\"octi-line-client\"] }\n"
+                    + "  }\n"
+                    + "}\n";
+            Files.write(oidcConfigFile.toPath(), oidcJson.getBytes(StandardCharsets.UTF_8));
+            oidcConfigFile.setReadable(false, false);
+            oidcConfigFile.setReadable(true, true);
+            oidcConfigFile.setWritable(false, false);
+            oidcConfigFile.setWritable(true, true);
+        }
 
         ProcessBuilder pb = new ProcessBuilder(
                 serverBin.getAbsolutePath(),
                 "--bind", "127.0.0.1",
-                "--port", "0",
+                "--port", String.valueOf(fixedPort),
                 "--db", _sqliteDbFile.getAbsolutePath(),
                 "--oidc-config", oidcConfigFile.getAbsolutePath());
         pb.redirectErrorStream(true);

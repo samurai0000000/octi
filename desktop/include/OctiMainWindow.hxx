@@ -216,6 +216,7 @@ private:
     void handleSelfUpdateStateChanged(const selfupdate::UpdateState &state);
     void handleSelfUpdateQuitRequested();
     void updateSelfUpdateBannerUi();
+    void showProtocolUpgradeRequired(const std::string &message = "");
 
     ClientConfigStore _configStore;
     std::unique_ptr<OctiNetworkClient> _netClient;

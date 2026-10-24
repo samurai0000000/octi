@@ -679,6 +679,8 @@ struct OctiNetworkClient::Impl {
         const httplib::Headers &extra = httplib::Headers()) const
     {
         httplib::Headers h = extra;
+        h.emplace("X-Octi-Protocol-Version",
+                  std::to_string(OCTI_PROTOCOL_VERSION));
         std::string tok = currentToken();
         if (!tok.empty()) {
             h.emplace("Authorization", "Bearer " + tok);
@@ -720,31 +722,53 @@ struct OctiNetworkClient::Impl {
         return r;
     }
 
+    template <typename Fn>
+    RawResponse executeWithRetry(Fn &&requestFn) const
+    {
+        httplib::Result res;
+        for (int attempt = 1; attempt <= 5; ++attempt) {
+            std::unique_ptr<httplib::Client> cli = makeClient();
+            res = requestFn(cli.get());
+            if (res) {
+                return wrapResult(res);
+            }
+            if (attempt < 5) {
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(100 * attempt));
+            }
+        }
+        return wrapResult(res);
+    }
+
     RawResponse doGet(const std::string &path,
                       const httplib::Headers &extra = httplib::Headers()) const
     {
-        std::unique_ptr<httplib::Client> cli = makeClient();
-        return wrapResult(cli->Get(path, authHeaders(extra)));
+        return executeWithRetry([&](httplib::Client *cli) {
+            return cli->Get(path, authHeaders(extra));
+        });
     }
 
     RawResponse doPost(const std::string &path, const Json &body) const
     {
-        std::unique_ptr<httplib::Client> cli = makeClient();
-        return wrapResult(
-            cli->Post(path, authHeaders(), body.dump(), "application/json"));
+        std::string payload = body.dump();
+        return executeWithRetry([&](httplib::Client *cli) {
+            return cli->Post(path, authHeaders(), payload, "application/json");
+        });
     }
 
     RawResponse doPatch(const std::string &path, const Json &body) const
     {
-        std::unique_ptr<httplib::Client> cli = makeClient();
-        return wrapResult(
-            cli->Patch(path, authHeaders(), body.dump(), "application/json"));
+        std::string payload = body.dump();
+        return executeWithRetry([&](httplib::Client *cli) {
+            return cli->Patch(path, authHeaders(), payload, "application/json");
+        });
     }
 
     RawResponse doDelete(const std::string &path) const
     {
-        std::unique_ptr<httplib::Client> cli = makeClient();
-        return wrapResult(cli->Delete(path, authHeaders()));
+        return executeWithRetry([&](httplib::Client *cli) {
+            return cli->Delete(path, authHeaders());
+        });
     }
 
     template <typename T>
@@ -831,8 +855,7 @@ struct OctiNetworkClient::Impl {
                                 if (parsed[i].id > runner.lastId.load()) {
                                     runner.lastId.store(parsed[i].id);
                                 }
-                                if (parsed[i].event == "shutdown" ||
-                                    parsed[i].event == "closed") {
+                                if (parsed[i].event == "closed") {
                                     terminalEventSeen = true;
                                 }
                                 if (onEvent) {
@@ -942,6 +965,10 @@ ApiResult<HealthInfo> OctiNetworkClient::fetchHealth()
         raw.json.value("active_tables", static_cast<std::int64_t>(0));
     res.data.onlinePlayers =
         raw.json.value("online_players", static_cast<std::int64_t>(0));
+    res.data.protocolVersion =
+        raw.json.value("protocol_version", OCTI_PROTOCOL_VERSION);
+    res.data.minProtocolVersion =
+        raw.json.value("min_protocol_version", OCTI_MIN_PROTOCOL_VERSION);
     return res;
 }
 

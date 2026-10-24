@@ -90,6 +90,13 @@ struct QueueInfo {
     int window = 0;
 };
 
+struct QueuedPlayerSnapshot {
+    int64_t playerId = 0;
+    int rating = 1200;
+    MatchRuleset ruleset;
+    int64_t waitedMs = 0;
+};
+
 class MatchmakingQueue {
 public:
     static constexpr size_t kMaxQueueSize = 5000;
@@ -120,6 +127,10 @@ public:
      * the result is deterministic for a given clock and arrival sequence.
      */
     std::vector<MatchGroup> findMatches();
+
+    /* Snapshot and restore queued tickets with relative wait time offsets. */
+    std::vector<QueuedPlayerSnapshot> snapshot() const;
+    void restore(const std::vector<QueuedPlayerSnapshot> &entries);
 
 private:
     struct Entry {

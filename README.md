@@ -1,6 +1,7 @@
 # OCTI
 
-**Version: 2.0.6**
+**Version: 2.0.7**
+**Protocol Version: 1**
 
 An open-source platform for playing **OCTI** and **OCTI for Kids (OFK)**—combining an Android mobile client, a Qt desktop client for Linux (X11) and Windows, a shared C++17 core engine with an AI opponent, a real-time multiplayer and matchmaking server, and a web-based game archive.
 

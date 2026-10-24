@@ -3263,6 +3263,13 @@ TEST(GameRoomManagerTest, ConcurrentCallersSeeAConsistentRoom)
 TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOperations)
 {
     bool passed = rc::check("banned set and voice policy invariants", [&]() {
+        std::vector<LiveRoomRow> existingRows;
+        std::string delErr;
+        if (store->listLiveRooms(existingRows, delErr)) {
+            for (const auto &row : existingRows) {
+                store->deleteLiveRoom(row.roomId, delErr);
+            }
+        }
         GameRoomManager local(*store);
         int64_t t = kT0;
         local.setClock([&t]() -> int64_t { return t; });
@@ -3606,6 +3613,13 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
 TEST(GameRoomManagerTest, RapidCheckRandomLegalGamesStayInSyncWithTheEngine)
 {
     bool passed = rc::check("room board, clocks and transcript track the engine", [&]() {
+        std::vector<LiveRoomRow> existingRows;
+        std::string delErr;
+        if (store->listLiveRooms(existingRows, delErr)) {
+            for (const auto &row : existingRows) {
+                store->deleteLiveRoom(row.roomId, delErr);
+            }
+        }
         GameRoomManager local(*store);
         int64_t t = kT0;
         local.setClock([&t]() -> int64_t { return t; });
@@ -3771,6 +3785,346 @@ TEST(GameRoomManagerTest, SoleHostLeavingClosesTheRoomWithoutTouchingTheFreedId)
     EXPECT_OK(mgr->leaveLobby(p[1]));
     CHECK_EQUAL(0, static_cast<int>(mgr->roomCount()));
     EXPECT_CODE(NOT_FOUND, mgr->joinTable(r2.roomId, p[2], 0, ""));
+}
+
+TEST(GameRoomManagerTest, HotRestoreAcrossManagerRecreationWaitingAndInProgressAndFinished)
+{
+    /* 1. WAITING room */
+    RoomResult rw = mgr->createTable(p[7], cfg(GAME_MODE_2));
+    EXPECT_OK(rw);
+    std::string waitingId = rw.roomId;
+
+    /* 2. IN_PROGRESS 2P timed room with moves */
+    RoomResult r2p = mgr->createTable(p[0], timedCfg(60000, 1000, GAME_MODE_2));
+    EXPECT_OK(r2p);
+    EXPECT_OK(mgr->joinTable(r2p.roomId, p[1], 0, ""));
+    std::string inProgId = r2p.roomId;
+    EXPECT_OK(mgr->submitMove(inProgId, p[0], "73+a"));
+    EXPECT_OK(mgr->submitMove(inProgId, p[1], "77+e"));
+    EXPECT_OK(mgr->observeRoom(inProgId, p[6]));
+    EXPECT_OK(mgr->muteUser(inProgId, p[0], p[6], true, false));
+
+    /* 3. IN_PROGRESS 4P room with moves */
+    RoomResult r4p = mgr->createTable(p[2], cfg(GAME_MODE_4));
+    EXPECT_OK(r4p);
+    EXPECT_OK(mgr->joinTable(r4p.roomId, p[3], 0, ""));
+    EXPECT_OK(mgr->joinTable(r4p.roomId, p[4], 0, ""));
+    EXPECT_OK(mgr->joinTable(r4p.roomId, p[5], 0, ""));
+    std::string fourPId = r4p.roomId;
+    EXPECT_OK(mgr->submitMove(fourPId, p[2], "33+a"));
+    EXPECT_OK(mgr->submitMove(fourPId, p[3], "73"));
+
+    /* 4. FINISHED OFK room played to victory */
+    LoginResult lr1 = store->loginWithSso(makeClaims("sub-ofk1", "ofk1"), "test");
+    LoginResult lr2 = store->loginWithSso(makeClaims("sub-ofk2", "ofk2"), "test");
+    CHECK_TRUE(lr1.ok);
+    CHECK_TRUE(lr2.ok);
+    int64_t pOfk1 = lr1.profile.playerId;
+    int64_t pOfk2 = lr2.profile.playerId;
+    RoomResult rofk = mgr->createTable(pOfk1, cfg(GAME_MODE_OFK));
+    EXPECT_OK(rofk);
+    EXPECT_OK(mgr->joinTable(rofk.roomId, pOfk2, 0, ""));
+    std::string ofkId = rofk.roomId;
+    for (size_t i = 0; i < kOfkWin.size(); ++i) {
+        int seat = (i % 2 == 0) ? 1 : 2;
+        int64_t player = (seat == 1) ? pOfk1 : pOfk2;
+        EXPECT_OK(mgr->submitMove(ofkId, player, kOfkWin[i]));
+    }
+    RoomView vOfkPre = view(ofkId);
+    CHECK_EQUAL(static_cast<int>(RoomPhase::FINISHED), static_cast<int>(vOfkPre.phase));
+
+    RoomView vWaitPre = view(waitingId);
+    RoomView vInProgPre = view(inProgId);
+    RoomView v4PPre = view(fourPId);
+
+    /* Checkpoint to store and simulate restart */
+    CHECK_TRUE(mgr->checkpointToStore());
+    delete mgr;
+    mgr = nullptr;
+
+    /* Reconstruct on the same AccountStore */
+    mgr = new GameRoomManager(*store);
+    mgr->setClock([this]() -> int64_t { return now; });
+    mgr->setWallClock([this]() -> int64_t { return wall; });
+
+    CHECK_EQUAL(4, static_cast<int>(mgr->roomCount()));
+
+    /* Verify WAITING room */
+    RoomView vWaitPost = view(waitingId);
+    STRCMP_EQUAL(waitingId.c_str(), vWaitPost.roomId.c_str());
+    CHECK_EQUAL(static_cast<int>(RoomPhase::WAITING_FOR_PLAYERS), static_cast<int>(vWaitPost.phase));
+    LONGS_EQUAL(p[7], vWaitPost.hostPlayerId);
+
+    /* Verify 2P IN_PROGRESS room */
+    RoomView vInProgPost = view(inProgId);
+    STRCMP_EQUAL(inProgId.c_str(), vInProgPost.roomId.c_str());
+    CHECK_EQUAL(static_cast<int>(RoomPhase::IN_PROGRESS), static_cast<int>(vInProgPost.phase));
+    STRCMP_EQUAL(vInProgPre.fen.c_str(), vInProgPost.fen.c_str());
+    CHECK_EQUAL(vInProgPre.moves.size(), vInProgPost.moves.size());
+    LONGS_EQUAL(1, vInProgPost.turnSeat);
+    CHECK_EQUAL(1u, vInProgPost.observerIds.size());
+    LONGS_EQUAL(p[6], vInProgPost.observerIds[0]);
+
+    /* Continue playing the 2P in-progress room after restore */
+    EXPECT_OK(mgr->submitMove(inProgId, p[0], "73a-74"));
+    RoomView vInProgPostMove = view(inProgId);
+    LONGS_EQUAL(3, vInProgPostMove.plyCount);
+    LONGS_EQUAL(2, vInProgPostMove.turnSeat);
+
+    /* Verify 4P room */
+    RoomView v4PPost = view(fourPId);
+    CHECK_EQUAL(static_cast<int>(RoomPhase::IN_PROGRESS), static_cast<int>(v4PPost.phase));
+    STRCMP_EQUAL(v4PPre.fen.c_str(), v4PPost.fen.c_str());
+    CHECK_EQUAL(2u, v4PPost.moves.size());
+    LONGS_EQUAL(3, v4PPost.turnSeat);
+
+    /* Verify FINISHED room */
+    RoomView vOfkPost = view(ofkId);
+    CHECK_EQUAL(static_cast<int>(RoomPhase::FINISHED), static_cast<int>(vOfkPost.phase));
+    STRCMP_EQUAL(vOfkPre.result.c_str(), vOfkPost.result.c_str());
+    STRCMP_EQUAL(vOfkPre.termination.c_str(), vOfkPost.termination.c_str());
+    CHECK_EQUAL(vOfkPre.winnerSeat, vOfkPost.winnerSeat);
+}
+
+TEST(GameRoomManagerTest, ExactClockFreezeAcrossManagerRestart)
+{
+    /* 60s initial clock, 0 increment */
+    std::string room = startTable(timedCfg(60000, 0, GAME_MODE_2), 2);
+    RoomView v0 = view(room);
+    LONGS_EQUAL(60000, v0.seats[0].clockMs);
+    LONGS_EQUAL(60000, v0.seats[1].clockMs);
+
+    /* Player 1 spends 15s thinking */
+    now += 15000;
+    RoomView v1 = view(room);
+    LONGS_EQUAL(45000, v1.seats[0].clockMs);
+
+    /* Server shutdown for 60 seconds (1 minute upgrade window) */
+    CHECK_TRUE(mgr->checkpointToStore());
+    delete mgr;
+    mgr = nullptr;
+
+    now += 60000;
+    wall += 60;
+
+    /* Server relaunched */
+    mgr = new GameRoomManager(*store);
+    mgr->setClock([this]() -> int64_t { return now; });
+    mgr->setWallClock([this]() -> int64_t { return wall; });
+
+    /* Player 1 clock must be frozen at 45000ms, not deducted by downtime! */
+    RoomView v2 = view(room);
+    LONGS_EQUAL(45000, v2.seats[0].clockMs);
+
+    /* Player 1 spends another 10s thinking after restart */
+    now += 10000;
+    RoomView v3 = view(room);
+    LONGS_EQUAL(35000, v3.seats[0].clockMs);
+
+    /* Player 1 submits move: total elapsed on turn was 25000ms */
+    RoomResult mr = mgr->submitMove(room, p[0], "73+a");
+    EXPECT_OK(mr);
+    LONGS_EQUAL(25000, mr.elapsedMs);
+    LONGS_EQUAL(35000, mr.clockMs);
+}
+
+TEST(GameRoomManagerTest, PreservationOfSeatDisconnectAndProposalsAndLobby)
+{
+    std::string room = startTable(timedCfg(60000, 0, GAME_MODE_2), 2);
+
+    /* Disconnect seat 2 and offer draw proposal */
+    EXPECT_OK(mgr->markDisconnected(room, p[1]));
+    EXPECT_OK(mgr->submitProposal(room, p[0], ProposalType::DRAW_OFFER));
+    now += 20000;
+
+    /* Post lobby chat and queue matchmaking */
+    EXPECT_OK(mgr->postLobbyChat(p[0], "live upgrade incoming"));
+    MatchRuleset rs;
+    rs.mode = GAME_MODE_2;
+    EXPECT_OK(mgr->enqueueMatchmaking(p[2], rs));
+
+    /* Shutdown and stop for 120s */
+    CHECK_TRUE(mgr->checkpointToStore());
+    delete mgr;
+    mgr = nullptr;
+
+    now += 120000;
+    wall += 120;
+
+    /* Restart */
+    mgr = new GameRoomManager(*store);
+    mgr->setClock([this]() -> int64_t { return now; });
+    mgr->setWallClock([this]() -> int64_t { return wall; });
+
+    RoomView vr = view(room);
+    CHECK_FALSE(vr.seats[1].connected);
+    LONGS_EQUAL(20000, vr.seats[1].disconnectedForMs);
+    CHECK_EQUAL(1u, vr.proposals.size());
+    CHECK_EQUAL(static_cast<int>(ProposalType::DRAW_OFFER), static_cast<int>(vr.proposals[0].type));
+    /* Remaining TTL was 60000 - 20000 = 40000 */
+    LONGS_EQUAL(now + 40000, vr.proposals[0].expiresAtMs);
+
+    /* Lobby chat and sequence preserved */
+    LobbySnapshot ls = mgr->lobbyState();
+    CHECK_TRUE(ls.latestSeq > 0);
+    bool chatFound = false;
+    for (size_t i = 0; i < ls.recentChat.size(); ++i) {
+        if (ls.recentChat[i].text == "live upgrade incoming") {
+            chatFound = true;
+            break;
+        }
+    }
+    CHECK_TRUE(chatFound);
+
+    /* Matchmaking queue preserved */
+    MatchmakingStatus ms = mgr->matchmakingStatus(p[2]);
+    CHECK_TRUE(ms.queued);
+}
+
+TEST(GameRoomManagerTest, StaleOfflineRoomsExpiredAfter24Hours)
+{
+    RoomResult r1 = mgr->createTable(p[0], cfg());
+    EXPECT_OK(r1);
+    CHECK_TRUE(mgr->checkpointToStore());
+
+    /* A: At exact 24 hours (86400s), room is still kept */
+    delete mgr;
+    mgr = nullptr;
+    wall += 86400;
+
+    mgr = new GameRoomManager(*store);
+    mgr->setClock([this]() -> int64_t { return now; });
+    mgr->setWallClock([this]() -> int64_t { return wall; });
+    CHECK_EQUAL(1, static_cast<int>(mgr->roomCount()));
+
+    /* B: At 86401s (> 24 hours), room is expired and purged */
+    delete mgr;
+    mgr = nullptr;
+    wall += 1;
+
+    mgr = new GameRoomManager(*store);
+    mgr->setClock([this]() -> int64_t { return now; });
+    mgr->setWallClock([this]() -> int64_t { return wall; });
+    CHECK_EQUAL(0, static_cast<int>(mgr->roomCount()));
+
+    std::vector<octi::LiveRoomRow> remaining;
+    std::string err;
+    CHECK_TRUE(store->listLiveRooms(remaining, err));
+    CHECK_EQUAL(0u, remaining.size());
+}
+
+TEST(GameRoomManagerTest, CorruptJsonInLiveRoomsAndMetaIgnoredSafely)
+{
+    /* Create one valid room */
+    RoomResult rValid = mgr->createTable(p[0], cfg());
+    EXPECT_OK(rValid);
+    CHECK_TRUE(mgr->checkpointToStore());
+    delete mgr;
+    mgr = nullptr;
+
+    /* Inject corrupt entries into database */
+    std::string err;
+    CHECK_TRUE(store->upsertLiveRoom("corrupt-raw", "{not valid json", err));
+    CHECK_TRUE(store->upsertLiveRoom("corrupt-types", "{\"id\":\"corrupt-types\",\"config\":123}", err));
+    CHECK_TRUE(store->setLiveMeta("lobby_state", "invalid meta json", err));
+
+    /* Reconstruct manager: must not crash or throw */
+    mgr = new GameRoomManager(*store);
+    mgr->setClock([this]() -> int64_t { return now; });
+    mgr->setWallClock([this]() -> int64_t { return wall; });
+
+    CHECK_EQUAL(1, static_cast<int>(mgr->roomCount()));
+    RoomView v = view(rValid.roomId);
+    STRCMP_EQUAL(rValid.roomId.c_str(), v.roomId.c_str());
+
+    /* Corrupt rows should have been cleaned up */
+    std::vector<octi::LiveRoomRow> liveRows;
+    CHECK_TRUE(store->listLiveRooms(liveRows, err));
+    CHECK_EQUAL(1u, liveRows.size());
+    STRCMP_EQUAL(rValid.roomId.c_str(), liveRows[0].roomId.c_str());
+}
+
+TEST(GameRoomManagerTest, RapidCheckMoveSequenceRoundTripsAcrossManagerRestart)
+{
+    bool passed = rc::check("random legal moves round-trip identically across restart", [&]() {
+        /* Setup a clean temporary sub-store */
+        TempDir tempDir;
+        AccountStore localStore;
+        std::string err;
+        RC_ASSERT(localStore.openOrCreate(tempDir.path() + "/test.db", err));
+
+        int64_t tNow = 1000000;
+        int64_t tWall = 2000000;
+        localStore.setClock([&tWall]() -> int64_t { return tWall; });
+
+        std::vector<int64_t> pids;
+        for (int i = 0; i < 2; ++i) {
+            LoginResult lr = localStore.loginWithSso(
+                makeClaims("rc-sub-" + std::to_string(i), "rc-" + std::to_string(i)), "test");
+            RC_ASSERT(lr.ok);
+            pids.push_back(lr.profile.playerId);
+        }
+
+        std::unique_ptr<GameRoomManager> m1(new GameRoomManager(localStore));
+        m1->setClock([&tNow]() -> int64_t { return tNow; });
+        m1->setWallClock([&tWall]() -> int64_t { return tWall; });
+
+        GameTableConfig tableCfg;
+        tableCfg.mode = GAME_MODE_2;
+        tableCfg.timeControl.enabled = true;
+        tableCfg.timeControl.initialMs = 120000;
+        tableCfg.timeControl.incrementMs = 2000;
+
+        RoomResult cr = m1->createTable(pids[0], tableCfg);
+        RC_ASSERT(cr.ok());
+        RoomResult jr = m1->joinTable(cr.roomId, pids[1], 0, "");
+        RC_ASSERT(jr.ok());
+
+        /* Play a random prefix of kTwoPlayerWin */
+        size_t steps = *rc::gen::inRange<size_t>(0, kTwoPlayerWin.size());
+        for (size_t s = 0; s < steps; ++s) {
+            int seat = (s % 2 == 0) ? 1 : 2;
+            int delay = *rc::gen::inRange<int>(100, 3000);
+            tNow += delay;
+            RoomResult mr = m1->submitMove(cr.roomId, pids[seat - 1], kTwoPlayerWin[s]);
+            RC_ASSERT(mr.ok());
+            if (mr.gameOver) {
+                break;
+            }
+        }
+
+        RoomView preView;
+        RC_ASSERT(m1->getRoomView(cr.roomId, 0, preView).ok());
+
+        /* Stop m1 and advance downtime clock */
+        m1->checkpointToStore();
+        m1.reset();
+
+        int stopDuration = *rc::gen::inRange<int>(1000, 50000);
+        tNow += stopDuration;
+        tWall += (stopDuration / 1000);
+
+        /* Reconstruct m2 on the same database */
+        std::unique_ptr<GameRoomManager> m2(new GameRoomManager(localStore));
+        m2->setClock([&tNow]() -> int64_t { return tNow; });
+        m2->setWallClock([&tWall]() -> int64_t { return tWall; });
+
+        RoomView postView;
+        RC_ASSERT(m2->getRoomView(cr.roomId, 0, postView).ok());
+
+        RC_ASSERT(preView.roomId == postView.roomId);
+        RC_ASSERT(preView.phase == postView.phase);
+        RC_ASSERT(preView.fen == postView.fen);
+        RC_ASSERT(preView.moves.size() == postView.moves.size());
+        RC_ASSERT(preView.turnSeat == postView.turnSeat);
+        RC_ASSERT(preView.plyCount == postView.plyCount);
+        RC_ASSERT(preView.result == postView.result);
+        RC_ASSERT(preView.winnerSeat == postView.winnerSeat);
+        for (size_t i = 0; i < preView.seats.size(); ++i) {
+            RC_ASSERT(preView.seats[i].clockMs == postView.seats[i].clockMs);
+        }
+    });
+    CHECK_TRUE(passed);
 }
 
 int main(int argc, char **argv)

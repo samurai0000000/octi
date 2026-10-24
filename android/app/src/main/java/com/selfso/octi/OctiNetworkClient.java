@@ -61,6 +61,8 @@ public final class OctiNetworkClient implements AutoCloseable {
         public long uptimeSec = 0;
         public long activeTables = 0;
         public long onlinePlayers = 0;
+        public int protocolVersion = OctiDefs.OCTI_PROTOCOL_VERSION;
+        public int minProtocolVersion = OctiDefs.OCTI_MIN_PROTOCOL_VERSION;
     }
 
     public static final class AuthProviderInfo {
@@ -842,6 +844,10 @@ public final class OctiNetworkClient implements AutoCloseable {
         res.data.uptimeSec = OctiMiniJson.getLong(raw.json, "uptime_sec", 0);
         res.data.activeTables = OctiMiniJson.getLong(raw.json, "active_tables", 0);
         res.data.onlinePlayers = OctiMiniJson.getLong(raw.json, "online_players", 0);
+        res.data.protocolVersion = OctiMiniJson.getInt(
+                raw.json, "protocol_version", OctiDefs.OCTI_PROTOCOL_VERSION);
+        res.data.minProtocolVersion = OctiMiniJson.getInt(
+                raw.json, "min_protocol_version", OctiDefs.OCTI_MIN_PROTOCOL_VERSION);
         return res;
     }
 
@@ -2010,104 +2016,127 @@ public final class OctiNetworkClient implements AutoCloseable {
         byte[] bodyBytes = jsonBody != null ? jsonBody.getBytes(StandardCharsets.UTF_8) : null;
         String token = sessionToken();
 
-        try (Socket sock = new Socket()) {
-            sock.connect(new InetSocketAddress(_host, _port), 5000);
-            sock.setSoTimeout(10000);
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            r = new RawResponse();
+            try (Socket sock = new Socket()) {
+                sock.connect(new InetSocketAddress(_host, _port), 5000);
+                sock.setSoTimeout(10000);
 
-            OutputStream out = sock.getOutputStream();
-            InputStream in = sock.getInputStream();
+                OutputStream out = sock.getOutputStream();
+                InputStream in = sock.getInputStream();
 
-            StringBuilder req = new StringBuilder(256);
-            req.append(method).append(' ').append(path).append(" HTTP/1.1\r\n");
-            req.append("Host: ").append(_host).append(':').append(_port).append("\r\n");
-            req.append("User-Agent: octi-android/1.0\r\n");
-            req.append("Accept: application/json, text/plain, */*\r\n");
-            req.append("Connection: close\r\n");
-            if (!token.isEmpty()) {
-                req.append("Authorization: Bearer ").append(token).append("\r\n");
-            }
-            if (bodyBytes != null) {
-                req.append("Content-Type: application/json\r\n");
-                req.append("Content-Length: ").append(bodyBytes.length).append("\r\n");
-            }
-            req.append("\r\n");
+                StringBuilder req = new StringBuilder(256);
+                req.append(method).append(' ').append(path).append(" HTTP/1.1\r\n");
+                req.append("Host: ").append(_host).append(':').append(_port).append("\r\n");
+                req.append("User-Agent: octi-android/1.0\r\n");
+                req.append("Accept: application/json, text/plain, */*\r\n");
+                req.append("Connection: close\r\n");
+                req.append("X-Octi-Protocol-Version: ").append(OctiDefs.OCTI_PROTOCOL_VERSION).append("\r\n");
+                if (!token.isEmpty()) {
+                    req.append("Authorization: Bearer ").append(token).append("\r\n");
+                }
+                if (bodyBytes != null) {
+                    req.append("Content-Type: application/json\r\n");
+                    req.append("Content-Length: ").append(bodyBytes.length).append("\r\n");
+                }
+                req.append("\r\n");
 
-            out.write(req.toString().getBytes(StandardCharsets.US_ASCII));
-            if (bodyBytes != null && bodyBytes.length > 0) {
-                out.write(bodyBytes);
-            }
-            out.flush();
+                out.write(req.toString().getBytes(StandardCharsets.US_ASCII));
+                if (bodyBytes != null && bodyBytes.length > 0) {
+                    out.write(bodyBytes);
+                }
+                out.flush();
 
-            String statusLine = readHttpLine(in);
-            if (statusLine == null || statusLine.isEmpty()) {
-                r.transportOk = false;
-                r.transportError = "empty HTTP response";
+                String statusLine = readHttpLine(in);
+                if (statusLine == null || statusLine.isEmpty()) {
+                    r.transportOk = false;
+                    r.transportError = "empty HTTP response";
+                    if (attempt < 5) {
+                        try {
+                            Thread.sleep(100L * attempt);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            return r;
+                        }
+                        continue;
+                    }
+                    return r;
+                }
+                String[] stParts = statusLine.split(" ", 3);
+                if (stParts.length < 2) {
+                    r.transportOk = false;
+                    r.transportError = "malformed status line: " + statusLine;
+                    return r;
+                }
+                r.status = Integer.parseInt(stParts[1].trim());
+                r.transportOk = true;
+
+                int contentLength = -1;
+                boolean chunked = false;
+                String line;
+                while ((line = readHttpLine(in)) != null && !line.isEmpty()) {
+                    int colon = line.indexOf(':');
+                    if (colon <= 0) {
+                        continue;
+                    }
+                    String hName = line.substring(0, colon).trim().toLowerCase(Locale.ROOT);
+                    String hVal = line.substring(colon + 1).trim();
+                    switch (hName) {
+                        case "content-type":
+                            r.contentType = hVal;
+                            break;
+                        case "content-length":
+                            try {
+                                contentLength = Integer.parseInt(hVal);
+                            } catch (NumberFormatException ignored) {
+                            }
+                            break;
+                        case "transfer-encoding":
+                            if (hVal.toLowerCase(Locale.ROOT).contains("chunked")) {
+                                chunked = true;
+                            }
+                            break;
+                        case "retry-after":
+                            try {
+                                r.retryAfterSec = Math.max(0, Integer.parseInt(hVal));
+                            } catch (NumberFormatException ignored) {
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
+                byte[] respBytes;
+                if (chunked) {
+                    respBytes = readChunkedBody(in);
+                } else if (contentLength >= 0) {
+                    respBytes = readExactBytes(in, contentLength);
+                } else {
+                    respBytes = readUntilEof(in);
+                }
+                r.body = new String(respBytes, StandardCharsets.UTF_8);
+                String trimmed = r.body.trim();
+                if (!trimmed.isEmpty() && (trimmed.charAt(0) == '{' || trimmed.charAt(0) == '[')) {
+                    r.json = OctiMiniJson.parseObjectOrNull(trimmed);
+                }
                 return r;
-            }
-            String[] stParts = statusLine.split(" ", 3);
-            if (stParts.length < 2) {
+            } catch (Exception e) {
                 r.transportOk = false;
-                r.transportError = "malformed status line: " + statusLine;
-                return r;
-            }
-            r.status = Integer.parseInt(stParts[1].trim());
-            r.transportOk = true;
-
-            int contentLength = -1;
-            boolean chunked = false;
-            String line;
-            while ((line = readHttpLine(in)) != null && !line.isEmpty()) {
-                int colon = line.indexOf(':');
-                if (colon <= 0) {
+                r.transportError = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                if (attempt < 5) {
+                    try {
+                        Thread.sleep(100L * attempt);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return r;
+                    }
                     continue;
                 }
-                String hName = line.substring(0, colon).trim().toLowerCase(Locale.ROOT);
-                String hVal = line.substring(colon + 1).trim();
-                switch (hName) {
-                    case "content-type":
-                        r.contentType = hVal;
-                        break;
-                    case "content-length":
-                        try {
-                            contentLength = Integer.parseInt(hVal);
-                        } catch (NumberFormatException ignored) {
-                        }
-                        break;
-                    case "transfer-encoding":
-                        if (hVal.toLowerCase(Locale.ROOT).contains("chunked")) {
-                            chunked = true;
-                        }
-                        break;
-                    case "retry-after":
-                        try {
-                            r.retryAfterSec = Math.max(0, Integer.parseInt(hVal));
-                        } catch (NumberFormatException ignored) {
-                        }
-                        break;
-                    default:
-                        break;
-                }
+                return r;
             }
-
-            byte[] respBytes;
-            if (chunked) {
-                respBytes = readChunkedBody(in);
-            } else if (contentLength >= 0) {
-                respBytes = readExactBytes(in, contentLength);
-            } else {
-                respBytes = readUntilEof(in);
-            }
-            r.body = new String(respBytes, StandardCharsets.UTF_8);
-            String trimmed = r.body.trim();
-            if (!trimmed.isEmpty() && (trimmed.charAt(0) == '{' || trimmed.charAt(0) == '[')) {
-                r.json = OctiMiniJson.parseObjectOrNull(trimmed);
-            }
-            return r;
-        } catch (Exception e) {
-            r.transportOk = false;
-            r.transportError = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            return r;
         }
+        return r;
     }
 
     private void launchSseStream(
@@ -2151,6 +2180,7 @@ public final class OctiNetworkClient implements AutoCloseable {
                     req.append("Accept: text/event-stream\r\n");
                     req.append("Cache-Control: no-cache\r\n");
                     req.append("Connection: close\r\n");
+                    req.append("X-Octi-Protocol-Version: ").append(OctiDefs.OCTI_PROTOCOL_VERSION).append("\r\n");
                     if (!token.isEmpty()) {
                         req.append("Authorization: Bearer ").append(token).append("\r\n");
                     }
@@ -2266,7 +2296,7 @@ public final class OctiNetworkClient implements AutoCloseable {
             if (ev.id > runner.lastId.get()) {
                 runner.lastId.set(ev.id);
             }
-            if ("shutdown".equals(ev.event) || "closed".equals(ev.event)) {
+            if ("closed".equals(ev.event)) {
                 terminalSeen = true;
             }
             if (onEvent != null && !runner.stopRequested.get()) {

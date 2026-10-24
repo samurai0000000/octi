@@ -248,6 +248,8 @@ bool parseProposalType(const std::string &s, ProposalType &out)
 
 namespace {
 
+using Json = nlohmann::json;
+
 const std::string kEmptyString;
 
 RoomResult fail(RoomCode code, const std::string &message)
@@ -615,27 +617,46 @@ GameRoomManager::GameRoomManager(AccountStore &store)
     : _store(store),
       _clock(steadyMs),
       _wallClock(systemSec),
+      _customWallClock(false),
+      _restoring(false),
       _lobbySeq(0),
       _lobbyEvictedUpToSeq(0),
       _lobbyChatCount(0),
       _roomCounter(0)
 {
     _queue.setClock([this]() -> int64_t { return _clock(); });
+    restoreFromStoreLocked();
 }
 
 GameRoomManager::~GameRoomManager() = default;
+
+bool GameRoomManager::checkpointToStore()
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    return checkpointToStoreLocked();
+}
+
+bool GameRoomManager::restoreFromStore()
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    return restoreFromStoreLocked();
+}
 
 void GameRoomManager::setClock(std::function<int64_t()> nowMs)
 {
     std::lock_guard<std::mutex> lock(_mutex);
     _clock = nowMs ? std::move(nowMs) : std::function<int64_t()>(steadyMs);
+    _queue.setClock([this]() -> int64_t { return _clock(); });
+    restoreFromStoreLocked();
 }
 
 void GameRoomManager::setWallClock(std::function<int64_t()> epochSec)
 {
     std::lock_guard<std::mutex> lock(_mutex);
+    _customWallClock = (epochSec != nullptr);
     _wallClock = epochSec ? std::move(epochSec)
                           : std::function<int64_t()>(systemSec);
+    restoreFromStoreLocked();
 }
 
 void GameRoomManager::setLimits(const RoomLimits &limits)
@@ -797,6 +818,7 @@ void GameRoomManager::pushLobbyEventLocked(LobbyEvent e)
         _lobbyEvictedUpToSeq = std::max(_lobbyEvictedUpToSeq, front.seq);
         _lobbyEvents.pop_front();
     }
+    saveLobbyMetaLocked();
 }
 
 void GameRoomManager::announceTableLocked(const Room &r, bool closed)
@@ -1106,6 +1128,9 @@ void GameRoomManager::deleteRoomLocked(const std::string &roomIdRef)
 {
     /* Callers may pass the room's own id, which dies with the room. */
     const std::string roomId = roomIdRef;
+    std::string delErr;
+    _store.deleteLiveRoom(roomId, delErr);
+
     std::map<std::string, std::unique_ptr<Room>>::iterator it =
         _rooms.find(roomId);
     if (it == _rooms.end()) {
@@ -1448,6 +1473,8 @@ RoomResult GameRoomManager::createTable(int64_t hostPlayerId,
     Room *r = createRoomLocked(cfg, hostPlayerId, now);
     seatPlayerLocked(*r, 1, hostPlayerId, now);
     announceTableLocked(*r, false);
+    saveRoomLocked(*r);
+    saveLobbyMetaLocked();
     RoomResult res = success();
     res.roomId = r->id;
     res.seat = 1;
@@ -1514,6 +1541,7 @@ RoomResult GameRoomManager::joinTable(const std::string &roomId,
     } else {
         announceTableLocked(*r, false);
     }
+    saveRoomLocked(*r);
     return res;
 }
 
@@ -1539,6 +1567,9 @@ RoomResult GameRoomManager::leaveTable(const std::string &roomId,
                     "game already started; resign instead");
     }
     leaveWaitingSeatLocked(*r, seat, now);
+    if (findRoomLocked(roomId) != nullptr) {
+        saveRoomLocked(*r);
+    }
     return success();
 }
 
@@ -1582,6 +1613,7 @@ RoomResult GameRoomManager::kickSeat(const std::string &roomId,
     unseatLocked(*r, ts);
     r->lastActivityMs = now;
     announceTableLocked(*r, false);
+    saveRoomLocked(*r);
     return res;
 }
 
@@ -1619,6 +1651,7 @@ RoomResult GameRoomManager::observeRoom(const std::string &roomId,
     e.type = RoomEventType::OBSERVER_JOINED;
     e.playerId = playerId;
     res.seq = emitLocked(*r, e, now);
+    saveRoomLocked(*r);
     return res;
 }
 
@@ -1645,6 +1678,7 @@ RoomResult GameRoomManager::stopObserving(const std::string &roomId,
     e.detail = "left";
     RoomResult res = success();
     res.seq = emitLocked(*r, e, now);
+    saveRoomLocked(*r);
     return res;
 }
 
@@ -1677,6 +1711,7 @@ RoomResult GameRoomManager::enqueueMatchmaking(int64_t playerId,
     switch (_queue.enqueue(playerId, rating, rs)) {
     case EnqueueStatus::OK:
         _matchAssignments.erase(playerId);
+        saveLobbyMetaLocked();
         return success();
     case EnqueueStatus::ALREADY_QUEUED:
         return fail(RoomCode::CONFLICT, "already in the matchmaking queue");
@@ -1697,6 +1732,7 @@ RoomResult GameRoomManager::dequeueMatchmaking(int64_t playerId)
     if (!_queue.dequeue(playerId)) {
         return fail(RoomCode::INVALID_STATE, "not in the matchmaking queue");
     }
+    saveLobbyMetaLocked();
     return success();
 }
 
@@ -1752,6 +1788,7 @@ void GameRoomManager::spawnMatchRoomLocked(const MatchGroup &g, int64_t now)
         e.roomId = r->id;
         pushLobbyEventLocked(e);
     }
+    saveRoomLocked(*r);
 }
 
 TickReport GameRoomManager::tick()
@@ -1832,8 +1869,10 @@ int64_t GameRoomManager::liveClockLocked(const Room &r, int seat,
 
 void GameRoomManager::advanceRoomLocked(Room &r, int64_t now)
 {
+    bool proposalsExpired = false;
     for (size_t i = 0; i < r.proposals.size();) {
         if (now >= r.proposals[i].expiresAtMs) {
+            proposalsExpired = true;
             RoomEvent e;
             e.type = RoomEventType::PROPOSAL_EXPIRED;
             e.playerId = r.proposals[i].proposerId;
@@ -1844,6 +1883,9 @@ void GameRoomManager::advanceRoomLocked(Room &r, int64_t now)
         } else {
             ++i;
         }
+    }
+    if (proposalsExpired) {
+        saveRoomLocked(r);
     }
 
     for (std::deque<RoomEvent>::iterator it = r.events.begin();
@@ -2048,6 +2090,7 @@ RoomResult GameRoomManager::submitMove(const std::string &roomId,
         r->turnStartedMs = now;
         r->turnCarryMs = 0;
     }
+    saveRoomLocked(*r);
     return res;
 }
 
@@ -2093,6 +2136,7 @@ RoomResult GameRoomManager::resign(const std::string &roomId, int64_t playerId)
         return fail(RoomCode::INVALID_STATE, "already eliminated");
     }
     forfeitSeatLocked(*r, now, seat, "RESIGNATION");
+    saveRoomLocked(*r);
     RoomResult res = success();
     res.roomId = r->id;
     res.seat = seat;
@@ -2132,6 +2176,7 @@ RoomResult GameRoomManager::markDisconnected(const std::string &roomId,
     e.seat = seat;
     RoomResult res = success();
     res.seq = emitLocked(*r, e, now);
+    saveRoomLocked(*r);
     return res;
 }
 
@@ -2163,6 +2208,7 @@ RoomResult GameRoomManager::markReconnected(const std::string &roomId,
     e.seat = seat;
     RoomResult res = success();
     res.seq = emitLocked(*r, e, now);
+    saveRoomLocked(*r);
     return res;
 }
 
@@ -2217,6 +2263,7 @@ RoomResult GameRoomManager::claimDisconnectForfeit(const std::string &roomId,
                     "no opposing seat is past the reconnect grace window");
     }
     forfeitSeatLocked(*r, now, victim, "DISCONNECT_FORFEIT");
+    saveRoomLocked(*r);
     RoomResult res = success();
     res.roomId = r->id;
     res.seat = victim;
@@ -2324,8 +2371,10 @@ RoomResult GameRoomManager::submitProposal(const std::string &roomId,
         if (done.seq == 0) {
             done.seq = seq;
         }
+        saveRoomLocked(*r);
         return done;
     }
+    saveRoomLocked(*r);
     RoomResult res = success();
     res.seq = seq;
     res.roomId = r->id;
@@ -2388,6 +2437,7 @@ RoomResult GameRoomManager::respondProposal(const std::string &roomId,
         e.text = isProposer ? "withdrawn" : "declined";
         RoomResult res = success();
         res.seq = emitLocked(*r, e, now);
+        saveRoomLocked(*r);
         return res;
     }
 
@@ -2406,11 +2456,14 @@ RoomResult GameRoomManager::respondProposal(const std::string &roomId,
         e.detail = toString(type);
         RoomResult res = success();
         res.seq = emitLocked(*r, e, now);
+        saveRoomLocked(*r);
         return res;
     }
     int64_t proposer = prop.proposerId;
     r->proposals.erase(r->proposals.begin() + static_cast<long>(idx));
-    return completeProposalLocked(*r, type, proposer, now);
+    RoomResult cRes = completeProposalLocked(*r, type, proposer, now);
+    saveRoomLocked(*r);
+    return cRes;
 }
 
 RoomResult GameRoomManager::completeProposalLocked(Room &r, ProposalType type,
@@ -2438,6 +2491,7 @@ RoomResult GameRoomManager::completeProposalLocked(Room &r, ProposalType type,
         e.type = RoomEventType::GAME_PAUSED;
         e.playerId = proposerId;
         res.seq = emitLocked(r, e, now);
+        saveRoomLocked(r);
         return res;
     }
     case ProposalType::UNDO_REQUEST: {
@@ -2466,6 +2520,7 @@ RoomResult GameRoomManager::completeProposalLocked(Room &r, ProposalType type,
         e.ply = static_cast<int>(r.plies.size());
         e.text = p.move;
         res.seq = emitLocked(r, e, now);
+        saveRoomLocked(r);
         return res;
     }
     case ProposalType::REMATCH_REQUEST:
@@ -2504,6 +2559,7 @@ RoomResult GameRoomManager::resumeGame(const std::string &roomId,
     RoomResult res = success();
     res.seq = emitLocked(*r, e, now);
     res.roomId = r->id;
+    saveRoomLocked(*r);
     return res;
 }
 
@@ -2557,7 +2613,9 @@ RoomResult GameRoomManager::spawnRematchLocked(Room &old, int64_t now)
         e.playerId = hostId;
         e.text = n->id;
         res.seq = emitLocked(*o, e, now);
+        saveRoomLocked(*o);
     }
+    saveRoomLocked(*n);
     return res;
 }
 
@@ -2606,6 +2664,7 @@ void GameRoomManager::finishGameLocked(Room &r, int64_t now,
         refreshPresenceLocked(r.seatPlayer[s]);
     }
     announceTableLocked(r, false);
+    saveRoomLocked(r);
 }
 
 bool GameRoomManager::archiveLocked(Room &r)
@@ -2644,6 +2703,7 @@ bool GameRoomManager::archiveLocked(Room &r)
         for (int s = 1; s <= r.seatCount; ++s) {
             if (!_store.getProfileById(r.seatPlayer[s], prof[s])) {
                 r.archiveError = "player profile lookup failed";
+                saveRoomLocked(r);
                 return false;
             }
         }
@@ -2693,9 +2753,11 @@ bool GameRoomManager::archiveLocked(Room &r)
     if (st == ArchiveStatus::OK) {
         r.archived = true;
         r.archiveError.clear();
+        saveRoomLocked(r);
         return true;
     }
     r.archiveError = err.empty() ? "archive failed" : err;
+    saveRoomLocked(r);
     return false;
 }
 
@@ -2846,6 +2908,7 @@ RoomResult GameRoomManager::postBoardChat(const std::string &roomId,
     RoomResult res = success();
     res.seq = emitLocked(*r, e, now);
     res.roomId = r->id;
+    saveRoomLocked(*r);
     return res;
 }
 
@@ -2973,6 +3036,7 @@ RoomResult GameRoomManager::submitVoiceMeta(const std::string &roomId,
     RoomResult res = success();
     res.seq = emitLocked(*r, e, now);
     res.roomId = r->id;
+    saveRoomLocked(*r);
     return res;
 }
 
@@ -3055,6 +3119,7 @@ RoomResult GameRoomManager::banUser(const std::string &roomId,
         announceTableLocked(*r, false);
     }
     refreshPresenceLocked(targetPlayerId);
+    saveRoomLocked(*r);
     return res;
 }
 
@@ -3113,6 +3178,7 @@ RoomResult GameRoomManager::muteUser(const std::string &roomId,
                    ";mute_voice=" + (muteVoice ? "1" : "0");
         res.seq = emitLocked(*r, e, now);
     }
+    saveRoomLocked(*r);
     return res;
 }
 
@@ -3184,6 +3250,7 @@ RoomResult GameRoomManager::updateRoomPolicies(
     res.seq = emitLocked(*r, e, now);
     enforcePoliciesLocked(*r, now);
     announceTableLocked(*r, false);
+    saveRoomLocked(*r);
     return res;
 }
 
@@ -3375,6 +3442,663 @@ std::vector<int64_t> GameRoomManager::bannedPlayers(const std::string &roomId) c
         return std::vector<int64_t>();
     }
     return std::vector<int64_t>(r->banned.begin(), r->banned.end());
+}
+
+/* ------------------------------------------------------------------ */
+/* Live state persistence                                              */
+/* ------------------------------------------------------------------ */
+
+bool GameRoomManager::checkpointToStoreLocked()
+{
+    for (std::map<std::string, std::unique_ptr<Room>>::const_iterator it =
+             _rooms.begin();
+         it != _rooms.end(); ++it) {
+        saveRoomLocked(*it->second);
+    }
+    saveLobbyMetaLocked();
+    return true;
+}
+
+void GameRoomManager::saveRoomLocked(const Room &r)
+{
+    if (_restoring) {
+        return;
+    }
+    int64_t now = nowMs();
+    Json j;
+    j["id"] = r.id;
+
+    // config
+    Json cfg;
+    cfg["mode"] = static_cast<int>(r.config.mode);
+    cfg["bases"] = static_cast<int>(r.config.bases);
+    cfg["useSuperProngs"] = r.config.useSuperProngs;
+    cfg["useEdgelessBoard"] = r.config.useEdgelessBoard;
+    Json tc;
+    tc["enabled"] = r.config.timeControl.enabled;
+    tc["initialMs"] = r.config.timeControl.initialMs;
+    tc["incrementMs"] = r.config.timeControl.incrementMs;
+    tc["disconnectGraceMs"] = r.config.timeControl.disconnectGraceMs;
+    cfg["timeControl"] = tc;
+    cfg["rated"] = r.config.rated;
+    cfg["allowTakeback"] = r.config.allowTakeback;
+    cfg["observerPolicy"] = toString(r.config.observerPolicy);
+    cfg["voicePolicy"] = toString(r.config.voicePolicy);
+    cfg["passcode"] = r.config.passcode;
+    j["config"] = cfg;
+
+    j["phase"] = toString(r.phase);
+    j["hostId"] = r.hostId;
+    j["seatCount"] = r.seatCount;
+
+    // seats
+    Json seats = Json::array();
+    for (int s = 1; s <= 4; ++s) {
+        Json sj;
+        sj["seat"] = s;
+        sj["player"] = r.seatPlayer[s];
+        sj["handle"] = r.seatHandle[s];
+        sj["rating"] = r.seatRating[s];
+        sj["connected"] = r.seatConnected[s];
+        int64_t disconnectedForMs = 0;
+        if (!r.seatConnected[s] && r.seatDisconnectedAt[s] > 0) {
+            disconnectedForMs = std::max<int64_t>(0, now - r.seatDisconnectedAt[s]);
+        }
+        sj["disconnectedForMs"] = disconnectedForMs;
+        sj["clockMs"] = r.clockMs[s];
+        seats.push_back(sj);
+    }
+    j["seats"] = seats;
+
+    // clock / turn freeze
+    int64_t effectiveTurnCarryMs = r.turnCarryMs;
+    if (r.phase == RoomPhase::IN_PROGRESS && r.config.timeControl.enabled &&
+        !r.paused && r.turnStartedMs > 0) {
+        effectiveTurnCarryMs += std::max<int64_t>(0, now - r.turnStartedMs);
+    }
+    j["effectiveTurnCarryMs"] = effectiveTurnCarryMs;
+    j["paused"] = r.paused;
+
+    // plies
+    Json plies = Json::array();
+    for (size_t i = 0; i < r.plies.size(); ++i) {
+        Json p;
+        p["seat"] = r.plies[i].seat;
+        p["move"] = r.plies[i].move;
+        p["clockBeforeMs"] = r.plies[i].clockBeforeMs;
+        p["clockAfterMs"] = r.plies[i].clockAfterMs;
+        p["elapsedMs"] = r.plies[i].elapsedMs;
+        plies.push_back(p);
+    }
+    j["plies"] = plies;
+
+    // board fen position snapshot
+    if (r.board) {
+        j["fen"] = r.board->toPositionString();
+    } else {
+        j["fen"] = "";
+    }
+
+    // observers
+    Json obs = Json::array();
+    for (int64_t o : r.observers) {
+        obs.push_back(o);
+    }
+    j["observers"] = obs;
+
+    // banned
+    Json banned = Json::array();
+    for (int64_t b : r.banned) {
+        banned.push_back(b);
+    }
+    j["banned"] = banned;
+
+    // muted
+    Json muted = Json::object();
+    for (std::map<int64_t, Room::Mute>::const_iterator it = r.muted.begin();
+         it != r.muted.end(); ++it) {
+        Json m;
+        m["chat"] = it->second.chat;
+        m["voice"] = it->second.voice;
+        muted[std::to_string(it->first)] = m;
+    }
+    j["muted"] = muted;
+
+    // voicePeers
+    Json vp = Json::object();
+    for (std::map<int64_t, bool>::const_iterator it = r.voicePeers.begin();
+         it != r.voicePeers.end(); ++it) {
+        vp[std::to_string(it->first)] = it->second;
+    }
+    j["voicePeers"] = vp;
+
+    // proposals
+    Json props = Json::array();
+    for (size_t i = 0; i < r.proposals.size(); ++i) {
+        const Room::Proposal &p = r.proposals[i];
+        Json pj;
+        pj["type"] = toString(p.type);
+        pj["proposerId"] = p.proposerId;
+        Json acc = Json::array();
+        for (int64_t a : p.accepted) {
+            acc.push_back(a);
+        }
+        pj["accepted"] = acc;
+        pj["remainingTtlMs"] = std::max<int64_t>(1, p.expiresAtMs - now);
+        props.push_back(pj);
+    }
+    j["proposals"] = props;
+
+    // events (exclude RoomEventType::VOICE_SIGNAL)
+    j["nextSeq"] = r.nextSeq;
+    j["evictedUpToSeq"] = r.evictedUpToSeq;
+    Json evs = Json::array();
+    for (size_t i = 0; i < r.events.size(); ++i) {
+        const RoomEvent &ev = r.events[i];
+        if (ev.type == RoomEventType::VOICE_SIGNAL) {
+            continue;
+        }
+        Json ej;
+        ej["seq"] = ev.seq;
+        ej["type"] = toString(ev.type);
+        ej["ageMs"] = std::max<int64_t>(0, now - ev.atMs);
+        ej["playerId"] = ev.playerId;
+        ej["handle"] = ev.handle;
+        ej["targetPlayerId"] = ev.targetPlayerId;
+        ej["seat"] = ev.seat;
+        ej["scope"] = toString(ev.scope);
+        ej["ply"] = ev.ply;
+        ej["clockMs"] = ev.clockMs;
+        ej["elapsedMs"] = ev.elapsedMs;
+        ej["text"] = ev.text;
+        ej["detail"] = ev.detail;
+        evs.push_back(ej);
+    }
+    j["events"] = evs;
+
+    // result / termination / winnerSeat
+    j["result"] = r.result;
+    j["termination"] = r.termination;
+    j["winnerSeat"] = r.winnerSeat;
+
+    // archive / rematch
+    j["archived"] = r.archived;
+    j["archiveError"] = r.archiveError;
+    j["archiveAttempts"] = r.archiveAttempts;
+    j["rematchRoomId"] = r.rematchRoomId;
+
+    // timestamps
+    j["idleElapsedMs"] = std::max<int64_t>(0, now - r.lastActivityMs);
+    j["createdElapsedMs"] = std::max<int64_t>(0, now - r.createdAtMs);
+    j["endedElapsedMs"] = (r.endedAtMs > 0) ? std::max<int64_t>(0, now - r.endedAtMs) : -1;
+    j["startedAtSec"] = r.startedAtSec;
+    j["endedAtSec"] = r.endedAtSec;
+
+    std::string err;
+    _store.upsertLiveRoom(r.id, j.dump(), err);
+}
+
+void GameRoomManager::saveLobbyMetaLocked()
+{
+    if (_restoring) {
+        return;
+    }
+    int64_t now = nowMs();
+    Json j;
+    j["roomCounter"] = _roomCounter;
+    j["lobbySeq"] = _lobbySeq;
+    j["lobbyEvictedUpToSeq"] = _lobbyEvictedUpToSeq;
+
+    Json evs = Json::array();
+    for (size_t i = 0; i < _lobbyEvents.size(); ++i) {
+        const LobbyEvent &ev = _lobbyEvents[i];
+        Json ej;
+        ej["seq"] = ev.seq;
+        ej["type"] = toString(ev.type);
+        ej["ageMs"] = std::max<int64_t>(0, now - ev.atMs);
+        ej["playerId"] = ev.playerId;
+        ej["handle"] = ev.handle;
+        ej["targetPlayerId"] = ev.targetPlayerId;
+        ej["text"] = ev.text;
+        ej["status"] = toString(ev.status);
+        ej["roomId"] = ev.roomId;
+        evs.push_back(ej);
+    }
+    j["lobbyEvents"] = evs;
+
+    Json assignments = Json::object();
+    for (std::map<int64_t, std::string>::const_iterator it =
+             _matchAssignments.begin();
+         it != _matchAssignments.end(); ++it) {
+        assignments[std::to_string(it->first)] = it->second;
+    }
+    j["matchAssignments"] = assignments;
+
+    std::vector<QueuedPlayerSnapshot> qSnap = _queue.snapshot();
+    Json qArr = Json::array();
+    for (size_t i = 0; i < qSnap.size(); ++i) {
+        const QueuedPlayerSnapshot &s = qSnap[i];
+        Json qj;
+        qj["playerId"] = s.playerId;
+        qj["rating"] = s.rating;
+        Json rs;
+        rs["mode"] = static_cast<int>(s.ruleset.mode);
+        rs["bases"] = static_cast<int>(s.ruleset.bases);
+        rs["useSuperProngs"] = s.ruleset.useSuperProngs;
+        rs["useEdgelessBoard"] = s.ruleset.useEdgelessBoard;
+        rs["initialMs"] = s.ruleset.initialMs;
+        rs["incrementMs"] = s.ruleset.incrementMs;
+        qj["ruleset"] = rs;
+        qj["waitedMs"] = s.waitedMs;
+        qArr.push_back(qj);
+    }
+    j["queue"] = qArr;
+
+    std::string err;
+    _store.setLiveMeta("lobby_state", j.dump(), err);
+}
+
+bool GameRoomManager::restoreFromStoreLocked()
+{
+    _restoring = true;
+    struct RestoringGuard {
+        bool &flag;
+        ~RestoringGuard() { flag = false; }
+    } guard{_restoring};
+
+    _rooms.clear();
+    _seatRoom.clear();
+    _observing.clear();
+
+    int64_t restoreNow = nowMs();
+    int64_t curWallSec = wallSec();
+
+    std::vector<LiveRoomRow> rows;
+    std::string err;
+    if (!_store.listLiveRooms(rows, err)) {
+        return false;
+    }
+
+    for (size_t idx = 0; idx < rows.size(); ++idx) {
+        const LiveRoomRow &row = rows[idx];
+        // 24-hour stale expiration
+        bool eligibleForStaleCheck = _customWallClock || (row.updatedAt >= 1000000000LL);
+        if (eligibleForStaleCheck && row.updatedAt > 0 && curWallSec > row.updatedAt &&
+            (curWallSec - row.updatedAt) > kMaxLiveRoomOfflineSec) {
+            _store.deleteLiveRoom(row.roomId, err);
+            continue;
+        }
+
+        Json j;
+        try {
+            j = Json::parse(row.stateJson, nullptr, false);
+            if (j.is_discarded() || !j.is_object()) {
+                _store.deleteLiveRoom(row.roomId, err);
+                continue;
+            }
+        } catch (...) {
+            _store.deleteLiveRoom(row.roomId, err);
+            continue;
+        }
+
+        try {
+            std::unique_ptr<Room> r(new Room());
+            r->id = j.value("id", row.roomId);
+            if (r->id.empty()) {
+                _store.deleteLiveRoom(row.roomId, err);
+                continue;
+            }
+
+            // config must exist and be an object
+            if (!j.contains("config") || !j["config"].is_object()) {
+                _store.deleteLiveRoom(row.roomId, err);
+                continue;
+            }
+            const Json &cfg = j["config"];
+                r->config.mode = static_cast<OctiGameMode>(
+                    cfg.value("mode", static_cast<int>(GAME_MODE_2)));
+                r->config.bases = static_cast<OctiGameBases>(
+                    cfg.value("bases", static_cast<int>(GAME_BASES_3)));
+                r->config.useSuperProngs = cfg.value("useSuperProngs", false);
+                r->config.useEdgelessBoard = cfg.value("useEdgelessBoard", false);
+                if (cfg.contains("timeControl") && cfg["timeControl"].is_object()) {
+                    const Json &tc = cfg["timeControl"];
+                    r->config.timeControl.enabled = tc.value("enabled", false);
+                    r->config.timeControl.initialMs = tc.value("initialMs", 0LL);
+                    r->config.timeControl.incrementMs = tc.value("incrementMs", 0LL);
+                    r->config.timeControl.disconnectGraceMs =
+                        tc.value("disconnectGraceMs", 90000LL);
+                }
+                r->config.rated = cfg.value("rated", true);
+                r->config.allowTakeback = cfg.value("allowTakeback", false);
+                parseObserverPolicy(cfg.value("observerPolicy", "OPEN"),
+                                    r->config.observerPolicy);
+                parseVoicePolicy(cfg.value("voicePolicy", "PLAYERS_ONLY"),
+                                 r->config.voicePolicy);
+                r->config.passcode = cfg.value("passcode", "");
+
+            std::string phaseStr = j.value("phase", "WAITING_FOR_PLAYERS");
+            if (phaseStr == "IN_PROGRESS") {
+                r->phase = RoomPhase::IN_PROGRESS;
+            } else if (phaseStr == "FINISHED") {
+                r->phase = RoomPhase::FINISHED;
+            } else {
+                r->phase = RoomPhase::WAITING_FOR_PLAYERS;
+            }
+
+            r->hostId = j.value("hostId", 0LL);
+            if (r->hostId <= 0) {
+                _store.deleteLiveRoom(row.roomId, err);
+                continue;
+            }
+            r->seatCount = j.value("seatCount", seatCountOf(r->config.mode));
+
+            // seats
+            if (j.contains("seats") && j["seats"].is_array()) {
+                for (size_t si = 0; si < j["seats"].size(); ++si) {
+                    const Json &sj = j["seats"][si];
+                    int s = sj.value("seat", 0);
+                    if (s >= 1 && s <= 4) {
+                        r->seatPlayer[s] = sj.value("player", 0LL);
+                        r->seatHandle[s] = sj.value("handle", "");
+                        r->seatRating[s] = sj.value("rating", 0);
+                        r->seatConnected[s] = sj.value("connected", true);
+                        int64_t disconnectedForMs = sj.value("disconnectedForMs", 0LL);
+                        if (!r->seatConnected[s]) {
+                            r->seatDisconnectedAt[s] =
+                                restoreNow - std::max<int64_t>(0, disconnectedForMs);
+                        } else {
+                            r->seatDisconnectedAt[s] = 0;
+                        }
+                        r->clockMs[s] = sj.value("clockMs", 0LL);
+                    }
+                }
+            }
+
+            // clocks / turn
+            int64_t effTurnCarryMs = j.value("effectiveTurnCarryMs", 0LL);
+            r->turnCarryMs = effTurnCarryMs;
+            r->paused = j.value("paused", false);
+            r->turnStartedMs =
+                (r->phase == RoomPhase::IN_PROGRESS && !r->paused) ? restoreNow : 0;
+
+            // plies
+            if (j.contains("plies") && j["plies"].is_array()) {
+                for (size_t pi = 0; pi < j["plies"].size(); ++pi) {
+                    const Json &pj = j["plies"][pi];
+                    Room::Ply ply;
+                    ply.seat = pj.value("seat", 0);
+                    ply.move = pj.value("move", "");
+                    ply.clockBeforeMs = pj.value("clockBeforeMs", 0LL);
+                    ply.clockAfterMs = pj.value("clockAfterMs", 0LL);
+                    ply.elapsedMs = pj.value("elapsedMs", 0LL);
+                    r->plies.push_back(ply);
+                }
+            }
+
+            // board reconstruction
+            r->board.reset(new OctiBoard(r->config.mode, r->config.useSuperProngs,
+                                         r->config.useEdgelessBoard, r->config.bases));
+            if (r->phase != RoomPhase::WAITING_FOR_PLAYERS) {
+                OctiGame *g = r->board->getGame();
+                g->start(PLAYER_A);
+                bool replayFailed = false;
+                for (size_t pidx = 0; pidx < r->plies.size(); ++pidx) {
+                    try {
+                        g->move(static_cast<OctiPlayer>(r->plies[pidx].seat),
+                                r->plies[pidx].move);
+                    } catch (...) {
+                        replayFailed = true;
+                        break;
+                    }
+                }
+                std::string fen = j.value("fen", "");
+                if (replayFailed && !fen.empty()) {
+                    try {
+                        r->board->fromPositionString(fen);
+                    } catch (...) {}
+                }
+                if (r->phase == RoomPhase::FINISHED && !g->isGameOver()) {
+                    int wSeat = j.value("winnerSeat", 0);
+                    if (wSeat > 0) {
+                        OctiPlayer loser = (wSeat == 1) ? PLAYER_B : PLAYER_A;
+                        try {
+                            g->resign(loser);
+                        } catch (...) {}
+                    }
+                }
+            }
+
+            // observers
+            if (j.contains("observers") && j["observers"].is_array()) {
+                for (size_t oi = 0; oi < j["observers"].size(); ++oi) {
+                    int64_t pid = j["observers"][oi].get<int64_t>();
+                    if (pid > 0) {
+                        r->observers.insert(pid);
+                    }
+                }
+            }
+
+            // banned
+            if (j.contains("banned") && j["banned"].is_array()) {
+                for (size_t bi = 0; bi < j["banned"].size(); ++bi) {
+                    int64_t pid = j["banned"][bi].get<int64_t>();
+                    if (pid > 0) {
+                        r->banned.insert(pid);
+                    }
+                }
+            }
+
+            // muted
+            if (j.contains("muted") && j["muted"].is_object()) {
+                for (Json::const_iterator it = j["muted"].begin();
+                     it != j["muted"].end(); ++it) {
+                    int64_t pid = std::stoll(it.key());
+                    Room::Mute m;
+                    m.chat = it.value().value("chat", false);
+                    m.voice = it.value().value("voice", false);
+                    r->muted[pid] = m;
+                }
+            }
+
+            // voicePeers
+            if (j.contains("voicePeers") && j["voicePeers"].is_object()) {
+                for (Json::const_iterator it = j["voicePeers"].begin();
+                     it != j["voicePeers"].end(); ++it) {
+                    int64_t pid = std::stoll(it.key());
+                    r->voicePeers[pid] = it.value().get<bool>();
+                }
+            }
+
+            // proposals
+            if (j.contains("proposals") && j["proposals"].is_array()) {
+                for (size_t pri = 0; pri < j["proposals"].size(); ++pri) {
+                    const Json &pj = j["proposals"][pri];
+                    Room::Proposal prop;
+                    parseProposalType(pj.value("type", "DRAW_OFFER"), prop.type);
+                    prop.proposerId = pj.value("proposerId", 0LL);
+                    if (pj.contains("accepted") && pj["accepted"].is_array()) {
+                        for (size_t ai = 0; ai < pj["accepted"].size(); ++ai) {
+                            prop.accepted.insert(pj["accepted"][ai].get<int64_t>());
+                        }
+                    }
+                    int64_t remainingTtlMs = pj.value("remainingTtlMs", 60000LL);
+                    prop.expiresAtMs = restoreNow + std::max<int64_t>(1, remainingTtlMs);
+                    r->proposals.push_back(prop);
+                }
+            }
+
+            // events
+            r->nextSeq = j.value("nextSeq", 1LL);
+            r->evictedUpToSeq = j.value("evictedUpToSeq", 0LL);
+            if (j.contains("events") && j["events"].is_array()) {
+                for (size_t ei = 0; ei < j["events"].size(); ++ei) {
+                    const Json &ej = j["events"][ei];
+                    RoomEvent ev;
+                    ev.seq = ej.value("seq", 0LL);
+                    std::string tStr = ej.value("type", "ROOM_CREATED");
+                    for (int ti = 0;
+                         ti <= static_cast<int>(RoomEventType::PLAYER_RECONNECTED);
+                         ++ti) {
+                        if (toString(static_cast<RoomEventType>(ti)) == tStr) {
+                            ev.type = static_cast<RoomEventType>(ti);
+                            break;
+                        }
+                    }
+                    int64_t ageMs = ej.value("ageMs", 0LL);
+                    ev.atMs = restoreNow - std::max<int64_t>(0, ageMs);
+                    ev.playerId = ej.value("playerId", 0LL);
+                    ev.handle = ej.value("handle", "");
+                    ev.targetPlayerId = ej.value("targetPlayerId", 0LL);
+                    ev.seat = ej.value("seat", 0);
+                    parseChatScope(ej.value("scope", "ALL"), ev.scope);
+                    ev.ply = ej.value("ply", 0);
+                    ev.clockMs = ej.value("clockMs", 0LL);
+                    ev.elapsedMs = ej.value("elapsedMs", 0LL);
+                    ev.text = ej.value("text", "");
+                    ev.detail = ej.value("detail", "");
+                    r->events.push_back(ev);
+                }
+            }
+
+            // outcome
+            r->result = j.value("result", "");
+            r->termination = j.value("termination", "");
+            r->winnerSeat = j.value("winnerSeat", 0);
+
+            // archive / rematch
+            r->archived = j.value("archived", false);
+            r->archiveError = j.value("archiveError", "");
+            r->archiveAttempts = j.value("archiveAttempts", 0);
+            r->rematchRoomId = j.value("rematchRoomId", "");
+
+            // timestamps
+            int64_t idleElapsedMs = j.value("idleElapsedMs", 0LL);
+            int64_t createdElapsedMs = j.value("createdElapsedMs", 0LL);
+            int64_t endedElapsedMs = j.value("endedElapsedMs", -1LL);
+            r->lastActivityMs = restoreNow - std::max<int64_t>(0, idleElapsedMs);
+            r->createdAtMs = restoreNow - std::max<int64_t>(0, createdElapsedMs);
+            r->endedAtMs = (endedElapsedMs >= 0) ? (restoreNow - endedElapsedMs) : 0;
+            r->startedAtSec = j.value("startedAtSec", 0LL);
+            r->endedAtSec = j.value("endedAtSec", 0LL);
+
+            // Link presence and seat mapping
+            if (r->hostId > 0) {
+                ensurePlayerLocked(r->hostId);
+            }
+            for (int s = 1; s <= r->seatCount; ++s) {
+                int64_t pid = r->seatPlayer[s];
+                if (pid > 0) {
+                    ensurePlayerLocked(pid);
+                    if (r->phase != RoomPhase::FINISHED) {
+                        _seatRoom[pid] = r->id;
+                        if (r->seatConnected[s]) {
+                            _players[pid].online = true;
+                        }
+                    }
+                }
+            }
+            for (std::set<int64_t>::const_iterator oit = r->observers.begin();
+                 oit != r->observers.end(); ++oit) {
+                ensurePlayerLocked(*oit);
+                if (r->phase != RoomPhase::FINISHED) {
+                    _observing[*oit].insert(r->id);
+                    _players[*oit].online = true;
+                }
+            }
+
+            _rooms[r->id] = std::move(r);
+        } catch (...) {
+            _store.deleteLiveRoom(row.roomId, err);
+            continue;
+        }
+    }
+
+    // Restore live_meta "lobby_state"
+    std::string metaJson;
+    if (_store.getLiveMeta("lobby_state", metaJson, err) && !metaJson.empty()) {
+        try {
+            Json mj = Json::parse(metaJson, nullptr, false);
+            if (!mj.is_discarded() && mj.is_object()) {
+                _roomCounter = mj.value("roomCounter", 0ULL);
+                _lobbySeq = mj.value("lobbySeq", 0LL);
+                _lobbyEvictedUpToSeq = mj.value("lobbyEvictedUpToSeq", 0LL);
+
+                _lobbyEvents.clear();
+                _lobbyChatCount = 0;
+                if (mj.contains("lobbyEvents") && mj["lobbyEvents"].is_array()) {
+                    for (size_t lei = 0; lei < mj["lobbyEvents"].size(); ++lei) {
+                        const Json &ej = mj["lobbyEvents"][lei];
+                        LobbyEvent ev;
+                        ev.seq = ej.value("seq", 0LL);
+                        std::string tStr = ej.value("type", "LOBBY_CHAT");
+                        if (tStr == "PRESENCE") ev.type = LobbyEventType::PRESENCE;
+                        else if (tStr == "TABLE_UPDATED") ev.type = LobbyEventType::TABLE_UPDATED;
+                        else if (tStr == "TABLE_CLOSED") ev.type = LobbyEventType::TABLE_CLOSED;
+                        else if (tStr == "MATCH_FOUND") ev.type = LobbyEventType::MATCH_FOUND;
+                        else ev.type = LobbyEventType::LOBBY_CHAT;
+
+                        int64_t ageMs = ej.value("ageMs", 0LL);
+                        ev.atMs = restoreNow - std::max<int64_t>(0, ageMs);
+                        ev.playerId = ej.value("playerId", 0LL);
+                        ev.handle = ej.value("handle", "");
+                        ev.targetPlayerId = ej.value("targetPlayerId", 0LL);
+                        ev.text = ej.value("text", "");
+                        std::string stStr = ej.value("status", "IN_LOBBY");
+                        if (stStr == "OFFLINE") ev.status = PresenceStatus::OFFLINE;
+                        else if (stStr == "AT_TABLE") ev.status = PresenceStatus::AT_TABLE;
+                        else if (stStr == "PLAYING") ev.status = PresenceStatus::PLAYING;
+                        else if (stStr == "OBSERVING") ev.status = PresenceStatus::OBSERVING;
+                        else ev.status = PresenceStatus::IN_LOBBY;
+                        ev.roomId = ej.value("roomId", "");
+
+                        if (ev.type == LobbyEventType::LOBBY_CHAT) {
+                            ++_lobbyChatCount;
+                        }
+                        _lobbyEvents.push_back(ev);
+                    }
+                }
+
+                _matchAssignments.clear();
+                if (mj.contains("matchAssignments") && mj["matchAssignments"].is_object()) {
+                    for (Json::const_iterator it = mj["matchAssignments"].begin();
+                         it != mj["matchAssignments"].end(); ++it) {
+                        int64_t pid = std::stoll(it.key());
+                        std::string rid = it.value().get<std::string>();
+                        if (_rooms.count(rid) != 0) {
+                            _matchAssignments[pid] = rid;
+                        }
+                    }
+                }
+
+                if (mj.contains("queue") && mj["queue"].is_array()) {
+                    std::vector<QueuedPlayerSnapshot> qEntries;
+                    for (size_t qi = 0; qi < mj["queue"].size(); ++qi) {
+                        const Json &qj = mj["queue"][qi];
+                        QueuedPlayerSnapshot s;
+                        s.playerId = qj.value("playerId", 0LL);
+                        s.rating = qj.value("rating", 1200);
+                        if (qj.contains("ruleset") && qj["ruleset"].is_object()) {
+                            const Json &rs = qj["ruleset"];
+                            s.ruleset.mode = static_cast<OctiGameMode>(
+                                rs.value("mode", static_cast<int>(GAME_MODE_2)));
+                            s.ruleset.bases = static_cast<OctiGameBases>(
+                                rs.value("bases", static_cast<int>(GAME_BASES_3)));
+                            s.ruleset.useSuperProngs = rs.value("useSuperProngs", false);
+                            s.ruleset.useEdgelessBoard = rs.value("useEdgelessBoard", false);
+                            s.ruleset.initialMs = rs.value("initialMs", 0LL);
+                            s.ruleset.incrementMs = rs.value("incrementMs", 0LL);
+                        }
+                        s.waitedMs = qj.value("waitedMs", 0LL);
+                        qEntries.push_back(s);
+                    }
+                    _queue.restore(qEntries);
+                }
+            }
+        } catch (...) {}
+    }
+
+    return true;
 }
 
 } // namespace octi

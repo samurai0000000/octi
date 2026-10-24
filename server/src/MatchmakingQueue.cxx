@@ -310,6 +310,57 @@ std::vector<MatchGroup> MatchmakingQueue::findMatches()
     return groups;
 }
 
+std::vector<QueuedPlayerSnapshot> MatchmakingQueue::snapshot() const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    int64_t now = nowLocked();
+    std::vector<QueuedPlayerSnapshot> out;
+    out.reserve(_entries.size());
+    std::vector<const Entry *> sorted;
+    sorted.reserve(_entries.size());
+    for (std::map<int64_t, Entry>::const_iterator it = _entries.begin();
+         it != _entries.end(); ++it) {
+        sorted.push_back(&it->second);
+    }
+    std::sort(sorted.begin(), sorted.end(),
+              [](const Entry *a, const Entry *b) { return a->order < b->order; });
+    for (size_t i = 0; i < sorted.size(); ++i) {
+        const Entry &e = *sorted[i];
+        QueuedPlayerSnapshot s;
+        s.playerId = e.playerId;
+        s.rating = e.rating;
+        s.ruleset = e.ruleset;
+        s.waitedMs = std::max<int64_t>(0, now - e.enqueuedAtMs);
+        out.push_back(s);
+    }
+    return out;
+}
+
+void MatchmakingQueue::restore(const std::vector<QueuedPlayerSnapshot> &entries)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    _entries.clear();
+    _nextOrder = 0;
+    int64_t now = nowLocked();
+    for (size_t i = 0; i < entries.size(); ++i) {
+        const QueuedPlayerSnapshot &s = entries[i];
+        MatchRuleset rs = s.ruleset.normalized();
+        if (s.playerId <= 0 || !rs.isValid() || s.rating < 0) {
+            continue;
+        }
+        if (_entries.count(s.playerId) != 0 || _entries.size() >= kMaxQueueSize) {
+            continue;
+        }
+        Entry e;
+        e.playerId = s.playerId;
+        e.rating = s.rating;
+        e.ruleset = rs;
+        e.enqueuedAtMs = now - std::max<int64_t>(0, s.waitedMs);
+        e.order = _nextOrder++;
+        _entries[s.playerId] = e;
+    }
+}
+
 } // namespace octi
 
 /*

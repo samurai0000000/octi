@@ -1339,7 +1339,7 @@ bool OctiHttpServer::Impl::streamStep(StreamState &st,
 {
     const int64_t now = steadyMs();
     if (stopping.load()) {
-        putText(sink, "event: shutdown\ndata: {}\n\n");
+        putText(sink, "event: reconnect\ndata: {}\n\n");
         sink.done();
         return true;
     }
@@ -1397,7 +1397,7 @@ bool OctiHttpServer::Impl::streamStep(StreamState &st,
     }
     waitWake(cfg.ssePollMs);
     if (stopping.load()) {
-        putText(sink, "event: shutdown\ndata: {}\n\n");
+        putText(sink, "event: reconnect\ndata: {}\n\n");
         sink.done();
         return true;
     }
@@ -1502,6 +1502,8 @@ void OctiHttpServer::Impl::handleHealth(const Request &, Response &res)
     Json j;
     j["status"] = "ok";
     j["version"] = OctiCore::versionString();
+    j["protocol_version"] = cfg.protocolVersion;
+    j["min_protocol_version"] = cfg.minProtocolVersion;
     j["uptime_sec"] = std::max<int64_t>(0, epochSec() - startedAtSec);
     j["active_tables"] = static_cast<int64_t>(rooms.roomCount());
     j["online_players"] = static_cast<int64_t>(rooms.onlinePlayerCount());
@@ -2761,7 +2763,50 @@ void OctiHttpServer::Impl::registerRoutes()
      * multipart...) is refused before a single body byte is consumed.
      */
     server.set_pre_routing_handler(
-        [](const Request &rq, Response &rs) -> httplib::Server::HandlerResponse {
+        [this](const Request &rq, Response &rs) -> httplib::Server::HandlerResponse {
+            if (rq.path != "/api/v1/health" &&
+                (rq.path == "/api/v1" || rq.path.rfind("/api/v1/", 0) == 0)) {
+                int clientProto = 1;
+                if (rq.has_header("X-Octi-Protocol-Version")) {
+                    std::string val = rq.get_header_value("X-Octi-Protocol-Version");
+                    if (val.empty()) {
+                        sendError(rs, 400, "INVALID_PROTOCOL_VERSION",
+                                  "invalid X-Octi-Protocol-Version header");
+                        return httplib::Server::HandlerResponse::Handled;
+                    }
+                    for (size_t i = 0; i < val.size(); ++i) {
+                        if (val[i] < '0' || val[i] > '9') {
+                            sendError(rs, 400, "INVALID_PROTOCOL_VERSION",
+                                      "invalid X-Octi-Protocol-Version header");
+                            return httplib::Server::HandlerResponse::Handled;
+                        }
+                    }
+                    try {
+                        long long v = std::stoll(val);
+                        if (v < 1 || v > 1000000) {
+                            sendError(rs, 400, "INVALID_PROTOCOL_VERSION",
+                                      "invalid X-Octi-Protocol-Version header");
+                            return httplib::Server::HandlerResponse::Handled;
+                        }
+                        clientProto = static_cast<int>(v);
+                    } catch (...) {
+                        sendError(rs, 400, "INVALID_PROTOCOL_VERSION",
+                                  "invalid X-Octi-Protocol-Version header");
+                        return httplib::Server::HandlerResponse::Handled;
+                    }
+                }
+                if (clientProto < cfg.minProtocolVersion) {
+                    Json j;
+                    j["error"] = "UPGRADE_REQUIRED";
+                    j["message"] =
+                        "client protocol version is outdated; please upgrade OCTI";
+                    j["protocol_version"] = cfg.protocolVersion;
+                    j["min_protocol_version"] = cfg.minProtocolVersion;
+                    sendJson(rs, 426, j);
+                    return httplib::Server::HandlerResponse::Handled;
+                }
+            }
+
             if (rq.method == "GET" || rq.method == "HEAD" ||
                 rq.method == "OPTIONS") {
                 return httplib::Server::HandlerResponse::Unhandled;

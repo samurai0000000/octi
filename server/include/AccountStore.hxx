@@ -172,6 +172,12 @@ struct ArchiveFilter {
     int offset = 0;                     // clamped to >= 0
 };
 
+struct LiveRoomRow {
+    std::string roomId;
+    std::string stateJson;
+    int64_t updatedAt = 0;
+};
+
 class AccountStore {
 public:
     static constexpr int kMinHandleLength = 3;
@@ -250,6 +256,16 @@ public:
     bool listArchivedGames(const ArchiveFilter &filter,
                            std::vector<GameRecord> &out,
                            int64_t *total = nullptr);
+
+    /* Live room and lobby meta persistence. */
+    bool upsertLiveRoom(const std::string &roomId, const std::string &stateJson,
+                        std::string &error);
+    bool deleteLiveRoom(const std::string &roomId, std::string &error);
+    bool listLiveRooms(std::vector<LiveRoomRow> &out, std::string &error);
+    bool setLiveMeta(const std::string &metaKey, const std::string &metaJson,
+                     std::string &error);
+    bool getLiveMeta(const std::string &metaKey, std::string &metaJson,
+                     std::string &error);
 
 private:
     int64_t nowSec() const;

@@ -104,7 +104,17 @@ const char kSchemaSql[] =
     ");"
     "CREATE INDEX IF NOT EXISTS idx_games_ended_at ON games(ended_at DESC);"
     "CREATE INDEX IF NOT EXISTS idx_games_p1 ON games(p1_player_id);"
-    "CREATE INDEX IF NOT EXISTS idx_games_p2 ON games(p2_player_id);";
+    "CREATE INDEX IF NOT EXISTS idx_games_p2 ON games(p2_player_id);"
+    "CREATE TABLE IF NOT EXISTS live_rooms ("
+    " room_id TEXT PRIMARY KEY,"
+    " state_json TEXT NOT NULL,"
+    " updated_at INTEGER NOT NULL"
+    ");"
+    "CREATE TABLE IF NOT EXISTS live_meta ("
+    " meta_key TEXT PRIMARY KEY,"
+    " meta_json TEXT NOT NULL,"
+    " updated_at INTEGER NOT NULL"
+    ");";
 
 const char kProfileCols[] =
     "player_id, uuid, handle, display_name, avatar_url, elo_2p, elo_4p,"
@@ -1646,6 +1656,139 @@ bool AccountStore::listArchivedGames(const ArchiveFilter &filter,
         out.push_back(g);
     }
     return rc == SQLITE_DONE;
+}
+
+bool AccountStore::upsertLiveRoom(const std::string &roomId,
+                                  const std::string &stateJson,
+                                  std::string &error)
+{
+    if (roomId.empty() || roomId.size() > 64) {
+        error = "invalid room id";
+        return false;
+    }
+    if (stateJson.empty() || stateJson.size() > kMaxTranscriptBytes) {
+        error = "invalid state json";
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        error = "database is closed";
+        return false;
+    }
+    Stmt s(_db, "INSERT OR REPLACE INTO live_rooms(room_id, state_json, updated_at)"
+                " VALUES(?1, ?2, ?3)");
+    s.bindText(1, roomId);
+    s.bindText(2, stateJson);
+    s.bindInt(3, nowSec());
+    if (s.step() != SQLITE_DONE) {
+        error = sqlite3_errmsg(_db);
+        return false;
+    }
+    return true;
+}
+
+bool AccountStore::deleteLiveRoom(const std::string &roomId,
+                                  std::string &error)
+{
+    if (roomId.empty() || roomId.size() > 64) {
+        error = "invalid room id";
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        error = "database is closed";
+        return false;
+    }
+    Stmt s(_db, "DELETE FROM live_rooms WHERE room_id = ?1");
+    s.bindText(1, roomId);
+    if (s.step() != SQLITE_DONE) {
+        error = sqlite3_errmsg(_db);
+        return false;
+    }
+    return true;
+}
+
+bool AccountStore::listLiveRooms(std::vector<LiveRoomRow> &out,
+                                 std::string &error)
+{
+    out.clear();
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        error = "database is closed";
+        return false;
+    }
+    Stmt s(_db, "SELECT room_id, state_json, updated_at FROM live_rooms"
+                " ORDER BY room_id ASC");
+    int rc;
+    while ((rc = s.step()) == SQLITE_ROW) {
+        LiveRoomRow r;
+        r.roomId = s.colText(0);
+        r.stateJson = s.colText(1);
+        r.updatedAt = s.colInt(2);
+        out.push_back(std::move(r));
+    }
+    if (rc != SQLITE_DONE) {
+        error = sqlite3_errmsg(_db);
+        return false;
+    }
+    return true;
+}
+
+bool AccountStore::setLiveMeta(const std::string &metaKey,
+                               const std::string &metaJson,
+                               std::string &error)
+{
+    if (metaKey.empty() || metaKey.size() > 64) {
+        error = "invalid meta key";
+        return false;
+    }
+    if (metaJson.empty() || metaJson.size() > kMaxTranscriptBytes) {
+        error = "invalid meta json";
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        error = "database is closed";
+        return false;
+    }
+    Stmt s(_db, "INSERT OR REPLACE INTO live_meta(meta_key, meta_json, updated_at)"
+                " VALUES(?1, ?2, ?3)");
+    s.bindText(1, metaKey);
+    s.bindText(2, metaJson);
+    s.bindInt(3, nowSec());
+    if (s.step() != SQLITE_DONE) {
+        error = sqlite3_errmsg(_db);
+        return false;
+    }
+    return true;
+}
+
+bool AccountStore::getLiveMeta(const std::string &metaKey,
+                               std::string &metaJson,
+                               std::string &error)
+{
+    if (metaKey.empty() || metaKey.size() > 64) {
+        error = "invalid meta key";
+        return false;
+    }
+    metaJson.clear();
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        error = "database is closed";
+        return false;
+    }
+    Stmt s(_db, "SELECT meta_json FROM live_meta WHERE meta_key = ?1");
+    s.bindText(1, metaKey);
+    int rc = s.step();
+    if (rc == SQLITE_ROW) {
+        metaJson = s.colText(0);
+        return true;
+    }
+    if (rc == SQLITE_DONE) {
+        return true;
+    }
+    error = sqlite3_errmsg(_db);
+    return false;
 }
 
 } // namespace octi

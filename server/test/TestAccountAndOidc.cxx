@@ -2744,6 +2744,109 @@ TEST(AccountStoreTest, RapidCheckArbitraryNamesYieldValidUniqueHandles)
     CHECK_TRUE(passed);
 }
 
+TEST(AccountStoreTest, LiveRoomCrudAndListing)
+{
+    std::string err;
+    std::vector<octi::LiveRoomRow> rooms;
+    CHECK_TRUE(store->listLiveRooms(rooms, err));
+    LONGS_EQUAL(0, rooms.size());
+
+    clockNow = 1000;
+    CHECK_TRUE(store->upsertLiveRoom("room-c", "{\"state\":\"c\"}", err));
+    CHECK_TRUE(store->upsertLiveRoom("room-a", "{\"state\":\"a\"}", err));
+    CHECK_TRUE(store->upsertLiveRoom("room-b", "{\"state\":\"b\"}", err));
+
+    CHECK_TRUE(store->listLiveRooms(rooms, err));
+    LONGS_EQUAL(3, rooms.size());
+    STRCMP_EQUAL("room-a", rooms[0].roomId.c_str());
+    STRCMP_EQUAL("{\"state\":\"a\"}", rooms[0].stateJson.c_str());
+    LONGS_EQUAL(1000, rooms[0].updatedAt);
+    STRCMP_EQUAL("room-b", rooms[1].roomId.c_str());
+    STRCMP_EQUAL("room-c", rooms[2].roomId.c_str());
+
+    /* Updating room-b with a later timestamp overwrites existing row */
+    clockNow = 2500;
+    CHECK_TRUE(store->upsertLiveRoom("room-b", "{\"state\":\"b2\"}", err));
+    CHECK_TRUE(store->listLiveRooms(rooms, err));
+    LONGS_EQUAL(3, rooms.size());
+    STRCMP_EQUAL("room-b", rooms[1].roomId.c_str());
+    STRCMP_EQUAL("{\"state\":\"b2\"}", rooms[1].stateJson.c_str());
+    LONGS_EQUAL(2500, rooms[1].updatedAt);
+
+    /* Deletion */
+    CHECK_TRUE(store->deleteLiveRoom("room-a", err));
+    CHECK_TRUE(store->listLiveRooms(rooms, err));
+    LONGS_EQUAL(2, rooms.size());
+    STRCMP_EQUAL("room-b", rooms[0].roomId.c_str());
+    STRCMP_EQUAL("room-c", rooms[1].roomId.c_str());
+
+    /* Idempotent delete on non-existent room returns true */
+    CHECK_TRUE(store->deleteLiveRoom("room-nonexistent", err));
+    CHECK_TRUE(store->listLiveRooms(rooms, err));
+    LONGS_EQUAL(2, rooms.size());
+}
+
+TEST(AccountStoreTest, LiveMetaSetAndGet)
+{
+    std::string err;
+    std::string meta;
+
+    /* Non-existent key returns true with empty string */
+    CHECK_TRUE(store->getLiveMeta("lobby_state", meta, err));
+    STRCMP_EQUAL("", meta.c_str());
+
+    /* Set and get */
+    CHECK_TRUE(store->setLiveMeta("lobby_state", "{\"seq\":42}", err));
+    CHECK_TRUE(store->getLiveMeta("lobby_state", meta, err));
+    STRCMP_EQUAL("{\"seq\":42}", meta.c_str());
+
+    /* Overwrite */
+    CHECK_TRUE(store->setLiveMeta("lobby_state", "{\"seq\":43}", err));
+    CHECK_TRUE(store->getLiveMeta("lobby_state", meta, err));
+    STRCMP_EQUAL("{\"seq\":43}", meta.c_str());
+}
+
+TEST(AccountStoreTest, LivePersistenceBoundaryAndFaults)
+{
+    std::string err;
+
+    /* Boundary limits */
+    std::string valid64Key(64, 'k');
+    std::string tooLongKey(65, 'k');
+    CHECK_TRUE(store->upsertLiveRoom(valid64Key, "{}", err));
+    CHECK_FALSE(store->upsertLiveRoom(tooLongKey, "{}", err));
+    CHECK_FALSE(store->upsertLiveRoom("", "{}", err));
+    CHECK_FALSE(store->upsertLiveRoom("valid-id", "", err));
+
+    std::string maxJson(1024 * 1024, 'x');
+    CHECK_TRUE(store->upsertLiveRoom("max-room", maxJson, err));
+    std::string oversizedJson((1024 * 1024) + 1, 'x');
+    CHECK_FALSE(store->upsertLiveRoom("oversized-room", oversizedJson, err));
+
+    CHECK_FALSE(store->deleteLiveRoom("", err));
+    CHECK_FALSE(store->deleteLiveRoom(tooLongKey, err));
+
+    /* Meta boundaries */
+    CHECK_TRUE(store->setLiveMeta(valid64Key, "{}", err));
+    CHECK_FALSE(store->setLiveMeta(tooLongKey, "{}", err));
+    CHECK_FALSE(store->setLiveMeta("", "{}", err));
+    CHECK_FALSE(store->setLiveMeta("valid-meta", "", err));
+    CHECK_TRUE(store->setLiveMeta("max-meta", maxJson, err));
+    CHECK_FALSE(store->setLiveMeta("oversized-meta", oversizedJson, err));
+
+    CHECK_FALSE(store->getLiveMeta("", maxJson, err));
+    CHECK_FALSE(store->getLiveMeta(tooLongKey, maxJson, err));
+
+    /* Fault: closed database */
+    AccountStore closedStore;
+    std::vector<octi::LiveRoomRow> rows;
+    CHECK_FALSE(closedStore.upsertLiveRoom("r", "{}", err));
+    CHECK_FALSE(closedStore.deleteLiveRoom("r", err));
+    CHECK_FALSE(closedStore.listLiveRooms(rows, err));
+    CHECK_FALSE(closedStore.setLiveMeta("m", "{}", err));
+    CHECK_FALSE(closedStore.getLiveMeta("m", maxJson, err));
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

@@ -416,12 +416,19 @@ public:
     static constexpr size_t kMaxReasonBytes = 200;
     static constexpr int64_t kMaxClockSettingMs = 4LL * 3600 * 1000;
     static constexpr int64_t kMaxGraceMs = 10LL * 60 * 1000;
+    static constexpr int64_t kMaxLiveRoomOfflineSec = 24LL * 3600;
 
     explicit GameRoomManager(AccountStore &store);
     ~GameRoomManager();
 
     GameRoomManager(const GameRoomManager &) = delete;
     GameRoomManager &operator=(const GameRoomManager &) = delete;
+
+    /* Flush all live rooms, lobby state, and matchmaking queue to AccountStore. */
+    bool checkpointToStore();
+
+    /* Reload live rooms, lobby state, and matchmaking queue from AccountStore. */
+    bool restoreFromStore();
 
     /* Monotonic milliseconds (clocks, deadlines); default steady_clock. */
     void setClock(std::function<int64_t()> nowMs);
@@ -585,10 +592,18 @@ private:
     void fillView(const Room &r, int64_t viewerId, int64_t now,
                   RoomView &out) const;
 
+    /* Live state persistence */
+    bool checkpointToStoreLocked();
+    bool restoreFromStoreLocked();
+    void saveRoomLocked(const Room &r);
+    void saveLobbyMetaLocked();
+
     mutable std::mutex _mutex;
     AccountStore &_store;
     std::function<int64_t()> _clock;
     std::function<int64_t()> _wallClock;
+    bool _customWallClock;
+    bool _restoring;
     RoomLimits _limits;
     MatchmakingQueue _queue;
 

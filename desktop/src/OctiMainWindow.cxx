@@ -1072,6 +1072,9 @@ ApiResult<CreateTableResponse> OctiMainWindow::createAndEnterOnlineTable(
         CreateTableDialog::normalizeVoicePolicy(req.voicePolicy);
     res = _netClient->createTable(normalized);
     if (!res.ok) {
+        if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
+            showProtocolUpgradeRequired(res.errorMessage);
+        }
         return res;
     }
 
@@ -1111,6 +1114,9 @@ ApiResult<JoinTableResponse> OctiMainWindow::joinAndEnterOnlineTable(
     }
     res = _netClient->joinTable(roomId, seat, passcode);
     if (!res.ok) {
+        if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
+            showProtocolUpgradeRequired(res.errorMessage);
+        }
         return res;
     }
 
@@ -1149,6 +1155,9 @@ ApiResult<bool> OctiMainWindow::observeOnlineTable(
     }
     res = _netClient->observeTable(roomId, passcode);
     if (!res.ok) {
+        if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
+            showProtocolUpgradeRequired(res.errorMessage);
+        }
         return res;
     }
 
@@ -1221,6 +1230,9 @@ bool OctiMainWindow::refreshOnlineGameView()
     }
     auto res = _netClient->fetchGameView(_onlineRoomId);
     if (!res.ok) {
+        if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
+            showProtocolUpgradeRequired(res.errorMessage);
+        }
         return false;
     }
     applyGameViewData(res.data);
@@ -1360,6 +1372,7 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
         }
     }
 
+    std::string type = j.is_object() ? j.value("type", "") : "";
     if (ev.event == "MOVE" || ev.event == "GAME_STARTED" ||
         ev.event == "PROPOSAL_OFFERED" || ev.event == "PROPOSAL_ACCEPTED" ||
         ev.event == "PROPOSAL_DECLINED" || ev.event == "PROPOSAL_EXPIRED" ||
@@ -1367,7 +1380,10 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
         ev.event == "UNDO_APPLIED" || ev.event == "REMATCH_CREATED" ||
         ev.event == "GAME_OVER" || ev.event == "POLICY_UPDATED" ||
         ev.event == "SEAT_JOINED" || ev.event == "SEAT_LEFT" ||
-        ev.event == "OBSERVER_BANNED" || ev.event == "VOICE_META") {
+        ev.event == "OBSERVER_BANNED" || ev.event == "VOICE_META" ||
+        ev.event == "reconnect" || ev.event == "gap" ||
+        ev.event == "PLAYER_DISCONNECTED" || ev.event == "PLAYER_RECONNECTED" ||
+        type == "PLAYER_DISCONNECTED" || type == "PLAYER_RECONNECTED") {
         refreshOnlineGameView();
     }
 }
@@ -1389,6 +1405,9 @@ void OctiMainWindow::handleLocalOrOnlineMoveCommitted(
         auto res = _netClient->submitMove(_onlineRoomId, moveNotation);
         if (!res.ok) {
             _appliedOnlineMoves.pop_back();
+            if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
+                showProtocolUpgradeRequired(res.errorMessage);
+            }
         }
         refreshOnlineGameView();
         return;
@@ -2271,6 +2290,30 @@ void OctiMainWindow::updateSelfUpdateBannerUi()
         _updateBannerProgressBar->setVisible(false);
         _updateActionBtn->setVisible(false);
         break;
+    }
+}
+
+void OctiMainWindow::showProtocolUpgradeRequired(const std::string &message)
+{
+    QString msg = message.empty()
+        ? QStringLiteral(
+              "OCTI update required: client protocol version is outdated. "
+              "Please update OCTI.")
+        : QString::fromStdString(message);
+    if (_updateBannerWidget && _updateBannerLabel) {
+        _updateBannerLabel->setText(msg);
+        _updateBannerWidget->setVisible(true);
+        if (_updateBannerProgressBar) {
+            _updateBannerProgressBar->setVisible(false);
+        }
+        if (_updateActionBtn) {
+            _updateActionBtn->setVisible(true);
+            _updateActionBtn->setEnabled(true);
+            _updateActionBtn->setText("Check for Updates");
+        }
+    }
+    if (_serverStatusLabel) {
+        _serverStatusLabel->setText("Upgrade Required (426)");
     }
 }
 

@@ -33,6 +33,8 @@ struct HealthInfo {
     std::int64_t uptimeSec = 0;
     std::int64_t activeTables = 0;
     std::int64_t onlinePlayers = 0;
+    int protocolVersion = OCTI_PROTOCOL_VERSION;
+    int minProtocolVersion = OCTI_MIN_PROTOCOL_VERSION;
 };
 
 struct AuthProviderInfo {

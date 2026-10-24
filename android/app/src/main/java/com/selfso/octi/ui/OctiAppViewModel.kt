@@ -1122,6 +1122,15 @@ class OctiAppViewModel @JvmOverloads constructor(
             }
         }
 
+        var evType = ""
+        try {
+            if (ev.dataJson.isNotEmpty() && ev.dataJson.startsWith("{")) {
+                val j = JSONObject(ev.dataJson)
+                evType = j.optString("type", "")
+            }
+        } catch (ignored: Exception) {
+        }
+
         if ("MOVE" == ev.event ||
             "MOVE_APPLIED" == ev.event ||
             "GAME_STARTED" == ev.event ||
@@ -1132,7 +1141,22 @@ class OctiAppViewModel @JvmOverloads constructor(
             "ACTION_APPLIED" == ev.event ||
             "PLAYER_JOINED" == ev.event ||
             "PLAYER_LEFT" == ev.event ||
-            "POLICY_UPDATED" == ev.event
+            "POLICY_UPDATED" == ev.event ||
+            "reconnect" == ev.event ||
+            "gap" == ev.event ||
+            "PLAYER_DISCONNECTED" == ev.event ||
+            "PLAYER_RECONNECTED" == ev.event ||
+            "GAME_PAUSED" == ev.event ||
+            "GAME_RESUMED" == ev.event ||
+            "MOVE_UNDONE" == ev.event ||
+            "UNDO_APPLIED" == ev.event ||
+            "REMATCH_CREATED" == ev.event ||
+            "PLAYER_DISCONNECTED" == evType ||
+            "PLAYER_RECONNECTED" == evType ||
+            "GAME_PAUSED" == evType ||
+            "GAME_RESUMED" == evType ||
+            "MOVE_UNDONE" == evType ||
+            "REMATCH_CREATED" == evType
         ) {
             refreshActiveGameView()
         }

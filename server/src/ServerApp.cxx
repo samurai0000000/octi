@@ -434,6 +434,7 @@ int ServerApp::run(std::ostream &out, std::ostream &err)
     }
 
     server.stop();
+    rooms.checkpointToStore();
     {
         std::lock_guard<std::mutex> lock(jwksMutex);
         jwksStop = true;

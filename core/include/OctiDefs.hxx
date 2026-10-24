@@ -11,6 +11,8 @@ namespace octi {
 
 constexpr const char *OCTI_SERVER_HOST = "trumpet.selfso.com";
 constexpr int OCTI_SERVER_PORT = 6874;
+constexpr int OCTI_PROTOCOL_VERSION = 1;
+constexpr int OCTI_MIN_PROTOCOL_VERSION = 1;
 
 enum OctiGameMode {
     GAME_MODE_UNDEF = 0,

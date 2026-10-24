@@ -256,6 +256,33 @@ TEST(ServerFoundationTest, DebPackageMatchesReadmeVersionAndSystemdSpec)
     runCmd("rm -rf '" + tmpDirStr + "'");
 }
 
+TEST(ServerFoundationTest, ProtocolVersionMatchesReadme)
+{
+    LONGS_EQUAL(1, octi::OCTI_PROTOCOL_VERSION);
+    LONGS_EQUAL(1, octi::OCTI_MIN_PROTOCOL_VERSION);
+
+    /* Read README.md to verify Protocol Version annotation */
+    std::string readme = readFile("README.md");
+    if (readme.empty()) {
+        readme = readFile("../README.md");
+    }
+    if (readme.empty()) {
+        readme = readFile("../../README.md");
+    }
+    const char *home = std::getenv("HOME");
+    if (readme.empty() && home != nullptr) {
+        readme = readFile(std::string(home) + "/work/octi/README.md");
+    }
+    CHECK_FALSE_TEXT(readme.empty(), "README.md must be readable");
+    size_t pos = readme.find("**Protocol Version: ");
+    CHECK_TRUE_TEXT(pos != std::string::npos, "README.md must contain **Protocol Version: <N>**");
+    size_t endPos = readme.find("**", pos + 20);
+    CHECK_TRUE_TEXT(endPos != std::string::npos, "Malformed **Protocol Version: <N>** tag");
+    std::string protoStr = readme.substr(pos + 20, endPos - (pos + 20));
+    int protoVal = std::atoi(protoStr.c_str());
+    LONGS_EQUAL(octi::OCTI_PROTOCOL_VERSION, protoVal);
+}
+
 int main(int argc, char **argv)
 {
     return CommandLineTestRunner::RunAllTests(argc, argv);

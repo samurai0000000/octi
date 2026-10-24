@@ -243,6 +243,7 @@ struct LiveServerEnv {
     OidcVerifier verifier;
     std::unique_ptr<GameRoomManager> rooms;
     std::unique_ptr<OctiHttpServer> server;
+    int savedPort = 0;
 
     explicit LiveServerEnv(
         const HttpServerConfig &cfg = defaultTestServerConfig())
@@ -272,6 +273,7 @@ struct LiveServerEnv {
         if (!server->start(err)) {
             FAIL(err.c_str());
         }
+        savedPort = server->port();
     }
 
     ~LiveServerEnv()
@@ -283,7 +285,39 @@ struct LiveServerEnv {
         std::filesystem::remove_all(dir, ec);
     }
 
-    int port() const { return server->port(); }
+    int port() const { return server ? server->port() : savedPort; }
+
+    void stop()
+    {
+        if (rooms) {
+            rooms->checkpointToStore();
+        }
+        if (server) {
+            server->stop();
+        }
+        server.reset();
+        rooms.reset();
+    }
+
+    void startAgain(const HttpServerConfig *newCfg = nullptr)
+    {
+        HttpServerConfig c =
+            (newCfg != nullptr) ? *newCfg : defaultTestServerConfig();
+        c.port = savedPort;
+        rooms = std::make_unique<GameRoomManager>(store);
+        server = std::make_unique<OctiHttpServer>(store, verifier, *rooms, c);
+        std::string err;
+        if (!server->start(err)) {
+            FAIL(err.c_str());
+        }
+        savedPort = server->port();
+    }
+
+    void restart(const HttpServerConfig *newCfg = nullptr)
+    {
+        stop();
+        startAgain(newCfg);
+    }
 };
 
 } // namespace
@@ -791,6 +825,212 @@ TEST(OctiNetworkClientTest, RateLimit429RetryAfterPropagation)
     CHECK_FALSE(r3.ok);
     LONGS_EQUAL(429, r3.httpStatus);
     CHECK_TRUE(r3.retryAfterSec >= 1);
+}
+
+TEST(OctiNetworkClientTest, HealthReportsProtocolVersionAndDriftTolerance)
+{
+    LiveServerEnv env;
+    auto client = OctiNetworkClient::forHermeticTest(env.port());
+
+    auto health = client->fetchHealth();
+    CHECK_TRUE_TEXT(health.ok, health.errorMessage.c_str());
+    LONGS_EQUAL(200, health.httpStatus);
+    STRCMP_EQUAL("ok", health.data.status.c_str());
+    LONGS_EQUAL(1, health.data.protocolVersion);
+    LONGS_EQUAL(1, health.data.minProtocolVersion);
+
+    auto providers = client->fetchProviders();
+    CHECK_TRUE(providers.ok);
+}
+
+TEST(OctiNetworkClientTest, UpgradeRequired426WhenServerMinProtocolVersionHigher)
+{
+    HttpServerConfig cfg = defaultTestServerConfig();
+    cfg.minProtocolVersion = 2;
+    LiveServerEnv env(cfg);
+
+    auto client = OctiNetworkClient::forHermeticTest(env.port());
+
+    auto health = client->fetchHealth();
+    CHECK_TRUE_TEXT(health.ok, health.errorMessage.c_str());
+    LONGS_EQUAL(200, health.httpStatus);
+    LONGS_EQUAL(2, health.data.minProtocolVersion);
+
+    CreateTableRequest req;
+    req.mode = "2P";
+    auto createRes = client->createTable(req);
+    CHECK_FALSE(createRes.ok);
+    LONGS_EQUAL(426, createRes.httpStatus);
+    STRCMP_EQUAL("UPGRADE_REQUIRED", createRes.errorCode.c_str());
+
+    std::atomic<int> eventsSeen{0};
+    client->startGameEventStream("non-existent-room", 0, [&](const SseEvent &) {
+        eventsSeen++;
+    });
+    for (int i = 0; i < 50; ++i) {
+        if (!client->isGameEventStreamActive()) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    CHECK_FALSE(client->isGameEventStreamActive());
+    LONGS_EQUAL(0, eventsSeen.load());
+}
+
+TEST(OctiNetworkClientTest, LiveServerRestartPreservesGameSseAndAllowsMoveContinuation)
+{
+    LiveServerEnv env;
+    auto clientA = OctiNetworkClient::forHermeticTest(env.port());
+    auto clientB = OctiNetworkClient::forHermeticTest(env.port());
+
+    auto loginA = clientA->loginWithSso(
+        "google", makeToken("google", "sub-live-a", "AliceLive"), "AliceLive");
+    auto loginB = clientB->loginWithSso(
+        "google", makeToken("google", "sub-live-b", "BobLive"), "BobLive");
+    CHECK_TRUE(loginA.ok && loginB.ok);
+
+    CreateTableRequest req;
+    req.mode = "2P";
+    req.timeControlEnabled = true;
+    req.initialMs = 600000;
+    req.incrementMs = 0;
+    auto createRes = clientA->createTable(req);
+    CHECK_TRUE_TEXT(createRes.ok, createRes.errorMessage.c_str());
+    std::string roomId = createRes.data.roomId;
+
+    auto joinRes = clientB->joinTable(roomId, 2);
+    CHECK_TRUE_TEXT(joinRes.ok, joinRes.errorMessage.c_str());
+
+    std::mutex sseMutex;
+    std::vector<SseEvent> eventsA;
+    std::vector<SseEvent> eventsB;
+
+    clientA->startGameEventStream(roomId, 0, [&](const SseEvent &ev) {
+        std::lock_guard<std::mutex> lk(sseMutex);
+        eventsA.push_back(ev);
+    });
+    clientB->startGameEventStream(roomId, 0, [&](const SseEvent &ev) {
+        std::lock_guard<std::mutex> lk(sseMutex);
+        eventsB.push_back(ev);
+    });
+
+    for (int i = 0; i < 50; ++i) {
+        if (clientA->isGameEventStreamActive() && clientB->isGameEventStreamActive()) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    CHECK_TRUE(clientA->isGameEventStreamActive());
+    CHECK_TRUE(clientB->isGameEventStreamActive());
+
+    // Move 1: Alice moves "73+a"
+    auto mv1 = clientA->submitMove(roomId, "73+a");
+    CHECK_TRUE_TEXT(mv1.ok, mv1.errorMessage.c_str());
+
+    bool seenMv1 = false;
+    for (int i = 0; i < 50; ++i) {
+        {
+            std::lock_guard<std::mutex> lk(sseMutex);
+            for (const auto &ev : eventsB) {
+                if (ev.dataJson.find("73+a") != std::string::npos) {
+                    seenMv1 = true;
+                    break;
+                }
+            }
+        }
+        if (seenMv1) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    CHECK_TRUE(seenMv1);
+
+    // Move 2: Bob moves "77+e"
+    auto mv2 = clientB->submitMove(roomId, "77+e");
+    CHECK_TRUE_TEXT(mv2.ok, mv2.errorMessage.c_str());
+
+    bool seenMv2 = false;
+    for (int i = 0; i < 50; ++i) {
+        {
+            std::lock_guard<std::mutex> lk(sseMutex);
+            for (const auto &ev : eventsA) {
+                if (ev.dataJson.find("77+e") != std::string::npos) {
+                    seenMv2 = true;
+                    break;
+                }
+            }
+        }
+        if (seenMv2) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    CHECK_TRUE(seenMv2);
+
+    auto viewBefore = clientA->fetchGameView(roomId);
+    CHECK_TRUE(viewBefore.ok);
+    LONGS_EQUAL(1, viewBefore.data.turnSeat);
+    LONGS_EQUAL(2, viewBefore.data.plyCount);
+
+    // Live restart the server on the exact same port and SQLite DB!
+    env.restart();
+
+    // Give SSE clients time to reconnect automatically
+    for (int i = 0; i < 50; ++i) {
+        if (clientA->isGameEventStreamActive() && clientB->isGameEventStreamActive()) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    CHECK_TRUE(clientA->isGameEventStreamActive());
+    CHECK_TRUE(clientB->isGameEventStreamActive());
+
+    // Move 3: Alice submits next move "73a-74" after restart
+    auto mv3 = clientA->submitMove(roomId, "73a-74");
+    CHECK_TRUE_TEXT(mv3.ok, mv3.errorMessage.c_str());
+
+    bool seenMv3 = false;
+    for (int i = 0; i < 50; ++i) {
+        {
+            std::lock_guard<std::mutex> lk(sseMutex);
+            for (const auto &ev : eventsB) {
+                if (ev.dataJson.find("73a-74") != std::string::npos) {
+                    seenMv3 = true;
+                    break;
+                }
+            }
+        }
+        if (seenMv3) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    CHECK_TRUE(seenMv3);
+
+    auto viewAfter = clientA->fetchGameView(roomId);
+    CHECK_TRUE(viewAfter.ok);
+    LONGS_EQUAL(3, viewAfter.data.plyCount);
+    LONGS_EQUAL(2, viewAfter.data.turnSeat);
+    CHECK_TRUE(viewAfter.data.seats[0].clockMs > 0);
+
+    clientA->stopEventStreams();
+    clientB->stopEventStreams();
+}
+
+TEST(OctiNetworkClientTest, TransientTransportRetryRecoversAcrossServerDowntime)
+{
+    LiveServerEnv env;
+    auto client = OctiNetworkClient::forHermeticTest(env.port());
+
+    auto health1 = client->fetchHealth();
+    CHECK_TRUE(health1.ok);
+
+    env.stop();
+
+    std::thread restarter([&env]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        env.startAgain();
+    });
+
+    auto health2 = client->fetchHealth();
+    restarter.join();
+
+    CHECK_TRUE_TEXT(health2.ok, health2.errorMessage.c_str());
+    LONGS_EQUAL(200, health2.httpStatus);
 }
 
 /* ==================================================================== */
