@@ -8,9 +8,12 @@
 #include <fstream>
 #include <sstream>
 #include <nlohmann/json.hpp>
+#include <QAction>
 #include <QApplication>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QMenu>
+#include <QMenuBar>
 #include <QPainter>
 #include <QVBoxLayout>
 #include "OctiCore.hxx"
@@ -35,8 +38,7 @@ std::string DesktopCliArgs::usageBanner(const char *progName)
     const char *prog = (progName && progName[0] != '\0') ? progName : "octi";
     std::ostringstream oss;
     oss << "Usage: " << prog << " [options]\n"
-        << "Canonical Server Endpoint: " << OCTI_SERVER_HOST << ":"
-        << OCTI_SERVER_PORT << " (hard-coded)\n\n"
+        << "Canonical Server Endpoint: Server endpoint is permanently fixed and not configurable\n\n"
         << "Options:\n"
         << "  -h, --help           Show this usage help and exit\n"
         << "  -v, --version        Show version banner and exit\n"
@@ -101,8 +103,7 @@ bool DesktopCliArgs::parse(int argc,
             std::strncmp(arg, "--port=", 7) == 0 ||
             std::strcmp(arg, "-p") == 0) {
             errMsg = std::string("Rejected option '") + arg +
-                     "': server endpoint is permanently fixed to " +
-                     OCTI_SERVER_HOST + ":" + std::to_string(OCTI_SERVER_PORT);
+                     "': server endpoint is permanently fixed and not configurable";
             return false;
         }
 
@@ -116,8 +117,7 @@ bool DesktopCliArgs::parse(int argc,
         }
 
         errMsg = std::string("Unknown command-line option '") + arg +
-                 "' (server is fixed to " + OCTI_SERVER_HOST + ":" +
-                 std::to_string(OCTI_SERVER_PORT) + ")";
+                 "' (server endpoint is permanently fixed and not configurable)";
         return false;
     }
     return true;
@@ -242,71 +242,58 @@ OctiMainWindow::OctiMainWindow(
     rootLayout->setSpacing(10);
     setCentralWidget(central);
 
-    /* ---- Top Navigation Bar (2-Tier Luxury Header) ---- */
+    /* ---- Top Navigation Bar (Decluttered Logo Header - GUI-04) ---- */
     QWidget *topBar = new QWidget(central);
-    QVBoxLayout *topBarOuter = new QVBoxLayout(topBar);
-    topBarOuter->setContentsMargins(8, 6, 8, 6);
-    topBarOuter->setSpacing(6);
-
-    QHBoxLayout *topRow1 = new QHBoxLayout();
-    topRow1->setContentsMargins(0, 0, 0, 0);
-    topRow1->setSpacing(8);
+    QHBoxLayout *topBarLayout = new QHBoxLayout(topBar);
+    topBarLayout->setContentsMargins(8, 4, 8, 4);
+    topBarLayout->setSpacing(8);
 
     QLabel *crestLabel = new QLabel(topBar);
     crestLabel->setPixmap(QPixmap::fromImage(renderOctiIconImage(32)));
     crestLabel->setFixedSize(32, 32);
     crestLabel->setStyleSheet("border: none; background: transparent;");
-    topRow1->addWidget(crestLabel);
+    topBarLayout->addWidget(crestLabel);
 
     _brandLabel = new QLabel("OCTI", topBar);
     _brandLabel->setStyleSheet("font-size: 20px; font-weight: bold;");
-    topRow1->addWidget(_brandLabel);
+    topBarLayout->addWidget(_brandLabel);
 
+    topBarLayout->addStretch(1);
+    rootLayout->addWidget(topBar);
+
+    /* Legacy button/status pointers (hidden for header decluttering, but kept valid) */
     _serverStatusLabel = new QLabel(topBar);
     _serverStatusLabel->setObjectName("serverEndpointBadge");
-    topRow1->addWidget(_serverStatusLabel);
+    _serverStatusLabel->setVisible(false);
 
     _profileBadgeLabel = new QLabel("Guest (Offline Practice)", topBar);
-    topRow1->addWidget(_profileBadgeLabel);
+    _profileBadgeLabel->setVisible(false);
 
     _signInBtn = new QPushButton("Sign In / SSO", topBar);
+    _signInBtn->setVisible(false);
     _accountLinkBtn = new QPushButton("Account / Link SSO", topBar);
-    topRow1->addWidget(_signInBtn);
-    topRow1->addWidget(_accountLinkBtn);
-
-    topRow1->addStretch(1);
-
+    _accountLinkBtn->setVisible(false);
     _boardViewBtn = new QPushButton("Board Table", topBar);
+    _boardViewBtn->setVisible(false);
     _lobbyViewBtn = new QPushButton("Online Lobby", topBar);
-    topRow1->addWidget(_boardViewBtn);
-    topRow1->addWidget(_lobbyViewBtn);
-    topBarOuter->addLayout(topRow1);
-
-    QHBoxLayout *topRow2 = new QHBoxLayout();
-    topRow2->setContentsMargins(0, 0, 0, 0);
-    topRow2->setSpacing(8);
-
+    _lobbyViewBtn->setVisible(false);
     _newLocalGameBtn = new QPushButton("New Local / Bot Game", topBar);
+    _newLocalGameBtn->setVisible(false);
     _rotateBoardBtn = new QPushButton("Rotate Board (0°)", topBar);
+    _rotateBoardBtn->setVisible(false);
     _confirmAllCheck = new QCheckBox("Confirm All Moves", topBar);
     _confirmAllCheck->setChecked(_composer.confirmAllMoves());
+    _confirmAllCheck->setVisible(false);
     _themeToggleBtn = new QPushButton("Theme: Obsidian", topBar);
+    _themeToggleBtn->setVisible(false);
     _sfxMuteBtn = new QPushButton("SFX: On", topBar);
+    _sfxMuteBtn->setVisible(false);
     _archiveBtn = new QPushButton("Archive", topBar);
+    _archiveBtn->setVisible(false);
     _leaderboardBtn = new QPushButton("Leaderboard", topBar);
-
-    topRow2->addWidget(_newLocalGameBtn);
-    topRow2->addWidget(_rotateBoardBtn);
-    topRow2->addWidget(_confirmAllCheck);
-    topRow2->addWidget(_themeToggleBtn);
-    topRow2->addWidget(_sfxMuteBtn);
-    topRow2->addStretch(1);
-    topRow2->addWidget(_archiveBtn);
-    topRow2->addWidget(_leaderboardBtn);
+    _leaderboardBtn->setVisible(false);
     _checkUpdateBtn = new QPushButton("Check for Updates", topBar);
-    topRow2->addWidget(_checkUpdateBtn);
-    topBarOuter->addLayout(topRow2);
-    rootLayout->addWidget(topBar);
+    _checkUpdateBtn->setVisible(false);
 
     /* ---- Inline Self-Update Notification Banner ---- */
     _updateBannerWidget = new QWidget(central);
@@ -705,6 +692,7 @@ OctiMainWindow::OctiMainWindow(
     refreshMoveHistoryAndFenUi();
     updateProposalBannerUi();
     updateVoiceControlUi();
+    setupMenuBar();
 }
 
 OctiMainWindow::~OctiMainWindow()
@@ -937,11 +925,236 @@ void OctiMainWindow::setTheme(ThemeId theme)
     _configStore.preferences().theme = _theme;
     std::string ignoredErr;
     _configStore.save(ignoredErr);
+    setupMenuBar();
 }
 
 ThemeId OctiMainWindow::theme() const
 {
     return _theme;
+}
+
+void OctiMainWindow::showSplashAboutDialog()
+{
+    OctiSplashDialog splash(this, _theme);
+    splash.exec();
+}
+
+int OctiMainWindow::menuActionCountWithIconsAndShortcuts() const
+{
+    int count = 0;
+    if (menuBar()) {
+        for (QAction *menuAct : menuBar()->actions()) {
+            if (menuAct->menu()) {
+                for (QAction *act : menuAct->menu()->actions()) {
+                    if (!act->isSeparator() && !act->icon().isNull() && !act->shortcut().isEmpty()) {
+                        ++count;
+                    }
+                }
+            }
+        }
+    }
+    return count;
+}
+
+void OctiMainWindow::setupMenuBar()
+{
+    QMenuBar *mb = menuBar();
+    if (!mb) {
+        return;
+    }
+    mb->clear();
+
+    // 1. &Game Menu
+    QMenu *gameMenu = mb->addMenu("&Game");
+
+    QAction *actNewGame = gameMenu->addAction(createMenuIcon(MenuIconKind::NEW_GAME, _theme), "New Local / Bot Game...");
+    actNewGame->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_N));
+    QObject::connect(actNewGame, &QAction::triggered, this, [this]() {
+        NewLocalGameDialog dlg(_theme, this);
+        dlg.setConfig(_localConfig);
+        if (dlg.exec() == QDialog::Accepted) {
+            startNewLocalGame(dlg.config());
+        }
+    });
+
+    QAction *actBoardView = gameMenu->addAction(createMenuIcon(MenuIconKind::BOARD_VIEW, _theme), "Tabletop Board View");
+    actBoardView->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_1));
+    QObject::connect(actBoardView, &QAction::triggered, this, [this]() {
+        showBoardView();
+    });
+
+    QAction *actLobbyView = gameMenu->addAction(createMenuIcon(MenuIconKind::LOBBY_VIEW, _theme), "Online Lobby & Matchmaking");
+    actLobbyView->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_2));
+    QObject::connect(actLobbyView, &QAction::triggered, this, [this]() {
+        showLobbyView();
+    });
+
+    gameMenu->addSeparator();
+
+    QAction *actOfferDraw = gameMenu->addAction(createMenuIcon(MenuIconKind::OFFER_DRAW, _theme), "Offer Draw");
+    actOfferDraw->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
+    QObject::connect(actOfferDraw, &QAction::triggered, this, [this]() {
+        proposeDraw();
+    });
+
+    QAction *actPauseResume = gameMenu->addAction(createMenuIcon(MenuIconKind::PAUSE_RESUME, _theme), "Pause / Resume Game");
+    actPauseResume->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_P));
+    QObject::connect(actPauseResume, &QAction::triggered, this, [this]() {
+        proposePauseOrResume();
+    });
+
+    QAction *actUndo = gameMenu->addAction(createMenuIcon(MenuIconKind::UNDO_MOVE, _theme), "Undo Move");
+    actUndo->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Z));
+    QObject::connect(actUndo, &QAction::triggered, this, [this]() {
+        if (_inOnlineRoom && !_onlineRoomId.empty()) {
+            proposeUndo();
+        } else if (_board.getGame() && _board.getGame()->canUndo()) {
+            _board.getGame()->undo();
+            if (_isLocalBotGame && _board.getGame()->canUndo() &&
+                _board.getGame()->getTurn() != _localConfig.humanSeat) {
+                _board.getGame()->undo();
+            }
+            refreshMoveHistoryAndFenUi();
+            if (_boardCanvas) _boardCanvas->update();
+        }
+    });
+
+    QAction *actClaimForfeit = gameMenu->addAction(createMenuIcon(MenuIconKind::CLAIM_FORFEIT, _theme), "Claim Opponent Forfeit");
+    actClaimForfeit->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_F));
+    QObject::connect(actClaimForfeit, &QAction::triggered, this, [this]() {
+        claimOpponentForfeit();
+    });
+
+    QAction *actResign = gameMenu->addAction(createMenuIcon(MenuIconKind::RESIGN, _theme), "Resign Game");
+    actResign->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R));
+    QObject::connect(actResign, &QAction::triggered, this, [this]() {
+        resignCurrentGame();
+    });
+
+    gameMenu->addSeparator();
+
+    QAction *actQuit = gameMenu->addAction(createMenuIcon(MenuIconKind::QUIT, _theme), "Quit OCTI");
+    actQuit->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
+    QObject::connect(actQuit, &QAction::triggered, this, [this]() {
+        close();
+    });
+
+    // 2. &View Menu
+    QMenu *viewMenu = mb->addMenu("&View");
+
+    QAction *actRotate = viewMenu->addAction(createMenuIcon(MenuIconKind::ROTATE_BOARD, _theme), "Rotate Board 90° Clockwise");
+    actRotate->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
+    QObject::connect(actRotate, &QAction::triggered, this, [this]() {
+        rotateBoardClockwise();
+    });
+
+    QAction *actTheme = viewMenu->addAction(createMenuIcon(MenuIconKind::SWITCH_THEME, _theme), "Switch Tabletop Theme");
+    actTheme->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
+    QObject::connect(actTheme, &QAction::triggered, this, [this]() {
+        toggleTheme();
+    });
+
+    QAction *actSfx = viewMenu->addAction(createMenuIcon(MenuIconKind::TOGGLE_SFX, _theme), "Toggle Sound Effects (SFX)");
+    actSfx->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_M));
+    QObject::connect(actSfx, &QAction::triggered, this, [this]() {
+        setSfxMuted(!isSfxMuted());
+    });
+
+    viewMenu->addSeparator();
+
+    QAction *actVcrFirst = viewMenu->addAction(createMenuIcon(MenuIconKind::VCR_FIRST, _theme), "First Ply (|<)");
+    actVcrFirst->setShortcut(QKeySequence(Qt::Key_Home));
+    QObject::connect(actVcrFirst, &QAction::triggered, this, [this]() {
+        vcrFirst();
+    });
+
+    QAction *actVcrPrev = viewMenu->addAction(createMenuIcon(MenuIconKind::VCR_PREV, _theme), "Previous Ply (<)");
+    actVcrPrev->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Left));
+    QObject::connect(actVcrPrev, &QAction::triggered, this, [this]() {
+        vcrPrev();
+    });
+
+    QAction *actVcrNext = viewMenu->addAction(createMenuIcon(MenuIconKind::VCR_NEXT, _theme), "Next Ply (>)");
+    actVcrNext->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Right));
+    QObject::connect(actVcrNext, &QAction::triggered, this, [this]() {
+        vcrNext();
+    });
+
+    QAction *actVcrLast = viewMenu->addAction(createMenuIcon(MenuIconKind::VCR_LAST, _theme), "Latest Ply (>|)");
+    actVcrLast->setShortcut(QKeySequence(Qt::Key_End));
+    QObject::connect(actVcrLast, &QAction::triggered, this, [this]() {
+        vcrLast();
+    });
+
+    // 3. &Online Menu
+    QMenu *onlineMenu = mb->addMenu("&Online");
+
+    QAction *actSignIn = onlineMenu->addAction(createMenuIcon(MenuIconKind::SIGN_IN, _theme), "Sign In / SSO Onboarding...");
+    actSignIn->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_I));
+    QObject::connect(actSignIn, &QAction::triggered, this, [this]() {
+        SsoOnboardingDialog dlg(_netClient.get(), &_configStore, _theme, this);
+        if (dlg.exec() == QDialog::Accepted) {
+            _authenticated = true;
+            updateTopBarLabels();
+        }
+    });
+
+    QAction *actAccount = onlineMenu->addAction(createMenuIcon(MenuIconKind::ACCOUNT_LINK, _theme), "Account & Linked Identities...");
+    actAccount->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_L));
+    QObject::connect(actAccount, &QAction::triggered, this, [this]() {
+        AccountLinkDialog dlg(_netClient.get(), &_configStore, _theme, this);
+        dlg.setOnAccountSwitchedCallback([this](const PlayerProfileInfo &prof) {
+            applyAuthenticatedProfile(prof);
+        });
+        dlg.exec();
+    });
+
+    QAction *actArchive = onlineMenu->addAction(createMenuIcon(MenuIconKind::GAME_ARCHIVE, _theme), "Game Archive & Replay Browser...");
+    actArchive->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_A));
+    QObject::connect(actArchive, &QAction::triggered, this, [this]() {
+        ArchiveBrowserDialog dlg(_netClient.get(), _theme, this);
+        dlg.setOnLoadReplayCallback(
+            [this](const std::string &, const std::string &transcript, const ArchivedGameSummary &) {
+                loadOctiTranscriptIntoReplay(transcript);
+                showBoardView();
+            });
+        dlg.refreshArchiveList();
+        dlg.exec();
+    });
+
+    QAction *actLeaderboard = onlineMenu->addAction(createMenuIcon(MenuIconKind::LEADERBOARD, _theme), "Elo Leaderboard...");
+    actLeaderboard->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
+    QObject::connect(actLeaderboard, &QAction::triggered, this, [this]() {
+        LeaderboardDialog dlg(_netClient.get(), _theme, this);
+        dlg.refreshLeaderboard("2P");
+        dlg.exec();
+    });
+
+    QAction *actModeration = onlineMenu->addAction(createMenuIcon(MenuIconKind::MODERATION, _theme), "Table Moderation & Policies...");
+    actModeration->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M));
+    QObject::connect(actModeration, &QAction::triggered, this, [this]() {
+        RoomModerationDialog dlg(_netClient.get(), _onlineRoomId, _theme, this);
+        dlg.exec();
+    });
+
+    // 4. &Help Menu
+    QMenu *helpMenu = mb->addMenu("&Help");
+
+    QAction *actUpdate = helpMenu->addAction(createMenuIcon(MenuIconKind::CHECK_UPDATE, _theme), "Check for Updates...");
+    actUpdate->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_U));
+    QObject::connect(actUpdate, &QAction::triggered, this, [this]() {
+        SelfUpdateDialog dlg(_updateController, _theme, this);
+        if (_currentUpdateState.phase == selfupdate::UpdatePhase::Idle) {
+            checkForAppUpdates(true);
+        }
+        dlg.exec();
+    });
+
+    QAction *actSplash = helpMenu->addAction(createMenuIcon(MenuIconKind::SHOW_SPLASH, _theme), "Show Splash / About OCTI");
+    actSplash->setShortcut(QKeySequence(Qt::Key_F1));
+    QObject::connect(actSplash, &QAction::triggered, this, [this]() {
+        showSplashAboutDialog();
+    });
 }
 
 void OctiMainWindow::setSfxMuted(bool muted)
@@ -1201,6 +1414,7 @@ void OctiMainWindow::leaveOnlineRoom()
     _appliedOnlineMoves.clear();
     updateProposalBannerUi();
     updateVoiceControlUi();
+    setupMenuBar();
 }
 
 bool OctiMainWindow::isInOnlineGame() const
@@ -1334,6 +1548,7 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
     refreshMoveHistoryAndFenUi();
     updateProposalBannerUi();
     updateVoiceControlUi();
+    setupMenuBar();
 }
 
 void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
@@ -1636,6 +1851,7 @@ void OctiMainWindow::leaveOnlineVoice()
         _reservePanel->setPushToTalkActive(false);
     }
     updateVoiceControlUi();
+    setupMenuBar();
 }
 
 bool OctiMainWindow::isInVoiceRoom() const

@@ -160,7 +160,46 @@ fun OctiReserveHud(
                 )
             }
 
-            if (awaitingConfirm) {
+            val isGuided = viewModel.composer.isGuidedMoveActive && boardRev >= 0L
+            if (isGuided) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val curSq = viewModel.composer.guidedCurrentSquare()
+                    Text(
+                        text = "Move at (${curSq[0]}, ${curSq[1]})",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = OctiTheme.colors.accentBrass
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { viewModel.rollbackStagedMove() }) {
+                            Text("Cancel")
+                        }
+                        Button(
+                            onClick = {
+                                viewModel.composer.finishGuidedMoveHere()
+                                if (viewModel.composer.hasUnlockedSuperProngBonus()) {
+                                    viewModel.setShowSuperProngBonusDialog(true)
+                                }
+                                if (viewModel.composer.hasOtherMovablePodAtOrigin()) {
+                                    val orig = viewModel.composer.guidedOriginSquare()
+                                    viewModel.setCompositePodPrompt(Pair(orig[0], orig[1]))
+                                }
+                                viewModel.notifyComposerUpdated()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = OctiTheme.colors.accentBrass,
+                                contentColor = OctiTheme.colors.windowBg
+                            )
+                        ) {
+                            Text("Finish Move Here")
+                        }
+                    }
+                }
+            } else if (awaitingConfirm) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -287,3 +326,12 @@ fun OctiReserveHud(
         }
     }
 }
+
+/*
+ * Local variables:
+ * mode: Kotlin
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

@@ -307,8 +307,10 @@ TEST(DesktopAppIntegrationTest, HardCodedEndpointAndCliOptionGuard)
         const char *argv[] = {"octi", "--help"};
         CHECK_TRUE(DesktopCliArgs::parse(2, argv, parsed, errMsg));
         CHECK_TRUE(parsed.showHelp);
-        CHECK_TRUE(DesktopCliArgs::usageBanner("octi").find(
-                       "trumpet.selfso.com:6874") != std::string::npos);
+        std::string banner = DesktopCliArgs::usageBanner("octi");
+        CHECK_TRUE(banner.find("trumpet.selfso.com") == std::string::npos);
+        CHECK_TRUE(banner.find("6874") == std::string::npos);
+        CHECK_TRUE(banner.find("Server endpoint is permanently fixed") != std::string::npos);
     }
     {
         const char *argv[] = {"octi", "--offline", "--config", "/tmp/my_octi.json"};
@@ -336,7 +338,13 @@ TEST(DesktopAppIntegrationTest, HardCodedEndpointAndCliOptionGuard)
         const char *argv[] = {"octi", badFlag, "1234"};
         CHECK_FALSE(DesktopCliArgs::parse(3, argv, parsed, errMsg));
         CHECK_TRUE_TEXT(
-            errMsg.find("trumpet.selfso.com:6874") != std::string::npos,
+            errMsg.find("trumpet.selfso.com") == std::string::npos,
+            errMsg.c_str());
+        CHECK_TRUE_TEXT(
+            errMsg.find("6874") == std::string::npos,
+            errMsg.c_str());
+        CHECK_TRUE_TEXT(
+            errMsg.find("server endpoint is permanently fixed") != std::string::npos,
             errMsg.c_str());
     }
 
@@ -351,6 +359,7 @@ TEST(DesktopAppIntegrationTest, HardCodedEndpointAndCliOptionGuard)
     CHECK_FALSE(defaultWin.serverStatusText().contains("6874"));
     CHECK_TRUE(defaultWin.serverStatusText() == "Ready");
     CHECK_FALSE(defaultWin.hasEditableServerOrPortField());
+    LONGS_EQUAL(23, defaultWin.menuActionCountWithIconsAndShortcuts());
 
     SsoOnboardingDialog ssoDlg(defaultWin.netClient());
     CHECK_TRUE(ssoDlg.serverBadgeText().isEmpty());
@@ -537,6 +546,9 @@ TEST(DesktopAppIntegrationTest,
     /* 6. Live Drag-and-Drop Board Play Propagating Over SSE */
     /* Move 1 (Alice): Add prong at (3,3) North -> "33+a" */
     CHECK_TRUE(winA.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+    if (winA.moveComposer()->isAwaitingConfirmation()) {
+        CHECK_TRUE(winA.moveComposer()->commitStagedMove());
+    }
     for (int i = 0; i < 40 && winB.vcrCurrentPly() < 1; ++i) {
         winB.pumpUiEvents();
         std::this_thread::sleep_for(std::chrono::milliseconds(15));
@@ -551,6 +563,9 @@ TEST(DesktopAppIntegrationTest,
 
     /* Move 2 (Bob): Add prong at (5,7) South -> "57+e" */
     CHECK_TRUE(winB.boardCanvas()->simulateDragProngToPod(5, 7, 0, DIR_S, false));
+    if (winB.moveComposer()->isAwaitingConfirmation()) {
+        CHECK_TRUE(winB.moveComposer()->commitStagedMove());
+    }
     for (int i = 0; i < 40 && winA.vcrCurrentPly() < 2; ++i) {
         winA.pumpUiEvents();
         std::this_thread::sleep_for(std::chrono::milliseconds(15));
@@ -562,6 +577,9 @@ TEST(DesktopAppIntegrationTest,
 
     /* Move 3 (Alice): Step pod from (3,3) to (3,4) -> "33a-34" */
     CHECK_TRUE(winA.boardCanvas()->simulateDragPodToSquare(3, 3, 0, 3, 4, false));
+    if (winA.moveComposer()->isAwaitingConfirmation()) {
+        CHECK_TRUE(winA.moveComposer()->commitStagedMove());
+    }
     for (int i = 0; i < 40 && winB.vcrCurrentPly() < 3; ++i) {
         winB.pumpUiEvents();
         std::this_thread::sleep_for(std::chrono::milliseconds(15));
@@ -740,6 +758,9 @@ TEST(DesktopAppIntegrationTest,
         /* Human (Seat A) adds a superprong at (5,3) North -> Bot (Seat B) replies automatically! */
         CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(
             5, 3, 0, DIR_N, true));
+        if (win.moveComposer()->isAwaitingConfirmation()) {
+            CHECK_TRUE(win.moveComposer()->commitStagedMove());
+        }
         LONGS_EQUAL(2, win.vcrCurrentPly());
         LONGS_EQUAL(static_cast<long>(PLAYER_A),
                     static_cast<long>(win.board()->getGame()->getTurn()));
@@ -823,6 +844,9 @@ TEST(DesktopAppIntegrationTest,
         LONGS_EQUAL(7, win.board()->getBoardHeight());
         CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(
             2, 2, 0, DIR_N, false));
+        if (win.moveComposer()->isAwaitingConfirmation()) {
+            CHECK_TRUE(win.moveComposer()->commitStagedMove());
+        }
         LONGS_EQUAL(2, win.vcrCurrentPly());
     }
 
@@ -1480,6 +1504,66 @@ TEST(DesktopAppIntegrationTest, DesktopSelfUpdateEndToEndAndFaultInjection)
     CHECK_TRUE(ok);
 
     std::filesystem::remove_all(tmpDirStr);
+}
+
+TEST(DesktopAppIntegrationTest, GuiRefinementArtifactsAndPrompts)
+{
+    QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);
+    QString guiArtifactDir = repoRootStr + "/plan/done/plan_gui_refinement.artifacts";
+    if (!QDir(guiArtifactDir).exists()) {
+        guiArtifactDir = repoRootStr + "/plan/plan_gui_refinement.artifacts";
+    }
+    QDir().mkpath(guiArtifactDir);
+
+    // 1. Procedural Animated Splash Screen (desktop_splash.png)
+    QImage splashImg = OctiSplashDialog::renderSplashFrame(960, 560, 0.72);
+    CHECK_FALSE(splashImg.isNull());
+    QString splashPath = guiArtifactDir + "/desktop_splash.png";
+    CHECK_TRUE(splashImg.save(splashPath));
+    CHECK_TRUE_TEXT(QFileInfo(splashPath).size() > 15000, "desktop_splash.png size check");
+
+    // 2. Decluttered Desktop Main Window with Luxury Header (desktop_main_decluttered.png)
+    std::string cfgPath = "/tmp/octi_gui_refine_test.json";
+    OctiMainWindow win(nullptr, cfgPath, false);
+    win.setTheme(ThemeId::OBSIDIAN_BRASS);
+    win.showBoardView();
+    QImage mainImg = win.renderWindowToImage(1440, 900);
+    CHECK_FALSE(mainImg.isNull());
+    QString mainPath = guiArtifactDir + "/desktop_main_decluttered.png";
+    CHECK_TRUE(mainImg.save(mainPath));
+    CHECK_TRUE_TEXT(QFileInfo(mainPath).size() > 15000, "desktop_main_decluttered.png size check");
+
+    // Check menu actions count
+    LONGS_EQUAL(23, win.menuActionCountWithIconsAndShortcuts());
+
+    // 3. Zoomed Square Dialog Preview (desktop_zoomed_square.png)
+    ZoomedSquareDialog zoomedDlg(win.board(), win.moveComposer(), 3, 3,
+                                BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS, &win);
+    QImage zoomedImg = zoomedDlg.renderToImage(560, 620);
+    CHECK_FALSE(zoomedImg.isNull());
+    QString zoomedPath = guiArtifactDir + "/desktop_zoomed_square.png";
+    CHECK_TRUE(zoomedImg.save(zoomedPath));
+    CHECK_TRUE_TEXT(QFileInfo(zoomedPath).size() > 12000, "desktop_zoomed_square.png size check");
+
+    // 4. Prompt Dialog Invariants
+    CapturePromptDialog capDlg(3, 5, PLAYER_B, ThemeId::OBSIDIAN_BRASS, &win);
+    CHECK_TRUE(capDlg.captureChosen());
+
+    SuperProngBonusDialog spDlg(ThemeId::OBSIDIAN_BRASS, &win);
+    CHECK_TRUE(spDlg.moveNowChosen());
+
+    CompositePodMoveDialog compDlg(3, 3, ThemeId::OBSIDIAN_BRASS, &win);
+    CHECK_TRUE(compDlg.selectNextPodChosen());
+
+    // 5. Verify all 23 vector menu icons generate valid pixmaps
+    for (int k = 0; k <= static_cast<int>(MenuIconKind::SHOW_SPLASH); ++k) {
+        QIcon icon = createMenuIcon(static_cast<MenuIconKind>(k), ThemeId::OBSIDIAN_BRASS);
+        CHECK_FALSE(icon.isNull());
+        QPixmap px = icon.pixmap(32, 32);
+        CHECK_FALSE(px.isNull());
+    }
+
+    std::remove(cfgPath.c_str());
 }
 
 extern "C" const char *__lsan_default_suppressions()

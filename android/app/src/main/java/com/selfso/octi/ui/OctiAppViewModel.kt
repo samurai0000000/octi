@@ -143,7 +143,7 @@ class OctiAppViewModel @JvmOverloads constructor(
     private val _theme = MutableStateFlow(OctiThemeId.OBSIDIAN_BRASS)
     val theme: StateFlow<OctiThemeId> = _theme.asStateFlow()
 
-    private val _confirmAllMoves = MutableStateFlow(false)
+    private val _confirmAllMoves = MutableStateFlow(true)
     val confirmAllMoves: StateFlow<Boolean> = _confirmAllMoves.asStateFlow()
 
     private val _moveEntireMatchingStack = MutableStateFlow(false)
@@ -248,6 +248,49 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     private val _showCreateTableDialog = MutableStateFlow(false)
     val showCreateTableDialog: StateFlow<Boolean> = _showCreateTableDialog.asStateFlow()
+
+    data class CapturePromptData(val jumpedX: Int, val jumpedY: Int, val player: OctiPlayer)
+
+    private val _zoomedSquare = MutableStateFlow<Pair<Int, Int>?>(null)
+    val zoomedSquare: StateFlow<Pair<Int, Int>?> = _zoomedSquare.asStateFlow()
+
+    private val _capturePrompt = MutableStateFlow<CapturePromptData?>(null)
+    val capturePrompt: StateFlow<CapturePromptData?> = _capturePrompt.asStateFlow()
+
+    private val _showSuperProngBonusDialog = MutableStateFlow(false)
+    val showSuperProngBonusDialog: StateFlow<Boolean> = _showSuperProngBonusDialog.asStateFlow()
+
+    private val _compositePodPrompt = MutableStateFlow<Pair<Int, Int>?>(null)
+    val compositePodPrompt: StateFlow<Pair<Int, Int>?> = _compositePodPrompt.asStateFlow()
+
+    fun openZoomedSquare(x: Int, y: Int) {
+        _zoomedSquare.value = Pair(x, y)
+    }
+
+    fun closeZoomedSquare() {
+        _zoomedSquare.value = null
+    }
+
+    fun promptCapture(jumpedX: Int, jumpedY: Int, player: OctiPlayer) {
+        _capturePrompt.value = CapturePromptData(jumpedX, jumpedY, player)
+    }
+
+    fun resolveCapturePrompt(capture: Boolean) {
+        val p = _capturePrompt.value
+        if (p != null) {
+            composer.setCaptureAtSquare(p.jumpedX, p.jumpedY, capture)
+            _capturePrompt.value = null
+            bumpBoardRevision()
+        }
+    }
+
+    fun setShowSuperProngBonusDialog(show: Boolean) {
+        _showSuperProngBonusDialog.value = show
+    }
+
+    fun setCompositePodPrompt(square: Pair<Int, Int>?) {
+        _compositePodPrompt.value = square
+    }
 
     init {
         configStore.load()
@@ -685,7 +728,7 @@ class OctiAppViewModel @JvmOverloads constructor(
         bumpBoardRevision()
     }
 
-    private fun bumpBoardRevision() {
+    fun bumpBoardRevision() {
         _boardRevision.value = _boardRevision.value + 1L
     }
 
@@ -1266,3 +1309,12 @@ class OctiAppViewModel @JvmOverloads constructor(
         netClient.close()
     }
 }
+
+/*
+ * Local variables:
+ * mode: Kotlin
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

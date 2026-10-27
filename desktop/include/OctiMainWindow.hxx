@@ -103,6 +103,9 @@ public:
     void setTheme(ThemeId theme);
     ThemeId theme() const;
 
+    int menuActionCountWithIconsAndShortcuts() const;
+    void showSplashAboutDialog();
+
     void setSfxMuted(bool muted);
     bool isSfxMuted() const;
 
@@ -217,6 +220,7 @@ private:
     void handleSelfUpdateQuitRequested();
     void updateSelfUpdateBannerUi();
     void showProtocolUpgradeRequired(const std::string &message = "");
+    void setupMenuBar();
 
     ClientConfigStore _configStore;
     std::unique_ptr<OctiNetworkClient> _netClient;

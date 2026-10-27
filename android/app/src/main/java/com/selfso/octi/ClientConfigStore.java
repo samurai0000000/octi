@@ -46,7 +46,7 @@ public final class ClientConfigStore {
         public String avatarUrl = "";
         public String preferredProvider = "";
         public OctiThemeId theme = OctiThemeId.OBSIDIAN_BRASS;
-        public boolean confirmAllMoves = false;
+        public boolean confirmAllMoves = true;
         public boolean sfxMuted = false;
         public boolean volumeKeyPtt = true;
         public int pttKey = 'V';
@@ -1042,3 +1042,13 @@ final class OctiMiniJson {
         ++pos;
     }
 }
+
+/*
+ * Local variables:
+ * mode: Java
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

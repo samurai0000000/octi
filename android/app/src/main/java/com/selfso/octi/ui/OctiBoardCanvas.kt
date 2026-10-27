@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.IntSize
 import com.selfso.octi.OctiBoardRenderer
 import com.selfso.octi.OctiDir
 import com.selfso.octi.OctiMoveComposer
+import com.selfso.octi.OctiPlayer
 import com.selfso.octi.ui.theme.OctiTheme
 
 /**
@@ -126,7 +127,57 @@ fun OctiBoardCanvas(
                         val sqX = xy[0]
                         val sqY = xy[1]
 
-                        // 3. Check optional capture toggle on jumped square
+                        // 3. If Move Composer is in guided move/jump chain mode
+                        if (composer.isGuidedMoveActive) {
+                            val nextSquares = composer.guidedNextSquares()
+                            var isDestination = false
+                            for (dest in nextSquares) {
+                                if (dest[0] == sqX && dest[1] == sqY) {
+                                    isDestination = true
+                                    break
+                                }
+                            }
+                            if (isDestination) {
+                                if (composer.selectGuidedDestination(sqX, sqY)) {
+                                    val capChoices = composer.captureChoices()
+                                    val latestCap = capChoices.lastOrNull { !it.mandatory }
+                                    if (latestCap != null) {
+                                        val jsq = b.squareAt(latestCap.jumpedX - 1, latestCap.jumpedY - 1)
+                                        val jumpedPlayer = if (!jsq.isEmpty) jsq.getPodAt(0).type.toPlayer() else OctiPlayer.PLAYER_B
+                                        viewModel.promptCapture(latestCap.jumpedX, latestCap.jumpedY, jumpedPlayer)
+                                    }
+                                    if (composer.hasUnlockedSuperProngBonus()) {
+                                        viewModel.setShowSuperProngBonusDialog(true)
+                                    }
+                                    if (!composer.isGuidedMoveActive && composer.hasOtherMovablePodAtOrigin()) {
+                                        val orig = composer.guidedOriginSquare()
+                                        viewModel.setCompositePodPrompt(Pair(orig[0], orig[1]))
+                                    }
+                                    viewModel.notifyComposerUpdated()
+                                    return@detectTapGestures
+                                }
+                            }
+
+                            // Tapping current square finishes guided jump chain here
+                            val curSq = composer.guidedCurrentSquare()
+                            if (curSq[0] == sqX && curSq[1] == sqY) {
+                                composer.finishGuidedMoveHere()
+                                if (composer.hasUnlockedSuperProngBonus()) {
+                                    viewModel.setShowSuperProngBonusDialog(true)
+                                }
+                                if (composer.hasOtherMovablePodAtOrigin()) {
+                                    val orig = composer.guidedOriginSquare()
+                                    viewModel.setCompositePodPrompt(Pair(orig[0], orig[1]))
+                                }
+                                viewModel.notifyComposerUpdated()
+                                return@detectTapGestures
+                            }
+
+                            // Tapping elsewhere during guided move does not open zoomed square
+                            return@detectTapGestures
+                        }
+
+                        // 4. Check optional capture toggle on jumped square
                         if (composer.toggleCaptureAtSquare(sqX, sqY)) {
                             viewModel.notifyComposerUpdated()
                             return@detectTapGestures
@@ -150,13 +201,15 @@ fun OctiBoardCanvas(
                             val chosenDir = if (dir != OctiDir.DIR_UNDEF) dir else OctiDir.DIR_N
                             val podIdx = Math.max(0, composer.selectedStackPodIndex(sqX, sqY))
                             composer.dropOnCompassSector(sqX, sqY, podIdx, chosenDir)
+                            if (composer.hasUnlockedSuperProngBonus()) {
+                                viewModel.setShowSuperProngBonusDialog(true)
+                            }
                             viewModel.notifyComposerUpdated()
                             return@detectTapGestures
                         }
 
                         if (dragKind == OctiMoveComposer.DragKind.ADD_POD_FROM_RESERVE ||
-                            dragKind == OctiMoveComposer.DragKind.LIBERATE_POD_FROM_RESERVE ||
-                            dragKind == OctiMoveComposer.DragKind.MOVE_OR_JUMP_POD
+                            dragKind == OctiMoveComposer.DragKind.LIBERATE_POD_FROM_RESERVE
                         ) {
                             if (composer.dropOnSquare(sqX, sqY)) {
                                 selectedOriginSquare = null
@@ -165,28 +218,15 @@ fun OctiBoardCanvas(
                             }
                         }
 
-                        // 4. Tap-to-select pod on square or tap destination for selected origin
-                        val prevOrigin = selectedOriginSquare
-                        if (prevOrigin != null && (prevOrigin.first != sqX || prevOrigin.second != sqY)) {
-                            val podIdx = composer.selectedStackPodIndex(prevOrigin.first, prevOrigin.second)
-                            composer.beginMoveOrJumpPod(prevOrigin.first, prevOrigin.second, podIdx)
-                            if (composer.dropOnSquare(sqX, sqY)) {
-                                selectedOriginSquare = null
-                                viewModel.notifyComposerUpdated()
-                                return@detectTapGestures
-                            }
-                        }
-
+                        // 5. Non-empty square or friendly home square opens Zoomed Square Dialog
                         val sq = b.squareAt(sqX - 1, sqY - 1)
                         val turn = b.game?.turn
-                        if (!sq.isEmpty && turn != null && sq.isOccupiedBy(turn)) {
+                        val isHome = if (turn != null) b.isHomeSquareOf(sqX - 1, sqY - 1, turn) else false
+                        if (!sq.isEmpty || isHome) {
                             selectedOriginSquare = Pair(sqX, sqY)
-                            val podIdx = composer.selectedStackPodIndex(sqX, sqY)
-                            composer.beginMoveOrJumpPod(sqX, sqY, podIdx)
-                            if (sq.numPods >= 2) {
-                                composer.openStackFan(sqX, sqY)
-                            }
+                            viewModel.openZoomedSquare(sqX, sqY)
                             viewModel.notifyComposerUpdated()
+                            return@detectTapGestures
                         }
                     },
                     onLongPress = { offset ->
@@ -222,3 +262,12 @@ fun OctiBoardCanvas(
         }
     }
 }
+
+/*
+ * Local variables:
+ * mode: Kotlin
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

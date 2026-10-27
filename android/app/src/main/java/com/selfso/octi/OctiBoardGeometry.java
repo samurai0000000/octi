@@ -71,8 +71,8 @@ public class OctiBoardGeometry {
                           BoardRotation rotation) {
         this.viewportWidth = Math.max(64, viewportWidth);
         this.viewportHeight = Math.max(64, viewportHeight);
-        this.gridWidth = clamp(gridWidth, 1, 9);
-        this.gridHeight = clamp(gridHeight, 1, 9);
+        this.gridWidth = clamp(gridWidth, 1, 15);
+        this.gridHeight = clamp(gridHeight, 1, 15);
         this.rotation = (rotation != null) ? rotation : BoardRotation.ROT_0;
         recomputeLayout();
     }
@@ -84,8 +84,8 @@ public class OctiBoardGeometry {
     }
 
     public void setGridDimensions(int gridWidth, int gridHeight) {
-        this.gridWidth = clamp(gridWidth, 1, 9);
-        this.gridHeight = clamp(gridHeight, 1, 9);
+        this.gridWidth = clamp(gridWidth, 1, 15);
+        this.gridHeight = clamp(gridHeight, 1, 15);
         recomputeLayout();
     }
 
@@ -148,6 +148,14 @@ public class OctiBoardGeometry {
 
     public double getCellSize() {
         return cellSize;
+    }
+
+    public double podOuterRadius() {
+        return cellSize * 0.40;
+    }
+
+    public double getPodOuterRadius() {
+        return cellSize * 0.40;
     }
 
     public static BoardRotation rotationForSeat(OctiGameMode mode, OctiPlayer seat) {
@@ -220,28 +228,18 @@ public class OctiBoardGeometry {
         int cols = Math.max(1, screenCols());
         int rows = Math.max(1, screenRows());
 
-        double pad = Math.max(12.0, Math.min(viewportWidth, viewportHeight) * 0.045);
-        double availW = Math.max(32.0, viewportWidth - 2.0 * pad);
-        double availH = Math.max(32.0, viewportHeight - 2.0 * pad);
-
-        double cellW = availW / (cols + 1.10);
-        double cellH = availH / (rows + 1.10);
+        double cellW = viewportWidth / (double) cols;
+        double cellH = viewportHeight / (double) rows;
         cellSize = Math.max(4.0, Math.min(cellW, cellH));
 
         double gridW = cellSize * cols;
         double gridH = cellSize * rows;
-        double gutter = cellSize * 0.55;
 
         double gridLeft = (viewportWidth - gridW) * 0.5;
         double gridTop = (viewportHeight - gridH) * 0.5;
 
         gridInnerRect = new double[]{gridLeft, gridTop, gridW, gridH};
-        boardOuterRect = new double[]{
-            gridLeft - gutter,
-            gridTop - gutter,
-            gridW + 2.0 * gutter,
-            gridH + 2.0 * gutter
-        };
+        boardOuterRect = new double[]{gridLeft, gridTop, gridW, gridH};
     }
 
     private boolean boardToScreenGrid(int x1, int y1, int[] outColRow) {
@@ -329,8 +327,8 @@ public class OctiBoardGeometry {
         if (outXY1 == null || outXY1.length < 2) {
             return false;
         }
-        if (px < gridInnerRect[0] || px >= gridInnerRect[0] + gridInnerRect[2]
-                || py < gridInnerRect[1] || py >= gridInnerRect[1] + gridInnerRect[3]) {
+        if (px < gridInnerRect[0] || px > gridInnerRect[0] + gridInnerRect[2]
+                || py < gridInnerRect[1] || py > gridInnerRect[1] + gridInnerRect[3]) {
             return false;
         }
 
@@ -338,6 +336,12 @@ public class OctiBoardGeometry {
         int rows = screenRows();
         int col = (int) Math.floor((px - gridInnerRect[0]) / cellSize);
         int row = (int) Math.floor((py - gridInnerRect[1]) / cellSize);
+        if (col >= cols) {
+            col = cols - 1;
+        }
+        if (row >= rows) {
+            row = rows - 1;
+        }
         if (col < 0 || col >= cols || row < 0 || row >= rows) {
             return false;
         }
@@ -553,3 +557,13 @@ public class OctiBoardGeometry {
         return Math.max(min, Math.min(max, val));
     }
 }
+
+/*
+ * Local variables:
+ * mode: Java
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

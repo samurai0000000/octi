@@ -9,6 +9,7 @@ package com.selfso.octi;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -87,7 +88,7 @@ public class OctiMoveComposer {
     }
 
     private OctiBoard board;
-    private boolean confirmAllMoves = false;
+    private boolean confirmAllMoves = true;
     private boolean moveEntireMatchingStack = false;
     private MoveCommitListener onMoveCommitted = null;
 
@@ -122,6 +123,16 @@ public class OctiMoveComposer {
     private int eighthProngTargetBx = -1;
     private int eighthProngTargetBy = -1;
     private String eighthProngBonusNotation = "";
+
+    // Guided step / jump chain state (0-based internally)
+    private boolean guidedMoveActive = false;
+    private boolean guidedMidHop = false;
+    private int guidedOriginBx = -1;
+    private int guidedOriginBy = -1;
+    private int guidedCurBx = -1;
+    private int guidedCurBy = -1;
+    private int guidedPodIndex = -1;
+    private boolean guidedMoveAllStack = false;
 
     public OctiMoveComposer() {
         this(null);
@@ -1217,6 +1228,40 @@ public class OctiMoveComposer {
         return true;
     }
 
+    public void setCaptureAtSquare(int jumpedX, int jumpedY, boolean capture) {
+        if (stagedOps.isEmpty()) {
+            return;
+        }
+
+        int targetIdx = -1;
+        for (int i = 0; i < captureChoices.size(); i++) {
+            CaptureChoice cc = captureChoices.get(i);
+            if (cc.jumpedX == jumpedX && cc.jumpedY == jumpedY) {
+                targetIdx = i;
+                break;
+            }
+        }
+        if (targetIdx < 0) {
+            return;
+        }
+        CaptureChoice choice = captureChoices.get(targetIdx);
+        if (choice.mandatory) {
+            return;
+        }
+
+        choice.capture = capture;
+
+        for (HopCaptureLink link : hopCaptureLinks) {
+            if (link.jumpedX == jumpedX && link.jumpedY == jumpedY
+                    && link.opIndex < stagedOps.size()
+                    && link.hopIndex < stagedOps.get(link.opIndex).hops.size()) {
+                stagedOps.get(link.opIndex).hops.get(link.hopIndex).capture = capture;
+            }
+        }
+
+        syncPreparedStateToGame();
+    }
+
     public boolean toggleCaptureAtSquare(int jumpedX, int jumpedY) {
         if (stagedOps.isEmpty()) {
             return false;
@@ -1277,6 +1322,17 @@ public class OctiMoveComposer {
         return awaitingSuperProngBonusMove;
     }
 
+    public boolean hasUnlockedSuperProngBonus() {
+        return awaitingSuperProngBonusMove;
+    }
+
+    public int[] eighthProngOriginSquare() {
+        if (awaitingSuperProngBonusMove && stagedOps.size() == 1) {
+            return new int[]{stagedOps.get(0).x0 + 1, stagedOps.get(0).y0 + 1};
+        }
+        return new int[]{0, 0};
+    }
+
     public String stagedMoveNotation() {
         if (stagedOps.isEmpty()) {
             return "";
@@ -1293,6 +1349,365 @@ public class OctiMoveComposer {
 
     public List<CaptureChoice> captureChoices() {
         return Collections.unmodifiableList(captureChoices);
+    }
+
+    // Guided Step / Multi-Hop Jump Helpers
+    public boolean beginGuidedPodMove(int x, int y, int podIndex, boolean moveAllMatchingStack) {
+        if (board == null || board.getGame() == null) {
+            return false;
+        }
+        OctiGame game = board.getGame();
+        if (!game.isGameStarted() || game.isGameOver()) {
+            return false;
+        }
+
+        int bx = x - 1;
+        int by = y - 1;
+        if (!board.isValidCoord(bx, by)) {
+            return false;
+        }
+
+        if (!stagedOps.isEmpty()) {
+            for (OctiMoveOp op : stagedOps) {
+                if (op.hops.isEmpty() || op.x0 != bx || op.y0 != by) {
+                    return false;
+                }
+            }
+        }
+
+        OctiPlayer turn = game.getTurn();
+        OctiSquare sq = board.squareAt(bx, by);
+        int resolvedIdx = resolvePodIndex(sq, x, y, podIndex, turn, true);
+        if (resolvedIdx < 0 || resolvedIdx >= sq.getNumPods()) {
+            return false;
+        }
+
+        guidedOriginBx = bx;
+        guidedOriginBy = by;
+        guidedCurBx = bx;
+        guidedCurBy = by;
+        guidedPodIndex = resolvedIdx;
+        guidedMoveAllStack = moveAllMatchingStack;
+        guidedMidHop = false;
+        guidedMoveActive = true;
+
+        if (guidedNextSquares().isEmpty()) {
+            guidedMoveActive = false;
+            return false;
+        }
+
+        return true;
+    }
+
+    public boolean isGuidedMoveActive() {
+        return guidedMoveActive;
+    }
+
+    public int[] guidedCurrentSquare() {
+        if (!guidedMoveActive) {
+            return new int[]{0, 0};
+        }
+        return new int[]{guidedCurBx + 1, guidedCurBy + 1};
+    }
+
+    public int[] guidedOriginSquare() {
+        if (!guidedMoveActive) {
+            return new int[]{0, 0};
+        }
+        return new int[]{guidedOriginBx + 1, guidedOriginBy + 1};
+    }
+
+    public List<int[]> guidedNextSquares() {
+        List<int[]> result = new ArrayList<>();
+        if (!guidedMoveActive || board == null || board.getGame() == null) {
+            return result;
+        }
+        OctiGame game = board.getGame();
+        if (!game.isGameStarted() || game.isGameOver()) {
+            return result;
+        }
+
+        OctiPlayer turn = game.getTurn();
+        int w = board.getBoardWidth();
+        int h = board.getBoardHeight();
+        boolean edgeless = game.useEdgelessBoard();
+        Set<IntPair> seen = new HashSet<>();
+
+        if (!guidedMidHop) {
+            if (!board.isValidCoord(guidedOriginBx, guidedOriginBy)) {
+                return result;
+            }
+            OctiSquare startSq = board.squareAt(guidedOriginBx, guidedOriginBy);
+            if (guidedPodIndex < 0 || guidedPodIndex >= startSq.getNumPods()) {
+                return result;
+            }
+            OctiPod pod = startSq.getPodAt(guidedPodIndex);
+            if (pod.getType() != turn.toPodType()) {
+                return result;
+            }
+            List<OctiPod> ghostPods = new ArrayList<>(startSq.pods());
+
+            // 1. Distance-1 steps
+            for (int d = 0; d < OctiDir.DIR_MAX; d++) {
+                OctiDir dir = OctiDir.fromIndex(d);
+                if (pod.prongAt(dir) == OctiProngType.NO_PRONG) {
+                    continue;
+                }
+                if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK && isOfkBackwardDirection(turn, dir)) {
+                    continue;
+                }
+                int jdx = dir.deltaX();
+                int jdy = dir.deltaY();
+                int sx = edgeless ? (((guidedOriginBx + jdx) % w + w) % w) : (guidedOriginBx + jdx);
+                int sy = edgeless ? (((guidedOriginBy + jdy) % h + h) % h) : (guidedOriginBy + jdy);
+                if (!board.isValidCoord(sx, sy)) {
+                    continue;
+                }
+                OctiSquare destSq = board.squareAt(sx, sy);
+                if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK) {
+                    if (!destSq.isEmpty()) {
+                        continue;
+                    }
+                } else {
+                    if (destSq.hasEnemyOf(turn)) {
+                        continue;
+                    }
+                    if (destSq.getNumPods() >= 7) {
+                        continue;
+                    }
+                }
+                OctiHop hop = new OctiHop(sx, sy, false);
+                OctiMoveOp op = new OctiMoveOp();
+                op.x0 = guidedOriginBx;
+                op.y0 = guidedOriginBy;
+                op.pod = pod.copy();
+                op.hops.add(hop);
+                List<OctiMoveOp> cand = new ArrayList<>();
+                for (OctiMoveOp sop : stagedOps) {
+                    cand.add(new OctiMoveOp(sop));
+                }
+                cand.add(op);
+                if (validateOpsOnScratch(cand)) {
+                    IntPair pair = new IntPair(sx + 1, sy + 1);
+                    if (seen.add(pair)) {
+                        result.add(new int[]{sx + 1, sy + 1});
+                    }
+                }
+            }
+
+            // 2. Distance-2 jumps
+            for (int d = 0; d < OctiDir.DIR_MAX; d++) {
+                OctiDir dir = OctiDir.fromIndex(d);
+                if (pod.prongAt(dir) == OctiProngType.NO_PRONG) {
+                    continue;
+                }
+                if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK && isOfkBackwardDirection(turn, dir)) {
+                    continue;
+                }
+                int jdx = dir.deltaX();
+                int jdy = dir.deltaY();
+                int dx = jdx * 2;
+                int dy = jdy * 2;
+                int jx = edgeless ? (((guidedOriginBx + jdx) % w + w) % w) : (guidedOriginBx + jdx);
+                int jy = edgeless ? (((guidedOriginBy + jdy) % h + h) % h) : (guidedOriginBy + jdy);
+                int lx = edgeless ? (((guidedOriginBx + dx) % w + w) % w) : (guidedOriginBx + dx);
+                int ly = edgeless ? (((guidedOriginBy + dy) % h + h) % h) : (guidedOriginBy + dy);
+                if (!board.isValidCoord(jx, jy) || !board.isValidCoord(lx, ly)) {
+                    continue;
+                }
+                OctiSquare jumpedSq = board.squareAt(jx, jy);
+                boolean jumpedEmpty = (jx == guidedOriginBx && jy == guidedOriginBy)
+                        ? jumpedSq.isEmptyWithout(ghostPods) : jumpedSq.isEmpty();
+                if (jumpedEmpty) {
+                    continue;
+                }
+
+                OctiSquare landSq = board.squareAt(lx, ly);
+                boolean landEmpty = (lx == guidedOriginBx && ly == guidedOriginBy)
+                        ? landSq.isEmptyWithout(ghostPods) : landSq.isEmpty();
+                if (!landEmpty) {
+                    continue;
+                }
+
+                OctiHop hop = new OctiHop(lx, ly, (board.getGameMode() == OctiGameMode.GAME_MODE_OFK) || jumpedSq.hasEnemyOf(turn));
+                OctiMoveOp op = new OctiMoveOp();
+                op.x0 = guidedOriginBx;
+                op.y0 = guidedOriginBy;
+                op.pod = pod.copy();
+                op.hops.add(hop);
+                List<OctiMoveOp> cand = new ArrayList<>();
+                for (OctiMoveOp sop : stagedOps) {
+                    cand.add(new OctiMoveOp(sop));
+                }
+                cand.add(op);
+                if (validateOpsOnScratch(cand)) {
+                    IntPair pair = new IntPair(lx + 1, ly + 1);
+                    if (seen.add(pair)) {
+                        result.add(new int[]{lx + 1, ly + 1});
+                    }
+                }
+            }
+        } else {
+            // Mid-jump continuation from (guidedCurBx, guidedCurBy)
+            if (stagedOps.isEmpty()) {
+                return result;
+            }
+            OctiMoveOp curOp = stagedOps.get(stagedOps.size() - 1);
+            OctiPod pod = curOp.pod;
+            OctiSquare startSq = board.squareAt(guidedOriginBx, guidedOriginBy);
+            List<OctiPod> ghostPods = new ArrayList<>(startSq.pods());
+
+            for (int d = 0; d < OctiDir.DIR_MAX; d++) {
+                OctiDir dir = OctiDir.fromIndex(d);
+                if (pod.prongAt(dir) == OctiProngType.NO_PRONG) {
+                    continue;
+                }
+                if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK && isOfkBackwardDirection(turn, dir)) {
+                    continue;
+                }
+                int jdx = dir.deltaX();
+                int jdy = dir.deltaY();
+                int dx = jdx * 2;
+                int dy = jdy * 2;
+                int jx = edgeless ? (((guidedCurBx + jdx) % w + w) % w) : (guidedCurBx + jdx);
+                int jy = edgeless ? (((guidedCurBy + jdy) % h + h) % h) : (guidedCurBy + jdy);
+                int lx = edgeless ? (((guidedCurBx + dx) % w + w) % w) : (guidedCurBx + dx);
+                int ly = edgeless ? (((guidedCurBy + dy) % h + h) % h) : (guidedCurBy + dy);
+                if (!board.isValidCoord(jx, jy) || !board.isValidCoord(lx, ly)) {
+                    continue;
+                }
+                if (activeJumpedCoords.contains(new IntPair(jx, jy))) {
+                    continue;
+                }
+                OctiSquare jumpedSq = board.squareAt(jx, jy);
+                boolean jumpedEmpty = (jx == guidedOriginBx && jy == guidedOriginBy)
+                        ? jumpedSq.isEmptyWithout(ghostPods) : jumpedSq.isEmpty();
+                if (jumpedEmpty) {
+                    continue;
+                }
+
+                OctiSquare landSq = board.squareAt(lx, ly);
+                boolean landEmpty = (lx == guidedOriginBx && ly == guidedOriginBy)
+                        ? landSq.isEmptyWithout(ghostPods) : landSq.isEmpty();
+                if (!landEmpty) {
+                    continue;
+                }
+
+                List<OctiMoveOp> cand = new ArrayList<>();
+                for (OctiMoveOp sop : stagedOps) {
+                    cand.add(new OctiMoveOp(sop));
+                }
+                OctiHop hop = new OctiHop(lx, ly, (board.getGameMode() == OctiGameMode.GAME_MODE_OFK) || jumpedSq.hasEnemyOf(turn));
+                cand.get(cand.size() - 1).hops.add(hop);
+                if (validateOpsOnScratch(cand)) {
+                    IntPair pair = new IntPair(lx + 1, ly + 1);
+                    if (seen.add(pair)) {
+                        result.add(new int[]{lx + 1, ly + 1});
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    public boolean selectGuidedDestination(int toX, int toY) {
+        if (!guidedMoveActive || board == null || board.getGame() == null) {
+            return false;
+        }
+        List<int[]> legal = guidedNextSquares();
+        boolean found = false;
+        for (int[] sq : legal) {
+            if (sq[0] == toX && sq[1] == toY) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return false;
+        }
+
+        int tbx = toX - 1;
+        int tby = toY - 1;
+        int fromBx = guidedMidHop ? guidedCurBx : guidedOriginBx;
+        int fromBy = guidedMidHop ? guidedCurBy : guidedOriginBy;
+
+        int w = board.getBoardWidth();
+        int h = board.getBoardHeight();
+        boolean edgeless = board.getGame().useEdgelessBoard();
+        int[] dxy = new int[2];
+        computeDisplacement(fromBx, fromBy, tbx, tby, edgeless, w, h, dxy);
+        boolean isStep = (Math.max(Math.abs(dxy[0]), Math.abs(dxy[1])) == 1);
+
+        if (!guidedMidHop) {
+            if (!stageOrCommitPodMoveOrJump(fromBx + 1, fromBy + 1, guidedPodIndex,
+                    toX, toY, guidedMoveAllStack)) {
+                return false;
+            }
+            guidedCurBx = tbx;
+            guidedCurBy = tby;
+            if (isStep) {
+                guidedMoveActive = false;
+            } else {
+                guidedMidHop = true;
+                if (guidedNextSquares().isEmpty()) {
+                    guidedMoveActive = false;
+                }
+            }
+            return true;
+        } else {
+            if (!stageOrCommitPodMoveOrJump(fromBx + 1, fromBy + 1, guidedPodIndex,
+                    toX, toY, guidedMoveAllStack)) {
+                return false;
+            }
+            guidedCurBx = tbx;
+            guidedCurBy = tby;
+            if (guidedNextSquares().isEmpty()) {
+                guidedMoveActive = false;
+            }
+            return true;
+        }
+    }
+
+    public boolean finishGuidedMoveHere() {
+        if (!guidedMoveActive) {
+            return false;
+        }
+        if (guidedMidHop) {
+            guidedMoveActive = false;
+            activeJumpHasChain = false;
+            return true;
+        }
+        guidedMoveActive = false;
+        return false;
+    }
+
+    public boolean hasOtherMovablePodAtOrigin() {
+        if (stagedOps.isEmpty() || board == null || board.getGame() == null) {
+            return false;
+        }
+        int origBx = stagedOps.get(0).x0;
+        int origBy = stagedOps.get(0).y0;
+        OctiPlayer turn = board.getGame().getTurn();
+        OctiSquare sq = board.squareAt(origBx, origBy);
+        OctiPodType desiredType = turn.toPodType();
+
+        for (int i = 0; i < sq.getNumPods(); i++) {
+            if (isPodClaimed(origBx, origBy, i)) {
+                continue;
+            }
+            OctiPod pod = sq.getPodAt(i);
+            if (pod.getType() != desiredType) {
+                continue;
+            }
+            if (pod.getNumProngs() > 0) {
+                List<int[]> dests = legalDestinationsFrom(origBx + 1, origBy + 1, i);
+                if (!dests.isEmpty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public List<int[]> legalDestinationsFrom(int x, int y) {
@@ -1536,6 +1951,15 @@ public class OctiMoveComposer {
         eighthProngBonusNotation = "";
         activeDragKind = DragKind.NONE;
 
+        guidedMoveActive = false;
+        guidedMidHop = false;
+        guidedOriginBx = -1;
+        guidedOriginBy = -1;
+        guidedCurBx = -1;
+        guidedCurBy = -1;
+        guidedPodIndex = -1;
+        guidedMoveAllStack = false;
+
         refreshLegalMoves();
 
         if (onMoveCommitted != null) {
@@ -1569,6 +1993,26 @@ public class OctiMoveComposer {
         eighthProngTargetBy = -1;
         eighthProngBonusNotation = "";
         activeDragKind = DragKind.NONE;
+
+        guidedMoveActive = false;
+        guidedMidHop = false;
+        guidedOriginBx = -1;
+        guidedOriginBy = -1;
+        guidedCurBx = -1;
+        guidedCurBy = -1;
+        guidedPodIndex = -1;
+        guidedMoveAllStack = false;
+
         refreshLegalMoves();
     }
 }
+
+/*
+ * Local variables:
+ * mode: Java
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

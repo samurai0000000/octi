@@ -295,6 +295,24 @@ public class OctiSquare {
         return !OctiPlayer.areAllied(mode, player, baseOwner);
     }
 
+    public boolean isHomeSquareOf(OctiPlayer player) {
+        if (player == null) {
+            return false;
+        }
+        switch (type) {
+            case A_HOME_SQUARE:
+                return player == OctiPlayer.PLAYER_A;
+            case B_HOME_SQUARE:
+                return player == OctiPlayer.PLAYER_B;
+            case C_HOME_SQUARE:
+                return player == OctiPlayer.PLAYER_C;
+            case D_HOME_SQUARE:
+                return player == OctiPlayer.PLAYER_D;
+            default:
+                return false;
+        }
+    }
+
     public boolean hasSameMaterialsAs(OctiSquare other) {
         if (other == null || pods.size() != other.pods.size()) {
             return false;
@@ -308,3 +326,12 @@ public class OctiSquare {
         return s1.equals(s2);
     }
 }
+
+/*
+ * Local variables:
+ * mode: Java
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

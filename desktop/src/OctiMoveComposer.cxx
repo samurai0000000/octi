@@ -160,7 +160,7 @@ bool findJumpPathBfs(const OctiBoard *board,
 
 OctiMoveComposer::OctiMoveComposer(OctiBoard *board)
     : _board(board)
-    , _confirmAllMoves(false)
+    , _confirmAllMoves(true)
     , _moveEntireMatchingStack(false)
     , _awaitingConfirmation(false)
     , _awaitingSuperProngBonusMove(false)
@@ -172,6 +172,14 @@ OctiMoveComposer::OctiMoveComposer(OctiBoard *board)
     , _hasEighthProngBonusHop(false)
     , _eighthProngTargetBx(-1)
     , _eighthProngTargetBy(-1)
+    , _guidedMoveActive(false)
+    , _guidedMidHop(false)
+    , _guidedOriginBx(-1)
+    , _guidedOriginBy(-1)
+    , _guidedCurBx(-1)
+    , _guidedCurBy(-1)
+    , _guidedPodIndex(-1)
+    , _guidedMoveAllStack(false)
 {
     refreshLegalMoves();
 }
@@ -898,6 +906,380 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
     return true;
 }
 
+bool OctiMoveComposer::beginGuidedPodMove(int x, int y, int podIndex, bool moveAllMatchingStack)
+{
+    if (!_board || !_board->getGame()) {
+        return false;
+    }
+    OctiGame *game = _board->getGame();
+    if (!game->isGameStarted() || game->isGameOver()) {
+        return false;
+    }
+
+    int bx = x - 1;
+    int by = y - 1;
+    if (!_board->isValidCoord(bx, by)) {
+        return false;
+    }
+
+    // If there are existing staged ops, ensure they all originate from this same square
+    if (!_stagedOps.empty()) {
+        for (const auto &op : _stagedOps) {
+            if (op.hops.empty() || op.x0 != bx || op.y0 != by) {
+                return false;
+            }
+        }
+    }
+
+    OctiPlayer turn = game->getTurn();
+    const OctiSquare &sq = _board->squareAt(bx, by);
+    int resolvedIdx = resolvePodIndex(sq, x, y, podIndex, turn, true);
+    if (resolvedIdx < 0 || resolvedIdx >= sq.getNumPods()) {
+        return false;
+    }
+
+    _guidedOriginBx = bx;
+    _guidedOriginBy = by;
+    _guidedCurBx = bx;
+    _guidedCurBy = by;
+    _guidedPodIndex = resolvedIdx;
+    _guidedMoveAllStack = moveAllMatchingStack;
+    _guidedMidHop = false;
+    _guidedMoveActive = true;
+
+    // Verify this pod has at least one legal next square
+    if (guidedNextSquares().empty()) {
+        _guidedMoveActive = false;
+        return false;
+    }
+
+    return true;
+}
+
+bool OctiMoveComposer::isGuidedMoveActive() const
+{
+    return _guidedMoveActive;
+}
+
+std::pair<int, int> OctiMoveComposer::guidedCurrentSquare() const
+{
+    if (!_guidedMoveActive) {
+        return {0, 0};
+    }
+    return {_guidedCurBx + 1, _guidedCurBy + 1};
+}
+
+std::pair<int, int> OctiMoveComposer::guidedOriginSquare() const
+{
+    if (!_guidedMoveActive) {
+        return {0, 0};
+    }
+    return {_guidedOriginBx + 1, _guidedOriginBy + 1};
+}
+
+std::vector<std::pair<int, int>> OctiMoveComposer::guidedNextSquares() const
+{
+    std::vector<std::pair<int, int>> result;
+    if (!_guidedMoveActive || !_board || !_board->getGame()) {
+        return result;
+    }
+    OctiGame *game = _board->getGame();
+    if (!game->isGameStarted() || game->isGameOver()) {
+        return result;
+    }
+
+    OctiPlayer turn = game->getTurn();
+    int w = _board->getBoardWidth();
+    int h = _board->getBoardHeight();
+    bool edgeless = game->useEdgelessBoard();
+    std::set<std::pair<int, int>> seen;
+
+    if (!_guidedMidHop) {
+        if (!_board->isValidCoord(_guidedOriginBx, _guidedOriginBy)) {
+            return result;
+        }
+        const OctiSquare &startSq = _board->squareAt(_guidedOriginBx, _guidedOriginBy);
+        if (_guidedPodIndex < 0 || _guidedPodIndex >= startSq.getNumPods()) {
+            return result;
+        }
+        const OctiPod &pod = startSq.getPodAt(_guidedPodIndex);
+        if (pod.getType() != playerToPodType(turn)) {
+            return result;
+        }
+        std::vector<OctiPod> ghostPods = startSq.pods();
+
+        // 1. Distance-1 steps
+        for (int d = DIR_N; d <= DIR_NW; ++d) {
+            OctiDir dir = static_cast<OctiDir>(d);
+            if (pod.prongAt(dir) == NO_PRONG) {
+                continue;
+            }
+            if (_board->getGameMode() == GAME_MODE_OFK && isOfkBackwardDirection(turn, dir)) {
+                continue;
+            }
+            int jdx = dirDeltaX(dir);
+            int jdy = dirDeltaY(dir);
+            int sx = edgeless ? (((_guidedOriginBx + jdx) % w + w) % w) : (_guidedOriginBx + jdx);
+            int sy = edgeless ? (((_guidedOriginBy + jdy) % h + h) % h) : (_guidedOriginBy + jdy);
+            if (!_board->isValidCoord(sx, sy)) {
+                continue;
+            }
+            const OctiSquare &destSq = _board->squareAt(sx, sy);
+            if (_board->getGameMode() == GAME_MODE_OFK) {
+                if (!destSq.isEmpty()) continue;
+            } else {
+                if (destSq.hasEnemyOf(turn)) continue;
+                if (destSq.getNumPods() >= 7) continue;
+            }
+            OctiHop hop; hop.x = sx; hop.y = sy; hop.capture = false;
+            OctiMoveOp op; op.x0 = _guidedOriginBx; op.y0 = _guidedOriginBy;
+            op.pod = pod; op.hops.push_back(hop);
+            std::vector<OctiMoveOp> cand = _stagedOps;
+            cand.push_back(op);
+            if (validateOpsOnScratch(cand)) {
+                if (seen.insert({sx + 1, sy + 1}).second) {
+                    result.push_back({sx + 1, sy + 1});
+                }
+            }
+        }
+
+        // 2. Distance-2 jumps
+        for (int d = DIR_N; d <= DIR_NW; ++d) {
+            OctiDir dir = static_cast<OctiDir>(d);
+            if (pod.prongAt(dir) == NO_PRONG) {
+                continue;
+            }
+            if (_board->getGameMode() == GAME_MODE_OFK && isOfkBackwardDirection(turn, dir)) {
+                continue;
+            }
+            int jdx = dirDeltaX(dir);
+            int jdy = dirDeltaY(dir);
+            int dx = jdx * 2;
+            int dy = jdy * 2;
+            int jx = edgeless ? (((_guidedOriginBx + jdx) % w + w) % w) : (_guidedOriginBx + jdx);
+            int jy = edgeless ? (((_guidedOriginBy + jdy) % h + h) % h) : (_guidedOriginBy + jdy);
+            int lx = edgeless ? (((_guidedOriginBx + dx) % w + w) % w) : (_guidedOriginBx + dx);
+            int ly = edgeless ? (((_guidedOriginBy + dy) % h + h) % h) : (_guidedOriginBy + dy);
+            if (!_board->isValidCoord(jx, jy) || !_board->isValidCoord(lx, ly)) {
+                continue;
+            }
+            const OctiSquare &jumpedSq = _board->squareAt(jx, jy);
+            bool jumpedEmpty = (jx == _guidedOriginBx && jy == _guidedOriginBy)
+                ? jumpedSq.isEmptyWithout(ghostPods) : jumpedSq.isEmpty();
+            if (jumpedEmpty) continue;
+
+            const OctiSquare &landSq = _board->squareAt(lx, ly);
+            bool landEmpty = (lx == _guidedOriginBx && ly == _guidedOriginBy)
+                ? landSq.isEmptyWithout(ghostPods) : landSq.isEmpty();
+            if (!landEmpty) continue;
+
+            OctiHop hop; hop.x = lx; hop.y = ly;
+            hop.capture = (_board->getGameMode() == GAME_MODE_OFK) || jumpedSq.hasEnemyOf(turn);
+            OctiMoveOp op; op.x0 = _guidedOriginBx; op.y0 = _guidedOriginBy;
+            op.pod = pod; op.hops.push_back(hop);
+            std::vector<OctiMoveOp> cand = _stagedOps;
+            cand.push_back(op);
+            if (validateOpsOnScratch(cand)) {
+                if (seen.insert({lx + 1, ly + 1}).second) {
+                    result.push_back({lx + 1, ly + 1});
+                }
+            }
+        }
+    } else {
+        // Mid-jump continuation from (_guidedCurBx, _guidedCurBy)
+        if (_stagedOps.empty()) {
+            return result;
+        }
+        const OctiMoveOp &curOp = _stagedOps.back();
+        const OctiPod &pod = curOp.pod;
+        const OctiSquare &startSq = _board->squareAt(_guidedOriginBx, _guidedOriginBy);
+        std::vector<OctiPod> ghostPods = startSq.pods();
+
+        for (int d = DIR_N; d <= DIR_NW; ++d) {
+            OctiDir dir = static_cast<OctiDir>(d);
+            if (pod.prongAt(dir) == NO_PRONG) {
+                continue;
+            }
+            if (_board->getGameMode() == GAME_MODE_OFK && isOfkBackwardDirection(turn, dir)) {
+                continue;
+            }
+            int jdx = dirDeltaX(dir);
+            int jdy = dirDeltaY(dir);
+            int dx = jdx * 2;
+            int dy = jdy * 2;
+            int jx = edgeless ? (((_guidedCurBx + jdx) % w + w) % w) : (_guidedCurBx + jdx);
+            int jy = edgeless ? (((_guidedCurBy + jdy) % h + h) % h) : (_guidedCurBy + jdy);
+            int lx = edgeless ? (((_guidedCurBx + dx) % w + w) % w) : (_guidedCurBx + dx);
+            int ly = edgeless ? (((_guidedCurBy + dy) % h + h) % h) : (_guidedCurBy + dy);
+            if (!_board->isValidCoord(jx, jy) || !_board->isValidCoord(lx, ly)) {
+                continue;
+            }
+            if (std::find(_activeJumpedCoords.begin(), _activeJumpedCoords.end(),
+                          std::make_pair(jx, jy)) != _activeJumpedCoords.end()) {
+                continue;
+            }
+            const OctiSquare &jumpedSq = _board->squareAt(jx, jy);
+            bool jumpedEmpty = (jx == _guidedOriginBx && jy == _guidedOriginBy)
+                ? jumpedSq.isEmptyWithout(ghostPods) : jumpedSq.isEmpty();
+            if (jumpedEmpty) continue;
+
+            const OctiSquare &landSq = _board->squareAt(lx, ly);
+            bool landEmpty = (lx == _guidedOriginBx && ly == _guidedOriginBy)
+                ? landSq.isEmptyWithout(ghostPods) : landSq.isEmpty();
+            if (!landEmpty) continue;
+
+            std::vector<OctiMoveOp> cand = _stagedOps;
+            OctiHop hop; hop.x = lx; hop.y = ly;
+            hop.capture = (_board->getGameMode() == GAME_MODE_OFK) || jumpedSq.hasEnemyOf(turn);
+            cand.back().hops.push_back(hop);
+            if (validateOpsOnScratch(cand)) {
+                if (seen.insert({lx + 1, ly + 1}).second) {
+                    result.push_back({lx + 1, ly + 1});
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+bool OctiMoveComposer::selectGuidedDestination(int toX, int toY)
+{
+    if (!_guidedMoveActive || !_board || !_board->getGame()) {
+        return false;
+    }
+    auto legal = guidedNextSquares();
+    bool found = false;
+    for (const auto &sq : legal) {
+        if (sq.first == toX && sq.second == toY) {
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        return false;
+    }
+
+    int tbx = toX - 1;
+    int tby = toY - 1;
+    int fromBx = _guidedMidHop ? _guidedCurBx : _guidedOriginBx;
+    int fromBy = _guidedMidHop ? _guidedCurBy : _guidedOriginBy;
+
+    int w = _board->getBoardWidth();
+    int h = _board->getBoardHeight();
+    bool edgeless = _board->getGame()->useEdgelessBoard();
+    int dx = 0, dy = 0;
+    computeDisplacement(fromBx, fromBy, tbx, tby, edgeless, w, h, dx, dy);
+    bool isStep = (std::max(std::abs(dx), std::abs(dy)) == 1);
+
+    if (!_guidedMidHop) {
+        if (!stageOrCommitPodMoveOrJump(fromBx + 1, fromBy + 1, _guidedPodIndex,
+                                        toX, toY, _guidedMoveAllStack)) {
+            return false;
+        }
+        _guidedCurBx = tbx;
+        _guidedCurBy = tby;
+        if (isStep) {
+            _guidedMoveActive = false;
+        } else {
+            _guidedMidHop = true;
+            if (guidedNextSquares().empty()) {
+                _guidedMoveActive = false;
+            }
+        }
+        return true;
+    } else {
+        if (!stageOrCommitPodMoveOrJump(fromBx + 1, fromBy + 1, _guidedPodIndex,
+                                        toX, toY, _guidedMoveAllStack)) {
+            return false;
+        }
+        _guidedCurBx = tbx;
+        _guidedCurBy = tby;
+        if (guidedNextSquares().empty()) {
+            _guidedMoveActive = false;
+        }
+        return true;
+    }
+}
+
+bool OctiMoveComposer::finishGuidedMoveHere()
+{
+    if (!_guidedMoveActive) {
+        return false;
+    }
+    if (_guidedMidHop) {
+        _guidedMoveActive = false;
+        _activeJumpHasChain = false;
+        return true;
+    }
+    _guidedMoveActive = false;
+    return false;
+}
+
+bool OctiMoveComposer::hasOtherMovablePodAtOrigin() const
+{
+    if (_stagedOps.empty() || !_board || !_board->getGame()) {
+        return false;
+    }
+    int origBx = _stagedOps[0].x0;
+    int origBy = _stagedOps[0].y0;
+    OctiPlayer turn = _board->getGame()->getTurn();
+    const OctiSquare &sq = _board->squareAt(origBx, origBy);
+    OctiPodType desiredType = playerToPodType(turn);
+
+    for (int i = 0; i < sq.getNumPods(); ++i) {
+        if (isPodClaimed(origBx, origBy, i)) {
+            continue;
+        }
+        const OctiPod &pod = sq.getPodAt(i);
+        if (pod.getType() != desiredType) {
+            continue;
+        }
+        if (pod.getNumProngs() > 0) {
+            auto dests = legalDestinationsFrom(origBx + 1, origBy + 1, i);
+            if (!dests.empty()) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool OctiMoveComposer::setCaptureAtSquare(int jumpedX, int jumpedY, bool capture)
+{
+    if (_stagedOps.empty()) {
+        return false;
+    }
+
+    int targetIdx = -1;
+    for (std::size_t i = 0; i < _captureChoices.size(); ++i) {
+        if (_captureChoices[i].jumpedX == jumpedX &&
+            _captureChoices[i].jumpedY == jumpedY) {
+            targetIdx = static_cast<int>(i);
+            break;
+        }
+    }
+    if (targetIdx < 0) {
+        return false;
+    }
+    if (_captureChoices[static_cast<std::size_t>(targetIdx)].mandatory) {
+        return false;
+    }
+
+    _captureChoices[static_cast<std::size_t>(targetIdx)].capture = capture;
+
+    for (const auto &link : _hopCaptureLinks) {
+        if (link.jumpedX == jumpedX && link.jumpedY == jumpedY &&
+            link.opIndex < _stagedOps.size() &&
+            link.hopIndex < _stagedOps[link.opIndex].hops.size()) {
+            _stagedOps[link.opIndex].hops[link.hopIndex].capture = capture;
+        }
+    }
+
+    syncPreparedStateToGame();
+    return true;
+}
+
 bool OctiMoveComposer::toggleCaptureAtSquare(int jumpedX, int jumpedY)
 {
     if (_stagedOps.empty()) {
@@ -1210,6 +1592,15 @@ bool OctiMoveComposer::commitStagedMove()
     _hasEighthProngBonusHop = false;
     _eighthProngBonusNotation.clear();
 
+    _guidedMoveActive = false;
+    _guidedMidHop = false;
+    _guidedOriginBx = -1;
+    _guidedOriginBy = -1;
+    _guidedCurBx = -1;
+    _guidedCurBy = -1;
+    _guidedPodIndex = -1;
+    _guidedMoveAllStack = false;
+
     refreshLegalMoves();
 
     if (_onMoveCommitted) {
@@ -1239,6 +1630,16 @@ void OctiMoveComposer::cancelAndRollback()
     _eighthProngTargetBx = -1;
     _eighthProngTargetBy = -1;
     _eighthProngBonusNotation.clear();
+
+    _guidedMoveActive = false;
+    _guidedMidHop = false;
+    _guidedOriginBx = -1;
+    _guidedOriginBy = -1;
+    _guidedCurBx = -1;
+    _guidedCurBy = -1;
+    _guidedPodIndex = -1;
+    _guidedMoveAllStack = false;
+
     refreshLegalMoves();
 }
 

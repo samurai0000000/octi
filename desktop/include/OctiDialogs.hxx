@@ -9,14 +9,21 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
+#include <QElapsedTimer>
+#include <QIcon>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMouseEvent>
+#include <QPainter>
 #include <QPlainTextEdit>
 #include <QProgressBar>
 #include <QPushButton>
@@ -24,8 +31,11 @@
 #include <QTableWidget>
 #include <QTimer>
 #include "ClientConfigStore.hxx"
+#include "OctiBoard.hxx"
+#include "OctiBoardGeometry.hxx"
 #include "OctiBotEngine.hxx"
 #include "OctiDefs.hxx"
+#include "OctiMoveComposer.hxx"
 #include "OctiNetworkClient.hxx"
 #include "OctiTheme.hxx"
 #include "QtCompat.hxx"
@@ -561,6 +571,219 @@ private:
     QPushButton *_cancelBtn;
     QPushButton *_closeBtn;
 };
+
+/*
+ * 12. OctiSplashDialog:
+ *     5.0-second (5000 ms) luxury procedural animated splash screen.
+ *     Obsidian & Brass tabletop, rotating brass ring, animated OCTI pod & superprong snapping,
+ *     game credits, authorship, copyright, version 2.0.8, progress bar,
+ *     and early dismissal via ESC or mouse click.
+ */
+class OctiSplashDialog : public QDialog {
+public:
+    explicit OctiSplashDialog(QWidget *parent = nullptr,
+                              ThemeId theme = ThemeId::OBSIDIAN_BRASS);
+    ~OctiSplashDialog() override;
+
+    static QImage renderSplashFrame(int width, int height, double progress);
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+
+private:
+    ThemeId _theme;
+    QTimer _timer;
+    QElapsedTimer _elapsed;
+    double _progress;
+};
+
+/*
+ * 13. ZoomedSquareDialog:
+ *     Zoomed close-up square view opened on clicking any non-empty square
+ *     (or eligible friendly home square for Reserve Pod / Liberation).
+ *     Provides pod stack strip for >= 2 pods, move all matching stack toggle,
+ *     interactive 320x320 zoomed octagonal pod canvas with 8 directional sockets,
+ *     prong dispenser tray for dragging / repositioning prongs,
+ *     and "Move / Jump This Pod" action button.
+ */
+class ZoomedSquareDialog : public QDialog {
+public:
+    explicit ZoomedSquareDialog(OctiBoard *board,
+                                OctiMoveComposer *composer,
+                                int squareX, int squareY,
+                                BoardRotation rotation = BoardRotation::ROT_0,
+                                ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                                QWidget *parent = nullptr);
+    ~ZoomedSquareDialog() override;
+
+    int selectedPodIndex() const;
+    bool shouldMovePod() const;
+    bool moveAllMatchingStack() const;
+    bool actionCompleted() const;
+
+    QImage renderToImage(int width = 560, int height = 620);
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+
+private:
+    void updatePodSelection(int idx);
+    void setupUi();
+
+    OctiBoard *_board;
+    OctiMoveComposer *_composer;
+    int _squareX;
+    int _squareY;
+    BoardRotation _rotation;
+    ThemeId _theme;
+
+    int _selectedPodIndex;
+    bool _shouldMovePod;
+    bool _moveAllMatchingStack;
+    bool _actionCompleted;
+
+    QRectF _podCanvasRect;
+    QRectF _stackStripRect;
+    std::vector<QRectF> _stackPodTabRects;
+    QRectF _moveStackCheckRect;
+    QRectF _normalProngTrayRect;
+    QRectF _superProngTrayRect;
+    QRectF _movePodBtnRect;
+    QRectF _placeReserveBtnRect;
+    QRectF _liberateBtnRect;
+    QRectF _closeBtnRect;
+
+    std::map<OctiDir, QPointF> _socketCenters;
+    double _socketRadius;
+
+    enum class ZoomDragKind {
+        NONE,
+        ADD_NORMAL_PRONG,
+        ADD_SUPERPRONG,
+        REPOSITION_PRONG
+    };
+    ZoomDragKind _dragKind;
+    OctiDir _dragSrcProngDir;
+    OctiDir _hoverProngDir;
+    QPointF _dragCursorPos;
+};
+
+/*
+ * 14. CapturePromptDialog:
+ *     Prompts "Capture jumped pod(s) at Square (X, Y)?" with [Capture] and [Leave on Board]
+ *     buttons, and an interactive mini-canvas where dragging the jumped pod off-board
+ *     also triggers capture.
+ */
+class CapturePromptDialog : public QDialog {
+public:
+    explicit CapturePromptDialog(int jumpedX, int jumpedY,
+                                 OctiPlayer jumpedPlayer,
+                                 ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                                 QWidget *parent = nullptr);
+    ~CapturePromptDialog() override;
+
+    bool captureChosen() const;
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+
+private:
+    int _jumpedX;
+    int _jumpedY;
+    OctiPlayer _jumpedPlayer;
+    ThemeId _theme;
+    bool _captureChosen;
+
+    QRectF _miniCanvasRect;
+    QRectF _podIconRect;
+    QRectF _captureBtnRect;
+    QRectF _leaveBtnRect;
+
+    bool _draggingPod;
+    QPointF _dragPos;
+};
+
+/*
+ * 15. SuperProngBonusDialog:
+ *     Prompts "8th-Prong Superprong Bonus Move Available!"
+ *     with [Move / Jump Now] and [Skip Bonus Move] buttons.
+ */
+class SuperProngBonusDialog : public QDialog {
+public:
+    explicit SuperProngBonusDialog(ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                                   QWidget *parent = nullptr);
+    ~SuperProngBonusDialog() override;
+
+    bool moveNowChosen() const;
+
+private:
+    ThemeId _theme;
+    bool _moveNowChosen;
+    QPushButton *_moveNowBtn;
+    QPushButton *_skipBtn;
+};
+
+/*
+ * 16. CompositePodMoveDialog:
+ *     Prompts "Another pod on Square (X, Y) can also move this turn."
+ *     with [Select Next Pod] and [Proceed to Confirm Move] buttons.
+ */
+class CompositePodMoveDialog : public QDialog {
+public:
+    explicit CompositePodMoveDialog(int x, int y,
+                                    ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                                    QWidget *parent = nullptr);
+    ~CompositePodMoveDialog() override;
+
+    bool selectNextPodChosen() const;
+
+private:
+    int _x;
+    int _y;
+    ThemeId _theme;
+    bool _selectNextPodChosen;
+    QPushButton *_selectNextBtn;
+    QPushButton *_confirmBtn;
+};
+
+/*
+ * Procedural Vector Menu Icon Generator (GUI-04)
+ */
+enum class MenuIconKind {
+    NEW_GAME,
+    BOARD_VIEW,
+    LOBBY_VIEW,
+    OFFER_DRAW,
+    PAUSE_RESUME,
+    UNDO_MOVE,
+    CLAIM_FORFEIT,
+    RESIGN,
+    QUIT,
+    ROTATE_BOARD,
+    SWITCH_THEME,
+    TOGGLE_SFX,
+    VCR_FIRST,
+    VCR_PREV,
+    VCR_NEXT,
+    VCR_LAST,
+    SIGN_IN,
+    ACCOUNT_LINK,
+    GAME_ARCHIVE,
+    LEADERBOARD,
+    MODERATION,
+    CHECK_UPDATE,
+    SHOW_SPLASH,
+};
+
+QIcon createMenuIcon(MenuIconKind kind, ThemeId theme = ThemeId::OBSIDIAN_BRASS);
 
 } // namespace octi
 

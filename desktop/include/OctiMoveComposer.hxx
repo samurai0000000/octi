@@ -67,6 +67,17 @@ public:
                                     int toX, int toY,
                                     bool moveAllMatchingStack = false);
 
+    // Guided Step / Multi-Hop Jump & Composite / Bonus Move Helpers (1-based coordinates)
+    bool beginGuidedPodMove(int x, int y, int podIndex, bool moveAllMatchingStack = false);
+    bool isGuidedMoveActive() const;
+    std::pair<int, int> guidedCurrentSquare() const;
+    std::pair<int, int> guidedOriginSquare() const;
+    std::vector<std::pair<int, int>> guidedNextSquares() const;
+    bool selectGuidedDestination(int toX, int toY);
+    bool finishGuidedMoveHere();
+    bool hasOtherMovablePodAtOrigin() const;
+
+    bool setCaptureAtSquare(int jumpedX, int jumpedY, bool capture);
     bool toggleCaptureAtSquare(int jumpedX, int jumpedY);
     bool toggleHopCapture(std::size_t hopIndex);
 
@@ -129,6 +140,16 @@ private:
     int _eighthProngTargetBx;
     int _eighthProngTargetBy;
     std::string _eighthProngBonusNotation;
+
+    // Guided step / jump chain state (0-based internally)
+    bool _guidedMoveActive;
+    bool _guidedMidHop;
+    int _guidedOriginBx;
+    int _guidedOriginBy;
+    int _guidedCurBx;
+    int _guidedCurBy;
+    int _guidedPodIndex;
+    bool _guidedMoveAllStack;
 };
 
 } // namespace octi

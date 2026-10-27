@@ -146,6 +146,13 @@ public class OctiBoard {
         return game;
     }
 
+    public boolean isHomeSquareOf(int x, int y, OctiPlayer player) {
+        if (!isValidCoord(x, y)) {
+            return false;
+        }
+        return boardSquares[x][y].isHomeSquareOf(player);
+    }
+
     public boolean canLiberate(OctiPlayer player) {
         if (mode == OctiGameMode.GAME_MODE_UNDEF || mode == OctiGameMode.GAME_MODE_OFK) {
             return false;
@@ -772,3 +779,13 @@ public class OctiBoard {
         return sb.toString();
     }
 }
+
+/*
+ * Local variables:
+ * mode: Java
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

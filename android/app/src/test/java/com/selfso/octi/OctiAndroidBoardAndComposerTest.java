@@ -303,22 +303,22 @@ public class OctiAndroidBoardAndComposerTest {
         OctiMoveComposer composer = new OctiMoveComposer(board);
         composer.setMoveCommitListener(lastCommitted::set);
 
-        // 1. Smart Auto-Commit (default confirmAllMoves = false): Adding a prong to (3,3) auto-commits immediately
-        assertFalse(composer.isConfirmAllMoves());
+        // 1. Confirm-All (default confirmAllMoves = true per GUI-02): Adding a prong to (3,3) pauses for confirmation
+        assertTrue(composer.isConfirmAllMoves());
         assertTrue(composer.beginAddProngFromReserve(false));
         assertTrue(composer.dropOnCompassSector(3, 3, 0, OctiDir.DIR_N));
+        assertNull("Confirm-All must pause before committing", lastCommitted.get());
+        assertTrue(composer.shouldPauseForConfirmation());
+        assertEquals("33+a", composer.getStagedMoveNotation());
+        assertTrue(composer.commitMove());
         assertEquals("33+a", lastCommitted.get());
         assertEquals(OctiPlayer.PLAYER_B, game.getTurn());
 
-        // 2. Confirm-All mode: Adding a pod for Player B on (5,7) pauses for confirmation
+        // 2. Smart Auto-Commit mode (confirmAllMoves = false): Adding a pod for Player B on (5,7) auto-commits immediately
         lastCommitted.set(null);
-        composer.setConfirmAllMoves(true);
+        composer.setConfirmAllMoves(false);
         assertTrue(composer.beginAddPodFromReserve());
         assertTrue(composer.dropOnSquare(5, 7));
-        assertNull("Confirm-All must pause before committing", lastCommitted.get());
-        assertTrue(composer.shouldPauseForConfirmation());
-        assertEquals("57", composer.getStagedMoveNotation());
-        assertTrue(composer.commitMove());
         assertEquals("57", lastCommitted.get());
         assertEquals(OctiPlayer.PLAYER_A, game.getTurn());
 
@@ -331,6 +331,7 @@ public class OctiAndroidBoardAndComposerTest {
         assertEquals(OctiPlayer.PLAYER_B, game.getTurn());
 
         // 4. Single step by Player A after Player B adds a prong
+        composer.setConfirmAllMoves(false);
         assertTrue(composer.beginAddProngFromReserve(false));
         assertTrue(composer.dropOnCompassSector(3, 7, 0, OctiDir.DIR_S));
         assertEquals("37+e", lastCommitted.get());
@@ -359,6 +360,7 @@ public class OctiAndroidBoardAndComposerTest {
         // Now A is at (3,3) with N prong, B is at (3,4). Jump (3,3) -> (3,5) crosses occupied (3,4)!
         AtomicReference<String> committed = new AtomicReference<>();
         OctiMoveComposer composer = new OctiMoveComposer(board);
+        composer.setConfirmAllMoves(false);
         composer.setMoveCommitListener(committed::set);
 
         assertTrue(composer.beginMoveOrJumpPod(3, 3, 0, false));
@@ -405,6 +407,7 @@ public class OctiAndroidBoardAndComposerTest {
         assertFalse("Must have legal liberation squares", libSquares.isEmpty());
 
         AtomicReference<String> committed = new AtomicReference<>();
+        composer.setConfirmAllMoves(false);
         composer.setMoveCommitListener(committed::set);
         int[] target = libSquares.get(0);
         assertTrue(composer.beginLiberatePodFromReserve());
@@ -459,6 +462,7 @@ public class OctiAndroidBoardAndComposerTest {
 
         AtomicReference<String> committed = new AtomicReference<>();
         OctiMoveComposer composer = new OctiMoveComposer(board);
+        composer.setConfirmAllMoves(false);
         composer.setMoveCommitListener(committed::set);
 
         assertTrue(composer.beginMoveOrJumpPod(5, 3, 0, true));
@@ -474,6 +478,7 @@ public class OctiAndroidBoardAndComposerTest {
         OctiGame game = board.getGame();
         AtomicReference<String> committed = new AtomicReference<>();
         OctiMoveComposer composer = new OctiMoveComposer(board);
+        composer.setConfirmAllMoves(false);
         composer.setMoveCommitListener(committed::set);
 
         OctiDir[] firstSevenDirs = {
@@ -521,6 +526,7 @@ public class OctiAndroidBoardAndComposerTest {
 
         AtomicReference<String> committed = new AtomicReference<>();
         OctiMoveComposer composer = new OctiMoveComposer(board);
+        composer.setConfirmAllMoves(false);
         composer.setMoveCommitListener(committed::set);
 
         assertTrue(composer.beginMoveOrJumpPod(1, 3, 0, false));
@@ -842,4 +848,183 @@ public class OctiAndroidBoardAndComposerTest {
             }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // 8. Envelope 2: Full-Width Borderless Board, Guided Moves & Visual Artifacts
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testOctiAppVersionAndProtocolConstants() {
+        assertEquals("2.0.8", OctiDefs.OCTI_APP_VERSION);
+        assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
+    }
+
+    @Test
+    public void testZeroBorderFullWidthBoardGeometry() {
+        // 9x9 square viewport (1080 x 1080)
+        OctiBoardGeometry geom = new OctiBoardGeometry(9, 9, 1080.0, 1080.0,
+                OctiBoardGeometry.BoardRotation.ROT_0);
+        double[] outer = geom.boardOuterRect();
+        assertEquals(0.0, outer[0], 0.001);
+        assertEquals(0.0, outer[1], 0.001);
+        assertEquals(1080.0, outer[2], 0.001);
+        assertEquals(1080.0, outer[3], 0.001);
+
+        double[] inner = geom.gridInnerRect();
+        assertEquals(0.0, inner[0], 0.001);
+        assertEquals(0.0, inner[1], 0.001);
+        assertEquals(1080.0, inner[2], 0.001);
+        assertEquals(1080.0, inner[3], 0.001);
+
+        assertEquals(120.0, geom.cellSize(), 0.001);
+        assertEquals(48.0, geom.podOuterRadius(), 0.001); // 0.40 * cellSize
+
+        // 9x9 tall portrait viewport (1080 x 1920)
+        OctiBoardGeometry geomPortrait = new OctiBoardGeometry(9, 9, 1080.0, 1920.0,
+                OctiBoardGeometry.BoardRotation.ROT_0);
+        assertEquals(120.0, geomPortrait.cellSize(), 0.001);
+        assertEquals(48.0, geomPortrait.podOuterRadius(), 0.001);
+
+        // OFK 6x7 tall portrait viewport (1080 x 1920)
+        OctiBoardGeometry geomOfk = new OctiBoardGeometry(6, 7, 1080.0, 1920.0,
+                OctiBoardGeometry.BoardRotation.ROT_0);
+        assertEquals(180.0, geomOfk.cellSize(), 0.001); // 1080 / 6 = 180.0
+        assertEquals(72.0, geomOfk.podOuterRadius(), 0.001);
+    }
+
+    @Test
+    public void testMoveComposerGuidedMoveWorkflowStep() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+        game.move("33+c"); // Player A adds East prong at 3,3
+        game.move("37+c"); // Player B adds East prong at 3,7
+
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        assertFalse(composer.isGuidedMoveActive());
+
+        // Begin guided pod move on (3,3) pod 0
+        assertTrue(composer.beginGuidedPodMove(3, 3, 0, false));
+        assertTrue(composer.isGuidedMoveActive());
+
+        int[] cur = composer.guidedCurrentSquare();
+        assertEquals(3, cur[0]);
+        assertEquals(3, cur[1]);
+
+        int[] orig = composer.guidedOriginSquare();
+        assertEquals(3, orig[0]);
+        assertEquals(3, orig[1]);
+
+        List<int[]> nexts = composer.guidedNextSquares();
+        assertFalse(nexts.isEmpty());
+        boolean has43 = false;
+        for (int[] sq : nexts) {
+            if (sq[0] == 4 && sq[1] == 3) {
+                has43 = true;
+                break;
+            }
+        }
+        assertTrue("Destination (4,3) must be in legal next squares", has43);
+
+        // Selecting a single step completes the guided hop sequence and pauses for confirmation
+        assertTrue(composer.selectGuidedDestination(4, 3));
+        assertFalse(composer.isGuidedMoveActive());
+        assertTrue(composer.isAwaitingConfirmation());
+        assertEquals("33c-43", composer.stagedMoveNotation());
+
+        // Commit move
+        assertTrue(composer.commitStagedMove());
+        assertEquals(OctiPlayer.PLAYER_B, game.getTurn());
+        assertEquals(1, board.squareAt(3, 2).getNumPods());
+    }
+
+    @Test
+    public void testMoveComposerGuidedJumpChainAndFinishHere() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+        game.move("33+c"); // A: adds East prong at (3,3)
+        game.move("37+c"); // B: adds East prong at (3,7)
+        game.move("33c-43"); // A: steps to (4,3)
+        game.move("37c-47"); // B: steps to (4,7)
+
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        assertFalse(composer.isGuidedMoveActive());
+
+        // Cancel and rollback cleanly resets guided state
+        assertTrue(composer.beginGuidedPodMove(4, 3, 0, false));
+        assertTrue(composer.isGuidedMoveActive());
+        composer.cancelAndRollback();
+        assertFalse(composer.isGuidedMoveActive());
+    }
+
+    @Test
+    public void testRenderZoomedPodPixelsAndSplashPixels() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        int[] zoomed = OctiBoardRenderer.renderZoomedPodPixels(
+                board, 3, 3, 0, 0, OctiThemeId.OBSIDIAN_BRASS, 480, -1);
+        assertNotNull(zoomed);
+        assertEquals(480 * 480, zoomed.length);
+
+        int[] splash = OctiBoardRenderer.renderSplashPixels(480, 800, 0.5);
+        assertNotNull(splash);
+        assertEquals(480 * 800, splash.length);
+    }
+
+    @Test
+    public void testExportAndroidVisualArtifactPngs() throws Exception {
+        File repoRoot = resolveRepoRoot();
+        File artifactDir = new File(repoRoot, "plan/done/plan_gui_refinement.artifacts");
+        if (!artifactDir.isDirectory()) {
+            artifactDir = new File(repoRoot, "plan/plan_gui_refinement.artifacts");
+        }
+        if (!artifactDir.isDirectory()) {
+            assertTrue(artifactDir.mkdirs());
+        }
+
+        // 1. android_board_fullwidth_2p.png (1080 x 1080)
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        OctiBoardGeometry geom = new OctiBoardGeometry(9, 9, 1080.0, 1080.0,
+                OctiBoardGeometry.BoardRotation.ROT_0);
+        int[] boardPixels = OctiBoardRenderer.renderBoardPixels(
+                board, composer, geom, OctiThemeId.OBSIDIAN_BRASS);
+        File boardPng = new File(artifactDir, "android_board_fullwidth_2p.png");
+        OctiAppIconRenderer.writeArgbPng(1080, 1080, boardPixels, boardPng);
+        assertTrue("android_board_fullwidth_2p.png must exist", boardPng.isFile());
+        assertTrue("android_board_fullwidth_2p.png must be > 4KB", boardPng.length() > 4096);
+
+        // 2. android_splash.png (1080 x 1920)
+        int[] splashPixels = OctiBoardRenderer.renderSplashPixels(1080, 1920, 0.65);
+        File splashPng = new File(artifactDir, "android_splash.png");
+        OctiAppIconRenderer.writeArgbPng(1080, 1920, splashPixels, splashPng);
+        assertTrue("android_splash.png must exist", splashPng.isFile());
+        assertTrue("android_splash.png must be > 4KB", splashPng.length() > 4096);
+
+        // 3. android_zoomed_square.png (800 x 800)
+        board.getGame().move("33+a");
+        board.getGame().move("37+e");
+        int[] zoomPixels = OctiBoardRenderer.renderZoomedPodPixels(
+                board, 3, 3, 0, 0, OctiThemeId.OBSIDIAN_BRASS, 800, -1);
+        File zoomPng = new File(artifactDir, "android_zoomed_square.png");
+        OctiAppIconRenderer.writeArgbPng(800, 800, zoomPixels, zoomPng);
+        assertTrue("android_zoomed_square.png must exist", zoomPng.isFile());
+        assertTrue("android_zoomed_square.png must be > 4KB", zoomPng.length() > 4096);
+
+        // Validate PNG magic bytes across all three artifacts
+        for (File f : new File[]{boardPng, splashPng, zoomPng}) {
+            byte[] bytes = Files.readAllBytes(f.toPath());
+            assertEquals((byte) 0x89, bytes[0]);
+            assertEquals((byte) 0x50, bytes[1]);
+            assertEquals((byte) 0x4E, bytes[2]);
+            assertEquals((byte) 0x47, bytes[3]);
+        }
+    }
 }
+
+/*
+ * Local variables:
+ * mode: Java
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

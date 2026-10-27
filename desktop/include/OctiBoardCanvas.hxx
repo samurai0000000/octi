@@ -124,6 +124,9 @@ private:
 
     QRectF _commitBtnRect;
     QRectF _rollbackBtnRect;
+    QRectF _finishBtnRect;
+    int _dragJumpedSquareX;
+    int _dragJumpedSquareY;
 
     QTimer _animTimer;
     bool _animActive;

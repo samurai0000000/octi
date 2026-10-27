@@ -5,6 +5,7 @@
  */
 
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <QAbstractItemView>
 #include <QDesktopServices>
@@ -2589,6 +2590,1207 @@ bool SelfUpdateDialog::isDownloadInstallButtonEnabled() const
 bool SelfUpdateDialog::isCancelButtonEnabled() const
 {
     return _cancelBtn ? _cancelBtn->isEnabled() : false;
+}
+
+/* ==================================================================== */
+/* OctiSplashDialog                                                     */
+/* ==================================================================== */
+
+OctiSplashDialog::OctiSplashDialog(QWidget *parent, ThemeId theme)
+    : QDialog(parent)
+    , _theme(theme)
+    , _timer(this)
+    , _elapsed()
+    , _progress(0.0)
+{
+    setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
+    setAttribute(Qt::WA_TranslucentBackground, false);
+    setFixedSize(960, 560);
+    setModal(true);
+
+    _elapsed.start();
+    QObject::connect(&_timer, &QTimer::timeout, this, [this]() {
+        qint64 ms = _elapsed.elapsed();
+        _progress = std::min(1.0, static_cast<double>(ms) / 5000.0);
+        update();
+        if (ms >= 5000) {
+            _timer.stop();
+            accept();
+        }
+    });
+    _timer.start(16);
+}
+
+OctiSplashDialog::~OctiSplashDialog()
+{
+    if (_timer.isActive()) {
+        _timer.stop();
+    }
+}
+
+QImage OctiSplashDialog::renderSplashFrame(int width, int height, double progress)
+{
+    progress = std::clamp(progress, 0.0, 1.0);
+    QImage frame(width, height, QImage::Format_ARGB32_Premultiplied);
+    frame.fill(Qt::transparent);
+    QPainter p(&frame);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
+
+    const OctiPalette &pal = paletteForTheme(ThemeId::OBSIDIAN_BRASS);
+
+    double w = static_cast<double>(width);
+    double h = static_cast<double>(height);
+
+    // 1. Radial background
+    QPointF bgCenter(w * 0.5, h * 0.42);
+    QRadialGradient bgGrad(bgCenter, std::max(w, h) * 0.75);
+    bgGrad.setColorAt(0.0, QColor(24, 34, 52));
+    bgGrad.setColorAt(0.55, QColor(13, 18, 27));
+    bgGrad.setColorAt(1.0, QColor(5, 7, 11));
+    p.fillRect(QRectF(0, 0, w, h), bgGrad);
+
+    // 2. Animated perspective tabletop grid
+    p.save();
+    double vpX = w * 0.5;
+    double vpY = h * 0.12;
+    for (int i = -12; i <= 12; ++i) {
+        double botX = w * 0.5 + i * (w * 0.065);
+        p.setPen(QPen(QColor(212, 175, 55, 30), 1.0));
+        p.drawLine(QPointF(vpX, vpY), QPointF(botX, h));
+    }
+    double scrollY = std::fmod(progress * 180.0, 36.0);
+    for (double y = h * 0.35 + scrollY; y < h; y += 36.0) {
+        double factor = (y - vpY) / (h - vpY);
+        p.setPen(QPen(QColor(212, 175, 55, static_cast<int>(35 * factor)), 1.0));
+        p.drawLine(QPointF(0, y), QPointF(w, y));
+    }
+    p.restore();
+
+    // 3. Rotating brass compass ring
+    p.save();
+    QPointF podCenter(w * 0.5, h * 0.40);
+    double outerR = std::min(w, h) * 0.28;
+    double ringAngleDeg = progress * 360.0 * 0.4;
+    p.translate(podCenter);
+    p.rotate(ringAngleDeg);
+
+    QPen brassRingPen(pal.boardOuterFrame, 2.2);
+    p.setPen(brassRingPen);
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(QPointF(0, 0), outerR, outerR);
+    p.setPen(QPen(pal.accentBrass, 1.2, Qt::DashLine));
+    p.drawEllipse(QPointF(0, 0), outerR * 0.85, outerR * 0.85);
+
+    for (int deg = 0; deg < 360; deg += 15) {
+        double rad = deg * M_PI / 180.0;
+        double r1 = (deg % 45 == 0) ? (outerR * 0.80) : (outerR * 0.86);
+        double r2 = outerR * 0.98;
+        p.setPen(QPen(pal.accentBrass, (deg % 90 == 0) ? 2.0 : 1.0));
+        p.drawLine(QPointF(std::cos(rad) * r1, std::sin(rad) * r1),
+                   QPointF(std::cos(rad) * r2, std::sin(rad) * r2));
+    }
+    p.restore();
+
+    // 4. Central animated jewel-faceted Emerald & Brass OCTI Pod & Prongs
+    p.save();
+    double podScale = 0.5 + 0.5 * std::min(1.0, progress * 1.6);
+    double podR = std::min(w, h) * 0.16 * podScale;
+    QRectF podRect(podCenter.x() - podR, podCenter.y() - podR, podR * 2.0, podR * 2.0);
+
+    OctiPod pod(A_POD);
+    if (progress >= 0.25) pod.addProng(DIR_E, false);
+    if (progress >= 0.40) pod.addProng(DIR_W, false);
+    if (progress >= 0.55) pod.addProng(DIR_NE, false);
+    if (progress >= 0.70) pod.addProng(DIR_SW, false);
+    if (progress >= 0.82) pod.addProng(DIR_N, true); // crowned Superprong!
+
+    int podRotDeg = static_cast<int>((1.0 - std::min(1.0, progress * 1.5)) * 45.0);
+    paintOctagonalPod(p, podRect, A_POD, pod, pal, podRotDeg, true, 1.0);
+
+    // Glowing shockwave rings when prongs snap in
+    if (progress >= 0.82) {
+        double shockR = podR * (1.1 + 0.35 * (progress - 0.82) / 0.18);
+        p.setPen(QPen(pal.prongSuperGold, 2.5));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(podCenter, shockR, shockR);
+    } else if (progress >= 0.55) {
+        double shockR = podR * (1.05 + 0.25 * (progress - 0.55) / 0.27);
+        p.setPen(QPen(pal.legalStepGuide, 1.8));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(podCenter, shockR, shockR);
+    }
+
+    // Orbiting particles
+    int numParticles = 8;
+    for (int i = 0; i < numParticles; ++i) {
+        double partAngle = (progress * 2.5 * M_PI) + (i * 2.0 * M_PI / numParticles);
+        double partR = podR * (1.35 + 0.15 * std::sin(progress * 6.0 + i));
+        QPointF partPos(podCenter.x() + std::cos(partAngle) * partR,
+                        podCenter.y() + std::sin(partAngle) * partR);
+        p.setPen(Qt::NoPen);
+        p.setBrush((i % 2 == 0) ? pal.prongSuperGold : pal.accentBrass);
+        p.drawEllipse(partPos, 2.5, 2.5);
+    }
+    p.restore();
+
+    // 5. Typography (Title, Subtitle, Version, Credits, Copyright)
+    p.save();
+    QFont titleFont("SansSerif", 36, QFont::Bold);
+    titleFont.setLetterSpacing(QFont::AbsoluteSpacing, 6.0);
+    p.setFont(titleFont);
+    QRectF titleRect(0, h * 0.04, w, 48);
+    p.setPen(QColor(10, 14, 20, 220));
+    p.drawText(titleRect.translated(2.0, 2.0), Qt::AlignCenter, "OCTI");
+    p.setPen(pal.prongSuperGold);
+    p.drawText(titleRect, Qt::AlignCenter, "OCTI");
+
+    QFont subFont("SansSerif", 13, QFont::Medium);
+    subFont.setLetterSpacing(QFont::AbsoluteSpacing, 1.5);
+    p.setFont(subFont);
+    p.setPen(pal.accentBrass);
+    QRectF subRect(0, h * 0.04 + 48, w, 24);
+    p.drawText(subRect, Qt::AlignCenter, "Strategic Abstract Board Game Platform");
+
+    double metaY = h * 0.67;
+    QFont metaFont("SansSerif", 11, QFont::Bold);
+    p.setFont(metaFont);
+    p.setPen(pal.textPrimary);
+    QRectF verRect(0, metaY, w, 22);
+    p.drawText(verRect, Qt::AlignCenter,
+               QString("Version %1 (Protocol v1)")
+                   .arg(QString::fromStdString(OctiCore::versionString())));
+
+    QFont credFont("SansSerif", 10);
+    p.setFont(credFont);
+    p.setPen(QColor(185, 195, 210));
+    QRectF authRect(0, metaY + 24, w, 20);
+    p.drawText(authRect, Qt::AlignCenter, "Author: Charles Chiou (selfso.com)");
+
+    QRectF gameRect(0, metaY + 44, w, 20);
+    p.drawText(gameRect, Qt::AlignCenter, "Original OCTI Game Designed by Don Green");
+
+    QRectF cprtRect(0, metaY + 64, w, 20);
+    p.setPen(pal.accentBrass);
+    p.drawText(cprtRect, Qt::AlignCenter,
+               "Copyright (C) 2026, Charles Chiou. All Rights Reserved.");
+
+    double barW = w * 0.55;
+    double barH = 5.0;
+    QRectF barBg(w * 0.5 - barW * 0.5, h - 34.0, barW, barH);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(30, 40, 56));
+    p.drawRoundedRect(barBg, 2.5, 2.5);
+
+    QRectF barFill(barBg.left(), barBg.top(), barW * progress, barH);
+    QLinearGradient barGrad(barFill.topLeft(), barFill.topRight());
+    barGrad.setColorAt(0.0, pal.podA.core);
+    barGrad.setColorAt(1.0, pal.prongSuperGold);
+    p.setBrush(barGrad);
+    p.drawRoundedRect(barFill, 2.5, 2.5);
+
+    QFont hintFont("SansSerif", 9);
+    p.setFont(hintFont);
+    p.setPen(QColor(150, 160, 175));
+    QRectF hintRect(0, h - 24.0, w, 18);
+    p.drawText(hintRect, Qt::AlignCenter, "Click or Press ESC to Continue");
+
+    p.restore();
+    return frame;
+}
+
+void OctiSplashDialog::paintEvent(QPaintEvent *event)
+{
+    (void)event;
+    QPainter p(this);
+    p.drawImage(0, 0, renderSplashFrame(width(), height(), _progress));
+}
+
+void OctiSplashDialog::keyPressEvent(QKeyEvent *event)
+{
+    if (event && event->key() == Qt::Key_Escape) {
+        if (_timer.isActive()) {
+            _timer.stop();
+        }
+        reject();
+        return;
+    }
+    QDialog::keyPressEvent(event);
+}
+
+void OctiSplashDialog::mousePressEvent(QMouseEvent *event)
+{
+    (void)event;
+    if (_timer.isActive()) {
+        _timer.stop();
+    }
+    accept();
+}
+
+/* ==================================================================== */
+/* ZoomedSquareDialog                                                   */
+/* ==================================================================== */
+
+ZoomedSquareDialog::ZoomedSquareDialog(OctiBoard *board,
+                                       OctiMoveComposer *composer,
+                                       int squareX, int squareY,
+                                       BoardRotation rotation,
+                                       ThemeId theme,
+                                       QWidget *parent)
+    : QDialog(parent)
+    , _board(board)
+    , _composer(composer)
+    , _squareX(squareX)
+    , _squareY(squareY)
+    , _rotation(rotation)
+    , _theme(theme)
+    , _selectedPodIndex(0)
+    , _shouldMovePod(false)
+    , _moveAllMatchingStack(false)
+    , _actionCompleted(false)
+    , _socketRadius(18.0)
+    , _dragKind(ZoomDragKind::NONE)
+    , _dragSrcProngDir(DIR_UNDEF)
+    , _hoverProngDir(DIR_UNDEF)
+    , _dragCursorPos()
+{
+    setFixedSize(560, 620);
+    setModal(true);
+    setWindowTitle(QString("Square (%1, %2) Close-Up Inspector").arg(_squareX).arg(_squareY));
+
+    if (_board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
+        const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+        if (_composer) {
+            _selectedPodIndex = _composer->selectedStackPodIndex(_squareX, _squareY);
+        }
+        if (_selectedPodIndex < 0 || _selectedPodIndex >= sq.getNumPods()) {
+            _selectedPodIndex = std::max(0, sq.getNumPods() - 1);
+        }
+    }
+}
+
+ZoomedSquareDialog::~ZoomedSquareDialog() = default;
+
+int ZoomedSquareDialog::selectedPodIndex() const
+{
+    return _selectedPodIndex;
+}
+
+bool ZoomedSquareDialog::shouldMovePod() const
+{
+    return _shouldMovePod;
+}
+
+bool ZoomedSquareDialog::moveAllMatchingStack() const
+{
+    return _moveAllMatchingStack;
+}
+
+bool ZoomedSquareDialog::actionCompleted() const
+{
+    return _actionCompleted;
+}
+
+QImage ZoomedSquareDialog::renderToImage(int width, int height)
+{
+    QImage img(width, height, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
+
+    const OctiPalette &pal = paletteForTheme(_theme);
+
+    // 1. Background Card
+    QRectF bgRect(0, 0, width, height);
+    p.setPen(QPen(pal.accentBrass, 1.8));
+    p.setBrush(pal.panelCardBg);
+    p.drawRoundedRect(bgRect.adjusted(1, 1, -1, -1), 10.0, 10.0);
+
+    // 2. Header
+    QFont titleFont("SansSerif", 16, QFont::Bold);
+    p.setFont(titleFont);
+    p.setPen(pal.prongSuperGold);
+    QRectF coordRect(16, 14, width - 32, 28);
+    p.drawText(coordRect, Qt::AlignLeft | Qt::AlignVCenter,
+               QString("Square (%1, %2)").arg(_squareX).arg(_squareY));
+
+    bool isTurn = false;
+    bool hasEnemy = false;
+    bool isEmptySquare = true;
+    int numPods = 0;
+    if (_board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
+        const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+        numPods = sq.getNumPods();
+        isEmptySquare = sq.isEmpty();
+        if (_board->getGame()) {
+            OctiPlayer turn = _board->getGame()->getTurn();
+            isTurn = true;
+            hasEnemy = sq.hasEnemyOf(turn);
+        }
+    }
+
+    QFont modeFont("SansSerif", 10, QFont::Medium);
+    p.setFont(modeFont);
+    p.setPen(hasEnemy ? pal.legalCaptureGlow : pal.accentBrass);
+    QString modeStr = hasEnemy
+        ? "Close-Up Inspect Mode (Opponent Square)"
+        : (isEmptySquare
+               ? "Eligible Friendly Home Square"
+               : "Active Turn - Pod Configuration & Move Planning");
+    QRectF modeRect(16, 42, width - 32, 20);
+    p.drawText(modeRect, Qt::AlignLeft | Qt::AlignVCenter, modeStr);
+
+    // 3. Stack Selector Strip (when >= 2 pods)
+    _stackPodTabRects.clear();
+    _moveStackCheckRect = QRectF();
+    if (numPods >= 2) {
+        double tabW = std::min(80.0, (width - 150.0) / numPods);
+        double tabH = 26.0;
+        double startX = 120.0;
+        double startY = 66.0;
+
+        for (int i = 0; i < numPods; ++i) {
+            QRectF tabR(startX + i * (tabW + 6.0), startY, tabW, tabH);
+            _stackPodTabRects.push_back(tabR);
+
+            bool sel = (i == _selectedPodIndex);
+            p.setPen(QPen(sel ? pal.prongSuperGold : pal.accentBrass, sel ? 1.8 : 1.0));
+            p.setBrush(sel ? pal.boardOuterFrame.darker(140) : pal.panelCardBg.darker(120));
+            p.drawRoundedRect(tabR, 4.0, 4.0);
+
+            p.setPen(sel ? pal.prongSuperGold : pal.textPrimary);
+            QFont tabFont("SansSerif", 9, sel ? QFont::Bold : QFont::Normal);
+            p.setFont(tabFont);
+            p.drawText(tabR, Qt::AlignCenter, QString("Pod %1/%2").arg(i + 1).arg(numPods));
+        }
+
+        if (!hasEnemy && isTurn) {
+            _moveStackCheckRect = QRectF(120.0, 96.0, 240.0, 20.0);
+            p.setPen(QPen(pal.accentBrass, 1.2));
+            p.setBrush(_moveAllMatchingStack ? pal.accentBrass : Qt::NoBrush);
+            p.drawRect(120.0, 98.0, 14.0, 14.0);
+            if (_moveAllMatchingStack) {
+                p.setPen(QPen(Qt::black, 2.0));
+                p.drawLine(122.0, 105.0, 126.0, 110.0);
+                p.drawLine(126.0, 110.0, 132.0, 100.0);
+            }
+            p.setPen(pal.textPrimary);
+            QFont chkFont("SansSerif", 9);
+            p.setFont(chkFont);
+            p.drawText(QRectF(140.0, 96.0, 220.0, 18.0),
+                       Qt::AlignLeft | Qt::AlignVCenter,
+                       "Move All Matching Pods (Stack)");
+        }
+    }
+
+    // 4. Large Interactive 320x320 Zoomed Pod Canvas
+    _podCanvasRect = QRectF(120.0, (numPods >= 2) ? 122.0 : 76.0, 320.0, 320.0);
+    p.setPen(QPen(pal.boardOuterFrame.darker(180), 1.0));
+    p.setBrush(QColor(10, 14, 22, 160));
+    p.drawRoundedRect(_podCanvasRect, 8.0, 8.0);
+
+    QPointF pc = _podCanvasRect.center();
+    double podR = 100.0;
+    _socketRadius = 18.0;
+
+    _socketCenters.clear();
+    int rotDeg = static_cast<int>(_rotation);
+    double radRot = rotDeg * M_PI / 180.0;
+
+    if (!isEmptySquare && _board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
+        const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+        int pIdx = std::clamp(_selectedPodIndex, 0, sq.getNumPods() - 1);
+        const OctiPod &pod = sq.getPodAt(pIdx);
+
+        QRectF pRect(pc.x() - podR, pc.y() - podR, podR * 2.0, podR * 2.0);
+        paintOctagonalPod(p, pRect, pod.getType(), pod, pal, rotDeg, true, 1.0);
+
+        // Render all 8 sockets around perimeter
+        for (int d = DIR_N; d <= DIR_NW; ++d) {
+            OctiDir dir = static_cast<OctiDir>(d);
+            double uX = dirDeltaX(dir);
+            double uY = dirDeltaY(dir);
+            double ruX = uX * std::cos(radRot) - uY * std::sin(radRot);
+            double ruY = uX * std::sin(radRot) + uY * std::cos(radRot);
+
+            QPointF sc = pc + QPointF(ruX * (podR * 0.76), ruY * (podR * 0.76));
+            _socketCenters[dir] = sc;
+
+            bool isHovered = (dir == _hoverProngDir);
+            p.setPen(QPen(isHovered ? pal.legalStepGuide : pal.gridSocketShadow,
+                          isHovered ? 2.2 : 1.2));
+            p.setBrush(isHovered ? pal.legalStepGuide.darker(160) : QColor(14, 20, 30, 200));
+            p.drawEllipse(sc, _socketRadius, _socketRadius);
+
+            // Socket direction letter 'a'..'h'
+            QFont scFont("SansSerif", 9, QFont::Bold);
+            p.setFont(scFont);
+            p.setPen(isHovered ? pal.prongSuperGold : pal.accentBrass);
+            char letter = static_cast<char>('a' + (d - DIR_N));
+            p.drawText(QRectF(sc.x() - 10, sc.y() - 10, 20, 20),
+                       Qt::AlignCenter, QString(letter));
+        }
+    } else {
+        // Empty friendly home square
+        p.setPen(QPen(pal.accentBrass, 1.5, Qt::DashLine));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(pc, podR * 0.8, podR * 0.8);
+        QFont eFont("SansSerif", 11, QFont::Medium);
+        p.setFont(eFont);
+        p.setPen(pal.accentBrass);
+        p.drawText(_podCanvasRect, Qt::AlignCenter, "Empty OCTI Home Square\n(Place Pod to Enter Board)");
+    }
+
+    // 5. Left Side: Prong Dispenser Tray (for friendly pods on player's turn)
+    _normalProngTrayRect = QRectF();
+    _superProngTrayRect = QRectF();
+    if (!hasEnemy && isTurn && _board && _board->getGame()) {
+        OctiPlayer turn = _board->getGame()->getTurn();
+        int freeProngs = _board->getGame()->getFreeProngs(turn);
+        int freeSuper = _board->getGame()->getFreeSuperProngs(turn);
+
+        _normalProngTrayRect = QRectF(16, 140, 88, 80);
+        _superProngTrayRect = QRectF(16, 235, 88, 80);
+
+        // Normal Prong Tray Card
+        p.setPen(QPen(pal.accentBrass, 1.2));
+        p.setBrush(pal.panelCardBg.darker(110));
+        p.drawRoundedRect(_normalProngTrayRect, 6.0, 6.0);
+        QRectF npIconR(_normalProngTrayRect.center().x() - 14, _normalProngTrayRect.top() + 8, 28, 28);
+        paintProngGlyph(p, npIconR, false, pal);
+        QFont trayFont("SansSerif", 8, QFont::Bold);
+        p.setFont(trayFont);
+        p.setPen(pal.textPrimary);
+        QRectF npTxtR(_normalProngTrayRect.left(), _normalProngTrayRect.top() + 40, _normalProngTrayRect.width(), 34);
+        p.drawText(npTxtR, Qt::AlignCenter, QString("Normal\n(%1 avail)").arg(freeProngs));
+
+        // Superprong Tray Card
+        p.setPen(QPen(pal.prongSuperGold, 1.2));
+        p.setBrush(pal.panelCardBg.darker(110));
+        p.drawRoundedRect(_superProngTrayRect, 6.0, 6.0);
+        QRectF spIconR(_superProngTrayRect.center().x() - 14, _superProngTrayRect.top() + 8, 28, 28);
+        paintProngGlyph(p, spIconR, true, pal);
+        p.setFont(trayFont);
+        p.setPen(pal.prongSuperGold);
+        QRectF spTxtR(_superProngTrayRect.left(), _superProngTrayRect.top() + 40, _superProngTrayRect.width(), 34);
+        p.drawText(spTxtR, Qt::AlignCenter, QString("Super (!)\n(%1 avail)").arg(freeSuper));
+    }
+
+    // 6. Action Buttons at Bottom
+    _movePodBtnRect = QRectF(120, 455, 320, 38);
+    _placeReserveBtnRect = QRectF();
+    _liberateBtnRect = QRectF();
+    _closeBtnRect = QRectF(120, 545, 320, 34);
+
+    bool canMove = false;
+    if (_composer && !isEmptySquare) {
+        canMove = !_composer->legalDestinationsFrom(_squareX, _squareY, _selectedPodIndex).empty();
+    }
+    p.setPen(QPen(canMove ? pal.prongSuperGold : pal.accentBrass.darker(180), 1.4));
+    p.setBrush(canMove ? pal.podA.core : pal.panelCardBg.darker(140));
+    p.drawRoundedRect(_movePodBtnRect, 6.0, 6.0);
+    p.setPen(canMove ? Qt::white : QColor(130, 140, 150));
+    QFont btnFont("SansSerif", 11, QFont::Bold);
+    p.setFont(btnFont);
+    p.drawText(_movePodBtnRect, Qt::AlignCenter, "Move / Jump This Pod");
+
+    // Home square buttons
+    if (isEmptySquare && _composer) {
+        _placeReserveBtnRect = QRectF(120, 502, 155, 34);
+        _liberateBtnRect = QRectF(285, 502, 155, 34);
+
+        p.setPen(QPen(pal.accentBrass, 1.2));
+        p.setBrush(pal.panelCardBg);
+        p.drawRoundedRect(_placeReserveBtnRect, 5.0, 5.0);
+        p.setPen(pal.textPrimary);
+        p.setFont(QFont("SansSerif", 9, QFont::Bold));
+        p.drawText(_placeReserveBtnRect, Qt::AlignCenter, "Place Reserve (+)");
+
+        p.setPen(QPen(pal.accentBrass, 1.2));
+        p.drawRoundedRect(_liberateBtnRect, 5.0, 5.0);
+        p.setPen(pal.textPrimary);
+        p.drawText(_liberateBtnRect, Qt::AlignCenter, "Liberate (*)");
+    }
+
+    // Close Inspector button
+    p.setPen(QPen(pal.accentBrass, 1.2));
+    p.setBrush(pal.panelCardBg);
+    p.drawRoundedRect(_closeBtnRect, 5.0, 5.0);
+    p.setPen(pal.textPrimary);
+    p.setFont(QFont("SansSerif", 10, QFont::Medium));
+    p.drawText(_closeBtnRect, Qt::AlignCenter, "Close Inspector [Esc]");
+
+    // 7. Render active drag token if dragging
+    if (_dragKind != ZoomDragKind::NONE) {
+        QRectF dragRect(_dragCursorPos.x() - 16, _dragCursorPos.y() - 16, 32, 32);
+        if (_dragKind == ZoomDragKind::ADD_NORMAL_PRONG) {
+            paintProngGlyph(p, dragRect, false, pal);
+        } else if (_dragKind == ZoomDragKind::ADD_SUPERPRONG) {
+            paintProngGlyph(p, dragRect, true, pal);
+        } else if (_dragKind == ZoomDragKind::REPOSITION_PRONG) {
+            paintProngGlyph(p, dragRect, false, pal);
+        }
+    }
+
+    p.end();
+    return img;
+}
+
+void ZoomedSquareDialog::paintEvent(QPaintEvent *event)
+{
+    (void)event;
+    QPainter p(this);
+    p.drawImage(0, 0, renderToImage(width(), height()));
+}
+
+void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
+{
+    if (!event) return;
+    QPointF pos = mousePosF(event);
+
+    // 1. Check Stack tabs
+    for (std::size_t i = 0; i < _stackPodTabRects.size(); ++i) {
+        if (_stackPodTabRects[i].contains(pos)) {
+            _selectedPodIndex = static_cast<int>(i);
+            if (_composer) {
+                _composer->selectStackPodIndex(_squareX, _squareY, _selectedPodIndex);
+            }
+            update();
+            return;
+        }
+    }
+
+    // 2. Check Move Stack check box
+    if (!_moveStackCheckRect.isEmpty() && _moveStackCheckRect.contains(pos)) {
+        _moveAllMatchingStack = !_moveAllMatchingStack;
+        update();
+        return;
+    }
+
+    // 3. Check Move Pod button
+    if (_movePodBtnRect.contains(pos)) {
+        if (_composer && !_composer->legalDestinationsFrom(_squareX, _squareY, _selectedPodIndex).empty()) {
+            _shouldMovePod = true;
+            accept();
+            return;
+        }
+    }
+
+    // 4. Check Home square buttons
+    if (!_placeReserveBtnRect.isEmpty() && _placeReserveBtnRect.contains(pos)) {
+        if (_composer) {
+            _composer->stageOrCommitAddPod(_squareX, _squareY, false);
+            _actionCompleted = true;
+            accept();
+            return;
+        }
+    }
+    if (!_liberateBtnRect.isEmpty() && _liberateBtnRect.contains(pos)) {
+        if (_composer) {
+            _composer->stageOrCommitAddPod(_squareX, _squareY, true);
+            _actionCompleted = true;
+            accept();
+            return;
+        }
+    }
+
+    // 5. Check Close button
+    if (_closeBtnRect.contains(pos)) {
+        reject();
+        return;
+    }
+
+    // 6. Check Prong Trays
+    if (!_normalProngTrayRect.isEmpty() && _normalProngTrayRect.contains(pos)) {
+        _dragKind = ZoomDragKind::ADD_NORMAL_PRONG;
+        _dragCursorPos = pos;
+        update();
+        return;
+    }
+    if (!_superProngTrayRect.isEmpty() && _superProngTrayRect.contains(pos)) {
+        _dragKind = ZoomDragKind::ADD_SUPERPRONG;
+        _dragCursorPos = pos;
+        update();
+        return;
+    }
+
+    // 7. Check socket drag (reposition existing prong)
+    if (_board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
+        const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+        if (_selectedPodIndex < sq.getNumPods()) {
+            const OctiPod &pod = sq.getPodAt(_selectedPodIndex);
+            for (const auto &pair : _socketCenters) {
+                OctiDir dir = pair.first;
+                QPointF sc = pair.second;
+                double dist = std::hypot(pos.x() - sc.x(), pos.y() - sc.y());
+                if (dist <= _socketRadius * 1.5) {
+                    if (pod.prongAt(dir) == NORMAL_PRONG) {
+                        _dragKind = ZoomDragKind::REPOSITION_PRONG;
+                        _dragSrcProngDir = dir;
+                        _dragCursorPos = pos;
+                        update();
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void ZoomedSquareDialog::mouseMoveEvent(QMouseEvent *event)
+{
+    if (!event) return;
+    QPointF pos = mousePosF(event);
+    _dragCursorPos = pos;
+
+    _hoverProngDir = DIR_UNDEF;
+    for (const auto &pair : _socketCenters) {
+        OctiDir dir = pair.first;
+        QPointF sc = pair.second;
+        double dist = std::hypot(pos.x() - sc.x(), pos.y() - sc.y());
+        if (dist <= _socketRadius * 1.5) {
+            _hoverProngDir = dir;
+            break;
+        }
+    }
+    update();
+}
+
+void ZoomedSquareDialog::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (!event) {
+        _dragKind = ZoomDragKind::NONE;
+        return;
+    }
+    QPointF pos = mousePosF(event);
+
+    if (_dragKind != ZoomDragKind::NONE && _composer) {
+        OctiDir targetDir = DIR_UNDEF;
+        for (const auto &pair : _socketCenters) {
+            OctiDir dir = pair.first;
+            QPointF sc = pair.second;
+            double dist = std::hypot(pos.x() - sc.x(), pos.y() - sc.y());
+            if (dist <= _socketRadius * 1.6) {
+                targetDir = dir;
+                break;
+            }
+        }
+
+        if (targetDir != DIR_UNDEF) {
+            if (_dragKind == ZoomDragKind::ADD_NORMAL_PRONG) {
+                if (_composer->stageOrCommitAddProng(_squareX, _squareY, _selectedPodIndex, targetDir, false)) {
+                    _actionCompleted = true;
+                    accept();
+                    return;
+                }
+            } else if (_dragKind == ZoomDragKind::ADD_SUPERPRONG) {
+                if (_composer->stageOrCommitAddProng(_squareX, _squareY, _selectedPodIndex, targetDir, true)) {
+                    _actionCompleted = true;
+                    accept();
+                    return;
+                }
+            } else if (_dragKind == ZoomDragKind::REPOSITION_PRONG) {
+                if (_composer->stageOrCommitRepositionProng(_squareX, _squareY, _selectedPodIndex, _dragSrcProngDir, targetDir)) {
+                    _actionCompleted = true;
+                    accept();
+                    return;
+                }
+            }
+        }
+    }
+
+    _dragKind = ZoomDragKind::NONE;
+    _dragSrcProngDir = DIR_UNDEF;
+    update();
+}
+
+/* ==================================================================== */
+/* CapturePromptDialog                                                  */
+/* ==================================================================== */
+
+CapturePromptDialog::CapturePromptDialog(int jumpedX, int jumpedY,
+                                         OctiPlayer jumpedPlayer,
+                                         ThemeId theme,
+                                         QWidget *parent)
+    : QDialog(parent)
+    , _jumpedX(jumpedX)
+    , _jumpedY(jumpedY)
+    , _jumpedPlayer(jumpedPlayer)
+    , _theme(theme)
+    , _captureChosen(true)
+    , _miniCanvasRect(100, 65, 160, 65)
+    , _podIconRect(165, 82, 30, 30)
+    , _captureBtnRect(35, 150, 135, 38)
+    , _leaveBtnRect(190, 150, 135, 38)
+    , _draggingPod(false)
+    , _dragPos()
+{
+    setFixedSize(360, 210);
+    setModal(true);
+    setWindowTitle("Capture Jumped Pod?");
+}
+
+CapturePromptDialog::~CapturePromptDialog() = default;
+
+bool CapturePromptDialog::captureChosen() const
+{
+    return _captureChosen;
+}
+
+void CapturePromptDialog::paintEvent(QPaintEvent *event)
+{
+    (void)event;
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
+
+    const OctiPalette &pal = paletteForTheme(_theme);
+
+    // Dialog background
+    p.setPen(QPen(pal.accentBrass, 1.5));
+    p.setBrush(pal.panelCardBg);
+    p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 8.0, 8.0);
+
+    // Title / prompt
+    QFont f("SansSerif", 11, QFont::Bold);
+    p.setFont(f);
+    p.setPen(pal.prongSuperGold);
+    QRectF promptRect(16, 16, width() - 32, 24);
+    p.drawText(promptRect, Qt::AlignCenter,
+               QString("Capture jumped pod at Square (%1, %2)?").arg(_jumpedX).arg(_jumpedY));
+
+    QFont hintF("SansSerif", 9);
+    p.setFont(hintF);
+    p.setPen(pal.textPrimary);
+    QRectF subPrompt(16, 40, width() - 32, 18);
+    p.drawText(subPrompt, Qt::AlignCenter, "Click [Capture] or drag pod off the board area below:");
+
+    // Mini-canvas board box
+    p.setPen(QPen(pal.boardOuterFrame, 1.2, Qt::DashLine));
+    p.setBrush(pal.panelCardBg.darker(140));
+    p.drawRoundedRect(_miniCanvasRect, 6.0, 6.0);
+
+    // Pod icon
+    QRectF drawPodRect = _draggingPod ? QRectF(_dragPos.x() - 15, _dragPos.y() - 15, 30, 30) : _podIconRect;
+    OctiPodType pt = playerToPodType(_jumpedPlayer);
+    OctiPod pObj(pt);
+    paintOctagonalPod(p, drawPodRect, pt, pObj, pal, 0, true, 1.0);
+
+    // Buttons
+    p.setPen(QPen(pal.prongSuperGold, 1.2));
+    p.setBrush(pal.podA.core);
+    p.drawRoundedRect(_captureBtnRect, 5.0, 5.0);
+    p.setPen(Qt::white);
+    p.setFont(QFont("SansSerif", 10, QFont::Bold));
+    p.drawText(_captureBtnRect, Qt::AlignCenter, "Capture [x]");
+
+    p.setPen(QPen(pal.accentBrass, 1.2));
+    p.setBrush(pal.panelCardBg.darker(120));
+    p.drawRoundedRect(_leaveBtnRect, 5.0, 5.0);
+    p.setPen(pal.textPrimary);
+    p.drawText(_leaveBtnRect, Qt::AlignCenter, "Leave on Board");
+}
+
+void CapturePromptDialog::mousePressEvent(QMouseEvent *event)
+{
+    if (!event) return;
+    QPointF pos = mousePosF(event);
+
+    if (_captureBtnRect.contains(pos)) {
+        _captureChosen = true;
+        accept();
+        return;
+    }
+    if (_leaveBtnRect.contains(pos)) {
+        _captureChosen = false;
+        accept();
+        return;
+    }
+    if (_podIconRect.contains(pos)) {
+        _draggingPod = true;
+        _dragPos = pos;
+        update();
+        return;
+    }
+}
+
+void CapturePromptDialog::mouseMoveEvent(QMouseEvent *event)
+{
+    if (!event) return;
+    if (_draggingPod) {
+        _dragPos = mousePosF(event);
+        update();
+    }
+}
+
+void CapturePromptDialog::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (!event) return;
+    if (_draggingPod) {
+        QPointF pos = mousePosF(event);
+        _draggingPod = false;
+        if (!_miniCanvasRect.contains(pos)) {
+            _captureChosen = true;
+            accept();
+            return;
+        }
+        update();
+    }
+}
+
+/* ==================================================================== */
+/* SuperProngBonusDialog                                                */
+/* ==================================================================== */
+
+SuperProngBonusDialog::SuperProngBonusDialog(ThemeId theme, QWidget *parent)
+    : QDialog(parent)
+    , _theme(theme)
+    , _moveNowChosen(true)
+    , _moveNowBtn(nullptr)
+    , _skipBtn(nullptr)
+{
+    setFixedSize(440, 190);
+    setModal(true);
+    setWindowTitle("Superprong Bonus Move Available!");
+
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(20, 20, 20, 20);
+    layout->setSpacing(12);
+
+    QLabel *titleLabel = new QLabel("8th-Prong Superprong Bonus Move Available!", this);
+    titleLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: #f5c542;");
+    layout->addWidget(titleLabel, 0, Qt::AlignCenter);
+
+    QLabel *msgLabel = new QLabel(
+        "You have completed your pod's 8th prong with a crowned Superprong!\n"
+        "You are entitled to an immediate bonus move or jump with this pod.", this);
+    msgLabel->setAlignment(Qt::AlignCenter);
+    msgLabel->setWordWrap(true);
+    layout->addWidget(msgLabel);
+
+    QHBoxLayout *btnLayout = new QHBoxLayout();
+    btnLayout->setSpacing(14);
+
+    _moveNowBtn = new QPushButton("Move / Jump Now", this);
+    _moveNowBtn->setDefault(true);
+    _skipBtn = new QPushButton("Skip Bonus Move", this);
+
+    btnLayout->addWidget(_moveNowBtn);
+    btnLayout->addWidget(_skipBtn);
+    layout->addLayout(btnLayout);
+
+    QObject::connect(_moveNowBtn, &QPushButton::clicked, this, [this]() {
+        _moveNowChosen = true;
+        accept();
+    });
+    QObject::connect(_skipBtn, &QPushButton::clicked, this, [this]() {
+        _moveNowChosen = false;
+        accept();
+    });
+}
+
+SuperProngBonusDialog::~SuperProngBonusDialog() = default;
+
+bool SuperProngBonusDialog::moveNowChosen() const
+{
+    return _moveNowChosen;
+}
+
+/* ==================================================================== */
+/* CompositePodMoveDialog                                               */
+/* ==================================================================== */
+
+CompositePodMoveDialog::CompositePodMoveDialog(int x, int y,
+                                               ThemeId theme,
+                                               QWidget *parent)
+    : QDialog(parent)
+    , _x(x)
+    , _y(y)
+    , _theme(theme)
+    , _selectNextPodChosen(true)
+    , _selectNextBtn(nullptr)
+    , _confirmBtn(nullptr)
+{
+    setFixedSize(440, 190);
+    setModal(true);
+    setWindowTitle("Composite Multi-Pod Move Available");
+
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(20, 20, 20, 20);
+    layout->setSpacing(12);
+
+    QLabel *titleLabel = new QLabel(
+        QString("Another pod on Square (%1, %2) can also move this turn.").arg(_x).arg(_y), this);
+    titleLabel->setStyleSheet("font-size: 13px; font-weight: bold; color: #f5c542;");
+    layout->addWidget(titleLabel, 0, Qt::AlignCenter);
+
+    QLabel *msgLabel = new QLabel(
+        "In OCTI, multiple pods starting on the same square may move together\n"
+        "as a single composite turn. Would you like to select another pod?", this);
+    msgLabel->setAlignment(Qt::AlignCenter);
+    msgLabel->setWordWrap(true);
+    layout->addWidget(msgLabel);
+
+    QHBoxLayout *btnLayout = new QHBoxLayout();
+    btnLayout->setSpacing(14);
+
+    _selectNextBtn = new QPushButton("Select Next Pod", this);
+    _confirmBtn = new QPushButton("Proceed to Confirm Move", this);
+    _confirmBtn->setDefault(true);
+
+    btnLayout->addWidget(_selectNextBtn);
+    btnLayout->addWidget(_confirmBtn);
+    layout->addLayout(btnLayout);
+
+    QObject::connect(_selectNextBtn, &QPushButton::clicked, this, [this]() {
+        _selectNextPodChosen = true;
+        accept();
+    });
+    QObject::connect(_confirmBtn, &QPushButton::clicked, this, [this]() {
+        _selectNextPodChosen = false;
+        accept();
+    });
+}
+
+CompositePodMoveDialog::~CompositePodMoveDialog() = default;
+
+bool CompositePodMoveDialog::selectNextPodChosen() const
+{
+    return _selectNextPodChosen;
+}
+
+/* ==================================================================== */
+/* createMenuIcon                                                       */
+/* ==================================================================== */
+
+QIcon createMenuIcon(MenuIconKind kind, ThemeId theme)
+{
+    const OctiPalette &pal = paletteForTheme(theme);
+    QImage img(32, 32, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
+
+    switch (kind) {
+    case MenuIconKind::NEW_GAME: {
+        p.setPen(QPen(pal.accentBrass, 1.5));
+        p.setBrush(pal.podA.core);
+        QRectF r(4, 4, 24, 24);
+        p.drawRoundedRect(r, 6, 6);
+        p.setPen(QPen(pal.prongSuperGold, 2.0));
+        p.drawLine(16, 9, 16, 23);
+        p.drawLine(9, 16, 23, 16);
+        break;
+    }
+    case MenuIconKind::BOARD_VIEW: {
+        p.setPen(QPen(pal.accentBrass, 1.2));
+        for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 3; ++col) {
+                p.setBrush(((row + col) % 2 == 0) ? pal.gridCellLight : pal.gridCellDark);
+                p.drawRect(5 + col * 7, 5 + row * 7, 7, 7);
+            }
+        }
+        break;
+    }
+    case MenuIconKind::LOBBY_VIEW: {
+        p.setPen(QPen(pal.accentBrass, 1.5));
+        p.setBrush(pal.panelCardBg);
+        p.drawEllipse(7, 6, 8, 8);
+        p.drawArc(4, 15, 14, 12, 0, 180 * 16);
+        p.drawEllipse(17, 10, 8, 8);
+        p.drawArc(14, 19, 14, 12, 0, 180 * 16);
+        break;
+    }
+    case MenuIconKind::OFFER_DRAW: {
+        p.setPen(QPen(pal.accentBrass, 1.5));
+        p.drawLine(16, 6, 16, 24);
+        p.drawLine(8, 12, 24, 12);
+        p.drawLine(8, 12, 6, 18);
+        p.drawLine(24, 12, 26, 18);
+        p.setBrush(pal.accentBrass);
+        p.drawChord(3, 16, 8, 6, 180 * 16, 180 * 16);
+        p.drawChord(21, 16, 8, 6, 180 * 16, 180 * 16);
+        break;
+    }
+    case MenuIconKind::PAUSE_RESUME: {
+        p.setPen(QPen(pal.prongSuperGold, 1.2));
+        p.setBrush(pal.prongSuperGold);
+        p.drawRoundedRect(7, 7, 6, 18, 2, 2);
+        p.drawRoundedRect(19, 7, 6, 18, 2, 2);
+        break;
+    }
+    case MenuIconKind::UNDO_MOVE: {
+        p.setPen(QPen(pal.accentBrass, 2.2));
+        p.setBrush(Qt::NoBrush);
+        p.drawArc(6, 6, 20, 20, 45 * 16, 270 * 16);
+        QPolygonF head;
+        head << QPointF(5, 12) << QPointF(11, 8) << QPointF(11, 16);
+        p.setBrush(pal.accentBrass);
+        p.drawPolygon(head);
+        break;
+    }
+    case MenuIconKind::CLAIM_FORFEIT: {
+        p.setPen(QPen(pal.accentBrass, 1.6));
+        p.setBrush(pal.panelCardBg);
+        p.drawEllipse(5, 7, 22, 22);
+        p.drawLine(16, 4, 16, 7);
+        p.setPen(QPen(pal.prongSuperGold, 2.0));
+        p.drawLine(16, 11, 16, 17);
+        p.drawPoint(16, 22);
+        break;
+    }
+    case MenuIconKind::RESIGN: {
+        p.setPen(QPen(pal.accentBrass, 1.8));
+        p.drawLine(8, 5, 8, 27);
+        p.setPen(QPen(Qt::white, 1.2));
+        p.setBrush(Qt::white);
+        QPolygonF flag;
+        flag << QPointF(9, 6) << QPointF(24, 11) << QPointF(9, 17);
+        p.drawPolygon(flag);
+        break;
+    }
+    case MenuIconKind::QUIT: {
+        p.setPen(QPen(pal.legalCaptureGlow, 2.0));
+        p.setBrush(Qt::NoBrush);
+        p.drawArc(6, 8, 20, 20, -50 * 16, 280 * 16);
+        p.drawLine(16, 5, 16, 15);
+        break;
+    }
+    case MenuIconKind::ROTATE_BOARD: {
+        p.setPen(QPen(pal.accentBrass, 2.0));
+        p.setBrush(Qt::NoBrush);
+        p.drawArc(6, 6, 20, 20, 30 * 16, 240 * 16);
+        QPolygonF arr;
+        arr << QPointF(23, 14) << QPointF(27, 8) << QPointF(20, 8);
+        p.setBrush(pal.accentBrass);
+        p.drawPolygon(arr);
+        break;
+    }
+    case MenuIconKind::SWITCH_THEME: {
+        p.setPen(QPen(pal.accentBrass, 1.6));
+        p.setBrush(pal.panelCardBg);
+        p.drawEllipse(5, 5, 22, 22);
+        p.setBrush(pal.accentBrass);
+        p.drawChord(5, 5, 22, 22, 90 * 16, 180 * 16);
+        break;
+    }
+    case MenuIconKind::TOGGLE_SFX: {
+        p.setPen(QPen(pal.accentBrass, 1.4));
+        p.setBrush(pal.accentBrass);
+        QPolygonF speaker;
+        speaker << QPointF(6, 11) << QPointF(11, 11) << QPointF(16, 6)
+                << QPointF(16, 26) << QPointF(11, 21) << QPointF(6, 21);
+        p.drawPolygon(speaker);
+        p.setBrush(Qt::NoBrush);
+        p.drawArc(16, 10, 8, 12, -45 * 16, 90 * 16);
+        p.drawArc(18, 6, 10, 20, -45 * 16, 90 * 16);
+        break;
+    }
+    case MenuIconKind::VCR_FIRST: {
+        p.setPen(QPen(pal.accentBrass, 1.8));
+        p.drawLine(7, 8, 7, 24);
+        p.setBrush(pal.accentBrass);
+        QPolygonF tri;
+        tri << QPointF(11, 16) << QPointF(24, 8) << QPointF(24, 24);
+        p.drawPolygon(tri);
+        break;
+    }
+    case MenuIconKind::VCR_PREV: {
+        p.setPen(QPen(pal.accentBrass, 1.5));
+        p.setBrush(pal.accentBrass);
+        QPolygonF tri;
+        tri << QPointF(8, 16) << QPointF(22, 8) << QPointF(22, 24);
+        p.drawPolygon(tri);
+        break;
+    }
+    case MenuIconKind::VCR_NEXT: {
+        p.setPen(QPen(pal.accentBrass, 1.5));
+        p.setBrush(pal.accentBrass);
+        QPolygonF tri;
+        tri << QPointF(24, 16) << QPointF(10, 8) << QPointF(10, 24);
+        p.drawPolygon(tri);
+        break;
+    }
+    case MenuIconKind::VCR_LAST: {
+        p.setPen(QPen(pal.accentBrass, 1.8));
+        p.drawLine(25, 8, 25, 24);
+        p.setBrush(pal.accentBrass);
+        QPolygonF tri;
+        tri << QPointF(21, 16) << QPointF(8, 8) << QPointF(8, 24);
+        p.drawPolygon(tri);
+        break;
+    }
+    case MenuIconKind::SIGN_IN: {
+        p.setPen(QPen(pal.accentBrass, 1.6));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(6, 7, 10, 10);
+        p.drawLine(15, 15, 26, 24);
+        p.drawLine(21, 20, 23, 18);
+        p.drawLine(24, 22, 26, 20);
+        break;
+    }
+    case MenuIconKind::ACCOUNT_LINK: {
+        p.setPen(QPen(pal.accentBrass, 1.8));
+        p.setBrush(Qt::NoBrush);
+        p.drawRoundedRect(6, 10, 12, 7, 3, 3);
+        p.drawRoundedRect(14, 15, 12, 7, 3, 3);
+        break;
+    }
+    case MenuIconKind::GAME_ARCHIVE: {
+        p.setPen(QPen(pal.accentBrass, 1.5));
+        p.setBrush(pal.panelCardBg);
+        p.drawRect(7, 5, 18, 22);
+        p.drawLine(11, 10, 21, 10);
+        p.drawLine(11, 15, 21, 15);
+        p.drawLine(11, 20, 18, 20);
+        break;
+    }
+    case MenuIconKind::LEADERBOARD: {
+        p.setPen(QPen(pal.accentBrass, 1.4));
+        p.setBrush(pal.accentBrass);
+        p.drawRect(5, 15, 7, 12);
+        p.drawRect(12, 8, 8, 19);
+        p.drawRect(20, 18, 7, 9);
+        break;
+    }
+    case MenuIconKind::MODERATION: {
+        p.setPen(QPen(pal.accentBrass, 1.6));
+        p.setBrush(pal.panelCardBg);
+        QPolygonF shield;
+        shield << QPointF(16, 5) << QPointF(25, 9) << QPointF(25, 17)
+               << QPointF(16, 27) << QPointF(7, 17) << QPointF(7, 9);
+        p.drawPolygon(shield);
+        break;
+    }
+    case MenuIconKind::CHECK_UPDATE: {
+        p.setPen(QPen(pal.prongSuperGold, 1.6));
+        p.drawLine(16, 12, 16, 24);
+        QPolygonF arr;
+        arr << QPointF(16, 26) << QPointF(12, 21) << QPointF(20, 21);
+        p.setBrush(pal.prongSuperGold);
+        p.drawPolygon(arr);
+        p.setBrush(Qt::NoBrush);
+        p.drawArc(7, 8, 18, 12, 0, 180 * 16);
+        break;
+    }
+    case MenuIconKind::SHOW_SPLASH: {
+        p.setPen(QPen(pal.prongSuperGold, 1.8));
+        p.setBrush(pal.podA.core);
+        QRectF r(6, 6, 20, 20);
+        p.drawRoundedRect(r, 5, 5);
+        p.setPen(QPen(pal.prongSuperGold, 1.5));
+        p.drawLine(16, 8, 16, 24);
+        p.drawLine(8, 16, 24, 16);
+        p.drawLine(10, 10, 22, 22);
+        p.drawLine(22, 10, 10, 22);
+        break;
+    }
+    }
+
+    p.end();
+    return QIcon(QPixmap::fromImage(img));
 }
 
 } // namespace octi

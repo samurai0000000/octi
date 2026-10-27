@@ -271,18 +271,17 @@ TEST(OctiMoveComposerTest, SmartAutoCommitProngAddPodDropStepAndConfirmAll)
         committedMoves.push_back(m);
     });
 
-    // 1. Smart Auto-Commit (default confirmAllMoves == false):
-    // Adding a normal prong on A's pod at (3,3) in DIR_N ('a') auto-commits immediately
-    CHECK_FALSE(composer.confirmAllMoves());
+    // 1. Mandatory Move Confirmation (default confirmAllMoves == true):
+    // Adding a normal prong on A's pod at (3,3) in DIR_N ('a') pauses for confirmation
+    CHECK_TRUE(composer.confirmAllMoves());
     CHECK_TRUE(composer.stageOrCommitAddProng(3, 3, 0, DIR_N, false));
-    CHECK_FALSE(composer.isAwaitingConfirmation());
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    CHECK_TRUE(composer.commitStagedMove());
     LONGS_EQUAL(1, static_cast<long>(committedMoves.size()));
     STRCMP_EQUAL("33+a", committedMoves.back().c_str());
     LONGS_EQUAL(static_cast<int>(PLAYER_B), static_cast<int>(board.getGame()->getTurn()));
 
-    // 2. Switch to Confirm-All mode: B drops a reserve pod at (5,7) -> pauses until commitStagedMove()
-    composer.setConfirmAllMoves(true);
-    CHECK_TRUE(composer.confirmAllMoves());
+    // 2. B drops a reserve pod at (5,7) in Confirm-All mode -> pauses until commitStagedMove()
     CHECK_TRUE(composer.stageOrCommitAddPod(5, 7, false));
     CHECK_TRUE(composer.isAwaitingConfirmation());
     STRCMP_EQUAL("57", composer.stagedMoveNotation().c_str());
@@ -293,8 +292,9 @@ TEST(OctiMoveComposerTest, SmartAutoCommitProngAddPodDropStepAndConfirmAll)
     STRCMP_EQUAL("57", committedMoves.back().c_str());
     LONGS_EQUAL(static_cast<int>(PLAYER_A), static_cast<int>(board.getGame()->getTurn()));
 
-    // 3. Switch back to Smart Auto-Commit: A steps from (3,3) to (3,4) -> auto-commits immediately
+    // 3. Switch to Smart Auto-Commit explicitly (confirmAllMoves = false): A steps from (3,3) to (3,4) -> auto-commits immediately
     composer.setConfirmAllMoves(false);
+    CHECK_FALSE(composer.confirmAllMoves());
     CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4, false));
     CHECK_FALSE(composer.isAwaitingConfirmation());
     LONGS_EQUAL(3, static_cast<long>(committedMoves.size()));
@@ -338,6 +338,9 @@ TEST(OctiMoveComposerTest, MultiHopJumpSelectiveCaptureAndLiberation)
     auto libSquares = composer.legalPodDropSquares(true);
     CHECK_FALSE(libSquares.empty());
     CHECK_TRUE(composer.stageOrCommitAddPod(5, 7, true));
+    if (composer.isAwaitingConfirmation()) {
+        CHECK_TRUE(composer.commitStagedMove());
+    }
     STRCMP_EQUAL("57*", lastMove.c_str());
 
     // Now it's B's turn; let B step (3,6) -> (3,5) so B is at (3,5) and A is at (3,3) with 'a' prong
@@ -435,6 +438,9 @@ TEST(OctiMoveComposerTest, SuperprongEighthProngBonusMoveAndEdgelessWrap)
     });
     // Step West from (1,3) wraps around to (9,3)!
     CHECK_TRUE(edgelessComposer.stageOrCommitPodMoveOrJump(1, 3, 0, 9, 3, false));
+    if (edgelessComposer.isAwaitingConfirmation()) {
+        CHECK_TRUE(edgelessComposer.commitStagedMove());
+    }
     STRCMP_EQUAL("13g-93", edgelessCommitted.c_str());
 
     // Test 8th prong added as superprong pauses for bonus move and then commits "33abcdefg+h!,33-34"
@@ -451,7 +457,13 @@ TEST(OctiMoveComposerTest, SuperprongEighthProngBonusMoveAndEdgelessWrap)
     const OctiDir bDirs[] = { DIR_S, DIR_S, DIR_S, DIR_SE, DIR_SE, DIR_SE, DIR_SW };
     for (int i = 0; i < 7; ++i) {
         CHECK_TRUE(spComposer.stageOrCommitAddProng(3, 3, 0, dirs[i], false));
+        if (spComposer.isAwaitingConfirmation()) {
+            CHECK_TRUE(spComposer.commitStagedMove());
+        }
         CHECK_TRUE(spComposer.stageOrCommitAddProng(bSquaresX[i], 7, 0, bDirs[i], false));
+        if (spComposer.isAwaitingConfirmation()) {
+            CHECK_TRUE(spComposer.commitStagedMove());
+        }
     }
 
     // Adding the 8th prong on (3,3) as a superprong in DIR_NW ('h') must pause for bonus move
@@ -499,6 +511,99 @@ TEST(OctiMoveComposerTest, FaultInjectionIllegalMovesAndRollback)
     LONGS_EQUAL(static_cast<int>(PLAYER_A), static_cast<int>(board.getGame()->getTurn()));
     LONGS_EQUAL(static_cast<int>(NO_PRONG),
                 static_cast<int>(board.squareAt(2, 2).getPodAt(0).prongAt(DIR_N)));
+}
+
+TEST(OctiMoveComposerTest, GuidedStepAndMultiHopJumpWorkflow)
+{
+    OctiBoard board(GAME_MODE_2);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+    std::string committed;
+    composer.setMoveCommittedCallback([&](const std::string &m) { committed = m; });
+
+    // 1. Pod at (3,3) has no prongs yet -> cannot begin guided move
+    CHECK_FALSE(composer.beginGuidedPodMove(3, 3, 0));
+    CHECK_FALSE(composer.isGuidedMoveActive());
+
+    // 2. Add North prong 'a' at (3,3) and commit
+    CHECK_TRUE(composer.stageOrCommitAddProng(3, 3, 0, DIR_N, false));
+    CHECK_TRUE(composer.commitStagedMove());
+
+    // B adds South prong 'e' at (3,7) and commits
+    CHECK_TRUE(composer.stageOrCommitAddProng(3, 7, 0, DIR_S, false));
+    CHECK_TRUE(composer.commitStagedMove());
+
+    // 3. Now A's turn: begin guided move from (3,3)
+    CHECK_TRUE(composer.beginGuidedPodMove(3, 3, 0));
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    CHECK_EQUAL(3, composer.guidedOriginSquare().first);
+    CHECK_EQUAL(3, composer.guidedOriginSquare().second);
+    CHECK_EQUAL(3, composer.guidedCurrentSquare().first);
+    CHECK_EQUAL(3, composer.guidedCurrentSquare().second);
+
+    auto nextHops = composer.guidedNextSquares();
+    CHECK_FALSE(nextHops.empty());
+    bool found34 = false;
+    for (const auto &sq : nextHops) {
+        if (sq.first == 3 && sq.second == 4) {
+            found34 = true;
+            break;
+        }
+    }
+    CHECK_TRUE(found34);
+
+    // 4. Select destination (3,4) -> distance-1 step finishes guided selection and awaits confirmation
+    CHECK_TRUE(composer.selectGuidedDestination(3, 4));
+    CHECK_FALSE(composer.isGuidedMoveActive());
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    STRCMP_EQUAL("33a-34", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.commitStagedMove());
+    STRCMP_EQUAL("33a-34", committed.c_str());
+
+    // B moves pod from (3,7) to (3,6)
+    CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 7, 0, 3, 6, false));
+    CHECK_TRUE(composer.commitStagedMove());
+
+    // A adds prong 'b' (NE) to pod at (3,4)
+    CHECK_TRUE(composer.stageOrCommitAddProng(3, 4, 0, DIR_NE, false));
+    CHECK_TRUE(composer.commitStagedMove());
+
+    // B moves pod from (3,6) to (3,5)
+    CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 6, 0, 3, 5, false));
+    if (composer.isAwaitingConfirmation()) {
+        CHECK_TRUE(composer.commitStagedMove());
+    }
+
+    // 5. A is at (3,4) with 'a' (N) prong, B is at (3,5), (3,6) is empty!
+    // A starts guided move at (3,4)
+    CHECK_TRUE(composer.beginGuidedPodMove(3, 4, 0));
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    auto jumpHops = composer.guidedNextSquares();
+    bool found36 = false;
+    for (const auto &sq : jumpHops) {
+        if (sq.first == 3 && sq.second == 6) {
+            found36 = true;
+            break;
+        }
+    }
+    CHECK_TRUE(found36);
+
+    // Select jump landing (3,6)
+    CHECK_TRUE(composer.selectGuidedDestination(3, 6));
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    STRCMP_EQUAL("34ab-36x", composer.stagedMoveNotation().c_str());
+
+    // Test setCaptureAtSquare
+    CHECK_TRUE(composer.setCaptureAtSquare(3, 5, false));
+    STRCMP_EQUAL("34ab-36", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.setCaptureAtSquare(3, 5, true));
+    STRCMP_EQUAL("34ab-36x", composer.stagedMoveNotation().c_str());
+
+    // Test finishGuidedMoveHere
+    composer.finishGuidedMoveHere();
+    CHECK_FALSE(composer.isGuidedMoveActive());
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    CHECK_TRUE(composer.commitStagedMove());
 }
 
 TEST(OctiMoveComposerTest, RapidCheckComposerLegalMovesInvariant)
@@ -669,6 +774,7 @@ TEST(OctiBoardCanvasRenderTest, CanvasSimulateDragAndEscapeRollback)
     OctiSoundSynth synth;
     OctiBoardCanvas canvas;
     canvas.attachBoard(&board, &composer, &synth);
+    composer.setConfirmAllMoves(false);
 
     CHECK_TRUE(canvas.simulateDragProngToPod(3, 3, 0, DIR_N, false));
     CHECK_TRUE(canvas.simulateDragFromReserveToSquare(DragKind::ADD_POD_FROM_RESERVE, 5, 7));
@@ -688,6 +794,7 @@ TEST(OctiBoardCanvasRenderTest, CanvasSimulateDragAndEscapeRollback)
     OctiBoard mouseBoard(GAME_MODE_2);
     mouseBoard.getGame()->start(PLAYER_A);
     OctiMoveComposer mouseComposer(&mouseBoard);
+    mouseComposer.setConfirmAllMoves(false);
     OctiBoardCanvas mouseCanvas;
     mouseCanvas.resize(800, 800);
     mouseCanvas.attachBoard(&mouseBoard, &mouseComposer, &synth);

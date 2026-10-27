@@ -37,6 +37,8 @@ int main(int argc, char *argv[])
 
     QApplication app(argc, argv);
     app.setWindowIcon(octi::createOctiAppIcon());
+    octi::OctiSplashDialog splash;
+    splash.exec();
     octi::OctiMainWindow window(
         nullptr, cliArgs.configPath, cliArgs.startOffline);
     window.show();

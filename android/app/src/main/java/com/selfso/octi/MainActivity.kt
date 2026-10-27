@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -32,19 +33,27 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.selfso.octi.ui.AccountIdentitiesDialog
 import com.selfso.octi.ui.ArchiveScreen
+import com.selfso.octi.ui.CapturePromptDialog
+import com.selfso.octi.ui.CompositePodMoveDialog
 import com.selfso.octi.ui.CreateTableDialog
 import com.selfso.octi.ui.LobbyScreen
 import com.selfso.octi.ui.NewGameSetupDialog
 import com.selfso.octi.ui.OctiAppViewModel
 import com.selfso.octi.ui.OctiBoardCanvas
 import com.selfso.octi.ui.OctiReserveHud
+import com.selfso.octi.ui.OctiSplashOverlay
 import com.selfso.octi.ui.SsoSignInDialog
+import com.selfso.octi.ui.SuperProngBonusDialog
+import com.selfso.octi.ui.ZoomedSquareDialog
 import com.selfso.octi.ui.theme.OctiMaterialTheme
 import com.selfso.octi.ui.theme.OctiTheme
 import com.selfso.selfupdate.ui.SelfUpdateBanner
@@ -55,6 +64,8 @@ class MainActivity : ComponentActivity() {
 
     lateinit var appViewModel: OctiAppViewModel
         private set
+
+    var isSplashActive: Boolean = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,12 +86,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeId by appViewModel.theme.collectAsState()
             OctiMaterialTheme(themeId = themeId) {
-                OctiMainAppContent(viewModel = appViewModel)
+                OctiMainAppContent(
+                    viewModel = appViewModel,
+                    onSplashDismissed = { isSplashActive = false }
+                )
             }
         }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (isSplashActive && (keyCode == KeyEvent.KEYCODE_ESCAPE || keyCode == KeyEvent.KEYCODE_BACK)) {
+            isSplashActive = false
+            return true
+        }
         if (::appViewModel.isInitialized && appViewModel.onHardwareKeyEvent(keyCode, true)) {
             return true
         }
@@ -104,7 +122,10 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OctiMainAppContent(viewModel: OctiAppViewModel) {
+fun OctiMainAppContent(
+    viewModel: OctiAppViewModel,
+    onSplashDismissed: () -> Unit = {}
+) {
     val updateController = rememberSelfUpdateController(checkOnLaunch = true)
     val currentTab by viewModel.currentTab.collectAsState()
     val themeId by viewModel.theme.collectAsState()
@@ -114,6 +135,7 @@ fun OctiMainAppContent(viewModel: OctiAppViewModel) {
     val showSsoDialog by viewModel.showSsoDialog.collectAsState()
     val showAccountDialog by viewModel.showAccountDialog.collectAsState()
     val showCreateTableDialog by viewModel.showCreateTableDialog.collectAsState()
+    var showSplash by remember { mutableStateOf(true) }
 
     Scaffold(
         containerColor = OctiTheme.colors.windowBg,
@@ -231,20 +253,23 @@ fun OctiMainAppContent(viewModel: OctiAppViewModel) {
             when (currentTab) {
                 OctiAppViewModel.AppTab.BOARD -> {
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(8.dp),
+                        modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        val cols = viewModel.board.boardWidth
+                        val rows = viewModel.board.boardHeight
+                        val aspectRatio = cols.toFloat() / rows.toFloat()
                         OctiBoardCanvas(
                             viewModel = viewModel,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .weight(1f)
+                                .aspectRatio(aspectRatio)
                         )
                         OctiReserveHud(
                             viewModel = viewModel,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp)
                         )
                     }
                 }
@@ -287,5 +312,118 @@ fun OctiMainAppContent(viewModel: OctiAppViewModel) {
                 onDismiss = { viewModel.setShowCreateTableDialog(false) }
             )
         }
+
+        val zoomedSquare by viewModel.zoomedSquare.collectAsState()
+        zoomedSquare?.let { (zx, zy) ->
+            ZoomedSquareDialog(
+                board = viewModel.board,
+                composer = viewModel.composer,
+                squareX = zx,
+                squareY = zy,
+                rotation = viewModel.boardRotation.collectAsState().value,
+                themeId = themeId,
+                onDismiss = { viewModel.closeZoomedSquare() },
+                onBeginGuidedMove = { podIndex, moveAllStack ->
+                    viewModel.composer.beginGuidedPodMove(zx, zy, podIndex, moveAllStack)
+                    viewModel.bumpBoardRevision()
+                },
+                onAddProng = { podIndex, dir, superProng ->
+                    viewModel.composer.selectStackPodIndex(zx, zy, podIndex)
+                    viewModel.composer.beginAddProngFromReserve(superProng)
+                    viewModel.composer.dropOnCompassSector(zx, zy, podIndex, dir)
+                    viewModel.notifyComposerUpdated()
+                    if (viewModel.composer.hasUnlockedSuperProngBonus()) {
+                        viewModel.setShowSuperProngBonusDialog(true)
+                    }
+                },
+                onRepositionProng = { podIndex, srcDir, dstDir ->
+                    viewModel.composer.selectStackPodIndex(zx, zy, podIndex)
+                    viewModel.composer.beginRepositionProng(zx, zy, podIndex, srcDir)
+                    viewModel.composer.dropOnCompassSector(zx, zy, podIndex, dstDir)
+                    viewModel.notifyComposerUpdated()
+                },
+                onPlaceReservePod = { liberate ->
+                    if (liberate) {
+                        viewModel.composer.beginLiberatePodFromReserve()
+                    } else {
+                        viewModel.composer.beginAddPodFromReserve()
+                    }
+                    viewModel.composer.dropOnSquare(zx, zy)
+                    viewModel.notifyComposerUpdated()
+                }
+            )
+        }
+
+        val capturePrompt by viewModel.capturePrompt.collectAsState()
+        capturePrompt?.let { cp ->
+            CapturePromptDialog(
+                jumpedX = cp.jumpedX,
+                jumpedY = cp.jumpedY,
+                player = cp.player,
+                onChoice = { capture ->
+                    viewModel.resolveCapturePrompt(capture)
+                },
+                onDismiss = {
+                    viewModel.resolveCapturePrompt(false)
+                }
+            )
+        }
+
+        val showSuperProngBonusDialog by viewModel.showSuperProngBonusDialog.collectAsState()
+        if (showSuperProngBonusDialog) {
+            SuperProngBonusDialog(
+                onMoveNow = {
+                    viewModel.setShowSuperProngBonusDialog(false)
+                    val orig = viewModel.composer.eighthProngOriginSquare()
+                    if (orig[0] > 0 && orig[1] > 0) {
+                        val podIdx = viewModel.composer.selectedStackPodIndex(orig[0], orig[1])
+                        viewModel.composer.beginGuidedPodMove(orig[0], orig[1], Math.max(0, podIdx), false)
+                        viewModel.bumpBoardRevision()
+                    }
+                },
+                onSkip = {
+                    viewModel.setShowSuperProngBonusDialog(false)
+                    if (viewModel.composer.canCommitStagedMove()) {
+                        viewModel.commitStagedMove()
+                    }
+                }
+            )
+        }
+
+        val compositePodPrompt by viewModel.compositePodPrompt.collectAsState()
+        compositePodPrompt?.let { (ox, oy) ->
+            CompositePodMoveDialog(
+                originX = ox,
+                originY = oy,
+                onSelectNextPod = {
+                    viewModel.setCompositePodPrompt(null)
+                    viewModel.openZoomedSquare(ox, oy)
+                },
+                onProceedToConfirm = {
+                    viewModel.setCompositePodPrompt(null)
+                    if (viewModel.composer.canCommitStagedMove()) {
+                        viewModel.commitStagedMove()
+                    }
+                }
+            )
+        }
+
+        if (showSplash) {
+            OctiSplashOverlay(
+                onDismiss = {
+                    showSplash = false
+                    onSplashDismissed()
+                }
+            )
+        }
     }
 }
+
+/*
+ * Local variables:
+ * mode: Kotlin
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

@@ -22,7 +22,7 @@ struct ClientPreferences {
     std::string avatarUrl;
     std::string preferredProvider;
     ThemeId theme = ThemeId::OBSIDIAN_BRASS;
-    bool confirmAllMoves = false;
+    bool confirmAllMoves = true;
     bool sfxMuted = false;
     int pttKey = 'V';
 };
