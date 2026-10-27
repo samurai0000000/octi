@@ -616,7 +616,7 @@ void OctiBoardCanvas::paintCommitBanner(QPainter &p,
     if (!_composer || (!_composer->isAwaitingConfirmation() && !_composer->isGuidedMoveActive())) {
         return;
     }
-    if (isVisible() && !_composer->isGuidedMoveActive()) {
+    if (isVisible()) {
         return;
     }
 
@@ -895,6 +895,24 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
     paintCaptureChoicePills(p, geom, pal);
     paintCommitBanner(p, geom, pal);
 
+    // 10. Persistent Game Over Victory Banner (PCE-D06)
+    if (displayBoard && displayBoard->getGame() && displayBoard->getGame()->isGameOver()) {
+        double banW = std::min(outer.width() * 0.88, 520.0);
+        double banH = 44.0;
+        QRectF banRect(outer.center().x() - banW * 0.5,
+                       outer.top() + 10.0,
+                       banW, banH);
+        p.setPen(QPen(pal.prongSuperGold, 2.2));
+        p.setBrush(QColor(12, 16, 26, 235));
+        p.drawRoundedRect(banRect, 8.0, 8.0);
+
+        QFont vf("SansSerif", 13, QFont::Bold);
+        p.setFont(vf);
+        p.setPen(pal.prongSuperGold);
+        p.drawText(banRect, Qt::AlignCenter,
+                   GameOverDialog::describeWinnerBanner(displayBoard));
+    }
+
     p.restore();
 }
 
@@ -915,6 +933,9 @@ void OctiBoardCanvas::resizeEvent(QResizeEvent *event)
 void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
 {
     if (!event || !_board || !_composer) {
+        return;
+    }
+    if (_board->getGame() && _board->getGame()->isGameOver()) {
         return;
     }
 
@@ -986,24 +1007,56 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
                 }
             }
             if (isNext) {
+                std::size_t prevCapCount = _composer->captureChoices().size();
                 _composer->selectGuidedDestination(gx, gy);
                 if (isVisible()) {
-                    // Prompt for optional capture if jumped enemy
-                    for (const auto &cc : _composer->captureChoices()) {
+                    // Prompt only for newly added optional captures on this hop (PCE-D07)
+                    const auto &choices = _composer->captureChoices();
+                    for (std::size_t ci = prevCapCount; ci < choices.size(); ++ci) {
+                        const auto &cc = choices[ci];
                         if (!cc.mandatory) {
-                            CapturePromptDialog capDlg(cc.jumpedX, cc.jumpedY, PLAYER_B, _theme, this);
+                            OctiPlayer activeTurn = (_board->getGame())
+                                ? _board->getGame()->getTurn() : PLAYER_A;
+                            OctiPlayer jumpedOwner = (activeTurn == PLAYER_B)
+                                ? PLAYER_A : PLAYER_B;
+                            if (_board->isValidCoord(cc.jumpedX - 1, cc.jumpedY - 1)) {
+                                const OctiSquare &jsq =
+                                    _board->squareAt(cc.jumpedX - 1, cc.jumpedY - 1);
+                                for (int pi = 0; pi < jsq.getNumPods(); ++pi) {
+                                    OctiPodType pt = jsq.getPodAt(pi).getType();
+                                    OctiPlayer owner = (pt == A_POD ? PLAYER_A :
+                                                        pt == B_POD ? PLAYER_B :
+                                                        pt == C_POD ? PLAYER_C : PLAYER_D);
+                                    if (owner != activeTurn) {
+                                        jumpedOwner = owner;
+                                        break;
+                                    }
+                                }
+                            }
+                            CapturePromptDialog capDlg(
+                                cc.jumpedX, cc.jumpedY, jumpedOwner, _theme, this);
                             if (capDlg.exec() == QDialog::Accepted) {
-                                _composer->setCaptureAtSquare(cc.jumpedX, cc.jumpedY, capDlg.captureChosen());
+                                _composer->setCaptureAtSquare(
+                                    cc.jumpedX, cc.jumpedY, capDlg.captureChosen());
                             }
                         }
                     }
-                    if (!_composer->isGuidedMoveActive() && _composer->isAwaitingConfirmation()) {
+                    if (_composer->isAwaitingConfirmation()) {
                         presentPlyConfirmationIfNeeded();
                     }
                 }
                 update();
                 return;
             }
+        }
+        if (isVisible()) {
+            if (_composer->isAwaitingConfirmation()) {
+                presentPlyConfirmationIfNeeded();
+            } else {
+                _composer->cancelAndRollback();
+            }
+            update();
+            return;
         }
     }
 
@@ -1126,7 +1179,7 @@ void OctiBoardCanvas::mouseMoveEvent(QMouseEvent *event)
 
 void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (!event || !_composer) {
+    if (!event || !_composer || (_board && _board->getGame() && _board->getGame()->isGameOver())) {
         _dragKind = DragKind::NONE;
         return;
     }
@@ -1274,9 +1327,12 @@ void OctiBoardCanvas::presentPlyConfirmationIfNeeded()
     dlg.exec();
 
     if (dlg.chosenAction() == PlyConfirmDialog::ResultAction::MORE_MOVES) {
-        if (_composer->isAwaitingSuperProngBonusMove()) {
-            SuperProngBonusDialog spDlg(_theme, this);
-            spDlg.exec();
+        if (_composer->isAwaitingSuperProngBonusMove() &&
+            !_composer->hasEighthProngBonusHop()) {
+            std::pair<int, int> orig = _composer->guidedOriginSquare();
+            _composer->beginGuidedPodMove(orig.first, orig.second, -1, false);
+        } else if (_composer->isGuidedMoveActive()) {
+            // Keep guided jump active so user can click next hop destination
         } else if (_composer->hasOtherMovablePodAtOrigin()) {
             std::pair<int, int> orig = _composer->guidedOriginSquare();
             ZoomedSquareDialog zd(_board, _composer, orig.first, orig.second, _rotation, _theme, this);
@@ -1291,6 +1347,9 @@ void OctiBoardCanvas::presentPlyConfirmationIfNeeded()
 void OctiBoardCanvas::mouseDoubleClickEvent(QMouseEvent *event)
 {
     (void)event;
+    if (_board && _board->getGame() && _board->getGame()->isGameOver()) {
+        return;
+    }
     if (_composer && _composer->isAwaitingConfirmation()) {
         _composer->commitStagedMove();
         update();
@@ -1299,7 +1358,7 @@ void OctiBoardCanvas::mouseDoubleClickEvent(QMouseEvent *event)
 
 void OctiBoardCanvas::keyPressEvent(QKeyEvent *event)
 {
-    if (!event || !_composer) {
+    if (!event || !_composer || (_board && _board->getGame() && _board->getGame()->isGameOver())) {
         QWidget::keyPressEvent(event);
         return;
     }

@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,7 +20,13 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -40,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.selfso.octi.BuildConfig
 import com.selfso.selfupdate.UpdateState
@@ -48,6 +56,7 @@ import com.selfso.octi.ui.ArchiveScreen
 import com.selfso.octi.ui.CapturePromptDialog
 import com.selfso.octi.ui.CompositePodMoveDialog
 import com.selfso.octi.ui.CreateTableDialog
+import com.selfso.octi.ui.GameOverDialog
 import com.selfso.octi.ui.LobbyScreen
 import com.selfso.octi.ui.NewGameSetupDialog
 import com.selfso.octi.ui.OctiAppViewModel
@@ -158,12 +167,19 @@ fun OctiMainAppContent(
     val currentTab by viewModel.currentTab.collectAsState()
     val themeId by viewModel.theme.collectAsState()
     val sfxMuted by viewModel.sfxMuted.collectAsState()
+    val confirmAllMoves by viewModel.confirmAllMoves.collectAsState()
     val statusBanner by viewModel.statusBanner.collectAsState()
     val showNewGameDialog by viewModel.showNewGameDialog.collectAsState()
     val showSsoDialog by viewModel.showSsoDialog.collectAsState()
     val showAccountDialog by viewModel.showAccountDialog.collectAsState()
     val showCreateTableDialog by viewModel.showCreateTableDialog.collectAsState()
+    val showGameOverDialog by viewModel.showGameOverDialog.collectAsState()
+    val boardRev by viewModel.boardRevision.collectAsState()
+    val zoomedSquare by viewModel.zoomedSquare.collectAsState()
+    val capturePrompt by viewModel.capturePrompt.collectAsState()
+    val isContinuingGuidedJump by viewModel.isContinuingGuidedJump.collectAsState()
     var showSplash by remember { mutableStateOf(true) }
+    var showTopMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = OctiTheme.colors.windowBg,
@@ -183,13 +199,16 @@ fun OctiMainAppContent(
                                 text = "OCTI",
                                 style = MaterialTheme.typography.headlineMedium,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = OctiTheme.colors.accentBrass
+                                color = OctiTheme.colors.accentBrass,
+                                maxLines = 1
                             )
                             if (statusBanner.isNotEmpty()) {
                                 Text(
                                     text = statusBanner,
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = OctiTheme.colors.textSecondary
+                                    color = OctiTheme.colors.textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -199,40 +218,70 @@ fun OctiMainAppContent(
                             onClick = { viewModel.setShowNewGameDialog(true) },
                             modifier = Modifier.padding(end = 4.dp)
                         ) {
-                            Text("New Game")
+                            Text("New Game", maxLines = 1)
                         }
-                        TextButton(
-                            onClick = { viewModel.toggleTheme() },
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = OctiTheme.colors.textPrimary
-                            )
-                        ) {
-                            Text(
-                                if (themeId == OctiThemeId.OBSIDIAN_BRASS) {
-                                    "Obsidian"
-                                } else {
-                                    "Rosewood"
-                                }
-                            )
-                        }
-                        TextButton(
-                            onClick = { viewModel.toggleSfxMuted() },
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = OctiTheme.colors.textPrimary
-                            )
-                        ) {
-                            Text(if (sfxMuted) "SFX:Off" else "SFX:On")
-                        }
-                        TextButton(
-                            onClick = {
-                                manualUpdateCheckPending = true
-                                updateController.checkForUpdates()
-                            },
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = OctiTheme.colors.accentBrass
-                            )
-                        ) {
-                            Text("Check for Updates")
+                        Box {
+                            TextButton(
+                                onClick = { showTopMenu = true },
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = OctiTheme.colors.accentBrass
+                                )
+                            ) {
+                                Text("Menu ▾", fontWeight = FontWeight.Bold)
+                            }
+                            DropdownMenu(
+                                expanded = showTopMenu,
+                                onDismissRequest = { showTopMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            "Theme: " + if (themeId == OctiThemeId.OBSIDIAN_BRASS) {
+                                                "Obsidian"
+                                            } else {
+                                                "Rosewood"
+                                            }
+                                        )
+                                    },
+                                    onClick = {
+                                        showTopMenu = false
+                                        viewModel.toggleTheme()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text("Sound Effects: " + if (sfxMuted) "Off" else "On")
+                                    },
+                                    onClick = {
+                                        showTopMenu = false
+                                        viewModel.toggleSfxMuted()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text("Confirm All Moves: " + if (confirmAllMoves) "On" else "Off")
+                                    },
+                                    onClick = {
+                                        showTopMenu = false
+                                        viewModel.toggleConfirmAllMoves()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Check for Updates") },
+                                    onClick = {
+                                        showTopMenu = false
+                                        manualUpdateCheckPending = true
+                                        updateController.checkForUpdates()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("About OCTI (Splash)") },
+                                    onClick = {
+                                        showTopMenu = false
+                                        showSplash = true
+                                    }
+                                )
+                            }
                         }
                     }
                 )
@@ -287,6 +336,41 @@ fun OctiMainAppContent(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        val isGameOver = viewModel.board.game?.isGameOver == true && boardRev >= 0L
+                        if (isGameOver) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+                                border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "GAME OVER — Winner: ${viewModel.board.game?.winner}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = OctiTheme.colors.accentBrass
+                                    )
+                                    Button(
+                                        onClick = { viewModel.setShowNewGameDialog(true) },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = OctiTheme.colors.accentBrass,
+                                            contentColor = OctiTheme.colors.windowBg
+                                        )
+                                    ) {
+                                        Text("New Game", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
                         val cols = viewModel.board.boardWidth
                         val rows = viewModel.board.boardHeight
                         val aspectRatio = cols.toFloat() / rows.toFloat()
@@ -317,6 +401,39 @@ fun OctiMainAppContent(
                     )
                 }
             }
+
+            val isPickingGuidedDest = viewModel.composer.isGuidedMoveActive &&
+                    (!viewModel.composer.isGuidedMidHop || isContinuingGuidedJump)
+            val isAwaitingConfirm = viewModel.composer.isAwaitingConfirmation && boardRev >= 0L &&
+                    zoomedSquare == null && capturePrompt == null && !isPickingGuidedDest
+            if (isAwaitingConfirm) {
+                PlyConfirmDialog(
+                    stagedNotation = viewModel.composer.stagedMoveNotation(),
+                    canMoreMoves = viewModel.composer.canAddMoreMoves(),
+                    onCommit = {
+                        if (viewModel.composer.isGuidedMoveActive) {
+                            viewModel.composer.finishGuidedMoveHere()
+                        }
+                        viewModel.commitStagedMove()
+                    },
+                    onCancel = { viewModel.rollbackStagedMove() },
+                    onMoreMoves = {
+                        if (viewModel.composer.hasUnlockedSuperProngBonus() && !viewModel.composer.isGuidedMoveActive) {
+                            val orig = viewModel.composer.eighthProngOriginSquare()
+                            viewModel.composer.beginGuidedPodMove(orig[0], orig[1], -1, false)
+                            viewModel.bumpBoardRevision()
+                        } else if (viewModel.composer.hasContinuationJump()) {
+                            viewModel.resumeGuidedJumpSelection()
+                        } else if (viewModel.composer.hasOtherMovablePodAtOrigin()) {
+                            val orig = viewModel.composer.guidedOriginSquare()
+                            viewModel.openZoomedSquare(orig[0], orig[1])
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 8.dp)
+                )
+            }
         }
 
         if (showNewGameDialog) {
@@ -344,7 +461,6 @@ fun OctiMainAppContent(
             )
         }
 
-        val zoomedSquare by viewModel.zoomedSquare.collectAsState()
         zoomedSquare?.let { (zx, zy) ->
             ZoomedSquareDialog(
                 board = viewModel.board,
@@ -355,40 +471,41 @@ fun OctiMainAppContent(
                 themeId = themeId,
                 onDismiss = { viewModel.closeZoomedSquare() },
                 onBeginGuidedMove = { podIndex, moveAllStack ->
-                    viewModel.composer.beginGuidedPodMove(zx, zy, podIndex, moveAllStack)
-                    viewModel.bumpBoardRevision()
+                    if (viewModel.composer.beginGuidedPodMove(zx, zy, podIndex, moveAllStack)) {
+                        viewModel.closeZoomedSquare()
+                        viewModel.bumpBoardRevision()
+                    }
                 },
                 onAddProng = { podIndex, dir, superProng ->
                     viewModel.composer.selectStackPodIndex(zx, zy, podIndex)
                     viewModel.composer.beginAddProngFromReserve(superProng)
-                    viewModel.composer.dropOnCompassSector(zx, zy, podIndex, dir)
-                    viewModel.closeZoomedSquare()
-                    viewModel.notifyComposerUpdated()
-                    if (viewModel.composer.hasUnlockedSuperProngBonus()) {
-                        viewModel.setShowSuperProngBonusDialog(true)
+                    if (viewModel.composer.dropOnCompassSector(zx, zy, podIndex, dir)) {
+                        viewModel.closeZoomedSquare()
+                        viewModel.notifyComposerUpdated()
                     }
                 },
                 onRepositionProng = { podIndex, srcDir, dstDir ->
                     viewModel.composer.selectStackPodIndex(zx, zy, podIndex)
                     viewModel.composer.beginRepositionProng(zx, zy, podIndex, srcDir)
-                    viewModel.composer.dropOnCompassSector(zx, zy, podIndex, dstDir)
-                    viewModel.closeZoomedSquare()
-                    viewModel.notifyComposerUpdated()
+                    if (viewModel.composer.dropOnCompassSector(zx, zy, podIndex, dstDir)) {
+                        viewModel.closeZoomedSquare()
+                        viewModel.notifyComposerUpdated()
+                    }
                 },
                 onPlaceReservePod = { liberate ->
-                    if (liberate) {
+                    val canStart = if (liberate) {
                         viewModel.composer.beginLiberatePodFromReserve()
                     } else {
                         viewModel.composer.beginAddPodFromReserve()
                     }
-                    viewModel.composer.dropOnSquare(zx, zy)
-                    viewModel.closeZoomedSquare()
-                    viewModel.notifyComposerUpdated()
+                    if (canStart && viewModel.composer.dropOnSquare(zx, zy)) {
+                        viewModel.closeZoomedSquare()
+                        viewModel.notifyComposerUpdated()
+                    }
                 }
             )
         }
 
-        val capturePrompt by viewModel.capturePrompt.collectAsState()
         capturePrompt?.let { cp ->
             CapturePromptDialog(
                 jumpedX = cp.jumpedX,
@@ -403,61 +520,18 @@ fun OctiMainAppContent(
             )
         }
 
-        val showSuperProngBonusDialog by viewModel.showSuperProngBonusDialog.collectAsState()
-        if (showSuperProngBonusDialog) {
-            SuperProngBonusDialog(
-                onMoveNow = {
-                    viewModel.setShowSuperProngBonusDialog(false)
-                    val orig = viewModel.composer.eighthProngOriginSquare()
-                    if (orig[0] > 0 && orig[1] > 0) {
-                        val podIdx = viewModel.composer.selectedStackPodIndex(orig[0], orig[1])
-                        viewModel.composer.beginGuidedPodMove(orig[0], orig[1], Math.max(0, podIdx), false)
-                        viewModel.bumpBoardRevision()
-                    }
+        if (showGameOverDialog && viewModel.board.game?.isGameOver == true) {
+            GameOverDialog(
+                winner = viewModel.board.game?.winner ?: OctiPlayer.PLAYER_A,
+                matchLabel = statusBanner,
+                totalPlies = viewModel.livePlyCount(),
+                resigned = viewModel.board.game?.isGameResigned == true,
+                onNewGame = {
+                    viewModel.dismissGameOverDialog()
+                    viewModel.setShowNewGameDialog(true)
                 },
-                onSkip = {
-                    viewModel.setShowSuperProngBonusDialog(false)
-                    if (viewModel.composer.canCommitStagedMove()) {
-                        viewModel.commitStagedMove()
-                    }
-                }
-            )
-        }
-
-        val compositePodPrompt by viewModel.compositePodPrompt.collectAsState()
-        compositePodPrompt?.let { (ox, oy) ->
-            CompositePodMoveDialog(
-                originX = ox,
-                originY = oy,
-                onSelectNextPod = {
-                    viewModel.setCompositePodPrompt(null)
-                    viewModel.openZoomedSquare(ox, oy)
-                },
-                onProceedToConfirm = {
-                    viewModel.setCompositePodPrompt(null)
-                    if (viewModel.composer.canCommitStagedMove()) {
-                        viewModel.commitStagedMove()
-                    }
-                }
-            )
-        }
-
-        val boardRev by viewModel.boardRevision.collectAsState()
-        val isAwaitingConfirm = viewModel.composer.isAwaitingConfirmation && boardRev >= 0L &&
-                zoomedSquare == null && capturePrompt == null && !showSuperProngBonusDialog && compositePodPrompt == null
-        if (isAwaitingConfirm) {
-            PlyConfirmDialog(
-                stagedNotation = viewModel.composer.stagedMoveNotation(),
-                canMoreMoves = viewModel.composer.hasOtherMovablePodAtOrigin() || viewModel.composer.hasUnlockedSuperProngBonus(),
-                onCommit = { viewModel.commitStagedMove() },
-                onCancel = { viewModel.rollbackStagedMove() },
-                onMoreMoves = {
-                    if (viewModel.composer.hasUnlockedSuperProngBonus()) {
-                        viewModel.setShowSuperProngBonusDialog(true)
-                    } else if (viewModel.composer.hasOtherMovablePodAtOrigin()) {
-                        val orig = viewModel.composer.guidedOriginSquare()
-                        viewModel.openZoomedSquare(orig[0], orig[1])
-                    }
+                onReviewBoard = {
+                    viewModel.dismissGameOverDialog()
                 }
             )
         }

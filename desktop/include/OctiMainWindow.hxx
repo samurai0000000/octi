@@ -215,6 +215,8 @@ private:
     void refreshMoveHistoryAndFenUi();
     void updateProposalBannerUi();
     void updateVoiceControlUi();
+    void updateMatchActionsVisibility();
+    void checkAndPresentGameOver();
     void bindSelfUpdateController();
     void handleSelfUpdateStateChanged(const selfupdate::UpdateState &state);
     void handleSelfUpdateQuitRequested();
@@ -272,6 +274,9 @@ private:
     LobbyView *_lobbyView;
 
     /* ---- Right Side Panel Widgets ---- */
+    QLabel *_matchModeLabel;
+    QLabel *_matchTurnStatusLabel;
+    QPushButton *_sidebarNewGameBtn;
     QListWidget *_moveHistoryList;
     QPushButton *_vcrFirstBtn;
     QPushButton *_vcrPrevBtn;
@@ -291,14 +296,17 @@ private:
     QPushButton *_resignBtn;
     QPushButton *_moderationBtn;
 
+    QWidget *_chatBox;
     QComboBox *_chatScopeCombo;
     QPlainTextEdit *_gameChatTranscript;
     QLineEdit *_gameChatInput;
     QPushButton *_sendGameChatBtn;
 
+    QWidget *_voiceBox;
     QPushButton *_joinLeaveVoiceBtn;
     QPushButton *_holdToTalkBtn;
     QLabel *_voiceStatusLabel;
+    bool _gameOverDialogShownForCurrentMatch;
 
     /* ---- Self-Update Subsystem ---- */
     std::shared_ptr<selfupdate::SelfUpdateController> _updateController;

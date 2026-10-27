@@ -171,6 +171,9 @@ OctiMainWindow::OctiMainWindow(
       _reservePanel(nullptr),
       _boardCanvas(nullptr),
       _lobbyView(nullptr),
+      _matchModeLabel(nullptr),
+      _matchTurnStatusLabel(nullptr),
+      _sidebarNewGameBtn(nullptr),
       _moveHistoryList(nullptr),
       _vcrFirstBtn(nullptr),
       _vcrPrevBtn(nullptr),
@@ -187,13 +190,16 @@ OctiMainWindow::OctiMainWindow(
       _claimForfeitBtn(nullptr),
       _resignBtn(nullptr),
       _moderationBtn(nullptr),
+      _chatBox(nullptr),
       _chatScopeCombo(nullptr),
       _gameChatTranscript(nullptr),
       _gameChatInput(nullptr),
       _sendGameChatBtn(nullptr),
+      _voiceBox(nullptr),
       _joinLeaveVoiceBtn(nullptr),
       _holdToTalkBtn(nullptr),
       _voiceStatusLabel(nullptr),
+      _gameOverDialogShownForCurrentMatch(false),
       _updateController(nullptr),
       _currentUpdateState(),
       _activeUpdateDialog(nullptr),
@@ -355,6 +361,17 @@ OctiMainWindow::OctiMainWindow(
     rightLayout->setContentsMargins(0, 0, 0, 0);
     rightLayout->setSpacing(8);
 
+    /* 0. Match Status Card (PCE-D06 / PCE-D09) */
+    QGroupBox *statusBox = new QGroupBox("Match Status", rightSide);
+    QVBoxLayout *statusLayout = new QVBoxLayout(statusBox);
+    _matchModeLabel = new QLabel("Local vs AI Bot", statusBox);
+    _matchTurnStatusLabel = new QLabel("Active Turn: Player A", statusBox);
+    _matchTurnStatusLabel->setStyleSheet("font-size: 13px; font-weight: bold;");
+    _matchTurnStatusLabel->setWordWrap(true);
+    statusLayout->addWidget(_matchModeLabel);
+    statusLayout->addWidget(_matchTurnStatusLabel);
+    rightLayout->addWidget(statusBox);
+
     /* 1. Move History & VCR Replay */
     QGroupBox *historyBox = new QGroupBox("Move History • VCR Replay", rightSide);
     QVBoxLayout *histLayout = new QVBoxLayout(historyBox);
@@ -392,12 +409,14 @@ OctiMainWindow::OctiMainWindow(
     _proposalBannerWidget->setVisible(false);
     rightLayout->addWidget(_proposalBannerWidget);
 
-    QGroupBox *actionsBox = new QGroupBox("Match Actions • Moderation", rightSide);
+    QGroupBox *actionsBox = new QGroupBox("Match Actions", rightSide);
     QVBoxLayout *actLayout = new QVBoxLayout(actionsBox);
     QHBoxLayout *actRow1 = new QHBoxLayout();
+    _sidebarNewGameBtn = new QPushButton("New Game...", actionsBox);
     _offerDrawBtn = new QPushButton("Offer Draw", actionsBox);
     _pauseResumeBtn = new QPushButton("Pause", actionsBox);
     _undoRequestBtn = new QPushButton("Undo", actionsBox);
+    actRow1->addWidget(_sidebarNewGameBtn);
     actRow1->addWidget(_offerDrawBtn);
     actRow1->addWidget(_pauseResumeBtn);
     actRow1->addWidget(_undoRequestBtn);
@@ -415,6 +434,7 @@ OctiMainWindow::OctiMainWindow(
 
     /* 3. Board Chat Widget */
     QGroupBox *chatBox = new QGroupBox("Table Chat", rightSide);
+    _chatBox = chatBox;
     QVBoxLayout *chatLayout = new QVBoxLayout(chatBox);
     _gameChatTranscript = new QPlainTextEdit(chatBox);
     _gameChatTranscript->setReadOnly(true);
@@ -435,6 +455,7 @@ OctiMainWindow::OctiMainWindow(
 
     /* 4. Push-to-Talk Voice Control Bar */
     QGroupBox *voiceBox = new QGroupBox("Push-to-Talk P2P Voice", rightSide);
+    _voiceBox = voiceBox;
     QVBoxLayout *vLayout = new QVBoxLayout(voiceBox);
     _voiceStatusLabel = new QLabel("Voice: Disconnected (Strict PTT)", voiceBox);
     vLayout->addWidget(_voiceStatusLabel);
@@ -490,6 +511,13 @@ OctiMainWindow::OctiMainWindow(
         dlg.exec();
     });
     QObject::connect(_newLocalGameBtn, &QPushButton::clicked, [this]() {
+        NewLocalGameDialog dlg(_theme, this);
+        dlg.setConfig(_localConfig);
+        if (dlg.exec() == QDialog::Accepted) {
+            startNewLocalGame(dlg.config());
+        }
+    });
+    QObject::connect(_sidebarNewGameBtn, &QPushButton::clicked, [this]() {
         NewLocalGameDialog dlg(_theme, this);
         dlg.setConfig(_localConfig);
         if (dlg.exec() == QDialog::Accepted) {
@@ -690,6 +718,7 @@ OctiMainWindow::OctiMainWindow(
     refreshMoveHistoryAndFenUi();
     updateProposalBannerUi();
     updateVoiceControlUi();
+    updateMatchActionsVisibility();
     setupMenuBar();
 }
 
@@ -1174,6 +1203,7 @@ bool OctiMainWindow::isSfxMuted() const
 void OctiMainWindow::startNewLocalGame(const LocalGameConfig &cfg)
 {
     leaveOnlineRoom();
+    _gameOverDialogShownForCurrentMatch = false;
     _localConfig = cfg;
     _isLocalBotGame = (cfg.playType == LocalPlayType::VS_AI_BOT);
     _botEngine.setDifficulty(cfg.botDifficulty);
@@ -1208,6 +1238,7 @@ void OctiMainWindow::startNewLocalGame(const LocalGameConfig &cfg)
     showBoardView();
     refreshMoveHistoryAndFenUi();
     updateProposalBannerUi();
+    updateMatchActionsVisibility();
 
     if (_isLocalBotGame) {
         executeBotTurnIfNeeded();
@@ -1260,6 +1291,7 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
             _reservePanel->refresh();
         }
         refreshMoveHistoryAndFenUi();
+        checkAndPresentGameOver();
     }
     return movedAny;
 }
@@ -1410,6 +1442,7 @@ void OctiMainWindow::leaveOnlineRoom()
     _appliedOnlineMoves.clear();
     updateProposalBannerUi();
     updateVoiceControlUi();
+    updateMatchActionsVisibility();
     setupMenuBar();
 }
 
@@ -1544,6 +1577,8 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
     refreshMoveHistoryAndFenUi();
     updateProposalBannerUi();
     updateVoiceControlUi();
+    updateMatchActionsVisibility();
+    checkAndPresentGameOver();
     setupMenuBar();
 }
 
@@ -1631,7 +1666,8 @@ void OctiMainWindow::handleLocalOrOnlineMoveCommitted(
         _reservePanel->refresh();
     }
     refreshMoveHistoryAndFenUi();
-    if (_isLocalBotGame) {
+    checkAndPresentGameOver();
+    if (_isLocalBotGame && _board.getGame() && !_board.getGame()->isGameOver()) {
         executeBotTurnIfNeeded();
     }
 }
@@ -1766,7 +1802,15 @@ ApiResult<bool> OctiMainWindow::resignCurrentGame()
     if (_board.getGame() && _board.getGame()->isGameStarted() &&
         !_board.getGame()->isGameOver()) {
         _board.getGame()->resign(_board.getGame()->getTurn());
+        _composer.refreshLegalMoves();
+        if (_boardCanvas) {
+            _boardCanvas->update();
+        }
+        if (_reservePanel) {
+            _reservePanel->refresh();
+        }
         refreshMoveHistoryAndFenUi();
+        checkAndPresentGameOver();
         res.ok = true;
         res.data = true;
     }
@@ -2000,6 +2044,7 @@ bool OctiMainWindow::loadOctiTranscriptIntoReplay(
         return false;
     }
     leaveOnlineRoom();
+    _gameOverDialogShownForCurrentMatch = false;
     _isLocalBotGame = false;
     try {
         _board.deserializeGame(octiTranscript);
@@ -2154,6 +2199,96 @@ void OctiMainWindow::refreshMoveHistoryAndFenUi()
         _fenStatusLabel->setText(
             QString("FEN: %1")
                 .arg(QString::fromStdString(_board.toPositionString())));
+    }
+    updateMatchActionsVisibility();
+}
+
+void OctiMainWindow::updateMatchActionsVisibility()
+{
+    bool online = (_inOnlineRoom && !_onlineRoomId.empty());
+    if (_offerDrawBtn) {
+        _offerDrawBtn->setVisible(online);
+    }
+    if (_pauseResumeBtn) {
+        _pauseResumeBtn->setVisible(online);
+    }
+    if (_claimForfeitBtn) {
+        _claimForfeitBtn->setVisible(online);
+    }
+    if (_moderationBtn) {
+        _moderationBtn->setVisible(online);
+    }
+    if (_chatBox) {
+        _chatBox->setVisible(online);
+    }
+    if (_voiceBox) {
+        _voiceBox->setVisible(online);
+    }
+
+    if (_matchModeLabel) {
+        if (online) {
+            _matchModeLabel->setText(
+                QString("Online Room: %1")
+                    .arg(QString::fromStdString(_onlineRoomId)));
+        } else if (_isLocalBotGame) {
+            _matchModeLabel->setText(
+                QString::fromUtf8("Local vs AI Bot \xE2\x80\xA2 Offline Tabletop"));
+        } else {
+            _matchModeLabel->setText(
+                QString::fromUtf8("Local Pass-and-Play \xE2\x80\xA2 Offline Tabletop"));
+        }
+    }
+
+    if (_matchTurnStatusLabel) {
+        const OctiGame *g = _board.getGame();
+        if (g && g->isGameOver()) {
+            _matchTurnStatusLabel->setText(
+                QString::fromUtf8("%1 \xE2\x80\x94 %2")
+                    .arg(GameOverDialog::describeWinnerBanner(&_board))
+                    .arg(GameOverDialog::describeTerminationReason(&_board)));
+        } else if (g) {
+            int pIdx = static_cast<int>(g->getTurn());
+            QChar pCh = (pIdx >= 1 && pIdx <= 4) ? QChar('A' + pIdx - 1) : QChar('A');
+            _matchTurnStatusLabel->setText(
+                QString("Active Turn: Player %1").arg(pCh));
+        } else {
+            _matchTurnStatusLabel->setText("Match Idle");
+        }
+    }
+}
+
+void OctiMainWindow::checkAndPresentGameOver()
+{
+    const OctiGame *g = _board.getGame();
+    if (!g || !g->isGameOver()) {
+        return;
+    }
+    if (_gameOverDialogShownForCurrentMatch) {
+        return;
+    }
+    _gameOverDialogShownForCurrentMatch = true;
+    _soundSynth.triggerCue(SoundCue::GAME_VICTORY);
+    updateMatchActionsVisibility();
+    if (_boardCanvas) {
+        _boardCanvas->update();
+    }
+    if (_reservePanel) {
+        _reservePanel->refresh();
+    }
+    if (isVisible()) {
+        GameOverDialog dlg(&_board, _theme, this);
+        dlg.exec();
+        if (dlg.newGameRequested()) {
+            if (_inOnlineRoom && !_onlineRoomId.empty()) {
+                proposeRematch();
+            } else {
+                NewLocalGameDialog newDlg(_theme, this);
+                newDlg.setConfig(_localConfig);
+                if (newDlg.exec() == QDialog::Accepted) {
+                    startNewLocalGame(newDlg.config());
+                }
+            }
+        }
     }
 }
 

@@ -498,7 +498,13 @@ public:
                             const std::string &octiTranscript = "",
                             ThemeId theme = ThemeId::OBSIDIAN_BRASS,
                             QWidget *parent = nullptr);
+    explicit GameOverDialog(const OctiBoard *board,
+                            ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                            QWidget *parent = nullptr);
     ~GameOverDialog() override;
+
+    static QString describeWinnerBanner(const OctiBoard *board);
+    static QString describeTerminationReason(const OctiBoard *board);
 
     void setTheme(ThemeId theme);
     ThemeId theme() const;
@@ -511,20 +517,31 @@ public:
     bool exportTranscriptToFile(const std::string &filePath) const;
     void triggerRematch();
     bool wasRematchRequested() const;
+    bool newGameRequested() const;
 
     void setOnRematchCallback(std::function<void()> cb);
 
+    QImage renderToImage(int width = 480, int height = 280);
+    QRectF newGameBtnRect() const { return _newGameBtnRect; }
+    QRectF reviewBoardBtnRect() const { return _reviewBoardBtnRect; }
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+
 private:
     ThemeId _theme;
-    QLabel *_winnerLabel;
-    QLabel *_terminationLabel;
-    QLabel *_movesLabel;
-    QPushButton *_exportBtn;
-    QPushButton *_rematchBtn;
+    QString _winnerBanner;
+    QString _terminationReason;
     int _moveCount;
     std::string _transcript;
     bool _rematchRequested;
+    bool _newGameRequested;
     std::function<void()> _onRematchCallback;
+
+    QRectF _newGameBtnRect;
+    QRectF _reviewBoardBtnRect;
 };
 
 class SelfUpdateDialog : public QDialog {
@@ -577,7 +594,7 @@ private:
  * 12. OctiSplashDialog:
  *     10.0-second (10000 ms) luxury procedural animated splash screen.
  *     Obsidian & Brass tabletop, rotating brass ring, animated OCTI pod & superprong snapping,
- *     game credits, authorship, copyright, version 2.0.9, progress bar,
+ *     game credits, authorship, copyright, version 2.0.10, progress bar,
  *     and early dismissal via ESC or mouse click.
  */
 class OctiSplashDialog : public QDialog {
@@ -625,6 +642,10 @@ public:
     bool actionCompleted() const;
     void cycleSelectedPod(int delta);
     const std::map<OctiDir, QPointF> &socketCenters() const { return _socketCenters; }
+    QRectF movePodBtnRect() const { return _movePodBtnRect; }
+    QRectF placeReserveBtnRect() const { return _placeReserveBtnRect; }
+    QRectF liberateBtnRect() const { return _liberateBtnRect; }
+    const std::vector<QRectF> &stackPodTabRects() const { return _stackPodTabRects; }
 
     QImage renderToImage(int width = 560, int height = 530);
 

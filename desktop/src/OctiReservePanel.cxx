@@ -132,6 +132,8 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
 
     const OctiGame *game = _board ? _board->getGame() : nullptr;
     OctiGameMode mode = _board ? _board->getGameMode() : GAME_MODE_2;
+    bool isGameOver = game ? game->isGameOver() : false;
+    OctiPlayer winner = isGameOver ? game->getWinner() : PLAYER_UNDEF;
     OctiPlayer activeTurn = game ? game->getTurn() : PLAYER_A;
     int numPlayers = (mode == GAME_MODE_4) ? 4 : 2;
 
@@ -143,12 +145,16 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
     for (int pIdx = 1; pIdx <= numPlayers; ++pIdx) {
         OctiPlayer player = static_cast<OctiPlayer>(pIdx);
         const PodFactionPalette &fp = pal.factionForPlayer(player);
-        bool isTurn = (player == activeTurn);
+        bool isTurn = !isGameOver && (player == activeTurn);
+        bool isWinner = isGameOver && (player == winner ||
+            (mode == GAME_MODE_4 &&
+             (((winner == PLAYER_A || winner == PLAYER_C) && (player == PLAYER_A || player == PLAYER_C)) ||
+              ((winner == PLAYER_B || winner == PLAYER_D) && (player == PLAYER_B || player == PLAYER_D)))));
         bool isElim = game ? game->isPlayerEliminated(player) : false;
 
         QRectF cardRect(margin, yCursor, cardW, cardH);
-        p.setPen(QPen(isTurn ? pal.prongSuperGold : pal.panelCardBorder,
-                      isTurn ? 2.4 : 1.2));
+        p.setPen(QPen((isTurn || isWinner) ? pal.prongSuperGold : pal.panelCardBorder,
+                      (isTurn || isWinner) ? 2.4 : 1.2));
         p.setBrush(pal.panelCardBg);
         p.drawRoundedRect(cardRect, 8.0, 8.0);
 
@@ -158,7 +164,9 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
             pName += (player == PLAYER_A || player == PLAYER_C)
                 ? " (Team A+C)" : " (Team B+D)";
         }
-        if (isElim) {
+        if (isWinner) {
+            pName += " [WINNER]";
+        } else if (isElim) {
             pName += " [ELIMINATED]";
         }
 
@@ -166,9 +174,9 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
         hf.setBold(true);
         hf.setPixelSize(13);
         p.setFont(hf);
-        p.setPen(isElim ? pal.legalCaptureGlow : fp.highlight);
+        p.setPen(isWinner ? pal.prongSuperGold : (isElim ? pal.legalCaptureGlow : fp.highlight));
         p.drawText(QRectF(cardRect.left() + 10.0, cardRect.top() + 6.0,
-                          cardRect.width() * 0.62, 22.0),
+                          cardRect.width() * 0.65, 22.0),
                    Qt::AlignVCenter | Qt::AlignLeft, pName);
 
         long remMs = game ? game->getTimeRemaining(player) : 600000L;
@@ -196,7 +204,7 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
         QRectF rNormProng(rLibPod.right() + 6.0, wellY, wellW, wellH);
         QRectF rSupProng(rNormProng.right() + 6.0, wellY, wellW, wellH);
 
-        if (isTurn) {
+        if (isTurn || (isGameOver && player == activeTurn)) {
             _freePodWellRect = rFreePod;
             _liberatePodWellRect = rLibPod;
             _normalProngWellRect = rNormProng;
@@ -240,14 +248,12 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
         yCursor += cardH + 10.0;
     }
 
-    // Push-to-Talk Voice Control Card at bottom
-    double pttCardH = 66.0;
-    double pttTop = std::max(yCursor + 6.0, static_cast<double>(height) - pttCardH - margin);
+    _pttButtonRect = QRectF();
 
     // Tactical Controls Guide Card (shown when vertical room permits)
-    double availGuideH = pttTop - yCursor - 8.0;
+    double availGuideH = static_cast<double>(height) - yCursor - margin;
     if (availGuideH >= 86.0) {
-        double guideH = std::min(126.0, availGuideH);
+        double guideH = std::min(144.0, availGuideH);
         QRectF guideRect(margin, yCursor, cardW, guideH);
         p.setPen(QPen(pal.panelCardBorder, 1.1));
         p.setBrush(pal.panelCardBg);
@@ -261,57 +267,23 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
         p.drawText(QRectF(guideRect.left() + 10.0, guideRect.top() + 6.0,
                           guideRect.width() - 20.0, 18.0),
                    Qt::AlignVCenter | Qt::AlignLeft,
-                   "Tactical Controls • How to Play");
+                   QString::fromUtf8("Quick Guide \xE2\x80\xA2 Zoomed Square Controls"));
 
         gf.setBold(false);
         gf.setPixelSize(10);
         p.setFont(gf);
         p.setPen(pal.textSecondary);
-        QString guideText =
-            "• Add Prong: Hover your pod & click any compass dot (a–h), "
-            "or click/drag 'Prongs' onto a pod.\n"
-            "• Move / Jump: Drag pod to green dot (or click pod, then green dot).\n"
-            "• Add Pod: Click/drag 'Pods (+)' to an empty home square.\n"
-            "• Reposition Prong: Drag a prong to another slot on the same pod.";
+        QString guideText = QString::fromUtf8(
+            "\xE2\x80\xA2 Empty Home Square: Click square to Place Reserve (+) or Liberate (*).\n"
+            "\xE2\x80\xA2 Friendly Pod: Click pod to open Zoom View \xE2\x80\x94 click socket (a\xE2\x80\x93h) "
+            "to add/reposition prong, or click 'Move / Jump This Pod'.\n"
+            "\xE2\x80\xA2 Multi-Pod Stack: Scroll mouse wheel or click Pod tabs in Zoom View.\n"
+            "\xE2\x80\xA2 Guided Jump: Click green target dots, then Commit or More Moves.");
         p.drawText(QRectF(guideRect.left() + 10.0, guideRect.top() + 26.0,
                           guideRect.width() - 20.0, guideH - 30.0),
                    Qt::AlignTop | Qt::AlignLeft | Qt::TextWordWrap,
                    guideText);
     }
-    _pttButtonRect = QRectF(margin, pttTop, cardW, pttCardH);
-
-    QColor pttBorder = _voiceMutedByRoom ? pal.legalCaptureGlow :
-                       _pttActive ? pal.legalStepGuide : pal.accentBrass;
-    p.setPen(QPen(pttBorder, _pttActive ? 2.4 : 1.4));
-    p.setBrush(_pttActive ? pal.legalStepGuide.darker(260) : pal.panelCardBg);
-    p.drawRoundedRect(_pttButtonRect, 8.0, 8.0);
-
-    QRectF micRect(_pttButtonRect.left() + 12.0, _pttButtonRect.top() + 11.0, 44.0, 44.0);
-    paintVoiceMicIcon(p, micRect, _pttActive, _voiceMutedByRoom, pal);
-
-    QFont vf = p.font();
-    vf.setBold(true);
-    vf.setPixelSize(13);
-    p.setFont(vf);
-    p.setPen(pal.textPrimary);
-
-    QString pttLabel = _voiceMutedByRoom
-        ? "Voice Muted by Room"
-        : (_pttActive ? "TRANSMITTING (PTT Active)" : "Hold to Talk [V] (Push-to-Talk)");
-    p.drawText(QRectF(micRect.right() + 10.0, _pttButtonRect.top() + 10.0,
-                      _pttButtonRect.width() - 72.0, 24.0),
-               Qt::AlignVCenter | Qt::AlignLeft, pttLabel);
-
-    vf.setBold(false);
-    vf.setPixelSize(11);
-    p.setFont(vf);
-    p.setPen(pal.textSecondary);
-    QString subStatus = _voiceMutedByRoom
-        ? "Room moderator disabled microphone"
-        : (_pttActive ? "Release [V] or mouse button to mute" : "P2P UDP Voice • Mic Muted");
-    p.drawText(QRectF(micRect.right() + 10.0, _pttButtonRect.top() + 34.0,
-                      _pttButtonRect.width() - 72.0, 20.0),
-               Qt::AlignVCenter | Qt::AlignLeft, subStatus);
 
     p.restore();
 }
@@ -355,7 +327,7 @@ void OctiReservePanel::mousePressEvent(QMouseEvent *event)
         return;
     }
 
-    if (_canvas) {
+    if (!isVisible() && _canvas) {
         if (_freePodWellRect.contains(pos)) {
             _canvas->startExternalReserveDrag(DragKind::ADD_POD_FROM_RESERVE);
         } else if (_liberatePodWellRect.contains(pos)) {

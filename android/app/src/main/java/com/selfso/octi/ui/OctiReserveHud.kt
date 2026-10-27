@@ -104,74 +104,39 @@ fun OctiReserveHud(
 
             Spacer(modifier = Modifier.height(6.dp))
 
+            val isLocalMatch = matchType == OctiAppViewModel.MatchType.LOCAL_PASS_AND_PLAY ||
+                matchType == OctiAppViewModel.MatchType.LOCAL_VS_BOT
+            val canUndo = isLocalMatch && (viewModel.board.game?.canUndo() == true)
+
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 FilterChip(
-                    selected = dragKind == OctiMoveComposer.DragKind.ADD_POD_FROM_RESERVE,
-                    onClick = {
-                        viewModel.composer.beginAddPodFromReserve()
-                        viewModel.notifyComposerUpdated()
-                    },
-                    enabled = !viewModel.isViewingHistory() && freePods > 0,
-                    label = { Text("+Pod ($freePods)") }
-                )
-                FilterChip(
-                    selected = dragKind == OctiMoveComposer.DragKind.LIBERATE_POD_FROM_RESERVE,
-                    onClick = {
-                        viewModel.composer.beginLiberatePodFromReserve()
-                        viewModel.notifyComposerUpdated()
-                    },
-                    enabled = !viewModel.isViewingHistory() &&
-                        capPods > 0 && activeBoard.canLiberate(turn),
-                    label = { Text("Liberate ($capPods)") }
-                )
-                FilterChip(
                     selected = moveStack,
                     onClick = { viewModel.setMoveEntireMatchingStack(!moveStack) },
                     label = { Text("Move Stack") }
                 )
-            }
-
-            val isGuided = viewModel.composer.isGuidedMoveActive && boardRev >= 0L
-            if (isGuided) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val curSq = viewModel.composer.guidedCurrentSquare()
-                    Text(
-                        text = "Move at (${curSq[0]}, ${curSq[1]})",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = OctiTheme.colors.accentBrass
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { viewModel.rollbackStagedMove() }) {
-                            Text("Cancel")
-                        }
-                        Button(
-                            onClick = {
-                                viewModel.composer.finishGuidedMoveHere()
-                                if (viewModel.composer.hasUnlockedSuperProngBonus()) {
-                                    viewModel.setShowSuperProngBonusDialog(true)
-                                }
-                                if (viewModel.composer.hasOtherMovablePodAtOrigin()) {
-                                    val orig = viewModel.composer.guidedOriginSquare()
-                                    viewModel.setCompositePodPrompt(Pair(orig[0], orig[1]))
-                                }
-                                viewModel.notifyComposerUpdated()
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = OctiTheme.colors.accentBrass,
-                                contentColor = OctiTheme.colors.windowBg
-                            )
-                        ) {
-                            Text("Finish Move Here")
-                        }
+                if (isLocalMatch) {
+                    OutlinedButton(
+                        onClick = { viewModel.undoLocalMove() },
+                        enabled = canUndo && !viewModel.isViewingHistory()
+                    ) {
+                        Text("Undo")
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.resignLocalGame() },
+                        enabled = !isGameOver && !viewModel.isViewingHistory()
+                    ) {
+                        Text("Resign")
+                    }
+                }
+                if (viewModel.composer.isGuidedMoveActive && boardRev >= 0L) {
+                    OutlinedButton(
+                        onClick = { viewModel.rollbackStagedMove() }
+                    ) {
+                        Text("Cancel Move")
                     }
                 }
             }
@@ -213,17 +178,6 @@ fun OctiReserveHud(
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     OutlinedButton(onClick = { viewModel.rotateBoard90Clockwise() }) {
                         Text("Rot 90°")
-                    }
-                    if (matchType == OctiAppViewModel.MatchType.LOCAL_VS_BOT && !isGameOver) {
-                        Button(
-                            onClick = { viewModel.playBotTurnSynchronously() },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = OctiTheme.colors.accentBrass,
-                                contentColor = OctiTheme.colors.windowBg
-                            )
-                        ) {
-                            Text("Bot Move")
-                        }
                     }
                 }
             }

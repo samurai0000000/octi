@@ -263,12 +263,28 @@ class OctiAppViewModel @JvmOverloads constructor(
     private val _compositePodPrompt = MutableStateFlow<Pair<Int, Int>?>(null)
     val compositePodPrompt: StateFlow<Pair<Int, Int>?> = _compositePodPrompt.asStateFlow()
 
+    private val _isContinuingGuidedJump = MutableStateFlow(false)
+    val isContinuingGuidedJump: StateFlow<Boolean> = _isContinuingGuidedJump.asStateFlow()
+
+    private val _showGameOverDialog = MutableStateFlow(false)
+    val showGameOverDialog: StateFlow<Boolean> = _showGameOverDialog.asStateFlow()
+
     fun openZoomedSquare(x: Int, y: Int) {
+        _isContinuingGuidedJump.value = false
         _zoomedSquare.value = Pair(x, y)
     }
 
     fun closeZoomedSquare() {
         _zoomedSquare.value = null
+    }
+
+    fun resumeGuidedJumpSelection() {
+        _isContinuingGuidedJump.value = true
+        bumpBoardRevision()
+    }
+
+    fun dismissGameOverDialog() {
+        _showGameOverDialog.value = false
     }
 
     fun promptCapture(jumpedX: Int, jumpedY: Int, player: OctiPlayer) {
@@ -480,6 +496,12 @@ class OctiAppViewModel @JvmOverloads constructor(
         _moveHistory.clear()
         _fenHistory.add(initialFen)
         _viewingPly.value = 0
+        _isContinuingGuidedJump.value = false
+        _showGameOverDialog.value = false
+        _zoomedSquare.value = null
+        _capturePrompt.value = null
+        _showSuperProngBonusDialog.value = false
+        _compositePodPrompt.value = null
 
         val initialRot = OctiBoardGeometry.rotationForSeat(mode, humanPlayer)
         _boardRotation.value = initialRot
@@ -496,6 +518,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             "Pass & Play (${modeToWireCode(mode)})"
         }
         bumpBoardRevision()
+        executeBotTurnIfNeeded()
     }
 
     fun livePlyCount(): Int {
@@ -570,6 +593,10 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun commitStagedMove(): Boolean {
+        _isContinuingGuidedJump.value = false
+        if (composer.isGuidedMoveActive()) {
+            composer.finishGuidedMoveHere()
+        }
         if (!composer.isAwaitingConfirmation()) {
             return false
         }
@@ -585,13 +612,87 @@ class OctiAppViewModel @JvmOverloads constructor(
         recordAppliedBoardPly(stagedNotation)
         syncRotationToActiveSeat()
         bumpBoardRevision()
+        executeBotTurnIfNeeded()
         return true
     }
 
     fun rollbackStagedMove() {
+        _isContinuingGuidedJump.value = false
         composer.rollbackMove()
         displayBoard.fromPositionString(board.toPositionString())
         bumpBoardRevision()
+    }
+
+    fun undoLocalMove(): Boolean {
+        if (_matchType.value != MatchType.LOCAL_PASS_AND_PLAY &&
+            _matchType.value != MatchType.LOCAL_VS_BOT
+        ) {
+            return false
+        }
+        _isContinuingGuidedJump.value = false
+        composer.rollbackMove()
+        val g = board.game ?: return false
+        if (!g.canUndo()) {
+            return false
+        }
+        g.undo()
+        if (_matchType.value == MatchType.LOCAL_VS_BOT &&
+            g.turn != _humanSeat.value &&
+            g.canUndo()
+        ) {
+            g.undo()
+        }
+        while (_fenHistory.size > g.numMoves + 1 && _fenHistory.size > 1) {
+            _fenHistory.removeAt(_fenHistory.size - 1)
+        }
+        while (_moveHistory.size > g.numMoves && _moveHistory.isNotEmpty()) {
+            _moveHistory.removeAt(_moveHistory.size - 1)
+        }
+        val currentFen = board.toPositionString()
+        if (_fenHistory.isEmpty()) {
+            _fenHistory.add(currentFen)
+        } else {
+            _fenHistory[_fenHistory.size - 1] = currentFen
+        }
+        displayBoard.fromPositionString(currentFen)
+        _viewingPly.value = livePlyCount()
+        _showGameOverDialog.value = g.isGameOver
+        composer.attachBoard(board)
+        composer.setConfirmAllMoves(_confirmAllMoves.value)
+        syncRotationToActiveSeat()
+        bumpBoardRevision()
+        return true
+    }
+
+    fun resignLocalGame(): Boolean {
+        if (_matchType.value != MatchType.LOCAL_PASS_AND_PLAY &&
+            _matchType.value != MatchType.LOCAL_VS_BOT
+        ) {
+            return false
+        }
+        val g = board.game ?: return false
+        if (!g.isGameStarted || g.isGameOver) {
+            return false
+        }
+        _isContinuingGuidedJump.value = false
+        composer.rollbackMove()
+        val resignPlayer = if (_matchType.value == MatchType.LOCAL_VS_BOT) {
+            _humanSeat.value
+        } else {
+            g.turn
+        }
+        return try {
+            g.resign(resignPlayer)
+            val snap = board.toPositionString()
+            displayBoard.fromPositionString(snap)
+            soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
+            _statusBanner.value = "Game Over — Winner: ${g.winner}"
+            _showGameOverDialog.value = true
+            bumpBoardRevision()
+            true
+        } catch (e: RuntimeException) {
+            false
+        }
     }
 
     /**
@@ -608,6 +709,21 @@ class OctiAppViewModel @JvmOverloads constructor(
             return ""
         }
         return chosen
+    }
+
+    fun executeBotTurnIfNeeded(): Boolean {
+        if (_matchType.value != MatchType.LOCAL_VS_BOT) return false
+        val g = board.game ?: return false
+        if (!g.isGameStarted || g.isGameOver) return false
+        var safety = 0
+        var moved = false
+        while (!g.isGameOver && g.turn != _humanSeat.value && safety < 8) {
+            safety++
+            val chosen = playBotTurnSynchronously()
+            if (chosen.isEmpty()) break
+            moved = true
+        }
+        return moved
     }
 
     fun loadTranscriptForReplay(octiText: String): Boolean {
@@ -661,6 +777,7 @@ class OctiAppViewModel @JvmOverloads constructor(
         if (board.game.isGameOver) {
             soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
             _statusBanner.value = "Game Over — Winner: ${board.game.winner}"
+            _showGameOverDialog.value = true
         } else {
             val cue = when {
                 notation.contains("x") -> OctiSoundSynth.SoundCue.POD_CAPTURE
@@ -705,6 +822,7 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun notifyComposerUpdated() {
+        _isContinuingGuidedJump.value = false
         val currentBoardFen = board.toPositionString()
         displayBoard.fromPositionString(currentBoardFen)
         val gameHistorySize = board.game?.numMoves ?: 0
@@ -720,10 +838,15 @@ class OctiAppViewModel @JvmOverloads constructor(
             _viewingPly.value = livePlyCount()
             if (board.game.isGameOver) {
                 soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
+                _statusBanner.value = "Game Over — Winner: ${board.game.winner}"
+                _showGameOverDialog.value = true
             } else {
                 soundSynth.triggerCue(OctiSoundSynth.SoundCue.POD_STEP)
             }
             syncRotationToActiveSeat()
+            if (!composer.isAwaitingConfirmation()) {
+                executeBotTurnIfNeeded()
+            }
         }
         bumpBoardRevision()
     }
@@ -1044,6 +1167,9 @@ class OctiAppViewModel @JvmOverloads constructor(
                 if (!isViewingHistory() || _viewingPly.value >= livePlyCount() - 1) {
                     displayBoard.fromPositionString(gv.fen)
                     _viewingPly.value = livePlyCount()
+                }
+                if (board.game?.isGameOver == true) {
+                    _showGameOverDialog.value = true
                 }
             } catch (ignored: RuntimeException) {
             }

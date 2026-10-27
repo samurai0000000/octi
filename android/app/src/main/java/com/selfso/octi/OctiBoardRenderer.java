@@ -666,6 +666,83 @@ public final class OctiBoardRenderer {
                 OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw, y + height, x, y + height, thickness, color);
                 OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y + height, x, y, thickness, color);
                 break;
+            case 'I':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.15, y, x + gw * 0.85, y, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.5, y, x + gw * 0.5, y + height, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.15, y + height, x + gw * 0.85, y + height, thickness, color);
+                break;
+            case 'K':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y, x, y + height, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y + height * 0.5, x + gw, y, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y + height * 0.5, x + gw, y + height, thickness, color);
+                break;
+            case 'L':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y, x, y + height, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y + height, x + gw, y + height, thickness, color);
+                break;
+            case 'N':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y + height, x, y, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y, x + gw, y + height, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw, y + height, x + gw, y, thickness, color);
+                break;
+            case 'P':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y + height, x, y, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y, x + gw, y, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw, y, x + gw, y + height * 0.5, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw, y + height * 0.5, x, y + height * 0.5, thickness, color);
+                break;
+            case 'R':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y + height, x, y, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y, x + gw, y, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw, y, x + gw, y + height * 0.5, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw, y + height * 0.5, x, y + height * 0.5, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.4, y + height * 0.5, x + gw, y + height, thickness, color);
+                break;
+            case 'S':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw, y, x, y, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y, x, y + height * 0.5, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y + height * 0.5, x + gw, y + height * 0.5, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw, y + height * 0.5, x + gw, y + height, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw, y + height, x, y + height, thickness, color);
+                break;
+            case 'T':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y, x + gw, y, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.5, y, x + gw * 0.5, y + height, thickness, color);
+                break;
+            case 'U':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y, x, y + height, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y + height, x + gw, y + height, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw, y + height, x + gw, y, thickness, color);
+                break;
+            case 'V':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y, x + gw * 0.5, y + height, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.5, y + height, x + gw, y, thickness, color);
+                break;
+            case 'W':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y, x + gw * 0.25, y + height, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.25, y + height, x + gw * 0.5, y + height * 0.45, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.5, y + height * 0.45, x + gw * 0.75, y + height, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.75, y + height, x + gw, y, thickness, color);
+                break;
+            case 'Y':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x, y, x + gw * 0.5, y + height * 0.5, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw, y, x + gw * 0.5, y + height * 0.5, thickness, color);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.5, y + height * 0.5, x + gw * 0.5, y + height, thickness, color);
+                break;
+            case '-':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.1, y + height * 0.5, x + gw * 0.9, y + height * 0.5, thickness, color);
+                break;
+            case ':':
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, x + gw * 0.5, y + height * 0.3, thickness * 1.1, color);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, x + gw * 0.5, y + height * 0.75, thickness * 1.1, color);
+                break;
+            case '!':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.5, y, x + gw * 0.5, y + height * 0.7, thickness, color);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, x + gw * 0.5, y + height * 0.92, thickness * 1.1, color);
+                break;
+            case ',':
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.5, y + height * 0.75, x + gw * 0.3, y + height * 1.05, thickness, color);
+                break;
             default:
                 break;
         }
@@ -980,6 +1057,145 @@ public final class OctiBoardRenderer {
         if (progress > 0.0) {
             fillRectSolid(pixels, w, h, barX, barY, barW * progress, barH, pal.prongSuperGold);
         }
+
+        return pixels;
+    }
+
+    public static int[] renderPlyConfirmScreenPixels(OctiBoard previewBoard,
+                                                     OctiMoveComposer composer,
+                                                     OctiThemeId theme) {
+        int w = 1080;
+        int h = 1920;
+        OctiPalette pal = OctiPalette.forTheme(theme != null ? theme : OctiThemeId.OBSIDIAN_BRASS);
+        int[] pixels = new int[w * h];
+        Arrays.fill(pixels, pal.windowBg);
+
+        // 1. Decluttered TopAppBar (PCE-A08)
+        fillRectSolid(pixels, w, h, 0, 0, w, 128, pal.panelCardBg);
+        drawRectOutline(pixels, w, h, 0, 0, w, 128, 1.5, pal.panelCardBorder);
+        drawVectorString(pixels, w, h, 36, 42, 42, "OCTI", pal.accentBrass, 3.6);
+        drawVectorString(pixels, w, h, 220, 52, 22, "VS BOT TACTICAL", pal.textSecondary, 2.0);
+        drawRectOutline(pixels, w, h, 680, 32, 210, 64, 2.0, pal.accentBrass);
+        drawVectorString(pixels, w, h, 706, 52, 22, "NEW GAME", pal.accentBrass, 2.2);
+        drawVectorString(pixels, w, h, 920, 52, 22, "MENU", pal.accentBrass, 2.2);
+
+        // 2. 1080x1080 Board Canvas
+        OctiBoard boardToRender = (composer != null && composer.isAwaitingConfirmation())
+                ? composer.buildPreviewBoard()
+                : previewBoard;
+        OctiBoardGeometry geo = new OctiBoardGeometry(1080, 1080, 9, 9,
+                OctiBoardGeometry.BoardRotation.ROT_0);
+        int[] boardPx = renderBoardPixels(boardToRender, composer, geo, theme);
+        for (int by = 0; by < 1080; by++) {
+            System.arraycopy(boardPx, by * 1080, pixels, (136 + by) * w, 1080);
+        }
+
+        // 3. Cleaned Reserve HUD (PCE-A09: Move Stack, Undo, Resign, VCR, Rot 90)
+        fillRectSolid(pixels, w, h, 20, 1232, 1040, 240, pal.panelCardBg);
+        drawRectOutline(pixels, w, h, 20, 1232, 1040, 240, 1.8, pal.panelCardBorder);
+        drawVectorString(pixels, w, h, 48, 1258, 24, "TURN: PLAYER A", pal.accentBrass, 2.4);
+        drawVectorString(pixels, w, h, 620, 1258, 22, "PODS:4 PRONGS:25", pal.textSecondary, 2.0);
+
+        drawRectOutline(pixels, w, h, 48, 1306, 220, 56, 1.8, pal.panelCardBorder);
+        drawVectorString(pixels, w, h, 68, 1323, 20, "MOVE STACK", pal.textPrimary, 2.0);
+        drawRectOutline(pixels, w, h, 288, 1306, 160, 56, 1.8, pal.panelCardBorder);
+        drawVectorString(pixels, w, h, 326, 1323, 20, "UNDO", pal.textPrimary, 2.0);
+        drawRectOutline(pixels, w, h, 468, 1306, 180, 56, 1.8, pal.panelCardBorder);
+        drawVectorString(pixels, w, h, 496, 1323, 20, "RESIGN", pal.textPrimary, 2.0);
+
+        // 4. Bottom-anchored borderless PlyConfirmDialog (PCE-A01, PCE-A05)
+        int dlgY = 1500;
+        fillRectSolid(pixels, w, h, 28, dlgY, 1024, 220, pal.panelCardBg);
+        drawRectOutline(pixels, w, h, 28, dlgY, 1024, 220, 3.2, pal.accentBrass);
+        String notation = (composer != null) ? composer.stagedMoveNotation() : "33A-34";
+        drawVectorString(pixels, w, h, 60, dlgY + 32, 26, "STAGED PLY: " + notation, pal.legalStepGuide, 2.6);
+
+        // Cancel button
+        drawRectOutline(pixels, w, h, 60, dlgY + 104, 290, 84, 2.4, pal.legalCaptureGlow);
+        drawVectorString(pixels, w, h, 134, dlgY + 134, 24, "CANCEL", pal.legalCaptureGlow, 2.4);
+
+        // More Moves button
+        fillRectSolid(pixels, w, h, 374, dlgY + 104, 332, 84, 0xFF1E293B);
+        drawRectOutline(pixels, w, h, 374, dlgY + 104, 332, 84, 2.4, pal.accentBrass);
+        drawVectorString(pixels, w, h, 430, dlgY + 134, 24, "MORE MOVES", pal.accentBrass, 2.4);
+
+        // Commit button
+        fillRectSolid(pixels, w, h, 730, dlgY + 104, 290, 84, pal.accentBrass);
+        drawVectorString(pixels, w, h, 804, dlgY + 134, 24, "COMMIT", pal.windowBg, 2.8);
+
+        // 5. Bottom Navigation Bar
+        fillRectSolid(pixels, w, h, 0, 1760, w, 160, pal.panelCardBg);
+        drawRectOutline(pixels, w, h, 0, 1760, w, 160, 1.5, pal.panelCardBorder);
+        drawVectorString(pixels, w, h, 90, 1826, 22, "BOARD", pal.accentBrass, 2.4);
+        drawVectorString(pixels, w, h, 450, 1826, 22, "LOBBY", pal.textSecondary, 2.0);
+        drawVectorString(pixels, w, h, 790, 1826, 22, "ARCHIVE", pal.textSecondary, 2.0);
+
+        return pixels;
+    }
+
+    public static int[] renderGameOverScreenPixels(OctiBoard board,
+                                                   OctiMoveComposer composer,
+                                                   OctiThemeId theme) {
+        int w = 1080;
+        int h = 1920;
+        OctiPalette pal = OctiPalette.forTheme(theme != null ? theme : OctiThemeId.OBSIDIAN_BRASS);
+        int[] pixels = new int[w * h];
+        Arrays.fill(pixels, pal.windowBg);
+
+        // 1. TopAppBar
+        fillRectSolid(pixels, w, h, 0, 0, w, 128, pal.panelCardBg);
+        drawRectOutline(pixels, w, h, 0, 0, w, 128, 1.5, pal.panelCardBorder);
+        drawVectorString(pixels, w, h, 36, 42, 42, "OCTI", pal.accentBrass, 3.6);
+        drawVectorString(pixels, w, h, 220, 52, 22, "GAME OVER: PLAYER A", pal.textSecondary, 2.0);
+        drawRectOutline(pixels, w, h, 680, 32, 210, 64, 2.0, pal.accentBrass);
+        drawVectorString(pixels, w, h, 706, 52, 22, "NEW GAME", pal.accentBrass, 2.2);
+        drawVectorString(pixels, w, h, 920, 52, 22, "MENU", pal.accentBrass, 2.2);
+
+        // 2. Persistent Top Victory Banner above board (PCE-A07)
+        fillRectSolid(pixels, w, h, 20, 140, 1040, 88, pal.panelCardBg);
+        drawRectOutline(pixels, w, h, 20, 140, 1040, 88, 2.8, pal.accentBrass);
+        drawVectorString(pixels, w, h, 48, 170, 26, "GAME OVER - WINNER: PLAYER A", pal.accentBrass, 2.6);
+        fillRectSolid(pixels, w, h, 810, 154, 220, 60, pal.accentBrass);
+        drawVectorString(pixels, w, h, 838, 172, 22, "NEW GAME", pal.windowBg, 2.4);
+
+        // 3. Board Canvas
+        OctiBoardGeometry geo = new OctiBoardGeometry(1080, 1080, 9, 9,
+                OctiBoardGeometry.BoardRotation.ROT_0);
+        int[] boardPx = renderBoardPixels(board, composer, geo, theme);
+        for (int by = 0; by < 1080; by++) {
+            System.arraycopy(boardPx, by * 1080, pixels, (240 + by) * w, 1080);
+        }
+
+        // 3b. Reserve HUD + Bottom Navigation Bar under Scrim
+        fillRectSolid(pixels, w, h, 20, 1336, 1040, 240, pal.panelCardBg);
+        drawRectOutline(pixels, w, h, 20, 1336, 1040, 240, 1.8, pal.panelCardBorder);
+        drawVectorString(pixels, w, h, 48, 1362, 24, "WINNER: PLAYER A", pal.accentBrass, 2.4);
+        drawVectorString(pixels, w, h, 620, 1362, 22, "PODS:4 PRONGS:25", pal.textSecondary, 2.0);
+        fillRectSolid(pixels, w, h, 0, 1760, w, 160, pal.panelCardBg);
+        drawRectOutline(pixels, w, h, 0, 1760, w, 160, 1.5, pal.panelCardBorder);
+        drawVectorString(pixels, w, h, 90, 1826, 22, "BOARD", pal.accentBrass, 2.4);
+        drawVectorString(pixels, w, h, 450, 1826, 22, "LOBBY", pal.textSecondary, 2.0);
+        drawVectorString(pixels, w, h, 790, 1826, 22, "ARCHIVE", pal.textSecondary, 2.0);
+
+        // 4. Scrim + Centered GameOverDialog Modal (PCE-A07)
+        fillRectAlpha(pixels, w, h, 0, 128, w, 1632, 0xFF000000, 0.58);
+        int mx = 84;
+        int my = 660;
+        int mw = 912;
+        int mh = 440;
+        fillRectSolid(pixels, w, h, mx, my, mw, mh, pal.panelCardBg);
+        drawRectOutline(pixels, w, h, mx, my, mw, mh, 3.8, pal.accentBrass);
+
+        drawVectorString(pixels, w, h, mx + 86, my + 56, 34, "VICTORY - PLAYER A WINS!", pal.accentBrass, 3.2);
+        drawVectorString(pixels, w, h, mx + 120, my + 140, 24, "MATCH CONCLUDED BY RESIGNATION", pal.textPrimary, 2.2);
+        drawVectorString(pixels, w, h, mx + 250, my + 200, 22, "LOCAL VS BOT TACTICAL", pal.textSecondary, 2.0);
+
+        // Review Board & New Game buttons
+        drawRectOutline(pixels, w, h, mx + 56, my + 294, 380, 92, 2.6, pal.accentBrass);
+        drawVectorString(pixels, w, h, mx + 104, my + 328, 24, "REVIEW BOARD", pal.accentBrass, 2.4);
+
+        fillRectSolid(pixels, w, h, mx + 476, my + 294, 380, 92, pal.accentBrass);
+        drawVectorString(pixels, w, h, mx + 566, my + 328, 24, "NEW GAME", pal.windowBg, 2.8);
 
         return pixels;
     }

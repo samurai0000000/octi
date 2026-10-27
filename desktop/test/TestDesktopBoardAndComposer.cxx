@@ -1201,6 +1201,125 @@ TEST(OctiDialogsRefinementTest, PlyConfirmDialogCommitCancelAndMoreMoves)
     composer.cancelAndRollback();
 }
 
+TEST(OctiDialogsRefinementTest, PlyConfirmMultiMoveAndGameOverEndgameV3)
+{
+    QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);
+    QString artifactDir = QFileInfo::exists(repoRootStr + "/plan/done/plan_ply_confirm_and_endgame.md")
+                              ? (repoRootStr + "/plan/done/ply_confirm_and_endgame.artifacts")
+                              : (repoRootStr + "/plan/ply_confirm_and_endgame.artifacts");
+    QDir().mkpath(artifactDir);
+
+    // 1. PCE-D01: ZoomedSquareDialog on empty home square shows Place Reserve & Liberate, NOT Move/Jump
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    board.squareAt(2, 2).clear(); // Empty Player A home square at (3,3)
+    OctiMoveComposer composer(&board);
+
+    ZoomedSquareDialog emptyHomeDlg(&board, &composer, 3, 3,
+                                    BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    QImage emptyHomeImg = emptyHomeDlg.renderToImage(560, 530);
+    CHECK_FALSE(emptyHomeImg.isNull());
+    CHECK_TRUE(emptyHomeDlg.movePodBtnRect().isEmpty());
+    CHECK_FALSE(emptyHomeDlg.placeReserveBtnRect().isEmpty());
+    CHECK_FALSE(emptyHomeDlg.liberateBtnRect().isEmpty());
+
+    QString emptyHomePath = artifactDir + "/desktop_zoomed_empty_home_v3.png";
+    CHECK_TRUE(emptyHomeImg.save(emptyHomePath));
+    CHECK_TRUE(QFileInfo(emptyHomePath).size() > 10000);
+
+    // 2. PCE-D02 & PCE-D03: Multi-pod stack More Moves preserves guidedOriginSquare & auto-selects unclaimed pod
+    board.squareAt(2, 2).clear();
+    OctiPod p0(A_POD);
+    p0.addProng(DIR_N);
+    OctiPod p1(A_POD);
+    p1.addProng(DIR_E);
+    board.squareAt(2, 2).addPod(p0);
+    board.squareAt(2, 2).addPod(p1);
+    composer.refreshLegalMoves();
+
+    CHECK_TRUE(composer.beginGuidedPodMove(3, 3, 1, false));
+    CHECK_TRUE(composer.selectGuidedDestination(4, 3));
+    CHECK_FALSE(composer.isGuidedMoveActive());
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    LONGS_EQUAL(3, composer.guidedOriginSquare().first);
+    LONGS_EQUAL(3, composer.guidedOriginSquare().second);
+    CHECK_TRUE(composer.isSquarePodClaimed(3, 3, 1));
+    CHECK_FALSE(composer.isSquarePodClaimed(3, 3, 0));
+    LONGS_EQUAL(0, composer.firstUnclaimedFriendlyPodIndex(3, 3));
+
+    // Reopening ZoomedSquareDialog on (3,3) auto-selects pod 0 (unclaimed)
+    ZoomedSquareDialog stackDlg(&board, &composer, 3, 3,
+                                BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    LONGS_EQUAL(0, stackDlg.selectedPodIndex());
+    stackDlg.renderToImage(560, 530);
+    CHECK_FALSE(stackDlg.movePodBtnRect().isEmpty());
+    composer.cancelAndRollback();
+
+    // 3. PCE-D04: 8th-prong superprong bonus hop interactive completion
+    board.squareAt(2, 2).clear();
+    OctiPod almostFull(A_POD);
+    for (int d = DIR_N; d <= DIR_W; ++d) {
+        almostFull.addProng(static_cast<OctiDir>(d));
+    }
+    board.squareAt(2, 2).addPod(almostFull);
+    composer.refreshLegalMoves();
+
+    CHECK_TRUE(composer.stageOrCommitAddProng(3, 3, 0, DIR_NW, true));
+    CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+    CHECK_FALSE(composer.hasEighthProngBonusHop());
+    CHECK_TRUE(composer.canAddMoreMoves());
+    CHECK_TRUE(composer.beginGuidedPodMove(3, 3, 0, false));
+    CHECK_FALSE(composer.guidedNextSquares().empty());
+    CHECK_TRUE(composer.selectGuidedDestination(3, 4));
+    CHECK_TRUE(composer.hasEighthProngBonusHop());
+    CHECK_TRUE(composer.stagedMoveNotation().find("+h!,33-34") != std::string::npos);
+    CHECK_TRUE(composer.commitStagedMove());
+
+    // 4. PCE-D05: Multi-hop jump allows early commit via PlyConfirmDialog after first hop
+    OctiBoard jumpBoard(GAME_MODE_2, false, false, GAME_BASES_3);
+    jumpBoard.getGame()->start(PLAYER_A);
+    jumpBoard.squareAt(2, 2).clear();
+    jumpBoard.squareAt(2, 6).clear(); // Clear B's initial pod at (3,7) so landing square is empty
+    OctiPod jumper(A_POD);
+    jumper.addProng(DIR_N);
+    jumpBoard.squareAt(2, 2).addPod(jumper);
+    jumpBoard.squareAt(2, 3).addPod(OctiPod(B_POD)); // Enemy at (3,4)
+    jumpBoard.squareAt(2, 5).addPod(OctiPod(B_POD)); // Enemy at (3,6)
+    OctiMoveComposer jumpComposer(&jumpBoard);
+
+    CHECK_TRUE(jumpComposer.beginGuidedPodMove(3, 3, 0, false));
+    CHECK_TRUE(jumpComposer.selectGuidedDestination(3, 5)); // First jump to (3,5)
+    CHECK_TRUE(jumpComposer.isGuidedMoveActive());          // Second jump to (3,7) available
+    CHECK_TRUE(jumpComposer.isAwaitingConfirmation());
+    CHECK_TRUE(jumpComposer.canAddMoreMoves());
+
+    PlyConfirmDialog jumpConfirmDlg(&jumpComposer, ThemeId::OBSIDIAN_BRASS);
+    CHECK_TRUE(jumpConfirmDlg.isMoreMovesVisible());
+    jumpConfirmDlg.renderToImage(460, 150);
+    // Simulate clicking Commit after first hop
+    QKeyEvent enterEv(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+    QCoreApplication::sendEvent(&jumpConfirmDlg, &enterEv);
+    CHECK_TRUE(jumpConfirmDlg.chosenAction() == PlyConfirmDialog::ResultAction::COMMIT);
+    CHECK_FALSE(jumpComposer.isGuidedMoveActive());
+    CHECK_FALSE(jumpComposer.isAwaitingConfirmation());
+    LONGS_EQUAL(1, jumpBoard.squareAt(2, 4).getNumPods()); // Landed at (3,5)
+
+    // 5. PCE-D06: GameOverDialog luxury borderless card & endgame state
+    jumpBoard.getGame()->resign(jumpBoard.getGame()->getTurn());
+    CHECK_TRUE(jumpBoard.getGame()->isGameOver());
+
+    GameOverDialog goDlg(&jumpBoard, ThemeId::OBSIDIAN_BRASS);
+    CHECK_TRUE(goDlg.windowFlags() & Qt::FramelessWindowHint);
+    CHECK_TRUE(goDlg.winnerBannerText().contains("PLAYER A WINS"));
+    CHECK_TRUE(goDlg.terminationText().contains("Resignation"));
+
+    QImage goImg = goDlg.renderToImage(480, 280);
+    CHECK_FALSE(goImg.isNull());
+    QString goPath = artifactDir + "/desktop_gameover_dialog_v3.png";
+    CHECK_TRUE(goImg.save(goPath));
+    CHECK_TRUE(QFileInfo(goPath).size() > 10000);
+}
+
 extern "C" const char *__lsan_default_suppressions()
 {
     return "leak:libqoffscreen.so\n";

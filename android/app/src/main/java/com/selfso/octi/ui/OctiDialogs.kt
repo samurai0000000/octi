@@ -596,22 +596,29 @@ fun ZoomedSquareDialog(
     val hasEnemy = sq?.hasEnemyOf(turn) == true
     val isFriendlyTurn = !hasEnemy && isTurn && !isEmptySquare
 
-    var selectedPodIndex by remember {
+    var selectedPodIndex by remember(squareX, squareY, numPods, composer.stagedMoveNotation()) {
+        val unclaimed = composer.firstUnclaimedFriendlyPodIndex(squareX, squareY)
         mutableStateOf(
-            if (numPods > 0) Math.max(0, Math.min(numPods - 1, composer.selectedStackPodIndex(squareX, squareY))) else 0
+            if (unclaimed >= 0) {
+                unclaimed
+            } else if (numPods > 0) {
+                Math.max(0, Math.min(numPods - 1, composer.selectedStackPodIndex(squareX, squareY)))
+            } else {
+                0
+            }
         )
     }
-    var moveAllStack by remember { mutableStateOf(false) }
+    var moveAllStack by remember(squareX, squareY) { mutableStateOf(false) }
 
     val freeProngs = board.game?.getFreeProngs(turn) ?: 0
     val freeSuper = board.game?.getFreeSuperProngs(turn) ?: 0
     val useSuperProngs = board.game?.useSuperProngs() == true
 
-    var selectedProngTray by remember {
+    var selectedProngTray by remember(squareX, squareY) {
         mutableStateOf<String?>(if (isFriendlyTurn && freeProngs > 0) "NORMAL" else null)
     }
-    var selectedRepositionSrcDir by remember { mutableStateOf<OctiDir?>(null) }
-    var hoverSocketDir by remember { mutableStateOf(-1) }
+    var selectedRepositionSrcDir by remember(squareX, squareY) { mutableStateOf<OctiDir?>(null) }
+    var hoverSocketDir by remember(squareX, squareY) { mutableStateOf(-1) }
     var podBoxPxSize by remember { mutableStateOf(IntSize(480, 480)) }
 
     val zoomedBitmap = remember(squareX, squareY, selectedPodIndex, rotation, themeId, hoverSocketDir, composer.stagedMoveNotation()) {
@@ -691,6 +698,7 @@ fun ZoomedSquareDialog(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             for (i in 0 until numPods) {
+                                val isClaimed = composer.isSquarePodClaimed(squareX, squareY, i)
                                 FilterChip(
                                     selected = i == selectedPodIndex,
                                     onClick = {
@@ -698,7 +706,15 @@ fun ZoomedSquareDialog(
                                         composer.selectStackPodIndex(squareX, squareY, i)
                                         selectedRepositionSrcDir = null
                                     },
-                                    label = { Text("Pod ${i + 1}/$numPods") }
+                                    label = {
+                                        Text(
+                                            if (isClaimed) {
+                                                "Pod ${i + 1}/$numPods (Moved)"
+                                            } else {
+                                                "Pod ${i + 1}/$numPods"
+                                            }
+                                        )
+                                    }
                                 )
                             }
                         }
@@ -788,7 +804,6 @@ fun ZoomedSquareDialog(
                                                     onRepositionProng(selectedPodIndex, selectedRepositionSrcDir!!, hitDir)
                                                     selectedRepositionSrcDir = null
                                                     hoverSocketDir = -1
-                                                    onDismiss()
                                                 } else {
                                                     selectedRepositionSrcDir = hitDir
                                                     hoverSocketDir = hitDir.index
@@ -799,10 +814,8 @@ fun ZoomedSquareDialog(
                                             } else if (pt == OctiProngType.NO_PRONG) {
                                                 if (selectedProngTray == "SUPER" && freeSuper > 0) {
                                                     onAddProng(selectedPodIndex, hitDir, true)
-                                                    onDismiss()
                                                 } else if ((selectedProngTray == "NORMAL" || selectedProngTray == null) && freeProngs > 0) {
                                                     onAddProng(selectedPodIndex, hitDir, false)
-                                                    onDismiss()
                                                 }
                                             }
                                         }
@@ -858,15 +871,12 @@ fun ZoomedSquareDialog(
                                                 onRepositionProng(selectedPodIndex, selectedRepositionSrcDir!!, dropDir)
                                                 selectedRepositionSrcDir = null
                                                 hoverSocketDir = -1
-                                                onDismiss()
                                             } else if (selectedProngTray == "SUPER" && freeSuper > 0) {
                                                 onAddProng(selectedPodIndex, dropDir, true)
                                                 hoverSocketDir = -1
-                                                onDismiss()
                                             } else if ((selectedProngTray == "NORMAL" || selectedProngTray == null) && freeProngs > 0) {
                                                 onAddProng(selectedPodIndex, dropDir, false)
                                                 hoverSocketDir = -1
-                                                onDismiss()
                                             }
                                         }
                                         hoverSocketDir = -1
@@ -882,18 +892,27 @@ fun ZoomedSquareDialog(
                     }
 
                     if (isFriendlyTurn) {
+                        val isClaimedPod = composer.isSquarePodClaimed(squareX, squareY, selectedPodIndex)
+                        val podProngs = if (selectedPodIndex in 0 until numPods) {
+                            sq?.getPodAt(selectedPodIndex)?.numProngs ?: 0
+                        } else {
+                            0
+                        }
                         Button(
                             onClick = {
                                 onBeginGuidedMove(selectedPodIndex, moveAllStack)
-                                onDismiss()
                             },
+                            enabled = !isClaimedPod && podProngs > 0,
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = OctiTheme.colors.accentBrass,
                                 contentColor = OctiTheme.colors.windowBg
                             )
                         ) {
-                            Text("Move / Jump This Pod", fontWeight = FontWeight.Bold)
+                            Text(
+                                text = if (isClaimedPod) "Pod Already Moved" else "Move / Jump This Pod",
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
 
@@ -905,7 +924,6 @@ fun ZoomedSquareDialog(
                             Button(
                                 onClick = {
                                     onPlaceReservePod(false)
-                                    onDismiss()
                                 },
                                 modifier = Modifier.weight(1f)
                             ) {
@@ -914,7 +932,6 @@ fun ZoomedSquareDialog(
                             OutlinedButton(
                                 onClick = {
                                     onPlaceReservePod(true)
-                                    onDismiss()
                                 },
                                 modifier = Modifier.weight(1f)
                             ) {
@@ -1119,6 +1136,90 @@ fun PlyConfirmDialog(
                     )
                 ) {
                     Text("Commit", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GameOverDialog(
+    winner: OctiPlayer,
+    matchLabel: String,
+    totalPlies: Int,
+    resigned: Boolean,
+    onNewGame: () -> Unit,
+    onReviewBoard: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onReviewBoard,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.90f)
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+            border = BorderStroke(2.dp, OctiTheme.colors.accentBrass)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "VICTORY — ${winner.name} WINS!",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = OctiTheme.colors.accentBrass,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = if (resigned) {
+                        "Match concluded by resignation after $totalPlies plies"
+                    } else {
+                        "Match concluded after $totalPlies plies"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OctiTheme.colors.textPrimary,
+                    textAlign = TextAlign.Center
+                )
+                if (matchLabel.isNotEmpty()) {
+                    Text(
+                        text = matchLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = OctiTheme.colors.textSecondary,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onReviewBoard,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Review Board", fontWeight = FontWeight.SemiBold)
+                    }
+                    Button(
+                        onClick = onNewGame,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OctiTheme.colors.accentBrass,
+                            contentColor = OctiTheme.colors.windowBg
+                        )
+                    ) {
+                        Text("New Game", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }

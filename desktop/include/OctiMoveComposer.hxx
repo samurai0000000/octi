@@ -75,7 +75,12 @@ public:
     std::vector<std::pair<int, int>> guidedNextSquares() const;
     bool selectGuidedDestination(int toX, int toY);
     bool finishGuidedMoveHere();
+    bool finishGuidedMove() { return finishGuidedMoveHere(); }
     bool hasOtherMovablePodAtOrigin() const;
+    bool isSquarePodClaimed(int x, int y, int podIndex) const;
+    int firstUnclaimedFriendlyPodIndex(int x, int y) const;
+    bool canAddMoreMoves() const;
+    bool hasEighthProngBonusHop() const;
 
     bool setCaptureAtSquare(int jumpedX, int jumpedY, bool capture);
     bool toggleCaptureAtSquare(int jumpedX, int jumpedY);

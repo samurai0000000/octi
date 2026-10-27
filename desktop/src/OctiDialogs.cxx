@@ -2109,58 +2109,124 @@ GameOverDialog::GameOverDialog(const std::string &winnerBanner,
                                QWidget *parent)
     : QDialog(parent),
       _theme(theme),
-      _winnerLabel(nullptr),
-      _terminationLabel(nullptr),
-      _movesLabel(nullptr),
-      _exportBtn(nullptr),
-      _rematchBtn(nullptr),
+      _winnerBanner(QString::fromStdString(winnerBanner)),
+      _terminationReason(QString::fromStdString(terminationReason)),
       _moveCount(moveCount),
       _transcript(octiTranscript),
-      _rematchRequested(false)
+      _rematchRequested(false),
+      _newGameRequested(false),
+      _newGameBtnRect(56.0, 210.0, 172.0, 42.0),
+      _reviewBoardBtnRect(252.0, 210.0, 172.0, 42.0)
 {
+    setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
+    setAttribute(Qt::WA_TranslucentBackground, true);
+    setFixedSize(480, 280);
+    setModal(true);
     setWindowTitle("OCTI — Game Over");
-    setMinimumSize(380, 240);
+}
 
-    QVBoxLayout *root = new QVBoxLayout(this);
-
-    _winnerLabel = new QLabel(QString::fromStdString(winnerBanner), this);
-    _winnerLabel->setStyleSheet("font-size: 18px; font-weight: bold;");
-    root->addWidget(_winnerLabel);
-
-    _terminationLabel = new QLabel(
-        QString("Termination: %1").arg(QString::fromStdString(terminationReason)),
-        this);
-    root->addWidget(_terminationLabel);
-
-    _movesLabel = new QLabel(
-        QString("Total Plies / Moves: %1").arg(moveCount), this);
-    root->addWidget(_movesLabel);
-
-    QHBoxLayout *btns = new QHBoxLayout();
-    _exportBtn = new QPushButton("Export .octi", this);
-    _rematchBtn = new QPushButton("Request / Accept Rematch", this);
-    QPushButton *closeBtn = new QPushButton("Close", this);
-    btns->addWidget(_exportBtn);
-    btns->addWidget(_rematchBtn);
-    btns->addWidget(closeBtn);
-    root->addLayout(btns);
-
-    QObject::connect(_rematchBtn, &QPushButton::clicked, [this]() {
-        triggerRematch();
-    });
-    QObject::connect(closeBtn, &QPushButton::clicked, [this]() {
-        accept();
-    });
-
-    setTheme(_theme);
+GameOverDialog::GameOverDialog(const OctiBoard *board,
+                               ThemeId theme,
+                               QWidget *parent)
+    : GameOverDialog(describeWinnerBanner(board).toStdString(),
+                     describeTerminationReason(board).toStdString(),
+                     (board && board->getGame())
+                         ? board->getGame()->getNumMoves()
+                         : 0,
+                     "",
+                     theme,
+                     parent)
+{
 }
 
 GameOverDialog::~GameOverDialog() = default;
 
+QString GameOverDialog::describeWinnerBanner(const OctiBoard *board)
+{
+    if (!board || !board->getGame()) {
+        return QString::fromUtf8("GAME OVER");
+    }
+    OctiPlayer winner = board->getGame()->getWinner();
+    if (board->getGameMode() == GAME_MODE_4) {
+        if (winner == PLAYER_A || winner == PLAYER_C) {
+            return QString::fromUtf8("VICTORY \xE2\x80\x94 TEAM A+C WINS!");
+        }
+        if (winner == PLAYER_B || winner == PLAYER_D) {
+            return QString::fromUtf8("VICTORY \xE2\x80\x94 TEAM B+D WINS!");
+        }
+    } else {
+        if (winner == PLAYER_A) {
+            return QString::fromUtf8("VICTORY \xE2\x80\x94 PLAYER A WINS!");
+        }
+        if (winner == PLAYER_B) {
+            return QString::fromUtf8("VICTORY \xE2\x80\x94 PLAYER B WINS!");
+        }
+        if (winner == PLAYER_C) {
+            return QString::fromUtf8("VICTORY \xE2\x80\x94 PLAYER C WINS!");
+        }
+        if (winner == PLAYER_D) {
+            return QString::fromUtf8("VICTORY \xE2\x80\x94 PLAYER D WINS!");
+        }
+    }
+    return QString::fromUtf8("DRAW / STALEMATE");
+}
+
+QString GameOverDialog::describeTerminationReason(const OctiBoard *board)
+{
+    if (!board || !board->getGame()) {
+        return QStringLiteral("Match Concluded");
+    }
+    if (board->getGame()->isGameResigned()) {
+        return QStringLiteral("Victory by Resignation");
+    }
+    std::vector<std::pair<OctiPlayer, OctiMove>> moves;
+    board->getGame()->getMoves(moves);
+    if (!moves.empty() && moves.back().second.getOps().empty()) {
+        return QStringLiteral("Victory by Resignation");
+    }
+
+    OctiPlayer winner = board->getGame()->getWinner();
+    if (winner != PLAYER_UNDEF) {
+        for (int x = 0; x < 9; ++x) {
+            for (int y = 0; y < 9; ++y) {
+                const OctiSquare &sq = board->squareAt(x, y);
+                if (sq.isEmpty()) {
+                    continue;
+                }
+                OctiSquareType st = sq.getType();
+                OctiPodType wPod = (winner == PLAYER_A ? A_POD :
+                                    winner == PLAYER_B ? B_POD :
+                                    winner == PLAYER_C ? C_POD : D_POD);
+                bool hasWinnerPod = false;
+                for (int pi = 0; pi < sq.getNumPods(); ++pi) {
+                    if (sq.getPodAt(pi).getType() == wPod) {
+                        hasWinnerPod = true;
+                        break;
+                    }
+                }
+                if (!hasWinnerPod) {
+                    continue;
+                }
+                if ((st == A_HOME_SQUARE && winner != PLAYER_A) ||
+                    (st == B_HOME_SQUARE && winner != PLAYER_B) ||
+                    (st == C_HOME_SQUARE && winner != PLAYER_C) ||
+                    (st == D_HOME_SQUARE && winner != PLAYER_D)) {
+                    return QStringLiteral("Captured Enemy Home Base");
+                }
+            }
+        }
+        OctiPlayer opp = (winner == PLAYER_A) ? PLAYER_B : PLAYER_A;
+        if (board->getGame()->isPlayerEliminated(opp)) {
+            return QStringLiteral("Eliminated All Opponent Pods");
+        }
+    }
+    return QStringLiteral("Captured Enemy Home Base");
+}
+
 void GameOverDialog::setTheme(ThemeId theme)
 {
     _theme = theme;
-    setStyleSheet(buildAppStyleSheet(_theme));
+    update();
 }
 
 ThemeId GameOverDialog::theme() const
@@ -2170,12 +2236,12 @@ ThemeId GameOverDialog::theme() const
 
 QString GameOverDialog::winnerBannerText() const
 {
-    return _winnerLabel ? _winnerLabel->text() : QString();
+    return _winnerBanner;
 }
 
 QString GameOverDialog::terminationText() const
 {
-    return _terminationLabel ? _terminationLabel->text() : QString();
+    return QString("Termination: %1").arg(_terminationReason);
 }
 
 int GameOverDialog::moveCount() const
@@ -2204,6 +2270,7 @@ bool GameOverDialog::exportTranscriptToFile(const std::string &filePath) const
 void GameOverDialog::triggerRematch()
 {
     _rematchRequested = true;
+    _newGameRequested = true;
     if (_onRematchCallback) {
         _onRematchCallback();
     }
@@ -2215,9 +2282,133 @@ bool GameOverDialog::wasRematchRequested() const
     return _rematchRequested;
 }
 
+bool GameOverDialog::newGameRequested() const
+{
+    return _newGameRequested;
+}
+
 void GameOverDialog::setOnRematchCallback(std::function<void()> cb)
 {
     _onRematchCallback = std::move(cb);
+}
+
+QImage GameOverDialog::renderToImage(int width, int height)
+{
+    QImage img(width, height, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
+
+    const OctiPalette &pal = paletteForTheme(_theme);
+
+    QRectF outerRect(2.0, 2.0, width - 4.0, height - 4.0);
+    p.setPen(QPen(pal.prongSuperGold, 2.4));
+    p.setBrush(pal.panelCardBg);
+    p.drawRoundedRect(outerRect, 12.0, 12.0);
+
+    QRectF innerRect = outerRect.adjusted(6.0, 6.0, -6.0, -6.0);
+    p.setPen(QPen(pal.accentBrass, 1.0));
+    p.setBrush(Qt::NoBrush);
+    p.drawRoundedRect(innerRect, 8.0, 8.0);
+
+    QFont badgeFont("SansSerif", 9, QFont::Bold);
+    badgeFont.setLetterSpacing(QFont::AbsoluteSpacing, 2.0);
+    p.setFont(badgeFont);
+    p.setPen(pal.accentBrass);
+    p.drawText(QRectF(24.0, 22.0, width - 48.0, 20.0),
+               Qt::AlignCenter,
+               QStringLiteral("MATCH CONCLUDED"));
+
+    QFont bannerFont("SansSerif", 17, QFont::Bold);
+    p.setFont(bannerFont);
+    p.setPen(pal.prongSuperGold);
+    p.drawText(QRectF(24.0, 52.0, width - 48.0, 44.0),
+               Qt::AlignCenter | Qt::TextWordWrap,
+               _winnerBanner);
+
+    p.setPen(QPen(pal.accentBrass.darker(130), 1.0));
+    p.drawLine(QPointF(60.0, 106.0), QPointF(width - 60.0, 106.0));
+
+    QFont reasonFont("SansSerif", 12, QFont::DemiBold);
+    p.setFont(reasonFont);
+    p.setPen(pal.textPrimary);
+    p.drawText(QRectF(24.0, 118.0, width - 48.0, 28.0),
+               Qt::AlignCenter,
+               _terminationReason);
+
+    QFont statsFont("SansSerif", 10, QFont::Normal);
+    p.setFont(statsFont);
+    p.setPen(pal.textSecondary);
+    p.drawText(QRectF(24.0, 150.0, width - 48.0, 24.0),
+               Qt::AlignCenter,
+               QString("Total Plies / Moves: %1").arg(_moveCount));
+
+    double btnW = 176.0;
+    double btnH = 42.0;
+    double gap = 24.0;
+    double startX = (width - (2.0 * btnW + gap)) * 0.5;
+    double btnY = height - btnH - 26.0;
+
+    _newGameBtnRect = QRectF(startX, btnY, btnW, btnH);
+    _reviewBoardBtnRect = QRectF(startX + btnW + gap, btnY, btnW, btnH);
+
+    p.setPen(QPen(pal.prongSuperGold, 1.6));
+    p.setBrush(pal.podA.core);
+    p.drawRoundedRect(_newGameBtnRect, 7.0, 7.0);
+    p.setFont(QFont("SansSerif", 11, QFont::Bold));
+    p.setPen(Qt::white);
+    p.drawText(_newGameBtnRect, Qt::AlignCenter, QStringLiteral("New Game"));
+
+    p.setPen(QPen(pal.accentBrass, 1.4));
+    p.setBrush(pal.panelCardBg.darker(130));
+    p.drawRoundedRect(_reviewBoardBtnRect, 7.0, 7.0);
+    p.setPen(pal.textPrimary);
+    p.drawText(_reviewBoardBtnRect, Qt::AlignCenter, QStringLiteral("Review Board"));
+
+    p.end();
+    return img;
+}
+
+void GameOverDialog::paintEvent(QPaintEvent *event)
+{
+    (void)event;
+    QPainter p(this);
+    p.drawImage(0, 0, renderToImage(width(), height()));
+}
+
+void GameOverDialog::mousePressEvent(QMouseEvent *event)
+{
+    if (!event) {
+        return;
+    }
+    QPointF pos = mousePosF(event);
+    if (_newGameBtnRect.contains(pos)) {
+        triggerRematch();
+        return;
+    }
+    if (_reviewBoardBtnRect.contains(pos)) {
+        _newGameRequested = false;
+        accept();
+        return;
+    }
+}
+
+void GameOverDialog::keyPressEvent(QKeyEvent *event)
+{
+    if (!event) {
+        return;
+    }
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+        triggerRematch();
+        return;
+    }
+    if (event->key() == Qt::Key_Escape) {
+        _newGameRequested = false;
+        reject();
+        return;
+    }
+    QDialog::keyPressEvent(event);
 }
 
 /* ==================================================================== */
@@ -2871,6 +3062,14 @@ ZoomedSquareDialog::ZoomedSquareDialog(OctiBoard *board,
         if (_selectedPodIndex < 0 || _selectedPodIndex >= sq.getNumPods()) {
             _selectedPodIndex = std::max(0, sq.getNumPods() - 1);
         }
+        if (_composer && sq.getNumPods() > 0 &&
+            _composer->isSquarePodClaimed(_squareX, _squareY, _selectedPodIndex)) {
+            int unclaimed = _composer->firstUnclaimedFriendlyPodIndex(_squareX, _squareY);
+            if (unclaimed >= 0 && unclaimed < sq.getNumPods()) {
+                _selectedPodIndex = unclaimed;
+                _composer->selectStackPodIndex(_squareX, _squareY, _selectedPodIndex);
+            }
+        }
         if (_board->getGame()) {
             OctiPlayer t = _board->getGame()->getTurn();
             if (_board->getGame()->getFreeProngs(t) == 0 &&
@@ -3004,14 +3203,18 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
             _stackPodTabRects.push_back(tabR);
 
             bool sel = (i == _selectedPodIndex);
+            bool claimed = (_composer && _composer->isSquarePodClaimed(_squareX, _squareY, i));
             p.setPen(QPen(sel ? pal.prongSuperGold : pal.accentBrass, sel ? 1.8 : 1.0));
             p.setBrush(sel ? pal.boardOuterFrame.darker(140) : pal.panelCardBg.darker(120));
             p.drawRoundedRect(tabR, 4.0, 4.0);
 
-            p.setPen(sel ? pal.prongSuperGold : pal.textPrimary);
+            p.setPen(claimed ? pal.textSecondary : (sel ? pal.prongSuperGold : pal.textPrimary));
             QFont tabFont("SansSerif", 9, sel ? QFont::Bold : QFont::Normal);
             p.setFont(tabFont);
-            p.drawText(tabR, Qt::AlignCenter, QString("Pod %1/%2").arg(i + 1).arg(numPods));
+            QString tabLabel = claimed
+                ? QString::fromUtf8("Pod %1/%2 \xE2\x9C\x93").arg(i + 1).arg(numPods)
+                : QString("Pod %1/%2").arg(i + 1).arg(numPods);
+            p.drawText(tabR, Qt::AlignCenter, tabLabel);
         }
 
         if (!hasEnemy && isTurn) {
@@ -3116,7 +3319,10 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
     // 5. Left Side: Prong Dispenser Tray (for friendly pods on player's turn)
     _normalProngTrayRect = QRectF();
     _superProngTrayRect = QRectF();
-    if (!hasEnemy && isTurn && _board && _board->getGame()) {
+    bool currentPodClaimed = (!isEmptySquare && _composer &&
+                              _composer->isSquarePodClaimed(_squareX, _squareY, _selectedPodIndex));
+    if (! isEmptySquare && !hasEnemy && isTurn && !currentPodClaimed &&
+        _board && _board->getGame()) {
         OctiPlayer turn = _board->getGame()->getTurn();
         int freeProngs = _board->getGame()->getFreeProngs(turn);
         int freeSuper = _board->getGame()->getFreeSuperProngs(turn);
@@ -3151,39 +3357,59 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         p.drawText(spTxtR, Qt::AlignCenter, QString("Super (!)\n(%1 avail)").arg(freeSuper));
     }
 
-    // 6. Action Buttons at Bottom (tightened for 530 height, no Close button)
-    _movePodBtnRect = QRectF(120, 460, 320, 38);
+    // 6. Action Buttons at Bottom (PCE-D01: mutually exclusive by square state)
+    _movePodBtnRect = QRectF();
     _placeReserveBtnRect = QRectF();
     _liberateBtnRect = QRectF();
 
-    bool canMove = false;
-    if (_composer && !isEmptySquare) {
-        canMove = !_composer->legalDestinationsFrom(_squareX, _squareY, _selectedPodIndex).empty();
-    }
-    p.setPen(QPen(canMove ? pal.prongSuperGold : pal.accentBrass.darker(180), 1.4));
-    p.setBrush(canMove ? pal.podA.core : pal.panelCardBg.darker(140));
-    p.drawRoundedRect(_movePodBtnRect, 6.0, 6.0);
-    p.setPen(canMove ? Qt::white : QColor(130, 140, 150));
-    QFont btnFont("SansSerif", 11, QFont::Bold);
-    p.setFont(btnFont);
-    p.drawText(_movePodBtnRect, Qt::AlignCenter, "Move / Jump This Pod");
-
-    // Home square buttons
-    if (isEmptySquare && _composer) {
+    if (!isEmptySquare && !hasEnemy && isTurn && !currentPodClaimed) {
+        _movePodBtnRect = QRectF(120, 460, 320, 38);
+        bool canMove = false;
+        if (_composer) {
+            canMove = !_composer->legalDestinationsFrom(_squareX, _squareY, _selectedPodIndex).empty();
+        }
+        p.setPen(QPen(canMove ? pal.prongSuperGold : pal.accentBrass.darker(180), 1.4));
+        p.setBrush(canMove ? pal.podA.core : pal.panelCardBg.darker(140));
+        p.drawRoundedRect(_movePodBtnRect, 6.0, 6.0);
+        p.setPen(canMove ? Qt::white : QColor(130, 140, 150));
+        QFont btnFont("SansSerif", 11, QFont::Bold);
+        p.setFont(btnFont);
+        p.drawText(_movePodBtnRect, Qt::AlignCenter, "Move / Jump This Pod");
+    } else if (isEmptySquare && isTurn && _composer) {
         _placeReserveBtnRect = QRectF(120, 460, 155, 38);
         _liberateBtnRect = QRectF(285, 460, 155, 38);
 
-        p.setPen(QPen(pal.accentBrass, 1.2));
-        p.setBrush(pal.panelCardBg);
-        p.drawRoundedRect(_placeReserveBtnRect, 5.0, 5.0);
-        p.setPen(pal.textPrimary);
+        int freePods = (_board && _board->getGame())
+            ? _board->getGame()->getFreePods(_board->getGame()->getTurn()) : 0;
+        int capPods = (_board && _board->getGame())
+            ? _board->getGame()->getCapturedPods(_board->getGame()->getTurn()) : 0;
+
+        p.setPen(QPen(freePods > 0 ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
+        p.setBrush(freePods > 0 ? pal.podA.core : pal.panelCardBg.darker(130));
+        p.drawRoundedRect(_placeReserveBtnRect, 6.0, 6.0);
+        p.setPen(freePods > 0 ? Qt::white : pal.textSecondary);
         p.setFont(QFont("SansSerif", 9, QFont::Bold));
         p.drawText(_placeReserveBtnRect, Qt::AlignCenter, "Place Reserve (+)");
 
-        p.setPen(QPen(pal.accentBrass, 1.2));
-        p.drawRoundedRect(_liberateBtnRect, 5.0, 5.0);
-        p.setPen(pal.textPrimary);
+        p.setPen(QPen(capPods > 0 ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
+        p.setBrush(capPods > 0 ? pal.accentBrass.darker(140) : pal.panelCardBg.darker(130));
+        p.drawRoundedRect(_liberateBtnRect, 6.0, 6.0);
+        p.setPen(capPods > 0 ? pal.prongSuperGold : pal.textSecondary);
         p.drawText(_liberateBtnRect, Qt::AlignCenter, "Liberate (*)");
+    } else if (hasEnemy) {
+        QFont roFont("SansSerif", 10, QFont::Medium);
+        p.setFont(roFont);
+        p.setPen(pal.textSecondary);
+        p.drawText(QRectF(40, 460, width - 80, 38),
+                   Qt::AlignCenter,
+                   QString::fromUtf8("Read-Only Opponent Pod Inspection \xE2\x80\x94 Click Outside or [Esc] to Close"));
+    } else if (currentPodClaimed) {
+        QFont clFont("SansSerif", 10, QFont::Medium);
+        p.setFont(clFont);
+        p.setPen(pal.accentBrass);
+        p.drawText(QRectF(40, 460, width - 80, 38),
+                   Qt::AlignCenter,
+                   QString::fromUtf8("Pod Already Moved This Turn \xE2\x80\x94 Select Another Pod Tab Above"));
     }
 
     // 7. Render active drag token if dragging
@@ -3240,8 +3466,10 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
     }
 
     // 3. Check Move Pod button
-    if (_movePodBtnRect.contains(pos)) {
-        if (_composer && !_composer->legalDestinationsFrom(_squareX, _squareY, _selectedPodIndex).empty()) {
+    if (!_movePodBtnRect.isEmpty() && _movePodBtnRect.contains(pos)) {
+        if (_composer &&
+            !_composer->isSquarePodClaimed(_squareX, _squareY, _selectedPodIndex) &&
+            !_composer->legalDestinationsFrom(_squareX, _squareY, _selectedPodIndex).empty()) {
             _shouldMovePod = true;
             accept();
             return;
@@ -3250,20 +3478,20 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
 
     // 4. Check Home square buttons
     if (!_placeReserveBtnRect.isEmpty() && _placeReserveBtnRect.contains(pos)) {
-        if (_composer) {
-            _composer->stageOrCommitAddPod(_squareX, _squareY, false);
+        if (_composer && _composer->stageOrCommitAddPod(_squareX, _squareY, false)) {
             _actionCompleted = true;
             accept();
             return;
         }
+        return;
     }
     if (!_liberateBtnRect.isEmpty() && _liberateBtnRect.contains(pos)) {
-        if (_composer) {
-            _composer->stageOrCommitAddPod(_squareX, _squareY, true);
+        if (_composer && _composer->stageOrCommitAddPod(_squareX, _squareY, true)) {
             _actionCompleted = true;
             accept();
             return;
         }
+        return;
     }
 
     // 5. Check Prong Trays (GUI2-04 toggle selection and start drag)
@@ -3290,7 +3518,8 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
         bool isTurn = (_board->getGame() && _board->getGame()->getTurn() != PLAYER_UNDEF);
         bool hasEnemy = isTurn && sq.hasEnemyOf(_board->getGame()->getTurn());
 
-        if (!hasEnemy && isTurn && _selectedPodIndex < sq.getNumPods()) {
+        if (!hasEnemy && isTurn && _selectedPodIndex < sq.getNumPods() &&
+            (!_composer || !_composer->isSquarePodClaimed(_squareX, _squareY, _selectedPodIndex))) {
             const OctiPod &pod = sq.getPodAt(_selectedPodIndex);
             for (const auto &pair : _socketCenters) {
                 OctiDir dir = pair.first;
@@ -3714,8 +3943,7 @@ PlyConfirmDialog::PlyConfirmDialog(OctiMoveComposer *composer,
 
     if (_composer) {
         _notation = QString::fromStdString(_composer->stagedMoveNotation());
-        _hasMoreMoves = (_composer->hasOtherMovablePodAtOrigin() ||
-                         _composer->isAwaitingSuperProngBonusMove());
+        _hasMoreMoves = _composer->canAddMoreMoves();
     }
 }
 
@@ -3767,9 +3995,17 @@ QImage PlyConfirmDialog::renderToImage(int width, int height)
     p.setFont(subFont);
     p.setPen(pal.textPrimary);
     QRectF subRect(16, 40, width - 32, 34);
-    QString subText = _hasMoreMoves
-        ? "Commit turn, cancel to undo, or move another pod in stack."
-        : "Commit turn to engine, or cancel to undo staged move.";
+    QString subText = "Commit turn to engine, or cancel to undo staged move.";
+    if (_hasMoreMoves) {
+        if (_composer && _composer->isAwaitingSuperProngBonusMove() &&
+            !_composer->hasEighthProngBonusHop()) {
+            subText = "Commit turn, cancel, or click More Moves for 8th-prong bonus move.";
+        } else if (_composer && _composer->isGuidedMoveActive()) {
+            subText = "Commit turn here, cancel, or click More Moves to continue jumping.";
+        } else {
+            subText = "Commit turn, cancel to undo, or move another pod in stack.";
+        }
+    }
     p.drawText(subRect, Qt::AlignCenter | Qt::TextWordWrap, subText);
 
     // 4. Buttons
@@ -3859,6 +4095,9 @@ void PlyConfirmDialog::mousePressEvent(QMouseEvent *event)
     if (_commitBtnRect.contains(pos)) {
         _chosenAction = ResultAction::COMMIT;
         if (_composer) {
+            if (_composer->isGuidedMoveActive()) {
+                _composer->finishGuidedMoveHere();
+            }
             _composer->commitStagedMove();
         }
         accept();
@@ -3888,6 +4127,9 @@ void PlyConfirmDialog::keyPressEvent(QKeyEvent *event)
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         _chosenAction = ResultAction::COMMIT;
         if (_composer) {
+            if (_composer->isGuidedMoveActive()) {
+                _composer->finishGuidedMoveHere();
+            }
             _composer->commitStagedMove();
         }
         accept();

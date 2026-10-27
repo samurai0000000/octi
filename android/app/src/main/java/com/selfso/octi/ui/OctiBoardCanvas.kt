@@ -140,20 +140,16 @@ fun OctiBoardCanvas(
                                 }
                             }
                             if (isDestination) {
+                                val prevCapCount = composer.captureChoices().size
                                 if (composer.selectGuidedDestination(sqX, sqY)) {
                                     val capChoices = composer.captureChoices()
-                                    val latestCap = capChoices.lastOrNull { !it.mandatory }
-                                    if (latestCap != null) {
-                                        val jsq = b.squareAt(latestCap.jumpedX - 1, latestCap.jumpedY - 1)
-                                        val jumpedPlayer = if (!jsq.isEmpty) jsq.getPodAt(0).type.toPlayer() else OctiPlayer.PLAYER_B
-                                        viewModel.promptCapture(latestCap.jumpedX, latestCap.jumpedY, jumpedPlayer)
-                                    }
-                                    if (composer.hasUnlockedSuperProngBonus()) {
-                                        viewModel.setShowSuperProngBonusDialog(true)
-                                    }
-                                    if (!composer.isGuidedMoveActive && composer.hasOtherMovablePodAtOrigin()) {
-                                        val orig = composer.guidedOriginSquare()
-                                        viewModel.setCompositePodPrompt(Pair(orig[0], orig[1]))
+                                    if (capChoices.size > prevCapCount) {
+                                        val latestCap = capChoices.lastOrNull { !it.mandatory }
+                                        if (latestCap != null) {
+                                            val jsq = b.squareAt(latestCap.jumpedX - 1, latestCap.jumpedY - 1)
+                                            val jumpedPlayer = if (!jsq.isEmpty) jsq.getPodAt(0).type.toPlayer() else OctiPlayer.PLAYER_B
+                                            viewModel.promptCapture(latestCap.jumpedX, latestCap.jumpedY, jumpedPlayer)
+                                        }
                                     }
                                     viewModel.notifyComposerUpdated()
                                     return@detectTapGestures
@@ -164,18 +160,15 @@ fun OctiBoardCanvas(
                             val curSq = composer.guidedCurrentSquare()
                             if (curSq[0] == sqX && curSq[1] == sqY) {
                                 composer.finishGuidedMoveHere()
-                                if (composer.hasUnlockedSuperProngBonus()) {
-                                    viewModel.setShowSuperProngBonusDialog(true)
-                                }
-                                if (composer.hasOtherMovablePodAtOrigin()) {
-                                    val orig = composer.guidedOriginSquare()
-                                    viewModel.setCompositePodPrompt(Pair(orig[0], orig[1]))
-                                }
                                 viewModel.notifyComposerUpdated()
                                 return@detectTapGestures
                             }
 
                             // Tapping elsewhere during guided move does not open zoomed square
+                            return@detectTapGestures
+                        }
+
+                        if (b.game?.isGameOver == true) {
                             return@detectTapGestures
                         }
 
