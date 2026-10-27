@@ -52,6 +52,8 @@ fun OctiBoardCanvas(
         val vh = Math.max(320, Math.min(1280, canvasSize.height))
         val activeBoard = if (viewModel.isViewingHistory()) {
             viewModel.displayBoard
+        } else if (viewModel.composer.isAwaitingConfirmation) {
+            viewModel.composer.buildPreviewBoard() ?: viewModel.board
         } else {
             viewModel.board
         }
@@ -184,30 +186,6 @@ fun OctiBoardCanvas(
                         }
 
                         val dragKind = composer.activeDragKind()
-                        if (dragKind == OctiMoveComposer.DragKind.ADD_PRONG_FROM_RESERVE ||
-                            dragKind == OctiMoveComposer.DragKind.ADD_SUPERPRONG_FROM_RESERVE ||
-                            dragKind == OctiMoveComposer.DragKind.REPOSITION_PRONG_ON_POD
-                        ) {
-                            val center = geo.squareCenter(sqX, sqY)
-                            val cellR = geo.cellSize() * 0.48
-                            val dir = geo.hitTestCompassSector(
-                                center[0],
-                                center[1],
-                                cellR * 0.12,
-                                cellR * 1.15,
-                                px,
-                                py
-                            )
-                            val chosenDir = if (dir != OctiDir.DIR_UNDEF) dir else OctiDir.DIR_N
-                            val podIdx = Math.max(0, composer.selectedStackPodIndex(sqX, sqY))
-                            composer.dropOnCompassSector(sqX, sqY, podIdx, chosenDir)
-                            if (composer.hasUnlockedSuperProngBonus()) {
-                                viewModel.setShowSuperProngBonusDialog(true)
-                            }
-                            viewModel.notifyComposerUpdated()
-                            return@detectTapGestures
-                        }
-
                         if (dragKind == OctiMoveComposer.DragKind.ADD_POD_FROM_RESERVE ||
                             dragKind == OctiMoveComposer.DragKind.LIBERATE_POD_FROM_RESERVE
                         ) {

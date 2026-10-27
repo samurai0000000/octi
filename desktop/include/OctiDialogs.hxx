@@ -30,6 +30,7 @@
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QTimer>
+#include <QWheelEvent>
 #include "ClientConfigStore.hxx"
 #include "OctiBoard.hxx"
 #include "OctiBoardGeometry.hxx"
@@ -574,9 +575,9 @@ private:
 
 /*
  * 12. OctiSplashDialog:
- *     5.0-second (5000 ms) luxury procedural animated splash screen.
+ *     10.0-second (10000 ms) luxury procedural animated splash screen.
  *     Obsidian & Brass tabletop, rotating brass ring, animated OCTI pod & superprong snapping,
- *     game credits, authorship, copyright, version 2.0.8, progress bar,
+ *     game credits, authorship, copyright, version 2.0.9, progress bar,
  *     and early dismissal via ESC or mouse click.
  */
 class OctiSplashDialog : public QDialog {
@@ -622,14 +623,18 @@ public:
     bool shouldMovePod() const;
     bool moveAllMatchingStack() const;
     bool actionCompleted() const;
+    void cycleSelectedPod(int delta);
+    const std::map<OctiDir, QPointF> &socketCenters() const { return _socketCenters; }
 
-    QImage renderToImage(int width = 560, int height = 620);
+    QImage renderToImage(int width = 560, int height = 530);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
 
 private:
     void updatePodSelection(int idx);
@@ -656,10 +661,16 @@ private:
     QRectF _movePodBtnRect;
     QRectF _placeReserveBtnRect;
     QRectF _liberateBtnRect;
-    QRectF _closeBtnRect;
 
     std::map<OctiDir, QPointF> _socketCenters;
     double _socketRadius;
+
+    enum class SelectedProngType {
+        NORMAL,
+        SUPER
+    };
+    SelectedProngType _selectedProngType;
+    OctiDir _selectedProngSocketForReposition;
 
     enum class ZoomDragKind {
         NONE,
@@ -724,6 +735,9 @@ public:
 
     bool moveNowChosen() const;
 
+protected:
+    void paintEvent(QPaintEvent *event) override;
+
 private:
     ThemeId _theme;
     bool _moveNowChosen;
@@ -745,6 +759,9 @@ public:
 
     bool selectNextPodChosen() const;
 
+protected:
+    void paintEvent(QPaintEvent *event) override;
+
 private:
     int _x;
     int _y;
@@ -752,6 +769,48 @@ private:
     bool _selectNextPodChosen;
     QPushButton *_selectNextBtn;
     QPushButton *_confirmBtn;
+};
+
+/*
+ * 17. PlyConfirmDialog (GUI2-05):
+ *     Borderless, pure-rendering ply confirmation dialog.
+ *     Presents Commit [Enter], Cancel [Esc], and optional More Moves [M] buttons
+ *     while the live staged board preview remains clearly visible.
+ */
+class PlyConfirmDialog : public QDialog {
+public:
+    enum class ResultAction {
+        COMMIT,
+        CANCEL,
+        MORE_MOVES
+    };
+
+    explicit PlyConfirmDialog(OctiMoveComposer *composer,
+                              ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                              QWidget *parent = nullptr);
+    ~PlyConfirmDialog() override;
+
+    ResultAction chosenAction() const;
+    bool isMoreMovesVisible() const;
+    QString stagedMoveText() const;
+
+    QImage renderToImage(int width = 420, int height = 150);
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+
+private:
+    OctiMoveComposer *_composer;
+    ThemeId _theme;
+    ResultAction _chosenAction;
+    bool _hasMoreMoves;
+    QString _notation;
+
+    QRectF _commitBtnRect;
+    QRectF _cancelBtnRect;
+    QRectF _moreMovesBtnRect;
 };
 
 /*

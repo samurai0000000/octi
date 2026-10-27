@@ -219,8 +219,6 @@ public class OctiMoveComposer {
         if (board == null || !board.isValidCoord(x - 1, y - 1)) {
             return;
         }
-        activeStackSquareX = x;
-        activeStackSquareY = y;
         OctiSquare sq = board.squareAt(x - 1, y - 1);
         IntPair key = new IntPair(x, y);
         if (podIndex < 0 || podIndex >= sq.getNumPods()) {
@@ -1312,6 +1310,24 @@ public class OctiMoveComposer {
 
     public boolean isAwaitingConfirmation() {
         return awaitingConfirmation && !stagedOps.isEmpty();
+    }
+
+    public OctiBoard buildPreviewBoard() {
+        if (board == null) {
+            return null;
+        }
+        if (!isAwaitingConfirmation() || stagedOps.isEmpty()) {
+            return board;
+        }
+        try {
+            OctiBoard preview = new OctiBoard();
+            preview.suppressBoardUpdateNotification(true);
+            preview.fromPositionString(board.toPositionString());
+            preview.getGame().move(new OctiMove(stagedOps));
+            return preview;
+        } catch (Throwable t) {
+            return board;
+        }
     }
 
     public boolean shouldPauseForConfirmation() {

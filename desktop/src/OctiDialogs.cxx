@@ -2248,6 +2248,7 @@ SelfUpdateDialog::SelfUpdateDialog(
     setWindowTitle("Software Update — OCTI Desktop Player");
     setMinimumSize(540, 480);
     resize(580, 520);
+    setModal(true);
 
     QVBoxLayout *rootLayout = new QVBoxLayout(this);
     rootLayout->setContentsMargins(16, 16, 16, 16);
@@ -2405,7 +2406,7 @@ void SelfUpdateDialog::applyUpdateState(const selfupdate::UpdateState &state)
         _versionSummaryLabel->setText(
             QString("Installed: v%1 (Latest)").arg(installedVer));
         _statusLabel->setText(
-            QString("OCTI Desktop Player v%1 is the latest version.")
+            QString("OCTI Desktop Player v%1 is up to date (No updates available).")
                 .arg(installedVer));
         _checkBtn->setEnabled(true);
         _downloadInstallBtn->setEnabled(false);
@@ -2611,9 +2612,9 @@ OctiSplashDialog::OctiSplashDialog(QWidget *parent, ThemeId theme)
     _elapsed.start();
     QObject::connect(&_timer, &QTimer::timeout, this, [this]() {
         qint64 ms = _elapsed.elapsed();
-        _progress = std::min(1.0, static_cast<double>(ms) / 5000.0);
+        _progress = std::clamp(static_cast<double>(ms) / 10000.0, 0.0, 1.0);
         update();
-        if (ms >= 5000) {
+        if (ms >= 10000) {
             _timer.stop();
             accept();
         }
@@ -2849,12 +2850,16 @@ ZoomedSquareDialog::ZoomedSquareDialog(OctiBoard *board,
     , _moveAllMatchingStack(false)
     , _actionCompleted(false)
     , _socketRadius(18.0)
+    , _selectedProngType(SelectedProngType::NORMAL)
+    , _selectedProngSocketForReposition(DIR_UNDEF)
     , _dragKind(ZoomDragKind::NONE)
     , _dragSrcProngDir(DIR_UNDEF)
     , _hoverProngDir(DIR_UNDEF)
     , _dragCursorPos()
 {
-    setFixedSize(560, 620);
+    setWindowFlags(Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
+    setAttribute(Qt::WA_TranslucentBackground, true);
+    setFixedSize(560, 530);
     setModal(true);
     setWindowTitle(QString("Square (%1, %2) Close-Up Inspector").arg(_squareX).arg(_squareY));
 
@@ -2865,6 +2870,13 @@ ZoomedSquareDialog::ZoomedSquareDialog(OctiBoard *board,
         }
         if (_selectedPodIndex < 0 || _selectedPodIndex >= sq.getNumPods()) {
             _selectedPodIndex = std::max(0, sq.getNumPods() - 1);
+        }
+        if (_board->getGame()) {
+            OctiPlayer t = _board->getGame()->getTurn();
+            if (_board->getGame()->getFreeProngs(t) == 0 &&
+                _board->getGame()->getFreeSuperProngs(t) > 0) {
+                _selectedProngType = SelectedProngType::SUPER;
+            }
         }
     }
 }
@@ -2889,6 +2901,43 @@ bool ZoomedSquareDialog::moveAllMatchingStack() const
 bool ZoomedSquareDialog::actionCompleted() const
 {
     return _actionCompleted;
+}
+
+void ZoomedSquareDialog::cycleSelectedPod(int delta)
+{
+    if (!_board || !_board->isValidCoord(_squareX - 1, _squareY - 1)) {
+        return;
+    }
+    const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+    int numPods = sq.getNumPods();
+    if (numPods < 2) {
+        return;
+    }
+    _selectedPodIndex = ((_selectedPodIndex + delta) % numPods + numPods) % numPods;
+    if (_composer) {
+        _composer->selectStackPodIndex(_squareX, _squareY, _selectedPodIndex);
+    }
+    update();
+}
+
+void ZoomedSquareDialog::wheelEvent(QWheelEvent *event)
+{
+    if (!event) return;
+    int dy = event->angleDelta().y();
+    if (dy > 0) {
+        cycleSelectedPod(1);
+    } else if (dy < 0) {
+        cycleSelectedPod(-1);
+    }
+}
+
+void ZoomedSquareDialog::keyPressEvent(QKeyEvent *event)
+{
+    if (event && event->key() == Qt::Key_Escape) {
+        reject();
+        return;
+    }
+    QDialog::keyPressEvent(event);
 }
 
 QImage ZoomedSquareDialog::renderToImage(int width, int height)
@@ -2996,37 +3045,59 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
 
     _socketCenters.clear();
     int rotDeg = static_cast<int>(_rotation);
-    double radRot = rotDeg * M_PI / 180.0;
 
     if (!isEmptySquare && _board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
         const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
         int pIdx = std::clamp(_selectedPodIndex, 0, sq.getNumPods() - 1);
-        const OctiPod &pod = sq.getPodAt(pIdx);
 
+        // GUI2-09: Render other stacked pods underneath with stepped offsets and reduced opacity
+        if (sq.getNumPods() >= 2) {
+            int layerStep = 0;
+            for (int i = 0; i < sq.getNumPods(); ++i) {
+                if (i == pIdx) continue;
+                layerStep++;
+                const OctiPod &underPod = sq.getPodAt(i);
+                QPointF offset(-layerStep * 14.0, layerStep * 14.0);
+                QRectF underRect(pc.x() + offset.x() - podR,
+                                 pc.y() + offset.y() - podR,
+                                 podR * 2.0, podR * 2.0);
+                paintOctagonalPod(p, underRect, underPod.getType(), underPod,
+                                  pal, rotDeg, false, 0.28);
+            }
+        }
+
+        // Active pod at exact center with full opacity
+        const OctiPod &pod = sq.getPodAt(pIdx);
         QRectF pRect(pc.x() - podR, pc.y() - podR, podR * 2.0, podR * 2.0);
         paintOctagonalPod(p, pRect, pod.getType(), pod, pal, rotDeg, true, 1.0);
 
-        // Render all 8 sockets around perimeter
+        // GUI2-02: Render all 8 sockets around perimeter using OctiBoardGeometry dirUnitVectorScreen
+        OctiBoardGeometry zGeom(320, 320, 9, 9, _rotation);
         for (int d = DIR_N; d <= DIR_NW; ++d) {
             OctiDir dir = static_cast<OctiDir>(d);
-            double uX = dirDeltaX(dir);
-            double uY = dirDeltaY(dir);
-            double ruX = uX * std::cos(radRot) - uY * std::sin(radRot);
-            double ruY = uX * std::sin(radRot) + uY * std::cos(radRot);
-
-            QPointF sc = pc + QPointF(ruX * (podR * 0.76), ruY * (podR * 0.76));
+            QPointF u = zGeom.dirUnitVectorScreen(dir);
+            QPointF sc = pc + QPointF(u.x() * (podR * 0.86), u.y() * (podR * 0.86));
             _socketCenters[dir] = sc;
 
             bool isHovered = (dir == _hoverProngDir);
-            p.setPen(QPen(isHovered ? pal.legalStepGuide : pal.gridSocketShadow,
-                          isHovered ? 2.2 : 1.2));
-            p.setBrush(isHovered ? pal.legalStepGuide.darker(160) : QColor(14, 20, 30, 200));
+            bool isRepositionSrc = (dir == _selectedProngSocketForReposition);
+
+            if (isRepositionSrc) {
+                p.setPen(QPen(pal.prongSuperGold, 2.5));
+                p.setBrush(pal.prongSuperGold.darker(160));
+            } else if (isHovered) {
+                p.setPen(QPen(pal.legalStepGuide, 2.2));
+                p.setBrush(pal.legalStepGuide.darker(160));
+            } else {
+                p.setPen(QPen(pal.gridSocketShadow, 1.2));
+                p.setBrush(QColor(14, 20, 30, 200));
+            }
             p.drawEllipse(sc, _socketRadius, _socketRadius);
 
             // Socket direction letter 'a'..'h'
             QFont scFont("SansSerif", 9, QFont::Bold);
             p.setFont(scFont);
-            p.setPen(isHovered ? pal.prongSuperGold : pal.accentBrass);
+            p.setPen((isHovered || isRepositionSrc) ? pal.prongSuperGold : pal.accentBrass);
             char letter = static_cast<char>('a' + (d - DIR_N));
             p.drawText(QRectF(sc.x() - 10, sc.y() - 10, 20, 20),
                        Qt::AlignCenter, QString(letter));
@@ -3053,35 +3124,37 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         _normalProngTrayRect = QRectF(16, 140, 88, 80);
         _superProngTrayRect = QRectF(16, 235, 88, 80);
 
+        bool npSelected = (_selectedProngType == SelectedProngType::NORMAL);
+        bool spSelected = (_selectedProngType == SelectedProngType::SUPER);
+
         // Normal Prong Tray Card
-        p.setPen(QPen(pal.accentBrass, 1.2));
-        p.setBrush(pal.panelCardBg.darker(110));
+        p.setPen(QPen(npSelected ? pal.prongSuperGold : pal.accentBrass, npSelected ? 2.0 : 1.2));
+        p.setBrush(npSelected ? pal.panelCardBg : pal.panelCardBg.darker(110));
         p.drawRoundedRect(_normalProngTrayRect, 6.0, 6.0);
         QRectF npIconR(_normalProngTrayRect.center().x() - 14, _normalProngTrayRect.top() + 8, 28, 28);
         paintProngGlyph(p, npIconR, false, pal);
         QFont trayFont("SansSerif", 8, QFont::Bold);
         p.setFont(trayFont);
-        p.setPen(pal.textPrimary);
+        p.setPen(npSelected ? pal.prongSuperGold : pal.textPrimary);
         QRectF npTxtR(_normalProngTrayRect.left(), _normalProngTrayRect.top() + 40, _normalProngTrayRect.width(), 34);
         p.drawText(npTxtR, Qt::AlignCenter, QString("Normal\n(%1 avail)").arg(freeProngs));
 
         // Superprong Tray Card
-        p.setPen(QPen(pal.prongSuperGold, 1.2));
-        p.setBrush(pal.panelCardBg.darker(110));
+        p.setPen(QPen(spSelected ? pal.prongSuperGold : pal.accentBrass.darker(130), spSelected ? 2.0 : 1.2));
+        p.setBrush(spSelected ? pal.panelCardBg : pal.panelCardBg.darker(110));
         p.drawRoundedRect(_superProngTrayRect, 6.0, 6.0);
         QRectF spIconR(_superProngTrayRect.center().x() - 14, _superProngTrayRect.top() + 8, 28, 28);
         paintProngGlyph(p, spIconR, true, pal);
         p.setFont(trayFont);
-        p.setPen(pal.prongSuperGold);
+        p.setPen(spSelected ? pal.prongSuperGold : pal.accentBrass);
         QRectF spTxtR(_superProngTrayRect.left(), _superProngTrayRect.top() + 40, _superProngTrayRect.width(), 34);
         p.drawText(spTxtR, Qt::AlignCenter, QString("Super (!)\n(%1 avail)").arg(freeSuper));
     }
 
-    // 6. Action Buttons at Bottom
-    _movePodBtnRect = QRectF(120, 455, 320, 38);
+    // 6. Action Buttons at Bottom (tightened for 530 height, no Close button)
+    _movePodBtnRect = QRectF(120, 460, 320, 38);
     _placeReserveBtnRect = QRectF();
     _liberateBtnRect = QRectF();
-    _closeBtnRect = QRectF(120, 545, 320, 34);
 
     bool canMove = false;
     if (_composer && !isEmptySquare) {
@@ -3097,8 +3170,8 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
 
     // Home square buttons
     if (isEmptySquare && _composer) {
-        _placeReserveBtnRect = QRectF(120, 502, 155, 34);
-        _liberateBtnRect = QRectF(285, 502, 155, 34);
+        _placeReserveBtnRect = QRectF(120, 460, 155, 38);
+        _liberateBtnRect = QRectF(285, 460, 155, 38);
 
         p.setPen(QPen(pal.accentBrass, 1.2));
         p.setBrush(pal.panelCardBg);
@@ -3112,14 +3185,6 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         p.setPen(pal.textPrimary);
         p.drawText(_liberateBtnRect, Qt::AlignCenter, "Liberate (*)");
     }
-
-    // Close Inspector button
-    p.setPen(QPen(pal.accentBrass, 1.2));
-    p.setBrush(pal.panelCardBg);
-    p.drawRoundedRect(_closeBtnRect, 5.0, 5.0);
-    p.setPen(pal.textPrimary);
-    p.setFont(QFont("SansSerif", 10, QFont::Medium));
-    p.drawText(_closeBtnRect, Qt::AlignCenter, "Close Inspector [Esc]");
 
     // 7. Render active drag token if dragging
     if (_dragKind != ZoomDragKind::NONE) {
@@ -3148,6 +3213,12 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
 {
     if (!event) return;
     QPointF pos = mousePosF(event);
+
+    // GUI2-03: Click outside to dismiss immediately
+    if (!rect().contains(pos.toPoint())) {
+        reject();
+        return;
+    }
 
     // 1. Check Stack tabs
     for (std::size_t i = 0; i < _stackPodTabRects.size(); ++i) {
@@ -3195,30 +3266,31 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
         }
     }
 
-    // 5. Check Close button
-    if (_closeBtnRect.contains(pos)) {
-        reject();
-        return;
-    }
-
-    // 6. Check Prong Trays
+    // 5. Check Prong Trays (GUI2-04 toggle selection and start drag)
     if (!_normalProngTrayRect.isEmpty() && _normalProngTrayRect.contains(pos)) {
+        _selectedProngType = SelectedProngType::NORMAL;
+        _selectedProngSocketForReposition = DIR_UNDEF;
         _dragKind = ZoomDragKind::ADD_NORMAL_PRONG;
         _dragCursorPos = pos;
         update();
         return;
     }
     if (!_superProngTrayRect.isEmpty() && _superProngTrayRect.contains(pos)) {
+        _selectedProngType = SelectedProngType::SUPER;
+        _selectedProngSocketForReposition = DIR_UNDEF;
         _dragKind = ZoomDragKind::ADD_SUPERPRONG;
         _dragCursorPos = pos;
         update();
         return;
     }
 
-    // 7. Check socket drag (reposition existing prong)
+    // 6. Check socket interaction (GUI2-04: both single click/tap and drag-and-drop)
     if (_board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
         const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
-        if (_selectedPodIndex < sq.getNumPods()) {
+        bool isTurn = (_board->getGame() && _board->getGame()->getTurn() != PLAYER_UNDEF);
+        bool hasEnemy = isTurn && sq.hasEnemyOf(_board->getGame()->getTurn());
+
+        if (!hasEnemy && isTurn && _selectedPodIndex < sq.getNumPods()) {
             const OctiPod &pod = sq.getPodAt(_selectedPodIndex);
             for (const auto &pair : _socketCenters) {
                 OctiDir dir = pair.first;
@@ -3226,11 +3298,35 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
                 double dist = std::hypot(pos.x() - sc.x(), pos.y() - sc.y());
                 if (dist <= _socketRadius * 1.5) {
                     if (pod.prongAt(dir) == NORMAL_PRONG) {
+                        // Existing normal prong clicked: select for reposition / start drag
+                        _selectedProngSocketForReposition = dir;
                         _dragKind = ZoomDragKind::REPOSITION_PRONG;
                         _dragSrcProngDir = dir;
                         _dragCursorPos = pos;
                         update();
                         return;
+                    } else if (pod.prongAt(dir) == NO_PRONG) {
+                        // Empty socket clicked
+                        if (_selectedProngSocketForReposition != DIR_UNDEF &&
+                            _selectedProngSocketForReposition != dir) {
+                            // Reposition previously selected prong to this socket!
+                            if (_composer && _composer->stageOrCommitRepositionProng(
+                                    _squareX, _squareY, _selectedPodIndex,
+                                    _selectedProngSocketForReposition, dir)) {
+                                _actionCompleted = true;
+                                accept();
+                                return;
+                            }
+                        } else {
+                            // Add new prong to this socket!
+                            bool isSuper = (_selectedProngType == SelectedProngType::SUPER);
+                            if (_composer && _composer->stageOrCommitAddProng(
+                                    _squareX, _squareY, _selectedPodIndex, dir, isSuper)) {
+                                _actionCompleted = true;
+                                accept();
+                                return;
+                            }
+                        }
                     }
                 }
             }
@@ -3290,8 +3386,9 @@ void ZoomedSquareDialog::mouseReleaseEvent(QMouseEvent *event)
                     accept();
                     return;
                 }
-            } else if (_dragKind == ZoomDragKind::REPOSITION_PRONG) {
-                if (_composer->stageOrCommitRepositionProng(_squareX, _squareY, _selectedPodIndex, _dragSrcProngDir, targetDir)) {
+            } else if (_dragKind == ZoomDragKind::REPOSITION_PRONG && targetDir != _dragSrcProngDir) {
+                if (_composer->stageOrCommitRepositionProng(_squareX, _squareY, _selectedPodIndex,
+                                                            _dragSrcProngDir, targetDir)) {
                     _actionCompleted = true;
                     accept();
                     return;
@@ -3326,6 +3423,8 @@ CapturePromptDialog::CapturePromptDialog(int jumpedX, int jumpedY,
     , _draggingPod(false)
     , _dragPos()
 {
+    setWindowFlags(Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
+    setAttribute(Qt::WA_TranslucentBackground, true);
     setFixedSize(360, 210);
     setModal(true);
     setWindowTitle("Capture Jumped Pod?");
@@ -3397,6 +3496,11 @@ void CapturePromptDialog::mousePressEvent(QMouseEvent *event)
     if (!event) return;
     QPointF pos = mousePosF(event);
 
+    if (!rect().contains(pos.toPoint())) {
+        reject();
+        return;
+    }
+
     if (_captureBtnRect.contains(pos)) {
         _captureChosen = true;
         accept();
@@ -3450,6 +3554,8 @@ SuperProngBonusDialog::SuperProngBonusDialog(ThemeId theme, QWidget *parent)
     , _moveNowBtn(nullptr)
     , _skipBtn(nullptr)
 {
+    setWindowFlags(Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
+    setAttribute(Qt::WA_TranslucentBackground, true);
     setFixedSize(440, 190);
     setModal(true);
     setWindowTitle("Superprong Bonus Move Available!");
@@ -3497,6 +3603,17 @@ bool SuperProngBonusDialog::moveNowChosen() const
     return _moveNowChosen;
 }
 
+void SuperProngBonusDialog::paintEvent(QPaintEvent *event)
+{
+    (void)event;
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    const OctiPalette &pal = paletteForTheme(_theme);
+    p.setPen(QPen(pal.accentBrass, 1.5));
+    p.setBrush(pal.panelCardBg);
+    p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 10.0, 10.0);
+}
+
 /* ==================================================================== */
 /* CompositePodMoveDialog                                               */
 /* ==================================================================== */
@@ -3512,6 +3629,8 @@ CompositePodMoveDialog::CompositePodMoveDialog(int x, int y,
     , _selectNextBtn(nullptr)
     , _confirmBtn(nullptr)
 {
+    setWindowFlags(Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
+    setAttribute(Qt::WA_TranslucentBackground, true);
     setFixedSize(440, 190);
     setModal(true);
     setWindowTitle("Composite Multi-Pod Move Available");
@@ -3558,6 +3677,239 @@ CompositePodMoveDialog::~CompositePodMoveDialog() = default;
 bool CompositePodMoveDialog::selectNextPodChosen() const
 {
     return _selectNextPodChosen;
+}
+
+void CompositePodMoveDialog::paintEvent(QPaintEvent *event)
+{
+    (void)event;
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    const OctiPalette &pal = paletteForTheme(_theme);
+    p.setPen(QPen(pal.accentBrass, 1.5));
+    p.setBrush(pal.panelCardBg);
+    p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 10.0, 10.0);
+}
+
+/* ==================================================================== */
+/* 17. PlyConfirmDialog (GUI2-05)                                       */
+/* ==================================================================== */
+
+PlyConfirmDialog::PlyConfirmDialog(OctiMoveComposer *composer,
+                                  ThemeId theme,
+                                  QWidget *parent)
+    : QDialog(parent)
+    , _composer(composer)
+    , _theme(theme)
+    , _chosenAction(ResultAction::CANCEL)
+    , _hasMoreMoves(false)
+    , _notation()
+    , _commitBtnRect()
+    , _cancelBtnRect()
+    , _moreMovesBtnRect()
+{
+    setWindowFlags(Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
+    setAttribute(Qt::WA_TranslucentBackground, true);
+    setFixedSize(460, 150);
+    setModal(true);
+
+    if (_composer) {
+        _notation = QString::fromStdString(_composer->stagedMoveNotation());
+        _hasMoreMoves = (_composer->hasOtherMovablePodAtOrigin() ||
+                         _composer->isAwaitingSuperProngBonusMove());
+    }
+}
+
+PlyConfirmDialog::~PlyConfirmDialog() = default;
+
+PlyConfirmDialog::ResultAction PlyConfirmDialog::chosenAction() const
+{
+    return _chosenAction;
+}
+
+bool PlyConfirmDialog::isMoreMovesVisible() const
+{
+    return _hasMoreMoves;
+}
+
+QString PlyConfirmDialog::stagedMoveText() const
+{
+    return _notation;
+}
+
+QImage PlyConfirmDialog::renderToImage(int width, int height)
+{
+    QImage img(width, height, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
+
+    const OctiPalette &pal = paletteForTheme(_theme);
+
+    // 1. Background Card
+    QRectF bgRect(0, 0, width, height);
+    p.setPen(QPen(pal.accentBrass, 1.8));
+    p.setBrush(pal.panelCardBg);
+    p.drawRoundedRect(bgRect.adjusted(1, 1, -1, -1), 10.0, 10.0);
+
+    // 2. Title & Move Notation
+    QFont titleFont("SansSerif", 13, QFont::Bold);
+    p.setFont(titleFont);
+    p.setPen(pal.prongSuperGold);
+    QRectF titleRect(16, 14, width - 32, 24);
+    QString titleText = _notation.isEmpty()
+        ? "Confirm Staged Move"
+        : QString("Confirm Staged Move: %1").arg(_notation);
+    p.drawText(titleRect, Qt::AlignCenter, titleText);
+
+    // 3. Subtitle / Instruction
+    QFont subFont("SansSerif", 9);
+    p.setFont(subFont);
+    p.setPen(pal.textPrimary);
+    QRectF subRect(16, 40, width - 32, 34);
+    QString subText = _hasMoreMoves
+        ? "Commit turn, cancel to undo, or move another pod in stack."
+        : "Commit turn to engine, or cancel to undo staged move.";
+    p.drawText(subRect, Qt::AlignCenter | Qt::TextWordWrap, subText);
+
+    // 4. Buttons
+    double btnH = 38.0;
+    double btnY = height - btnH - 18.0;
+
+    if (_hasMoreMoves) {
+        double btnW = 126.0;
+        double gap = 14.0;
+        double startX = (width - (3 * btnW + 2 * gap)) * 0.5;
+
+        _commitBtnRect = QRectF(startX, btnY, btnW, btnH);
+        _cancelBtnRect = QRectF(startX + btnW + gap, btnY, btnW, btnH);
+        _moreMovesBtnRect = QRectF(startX + 2 * (btnW + gap), btnY, btnW, btnH);
+
+        // Commit Button
+        p.setPen(QPen(pal.prongSuperCore, 1.2));
+        p.setBrush(pal.podA.core);
+        p.drawRoundedRect(_commitBtnRect, 6.0, 6.0);
+        p.setPen(Qt::white);
+        p.setFont(QFont("SansSerif", 10, QFont::Bold));
+        p.drawText(_commitBtnRect, Qt::AlignCenter, "Commit [Enter]");
+
+        // Cancel Button
+        p.setPen(QPen(pal.accentBrass, 1.2));
+        p.setBrush(pal.panelCardBg.darker(130));
+        p.drawRoundedRect(_cancelBtnRect, 6.0, 6.0);
+        p.setPen(pal.textPrimary);
+        p.drawText(_cancelBtnRect, Qt::AlignCenter, "Cancel [Esc]");
+
+        // More Moves Button
+        p.setPen(QPen(pal.prongSuperGold, 1.2));
+        p.setBrush(pal.accentBrass.darker(150));
+        p.drawRoundedRect(_moreMovesBtnRect, 6.0, 6.0);
+        p.setPen(pal.prongSuperGold);
+        p.drawText(_moreMovesBtnRect, Qt::AlignCenter, "More Moves [M]");
+    } else {
+        double btnW = 150.0;
+        double gap = 24.0;
+        double startX = (width - (2 * btnW + gap)) * 0.5;
+
+        _commitBtnRect = QRectF(startX, btnY, btnW, btnH);
+        _cancelBtnRect = QRectF(startX + btnW + gap, btnY, btnW, btnH);
+        _moreMovesBtnRect = QRectF();
+
+        // Commit Button
+        p.setPen(QPen(pal.prongSuperCore, 1.2));
+        p.setBrush(pal.podA.core);
+        p.drawRoundedRect(_commitBtnRect, 6.0, 6.0);
+        p.setPen(Qt::white);
+        p.setFont(QFont("SansSerif", 10, QFont::Bold));
+        p.drawText(_commitBtnRect, Qt::AlignCenter, "Commit [Enter]");
+
+        // Cancel Button
+        p.setPen(QPen(pal.accentBrass, 1.2));
+        p.setBrush(pal.panelCardBg.darker(130));
+        p.drawRoundedRect(_cancelBtnRect, 6.0, 6.0);
+        p.setPen(pal.textPrimary);
+        p.drawText(_cancelBtnRect, Qt::AlignCenter, "Cancel [Esc]");
+    }
+
+    p.end();
+    return img;
+}
+
+void PlyConfirmDialog::paintEvent(QPaintEvent *event)
+{
+    (void)event;
+    QPainter p(this);
+    p.drawImage(0, 0, renderToImage(width(), height()));
+}
+
+void PlyConfirmDialog::mousePressEvent(QMouseEvent *event)
+{
+    if (!event) return;
+    QPointF pos = mousePosF(event);
+
+    if (!rect().contains(pos.toPoint())) {
+        _chosenAction = ResultAction::CANCEL;
+        if (_composer) {
+            _composer->cancelAndRollback();
+        }
+        reject();
+        return;
+    }
+
+    if (_commitBtnRect.contains(pos)) {
+        _chosenAction = ResultAction::COMMIT;
+        if (_composer) {
+            _composer->commitStagedMove();
+        }
+        accept();
+        return;
+    }
+
+    if (_cancelBtnRect.contains(pos)) {
+        _chosenAction = ResultAction::CANCEL;
+        if (_composer) {
+            _composer->cancelAndRollback();
+        }
+        reject();
+        return;
+    }
+
+    if (_hasMoreMoves && _moreMovesBtnRect.contains(pos)) {
+        _chosenAction = ResultAction::MORE_MOVES;
+        accept();
+        return;
+    }
+}
+
+void PlyConfirmDialog::keyPressEvent(QKeyEvent *event)
+{
+    if (!event) return;
+
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+        _chosenAction = ResultAction::COMMIT;
+        if (_composer) {
+            _composer->commitStagedMove();
+        }
+        accept();
+        return;
+    }
+
+    if (event->key() == Qt::Key_Escape) {
+        _chosenAction = ResultAction::CANCEL;
+        if (_composer) {
+            _composer->cancelAndRollback();
+        }
+        reject();
+        return;
+    }
+
+    if (_hasMoreMoves && event->key() == Qt::Key_M) {
+        _chosenAction = ResultAction::MORE_MOVES;
+        accept();
+        return;
+    }
+
+    QDialog::keyPressEvent(event);
 }
 
 /* ==================================================================== */

@@ -129,34 +129,9 @@ fun OctiReserveHud(
                     label = { Text("Liberate ($capPods)") }
                 )
                 FilterChip(
-                    selected = dragKind == OctiMoveComposer.DragKind.ADD_PRONG_FROM_RESERVE,
-                    onClick = {
-                        viewModel.composer.beginAddProngFromReserve(false)
-                        viewModel.notifyComposerUpdated()
-                    },
-                    enabled = !viewModel.isViewingHistory() && freeProngs > 0,
-                    label = { Text("+Prong ($freeProngs)") }
-                )
-                if (useSuperProngs) {
-                    FilterChip(
-                        selected = dragKind == OctiMoveComposer.DragKind.ADD_SUPERPRONG_FROM_RESERVE,
-                        onClick = {
-                            viewModel.composer.beginAddProngFromReserve(true)
-                            viewModel.notifyComposerUpdated()
-                        },
-                        enabled = !viewModel.isViewingHistory() && freeSuper > 0,
-                        label = { Text("+Super ($freeSuper)") }
-                    )
-                }
-                FilterChip(
                     selected = moveStack,
                     onClick = { viewModel.setMoveEntireMatchingStack(!moveStack) },
                     label = { Text("Move Stack") }
-                )
-                FilterChip(
-                    selected = confirmAll,
-                    onClick = { viewModel.toggleConfirmAllMoves() },
-                    label = { Text("Confirm All") }
                 )
             }
 
@@ -196,33 +171,6 @@ fun OctiReserveHud(
                             )
                         ) {
                             Text("Finish Move Here")
-                        }
-                    }
-                }
-            } else if (awaitingConfirm) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Staged: $stagedNotation",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = OctiTheme.colors.legalStep
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { viewModel.rollbackStagedMove() }) {
-                            Text("Rollback")
-                        }
-                        Button(
-                            onClick = { viewModel.commitStagedMove() },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = OctiTheme.colors.accentBrass,
-                                contentColor = OctiTheme.colors.windowBg
-                            )
-                        ) {
-                            Text("Confirm Move")
                         }
                     }
                 }

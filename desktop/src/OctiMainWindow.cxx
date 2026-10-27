@@ -669,10 +669,8 @@ OctiMainWindow::OctiMainWindow(
     });
 
     QObject::connect(_checkUpdateBtn, &QPushButton::clicked, [this]() {
+        checkForAppUpdates(true);
         SelfUpdateDialog dlg(_updateController, _theme, this);
-        if (_currentUpdateState.phase == selfupdate::UpdatePhase::Idle) {
-            checkForAppUpdates(true);
-        }
         dlg.exec();
     });
     QObject::connect(_updateActionBtn, &QPushButton::clicked, [this]() {
@@ -1143,10 +1141,8 @@ void OctiMainWindow::setupMenuBar()
     QAction *actUpdate = helpMenu->addAction(createMenuIcon(MenuIconKind::CHECK_UPDATE, _theme), "Check for Updates...");
     actUpdate->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_U));
     QObject::connect(actUpdate, &QAction::triggered, this, [this]() {
+        checkForAppUpdates(true);
         SelfUpdateDialog dlg(_updateController, _theme, this);
-        if (_currentUpdateState.phase == selfupdate::UpdatePhase::Idle) {
-            checkForAppUpdates(true);
-        }
         dlg.exec();
     });
 

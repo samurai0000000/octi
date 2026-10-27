@@ -1356,6 +1356,38 @@ const std::vector<CaptureChoice> &OctiMoveComposer::captureChoices() const
     return _captureChoices;
 }
 
+bool OctiMoveComposer::populatePreviewBoard(OctiBoard &outBoard) const
+{
+    if (!_board || !_board->getGame()) {
+        return false;
+    }
+    outBoard.suppressBoardUpdateNotification(true);
+    outBoard.fromPositionString(_board->toPositionString());
+    if (_stagedOps.empty()) {
+        return true;
+    }
+    try {
+        OctiMove mv(_stagedOps);
+        outBoard.getGame()->move(mv);
+        if (_hasEighthProngBonusHop &&
+            outBoard.isValidCoord(_eighthProngTargetBx, _eighthProngTargetBy) &&
+            _stagedOps.size() == 1) {
+            int sx = _stagedOps[0].x0;
+            int sy = _stagedOps[0].y0;
+            OctiSquare &srcSq = outBoard.squareAt(sx, sy);
+            OctiSquare &dstSq = outBoard.squareAt(_eighthProngTargetBx, _eighthProngTargetBy);
+            if (!srcSq.isEmpty()) {
+                OctiPod movedPod = srcSq.getPodAt(srcSq.getNumPods() - 1);
+                srcSq.removePod(movedPod);
+                dstSq.addPod(movedPod);
+            }
+        }
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 std::vector<std::pair<int, int>> OctiMoveComposer::legalDestinationsFrom(
     int x, int y, int podIndex) const
 {

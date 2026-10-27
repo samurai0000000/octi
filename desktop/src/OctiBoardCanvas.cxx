@@ -9,6 +9,7 @@
 #include "QtCompat.hxx"
 #include <algorithm>
 #include <cmath>
+#include <QCoreApplication>
 #include <QFont>
 #include <QLinearGradient>
 #include <QPainterPath>
@@ -615,6 +616,9 @@ void OctiBoardCanvas::paintCommitBanner(QPainter &p,
     if (!_composer || (!_composer->isAwaitingConfirmation() && !_composer->isGuidedMoveActive())) {
         return;
     }
+    if (isVisible() && !_composer->isGuidedMoveActive()) {
+        return;
+    }
 
     p.save();
     QRectF outer = geom.boardOuterRect();
@@ -694,8 +698,16 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
     const OctiPalette &pal = paletteForTheme(_theme);
     p.fillRect(0, 0, width, height, pal.windowBg);
 
-    int gw = _board ? _board->getBoardWidth() : 9;
-    int gh = _board ? _board->getBoardHeight() : 9;
+    const OctiBoard *displayBoard = _board;
+    OctiBoard previewBoard;
+    if (_composer && _composer->isAwaitingConfirmation()) {
+        if (_composer->populatePreviewBoard(previewBoard)) {
+            displayBoard = &previewBoard;
+        }
+    }
+
+    int gw = displayBoard ? displayBoard->getBoardWidth() : 9;
+    int gh = displayBoard ? displayBoard->getBoardHeight() : 9;
     OctiBoardGeometry geom(width, height, gw, gh, _rotation);
 
     // 1. Luxury board outer frame with 3D brass bevel
@@ -763,7 +775,7 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
     }
 
     // 4. Edgeless board portal glow
-    if (_board && _board->getGame() && _board->getGame()->useEdgelessBoard()) {
+    if (displayBoard && displayBoard->getGame() && displayBoard->getGame()->useEdgelessBoard()) {
         paintEdgelessPortals(p, geom, pal);
     }
 
@@ -782,8 +794,8 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
             p.setBrush(Qt::NoBrush);
             p.drawEllipse(sqRect.center(), socketR, socketR);
 
-            if (_board && _board->isValidCoord(x - 1, y - 1)) {
-                const OctiSquare &sq = _board->squareAt(x - 1, y - 1);
+            if (displayBoard && displayBoard->isValidCoord(x - 1, y - 1)) {
+                const OctiSquare &sq = displayBoard->squareAt(x - 1, y - 1);
                 OctiSquareType st = sq.getType();
                 if (st == A_HOME_SQUARE || st == B_HOME_SQUARE ||
                     st == C_HOME_SQUARE || st == D_HOME_SQUARE) {
@@ -795,7 +807,7 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
         }
     }
 
-    // 6. Legal destination guides when dragging, selecting, or hovering
+    // 6. Legal destination guides when dragging or guided move active (GUI2-06)
     if (_composer) {
         std::vector<std::pair<int, int>> guides;
         if (_composer->isGuidedMoveActive()) {
@@ -807,11 +819,6 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
         } else if (_dragKind == DragKind::MOVE_OR_JUMP_POD &&
                    _dragStartX >= 1 && _dragStartY >= 1) {
             guides = _composer->legalDestinationsFrom(_dragStartX, _dragStartY, _dragPodIndex);
-        } else if (_selectedSquareX >= 1 && _selectedSquareY >= 1) {
-            guides = _composer->legalDestinationsFrom(
-                _selectedSquareX, _selectedSquareY, _selectedPodIndex);
-        } else if (_hoverSquareX >= 1 && _hoverSquareY >= 1) {
-            guides = _composer->legalDestinationsFrom(_hoverSquareX, _hoverSquareY);
         }
 
         for (const auto &dest : guides) {
@@ -828,10 +835,10 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
     }
 
     // 7. Pods, prongs, superprongs, and layered 3D-offset multi-pod stacks with count badges
-    if (_board) {
+    if (displayBoard) {
         for (int y = 1; y <= gh; ++y) {
             for (int x = 1; x <= gw; ++x) {
-                const OctiSquare &sq = _board->squareAt(x - 1, y - 1);
+                const OctiSquare &sq = displayBoard->squareAt(x - 1, y - 1);
                 int numPods = sq.getNumPods();
                 if (numPods <= 0) {
                     continue;
@@ -884,45 +891,7 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
                           geom.rotationDegrees(), true, 0.92);
     }
 
-    // 9. Compass Rose Prong Wheel when dragging prong/superprong, repositioning, or hovering/selecting a friendly pod
-    if (_composer) {
-        if ((_dragKind == DragKind::ADD_PRONG_FROM_RESERVE ||
-             _dragKind == DragKind::ADD_SUPERPRONG_FROM_RESERVE ||
-             _dragKind == DragKind::REPOSITION_PRONG_ON_POD) &&
-            _hoverSquareX >= 1 && _hoverSquareY >= 1) {
-            bool isSuper = (_dragKind == DragKind::ADD_SUPERPRONG_FROM_RESERVE);
-            paintCompassProngWheel(p, geom, _hoverSquareX, _hoverSquareY,
-                                   _dragPodIndex, isSuper, _dragHoverProngDir, pal);
-        } else if (_dragKind == DragKind::NONE) {
-            int wx = (_hoverSquareX >= 1 && _hoverSquareY >= 1)
-                         ? _hoverSquareX
-                         : _selectedSquareX;
-            int wy = (_hoverSquareX >= 1 && _hoverSquareY >= 1)
-                         ? _hoverSquareY
-                         : _selectedSquareY;
-            if (wx >= 1 && wy >= 1 && _board &&
-                _board->isValidCoord(wx - 1, wy - 1) &&
-                !_board->squareAt(wx - 1, wy - 1).isEmpty()) {
-                int selPod = _composer->selectedStackPodIndex(wx, wy);
-                bool isSuper = (_dragShiftHeld && _board->getGame() &&
-                                _board->getGame()->useSuperProngs());
-                if (!_composer->legalProngAdditionsAt(wx, wy, selPod, isSuper).empty()) {
-                    OctiDir hDir = (wx == _hoverSquareX && wy == _hoverSquareY)
-                                       ? _dragHoverProngDir
-                                       : DIR_UNDEF;
-                    paintCompassProngWheel(p, geom, wx, wy, selPod,
-                                           isSuper, hDir, pal);
-                }
-            }
-        }
-    }
-
-    // 10. Floating Stack Fan Pop-over strip
-    if (_stackFanX >= 1 && _stackFanY >= 1) {
-        paintStackFanOverlay(p, geom, _stackFanX, _stackFanY, pal);
-    }
-
-    // 11. Floating Capture [x] / Keep [ ] pills & Commit Move / Rollback banner
+    // 9. Floating Capture [x] / Keep [ ] pills & Commit Move / Rollback banner
     paintCaptureChoicePills(p, geom, pal);
     paintCommitBanner(p, geom, pal);
 
@@ -956,7 +925,11 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
     // 1. Check Finish Move Here button (when guided multi-hop jump is active)
     if (!_finishBtnRect.isEmpty() && _finishBtnRect.contains(pos)) {
         _composer->finishGuidedMoveHere();
-        update();
+        if (isVisible() && _composer->isAwaitingConfirmation()) {
+            presentPlyConfirmationIfNeeded();
+        } else {
+            update();
+        }
         return;
     }
 
@@ -1024,21 +997,8 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
                             }
                         }
                     }
-                    // Check if 8th prong superprong bonus move is available
-                    if (_composer->isAwaitingSuperProngBonusMove()) {
-                        SuperProngBonusDialog spDlg(_theme, this);
-                        spDlg.exec();
-                    }
-                    // If guided hop finished and other pods at origin can move:
-                    if (!_composer->isGuidedMoveActive() && _composer->hasOtherMovablePodAtOrigin()) {
-                        std::pair<int, int> orig = _composer->guidedOriginSquare();
-                        CompositePodMoveDialog compDlg(orig.first, orig.second, _theme, this);
-                        if (compDlg.exec() == QDialog::Accepted && compDlg.selectNextPodChosen()) {
-                            ZoomedSquareDialog zd(_board, _composer, orig.first, orig.second, _rotation, _theme, this);
-                            if (zd.exec() == QDialog::Accepted && zd.shouldMovePod()) {
-                                _composer->beginGuidedPodMove(orig.first, orig.second, zd.selectedPodIndex(), zd.moveAllMatchingStack());
-                            }
-                        }
+                    if (!_composer->isGuidedMoveActive() && _composer->isAwaitingConfirmation()) {
+                        presentPlyConfirmationIfNeeded();
                     }
                 }
                 update();
@@ -1100,6 +1060,9 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
             }
         }
 
+        _stackFanX = -1;
+        _stackFanY = -1;
+
         if (isVisible() && (isNonEmpty || isEligibleHome)) {
             ZoomedSquareDialog dlg(_board, _composer, sx, sy, _rotation, _theme, this);
             int res = dlg.exec();
@@ -1107,9 +1070,8 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
                 if (dlg.shouldMovePod()) {
                     _composer->beginGuidedPodMove(sx, sy, dlg.selectedPodIndex(), dlg.moveAllMatchingStack());
                 } else if (dlg.actionCompleted()) {
-                    if (_composer->isAwaitingSuperProngBonusMove()) {
-                        SuperProngBonusDialog spDlg(_theme, this);
-                        spDlg.exec();
+                    if (_composer->isAwaitingConfirmation()) {
+                        presentPlyConfirmationIfNeeded();
                     }
                 }
             }
@@ -1145,11 +1107,6 @@ void OctiBoardCanvas::mouseMoveEvent(QMouseEvent *event)
     if (_geometry.screenToSquare(pos, sx, sy)) {
         _hoverSquareX = sx;
         _hoverSquareY = sy;
-        if (_board && _board->isValidCoord(sx - 1, sy - 1) &&
-            _board->squareAt(sx - 1, sy - 1).getNumPods() >= 2) {
-            _stackFanX = sx;
-            _stackFanY = sy;
-        }
         QPointF center = _geometry.squareCenter(sx, sy);
         double cell = _geometry.cellSize();
         double innerR = (_dragKind == DragKind::ADD_PRONG_FROM_RESERVE ||
@@ -1296,6 +1253,38 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
     _dragStartY = -1;
     _dragPodIndex = -1;
     _dragSrcProngDir = DIR_UNDEF;
+    if (isVisible() && _composer && _composer->isAwaitingConfirmation()) {
+        presentPlyConfirmationIfNeeded();
+    }
+    update();
+}
+
+void OctiBoardCanvas::presentPlyConfirmationIfNeeded()
+{
+    if (!isVisible() || !_composer || !_composer->isAwaitingConfirmation()) {
+        return;
+    }
+    update();
+    QCoreApplication::processEvents();
+
+    PlyConfirmDialog dlg(_composer, _theme, this);
+    QPoint pt = mapToGlobal(QPoint((width() - dlg.width()) / 2,
+                                   std::max(10, height() - dlg.height() - 20)));
+    dlg.move(pt);
+    dlg.exec();
+
+    if (dlg.chosenAction() == PlyConfirmDialog::ResultAction::MORE_MOVES) {
+        if (_composer->isAwaitingSuperProngBonusMove()) {
+            SuperProngBonusDialog spDlg(_theme, this);
+            spDlg.exec();
+        } else if (_composer->hasOtherMovablePodAtOrigin()) {
+            std::pair<int, int> orig = _composer->guidedOriginSquare();
+            ZoomedSquareDialog zd(_board, _composer, orig.first, orig.second, _rotation, _theme, this);
+            if (zd.exec() == QDialog::Accepted && zd.shouldMovePod()) {
+                _composer->beginGuidedPodMove(orig.first, orig.second, zd.selectedPodIndex(), zd.moveAllMatchingStack());
+            }
+        }
+    }
     update();
 }
 

@@ -7,10 +7,14 @@
 package com.selfso.octi.ui
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,15 +44,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -68,7 +83,53 @@ import com.selfso.octi.OctiProngType
 import com.selfso.octi.OctiSquare
 import com.selfso.octi.OctiThemeId
 import com.selfso.octi.ui.theme.OctiTheme
-import kotlinx.coroutines.delay
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sin
+
+object OctiDialogs {
+    const val SPLASH_DURATION_MS: Long = 10000L
+
+    @JvmStatic
+    fun hitTestZoomedSocket(
+        canvasWidthPx: Float,
+        canvasHeightPx: Float,
+        touchX: Float,
+        touchY: Float,
+        rotation: OctiBoardGeometry.BoardRotation
+    ): OctiDir {
+        val sizePx = min(canvasWidthPx, canvasHeightPx)
+        if (sizePx <= 0f) return OctiDir.DIR_UNDEF
+        val cx = canvasWidthPx * 0.5f
+        val cy = canvasHeightPx * 0.5f
+        val podR = sizePx * 0.30f
+        val socketDist = podR * 0.88f
+        val socketR = sizePx * 0.052f
+        val geo = OctiBoardGeometry(480, 480, 9, 9, rotation)
+
+        for (d in 0 until OctiDir.DIR_MAX) {
+            val dir = OctiDir.fromIndex(d)
+            val u = geo.dirUnitVectorScreen(dir)
+            val scx = cx + (u[0] * socketDist).toFloat()
+            val scy = cy + (u[1] * socketDist).toFloat()
+            val dist = hypot((touchX - scx).toDouble(), (touchY - scy).toDouble()).toFloat()
+            if (dist <= socketR * 2.2f) {
+                return dir
+            }
+        }
+        return OctiDir.DIR_UNDEF
+    }
+}
+
+fun hitTestZoomedSocket(
+    canvasWidthPx: Float,
+    canvasHeightPx: Float,
+    touchX: Float,
+    touchY: Float,
+    rotation: OctiBoardGeometry.BoardRotation
+): OctiDir = OctiDialogs.hitTestZoomedSocket(canvasWidthPx, canvasHeightPx, touchX, touchY, rotation)
 
 private val CANONICAL_SSO_PROVIDERS = listOf(
     "google" to "Google",
@@ -541,13 +602,17 @@ fun ZoomedSquareDialog(
         )
     }
     var moveAllStack by remember { mutableStateOf(false) }
-    var selectedProngTray by remember { mutableStateOf<String?>(null) }
-    var selectedRepositionSrcDir by remember { mutableStateOf<OctiDir?>(null) }
-    var hoverSocketDir by remember { mutableStateOf(-1) }
 
     val freeProngs = board.game?.getFreeProngs(turn) ?: 0
     val freeSuper = board.game?.getFreeSuperProngs(turn) ?: 0
     val useSuperProngs = board.game?.useSuperProngs() == true
+
+    var selectedProngTray by remember {
+        mutableStateOf<String?>(if (isFriendlyTurn && freeProngs > 0) "NORMAL" else null)
+    }
+    var selectedRepositionSrcDir by remember { mutableStateOf<OctiDir?>(null) }
+    var hoverSocketDir by remember { mutableStateOf(-1) }
+    var podBoxPxSize by remember { mutableStateOf(IntSize(480, 480)) }
 
     val zoomedBitmap = remember(squareX, squareY, selectedPodIndex, rotation, themeId, hoverSocketDir, composer.stagedMoveNotation()) {
         val sizePx = 480
@@ -566,230 +631,297 @@ fun ZoomedSquareDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
     ) {
-        Card(
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .padding(8.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg)
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
+            Card(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .fillMaxWidth(0.92f)
+                    .padding(8.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {}
+                    ),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+                border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "Square ($squareX, $squareY)",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = OctiTheme.colors.accentBrass
-                    )
-                    Text(
-                        text = if (hasEnemy) "Opponent Inspect" else if (isEmptySquare) "Home Square" else "Friendly Pod",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (hasEnemy) OctiTheme.colors.legalCapture else OctiTheme.colors.textSecondary
-                    )
-                }
-
-                if (numPods >= 2) {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        for (i in 0 until numPods) {
-                            FilterChip(
-                                selected = i == selectedPodIndex,
-                                onClick = {
-                                    selectedPodIndex = i
-                                    composer.selectStackPodIndex(squareX, squareY, i)
-                                    selectedProngTray = null
-                                    selectedRepositionSrcDir = null
-                                },
-                                label = { Text("Pod ${i + 1}/$numPods") }
-                            )
-                        }
-                    }
-                    if (isFriendlyTurn) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Checkbox(
-                                checked = moveAllStack,
-                                onCheckedChange = { moveAllStack = it }
-                            )
-                            Text("All Matching Pods (Stack)", style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
-
-                if (isFriendlyTurn) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        FilterChip(
-                            selected = selectedProngTray == "NORMAL",
-                            onClick = {
-                                selectedProngTray = if (selectedProngTray == "NORMAL") null else "NORMAL"
-                                selectedRepositionSrcDir = null
-                            },
-                            enabled = freeProngs > 0,
-                            label = { Text("Normal Prong ($freeProngs)") }
+                        Text(
+                            text = "Square ($squareX, $squareY)",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = OctiTheme.colors.accentBrass
                         )
-                        if (useSuperProngs) {
+                        Text(
+                            text = if (hasEnemy) "Opponent Inspect" else if (isEmptySquare) "Home Square" else "Friendly Pod",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (hasEnemy) OctiTheme.colors.legalCapture else OctiTheme.colors.textSecondary
+                        )
+                    }
+
+                    if (numPods >= 2) {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            for (i in 0 until numPods) {
+                                FilterChip(
+                                    selected = i == selectedPodIndex,
+                                    onClick = {
+                                        selectedPodIndex = i
+                                        composer.selectStackPodIndex(squareX, squareY, i)
+                                        selectedRepositionSrcDir = null
+                                    },
+                                    label = { Text("Pod ${i + 1}/$numPods") }
+                                )
+                            }
+                        }
+                        if (isFriendlyTurn) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Checkbox(
+                                    checked = moveAllStack,
+                                    onCheckedChange = { moveAllStack = it }
+                                )
+                                Text("All Matching Pods (Stack)", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+
+                    if (isFriendlyTurn) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             FilterChip(
-                                selected = selectedProngTray == "SUPER",
+                                selected = selectedProngTray == "NORMAL",
                                 onClick = {
-                                    selectedProngTray = if (selectedProngTray == "SUPER") null else "SUPER"
+                                    selectedProngTray = if (selectedProngTray == "NORMAL") null else "NORMAL"
                                     selectedRepositionSrcDir = null
                                 },
-                                enabled = freeSuper > 0,
-                                label = { Text("Superprong (!) ($freeSuper)") }
+                                enabled = freeProngs > 0,
+                                label = { Text("Normal Prong ($freeProngs)") }
+                            )
+                            if (useSuperProngs) {
+                                FilterChip(
+                                    selected = selectedProngTray == "SUPER",
+                                    onClick = {
+                                        selectedProngTray = if (selectedProngTray == "SUPER") null else "SUPER"
+                                        selectedRepositionSrcDir = null
+                                    },
+                                    enabled = freeSuper > 0,
+                                    label = { Text("Superprong (!) ($freeSuper)") }
+                                )
+                            }
+                        }
+                        if (selectedRepositionSrcDir != null) {
+                            Text(
+                                text = "Reposition prong: Tap or drag to empty socket",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OctiTheme.colors.accentBrass
+                            )
+                        } else if (selectedProngTray != null) {
+                            Text(
+                                text = "Tap socket (a..h) or drag outward from center to add $selectedProngTray prong",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OctiTheme.colors.legalStep
+                            )
+                        } else {
+                            Text(
+                                text = "Tap any socket to select/add, or select from tray above",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OctiTheme.colors.textSecondary
                             )
                         }
                     }
-                    if (selectedProngTray != null) {
-                        Text(
-                            text = "Tap any socket (a..h) to add $selectedProngTray prong",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = OctiTheme.colors.legalStep
-                        )
-                    } else if (selectedRepositionSrcDir != null) {
-                        Text(
-                            text = "Reposition prong: Tap empty target socket",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = OctiTheme.colors.accentBrass
-                        )
-                    } else {
-                        Text(
-                            text = "Tap a prong socket to select, or select from tray above",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = OctiTheme.colors.textSecondary
-                        )
-                    }
-                }
 
-                Box(
-                    modifier = Modifier
-                        .size(280.dp)
-                        .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir) {
-                            detectTapGestures(
-                                onTap = { offset ->
-                                    if (!isFriendlyTurn || sq == null || sq.isEmpty) return@detectTapGestures
-                                    val pod = sq.getPodAt(Math.max(0, Math.min(sq.numPods - 1, selectedPodIndex)))
-                                    val sizePx = 280f
-                                    val cx = sizePx * 0.5f
-                                    val cy = sizePx * 0.5f
-                                    val podR = sizePx * 0.30f
-                                    val socketDist = podR * 0.88f
-                                    val socketR = sizePx * 0.052f
-                                    val radRot = Math.toRadians(rotation.degrees.toDouble())
-
-                                    var hitDir = -1
-                                    for (d in 0 until OctiDir.DIR_MAX) {
-                                        val dir = OctiDir.fromIndex(d)
-                                        val dx = dir.deltaX().toDouble()
-                                        val dy = -dir.deltaY().toDouble()
-                                        val u0 = dx * Math.cos(radRot) - dy * Math.sin(radRot)
-                                        val u1 = dx * Math.sin(radRot) + dy * Math.cos(radRot)
-                                        val scx = cx + u0 * socketDist
-                                        val scy = cy + u1 * socketDist
-                                        if (Math.hypot(offset.x - scx, offset.y - scy) <= socketR * 1.6) {
-                                            hitDir = d
-                                            break
-                                        }
-                                    }
-
-                                    if (hitDir >= 0) {
-                                        val targetDir = OctiDir.fromIndex(hitDir)
-                                        if (selectedProngTray == "NORMAL") {
-                                            onAddProng(selectedPodIndex, targetDir, false)
-                                            selectedProngTray = null
-                                            hoverSocketDir = -1
-                                        } else if (selectedProngTray == "SUPER") {
-                                            onAddProng(selectedPodIndex, targetDir, true)
-                                            selectedProngTray = null
-                                            hoverSocketDir = -1
-                                        } else if (selectedRepositionSrcDir != null) {
-                                            onRepositionProng(selectedPodIndex, selectedRepositionSrcDir!!, targetDir)
-                                            selectedRepositionSrcDir = null
-                                            hoverSocketDir = -1
-                                        } else {
-                                            if (pod.prongAt(targetDir) != OctiProngType.NO_PRONG) {
-                                                selectedRepositionSrcDir = targetDir
-                                                hoverSocketDir = hitDir
+                    Box(
+                        modifier = Modifier
+                            .size(280.dp)
+                            .onSizeChanged { newSize ->
+                                if (newSize.width > 0 && newSize.height > 0) {
+                                    podBoxPxSize = newSize
+                                }
+                            }
+                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize) {
+                                detectTapGestures(
+                                    onTap = { offset ->
+                                        if (!isFriendlyTurn || sq == null) return@detectTapGestures
+                                        val pIdx = Math.max(0, Math.min(sq.numPods - 1, selectedPodIndex))
+                                        val pod = sq.getPodAt(pIdx)
+                                        val wPx = podBoxPxSize.width.toFloat()
+                                        val hPx = podBoxPxSize.height.toFloat()
+                                        val hitDir = hitTestZoomedSocket(wPx, hPx, offset.x, offset.y, rotation)
+                                        if (hitDir != OctiDir.DIR_UNDEF) {
+                                            val pt = pod.prongAt(hitDir)
+                                            if (selectedRepositionSrcDir != null) {
+                                                if (pt == OctiProngType.NO_PRONG) {
+                                                    onRepositionProng(selectedPodIndex, selectedRepositionSrcDir!!, hitDir)
+                                                    selectedRepositionSrcDir = null
+                                                    hoverSocketDir = -1
+                                                    onDismiss()
+                                                } else {
+                                                    selectedRepositionSrcDir = hitDir
+                                                    hoverSocketDir = hitDir.index
+                                                }
+                                            } else if (pt == OctiProngType.NORMAL_PRONG) {
+                                                selectedRepositionSrcDir = hitDir
+                                                hoverSocketDir = hitDir.index
+                                            } else if (pt == OctiProngType.NO_PRONG) {
+                                                if (selectedProngTray == "SUPER" && freeSuper > 0) {
+                                                    onAddProng(selectedPodIndex, hitDir, true)
+                                                    onDismiss()
+                                                } else if ((selectedProngTray == "NORMAL" || selectedProngTray == null) && freeProngs > 0) {
+                                                    onAddProng(selectedPodIndex, hitDir, false)
+                                                    onDismiss()
+                                                }
                                             }
                                         }
                                     }
-                                }
-                            )
-                        }
-                ) {
-                    Image(
-                        bitmap = zoomedBitmap,
-                        contentDescription = "Zoomed Square Pod",
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-
-                if (isFriendlyTurn) {
-                    Button(
-                        onClick = {
-                            onBeginGuidedMove(selectedPodIndex, moveAllStack)
-                            onDismiss()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = OctiTheme.colors.accentBrass,
-                            contentColor = OctiTheme.colors.windowBg
+                                )
+                            }
+                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize) {
+                                detectDragGestures(
+                                    onDragStart = { startOffset ->
+                                        if (!isFriendlyTurn || sq == null) return@detectDragGestures
+                                        val pIdx = Math.max(0, Math.min(sq.numPods - 1, selectedPodIndex))
+                                        val pod = sq.getPodAt(pIdx)
+                                        val wPx = podBoxPxSize.width.toFloat()
+                                        val hPx = podBoxPxSize.height.toFloat()
+                                        val hitDir = hitTestZoomedSocket(wPx, hPx, startOffset.x, startOffset.y, rotation)
+                                        if (hitDir != OctiDir.DIR_UNDEF && pod.prongAt(hitDir) == OctiProngType.NORMAL_PRONG) {
+                                            selectedRepositionSrcDir = hitDir
+                                        }
+                                    },
+                                    onDrag = { change, _ ->
+                                        if (!isFriendlyTurn || sq == null) return@detectDragGestures
+                                        val wPx = podBoxPxSize.width.toFloat()
+                                        val hPx = podBoxPxSize.height.toFloat()
+                                        val hitDir = hitTestZoomedSocket(wPx, hPx, change.position.x, change.position.y, rotation)
+                                        if (hitDir != OctiDir.DIR_UNDEF) {
+                                            hoverSocketDir = hitDir.index
+                                        } else {
+                                            val cx = wPx * 0.5f
+                                            val cy = hPx * 0.5f
+                                            val sizeMin = min(wPx, hPx)
+                                            val podR = sizeMin * 0.30f
+                                            val geo = OctiBoardGeometry(480, 480, 9, 9, rotation)
+                                            val sectorDir = geo.hitTestCompassSector(
+                                                cx.toDouble(), cy.toDouble(),
+                                                (podR * 0.4).toDouble(), (podR * 1.6).toDouble(),
+                                                change.position.x.toDouble(), change.position.y.toDouble()
+                                            )
+                                            if (sectorDir != OctiDir.DIR_UNDEF) {
+                                                hoverSocketDir = sectorDir.index
+                                            }
+                                        }
+                                    },
+                                    onDragCancel = {
+                                        hoverSocketDir = -1
+                                    },
+                                    onDragEnd = {
+                                        if (!isFriendlyTurn || sq == null) return@detectDragGestures
+                                        val pIdx = Math.max(0, Math.min(sq.numPods - 1, selectedPodIndex))
+                                        val pod = sq.getPodAt(pIdx)
+                                        val dropDir = if (hoverSocketDir in 0 until OctiDir.DIR_MAX) OctiDir.fromIndex(hoverSocketDir) else OctiDir.DIR_UNDEF
+                                        if (dropDir != OctiDir.DIR_UNDEF && pod.prongAt(dropDir) == OctiProngType.NO_PRONG) {
+                                            if (selectedRepositionSrcDir != null && selectedRepositionSrcDir != dropDir) {
+                                                onRepositionProng(selectedPodIndex, selectedRepositionSrcDir!!, dropDir)
+                                                selectedRepositionSrcDir = null
+                                                hoverSocketDir = -1
+                                                onDismiss()
+                                            } else if (selectedProngTray == "SUPER" && freeSuper > 0) {
+                                                onAddProng(selectedPodIndex, dropDir, true)
+                                                hoverSocketDir = -1
+                                                onDismiss()
+                                            } else if ((selectedProngTray == "NORMAL" || selectedProngTray == null) && freeProngs > 0) {
+                                                onAddProng(selectedPodIndex, dropDir, false)
+                                                hoverSocketDir = -1
+                                                onDismiss()
+                                            }
+                                        }
+                                        hoverSocketDir = -1
+                                    }
+                                )
+                            }
+                    ) {
+                        Image(
+                            bitmap = zoomedBitmap,
+                            contentDescription = "Zoomed Square Pod",
+                            modifier = Modifier.fillMaxSize()
                         )
-                    ) {
-                        Text("Move / Jump This Pod", fontWeight = FontWeight.Bold)
                     }
-                }
 
-                if (isEmptySquare && isTurn) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    if (isFriendlyTurn) {
                         Button(
                             onClick = {
-                                onPlaceReservePod(false)
+                                onBeginGuidedMove(selectedPodIndex, moveAllStack)
                                 onDismiss()
                             },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = OctiTheme.colors.accentBrass,
+                                contentColor = OctiTheme.colors.windowBg
+                            )
                         ) {
-                            Text("Place Reserve (+)")
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                onPlaceReservePod(true)
-                                onDismiss()
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Liberate (*)")
+                            Text("Move / Jump This Pod", fontWeight = FontWeight.Bold)
                         }
                     }
-                }
 
-                OutlinedButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Close Inspector [Esc]")
+                    if (isEmptySquare && isTurn) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    onPlaceReservePod(false)
+                                    onDismiss()
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Place Reserve (+)")
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    onPlaceReservePod(true)
+                                    onDismiss()
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Liberate (*)")
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -915,41 +1047,401 @@ fun CompositePodMoveDialog(
 }
 
 @Composable
+fun PlyConfirmDialog(
+    stagedNotation: String,
+    canMoreMoves: Boolean,
+    onCommit: () -> Unit,
+    onCancel: () -> Unit,
+    onMoreMoves: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+        border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Staged Ply: $stagedNotation",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = OctiTheme.colors.legalStep
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onCancel,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = OctiTheme.colors.legalCapture
+                    ),
+                    border = BorderStroke(1.dp, OctiTheme.colors.legalCapture)
+                ) {
+                    Text("Cancel", fontWeight = FontWeight.SemiBold)
+                }
+
+                if (canMoreMoves) {
+                    Button(
+                        onClick = onMoreMoves,
+                        modifier = Modifier.weight(1.1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OctiTheme.colors.panelCardBorder,
+                            contentColor = OctiTheme.colors.accentBrass
+                        )
+                    ) {
+                        Text("More Moves", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                Button(
+                    onClick = onCommit,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OctiTheme.colors.accentBrass,
+                        contentColor = OctiTheme.colors.windowBg
+                    )
+                ) {
+                    Text("Commit", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun UpToDateModalDialog(
+    message: String,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.86f)
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+            border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "Check for Updates",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = OctiTheme.colors.accentBrass
+                )
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OctiTheme.colors.textPrimary
+                )
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(0.5f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OctiTheme.colors.accentBrass,
+                        contentColor = OctiTheme.colors.windowBg
+                    )
+                ) {
+                    Text("OK", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun OctiSplashOverlay(
     onDismiss: () -> Unit
 ) {
-    var progress by remember { mutableStateOf(0f) }
+    var progress by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(Unit) {
-        val start = System.currentTimeMillis()
+        val startNanos = withFrameNanos { it }
+        val durationNanos = OctiDialogs.SPLASH_DURATION_MS * 1_000_000L
         while (progress < 1f) {
-            delay(16)
-            val elapsed = System.currentTimeMillis() - start
-            progress = (elapsed / 5000f).coerceIn(0f, 1f)
+            val nowNanos = withFrameNanos { it }
+            val elapsed = nowNanos - startNanos
+            progress = (elapsed.toFloat() / durationNanos.toFloat()).coerceIn(0f, 1f)
+            if (progress >= 1f) {
+                break
+            }
         }
         onDismiss()
-    }
-
-    val splashBitmap = remember(progress) {
-        val w = 480
-        val h = 800
-        val pixels = OctiBoardRenderer.renderSplashPixels(w, h, progress.toDouble())
-        Bitmap.createBitmap(pixels, w, h, Bitmap.Config.ARGB_8888).asImageBitmap()
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(OctiTheme.colors.windowBg)
-            .clickable { onDismiss() },
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Image(
-            bitmap = splashBitmap,
-            contentDescription = "OCTI Splash",
-            modifier = Modifier.fillMaxSize()
-        )
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val cx = w * 0.5f
+            val cy = h * 0.36f
+            val maxR = hypot(w.toDouble(), h.toDouble()).toFloat() * 0.70f
 
+            // 1. Deep Obsidian radial gradient backdrop
+            drawRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF1E293B),
+                        Color(0xFF0F172A),
+                        Color(0xFF05070B)
+                    ),
+                    center = Offset(cx, cy),
+                    radius = maxR
+                )
+            )
+
+            // 2. Rotating outer brass compass ring
+            val rOuter = min(w, h) * 0.30f
+            withTransform({
+                rotate(degrees = progress * 180f, pivot = Offset(cx, cy))
+            }) {
+                drawCircle(
+                    color = Color(0xFFC8A253),
+                    radius = rOuter,
+                    center = Offset(cx, cy),
+                    style = Stroke(width = 2.dp.toPx())
+                )
+                drawCircle(
+                    color = Color(0x66C8A253),
+                    radius = rOuter * 1.06f,
+                    center = Offset(cx, cy),
+                    style = Stroke(width = 1.dp.toPx())
+                )
+                for (i in 0 until 16) {
+                    val angle = (i * 22.5 * Math.PI / 180.0)
+                    val cosA = cos(angle).toFloat()
+                    val sinA = sin(angle).toFloat()
+                    val tLen = if (i % 2 == 0) 14.dp.toPx() else 7.dp.toPx()
+                    drawLine(
+                        color = if (i % 2 == 0) Color(0xFFFBBF24) else Color(0xFFC8A253),
+                        start = Offset(cx + cosA * (rOuter - tLen), cy + sinA * (rOuter - tLen)),
+                        end = Offset(cx + cosA * rOuter, cy + sinA * rOuter),
+                        strokeWidth = if (i % 2 == 0) 2.dp.toPx() else 1.2.dp.toPx()
+                    )
+                }
+            }
+
+            // 3. Counter-rotating inner brass ring
+            val rInner = rOuter * 0.62f
+            withTransform({
+                rotate(degrees = -progress * 240f, pivot = Offset(cx, cy))
+            }) {
+                drawCircle(
+                    color = Color(0xFFE2C974),
+                    radius = rInner,
+                    center = Offset(cx, cy),
+                    style = Stroke(width = 1.5.dp.toPx())
+                )
+                for (i in 0 until 8) {
+                    val angle = (i * 45.0 * Math.PI / 180.0)
+                    val cosA = cos(angle).toFloat()
+                    val sinA = sin(angle).toFloat()
+                    drawLine(
+                        color = Color(0xFFE2C974),
+                        start = Offset(cx + cosA * (rInner - 8.dp.toPx()), cy + sinA * (rInner - 8.dp.toPx())),
+                        end = Offset(cx + cosA * rInner, cy + sinA * rInner),
+                        strokeWidth = 1.4.dp.toPx()
+                    )
+                }
+            }
+
+            // 4. Central octagonal pod geometry
+            val podR = min(w, h) * 0.13f
+            val geo = OctiBoardGeometry(480, 480, 9, 9, OctiBoardGeometry.BoardRotation.ROT_0)
+
+            // 5. Animated 8-prong beams + golden Superprong shooting in and snapping
+            for (d in 0 until OctiDir.DIR_MAX) {
+                val dir = OctiDir.fromIndex(d)
+                val u = geo.dirUnitVectorScreen(dir)
+                val u0 = u[0].toFloat()
+                val u1 = u[1].toFloat()
+                val isSuper = (d == 0)
+
+                val prongProgress = ((progress - d * 0.07f) / 0.32f).coerceIn(0f, 1f)
+                if (prongProgress > 0f) {
+                    val startDist = rOuter * 1.35f
+                    val endDist = podR * 0.90f
+                    val currDist = startDist + (endDist - startDist) * prongProgress
+                    val tipDist = currDist + podR * (if (isSuper) 0.50f else 0.38f)
+
+                    val px = -u1
+                    val py = u0
+                    val halfW = podR * (if (isSuper) 0.12f else 0.08f)
+
+                    val prongPath = Path().apply {
+                        moveTo(cx + u0 * currDist - px * halfW, cy + u1 * currDist - py * halfW)
+                        lineTo(cx + u0 * (tipDist * 0.85f) - px * (halfW * 0.85f), cy + u1 * (tipDist * 0.85f) - py * (halfW * 0.85f))
+                        lineTo(cx + u0 * tipDist, cy + u1 * tipDist)
+                        lineTo(cx + u0 * (tipDist * 0.85f) + px * (halfW * 0.85f), cy + u1 * (tipDist * 0.85f) + py * (halfW * 0.85f))
+                        lineTo(cx + u0 * currDist + px * halfW, cy + u1 * currDist + py * halfW)
+                        close()
+                    }
+
+                    if (isSuper) {
+                        drawPath(
+                            path = prongPath,
+                            brush = Brush.linearGradient(
+                                colors = listOf(Color(0xFFFEF08A), Color(0xFFFBBF24), Color(0xFFD97706)),
+                                start = Offset(cx + u0 * currDist, cy + u1 * currDist),
+                                end = Offset(cx + u0 * tipDist, cy + u1 * tipDist)
+                            )
+                        )
+                        drawPath(
+                            path = prongPath,
+                            color = Color(0xFFFEF08A),
+                            style = Stroke(width = 1.5.dp.toPx())
+                        )
+                    } else {
+                        drawPath(
+                            path = prongPath,
+                            brush = Brush.linearGradient(
+                                colors = listOf(Color(0xFFE2E8F0), Color(0xFF94A3B8), Color(0xFF64748B)),
+                                start = Offset(cx + u0 * currDist, cy + u1 * currDist),
+                                end = Offset(cx + u0 * tipDist, cy + u1 * tipDist)
+                            )
+                        )
+                        drawPath(
+                            path = prongPath,
+                            color = Color(0xFFCBD5E1),
+                            style = Stroke(width = 1.dp.toPx())
+                        )
+                    }
+                }
+            }
+
+            // Draw central Emerald (#10B981) & Brass (#C8A253) octagonal pod
+            val octoPath = Path()
+            for (i in 0 until 8) {
+                val angle = (i * 45.0 + 22.5) * Math.PI / 180.0
+                val px = cx + cos(angle).toFloat() * podR
+                val py = cy + sin(angle).toFloat() * podR
+                if (i == 0) octoPath.moveTo(px, py) else octoPath.lineTo(px, py)
+            }
+            octoPath.close()
+
+            // Outer drop shadow
+            drawPath(
+                path = octoPath,
+                color = Color(0x80000000)
+            )
+
+            // Emerald radial gradient fill
+            drawPath(
+                path = octoPath,
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF34D399),
+                        Color(0xFF10B981),
+                        Color(0xFF064E3B)
+                    ),
+                    center = Offset(cx - podR * 0.2f, cy - podR * 0.2f),
+                    radius = podR * 1.2f
+                )
+            )
+
+            // Brass perimeter stroke
+            drawPath(
+                path = octoPath,
+                color = Color(0xFFC8A253),
+                style = Stroke(width = 3.dp.toPx())
+            )
+
+            // Inner core octagon
+            val innerOcto = Path()
+            for (i in 0 until 8) {
+                val angle = (i * 45.0 + 22.5) * Math.PI / 180.0
+                val px = cx + cos(angle).toFloat() * (podR * 0.76f)
+                val py = cy + sin(angle).toFloat() * (podR * 0.76f)
+                if (i == 0) innerOcto.moveTo(px, py) else innerOcto.lineTo(px, py)
+            }
+            innerOcto.close()
+            drawPath(
+                path = innerOcto,
+                color = Color(0x40FFFFFF),
+                style = Stroke(width = 1.2.dp.toPx())
+            )
+
+            // Central brass emblem
+            drawCircle(
+                color = Color(0xFF0F172A),
+                radius = podR * 0.22f,
+                center = Offset(cx, cy)
+            )
+            drawCircle(
+                color = Color(0xFFC8A253),
+                radius = podR * 0.22f,
+                center = Offset(cx, cy),
+                style = Stroke(width = 1.6.dp.toPx())
+            )
+
+            // Smooth progress bar track & fill near bottom
+            val barW = w * 0.72f
+            val barH = 5.dp.toPx()
+            val barX = cx - barW * 0.5f
+            val barY = h * 0.86f
+
+            // Track
+            drawRoundRect(
+                color = Color(0xFF1E293B),
+                topLeft = Offset(barX, barY),
+                size = Size(barW, barH),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(barH * 0.5f, barH * 0.5f)
+            )
+            // Fill
+            drawRoundRect(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFF10B981),
+                        Color(0xFFC8A253),
+                        Color(0xFFFBBF24)
+                    )
+                ),
+                topLeft = Offset(barX, barY),
+                size = Size(barW * progress, barH),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(barH * 0.5f, barH * 0.5f)
+            )
+        }
+
+        // Overlay Typography
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -959,7 +1451,7 @@ fun OctiSplashOverlay(
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(top = 40.dp)
+                modifier = Modifier.padding(top = 44.dp)
             ) {
                 Text(
                     text = "OCTI",
@@ -968,7 +1460,7 @@ fun OctiSplashOverlay(
                     color = OctiTheme.colors.accentBrass
                 )
                 Text(
-                    text = "TACTICAL POD STRATEGY",
+                    text = "TACTICAL POD & PRONG BOARD GAME",
                     style = MaterialTheme.typography.titleSmall,
                     letterSpacing = 2.sp,
                     color = OctiTheme.colors.textSecondary
@@ -978,17 +1470,12 @@ fun OctiSplashOverlay(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.padding(bottom = 36.dp)
+                modifier = Modifier.padding(bottom = 32.dp)
             ) {
                 Text(
-                    text = "Author: Charles Chiou (selfso.com)",
+                    text = "Author: Charles Chiou",
                     style = MaterialTheme.typography.bodyMedium,
                     color = OctiTheme.colors.textPrimary
-                )
-                Text(
-                    text = "Original OCTI Game Designed by Don Green",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = OctiTheme.colors.textSecondary
                 )
                 Text(
                     text = "Copyright (C) 2026, Charles Chiou",
@@ -996,14 +1483,14 @@ fun OctiSplashOverlay(
                     color = OctiTheme.colors.textSecondary
                 )
                 Text(
-                    text = "Version ${OctiDefs.OCTI_APP_VERSION} (Protocol v${OctiDefs.OCTI_PROTOCOL_VERSION})",
+                    text = "Version ${OctiDefs.OCTI_APP_VERSION}",
                     style = MaterialTheme.typography.labelMedium,
                     color = OctiTheme.colors.accentBrass,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(18.dp))
                 Text(
-                    text = "Press ESC or tap anywhere to continue",
+                    text = "Tap anywhere or press ESC / Back to skip",
                     style = MaterialTheme.typography.labelSmall,
                     color = OctiTheme.colors.textSecondary
                 )

@@ -31,6 +31,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +41,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.selfso.octi.BuildConfig
+import com.selfso.selfupdate.UpdateState
 import com.selfso.octi.ui.AccountIdentitiesDialog
 import com.selfso.octi.ui.ArchiveScreen
 import com.selfso.octi.ui.CapturePromptDialog
@@ -51,8 +54,10 @@ import com.selfso.octi.ui.OctiAppViewModel
 import com.selfso.octi.ui.OctiBoardCanvas
 import com.selfso.octi.ui.OctiReserveHud
 import com.selfso.octi.ui.OctiSplashOverlay
+import com.selfso.octi.ui.PlyConfirmDialog
 import com.selfso.octi.ui.SsoSignInDialog
 import com.selfso.octi.ui.SuperProngBonusDialog
+import com.selfso.octi.ui.UpToDateModalDialog
 import com.selfso.octi.ui.ZoomedSquareDialog
 import com.selfso.octi.ui.theme.OctiMaterialTheme
 import com.selfso.octi.ui.theme.OctiTheme
@@ -127,6 +132,29 @@ fun OctiMainAppContent(
     onSplashDismissed: () -> Unit = {}
 ) {
     val updateController = rememberSelfUpdateController(checkOnLaunch = true)
+    val updateState by updateController.state.collectAsState()
+    var manualUpdateCheckPending by remember { mutableStateOf(false) }
+    var updateModalMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(updateState) {
+        if (manualUpdateCheckPending) {
+            when (val s = updateState) {
+                is UpdateState.UpToDate -> {
+                    manualUpdateCheckPending = false
+                    updateModalMessage = "OCTI v${BuildConfig.VERSION_NAME} is up to date. No newer update is available."
+                }
+                is UpdateState.Error -> {
+                    manualUpdateCheckPending = false
+                    updateModalMessage = s.message
+                }
+                is UpdateState.Available, is UpdateState.ReadyToInstall, is UpdateState.Downloading, is UpdateState.Installing -> {
+                    manualUpdateCheckPending = false
+                }
+                else -> {}
+            }
+        }
+    }
+
     val currentTab by viewModel.currentTab.collectAsState()
     val themeId by viewModel.theme.collectAsState()
     val sfxMuted by viewModel.sfxMuted.collectAsState()
@@ -196,7 +224,10 @@ fun OctiMainAppContent(
                             Text(if (sfxMuted) "SFX:Off" else "SFX:On")
                         }
                         TextButton(
-                            onClick = { updateController.checkForUpdates() },
+                            onClick = {
+                                manualUpdateCheckPending = true
+                                updateController.checkForUpdates()
+                            },
                             colors = ButtonDefaults.textButtonColors(
                                 contentColor = OctiTheme.colors.accentBrass
                             )
@@ -331,6 +362,7 @@ fun OctiMainAppContent(
                     viewModel.composer.selectStackPodIndex(zx, zy, podIndex)
                     viewModel.composer.beginAddProngFromReserve(superProng)
                     viewModel.composer.dropOnCompassSector(zx, zy, podIndex, dir)
+                    viewModel.closeZoomedSquare()
                     viewModel.notifyComposerUpdated()
                     if (viewModel.composer.hasUnlockedSuperProngBonus()) {
                         viewModel.setShowSuperProngBonusDialog(true)
@@ -340,6 +372,7 @@ fun OctiMainAppContent(
                     viewModel.composer.selectStackPodIndex(zx, zy, podIndex)
                     viewModel.composer.beginRepositionProng(zx, zy, podIndex, srcDir)
                     viewModel.composer.dropOnCompassSector(zx, zy, podIndex, dstDir)
+                    viewModel.closeZoomedSquare()
                     viewModel.notifyComposerUpdated()
                 },
                 onPlaceReservePod = { liberate ->
@@ -349,6 +382,7 @@ fun OctiMainAppContent(
                         viewModel.composer.beginAddPodFromReserve()
                     }
                     viewModel.composer.dropOnSquare(zx, zy)
+                    viewModel.closeZoomedSquare()
                     viewModel.notifyComposerUpdated()
                 }
             )
@@ -405,6 +439,33 @@ fun OctiMainAppContent(
                         viewModel.commitStagedMove()
                     }
                 }
+            )
+        }
+
+        val boardRev by viewModel.boardRevision.collectAsState()
+        val isAwaitingConfirm = viewModel.composer.isAwaitingConfirmation && boardRev >= 0L &&
+                zoomedSquare == null && capturePrompt == null && !showSuperProngBonusDialog && compositePodPrompt == null
+        if (isAwaitingConfirm) {
+            PlyConfirmDialog(
+                stagedNotation = viewModel.composer.stagedMoveNotation(),
+                canMoreMoves = viewModel.composer.hasOtherMovablePodAtOrigin() || viewModel.composer.hasUnlockedSuperProngBonus(),
+                onCommit = { viewModel.commitStagedMove() },
+                onCancel = { viewModel.rollbackStagedMove() },
+                onMoreMoves = {
+                    if (viewModel.composer.hasUnlockedSuperProngBonus()) {
+                        viewModel.setShowSuperProngBonusDialog(true)
+                    } else if (viewModel.composer.hasOtherMovablePodAtOrigin()) {
+                        val orig = viewModel.composer.guidedOriginSquare()
+                        viewModel.openZoomedSquare(orig[0], orig[1])
+                    }
+                }
+            )
+        }
+
+        updateModalMessage?.let { msg ->
+            UpToDateModalDialog(
+                message = msg,
+                onDismiss = { updateModalMessage = null }
             )
         }
 

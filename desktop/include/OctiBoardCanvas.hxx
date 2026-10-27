@@ -97,6 +97,7 @@ private:
                                  const OctiPalette &pal);
     void paintCommitBanner(QPainter &p, const OctiBoardGeometry &geom,
                            const OctiPalette &pal);
+    void presentPlyConfirmationIfNeeded();
 
     OctiBoard *_board;
     OctiMoveComposer *_composer;

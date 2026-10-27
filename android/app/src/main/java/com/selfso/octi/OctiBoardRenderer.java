@@ -174,8 +174,6 @@ public final class OctiBoardRenderer {
                 guides = composer.legalPodDropSquares(false);
             } else if (composer.activeDragKind() == OctiMoveComposer.DragKind.LIBERATE_POD_FROM_RESERVE) {
                 guides = composer.legalPodDropSquares(true);
-            } else if (hoverSquareX >= 1 && hoverSquareY >= 1) {
-                guides = composer.legalDestinationsFrom(hoverSquareX, hoverSquareY);
             }
             if (guides != null) {
                 for (int[] dest : guides) {
@@ -238,62 +236,6 @@ public final class OctiBoardRenderer {
             }
         }
 
-        // 8. Radial Prong Wheel when hovering a friendly pod
-        if (composer != null && hoverSquareX >= 1 && hoverSquareY >= 1
-                && board != null && board.isValidCoord(hoverSquareX - 1, hoverSquareY - 1)
-                && !board.squareAt(hoverSquareX - 1, hoverSquareY - 1).isEmpty()) {
-            int selPod = composer.selectedStackPodIndex(hoverSquareX, hoverSquareY);
-            List<OctiDir> legalDirs = composer.legalProngAdditionsAt(
-                    hoverSquareX, hoverSquareY, selPod, false);
-            if (!legalDirs.isEmpty()) {
-                double[] center = g.squareCenter(hoverSquareX, hoverSquareY);
-                double slotDist = cell * 0.36;
-                OctiAppIconRenderer.drawCircleStroke(pixels, w, h,
-                        center[0], center[1], slotDist, 1.2, pal.accentBrass);
-                for (int d = 0; d < OctiDir.DIR_MAX; d++) {
-                    OctiDir dir = OctiDir.fromIndex(d);
-                    double[] u = g.dirUnitVectorScreen(dir);
-                    double sx = center[0] + u[0] * slotDist;
-                    double sy = center[1] + u[1] * slotDist;
-                    boolean isLegal = legalDirs.contains(dir);
-                    boolean isHover = (dir == hoverProngDir);
-                    double dotR = isHover ? cell * 0.10 : cell * 0.08;
-                    int fill = (isHover && isLegal) ? pal.legalStepGuide
-                            : isLegal ? 0xD8162A3E : 0x70141A24;
-                    int stroke = (isHover && isLegal) ? pal.prongSuperCore
-                            : isLegal ? pal.accentBrass : pal.textSecondary;
-                    OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, sx, sy, dotR, fill);
-                    OctiAppIconRenderer.drawCircleStroke(pixels, w, h, sx, sy, dotR, 1.2, stroke);
-                }
-            }
-        }
-
-        // 9. Floating Stack Fan Pop-over strip
-        if (stackFanX >= 1 && stackFanY >= 1 && board != null
-                && board.isValidCoord(stackFanX - 1, stackFanY - 1)) {
-            OctiSquare sq = board.squareAt(stackFanX - 1, stackFanY - 1);
-            int n = sq.getNumPods();
-            if (n >= 2) {
-                double[] overlay = g.stackFanOverlayRect(stackFanX, stackFanY, n);
-                fillRectSolid(pixels, w, h, overlay[0], overlay[1], overlay[2], overlay[3], 0xEB0F1622);
-                drawRectOutline(pixels, w, h, overlay[0], overlay[1], overlay[2], overlay[3],
-                        1.8, pal.accentBrass);
-                int selIdx = (composer != null)
-                        ? composer.selectedStackPodIndex(stackFanX, stackFanY)
-                        : (n - 1);
-                for (int i = 0; i < n; i++) {
-                    double[] slot = g.stackFanSlotRect(stackFanX, stackFanY, n, i);
-                    boolean selected = (i == selIdx);
-                    if (selected) {
-                        drawRectOutline(pixels, w, h, slot[0], slot[1], slot[2], slot[3],
-                                2.0, pal.prongSuperGold);
-                    }
-                    OctiPod pod = sq.getPodAt(i);
-                    paintOctagonalPod(pixels, w, h, slot, pod.getType(), pod, g, pal, selected);
-                }
-            }
-        }
-
         // 10. Floating Capture [x] / Keep [ ] pills
         if (composer != null && !composer.captureChoices().isEmpty()) {
             for (OctiMoveComposer.CaptureChoice cc : composer.captureChoices()) {
@@ -309,30 +251,6 @@ public final class OctiBoardRenderer {
                 fillRectSolid(pixels, w, h, px, py, pw, ph, bg);
                 drawRectOutline(pixels, w, h, px, py, pw, ph, 1.2, pal.prongSuperCore);
             }
-        }
-
-        // 11. Floating Commit Move / Rollback confirmation banner
-        if (composer != null && composer.isAwaitingConfirmation()) {
-            double barW = Math.min(outer[2] * 0.88, 520.0);
-            double barH = Math.max(28.0, outer[3] * 0.055);
-            double barX = outer[0] + outer[2] * 0.5 - barW * 0.5;
-            double barY = outer[1] + outer[3] - barH - 6.0;
-            fillRectSolid(pixels, w, h, barX, barY, barW, barH, 0xEE0E1420);
-            drawRectOutline(pixels, w, h, barX, barY, barW, barH, 1.8, pal.accentBrass);
-
-            double btnW = barW * 0.24;
-            double btnH = barH - 8.0;
-            double commitX = barX + barW - btnW * 2.0 - 14.0;
-            double rollbackX = barX + barW - btnW - 6.0;
-            double btnY = barY + 4.0;
-
-            fillRectSolid(pixels, w, h, commitX, btnY, btnW, btnH,
-                    OctiAppIconRenderer.lerpColor(pal.legalStepGuide, 0xFF000000, 0.25));
-            drawRectOutline(pixels, w, h, commitX, btnY, btnW, btnH, 1.2, pal.prongSuperCore);
-
-            fillRectSolid(pixels, w, h, rollbackX, btnY, btnW, btnH,
-                    OctiAppIconRenderer.lerpColor(pal.legalCaptureGlow, 0xFF000000, 0.30));
-            drawRectOutline(pixels, w, h, rollbackX, btnY, btnW, btnH, 1.2, pal.accentBrass);
         }
 
         return pixels;
@@ -771,6 +689,98 @@ public final class OctiBoardRenderer {
         }
     }
 
+    private static void paintZoomedPodBodyAndProngs(int[] targetPixels,
+                                                    int s,
+                                                    double podCx,
+                                                    double podCy,
+                                                    double podR,
+                                                    OctiPod pod,
+                                                    OctiBoardGeometry geo,
+                                                    OctiPalette pal,
+                                                    boolean drawHighlightRim) {
+        OctiPalette.PodFactionPalette fp = pal.factionForPodType(pod.getType());
+        double prongInnerR = podR * 0.60;
+        double prongOuterR = podR * 1.38;
+        double superOuterR = podR * 1.50;
+
+        for (int d = 0; d < OctiDir.DIR_MAX; d++) {
+            OctiDir dir = OctiDir.fromIndex(d);
+            OctiProngType pt = pod.prongAt(dir);
+            if (pt == OctiProngType.NO_PRONG) {
+                continue;
+            }
+            double[] u = geo.dirUnitVectorScreen(dir);
+            double u0 = u[0];
+            double u1 = u[1];
+            double px = -u1;
+            double py = u0;
+
+            if (pt == OctiProngType.NORMAL_PRONG) {
+                double halfW = Math.max(3.5, podR * 0.08);
+                double[] vx = {
+                    podCx + u0 * prongInnerR - px * halfW,
+                    podCx + u0 * (prongOuterR * 0.86) - px * (halfW * 0.85),
+                    podCx + u0 * prongOuterR,
+                    podCx + u0 * (prongOuterR * 0.86) + px * (halfW * 0.85),
+                    podCx + u0 * prongInnerR + px * halfW
+                };
+                double[] vy = {
+                    podCy + u1 * prongInnerR - py * halfW,
+                    podCy + u1 * (prongOuterR * 0.86) - py * (halfW * 0.85),
+                    podCy + u1 * prongOuterR,
+                    podCy + u1 * (prongOuterR * 0.86) + py * (halfW * 0.85),
+                    podCy + u1 * prongInnerR + py * halfW
+                };
+                OctiAppIconRenderer.fillPolygonShaded(targetPixels, s, s, vx, vy,
+                        pal.prongNormalTip, pal.prongNormalMetal, 0xFF64748B);
+                OctiAppIconRenderer.drawPolygonOutline(targetPixels, s, s, vx, vy, 1.4, 0xFF05070B);
+                OctiAppIconRenderer.drawLineSegment(targetPixels, s, s,
+                        podCx + u0 * (prongInnerR * 1.05), podCy + u1 * (prongInnerR * 1.05),
+                        podCx + u0 * (prongOuterR * 0.88), podCy + u1 * (prongOuterR * 0.88),
+                        1.4, 0xCCFFFFFF);
+            } else if (pt == OctiProngType.SUPER_PRONG) {
+                double halfW = Math.max(5.0, podR * 0.11);
+                double[] vx = {
+                    podCx + u0 * prongInnerR - px * (halfW * 0.75),
+                    podCx + u0 * (superOuterR * 0.72) - px * (halfW * 1.25),
+                    podCx + u0 * superOuterR,
+                    podCx + u0 * (superOuterR * 0.72) + px * (halfW * 1.25),
+                    podCx + u0 * prongInnerR + px * (halfW * 0.75)
+                };
+                double[] vy = {
+                    podCy + u1 * prongInnerR - py * (halfW * 0.75),
+                    podCy + u1 * (superOuterR * 0.72) - py * (halfW * 1.25),
+                    podCy + u1 * superOuterR,
+                    podCy + u1 * (superOuterR * 0.72) + py * (halfW * 1.25),
+                    podCy + u1 * prongInnerR + py * (halfW * 0.75)
+                };
+                OctiAppIconRenderer.fillPolygonShaded(targetPixels, s, s, vx, vy,
+                        pal.prongSuperCore, pal.prongSuperGold, 0xFFD97706);
+                OctiAppIconRenderer.drawPolygonOutline(targetPixels, s, s, vx, vy, 1.8, pal.prongSuperCore);
+                OctiAppIconRenderer.drawLineSegment(targetPixels, s, s,
+                        podCx + u0 * (prongInnerR * 1.05), podCy + u1 * (prongInnerR * 1.05),
+                        podCx + u0 * (superOuterR * 0.90), podCy + u1 * (superOuterR * 0.90),
+                        1.6, 0xFFFEF08A);
+            }
+        }
+
+        OctiAppIconRenderer.fillOctagonFlat(targetPixels, s, s,
+                podCx + podR * 0.05, podCy + podR * 0.08, podR * 1.02, 0x7D000000);
+        OctiAppIconRenderer.fillOctagonGradient(targetPixels, s, s,
+                podCx, podCy, podR, fp.highlight, fp.rim, fp.shadow);
+        OctiAppIconRenderer.drawOctagonStroke(targetPixels, s, s,
+                podCx, podCy, podR, drawHighlightRim ? 2.4 : 1.6,
+                drawHighlightRim ? pal.prongSuperGold : fp.rim);
+
+        OctiAppIconRenderer.fillOctagonGradient(targetPixels, s, s,
+                podCx, podCy, podR * 0.78, fp.highlight, fp.core, fp.shadow);
+        OctiAppIconRenderer.drawOctagonStroke(targetPixels, s, s,
+                podCx, podCy, podR * 0.78, 1.2, fp.highlight);
+
+        OctiAppIconRenderer.fillCircleAlpha(targetPixels, s, s, podCx, podCy, podR * 0.18, fp.emblem);
+        OctiAppIconRenderer.drawCircleStroke(targetPixels, s, s, podCx, podCy, podR * 0.18, 1.4, pal.accentBrass);
+    }
+
     public static int[] renderZoomedPodPixels(OctiBoard board,
                                               int x,
                                               int y,
@@ -805,110 +815,44 @@ public final class OctiBoardRenderer {
         OctiSquare sq = hasSquare ? board.squareAt(x - 1, y - 1) : null;
         boolean hasPod = (sq != null && !sq.isEmpty());
 
-        double radRot = Math.toRadians(rotationDeg);
+        OctiBoardGeometry geo = new OctiBoardGeometry(s, s, 9, 9,
+                OctiBoardGeometry.BoardRotation.fromDegrees(rotationDeg));
 
         if (hasPod) {
-            int pIdx = Math.max(0, Math.min(sq.getNumPods() - 1, podIndex));
-            OctiPod pod = sq.getPodAt(pIdx);
-            OctiPalette.PodFactionPalette fp = pal.factionForPodType(pod.getType());
+            int numPods = sq.getNumPods();
+            int pIdx = Math.max(0, Math.min(numPods - 1, podIndex));
 
-            double prongInnerR = podR * 0.60;
-            double prongOuterR = podR * 1.38;
-            double superOuterR = podR * 1.50;
-
-            for (int d = 0; d < OctiDir.DIR_MAX; d++) {
-                OctiDir dir = OctiDir.fromIndex(d);
-                OctiProngType pt = pod.prongAt(dir);
-                if (pt == OctiProngType.NO_PRONG) {
-                    continue;
-                }
-                double dx = dir.deltaX();
-                double dy = -dir.deltaY();
-                double u0 = dx * Math.cos(radRot) - dy * Math.sin(radRot);
-                double u1 = dx * Math.sin(radRot) + dy * Math.cos(radRot);
-                double len = Math.hypot(u0, u1);
-                if (len > 1e-9) {
-                    u0 /= len;
-                    u1 /= len;
-                }
-                double px = -u1;
-                double py = u0;
-
-                if (pt == OctiProngType.NORMAL_PRONG) {
-                    double halfW = Math.max(3.5, podR * 0.08);
-                    double[] vx = {
-                        cx + u0 * prongInnerR - px * halfW,
-                        cx + u0 * (prongOuterR * 0.86) - px * (halfW * 0.85),
-                        cx + u0 * prongOuterR,
-                        cx + u0 * (prongOuterR * 0.86) + px * (halfW * 0.85),
-                        cx + u0 * prongInnerR + px * halfW
-                    };
-                    double[] vy = {
-                        cy + u1 * prongInnerR - py * halfW,
-                        cy + u1 * (prongOuterR * 0.86) - py * (halfW * 0.85),
-                        cy + u1 * prongOuterR,
-                        cy + u1 * (prongOuterR * 0.86) + py * (halfW * 0.85),
-                        cy + u1 * prongInnerR + py * halfW
-                    };
-                    OctiAppIconRenderer.fillPolygonShaded(pixels, s, s, vx, vy,
-                            pal.prongNormalTip, pal.prongNormalMetal, 0xFF64748B);
-                    OctiAppIconRenderer.drawPolygonOutline(pixels, s, s, vx, vy, 1.4, 0xFF05070B);
-                    OctiAppIconRenderer.drawLineSegment(pixels, s, s,
-                            cx + u0 * (prongInnerR * 1.05), cy + u1 * (prongInnerR * 1.05),
-                            cx + u0 * (prongOuterR * 0.88), cy + u1 * (prongOuterR * 0.88),
-                            1.4, 0xCCFFFFFF);
-                } else if (pt == OctiProngType.SUPER_PRONG) {
-                    double halfW = Math.max(5.0, podR * 0.11);
-                    double[] vx = {
-                        cx + u0 * prongInnerR - px * (halfW * 0.75),
-                        cx + u0 * (superOuterR * 0.72) - px * (halfW * 1.25),
-                        cx + u0 * superOuterR,
-                        cx + u0 * (superOuterR * 0.72) + px * (halfW * 1.25),
-                        cx + u0 * prongInnerR + px * (halfW * 0.75)
-                    };
-                    double[] vy = {
-                        cy + u1 * prongInnerR - py * (halfW * 0.75),
-                        cy + u1 * (superOuterR * 0.72) - py * (halfW * 1.25),
-                        cy + u1 * superOuterR,
-                        cy + u1 * (superOuterR * 0.72) + py * (halfW * 1.25),
-                        cy + u1 * prongInnerR + py * (halfW * 0.75)
-                    };
-                    OctiAppIconRenderer.fillPolygonShaded(pixels, s, s, vx, vy,
-                            pal.prongSuperCore, pal.prongSuperGold, 0xFFD97706);
-                    OctiAppIconRenderer.drawPolygonOutline(pixels, s, s, vx, vy, 1.8, pal.prongSuperCore);
-                    OctiAppIconRenderer.drawLineSegment(pixels, s, s,
-                            cx + u0 * (prongInnerR * 1.05), cy + u1 * (prongInnerR * 1.05),
-                            cx + u0 * (superOuterR * 0.90), cy + u1 * (superOuterR * 0.90),
-                            1.6, 0xFFFEF08A);
+            // Translucent offset underlay of other pods in stack
+            if (numPods >= 2) {
+                int[] scratch = new int[s * s];
+                for (int i = 0; i < numPods; i++) {
+                    if (i == pIdx) {
+                        continue;
+                    }
+                    int layerStep = pIdx - i;
+                    double offX = -layerStep * (s * 0.035);
+                    double offY = layerStep * (s * 0.035);
+                    Arrays.fill(scratch, 0);
+                    paintZoomedPodBodyAndProngs(scratch, s, cx + offX, cy + offY, podR,
+                            sq.getPodAt(i), geo, pal, false);
+                    for (int idx = 0; idx < s * s; idx++) {
+                        if ((scratch[idx] & 0xFF000000) != 0) {
+                            pixels[idx] = OctiAppIconRenderer.blendColor(pixels[idx], scratch[idx], 0.28);
+                        }
+                    }
                 }
             }
 
-            OctiAppIconRenderer.fillOctagonFlat(pixels, s, s,
-                    cx + podR * 0.05, cy + podR * 0.08, podR * 1.02, 0x7D000000);
-            OctiAppIconRenderer.fillOctagonGradient(pixels, s, s,
-                    cx, cy, podR, fp.highlight, fp.rim, fp.shadow);
-            OctiAppIconRenderer.drawOctagonStroke(pixels, s, s,
-                    cx, cy, podR, 2.4, pal.prongSuperGold);
+            // Render active pod at full opacity at center
+            OctiPod pod = sq.getPodAt(pIdx);
+            paintZoomedPodBodyAndProngs(pixels, s, cx, cy, podR, pod, geo, pal, true);
 
-            OctiAppIconRenderer.fillOctagonGradient(pixels, s, s,
-                    cx, cy, podR * 0.78, fp.highlight, fp.core, fp.shadow);
-            OctiAppIconRenderer.drawOctagonStroke(pixels, s, s,
-                    cx, cy, podR * 0.78, 1.2, fp.highlight);
-
-            OctiAppIconRenderer.fillCircleAlpha(pixels, s, s, cx, cy, podR * 0.18, fp.emblem);
-            OctiAppIconRenderer.drawCircleStroke(pixels, s, s, cx, cy, podR * 0.18, 1.4, pal.accentBrass);
-
+            // Render 8 interactive sockets ('a'..'h')
             for (int d = 0; d < OctiDir.DIR_MAX; d++) {
                 OctiDir dir = OctiDir.fromIndex(d);
-                double dx = dir.deltaX();
-                double dy = -dir.deltaY();
-                double u0 = dx * Math.cos(radRot) - dy * Math.sin(radRot);
-                double u1 = dx * Math.sin(radRot) + dy * Math.cos(radRot);
-                double len = Math.hypot(u0, u1);
-                if (len > 1e-9) {
-                    u0 /= len;
-                    u1 /= len;
-                }
+                double[] u = geo.dirUnitVectorScreen(dir);
+                double u0 = u[0];
+                double u1 = u[1];
                 double scx = cx + u0 * socketDist;
                 double scy = cy + u1 * socketDist;
 

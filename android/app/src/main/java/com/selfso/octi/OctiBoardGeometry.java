@@ -27,6 +27,20 @@ public class OctiBoardGeometry {
         public int getDegrees() {
             return degrees;
         }
+
+        public static BoardRotation fromDegrees(int deg) {
+            int normalized = ((deg % 360) + 360) % 360;
+            switch (normalized) {
+                case 90:
+                    return ROT_90;
+                case 180:
+                    return ROT_180;
+                case 270:
+                    return ROT_270;
+                default:
+                    return ROT_0;
+            }
+        }
     }
 
     private int viewportWidth;

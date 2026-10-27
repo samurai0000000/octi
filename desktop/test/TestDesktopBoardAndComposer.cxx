@@ -20,6 +20,7 @@
 #include "OctiBoardGeometry.hxx"
 #include "OctiBotEngine.hxx"
 #include "OctiDefs.hxx"
+#include "OctiDialogs.hxx"
 #include "OctiGame.hxx"
 #include "OctiMoveComposer.hxx"
 #include "OctiReservePanel.hxx"
@@ -1007,6 +1008,197 @@ TEST(OctiSoundSynthTest, SynthesizeAllSevenCuesAndVerifyMuteGate)
     dispatcher.post([&]() { dispatched = true; });
     QCoreApplication::processEvents();
     CHECK_TRUE(dispatched);
+}
+
+TEST_GROUP(OctiDialogsRefinementTest)
+{
+    void setup() override
+    {
+    }
+
+    void teardown() override
+    {
+    }
+};
+
+TEST(OctiDialogsRefinementTest, SplashDialogTenSecondDurationAndEarlyDismissal)
+{
+    OctiSplashDialog splash(nullptr, ThemeId::OBSIDIAN_BRASS);
+    CHECK_TRUE(splash.windowFlags() & Qt::FramelessWindowHint);
+
+    QImage f0 = OctiSplashDialog::renderSplashFrame(960, 560, 0.0);
+    CHECK_FALSE(f0.isNull());
+    LONGS_EQUAL(960, f0.width());
+    LONGS_EQUAL(560, f0.height());
+
+    QImage fMid = OctiSplashDialog::renderSplashFrame(960, 560, 0.5);
+    CHECK_FALSE(fMid.isNull());
+
+    QImage fEnd = OctiSplashDialog::renderSplashFrame(960, 560, 1.0);
+    CHECK_FALSE(fEnd.isNull());
+
+    // ESC dismisses splash early
+    QKeyEvent escEv(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+    QCoreApplication::sendEvent(&splash, &escEv);
+}
+
+TEST(OctiDialogsRefinementTest, ZoomedSquareDialogSocketOrientationAtRot0)
+{
+    QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);
+    QString artifactDir = QFileInfo::exists(repoRootStr + "/plan/done/plan_gui_refinement_v2.md")
+                              ? (repoRootStr + "/plan/done/plan_gui_refinement_v2.artifacts")
+                              : (repoRootStr + "/plan/plan_gui_refinement_v2.artifacts");
+    QDir().mkpath(artifactDir);
+
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+
+    ZoomedSquareDialog dlg(&board, &composer, 3, 3, BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    CHECK_TRUE(dlg.windowFlags() & Qt::FramelessWindowHint);
+    CHECK_TRUE(dlg.windowFlags() & Qt::Popup);
+
+    QImage img = dlg.renderToImage(560, 530);
+    CHECK_FALSE(img.isNull());
+    LONGS_EQUAL(560, img.width());
+    LONGS_EQUAL(530, img.height());
+
+    QString podArtifact = artifactDir + "/desktop_zoomed_green_pod_v2.png";
+    CHECK_TRUE(img.save(podArtifact));
+    CHECK_TRUE(QFileInfo(podArtifact).size() > 10000);
+
+    // Center of pod canvas in ZoomedSquareDialog:
+    // _podCanvasRect is QRectF(120, 76, 320, 320) when numPods == 1
+    // pc = center = (280, 236)
+    QPointF pc(280.0, 236.0);
+    const auto &sockets = dlg.socketCenters();
+    LONGS_EQUAL(8, static_cast<long>(sockets.size()));
+
+    // At ROT_0:
+    // DIR_N ('a'): 12 o'clock TOP (sc.y < pc.y, sc.x == pc.x)
+    CHECK_TRUE(sockets.at(DIR_N).y() < pc.y() - 50.0);
+    DOUBLES_EQUAL(pc.x(), sockets.at(DIR_N).x(), 1.0);
+
+    // DIR_S ('e'): 6 o'clock BOTTOM (sc.y > pc.y, sc.x == pc.x)
+    CHECK_TRUE(sockets.at(DIR_S).y() > pc.y() + 50.0);
+    DOUBLES_EQUAL(pc.x(), sockets.at(DIR_S).x(), 1.0);
+
+    // DIR_E ('c'): 3 o'clock RIGHT (sc.x > pc.x, sc.y == pc.y)
+    CHECK_TRUE(sockets.at(DIR_E).x() > pc.x() + 50.0);
+    DOUBLES_EQUAL(pc.y(), sockets.at(DIR_E).y(), 1.0);
+
+    // DIR_W ('g'): 9 o'clock LEFT (sc.x < pc.x, sc.y == pc.y)
+    CHECK_TRUE(sockets.at(DIR_W).x() < pc.x() - 50.0);
+    DOUBLES_EQUAL(pc.y(), sockets.at(DIR_W).y(), 1.0);
+
+    // Diagonals
+    CHECK_TRUE(sockets.at(DIR_NE).x() > pc.x() + 30.0);
+    CHECK_TRUE(sockets.at(DIR_NE).y() < pc.y() - 30.0); // 1:30
+
+    CHECK_TRUE(sockets.at(DIR_SE).x() > pc.x() + 30.0);
+    CHECK_TRUE(sockets.at(DIR_SE).y() > pc.y() + 30.0); // 4:30
+
+    CHECK_TRUE(sockets.at(DIR_SW).x() < pc.x() - 30.0);
+    CHECK_TRUE(sockets.at(DIR_SW).y() > pc.y() + 30.0); // 7:30
+
+    CHECK_TRUE(sockets.at(DIR_NW).x() < pc.x() - 30.0);
+    CHECK_TRUE(sockets.at(DIR_NW).y() < pc.y() - 30.0); // 10:30
+}
+
+TEST(OctiDialogsRefinementTest, ZoomedSquareDialogStackUnderlayAndMouseWheelCycling)
+{
+    QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);
+    QString artifactDir = QFileInfo::exists(repoRootStr + "/plan/done/plan_gui_refinement_v2.md")
+                              ? (repoRootStr + "/plan/done/plan_gui_refinement_v2.artifacts")
+                              : (repoRootStr + "/plan/plan_gui_refinement_v2.artifacts");
+    QDir().mkpath(artifactDir);
+
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+
+    // Add a second pod to (3,3) to create a multi-pod stack
+    OctiPod podB(B_POD);
+    podB.addProng(DIR_N);
+    board.squareAt(2, 2).addPod(podB);
+    LONGS_EQUAL(2, board.squareAt(2, 2).getNumPods());
+
+    OctiMoveComposer composer(&board);
+    ZoomedSquareDialog dlg(&board, &composer, 3, 3, BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+
+    LONGS_EQUAL(1, dlg.selectedPodIndex());
+
+    // Cycle stack forwards and backwards
+    dlg.cycleSelectedPod(1);
+    LONGS_EQUAL(0, dlg.selectedPodIndex());
+
+    dlg.cycleSelectedPod(-1);
+    LONGS_EQUAL(1, dlg.selectedPodIndex());
+
+    QImage stackImg = dlg.renderToImage(560, 530);
+    CHECK_FALSE(stackImg.isNull());
+    QString stackArtifact = artifactDir + "/desktop_zoomed_stack_underlay_v2.png";
+    CHECK_TRUE(stackImg.save(stackArtifact));
+    CHECK_TRUE(QFileInfo(stackArtifact).size() > 10000);
+}
+
+TEST(OctiDialogsRefinementTest, PlyConfirmDialogCommitCancelAndMoreMoves)
+{
+    QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);
+    QString artifactDir = QFileInfo::exists(repoRootStr + "/plan/done/plan_gui_refinement_v2.md")
+                              ? (repoRootStr + "/plan/done/plan_gui_refinement_v2.artifacts")
+                              : (repoRootStr + "/plan/plan_gui_refinement_v2.artifacts");
+    QDir().mkpath(artifactDir);
+
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+
+    // 1. Stage adding normal prong at 33+a
+    CHECK_TRUE(composer.stageOrCommitAddProng(3, 3, 0, DIR_N, false));
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    STRCMP_EQUAL("33+a", composer.stagedMoveNotation().c_str());
+
+    // 2. Verify populatePreviewBoard shows prong on preview while real board is clean
+    OctiBoard previewBoard;
+    CHECK_TRUE(composer.populatePreviewBoard(previewBoard));
+    CHECK_EQUAL(NORMAL_PRONG, previewBoard.squareAt(2, 2).getPodAt(0).prongAt(DIR_N));
+    CHECK_EQUAL(NO_PRONG, board.squareAt(2, 2).getPodAt(0).prongAt(DIR_N));
+
+    // 3. Borderless PlyConfirmDialog
+    PlyConfirmDialog dlg(&composer, ThemeId::OBSIDIAN_BRASS);
+    CHECK_TRUE(dlg.windowFlags() & Qt::FramelessWindowHint);
+    CHECK_TRUE(dlg.windowFlags() & Qt::Popup);
+    CHECK_TRUE(dlg.stagedMoveText().contains("33+a"));
+    CHECK_FALSE(dlg.isMoreMovesVisible());
+
+    QImage dlgImg = dlg.renderToImage(460, 150);
+    CHECK_FALSE(dlgImg.isNull());
+    QString confirmArtifact = artifactDir + "/desktop_ply_confirm_dialog_v2.png";
+    CHECK_TRUE(dlgImg.save(confirmArtifact));
+    CHECK_TRUE(QFileInfo(confirmArtifact).size() > 5000);
+
+    // 4. Cancel and rollback restores board
+    composer.cancelAndRollback();
+    CHECK_FALSE(composer.isAwaitingConfirmation());
+    CHECK_EQUAL(NO_PRONG, board.squareAt(2, 2).getPodAt(0).prongAt(DIR_N));
+
+    // 5. Verify More Moves visibility when origin has other movable pods
+    board.squareAt(2, 2).clear();
+    OctiPod pod1(A_POD);
+    pod1.addProng(DIR_N);
+    OctiPod pod2(A_POD);
+    pod2.addProng(DIR_N);
+    board.squareAt(2, 2).addPod(pod1);
+    board.squareAt(2, 2).addPod(pod2);
+    LONGS_EQUAL(2, board.squareAt(2, 2).getNumPods());
+
+    CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 1, 3, 4, false));
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    CHECK_TRUE(composer.hasOtherMovablePodAtOrigin());
+
+    PlyConfirmDialog dlgMore(&composer, ThemeId::OBSIDIAN_BRASS);
+    CHECK_TRUE(dlgMore.isMoreMovesVisible());
+    composer.cancelAndRollback();
 }
 
 extern "C" const char *__lsan_default_suppressions()

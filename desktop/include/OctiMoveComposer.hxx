@@ -86,6 +86,7 @@ public:
     bool isAwaitingSuperProngBonusMove() const;
     std::string stagedMoveNotation() const;
     const std::vector<CaptureChoice> &captureChoices() const;
+    bool populatePreviewBoard(OctiBoard &outBoard) const;
 
     std::vector<std::pair<int, int>> legalDestinationsFrom(int x, int y, int podIndex = -1) const;
     std::vector<OctiDir> legalProngAdditionsAt(int x, int y, int podIndex, bool superProng) const;
