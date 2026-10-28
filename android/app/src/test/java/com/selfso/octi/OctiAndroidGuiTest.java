@@ -11,10 +11,12 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.selfso.octi.ui.OctiAppViewModel;
+import com.selfso.octi.ui.OctiDialogs;
 
 import org.junit.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
@@ -413,6 +415,87 @@ public class OctiAndroidGuiTest {
         } finally {
             vm.close();
         }
+    }
+
+    @Test
+    public void testHitTestZoomedSocketCompassSectorFallback_ACF_A02() {
+        // Direct socket hit (cx = 240, cy = 240, socketDist = 109.4):
+        OctiDir dirE = OctiDialogs.hitTestZoomedSocket(480f, 480f, 350f, 240f, OctiBoardGeometry.BoardRotation.ROT_0);
+        assertEquals(OctiDir.DIR_E, dirE);
+
+        // Prong blade tip hit (outside socket radius, caught by compass sector fallback):
+        OctiDir bladeE = OctiDialogs.hitTestZoomedSocket(480f, 480f, 420f, 240f, OctiBoardGeometry.BoardRotation.ROT_0);
+        assertEquals(OctiDir.DIR_E, bladeE);
+
+        OctiDir bladeN = OctiDialogs.hitTestZoomedSocket(480f, 480f, 240f, 60f, OctiBoardGeometry.BoardRotation.ROT_0);
+        assertEquals(OctiDir.DIR_N, bladeN);
+
+        OctiDir bladeSW = OctiDialogs.hitTestZoomedSocket(480f, 480f, 100f, 380f, OctiBoardGeometry.BoardRotation.ROT_0);
+        assertEquals(OctiDir.DIR_SW, bladeSW);
+    }
+
+    @Test
+    public void testContinuousRotationSnapMath_ACF_A03() {
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_0, snapRotation(OctiBoardGeometry.BoardRotation.ROT_0, 15f));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_90, snapRotation(OctiBoardGeometry.BoardRotation.ROT_0, 50f));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_90, snapRotation(OctiBoardGeometry.BoardRotation.ROT_0, 110f));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_180, snapRotation(OctiBoardGeometry.BoardRotation.ROT_0, 140f));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_0, snapRotation(OctiBoardGeometry.BoardRotation.ROT_0, -35f));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_270, snapRotation(OctiBoardGeometry.BoardRotation.ROT_0, -50f));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_180, snapRotation(OctiBoardGeometry.BoardRotation.ROT_90, 60f));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_0, snapRotation(OctiBoardGeometry.BoardRotation.ROT_270, 60f));
+    }
+
+    private OctiBoardGeometry.BoardRotation snapRotation(OctiBoardGeometry.BoardRotation current, float gestureDeg) {
+        float currentDeg = (float) current.degrees();
+        float totalDeg = currentDeg + gestureDeg;
+        int snappedStep = Math.round(totalDeg / 90.0f);
+        int normalizedDeg = ((snappedStep * 90 % 360) + 360) % 360;
+        return OctiBoardGeometry.BoardRotation.fromDegrees(normalizedDeg);
+    }
+
+    @Test
+    public void testExportVisualArtifacts_ACF_A05() throws IOException {
+        File repoRoot = resolveRepoRoot();
+        File artifactDir = new File(repoRoot, "plan/android_commit_dialog_fix.artifacts");
+        if (!artifactDir.exists()) {
+            assertTrue("Artifact directory must be created", artifactDir.mkdirs());
+        }
+
+        // 1. Zoomed pod with prominent prongs
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, true, false, OctiGameBases.GAME_BASES_3);
+        board.getGame().start(OctiPlayer.PLAYER_A);
+        OctiSquare sq = board.squareAt(2, 2);
+        sq.clear();
+        OctiPod pod = new OctiPod(OctiPodType.A_POD);
+        pod.addProng(OctiDir.DIR_N, false);
+        pod.addProng(OctiDir.DIR_E, false);
+        pod.addProng(OctiDir.DIR_S, false);
+        pod.addProng(OctiDir.DIR_NW, true); // superprong!
+        sq.addPod(pod);
+
+        int sizePx = 600;
+        int[] zoomedPx = OctiBoardRenderer.renderZoomedPodPixels(
+                board, 3, 3, 0, 0, OctiThemeId.OBSIDIAN_BRASS, sizePx, -1);
+        File zoomedPng = new File(artifactDir, "android_zoomed_pod_prominent_prongs.png");
+        OctiAppIconRenderer.writeArgbPng(sizePx, sizePx, zoomedPx, zoomedPng);
+        assertTrue("Zoomed pod PNG must exist", zoomedPng.isFile());
+        assertTrue("Zoomed pod PNG must be non-empty", zoomedPng.length() > 4096);
+
+        // 2. Main board with prominent prongs
+        OctiBoardGeometry geo = new OctiBoardGeometry(800, 800, 9, 9, OctiBoardGeometry.BoardRotation.ROT_0);
+        int[] boardPx = OctiBoardRenderer.renderBoardPixels(board, null, geo, OctiThemeId.OBSIDIAN_BRASS);
+        File boardPng = new File(artifactDir, "android_board_prominent_prongs.png");
+        OctiAppIconRenderer.writeArgbPng(800, 800, boardPx, boardPng);
+        assertTrue("Board PNG must exist", boardPng.isFile());
+        assertTrue("Board PNG must be non-empty", boardPng.length() > 4096);
+
+        // 3. Splash screen without progress bar
+        int[] splashPx = OctiBoardRenderer.renderSplashPixels(720, 1280, 0.85);
+        File splashPng = new File(artifactDir, "android_splash_no_bar.png");
+        OctiAppIconRenderer.writeArgbPng(720, 1280, splashPx, splashPng);
+        assertTrue("Splash PNG must exist", splashPng.isFile());
+        assertTrue("Splash PNG must be non-empty", splashPng.length() > 4096);
     }
 }
 

@@ -474,6 +474,8 @@ bool OctiMoveComposer::stageOrCommitAddPod(int targetX, int targetY, bool libera
     }
 
     _stagedOps = {op};
+    _guidedMoveActive = false;
+    _guidedMidHop = false;
     _awaitingConfirmation = true;
     syncPreparedStateToGame();
 
@@ -542,6 +544,8 @@ bool OctiMoveComposer::stageOrCommitAddProng(int x, int y,
     _guidedOriginBx = bx;
     _guidedOriginBy = by;
     _guidedPodIndex = resolvedIdx;
+    _guidedMoveActive = false;
+    _guidedMidHop = false;
     _awaitingSuperProngBonusMove = (superProng && pod.getNumProngs() == 7);
     _awaitingConfirmation = true;
     syncPreparedStateToGame();
@@ -607,6 +611,8 @@ bool OctiMoveComposer::stageOrCommitRepositionProng(int x, int y,
     }
 
     _stagedOps = {op};
+    _guidedMoveActive = false;
+    _guidedMidHop = false;
     _awaitingConfirmation = true;
     syncPreparedStateToGame();
 

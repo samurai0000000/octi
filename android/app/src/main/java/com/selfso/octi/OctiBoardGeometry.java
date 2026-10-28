@@ -333,6 +333,14 @@ public class OctiBoardGeometry {
         return new double[]{r[0] + r[2] * 0.5, r[1] + r[3] * 0.5};
     }
 
+    public double squareCenterX(int x1, int y1) {
+        return squareCenter(x1, y1)[0];
+    }
+
+    public double squareCenterY(int x1, int y1) {
+        return squareCenter(x1, y1)[1];
+    }
+
     public double[] squareCenter0(int x0, int y0) {
         return squareCenter(x0 + 1, y0 + 1);
     }

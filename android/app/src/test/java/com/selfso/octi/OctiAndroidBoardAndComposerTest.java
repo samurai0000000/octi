@@ -1118,6 +1118,92 @@ public class OctiAndroidBoardAndComposerTest {
         assertTrue(composer.isAwaitingConfirmation());
         assertEquals("53c-63", composer.stagedMoveNotation());
     }
+
+    @Test
+    public void testStageActionsResetGuidedMoveActiveAndSetAwaitingConfirmation_ACF_A01() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        // Pod at (3, 3) starts with DIR_N so it can move
+        board.squareAt(2, 2).getPodAt(0).addProng(OctiDir.DIR_N, false);
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        assertTrue(composer.confirmAllMoves());
+
+        // 1. Adding prong resets guidedMoveActive
+        assertTrue(composer.beginGuidedPodMove(3, 3, 0, false));
+        assertTrue(composer.isGuidedMoveActive());
+        assertFalse(composer.isAwaitingConfirmation());
+
+        assertTrue(composer.stageOrCommitAddProng(3, 3, 0, OctiDir.DIR_E, false));
+        assertFalse("stageOrCommitAddProng must reset guidedMoveActive", composer.isGuidedMoveActive());
+        assertTrue("stageOrCommitAddProng must set awaitingConfirmation", composer.isAwaitingConfirmation());
+        assertEquals("33a+c", composer.stagedMoveNotation());
+        assertTrue(composer.commitStagedMove());
+
+        // B's turn: B adds prong and commits
+        assertTrue(composer.stageOrCommitAddProng(3, 7, 0, OctiDir.DIR_S, false));
+        assertTrue(composer.commitStagedMove());
+
+        // 2. Repositioning prong resets guidedMoveActive
+        assertTrue(composer.beginGuidedPodMove(3, 3, 0, false));
+        assertTrue(composer.isGuidedMoveActive());
+        assertFalse(composer.isAwaitingConfirmation());
+
+        assertTrue(composer.stageOrCommitRepositionProng(3, 3, 0, OctiDir.DIR_N, OctiDir.DIR_W));
+        assertFalse("stageOrCommitRepositionProng must reset guidedMoveActive", composer.isGuidedMoveActive());
+        assertTrue("stageOrCommitRepositionProng must set awaitingConfirmation", composer.isAwaitingConfirmation());
+        assertTrue(composer.commitStagedMove());
+
+        // B's turn: B adds prong and commits
+        assertTrue(composer.stageOrCommitAddProng(5, 7, 0, OctiDir.DIR_S, false));
+        assertTrue(composer.commitStagedMove());
+
+        // 3. Adding pod resets guidedMoveActive
+        assertTrue(composer.beginGuidedPodMove(3, 3, 0, false));
+        assertTrue(composer.isGuidedMoveActive());
+        assertFalse(composer.isAwaitingConfirmation());
+
+        assertTrue(composer.stageOrCommitAddPod(3, 3, false));
+        assertFalse("stageOrCommitAddPod must reset guidedMoveActive", composer.isGuidedMoveActive());
+        assertTrue("stageOrCommitAddPod must set awaitingConfirmation", composer.isAwaitingConfirmation());
+        assertEquals("33", composer.stagedMoveNotation());
+        assertTrue(composer.commitStagedMove());
+    }
+
+    @Test
+    public void testDirectProngAdditionOnPodWithExistingProngs_ACF_A03() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+
+        // Player A starts by adding DIR_N ('a') to pod at (3, 3)
+        assertTrue(composer.stageOrCommitAddProng(3, 3, 0, OctiDir.DIR_N, false));
+        assertTrue(composer.commitStagedMove());
+
+        // Player B turn: add prong on (3, 7)
+        assertTrue(composer.stageOrCommitAddProng(3, 7, 0, OctiDir.DIR_S, false));
+        assertTrue(composer.commitStagedMove());
+
+        // Player A's turn again: Pod at (3, 3) already has DIR_N.
+        // Direct addition on empty socket DIR_E ('c') must succeed cleanly
+        List<OctiDir> legals = composer.legalProngAdditionsAt(3, 3, 0, false);
+        assertFalse(legals.contains(OctiDir.DIR_N));
+        assertTrue(legals.contains(OctiDir.DIR_E));
+        assertTrue(legals.contains(OctiDir.DIR_W));
+
+        assertTrue(composer.stageOrCommitAddProng(3, 3, 0, OctiDir.DIR_E, false));
+        assertTrue(composer.isAwaitingConfirmation());
+        assertEquals("33a+c", composer.stagedMoveNotation());
+
+        // Preview board should show both prongs
+        OctiBoard preview = composer.buildPreviewBoard();
+        assertNotNull(preview);
+        OctiPod previewPod = preview.squareAt(2, 2).getPodAt(0);
+        assertEquals(OctiProngType.NORMAL_PRONG, previewPod.prongAt(OctiDir.DIR_N));
+        assertEquals(OctiProngType.NORMAL_PRONG, previewPod.prongAt(OctiDir.DIR_E));
+        assertEquals(OctiProngType.NO_PRONG, previewPod.prongAt(OctiDir.DIR_S));
+
+        // Commit move
+        assertTrue(composer.commitStagedMove());
+        assertEquals(OctiPlayer.PLAYER_B, board.getGame().getTurn());
+    }
 }
 
 /*

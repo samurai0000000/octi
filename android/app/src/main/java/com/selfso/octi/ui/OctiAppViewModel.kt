@@ -868,6 +868,10 @@ class OctiAppViewModel @JvmOverloads constructor(
         _boardRevision.value = _boardRevision.value + 1L
     }
 
+    fun bumpRevision() {
+        bumpBoardRevision()
+    }
+
     /* ================================================================== */
     /* Online SSO Authentication & Multi-Provider Account Linking         */
     /* ================================================================== */

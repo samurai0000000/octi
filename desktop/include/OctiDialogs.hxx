@@ -646,6 +646,7 @@ public:
     QRectF movePodBtnRect() const { return _movePodBtnRect; }
     QRectF placeReserveBtnRect() const { return _placeReserveBtnRect; }
     QRectF liberateBtnRect() const { return _liberateBtnRect; }
+    QRectF liberateButtonRect() const { return _liberateBtnRect; }
     const std::vector<QRectF> &stackPodTabRects() const { return _stackPodTabRects; }
 
     QImage renderToImage(int width = 560, int height = 530);
@@ -661,6 +662,11 @@ protected:
 private:
     void updatePodSelection(int idx);
     void setupUi();
+    OctiDir hitTestSocketOrBladeAt(const QPointF &pos,
+                                   const OctiPod &pod,
+                                   const QPointF &pc,
+                                   double podR,
+                                   double socketDist) const;
 
     OctiBoard *_board;
     OctiMoveComposer *_composer;

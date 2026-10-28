@@ -392,10 +392,8 @@ fun OctiMainAppContent(
                 }
             }
 
-            val isPickingGuidedDest = viewModel.composer.isGuidedMoveActive &&
-                    (!viewModel.composer.isGuidedMidHop || isContinuingGuidedJump)
-            val isAwaitingConfirm = viewModel.composer.isAwaitingConfirmation && boardRev >= 0L &&
-                    zoomedSquare == null && capturePrompt == null && !isPickingGuidedDest
+            val isAwaitingConfirm = viewModel.composer.isAwaitingConfirmation &&
+                    boardRev >= 0L && zoomedSquare == null && capturePrompt == null
             if (isAwaitingConfirm) {
                 PlyConfirmDialog(
                     stagedNotation = viewModel.composer.stagedMoveNotation(),
@@ -422,6 +420,15 @@ fun OctiMainAppContent(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 8.dp)
+                )
+            }
+
+            if (showSplash) {
+                OctiSplashOverlay(
+                    onDismiss = {
+                        showSplash = false
+                        onSplashDismissed()
+                    }
                 )
             }
         }
@@ -461,12 +468,18 @@ fun OctiMainAppContent(
                 themeId = themeId,
                 onDismiss = { viewModel.closeZoomedSquare() },
                 onBeginGuidedMove = { podIndex, moveAllStack ->
+                    if (viewModel.composer.isAwaitingConfirmation) {
+                        viewModel.composer.cancelAndRollback()
+                    }
                     if (viewModel.composer.beginGuidedPodMove(zx, zy, podIndex, moveAllStack)) {
                         viewModel.closeZoomedSquare()
                         viewModel.bumpBoardRevision()
                     }
                 },
                 onAddProng = { podIndex, dir, superProng ->
+                    if (viewModel.composer.isAwaitingConfirmation) {
+                        viewModel.composer.cancelAndRollback()
+                    }
                     viewModel.composer.selectStackPodIndex(zx, zy, podIndex)
                     viewModel.composer.beginAddProngFromReserve(superProng)
                     if (viewModel.composer.dropOnCompassSector(zx, zy, podIndex, dir)) {
@@ -475,6 +488,9 @@ fun OctiMainAppContent(
                     }
                 },
                 onRepositionProng = { podIndex, srcDir, dstDir ->
+                    if (viewModel.composer.isAwaitingConfirmation) {
+                        viewModel.composer.cancelAndRollback()
+                    }
                     viewModel.composer.selectStackPodIndex(zx, zy, podIndex)
                     viewModel.composer.beginRepositionProng(zx, zy, podIndex, srcDir)
                     if (viewModel.composer.dropOnCompassSector(zx, zy, podIndex, dstDir)) {
@@ -483,6 +499,9 @@ fun OctiMainAppContent(
                     }
                 },
                 onPlaceReservePod = { liberate ->
+                    if (viewModel.composer.isAwaitingConfirmation) {
+                        viewModel.composer.cancelAndRollback()
+                    }
                     val canStart = if (liberate) {
                         viewModel.composer.beginLiberatePodFromReserve()
                     } else {
@@ -533,15 +552,6 @@ fun OctiMainAppContent(
                 onReinstall = {
                     updateModalMessage = null
                     updateController.reinstall()
-                }
-            )
-        }
-
-        if (showSplash) {
-            OctiSplashOverlay(
-                onDismiss = {
-                    showSplash = false
-                    onSplashDismissed()
                 }
             )
         }

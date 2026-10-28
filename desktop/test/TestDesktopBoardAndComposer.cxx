@@ -1151,6 +1151,11 @@ TEST(OctiDialogsRefinementTest, ZoomedSquareDialogPodPlacementAndLiberationButto
 
     OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
     board.getGame()->start(PLAYER_A);
+    board.squareAt(2, 6).addPod(OctiPod(A_POD));
+    OctiGameSnapshot snap = board.getGame()->captureSnapshot();
+    snap.players[PLAYER_A].capturedPods = 1;
+    snap.turn = PLAYER_A;
+    board.getGame()->restoreSnapshot(snap);
     OctiMoveComposer composer(&board);
 
     // 1. Occupied home square at (3, 3) (0-based (2, 2))
@@ -1287,18 +1292,19 @@ TEST(OctiDialogsRefinementTest, SingleClickMoveVsDoubleClickZoomDirectInteractio
     QMouseEvent dragCw(QEvent::MouseMove, rightPt, rightPt, rightPt,
                        Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
     QApplication::sendEvent(&canvas, &dragCw);
-    LONGS_EQUAL(static_cast<int>(BoardRotation::ROT_90),
-                static_cast<int>(canvas.boardRotation()));
+    DOUBLES_EQUAL(90.0, canvas.liveRotationOffsetDeg(), 2.0);
 
     QMouseEvent dragCcw(QEvent::MouseMove, topPt, topPt, topPt,
                         Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
     QApplication::sendEvent(&canvas, &dragCcw);
-    LONGS_EQUAL(static_cast<int>(BoardRotation::ROT_0),
-                static_cast<int>(canvas.boardRotation()));
+    DOUBLES_EQUAL(0.0, canvas.liveRotationOffsetDeg(), 2.0);
 
     QMouseEvent holdRelease(QEvent::MouseButtonRelease, topPt, topPt, topPt,
                             Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
     QApplication::sendEvent(&canvas, &holdRelease);
+    LONGS_EQUAL(static_cast<int>(BoardRotation::ROT_0),
+                static_cast<int>(canvas.boardRotation()));
+    DOUBLES_EQUAL(0.0, canvas.liveRotationOffsetDeg(), 0.001);
 }
 
 TEST(OctiDialogsRefinementTest, PlyConfirmDialogCommitCancelAndMoreMoves)
@@ -1373,6 +1379,11 @@ TEST(OctiDialogsRefinementTest, PlyConfirmMultiMoveAndGameOverEndgameV3)
     OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
     board.getGame()->start(PLAYER_A);
     board.squareAt(2, 2).clear(); // Empty Player A home square at (3,3)
+    board.squareAt(2, 6).addPod(OctiPod(A_POD));
+    OctiGameSnapshot snap = board.getGame()->captureSnapshot();
+    snap.players[PLAYER_A].capturedPods = 1;
+    snap.turn = PLAYER_A;
+    board.getGame()->restoreSnapshot(snap);
     OctiMoveComposer composer(&board);
 
     ZoomedSquareDialog emptyHomeDlg(&board, &composer, 3, 3,
@@ -1478,6 +1489,245 @@ TEST(OctiDialogsRefinementTest, PlyConfirmMultiMoveAndGameOverEndgameV3)
     QString goPath = artifactDir + "/desktop_gameover_dialog_v3.png";
     CHECK_TRUE(goImg.save(goPath));
     CHECK_TRUE(QFileInfo(goPath).size() > 10000);
+}
+
+// ============================================================================
+// Gate 2 Envelope 1: DesktopCommitDialogFixTest (ACF-D01 .. ACF-D04)
+// ============================================================================
+
+TEST_GROUP(DesktopCommitDialogFixTest)
+{
+};
+
+TEST(DesktopCommitDialogFixTest, DirectProngAdditionOnBoardAndGuidedMove)
+{
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+    OctiBoardCanvas canvas;
+    canvas.resize(800, 800);
+    canvas.attachBoard(&board, &composer);
+
+    const OctiBoardGeometry &geom = canvas.geometry();
+
+    // 1. Direct prong addition on pod with 0 prongs at (3, 3) -> 33+a
+    QPointF c33 = geom.squareCenter(3, 3);
+    double cell = geom.cellSize();
+    QPointF ptA = c33 + geom.dirUnitVectorScreen(DIR_N) * (cell * 0.35);
+
+    QMouseEvent prA(QEvent::MouseButtonPress, ptA, ptA, ptA,
+                    Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &prA);
+    QMouseEvent relA(QEvent::MouseButtonRelease, ptA, ptA, ptA,
+                     Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &relA);
+
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    STRCMP_EQUAL("33+a", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.commitStagedMove());
+
+    const OctiSquare &sqAfterA = board.squareAt(2, 2);
+    LONGS_EQUAL(1, sqAfterA.getNumPods());
+    LONGS_EQUAL(static_cast<int>(NORMAL_PRONG), static_cast<int>(sqAfterA.getPodAt(0).prongAt(DIR_N)));
+
+    // Player B's turn: make a dummy move for B
+    CHECK_TRUE(composer.stageOrCommitAddProng(3, 7, 0, DIR_S, false));
+    CHECK_TRUE(composer.commitStagedMove());
+
+    // 2. Direct prong addition on pod with 1 prong (already has 'a') at (3, 3) -> 33a+b
+    QPointF ptB = c33 + geom.dirUnitVectorScreen(DIR_NE) * (cell * 0.35);
+
+    QMouseEvent prB(QEvent::MouseButtonPress, ptB, ptB, ptB,
+                    Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &prB);
+    QMouseEvent relB(QEvent::MouseButtonRelease, ptB, ptB, ptB,
+                     Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &relB);
+
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    STRCMP_EQUAL("33a+b", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.commitStagedMove());
+    LONGS_EQUAL(static_cast<int>(NORMAL_PRONG), static_cast<int>(sqAfterA.getPodAt(0).prongAt(DIR_NE)));
+
+    // Player B's turn: make a dummy move for B
+    CHECK_TRUE(composer.stageOrCommitAddProng(3, 7, 0, DIR_SE, false));
+    CHECK_TRUE(composer.commitStagedMove());
+
+    // 3. Click pod center at (3, 3) activates guided move and allows destination click at (3, 4)
+    QMouseEvent prC(QEvent::MouseButtonPress, c33, c33, c33,
+                    Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &prC);
+    QMouseEvent relC(QEvent::MouseButtonRelease, c33, c33, c33,
+                     Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &relC);
+
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    LONGS_EQUAL(3, composer.guidedCurrentSquare().first);
+    LONGS_EQUAL(3, composer.guidedCurrentSquare().second);
+
+    // Click destination (3, 4) to step North
+    QPointF c34 = geom.squareCenter(3, 4);
+    QMouseEvent prDest(QEvent::MouseButtonPress, c34, c34, c34,
+                       Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &prDest);
+    QMouseEvent relDest(QEvent::MouseButtonRelease, c34, c34, c34,
+                        Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &relDest);
+
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    STRCMP_EQUAL("33ab-34", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.commitStagedMove());
+}
+
+TEST(DesktopCommitDialogFixTest, ContinuousHandDragRotationAndReleaseSnap)
+{
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+    OctiBoardCanvas canvas;
+    canvas.resize(800, 800);
+    canvas.attachBoard(&board, &composer);
+
+    LONGS_EQUAL(static_cast<int>(BoardRotation::ROT_0), static_cast<int>(canvas.boardRotation()));
+    DOUBLES_EQUAL(0.0, canvas.liveRotationOffsetDeg(), 0.001);
+
+    QPointF center = canvas.geometry().boardOuterRect().center();
+    QPointF p0(center.x(), center.y() - 200.0); // angle = -90 deg
+
+    // Press and hold for > 250ms to activate hand rotate
+    QMouseEvent pressEv(QEvent::MouseButtonPress, p0, p0, p0,
+                        Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &pressEv);
+
+    for (int i = 0; i < 35; ++i) {
+        QCoreApplication::processEvents();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    // Drag to p1 (angle = -55 deg) -> continuous arbitrary liveRotationOffsetDeg ~ +35 deg
+    double r = 200.0;
+    double rad1 = (-55.0) * 3.14159265358979323846 / 180.0;
+    QPointF p1(center.x() + r * std::cos(rad1), center.y() + r * std::sin(rad1));
+    QMouseEvent moveEv1(QEvent::MouseMove, p1, p1, p1,
+                        Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &moveEv1);
+    DOUBLES_EQUAL(35.0, canvas.liveRotationOffsetDeg(), 1.5);
+
+    // Drag further to p2 (angle = -18 deg) -> liveRotationOffsetDeg ~ +72 deg
+    double rad2 = (-18.0) * 3.14159265358979323846 / 180.0;
+    QPointF p2(center.x() + r * std::cos(rad2), center.y() + r * std::sin(rad2));
+    QMouseEvent moveEv2(QEvent::MouseMove, p2, p2, p2,
+                        Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &moveEv2);
+    DOUBLES_EQUAL(72.0, canvas.liveRotationOffsetDeg(), 1.5);
+
+    // Drag to p3 (angle = -8 deg) -> liveRotationOffsetDeg ~ +82 deg
+    double rad3 = (-8.0) * 3.14159265358979323846 / 180.0;
+    QPointF p3(center.x() + r * std::cos(rad3), center.y() + r * std::sin(rad3));
+    QMouseEvent moveEv3(QEvent::MouseMove, p3, p3, p3,
+                        Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &moveEv3);
+    DOUBLES_EQUAL(82.0, canvas.liveRotationOffsetDeg(), 1.5);
+
+    // Release mouse at p3: snaps to nearest 90 deg -> ROT_90
+    QMouseEvent relEv(QEvent::MouseButtonRelease, p3, p3, p3,
+                      Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &relEv);
+
+    LONGS_EQUAL(static_cast<int>(BoardRotation::ROT_90), static_cast<int>(canvas.boardRotation()));
+    DOUBLES_EQUAL(0.0, canvas.liveRotationOffsetDeg(), 0.001);
+
+    // Moving mouse after release without buttons pressed must NOT rotate the board
+    QPointF p4(300.0, 200.0);
+    QMouseEvent moveEv4(QEvent::MouseMove, p4, p4, p4,
+                        Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &moveEv4);
+
+    LONGS_EQUAL(static_cast<int>(BoardRotation::ROT_90), static_cast<int>(canvas.boardRotation()));
+    DOUBLES_EQUAL(0.0, canvas.liveRotationOffsetDeg(), 0.001);
+}
+
+TEST(DesktopCommitDialogFixTest, ZoomedSquareDialogLiberateVisibilityAndArtifacts)
+{
+    QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);
+    QString artifactDir = repoRootStr + "/plan/android_commit_dialog_fix.artifacts";
+    QDir().mkpath(artifactDir);
+
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+
+    // 1. When capturedPods == 0: "Liberate (*)" is hidden and Place Reserve is full width
+    ZoomedSquareDialog zd0(&board, &composer, 3, 3, BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    QImage zdImg0 = zd0.renderToImage(560, 530);
+    CHECK_FALSE(zdImg0.isNull());
+    CHECK_TRUE(zd0.liberateButtonRect().isEmpty());
+    CHECK_TRUE(zd0.liberateBtnRect().isEmpty());
+    CHECK_TRUE(zd0.placeReserveBtnRect().width() >= 300.0);
+
+    // 2. Add prongs to pod at (3, 3) for prominent rendering artifact:
+    board.getGame()->move("33+a");
+    board.getGame()->move("37+e");
+    board.getGame()->move("33a+b");
+    board.getGame()->move("37e+f");
+    board.getGame()->move("33ab+c");
+    board.getGame()->move("37ef+g");
+    board.getGame()->move("33abc+d!");
+
+    // Give A 1 captured pod on A's base (3, 3) and enemy base pod so canLiberate is true
+    board.squareAt(2, 6).addPod(OctiPod(A_POD));
+    OctiGameSnapshot snap = board.getGame()->captureSnapshot();
+    snap.players[PLAYER_A].capturedPods = 1;
+    snap.turn = PLAYER_A;
+    board.getGame()->restoreSnapshot(snap);
+
+    ZoomedSquareDialog zd1(&board, &composer, 3, 3, BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    QImage zdImg1 = zd1.renderToImage(560, 530);
+    CHECK_FALSE(zdImg1.isNull());
+    CHECK_FALSE(zd1.liberateButtonRect().isEmpty());
+    CHECK_FALSE(zd1.liberateBtnRect().isEmpty());
+
+    // Save desktop_zoomed_pod_prominent_prongs.png
+    QString zdPath = artifactDir + "/desktop_zoomed_pod_prominent_prongs.png";
+    CHECK_TRUE(zdImg1.save(zdPath));
+    CHECK_TRUE(QFileInfo(zdPath).size() > 10000);
+
+    // 3. desktop_board_prominent_prongs.png
+    OctiBoardCanvas canvas;
+    canvas.resize(960, 960);
+    canvas.attachBoard(&board, &composer);
+    QImage bImg = canvas.renderToImage(960, 960);
+    CHECK_FALSE(bImg.isNull());
+    QString bPath = artifactDir + "/desktop_board_prominent_prongs.png";
+    CHECK_TRUE(bImg.save(bPath));
+    CHECK_TRUE(QFileInfo(bPath).size() > 10000);
+
+    // 4. desktop_splash_no_bar.png
+    OctiSplashDialog splash(nullptr, ThemeId::OBSIDIAN_BRASS);
+    QImage sImg = splash.renderSplashFrame(560, 480, 0.50);
+    CHECK_FALSE(sImg.isNull());
+    QString sPath = artifactDir + "/desktop_splash_no_bar.png";
+    CHECK_TRUE(sImg.save(sPath));
+    CHECK_TRUE(QFileInfo(sPath).size() > 10000);
+
+    // 5. desktop_reserve_panel_captured.png
+    // In standard 2P mode without superprongs:
+    OctiBoard boardStandard(GAME_MODE_2, false, false, GAME_BASES_3);
+    boardStandard.getGame()->start(PLAYER_A);
+    OctiMoveComposer compStandard(&boardStandard);
+    OctiBoardCanvas canvStandard;
+    canvStandard.attachBoard(&boardStandard, &compStandard);
+
+    OctiReservePanel panel;
+    panel.attach(&boardStandard, &compStandard, &canvStandard);
+    panel.setTheme(ThemeId::OBSIDIAN_BRASS);
+    QImage rImg = panel.renderToImage(340, 720);
+    CHECK_FALSE(rImg.isNull());
+    CHECK_TRUE(panel.superProngWellRect().isEmpty()); // 3 wells mode!
+    CHECK_FALSE(panel.liberatePodWellRect().isEmpty());
+    QString rPath = artifactDir + "/desktop_reserve_panel_captured.png";
+    CHECK_TRUE(rImg.save(rPath));
+    CHECK_TRUE(QFileInfo(rPath).size() > 10000);
 }
 
 extern "C" const char *__lsan_default_suppressions()

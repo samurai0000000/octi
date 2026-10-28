@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -33,7 +34,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import com.selfso.octi.OctiBoardGeometry
 import com.selfso.octi.OctiBoardRenderer
+import com.selfso.octi.OctiDir
 import com.selfso.octi.OctiMoveComposer
 import com.selfso.octi.OctiPlayer
 import com.selfso.octi.ui.theme.OctiTheme
@@ -57,6 +60,7 @@ fun OctiBoardCanvas(
     var selectedOriginSquare by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var zoomScale by remember { mutableStateOf(1.0f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
+    var gestureRotationDeg by remember { mutableFloatStateOf(0f) }
     var multiTouchActive by remember { mutableStateOf(false) }
     var lastMultiTouchTimeMs by remember { mutableStateOf(0L) }
 
@@ -134,7 +138,6 @@ fun OctiBoardCanvas(
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    var rotationAccumDeg = 0f
                     var hadMultiTouch = false
                     awaitFirstDown(requireUnconsumed = false)
                     do {
@@ -161,22 +164,21 @@ fun OctiBoardCanvas(
                                 panOffset = Offset.Zero
                             }
 
-                            rotationAccumDeg += rotChange
-                            while (rotationAccumDeg >= 45f) {
-                                viewModel.rotateBoard90Clockwise()
-                                rotationAccumDeg -= 90f
-                            }
-                            while (rotationAccumDeg <= -45f) {
-                                viewModel.rotateBoard90CounterClockwise()
-                                rotationAccumDeg += 90f
-                            }
+                            gestureRotationDeg += rotChange
 
                             event.changes.forEach { it.consume() }
                         }
                     } while (event.changes.any { it.pressed })
 
-                    if (hadMultiTouch || zoomScale != 1.0f || panOffset != Offset.Zero) {
-                        // Snap back to original 0% zoom immediately when fingers lift off
+                    if (hadMultiTouch || zoomScale != 1.0f || panOffset != Offset.Zero || gestureRotationDeg != 0f) {
+                        val currentDeg = viewModel.boardRotation.value.degrees.toFloat()
+                        val totalDeg = currentDeg + gestureRotationDeg
+                        val snappedStep = Math.round(totalDeg / 90f).toInt()
+                        val normalizedDeg = ((snappedStep * 90 % 360) + 360) % 360
+                        val snapped = OctiBoardGeometry.BoardRotation.fromDegrees(normalizedDeg)
+                        viewModel.setBoardRotation(snapped)
+
+                        gestureRotationDeg = 0f
                         zoomScale = 1.0f
                         panOffset = Offset.Zero
                         multiTouchActive = false
@@ -236,9 +238,9 @@ fun OctiBoardCanvas(
                         val xy = IntArray(2)
                         if (!geo.screenToSquare(px, py, xy)) {
                             if (composer.isGuidedMoveActive) {
-                                val origSq = composer.guidedOriginSquare()
-                                val curSq = composer.guidedCurrentSquare()
-                                if (curSq[0] == origSq[0] && curSq[1] == origSq[1]) {
+                                if (composer.isAwaitingConfirmation) {
+                                    composer.finishGuidedMoveHere()
+                                } else {
                                     composer.cancelAndRollback()
                                 }
                             }
@@ -250,14 +252,7 @@ fun OctiBoardCanvas(
 
                         // 3. If Move Composer is in guided move/jump chain mode
                         if (composer.isGuidedMoveActive) {
-                            val nextSquares = composer.guidedNextSquares()
-                            var isDestination = false
-                            for (dest in nextSquares) {
-                                if (dest[0] == sqX && dest[1] == sqY) {
-                                    isDestination = true
-                                    break
-                                }
-                            }
+                            val isDestination = composer.isGuidedLegalDestination(sqX, sqY)
                             if (isDestination) {
                                 val prevCapCount = composer.captureChoices().size
                                 if (composer.selectGuidedDestination(sqX, sqY)) {
@@ -275,26 +270,21 @@ fun OctiBoardCanvas(
                                 }
                             }
 
-                            val origSq = composer.guidedOriginSquare()
-                            val curSq = composer.guidedCurrentSquare()
-                            if (curSq[0] == origSq[0] && curSq[1] == origSq[1]) {
-                                composer.cancelAndRollback()
-                                val sq = b.squareAt(sqX - 1, sqY - 1)
-                                val turn = b.game?.turn
-                                val isDifferentFriendlyPod = (sqX != origSq[0] || sqY != origSq[1]) &&
-                                    !sq.isEmpty && turn != null && !sq.hasEnemyOf(turn)
-                                if (!isDifferentFriendlyPod) {
-                                    viewModel.notifyComposerUpdated()
-                                    return@detectTapGestures
-                                }
-                                // Fall through to step 5 to start guided pod move on the new friendly pod
-                            } else if (curSq[0] == sqX && curSq[1] == sqY) {
-                                // At least 1 hop taken and tapped current square -> finish guided jump chain here
+                            // Not a legal destination!
+                            if (composer.isAwaitingConfirmation) {
                                 composer.finishGuidedMoveHere()
                                 viewModel.notifyComposerUpdated()
                                 return@detectTapGestures
                             } else {
-                                return@detectTapGestures
+                                composer.cancelAndRollback()
+                                val sq = b.squareAt(sqX - 1, sqY - 1)
+                                val turn = b.game?.turn
+                                val isFriendlyPod = !sq.isEmpty && turn != null && !sq.hasEnemyOf(turn)
+                                if (!isFriendlyPod) {
+                                    viewModel.notifyComposerUpdated()
+                                    return@detectTapGestures
+                                }
+                                // Friendly pod: fall through to process socket or guided move start
                             }
                         }
 
@@ -319,14 +309,36 @@ fun OctiBoardCanvas(
                             }
                         }
 
-                        // 5. Friendly pod initiates guided pod move directly on board without opening zoom dialog
+                        // 5. Friendly pod square interaction: direct socket tap or guided move start
                         val sq = b.squareAt(sqX - 1, sqY - 1)
                         val turn = b.game?.turn
                         if (!sq.isEmpty && turn != null && !sq.hasEnemyOf(turn)) {
-                            selectedOriginSquare = Pair(sqX, sqY)
                             val pIdx = composer.selectedStackPodIndex(sqX, sqY)
-                            composer.beginGuidedPodMove(sqX, sqY, pIdx, viewModel.moveEntireMatchingStack.value)
-                            viewModel.notifyComposerUpdated()
+                            val resolvedIdx = if (pIdx >= 0 && pIdx < sq.numPods) pIdx else 0
+                            val cell = geo.cellSize()
+                            val cx = geo.squareCenterX(sqX, sqY)
+                            val cy = geo.squareCenterY(sqX, sqY)
+                            val dist = Math.hypot(px - cx, py - cy)
+
+                            if (dist >= cell * 0.24 && dist <= cell * 0.48) {
+                                val relDir = geo.hitTestCompassSector(cx, cy, cell * 0.24, cell * 0.48, px, py)
+                                if (relDir != OctiDir.DIR_UNDEF &&
+                                    composer.legalProngAdditionsAt(sqX, sqY, resolvedIdx, false).contains(relDir)
+                                ) {
+                                    if (composer.isGuidedMoveActive && !composer.isAwaitingConfirmation) {
+                                        composer.cancelAndRollback()
+                                    }
+                                    if (composer.stageOrCommitAddProng(sqX, sqY, resolvedIdx, relDir, false)) {
+                                        selectedOriginSquare = Pair(sqX, sqY)
+                                        viewModel.bumpRevision()
+                                        return@detectTapGestures
+                                    }
+                                }
+                            }
+
+                            selectedOriginSquare = Pair(sqX, sqY)
+                            composer.beginGuidedPodMove(sqX, sqY, resolvedIdx, viewModel.moveEntireMatchingStack.value)
+                            viewModel.bumpRevision()
                             return@detectTapGestures
                         }
                     }
@@ -340,7 +352,8 @@ fun OctiBoardCanvas(
                     scaleX = zoomScale,
                     scaleY = zoomScale,
                     translationX = panOffset.x,
-                    translationY = panOffset.y
+                    translationY = panOffset.y,
+                    rotationZ = gestureRotationDeg
                 )
         ) {
             drawImage(

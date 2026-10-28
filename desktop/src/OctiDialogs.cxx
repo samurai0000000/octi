@@ -2975,20 +2975,6 @@ QImage OctiSplashDialog::renderSplashFrame(int width, int height, double progres
     p.drawText(cprtRect, Qt::AlignCenter,
                "Copyright (C) 2026, Charles Chiou. All Rights Reserved.");
 
-    double barW = w * 0.55;
-    double barH = 5.0;
-    QRectF barBg(w * 0.5 - barW * 0.5, h - 34.0, barW, barH);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(30, 40, 56));
-    p.drawRoundedRect(barBg, 2.5, 2.5);
-
-    QRectF barFill(barBg.left(), barBg.top(), barW * progress, barH);
-    QLinearGradient barGrad(barFill.topLeft(), barFill.topRight());
-    barGrad.setColorAt(0.0, pal.podA.core);
-    barGrad.setColorAt(1.0, pal.prongSuperGold);
-    p.setBrush(barGrad);
-    p.drawRoundedRect(barFill, 2.5, 2.5);
-
     QFont hintFont("SansSerif", 9);
     p.setFont(hintFont);
     p.setPen(QColor(150, 160, 175));
@@ -3175,15 +3161,25 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
     bool hasEnemy = false;
     bool isEmptySquare = true;
     int numPods = 0;
-    if (_board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
-        const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+
+    const OctiBoard *activeBoard = _board;
+    OctiBoard previewBoard;
+    if (_board && _composer && _composer->isAwaitingConfirmation()) {
+        if (_composer->populatePreviewBoard(previewBoard)) {
+            activeBoard = &previewBoard;
+        }
+    }
+
+    OctiPlayer turn = (_board && _board->getGame()) ? _board->getGame()->getTurn() : PLAYER_A;
+    if (_board && _board->getGame() && _board->getGame()->getTurn() != PLAYER_UNDEF) {
+        isTurn = true;
+    }
+
+    if (activeBoard && activeBoard->isValidCoord(_squareX - 1, _squareY - 1)) {
+        const OctiSquare &sq = activeBoard->squareAt(_squareX - 1, _squareY - 1);
         numPods = sq.getNumPods();
         isEmptySquare = sq.isEmpty();
-        if (_board->getGame()) {
-            OctiPlayer turn = _board->getGame()->getTurn();
-            isTurn = true;
-            hasEnemy = sq.hasEnemyOf(turn);
-        }
+        hasEnemy = (isTurn && sq.hasEnemyOf(turn));
     }
 
     QFont modeFont("SansSerif", 10, QFont::Medium);
@@ -3257,8 +3253,8 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
     _socketCenters.clear();
     int rotDeg = static_cast<int>(_rotation);
 
-    if (!isEmptySquare && _board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
-        const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+    if (!isEmptySquare && activeBoard && activeBoard->isValidCoord(_squareX - 1, _squareY - 1)) {
+        const OctiSquare &sq = activeBoard->squareAt(_squareX - 1, _squareY - 1);
         int pIdx = std::clamp(_selectedPodIndex, 0, sq.getNumPods() - 1);
 
         // GUI2-09: Render other stacked pods underneath with stepped offsets and reduced opacity
@@ -3277,21 +3273,26 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
             }
         }
 
-        // Active pod at exact center with full opacity
+        // Active pod at exact center with prongs cleared so we draw zoomed sockets + zoomed blades cleanly
         const OctiPod &pod = sq.getPodAt(pIdx);
         QRectF pRect(pc.x() - podR, pc.y() - podR, podR * 2.0, podR * 2.0);
-        paintOctagonalPod(p, pRect, pod.getType(), pod, pal, rotDeg, true, 1.0);
+        OctiPod bodyOnlyPod(pod.getType());
+        paintOctagonalPod(p, pRect, bodyOnlyPod.getType(), bodyOnlyPod, pal, rotDeg, true, 1.0);
 
-        // GUI2-02: Render all 8 sockets around perimeter using OctiBoardGeometry dirUnitVectorScreen
+        // GUI2-02: Render all 8 sockets around perimeter
         OctiBoardGeometry zGeom(320, 320, 9, 9, _rotation);
+        double socketDist = podR * 0.76;
+        _socketRadius = 15.0;
+
         for (int d = DIR_N; d <= DIR_NW; ++d) {
             OctiDir dir = static_cast<OctiDir>(d);
             QPointF u = zGeom.dirUnitVectorScreen(dir);
-            QPointF sc = pc + QPointF(u.x() * (podR * 0.86), u.y() * (podR * 0.86));
+            QPointF sc = pc + QPointF(u.x() * socketDist, u.y() * socketDist);
             _socketCenters[dir] = sc;
 
             bool isHovered = (dir == _hoverProngDir);
             bool isRepositionSrc = (dir == _selectedProngSocketForReposition);
+            OctiProngType pt = pod.prongAt(dir);
 
             if (isRepositionSrc) {
                 p.setPen(QPen(pal.prongSuperGold, 2.5));
@@ -3299,19 +3300,88 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
             } else if (isHovered) {
                 p.setPen(QPen(pal.legalStepGuide, 2.2));
                 p.setBrush(pal.legalStepGuide.darker(160));
+            } else if (pt == NORMAL_PRONG) {
+                p.setPen(QPen(pal.prongNormalTip, 2.0));
+                p.setBrush(pal.prongNormalMetal);
+            } else if (pt == SUPER_PRONG) {
+                p.setPen(QPen(pal.prongSuperCore, 2.2));
+                p.setBrush(pal.prongSuperGold);
             } else {
                 p.setPen(QPen(pal.gridSocketShadow, 1.2));
-                p.setBrush(QColor(14, 20, 30, 200));
+                p.setBrush(QColor(14, 20, 30, 210));
             }
             p.drawEllipse(sc, _socketRadius, _socketRadius);
 
             // Socket direction letter 'a'..'h'
             QFont scFont("SansSerif", 9, QFont::Bold);
             p.setFont(scFont);
-            p.setPen((isHovered || isRepositionSrc) ? pal.prongSuperGold : pal.accentBrass);
+            if (pt == NORMAL_PRONG || pt == SUPER_PRONG) {
+                p.setPen(QColor(11, 15, 23));
+            } else {
+                p.setPen((isHovered || isRepositionSrc) ? pal.prongSuperGold : pal.accentBrass);
+            }
             char letter = static_cast<char>('a' + (d - DIR_N));
             p.drawText(QRectF(sc.x() - 10, sc.y() - 10, 20, 20),
                        Qt::AlignCenter, QString(letter));
+        }
+
+        // Draw zoomed prong blades AFTER socket circles
+        for (int d = DIR_N; d <= DIR_NW; ++d) {
+            OctiDir dir = static_cast<OctiDir>(d);
+            OctiProngType pt = pod.prongAt(dir);
+            if (pt == NO_PRONG) {
+                continue;
+            }
+
+            QPointF u = zGeom.dirUnitVectorScreen(dir);
+            QPointF perp(-u.y(), u.x());
+            bool isSuper = (pt == SUPER_PRONG);
+            double halfW = isSuper ? 16.0 : 12.0;
+            double bladeInnerR = socketDist + _socketRadius * 0.55;
+            double bladeOuterR = isSuper ? (podR * 1.55) : (podR * 1.48);
+
+            QPointF innerPt = pc + u * bladeInnerR;
+            QPointF outerPt = pc + u * bladeOuterR;
+            QPointF shoulderPt = pc + u * (bladeInnerR + (bladeOuterR - bladeInnerR) * 0.72);
+
+            QPolygonF blade;
+            blade << (innerPt - perp * (halfW * 0.85))
+                  << (shoulderPt - perp * halfW)
+                  << outerPt
+                  << (shoulderPt + perp * halfW)
+                  << (innerPt + perp * (halfW * 0.85));
+
+            if (!isSuper) {
+                QLinearGradient grad(outerPt, innerPt);
+                grad.setColorAt(0.0, QColor(255, 255, 255));
+                grad.setColorAt(0.40, QColor(226, 232, 240));
+                grad.setColorAt(1.0, QColor(148, 163, 184));
+
+                p.setPen(QPen(QColor(15, 20, 28, 240), 2.0));
+                p.setBrush(grad);
+                p.drawPolygon(blade);
+
+                // Bright inner specular ridge line along shaft
+                p.setPen(QPen(QColor(255, 255, 255, 240), 2.0));
+                p.drawLine(innerPt, outerPt - u * 3.0);
+            } else {
+                QLinearGradient sgrad(outerPt, innerPt);
+                sgrad.setColorAt(0.0, pal.prongSuperGold.lighter(135));
+                sgrad.setColorAt(0.50, pal.prongSuperGold);
+                sgrad.setColorAt(1.0, pal.prongSuperCore);
+
+                p.setPen(QPen(pal.prongSuperCore.darker(140), 2.2));
+                p.setBrush(sgrad);
+                p.drawPolygon(blade);
+
+                // ++ badge on superprong blade
+                QPointF badgeCenter = innerPt + u * ((bladeOuterR - bladeInnerR) * 0.42);
+                QFont badgeFont("SansSerif", 9, QFont::Bold);
+                p.setFont(badgeFont);
+                p.setPen(QColor(25, 18, 6));
+                p.drawText(QRectF(badgeCenter.x() - 10, badgeCenter.y() - 8, 20, 16),
+                           Qt::AlignCenter, "++");
+            }
         }
     } else {
         // Empty friendly home square
@@ -3329,11 +3399,11 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
     _superProngTrayRect = QRectF();
     bool currentPodClaimed = (!isEmptySquare && _composer &&
                               _composer->isSquarePodClaimed(_squareX, _squareY, _selectedPodIndex));
-    if (! isEmptySquare && !hasEnemy && isTurn && !currentPodClaimed &&
+    if (!isEmptySquare && !hasEnemy && isTurn && !currentPodClaimed &&
         _board && _board->getGame()) {
-        OctiPlayer turn = _board->getGame()->getTurn();
-        int freeProngs = _board->getGame()->getFreeProngs(turn);
-        int freeSuper = _board->getGame()->getFreeSuperProngs(turn);
+        const OctiBoard *prongBoard = (activeBoard && activeBoard->getGame()) ? activeBoard : _board;
+        int freeProngs = prongBoard->getGame()->getFreeProngs(turn);
+        int freeSuper = prongBoard->getGame()->getFreeSuperProngs(turn);
 
         _normalProngTrayRect = QRectF(16, 140, 88, 80);
         _superProngTrayRect = QRectF(16, 235, 88, 80);
@@ -3370,10 +3440,9 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
     _placeReserveBtnRect = QRectF();
     _liberateBtnRect = QRectF();
 
-    OctiPlayer turn = (_board && _board->getGame()) ? _board->getGame()->getTurn() : PLAYER_A;
-    const OctiSquare &sq = (_board && _board->isValidCoord(_squareX - 1, _squareY - 1))
-        ? _board->squareAt(_squareX - 1, _squareY - 1)
-        : _board->squareAt(0, 0);
+    const OctiSquare &sq = (activeBoard && activeBoard->isValidCoord(_squareX - 1, _squareY - 1))
+        ? activeBoard->squareAt(_squareX - 1, _squareY - 1)
+        : activeBoard->squareAt(0, 0);
 
     bool isFriendlyBase = false;
     if (_board) {
@@ -3389,9 +3458,11 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
                                _board->getGameMode() != GAME_MODE_OFK &&
                                (isFriendlyBase || (!isEmptySquare && sq.getType() != NEUTRAL_SQUARE));
 
-    int freePods = (_board && _board->getGame()) ? _board->getGame()->getFreePods(turn) : 0;
-    int capPods = (_board && _board->getGame()) ? _board->getGame()->getCapturedPods(turn) : 0;
-    bool canLiberate = (capPods > 0 && _board && _board->canLiberate(turn));
+    const OctiBoard *resourceBoard = (activeBoard && activeBoard->getGame()) ? activeBoard : _board;
+    int freePods = (resourceBoard && resourceBoard->getGame()) ? resourceBoard->getGame()->getFreePods(turn) : 0;
+    int capPods = (resourceBoard && resourceBoard->getGame()) ? resourceBoard->getGame()->getCapturedPods(turn) : 0;
+    bool canLiberate = (capPods > 0 && resourceBoard && resourceBoard->canLiberate(turn));
+    bool canLiberateHere = (capPods > 0) && (isFriendlyBase ? (resourceBoard && resourceBoard->canLiberate(turn)) : true);
 
     auto drawPlaceAndLiberate = [&](const QRectF &placeRect, const QRectF &libRect, int fontSize) {
         _placeReserveBtnRect = placeRect;
@@ -3405,18 +3476,24 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         p.setFont(QFont("SansSerif", fontSize, QFont::Bold));
         p.drawText(_placeReserveBtnRect, Qt::AlignCenter, "Place Reserve (+)");
 
-        p.setPen(QPen(canLiberate ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
-        p.setBrush(canLiberate ? pal.accentBrass.darker(140) : pal.panelCardBg.darker(130));
-        p.drawRoundedRect(_liberateBtnRect, 6.0, 6.0);
-        p.setPen(canLiberate ? pal.prongSuperGold : pal.textSecondary);
-        p.setFont(QFont("SansSerif", fontSize, QFont::Bold));
-        p.drawText(_liberateBtnRect, Qt::AlignCenter, "Liberate (*)");
+        if (!_liberateBtnRect.isEmpty()) {
+            p.setPen(QPen(canLiberate ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
+            p.setBrush(canLiberate ? pal.accentBrass.darker(140) : pal.panelCardBg.darker(130));
+            p.drawRoundedRect(_liberateBtnRect, 6.0, 6.0);
+            p.setPen(canLiberate ? pal.prongSuperGold : pal.textSecondary);
+            p.setFont(QFont("SansSerif", fontSize, QFont::Bold));
+            p.drawText(_liberateBtnRect, Qt::AlignCenter, "Liberate (*)");
+        }
     };
 
     if (!isEmptySquare && !hasEnemy && isTurn && !currentPodClaimed) {
         if (canShowPodPlacement) {
             _movePodBtnRect = QRectF(120, 444, 320, 32);
-            drawPlaceAndLiberate(QRectF(120, 482, 155, 32), QRectF(285, 482, 155, 32), 9);
+            if (canLiberateHere) {
+                drawPlaceAndLiberate(QRectF(120, 482, 155, 32), QRectF(285, 482, 155, 32), 9);
+            } else {
+                drawPlaceAndLiberate(QRectF(120, 482, 320, 32), QRectF(), 10);
+            }
         } else {
             _movePodBtnRect = QRectF(120, 460, 320, 38);
         }
@@ -3433,7 +3510,11 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         p.setFont(btnFont);
         p.drawText(_movePodBtnRect, Qt::AlignCenter, "Move / Jump This Pod");
     } else if (isEmptySquare && canShowPodPlacement && _composer) {
-        drawPlaceAndLiberate(QRectF(120, 460, 155, 38), QRectF(285, 460, 155, 38), 9);
+        if (canLiberateHere) {
+            drawPlaceAndLiberate(QRectF(120, 460, 155, 38), QRectF(285, 460, 155, 38), 9);
+        } else {
+            drawPlaceAndLiberate(QRectF(120, 460, 320, 38), QRectF(), 10);
+        }
     } else if (hasEnemy) {
         QFont roFont("SansSerif", 10, QFont::Medium);
         p.setFont(roFont);
@@ -3551,54 +3632,95 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
     }
 
     // 6. Check socket interaction (GUI2-04: both single click/tap and drag-and-drop)
-    if (_board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
-        const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
-        bool isTurn = (_board->getGame() && _board->getGame()->getTurn() != PLAYER_UNDEF);
-        bool hasEnemy = isTurn && sq.hasEnemyOf(_board->getGame()->getTurn());
+    const OctiBoard *activeBoard = _board;
+    OctiBoard previewBoard;
+    if (_board && _composer && _composer->isAwaitingConfirmation()) {
+        if (_composer->populatePreviewBoard(previewBoard)) {
+            activeBoard = &previewBoard;
+        }
+    }
+    if (activeBoard && activeBoard->isValidCoord(_squareX - 1, _squareY - 1)) {
+        const OctiSquare &sq = activeBoard->squareAt(_squareX - 1, _squareY - 1);
+        OctiPlayer turn = (_board && _board->getGame()) ? _board->getGame()->getTurn() : PLAYER_A;
+        bool isTurn = (_board && _board->getGame() && _board->getGame()->getTurn() != PLAYER_UNDEF);
+        bool hasEnemy = isTurn && sq.hasEnemyOf(turn);
 
         if (!hasEnemy && isTurn && _selectedPodIndex < sq.getNumPods() &&
             (!_composer || !_composer->isSquarePodClaimed(_squareX, _squareY, _selectedPodIndex))) {
             const OctiPod &pod = sq.getPodAt(_selectedPodIndex);
-            for (const auto &pair : _socketCenters) {
-                OctiDir dir = pair.first;
-                QPointF sc = pair.second;
-                double dist = std::hypot(pos.x() - sc.x(), pos.y() - sc.y());
-                if (dist <= _socketRadius * 1.5) {
-                    if (pod.prongAt(dir) == NORMAL_PRONG) {
-                        // Existing normal prong clicked: select for reposition / start drag
-                        _selectedProngSocketForReposition = dir;
-                        _dragKind = ZoomDragKind::REPOSITION_PRONG;
-                        _dragSrcProngDir = dir;
-                        _dragCursorPos = pos;
-                        update();
-                        return;
-                    } else if (pod.prongAt(dir) == NO_PRONG) {
-                        // Empty socket clicked
-                        if (_selectedProngSocketForReposition != DIR_UNDEF &&
-                            _selectedProngSocketForReposition != dir) {
-                            // Reposition previously selected prong to this socket!
-                            if (_composer && _composer->stageOrCommitRepositionProng(
-                                    _squareX, _squareY, _selectedPodIndex,
-                                    _selectedProngSocketForReposition, dir)) {
-                                _actionCompleted = true;
-                                accept();
-                                return;
-                            }
-                        } else {
-                            // Add new prong to this socket!
-                            bool isSuper = (_selectedProngType == SelectedProngType::SUPER);
-                            if (_composer && _composer->stageOrCommitAddProng(
-                                    _squareX, _squareY, _selectedPodIndex, dir, isSuper)) {
-                                _actionCompleted = true;
-                                accept();
-                                return;
-                            }
+            QPointF pc = _podCanvasRect.center();
+            double podR = 100.0;
+            double socketDist = podR * 0.76;
+            OctiDir hitDir = hitTestSocketOrBladeAt(pos, pod, pc, podR, socketDist);
+            if (hitDir != DIR_UNDEF) {
+                if (pod.prongAt(hitDir) == NORMAL_PRONG) {
+                    // Existing normal prong clicked: select for reposition / start drag
+                    _selectedProngSocketForReposition = hitDir;
+                    _dragKind = ZoomDragKind::REPOSITION_PRONG;
+                    _dragSrcProngDir = hitDir;
+                    _dragCursorPos = pos;
+                    update();
+                    return;
+                } else if (pod.prongAt(hitDir) == NO_PRONG) {
+                    // Empty socket clicked
+                    if (_selectedProngSocketForReposition != DIR_UNDEF &&
+                        _selectedProngSocketForReposition != hitDir) {
+                        // Reposition previously selected prong to this socket!
+                        if (_composer && _composer->stageOrCommitRepositionProng(
+                                _squareX, _squareY, _selectedPodIndex,
+                                _selectedProngSocketForReposition, hitDir)) {
+                            _actionCompleted = true;
+                            accept();
+                            return;
+                        }
+                    } else {
+                        // Add new prong to this socket!
+                        bool isSuper = (_selectedProngType == SelectedProngType::SUPER);
+                        if (_composer && _composer->stageOrCommitAddProng(
+                                _squareX, _squareY, _selectedPodIndex, hitDir, isSuper)) {
+                            _actionCompleted = true;
+                            accept();
+                            return;
                         }
                     }
                 }
             }
         }
     }
+}
+
+OctiDir ZoomedSquareDialog::hitTestSocketOrBladeAt(const QPointF &pos,
+                                                   const OctiPod &pod,
+                                                   const QPointF &pc,
+                                                   double podR,
+                                                   double socketDist) const
+{
+    OctiBoardGeometry zGeom(320, 320, 9, 9, _rotation);
+    for (int d = DIR_N; d <= DIR_NW; ++d) {
+        OctiDir dir = static_cast<OctiDir>(d);
+        auto it = _socketCenters.find(dir);
+        if (it == _socketCenters.end()) {
+            continue;
+        }
+        QPointF sc = it->second;
+        double distToSocket = std::hypot(pos.x() - sc.x(), pos.y() - sc.y());
+        if (distToSocket <= _socketRadius * 1.5) {
+            return dir;
+        }
+        if (pod.prongAt(dir) != NO_PRONG) {
+            QPointF u = zGeom.dirUnitVectorScreen(dir);
+            QPointF v = pos - pc;
+            double proj = v.x() * u.x() + v.y() * u.y();
+            double perpDist = std::abs(-v.x() * u.y() + v.y() * u.x());
+            bool isSuper = (pod.prongAt(dir) == SUPER_PRONG);
+            double maxProj = isSuper ? (podR * 1.55 + 8.0) : (podR * 1.48 + 8.0);
+            double maxPerp = isSuper ? 18.0 : 14.0;
+            if (proj >= (socketDist - _socketRadius) && proj <= maxProj && perpDist <= maxPerp) {
+                return dir;
+            }
+        }
+    }
+    return DIR_UNDEF;
 }
 
 void ZoomedSquareDialog::mouseMoveEvent(QMouseEvent *event)
@@ -3608,13 +3730,14 @@ void ZoomedSquareDialog::mouseMoveEvent(QMouseEvent *event)
     _dragCursorPos = pos;
 
     _hoverProngDir = DIR_UNDEF;
-    for (const auto &pair : _socketCenters) {
-        OctiDir dir = pair.first;
-        QPointF sc = pair.second;
-        double dist = std::hypot(pos.x() - sc.x(), pos.y() - sc.y());
-        if (dist <= _socketRadius * 1.5) {
-            _hoverProngDir = dir;
-            break;
+    if (_board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
+        const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+        int pIdx = std::clamp(_selectedPodIndex, 0, sq.getNumPods() - 1);
+        if (pIdx >= 0 && pIdx < sq.getNumPods()) {
+            QPointF pc = _podCanvasRect.center();
+            double podR = 100.0;
+            double socketDist = podR * 0.76;
+            _hoverProngDir = hitTestSocketOrBladeAt(pos, sq.getPodAt(pIdx), pc, podR, socketDist);
         }
     }
     update();
@@ -3630,13 +3753,14 @@ void ZoomedSquareDialog::mouseReleaseEvent(QMouseEvent *event)
 
     if (_dragKind != ZoomDragKind::NONE && _composer) {
         OctiDir targetDir = DIR_UNDEF;
-        for (const auto &pair : _socketCenters) {
-            OctiDir dir = pair.first;
-            QPointF sc = pair.second;
-            double dist = std::hypot(pos.x() - sc.x(), pos.y() - sc.y());
-            if (dist <= _socketRadius * 1.6) {
-                targetDir = dir;
-                break;
+        if (_board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
+            const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+            int pIdx = std::clamp(_selectedPodIndex, 0, sq.getNumPods() - 1);
+            if (pIdx >= 0 && pIdx < sq.getNumPods()) {
+                QPointF pc = _podCanvasRect.center();
+                double podR = 100.0;
+                double socketDist = podR * 0.76;
+                targetDir = hitTestSocketOrBladeAt(pos, sq.getPodAt(pIdx), pc, podR, socketDist);
             }
         }
 

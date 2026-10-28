@@ -15,6 +15,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -106,8 +108,8 @@ object OctiDialogs {
         val cx = canvasWidthPx * 0.5f
         val cy = canvasHeightPx * 0.5f
         val podR = sizePx * 0.30f
-        val socketDist = podR * 0.88f
-        val socketR = sizePx * 0.052f
+        val socketDist = podR * 0.76f
+        val socketR = sizePx * 0.046f
         val geo = OctiBoardGeometry(480, 480, 9, 9, rotation)
 
         for (d in 0 until OctiDir.DIR_MAX) {
@@ -116,11 +118,15 @@ object OctiDialogs {
             val scx = cx + (u[0] * socketDist).toFloat()
             val scy = cy + (u[1] * socketDist).toFloat()
             val dist = hypot((touchX - scx).toDouble(), (touchY - scy).toDouble()).toFloat()
-            if (dist <= socketR * 2.2f) {
+            if (dist <= socketR * 1.45f) {
                 return dir
             }
         }
-        return OctiDir.DIR_UNDEF
+        return geo.hitTestCompassSector(
+            cx.toDouble(), cy.toDouble(),
+            (podR * 0.35f).toDouble(), (podR * 1.65f).toDouble(),
+            touchX.toDouble(), touchY.toDouble()
+        )
     }
 }
 
@@ -677,8 +683,9 @@ fun ZoomedSquareDialog(
 
     val zoomedBitmap = remember(squareX, squareY, selectedPodIndex, rotation, themeId, hoverSocketDir, composer.stagedMoveNotation()) {
         val sizePx = 480
+        val displayBoard = if (composer.isAwaitingConfirmation) composer.buildPreviewBoard() ?: board else board
         val pixels = OctiBoardRenderer.renderZoomedPodPixels(
-            board,
+            displayBoard,
             squareX,
             squareY,
             selectedPodIndex,
@@ -971,27 +978,40 @@ fun ZoomedSquareDialog(
                     }
 
                     if (canShowPodPlacement) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                        val canLiberateHere = (capPods > 0) && (if (isFriendlyHome) board.canLiberate(turn) else true)
+                        if (canLiberateHere) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        onPlaceReservePod(false)
+                                    },
+                                    enabled = freePods > 0,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Place Reserve (+)")
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        onPlaceReservePod(true)
+                                    },
+                                    enabled = true,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Liberate (*)")
+                                }
+                            }
+                        } else {
                             Button(
                                 onClick = {
                                     onPlaceReservePod(false)
                                 },
                                 enabled = freePods > 0,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text("Place Reserve (+)")
-                            }
-                            OutlinedButton(
-                                onClick = {
-                                    onPlaceReservePod(true)
-                                },
-                                enabled = capPods > 0 && board.canLiberate(turn),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Liberate (*)")
                             }
                         }
                     }
@@ -1594,46 +1614,20 @@ fun OctiSplashOverlay(
                 center = Offset(cx, cy),
                 style = Stroke(width = 1.6.dp.toPx())
             )
-
-            // Smooth progress bar track & fill near bottom
-            val barW = w * 0.72f
-            val barH = 5.dp.toPx()
-            val barX = cx - barW * 0.5f
-            val barY = h * 0.86f
-
-            // Track
-            drawRoundRect(
-                color = Color(0xFF1E293B),
-                topLeft = Offset(barX, barY),
-                size = Size(barW, barH),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(barH * 0.5f, barH * 0.5f)
-            )
-            // Fill
-            drawRoundRect(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color(0xFF10B981),
-                        Color(0xFFC8A253),
-                        Color(0xFFFBBF24)
-                    )
-                ),
-                topLeft = Offset(barX, barY),
-                size = Size(barW * progress, barH),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(barH * 0.5f, barH * 0.5f)
-            )
         }
 
         // Overlay Typography
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(top = 44.dp)
+                modifier = Modifier.padding(top = 16.dp)
             ) {
                 Text(
                     text = "OCTI",
@@ -1652,7 +1646,7 @@ fun OctiSplashOverlay(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.padding(bottom = 32.dp)
+                modifier = Modifier.padding(bottom = 16.dp)
             ) {
                 Text(
                     text = "Author: Charles Chiou",
@@ -1670,7 +1664,7 @@ fun OctiSplashOverlay(
                     color = OctiTheme.colors.accentBrass,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = "Tap anywhere or press ESC / Back to skip",
                     style = MaterialTheme.typography.labelSmall,

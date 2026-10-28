@@ -46,6 +46,7 @@ public:
     BoardRotation boardRotation() const;
     void rotateClockwise();
     void autoOrientForSeat(OctiPlayer seat);
+    double liveRotationOffsetDeg() const { return _liveRotationOffsetDeg; }
 
     double boardZoomScale() const;
     void setBoardZoom(double scale, const QPointF &focusPos = QPointF());
@@ -108,6 +109,7 @@ private:
     void paintCommitBanner(QPainter &p, const OctiBoardGeometry &geom,
                            const OctiPalette &pal);
     void presentPlyConfirmationIfNeeded();
+    void cancelHandRotateHold();
 
     OctiBoard *_board;
     OctiMoveComposer *_composer;
@@ -152,6 +154,8 @@ private:
 
     QTimer _holdRotateTimer;
     bool _handRotateActive;
+    bool _leftMouseHeld;
+    double _liveRotationOffsetDeg;
     QPointF _pressRawPos;
     double _handRotateRefAngleDeg;
 };

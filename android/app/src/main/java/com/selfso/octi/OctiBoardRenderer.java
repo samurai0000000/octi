@@ -337,8 +337,8 @@ public final class OctiBoardRenderer {
         double radius = Math.min(rect[2], rect[3]) * 0.40;
 
         double prongInnerR = radius * 0.60;
-        double prongOuterR = radius * 1.36;
-        double superOuterR = radius * 1.48;
+        double prongOuterR = radius * 1.46;
+        double superOuterR = radius * 1.56;
 
         // 1. Prongs
         for (int d = 0; d < OctiDir.DIR_MAX; d++) {
@@ -352,7 +352,7 @@ public final class OctiBoardRenderer {
             double py = u[0];
 
             if (pt == OctiProngType.NORMAL_PRONG) {
-                double halfW = Math.max(2.4, Math.min(rect[2], rect[3]) * 0.055);
+                double halfW = Math.max(2.8, radius * 0.20);
                 double[] vx = {
                     cx + u[0] * prongInnerR - px * halfW,
                     cx + u[0] * (prongOuterR * 0.86) - px * (halfW * 0.85),
@@ -368,14 +368,14 @@ public final class OctiBoardRenderer {
                     cy + u[1] * prongInnerR + py * halfW
                 };
                 OctiAppIconRenderer.fillPolygonShaded(pixels, w, h, vx, vy,
-                        pal.prongNormalTip, pal.prongNormalMetal, 0xFF64748B);
+                        0xFFFFFFFF, pal.prongNormalTip, pal.prongNormalMetal);
                 OctiAppIconRenderer.drawPolygonOutline(pixels, w, h, vx, vy, 1.4, 0xFF0A0F18);
                 OctiAppIconRenderer.drawLineSegment(pixels, w, h,
                         cx + u[0] * (prongInnerR * 1.05), cy + u[1] * (prongInnerR * 1.05),
                         cx + u[0] * (prongOuterR * 0.88), cy + u[1] * (prongOuterR * 0.88),
-                        1.0, 0xCCFFFFFF);
+                        1.2, 0xCCFFFFFF);
             } else if (pt == OctiProngType.SUPER_PRONG) {
-                double halfW = Math.max(3.2, Math.min(rect[2], rect[3]) * 0.070);
+                double halfW = Math.max(3.6, radius * 0.26);
                 double[] vx = {
                     cx + u[0] * prongInnerR - px * (halfW * 0.75),
                     cx + u[0] * (superOuterR * 0.72) - px * (halfW * 1.25),
@@ -391,12 +391,12 @@ public final class OctiBoardRenderer {
                     cy + u[1] * prongInnerR + py * (halfW * 0.75)
                 };
                 OctiAppIconRenderer.fillPolygonShaded(pixels, w, h, vx, vy,
-                        pal.prongSuperCore, pal.prongSuperGold, 0xFFD97706);
+                        0xFFFEF08A, pal.prongSuperGold, 0xFFD97706);
                 OctiAppIconRenderer.drawPolygonOutline(pixels, w, h, vx, vy, 1.6, pal.prongSuperCore);
                 OctiAppIconRenderer.drawLineSegment(pixels, w, h,
                         cx + u[0] * (prongInnerR * 1.05), cy + u[1] * (prongInnerR * 1.05),
                         cx + u[0] * (superOuterR * 0.90), cy + u[1] * (superOuterR * 0.90),
-                        1.3, 0xFFFEF08A);
+                        1.4, 0xFFFEF08A);
             }
         }
 
@@ -777,8 +777,8 @@ public final class OctiBoardRenderer {
                                                     boolean drawHighlightRim) {
         OctiPalette.PodFactionPalette fp = pal.factionForPodType(pod.getType());
         double prongInnerR = podR * 0.60;
-        double prongOuterR = podR * 1.38;
-        double superOuterR = podR * 1.50;
+        double prongOuterR = podR * 1.48;
+        double superOuterR = podR * 1.55;
 
         for (int d = 0; d < OctiDir.DIR_MAX; d++) {
             OctiDir dir = OctiDir.fromIndex(d);
@@ -793,7 +793,7 @@ public final class OctiBoardRenderer {
             double py = u0;
 
             if (pt == OctiProngType.NORMAL_PRONG) {
-                double halfW = Math.max(3.5, podR * 0.08);
+                double halfW = Math.max(8.0, podR * 0.145);
                 double[] vx = {
                     podCx + u0 * prongInnerR - px * halfW,
                     podCx + u0 * (prongOuterR * 0.86) - px * (halfW * 0.85),
@@ -809,14 +809,14 @@ public final class OctiBoardRenderer {
                     podCy + u1 * prongInnerR + py * halfW
                 };
                 OctiAppIconRenderer.fillPolygonShaded(targetPixels, s, s, vx, vy,
-                        pal.prongNormalTip, pal.prongNormalMetal, 0xFF64748B);
+                        0xFFFFFFFF, pal.prongNormalTip, pal.prongNormalMetal);
                 OctiAppIconRenderer.drawPolygonOutline(targetPixels, s, s, vx, vy, 1.4, 0xFF05070B);
                 OctiAppIconRenderer.drawLineSegment(targetPixels, s, s,
                         podCx + u0 * (prongInnerR * 1.05), podCy + u1 * (prongInnerR * 1.05),
                         podCx + u0 * (prongOuterR * 0.88), podCy + u1 * (prongOuterR * 0.88),
                         1.4, 0xCCFFFFFF);
             } else if (pt == OctiProngType.SUPER_PRONG) {
-                double halfW = Math.max(5.0, podR * 0.11);
+                double halfW = Math.max(10.0, podR * 0.185);
                 double[] vx = {
                     podCx + u0 * prongInnerR - px * (halfW * 0.75),
                     podCx + u0 * (superOuterR * 0.72) - px * (halfW * 1.25),
@@ -832,7 +832,7 @@ public final class OctiBoardRenderer {
                     podCy + u1 * prongInnerR + py * (halfW * 0.75)
                 };
                 OctiAppIconRenderer.fillPolygonShaded(targetPixels, s, s, vx, vy,
-                        pal.prongSuperCore, pal.prongSuperGold, 0xFFD97706);
+                        0xFFFEF08A, pal.prongSuperGold, 0xFFD97706);
                 OctiAppIconRenderer.drawPolygonOutline(targetPixels, s, s, vx, vy, 1.8, pal.prongSuperCore);
                 OctiAppIconRenderer.drawLineSegment(targetPixels, s, s,
                         podCx + u0 * (prongInnerR * 1.05), podCy + u1 * (prongInnerR * 1.05),
@@ -872,8 +872,8 @@ public final class OctiBoardRenderer {
         double cx = s * 0.5;
         double cy = s * 0.5;
         double podR = s * 0.30;
-        double socketR = s * 0.052;
-        double socketDist = podR * 0.88;
+        double socketR = s * 0.046;
+        double socketDist = podR * 0.76;
 
         for (int py = 0; py < s; py++) {
             for (int px = 0; px < s; px++) {
@@ -940,7 +940,10 @@ public final class OctiBoardRenderer {
                         : (pt == OctiProngType.NO_PRONG) ? 0xDD0E1420
                         : (pt == OctiProngType.SUPER_PRONG) ? pal.prongSuperGold
                         : pal.prongNormalMetal;
-                int sStroke = isHover ? pal.prongSuperCore : pal.accentBrass;
+                int sStroke = isHover ? pal.prongSuperCore
+                        : (pt == OctiProngType.SUPER_PRONG) ? pal.prongSuperCore
+                        : (pt == OctiProngType.NORMAL_PRONG) ? pal.prongNormalTip
+                        : pal.accentBrass;
 
                 OctiAppIconRenderer.fillCircleAlpha(pixels, s, s, scx, scy, socketR, sFill);
                 OctiAppIconRenderer.drawCircleStroke(pixels, s, s, scx, scy, socketR, isHover ? 2.4 : 1.4, sStroke);
@@ -948,6 +951,73 @@ public final class OctiBoardRenderer {
                 char letter = (char) ('a' + d);
                 int letterColor = isHover ? pal.prongSuperGold : (pt == OctiProngType.NO_PRONG ? pal.accentBrass : 0xFF0B0F17);
                 drawVectorGlyph(pixels, s, s, scx - socketR * 0.35, scy - socketR * 0.45, socketR * 0.90, letter, letterColor, 1.4);
+            }
+
+            // Draw large, high-contrast zoomed prong blades AFTER socket circles
+            for (int d = 0; d < OctiDir.DIR_MAX; d++) {
+                OctiDir dir = OctiDir.fromIndex(d);
+                OctiProngType pt = pod.prongAt(dir);
+                if (pt == OctiProngType.NO_PRONG) {
+                    continue;
+                }
+                double[] u = geo.dirUnitVectorScreen(dir);
+                double u0 = u[0];
+                double u1 = u[1];
+                double px = -u1;
+                double py = u0;
+
+                double bladeInnerR = socketDist + socketR * 0.55;
+                if (pt == OctiProngType.NORMAL_PRONG) {
+                    double bladeOuterR = podR * 1.48;
+                    double halfW = Math.max(9.0, podR * 0.145);
+                    double[] vx = {
+                        cx + u0 * bladeInnerR - px * halfW,
+                        cx + u0 * (bladeOuterR * 0.86) - px * (halfW * 0.85),
+                        cx + u0 * bladeOuterR,
+                        cx + u0 * (bladeOuterR * 0.86) + px * (halfW * 0.85),
+                        cx + u0 * bladeInnerR + px * halfW
+                    };
+                    double[] vy = {
+                        cy + u1 * bladeInnerR - py * halfW,
+                        cy + u1 * (bladeOuterR * 0.86) - py * (halfW * 0.85),
+                        cy + u1 * bladeOuterR,
+                        cy + u1 * (bladeOuterR * 0.86) + py * (halfW * 0.85),
+                        cy + u1 * bladeInnerR + py * halfW
+                    };
+                    OctiAppIconRenderer.fillPolygonShaded(pixels, s, s, vx, vy,
+                            0xFFFFFFFF, 0xFFE2E8F0, 0xFFCBD5E1);
+                    OctiAppIconRenderer.drawPolygonOutline(pixels, s, s, vx, vy, 1.8, 0xFF05070B);
+                    OctiAppIconRenderer.drawPolygonOutline(pixels, s, s, vx, vy, 1.0, pal.accentBrass);
+                    OctiAppIconRenderer.drawLineSegment(pixels, s, s,
+                            cx + u0 * bladeInnerR, cy + u1 * bladeInnerR,
+                            cx + u0 * (bladeOuterR * 0.90), cy + u1 * (bladeOuterR * 0.90),
+                            1.8, 0xFFFFFFFF);
+                } else if (pt == OctiProngType.SUPER_PRONG) {
+                    double bladeOuterR = podR * 1.55;
+                    double halfW = Math.max(12.0, podR * 0.185);
+                    double[] vx = {
+                        cx + u0 * bladeInnerR - px * (halfW * 0.80),
+                        cx + u0 * (bladeOuterR * 0.75) - px * (halfW * 1.20),
+                        cx + u0 * bladeOuterR,
+                        cx + u0 * (bladeOuterR * 0.75) + px * (halfW * 1.20),
+                        cx + u0 * bladeInnerR + px * (halfW * 0.80)
+                    };
+                    double[] vy = {
+                        cy + u1 * bladeInnerR - py * (halfW * 0.80),
+                        cy + u1 * (bladeOuterR * 0.75) - py * (halfW * 1.20),
+                        cy + u1 * bladeOuterR,
+                        cy + u1 * (bladeOuterR * 0.75) + py * (halfW * 1.20),
+                        cy + u1 * bladeInnerR + py * (halfW * 0.80)
+                    };
+                    OctiAppIconRenderer.fillPolygonShaded(pixels, s, s, vx, vy,
+                            0xFFFEF08A, 0xFFFBBF24, 0xFFD97706);
+                    OctiAppIconRenderer.drawPolygonOutline(pixels, s, s, vx, vy, 2.0, pal.prongSuperCore);
+                    OctiAppIconRenderer.drawPolygonOutline(pixels, s, s, vx, vy, 1.0, pal.accentBrass);
+                    OctiAppIconRenderer.drawLineSegment(pixels, s, s,
+                            cx + u0 * bladeInnerR, cy + u1 * bladeInnerR,
+                            cx + u0 * (bladeOuterR * 0.92), cy + u1 * (bladeOuterR * 0.92),
+                            2.0, 0xFFFEF08A);
+                }
             }
         } else {
             OctiAppIconRenderer.drawOctagonStroke(pixels, s, s, cx, cy, podR * 0.85, 2.0, pal.accentBrass);
@@ -1046,16 +1116,6 @@ public final class OctiBoardRenderer {
             double py = cy + Math.sin(pAngle) * pDist;
             int pCol = (i % 2 == 0) ? pal.prongSuperGold : pal.accentBrass;
             OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, px, py, 2.2, pCol);
-        }
-
-        double barW = w * 0.65;
-        double barH = 5.0;
-        double barX = (w - barW) * 0.5;
-        double barY = h * 0.94;
-        fillRectSolid(pixels, w, h, barX, barY, barW, barH, 0xFF141E2E);
-        drawRectOutline(pixels, w, h, barX, barY, barW, barH, 1.0, pal.accentBrass);
-        if (progress > 0.0) {
-            fillRectSolid(pixels, w, h, barX, barY, barW * progress, barH, pal.prongSuperGold);
         }
 
         return pixels;

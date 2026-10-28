@@ -806,6 +806,8 @@ public class OctiMoveComposer {
 
         stagedOps.clear();
         stagedOps.add(op);
+        guidedMoveActive = false;
+        guidedMidHop = false;
         awaitingConfirmation = true;
         syncPreparedStateToGame();
 
@@ -871,6 +873,8 @@ public class OctiMoveComposer {
 
         stagedOps.clear();
         stagedOps.add(op);
+        guidedMoveActive = false;
+        guidedMidHop = false;
         awaitingSuperProngBonusMove = (superProng && pod.getNumProngs() == 7);
         awaitingConfirmation = true;
         syncPreparedStateToGame();
@@ -937,6 +941,8 @@ public class OctiMoveComposer {
 
         stagedOps.clear();
         stagedOps.add(op);
+        guidedMoveActive = false;
+        guidedMidHop = false;
         awaitingConfirmation = true;
         syncPreparedStateToGame();
 
@@ -1679,6 +1685,18 @@ public class OctiMoveComposer {
         }
 
         return result;
+    }
+
+    public boolean isGuidedLegalDestination(int x, int y) {
+        if (!guidedMoveActive) {
+            return false;
+        }
+        for (int[] sq : guidedNextSquares()) {
+            if (sq[0] == x && sq[1] == y) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean selectGuidedDestination(int toX, int toY) {

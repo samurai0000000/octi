@@ -259,8 +259,8 @@ void paintOctagonalPod(QPainter &p,
 
     // 1. Draw prongs extending from pod body out to socket perimeter
     double prongInnerR = radius * 0.65;
-    double prongOuterR = radius * 1.34;
-    double superOuterR = radius * 1.44;
+    double prongOuterR = radius * 1.46;
+    double superOuterR = radius * 1.56;
 
     for (int d = DIR_N; d <= DIR_NW; ++d) {
         OctiDir dir = static_cast<OctiDir>(d);
@@ -273,7 +273,7 @@ void paintOctagonalPod(QPainter &p,
         QPointF perp(-u.y(), u.x());
 
         if (pt == NORMAL_PRONG) {
-            double halfW = std::max(2.2, radius * 0.15);
+            double halfW = std::max(2.8, radius * 0.20);
             QPolygonF shaft;
             shaft << (center + u * prongInnerR - perp * halfW)
                   << (center + u * (prongOuterR * 0.86) - perp * (halfW * 0.85))
@@ -281,16 +281,20 @@ void paintOctagonalPod(QPainter &p,
                   << (center + u * (prongOuterR * 0.86) + perp * (halfW * 0.85))
                   << (center + u * prongInnerR + perp * halfW);
 
-            QLinearGradient grad(center + u * prongInnerR, center + u * prongOuterR);
-            grad.setColorAt(0.0, pal.prongNormalMetal.darker(120));
-            grad.setColorAt(0.65, pal.prongNormalMetal);
-            grad.setColorAt(1.0, pal.prongNormalTip);
+            QLinearGradient grad(center + u * prongOuterR, center + u * prongInnerR);
+            grad.setColorAt(0.0, QColor(255, 255, 255));
+            grad.setColorAt(0.45, pal.prongNormalTip);
+            grad.setColorAt(1.0, pal.prongNormalMetal);
 
-            p.setPen(QPen(QColor(20, 26, 36, 220), std::max(1.0, radius * 0.05)));
+            p.setPen(QPen(QColor(15, 20, 28, 240), std::max(1.3, radius * 0.055)));
             p.setBrush(grad);
             p.drawPolygon(shaft);
+
+            // Specular ridge line along the shaft
+            p.setPen(QPen(QColor(255, 255, 255, 230), std::max(1.0, radius * 0.04)));
+            p.drawLine(center + u * (prongInnerR + radius * 0.08), center + u * (prongOuterR * 0.92));
         } else if (pt == SUPER_PRONG) {
-            double halfW = std::max(3.0, radius * 0.22);
+            double halfW = std::max(3.6, radius * 0.26);
             QPolygonF crown;
             crown << (center + u * prongInnerR - perp * (halfW * 0.75))
                   << (center + u * (superOuterR * 0.72) - perp * (halfW * 1.25))
@@ -303,7 +307,7 @@ void paintOctagonalPod(QPainter &p,
             sgrad.setColorAt(0.55, pal.prongSuperGold);
             sgrad.setColorAt(1.0, QColor(217, 119, 6));
 
-            p.setPen(QPen(pal.prongSuperCore, std::max(1.2, radius * 0.06)));
+            p.setPen(QPen(pal.prongSuperCore, std::max(1.4, radius * 0.07)));
             p.setBrush(sgrad);
             p.drawPolygon(crown);
         }
