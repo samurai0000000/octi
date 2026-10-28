@@ -9,6 +9,11 @@ package com.selfso.octi.ui
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateRotation
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,26 +22,27 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.selfso.octi.OctiBoardRenderer
-import com.selfso.octi.OctiDir
 import com.selfso.octi.OctiMoveComposer
 import com.selfso.octi.OctiPlayer
 import com.selfso.octi.ui.theme.OctiTheme
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /**
  * Interactive high-DPI OCTI board canvas with 4-quadrant rotation,
  * stack fan overlay hit-testing, radial 8-direction prong compass sector
- * selection, and Smart Auto-Commit / Confirm-All move composition.
+ * selection, two-finger pinch-to-zoom / 90° rotation, and Smart Auto-Commit /
+ * Confirm-All move composition.
  */
 @Composable
 fun OctiBoardCanvas(
@@ -47,10 +53,12 @@ fun OctiBoardCanvas(
     val rotation by viewModel.boardRotation.collectAsState()
     val boardRev by viewModel.boardRevision.collectAsState()
     val viewingPly by viewModel.viewingPly.collectAsState()
-    val coroutineScope = rememberCoroutineScope()
     var canvasSize by remember { mutableStateOf(IntSize(640, 640)) }
     var selectedOriginSquare by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var holdZoomTriggered by remember { mutableStateOf(false) }
+    var zoomScale by remember { mutableStateOf(1.0f) }
+    var panOffset by remember { mutableStateOf(Offset.Zero) }
+    var multiTouchActive by remember { mutableStateOf(false) }
+    var lastMultiTouchTimeMs by remember { mutableStateOf(0L) }
 
     val renderedBitmap = remember(themeId, rotation, boardRev, viewingPly, canvasSize) {
         val vw = Math.max(320, Math.min(1280, canvasSize.width))
@@ -77,58 +85,115 @@ fun OctiBoardCanvas(
         )
         Bitmap.createBitmap(pixels, vw, vh, Bitmap.Config.ARGB_8888).asImageBitmap()
     }
+    val currentRenderedBitmap by rememberUpdatedState(renderedBitmap)
+
+    fun openZoomForOffset(offset: Offset, viewportSize: IntSize) {
+        if (multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L) {
+            return
+        }
+        if (viewModel.isViewingHistory()) {
+            return
+        }
+        val b = viewModel.board
+        if (b.game?.isGameOver == true) {
+            return
+        }
+        val geo = viewModel.geometry
+        val scaleX = currentRenderedBitmap.width.toDouble() / Math.max(1, viewportSize.width).toDouble()
+        val scaleY = currentRenderedBitmap.height.toDouble() / Math.max(1, viewportSize.height).toDouble()
+        val px = offset.x.toDouble() * scaleX
+        val py = offset.y.toDouble() * scaleY
+        val xy = IntArray(2)
+        if (!geo.screenToSquare(px, py, xy)) {
+            return
+        }
+        val sqX = xy[0]
+        val sqY = xy[1]
+        val sq = b.squareAt(sqX - 1, sqY - 1)
+        val turn = b.game?.turn
+        val isHome = if (turn != null) b.isHomeSquareOf(sqX - 1, sqY - 1, turn) && !sq.hasEnemyOf(turn) else false
+        if (!sq.isEmpty || isHome) {
+            val composer = viewModel.composer
+            if (composer.isGuidedMoveActive && !composer.isAwaitingConfirmation) {
+                composer.cancelAndRollback()
+            }
+            selectedOriginSquare = Pair(sqX, sqY)
+            viewModel.openZoomedSquare(sqX, sqY)
+            viewModel.notifyComposerUpdated()
+        }
+    }
 
     Box(
         modifier = modifier
             .background(OctiTheme.colors.windowBg)
+            .clipToBounds()
             .onSizeChanged { newSize ->
                 if (newSize.width > 0 && newSize.height > 0) {
                     canvasSize = newSize
                 }
             }
-            .pointerInput(rotation, boardRev, viewingPly) {
-                detectTapGestures(
-                    onPress = { offset ->
-                        holdZoomTriggered = false
-                        val geo = viewModel.geometry
-                        val b = viewModel.board
-                        val scaleX = renderedBitmap.width.toDouble() / Math.max(1, size.width).toDouble()
-                        val scaleY = renderedBitmap.height.toDouble() / Math.max(1, size.height).toDouble()
-                        val px = offset.x.toDouble() * scaleX
-                        val py = offset.y.toDouble() * scaleY
-                        val xy = IntArray(2)
-                        val validSquare = geo.screenToSquare(px, py, xy)
-                        val sqX = if (validSquare) xy[0] else -1
-                        val sqY = if (validSquare) xy[1] else -1
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    var rotationAccumDeg = 0f
+                    var hadMultiTouch = false
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent()
+                        val pressedCount = event.changes.count { it.pressed }
+                        if (pressedCount >= 2) {
+                            hadMultiTouch = true
+                            multiTouchActive = true
+                            lastMultiTouchTimeMs = System.currentTimeMillis()
+                            val zoomChange = event.calculateZoom()
+                            val rotChange = event.calculateRotation()
+                            val panChange = event.calculatePan()
 
-                        val timerJob = coroutineScope.launch {
-                            delay(2000L)
-                            if (!viewModel.isViewingHistory() && b.game?.isGameOver != true && validSquare) {
-                                val sq = b.squareAt(sqX - 1, sqY - 1)
-                                val turn = b.game?.turn
-                                val isHome = if (turn != null) b.isHomeSquareOf(sqX - 1, sqY - 1, turn) else false
-                                if (!sq.isEmpty || isHome) {
-                                    holdZoomTriggered = true
-                                    val composer = viewModel.composer
-                                    if (composer.isGuidedMoveActive && !composer.isAwaitingConfirmation) {
-                                        composer.cancelAndRollback()
-                                    }
-                                    selectedOriginSquare = Pair(sqX, sqY)
-                                    viewModel.openZoomedSquare(sqX, sqY)
-                                    viewModel.notifyComposerUpdated()
-                                }
+                            val newScale = (zoomScale * zoomChange).coerceIn(1.0f, 3.0f)
+                            zoomScale = newScale
+                            if (newScale > 1.0f) {
+                                val maxPanX = (size.width * (newScale - 1.0f)) * 0.5f
+                                val maxPanY = (size.height * (newScale - 1.0f)) * 0.5f
+                                panOffset = Offset(
+                                    (panOffset.x + panChange.x).coerceIn(-maxPanX, maxPanX),
+                                    (panOffset.y + panChange.y).coerceIn(-maxPanY, maxPanY)
+                                )
+                            } else {
+                                panOffset = Offset.Zero
                             }
-                        }
 
-                        try {
-                            tryAwaitRelease()
-                        } finally {
-                            timerJob.cancel()
+                            rotationAccumDeg += rotChange
+                            while (rotationAccumDeg >= 45f) {
+                                viewModel.rotateBoard90Clockwise()
+                                rotationAccumDeg -= 90f
+                            }
+                            while (rotationAccumDeg <= -45f) {
+                                viewModel.rotateBoard90CounterClockwise()
+                                rotationAccumDeg += 90f
+                            }
+
+                            event.changes.forEach { it.consume() }
                         }
+                    } while (event.changes.any { it.pressed })
+
+                    if (hadMultiTouch || zoomScale != 1.0f || panOffset != Offset.Zero) {
+                        // Snap back to original 0% zoom immediately when fingers lift off
+                        zoomScale = 1.0f
+                        panOffset = Offset.Zero
+                        multiTouchActive = false
+                        lastMultiTouchTimeMs = System.currentTimeMillis()
+                    }
+                }
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = { offset ->
+                        openZoomForOffset(offset, size)
+                    },
+                    onLongPress = { offset ->
+                        openZoomForOffset(offset, size)
                     },
                     onTap = { offset ->
-                        if (holdZoomTriggered) {
-                            holdZoomTriggered = false
+                        if (multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L) {
                             return@detectTapGestures
                         }
                         if (viewModel.isViewingHistory()) {
@@ -137,8 +202,8 @@ fun OctiBoardCanvas(
                         val composer = viewModel.composer
                         val geo = viewModel.geometry
                         val b = viewModel.board
-                        val scaleX = renderedBitmap.width.toDouble() / Math.max(1, size.width).toDouble()
-                        val scaleY = renderedBitmap.height.toDouble() / Math.max(1, size.height).toDouble()
+                        val scaleX = currentRenderedBitmap.width.toDouble() / Math.max(1, size.width).toDouble()
+                        val scaleY = currentRenderedBitmap.height.toDouble() / Math.max(1, size.height).toDouble()
                         val px = offset.x.toDouble() * scaleX
                         val py = offset.y.toDouble() * scaleY
 
@@ -170,6 +235,13 @@ fun OctiBoardCanvas(
                         // 2. Map screen point to board square (1-based)
                         val xy = IntArray(2)
                         if (!geo.screenToSquare(px, py, xy)) {
+                            if (composer.isGuidedMoveActive) {
+                                val origSq = composer.guidedOriginSquare()
+                                val curSq = composer.guidedCurrentSquare()
+                                if (curSq[0] == origSq[0] && curSq[1] == origSq[1]) {
+                                    composer.cancelAndRollback()
+                                }
+                            }
                             viewModel.notifyComposerUpdated()
                             return@detectTapGestures
                         }
@@ -203,16 +275,27 @@ fun OctiBoardCanvas(
                                 }
                             }
 
-                            // Tapping current square finishes guided jump chain here
+                            val origSq = composer.guidedOriginSquare()
                             val curSq = composer.guidedCurrentSquare()
-                            if (curSq[0] == sqX && curSq[1] == sqY) {
+                            if (curSq[0] == origSq[0] && curSq[1] == origSq[1]) {
+                                composer.cancelAndRollback()
+                                val sq = b.squareAt(sqX - 1, sqY - 1)
+                                val turn = b.game?.turn
+                                val isDifferentFriendlyPod = (sqX != origSq[0] || sqY != origSq[1]) &&
+                                    !sq.isEmpty && turn != null && !sq.hasEnemyOf(turn)
+                                if (!isDifferentFriendlyPod) {
+                                    viewModel.notifyComposerUpdated()
+                                    return@detectTapGestures
+                                }
+                                // Fall through to step 5 to start guided pod move on the new friendly pod
+                            } else if (curSq[0] == sqX && curSq[1] == sqY) {
+                                // At least 1 hop taken and tapped current square -> finish guided jump chain here
                                 composer.finishGuidedMoveHere()
                                 viewModel.notifyComposerUpdated()
                                 return@detectTapGestures
+                            } else {
+                                return@detectTapGestures
                             }
-
-                            // Tapping elsewhere during guided move does not open zoomed square
-                            return@detectTapGestures
                         }
 
                         if (b.game?.isGameOver == true) {
@@ -250,7 +333,16 @@ fun OctiBoardCanvas(
                 )
             }
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(
+                    scaleX = zoomScale,
+                    scaleY = zoomScale,
+                    translationX = panOffset.x,
+                    translationY = panOffset.y
+                )
+        ) {
             drawImage(
                 image = renderedBitmap,
                 dstOffset = IntOffset.Zero,

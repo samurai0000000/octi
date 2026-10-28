@@ -10,11 +10,18 @@
 #include <nlohmann/json.hpp>
 #include <QAction>
 #include <QApplication>
+#include <QClipboard>
+#include <QDialog>
+#include <QFontDatabase>
 #include <QGroupBox>
+#include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QKeySequence>
+#include <QListWidgetItem>
 #include <QMenu>
 #include <QMenuBar>
 #include <QPainter>
+#include <QShortcut>
 #include <QVBoxLayout>
 #include "OctiCore.hxx"
 #include "OctiMainWindow.hxx"
@@ -179,6 +186,7 @@ OctiMainWindow::OctiMainWindow(
       _vcrPrevBtn(nullptr),
       _vcrNextBtn(nullptr),
       _vcrLastBtn(nullptr),
+      _exportNotationBtn(nullptr),
       _fenStatusLabel(nullptr),
       _proposalBannerWidget(nullptr),
       _proposalBannerLabel(nullptr),
@@ -377,21 +385,51 @@ OctiMainWindow::OctiMainWindow(
     QGroupBox *historyBox = new QGroupBox("Move History • VCR Replay", rightSide);
     QVBoxLayout *histLayout = new QVBoxLayout(historyBox);
     _moveHistoryList = new QListWidget(historyBox);
+    _moveHistoryList->setSelectionMode(QAbstractItemView::ExtendedSelection);
     histLayout->addWidget(_moveHistoryList, 1);
+
+    QShortcut *copyHistoryShortcut = new QShortcut(QKeySequence::Copy, _moveHistoryList);
+    QObject::connect(copyHistoryShortcut, &QShortcut::activated, this, [this]() {
+        if (!_moveHistoryList) {
+            return;
+        }
+        QStringList lines;
+        const QList<QListWidgetItem *> selected = _moveHistoryList->selectedItems();
+        if (!selected.isEmpty()) {
+            for (const QListWidgetItem *item : selected) {
+                if (item) {
+                    lines.append(item->text());
+                }
+            }
+        } else {
+            for (int i = 0; i < _moveHistoryList->count(); ++i) {
+                if (_moveHistoryList->item(i)) {
+                    lines.append(_moveHistoryList->item(i)->text());
+                }
+            }
+        }
+        if (QClipboard *cb = QGuiApplication::clipboard()) {
+            cb->setText(lines.join("\n"));
+        }
+    });
 
     QHBoxLayout *vcrRow = new QHBoxLayout();
     _vcrFirstBtn = new QPushButton("|< First", historyBox);
     _vcrPrevBtn = new QPushButton("< Prev", historyBox);
     _vcrNextBtn = new QPushButton("Next >", historyBox);
     _vcrLastBtn = new QPushButton("Last >|", historyBox);
+    _exportNotationBtn = new QPushButton("Export...", historyBox);
     vcrRow->addWidget(_vcrFirstBtn);
     vcrRow->addWidget(_vcrPrevBtn);
     vcrRow->addWidget(_vcrNextBtn);
     vcrRow->addWidget(_vcrLastBtn);
+    vcrRow->addWidget(_exportNotationBtn);
     histLayout->addLayout(vcrRow);
 
     _fenStatusLabel = new QLabel(historyBox);
     _fenStatusLabel->setWordWrap(true);
+    _fenStatusLabel->setTextInteractionFlags(
+        Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
     histLayout->addWidget(_fenStatusLabel);
     rightLayout->addWidget(historyBox, 2);
 
@@ -554,6 +592,9 @@ OctiMainWindow::OctiMainWindow(
     });
     QObject::connect(_vcrLastBtn, &QPushButton::clicked, [this]() {
         vcrLast();
+    });
+    QObject::connect(_exportNotationBtn, &QPushButton::clicked, [this]() {
+        showExportNotationDialog();
     });
 
     QObject::connect(_acceptProposalBtn, &QPushButton::clicked, [this]() {
@@ -953,6 +994,7 @@ void OctiMainWindow::setTheme(ThemeId theme)
     _configStore.preferences().theme = _theme;
     std::string ignoredErr;
     _configStore.save(ignoredErr);
+    refreshMoveHistoryAndFenUi();
     setupMenuBar();
 }
 
@@ -2038,6 +2080,11 @@ std::vector<std::string> OctiMainWindow::moveHistoryLines() const
     return out;
 }
 
+QListWidget *OctiMainWindow::moveHistoryListWidget() const
+{
+    return _moveHistoryList;
+}
+
 bool OctiMainWindow::loadOctiTranscriptIntoReplay(
     const std::string &octiTranscript)
 {
@@ -2069,6 +2116,57 @@ bool OctiMainWindow::loadOctiTranscriptIntoReplay(
 std::string OctiMainWindow::exportCurrentOctiTranscript() const
 {
     return _board.serializeGame();
+}
+
+QString OctiMainWindow::copyExportedNotationToClipboard() const
+{
+    QString text = QString::fromStdString(exportCurrentOctiTranscript());
+    if (QClipboard *cb = QGuiApplication::clipboard()) {
+        cb->setText(text);
+    }
+    return text;
+}
+
+void OctiMainWindow::showExportNotationDialog()
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle("Export OCTI Game Notation");
+    dlg.setModal(true);
+    dlg.resize(560, 440);
+    dlg.setStyleSheet(buildAppStyleSheet(_theme));
+
+    QVBoxLayout *layout = new QVBoxLayout(&dlg);
+    layout->setContentsMargins(16, 16, 16, 16);
+    layout->setSpacing(10);
+
+    QLabel *hdr = new QLabel(
+        "Canonical OCTI Transcript & Move Notation:", &dlg);
+    hdr->setStyleSheet("font-weight: bold; font-size: 13px;");
+    layout->addWidget(hdr);
+
+    QPlainTextEdit *editor = new QPlainTextEdit(&dlg);
+    editor->setReadOnly(true);
+    QFont monoFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    monoFont.setPointSize(10);
+    editor->setFont(monoFont);
+    editor->setPlainText(QString::fromStdString(exportCurrentOctiTranscript()));
+    layout->addWidget(editor, 1);
+
+    QHBoxLayout *btnRow = new QHBoxLayout();
+    btnRow->addStretch(1);
+    QPushButton *copyBtn = new QPushButton("Copy to Clipboard", &dlg);
+    QPushButton *closeBtn = new QPushButton("Close", &dlg);
+    btnRow->addWidget(copyBtn);
+    btnRow->addWidget(closeBtn);
+    layout->addLayout(btnRow);
+
+    QObject::connect(copyBtn, &QPushButton::clicked, &dlg, [this, copyBtn]() {
+        copyExportedNotationToClipboard();
+        copyBtn->setText("Copied!");
+    });
+    QObject::connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+
+    dlg.exec();
 }
 
 bool OctiMainWindow::saveTranscriptToFile(const std::string &filePath) const
@@ -2180,6 +2278,7 @@ void OctiMainWindow::refreshMoveHistoryAndFenUi()
         if (static_cast<int>(history.size()) > _vcrTotalPlies) {
             _vcrTotalPlies = static_cast<int>(history.size());
         }
+        const OctiPalette &pal = paletteForTheme(_theme);
         for (std::size_t i = 0; i < history.size(); ++i) {
             char pCh = 'A';
             switch (history[i].first) {
@@ -2193,7 +2292,11 @@ void OctiMainWindow::refreshMoveHistoryAndFenUi()
                 .arg(i + 1)
                 .arg(QChar(pCh))
                 .arg(QString::fromStdString(history[i].second.asString()));
-            _moveHistoryList->addItem(line);
+            QListWidgetItem *item = new QListWidgetItem(line);
+            const PodFactionPalette &fp = pal.factionForPlayer(history[i].first);
+            item->setBackground(QBrush(fp.shadow));
+            item->setForeground(QBrush(fp.highlight));
+            _moveHistoryList->addItem(item);
         }
     }
     if (_fenStatusLabel) {

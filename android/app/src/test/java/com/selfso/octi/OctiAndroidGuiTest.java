@@ -331,6 +331,89 @@ public class OctiAndroidGuiTest {
             assertEquals((byte) 0x47, bytes[3]);
         }
     }
+
+    @Test
+    public void testRotateBoard90ClockwiseAndCounterClockwiseQuadrants_AZG_A01_A03() {
+        OctiAppViewModel vm = new OctiAppViewModel();
+        try {
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_0, vm.getBoardRotation().getValue());
+
+            // Clockwise 90° steps strictly through ROT_90 -> ROT_180 -> ROT_270 -> ROT_0
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_90, vm.rotateBoard90Clockwise());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_90, vm.getBoardRotation().getValue());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_180, vm.rotateBoard90Clockwise());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_180, vm.getBoardRotation().getValue());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_270, vm.rotateBoard90Clockwise());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_270, vm.getBoardRotation().getValue());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_0, vm.rotateBoard90Clockwise());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_0, vm.getBoardRotation().getValue());
+
+            // Counter-clockwise 90° steps strictly through ROT_270 -> ROT_180 -> ROT_90 -> ROT_0
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_270, vm.rotateBoard90CounterClockwise());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_270, vm.getBoardRotation().getValue());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_180, vm.rotateBoard90CounterClockwise());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_180, vm.getBoardRotation().getValue());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_90, vm.rotateBoard90CounterClockwise());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_90, vm.getBoardRotation().getValue());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_0, vm.rotateBoard90CounterClockwise());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_0, vm.getBoardRotation().getValue());
+        } finally {
+            vm.close();
+        }
+    }
+
+    @Test
+    public void testOpenZoomedSquareAndCancelZeroHopGuidedMove_AZG_A02_A04() {
+        OctiAppViewModel vm = new OctiAppViewModel();
+        try {
+            vm.startNewLocalGame(
+                    OctiGameMode.GAME_MODE_2,
+                    false,
+                    false,
+                    OctiGameBases.GAME_BASES_3,
+                    false,
+                    OctiBotEngine.BotDifficulty.TACTICAL,
+                    OctiPlayer.PLAYER_A
+            );
+            OctiBoard board = vm.getBoard();
+            OctiMoveComposer composer = vm.getComposer();
+
+            // 1. Add prong on (3, 3) and step away so (3, 3) becomes an empty friendly home square
+            assertTrue(composer.stageOrCommitAddProng(3, 3, 0, OctiDir.DIR_N, false));
+            assertTrue(vm.commitStagedMove());
+            assertTrue(composer.stageOrCommitAddProng(3, 7, 0, OctiDir.DIR_S, false));
+            assertTrue(vm.commitStagedMove());
+            assertTrue(composer.beginGuidedPodMove(3, 3, 0, false));
+            assertTrue(composer.selectGuidedDestination(3, 4));
+            assertTrue(vm.commitStagedMove());
+            assertTrue(composer.stageOrCommitAddProng(5, 7, 0, OctiDir.DIR_S, false));
+            assertTrue(vm.commitStagedMove());
+
+            assertTrue("Home square (3, 3) should now be empty", board.squareAt(2, 2).isEmpty());
+            assertTrue(board.isHomeSquareOf(2, 2, OctiPlayer.PLAYER_A));
+
+            // 2. Start a 0-hop guided move on occupied square (3, 4), then cancel and open ZoomedSquareDialog on (3, 4)
+            assertTrue(composer.beginGuidedPodMove(3, 4, 0, false));
+            assertTrue(composer.isGuidedMoveActive());
+            assertFalse(composer.isAwaitingConfirmation());
+
+            composer.cancelAndRollback();
+            assertFalse(composer.isGuidedMoveActive());
+            vm.openZoomedSquare(3, 4);
+            kotlin.Pair<Integer, Integer> z1 = vm.getZoomedSquare().getValue();
+            assertEquals(Integer.valueOf(3), z1.getFirst());
+            assertEquals(Integer.valueOf(4), z1.getSecond());
+            vm.closeZoomedSquare();
+
+            // 3. Open ZoomedSquareDialog on empty friendly home square (3, 3) to place a reserve pod
+            vm.openZoomedSquare(3, 3);
+            kotlin.Pair<Integer, Integer> z2 = vm.getZoomedSquare().getValue();
+            assertEquals(Integer.valueOf(3), z2.getFirst());
+            assertEquals(Integer.valueOf(3), z2.getSecond());
+        } finally {
+            vm.close();
+        }
+    }
 }
 
 /*

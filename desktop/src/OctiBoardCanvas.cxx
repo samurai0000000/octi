@@ -11,6 +11,7 @@
 #include <cmath>
 #include <QCoreApplication>
 #include <QFont>
+#include <QLineF>
 #include <QLinearGradient>
 #include <QPainterPath>
 #include <QPen>
@@ -46,10 +47,35 @@ OctiBoardCanvas::OctiBoardCanvas(QWidget *parent)
     , _animActive(false)
     , _animProgress(0.0)
     , _animPodType(A_POD)
+    , _boardZoomScale(1.0)
+    , _boardZoomFocus(400.0, 400.0)
+    , _handRotateActive(false)
+    , _pressRawPos(0.0, 0.0)
+    , _handRotateRefAngleDeg(0.0)
 {
     setMinimumSize(420, 420);
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
+
+    _holdRotateTimer.setSingleShot(true);
+    QObject::connect(&_holdRotateTimer, &QTimer::timeout, [this]() {
+        _handRotateActive = true;
+        if (_composer && _composer->isGuidedMoveActive() &&
+            !_composer->isAwaitingConfirmation() &&
+            _composer->guidedCurrentSquare() == _composer->guidedOriginSquare()) {
+            _composer->cancelAndRollback();
+        }
+        _dragKind = DragKind::NONE;
+        _dragStartX = -1;
+        _dragStartY = -1;
+        _dragPodIndex = -1;
+        setCursor(Qt::OpenHandCursor);
+        QPointF center = _geometry.boardOuterRect().center();
+        _handRotateRefAngleDeg = std::atan2(
+            _pressRawPos.y() - center.y(),
+            _pressRawPos.x() - center.x()) * 180.0 / 3.14159265358979323846;
+        update();
+    });
 
     QObject::connect(&_animTimer, &QTimer::timeout, [this]() {
         _animProgress += 0.12;
@@ -65,6 +91,7 @@ OctiBoardCanvas::OctiBoardCanvas(QWidget *parent)
 OctiBoardCanvas::~OctiBoardCanvas()
 {
     _animTimer.stop();
+    _holdRotateTimer.stop();
 }
 
 void OctiBoardCanvas::attachBoard(OctiBoard *board,
@@ -131,6 +158,60 @@ void OctiBoardCanvas::autoOrientForSeat(OctiPlayer seat)
 {
     OctiGameMode mode = _board ? _board->getGameMode() : GAME_MODE_2;
     setBoardRotation(OctiBoardGeometry::rotationForSeat(mode, seat));
+}
+
+double OctiBoardCanvas::boardZoomScale() const
+{
+    return _boardZoomScale;
+}
+
+void OctiBoardCanvas::setBoardZoom(double scale, const QPointF &focusPos)
+{
+    double clamped = std::clamp(scale, 1.0, 3.0);
+    if (clamped <= 1.001) {
+        resetBoardZoom();
+        return;
+    }
+    _boardZoomScale = clamped;
+    if (!focusPos.isNull()) {
+        _boardZoomFocus = focusPos;
+    } else if (_boardZoomFocus.isNull()) {
+        _boardZoomFocus = QPointF(width() * 0.5, height() * 0.5);
+    }
+    update();
+}
+
+void OctiBoardCanvas::resetBoardZoom()
+{
+    _boardZoomScale = 1.0;
+    _boardZoomFocus = QPointF(width() * 0.5, height() * 0.5);
+    update();
+}
+
+QPointF OctiBoardCanvas::rawMousePosF(const QMouseEvent *event) const
+{
+    return octi::mousePosF(event);
+}
+
+QPointF OctiBoardCanvas::rawMousePosF(const QWheelEvent *event) const
+{
+    if (!event) {
+        return QPointF(0.0, 0.0);
+    }
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    return event->position();
+#else
+    return event->posF();
+#endif
+}
+
+QPointF OctiBoardCanvas::mousePosF(const QMouseEvent *event) const
+{
+    QPointF rawPos = rawMousePosF(event);
+    if (_boardZoomScale > 1.001) {
+        return (rawPos - _boardZoomFocus) / _boardZoomScale + _boardZoomFocus;
+    }
+    return rawPos;
 }
 
 const OctiBoardGeometry &OctiBoardCanvas::geometry() const
@@ -939,6 +1020,12 @@ void OctiBoardCanvas::paintEvent(QPaintEvent *event)
     (void)event;
     syncGeometryToBoard(width(), height());
     QPainter p(this);
+    if (_boardZoomScale > 1.001) {
+        p.fillRect(0, 0, width(), height(), paletteForTheme(_theme).windowBg);
+        p.translate(_boardZoomFocus);
+        p.scale(_boardZoomScale, _boardZoomScale);
+        p.translate(-_boardZoomFocus);
+    }
     paintBoardScene(p, width(), height());
 }
 
@@ -948,9 +1035,66 @@ void OctiBoardCanvas::resizeEvent(QResizeEvent *event)
     syncGeometryToBoard(width(), height());
 }
 
+bool OctiBoardCanvas::openZoomedSquareAt(int sx, int sy)
+{
+    if (!_board || !_board->isValidCoord(sx - 1, sy - 1)) {
+        return false;
+    }
+    const OctiSquare &sq = _board->squareAt(sx - 1, sy - 1);
+    bool isNonEmpty = !sq.isEmpty();
+    bool isEligibleHome = false;
+    if (_board->getGame() && _board->getGame()->isGameStarted() &&
+        _board->getGameMode() != GAME_MODE_OFK) {
+        OctiPlayer turn = _board->getGame()->getTurn();
+        bool isFriendlyBase = false;
+        if (_board->getNumPlayers() == 2) {
+            isFriendlyBase = ((turn == PLAYER_A && sq.getType() == A_HOME_SQUARE) ||
+                              (turn == PLAYER_B && sq.getType() == B_HOME_SQUARE));
+        } else if (_board->getNumPlayers() == 4) {
+            isFriendlyBase = (sq.getType() == static_cast<OctiSquareType>(turn));
+        }
+        if (isFriendlyBase && !sq.hasEnemyOf(turn)) {
+            if (_board->getGame()->getFreePods(turn) > 0 ||
+                (_board->getGame()->getCapturedPods(turn) > 0 && _board->canLiberate(turn))) {
+                isEligibleHome = true;
+            }
+        }
+    }
+
+    if (!isNonEmpty && !isEligibleHome) {
+        return false;
+    }
+
+    if (_composer && _composer->isGuidedMoveActive() && !_composer->isAwaitingConfirmation()) {
+        _composer->cancelAndRollback();
+    }
+    ZoomedSquareDialog dlg(_board, _composer, sx, sy, _rotation, _theme, this);
+    if (dlg.exec() == QDialog::Accepted) {
+        if (dlg.shouldMovePod() && _composer) {
+            _composer->beginGuidedPodMove(sx, sy, dlg.selectedPodIndex(), dlg.moveAllMatchingStack());
+        } else if (dlg.actionCompleted() && _composer && _composer->isAwaitingConfirmation()) {
+            presentPlyConfirmationIfNeeded();
+        }
+    }
+    update();
+    return true;
+}
+
 void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
 {
-    if (!event || !_board || !_composer) {
+    if (!event) {
+        return;
+    }
+    if (event->button() == Qt::RightButton && _boardZoomScale > 1.001) {
+        _holdRotateTimer.stop();
+        if (_handRotateActive) {
+            _handRotateActive = false;
+            unsetCursor();
+        }
+        resetBoardZoom();
+        return;
+    }
+    if (!_board || !_composer) {
         return;
     }
     if (_board->getGame() && _board->getGame()->isGameOver()) {
@@ -960,6 +1104,14 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
     QPointF pos = mousePosF(event);
     _dragCursorPos = pos;
     _dragShiftHeld = (event->modifiers() & Qt::ShiftModifier) != 0;
+
+    if (event->button() == Qt::RightButton) {
+        int rx = 0, ry = 0;
+        if (_geometry.screenToSquare(pos, rx, ry)) {
+            openZoomedSquareAt(rx, ry);
+        }
+        return;
+    }
 
     // 1. Check Finish Move Here button (when guided multi-hop jump is active)
     if (!_finishBtnRect.isEmpty() && _finishBtnRect.contains(pos)) {
@@ -1010,6 +1162,15 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
                 }
             }
         }
+    }
+
+    if (event->button() == Qt::LeftButton &&
+        _dragKind != DragKind::ADD_POD_FROM_RESERVE &&
+        _dragKind != DragKind::LIBERATE_POD_FROM_RESERVE &&
+        _dragKind != DragKind::ADD_PRONG_FROM_RESERVE &&
+        _dragKind != DragKind::ADD_SUPERPRONG_FROM_RESERVE) {
+        _pressRawPos = rawMousePosF(event);
+        _holdRotateTimer.start(380);
     }
 
     // 5. Guided hop selection when guided move is active
@@ -1067,12 +1228,41 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
                 return;
             }
         }
-        if (isVisible()) {
-            if (_composer->isAwaitingConfirmation()) {
+        if (_composer->isAwaitingConfirmation()) {
+            if (isVisible()) {
                 presentPlyConfirmationIfNeeded();
-            } else {
-                _composer->cancelAndRollback();
             }
+            update();
+            return;
+        }
+        bool zeroHopsSoFar = (_composer->guidedCurrentSquare() == _composer->guidedOriginSquare());
+        std::pair<int, int> oldOrigin = _composer->guidedOriginSquare();
+        _composer->cancelAndRollback();
+        if (zeroHopsSoFar && gx >= 1 && gy >= 1 &&
+            (gx != oldOrigin.first || gy != oldOrigin.second) &&
+            _board->isValidCoord(gx - 1, gy - 1)) {
+            const OctiSquare &clickedSq = _board->squareAt(gx - 1, gy - 1);
+            if (!clickedSq.isEmpty() && _board->getGame() &&
+                _board->getGame()->isGameStarted() &&
+                !clickedSq.hasEnemyOf(_board->getGame()->getTurn())) {
+                if (!isVisible()) {
+                    _composer->beginGuidedPodMove(
+                        gx, gy,
+                        _composer->selectedStackPodIndex(gx, gy),
+                        _composer->moveEntireMatchingStack());
+                    _dragStartX = gx;
+                    _dragStartY = gy;
+                    _dragPodIndex = _composer->selectedStackPodIndex(gx, gy);
+                    _dragKind = DragKind::MOVE_OR_JUMP_POD;
+                    update();
+                    return;
+                }
+                // Fall through to step 7 when isVisible() is true
+            } else {
+                update();
+                return;
+            }
+        } else {
             update();
             return;
         }
@@ -1149,6 +1339,43 @@ void OctiBoardCanvas::mouseMoveEvent(QMouseEvent *event)
     if (!event) {
         return;
     }
+    QPointF curRaw = rawMousePosF(event);
+    if (_holdRotateTimer.isActive() &&
+        QLineF(_pressRawPos, curRaw).length() > 8.0) {
+        _holdRotateTimer.stop();
+    }
+    if (_handRotateActive) {
+        setCursor(Qt::ClosedHandCursor);
+        QPointF center = _geometry.boardOuterRect().center();
+        double curAngleDeg = std::atan2(
+            curRaw.y() - center.y(),
+            curRaw.x() - center.x()) * 180.0 / 3.14159265358979323846;
+        auto normalizeDeg = [](double a) {
+            while (a > 180.0) a -= 360.0;
+            while (a < -180.0) a += 360.0;
+            return a;
+        };
+        double diff = normalizeDeg(curAngleDeg - _handRotateRefAngleDeg);
+        while (diff >= 45.0) {
+            rotateClockwise();
+            _handRotateRefAngleDeg = normalizeDeg(_handRotateRefAngleDeg + 90.0);
+            diff = normalizeDeg(curAngleDeg - _handRotateRefAngleDeg);
+        }
+        while (diff <= -45.0) {
+            BoardRotation prev = BoardRotation::ROT_0;
+            switch (_rotation) {
+            case BoardRotation::ROT_0:   prev = BoardRotation::ROT_270; break;
+            case BoardRotation::ROT_90:  prev = BoardRotation::ROT_0;   break;
+            case BoardRotation::ROT_180: prev = BoardRotation::ROT_90;  break;
+            case BoardRotation::ROT_270: prev = BoardRotation::ROT_180; break;
+            }
+            setBoardRotation(prev);
+            _handRotateRefAngleDeg = normalizeDeg(_handRotateRefAngleDeg - 90.0);
+            diff = normalizeDeg(curAngleDeg - _handRotateRefAngleDeg);
+        }
+        return;
+    }
+
     QPointF pos = mousePosF(event);
     _dragCursorPos = pos;
     _dragShiftHeld = (event->modifiers() & Qt::ShiftModifier) != 0;
@@ -1176,6 +1403,13 @@ void OctiBoardCanvas::mouseMoveEvent(QMouseEvent *event)
 
 void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
 {
+    _holdRotateTimer.stop();
+    if (_handRotateActive) {
+        _handRotateActive = false;
+        unsetCursor();
+        update();
+        return;
+    }
     if (!event || !_composer || (_board && _board->getGame() && _board->getGame()->isGameOver())) {
         _dragKind = DragKind::NONE;
         return;
@@ -1255,7 +1489,7 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
                 }
             }
             if (!acted) {
-                if (isVisible() && _composer && _composer->isGuidedMoveActive()) {
+                if (_composer && _composer->isGuidedMoveActive()) {
                     // Do NOT trigger single-click compass-sector prong addition on the board
                     // and do NOT cancel the guided move! Keep guided move active so legal
                     // destination squares remain highlighted for the user's second click!
@@ -1349,7 +1583,19 @@ void OctiBoardCanvas::presentPlyConfirmationIfNeeded()
 
 void OctiBoardCanvas::mouseDoubleClickEvent(QMouseEvent *event)
 {
-    if (!event || !_board) {
+    if (!event) {
+        return;
+    }
+    _holdRotateTimer.stop();
+    if (_handRotateActive) {
+        _handRotateActive = false;
+        unsetCursor();
+    }
+    if (_boardZoomScale > 1.001) {
+        resetBoardZoom();
+        return;
+    }
+    if (!_board) {
         return;
     }
     if (_board->getGame() && _board->getGame()->isGameOver()) {
@@ -1362,49 +1608,56 @@ void OctiBoardCanvas::mouseDoubleClickEvent(QMouseEvent *event)
     }
 
     int sx = 0, sy = 0;
-    if (_geometry.screenToSquare(mousePosF(event), sx, sy) &&
-        _board->isValidCoord(sx - 1, sy - 1)) {
-        const OctiSquare &sq = _board->squareAt(sx - 1, sy - 1);
-        bool isNonEmpty = !sq.isEmpty();
-        bool isEligibleHome = false;
-        if (_board->getGame() && _board->getGame()->isGameStarted() &&
-            _board->getGameMode() != GAME_MODE_OFK) {
-            OctiPlayer turn = _board->getGame()->getTurn();
-            bool isFriendlyBase = false;
-            if (_board->getNumPlayers() == 2) {
-                isFriendlyBase = ((turn == PLAYER_A && sq.getType() == A_HOME_SQUARE) ||
-                                  (turn == PLAYER_B && sq.getType() == B_HOME_SQUARE));
-            } else if (_board->getNumPlayers() == 4) {
-                isFriendlyBase = (sq.getType() == static_cast<OctiSquareType>(turn));
-            }
-            if (isFriendlyBase && !sq.hasEnemyOf(turn)) {
-                if (_board->getGame()->getFreePods(turn) > 0 ||
-                    (_board->getGame()->getCapturedPods(turn) > 0 && _board->canLiberate(turn))) {
-                    isEligibleHome = true;
-                }
-            }
-        }
+    if (_geometry.screenToSquare(mousePosF(event), sx, sy)) {
+        openZoomedSquareAt(sx, sy);
+    }
+}
 
-        if (isNonEmpty || isEligibleHome) {
-            if (_composer && _composer->isGuidedMoveActive() && !_composer->isAwaitingConfirmation()) {
-                _composer->cancelAndRollback();
-            }
-            ZoomedSquareDialog dlg(_board, _composer, sx, sy, _rotation, _theme, this);
-            if (dlg.exec() == QDialog::Accepted) {
-                if (dlg.shouldMovePod()) {
-                    _composer->beginGuidedPodMove(sx, sy, dlg.selectedPodIndex(), dlg.moveAllMatchingStack());
-                } else if (dlg.actionCompleted() && _composer && _composer->isAwaitingConfirmation()) {
-                    presentPlyConfirmationIfNeeded();
-                }
-            }
+void OctiBoardCanvas::wheelEvent(QWheelEvent *event)
+{
+    if (!event) {
+        return;
+    }
+    int deltaY = event->angleDelta().y();
+    if (deltaY == 0) {
+        return;
+    }
+    QPointF pos = rawMousePosF(event);
+    if (deltaY > 0) {
+        double oldScale = _boardZoomScale;
+        double newScale = std::min(3.0, oldScale * 1.15);
+        QPointF boardPt = (oldScale > 1.001)
+            ? ((pos - _boardZoomFocus) / oldScale + _boardZoomFocus)
+            : pos;
+        if (newScale > 1.001) {
+            _boardZoomFocus = (boardPt * newScale - pos) / (newScale - 1.0);
+        } else {
+            _boardZoomFocus = pos;
+        }
+        _boardZoomScale = newScale;
+        update();
+    } else {
+        double oldScale = _boardZoomScale;
+        double newScale = oldScale / 1.15;
+        if (newScale <= 1.03) {
+            resetBoardZoom();
+        } else {
+            QPointF boardPt = (oldScale > 1.001)
+                ? ((pos - _boardZoomFocus) / oldScale + _boardZoomFocus)
+                : pos;
+            _boardZoomFocus = (boardPt * newScale - pos) / (newScale - 1.0);
+            _boardZoomScale = newScale;
             update();
-            return;
         }
     }
+    event->accept();
 }
 
 void OctiBoardCanvas::keyPressEvent(QKeyEvent *event)
 {
+    if (event && event->key() == Qt::Key_Escape && _boardZoomScale > 1.001) {
+        resetBoardZoom();
+    }
     if (!event || !_composer || (_board && _board->getGame() && _board->getGame()->isGameOver())) {
         QWidget::keyPressEvent(event);
         return;

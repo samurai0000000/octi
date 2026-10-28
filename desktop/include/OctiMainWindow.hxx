@@ -173,9 +173,12 @@ public:
     int vcrTotalPlies() const;
     QString fenStatusText() const;
     std::vector<std::string> moveHistoryLines() const;
+    QListWidget *moveHistoryListWidget() const;
 
     bool loadOctiTranscriptIntoReplay(const std::string &octiTranscript);
     std::string exportCurrentOctiTranscript() const;
+    QString copyExportedNotationToClipboard() const;
+    void showExportNotationDialog();
     bool saveTranscriptToFile(const std::string &filePath) const;
     bool loadTranscriptFromFile(const std::string &filePath);
 
@@ -282,6 +285,7 @@ private:
     QPushButton *_vcrPrevBtn;
     QPushButton *_vcrNextBtn;
     QPushButton *_vcrLastBtn;
+    QPushButton *_exportNotationBtn;
     QLabel *_fenStatusLabel;
 
     QWidget *_proposalBannerWidget;

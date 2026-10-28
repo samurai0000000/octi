@@ -17,6 +17,7 @@
 #include <QRectF>
 #include <QResizeEvent>
 #include <QTimer>
+#include <QWheelEvent>
 #include <QWidget>
 #include "OctiBoard.hxx"
 #include "OctiBoardGeometry.hxx"
@@ -45,6 +46,10 @@ public:
     BoardRotation boardRotation() const;
     void rotateClockwise();
     void autoOrientForSeat(OctiPlayer seat);
+
+    double boardZoomScale() const;
+    void setBoardZoom(double scale, const QPointF &focusPos = QPointF());
+    void resetBoardZoom();
 
     const OctiBoardGeometry &geometry() const;
 
@@ -75,9 +80,14 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
 
 private:
+    QPointF rawMousePosF(const QMouseEvent *event) const;
+    QPointF rawMousePosF(const QWheelEvent *event) const;
+    QPointF mousePosF(const QMouseEvent *event) const;
+    bool openZoomedSquareAt(int sx, int sy);
     void syncGeometryToBoard(int w, int h);
     void triggerMoveAnimation(const QPointF &fromPt, const QPointF &toPt,
                               OctiPodType podType, const OctiPod &pod);
@@ -136,6 +146,14 @@ private:
     QPointF _animToPt;
     OctiPodType _animPodType;
     OctiPod _animPod;
+
+    double _boardZoomScale;
+    QPointF _boardZoomFocus;
+
+    QTimer _holdRotateTimer;
+    bool _handRotateActive;
+    QPointF _pressRawPos;
+    double _handRotateRefAngleDeg;
 };
 
 } // namespace octi

@@ -27,8 +27,10 @@
 #include <vector>
 
 #include <QApplication>
+#include <QClipboard>
 #include <QDir>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QImage>
 
 #include "AccountStore.hxx"
@@ -1562,6 +1564,52 @@ TEST(DesktopAppIntegrationTest, GuiRefinementArtifactsAndPrompts)
         CHECK_FALSE(icon.isNull());
         QPixmap px = icon.pixmap(32, 32);
         CHECK_FALSE(px.isNull());
+    }
+
+    // 6. AZG-D03: Verify player-color-coded move history items & OCTI notation clipboard export
+    {
+        LocalGameConfig pnpCfg;
+        pnpCfg.playType = LocalPlayType::PASS_AND_PLAY;
+        pnpCfg.mode = GAME_MODE_2;
+        pnpCfg.bases = GAME_BASES_3;
+        win.startNewLocalGame(pnpCfg);
+        win.setTheme(ThemeId::OBSIDIAN_BRASS);
+
+        CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+        if (win.moveComposer()->isAwaitingConfirmation()) {
+            CHECK_TRUE(win.moveComposer()->commitStagedMove());
+        }
+        CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 7, 0, DIR_S, false));
+        if (win.moveComposer()->isAwaitingConfirmation()) {
+            CHECK_TRUE(win.moveComposer()->commitStagedMove());
+        }
+
+        QListWidget *histList = win.moveHistoryListWidget();
+        CHECK_TRUE(histList != nullptr);
+        LONGS_EQUAL(2, histList->count());
+
+        const OctiPalette &obsPal = paletteForTheme(ThemeId::OBSIDIAN_BRASS);
+        CHECK_TRUE(histList->item(0)->background().color() == obsPal.podA.shadow);
+        CHECK_TRUE(histList->item(0)->foreground().color() == obsPal.podA.highlight);
+        CHECK_TRUE(histList->item(1)->background().color() == obsPal.podB.shadow);
+        CHECK_TRUE(histList->item(1)->foreground().color() == obsPal.podB.highlight);
+
+        // Toggle theme and verify move history item colors update to Rosewood palette
+        win.toggleTheme();
+        const OctiPalette &rosePal = paletteForTheme(ThemeId::ROSEWOOD_IVORY);
+        CHECK_TRUE(histList->item(0)->background().color() == rosePal.podA.shadow);
+        CHECK_TRUE(histList->item(0)->foreground().color() == rosePal.podA.highlight);
+        CHECK_TRUE(histList->item(1)->background().color() == rosePal.podB.shadow);
+        CHECK_TRUE(histList->item(1)->foreground().color() == rosePal.podB.highlight);
+
+        // Verify copyExportedNotationToClipboard() copies canonical .octi notation
+        QString exported = win.copyExportedNotationToClipboard();
+        CHECK_TRUE(exported.contains("33+a"));
+        CHECK_TRUE(exported.contains("37+e"));
+        if (QClipboard *cb = QGuiApplication::clipboard()) {
+            STRCMP_EQUAL(exported.toUtf8().constData(),
+                         cb->text().toUtf8().constData());
+        }
     }
 
     std::remove(cfgPath.c_str());

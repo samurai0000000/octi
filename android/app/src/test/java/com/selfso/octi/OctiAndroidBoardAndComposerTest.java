@@ -1082,6 +1082,42 @@ public class OctiAndroidBoardAndComposerTest {
         assertEquals(OctiPlayer.PLAYER_B, board.getGame().getTurn());
         assertEquals(1, board.squareAt(3, 2).getNumPods());
     }
+
+    @Test
+    public void testGuidedMoveZeroHopFriendlyPodSwitchAndCancel_AZG_A02() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        board.getGame().move("33+a");
+        board.getGame().move("37+e");
+        board.getGame().move("53+c");
+        board.getGame().move("57+e");
+
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+
+        // Start guided move on friendly pod at (3, 3) (0 hops taken so far)
+        assertTrue(composer.beginGuidedPodMove(3, 3, 0, false));
+        assertTrue(composer.isGuidedMoveActive());
+        assertEquals(3, composer.guidedOriginSquare()[0]);
+        assertEquals(3, composer.guidedOriginSquare()[1]);
+        assertEquals(3, composer.guidedCurrentSquare()[0]);
+        assertEquals(3, composer.guidedCurrentSquare()[1]);
+
+        // Switching to another friendly pod at (5, 3) when 0 hops have been taken:
+        // cancelAndRollback() followed by beginGuidedPodMove(5, 3, 0, false)
+        composer.cancelAndRollback();
+        assertFalse(composer.isGuidedMoveActive());
+        assertTrue(composer.beginGuidedPodMove(5, 3, 0, false));
+        assertTrue(composer.isGuidedMoveActive());
+        assertEquals(5, composer.guidedOriginSquare()[0]);
+        assertEquals(3, composer.guidedOriginSquare()[1]);
+        assertEquals(5, composer.guidedCurrentSquare()[0]);
+        assertEquals(3, composer.guidedCurrentSquare()[1]);
+
+        // Select destination (6, 3) for pod at (5, 3)
+        assertTrue(composer.selectGuidedDestination(6, 3));
+        assertFalse(composer.isGuidedMoveActive());
+        assertTrue(composer.isAwaitingConfirmation());
+        assertEquals("53c-63", composer.stagedMoveNotation());
+    }
 }
 
 /*

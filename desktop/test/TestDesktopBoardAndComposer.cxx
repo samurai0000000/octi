@@ -4,11 +4,13 @@
  * Copyright (C) 2026, Charles Chiou
  */
 
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 #include <QApplication>
 #include <QDir>
@@ -1222,6 +1224,81 @@ TEST(OctiDialogsRefinementTest, SingleClickMoveVsDoubleClickZoomDirectInteractio
     QPointF pt11 = canvas.geometry().squareCenter(1, 1);
     sendSingleClick(&canvas, pt11);
     CHECK_FALSE(composer.isGuidedMoveActive());
+
+    // 3. AZG-D02: 1-click friendly pod switching during 0-hop guided move
+    board.squareAt(4, 2).podAt(0).addProng(DIR_N, false); // Friendly pod at 1-based (5, 3)
+    composer.refreshLegalMoves();
+    sendSingleClick(&canvas, pt33);
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    LONGS_EQUAL(3, composer.guidedOriginSquare().first);
+    LONGS_EQUAL(3, composer.guidedOriginSquare().second);
+
+    QPointF pt53 = canvas.geometry().squareCenter(5, 3);
+    sendSingleClick(&canvas, pt53);
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    LONGS_EQUAL(5, composer.guidedOriginSquare().first);
+    LONGS_EQUAL(3, composer.guidedOriginSquare().second);
+
+    sendSingleClick(&canvas, pt11);
+    CHECK_FALSE(composer.isGuidedMoveActive());
+
+    // 4. AZG-D01: Board zoom via setBoardZoom / wheelEvent and snap-out via ESC, Right-Click, Double-Click
+    DOUBLES_EQUAL(1.0, canvas.boardZoomScale(), 1e-6);
+    QWheelEvent wheelIn(pt33, pt33, QPoint(0, 0), QPoint(0, 120),
+                        Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(&canvas, &wheelIn);
+    CHECK_TRUE(canvas.boardZoomScale() > 1.1);
+
+    // ESC snaps out of board zoom to 1.0
+    QKeyEvent escEv(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &escEv);
+    DOUBLES_EQUAL(1.0, canvas.boardZoomScale(), 1e-6);
+
+    // Right-click while zoomed in snaps out of board zoom without opening dialog
+    canvas.setBoardZoom(2.0, pt33);
+    DOUBLES_EQUAL(2.0, canvas.boardZoomScale(), 1e-6);
+    QMouseEvent rightPress(QEvent::MouseButtonPress, pt33, pt33, pt33,
+                           Qt::RightButton, Qt::RightButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &rightPress);
+    DOUBLES_EQUAL(1.0, canvas.boardZoomScale(), 1e-6);
+
+    // Double-click while zoomed in snaps out of board zoom without opening dialog
+    canvas.setBoardZoom(1.8, pt33);
+    DOUBLES_EQUAL(1.8, canvas.boardZoomScale(), 1e-6);
+    QMouseEvent dblClick(QEvent::MouseButtonDblClick, pt33, pt33, pt33,
+                         Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &dblClick);
+    DOUBLES_EQUAL(1.0, canvas.boardZoomScale(), 1e-6);
+
+    // 5. AZG-D02: Click-and-hold (~380ms) hand cursor 90-degree quadrant rotation
+    LONGS_EQUAL(static_cast<int>(BoardRotation::ROT_0),
+                static_cast<int>(canvas.boardRotation()));
+    QPointF center = canvas.geometry().boardOuterRect().center();
+    QPointF topPt(center.x(), center.y() - 150.0);   // -90 deg
+    QPointF rightPt(center.x() + 150.0, center.y()); // 0 deg (+90 deg CW from topPt)
+
+    QMouseEvent holdPress(QEvent::MouseButtonPress, topPt, topPt, topPt,
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &holdPress);
+    for (int i = 0; i < 45; ++i) {
+        QCoreApplication::processEvents();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    QMouseEvent dragCw(QEvent::MouseMove, rightPt, rightPt, rightPt,
+                       Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &dragCw);
+    LONGS_EQUAL(static_cast<int>(BoardRotation::ROT_90),
+                static_cast<int>(canvas.boardRotation()));
+
+    QMouseEvent dragCcw(QEvent::MouseMove, topPt, topPt, topPt,
+                        Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &dragCcw);
+    LONGS_EQUAL(static_cast<int>(BoardRotation::ROT_0),
+                static_cast<int>(canvas.boardRotation()));
+
+    QMouseEvent holdRelease(QEvent::MouseButtonRelease, topPt, topPt, topPt,
+                            Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &holdRelease);
 }
 
 TEST(OctiDialogsRefinementTest, PlyConfirmDialogCommitCancelAndMoreMoves)

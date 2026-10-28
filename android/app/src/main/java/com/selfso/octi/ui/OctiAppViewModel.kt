@@ -456,6 +456,18 @@ class OctiAppViewModel @JvmOverloads constructor(
         return next
     }
 
+    fun rotateBoard90CounterClockwise(): OctiBoardGeometry.BoardRotation {
+        _autoRotateSeatView.value = false
+        val next = when (_boardRotation.value) {
+            OctiBoardGeometry.BoardRotation.ROT_0 -> OctiBoardGeometry.BoardRotation.ROT_270
+            OctiBoardGeometry.BoardRotation.ROT_90 -> OctiBoardGeometry.BoardRotation.ROT_0
+            OctiBoardGeometry.BoardRotation.ROT_180 -> OctiBoardGeometry.BoardRotation.ROT_90
+            OctiBoardGeometry.BoardRotation.ROT_270 -> OctiBoardGeometry.BoardRotation.ROT_180
+        }
+        setBoardRotation(next)
+        return next
+    }
+
     fun setBotDifficulty(difficulty: OctiBotEngine.BotDifficulty) {
         _botDifficulty.value = difficulty
         botEngine.setDifficulty(difficulty)
