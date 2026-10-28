@@ -17,6 +17,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -29,6 +30,8 @@ import com.selfso.octi.OctiDir
 import com.selfso.octi.OctiMoveComposer
 import com.selfso.octi.OctiPlayer
 import com.selfso.octi.ui.theme.OctiTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Interactive high-DPI OCTI board canvas with 4-quadrant rotation,
@@ -44,8 +47,10 @@ fun OctiBoardCanvas(
     val rotation by viewModel.boardRotation.collectAsState()
     val boardRev by viewModel.boardRevision.collectAsState()
     val viewingPly by viewModel.viewingPly.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
     var canvasSize by remember { mutableStateOf(IntSize(640, 640)) }
     var selectedOriginSquare by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var holdZoomTriggered by remember { mutableStateOf(false) }
 
     val renderedBitmap = remember(themeId, rotation, boardRev, viewingPly, canvasSize) {
         val vw = Math.max(320, Math.min(1280, canvasSize.width))
@@ -83,7 +88,49 @@ fun OctiBoardCanvas(
             }
             .pointerInput(rotation, boardRev, viewingPly) {
                 detectTapGestures(
+                    onPress = { offset ->
+                        holdZoomTriggered = false
+                        val geo = viewModel.geometry
+                        val b = viewModel.board
+                        val scaleX = renderedBitmap.width.toDouble() / Math.max(1, size.width).toDouble()
+                        val scaleY = renderedBitmap.height.toDouble() / Math.max(1, size.height).toDouble()
+                        val px = offset.x.toDouble() * scaleX
+                        val py = offset.y.toDouble() * scaleY
+                        val xy = IntArray(2)
+                        val validSquare = geo.screenToSquare(px, py, xy)
+                        val sqX = if (validSquare) xy[0] else -1
+                        val sqY = if (validSquare) xy[1] else -1
+
+                        val timerJob = coroutineScope.launch {
+                            delay(2000L)
+                            if (!viewModel.isViewingHistory() && b.game?.isGameOver != true && validSquare) {
+                                val sq = b.squareAt(sqX - 1, sqY - 1)
+                                val turn = b.game?.turn
+                                val isHome = if (turn != null) b.isHomeSquareOf(sqX - 1, sqY - 1, turn) else false
+                                if (!sq.isEmpty || isHome) {
+                                    holdZoomTriggered = true
+                                    val composer = viewModel.composer
+                                    if (composer.isGuidedMoveActive && !composer.isAwaitingConfirmation) {
+                                        composer.cancelAndRollback()
+                                    }
+                                    selectedOriginSquare = Pair(sqX, sqY)
+                                    viewModel.openZoomedSquare(sqX, sqY)
+                                    viewModel.notifyComposerUpdated()
+                                }
+                            }
+                        }
+
+                        try {
+                            tryAwaitRelease()
+                        } finally {
+                            timerJob.cancel()
+                        }
+                    },
                     onTap = { offset ->
+                        if (holdZoomTriggered) {
+                            holdZoomTriggered = false
+                            return@detectTapGestures
+                        }
                         if (viewModel.isViewingHistory()) {
                             return@detectTapGestures
                         }
@@ -189,36 +236,15 @@ fun OctiBoardCanvas(
                             }
                         }
 
-                        // 5. Non-empty square or friendly home square opens Zoomed Square Dialog
+                        // 5. Friendly pod initiates guided pod move directly on board without opening zoom dialog
                         val sq = b.squareAt(sqX - 1, sqY - 1)
                         val turn = b.game?.turn
-                        val isHome = if (turn != null) b.isHomeSquareOf(sqX - 1, sqY - 1, turn) else false
-                        if (!sq.isEmpty || isHome) {
+                        if (!sq.isEmpty && turn != null && !sq.hasEnemyOf(turn)) {
                             selectedOriginSquare = Pair(sqX, sqY)
-                            viewModel.openZoomedSquare(sqX, sqY)
+                            val pIdx = composer.selectedStackPodIndex(sqX, sqY)
+                            composer.beginGuidedPodMove(sqX, sqY, pIdx, viewModel.moveEntireMatchingStack.value)
                             viewModel.notifyComposerUpdated()
                             return@detectTapGestures
-                        }
-                    },
-                    onLongPress = { offset ->
-                        if (viewModel.isViewingHistory()) {
-                            return@detectTapGestures
-                        }
-                        val geo = viewModel.geometry
-                        val b = viewModel.board
-                        val scaleX = renderedBitmap.width.toDouble() / Math.max(1, size.width).toDouble()
-                        val scaleY = renderedBitmap.height.toDouble() / Math.max(1, size.height).toDouble()
-                        val px = offset.x.toDouble() * scaleX
-                        val py = offset.y.toDouble() * scaleY
-                        val xy = IntArray(2)
-                        if (geo.screenToSquare(px, py, xy)) {
-                            val sqX = xy[0]
-                            val sqY = xy[1]
-                            val sq = b.squareAt(sqX - 1, sqY - 1)
-                            if (sq.numPods >= 2) {
-                                viewModel.composer.openStackFan(sqX, sqY)
-                                viewModel.notifyComposerUpdated()
-                            }
                         }
                     }
                 )

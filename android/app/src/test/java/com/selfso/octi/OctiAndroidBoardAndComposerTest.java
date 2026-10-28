@@ -855,7 +855,7 @@ public class OctiAndroidBoardAndComposerTest {
 
     @Test
     public void testOctiAppVersionAndProtocolConstants() {
-        assertEquals("2.0.11", OctiDefs.OCTI_APP_VERSION);
+        assertEquals("2.0.12", OctiDefs.OCTI_APP_VERSION);
         assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
     }
 
@@ -1017,6 +1017,70 @@ public class OctiAndroidBoardAndComposerTest {
             assertEquals((byte) 0x4E, bytes[2]);
             assertEquals((byte) 0x47, bytes[3]);
         }
+    }
+
+    @Test
+    public void testPodPlacementAndMandatoryProngConfirmation_PPL_A02() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        assertTrue(composer.confirmAllMoves());
+
+        // 1. Placing pod via stageOrCommitAddPod on occupied home square (3, 3)
+        // With confirmAllMoves=true, it stages the move and does NOT auto-commit
+        assertTrue(composer.stageOrCommitAddPod(3, 3, false));
+        assertTrue(composer.isAwaitingConfirmation());
+        assertEquals("33", composer.stagedMoveNotation());
+        assertEquals(OctiPlayer.PLAYER_A, board.getGame().getTurn());
+
+        // Commit the staged pod placement
+        assertTrue(composer.commitStagedMove());
+        assertFalse(composer.isAwaitingConfirmation());
+        assertEquals(OctiPlayer.PLAYER_B, board.getGame().getTurn());
+        assertEquals(2, board.squareAt(2, 2).getNumPods());
+
+        // 2. Mandatory confirmation for adding a prong:
+        // Adding a prong must stage the move (isAwaitingConfirmation == true)
+        // and NOT auto-commit until commitStagedMove is called.
+        assertTrue(composer.stageOrCommitAddProng(5, 7, 0, OctiDir.DIR_N, false));
+        assertTrue(composer.isAwaitingConfirmation());
+        assertEquals("57+a", composer.stagedMoveNotation());
+        assertEquals(OctiPlayer.PLAYER_B, board.getGame().getTurn());
+
+        // Confirming the move commits it
+        assertTrue(composer.commitStagedMove());
+        assertFalse(composer.isAwaitingConfirmation());
+        assertEquals(OctiPlayer.PLAYER_A, board.getGame().getTurn());
+
+        // 3. Single-tap board move via beginGuidedPodMove + selectGuidedDestination:
+        // Direct move without opening zoomed square dialog
+        assertTrue(composer.stageOrCommitAddProng(3, 3, 0, OctiDir.DIR_E, false));
+        assertTrue(composer.commitStagedMove());
+        assertTrue(composer.stageOrCommitAddProng(7, 7, 0, OctiDir.DIR_N, false));
+        assertTrue(composer.commitStagedMove());
+
+        // A single-taps pod at (3, 3): starts guided pod move
+        assertTrue(composer.beginGuidedPodMove(3, 3, 0, false));
+        assertTrue(composer.isGuidedMoveActive());
+        List<int[]> nextSquares = composer.guidedNextSquares();
+        boolean hasDest43 = false;
+        for (int[] sq : nextSquares) {
+            if (sq[0] == 4 && sq[1] == 3) {
+                hasDest43 = true;
+                break;
+            }
+        }
+        assertTrue("Destination (4, 3) must be in guided next squares", hasDest43);
+
+        // A single-taps destination (4, 3) on the board:
+        assertTrue(composer.selectGuidedDestination(4, 3));
+        assertFalse(composer.isGuidedMoveActive());
+        assertTrue(composer.isAwaitingConfirmation());
+        assertEquals("33c-43", composer.stagedMoveNotation());
+
+        // Must require confirmation
+        assertTrue(composer.commitStagedMove());
+        assertEquals(OctiPlayer.PLAYER_B, board.getGame().getTurn());
+        assertEquals(1, board.squareAt(3, 2).getNumPods());
     }
 }
 

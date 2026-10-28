@@ -1230,6 +1230,54 @@ TEST(OctiRulebookExamplesTest, Example3_EdgelessMovesAndJumps)
     CHECK_EQUAL(1, board.squareAt(8, 0).getNumPods());
 }
 
+TEST(OctiRulebookExamplesTest, ReservePodPlacementOnOccupiedAndEmptyFriendlyHomeSquares)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    // Initial 2P setup: Player A has pods at (2, 2) [33], (4, 2) [53], (6, 2) [73].
+    // Player A has 4 free reserve pods.
+    CHECK_EQUAL(4, game->getFreePods(octi::PLAYER_A));
+    CHECK_EQUAL(1, board.squareAt(2, 2).getNumPods());
+
+    // 1. Placing a reserve pod onto an already occupied friendly home square (33): "+c3" / "33"
+    game->move("33");
+    CHECK_EQUAL(2, board.squareAt(2, 2).getNumPods());
+    CHECK_EQUAL(3, game->getFreePods(octi::PLAYER_A));
+    CHECK_EQUAL(octi::PLAYER_B, game->getTurn());
+
+    // Player B passes turn with a dummy prong addition on (2, 6) [37]:
+    game->move("37+e");
+    CHECK_EQUAL(octi::PLAYER_A, game->getTurn());
+
+    // 2. Move pod from 53 (4, 2) to 54 (4, 3):
+    // First give it a North prong so it can step North
+    game->move("53+a");
+    game->move("57+e");
+    // Move from 53 to 54
+    game->move("53a-54");
+    // Now square (4, 2) [53] is an EMPTY friendly home square!
+    CHECK_TRUE(board.squareAt(4, 2).isEmpty());
+    CHECK_EQUAL(octi::PLAYER_B, game->getTurn());
+
+    // Player B dummy move
+    game->move("77+a");
+    CHECK_EQUAL(octi::PLAYER_A, game->getTurn());
+
+    // 3. Placing a reserve pod onto an EMPTY friendly home square (53): "53"
+    game->move("53");
+    CHECK_EQUAL(1, board.squareAt(4, 2).getNumPods());
+    CHECK_EQUAL(2, game->getFreePods(octi::PLAYER_A));
+
+    // 4. Verify illegal placements on non-friendly squares
+    CHECK_EQUAL(octi::PLAYER_B, game->getTurn());
+    // B cannot place pod on empty neutral square (0, 0) [11]
+    CHECK_THROWS(octi::IllegalMoveException, game->move("11"));
+    // B cannot place pod on Player A's home square (2, 2) [33]
+    CHECK_THROWS(octi::IllegalMoveException, game->move("33"));
+}
+
 TEST(OctiRulebookExamplesTest, Randomize18PlySequence)
 {
     octi::OctiBoard board(octi::GAME_MODE_2);

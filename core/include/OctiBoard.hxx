@@ -48,6 +48,7 @@ public:
     void clear();
 
     OctiGameMode getGameMode() const;
+    int getNumPlayers() const;
     int getBoardWidth() const;
     int getBoardHeight() const;
     bool isValidCoord(int x, int y) const;

@@ -119,6 +119,11 @@ OctiGameMode OctiBoard::getGameMode() const
     return _mode;
 }
 
+int OctiBoard::getNumPlayers() const
+{
+    return (_mode == GAME_MODE_4) ? 4 : 2;
+}
+
 int OctiBoard::getBoardWidth() const
 {
     return _width;

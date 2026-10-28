@@ -1462,6 +1462,57 @@ public class OctiBoardEngineTest {
         }
     }
 
+    @Test
+    public void testPodPlacementOnOccupiedAndEmptyFriendlyHomeSquare_PPL_A01() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false,
+                OctiGameBases.GAME_BASES_3);
+        OctiGame game = board.getGame();
+        game.start(OctiPlayer.PLAYER_A);
+
+        // 1. Initially (2, 2) (1-based "33") is occupied by 1 friendly A pod.
+        // A adds prong 'a' (DIR_N, dy=+1) and moves the pod off (2, 2) to empty the home square.
+        assertEquals(4, game.getFreePods(OctiPlayer.PLAYER_A));
+        assertEquals(1, board.squareAt(2, 2).getNumPods());
+
+        game.move("33+a");
+        game.move("37+e");
+        game.move("33a-34"); // pod leaves (2, 2) to (2, 3)
+
+        // Square (2, 2) is now completely EMPTY!
+        assertTrue("Square (2, 2) must now be empty", board.squareAt(2, 2).isEmpty());
+
+        game.move("57+e"); // Player B move
+
+        // 2. Player A's turn: (2, 2) is an EMPTY friendly home square!
+        // Placing a reserve pod on this empty friendly home square must be legal!
+        assertEquals(OctiPlayer.PLAYER_A, game.getTurn());
+        List<OctiMove> legalMoves = game.generateLegalMoves();
+        assertTrue("legalMoves must contain pod placement on empty friendly home square 33",
+                legalMoves.contains(new OctiMove("33")));
+
+        game.move("33"); // Place reserve pod on empty home square
+        assertEquals(3, game.getFreePods(OctiPlayer.PLAYER_A));
+        assertEquals(1, board.squareAt(2, 2).getNumPods());
+        assertEquals(OctiPodType.A_POD, board.squareAt(2, 2).getPodAt(0).getType());
+
+        game.move("77+e"); // Player B move
+
+        // 3. Player A's turn: (2, 2) is now an OCCUPIED friendly home square!
+        // Placing another reserve pod onto this occupied home square must also be legal!
+        assertEquals(OctiPlayer.PLAYER_A, game.getTurn());
+        legalMoves = game.generateLegalMoves();
+        assertTrue("legalMoves must contain pod placement on occupied friendly home square 33",
+                legalMoves.contains(new OctiMove("33")));
+
+        game.move("33"); // Place reserve pod on occupied home square
+        assertEquals(2, game.getFreePods(OctiPlayer.PLAYER_A));
+        assertEquals(2, board.squareAt(2, 2).getNumPods());
+        assertEquals(OctiPodType.A_POD, board.squareAt(2, 2).getPodAt(1).getType());
+
+        // 4. Placing on neutral square without friendly pods is illegal
+        assertThrowsIllegalMove(() -> game.move("44"));
+    }
+
     // -------------------------------------------------------------------------
     // Exception Assert Helpers
     // -------------------------------------------------------------------------

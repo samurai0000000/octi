@@ -224,7 +224,6 @@ OctiMainWindow::OctiMainWindow(
     if (_configStore.load(loadErr)) {
         const ClientPreferences &prefs = _configStore.preferences();
         _theme = prefs.theme;
-        _composer.setConfirmAllMoves(prefs.confirmAllMoves);
         _soundSynth.setMuted(prefs.sfxMuted);
         if (!prefs.sessionToken.empty()) {
             _netClient->setSessionToken(prefs.sessionToken);
@@ -235,6 +234,8 @@ OctiMainWindow::OctiMainWindow(
             _authenticated = !prefs.playerUuid.empty();
         }
     }
+    _composer.setConfirmAllMoves(true);
+    _configStore.preferences().confirmAllMoves = true;
 
     setWindowIcon(createOctiAppIcon());
     setWindowTitle(
@@ -288,7 +289,7 @@ OctiMainWindow::OctiMainWindow(
     _rotateBoardBtn = new QPushButton("Rotate Board (0°)", topBar);
     _rotateBoardBtn->setVisible(false);
     _confirmAllCheck = new QCheckBox("Confirm All Moves", topBar);
-    _confirmAllCheck->setChecked(_composer.confirmAllMoves());
+    _confirmAllCheck->setChecked(true);
     _confirmAllCheck->setVisible(false);
     _themeToggleBtn = new QPushButton("Theme: Obsidian", topBar);
     _themeToggleBtn->setVisible(false);
@@ -2397,6 +2398,8 @@ void OctiMainWindow::triggerAppUpdateDownloadAndInstall()
     }
     if (_currentUpdateState.phase == selfupdate::UpdatePhase::ReadyToInstall) {
         _updateController->installStagedPackage();
+    } else if (_currentUpdateState.phase == selfupdate::UpdatePhase::UpToDate) {
+        _updateController->reinstall();
     } else {
         _updateController->downloadAndInstall();
     }
@@ -2615,7 +2618,9 @@ void OctiMainWindow::updateSelfUpdateBannerUi()
                         ? OctiCore::versionString()
                         : _currentUpdateState.installedVersionName)));
         _updateBannerProgressBar->setVisible(false);
-        _updateActionBtn->setVisible(false);
+        _updateActionBtn->setVisible(true);
+        _updateActionBtn->setEnabled(true);
+        _updateActionBtn->setText("Reinstall");
         break;
 
     case selfupdate::UpdatePhase::Error:

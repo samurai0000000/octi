@@ -167,7 +167,6 @@ fun OctiMainAppContent(
     val currentTab by viewModel.currentTab.collectAsState()
     val themeId by viewModel.theme.collectAsState()
     val sfxMuted by viewModel.sfxMuted.collectAsState()
-    val confirmAllMoves by viewModel.confirmAllMoves.collectAsState()
     val statusBanner by viewModel.statusBanner.collectAsState()
     val showNewGameDialog by viewModel.showNewGameDialog.collectAsState()
     val showSsoDialog by viewModel.showSsoDialog.collectAsState()
@@ -255,15 +254,6 @@ fun OctiMainAppContent(
                                     onClick = {
                                         showTopMenu = false
                                         viewModel.toggleSfxMuted()
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = {
-                                        Text("Confirm All Moves: " + if (confirmAllMoves) "On" else "Off")
-                                    },
-                                    onClick = {
-                                        showTopMenu = false
-                                        viewModel.toggleConfirmAllMoves()
                                     }
                                 )
                                 DropdownMenuItem(
@@ -539,7 +529,11 @@ fun OctiMainAppContent(
         updateModalMessage?.let { msg ->
             UpToDateModalDialog(
                 message = msg,
-                onDismiss = { updateModalMessage = null }
+                onDismiss = { updateModalMessage = null },
+                onReinstall = {
+                    updateModalMessage = null
+                    updateController.reinstall()
+                }
             )
         }
 

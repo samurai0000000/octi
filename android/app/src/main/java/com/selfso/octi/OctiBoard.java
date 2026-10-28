@@ -123,6 +123,10 @@ public class OctiBoard {
         return mode;
     }
 
+    public int getNumPlayers() {
+        return (mode == OctiGameMode.GAME_MODE_4) ? 4 : 2;
+    }
+
     public int getBoardWidth() {
         return width;
     }

@@ -90,6 +90,7 @@ public:
     bool isAwaitingConfirmation() const;
     bool isAwaitingSuperProngBonusMove() const;
     std::string stagedMoveNotation() const;
+    const std::vector<OctiMoveOp> &stagedOps() const { return _stagedOps; }
     const std::vector<CaptureChoice> &captureChoices() const;
     bool populatePreviewBoard(OctiBoard &outBoard) const;
 

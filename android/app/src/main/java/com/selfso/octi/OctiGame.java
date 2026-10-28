@@ -684,8 +684,23 @@ public class OctiGame {
             if (sq.getType() == OctiSquareType.NEUTRAL_SQUARE) {
                 throw new IllegalMoveException("pod placement only allowed on OCTI squares");
             }
-            if (sq.isEmpty() || sq.hasEnemyOf(turn)) {
-                throw new IllegalMoveException("pod placement square must be occupied by friendly pod");
+            OctiSquareType st = sq.getType();
+            boolean isFriendlyHome = false;
+            if (board.getNumPlayers() == 2) {
+                isFriendlyHome = (turn == OctiPlayer.PLAYER_A && st == OctiSquareType.A_HOME_SQUARE)
+                        || (turn == OctiPlayer.PLAYER_B && st == OctiSquareType.B_HOME_SQUARE);
+            } else if (board.getNumPlayers() == 4) {
+                isFriendlyHome = (st.getValue() == turn.getValue());
+            }
+
+            if (isFriendlyHome) {
+                if (sq.hasEnemyOf(turn)) {
+                    throw new IllegalMoveException("pod placement square has enemy pod");
+                }
+            } else {
+                if (sq.isEmpty() || sq.hasEnemyOf(turn)) {
+                    throw new IllegalMoveException("pod placement square must be occupied by friendly pod");
+                }
             }
 
             int turnVal = turn.getValue();
@@ -1539,8 +1554,27 @@ public class OctiGame {
             for (int y = 0; y < h; y++) {
                 for (int x = 0; x < w; x++) {
                     OctiSquare sq = board.squareAt(x, y);
-                    if (sq.getType() == OctiSquareType.NEUTRAL_SQUARE || sq.isEmpty() || sq.hasEnemyOf(turn)) {
+                    if (sq.getType() == OctiSquareType.NEUTRAL_SQUARE) {
                         continue;
+                    }
+
+                    OctiSquareType st = sq.getType();
+                    boolean isFriendlyHome = false;
+                    if (board.getNumPlayers() == 2) {
+                        isFriendlyHome = (turn == OctiPlayer.PLAYER_A && st == OctiSquareType.A_HOME_SQUARE)
+                                || (turn == OctiPlayer.PLAYER_B && st == OctiSquareType.B_HOME_SQUARE);
+                    } else if (board.getNumPlayers() == 4) {
+                        isFriendlyHome = (st.getValue() == turn.getValue());
+                    }
+
+                    if (isFriendlyHome) {
+                        if (sq.hasEnemyOf(turn)) {
+                            continue;
+                        }
+                    } else {
+                        if (sq.isEmpty() || sq.hasEnemyOf(turn)) {
+                            continue;
+                        }
                     }
 
                     if (mode == OctiGameMode.GAME_MODE_2) {

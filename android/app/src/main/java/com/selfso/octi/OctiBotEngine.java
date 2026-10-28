@@ -633,20 +633,25 @@ public class OctiBotEngine {
                 continue;
             }
 
-            OctiPlayer nextTurn = game.getTurn();
-            boolean sameTeamNext = !game.isGameOver()
-                    && OctiPlayer.areAllied(mode, turn, nextTurn);
-
             int val;
-            if (sameTeamNext) {
-                val = negamax(scratchBoard, depth - 1, ply + 1,
-                        alpha, beta, turn, ctx);
+            if (game.isGameOver()) {
+                OctiPlayer w = game.getWinner();
+                val = OctiPlayer.areAllied(mode, w, turn)
+                        ? (WIN_SCORE - (ply + 1))
+                        : (-WIN_SCORE + (ply + 1));
             } else {
-                OctiPlayer oppPerspective = (nextTurn != OctiPlayer.PLAYER_UNDEF) ? nextTurn :
-                        ((turn == OctiPlayer.PLAYER_A || turn == OctiPlayer.PLAYER_C)
-                                ? OctiPlayer.PLAYER_B : OctiPlayer.PLAYER_A);
-                val = -negamax(scratchBoard, depth - 1, ply + 1,
-                        -beta, -alpha, oppPerspective, ctx);
+                OctiPlayer nextTurn = game.getTurn();
+                boolean sameTeamNext = OctiPlayer.areAllied(mode, turn, nextTurn);
+                if (sameTeamNext) {
+                    val = negamax(scratchBoard, depth - 1, ply + 1,
+                            alpha, beta, turn, ctx);
+                } else {
+                    OctiPlayer oppPerspective = (nextTurn != OctiPlayer.PLAYER_UNDEF) ? nextTurn :
+                            ((turn == OctiPlayer.PLAYER_A || turn == OctiPlayer.PLAYER_C)
+                                    ? OctiPlayer.PLAYER_B : OctiPlayer.PLAYER_A);
+                    val = -negamax(scratchBoard, depth - 1, ply + 1,
+                            -beta, -alpha, oppPerspective, ctx);
+                }
             }
 
             game.restoreSnapshot(snap);
@@ -773,20 +778,25 @@ public class OctiBotEngine {
                     continue;
                 }
 
-                OctiPlayer nextTurn = game.getTurn();
-                boolean sameTeamNext = !game.isGameOver()
-                        && OctiPlayer.areAllied(mode, rootTurn, nextTurn);
-
                 int score;
-                if (sameTeamNext) {
-                    score = negamax(scratchBoard, d - 1, 1,
-                            alpha, beta, rootTurn, ctx);
+                if (game.isGameOver()) {
+                    OctiPlayer w = game.getWinner();
+                    score = OctiPlayer.areAllied(mode, w, rootTurn)
+                            ? (WIN_SCORE - 1)
+                            : (-WIN_SCORE + 1);
                 } else {
-                    OctiPlayer oppPerspective = (nextTurn != OctiPlayer.PLAYER_UNDEF) ? nextTurn :
-                            ((rootTurn == OctiPlayer.PLAYER_A || rootTurn == OctiPlayer.PLAYER_C)
-                                    ? OctiPlayer.PLAYER_B : OctiPlayer.PLAYER_A);
-                    score = -negamax(scratchBoard, d - 1, 1,
-                            -beta, -alpha, oppPerspective, ctx);
+                    OctiPlayer nextTurn = game.getTurn();
+                    boolean sameTeamNext = OctiPlayer.areAllied(mode, rootTurn, nextTurn);
+                    if (sameTeamNext) {
+                        score = negamax(scratchBoard, d - 1, 1,
+                                alpha, beta, rootTurn, ctx);
+                    } else {
+                        OctiPlayer oppPerspective = (nextTurn != OctiPlayer.PLAYER_UNDEF) ? nextTurn :
+                                ((rootTurn == OctiPlayer.PLAYER_A || rootTurn == OctiPlayer.PLAYER_C)
+                                        ? OctiPlayer.PLAYER_B : OctiPlayer.PLAYER_A);
+                        score = -negamax(scratchBoard, d - 1, 1,
+                                -beta, -alpha, oppPerspective, ctx);
+                    }
                 }
 
                 game.restoreSnapshot(rootSnap);

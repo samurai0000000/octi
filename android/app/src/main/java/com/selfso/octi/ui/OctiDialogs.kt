@@ -81,6 +81,7 @@ import com.selfso.octi.OctiNetworkClient
 import com.selfso.octi.OctiPlayer
 import com.selfso.octi.OctiProngType
 import com.selfso.octi.OctiSquare
+import com.selfso.octi.OctiSquareType
 import com.selfso.octi.OctiThemeId
 import com.selfso.octi.ui.theme.OctiTheme
 import kotlin.math.cos
@@ -644,6 +645,10 @@ fun ZoomedSquareDialog(
     val isTurn = board.game != null && board.game.isGameStarted && !board.game.isGameOver
     val hasEnemy = sq?.hasEnemyOf(turn) == true
     val isFriendlyTurn = !hasEnemy && isTurn && !isEmptySquare
+    val freePods = board.game?.getFreePods(turn) ?: 0
+    val capPods = board.game?.getCapturedPods(turn) ?: 0
+    val isFriendlyHome = turn != null && ((board.numPlayers == 2 && ((turn == OctiPlayer.PLAYER_A && sq?.type == OctiSquareType.A_HOME_SQUARE) || (turn == OctiPlayer.PLAYER_B && sq?.type == OctiSquareType.B_HOME_SQUARE))) || (board.numPlayers == 4 && sq?.type?.value == turn.value))
+    val canShowPodPlacement = isTurn && !hasEnemy && board.gameMode != OctiGameMode.GAME_MODE_OFK && (isFriendlyHome || (!isEmptySquare && sq != null && sq.type != OctiSquareType.NEUTRAL_SQUARE))
 
     var selectedPodIndex by remember(squareX, squareY, numPods, composer.stagedMoveNotation()) {
         val unclaimed = composer.firstUnclaimedFriendlyPodIndex(squareX, squareY)
@@ -965,7 +970,7 @@ fun ZoomedSquareDialog(
                         }
                     }
 
-                    if (isEmptySquare && isTurn) {
+                    if (canShowPodPlacement) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -974,6 +979,7 @@ fun ZoomedSquareDialog(
                                 onClick = {
                                     onPlaceReservePod(false)
                                 },
+                                enabled = freePods > 0,
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text("Place Reserve (+)")
@@ -982,6 +988,7 @@ fun ZoomedSquareDialog(
                                 onClick = {
                                     onPlaceReservePod(true)
                                 },
+                                enabled = capPods > 0 && board.canLiberate(turn),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text("Liberate (*)")
@@ -1278,7 +1285,8 @@ fun GameOverDialog(
 @Composable
 fun UpToDateModalDialog(
     message: String,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onReinstall: (() -> Unit)? = null
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -1314,15 +1322,39 @@ fun UpToDateModalDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = OctiTheme.colors.textPrimary
                 )
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(0.5f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = OctiTheme.colors.accentBrass,
-                        contentColor = OctiTheme.colors.windowBg
-                    )
-                ) {
-                    Text("OK", fontWeight = FontWeight.Bold)
+                if (onReinstall != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onReinstall,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Reinstall", fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = OctiTheme.colors.accentBrass,
+                                contentColor = OctiTheme.colors.windowBg
+                            )
+                        ) {
+                            Text("OK", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth(0.5f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OctiTheme.colors.accentBrass,
+                            contentColor = OctiTheme.colors.windowBg
+                        )
+                    ) {
+                        Text("OK", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }

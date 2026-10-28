@@ -1141,6 +1141,89 @@ TEST(OctiDialogsRefinementTest, ZoomedSquareDialogStackUnderlayAndMouseWheelCycl
     CHECK_TRUE(QFileInfo(stackArtifact).size() > 10000);
 }
 
+TEST(OctiDialogsRefinementTest, ZoomedSquareDialogPodPlacementAndLiberationButtonsOnOccupiedAndEmptyHome)
+{
+    QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);
+    QString artifactDir = repoRootStr + "/plan/pod_placement_and_liberation.artifacts";
+    QDir().mkpath(artifactDir);
+
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+
+    // 1. Occupied home square at (3, 3) (0-based (2, 2))
+    ZoomedSquareDialog dlgOccupied(&board, &composer, 3, 3, BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    QImage imgOccupied = dlgOccupied.renderToImage(560, 530);
+    CHECK_FALSE(imgOccupied.isNull());
+    LONGS_EQUAL(560, imgOccupied.width());
+    LONGS_EQUAL(530, imgOccupied.height());
+
+    // Both Move Pod and Pod Placement buttons visible and non-overlapping
+    QRectF moveRect = dlgOccupied.movePodBtnRect();
+    QRectF placeRect = dlgOccupied.placeReserveBtnRect();
+    QRectF libRect = dlgOccupied.liberateBtnRect();
+    CHECK_FALSE(moveRect.isEmpty());
+    CHECK_FALSE(placeRect.isEmpty());
+    CHECK_FALSE(libRect.isEmpty());
+    CHECK_FALSE(moveRect.intersects(placeRect));
+    CHECK_FALSE(placeRect.intersects(libRect));
+
+    QString occArtifact = artifactDir + "/desktop_zoomed_occupied_home_v4.png";
+    CHECK_TRUE(imgOccupied.save(occArtifact));
+    CHECK_TRUE(QFileInfo(occArtifact).size() > 5000);
+
+    // 2. Empty home square at (5, 3) (0-based (4, 2))
+    board.squareAt(4, 2).clear();
+    CHECK_TRUE(board.squareAt(4, 2).isEmpty());
+
+    ZoomedSquareDialog dlgEmpty(&board, &composer, 5, 3, BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    QImage imgEmpty = dlgEmpty.renderToImage(560, 530);
+    CHECK_FALSE(imgEmpty.isNull());
+
+    CHECK_TRUE(dlgEmpty.movePodBtnRect().isEmpty());
+    CHECK_FALSE(dlgEmpty.placeReserveBtnRect().isEmpty());
+    CHECK_FALSE(dlgEmpty.liberateBtnRect().isEmpty());
+
+    QString emptyArtifact = artifactDir + "/desktop_zoomed_empty_home_v4.png";
+    CHECK_TRUE(imgEmpty.save(emptyArtifact));
+    CHECK_TRUE(QFileInfo(emptyArtifact).size() > 5000);
+}
+
+TEST(OctiDialogsRefinementTest, SingleClickMoveVsDoubleClickZoomDirectInteraction)
+{
+    OctiBoard board(GAME_MODE_2);
+    board.getGame()->start(PLAYER_A);
+    // Pod at 0-based (2, 2) corresponds to 1-based (3, 3); give it a North prong so it has legal moves
+    board.squareAt(2, 2).podAt(0).addProng(DIR_N, false);
+    OctiMoveComposer composer(&board);
+    OctiSoundSynth synth;
+
+    OctiBoardCanvas canvas;
+    canvas.resize(800, 800);
+    canvas.attachBoard(&board, &composer, &synth);
+    canvas.setVisible(true);
+
+    auto sendSingleClick = [](QWidget *w, const QPointF &pt) {
+        QMouseEvent press(QEvent::MouseButtonPress, pt, pt, pt,
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(w, &press);
+        QMouseEvent release(QEvent::MouseButtonRelease, pt, pt, pt,
+                            Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(w, &release);
+    };
+
+    // 1. Single click on friendly occupied square (3, 3) starts guided move directly
+    QPointF pt33 = canvas.geometry().squareCenter(3, 3);
+    sendSingleClick(&canvas, pt33);
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    CHECK_FALSE(composer.isAwaitingConfirmation());
+
+    // 2. Click outside (e.g. square (1, 1)) rolls back guided move
+    QPointF pt11 = canvas.geometry().squareCenter(1, 1);
+    sendSingleClick(&canvas, pt11);
+    CHECK_FALSE(composer.isGuidedMoveActive());
+}
+
 TEST(OctiDialogsRefinementTest, PlyConfirmDialogCommitCancelAndMoreMoves)
 {
     QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);

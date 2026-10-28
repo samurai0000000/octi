@@ -327,7 +327,7 @@ void OctiReservePanel::mousePressEvent(QMouseEvent *event)
         return;
     }
 
-    if (!isVisible() && _canvas) {
+    if (_canvas) {
         if (_freePodWellRect.contains(pos)) {
             _canvas->startExternalReserveDrag(DragKind::ADD_POD_FROM_RESERVE);
         } else if (_liberatePodWellRect.contains(pos)) {

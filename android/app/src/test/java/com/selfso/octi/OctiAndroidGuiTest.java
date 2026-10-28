@@ -213,6 +213,7 @@ public class OctiAndroidGuiTest {
         File cur = cwd;
         while (cur != null) {
             if (new File(cur, "plan/plan_ply_confirm_and_endgame.md").exists()
+                    || new File(cur, "plan/plan_pod_placement_and_liberation.md").exists()
                     || (new File(cur, "android").isDirectory() && new File(cur, "core").isDirectory())) {
                 return cur;
             }
@@ -274,6 +275,61 @@ public class OctiAndroidGuiTest {
         File gameOverPng = new File(artifactDir, "android_gameover_dialog_v3.png");
         OctiAppIconRenderer.writeArgbPng(1080, 1920, pixels2, gameOverPng);
         assertTrue(gameOverPng.isFile() && gameOverPng.length() > 4096);
+    }
+
+    @Test
+    public void testGenerateEnvelope3VerificationPngArtifacts_PPL_A03() throws Exception {
+        File repoRoot = resolveRepoRoot();
+        File artifactDir = new File(repoRoot, "plan/done/plan_pod_placement_and_liberation.md").exists()
+                ? new File(repoRoot, "plan/done/pod_placement_and_liberation.artifacts")
+                : new File(repoRoot, "plan/pod_placement_and_liberation.artifacts");
+        if (!artifactDir.exists()) {
+            assertTrue(artifactDir.mkdirs());
+        }
+
+        // 1. android_zoomed_occupied_home_v4.png (800 x 800)
+        // Zoomed square of an occupied friendly home square with placed pod
+        OctiBoard board1 = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false,
+                OctiGameBases.GAME_BASES_3);
+        board1.getGame().start(OctiPlayer.PLAYER_A);
+        // Play pod placement on home square (3, 3) so it has 2 pods
+        board1.getGame().move("33");
+        assertEquals(2, board1.squareAt(2, 2).getNumPods());
+
+        int[] zoomPixels = OctiBoardRenderer.renderZoomedPodPixels(
+                board1, 3, 3, 1, 0, OctiThemeId.OBSIDIAN_BRASS, 800, -1);
+        File zoomedPng = new File(artifactDir, "android_zoomed_occupied_home_v4.png");
+        OctiAppIconRenderer.writeArgbPng(800, 800, zoomPixels, zoomedPng);
+        assertTrue(zoomedPng.isFile());
+        assertTrue(zoomedPng.length() > 4096);
+
+        // 2. android_board_staged_pod_preview_v4.png (1080 x 1080)
+        // Board preview with staged reserve pod placement awaiting confirmation
+        OctiBoard board2 = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false,
+                OctiGameBases.GAME_BASES_3);
+        board2.getGame().start(OctiPlayer.PLAYER_A);
+        OctiMoveComposer composer2 = new OctiMoveComposer(board2);
+        assertTrue(composer2.stageOrCommitAddPod(3, 3, false));
+        assertTrue(composer2.isAwaitingConfirmation());
+
+        OctiBoard activePreviewBoard = composer2.buildPreviewBoard();
+        OctiBoardGeometry geom2 = new OctiBoardGeometry(9, 9, 1080.0, 1080.0,
+                OctiBoardGeometry.BoardRotation.ROT_0);
+        int[] boardPreviewPixels = OctiBoardRenderer.renderBoardPixels(
+                activePreviewBoard, composer2, geom2, OctiThemeId.OBSIDIAN_BRASS);
+        File boardPreviewPng = new File(artifactDir, "android_board_staged_pod_preview_v4.png");
+        OctiAppIconRenderer.writeArgbPng(1080, 1080, boardPreviewPixels, boardPreviewPng);
+        assertTrue(boardPreviewPng.isFile());
+        assertTrue(boardPreviewPng.length() > 4096);
+
+        // Verify PNG magic headers
+        for (File f : new File[]{zoomedPng, boardPreviewPng}) {
+            byte[] bytes = Files.readAllBytes(f.toPath());
+            assertEquals((byte) 0x89, bytes[0]);
+            assertEquals((byte) 0x50, bytes[1]);
+            assertEquals((byte) 0x4E, bytes[2]);
+            assertEquals((byte) 0x47, bytes[3]);
+        }
     }
 }
 

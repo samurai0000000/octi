@@ -558,19 +558,24 @@ int OctiBotEngine::negamax(OctiBoard &scratchBoard,
             continue;
         }
 
-        OctiPlayer nextTurn = game->getTurn();
-        bool sameTeamNext = !game->isGameOver() &&
-                            areAlliedPlayers(mode, turn, nextTurn);
-
         int val = 0;
-        if (sameTeamNext) {
-            val = negamax(scratchBoard, depth - 1, ply + 1,
-                          alpha, beta, turn, nodesVisited, deadlineMs, timedOut);
+        if (game->isGameOver()) {
+            OctiPlayer w = game->getWinner();
+            val = areAlliedPlayers(mode, w, turn)
+                ? (WIN_SCORE - (ply + 1))
+                : (-WIN_SCORE + (ply + 1));
         } else {
-            OctiPlayer oppPerspective = (nextTurn != PLAYER_UNDEF) ? nextTurn :
-                ((turn == PLAYER_A || turn == PLAYER_C) ? PLAYER_B : PLAYER_A);
-            val = -negamax(scratchBoard, depth - 1, ply + 1,
-                           -beta, -alpha, oppPerspective, nodesVisited, deadlineMs, timedOut);
+            OctiPlayer nextTurn = game->getTurn();
+            bool sameTeamNext = areAlliedPlayers(mode, turn, nextTurn);
+            if (sameTeamNext) {
+                val = negamax(scratchBoard, depth - 1, ply + 1,
+                              alpha, beta, turn, nodesVisited, deadlineMs, timedOut);
+            } else {
+                OctiPlayer oppPerspective = (nextTurn != PLAYER_UNDEF) ? nextTurn :
+                    ((turn == PLAYER_A || turn == PLAYER_C) ? PLAYER_B : PLAYER_A);
+                val = -negamax(scratchBoard, depth - 1, ply + 1,
+                               -beta, -alpha, oppPerspective, nodesVisited, deadlineMs, timedOut);
+            }
         }
 
         game->restoreSnapshot(snap);
@@ -688,21 +693,26 @@ std::string OctiBotEngine::chooseMove(const OctiBoard &board,
                 continue;
             }
 
-            OctiPlayer nextTurn = game->getTurn();
-            bool sameTeamNext = !game->isGameOver() &&
-                                areAlliedPlayers(mode, rootTurn, nextTurn);
-
             int score = 0;
-            if (sameTeamNext) {
-                score = negamax(scratchBoard, d - 1, 1,
-                                alpha, beta, rootTurn, nodesVisited,
-                                deadlineMs, timedOut);
+            if (game->isGameOver()) {
+                OctiPlayer w = game->getWinner();
+                score = areAlliedPlayers(mode, w, rootTurn)
+                    ? (WIN_SCORE - 1)
+                    : (-WIN_SCORE + 1);
             } else {
-                OctiPlayer oppPerspective = (nextTurn != PLAYER_UNDEF) ? nextTurn :
-                    ((rootTurn == PLAYER_A || rootTurn == PLAYER_C) ? PLAYER_B : PLAYER_A);
-                score = -negamax(scratchBoard, d - 1, 1,
-                                 -beta, -alpha, oppPerspective, nodesVisited,
-                                 deadlineMs, timedOut);
+                OctiPlayer nextTurn = game->getTurn();
+                bool sameTeamNext = areAlliedPlayers(mode, rootTurn, nextTurn);
+                if (sameTeamNext) {
+                    score = negamax(scratchBoard, d - 1, 1,
+                                    alpha, beta, rootTurn, nodesVisited,
+                                    deadlineMs, timedOut);
+                } else {
+                    OctiPlayer oppPerspective = (nextTurn != PLAYER_UNDEF) ? nextTurn :
+                        ((rootTurn == PLAYER_A || rootTurn == PLAYER_C) ? PLAYER_B : PLAYER_A);
+                    score = -negamax(scratchBoard, d - 1, 1,
+                                     -beta, -alpha, oppPerspective, nodesVisited,
+                                     deadlineMs, timedOut);
+                }
             }
 
             game->restoreSnapshot(rootSnap);

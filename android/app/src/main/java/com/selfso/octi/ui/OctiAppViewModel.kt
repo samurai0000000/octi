@@ -312,11 +312,12 @@ class OctiAppViewModel @JvmOverloads constructor(
         configStore.load()
         val prefs = configStore.preferences()
         _theme.value = prefs.getTheme()
-        _confirmAllMoves.value = prefs.isConfirmAllMoves()
+        _confirmAllMoves.value = true
         _sfxMuted.value = prefs.isSfxMuted()
         _volumeKeyPtt.value = prefs.isVolumeKeyPtt()
         soundSynth.setMuted(_sfxMuted.value)
-        composer.setConfirmAllMoves(_confirmAllMoves.value)
+        composer.setConfirmAllMoves(true)
+        prefs.setConfirmAllMoves(true)
         if (prefs.sessionToken.isNotEmpty()) {
             netClient.setSessionToken(prefs.sessionToken)
             _isAuthenticated.value = true

@@ -638,8 +638,23 @@ void OctiGame::applyMoveOps(const std::vector<OctiMoveOp> &ops)
         if (sq.getType() == NEUTRAL_SQUARE) {
             throw IllegalMoveException("pod placement only allowed on OCTI squares");
         }
-        if (sq.isEmpty() || sq.hasEnemyOf(_turn)) {
-            throw IllegalMoveException("pod placement square must be occupied by friendly pod");
+        OctiSquareType st = sq.getType();
+        bool isFriendlyHome = false;
+        if (_board->getNumPlayers() == 2) {
+            isFriendlyHome = (_turn == PLAYER_A && st == A_HOME_SQUARE) ||
+                             (_turn == PLAYER_B && st == B_HOME_SQUARE);
+        } else if (_board->getNumPlayers() == 4) {
+            isFriendlyHome = (st == static_cast<OctiSquareType>(_turn));
+        }
+
+        if (isFriendlyHome) {
+            if (sq.hasEnemyOf(_turn)) {
+                throw IllegalMoveException("pod placement square occupied by enemy pod");
+            }
+        } else {
+            if (sq.isEmpty() || sq.hasEnemyOf(_turn)) {
+                throw IllegalMoveException("pod placement square must be occupied by friendly pod");
+            }
         }
 
         if (_mode == GAME_MODE_2) {
@@ -1486,8 +1501,26 @@ void OctiGame::generateLegalMoves(std::vector<OctiMove> &outMoves) const
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
                 const OctiSquare &sq = _board->squareAt(x, y);
-                if (sq.getType() == NEUTRAL_SQUARE || sq.isEmpty() || sq.hasEnemyOf(_turn)) {
+                if (sq.getType() == NEUTRAL_SQUARE) {
                     continue;
+                }
+                OctiSquareType st = sq.getType();
+                bool isFriendlyHome = false;
+                if (_board->getNumPlayers() == 2) {
+                    isFriendlyHome = (_turn == PLAYER_A && st == A_HOME_SQUARE) ||
+                                     (_turn == PLAYER_B && st == B_HOME_SQUARE);
+                } else if (_board->getNumPlayers() == 4) {
+                    isFriendlyHome = (st == static_cast<OctiSquareType>(_turn));
+                }
+
+                if (isFriendlyHome) {
+                    if (sq.hasEnemyOf(_turn)) {
+                        continue;
+                    }
+                } else {
+                    if (sq.isEmpty() || sq.hasEnemyOf(_turn)) {
+                        continue;
+                    }
                 }
 
                 if (_mode == GAME_MODE_2) {

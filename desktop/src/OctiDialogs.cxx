@@ -2600,7 +2600,8 @@ void SelfUpdateDialog::applyUpdateState(const selfupdate::UpdateState &state)
             QString("OCTI Desktop Player v%1 is up to date (No updates available).")
                 .arg(installedVer));
         _checkBtn->setEnabled(true);
-        _downloadInstallBtn->setEnabled(false);
+        _downloadInstallBtn->setEnabled(true);
+        _downloadInstallBtn->setText("Reinstall");
         _cancelBtn->setEnabled(false);
         _progressBar->setValue(100);
         break;
@@ -2729,6 +2730,8 @@ void SelfUpdateDialog::triggerDownloadAndInstall()
     } else if (_controller) {
         if (_currentState.phase == selfupdate::UpdatePhase::ReadyToInstall) {
             _controller->installStagedPackage();
+        } else if (_currentState.phase == selfupdate::UpdatePhase::UpToDate) {
+            _controller->reinstall();
         } else {
             _controller->downloadAndInstall();
         }
@@ -2777,6 +2780,11 @@ int SelfUpdateDialog::progressPercent() const
 bool SelfUpdateDialog::isDownloadInstallButtonEnabled() const
 {
     return _downloadInstallBtn ? _downloadInstallBtn->isEnabled() : false;
+}
+
+QString SelfUpdateDialog::downloadInstallButtonText() const
+{
+    return _downloadInstallBtn ? _downloadInstallBtn->text() : QString();
 }
 
 bool SelfUpdateDialog::isCancelButtonEnabled() const
@@ -3357,13 +3365,62 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         p.drawText(spTxtR, Qt::AlignCenter, QString("Super (!)\n(%1 avail)").arg(freeSuper));
     }
 
-    // 6. Action Buttons at Bottom (PCE-D01: mutually exclusive by square state)
+    // 6. Action Buttons at Bottom
     _movePodBtnRect = QRectF();
     _placeReserveBtnRect = QRectF();
     _liberateBtnRect = QRectF();
 
+    OctiPlayer turn = (_board && _board->getGame()) ? _board->getGame()->getTurn() : PLAYER_A;
+    const OctiSquare &sq = (_board && _board->isValidCoord(_squareX - 1, _squareY - 1))
+        ? _board->squareAt(_squareX - 1, _squareY - 1)
+        : _board->squareAt(0, 0);
+
+    bool isFriendlyBase = false;
+    if (_board) {
+        if (_board->getNumPlayers() == 2) {
+            isFriendlyBase = ((turn == PLAYER_A && sq.getType() == A_HOME_SQUARE) ||
+                              (turn == PLAYER_B && sq.getType() == B_HOME_SQUARE));
+        } else if (_board->getNumPlayers() == 4) {
+            isFriendlyBase = (sq.getType() == static_cast<OctiSquareType>(turn));
+        }
+    }
+
+    bool canShowPodPlacement = isTurn && !hasEnemy && _board &&
+                               _board->getGameMode() != GAME_MODE_OFK &&
+                               (isFriendlyBase || (!isEmptySquare && sq.getType() != NEUTRAL_SQUARE));
+
+    int freePods = (_board && _board->getGame()) ? _board->getGame()->getFreePods(turn) : 0;
+    int capPods = (_board && _board->getGame()) ? _board->getGame()->getCapturedPods(turn) : 0;
+    bool canLiberate = (capPods > 0 && _board && _board->canLiberate(turn));
+
+    auto drawPlaceAndLiberate = [&](const QRectF &placeRect, const QRectF &libRect, int fontSize) {
+        _placeReserveBtnRect = placeRect;
+        _liberateBtnRect = libRect;
+
+        bool canPlace = (freePods > 0);
+        p.setPen(QPen(canPlace ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
+        p.setBrush(canPlace ? pal.podA.core : pal.panelCardBg.darker(130));
+        p.drawRoundedRect(_placeReserveBtnRect, 6.0, 6.0);
+        p.setPen(canPlace ? Qt::white : pal.textSecondary);
+        p.setFont(QFont("SansSerif", fontSize, QFont::Bold));
+        p.drawText(_placeReserveBtnRect, Qt::AlignCenter, "Place Reserve (+)");
+
+        p.setPen(QPen(canLiberate ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
+        p.setBrush(canLiberate ? pal.accentBrass.darker(140) : pal.panelCardBg.darker(130));
+        p.drawRoundedRect(_liberateBtnRect, 6.0, 6.0);
+        p.setPen(canLiberate ? pal.prongSuperGold : pal.textSecondary);
+        p.setFont(QFont("SansSerif", fontSize, QFont::Bold));
+        p.drawText(_liberateBtnRect, Qt::AlignCenter, "Liberate (*)");
+    };
+
     if (!isEmptySquare && !hasEnemy && isTurn && !currentPodClaimed) {
-        _movePodBtnRect = QRectF(120, 460, 320, 38);
+        if (canShowPodPlacement) {
+            _movePodBtnRect = QRectF(120, 444, 320, 32);
+            drawPlaceAndLiberate(QRectF(120, 482, 155, 32), QRectF(285, 482, 155, 32), 9);
+        } else {
+            _movePodBtnRect = QRectF(120, 460, 320, 38);
+        }
+
         bool canMove = false;
         if (_composer) {
             canMove = !_composer->legalDestinationsFrom(_squareX, _squareY, _selectedPodIndex).empty();
@@ -3372,30 +3429,11 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         p.setBrush(canMove ? pal.podA.core : pal.panelCardBg.darker(140));
         p.drawRoundedRect(_movePodBtnRect, 6.0, 6.0);
         p.setPen(canMove ? Qt::white : QColor(130, 140, 150));
-        QFont btnFont("SansSerif", 11, QFont::Bold);
+        QFont btnFont("SansSerif", _movePodBtnRect.height() < 36 ? 10 : 11, QFont::Bold);
         p.setFont(btnFont);
         p.drawText(_movePodBtnRect, Qt::AlignCenter, "Move / Jump This Pod");
-    } else if (isEmptySquare && isTurn && _composer) {
-        _placeReserveBtnRect = QRectF(120, 460, 155, 38);
-        _liberateBtnRect = QRectF(285, 460, 155, 38);
-
-        int freePods = (_board && _board->getGame())
-            ? _board->getGame()->getFreePods(_board->getGame()->getTurn()) : 0;
-        int capPods = (_board && _board->getGame())
-            ? _board->getGame()->getCapturedPods(_board->getGame()->getTurn()) : 0;
-
-        p.setPen(QPen(freePods > 0 ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
-        p.setBrush(freePods > 0 ? pal.podA.core : pal.panelCardBg.darker(130));
-        p.drawRoundedRect(_placeReserveBtnRect, 6.0, 6.0);
-        p.setPen(freePods > 0 ? Qt::white : pal.textSecondary);
-        p.setFont(QFont("SansSerif", 9, QFont::Bold));
-        p.drawText(_placeReserveBtnRect, Qt::AlignCenter, "Place Reserve (+)");
-
-        p.setPen(QPen(capPods > 0 ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
-        p.setBrush(capPods > 0 ? pal.accentBrass.darker(140) : pal.panelCardBg.darker(130));
-        p.drawRoundedRect(_liberateBtnRect, 6.0, 6.0);
-        p.setPen(capPods > 0 ? pal.prongSuperGold : pal.textSecondary);
-        p.drawText(_liberateBtnRect, Qt::AlignCenter, "Liberate (*)");
+    } else if (isEmptySquare && canShowPodPlacement && _composer) {
+        drawPlaceAndLiberate(QRectF(120, 460, 155, 38), QRectF(285, 460, 155, 38), 9);
     } else if (hasEnemy) {
         QFont roFont("SansSerif", 10, QFont::Medium);
         p.setFont(roFont);

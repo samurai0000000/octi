@@ -1491,7 +1491,8 @@ TEST(DesktopAppIntegrationTest, DesktopSelfUpdateEndToEndAndFaultInjection)
             propDlg.applyUpdateState(st);
             RC_ASSERT(propDlg.phaseBadgeText() == "UP TO DATE");
             RC_ASSERT(propDlg.progressPercent() == 100);
-            RC_ASSERT(!propDlg.isDownloadInstallButtonEnabled());
+            RC_ASSERT(propDlg.isDownloadInstallButtonEnabled());
+            RC_ASSERT(propDlg.downloadInstallButtonText() == "Reinstall");
 
             st.phase = selfupdate::UpdatePhase::Error;
             st.errorMessage = "Simulated error";
