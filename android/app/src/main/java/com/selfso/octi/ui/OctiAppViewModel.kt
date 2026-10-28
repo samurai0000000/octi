@@ -137,7 +137,7 @@ class OctiAppViewModel @JvmOverloads constructor(
     private val _currentTab = MutableStateFlow(AppTab.BOARD)
     val currentTab: StateFlow<AppTab> = _currentTab.asStateFlow()
 
-    private val _matchType = MutableStateFlow(MatchType.LOCAL_PASS_AND_PLAY)
+    private val _matchType = MutableStateFlow(MatchType.LOCAL_VS_BOT)
     val matchType: StateFlow<MatchType> = _matchType.asStateFlow()
 
     private val _theme = MutableStateFlow(OctiThemeId.OBSIDIAN_BRASS)
@@ -333,7 +333,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             false,
             false,
             OctiGameBases.GAME_BASES_3,
-            false,
+            true,
             OctiBotEngine.BotDifficulty.TACTICAL,
             OctiPlayer.PLAYER_A
         )
@@ -474,7 +474,7 @@ class OctiAppViewModel @JvmOverloads constructor(
         } else {
             OctiGameBases.GAME_BASES_3
         },
-        vsBot: Boolean = false,
+        vsBot: Boolean = true,
         difficulty: OctiBotEngine.BotDifficulty = OctiBotEngine.BotDifficulty.TACTICAL,
         humanPlayer: OctiPlayer = OctiPlayer.PLAYER_A
     ) {

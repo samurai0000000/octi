@@ -145,12 +145,21 @@ fun NewGameSetupDialog(
     viewModel: OctiAppViewModel,
     onDismiss: () -> Unit
 ) {
-    var mode by remember { mutableStateOf(OctiGameMode.GAME_MODE_2) }
-    var threeBases by remember { mutableStateOf(true) }
-    var useSuperProngs by remember { mutableStateOf(false) }
-    var edgeless by remember { mutableStateOf(false) }
-    var vsBot by remember { mutableStateOf(false) }
-    var difficulty by remember { mutableStateOf(OctiBotEngine.BotDifficulty.TACTICAL) }
+    var mode by remember { mutableStateOf(viewModel.board.gameMode) }
+    var threeBases by remember {
+        mutableStateOf(viewModel.board.game?.bases == OctiGameBases.GAME_BASES_3)
+    }
+    var useSuperProngs by remember {
+        mutableStateOf(viewModel.board.game?.useSuperProngs() == true)
+    }
+    var edgeless by remember {
+        mutableStateOf(viewModel.board.game?.useEdgelessBoard() == true)
+    }
+    var vsBot by remember {
+        mutableStateOf(viewModel.matchType.value != OctiAppViewModel.MatchType.LOCAL_PASS_AND_PLAY)
+    }
+    var difficulty by remember { mutableStateOf(viewModel.botDifficulty.value) }
+    var humanSeat by remember { mutableStateOf(viewModel.humanSeat.value) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -167,6 +176,9 @@ fun NewGameSetupDialog(
                         onClick = {
                             mode = OctiGameMode.GAME_MODE_2
                             threeBases = true
+                            if (humanSeat != OctiPlayer.PLAYER_A && humanSeat != OctiPlayer.PLAYER_B) {
+                                humanSeat = OctiPlayer.PLAYER_A
+                            }
                         },
                         label = { Text("2-Player (9x9)") }
                     )
@@ -183,6 +195,9 @@ fun NewGameSetupDialog(
                         onClick = {
                             mode = OctiGameMode.GAME_MODE_OFK
                             threeBases = false
+                            if (humanSeat != OctiPlayer.PLAYER_A && humanSeat != OctiPlayer.PLAYER_B) {
+                                humanSeat = OctiPlayer.PLAYER_A
+                            }
                         },
                         label = { Text("OCTI for Kids (6x7)") }
                     )
@@ -221,6 +236,30 @@ fun NewGameSetupDialog(
                             )
                         }
                     }
+
+                    Text("Your Seat:", fontWeight = FontWeight.SemiBold)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val availableSeats = if (mode == OctiGameMode.GAME_MODE_4) {
+                            listOf(
+                                OctiPlayer.PLAYER_A to "Seat A (Green)",
+                                OctiPlayer.PLAYER_B to "Seat B (Red)",
+                                OctiPlayer.PLAYER_C to "Seat C (Blue)",
+                                OctiPlayer.PLAYER_D to "Seat D (Amber)"
+                            )
+                        } else {
+                            listOf(
+                                OctiPlayer.PLAYER_A to "Seat A (Green / 1st)",
+                                OctiPlayer.PLAYER_B to "Seat B (Red / 2nd)"
+                            )
+                        }
+                        availableSeats.forEach { (seat, label) ->
+                            FilterChip(
+                                selected = humanSeat == seat,
+                                onClick = { humanSeat = seat },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
                 }
             }
         },
@@ -234,6 +273,16 @@ fun NewGameSetupDialog(
                     } else {
                         OctiGameBases.GAME_BASES_1
                     }
+                    val resolvedSeat = if (!vsBot) {
+                        OctiPlayer.PLAYER_A
+                    } else if (mode != OctiGameMode.GAME_MODE_4 &&
+                        humanSeat != OctiPlayer.PLAYER_A &&
+                        humanSeat != OctiPlayer.PLAYER_B
+                    ) {
+                        OctiPlayer.PLAYER_A
+                    } else {
+                        humanSeat
+                    }
                     viewModel.startNewLocalGame(
                         mode = mode,
                         useSuperProngs = (mode != OctiGameMode.GAME_MODE_OFK) && useSuperProngs,
@@ -241,7 +290,7 @@ fun NewGameSetupDialog(
                         bases = bases,
                         vsBot = vsBot,
                         difficulty = difficulty,
-                        humanPlayer = OctiPlayer.PLAYER_A
+                        humanPlayer = resolvedSeat
                     )
                     onDismiss()
                 },

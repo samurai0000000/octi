@@ -138,16 +138,9 @@ public class OctiAndroidGuiTest {
     public void testBotAutoPlaysOnMoveCommitInLocalVsBotMode_PCE_A03() {
         OctiAppViewModel vm = new OctiAppViewModel();
         try {
-            vm.startNewLocalGame(
-                    OctiGameMode.GAME_MODE_2,
-                    false,
-                    false,
-                    OctiGameBases.GAME_BASES_3,
-                    true,
-                    OctiBotEngine.BotDifficulty.TACTICAL,
-                    OctiPlayer.PLAYER_A
-            );
+            // Default on launch must be LOCAL_VS_BOT (matching Desktop)
             assertEquals(OctiAppViewModel.MatchType.LOCAL_VS_BOT, vm.getMatchType().getValue());
+            assertEquals(OctiPlayer.PLAYER_A, vm.getHumanSeat().getValue());
             assertEquals(OctiPlayer.PLAYER_A, vm.getBoard().getGame().getTurn());
             assertEquals(0, vm.livePlyCount());
 
@@ -158,6 +151,22 @@ public class OctiAndroidGuiTest {
             // Both the human move (ply 1) and the AI bot's reply (ply 2) must be applied automatically!
             assertEquals(2, vm.livePlyCount());
             assertEquals(OctiPlayer.PLAYER_A, vm.getBoard().getGame().getTurn());
+
+            // Starting as Seat B (Red / 2nd) must immediately auto-play Bot Seat A's opening ply
+            vm.startNewLocalGame(
+                    OctiGameMode.GAME_MODE_2,
+                    false,
+                    false,
+                    OctiGameBases.GAME_BASES_3,
+                    true,
+                    OctiBotEngine.BotDifficulty.TACTICAL,
+                    OctiPlayer.PLAYER_B
+            );
+            assertEquals(OctiAppViewModel.MatchType.LOCAL_VS_BOT, vm.getMatchType().getValue());
+            assertEquals(OctiPlayer.PLAYER_B, vm.getHumanSeat().getValue());
+            assertEquals(1, vm.livePlyCount());
+            assertEquals(OctiPlayer.PLAYER_B, vm.getBoard().getGame().getTurn());
+            assertEquals(OctiBoardGeometry.BoardRotation.ROT_180, vm.getBoardRotation().getValue());
         } finally {
             vm.close();
         }

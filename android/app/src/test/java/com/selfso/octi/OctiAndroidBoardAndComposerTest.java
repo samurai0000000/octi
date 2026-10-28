@@ -855,7 +855,7 @@ public class OctiAndroidBoardAndComposerTest {
 
     @Test
     public void testOctiAppVersionAndProtocolConstants() {
-        assertEquals("2.0.10", OctiDefs.OCTI_APP_VERSION);
+        assertEquals("2.0.11", OctiDefs.OCTI_APP_VERSION);
         assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
     }
 
