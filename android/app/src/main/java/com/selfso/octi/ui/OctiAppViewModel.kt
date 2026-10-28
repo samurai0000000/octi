@@ -311,6 +311,83 @@ class OctiAppViewModel @JvmOverloads constructor(
     private val _showGameOverDialog = MutableStateFlow(false)
     val showGameOverDialog: StateFlow<Boolean> = _showGameOverDialog.asStateFlow()
 
+    private val _showExportMovesDialog = MutableStateFlow(false)
+    val showExportMovesDialog: StateFlow<Boolean> = _showExportMovesDialog.asStateFlow()
+
+    private val _isBotThinking = MutableStateFlow(false)
+    val isBotThinking: StateFlow<Boolean> = _isBotThinking.asStateFlow()
+
+    private val _botThinkingProgress = MutableStateFlow(0f)
+    val botThinkingProgress: StateFlow<Float> = _botThinkingProgress.asStateFlow()
+
+    private val _botThinkingRemainingSec = MutableStateFlow(0f)
+    val botThinkingRemainingSec: StateFlow<Float> = _botThinkingRemainingSec.asStateFlow()
+
+    private val _asyncBotThinkingEnabled = MutableStateFlow(false)
+    val asyncBotThinkingEnabled: StateFlow<Boolean> = _asyncBotThinkingEnabled.asStateFlow()
+
+    @Volatile
+    private var _activeBotThinkingThread: Thread? = null
+
+    private val _botTurnGeneration = java.util.concurrent.atomic.AtomicInteger(0)
+
+    fun cancelActiveBotTurn() {
+        _botTurnGeneration.incrementAndGet()
+        _isBotThinking.value = false
+        _botThinkingProgress.value = 0f
+        _botThinkingRemainingSec.value = 0f
+        val active = _activeBotThinkingThread
+        _activeBotThinkingThread = null
+        if (active != null && active !== Thread.currentThread()) {
+            try {
+                active.interrupt()
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    private fun runOnUiThreadOrSync(action: () -> Unit) {
+        val vmName = System.getProperty("java.vm.name", "").lowercase()
+        val isAndroidVm = vmName.contains("dalvik") || vmName.contains("art")
+        if (isAndroidVm) {
+            try {
+                val mainLooper = android.os.Looper.getMainLooper()
+                if (mainLooper != null) {
+                    if (Thread.currentThread() === mainLooper.thread) {
+                        synchronized(board) {
+                            action()
+                        }
+                    } else {
+                        android.os.Handler(mainLooper).post {
+                            synchronized(board) {
+                                action()
+                            }
+                        }
+                    }
+                    return
+                }
+            } catch (_: Throwable) {
+            }
+        }
+        synchronized(board) {
+            action()
+        }
+    }
+
+    fun setShowExportMovesDialog(show: Boolean) {
+        _showExportMovesDialog.value = show
+    }
+
+    fun setAsyncBotThinkingEnabled(enabled: Boolean) {
+        _asyncBotThinkingEnabled.value = enabled
+    }
+
+    fun updateBotThinkingProgressForTest(thinking: Boolean, progress: Float, remainingSec: Float) {
+        _isBotThinking.value = thinking
+        _botThinkingProgress.value = progress
+        _botThinkingRemainingSec.value = remainingSec
+    }
+
     fun openZoomedSquare(x: Int, y: Int) {
         _isContinuingGuidedJump.value = false
         _zoomedSquare.value = Pair(x, y)
@@ -533,23 +610,26 @@ class OctiAppViewModel @JvmOverloads constructor(
         difficulty: OctiBotEngine.BotDifficulty = OctiBotEngine.BotDifficulty.TACTICAL,
         humanPlayer: OctiPlayer = OctiPlayer.PLAYER_A
     ) {
-        board.setGameMode(mode, useSuperProngs, useEdgeless, bases)
-        board.game.start(OctiPlayer.PLAYER_A)
+        cancelActiveBotTurn()
+        synchronized(board) {
+            board.setGameMode(mode, useSuperProngs, useEdgeless, bases)
+            board.game.start(OctiPlayer.PLAYER_A)
 
-        val initialFen = board.toPositionString()
-        displayBoard.fromPositionString(initialFen)
+            val initialFen = board.toPositionString()
+            displayBoard.fromPositionString(initialFen)
 
-        composer.attachBoard(board)
-        composer.setConfirmAllMoves(_confirmAllMoves.value)
-        composer.setMoveEntireMatchingStack(_moveEntireMatchingStack.value)
-        _matchType.value = if (vsBot) MatchType.LOCAL_VS_BOT else MatchType.LOCAL_PASS_AND_PLAY
-        _botDifficulty.value = difficulty
-        botEngine.setDifficulty(difficulty)
-        _humanSeat.value = humanPlayer
+            composer.attachBoard(board)
+            composer.setConfirmAllMoves(_confirmAllMoves.value)
+            composer.setMoveEntireMatchingStack(_moveEntireMatchingStack.value)
+            _matchType.value = if (vsBot) MatchType.LOCAL_VS_BOT else MatchType.LOCAL_PASS_AND_PLAY
+            _botDifficulty.value = difficulty
+            botEngine.setDifficulty(difficulty)
+            _humanSeat.value = humanPlayer
 
-        _fenHistory.clear()
-        _moveHistory.clear()
-        _fenHistory.add(initialFen)
+            _fenHistory.clear()
+            _moveHistory.clear()
+            _fenHistory.add(initialFen)
+        }
         _viewingPly.value = 0
         _isContinuingGuidedJump.value = false
         _showGameOverDialog.value = false
@@ -629,21 +709,23 @@ class OctiAppViewModel @JvmOverloads constructor(
             val res = submitOnlineMove(notation)
             return res.ok
         }
-        if (isViewingHistory()) {
-            vcrLast()
-        }
-        composer.rollbackMove()
-        return try {
-            board.game.move(notation)
-            recordAppliedBoardPly(notation)
-            composer.attachBoard(board)
-            composer.setConfirmAllMoves(_confirmAllMoves.value)
-            syncRotationToActiveSeat()
-            bumpBoardRevision()
-            true
-        } catch (e: RuntimeException) {
-            _statusBanner.value = "Illegal move: ${e.message}"
-            false
+        return synchronized(board) {
+            if (isViewingHistory()) {
+                vcrLast()
+            }
+            composer.rollbackMove()
+            try {
+                board.game.move(notation)
+                recordAppliedBoardPly(notation)
+                composer.attachBoard(board)
+                composer.setConfirmAllMoves(_confirmAllMoves.value)
+                syncRotationToActiveSeat()
+                bumpBoardRevision()
+                true
+            } catch (e: RuntimeException) {
+                _statusBanner.value = "Illegal move: ${e.message}"
+                false
+            }
         }
     }
 
@@ -684,39 +766,42 @@ class OctiAppViewModel @JvmOverloads constructor(
         ) {
             return false
         }
-        _isContinuingGuidedJump.value = false
-        composer.rollbackMove()
-        val g = board.game ?: return false
-        if (!g.canUndo()) {
-            return false
-        }
-        g.undo()
-        if (_matchType.value == MatchType.LOCAL_VS_BOT &&
-            g.turn != _humanSeat.value &&
-            g.canUndo()
-        ) {
+        cancelActiveBotTurn()
+        return synchronized(board) {
+            _isContinuingGuidedJump.value = false
+            composer.rollbackMove()
+            val g = board.game ?: return@synchronized false
+            if (!g.canUndo()) {
+                return@synchronized false
+            }
             g.undo()
+            if (_matchType.value == MatchType.LOCAL_VS_BOT &&
+                g.turn != _humanSeat.value &&
+                g.canUndo()
+            ) {
+                g.undo()
+            }
+            while (_fenHistory.size > g.numMoves + 1 && _fenHistory.size > 1) {
+                _fenHistory.removeAt(_fenHistory.size - 1)
+            }
+            while (_moveHistory.size > g.numMoves && _moveHistory.isNotEmpty()) {
+                _moveHistory.removeAt(_moveHistory.size - 1)
+            }
+            val currentFen = board.toPositionString()
+            if (_fenHistory.isEmpty()) {
+                _fenHistory.add(currentFen)
+            } else {
+                _fenHistory[_fenHistory.size - 1] = currentFen
+            }
+            displayBoard.fromPositionString(currentFen)
+            _viewingPly.value = livePlyCount()
+            _showGameOverDialog.value = g.isGameOver
+            composer.attachBoard(board)
+            composer.setConfirmAllMoves(_confirmAllMoves.value)
+            syncRotationToActiveSeat()
+            bumpBoardRevision()
+            true
         }
-        while (_fenHistory.size > g.numMoves + 1 && _fenHistory.size > 1) {
-            _fenHistory.removeAt(_fenHistory.size - 1)
-        }
-        while (_moveHistory.size > g.numMoves && _moveHistory.isNotEmpty()) {
-            _moveHistory.removeAt(_moveHistory.size - 1)
-        }
-        val currentFen = board.toPositionString()
-        if (_fenHistory.isEmpty()) {
-            _fenHistory.add(currentFen)
-        } else {
-            _fenHistory[_fenHistory.size - 1] = currentFen
-        }
-        displayBoard.fromPositionString(currentFen)
-        _viewingPly.value = livePlyCount()
-        _showGameOverDialog.value = g.isGameOver
-        composer.attachBoard(board)
-        composer.setConfirmAllMoves(_confirmAllMoves.value)
-        syncRotationToActiveSeat()
-        bumpBoardRevision()
-        return true
     }
 
     fun resignLocalGame(): Boolean {
@@ -725,28 +810,31 @@ class OctiAppViewModel @JvmOverloads constructor(
         ) {
             return false
         }
-        val g = board.game ?: return false
-        if (!g.isGameStarted || g.isGameOver) {
-            return false
-        }
-        _isContinuingGuidedJump.value = false
-        composer.rollbackMove()
-        val resignPlayer = if (_matchType.value == MatchType.LOCAL_VS_BOT) {
-            _humanSeat.value
-        } else {
-            g.turn
-        }
-        return try {
-            g.resign(resignPlayer)
-            val snap = board.toPositionString()
-            displayBoard.fromPositionString(snap)
-            soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
-            _statusBanner.value = "Game Over — Winner: ${g.winner}"
-            _showGameOverDialog.value = true
-            bumpBoardRevision()
-            true
-        } catch (e: RuntimeException) {
-            false
+        cancelActiveBotTurn()
+        return synchronized(board) {
+            val g = board.game ?: return@synchronized false
+            if (!g.isGameStarted || g.isGameOver) {
+                return@synchronized false
+            }
+            _isContinuingGuidedJump.value = false
+            composer.rollbackMove()
+            val resignPlayer = if (_matchType.value == MatchType.LOCAL_VS_BOT) {
+                _humanSeat.value
+            } else {
+                g.turn
+            }
+            try {
+                g.resign(resignPlayer)
+                val snap = board.toPositionString()
+                displayBoard.fromPositionString(snap)
+                soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
+                _statusBanner.value = "Game Over — Winner: ${g.winner}"
+                _showGameOverDialog.value = true
+                bumpBoardRevision()
+                true
+            } catch (e: RuntimeException) {
+                false
+            }
         }
     }
 
@@ -759,17 +847,114 @@ class OctiAppViewModel @JvmOverloads constructor(
             return ""
         }
         val stats = OctiBotEngine.BotSearchStats()
-        val chosen = botEngine.chooseMove(board, stats)
+        val isCustom = botEngine.isCustomTimeBudget
+        if (!isCustom) {
+            botEngine.setTimeBudgetMs(25)
+        }
+        val chosen = try {
+            botEngine.chooseMove(board, stats)
+        } finally {
+            if (!isCustom) {
+                botEngine.restoreDefaultBudget()
+            }
+        }
         if (chosen.isEmpty() || !applyMoveNotation(chosen)) {
             return ""
         }
         return chosen
     }
 
+    fun startAsyncBotTurn(): Thread? {
+        val rootFen: String
+        synchronized(board) {
+            val g = board.game ?: return null
+            if (!g.isGameStarted || g.isGameOver || g.turn == _humanSeat.value) {
+                return null
+            }
+            if (_isBotThinking.value) {
+                return _activeBotThinkingThread
+            }
+            rootFen = board.toPositionString()
+            _isBotThinking.value = true
+            _botThinkingProgress.value = 0f
+        }
+
+        val turnGen = _botTurnGeneration.incrementAndGet()
+        val budgetMs = botEngine.timeBudgetMs.toFloat().coerceAtLeast(10f)
+        _botThinkingRemainingSec.value = (budgetMs / 1000f)
+
+        val t = Thread({
+            val startNs = System.nanoTime()
+            val ticker = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
+            ticker.scheduleAtFixedRate({
+                if (_botTurnGeneration.get() == turnGen) {
+                    val elapsedMs = (System.nanoTime() - startNs) / 1_000_000f
+                    val progress = (elapsedMs / budgetMs).coerceIn(0f, 1f)
+                    val remaining = ((budgetMs - elapsedMs) / 1000f).coerceAtLeast(0f)
+                    _botThinkingProgress.value = progress
+                    _botThinkingRemainingSec.value = remaining
+                }
+            }, 100, 100, java.util.concurrent.TimeUnit.MILLISECONDS)
+
+            var chosen = ""
+            try {
+                val searchBoard = OctiBoard()
+                searchBoard.suppressBoardUpdateNotification(true)
+                searchBoard.fromPositionString(rootFen)
+                val stats = OctiBotEngine.BotSearchStats()
+                chosen = botEngine.chooseMove(searchBoard, stats)
+            } catch (_: Throwable) {
+                chosen = ""
+            } finally {
+                ticker.shutdownNow()
+            }
+
+            if (_botTurnGeneration.get() == turnGen) {
+                var moveApplied = false
+                try {
+                    synchronized(board) {
+                        var candidate = chosen
+                        if (candidate.isEmpty()) {
+                            candidate = board.game?.generateLegalMoves()?.firstOrNull()?.asString() ?: ""
+                        }
+                        if (candidate.isNotEmpty()) {
+                            moveApplied = applyMoveNotation(candidate)
+                            if (!moveApplied) {
+                                val fallback = board.game?.generateLegalMoves()?.firstOrNull()?.asString() ?: ""
+                                if (fallback.isNotEmpty() && fallback != candidate) {
+                                    moveApplied = applyMoveNotation(fallback)
+                                }
+                            }
+                        }
+                    }
+                } finally {
+                    _isBotThinking.value = false
+                    _botThinkingProgress.value = 1f
+                    _botThinkingRemainingSec.value = 0f
+                    _activeBotThinkingThread = null
+                }
+                if (moveApplied) {
+                    executeBotTurnIfNeeded()
+                }
+            }
+        }, "OctiBotThinkingThread")
+
+        _activeBotThinkingThread = t
+        t.start()
+        return t
+    }
+
     fun executeBotTurnIfNeeded(): Boolean {
         if (_matchType.value != MatchType.LOCAL_VS_BOT) return false
         val g = board.game ?: return false
         if (!g.isGameStarted || g.isGameOver) return false
+        if (g.turn == _humanSeat.value) return false
+
+        if (_asyncBotThinkingEnabled.value) {
+            startAsyncBotTurn()
+            return true
+        }
+
         var safety = 0
         var moved = false
         while (!g.isGameOver && g.turn != _humanSeat.value && safety < 8) {
@@ -820,6 +1005,46 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     fun exportCurrentTranscript(): String {
         return board.serializeGame()
+    }
+
+    /**
+     * Formats the committed move history as clean numbered lines for chat / Messenger:
+     * 1. A: 33
+     * 2. B: 37+d
+     * 3. A: 33+a
+     */
+    fun exportMoveHistoryText(): String {
+        val game = board.game
+        if (game != null && game.moves.isNotEmpty()) {
+            val sb = StringBuilder()
+            val movesList = game.moves
+            for (i in movesList.indices) {
+                val entry = movesList[i]
+                val playerLetter = when (entry.player) {
+                    OctiPlayer.PLAYER_A -> "A"
+                    OctiPlayer.PLAYER_B -> "B"
+                    OctiPlayer.PLAYER_C -> "C"
+                    OctiPlayer.PLAYER_D -> "D"
+                    else -> "?"
+                }
+                if (i > 0) {
+                    sb.append("\n")
+                }
+                sb.append("${i + 1}. $playerLetter: ${entry.move.asString()}")
+            }
+            return sb.toString()
+        }
+        if (_moveHistory.isNotEmpty()) {
+            val sb = StringBuilder()
+            for (i in _moveHistory.indices) {
+                if (i > 0) {
+                    sb.append("\n")
+                }
+                sb.append("${i + 1}. ${_moveHistory[i]}")
+            }
+            return sb.toString()
+        }
+        return ""
     }
 
     private fun recordAppliedBoardPly(notation: String) {
@@ -1498,6 +1723,7 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     override fun close() {
+        cancelActiveBotTurn()
         voiceEngine.close()
         netClient.close()
     }

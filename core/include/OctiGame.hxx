@@ -48,6 +48,7 @@ struct OctiGameSnapshot {
     bool gameResigned = false;
     OctiMove lastMove;
     OctiPlayer lastPlayer = PLAYER_UNDEF;
+    int searchPlyOffset = 0;
 };
 
 class OctiGame {
@@ -134,6 +135,8 @@ public:
     // Snapshot / state restore
     OctiGameSnapshot captureSnapshot() const;
     void restoreSnapshot(const OctiGameSnapshot &snap);
+    void setSearchMode(bool searchMode);
+    bool isSearchMode() const;
 
 private:
     void notifyGameUpdated();
@@ -170,6 +173,8 @@ private:
     std::vector<OctiMoveOp> _prepOps;
 
     std::vector<OctiGameListener *> _listeners;
+    bool _searchMode = false;
+    int _searchPlyOffset = 0;
 };
 
 } // namespace octi

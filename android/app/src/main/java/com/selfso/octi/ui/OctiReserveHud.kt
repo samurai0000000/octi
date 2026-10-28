@@ -6,6 +6,9 @@
 
 package com.selfso.octi.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +41,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -214,7 +218,10 @@ fun OctiReserveHud(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     OutlinedButton(
                         onClick = { viewModel.vcrFirst() },
                         enabled = viewingPly > 0
@@ -227,6 +234,12 @@ fun OctiReserveHud(
                     ) {
                         Text("<")
                     }
+                    Text(
+                        text = "Ply $viewingPly/$totalPlies",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = OctiTheme.colors.textSecondary,
+                        modifier = Modifier.padding(horizontal = 2.dp)
+                    )
                     OutlinedButton(
                         onClick = { viewModel.vcrNext() },
                         enabled = viewingPly < totalPlies
@@ -239,6 +252,18 @@ fun OctiReserveHud(
                     ) {
                         Text(">>|")
                     }
+                }
+                val context = LocalContext.current
+                OutlinedButton(
+                    onClick = {
+                        val text = viewModel.exportMoveHistoryText()
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        val clip = ClipData.newPlainText("OCTI Moves", text)
+                        clipboard?.setPrimaryClip(clip)
+                        viewModel.setShowExportMovesDialog(true)
+                    }
+                ) {
+                    Text("Export")
                 }
             }
 

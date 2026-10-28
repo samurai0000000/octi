@@ -2006,9 +2006,15 @@ NewLocalGameDialog::NewLocalGameDialog(ThemeId theme, QWidget *parent)
         "Local Pass-and-Play", static_cast<int>(LocalPlayType::PASS_AND_PLAY));
 
     _difficultyCombo = new QComboBox(this);
-    _difficultyCombo->addItem("Casual", static_cast<int>(BotDifficulty::CASUAL));
-    _difficultyCombo->addItem("Tactical", static_cast<int>(BotDifficulty::TACTICAL));
-    _difficultyCombo->addItem("Master", static_cast<int>(BotDifficulty::MASTER));
+    _difficultyCombo->addItem(
+        QString::fromUtf8("Level 1 \xE2\x80\x94 Casual (3s)"),
+        static_cast<int>(BotDifficulty::CASUAL));
+    _difficultyCombo->addItem(
+        QString::fromUtf8("Level 2 \xE2\x80\x94 Tactical (8s)"),
+        static_cast<int>(BotDifficulty::TACTICAL));
+    _difficultyCombo->addItem(
+        QString::fromUtf8("Level 3 \xE2\x80\x94 Master (15s)"),
+        static_cast<int>(BotDifficulty::MASTER));
     _difficultyCombo->setCurrentIndex(1);
 
     _humanSeatCombo = new QComboBox(this);
@@ -4394,6 +4400,137 @@ void PlyConfirmDialog::keyPressEvent(QKeyEvent *event)
     }
 
     QDialog::keyPressEvent(event);
+}
+
+/* ==================================================================== */
+/* OctiThinkingDialog (EMF-D02)                                         */
+/* ==================================================================== */
+
+OctiThinkingDialog::OctiThinkingDialog(BotDifficulty difficulty,
+                                       int budgetMs,
+                                       ThemeId theme,
+                                       QWidget *parent)
+    : QDialog(parent)
+    , _difficulty(difficulty)
+    , _budgetMs(std::max(10, budgetMs))
+    , _statusLabel(nullptr)
+    , _slider(nullptr)
+{
+    setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+    setWindowModality(Qt::ApplicationModal);
+    setAttribute(Qt::WA_TranslucentBackground, true);
+
+    const OctiPalette &pal = paletteForTheme(theme);
+
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(14, 10, 14, 10);
+    layout->setSpacing(6);
+
+    _statusLabel = new QLabel(this);
+    _statusLabel->setAlignment(Qt::AlignCenter);
+    _statusLabel->setStyleSheet(
+        QString("color: %1; font-weight: bold; font-size: 13px;")
+            .arg(pal.accentBrass.name()));
+    layout->addWidget(_statusLabel);
+
+    _slider = new QSlider(Qt::Horizontal, this);
+    _slider->setRange(0, 1000);
+    _slider->setValue(0);
+    _slider->setEnabled(false);
+    _slider->setStyleSheet(
+        QString("QSlider::groove:horizontal {"
+                "  border: 1px solid %1;"
+                "  height: 8px;"
+                "  background: %2;"
+                "  border-radius: 4px;"
+                "}"
+                "QSlider::sub-page:horizontal {"
+                "  background: %3;"
+                "  border-radius: 4px;"
+                "}"
+                "QSlider::handle:horizontal {"
+                "  background: #ffffff;"
+                "  border: 1px solid %1;"
+                "  width: 14px;"
+                "  margin-top: -3px;"
+                "  margin-bottom: -3px;"
+                "  border-radius: 7px;"
+                "}")
+            .arg(pal.accentBrass.name())
+            .arg(pal.panelCardBg.name())
+            .arg(pal.accentBrass.name()));
+    layout->addWidget(_slider);
+
+    setStyleSheet(
+        QString("QDialog {"
+                "  background-color: %1;"
+                "  border: 2px solid %2;"
+                "  border-radius: 12px;"
+                "}")
+            .arg(pal.panelCardBg.name())
+            .arg(pal.accentBrass.name()));
+
+    resize(360, 72);
+    updateProgress(0, _budgetMs);
+}
+
+OctiThinkingDialog::~OctiThinkingDialog() = default;
+
+void OctiThinkingDialog::updateProgress(int elapsedMs, int totalBudgetMs)
+{
+    int budget = std::max(1, totalBudgetMs > 0 ? totalBudgetMs : _budgetMs);
+    int level = static_cast<int>(_difficulty);
+    double remSec = std::max(0.0, static_cast<double>(budget - elapsedMs) / 1000.0);
+
+    if (_statusLabel) {
+        _statusLabel->setText(
+            QString("AI Thinking (Level %1) \xE2\x80\x94 %2s remaining")
+                .arg(level)
+                .arg(remSec, 0, 'f', 1));
+    }
+    if (_slider) {
+        int sVal = std::min(1000, std::max(0, static_cast<int>(elapsedMs * 1000ULL / budget)));
+        _slider->setValue(sVal);
+    }
+}
+
+int OctiThinkingDialog::sliderValue() const
+{
+    return _slider ? _slider->value() : 0;
+}
+
+QString OctiThinkingDialog::statusText() const
+{
+    return _statusLabel ? _statusLabel->text() : QString();
+}
+
+bool OctiThinkingDialog::isFrameless() const
+{
+    return (windowFlags() & Qt::FramelessWindowHint) != 0;
+}
+
+void OctiThinkingDialog::positionBelowBoard(QWidget *mainWindow, QWidget *canvas)
+{
+    if (!mainWindow) {
+        return;
+    }
+    QPoint mainTopLeft = mainWindow->mapToGlobal(QPoint(0, 0));
+    int mainW = mainWindow->width();
+    int mainH = mainWindow->height();
+
+    int dlgW = width() > 0 ? width() : 360;
+    int dlgH = height() > 0 ? height() : 72;
+
+    int cx = mainTopLeft.x() + mainW / 2;
+    if (canvas && canvas->isVisible()) {
+        QPoint cPos = canvas->mapToGlobal(QPoint(0, 0));
+        cx = cPos.x() + canvas->width() / 2;
+    }
+
+    int posX = cx - dlgW / 2;
+    int posY = mainTopLeft.y() + mainH - dlgH - 28;
+
+    move(posX, posY);
 }
 
 /* ==================================================================== */

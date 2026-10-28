@@ -27,6 +27,7 @@
 #include <QPlainTextEdit>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QSlider>
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QTimer>
@@ -595,7 +596,7 @@ private:
  * 12. OctiSplashDialog:
  *     10.0-second (10000 ms) luxury procedural animated splash screen.
  *     Obsidian & Brass tabletop, rotating brass ring, animated OCTI pod & superprong snapping,
- *     game credits, authorship, copyright, version 2.0.12, progress bar,
+ *     game credits, authorship, copyright, version 2.1.0, progress bar,
  *     and early dismissal via ESC or mouse click.
  */
 class OctiSplashDialog : public QDialog {
@@ -840,6 +841,30 @@ private:
 
     QRectF _commitBtnRect;
     QRectF _cancelBtnRect;
+};
+
+/*
+ * Modal Borderless Non-Obstructing "AI Thinking" Slider Dialog (EMF-D02)
+ */
+class OctiThinkingDialog : public QDialog {
+public:
+    explicit OctiThinkingDialog(BotDifficulty difficulty = BotDifficulty::TACTICAL,
+                                int budgetMs = 8000,
+                                ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                                QWidget *parent = nullptr);
+    ~OctiThinkingDialog() override;
+
+    void updateProgress(int elapsedMs, int totalBudgetMs);
+    int sliderValue() const;
+    QString statusText() const;
+    bool isFrameless() const;
+    void positionBelowBoard(QWidget *mainWindow, QWidget *canvas = nullptr);
+
+private:
+    BotDifficulty _difficulty;
+    int _budgetMs;
+    QLabel *_statusLabel;
+    QSlider *_slider;
 };
 
 /*

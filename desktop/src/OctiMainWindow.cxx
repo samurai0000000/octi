@@ -4,9 +4,11 @@
  * Copyright (C) 2026, Charles Chiou
  */
 
+#include <atomic>
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <thread>
 #include <nlohmann/json.hpp>
 #include <QAction>
 #include <QApplication>
@@ -430,7 +432,7 @@ OctiMainWindow::OctiMainWindow(
     _fenStatusLabel->setWordWrap(true);
     _fenStatusLabel->setTextInteractionFlags(
         Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
-    histLayout->addWidget(_fenStatusLabel);
+    _fenStatusLabel->setVisible(false);
     rightLayout->addWidget(historyBox, 2);
 
     /* 2. Active Proposal Banner & Game Action Buttons */
@@ -1250,6 +1252,9 @@ void OctiMainWindow::startNewLocalGame(const LocalGameConfig &cfg)
     _localConfig = cfg;
     _isLocalBotGame = (cfg.playType == LocalPlayType::VS_AI_BOT);
     _botEngine.setDifficulty(cfg.botDifficulty);
+    if (!isVisible()) {
+        _botEngine.setTimeBudgetMs(25);
+    }
 
     _board.setGameMode(
         cfg.mode, cfg.useSuperProngs, cfg.useEdgelessBoard, cfg.bases);
@@ -1307,13 +1312,53 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
     if (!game || !game->isGameStarted() || game->isGameOver()) {
         return false;
     }
+
+    if (!isVisible()) {
+        _botEngine.setTimeBudgetMs(25);
+    }
+
     int safetyCount = 0;
     bool movedAny = false;
     while (!game->isGameOver() &&
            game->getTurn() != _localConfig.humanSeat &&
            safetyCount < 8) {
         ++safetyCount;
-        std::string botMove = _botEngine.chooseMove(_board);
+
+        std::string botMove;
+        if (!isVisible()) {
+            botMove = _botEngine.chooseMove(_board);
+        } else {
+            int budgetMs = _botEngine.timeBudgetMs();
+            OctiThinkingDialog thinkingDlg(_botEngine.difficulty(), budgetMs, _theme, this);
+            thinkingDlg.positionBelowBoard(this, _boardCanvas);
+
+            std::atomic<bool> done{false};
+            std::string chosen;
+            std::thread worker([this, &done, &chosen]() {
+                chosen = _botEngine.chooseMove(_board);
+                done.store(true);
+            });
+
+            QElapsedTimer timer;
+            timer.start();
+            QTimer tickTimer;
+            QObject::connect(&tickTimer, &QTimer::timeout, &thinkingDlg, [&]() {
+                int elapsed = static_cast<int>(timer.elapsed());
+                thinkingDlg.updateProgress(elapsed, budgetMs);
+                if (done.load()) {
+                    thinkingDlg.accept();
+                }
+            });
+            tickTimer.start(50);
+
+            thinkingDlg.exec();
+            tickTimer.stop();
+            if (worker.joinable()) {
+                worker.join();
+            }
+            botMove = chosen;
+        }
+
         if (botMove.empty()) {
             break;
         }
@@ -2080,6 +2125,35 @@ std::vector<std::string> OctiMainWindow::moveHistoryLines() const
     return out;
 }
 
+QString OctiMainWindow::exportMoveHistoryText() const
+{
+    QString out;
+    const OctiGame *g = _board.getGame();
+    if (!g) {
+        return out;
+    }
+    std::vector<std::pair<OctiPlayer, OctiMove>> history;
+    g->getMoves(history);
+    for (std::size_t i = 0; i < history.size(); ++i) {
+        char pCh = 'A';
+        switch (history[i].first) {
+        case PLAYER_A: pCh = 'A'; break;
+        case PLAYER_B: pCh = 'B'; break;
+        case PLAYER_C: pCh = 'C'; break;
+        case PLAYER_D: pCh = 'D'; break;
+        default:       pCh = '?'; break;
+        }
+        if (!out.isEmpty()) {
+            out += "\n";
+        }
+        out += QString("%1. %2: %3")
+            .arg(i + 1)
+            .arg(QChar(pCh))
+            .arg(QString::fromStdString(history[i].second.asString()));
+    }
+    return out;
+}
+
 QListWidget *OctiMainWindow::moveHistoryListWidget() const
 {
     return _moveHistoryList;
@@ -2154,15 +2228,24 @@ void OctiMainWindow::showExportNotationDialog()
 
     QHBoxLayout *btnRow = new QHBoxLayout();
     btnRow->addStretch(1);
-    QPushButton *copyBtn = new QPushButton("Copy to Clipboard", &dlg);
+    QPushButton *copyMovesBtn = new QPushButton("Copy Moves (Messenger)", &dlg);
+    QPushButton *copyTranscriptBtn = new QPushButton("Copy Full Transcript", &dlg);
     QPushButton *closeBtn = new QPushButton("Close", &dlg);
-    btnRow->addWidget(copyBtn);
+    btnRow->addWidget(copyMovesBtn);
+    btnRow->addWidget(copyTranscriptBtn);
     btnRow->addWidget(closeBtn);
     layout->addLayout(btnRow);
 
-    QObject::connect(copyBtn, &QPushButton::clicked, &dlg, [this, copyBtn]() {
+    QObject::connect(copyMovesBtn, &QPushButton::clicked, &dlg, [this, copyMovesBtn]() {
+        QString text = exportMoveHistoryText();
+        if (QClipboard *cb = QGuiApplication::clipboard()) {
+            cb->setText(text);
+        }
+        copyMovesBtn->setText("Copied Moves!");
+    });
+    QObject::connect(copyTranscriptBtn, &QPushButton::clicked, &dlg, [this, copyTranscriptBtn]() {
         copyExportedNotationToClipboard();
-        copyBtn->setText("Copied!");
+        copyTranscriptBtn->setText("Copied Transcript!");
     });
     QObject::connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
 
@@ -2303,6 +2386,7 @@ void OctiMainWindow::refreshMoveHistoryAndFenUi()
         _fenStatusLabel->setText(
             QString("FEN: %1")
                 .arg(QString::fromStdString(_board.toPositionString())));
+        _fenStatusLabel->setVisible(false);
     }
     updateMatchActionsVisibility();
 }

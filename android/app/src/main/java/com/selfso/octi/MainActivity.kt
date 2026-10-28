@@ -6,6 +6,10 @@
 
 package com.selfso.octi
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
@@ -57,6 +61,7 @@ import com.selfso.octi.ui.ArchiveScreen
 import com.selfso.octi.ui.CapturePromptDialog
 import com.selfso.octi.ui.CompositePodMoveDialog
 import com.selfso.octi.ui.CreateTableDialog
+import com.selfso.octi.ui.ExportMovesDialog
 import com.selfso.octi.ui.GameOverDialog
 import com.selfso.octi.ui.LobbyScreen
 import com.selfso.octi.ui.NewGameSetupDialog
@@ -64,6 +69,7 @@ import com.selfso.octi.ui.OctiAppViewModel
 import com.selfso.octi.ui.OctiBoardCanvas
 import com.selfso.octi.ui.OctiReserveHud
 import com.selfso.octi.ui.OctiSplashOverlay
+import com.selfso.octi.ui.OctiThinkingDialog
 import com.selfso.octi.ui.PlyConfirmDialog
 import com.selfso.octi.ui.SsoSignInDialog
 import com.selfso.octi.ui.SuperProngBonusDialog
@@ -87,6 +93,7 @@ class MainActivity : ComponentActivity() {
 
         val configFile = ClientConfigStore.configFileForDirectory(filesDir ?: File("."))
         appViewModel = OctiAppViewModel(ClientConfigStore(configFile))
+        appViewModel.setAsyncBotThinkingEnabled(true)
 
         // Extract intent extras while strictly ignoring any server_url / server_host / server_port override
         val extrasMap = LinkedHashMap<String, String>()
@@ -175,6 +182,9 @@ fun OctiMainAppContent(
     val showAccountDialog by viewModel.showAccountDialog.collectAsState()
     val showCreateTableDialog by viewModel.showCreateTableDialog.collectAsState()
     val showGameOverDialog by viewModel.showGameOverDialog.collectAsState()
+    val showExportMovesDialog by viewModel.showExportMovesDialog.collectAsState()
+    val isBotThinking by viewModel.isBotThinking.collectAsState()
+    val botDifficulty by viewModel.botDifficulty.collectAsState()
     val boardRev by viewModel.boardRevision.collectAsState()
     val currentBoardRev = boardRev
     val awaitingConfirmation by viewModel.awaitingConfirmation.collectAsState()
@@ -240,6 +250,17 @@ fun OctiMainAppContent(
                                 expanded = showTopMenu,
                                 onDismissRequest = { showTopMenu = false }
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text("Export Moves") },
+                                    onClick = {
+                                        showTopMenu = false
+                                        val text = viewModel.exportMoveHistoryText()
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                        val clip = ClipData.newPlainText("OCTI Moves", text)
+                                        clipboard?.setPrimaryClip(clip)
+                                        viewModel.setShowExportMovesDialog(true)
+                                    }
+                                )
                                 DropdownMenuItem(
                                     text = {
                                         Text(
@@ -426,6 +447,16 @@ fun OctiMainAppContent(
                 )
             }
 
+            if (isBotThinking) {
+                val botThinkingProgress by viewModel.botThinkingProgress.collectAsState()
+                val botThinkingRemainingSec by viewModel.botThinkingRemainingSec.collectAsState()
+                OctiThinkingDialog(
+                    level = botDifficulty.level,
+                    progress = botThinkingProgress,
+                    remainingSec = botThinkingRemainingSec
+                )
+            }
+
             if (showSplash) {
                 OctiSplashOverlay(
                     apkSha256Prefix = apkSha256Prefix,
@@ -563,6 +594,27 @@ fun OctiMainAppContent(
                     updateModalMessage = null
                     updateController.reinstall()
                 }
+            )
+        }
+
+        if (showExportMovesDialog) {
+            val movesText = viewModel.exportMoveHistoryText()
+            ExportMovesDialog(
+                movesText = movesText,
+                onCopy = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    val clip = ClipData.newPlainText("OCTI Moves", movesText)
+                    clipboard?.setPrimaryClip(clip)
+                },
+                onShare = {
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, movesText)
+                    }
+                    val shareIntent = Intent.createChooser(sendIntent, "Share OCTI Moves")
+                    context.startActivity(shareIntent)
+                },
+                onDismiss = { viewModel.setShowExportMovesDialog(false) }
             )
         }
     }

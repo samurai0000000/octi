@@ -223,7 +223,18 @@ public class OctiGame {
     }
 
     public int getNumMoves() {
-        return history.size();
+        return history.size() + searchPlyOffset;
+    }
+
+    private boolean searchMode = false;
+    private int searchPlyOffset = 0;
+
+    public void setSearchMode(boolean searchMode) {
+        this.searchMode = searchMode;
+    }
+
+    public boolean isSearchMode() {
+        return searchMode;
     }
 
     public List<MoveHistoryEntry> getMoves() {
@@ -253,6 +264,7 @@ public class OctiGame {
         gameStarted = false;
         gameOver = false;
         gameResigned = false;
+        searchPlyOffset = 0;
         turn = OctiPlayer.PLAYER_UNDEF;
         winner = OctiPlayer.PLAYER_UNDEF;
         hasPreparedMove = false;
@@ -438,6 +450,17 @@ public class OctiGame {
         }
         if (m == null || m.isEmpty()) {
             throw new IllegalMoveException("move is empty");
+        }
+
+        if (searchMode) {
+            applyMoveOps(m.getOps());
+            check4PlayerElimination();
+            searchPlyOffset++;
+            updateGameOverAndWinner();
+            if (!gameOver) {
+                advanceTurn();
+            }
+            return;
         }
 
         OctiGameSnapshot snapBefore = captureSnapshot();
@@ -1880,26 +1903,46 @@ public class OctiGame {
 
     public OctiGameSnapshot captureSnapshot() {
         OctiGameSnapshot snap = new OctiGameSnapshot();
+        captureSnapshotInto(snap);
+        return snap;
+    }
+
+    public void captureSnapshotInto(OctiGameSnapshot snap) {
+        if (snap == null) {
+            return;
+        }
         if (board != null) {
             int w = board.getBoardWidth();
             int h = board.getBoardHeight();
             for (int x = 0; x < w; x++) {
                 for (int y = 0; y < h; y++) {
-                    for (OctiPod pod : board.squareAt(x, y).pods()) {
-                        snap.squares[x][y].add(pod.copy());
+                    List<OctiPod> dst = snap.squares[x][y];
+                    dst.clear();
+                    List<OctiPod> src = board.squareAt(x, y).pods();
+                    for (int i = 0, n = src.size(); i < n; i++) {
+                        dst.add(src.get(i).copy());
                     }
                 }
             }
         }
         for (int p = 0; p < 5; p++) {
-            snap.players[p] = new OctiPlayerState(players[p]);
+            OctiPlayerState dstP = snap.players[p];
+            OctiPlayerState srcP = players[p];
+            if (dstP != null && srcP != null) {
+                dstP.freePods = srcP.freePods;
+                dstP.capturedPods = srcP.capturedPods;
+                dstP.freeProngs = srcP.freeProngs;
+                dstP.freeSuperProngs = srcP.freeSuperProngs;
+                dstP.eliminated = srcP.eliminated;
+                dstP.timeRemainingMs = srcP.timeRemainingMs;
+            }
         }
         snap.turn = turn;
         snap.winner = winner;
         snap.gameStarted = gameStarted;
         snap.gameOver = gameOver;
         snap.gameResigned = gameResigned;
-        return snap;
+        snap.searchPlyOffset = searchPlyOffset;
     }
 
     public void restoreSnapshot(OctiGameSnapshot snap) {
@@ -1914,17 +1957,25 @@ public class OctiGame {
                 for (int y = 0; y < h; y++) {
                     OctiSquare sq = board.squareAt(x, y);
                     sq.clear();
-                    if (snap.squares[x][y] != null) {
-                        for (OctiPod pod : snap.squares[x][y]) {
-                            sq.addPod(pod.copy());
+                    List<OctiPod> src = snap.squares[x][y];
+                    if (src != null) {
+                        for (int i = 0, n = src.size(); i < n; i++) {
+                            sq.addPod(src.get(i).copy());
                         }
                     }
                 }
             }
         }
         for (int p = 0; p < 5; p++) {
-            if (snap.players[p] != null) {
-                players[p] = new OctiPlayerState(snap.players[p]);
+            OctiPlayerState srcP = snap.players[p];
+            OctiPlayerState dstP = players[p];
+            if (srcP != null && dstP != null) {
+                dstP.freePods = srcP.freePods;
+                dstP.capturedPods = srcP.capturedPods;
+                dstP.freeProngs = srcP.freeProngs;
+                dstP.freeSuperProngs = srcP.freeSuperProngs;
+                dstP.eliminated = srcP.eliminated;
+                dstP.timeRemainingMs = srcP.timeRemainingMs;
             }
         }
         this.turn = snap.turn;
@@ -1932,5 +1983,6 @@ public class OctiGame {
         this.gameStarted = snap.gameStarted;
         this.gameOver = snap.gameOver;
         this.gameResigned = snap.gameResigned;
+        this.searchPlyOffset = snap.searchPlyOffset;
     }
 }

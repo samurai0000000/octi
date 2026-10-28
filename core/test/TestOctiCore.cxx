@@ -1900,6 +1900,25 @@ TEST(OctiBotEngineCoreTest, CanonicalServerHostAndPortConstants)
     LONGS_EQUAL(6874, octi::OCTI_SERVER_PORT);
 }
 
+TEST(OctiBotEngineCoreTest, DefaultBudgetAndDepthPerDifficultyLevel)
+{
+    CHECK_EQUAL(3000, octi::OctiBotEngine::defaultBudgetForDifficulty(octi::BotDifficulty::CASUAL));
+    CHECK_EQUAL(8000, octi::OctiBotEngine::defaultBudgetForDifficulty(octi::BotDifficulty::TACTICAL));
+    CHECK_EQUAL(15000, octi::OctiBotEngine::defaultBudgetForDifficulty(octi::BotDifficulty::MASTER));
+
+    CHECK_EQUAL(5, octi::OctiBotEngine::maxDepthForDifficulty(octi::BotDifficulty::CASUAL));
+    CHECK_EQUAL(7, octi::OctiBotEngine::maxDepthForDifficulty(octi::BotDifficulty::TACTICAL));
+    CHECK_EQUAL(9, octi::OctiBotEngine::maxDepthForDifficulty(octi::BotDifficulty::MASTER));
+
+    CHECK_EQUAL(28, octi::OctiBotEngine::rootCapForDifficulty(octi::BotDifficulty::CASUAL));
+    CHECK_EQUAL(40, octi::OctiBotEngine::rootCapForDifficulty(octi::BotDifficulty::TACTICAL));
+    CHECK_EQUAL(56, octi::OctiBotEngine::rootCapForDifficulty(octi::BotDifficulty::MASTER));
+
+    CHECK_EQUAL(18, octi::OctiBotEngine::branchCapForDifficulty(octi::BotDifficulty::CASUAL));
+    CHECK_EQUAL(24, octi::OctiBotEngine::branchCapForDifficulty(octi::BotDifficulty::TACTICAL));
+    CHECK_EQUAL(32, octi::OctiBotEngine::branchCapForDifficulty(octi::BotDifficulty::MASTER));
+}
+
 TEST(OctiBotEngineCoreTest, ImmediateOnePlyWinningBaseCaptureAllDifficulties)
 {
     for (octi::BotDifficulty diff : {
@@ -1921,6 +1940,7 @@ TEST(OctiBotEngineCoreTest, ImmediateOnePlyWinningBaseCaptureAllDifficulties)
 
         std::string fenBefore = board.toPositionString();
         octi::OctiBotEngine bot(diff, 0x12345678ULL);
+        bot.setTimeBudgetMs(25);
         octi::BotSearchStats stats;
         std::string moveStr = bot.chooseMove(board, &stats);
 
@@ -1960,6 +1980,7 @@ TEST(OctiBotEngineCoreTest, OnePlyThreatDefenseBlocksImmediateLoss)
         board.squareAt(6, 6).addPod(podB2);
 
         octi::OctiBotEngine bot(diff, 0xCAFEBABEULL);
+        bot.setTimeBudgetMs(25);
         std::string moveStr = bot.chooseMove(board);
         STRCMP_EQUAL("35e-33x", moveStr.c_str());
     }

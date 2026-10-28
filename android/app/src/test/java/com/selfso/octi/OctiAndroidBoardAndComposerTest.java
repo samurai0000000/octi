@@ -72,7 +72,9 @@ public class OctiAndroidBoardAndComposerTest {
         if (board != null && board.getGame() != null
                 && board.getGame().isGameStarted()
                 && !board.getGame().isGameOver()) {
-            for (OctiMove mv : board.getGame().generateLegalMoves()) {
+            List<OctiMove> all = board.getGame().generateLegalMoves();
+            OctiBotEngine.appendCompositeMoves(board, board.getGame().getTurn(), all);
+            for (OctiMove mv : all) {
                 list.add(mv.asString());
             }
         }
@@ -594,6 +596,7 @@ public class OctiAndroidBoardAndComposerTest {
 
         // Now it is Player A's turn: A at (3,5) with N prong can jump over B at (3,6) onto B's home base (3,7) for instant win!
         OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
+        bot.setTimeBudgetMs(25);
         OctiBotEngine.BotSearchStats stats = new OctiBotEngine.BotSearchStats();
         String chosen = bot.chooseMove(winBoard, stats);
         assertTrue("Bot must choose winning jump onto (3,7), got: " + chosen,
@@ -622,6 +625,7 @@ public class OctiAndroidBoardAndComposerTest {
                         : OctiGameBases.GAME_BASES_3;
                 OctiBoard board = createStartedBoard(mode, mode != OctiGameMode.GAME_MODE_OFK, false, bases);
                 OctiBotEngine bot = new OctiBotEngine(diff);
+                bot.setTimeBudgetMs(25);
                 OctiBotEngine.BotSearchStats stats = new OctiBotEngine.BotSearchStats();
                 String snapshotBefore = board.toPositionString();
                 String move = bot.chooseMove(board, stats);
@@ -738,6 +742,7 @@ public class OctiAndroidBoardAndComposerTest {
         OctiMoveComposer composer = new OctiMoveComposer(board);
         composer.setMoveCommitListener(committedByComposer::add);
         OctiBotEngine casualBot = new OctiBotEngine(OctiBotEngine.BotDifficulty.CASUAL);
+        casualBot.setTimeBudgetMs(25);
 
         int[] outXY = new int[2];
 
@@ -855,7 +860,7 @@ public class OctiAndroidBoardAndComposerTest {
 
     @Test
     public void testOctiAppVersionAndProtocolConstants() {
-        assertEquals("2.0.12", OctiDefs.OCTI_APP_VERSION);
+        assertEquals("2.1.0", OctiDefs.OCTI_APP_VERSION);
         assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
     }
 

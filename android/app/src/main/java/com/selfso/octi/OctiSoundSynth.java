@@ -29,6 +29,7 @@ public class OctiSoundSynth {
     private long triggeredCount = 0;
     private SoundCue lastCue = SoundCue.POD_PLACE;
     private PlaybackCallback playbackCallback = null;
+    private Object activeAudioTrackRef = null;
 
     public OctiSoundSynth() {
     }
@@ -172,7 +173,10 @@ public class OctiSoundSynth {
         tryPlayAndroidAudioTrack(samples);
     }
 
-    private void tryPlayAndroidAudioTrack(short[] samples) {
+    private synchronized void tryPlayAndroidAudioTrack(short[] samples) {
+        if (samples == null || samples.length == 0) {
+            return;
+        }
         try {
             Class<?> audioTrackClass = Class.forName("android.media.AudioTrack");
             // Only attempt playback if running on actual Android runtime (not unit-test stub)
@@ -180,6 +184,14 @@ public class OctiSoundSynth {
             if (!vmName.toLowerCase().contains("dalvik")
                     && !vmName.toLowerCase().contains("art")) {
                 return;
+            }
+            if (activeAudioTrackRef instanceof android.media.AudioTrack) {
+                android.media.AudioTrack prev = (android.media.AudioTrack) activeAudioTrackRef;
+                activeAudioTrackRef = null;
+                try {
+                    prev.release();
+                } catch (Throwable ignored) {
+                }
             }
             android.media.AudioAttributes attrs = new android.media.AudioAttributes.Builder()
                     .setUsage(android.media.AudioAttributes.USAGE_GAME)
@@ -196,8 +208,13 @@ public class OctiSoundSynth {
                     samples.length * 2,
                     android.media.AudioTrack.MODE_STATIC,
                     android.media.AudioManager.AUDIO_SESSION_ID_GENERATE);
-            track.write(samples, 0, samples.length);
-            track.play();
+            if (track.getState() == android.media.AudioTrack.STATE_INITIALIZED) {
+                activeAudioTrackRef = track;
+                track.write(samples, 0, samples.length);
+                track.play();
+            } else {
+                track.release();
+            }
         } catch (Throwable ignored) {
             // Headless JVM unit test environment or audio device unavailable
         }

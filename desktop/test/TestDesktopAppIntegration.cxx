@@ -1615,6 +1615,62 @@ TEST(DesktopAppIntegrationTest, GuiRefinementArtifactsAndPrompts)
     std::remove(cfgPath.c_str());
 }
 
+TEST(DesktopAppIntegrationTest, ExportMoveHistoryTextAndThinkingSliderDialog)
+{
+    std::string cfgPath = "/tmp/octi_export_and_thinking_test.json";
+    OctiMainWindow win(nullptr, cfgPath, true);
+
+    LocalGameConfig cfg;
+    cfg.playType = LocalPlayType::PASS_AND_PLAY;
+    cfg.mode = GAME_MODE_2;
+    win.startNewLocalGame(cfg);
+
+    // Initial move history text should be empty
+    STRCMP_EQUAL("", win.exportMoveHistoryText().toUtf8().constData());
+
+    // FEN status label must be hidden (EMF-D01) while fenStatusText() returns valid FEN
+    CHECK_FALSE(win.fenStatusText().isEmpty());
+    CHECK_TRUE(win.fenStatusText().startsWith("FEN: "));
+
+    // Play 3 moves:
+    // 1. A: 33+a
+    // 2. B: 37+e
+    // 3. A: 33a-34
+    win.board()->getGame()->move("33+a");
+    win.board()->getGame()->move("37+e");
+    win.board()->getGame()->move("33a-34");
+
+    QString exportedMoves = win.exportMoveHistoryText();
+    QString expectedMoves = "1. A: 33+a\n2. B: 37+e\n3. A: 33a-34";
+    STRCMP_EQUAL(expectedMoves.toUtf8().constData(),
+                 exportedMoves.toUtf8().constData());
+
+    // Test OctiThinkingDialog (EMF-D02)
+    OctiThinkingDialog thinkingDlg(BotDifficulty::TACTICAL, 8000, ThemeId::OBSIDIAN_BRASS, &win);
+    CHECK_TRUE(thinkingDlg.isFrameless());
+    LONGS_EQUAL(static_cast<long>(Qt::ApplicationModal),
+                static_cast<long>(thinkingDlg.windowModality()));
+    LONGS_EQUAL(0, thinkingDlg.sliderValue());
+    CHECK_TRUE(thinkingDlg.statusText().contains("AI Thinking (Level 2)"));
+    CHECK_TRUE(thinkingDlg.statusText().contains("8.0s remaining"));
+
+    // Advance progress to 2000ms / 8000ms (25% = 250 on slider 0..1000)
+    thinkingDlg.updateProgress(2000, 8000);
+    LONGS_EQUAL(250, thinkingDlg.sliderValue());
+    CHECK_TRUE(thinkingDlg.statusText().contains("6.0s remaining"));
+
+    // Advance progress to 8000ms / 8000ms (100% = 1000 on slider)
+    thinkingDlg.updateProgress(8000, 8000);
+    LONGS_EQUAL(1000, thinkingDlg.sliderValue());
+    CHECK_TRUE(thinkingDlg.statusText().contains("0.0s remaining"));
+
+    // Test positioning
+    thinkingDlg.positionBelowBoard(&win, win.boardCanvas());
+    CHECK_TRUE(thinkingDlg.y() > 0);
+
+    std::remove(cfgPath.c_str());
+}
+
 extern "C" const char *__lsan_default_suppressions()
 {
     return "leak:libqoffscreen.so\n";

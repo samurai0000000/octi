@@ -117,6 +117,89 @@ public class OctiAndroidUiSmokeTest {
         assertFalse(composer.hasDistinctUnclaimedPodsAtOrigin());
         assertFalse(composer.hasOtherMovablePodAtOrigin());
     }
+
+    @Test
+    public void testExportMovesDialogAndMoveHistoryFormatting_EMF_A01() {
+        Class<?> dialogsKt = null;
+        try {
+            dialogsKt = Class.forName("com.selfso.octi.ui.OctiDialogsKt");
+        } catch (ClassNotFoundException ignored) {
+        }
+
+        if (dialogsKt != null) {
+            boolean foundExportDialog = false;
+            for (Method m : dialogsKt.getDeclaredMethods()) {
+                if (m.getName().startsWith("ExportMovesDialog")) {
+                    foundExportDialog = true;
+                    break;
+                }
+            }
+            assertTrue("Expected ExportMovesDialog composable in OctiDialogsKt", foundExportDialog);
+        }
+
+        com.selfso.octi.ui.OctiAppViewModel vm = new com.selfso.octi.ui.OctiAppViewModel();
+        try {
+            assertEquals("", vm.exportMoveHistoryText());
+            assertFalse(vm.getShowExportMovesDialog().getValue());
+
+            vm.setShowExportMovesDialog(true);
+            assertTrue(vm.getShowExportMovesDialog().getValue());
+            vm.setShowExportMovesDialog(false);
+            assertFalse(vm.getShowExportMovesDialog().getValue());
+
+            // Apply 3 moves and verify numbered chat format
+            assertTrue(vm.applyMoveNotation("33+a"));
+            assertTrue(vm.applyMoveNotation("37+e"));
+            assertTrue(vm.applyMoveNotation("33a-34"));
+
+            String exported = vm.exportMoveHistoryText();
+            assertTrue(exported.contains("1. A: 33+a"));
+            assertTrue(exported.contains("2. B: 37+e"));
+            assertTrue(exported.contains("3. A: 33a-34"));
+            assertEquals("1. A: 33+a\n2. B: 37+e\n3. A: 33a-34", exported.trim());
+        } finally {
+            vm.close();
+        }
+    }
+
+    @Test
+    public void testOctiThinkingDialogAndStateTracking_EMF_A02() {
+        Class<?> dialogsKt = null;
+        try {
+            dialogsKt = Class.forName("com.selfso.octi.ui.OctiDialogsKt");
+        } catch (ClassNotFoundException ignored) {
+        }
+
+        if (dialogsKt != null) {
+            boolean foundThinkingDialog = false;
+            for (Method m : dialogsKt.getDeclaredMethods()) {
+                if (m.getName().startsWith("OctiThinkingDialog")) {
+                    foundThinkingDialog = true;
+                    break;
+                }
+            }
+            assertTrue("Expected OctiThinkingDialog composable in OctiDialogsKt", foundThinkingDialog);
+        }
+
+        com.selfso.octi.ui.OctiAppViewModel vm = new com.selfso.octi.ui.OctiAppViewModel();
+        try {
+            assertFalse(vm.isBotThinking().getValue());
+            assertEquals(0f, vm.getBotThinkingProgress().getValue(), 0.0001f);
+            assertEquals(0f, vm.getBotThinkingRemainingSec().getValue(), 0.0001f);
+
+            vm.updateBotThinkingProgressForTest(true, 0.45f, 4.4f);
+            assertTrue(vm.isBotThinking().getValue());
+            assertEquals(0.45f, vm.getBotThinkingProgress().getValue(), 0.0001f);
+            assertEquals(4.4f, vm.getBotThinkingRemainingSec().getValue(), 0.0001f);
+
+            vm.updateBotThinkingProgressForTest(false, 1.0f, 0.0f);
+            assertFalse(vm.isBotThinking().getValue());
+            assertEquals(1.0f, vm.getBotThinkingProgress().getValue(), 0.0001f);
+            assertEquals(0.0f, vm.getBotThinkingRemainingSec().getValue(), 0.0001f);
+        } finally {
+            vm.close();
+        }
+    }
 }
 
 /*

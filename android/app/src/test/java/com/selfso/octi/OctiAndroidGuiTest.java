@@ -140,6 +140,7 @@ public class OctiAndroidGuiTest {
     public void testBotAutoPlaysOnMoveCommitInLocalVsBotMode_PCE_A03() {
         OctiAppViewModel vm = new OctiAppViewModel();
         try {
+            vm.getBotEngine().setTimeBudgetMs(25);
             // Default on launch must be LOCAL_VS_BOT (matching Desktop)
             assertEquals(OctiAppViewModel.MatchType.LOCAL_VS_BOT, vm.getMatchType().getValue());
             assertEquals(OctiPlayer.PLAYER_A, vm.getHumanSeat().getValue());
@@ -155,6 +156,7 @@ public class OctiAndroidGuiTest {
             assertEquals(OctiPlayer.PLAYER_A, vm.getBoard().getGame().getTurn());
 
             // Starting as Seat B (Red / 2nd) must immediately auto-play Bot Seat A's opening ply
+            vm.getBotEngine().setTimeBudgetMs(25);
             vm.startNewLocalGame(
                     OctiGameMode.GAME_MODE_2,
                     false,

@@ -21,6 +21,7 @@ public class OctiGameSnapshot {
     public boolean gameResigned = false;
     public OctiMove lastMove = new OctiMove();
     public OctiPlayer lastPlayer = OctiPlayer.PLAYER_UNDEF;
+    public int searchPlyOffset = 0;
 
     public OctiGameSnapshot() {
         for (int x = 0; x < 9; x++) {
@@ -57,6 +58,7 @@ public class OctiGameSnapshot {
             this.gameResigned = other.gameResigned;
             this.lastMove = (other.lastMove != null) ? new OctiMove(other.lastMove.asString()) : new OctiMove();
             this.lastPlayer = other.lastPlayer;
+            this.searchPlyOffset = other.searchPlyOffset;
         }
     }
 }

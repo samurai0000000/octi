@@ -41,6 +41,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -237,10 +238,15 @@ fun NewGameSetupDialog(
                     Text("Bot Difficulty:", fontWeight = FontWeight.SemiBold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OctiBotEngine.BotDifficulty.values().forEach { diff ->
+                            val label = when (diff) {
+                                OctiBotEngine.BotDifficulty.CASUAL -> "Lv1 (3s)"
+                                OctiBotEngine.BotDifficulty.TACTICAL -> "Lv2 (8s)"
+                                OctiBotEngine.BotDifficulty.MASTER -> "Lv3 (15s)"
+                            }
                             FilterChip(
                                 selected = difficulty == diff,
                                 onClick = { difficulty = diff },
-                                label = { Text(diff.name) }
+                                label = { Text(label) }
                             )
                         }
                     }
@@ -1730,6 +1736,145 @@ fun OctiSplashOverlay(
                     style = MaterialTheme.typography.labelSmall,
                     color = OctiTheme.colors.textSecondary
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun ExportMovesDialog(
+    movesText: String,
+    onCopy: () -> Unit,
+    onShare: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = OctiTheme.colors.panelCardBg,
+        titleContentColor = OctiTheme.colors.accentBrass,
+        textContentColor = OctiTheme.colors.textPrimary,
+        title = { Text("Export Moves") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Moves formatted for chat / Messenger:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = OctiTheme.colors.textSecondary
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(240.dp)
+                        .background(
+                            OctiTheme.colors.windowBg,
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                        .padding(8.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = movesText.ifEmpty { "(No moves yet)" },
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 13.sp
+                        ),
+                        color = OctiTheme.colors.textPrimary
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onCopy,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OctiTheme.colors.accentBrass,
+                        contentColor = OctiTheme.colors.windowBg
+                    )
+                ) {
+                    Text("Copy Moves", fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = onShare,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OctiTheme.colors.accentBrass,
+                        contentColor = OctiTheme.colors.windowBg
+                    )
+                ) {
+                    Text("Share...", fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+fun OctiThinkingDialog(
+    level: Int,
+    progress: Float,
+    remainingSec: Float,
+    modifier: Modifier = Modifier
+) {
+    val clampedProgress = progress.coerceIn(0f, 1f)
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {}
+            )
+            .padding(bottom = 16.dp, start = 16.dp, end = 16.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+            border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "AI Thinking (Level $level) — ${String.format(java.util.Locale.US, "%.1fs", remainingSec)} remaining",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = OctiTheme.colors.accentBrass
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .background(
+                            color = OctiTheme.colors.windowBg,
+                            shape = RoundedCornerShape(5.dp)
+                        )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction = clampedProgress)
+                            .height(10.dp)
+                            .background(
+                                color = OctiTheme.colors.accentBrass,
+                                shape = RoundedCornerShape(5.dp)
+                            )
+                    )
+                }
             }
         }
     }

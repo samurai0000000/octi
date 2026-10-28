@@ -229,7 +229,17 @@ void OctiGame::setTimeRemaining(OctiPlayer p, long ms)
 
 int OctiGame::getNumMoves() const
 {
-    return static_cast<int>(_history.size());
+    return static_cast<int>(_history.size()) + _searchPlyOffset;
+}
+
+void OctiGame::setSearchMode(bool searchMode)
+{
+    _searchMode = searchMode;
+}
+
+bool OctiGame::isSearchMode() const
+{
+    return _searchMode;
 }
 
 void OctiGame::getMoves(std::vector<std::pair<OctiPlayer, OctiMove>> &history) const
@@ -447,6 +457,17 @@ void OctiGame::executeMoveInternal(const OctiMove &m, bool isRedo)
     }
     if (m.isEmpty()) {
         throw IllegalMoveException("move is empty");
+    }
+
+    if (_searchMode) {
+        applyMoveOps(m.getOps());
+        check4PlayerElimination();
+        ++_searchPlyOffset;
+        updateGameOverAndWinner();
+        if (!_gameOver) {
+            advanceTurn();
+        }
+        return;
     }
 
     OctiGameSnapshot snapBefore = captureSnapshot();
@@ -1820,6 +1841,7 @@ OctiGameSnapshot OctiGame::captureSnapshot() const
     snap.gameStarted = _gameStarted;
     snap.gameOver = _gameOver;
     snap.gameResigned = _gameResigned;
+    snap.searchPlyOffset = _searchPlyOffset;
     return snap;
 }
 
@@ -1846,6 +1868,7 @@ void OctiGame::restoreSnapshot(const OctiGameSnapshot &snap)
     _gameStarted = snap.gameStarted;
     _gameOver = snap.gameOver;
     _gameResigned = snap.gameResigned;
+    _searchPlyOffset = snap.searchPlyOffset;
 }
 
 } // namespace octi

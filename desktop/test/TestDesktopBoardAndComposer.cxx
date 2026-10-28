@@ -856,6 +856,13 @@ TEST_GROUP(OctiBotEngineTest)
 {
 };
 
+TEST(OctiBotEngineTest, DefaultBudgetAndDepthPerDifficultyLevel)
+{
+    CHECK_EQUAL(3000, OctiBotEngine::defaultBudgetForDifficulty(BotDifficulty::CASUAL));
+    CHECK_EQUAL(8000, OctiBotEngine::defaultBudgetForDifficulty(BotDifficulty::TACTICAL));
+    CHECK_EQUAL(15000, OctiBotEngine::defaultBudgetForDifficulty(BotDifficulty::MASTER));
+}
+
 TEST(OctiBotEngineTest, BotPlaysAcrossVariantsAndFindsWinningAndBlockingMoves)
 {
     OctiBotEngine bot(BotDifficulty::CASUAL, 20261022ULL);

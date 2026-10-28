@@ -48,6 +48,11 @@ public:
     static int evaluatePosition(const OctiBoard &board,
                                 OctiPlayer perspective);
 
+    static int defaultBudgetForDifficulty(BotDifficulty d);
+    static int maxDepthForDifficulty(BotDifficulty d);
+    static int rootCapForDifficulty(BotDifficulty d);
+    static int branchCapForDifficulty(BotDifficulty d);
+
 private:
     struct TranspositionEntry {
         std::uint64_t key = 0;
@@ -57,8 +62,6 @@ private:
         std::string bestMove;
     };
 
-    int defaultBudgetForDifficulty(BotDifficulty d) const;
-    int maxDepthForDifficulty(BotDifficulty d) const;
     std::uint64_t nextRandom();
     std::uint64_t computePositionHash(const OctiBoard &board) const;
 

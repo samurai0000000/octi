@@ -173,6 +173,7 @@ public:
     int vcrTotalPlies() const;
     QString fenStatusText() const;
     std::vector<std::string> moveHistoryLines() const;
+    QString exportMoveHistoryText() const;
     QListWidget *moveHistoryListWidget() const;
 
     bool loadOctiTranscriptIntoReplay(const std::string &octiTranscript);

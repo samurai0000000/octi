@@ -176,6 +176,7 @@ public class OctiAndroidAppIntegrationTest {
                     true,
                     OctiBotEngine.BotDifficulty.CASUAL,
                     OctiPlayer.PLAYER_A);
+            vm.getBotEngine().setTimeBudgetMs(25);
             assertEquals(OctiAppViewModel.MatchType.LOCAL_VS_BOT, vm.getMatchType().getValue());
             assertEquals(0, vm.livePlyCount());
 

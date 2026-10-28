@@ -69,26 +69,28 @@ fun OctiBoardCanvas(
     val renderedBitmap = remember(themeId, rotation, boardRev, viewingPly, canvasSize) {
         val vw = Math.max(320, Math.min(1280, canvasSize.width))
         val vh = Math.max(320, Math.min(1280, canvasSize.height))
-        val activeBoard = if (viewModel.isViewingHistory()) {
-            viewModel.displayBoard
-        } else if (viewModel.composer.isAwaitingConfirmation) {
-            viewModel.composer.buildPreviewBoard() ?: viewModel.board
-        } else {
-            viewModel.board
+        val pixels = synchronized(viewModel.board) {
+            val activeBoard = if (viewModel.isViewingHistory()) {
+                viewModel.displayBoard
+            } else if (viewModel.composer.isAwaitingConfirmation) {
+                viewModel.composer.buildPreviewBoard() ?: viewModel.board
+            } else {
+                viewModel.board
+            }
+            viewModel.geometry.configure(
+                vw,
+                vh,
+                activeBoard.boardWidth,
+                activeBoard.boardHeight,
+                rotation
+            )
+            OctiBoardRenderer.renderBoardPixels(
+                activeBoard,
+                viewModel.composer,
+                viewModel.geometry,
+                themeId
+            )
         }
-        viewModel.geometry.configure(
-            vw,
-            vh,
-            activeBoard.boardWidth,
-            activeBoard.boardHeight,
-            rotation
-        )
-        val pixels = OctiBoardRenderer.renderBoardPixels(
-            activeBoard,
-            viewModel.composer,
-            viewModel.geometry,
-            themeId
-        )
         Bitmap.createBitmap(pixels, vw, vh, Bitmap.Config.ARGB_8888).asImageBitmap()
     }
     val currentRenderedBitmap by rememberUpdatedState(renderedBitmap)
