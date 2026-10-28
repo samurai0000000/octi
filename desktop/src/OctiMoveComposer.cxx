@@ -420,7 +420,7 @@ void OctiMoveComposer::syncPreparedStateToGame()
 
     for (const auto &op : _stagedOps) {
         if (op.addPod) {
-            game->prepareAddPod(op.x0, op.y0);
+            game->prepareAddPod(op.x0, op.y0, op.liberate);
         } else if (op.addProngDir != DIR_UNDEF && op.rmProngDir == DIR_UNDEF) {
             game->prepareAddProng(op.x0, op.y0, op.pod, op.addProngDir, op.superProng);
         } else if (op.addProngDir != DIR_UNDEF && op.rmProngDir != DIR_UNDEF) {

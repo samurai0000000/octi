@@ -144,6 +144,10 @@ public class OctiMove {
         return str;
     }
 
+    public String format() {
+        return str;
+    }
+
     private static String trimWhitespace(String s) {
         if (s == null) {
             return "";

@@ -39,6 +39,7 @@ import com.selfso.octi.OctiBoardRenderer
 import com.selfso.octi.OctiDir
 import com.selfso.octi.OctiMoveComposer
 import com.selfso.octi.OctiPlayer
+import com.selfso.octi.OctiProngType
 import com.selfso.octi.ui.theme.OctiTheme
 
 /**
@@ -63,6 +64,7 @@ fun OctiBoardCanvas(
     var gestureRotationDeg by remember { mutableFloatStateOf(0f) }
     var multiTouchActive by remember { mutableStateOf(false) }
     var lastMultiTouchTimeMs by remember { mutableStateOf(0L) }
+    var lastDragTimeMs by remember { mutableStateOf(0L) }
 
     val renderedBitmap = remember(themeId, rotation, boardRev, viewingPly, canvasSize) {
         val vw = Math.max(320, Math.min(1280, canvasSize.width))
@@ -139,11 +141,15 @@ fun OctiBoardCanvas(
             .pointerInput(Unit) {
                 awaitEachGesture {
                     var hadMultiTouch = false
-                    awaitFirstDown(requireUnconsumed = false)
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val startPos = down.position
+                    var lastPos = startPos
+                    var totalMoveDist = 0f
+                    val dragSlop = viewConfiguration.touchSlop
                     do {
                         val event = awaitPointerEvent()
-                        val pressedCount = event.changes.count { it.pressed }
-                        if (pressedCount >= 2) {
+                        val pressedPointers = event.changes.filter { it.pressed }
+                        if (pressedPointers.size >= 2) {
                             hadMultiTouch = true
                             multiTouchActive = true
                             lastMultiTouchTimeMs = System.currentTimeMillis()
@@ -167,6 +173,10 @@ fun OctiBoardCanvas(
                             gestureRotationDeg += rotChange
 
                             event.changes.forEach { it.consume() }
+                        } else if (pressedPointers.size == 1 && !hadMultiTouch) {
+                            val currPos = pressedPointers[0].position
+                            totalMoveDist += (currPos - lastPos).getDistance()
+                            lastPos = currPos
                         }
                     } while (event.changes.any { it.pressed })
 
@@ -183,6 +193,83 @@ fun OctiBoardCanvas(
                         panOffset = Offset.Zero
                         multiTouchActive = false
                         lastMultiTouchTimeMs = System.currentTimeMillis()
+                    } else if (totalMoveDist > dragSlop && !viewModel.isViewingHistory() && viewModel.board.game?.isGameOver != true) {
+                        lastDragTimeMs = System.currentTimeMillis()
+                        val scaleX = currentRenderedBitmap.width.toDouble() / Math.max(1, size.width).toDouble()
+                        val scaleY = currentRenderedBitmap.height.toDouble() / Math.max(1, size.height).toDouble()
+                        val geo = viewModel.geometry
+                        val b = viewModel.board
+                        val composer = viewModel.composer
+
+                        val startPx = startPos.x.toDouble() * scaleX
+                        val startPy = startPos.y.toDouble() * scaleY
+                        val endPx = lastPos.x.toDouble() * scaleX
+                        val endPy = lastPos.y.toDouble() * scaleY
+
+                        val startXY = IntArray(2)
+                        val endXY = IntArray(2)
+                        val startOnBoard = geo.screenToSquare(startPx, startPy, startXY)
+                        val endOnBoard = geo.screenToSquare(endPx, endPy, endXY)
+
+                        if (startOnBoard && endOnBoard) {
+                            val startX = startXY[0]
+                            val startY = startXY[1]
+                            val endX = endXY[0]
+                            val endY = endXY[1]
+                            val turn = b.game?.turn
+
+                            if (endX != startX || endY != startY) {
+                                val startSq = b.squareAt(startX - 1, startY - 1)
+                                val hasFriendlyPod = !startSq.isEmpty && turn != null && !startSq.hasEnemyOf(turn)
+                                if (composer.isGuidedMoveActive) {
+                                    if (composer.clickBoardSquareForGuidedMove(endX, endY)) {
+                                        viewModel.refreshDisplayBoard()
+                                        if (composer.hasPendingCaptureChoices()) {
+                                            val latestCap = composer.captureChoices().lastOrNull { !it.mandatory }
+                                            if (latestCap != null) {
+                                                val jsq = b.squareAt(latestCap.jumpedX - 1, latestCap.jumpedY - 1)
+                                                val jumpedPlayer = if (!jsq.isEmpty) jsq.getPodAt(0).type.toPlayer() else OctiPlayer.PLAYER_B
+                                                viewModel.promptCapture(latestCap.jumpedX, latestCap.jumpedY, jumpedPlayer)
+                                            }
+                                        }
+                                    }
+                                } else if (hasFriendlyPod) {
+                                    val pIdx = composer.selectedStackPodIndex(startX, startY)
+                                    val resolvedIdx = if (pIdx >= 0 && pIdx < startSq.numPods) pIdx else -1
+                                    if (composer.stageOrCommitPodMoveOrJump(startX, startY, resolvedIdx, endX, endY, viewModel.moveEntireMatchingStack.value)) {
+                                        viewModel.refreshDisplayBoard()
+                                        if (composer.hasPendingCaptureChoices()) {
+                                            val latestCap = composer.captureChoices().lastOrNull { !it.mandatory }
+                                            if (latestCap != null) {
+                                                val jsq = b.squareAt(latestCap.jumpedX - 1, latestCap.jumpedY - 1)
+                                                val jumpedPlayer = if (!jsq.isEmpty) jsq.getPodAt(0).type.toPlayer() else OctiPlayer.PLAYER_B
+                                                viewModel.promptCapture(latestCap.jumpedX, latestCap.jumpedY, jumpedPlayer)
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                val sq = b.squareAt(startX - 1, startY - 1)
+                                if (!sq.isEmpty && turn != null && !sq.hasEnemyOf(turn)) {
+                                    val cell = geo.cellSize()
+                                    val cx = geo.squareCenterX(startX, startY)
+                                    val cy = geo.squareCenterY(startX, startY)
+                                    val startDir = geo.hitTestCompassSector(cx, cy, cell * 0.15, cell * 0.50, startPx, startPy)
+                                    val endDir = geo.hitTestCompassSector(cx, cy, cell * 0.15, cell * 0.50, endPx, endPy)
+                                    if (startDir != OctiDir.DIR_UNDEF && endDir != OctiDir.DIR_UNDEF && startDir != endDir) {
+                                        val pIdx = composer.selectedStackPodIndex(startX, startY).let {
+                                            if (it in 0 until sq.numPods) it else 0
+                                        }
+                                        val pod = sq.getPodAt(pIdx)
+                                        if (pod.prongAt(startDir) != OctiProngType.NO_PRONG && pod.prongAt(endDir) == OctiProngType.NO_PRONG) {
+                                            if (composer.simulateRepositionProngOnPod(startX, startY, pIdx, startDir, endDir)) {
+                                                viewModel.refreshDisplayBoard()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -195,7 +282,7 @@ fun OctiBoardCanvas(
                         openZoomForOffset(offset, size)
                     },
                     onTap = { offset ->
-                        if (multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L) {
+                        if (multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L || System.currentTimeMillis() - lastDragTimeMs < 250L) {
                             return@detectTapGestures
                         }
                         if (viewModel.isViewingHistory()) {
@@ -249,6 +336,11 @@ fun OctiBoardCanvas(
                         }
                         val sqX = xy[0]
                         val sqY = xy[1]
+
+                        if (composer.isAwaitingConfirmation && !composer.isGuidedMoveActive) {
+                            composer.cancelAndRollback()
+                            viewModel.refreshDisplayBoard()
+                        }
 
                         // 3. If Move Composer is in guided move/jump chain mode
                         if (composer.isGuidedMoveActive) {

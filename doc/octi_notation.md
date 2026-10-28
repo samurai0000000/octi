@@ -102,8 +102,8 @@ A single ply (turn) executed by a player is represented by `<ply>`:
 ### 4.1 Ply Structure Explanations
 
 1. **Pod Placement & Disambiguation (`<pod-place>`)**:
-   - `<sq>` (e.g. `"33"`): Brings a pod onto square `XY`. If the player occupies an enemy or neutral OCTI square with `capturedPods > 0` or has `freePods == 0`, this liberates a captured pod onto `XY`; otherwise, it brings a reserve pod onto `XY` (`freePods--`).
-   - `<sq>*` (e.g. `"37*"`): Explicitly designates a **liberation move** onto square `XY`, even if the friendly reserve supply is non-empty (`freePods > 0`). Throws `IllegalMoveException` if the player does not currently occupy an enemy OCTI square or has 0 captured pods.
+   - `<sq>` (e.g. `"33"`): Brings a reserve pod onto square `XY` (`freePods--`). May be placed on any friendly OCTI square (empty or occupied), or on any enemy OCTI square currently occupied by the player (`sq.isOccupiedBy(turn)`). For backward compatibility, if `freePods == 0` and the player qualifies to liberate a captured pod, this liberates a captured pod onto `XY` (`capturedPods--`), provided `XY` is an OCTI square occupied by the player (`sq.isOccupiedBy(turn)`).
+   - `<sq>*` (e.g. `"37*"`, `"33*"`): Explicitly designates a **liberation move** onto square `XY`, bringing one captured pod back onto the board (`capturedPods--`). Liberating a captured pod strictly requires the active player to occupy an enemy OCTI square (`canLiberate(turn)`), have at least one captured pod (`capturedPods > 0`), and the destination OCTI square `XY` must be **occupied by the active player** (`sq.isOccupiedBy(turn)`). Throws `IllegalMoveException` if any of these conditions are not met. Canonical move generation emits `<sq>*` for liberation moves and bare `<sq>` for reserve pod placements.
 2. **Prong Insertion (`<prong-add>`)**:
    - `<sq><config>+<dir>[!]` (e.g. `"33+b"`, `"33b+a!"`): Inserts a prong in direction `<dir>` (or superprong `<dir>!`) into the friendly pod matching `<config>` located at `<sq>`.
 3. **Prong Repositioning (`<prong-reposition>`)**:
@@ -136,7 +136,7 @@ When generating, transmitting, or comparing moves, implementations must emit the
    The capture indicator must always be lowercase `'x'`:
    - Input `"33a-35X"` $\to$ Canonical `"33a-35x"`
 4. **Explicit Liberation Marker**:
-   When an op has `liberate == true`, the trailing `'*'` is preserved:
+   Move generators and parsers designate pod liberation with the trailing `'*'` marker (`<sq>*`), while reserve pod placement uses bare `<sq>`. When an op has `liberate == true`, the trailing `'*'` is preserved and the canonical serializer emits `<sq>*`:
    - Input `"37*"` $\to$ Canonical `"37*"`
 5. **Separators**:
    - Superprong prelude moves are separated from each other and from the regular move by a semicolon `';'`.

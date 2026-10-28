@@ -664,13 +664,16 @@ void OctiGame::applyMoveOps(const std::vector<OctiMoveOp> &ops)
                     if (!_board->canLiberate(_turn) || _players[_turn].capturedPods <= 0) {
                         throw IllegalMoveException("liberation condition not met on friendly base");
                     }
+                    if (!sq.isOccupiedBy(_turn)) {
+                        throw IllegalMoveException("liberated pod must be stacked on an occupied OCTI square");
+                    }
                     _players[_turn].capturedPods--;
                     sq.addPod(OctiPod(playerToPodType(_turn)));
                 } else {
                     if (_players[_turn].freePods > 0) {
                         _players[_turn].freePods--;
                         sq.addPod(OctiPod(playerToPodType(_turn)));
-                    } else if (_board->canLiberate(_turn) && _players[_turn].capturedPods > 0) {
+                    } else if (_board->canLiberate(_turn) && _players[_turn].capturedPods > 0 && sq.isOccupiedBy(_turn)) {
                         _players[_turn].capturedPods--;
                         sq.addPod(OctiPod(playerToPodType(_turn)));
                     } else {
@@ -686,11 +689,11 @@ void OctiGame::applyMoveOps(const std::vector<OctiMoveOp> &ops)
                     _players[_turn].capturedPods--;
                     sq.addPod(OctiPod(playerToPodType(_turn)));
                 } else {
-                    if (_players[_turn].capturedPods > 0) {
-                        _players[_turn].capturedPods--;
-                        sq.addPod(OctiPod(playerToPodType(_turn)));
-                    } else if (_players[_turn].freePods > 0) {
+                    if (_players[_turn].freePods > 0) {
                         _players[_turn].freePods--;
+                        sq.addPod(OctiPod(playerToPodType(_turn)));
+                    } else if (_players[_turn].capturedPods > 0) {
+                        _players[_turn].capturedPods--;
                         sq.addPod(OctiPod(playerToPodType(_turn)));
                     } else {
                         throw IllegalMoveException("no free or capturable pods available to place");
@@ -743,11 +746,11 @@ void OctiGame::applyMoveOps(const std::vector<OctiMoveOp> &ops)
                     _players[_turn].capturedPods--;
                     sq.addPod(OctiPod(playerToPodType(_turn)));
                 } else {
-                    if (_players[_turn].capturedPods > 0) {
-                        _players[_turn].capturedPods--;
-                        sq.addPod(OctiPod(playerToPodType(_turn)));
-                    } else if (_players[_turn].freePods > 0) {
+                    if (_players[_turn].freePods > 0) {
                         _players[_turn].freePods--;
+                        sq.addPod(OctiPod(playerToPodType(_turn)));
+                    } else if (_players[_turn].capturedPods > 0) {
+                        _players[_turn].capturedPods--;
                         sq.addPod(OctiPod(playerToPodType(_turn)));
                     } else {
                         throw IllegalMoveException("no free or capturable pods available");
@@ -1270,7 +1273,7 @@ void OctiGame::redo()
     notifyUndoRedoStatusChanged();
 }
 
-void OctiGame::prepareAddPod(int x, int y)
+void OctiGame::prepareAddPod(int x, int y, bool liberate)
 {
     if (!_hasPreparedMove) {
         _prepSnapshot = captureSnapshot();
@@ -1282,7 +1285,7 @@ void OctiGame::prepareAddPod(int x, int y)
     op.x0 = x;
     op.y0 = y;
     op.addPod = true;
-    op.liberate = false;
+    op.liberate = liberate;
     _prepOps.push_back(op);
 }
 
@@ -1531,26 +1534,21 @@ void OctiGame::generateLegalMoves(std::vector<OctiMove> &outMoves) const
                             op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = false;
                             outMoves.emplace_back(std::vector<OctiMoveOp>{op});
                         }
-                        if (_board->canLiberate(_turn) && _players[_turn].capturedPods > 0) {
-                            if (_players[_turn].freePods > 0) {
-                                OctiMoveOp op;
-                                op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = true;
-                                outMoves.emplace_back(std::vector<OctiMoveOp>{op});
-                            } else {
-                                OctiMoveOp op;
-                                op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = false;
-                                outMoves.emplace_back(std::vector<OctiMoveOp>{op});
-                            }
+                        if (_board->canLiberate(_turn) && _players[_turn].capturedPods > 0 && sq.isOccupiedBy(_turn)) {
+                            OctiMoveOp op;
+                            op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = true;
+                            outMoves.emplace_back(std::vector<OctiMoveOp>{op});
                         }
                     } else {
                         // Enemy base
-                        if (_players[_turn].capturedPods > 0) {
+                        if (_players[_turn].freePods > 0) {
                             OctiMoveOp op;
                             op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = false;
                             outMoves.emplace_back(std::vector<OctiMoveOp>{op});
-                        } else if (_players[_turn].freePods > 0) {
+                        }
+                        if (_players[_turn].capturedPods > 0) {
                             OctiMoveOp op;
-                            op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = false;
+                            op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = true;
                             outMoves.emplace_back(std::vector<OctiMoveOp>{op});
                         }
                     }
@@ -1587,9 +1585,14 @@ void OctiGame::generateLegalMoves(std::vector<OctiMove> &outMoves) const
                         }
                     } else {
                         // Enemy base or neutral OCTI square
-                        if (_players[_turn].capturedPods > 0 || _players[_turn].freePods > 0) {
+                        if (_players[_turn].freePods > 0) {
                             OctiMoveOp op;
                             op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = false;
+                            outMoves.emplace_back(std::vector<OctiMoveOp>{op});
+                        }
+                        if (_players[_turn].capturedPods > 0) {
+                            OctiMoveOp op;
+                            op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = true;
                             outMoves.emplace_back(std::vector<OctiMoveOp>{op});
                         }
                     }

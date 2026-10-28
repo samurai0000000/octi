@@ -120,6 +120,36 @@ class OctiAppViewModel @JvmOverloads constructor(
         ): File = runBlocking {
             ApkDownloader(cacheRootDir).downloadAndVerify(manifest)
         }
+
+        @Volatile
+        private var cachedApkSha256Prefix: String = ""
+
+        @JvmStatic
+        fun computeInstalledApkSha256Prefix(context: android.content.Context?, hexLen: Int = 12): String {
+            if (cachedApkSha256Prefix.isNotEmpty()) {
+                return cachedApkSha256Prefix.take(hexLen)
+            }
+            return try {
+                val apkPath = context?.applicationInfo?.sourceDir ?: return "dev-local"
+                val apkFile = File(apkPath)
+                if (!apkFile.isFile || apkFile.length() <= 0L) {
+                    return "dev-local"
+                }
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                apkFile.inputStream().use { input ->
+                    val buf = ByteArray(16 * 1024)
+                    var n: Int
+                    while (input.read(buf).also { n = it } != -1) {
+                        digest.update(buf, 0, n)
+                    }
+                }
+                val fullHex = digest.digest().joinToString("") { "%02x".format(it) }
+                cachedApkSha256Prefix = fullHex
+                fullHex.take(hexLen)
+            } catch (_: Throwable) {
+                "dev-local"
+            }
+        }
     }
 
     val soundSynth: OctiSoundSynth = OctiSoundSynth()
@@ -172,6 +202,18 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     private val _boardRevision = MutableStateFlow(0L)
     val boardRevision: StateFlow<Long> = _boardRevision.asStateFlow()
+
+    private val _awaitingConfirmation = MutableStateFlow(false)
+    val awaitingConfirmation: StateFlow<Boolean> = _awaitingConfirmation.asStateFlow()
+
+    private val _stagedMoveNotation = MutableStateFlow("")
+    val stagedMoveNotation: StateFlow<String> = _stagedMoveNotation.asStateFlow()
+
+    private val _canAddMoreMoves = MutableStateFlow(false)
+    val canAddMoreMoves: StateFlow<Boolean> = _canAddMoreMoves.asStateFlow()
+
+    private val _guidedMoveActive = MutableStateFlow(false)
+    val guidedMoveActive: StateFlow<Boolean> = _guidedMoveActive.asStateFlow()
 
     private val _statusBanner = MutableStateFlow("")
     val statusBanner: StateFlow<String> = _statusBanner.asStateFlow()
@@ -865,11 +907,19 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun bumpBoardRevision() {
+        _awaitingConfirmation.value = composer.isAwaitingConfirmation()
+        _stagedMoveNotation.value = composer.stagedMoveNotation()
+        _canAddMoreMoves.value = composer.canAddMoreMoves()
+        _guidedMoveActive.value = composer.isGuidedMoveActive()
         _boardRevision.value = _boardRevision.value + 1L
     }
 
     fun bumpRevision() {
         bumpBoardRevision()
+    }
+
+    fun refreshDisplayBoard() {
+        notifyComposerUpdated()
     }
 
     /* ================================================================== */

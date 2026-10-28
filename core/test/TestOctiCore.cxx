@@ -947,6 +947,68 @@ TEST(Octi2PlayerGameTest, TurnOptionV_ReservePodAndLiberation)
     CHECK_EQUAL(0, game->getCapturedPods(octi::PLAYER_A));
 }
 
+TEST(Octi2PlayerGameTest, UserReported72MoveTranscriptRejectsEmptyBaseLiberationAtMove60)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    const std::vector<std::string> moves = {
+        "33+b", "37+d", "53+h", "37d+e", "33b-44", "37de+f", "44b+h", "37def-46",
+        "44bh+a", "57+d", "53h+b", "57d+e", "33", "57de+f", "33+h", "77+d",
+        "33h+b", "46def-55", "44abh-66x-88x", "37", "88abh+f", "37", "88abfh-77", "37",
+        "77abfh+g", "37", "77abfgh-67", "57def-66", "67abfgh+e", "66def-75",
+        "67abefgh-57", "37+d", "57abefgh-47", "37d+c", "47abefgh-27x", "75def+a",
+        "27abefgh+c", "75adef+b", "27abcefgh-37", "75abdef+c", "37", "75abcdef+g",
+        "37abcefgh-47", "75abcdefg+h", "47abcefgh-57", "75abcdefgh-66", "57abcefgh-47",
+        "66abcdefgh-56", "47abcefgh-38", "56abcdefgh-65", "38abcefgh+d", "65abcdefgh-74",
+        "38abcdefgh-47", "74abcdefgh-72x", "47abcdefgh-57", "72abcdefgh-73", "57",
+        "73", "57abcdefgh-67"
+    };
+
+    LONGS_EQUAL(59, moves.size());
+    for (const auto &m : moves) {
+        game->move(m);
+    }
+
+    CHECK_EQUAL(octi::PLAYER_B, game->getTurn());
+    LONGS_EQUAL(0, game->getFreePods(octi::PLAYER_B));
+    LONGS_EQUAL(5, game->getCapturedPods(octi::PLAYER_B));
+    CHECK_TRUE(board.squareAt(6, 2).isOccupiedBy(octi::PLAYER_B));
+    CHECK_TRUE(board.squareAt(6, 6).isEmpty());
+
+    std::vector<octi::OctiMove> legalMoves = game->generateLegalMoves();
+    bool has73Star = false;
+    bool has77 = false;
+    bool has77Star = false;
+    bool has37 = false;
+    bool has37Star = false;
+    bool has57 = false;
+    bool has57Star = false;
+
+    for (const auto &lm : legalMoves) {
+        std::string s = lm.asString();
+        if (s == "73*") has73Star = true;
+        if (s == "77") has77 = true;
+        if (s == "77*") has77Star = true;
+        if (s == "37") has37 = true;
+        if (s == "37*") has37Star = true;
+        if (s == "57") has57 = true;
+        if (s == "57*") has57Star = true;
+    }
+
+    CHECK_TRUE(has73Star);
+    CHECK_FALSE(has77);
+    CHECK_FALSE(has77Star);
+    CHECK_FALSE(has37);
+    CHECK_FALSE(has37Star);
+    CHECK_FALSE(has57);
+    CHECK_FALSE(has57Star);
+
+    CHECK_THROWS(octi::IllegalMoveException, game->move("77"));
+    CHECK_THROWS(octi::IllegalMoveException, game->move("77*"));
+}
+
 TEST(Octi2PlayerGameTest, UndoRedoStack)
 {
     octi::OctiBoard board(octi::GAME_MODE_2);

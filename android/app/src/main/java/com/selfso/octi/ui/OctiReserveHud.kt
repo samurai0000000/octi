@@ -46,6 +46,10 @@ fun OctiReserveHud(
     modifier: Modifier = Modifier
 ) {
     val boardRev by viewModel.boardRevision.collectAsState()
+    val currentBoardRev = boardRev
+    val awaitingConfirmation by viewModel.awaitingConfirmation.collectAsState()
+    val stagedMoveNotation by viewModel.stagedMoveNotation.collectAsState()
+    val canAddMoreMoves by viewModel.canAddMoreMoves.collectAsState()
     val viewingPly by viewModel.viewingPly.collectAsState()
     val confirmAll by viewModel.confirmAllMoves.collectAsState()
     val moveStack by viewModel.moveEntireMatchingStack.collectAsState()
@@ -67,8 +71,12 @@ fun OctiReserveHud(
     val freeSuper = game?.getFreeSuperProngs(turn) ?: 0
     val useSuperProngs = game?.useSuperProngs() == true
     val isGameOver = game?.isGameOver == true
-    val awaitingConfirm = viewModel.composer.isAwaitingConfirmation && boardRev >= 0L
-    val stagedNotation = if (awaitingConfirm) viewModel.composer.stagedMoveNotation() else ""
+    val awaitingConfirm = (awaitingConfirmation || viewModel.composer.isAwaitingConfirmation) && currentBoardRev >= 0L
+    val stagedNotation = if (awaitingConfirm) {
+        stagedMoveNotation.ifEmpty { viewModel.composer.stagedMoveNotation() }
+    } else {
+        ""
+    }
     val dragKind = viewModel.composer.activeDragKind()
     val totalPlies = viewModel.livePlyCount()
 

@@ -978,7 +978,8 @@ fun ZoomedSquareDialog(
                     }
 
                     if (canShowPodPlacement) {
-                        val canLiberateHere = (capPods > 0) && (if (isFriendlyHome) board.canLiberate(turn) else true)
+                        val canLiberateHere = (capPods > 0) && sq.isOccupiedBy(turn) &&
+                            (if (isFriendlyHome) board.canLiberate(turn) else true)
                         if (canLiberateHere) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1305,6 +1306,7 @@ fun GameOverDialog(
 @Composable
 fun UpToDateModalDialog(
     message: String,
+    apkSha256Prefix: String = "dev-local",
     onDismiss: () -> Unit,
     onReinstall: (() -> Unit)? = null
 ) {
@@ -1342,6 +1344,13 @@ fun UpToDateModalDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = OctiTheme.colors.textPrimary
                 )
+                if (apkSha256Prefix.isNotEmpty()) {
+                    Text(
+                        text = "Installed SHA-256: $apkSha256Prefix",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = OctiTheme.colors.textSecondary
+                    )
+                }
                 if (onReinstall != null) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1383,6 +1392,7 @@ fun UpToDateModalDialog(
 
 @Composable
 fun OctiSplashOverlay(
+    apkSha256Prefix: String = "dev-local",
     onDismiss: () -> Unit
 ) {
     var progress by remember { mutableFloatStateOf(0f) }
@@ -1659,7 +1669,7 @@ fun OctiSplashOverlay(
                     color = OctiTheme.colors.textSecondary
                 )
                 Text(
-                    text = "Version ${OctiDefs.OCTI_APP_VERSION}",
+                    text = "Version ${OctiDefs.OCTI_VERSION_STRING}  •  SHA-256: $apkSha256Prefix",
                     style = MaterialTheme.typography.labelMedium,
                     color = OctiTheme.colors.accentBrass,
                     fontWeight = FontWeight.Bold

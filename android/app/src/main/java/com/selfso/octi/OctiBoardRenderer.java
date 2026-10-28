@@ -732,6 +732,12 @@ public final class OctiBoardRenderer {
             case '-':
                 OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + gw * 0.1, y + height * 0.5, x + gw * 0.9, y + height * 0.5, thickness, color);
                 break;
+            case '.':
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, x + gw * 0.5, y + height * 0.85, thickness * 1.1, color);
+                break;
+            case '•':
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, x + gw * 0.5, y + height * 0.5, thickness * 1.3, color);
+                break;
             case ':':
                 OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, x + gw * 0.5, y + height * 0.3, thickness * 1.1, color);
                 OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, x + gw * 0.5, y + height * 0.75, thickness * 1.1, color);
@@ -1028,12 +1034,20 @@ public final class OctiBoardRenderer {
     }
 
     public static int[] renderSplashPixels(int width, int height, double progressZeroToOne) {
+        return renderSplashPixels(width, height, OctiThemeId.OBSIDIAN_BRASS, progressZeroToOne, "dev-local");
+    }
+
+    public static int[] renderSplashPixels(int width, int height, OctiThemeId themeId, double progressZeroToOne) {
+        return renderSplashPixels(width, height, themeId, progressZeroToOne, "dev-local");
+    }
+
+    public static int[] renderSplashPixels(int width, int height, OctiThemeId themeId, double progressZeroToOne, String sha256Prefix) {
         int w = Math.max(128, width);
         int h = Math.max(128, height);
         int[] pixels = new int[w * h];
         double progress = Math.max(0.0, Math.min(1.0, progressZeroToOne));
 
-        OctiPalette pal = OctiPalette.forTheme(OctiThemeId.OBSIDIAN_BRASS);
+        OctiPalette pal = OctiPalette.forTheme(themeId != null ? themeId : OctiThemeId.OBSIDIAN_BRASS);
         double cx = w * 0.5;
         double cy = h * 0.40;
 
@@ -1117,6 +1131,28 @@ public final class OctiBoardRenderer {
             int pCol = (i % 2 == 0) ? pal.prongSuperGold : pal.accentBrass;
             OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, px, py, 2.2, pCol);
         }
+
+        String titleStr = "OCTI";
+        double titleH = Math.min(h * 0.055, w * 0.09);
+        double titleW = titleStr.length() * (titleH * 0.80);
+        drawVectorString(pixels, w, h, Math.max(10.0, (w - titleW) * 0.5), h * 0.055, titleH, titleStr, pal.prongSuperGold, 3.6);
+
+        String prefix = (sha256Prefix != null && !sha256Prefix.isEmpty()) ? sha256Prefix : "dev-local";
+        String verStr = "Version " + OctiDefs.OCTI_VERSION_STRING + "  •  SHA-256: " + prefix;
+        double textH = Math.max(11.0, Math.min(h * 0.020, (w - 56.0) / Math.max(1.0, verStr.length() * 0.78)));
+        double strW = verStr.length() * (textH * 0.76);
+        double tx = Math.max(16.0, (w - strW) * 0.5);
+        double ty = h * 0.78;
+        drawVectorString(pixels, w, h, tx, ty, textH, verStr, 0xFFFFFFFF, 2.0);
+
+        String authStr = "Author: Charles Chiou (selfso.com)";
+        double subH = textH * 0.82;
+        double authW = authStr.length() * (subH * 0.76);
+        drawVectorString(pixels, w, h, Math.max(16.0, (w - authW) * 0.5), ty + textH * 2.0, subH, authStr, pal.textSecondary, 1.5);
+
+        String copyStr = "Copyright (C) 2026, Charles Chiou";
+        double copyW = copyStr.length() * (subH * 0.76);
+        drawVectorString(pixels, w, h, Math.max(16.0, (w - copyW) * 0.5), ty + textH * 3.8, subH, copyStr, pal.accentBrass, 1.6);
 
         return pixels;
     }

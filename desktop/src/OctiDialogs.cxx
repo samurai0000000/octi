@@ -8,7 +8,10 @@
 #include <cmath>
 #include <fstream>
 #include <QAbstractItemView>
+#include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDesktopServices>
+#include <QFile>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -21,10 +24,37 @@
 #include "OctiCore.hxx"
 #include "OctiDialogs.hxx"
 #include "OctiMainWindow.hxx"
+#include "Version.hxx"
 
 namespace octi {
 
 namespace {
+
+QString binarySha256Prefix()
+{
+    static QString cached;
+    if (!cached.isEmpty()) {
+        return cached;
+    }
+    QString appPath = QCoreApplication::applicationFilePath();
+    QFile f(appPath);
+    if (!f.open(QIODevice::ReadOnly)) {
+        cached = QStringLiteral("dev-local");
+        return cached;
+    }
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    if (!hash.addData(&f)) {
+        cached = QStringLiteral("dev-local");
+        return cached;
+    }
+    QByteArray hex = hash.result().toHex().left(12).toLower();
+    if (hex.isEmpty()) {
+        cached = QStringLiteral("dev-local");
+    } else {
+        cached = QString::fromUtf8(hex);
+    }
+    return cached;
+}
 
 QIcon makeProviderIcon(const QString &provider)
 {
@@ -2958,8 +2988,8 @@ QImage OctiSplashDialog::renderSplashFrame(int width, int height, double progres
     p.setPen(pal.textPrimary);
     QRectF verRect(0, metaY, w, 22);
     p.drawText(verRect, Qt::AlignCenter,
-               QString("Version %1 (Protocol v1)")
-                   .arg(QString::fromStdString(OctiCore::versionString())));
+               QString("Version %1  \xE2\x80\xA2  SHA-256: %2")
+                   .arg(QString::fromUtf8(OCTI_VERSION_STRING), binarySha256Prefix()));
 
     QFont credFont("SansSerif", 10);
     p.setFont(credFont);
@@ -3462,7 +3492,8 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
     int freePods = (resourceBoard && resourceBoard->getGame()) ? resourceBoard->getGame()->getFreePods(turn) : 0;
     int capPods = (resourceBoard && resourceBoard->getGame()) ? resourceBoard->getGame()->getCapturedPods(turn) : 0;
     bool canLiberate = (capPods > 0 && resourceBoard && resourceBoard->canLiberate(turn));
-    bool canLiberateHere = (capPods > 0) && (isFriendlyBase ? (resourceBoard && resourceBoard->canLiberate(turn)) : true);
+    bool canLiberateHere = (capPods > 0) && sq.isOccupiedBy(turn) &&
+        (isFriendlyBase ? (_board && _board->canLiberate(turn)) : true);
 
     auto drawPlaceAndLiberate = [&](const QRectF &placeRect, const QRectF &libRect, int fontSize) {
         _placeReserveBtnRect = placeRect;

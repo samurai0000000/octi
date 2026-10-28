@@ -46,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -164,6 +165,7 @@ fun OctiMainAppContent(
         }
     }
 
+    val context = LocalContext.current
     val currentTab by viewModel.currentTab.collectAsState()
     val themeId by viewModel.theme.collectAsState()
     val sfxMuted by viewModel.sfxMuted.collectAsState()
@@ -174,9 +176,14 @@ fun OctiMainAppContent(
     val showCreateTableDialog by viewModel.showCreateTableDialog.collectAsState()
     val showGameOverDialog by viewModel.showGameOverDialog.collectAsState()
     val boardRev by viewModel.boardRevision.collectAsState()
+    val currentBoardRev = boardRev
+    val awaitingConfirmation by viewModel.awaitingConfirmation.collectAsState()
+    val stagedMoveNotation by viewModel.stagedMoveNotation.collectAsState()
+    val canAddMoreMoves by viewModel.canAddMoreMoves.collectAsState()
     val zoomedSquare by viewModel.zoomedSquare.collectAsState()
     val capturePrompt by viewModel.capturePrompt.collectAsState()
     val isContinuingGuidedJump by viewModel.isContinuingGuidedJump.collectAsState()
+    val apkSha256Prefix = remember(context) { OctiAppViewModel.computeInstalledApkSha256Prefix(context, 12) }
     var showSplash by remember { mutableStateOf(true) }
     var showTopMenu by remember { mutableStateOf(false) }
 
@@ -392,12 +399,13 @@ fun OctiMainAppContent(
                 }
             }
 
-            val isAwaitingConfirm = viewModel.composer.isAwaitingConfirmation &&
-                    boardRev >= 0L && zoomedSquare == null && capturePrompt == null
+            val isAwaitingConfirm = (awaitingConfirmation || viewModel.composer.isAwaitingConfirmation) &&
+                    currentBoardRev >= 0L &&
+                    zoomedSquare == null && capturePrompt == null
             if (isAwaitingConfirm) {
                 PlyConfirmDialog(
-                    stagedNotation = viewModel.composer.stagedMoveNotation(),
-                    canMoreMoves = viewModel.composer.canAddMoreMoves(),
+                    stagedNotation = stagedMoveNotation.ifEmpty { viewModel.composer.stagedMoveNotation() },
+                    canMoreMoves = canAddMoreMoves || viewModel.composer.canAddMoreMovesToTurn(),
                     onCommit = {
                         if (viewModel.composer.isGuidedMoveActive) {
                             viewModel.composer.finishGuidedMoveHere()
@@ -425,6 +433,7 @@ fun OctiMainAppContent(
 
             if (showSplash) {
                 OctiSplashOverlay(
+                    apkSha256Prefix = apkSha256Prefix,
                     onDismiss = {
                         showSplash = false
                         onSplashDismissed()
@@ -548,6 +557,7 @@ fun OctiMainAppContent(
         updateModalMessage?.let { msg ->
             UpToDateModalDialog(
                 message = msg,
+                apkSha256Prefix = apkSha256Prefix,
                 onDismiss = { updateModalMessage = null },
                 onReinstall = {
                     updateModalMessage = null

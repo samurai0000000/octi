@@ -751,7 +751,7 @@ public class OctiMoveComposer {
 
         for (OctiMoveOp op : stagedOps) {
             if (op.addPod) {
-                game.prepareAddPod(op.x0, op.y0);
+                game.prepareAddPod(op.x0, op.y0, op.liberate);
             } else if (op.addProngDir != OctiDir.DIR_UNDEF
                     && op.rmProngDir == OctiDir.DIR_UNDEF) {
                 game.prepareAddProng(op.x0, op.y0, op.pod, op.addProngDir, op.superProng);
@@ -950,6 +950,12 @@ public class OctiMoveComposer {
             return commitStagedMove();
         }
         return true;
+    }
+
+    public boolean stageOrCommitPodMoveOrJump(int fromX, int fromY,
+                                              int podIndex,
+                                              int toX, int toY) {
+        return stageOrCommitPodMoveOrJump(fromX, fromY, podIndex, toX, toY, false);
     }
 
     public boolean stageOrCommitPodMoveOrJump(int fromX, int fromY,
@@ -1790,6 +1796,27 @@ public class OctiMoveComposer {
         return (awaitingSuperProngBonusMove && !hasEighthProngBonusHop)
                 || hasOtherMovablePodAtOrigin()
                 || hasContinuationJump();
+    }
+
+    public boolean canAddMoreMovesToTurn() {
+        return canAddMoreMoves();
+    }
+
+    public boolean clickBoardSquareForGuidedMove(int x, int y) {
+        return selectGuidedDestination(x, y);
+    }
+
+    public boolean hasPendingCaptureChoices() {
+        for (CaptureChoice cc : captureChoices) {
+            if (!cc.mandatory) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean simulateRepositionProngOnPod(int x, int y, int podIndex, OctiDir srcDir, OctiDir tgtDir) {
+        return stageOrCommitRepositionProng(x, y, podIndex, srcDir, tgtDir);
     }
 
     public boolean hasOtherMovablePodAtOrigin() {

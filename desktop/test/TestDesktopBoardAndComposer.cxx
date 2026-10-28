@@ -1039,6 +1039,13 @@ TEST(OctiDialogsRefinementTest, SplashDialogTenSecondDurationAndEarlyDismissal)
     QImage fEnd = OctiSplashDialog::renderSplashFrame(960, 560, 1.0);
     CHECK_FALSE(fEnd.isNull());
 
+    QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);
+    QString planArtifactDir = repoRootStr + "/plan/liberation_rules_and_commit_dialog.artifacts";
+    QDir().mkpath(planArtifactDir);
+    QString splashArtifactPath = planArtifactDir + "/desktop_splash_sha256.png";
+    CHECK_TRUE(fMid.save(splashArtifactPath));
+    CHECK_TRUE(QFileInfo(splashArtifactPath).size() > 10000);
+
     // ESC dismisses splash early
     QKeyEvent escEv(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
     QCoreApplication::sendEvent(&splash, &escEv);
@@ -1189,7 +1196,7 @@ TEST(OctiDialogsRefinementTest, ZoomedSquareDialogPodPlacementAndLiberationButto
 
     CHECK_TRUE(dlgEmpty.movePodBtnRect().isEmpty());
     CHECK_FALSE(dlgEmpty.placeReserveBtnRect().isEmpty());
-    CHECK_FALSE(dlgEmpty.liberateBtnRect().isEmpty());
+    CHECK_TRUE(dlgEmpty.liberateBtnRect().isEmpty());
 
     QString emptyArtifact = artifactDir + "/desktop_zoomed_empty_home_v4.png";
     CHECK_TRUE(imgEmpty.save(emptyArtifact));
@@ -1392,7 +1399,7 @@ TEST(OctiDialogsRefinementTest, PlyConfirmMultiMoveAndGameOverEndgameV3)
     CHECK_FALSE(emptyHomeImg.isNull());
     CHECK_TRUE(emptyHomeDlg.movePodBtnRect().isEmpty());
     CHECK_FALSE(emptyHomeDlg.placeReserveBtnRect().isEmpty());
-    CHECK_FALSE(emptyHomeDlg.liberateBtnRect().isEmpty());
+    CHECK_TRUE(emptyHomeDlg.liberateBtnRect().isEmpty());
 
     QString emptyHomePath = artifactDir + "/desktop_zoomed_empty_home_v3.png";
     CHECK_TRUE(emptyHomeImg.save(emptyHomePath));

@@ -111,7 +111,7 @@ public:
     void redo();
 
     // Preparatory Move Workflow (GUI staging)
-    void prepareAddPod(int x, int y);
+    void prepareAddPod(int x, int y, bool liberate = false);
     void prepareAddProng(int x, int y, OctiPod pod, OctiDir dir, bool superProng = false);
     void prepareReposition(int x, int y, OctiPod pod, OctiDir srcDir, OctiDir tgtDir);
     void prepareHops(int x, int y, OctiPod pod, const std::vector<OctiHop> &hops);
