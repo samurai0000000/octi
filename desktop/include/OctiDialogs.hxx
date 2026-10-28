@@ -601,9 +601,11 @@ private:
 class OctiSplashDialog : public QDialog {
 public:
     explicit OctiSplashDialog(QWidget *parent = nullptr,
-                              ThemeId theme = ThemeId::OBSIDIAN_BRASS);
+                              ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                              bool loopIndefinitely = false);
     ~OctiSplashDialog() override;
 
+    bool isLoopingIndefinitely() const { return _loopIndefinitely; }
     static QImage renderSplashFrame(int width, int height, double progress);
 
 protected:
@@ -613,6 +615,7 @@ protected:
 
 private:
     ThemeId _theme;
+    bool _loopIndefinitely;
     QTimer _timer;
     QElapsedTimer _elapsed;
     double _progress;
@@ -642,6 +645,8 @@ public:
     bool moveAllMatchingStack() const;
     bool actionCompleted() const;
     void cycleSelectedPod(int delta);
+    void setHoverProngDirForTest(int dir);
+    OctiDir hoverProngDir() const { return _hoverProngDir; }
     const std::map<OctiDir, QPointF> &socketCenters() const { return _socketCenters; }
     QRectF movePodBtnRect() const { return _movePodBtnRect; }
     QRectF placeReserveBtnRect() const { return _placeReserveBtnRect; }
@@ -809,8 +814,7 @@ class PlyConfirmDialog : public QDialog {
 public:
     enum class ResultAction {
         COMMIT,
-        CANCEL,
-        MORE_MOVES
+        CANCEL
     };
 
     explicit PlyConfirmDialog(OctiMoveComposer *composer,
@@ -819,7 +823,6 @@ public:
     ~PlyConfirmDialog() override;
 
     ResultAction chosenAction() const;
-    bool isMoreMovesVisible() const;
     QString stagedMoveText() const;
 
     QImage renderToImage(int width = 420, int height = 150);
@@ -833,12 +836,10 @@ private:
     OctiMoveComposer *_composer;
     ThemeId _theme;
     ResultAction _chosenAction;
-    bool _hasMoreMoves;
     QString _notation;
 
     QRectF _commitBtnRect;
     QRectF _cancelBtnRect;
-    QRectF _moreMovesBtnRect;
 };
 
 /*

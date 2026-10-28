@@ -1005,7 +1005,7 @@ ThemeId OctiMainWindow::theme() const
 
 void OctiMainWindow::showSplashAboutDialog()
 {
-    OctiSplashDialog splash(this, _theme);
+    OctiSplashDialog splash(this, _theme, true);
     splash.exec();
 }
 

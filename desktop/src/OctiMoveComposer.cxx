@@ -11,6 +11,27 @@
 
 namespace octi {
 
+std::vector<int> sortedPodIndicesMostProngsFirst(const OctiSquare &sq)
+{
+    int numPods = sq.getNumPods();
+    std::vector<int> indices(numPods);
+    for (int i = 0; i < numPods; ++i) {
+        indices[i] = i;
+    }
+    std::stable_sort(indices.begin(), indices.end(), [&](int a, int b) {
+        const OctiPod &podA = sq.getPodAt(a);
+        const OctiPod &podB = sq.getPodAt(b);
+        if (podA.getNumProngs() != podB.getNumProngs()) {
+            return podA.getNumProngs() > podB.getNumProngs();
+        }
+        if (podA.getNumSuperProngs() != podB.getNumSuperProngs()) {
+            return podA.getNumSuperProngs() > podB.getNumSuperProngs();
+        }
+        return a > b;
+    });
+    return indices;
+}
+
 namespace {
 
 bool isOfkBackwardDirection(OctiPlayer turn, OctiDir dir)
@@ -251,7 +272,8 @@ int OctiMoveComposer::selectedStackPodIndex(int x, int y) const
         it->second >= 0 && it->second < sq.getNumPods()) {
         return it->second;
     }
-    return sq.getNumPods() - 1;
+    auto sorted = sortedPodIndicesMostProngsFirst(sq);
+    return sorted.empty() ? -1 : sorted.front();
 }
 
 void OctiMoveComposer::setMoveEntireMatchingStack(bool moveAll)
@@ -299,7 +321,8 @@ int OctiMoveComposer::resolvePodIndex(const OctiSquare &sq,
         }
     }
 
-    for (int i = sq.getNumPods() - 1; i >= 0; --i) {
+    auto sorted = sortedPodIndicesMostProngsFirst(sq);
+    for (int i : sorted) {
         if (sq.getPodAt(i).getType() == desiredType &&
             (!excludeClaimed || !isPodClaimed(bx, by, i))) {
             return i;
@@ -548,6 +571,13 @@ bool OctiMoveComposer::stageOrCommitAddProng(int x, int y,
     _guidedMidHop = false;
     _awaitingSuperProngBonusMove = (superProng && pod.getNumProngs() == 7);
     _awaitingConfirmation = true;
+    if (_awaitingSuperProngBonusMove) {
+        _guidedCurBx = bx;
+        _guidedCurBy = by;
+        _guidedMoveAllStack = false;
+        _guidedMidHop = false;
+        _guidedMoveActive = true;
+    }
     syncPreparedStateToGame();
 
     if (!_confirmAllMoves && !_awaitingSuperProngBonusMove) {
@@ -704,35 +734,71 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
         }
 
         std::vector<OctiMoveOp> candidateOps = _stagedOps;
-        for (const auto &eh : extraHops) {
-            candidateOps.back().hops.push_back(eh);
+        std::vector<std::size_t> matchingStackOpIndices;
+        for (std::size_t idx = 0; idx < candidateOps.size(); ++idx) {
+            const OctiMoveOp &cop = candidateOps[idx];
+            if (cop.x0 == _activeJumpStartBx && cop.y0 == _activeJumpStartBy && !cop.hops.empty()) {
+                const OctiHop &lastHop = cop.hops.back();
+                if (lastHop.x == _activeJumpCurBx && lastHop.y == _activeJumpCurBy) {
+                    bool canFollow = true;
+                    int cx = _activeJumpCurBx;
+                    int cy = _activeJumpCurBy;
+                    for (const auto &eh : extraHops) {
+                        int hdx = 0, hdy = 0;
+                        if (!computeDisplacement(cx, cy, eh.x, eh.y, edgeless, w, h, hdx, hdy)) {
+                            canFollow = false;
+                            break;
+                        }
+                        OctiDir reqDir = deltaToDir(hdx / 2, hdy / 2);
+                        if (reqDir == DIR_UNDEF || cop.pod.prongAt(reqDir) == NO_PRONG) {
+                            canFollow = false;
+                            break;
+                        }
+                        cx = eh.x;
+                        cy = eh.y;
+                    }
+                    if (canFollow) {
+                        matchingStackOpIndices.push_back(idx);
+                    }
+                }
+            }
+        }
+        if (matchingStackOpIndices.empty()) {
+            matchingStackOpIndices.push_back(candidateOps.size() - 1);
+        }
+        for (std::size_t opIdxToExtend : matchingStackOpIndices) {
+            for (const auto &eh : extraHops) {
+                candidateOps[opIdxToExtend].hops.push_back(eh);
+            }
         }
         if (!validateOpsOnScratch(candidateOps)) {
             return false;
         }
 
-        std::size_t opIdx = _stagedOps.size() - 1;
         std::size_t prevJumpedCount = _activeJumpedCoords.size();
-        for (std::size_t i = 0; i < extraHops.size(); ++i) {
-            std::size_t hopIdx = activeOp.hops.size();
-            activeOp.hops.push_back(extraHops[i]);
-            std::pair<int, int> jc = nextJumped[prevJumpedCount + i];
-            const OctiSquare &jsq = _board->squareAt(jc.first, jc.second);
-            if (jsq.hasEnemyOf(turn)) {
-                int jx1 = jc.first + 1;
-                int jy1 = jc.second + 1;
-                _hopCaptureLinks.push_back({opIdx, hopIdx, jx1, jy1});
-                bool alreadyListed = false;
-                for (const auto &cc : _captureChoices) {
-                    if (cc.jumpedX == jx1 && cc.jumpedY == jy1) {
-                        alreadyListed = true;
-                        break;
+        for (std::size_t opIdxToExtend : matchingStackOpIndices) {
+            OctiMoveOp &targetOp = _stagedOps[opIdxToExtend];
+            for (std::size_t i = 0; i < extraHops.size(); ++i) {
+                std::size_t hopIdx = targetOp.hops.size();
+                targetOp.hops.push_back(extraHops[i]);
+                std::pair<int, int> jc = nextJumped[prevJumpedCount + i];
+                const OctiSquare &jsq = _board->squareAt(jc.first, jc.second);
+                if (jsq.hasEnemyOf(turn)) {
+                    int jx1 = jc.first + 1;
+                    int jy1 = jc.second + 1;
+                    _hopCaptureLinks.push_back({opIdxToExtend, hopIdx, jx1, jy1});
+                    bool alreadyListed = false;
+                    for (const auto &cc : _captureChoices) {
+                        if (cc.jumpedX == jx1 && cc.jumpedY == jy1) {
+                            alreadyListed = true;
+                            break;
+                        }
                     }
-                }
-                if (!alreadyListed) {
-                    _captureChoices.push_back({
-                        jx1, jy1, true, _board->getGameMode() == GAME_MODE_OFK
-                    });
+                    if (!alreadyListed) {
+                        _captureChoices.push_back({
+                            jx1, jy1, true, _board->getGameMode() == GAME_MODE_OFK
+                        });
+                    }
                 }
             }
         }
@@ -740,6 +806,28 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
         _activeJumpedCoords = nextJumped;
         _activeJumpCurBx = tbx;
         _activeJumpCurBy = tby;
+        _guidedCurBx = tbx;
+        _guidedCurBy = tby;
+
+        bool hasContinuation = hasContinuationJumpFrom(
+            tbx, tby, activeOp.pod, _activeJumpStartBx, _activeJumpStartBy, ghostPods, nextJumped);
+        if (hasContinuation) {
+            _guidedMidHop = true;
+            _guidedMoveActive = true;
+        } else {
+            auto unclaimed = unclaimedMovablePodIndicesAtOrigin();
+            if (!unclaimed.empty() && !hasDistinctUnclaimedPodsAtOrigin()) {
+                _guidedCurBx = _guidedOriginBx;
+                _guidedCurBy = _guidedOriginBy;
+                _guidedPodIndex = unclaimed.front();
+                _guidedMoveAllStack = false;
+                _guidedMidHop = false;
+                _guidedMoveActive = true;
+            } else {
+                _guidedMidHop = false;
+                _guidedMoveActive = false;
+            }
+        }
         _awaitingConfirmation = true;
         syncPreparedStateToGame();
         return true;
@@ -846,6 +934,8 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
     }
 
     int startKey = fbx * 10 + fby;
+    _guidedOriginBx = fbx;
+    _guidedOriginBy = fby;
     for (int pIdx : podIndicesToMove) {
         std::size_t opIdx = _stagedOps.size();
         OctiMoveOp op;
@@ -881,6 +971,8 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
         }
     }
 
+    _guidedOriginBx = fbx;
+    _guidedOriginBy = fby;
     _activeJumpHasChain = !isDist1;
     _activeJumpStartBx = fbx;
     _activeJumpStartBy = fby;
@@ -896,6 +988,27 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
         if (!cc.mandatory) {
             hasOptionalCapture = true;
             break;
+        }
+    }
+
+    if (hasContinuation) {
+        _guidedMidHop = true;
+        _guidedMoveActive = true;
+        _guidedCurBx = tbx;
+        _guidedCurBy = tby;
+        _guidedPodIndex = resolvedIdx;
+    } else {
+        auto unclaimed = unclaimedMovablePodIndicesAtOrigin();
+        if (!unclaimed.empty() && !hasDistinctUnclaimedPodsAtOrigin()) {
+            _guidedCurBx = _guidedOriginBx;
+            _guidedCurBy = _guidedOriginBy;
+            _guidedPodIndex = unclaimed.front();
+            _guidedMoveAllStack = false;
+            _guidedMidHop = false;
+            _guidedMoveActive = true;
+        } else {
+            _guidedMidHop = false;
+            _guidedMoveActive = false;
         }
     }
 
@@ -1113,6 +1226,10 @@ std::vector<std::pair<int, int>> OctiMoveComposer::guidedNextSquares() const
         if (_stagedOps.empty()) {
             return result;
         }
+        if (!_board->isValidCoord(_guidedOriginBx, _guidedOriginBy) ||
+            !_board->isValidCoord(_guidedCurBx, _guidedCurBy)) {
+            return result;
+        }
         const OctiMoveOp &curOp = _stagedOps.back();
         const OctiPod &pod = curOp.pod;
         const OctiSquare &startSq = _board->squareAt(_guidedOriginBx, _guidedOriginBy);
@@ -1214,11 +1331,21 @@ bool OctiMoveComposer::selectGuidedDestination(int toX, int toY)
         }
         _guidedCurBx = tbx;
         _guidedCurBy = tby;
-        if (isStep) {
-            _guidedMoveActive = false;
-        } else {
+        bool hasContinuation = !isStep && !guidedNextSquares().empty();
+        if (hasContinuation) {
             _guidedMidHop = true;
-            if (guidedNextSquares().empty()) {
+            _guidedMoveActive = true;
+        } else {
+            auto unclaimed = unclaimedMovablePodIndicesAtOrigin();
+            if (!unclaimed.empty() && !hasDistinctUnclaimedPodsAtOrigin()) {
+                _guidedCurBx = _guidedOriginBx;
+                _guidedCurBy = _guidedOriginBy;
+                _guidedPodIndex = unclaimed.front();
+                _guidedMoveAllStack = false;
+                _guidedMidHop = false;
+                _guidedMoveActive = true;
+            } else {
+                _guidedMidHop = false;
                 _guidedMoveActive = false;
             }
         }
@@ -1230,8 +1357,23 @@ bool OctiMoveComposer::selectGuidedDestination(int toX, int toY)
         }
         _guidedCurBx = tbx;
         _guidedCurBy = tby;
-        if (guidedNextSquares().empty()) {
-            _guidedMoveActive = false;
+        bool hasContinuation = !guidedNextSquares().empty();
+        if (hasContinuation) {
+            _guidedMidHop = true;
+            _guidedMoveActive = true;
+        } else {
+            auto unclaimed = unclaimedMovablePodIndicesAtOrigin();
+            if (!unclaimed.empty() && !hasDistinctUnclaimedPodsAtOrigin()) {
+                _guidedCurBx = _guidedOriginBx;
+                _guidedCurBy = _guidedOriginBy;
+                _guidedPodIndex = unclaimed.front();
+                _guidedMoveAllStack = false;
+                _guidedMidHop = false;
+                _guidedMoveActive = true;
+            } else {
+                _guidedMidHop = false;
+                _guidedMoveActive = false;
+            }
         }
         return true;
     }
@@ -1242,42 +1384,66 @@ bool OctiMoveComposer::finishGuidedMoveHere()
     if (!_guidedMoveActive) {
         return false;
     }
-    if (_guidedMidHop) {
-        _guidedMoveActive = false;
-        _activeJumpHasChain = false;
-        return true;
-    }
     _guidedMoveActive = false;
+    _activeJumpHasChain = false;
+    _guidedMidHop = false;
+    return true;
+}
+
+std::vector<int> OctiMoveComposer::unclaimedMovablePodIndicesAtOrigin() const
+{
+    std::vector<int> result;
+    if (_stagedOps.empty() || !_board || !_board->getGame()) {
+        return result;
+    }
+    int origBx = _stagedOps[0].x0;
+    int origBy = _stagedOps[0].y0;
+    if (!_board->isValidCoord(origBx, origBy)) {
+        return result;
+    }
+    OctiPlayer turn = _board->getGame()->getTurn();
+    const OctiSquare &sq = _board->squareAt(origBx, origBy);
+    OctiPodType desiredType = playerToPodType(turn);
+    auto sorted = sortedPodIndicesMostProngsFirst(sq);
+    for (int idx : sorted) {
+        if (isPodClaimed(origBx, origBy, idx)) {
+            continue;
+        }
+        const OctiPod &pod = sq.getPodAt(idx);
+        if (pod.getType() != desiredType) {
+            continue;
+        }
+        if (pod.getNumProngs() > 0) {
+            auto dests = legalDestinationsFrom(origBx + 1, origBy + 1, idx);
+            if (!dests.empty()) {
+                result.push_back(idx);
+            }
+        }
+    }
+    return result;
+}
+
+bool OctiMoveComposer::hasDistinctUnclaimedPodsAtOrigin() const
+{
+    auto indices = unclaimedMovablePodIndicesAtOrigin();
+    if (indices.size() < 2 || _stagedOps.empty() || !_board) {
+        return false;
+    }
+    int origBx = _stagedOps[0].x0;
+    int origBy = _stagedOps[0].y0;
+    const OctiSquare &sq = _board->squareAt(origBx, origBy);
+    std::uint32_t firstConf = (sq.getPodAt(indices[0]).rawConfig() & 0xFFFFu);
+    for (std::size_t i = 1; i < indices.size(); ++i) {
+        if ((sq.getPodAt(indices[i]).rawConfig() & 0xFFFFu) != firstConf) {
+            return true;
+        }
+    }
     return false;
 }
 
 bool OctiMoveComposer::hasOtherMovablePodAtOrigin() const
 {
-    if (_stagedOps.empty() || !_board || !_board->getGame()) {
-        return false;
-    }
-    int origBx = _stagedOps[0].x0;
-    int origBy = _stagedOps[0].y0;
-    OctiPlayer turn = _board->getGame()->getTurn();
-    const OctiSquare &sq = _board->squareAt(origBx, origBy);
-    OctiPodType desiredType = playerToPodType(turn);
-
-    for (int i = 0; i < sq.getNumPods(); ++i) {
-        if (isPodClaimed(origBx, origBy, i)) {
-            continue;
-        }
-        const OctiPod &pod = sq.getPodAt(i);
-        if (pod.getType() != desiredType) {
-            continue;
-        }
-        if (pod.getNumProngs() > 0) {
-            auto dests = legalDestinationsFrom(origBx + 1, origBy + 1, i);
-            if (!dests.empty()) {
-                return true;
-            }
-        }
-    }
-    return false;
+    return !unclaimedMovablePodIndicesAtOrigin().empty();
 }
 
 bool OctiMoveComposer::isSquarePodClaimed(int x, int y, int podIndex) const
@@ -1297,9 +1463,10 @@ int OctiMoveComposer::firstUnclaimedFriendlyPodIndex(int x, int y) const
     int by = y - 1;
     const OctiSquare &sq = _board->squareAt(bx, by);
     OctiPodType desiredType = playerToPodType(_board->getGame()->getTurn());
-    for (int i = sq.getNumPods() - 1; i >= 0; --i) {
-        if (sq.getPodAt(i).getType() == desiredType && !isPodClaimed(bx, by, i)) {
-            return i;
+    auto sorted = sortedPodIndicesMostProngsFirst(sq);
+    for (int idx : sorted) {
+        if (sq.getPodAt(idx).getType() == desiredType && !isPodClaimed(bx, by, idx)) {
+            return idx;
         }
     }
     return -1;

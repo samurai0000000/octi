@@ -37,6 +37,8 @@ struct CaptureChoice {
     bool mandatory = false;
 };
 
+std::vector<int> sortedPodIndicesMostProngsFirst(const OctiSquare &sq);
+
 class OctiMoveComposer {
 public:
     explicit OctiMoveComposer(OctiBoard *board = nullptr);
@@ -77,6 +79,8 @@ public:
     bool finishGuidedMoveHere();
     bool finishGuidedMove() { return finishGuidedMoveHere(); }
     bool hasOtherMovablePodAtOrigin() const;
+    std::vector<int> unclaimedMovablePodIndicesAtOrigin() const;
+    bool hasDistinctUnclaimedPodsAtOrigin() const;
     bool isSquarePodClaimed(int x, int y, int podIndex) const;
     int firstUnclaimedFriendlyPodIndex(int x, int y) const;
     bool canAddMoreMoves() const;

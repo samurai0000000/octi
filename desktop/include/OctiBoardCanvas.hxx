@@ -47,10 +47,16 @@ public:
     void rotateClockwise();
     void autoOrientForSeat(OctiPlayer seat);
     double liveRotationOffsetDeg() const { return _liveRotationOffsetDeg; }
+    bool isHandRotateActive() const { return _handRotateActive; }
 
     double boardZoomScale() const;
+    QPointF boardZoomFocus() const { return _boardZoomFocus; }
+    bool isBoardPanActive() const { return _boardPanActive; }
     void setBoardZoom(double scale, const QPointF &focusPos = QPointF());
     void resetBoardZoom();
+
+    QRectF commitBtnRect() const { return _commitBtnRect; }
+    QRectF rollbackBtnRect() const { return _rollbackBtnRect; }
 
     const OctiBoardGeometry &geometry() const;
 
@@ -151,6 +157,8 @@ private:
 
     double _boardZoomScale;
     QPointF _boardZoomFocus;
+    bool _boardPanActive;
+    QPointF _lastPanRawPos;
 
     QTimer _holdRotateTimer;
     bool _handRotateActive;

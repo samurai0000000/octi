@@ -185,6 +185,7 @@ fun OctiMainAppContent(
     val isContinuingGuidedJump by viewModel.isContinuingGuidedJump.collectAsState()
     val apkSha256Prefix = remember(context) { OctiAppViewModel.computeInstalledApkSha256Prefix(context, 12) }
     var showSplash by remember { mutableStateOf(true) }
+    var splashLoopIndefinitely by remember { mutableStateOf(false) }
     var showTopMenu by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -275,6 +276,7 @@ fun OctiMainAppContent(
                                     text = { Text("About OCTI (Splash)") },
                                     onClick = {
                                         showTopMenu = false
+                                        splashLoopIndefinitely = true
                                         showSplash = true
                                     }
                                 )
@@ -403,9 +405,14 @@ fun OctiMainAppContent(
                     currentBoardRev >= 0L &&
                     zoomedSquare == null && capturePrompt == null
             if (isAwaitingConfirm) {
+                val hint = if (viewModel.composer.hasContinuationJump()) {
+                    "Tap board square to continue jumping"
+                } else if (viewModel.composer.hasOtherMovablePodAtOrigin()) {
+                    "Tap origin square to move another pod"
+                } else null
                 PlyConfirmDialog(
                     stagedNotation = stagedMoveNotation.ifEmpty { viewModel.composer.stagedMoveNotation() },
-                    canMoreMoves = canAddMoreMoves || viewModel.composer.canAddMoreMovesToTurn(),
+                    subtitleHint = hint,
                     onCommit = {
                         if (viewModel.composer.isGuidedMoveActive) {
                             viewModel.composer.finishGuidedMoveHere()
@@ -413,18 +420,6 @@ fun OctiMainAppContent(
                         viewModel.commitStagedMove()
                     },
                     onCancel = { viewModel.rollbackStagedMove() },
-                    onMoreMoves = {
-                        if (viewModel.composer.hasUnlockedSuperProngBonus() && !viewModel.composer.isGuidedMoveActive) {
-                            val orig = viewModel.composer.eighthProngOriginSquare()
-                            viewModel.composer.beginGuidedPodMove(orig[0], orig[1], -1, false)
-                            viewModel.bumpBoardRevision()
-                        } else if (viewModel.composer.hasContinuationJump()) {
-                            viewModel.resumeGuidedJumpSelection()
-                        } else if (viewModel.composer.hasOtherMovablePodAtOrigin()) {
-                            val orig = viewModel.composer.guidedOriginSquare()
-                            viewModel.openZoomedSquare(orig[0], orig[1])
-                        }
-                    },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 8.dp)
@@ -434,8 +429,10 @@ fun OctiMainAppContent(
             if (showSplash) {
                 OctiSplashOverlay(
                     apkSha256Prefix = apkSha256Prefix,
+                    loopIndefinitely = splashLoopIndefinitely,
                     onDismiss = {
                         showSplash = false
+                        splashLoopIndefinitely = false
                         onSplashDismissed()
                     }
                 )
@@ -477,7 +474,10 @@ fun OctiMainAppContent(
                 themeId = themeId,
                 onDismiss = { viewModel.closeZoomedSquare() },
                 onBeginGuidedMove = { podIndex, moveAllStack ->
-                    if (viewModel.composer.isAwaitingConfirmation) {
+                    val isOriginWithOther = viewModel.composer.isAwaitingConfirmation &&
+                            viewModel.composer.hasOtherMovablePodAtOrigin() &&
+                            viewModel.composer.guidedOriginSquare().let { it[0] == zx && it[1] == zy }
+                    if (viewModel.composer.isAwaitingConfirmation && !isOriginWithOther) {
                         viewModel.composer.cancelAndRollback()
                     }
                     if (viewModel.composer.beginGuidedPodMove(zx, zy, podIndex, moveAllStack)) {

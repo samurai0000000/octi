@@ -120,7 +120,10 @@ fun OctiBoardCanvas(
         val isHome = if (turn != null) b.isHomeSquareOf(sqX - 1, sqY - 1, turn) && !sq.hasEnemyOf(turn) else false
         if (!sq.isEmpty || isHome) {
             val composer = viewModel.composer
-            if (composer.isGuidedMoveActive && !composer.isAwaitingConfirmation) {
+            val isOriginWithOther = composer.isAwaitingConfirmation &&
+                    composer.hasOtherMovablePodAtOrigin() &&
+                    composer.guidedOriginSquare().let { it[0] == sqX && it[1] == sqY }
+            if (composer.isGuidedMoveActive && !composer.isAwaitingConfirmation && !isOriginWithOther) {
                 composer.cancelAndRollback()
             }
             selectedOriginSquare = Pair(sqX, sqY)
@@ -222,10 +225,12 @@ fun OctiBoardCanvas(
                                 val startSq = b.squareAt(startX - 1, startY - 1)
                                 val hasFriendlyPod = !startSq.isEmpty && turn != null && !startSq.hasEnemyOf(turn)
                                 if (composer.isGuidedMoveActive) {
+                                    val prevCapCount = composer.captureChoices().size
                                     if (composer.clickBoardSquareForGuidedMove(endX, endY)) {
                                         viewModel.refreshDisplayBoard()
-                                        if (composer.hasPendingCaptureChoices()) {
-                                            val latestCap = composer.captureChoices().lastOrNull { !it.mandatory }
+                                        val capChoices = composer.captureChoices()
+                                        if (capChoices.size > prevCapCount) {
+                                            val latestCap = capChoices.lastOrNull { !it.mandatory }
                                             if (latestCap != null) {
                                                 val jsq = b.squareAt(latestCap.jumpedX - 1, latestCap.jumpedY - 1)
                                                 val jumpedPlayer = if (!jsq.isEmpty) jsq.getPodAt(0).type.toPlayer() else OctiPlayer.PLAYER_B
@@ -236,34 +241,16 @@ fun OctiBoardCanvas(
                                 } else if (hasFriendlyPod) {
                                     val pIdx = composer.selectedStackPodIndex(startX, startY)
                                     val resolvedIdx = if (pIdx >= 0 && pIdx < startSq.numPods) pIdx else -1
+                                    val prevCapCount = composer.captureChoices().size
                                     if (composer.stageOrCommitPodMoveOrJump(startX, startY, resolvedIdx, endX, endY, viewModel.moveEntireMatchingStack.value)) {
                                         viewModel.refreshDisplayBoard()
-                                        if (composer.hasPendingCaptureChoices()) {
-                                            val latestCap = composer.captureChoices().lastOrNull { !it.mandatory }
+                                        val capChoices = composer.captureChoices()
+                                        if (capChoices.size > prevCapCount) {
+                                            val latestCap = capChoices.lastOrNull { !it.mandatory }
                                             if (latestCap != null) {
                                                 val jsq = b.squareAt(latestCap.jumpedX - 1, latestCap.jumpedY - 1)
                                                 val jumpedPlayer = if (!jsq.isEmpty) jsq.getPodAt(0).type.toPlayer() else OctiPlayer.PLAYER_B
                                                 viewModel.promptCapture(latestCap.jumpedX, latestCap.jumpedY, jumpedPlayer)
-                                            }
-                                        }
-                                    }
-                                }
-                            } else {
-                                val sq = b.squareAt(startX - 1, startY - 1)
-                                if (!sq.isEmpty && turn != null && !sq.hasEnemyOf(turn)) {
-                                    val cell = geo.cellSize()
-                                    val cx = geo.squareCenterX(startX, startY)
-                                    val cy = geo.squareCenterY(startX, startY)
-                                    val startDir = geo.hitTestCompassSector(cx, cy, cell * 0.15, cell * 0.50, startPx, startPy)
-                                    val endDir = geo.hitTestCompassSector(cx, cy, cell * 0.15, cell * 0.50, endPx, endPy)
-                                    if (startDir != OctiDir.DIR_UNDEF && endDir != OctiDir.DIR_UNDEF && startDir != endDir) {
-                                        val pIdx = composer.selectedStackPodIndex(startX, startY).let {
-                                            if (it in 0 until sq.numPods) it else 0
-                                        }
-                                        val pod = sq.getPodAt(pIdx)
-                                        if (pod.prongAt(startDir) != OctiProngType.NO_PRONG && pod.prongAt(endDir) == OctiProngType.NO_PRONG) {
-                                            if (composer.simulateRepositionProngOnPod(startX, startY, pIdx, startDir, endDir)) {
-                                                viewModel.refreshDisplayBoard()
                                             }
                                         }
                                     }
@@ -337,9 +324,21 @@ fun OctiBoardCanvas(
                         val sqX = xy[0]
                         val sqY = xy[1]
 
-                        if (composer.isAwaitingConfirmation && !composer.isGuidedMoveActive) {
-                            composer.cancelAndRollback()
-                            viewModel.refreshDisplayBoard()
+                        val orig = composer.guidedOriginSquare()
+                        val isOriginSquare = (orig != null && orig.size >= 2 && orig[0] == sqX && orig[1] == sqY)
+
+                        if (composer.isAwaitingConfirmation) {
+                            if (isOriginSquare && composer.hasOtherMovablePodAtOrigin()) {
+                                composer.finishGuidedMoveHere()
+                                if (composer.hasDistinctUnclaimedPodsAtOrigin()) {
+                                    viewModel.openZoomedSquare(sqX, sqY)
+                                } else {
+                                    val nextPod = composer.firstUnclaimedFriendlyPodIndex(sqX, sqY)
+                                    composer.beginGuidedPodMove(sqX, sqY, nextPod, viewModel.moveEntireMatchingStack.value)
+                                }
+                                viewModel.notifyComposerUpdated()
+                                return@detectTapGestures
+                            }
                         }
 
                         // 3. If Move Composer is in guided move/jump chain mode
@@ -376,7 +375,12 @@ fun OctiBoardCanvas(
                                     viewModel.notifyComposerUpdated()
                                     return@detectTapGestures
                                 }
-                                // Friendly pod: fall through to process socket or guided move start
+                                // Friendly pod: fall through to process guided move start
+                            }
+                        } else if (composer.isAwaitingConfirmation) {
+                            if (!isOriginSquare || !composer.hasOtherMovablePodAtOrigin()) {
+                                composer.cancelAndRollback()
+                                viewModel.refreshDisplayBoard()
                             }
                         }
 
@@ -401,33 +405,12 @@ fun OctiBoardCanvas(
                             }
                         }
 
-                        // 5. Friendly pod square interaction: direct socket tap or guided move start
+                        // 5. Friendly pod square interaction: guided move start
                         val sq = b.squareAt(sqX - 1, sqY - 1)
                         val turn = b.game?.turn
                         if (!sq.isEmpty && turn != null && !sq.hasEnemyOf(turn)) {
                             val pIdx = composer.selectedStackPodIndex(sqX, sqY)
                             val resolvedIdx = if (pIdx >= 0 && pIdx < sq.numPods) pIdx else 0
-                            val cell = geo.cellSize()
-                            val cx = geo.squareCenterX(sqX, sqY)
-                            val cy = geo.squareCenterY(sqX, sqY)
-                            val dist = Math.hypot(px - cx, py - cy)
-
-                            if (dist >= cell * 0.24 && dist <= cell * 0.48) {
-                                val relDir = geo.hitTestCompassSector(cx, cy, cell * 0.24, cell * 0.48, px, py)
-                                if (relDir != OctiDir.DIR_UNDEF &&
-                                    composer.legalProngAdditionsAt(sqX, sqY, resolvedIdx, false).contains(relDir)
-                                ) {
-                                    if (composer.isGuidedMoveActive && !composer.isAwaitingConfirmation) {
-                                        composer.cancelAndRollback()
-                                    }
-                                    if (composer.stageOrCommitAddProng(sqX, sqY, resolvedIdx, relDir, false)) {
-                                        selectedOriginSquare = Pair(sqX, sqY)
-                                        viewModel.bumpRevision()
-                                        return@detectTapGestures
-                                    }
-                                }
-                            }
-
                             selectedOriginSquare = Pair(sqX, sqY)
                             composer.beginGuidedPodMove(sqX, sqY, resolvedIdx, viewModel.moveEntireMatchingStack.value)
                             viewModel.bumpRevision()

@@ -247,7 +247,8 @@ void paintOctagonalPod(QPainter &p,
                        const OctiPalette &pal,
                        int boardRotationDeg,
                        bool highlighted,
-                       double opacity)
+                       double opacity,
+                       const QString &centerLabelOverride)
 {
     p.save();
     p.setRenderHint(QPainter::Antialiasing, true);
@@ -364,14 +365,16 @@ void paintOctagonalPod(QPainter &p,
         p.drawEllipse(sc, socketR, socketR);
     }
 
-    // 6. Faction letter emblem at center
-    QString label = "?";
-    switch (type) {
-    case A_POD: label = "A"; break;
-    case B_POD: label = "B"; break;
-    case C_POD: label = "C"; break;
-    case D_POD: label = "D"; break;
-    default:    break;
+    // 6. Faction letter emblem at center (or stack count override like "x2")
+    QString label = centerLabelOverride;
+    if (label.isEmpty()) {
+        switch (type) {
+        case A_POD: label = "A"; break;
+        case B_POD: label = "B"; break;
+        case C_POD: label = "C"; break;
+        case D_POD: label = "D"; break;
+        default:    label = "?"; break;
+        }
     }
 
     QFont font = p.font();

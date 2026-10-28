@@ -294,7 +294,7 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
             "\xE2\x80\xA2 Friendly Pod: Click pod to open Zoom View \xE2\x80\x94 click socket (a\xE2\x80\x93h) "
             "to add/reposition prong, or click 'Move / Jump This Pod'.\n"
             "\xE2\x80\xA2 Multi-Pod Stack: Scroll mouse wheel or click Pod tabs in Zoom View.\n"
-            "\xE2\x80\xA2 Guided Jump: Click green target dots, then Commit or More Moves.");
+            "\xE2\x80\xA2 Guided Jump: Click green target dots, then Commit or Cancel.");
         p.drawText(QRectF(guideRect.left() + 10.0, guideRect.top() + 26.0,
                           guideRect.width() - 20.0, guideH - 30.0),
                    Qt::AlignTop | Qt::AlignLeft | Qt::TextWordWrap,
@@ -348,10 +348,6 @@ void OctiReservePanel::mousePressEvent(QMouseEvent *event)
             _canvas->startExternalReserveDrag(DragKind::ADD_POD_FROM_RESERVE);
         } else if (_liberatePodWellRect.contains(pos)) {
             _canvas->startExternalReserveDrag(DragKind::LIBERATE_POD_FROM_RESERVE);
-        } else if (_normalProngWellRect.contains(pos)) {
-            _canvas->startExternalReserveDrag(DragKind::ADD_PRONG_FROM_RESERVE);
-        } else if (_superProngWellRect.contains(pos)) {
-            _canvas->startExternalReserveDrag(DragKind::ADD_SUPERPRONG_FROM_RESERVE);
         }
         update();
     }

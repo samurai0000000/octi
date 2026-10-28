@@ -79,7 +79,8 @@ void paintOctagonalPod(QPainter &p,
                        const OctiPalette &pal,
                        int boardRotationDeg = 0,
                        bool highlighted = false,
-                       double opacity = 1.0);
+                       double opacity = 1.0,
+                       const QString &centerLabelOverride = QString());
 
 inline void paintPodGlyph(QPainter &p,
                           const QRectF &rect,
@@ -88,9 +89,10 @@ inline void paintPodGlyph(QPainter &p,
                           const OctiPalette &pal,
                           int boardRotationDeg = 0,
                           bool highlighted = false,
-                          double opacity = 1.0)
+                          double opacity = 1.0,
+                          const QString &centerLabelOverride = QString())
 {
-    paintOctagonalPod(p, rect, type, pod, pal, boardRotationDeg, highlighted, opacity);
+    paintOctagonalPod(p, rect, type, pod, pal, boardRotationDeg, highlighted, opacity, centerLabelOverride);
 }
 
 void paintProngGlyph(QPainter &p,

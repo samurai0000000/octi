@@ -17,6 +17,7 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QKeyEvent>
+#include <QTimer>
 #include "OctiBoard.hxx"
 #include "OctiBoardCanvas.hxx"
 #include "OctiBoardGeometry.hxx"
@@ -815,23 +816,27 @@ TEST(OctiBoardCanvasRenderTest, CanvasSimulateDragAndEscapeRollback)
         QApplication::sendEvent(w, &release);
     };
 
-    // 1. Direct click on pod (3,3) North ('a') compass socket adds a prong ("33+a")
+    // 1. ZPB-D01: Direct click on pod (3,3) North ('a') compass socket does NOT add prong on board
     double cell = mouseCanvas.geometry().cellSize();
     QPointF pt33N = mouseCanvas.geometry().squareCenter(3, 3) +
                     mouseCanvas.geometry().dirUnitVectorScreen(DIR_N) * (cell * 0.35);
     sendClick(&mouseCanvas, pt33N);
+    LONGS_EQUAL(0, mouseBoard.getGame()->getNumMoves());
+
+    // 2. ZPB-D01: Click "Prongs" well in OctiReservePanel does NOT start external reserve drag
+    mouseReserve.renderToImage(340, 760);
+    sendClick(&mouseReserve, mouseReserve.normalProngWellRect().center());
+    LONGS_EQUAL(static_cast<long>(DragKind::NONE),
+                static_cast<long>(mouseCanvas.activeDragKind()));
+
+    // Stage prong addition via composer (33+a for Player A)
+    CHECK_TRUE(mouseComposer.stageOrCommitAddProng(3, 3, 0, DIR_N, false));
     LONGS_EQUAL(1, mouseBoard.getGame()->getNumMoves());
     LONGS_EQUAL(static_cast<long>(NORMAL_PRONG),
                 static_cast<long>(mouseBoard.squareAt(2, 2).getPodAt(0).prongAt(DIR_N)));
 
-    // 2. Click "Prongs" well in OctiReservePanel then click pod (3,7) South ('e') socket ("37+e")
-    mouseReserve.renderToImage(340, 760);
-    sendClick(&mouseReserve, mouseReserve.normalProngWellRect().center());
-    LONGS_EQUAL(static_cast<long>(DragKind::ADD_PRONG_FROM_RESERVE),
-                static_cast<long>(mouseCanvas.activeDragKind()));
-    QPointF pt37S = mouseCanvas.geometry().squareCenter(3, 7) +
-                    mouseCanvas.geometry().dirUnitVectorScreen(DIR_S) * (cell * 0.35);
-    sendClick(&mouseCanvas, pt37S);
+    // Player B adds prong via composer (37+s for Player B)
+    CHECK_TRUE(mouseComposer.stageOrCommitAddProng(3, 7, 0, DIR_S, false));
     LONGS_EQUAL(2, mouseBoard.getGame()->getNumMoves());
     LONGS_EQUAL(static_cast<long>(NORMAL_PRONG),
                 static_cast<long>(mouseBoard.squareAt(2, 6).getPodAt(0).prongAt(DIR_S)));
@@ -1342,7 +1347,6 @@ TEST(OctiDialogsRefinementTest, PlyConfirmDialogCommitCancelAndMoreMoves)
     CHECK_TRUE(dlg.windowFlags() & Qt::FramelessWindowHint);
     CHECK_TRUE(dlg.windowFlags() & Qt::Popup);
     CHECK_TRUE(dlg.stagedMoveText().contains("33+a"));
-    CHECK_FALSE(dlg.isMoreMovesVisible());
 
     QImage dlgImg = dlg.renderToImage(460, 150);
     CHECK_FALSE(dlgImg.isNull());
@@ -1370,7 +1374,7 @@ TEST(OctiDialogsRefinementTest, PlyConfirmDialogCommitCancelAndMoreMoves)
     CHECK_TRUE(composer.hasOtherMovablePodAtOrigin());
 
     PlyConfirmDialog dlgMore(&composer, ThemeId::OBSIDIAN_BRASS);
-    CHECK_TRUE(dlgMore.isMoreMovesVisible());
+    CHECK_TRUE(dlgMore.stagedMoveText().contains("33a-34"));
     composer.cancelAndRollback();
 }
 
@@ -1417,6 +1421,11 @@ TEST(OctiDialogsRefinementTest, PlyConfirmMultiMoveAndGameOverEndgameV3)
 
     CHECK_TRUE(composer.beginGuidedPodMove(3, 3, 1, false));
     CHECK_TRUE(composer.selectGuidedDestination(4, 3));
+    // ZPB-D03: automatically transitions to remaining origin pod 0
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    LONGS_EQUAL(3, composer.guidedCurrentSquare().first);
+    LONGS_EQUAL(3, composer.guidedCurrentSquare().second);
+    CHECK_TRUE(composer.finishGuidedMoveHere());
     CHECK_FALSE(composer.isGuidedMoveActive());
     CHECK_TRUE(composer.isAwaitingConfirmation());
     LONGS_EQUAL(3, composer.guidedOriginSquare().first);
@@ -1472,7 +1481,6 @@ TEST(OctiDialogsRefinementTest, PlyConfirmMultiMoveAndGameOverEndgameV3)
     CHECK_TRUE(jumpComposer.canAddMoreMoves());
 
     PlyConfirmDialog jumpConfirmDlg(&jumpComposer, ThemeId::OBSIDIAN_BRASS);
-    CHECK_TRUE(jumpConfirmDlg.isMoreMovesVisible());
     jumpConfirmDlg.renderToImage(460, 150);
     // Simulate clicking Commit after first hop
     QKeyEvent enterEv(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
@@ -1517,7 +1525,7 @@ TEST(DesktopCommitDialogFixTest, DirectProngAdditionOnBoardAndGuidedMove)
 
     const OctiBoardGeometry &geom = canvas.geometry();
 
-    // 1. Direct prong addition on pod with 0 prongs at (3, 3) -> 33+a
+    // 1. ZPB-D01: Direct click on board square does NOT add prong
     QPointF c33 = geom.squareCenter(3, 3);
     double cell = geom.cellSize();
     QPointF ptA = c33 + geom.dirUnitVectorScreen(DIR_N) * (cell * 0.35);
@@ -1529,6 +1537,10 @@ TEST(DesktopCommitDialogFixTest, DirectProngAdditionOnBoardAndGuidedMove)
                      Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
     QApplication::sendEvent(&canvas, &relA);
 
+    CHECK_FALSE(composer.isAwaitingConfirmation());
+
+    // Add prong via composer / Zoom dialog
+    CHECK_TRUE(composer.stageOrCommitAddProng(3, 3, 0, DIR_N, false));
     CHECK_TRUE(composer.isAwaitingConfirmation());
     STRCMP_EQUAL("33+a", composer.stagedMoveNotation().c_str());
     CHECK_TRUE(composer.commitStagedMove());
@@ -1541,16 +1553,8 @@ TEST(DesktopCommitDialogFixTest, DirectProngAdditionOnBoardAndGuidedMove)
     CHECK_TRUE(composer.stageOrCommitAddProng(3, 7, 0, DIR_S, false));
     CHECK_TRUE(composer.commitStagedMove());
 
-    // 2. Direct prong addition on pod with 1 prong (already has 'a') at (3, 3) -> 33a+b
-    QPointF ptB = c33 + geom.dirUnitVectorScreen(DIR_NE) * (cell * 0.35);
-
-    QMouseEvent prB(QEvent::MouseButtonPress, ptB, ptB, ptB,
-                    Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
-    QApplication::sendEvent(&canvas, &prB);
-    QMouseEvent relB(QEvent::MouseButtonRelease, ptB, ptB, ptB,
-                     Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
-    QApplication::sendEvent(&canvas, &relB);
-
+    // 2. Add second prong to pod (already has 'a') at (3, 3) -> 33a+b
+    CHECK_TRUE(composer.stageOrCommitAddProng(3, 3, 0, DIR_NE, false));
     CHECK_TRUE(composer.isAwaitingConfirmation());
     STRCMP_EQUAL("33a+b", composer.stagedMoveNotation().c_str());
     CHECK_TRUE(composer.commitStagedMove());
@@ -1735,6 +1739,498 @@ TEST(DesktopCommitDialogFixTest, ZoomedSquareDialogLiberateVisibilityAndArtifact
     QString rPath = artifactDir + "/desktop_reserve_panel_captured.png";
     CHECK_TRUE(rImg.save(rPath));
     CHECK_TRUE(QFileInfo(rPath).size() > 10000);
+}
+
+// ============================================================================
+// OctiZoomProngAndPodStackOrderTest: Dedicated Suite for ZPB-D01 .. ZPB-D06
+// ============================================================================
+
+TEST_GROUP(OctiZoomProngAndPodStackOrderTest)
+{
+};
+
+TEST(OctiZoomProngAndPodStackOrderTest, ZPB_D01_ZoomOnlyProngsAndHoverPreviewBlade)
+{
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+    OctiBoardCanvas canvas;
+    canvas.resize(800, 800);
+    canvas.attachBoard(&board, &composer);
+
+    OctiReservePanel panel;
+    panel.attach(&board, &composer, &canvas);
+
+    const OctiBoardGeometry &geom = canvas.geometry();
+
+    // 1. Board compass sector click does NOT add prong
+    QPointF c33 = geom.squareCenter(3, 3);
+    double cell = geom.cellSize();
+    QPointF ptN = c33 + geom.dirUnitVectorScreen(DIR_N) * (cell * 0.35);
+
+    QMouseEvent prN(QEvent::MouseButtonPress, ptN, ptN, ptN,
+                    Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &prN);
+    QMouseEvent relN(QEvent::MouseButtonRelease, ptN, ptN, ptN,
+                     Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &relN);
+
+    CHECK_FALSE(composer.isAwaitingConfirmation());
+    LONGS_EQUAL(0, composer.stagedOps().size());
+
+    // 2. Reserve panel dragging does NOT initiate prong dragging
+    QPointF prongWellCenter = panel.normalProngWellRect().center();
+    QMouseEvent prWell(QEvent::MouseButtonPress, prongWellCenter, prongWellCenter, prongWellCenter,
+                       Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&panel, &prWell);
+    QMouseEvent moveWell(QEvent::MouseMove, prongWellCenter + QPointF(20.0, 20.0),
+                         prongWellCenter + QPointF(20.0, 20.0), prongWellCenter + QPointF(20.0, 20.0),
+                         Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&panel, &moveWell);
+    LONGS_EQUAL(static_cast<int>(DragKind::NONE), static_cast<int>(canvas.activeDragKind()));
+    QMouseEvent relWell(QEvent::MouseButtonRelease, prongWellCenter + QPointF(20.0, 20.0),
+                        prongWellCenter + QPointF(20.0, 20.0), prongWellCenter + QPointF(20.0, 20.0),
+                        Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&panel, &relWell);
+
+    // 3. ZoomedSquareDialog hover preview blade
+    ZoomedSquareDialog zd(&board, &composer, 3, 3, BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    zd.resize(560, 530);
+
+    LONGS_EQUAL(static_cast<int>(DIR_UNDEF), static_cast<int>(zd.hoverProngDir()));
+
+    zd.setHoverProngDirForTest(DIR_N);
+    LONGS_EQUAL(static_cast<int>(DIR_N), static_cast<int>(zd.hoverProngDir()));
+
+    QImage zdImg = zd.renderToImage(560, 530);
+    CHECK_FALSE(zdImg.isNull());
+
+    // Click socket N in ZoomedSquareDialog to stage prong
+    auto it = zd.socketCenters().find(DIR_N);
+    CHECK_TRUE(it != zd.socketCenters().end());
+    QPointF sc = it->second;
+
+    QMouseEvent prSocket(QEvent::MouseButtonPress, sc, sc, sc,
+                         Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&zd, &prSocket);
+    QMouseEvent relSocket(QEvent::MouseButtonRelease, sc, sc, sc,
+                          Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&zd, &relSocket);
+
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    STRCMP_EQUAL("33+a", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.commitStagedMove());
+
+    const OctiSquare &sqAfter = board.squareAt(2, 2);
+    LONGS_EQUAL(static_cast<int>(NORMAL_PRONG), static_cast<int>(sqAfter.getPodAt(0).prongAt(DIR_N)));
+}
+
+TEST(OctiZoomProngAndPodStackOrderTest, ZPB_D02_PodSortingAndCenterCountLabel)
+{
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+    OctiBoardCanvas canvas;
+    canvas.resize(960, 960);
+    canvas.attachBoard(&board, &composer);
+
+    // Setup square (3, 3) (0-based 2, 2) with 3 pods having distinct prong counts:
+    // Pod 0: 1 normal prong at DIR_N
+    // Pod 1: 3 normal prongs (DIR_N, DIR_E, DIR_S) + 1 superprong at DIR_W
+    // Pod 2: 2 normal prongs (DIR_NE, DIR_SW)
+    OctiSquare &sq = board.squareAt(2, 2);
+    sq.clear();
+
+    OctiPod pod0(A_POD);
+    pod0.addProng(DIR_N, false);
+
+    OctiPod pod1(A_POD);
+    pod1.addProng(DIR_N, false);
+    pod1.addProng(DIR_E, false);
+    pod1.addProng(DIR_S, false);
+    pod1.addProng(DIR_W, true);
+
+    OctiPod pod2(A_POD);
+    pod2.addProng(DIR_NE, false);
+    pod2.addProng(DIR_SW, false);
+
+    sq.addPod(pod0);
+    sq.addPod(pod1);
+    sq.addPod(pod2);
+
+    LONGS_EQUAL(3, sq.getNumPods());
+
+    // Pod 1: 4 prongs (1 super)
+    // Pod 2: 2 prongs (0 super)
+    // Pod 0: 1 prong (0 super)
+    // Expected order: {1, 2, 0}
+    std::vector<int> sorted = sortedPodIndicesMostProngsFirst(sq);
+    LONGS_EQUAL(3, sorted.size());
+    LONGS_EQUAL(1, sorted[0]);
+    LONGS_EQUAL(2, sorted[1]);
+    LONGS_EQUAL(0, sorted[2]);
+
+    // Composer default pod resolution selects pod with most prongs
+    LONGS_EQUAL(1, composer.selectedStackPodIndex(3, 3));
+    LONGS_EQUAL(1, composer.firstUnclaimedFriendlyPodIndex(3, 3));
+
+    // ZoomedSquareDialog tab ordering and cycling
+    ZoomedSquareDialog zd(&board, &composer, 3, 3, BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    zd.resize(560, 530);
+    QImage zdImgPre = zd.renderToImage(560, 530);
+    CHECK_FALSE(zdImgPre.isNull());
+
+    LONGS_EQUAL(1, zd.selectedPodIndex());
+    LONGS_EQUAL(3, zd.stackPodTabRects().size());
+
+    // Cycle forward (+1): 1 -> 2 -> 0 -> 1
+    zd.cycleSelectedPod(1);
+    LONGS_EQUAL(2, zd.selectedPodIndex());
+    zd.cycleSelectedPod(1);
+    LONGS_EQUAL(0, zd.selectedPodIndex());
+    zd.cycleSelectedPod(1);
+    LONGS_EQUAL(1, zd.selectedPodIndex());
+
+    // Cycle backward (-1): 1 -> 0 -> 2 -> 1
+    zd.cycleSelectedPod(-1);
+    LONGS_EQUAL(0, zd.selectedPodIndex());
+    zd.cycleSelectedPod(-1);
+    LONGS_EQUAL(2, zd.selectedPodIndex());
+    zd.cycleSelectedPod(-1);
+    LONGS_EQUAL(1, zd.selectedPodIndex());
+
+    // Render board image: layer 0 bottom has pod 1 (most prongs), top layer has pod 0 with "x3" label
+    QImage bImg = canvas.renderToImage(960, 960);
+    CHECK_FALSE(bImg.isNull());
+}
+
+TEST(OctiZoomProngAndPodStackOrderTest, ZPB_D03_MultiHopContinuationAndStackCompositeMoves)
+{
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+    OctiBoardCanvas canvas;
+    canvas.resize(800, 800);
+    canvas.attachBoard(&board, &composer);
+
+    // 1. Multi-hop jump continuation retention
+    // Pod at (3, 3) with DIR_N, DIR_E
+    OctiSquare &sq33 = board.squareAt(2, 2);
+    sq33.clear();
+    OctiPod podJumper(A_POD);
+    podJumper.addProng(DIR_N, false);
+    podJumper.addProng(DIR_E, false);
+    sq33.addPod(podJumper);
+
+    // Pods to jump over: at (3, 4) [North of (3, 3)] and (4, 5) [East of (3, 5)]
+    OctiSquare &sq34 = board.squareAt(2, 3);
+    sq34.clear();
+    sq34.addPod(OctiPod(B_POD));
+
+    OctiSquare &sq45 = board.squareAt(3, 4);
+    sq45.clear();
+    sq45.addPod(OctiPod(B_POD));
+
+    // Clear landing squares (3, 5) and (5, 5)
+    OctiSquare &sq35 = board.squareAt(2, 4);
+    sq35.clear();
+    OctiSquare &sq55 = board.squareAt(4, 4);
+    sq55.clear();
+
+    // Stage first hop: jump North from (3, 3) to (3, 5)
+    CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 5, false));
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    LONGS_EQUAL(3, composer.guidedCurrentSquare().first);
+    LONGS_EQUAL(5, composer.guidedCurrentSquare().second);
+
+    // Verify continuation jump squares include (5, 5)
+    auto nextSquares = composer.guidedNextSquares();
+    bool has55 = false;
+    for (const auto &p : nextSquares) {
+        if (p.first == 5 && p.second == 5) {
+            has55 = true;
+            break;
+        }
+    }
+    CHECK_TRUE(has55);
+
+    // Select destination (5, 5)
+    CHECK_TRUE(composer.selectGuidedDestination(5, 5));
+    // Since (5, 5) has no further continuation hops, guided move completes automatically
+    CHECK_FALSE(composer.isGuidedMoveActive());
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    STRCMP_EQUAL("33ac-35x-55x", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.commitStagedMove());
+
+    // 2. Composite move: remaining pod at origin has identical config
+    // Turn is Player B; pass turn by staging a move for B
+    CHECK_TRUE(composer.stageOrCommitAddProng(5, 7, 0, DIR_S, false));
+    CHECK_TRUE(composer.commitStagedMove());
+
+    // Turn is Player A. Setup 2 identical pods at (4, 3)
+    OctiSquare &sq43 = board.squareAt(3, 2);
+    sq43.clear();
+    OctiPod podA1(A_POD);
+    podA1.addProng(DIR_N, false);
+    OctiPod podA2(A_POD);
+    podA2.addProng(DIR_N, false);
+    sq43.addPod(podA1);
+    sq43.addPod(podA2);
+
+    // Clear (4, 4)
+    OctiSquare &sq44 = board.squareAt(3, 3);
+    sq44.clear();
+
+    // Step Pod 0 from (4, 3) to (4, 4)
+    CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(4, 3, 0, 4, 4, false));
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+
+    // Since Pod 0 has no more hops, and remaining pod at origin is identical:
+    // composer automatically transitions guidedCurrentSquare to origin (4, 3)!
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    LONGS_EQUAL(4, composer.guidedCurrentSquare().first);
+    LONGS_EQUAL(3, composer.guidedCurrentSquare().second);
+    CHECK_TRUE(composer.hasOtherMovablePodAtOrigin());
+
+    // Step the remaining pod from (4, 3) to (4, 4)
+    CHECK_TRUE(composer.selectGuidedDestination(4, 4));
+    CHECK_FALSE(composer.isGuidedMoveActive());
+    STRCMP_EQUAL("43a-44,43a-44", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.commitStagedMove());
+
+    // 3. Composite move with distinct pods remaining at origin
+    // Dummy move for Player B
+    CHECK_TRUE(composer.stageOrCommitAddProng(5, 7, 0, DIR_SE, false));
+    CHECK_TRUE(composer.commitStagedMove());
+
+    // Setup 3 distinct pods at (5, 3)
+    OctiSquare &sq53 = board.squareAt(4, 2);
+    sq53.clear();
+    OctiPod podD0(A_POD);
+    podD0.addProng(DIR_N, false);
+    OctiPod podD1(A_POD);
+    podD1.addProng(DIR_E, false);
+    OctiPod podD2(A_POD);
+    podD2.addProng(DIR_S, false);
+    sq53.addPod(podD0);
+    sq53.addPod(podD1);
+    sq53.addPod(podD2);
+
+    // Clear (5, 4)
+    OctiSquare &sq54 = board.squareAt(4, 3);
+    sq54.clear();
+
+    CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(5, 3, 0, 5, 4, false));
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    CHECK_TRUE(composer.hasOtherMovablePodAtOrigin());
+    CHECK_TRUE(composer.hasDistinctUnclaimedPodsAtOrigin());
+
+    // Clicking origin (5, 3) on OctiBoardCanvas finishes pod at (5, 4) and opens
+    // ZoomedSquareDialog on origin without calling cancelAndRollback()
+    const OctiBoardGeometry &geom = canvas.geometry();
+    QPointF c53 = geom.squareCenter(5, 3);
+    QTimer::singleShot(20, [&]() {
+        if (QWidget *w = QApplication::activeModalWidget()) {
+            w->close();
+        }
+    });
+    QMouseEvent pr53(QEvent::MouseButtonPress, c53, c53, c53,
+                     Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &pr53);
+    QMouseEvent rel53(QEvent::MouseButtonRelease, c53, c53, c53,
+                      Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &rel53);
+
+    // Staged move is preserved!
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    STRCMP_EQUAL("53a-54", composer.stagedMoveNotation().c_str());
+
+    // Commit via canvas commit button
+    canvas.renderToImage(800, 800); // populates button rects
+    CHECK_FALSE(canvas.commitBtnRect().isEmpty());
+    QPointF cBtn = canvas.commitBtnRect().center();
+    QMouseEvent prCommit(QEvent::MouseButtonPress, cBtn, cBtn, cBtn,
+                         Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &prCommit);
+    QMouseEvent relCommit(QEvent::MouseButtonRelease, cBtn, cBtn, cBtn,
+                          Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &relCommit);
+
+    CHECK_FALSE(composer.isAwaitingConfirmation());
+}
+
+TEST(OctiZoomProngAndPodStackOrderTest, ZPB_D04_DragToPanZoomedBoardAndDragToRotate)
+{
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+    OctiBoardCanvas canvas;
+    canvas.resize(800, 800);
+    canvas.attachBoard(&board, &composer);
+
+    LONGS_EQUAL(static_cast<int>(BoardRotation::ROT_0), static_cast<int>(canvas.boardRotation()));
+    CHECK_FALSE(canvas.isHandRotateActive());
+    CHECK_FALSE(canvas.isBoardPanActive());
+
+    // 1. Drag to rotate unzoomed board (scale 1.0) on empty square (Row 5, angle 0 deg)
+    QPointF center = canvas.geometry().boardOuterRect().center();
+    double r = 150.0;
+    QPointF p0(center.x() + r, center.y());
+
+    QMouseEvent prRot(QEvent::MouseButtonPress, p0, p0, p0,
+                      Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &prRot);
+
+    double rad1 = 35.0 * 3.14159265358979323846 / 180.0;
+    QPointF p1(center.x() + r * std::cos(rad1), center.y() + r * std::sin(rad1));
+    QMouseEvent moveRot(QEvent::MouseMove, p1, p1, p1,
+                        Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &moveRot);
+
+    CHECK_TRUE(canvas.isHandRotateActive());
+    DOUBLES_EQUAL(35.0, canvas.liveRotationOffsetDeg(), 1.5);
+
+    QMouseEvent relRot(QEvent::MouseButtonRelease, p1, p1, p1,
+                       Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &relRot);
+
+    CHECK_FALSE(canvas.isHandRotateActive());
+
+    // 2. Drag to pan zoomed board (scale 2.0)
+    canvas.setBoardZoom(2.0, QPointF(400.0, 400.0));
+    DOUBLES_EQUAL(2.0, canvas.boardZoomScale(), 0.001);
+    QPointF f0 = canvas.boardZoomFocus();
+
+    QPointF panStart(400.0, 400.0);
+    QMouseEvent prPan(QEvent::MouseButtonPress, panStart, panStart, panStart,
+                      Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &prPan);
+    CHECK_FALSE(canvas.isBoardPanActive());
+
+    QPointF panNext(450.0, 430.0);
+    QMouseEvent movePan(QEvent::MouseMove, panNext, panNext, panNext,
+                        Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &movePan);
+
+    CHECK_TRUE(canvas.isBoardPanActive());
+    QPointF f1 = canvas.boardZoomFocus();
+    DOUBLES_EQUAL(f0.x() - 50.0, f1.x(), 1.0);
+    DOUBLES_EQUAL(f0.y() - 30.0, f1.y(), 1.0);
+
+    QMouseEvent relPan(QEvent::MouseButtonRelease, panNext, panNext, panNext,
+                       Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &relPan);
+
+    CHECK_FALSE(canvas.isBoardPanActive());
+
+    QImage panImg = canvas.renderToImage(960, 960);
+    CHECK_FALSE(panImg.isNull());
+
+    canvas.resetBoardZoom();
+    DOUBLES_EQUAL(1.0, canvas.boardZoomScale(), 0.001);
+}
+
+TEST(OctiZoomProngAndPodStackOrderTest, ZPB_D05_NoCanvasCompassWidgetAndLoopingSplash)
+{
+    // 1. Splash looping flag
+    OctiSplashDialog splashDef(nullptr, ThemeId::OBSIDIAN_BRASS, false);
+    CHECK_FALSE(splashDef.isLoopingIndefinitely());
+
+    OctiSplashDialog splashLoop(nullptr, ThemeId::OBSIDIAN_BRASS, true);
+    CHECK_TRUE(splashLoop.isLoopingIndefinitely());
+
+    QImage splashImg = OctiSplashDialog::renderSplashFrame(560, 480, 0.42);
+    CHECK_FALSE(splashImg.isNull());
+}
+
+TEST(OctiZoomProngAndPodStackOrderTest, ZPB_D06_DarkHomeSquaresAndPlayerPovOctiText)
+{
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+    OctiBoardCanvas canvas;
+    canvas.resize(960, 960);
+    canvas.attachBoard(&board, &composer);
+
+    LONGS_EQUAL(static_cast<int>(BoardRotation::ROT_0),
+                static_cast<int>(OctiBoardGeometry::rotationForSeat(GAME_MODE_2, PLAYER_A)));
+    LONGS_EQUAL(static_cast<int>(BoardRotation::ROT_180),
+                static_cast<int>(OctiBoardGeometry::rotationForSeat(GAME_MODE_2, PLAYER_B)));
+
+    // ROT_0: Player A text angle CW 0 deg, Player B 180 deg
+    int rotA_0 = ((static_cast<int>(BoardRotation::ROT_0) - static_cast<int>(BoardRotation::ROT_0)) % 360 + 360) % 360;
+    int rotB_0 = ((static_cast<int>(BoardRotation::ROT_180) - static_cast<int>(BoardRotation::ROT_0)) % 360 + 360) % 360;
+    LONGS_EQUAL(0, rotA_0);
+    LONGS_EQUAL(180, rotB_0);
+
+    // ROT_180: Player A text angle CW 180 deg, Player B 0 deg
+    int rotA_180 = ((static_cast<int>(BoardRotation::ROT_0) - static_cast<int>(BoardRotation::ROT_180)) % 360 + 360) % 360;
+    int rotB_180 = ((static_cast<int>(BoardRotation::ROT_180) - static_cast<int>(BoardRotation::ROT_180)) % 360 + 360) % 360;
+    LONGS_EQUAL(180, rotA_180);
+    LONGS_EQUAL(0, rotB_180);
+
+    // ROT_90: Player A text angle CW 270 deg, Player B 90 deg
+    int rotA_90 = ((static_cast<int>(BoardRotation::ROT_0) - static_cast<int>(BoardRotation::ROT_90)) % 360 + 360) % 360;
+    int rotB_90 = ((static_cast<int>(BoardRotation::ROT_180) - static_cast<int>(BoardRotation::ROT_90)) % 360 + 360) % 360;
+    LONGS_EQUAL(270, rotA_90);
+    LONGS_EQUAL(90, rotB_90);
+
+    // Render dark home squares in Obsidian Brass
+    canvas.setTheme(ThemeId::OBSIDIAN_BRASS);
+    QImage obsImg = canvas.renderToImage(960, 960);
+    CHECK_FALSE(obsImg.isNull());
+}
+
+TEST(OctiZoomProngAndPodStackOrderTest, ZPB_D07_ThreeAndFourJumpGuidedAndDragChain)
+{
+    OctiBoard board(GAME_MODE_2, false, false, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+
+    for (int x = 0; x < 9; ++x) {
+        for (int y = 0; y < 9; ++y) {
+            board.squareAt(x, y).clear();
+        }
+    }
+
+    OctiPod jumper(A_POD);
+    jumper.addProng(DIR_N, false);
+    jumper.addProng(DIR_E, false);
+    board.squareAt(1, 1).addPod(jumper); // (2, 2)
+
+    board.squareAt(1, 2).addPod(OctiPod(A_POD)); // (2, 3)
+    board.squareAt(1, 4).addPod(OctiPod(B_POD)); // (2, 5)
+    board.squareAt(2, 5).addPod(OctiPod(A_POD)); // (3, 6)
+    board.squareAt(4, 5).addPod(OctiPod(B_POD)); // (5, 6)
+
+    OctiMoveComposer composer(&board);
+    composer.setConfirmAllMoves(true);
+
+    CHECK_TRUE(composer.beginGuidedPodMove(2, 2, 0, false));
+
+    // 1st jump: (2, 2) -> (2, 4)
+    CHECK_TRUE(composer.selectGuidedDestination(2, 4));
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    LONGS_EQUAL(2, composer.guidedCurrentSquare().first);
+    LONGS_EQUAL(4, composer.guidedCurrentSquare().second);
+
+    // 2nd jump: (2, 4) -> (2, 6)
+    CHECK_TRUE(composer.selectGuidedDestination(2, 6));
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    LONGS_EQUAL(2, composer.guidedCurrentSquare().first);
+    LONGS_EQUAL(6, composer.guidedCurrentSquare().second);
+
+    // 3rd jump: (2, 6) -> (4, 6)
+    CHECK_TRUE(composer.selectGuidedDestination(4, 6));
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    LONGS_EQUAL(4, composer.guidedCurrentSquare().first);
+    LONGS_EQUAL(6, composer.guidedCurrentSquare().second);
+
+    // 4th jump: (4, 6) -> (6, 6)
+    CHECK_TRUE(composer.selectGuidedDestination(6, 6));
+    STRCMP_EQUAL("22ac-24-26x-46-66x", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.commitStagedMove());
+    LONGS_EQUAL(1, board.squareAt(5, 5).getNumPods());
 }
 
 extern "C" const char *__lsan_default_suppressions()

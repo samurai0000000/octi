@@ -47,6 +47,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -646,6 +647,14 @@ fun ZoomedSquareDialog(
         null
     }
     val numPods = sq?.numPods ?: 0
+    val sortedPodIndices = remember(squareX, squareY, numPods, composer.stagedMoveNotation()) {
+        if (sq != null) OctiBoardRenderer.sortedPodIndicesMostProngsFirst(sq).toList() else emptyList()
+    }
+    val defaultPodIdx = remember(sortedPodIndices) {
+        val unclaimed = sortedPodIndices.firstOrNull { !composer.isSquarePodClaimed(squareX, squareY, it) }
+        unclaimed ?: sortedPodIndices.firstOrNull() ?: 0
+    }
+    var selectedPodIndex by remember(squareX, squareY, defaultPodIdx) { mutableIntStateOf(defaultPodIdx) }
     val isEmptySquare = sq == null || sq.isEmpty
     val turn = board.game?.turn ?: OctiPlayer.PLAYER_A
     val isTurn = board.game != null && board.game.isGameStarted && !board.game.isGameOver
@@ -655,19 +664,6 @@ fun ZoomedSquareDialog(
     val capPods = board.game?.getCapturedPods(turn) ?: 0
     val isFriendlyHome = turn != null && ((board.numPlayers == 2 && ((turn == OctiPlayer.PLAYER_A && sq?.type == OctiSquareType.A_HOME_SQUARE) || (turn == OctiPlayer.PLAYER_B && sq?.type == OctiSquareType.B_HOME_SQUARE))) || (board.numPlayers == 4 && sq?.type?.value == turn.value))
     val canShowPodPlacement = isTurn && !hasEnemy && board.gameMode != OctiGameMode.GAME_MODE_OFK && (isFriendlyHome || (!isEmptySquare && sq != null && sq.type != OctiSquareType.NEUTRAL_SQUARE))
-
-    var selectedPodIndex by remember(squareX, squareY, numPods, composer.stagedMoveNotation()) {
-        val unclaimed = composer.firstUnclaimedFriendlyPodIndex(squareX, squareY)
-        mutableStateOf(
-            if (unclaimed >= 0) {
-                unclaimed
-            } else if (numPods > 0) {
-                Math.max(0, Math.min(numPods - 1, composer.selectedStackPodIndex(squareX, squareY)))
-            } else {
-                0
-            }
-        )
-    }
     var moveAllStack by remember(squareX, squareY) { mutableStateOf(false) }
 
     val freeProngs = board.game?.getFreeProngs(turn) ?: 0
@@ -758,7 +754,7 @@ fun ZoomedSquareDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            for (i in 0 until numPods) {
+                            sortedPodIndices.forEachIndexed { rank, i ->
                                 val isClaimed = composer.isSquarePodClaimed(squareX, squareY, i)
                                 FilterChip(
                                     selected = i == selectedPodIndex,
@@ -883,64 +879,116 @@ fun ZoomedSquareDialog(
                                     }
                                 )
                             }
-                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize) {
+                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize, sortedPodIndices) {
+                                var isRepositionDrag = false
+                                var verticalSlideAccumPx = 0f
+                                val density = this
+                                val stepThresholdPx = with(density) { 36.dp.toPx() }
+
                                 detectDragGestures(
                                     onDragStart = { startOffset ->
-                                        if (!isFriendlyTurn || sq == null) return@detectDragGestures
+                                        verticalSlideAccumPx = 0f
+                                        isRepositionDrag = false
+                                        if (sq == null) return@detectDragGestures
                                         val pIdx = Math.max(0, Math.min(sq.numPods - 1, selectedPodIndex))
                                         val pod = sq.getPodAt(pIdx)
                                         val wPx = podBoxPxSize.width.toFloat()
                                         val hPx = podBoxPxSize.height.toFloat()
                                         val hitDir = hitTestZoomedSocket(wPx, hPx, startOffset.x, startOffset.y, rotation)
-                                        if (hitDir != OctiDir.DIR_UNDEF && pod.prongAt(hitDir) == OctiProngType.NORMAL_PRONG) {
+                                        if (isFriendlyTurn && hitDir != OctiDir.DIR_UNDEF && pod.prongAt(hitDir) == OctiProngType.NORMAL_PRONG) {
                                             selectedRepositionSrcDir = hitDir
+                                            isRepositionDrag = true
                                         }
                                     },
-                                    onDrag = { change, _ ->
-                                        if (!isFriendlyTurn || sq == null) return@detectDragGestures
-                                        val wPx = podBoxPxSize.width.toFloat()
-                                        val hPx = podBoxPxSize.height.toFloat()
-                                        val hitDir = hitTestZoomedSocket(wPx, hPx, change.position.x, change.position.y, rotation)
-                                        if (hitDir != OctiDir.DIR_UNDEF) {
-                                            hoverSocketDir = hitDir.index
-                                        } else {
-                                            val cx = wPx * 0.5f
-                                            val cy = hPx * 0.5f
-                                            val sizeMin = min(wPx, hPx)
-                                            val podR = sizeMin * 0.30f
-                                            val geo = OctiBoardGeometry(480, 480, 9, 9, rotation)
-                                            val sectorDir = geo.hitTestCompassSector(
-                                                cx.toDouble(), cy.toDouble(),
-                                                (podR * 0.4).toDouble(), (podR * 1.6).toDouble(),
-                                                change.position.x.toDouble(), change.position.y.toDouble()
-                                            )
-                                            if (sectorDir != OctiDir.DIR_UNDEF) {
-                                                hoverSocketDir = sectorDir.index
+                                    onDrag = { change, dragAmount ->
+                                        if (sq == null) return@detectDragGestures
+                                        if (isRepositionDrag) {
+                                            val wPx = podBoxPxSize.width.toFloat()
+                                            val hPx = podBoxPxSize.height.toFloat()
+                                            val hitDir = hitTestZoomedSocket(wPx, hPx, change.position.x, change.position.y, rotation)
+                                            if (hitDir != OctiDir.DIR_UNDEF) {
+                                                hoverSocketDir = hitDir.index
+                                            } else {
+                                                val cx = wPx * 0.5f
+                                                val cy = hPx * 0.5f
+                                                val sizeMin = min(wPx, hPx)
+                                                val podR = sizeMin * 0.30f
+                                                val geo = OctiBoardGeometry(480, 480, 9, 9, rotation)
+                                                val sectorDir = geo.hitTestCompassSector(
+                                                    cx.toDouble(), cy.toDouble(),
+                                                    (podR * 0.4).toDouble(), (podR * 1.6).toDouble(),
+                                                    change.position.x.toDouble(), change.position.y.toDouble()
+                                                )
+                                                if (sectorDir != OctiDir.DIR_UNDEF) {
+                                                    hoverSocketDir = sectorDir.index
+                                                }
+                                            }
+                                        } else if (numPods >= 2 && Math.abs(dragAmount.y) > Math.abs(dragAmount.x) * 1.15f) {
+                                            verticalSlideAccumPx += dragAmount.y
+                                            if (Math.abs(verticalSlideAccumPx) >= stepThresholdPx && sortedPodIndices.isNotEmpty()) {
+                                                val curRank = sortedPodIndices.indexOf(selectedPodIndex).let { if (it >= 0) it else 0 }
+                                                val step = if (verticalSlideAccumPx < 0f) -1 else 1
+                                                val nextRank = ((curRank + step) % sortedPodIndices.size + sortedPodIndices.size) % sortedPodIndices.size
+                                                val newPodIdx = sortedPodIndices[nextRank]
+                                                selectedPodIndex = newPodIdx
+                                                composer.selectStackPodIndex(squareX, squareY, newPodIdx)
+                                                selectedRepositionSrcDir = null
+                                                if (verticalSlideAccumPx < 0f) {
+                                                    verticalSlideAccumPx += stepThresholdPx
+                                                } else {
+                                                    verticalSlideAccumPx -= stepThresholdPx
+                                                }
+                                            }
+                                        } else if (isFriendlyTurn) {
+                                            val wPx = podBoxPxSize.width.toFloat()
+                                            val hPx = podBoxPxSize.height.toFloat()
+                                            val hitDir = hitTestZoomedSocket(wPx, hPx, change.position.x, change.position.y, rotation)
+                                            if (hitDir != OctiDir.DIR_UNDEF) {
+                                                hoverSocketDir = hitDir.index
+                                            } else {
+                                                val cx = wPx * 0.5f
+                                                val cy = hPx * 0.5f
+                                                val sizeMin = min(wPx, hPx)
+                                                val podR = sizeMin * 0.30f
+                                                val geo = OctiBoardGeometry(480, 480, 9, 9, rotation)
+                                                val sectorDir = geo.hitTestCompassSector(
+                                                    cx.toDouble(), cy.toDouble(),
+                                                    (podR * 0.4).toDouble(), (podR * 1.6).toDouble(),
+                                                    change.position.x.toDouble(), change.position.y.toDouble()
+                                                )
+                                                if (sectorDir != OctiDir.DIR_UNDEF) {
+                                                    hoverSocketDir = sectorDir.index
+                                                }
                                             }
                                         }
                                     },
                                     onDragCancel = {
                                         hoverSocketDir = -1
+                                        verticalSlideAccumPx = 0f
+                                        isRepositionDrag = false
                                     },
                                     onDragEnd = {
-                                        if (!isFriendlyTurn || sq == null) return@detectDragGestures
-                                        val pIdx = Math.max(0, Math.min(sq.numPods - 1, selectedPodIndex))
-                                        val pod = sq.getPodAt(pIdx)
-                                        val dropDir = if (hoverSocketDir in 0 until OctiDir.DIR_MAX) OctiDir.fromIndex(hoverSocketDir) else OctiDir.DIR_UNDEF
-                                        if (dropDir != OctiDir.DIR_UNDEF && pod.prongAt(dropDir) == OctiProngType.NO_PRONG) {
-                                            if (selectedRepositionSrcDir != null && selectedRepositionSrcDir != dropDir) {
-                                                onRepositionProng(selectedPodIndex, selectedRepositionSrcDir!!, dropDir)
-                                                selectedRepositionSrcDir = null
-                                                hoverSocketDir = -1
-                                            } else if (selectedProngTray == "SUPER" && freeSuper > 0) {
-                                                onAddProng(selectedPodIndex, dropDir, true)
-                                                hoverSocketDir = -1
-                                            } else if ((selectedProngTray == "NORMAL" || selectedProngTray == null) && freeProngs > 0) {
-                                                onAddProng(selectedPodIndex, dropDir, false)
-                                                hoverSocketDir = -1
+                                        verticalSlideAccumPx = 0f
+                                        if (isFriendlyTurn && sq != null) {
+                                            val pIdx = Math.max(0, Math.min(sq.numPods - 1, selectedPodIndex))
+                                            val pod = sq.getPodAt(pIdx)
+                                            val dropDir = if (hoverSocketDir in 0 until OctiDir.DIR_MAX) OctiDir.fromIndex(hoverSocketDir) else OctiDir.DIR_UNDEF
+                                            if (dropDir != OctiDir.DIR_UNDEF && pod.prongAt(dropDir) == OctiProngType.NO_PRONG) {
+                                                if (selectedRepositionSrcDir != null && selectedRepositionSrcDir != dropDir) {
+                                                    onRepositionProng(selectedPodIndex, selectedRepositionSrcDir!!, dropDir)
+                                                    selectedRepositionSrcDir = null
+                                                    hoverSocketDir = -1
+                                                } else if (selectedProngTray == "SUPER" && freeSuper > 0) {
+                                                    onAddProng(selectedPodIndex, dropDir, true)
+                                                    hoverSocketDir = -1
+                                                } else if ((selectedProngTray == "NORMAL" || selectedProngTray == null) && freeProngs > 0) {
+                                                    onAddProng(selectedPodIndex, dropDir, false)
+                                                    hoverSocketDir = -1
+                                                }
                                             }
                                         }
                                         hoverSocketDir = -1
+                                        isRepositionDrag = false
                                     }
                                 )
                             }
@@ -1143,10 +1191,9 @@ fun CompositePodMoveDialog(
 @Composable
 fun PlyConfirmDialog(
     stagedNotation: String,
-    canMoreMoves: Boolean,
     onCommit: () -> Unit,
     onCancel: () -> Unit,
-    onMoreMoves: () -> Unit,
+    subtitleHint: String? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -1163,17 +1210,20 @@ fun PlyConfirmDialog(
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "Staged Ply: $stagedNotation",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = OctiTheme.colors.legalStep
                 )
+                if (subtitleHint != null && subtitleHint.isNotEmpty()) {
+                    Text(
+                        text = subtitleHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = OctiTheme.colors.accentBrass
+                    )
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1189,19 +1239,6 @@ fun PlyConfirmDialog(
                     border = BorderStroke(1.dp, OctiTheme.colors.legalCapture)
                 ) {
                     Text("Cancel", fontWeight = FontWeight.SemiBold)
-                }
-
-                if (canMoreMoves) {
-                    Button(
-                        onClick = onMoreMoves,
-                        modifier = Modifier.weight(1.1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = OctiTheme.colors.panelCardBorder,
-                            contentColor = OctiTheme.colors.accentBrass
-                        )
-                    ) {
-                        Text("More Moves", fontWeight = FontWeight.SemiBold)
-                    }
                 }
 
                 Button(
@@ -1393,22 +1430,35 @@ fun UpToDateModalDialog(
 @Composable
 fun OctiSplashOverlay(
     apkSha256Prefix: String = "dev-local",
+    loopIndefinitely: Boolean = false,
     onDismiss: () -> Unit
 ) {
+    androidx.activity.compose.BackHandler(enabled = true) {
+        onDismiss()
+    }
+
     var progress by remember { mutableFloatStateOf(0f) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(loopIndefinitely) {
         val startNanos = withFrameNanos { it }
         val durationNanos = OctiDialogs.SPLASH_DURATION_MS * 1_000_000L
-        while (progress < 1f) {
-            val nowNanos = withFrameNanos { it }
-            val elapsed = nowNanos - startNanos
-            progress = (elapsed.toFloat() / durationNanos.toFloat()).coerceIn(0f, 1f)
-            if (progress >= 1f) {
-                break
+        if (loopIndefinitely) {
+            while (true) {
+                val nowNanos = withFrameNanos { it }
+                val elapsed = nowNanos - startNanos
+                progress = ((elapsed % durationNanos).toFloat() / durationNanos.toFloat()).coerceIn(0f, 1f)
             }
+        } else {
+            while (progress < 1f) {
+                val nowNanos = withFrameNanos { it }
+                val elapsed = nowNanos - startNanos
+                progress = (elapsed.toFloat() / durationNanos.toFloat()).coerceIn(0f, 1f)
+                if (progress >= 1f) {
+                    break
+                }
+            }
+            onDismiss()
         }
-        onDismiss()
     }
 
     Box(

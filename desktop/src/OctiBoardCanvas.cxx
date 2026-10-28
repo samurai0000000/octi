@@ -50,6 +50,8 @@ OctiBoardCanvas::OctiBoardCanvas(QWidget *parent)
     , _animPodType(A_POD)
     , _boardZoomScale(1.0)
     , _boardZoomFocus(400.0, 400.0)
+    , _boardPanActive(false)
+    , _lastPanRawPos(0.0, 0.0)
     , _handRotateActive(false)
     , _leftMouseHeld(false)
     , _liveRotationOffsetDeg(0.0)
@@ -317,17 +319,6 @@ bool OctiBoardCanvas::finishExternalReserveDrop(const QPointF &canvasPos)
         if (_dragKind == DragKind::ADD_POD_FROM_RESERVE ||
             _dragKind == DragKind::LIBERATE_POD_FROM_RESERVE) {
             ok = simulateDragFromReserveToSquare(_dragKind, tx, ty);
-        } else if (_dragKind == DragKind::ADD_PRONG_FROM_RESERVE ||
-                   _dragKind == DragKind::ADD_SUPERPRONG_FROM_RESERVE) {
-            QPointF center = _geometry.squareCenter(tx, ty);
-            double cell = _geometry.cellSize();
-            OctiDir dir = _geometry.hitTestCompassSector(
-                center, cell * 0.04, cell * 0.68, canvasPos);
-            if (dir != DIR_UNDEF) {
-                ok = simulateDragProngToPod(
-                    tx, ty, -1, dir,
-                    _dragKind == DragKind::ADD_SUPERPRONG_FROM_RESERVE);
-            }
         }
     }
 
@@ -513,43 +504,37 @@ void OctiBoardCanvas::paintHomeSquareBadge(QPainter &p,
     default:            break;
     }
 
-    const PodFactionPalette &fp = pal.factionForPlayer(owner);
+    bool isRosewood = (_theme == ThemeId::ROSEWOOD_IVORY);
+    QColor outerBg = isRosewood ? QColor(20, 14, 11) : QColor(10, 14, 22);
+    QColor innerBg = isRosewood ? QColor(14, 10, 8) : QColor(7, 10, 16);
+
+    p.fillRect(sqRect.adjusted(1.0, 1.0, -1.0, -1.0), outerBg);
+
     QRectF inner = sqRect.adjusted(3.5, 3.5, -3.5, -3.5);
-
-    QColor fillCol = fp.core;
-    fillCol.setAlpha(48);
-    p.setBrush(fillCol);
-
     if (sq.isCaptured()) {
-        // Enemy capture threat halo
-        p.setPen(QPen(pal.legalCaptureGlow, 2.8));
+        p.setPen(QPen(pal.legalCaptureGlow, 2.4));
     } else {
-        p.setPen(QPen(fp.core, 2.0));
+        p.setPen(QPen(pal.boardBevelDark, 1.2));
     }
-    p.drawRoundedRect(inner, 6.0, 6.0);
-
-    // Base victory pip indicators (1-Base vs 3-Base)
-    int numPips = (_board && _board->getGame() &&
-                   _board->getGame()->getBases() == GAME_BASES_1) ? 1 : 3;
-    double pipR = std::max(1.8, sqRect.width() * 0.035);
-    double startX = sqRect.center().x() - static_cast<double>(numPips - 1) * pipR * 1.4;
-    double pipY = inner.bottom() - pipR * 1.8;
-    p.setPen(Qt::NoPen);
-    p.setBrush(fp.highlight);
-    for (int i = 0; i < numPips; ++i) {
-        p.drawEllipse(QPointF(startX + static_cast<double>(i) * pipR * 2.8, pipY),
-                      pipR, pipR);
-    }
+    p.setBrush(innerBg);
+    p.drawRoundedRect(inner, 4.0, 4.0);
 
     if (sq.isEmpty()) {
+        OctiGameMode mode = (_board && _board->getGame()) ? _board->getGameMode() : GAME_MODE_2;
+        BoardRotation seatRot = OctiBoardGeometry::rotationForSeat(mode, owner);
+        int textAngleCwDeg = ((static_cast<int>(seatRot) - static_cast<int>(_rotation)) % 360 + 360) % 360;
+
+        p.save();
+        p.translate(sqRect.center());
+        p.rotate(textAngleCwDeg);
         QFont f = p.font();
         f.setBold(true);
-        f.setPixelSize(std::max(8, static_cast<int>(sqRect.height() * 0.19)));
+        f.setPixelSize(std::max(8, static_cast<int>(sqRect.height() * 0.20)));
         p.setFont(f);
-        QColor txtCol = fp.highlight;
-        txtCol.setAlpha(185);
-        p.setPen(txtCol);
-        p.drawText(inner, Qt::AlignCenter, "OCTI");
+        p.setPen(pal.coordLabel);
+        p.drawText(QRectF(-inner.width() * 0.5, -inner.height() * 0.5, inner.width(), inner.height()),
+                   Qt::AlignCenter, "OCTI");
+        p.restore();
     }
 
     p.restore();
@@ -659,16 +644,18 @@ void OctiBoardCanvas::paintStackFanOverlay(QPainter &p,
     p.setBrush(QColor(15, 22, 34, 235));
     p.drawRoundedRect(overlay, 8.0, 8.0);
 
-    int selIdx = _composer ? _composer->selectedStackPodIndex(x, y) : (n - 1);
+    auto sorted = sortedPodIndicesMostProngsFirst(sq);
+    int selIdx = _composer ? _composer->selectedStackPodIndex(x, y) : (n > 0 ? sorted[0] : -1);
     for (int i = 0; i < n; ++i) {
+        int podIdx = (i < static_cast<int>(sorted.size())) ? sorted[i] : i;
         QRectF slot = geom.stackFanSlotRect(x, y, n, i);
-        bool selected = (i == selIdx);
+        bool selected = (podIdx == selIdx);
         if (selected) {
             p.setPen(QPen(pal.prongSuperGold, 2.0));
             p.setBrush(QColor(255, 255, 255, 28));
             p.drawRoundedRect(slot, 5.0, 5.0);
         }
-        const OctiPod &pod = sq.getPodAt(i);
+        const OctiPod &pod = sq.getPodAt(podIdx);
         paintOctagonalPod(p, slot, pod.getType(), pod, pal,
                           geom.rotationDegrees(), selected, 1.0);
     }
@@ -721,10 +708,7 @@ void OctiBoardCanvas::paintCommitBanner(QPainter &p,
     _commitBtnRect = QRectF();
     _rollbackBtnRect = QRectF();
     _finishBtnRect = QRectF();
-    if (!_composer || (!_composer->isAwaitingConfirmation() && !_composer->isGuidedMoveActive())) {
-        return;
-    }
-    if (isVisible()) {
+    if (!_composer || !_composer->isAwaitingConfirmation()) {
         return;
     }
 
@@ -743,8 +727,10 @@ void OctiBoardCanvas::paintCommitBanner(QPainter &p,
     QString staged = QString::fromStdString(_composer->stagedMoveNotation());
     if (_composer->isAwaitingSuperProngBonusMove()) {
         staged += " (8th Superprong Bonus Move Ready)";
+    } else if (_composer->hasOtherMovablePodAtOrigin()) {
+        staged += " (Click Origin Square to Move Next Pod)";
     } else if (_composer->isGuidedMoveActive()) {
-        staged += " (Guided Jump Active - Select Next Hop)";
+        staged += " (Click Destination to Jump or Commit)";
     }
 
     QFont f = p.font();
@@ -752,35 +738,18 @@ void OctiBoardCanvas::paintCommitBanner(QPainter &p,
     f.setPixelSize(11);
     p.setFont(f);
     p.setPen(pal.textPrimary);
-    bool showFinish = _composer->isGuidedMoveActive();
-    double textW = showFinish ? (barRect.width() * 0.38) : (barRect.width() * 0.46);
+    double textW = barRect.width() * 0.48;
     QRectF textRect(barRect.left() + 10.0, barRect.top(),
                     textW, barRect.height());
     p.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft,
                QString("Staged: %1").arg(staged));
 
     double btnH = barH - 10.0;
-    if (showFinish) {
-        double btnW = barRect.width() * 0.18;
-        _finishBtnRect = QRectF(barRect.right() - btnW * 3.0 - 20.0,
-                                barRect.top() + 5.0, btnW + 8.0, btnH);
-        _commitBtnRect = QRectF(barRect.right() - btnW * 2.0 - 6.0,
-                                barRect.top() + 5.0, btnW, btnH);
-        _rollbackBtnRect = QRectF(barRect.right() - btnW - 2.0,
-                                  barRect.top() + 5.0, btnW, btnH);
-
-        p.setPen(QPen(pal.accentBrass, 1.2));
-        p.setBrush(pal.podB.core.darker(130));
-        p.drawRoundedRect(_finishBtnRect, 5.0, 5.0);
-        p.setPen(Qt::white);
-        p.drawText(_finishBtnRect, Qt::AlignCenter, "Finish Here");
-    } else {
-        double btnW = barRect.width() * 0.24;
-        _commitBtnRect = QRectF(barRect.right() - btnW * 2.0 - 16.0,
-                                barRect.top() + 5.0, btnW, btnH);
-        _rollbackBtnRect = QRectF(barRect.right() - btnW - 8.0,
-                                  barRect.top() + 5.0, btnW, btnH);
-    }
+    double btnW = barRect.width() * 0.22;
+    _commitBtnRect = QRectF(barRect.right() - btnW * 2.0 - 16.0,
+                            barRect.top() + 5.0, btnW, btnH);
+    _rollbackBtnRect = QRectF(barRect.right() - btnW - 8.0,
+                              barRect.top() + 5.0, btnW, btnH);
 
     p.setPen(QPen(pal.prongSuperCore, 1.2));
     p.setBrush(pal.legalStepGuide.darker(135));
@@ -835,15 +804,8 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
     p.setBrush(Qt::NoBrush);
     p.drawRoundedRect(outer.adjusted(3.0, 3.0, -3.0, -3.0), 8.0, 8.0);
 
-    // 2. Corner compass rose showing North ('a')
+    // 2. Coordinate gutter labels (1..gw, 1..gh) rotated with board
     double gutter = (outer.width() - grid.width()) * 0.5;
-    double roseSize = std::max(18.0, gutter * 0.92);
-    QRectF roseRect(outer.right() - roseSize - 3.0,
-                    outer.top() + 3.0,
-                    roseSize, roseSize);
-    paintCompassRose(p, roseRect, geom.rotationDegrees(), pal);
-
-    // 3. Coordinate gutter labels (1..gw, 1..gh) rotated with board
     QFont coordFont = p.font();
     coordFont.setBold(true);
     coordFont.setPixelSize(std::max(9, static_cast<int>(geom.cellSize() * 0.24)));
@@ -942,6 +904,20 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
         }
     }
 
+    if (_composer && _composer->isAwaitingConfirmation() && _composer->hasOtherMovablePodAtOrigin()) {
+        std::pair<int, int> orig = _composer->guidedOriginSquare();
+        QRectF origRect = geom.squareRect(orig.first, orig.second);
+        if (!origRect.isEmpty()) {
+            p.save();
+            QPen ringPen(pal.accentBrass.lighter(130), 2.4, Qt::DashLine);
+            p.setPen(ringPen);
+            p.setBrush(QColor(0, 220, 255, 30));
+            double rad = origRect.width() * 0.44;
+            p.drawEllipse(origRect.center(), rad, rad);
+            p.restore();
+        }
+    }
+
     // 7. Pods, prongs, superprongs, and layered 3D-offset multi-pod stacks with count badges
     if (displayBoard) {
         for (int y = 1; y <= gh; ++y) {
@@ -953,38 +929,23 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
                 }
 
                 QRectF sqRect = geom.squareRect(x, y);
-                int selIdx = _composer ? _composer->selectedStackPodIndex(x, y) : (numPods - 1);
+                auto sorted = sortedPodIndicesMostProngsFirst(sq);
                 int maxLayers = std::min(numPods, 4);
 
                 for (int layer = 0; layer < maxLayers; ++layer) {
-                    int podIdx = (layer == maxLayers - 1) ? selIdx : layer;
+                    int podIdx = (layer == maxLayers - 1) ? sorted.back() : sorted[layer];
                     podIdx = std::clamp(podIdx, 0, numPods - 1);
                     const OctiPod &pod = sq.getPodAt(podIdx);
                     double offset = static_cast<double>(maxLayers - 1 - layer) * 2.6;
                     QRectF layerRect = sqRect.translated(-offset, offset);
                     bool hi = (x == _hoverSquareX && y == _hoverSquareY &&
                                layer == maxLayers - 1);
+                    QString centerOverride;
+                    if (numPods >= 2 && layer == maxLayers - 1) {
+                        centerOverride = QString("x%1").arg(numPods);
+                    }
                     paintOctagonalPod(p, layerRect, pod.getType(), pod, pal,
-                                      geom.rotationDegrees(), hi, 1.0);
-                }
-
-                if (numPods >= 2) {
-                    // Crisp stack count badge ("x2", "x3", ...)
-                    double bw = std::max(20.0, sqRect.width() * 0.34);
-                    double bh = std::max(15.0, sqRect.height() * 0.25);
-                    QRectF badgeRect(sqRect.right() - bw - 2.0,
-                                     sqRect.top() + 2.0, bw, bh);
-                    p.setPen(QPen(pal.accentBrass, 1.3));
-                    p.setBrush(pal.panelCardBg);
-                    p.drawRoundedRect(badgeRect, 4.0, 4.0);
-
-                    QFont bf = p.font();
-                    bf.setBold(true);
-                    bf.setPixelSize(std::max(8, static_cast<int>(bh * 0.68)));
-                    p.setFont(bf);
-                    p.setPen(pal.prongSuperGold);
-                    p.drawText(badgeRect, Qt::AlignCenter,
-                               QString::fromUtf8("\xC3\x97%1").arg(numPods));
+                                      geom.rotationDegrees(), hi, 1.0, centerOverride);
                 }
             }
         }
@@ -1096,7 +1057,11 @@ bool OctiBoardCanvas::openZoomedSquareAt(int sx, int sy)
         return false;
     }
 
-    if (_composer && _composer->isGuidedMoveActive() && !_composer->isAwaitingConfirmation()) {
+    bool isOriginWithRemaining = (_composer && _composer->isAwaitingConfirmation() &&
+                                  _composer->hasOtherMovablePodAtOrigin() &&
+                                  std::make_pair(sx, sy) == _composer->guidedOriginSquare());
+    if (!isOriginWithRemaining && _composer && _composer->isGuidedMoveActive() &&
+        !_composer->isAwaitingConfirmation()) {
         _composer->cancelAndRollback();
     }
     ZoomedSquareDialog dlg(_board, _composer, sx, sy, _rotation, _theme, this);
@@ -1131,6 +1096,9 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
     QPointF pos = mousePosF(event);
     _dragCursorPos = pos;
     _dragShiftHeld = (event->modifiers() & Qt::ShiftModifier) != 0;
+    _pressRawPos = rawMousePosF(event);
+    _lastPanRawPos = _pressRawPos;
+    _boardPanActive = false;
 
     if (event->button() == Qt::RightButton) {
         int rx = 0, ry = 0;
@@ -1140,19 +1108,7 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
         return;
     }
 
-    // 1. Check Finish Move Here button (when guided multi-hop jump is active)
-    if (!_finishBtnRect.isEmpty() && _finishBtnRect.contains(pos)) {
-        cancelHandRotateHold();
-        _composer->finishGuidedMoveHere();
-        if (isVisible() && _composer->isAwaitingConfirmation()) {
-            presentPlyConfirmationIfNeeded();
-        } else {
-            update();
-        }
-        return;
-    }
-
-    // 2. Check Commit / Rollback buttons
+    // 1. Check Commit / Rollback buttons on bottom banner
     if (_composer->isAwaitingConfirmation()) {
         if (_commitBtnRect.contains(pos)) {
             cancelHandRotateHold();
@@ -1165,6 +1121,27 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
             _composer->cancelAndRollback();
             update();
             return;
+        }
+    }
+
+    // 2. Check clicking staged origin square when multiple pods remain at origin
+    if (_composer && _composer->isAwaitingConfirmation() && _composer->hasOtherMovablePodAtOrigin()) {
+        int cx = 0, cy = 0;
+        if (_geometry.screenToSquare(pos, cx, cy)) {
+            std::pair<int, int> orig = _composer->guidedOriginSquare();
+            if (cx == orig.first && cy == orig.second) {
+                cancelHandRotateHold();
+                _composer->finishGuidedMoveHere();
+                if (!_composer->hasDistinctUnclaimedPodsAtOrigin()) {
+                    int nextIdx = _composer->firstUnclaimedFriendlyPodIndex(orig.first, orig.second);
+                    _composer->beginGuidedPodMove(orig.first, orig.second, nextIdx, false);
+                    update();
+                    return;
+                } else {
+                    openZoomedSquareAt(orig.first, orig.second);
+                    return;
+                }
+            }
         }
     }
 
@@ -1209,15 +1186,12 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
         }
     }
     bool isReserveDrag = (_dragKind == DragKind::ADD_POD_FROM_RESERVE ||
-                          _dragKind == DragKind::LIBERATE_POD_FROM_RESERVE ||
-                          _dragKind == DragKind::ADD_PRONG_FROM_RESERVE ||
-                          _dragKind == DragKind::ADD_SUPERPRONG_FROM_RESERVE);
+                          _dragKind == DragKind::LIBERATE_POD_FROM_RESERVE);
 
     if (event->button() == Qt::LeftButton) {
         _leftMouseHeld = true;
         if (!isGuidedDest && !isReserveDrag) {
-            _pressRawPos = rawMousePosF(event);
-            _holdRotateTimer.start(250);
+            _holdRotateTimer.start(200);
         }
     }
 
@@ -1235,6 +1209,9 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
             }
             if (isNext) {
                 cancelHandRotateHold();
+                _selectedSquareX = -1;
+                _selectedSquareY = -1;
+                _selectedPodIndex = -1;
                 std::size_t prevCapCount = _composer->captureChoices().size();
                 _composer->selectGuidedDestination(gx, gy);
                 if (isVisible()) {
@@ -1321,14 +1298,17 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
     // 6. Check Stack Fan Pop-over slot selection
     if (_stackFanX >= 1 && _stackFanY >= 1 &&
         _board->isValidCoord(_stackFanX - 1, _stackFanY - 1)) {
-        int n = _board->squareAt(_stackFanX - 1, _stackFanY - 1).getNumPods();
+        const OctiSquare &sq = _board->squareAt(_stackFanX - 1, _stackFanY - 1);
+        int n = sq.getNumPods();
         int slot = _geometry.hitTestStackFanSlot(_stackFanX, _stackFanY, n, pos);
         if (slot >= 0) {
-            _composer->selectStackPodIndex(_stackFanX, _stackFanY, slot);
+            auto sorted = sortedPodIndicesMostProngsFirst(sq);
+            int podIdx = (slot < static_cast<int>(sorted.size())) ? sorted[slot] : slot;
+            _composer->selectStackPodIndex(_stackFanX, _stackFanY, podIdx);
             _dragKind = DragKind::MOVE_OR_JUMP_POD;
             _dragStartX = _stackFanX;
             _dragStartY = _stackFanY;
-            _dragPodIndex = slot;
+            _dragPodIndex = podIdx;
             update();
             return;
         }
@@ -1342,15 +1322,9 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
         _hoverSquareY = sy;
 
         // If an external Reserve drag/tool is active, preserve _dragKind so
-        // mouseReleaseEvent places the reserve pod/prong onto (sx, sy)!
+        // mouseReleaseEvent places the reserve pod onto (sx, sy)!
         if (_dragKind == DragKind::ADD_POD_FROM_RESERVE ||
-            _dragKind == DragKind::LIBERATE_POD_FROM_RESERVE ||
-            _dragKind == DragKind::ADD_PRONG_FROM_RESERVE ||
-            _dragKind == DragKind::ADD_SUPERPRONG_FROM_RESERVE) {
-            QPointF center = _geometry.squareCenter(sx, sy);
-            double cell = _geometry.cellSize();
-            _dragHoverProngDir = _geometry.hitTestCompassSector(
-                center, cell * 0.04, cell * 0.68, pos);
+            _dragKind == DragKind::LIBERATE_POD_FROM_RESERVE) {
             update();
             return;
         }
@@ -1367,19 +1341,13 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
             _dragStartY = sy;
             _dragPodIndex = _composer->selectedStackPodIndex(sx, sy);
             _dragKind = DragKind::MOVE_OR_JUMP_POD;
-            QPointF center = _geometry.squareCenter(sx, sy);
-            double cell = _geometry.cellSize();
-            _dragSrcProngDir = _geometry.hitTestCompassSector(
-                center, cell * 0.16, cell * 0.55, pos);
-        } else if (!isVisible()) {
+            _dragSrcProngDir = DIR_UNDEF;
+        } else if (!isVisible() && !sq.isEmpty()) {
             _dragStartX = sx;
             _dragStartY = sy;
             _dragPodIndex = _composer->selectedStackPodIndex(sx, sy);
             _dragKind = DragKind::MOVE_OR_JUMP_POD;
-            QPointF center = _geometry.squareCenter(sx, sy);
-            double cell = _geometry.cellSize();
-            _dragSrcProngDir = _geometry.hitTestCompassSector(
-                center, cell * 0.16, cell * 0.55, pos);
+            _dragSrcProngDir = DIR_UNDEF;
         }
 
         update();
@@ -1392,6 +1360,25 @@ void OctiBoardCanvas::mouseMoveEvent(QMouseEvent *event)
         return;
     }
     QPointF curRaw = rawMousePosF(event);
+
+    if (_leftMouseHeld && _boardZoomScale > 1.001 &&
+        _dragKind != DragKind::ADD_POD_FROM_RESERVE &&
+        _dragKind != DragKind::LIBERATE_POD_FROM_RESERVE) {
+        double moveDist = std::hypot(curRaw.x() - _pressRawPos.x(), curRaw.y() - _pressRawPos.y());
+        if (moveDist > 6.0 || _boardPanActive) {
+            _boardPanActive = true;
+            _dragKind = DragKind::NONE;
+            _holdRotateTimer.stop();
+            setCursor(Qt::ClosedHandCursor);
+            QPointF delta = curRaw - _lastPanRawPos;
+            _lastPanRawPos = curRaw;
+            _boardZoomFocus -= delta / (_boardZoomScale - 1.0);
+            _boardZoomFocus.rx() = std::clamp(_boardZoomFocus.x(), 0.0, static_cast<double>(width()));
+            _boardZoomFocus.ry() = std::clamp(_boardZoomFocus.y(), 0.0, static_cast<double>(height()));
+            update();
+            return;
+        }
+    }
 
     if (_handRotateActive) {
         if (isVisible() && !(event->buttons() & Qt::LeftButton)) {
@@ -1415,12 +1402,25 @@ void OctiBoardCanvas::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
-    if (_holdRotateTimer.isActive()) {
-        double moveDist = QLineF(_pressRawPos, curRaw).length();
-        if (_dragKind != DragKind::NONE && moveDist > 14.0) {
+    if (_leftMouseHeld && !_handRotateActive && _boardZoomScale <= 1.001) {
+        double moveDist = std::hypot(curRaw.x() - _pressRawPos.x(), curRaw.y() - _pressRawPos.y());
+        if (_dragKind == DragKind::NONE && moveDist > 6.0) {
+            _handRotateActive = true;
             _holdRotateTimer.stop();
-        } else if (moveDist > 24.0) {
-            _holdRotateTimer.stop();
+            setCursor(Qt::ClosedHandCursor);
+            QPointF center = _geometry.boardOuterRect().center();
+            _handRotateRefAngleDeg = std::atan2(_pressRawPos.y() - center.y(),
+                                                _pressRawPos.x() - center.x()) * 180.0 / 3.14159265358979323846;
+            double curAngleDeg = std::atan2(curRaw.y() - center.y(),
+                                            curRaw.x() - center.x()) * 180.0 / 3.14159265358979323846;
+            auto normalizeDeg = [](double a) {
+                while (a > 180.0) a -= 360.0;
+                while (a < -180.0) a += 360.0;
+                return a;
+            };
+            _liveRotationOffsetDeg = normalizeDeg(curAngleDeg - _handRotateRefAngleDeg);
+            update();
+            return;
         }
     }
 
@@ -1432,20 +1432,11 @@ void OctiBoardCanvas::mouseMoveEvent(QMouseEvent *event)
     if (_geometry.screenToSquare(pos, sx, sy)) {
         _hoverSquareX = sx;
         _hoverSquareY = sy;
-        QPointF center = _geometry.squareCenter(sx, sy);
-        double cell = _geometry.cellSize();
-        double innerR = (_dragKind == DragKind::ADD_PRONG_FROM_RESERVE ||
-                         _dragKind == DragKind::ADD_SUPERPRONG_FROM_RESERVE ||
-                         _dragKind == DragKind::REPOSITION_PRONG_ON_POD)
-                            ? (cell * 0.04)
-                            : (cell * 0.16);
-        _dragHoverProngDir = _geometry.hitTestCompassSector(
-            center, innerR, cell * 0.65, pos);
     } else {
         _hoverSquareX = -1;
         _hoverSquareY = -1;
-        _dragHoverProngDir = DIR_UNDEF;
     }
+    _dragHoverProngDir = DIR_UNDEF;
     update();
 }
 
@@ -1468,6 +1459,14 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
         return;
     }
     cancelHandRotateHold();
+
+    if (_boardPanActive) {
+        _boardPanActive = false;
+        _leftMouseHeld = false;
+        unsetCursor();
+        update();
+        return;
+    }
 
     if (!event || !_composer || (_board && _board->getGame() && _board->getGame()->isGameOver())) {
         _dragKind = DragKind::NONE;
@@ -1496,33 +1495,6 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
             _selectedSquareX = -1;
             _selectedSquareY = -1;
             _selectedPodIndex = -1;
-        } else if (_dragKind == DragKind::ADD_PRONG_FROM_RESERVE ||
-                   _dragKind == DragKind::ADD_SUPERPRONG_FROM_RESERVE) {
-            QPointF center = _geometry.squareCenter(tx, ty);
-            double cell = _geometry.cellSize();
-            OctiDir dir = _geometry.hitTestCompassSector(
-                center, cell * 0.04, cell * 0.68, pos);
-            if (dir != DIR_UNDEF) {
-                simulateDragProngToPod(
-                    tx, ty, -1, dir,
-                    _dragKind == DragKind::ADD_SUPERPRONG_FROM_RESERVE);
-            }
-            _selectedSquareX = -1;
-            _selectedSquareY = -1;
-            _selectedPodIndex = -1;
-        } else if (_dragKind == DragKind::REPOSITION_PRONG_ON_POD &&
-                   tx == _dragStartX && ty == _dragStartY) {
-            QPointF center = _geometry.squareCenter(tx, ty);
-            double cell = _geometry.cellSize();
-            OctiDir tgtDir = _geometry.hitTestCompassSector(
-                center, cell * 0.08, cell * 0.68, pos);
-            if (tgtDir != DIR_UNDEF && tgtDir != _dragSrcProngDir) {
-                simulateRepositionProngOnPod(
-                    tx, ty, _dragPodIndex, _dragSrcProngDir, tgtDir);
-            }
-            _selectedSquareX = -1;
-            _selectedSquareY = -1;
-            _selectedPodIndex = -1;
         } else if (_dragKind == DragKind::MOVE_OR_JUMP_POD &&
                    _dragStartX >= 1 && _dragStartY >= 1 &&
                    (tx != _dragStartX || ty != _dragStartY)) {
@@ -1545,41 +1517,6 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
                     acted = simulateDragPodToSquare(
                         _selectedSquareX, _selectedSquareY, _selectedPodIndex,
                         tx, ty, _dragShiftHeld);
-                }
-            }
-            if (!acted) {
-                QPointF center = _geometry.squareCenter(tx, ty);
-                double cell = _geometry.cellSize();
-                double dist = QLineF(center, pos).length();
-                (void)dist;
-                OctiDir relDir = _geometry.hitTestCompassSector(
-                    center, cell * 0.24, cell * 0.48, pos);
-                bool wantSuper = _dragShiftHeld && _board &&
-                                 _board->getGame() &&
-                                 _board->getGame()->useSuperProngs();
-
-                if (_dragSrcProngDir != DIR_UNDEF && relDir != DIR_UNDEF &&
-                    relDir != _dragSrcProngDir) {
-                    if (_composer && _composer->isGuidedMoveActive() &&
-                        !_composer->isAwaitingConfirmation() &&
-                        _composer->guidedCurrentSquare() == _composer->guidedOriginSquare()) {
-                        _composer->cancelAndRollback();
-                    }
-                    acted = simulateRepositionProngOnPod(
-                        tx, ty, _dragPodIndex, _dragSrcProngDir, relDir);
-                } else if (relDir != DIR_UNDEF && event->button() == Qt::LeftButton) {
-                    auto legalDirs = _composer->legalProngAdditionsAt(
-                        tx, ty, _dragPodIndex, wantSuper);
-                    if (std::find(legalDirs.begin(), legalDirs.end(), relDir) !=
-                        legalDirs.end()) {
-                        if (_composer && _composer->isGuidedMoveActive() &&
-                            !_composer->isAwaitingConfirmation() &&
-                            _composer->guidedCurrentSquare() == _composer->guidedOriginSquare()) {
-                            _composer->cancelAndRollback();
-                        }
-                        acted = simulateDragProngToPod(
-                            tx, ty, _dragPodIndex, relDir, wantSuper);
-                    }
                 }
             }
             if (acted) {
@@ -1616,34 +1553,6 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
 
 void OctiBoardCanvas::presentPlyConfirmationIfNeeded()
 {
-    cancelHandRotateHold();
-    if (!isVisible() || !_composer || !_composer->isAwaitingConfirmation()) {
-        return;
-    }
-    update();
-    QCoreApplication::processEvents();
-
-    PlyConfirmDialog dlg(_composer, _theme, this);
-    QPoint pt = mapToGlobal(QPoint((width() - dlg.width()) / 2,
-                                   std::max(10, height() - dlg.height() - 20)));
-    dlg.move(pt);
-    dlg.exec();
-
-    if (dlg.chosenAction() == PlyConfirmDialog::ResultAction::MORE_MOVES) {
-        if (_composer->isAwaitingSuperProngBonusMove() &&
-            !_composer->hasEighthProngBonusHop()) {
-            std::pair<int, int> orig = _composer->guidedOriginSquare();
-            _composer->beginGuidedPodMove(orig.first, orig.second, -1, false);
-        } else if (_composer->isGuidedMoveActive()) {
-            // Keep guided jump active so user can click next hop destination
-        } else if (_composer->hasOtherMovablePodAtOrigin()) {
-            std::pair<int, int> orig = _composer->guidedOriginSquare();
-            ZoomedSquareDialog zd(_board, _composer, orig.first, orig.second, _rotation, _theme, this);
-            if (zd.exec() == QDialog::Accepted && zd.shouldMovePod()) {
-                _composer->beginGuidedPodMove(orig.first, orig.second, zd.selectedPodIndex(), zd.moveAllMatchingStack());
-            }
-        }
-    }
     update();
 }
 
