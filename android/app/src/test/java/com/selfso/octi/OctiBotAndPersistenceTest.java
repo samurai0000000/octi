@@ -211,6 +211,29 @@ public class OctiBotAndPersistenceTest {
         assertEquals(OctiPlayer.PLAYER_A, vm.getBoard().getGame().getTurn());
         vm.close();
     }
+
+    @Test
+    public void testLevel3MasterOpeningNeverDumpsUnarmedReservePodsOn37() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+        game.start(OctiPlayer.PLAYER_A);
+
+        OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.MASTER);
+        bot.setTimeBudgetMs(350);
+
+        String[] aMoves = new String[]{"53+h", "33+b", "33b-44", "53h-35"};
+        for (String aMove : aMoves) {
+            game.move(aMove);
+            String bMove = bot.chooseMove(board);
+            assertNotNull(bMove);
+            assertFalse("Level 3 must never dump bare reserve pods in opening: got " + bMove,
+                    bMove.equals("37") || bMove.equals("57") || bMove.equals("77"));
+            game.move(bMove);
+        }
+
+        // B should still have all 4 reserve pods in reserve after 4 opening turns
+        assertEquals(4, game.getFreePods(OctiPlayer.PLAYER_B));
+    }
 }
 
 /*

@@ -2107,6 +2107,28 @@ TEST(OctiBotEngineCoreTest, RapidCheckBotAlwaysSelectsLegalMoveWithoutMutatingBo
     CHECK_TRUE(passed);
 }
 
+TEST(OctiBotEngineCoreTest, Level3MasterOpeningNeverDumpsUnarmedReservePodsOn37)
+{
+    IGNORE_ALL_LEAKS_IN_TEST();
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    octi::OctiBotEngine bot(octi::BotDifficulty::MASTER, 0x5EED2026ULL);
+    bot.setTimeBudgetMs(350);
+
+    const std::vector<std::string> aMoves = {"53+h", "33+b", "33b-44", "53h-35"};
+    for (const auto &aMove : aMoves) {
+        game->move(aMove);
+        std::string bMove = bot.chooseMove(board);
+        CHECK_FALSE(bMove.empty());
+        CHECK_FALSE(bMove == "37" || bMove == "57" || bMove == "77");
+        game->move(bMove);
+    }
+
+    LONGS_EQUAL(4, game->getFreePods(octi::PLAYER_B));
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

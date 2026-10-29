@@ -148,7 +148,8 @@ bool isAlliedHomeSquareFor(OctiSquareType sqType, OctiGameMode mode, OctiPlayer 
 std::vector<std::pair<int, int>> targetEnemyBases(const OctiBoard &board,
                                                   OctiPlayer p)
 {
-    std::vector<std::pair<int, int>> targets;
+    std::vector<std::pair<int, int>> uncaptured;
+    std::vector<std::pair<int, int>> allEnemy;
     OctiGameMode mode = board.getGameMode();
     int w = board.getBoardWidth();
     int h = board.getBoardHeight();
@@ -156,11 +157,47 @@ std::vector<std::pair<int, int>> targetEnemyBases(const OctiBoard &board,
         for (int x = 0; x < w; ++x) {
             const OctiSquare &sq = board.squareAt(x, y);
             if (isEnemyHomeSquareFor(sq.getType(), mode, p)) {
-                targets.push_back({x, y});
+                allEnemy.push_back({x, y});
+                if (!sq.isCapturedByTeamOf(p)) {
+                    uncaptured.push_back({x, y});
+                }
             }
         }
     }
-    return targets;
+    return !uncaptured.empty() ? uncaptured : allEnemy;
+}
+
+bool isOrthogonalDir(OctiDir dir)
+{
+    return dir == DIR_N || dir == DIR_E || dir == DIR_S || dir == DIR_W;
+}
+
+bool isDiagonalDir(OctiDir dir)
+{
+    return dir == DIR_NE || dir == DIR_SE || dir == DIR_SW || dir == DIR_NW;
+}
+
+bool hasUnarmedPodOnHomeSquare(const OctiBoard &board, OctiPlayer turn)
+{
+    OctiGameMode mode = board.getGameMode();
+    int w = board.getBoardWidth();
+    int h = board.getBoardHeight();
+    OctiPodType podType = playerToPodType(turn);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            const OctiSquare &sq = board.squareAt(x, y);
+            if (!isAlliedHomeSquareFor(sq.getType(), mode, turn)) {
+                continue;
+            }
+            for (int i = 0; i < sq.getNumPods(); ++i) {
+                const OctiPod &pod = sq.getPodAt(i);
+                if (pod.getType() == podType && pod.getNumProngs() < 2) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 int torusDist(int a, int b, int dim, bool edgeless)
@@ -204,6 +241,7 @@ struct JumpMobilityThreat {
     int reachableSquares = 0;
     int capturablePods = 0;
     int capturableProngs = 0;
+    std::uint64_t capturedSqMask[2] = {0ULL, 0ULL};
 };
 
 void evaluateJumpCaptureRecursive(const OctiBoard &board,
@@ -212,12 +250,15 @@ void evaluateJumpCaptureRecursive(const OctiBoard &board,
                                   int h,
                                   int x,
                                   int y,
+                                  int depth,
                                   OctiPlayer podOwner,
                                   const OctiPod &pod,
-                                  std::uint64_t &jumpedMask,
-                                  std::uint64_t &visitedDestMask,
+                                  std::uint64_t visitedDestMask[2],
                                   JumpMobilityThreat &threat)
 {
+    if (depth > 4) {
+        return;
+    }
 
     for (int d = 0; d < DIR_MAX; ++d) {
         OctiDir dir = static_cast<OctiDir>(d);
@@ -237,46 +278,38 @@ void evaluateJumpCaptureRecursive(const OctiBoard &board,
             continue;
         }
 
-        int midIdx = ny * 9 + nx;
-        if (midIdx >= 64) {
-            midIdx = midIdx % 64;
-        }
-        std::uint64_t midBit = 1ULL << midIdx;
-        if ((jumpedMask & midBit) != 0ULL) {
-            continue;
-        }
-
         const OctiSquare &midSq = board.squareAt(nx, ny);
         const OctiSquare &destSq = board.squareAt(jx, jy);
 
-        if (midSq.isEmpty() || !destSq.isEmpty()) {
+        if (midSq.isEmpty() || destSq.hasEnemyOf(podOwner)) {
             continue;
         }
 
-        jumpedMask |= midBit;
+        int destIdx = jy * 9 + jx;
+        int destWord = (destIdx >> 6) & 1;
+        std::uint64_t destBit = 1ULL << (destIdx & 63);
+        if ((visitedDestMask[destWord] & destBit) != 0ULL) {
+            continue;
+        }
+        visitedDestMask[destWord] |= destBit;
+        threat.reachableSquares++;
 
         if (midSq.hasEnemyOf(podOwner)) {
-            threat.capturablePods += midSq.getNumPods();
-            for (int pi = 0; pi < midSq.getNumPods(); ++pi) {
-                const OctiPod &p = midSq.getPodAt(pi);
-                threat.capturableProngs += p.getNumProngs();
+            int midIdx = ny * 9 + nx;
+            int midWord = (midIdx >> 6) & 1;
+            std::uint64_t midBit = 1ULL << (midIdx & 63);
+            if ((threat.capturedSqMask[midWord] & midBit) == 0ULL) {
+                threat.capturedSqMask[midWord] |= midBit;
+                threat.capturablePods += midSq.getNumPods();
+                for (int pi = 0; pi < midSq.getNumPods(); ++pi) {
+                    const OctiPod &p = midSq.getPodAt(pi);
+                    threat.capturableProngs += p.getNumProngs();
+                }
             }
         }
 
-        int destIdx = jy * 9 + jx;
-        if (destIdx >= 64) {
-            destIdx = destIdx % 64;
-        }
-        std::uint64_t destBit = 1ULL << destIdx;
-        if ((visitedDestMask & destBit) == 0ULL) {
-            visitedDestMask |= destBit;
-            threat.reachableSquares++;
-        }
-
-        evaluateJumpCaptureRecursive(board, edgeless, w, h, jx, jy,
-                                     podOwner, pod, jumpedMask, visitedDestMask, threat);
-
-        jumpedMask &= ~midBit;
+        evaluateJumpCaptureRecursive(board, edgeless, w, h, jx, jy, depth + 1,
+                                     podOwner, pod, visitedDestMask, threat);
     }
 }
 
@@ -295,11 +328,10 @@ JumpMobilityThreat evaluatePodJumpThreat(const OctiBoard &board,
     int h = board.getBoardHeight();
     OctiPlayer owner = podTypeToPlayer(pod.getType());
 
-    std::uint64_t jumpedMask = 0ULL;
-    std::uint64_t visitedDestMask = 0ULL;
+    std::uint64_t visitedDestMask[2] = {0ULL, 0ULL};
 
-    evaluateJumpCaptureRecursive(board, edgeless, w, h, x, y,
-                                 owner, pod, jumpedMask, visitedDestMask, threat);
+    evaluateJumpCaptureRecursive(board, edgeless, w, h, x, y, 0,
+                                 owner, pod, visitedDestMask, threat);
     return threat;
 }
 
@@ -545,13 +577,13 @@ int scoreMoveHeuristic(const OctiBoard &board,
     int w = board.getBoardWidth();
     int h = board.getBoardHeight();
     bool edgeless = game ? game->useEdgelessBoard() : false;
-    int numMoves = game ? game->getNumMoves() : 0;
+    bool earlyDevelopment = game && game->getFreeProngs(turn) >= 8;
 
     int score = 0;
 
     // Prioritize composite moves
     if (move.getOps().size() > 1) {
-        score += 6500 * static_cast<int>(move.getOps().size());
+        score += 8000 + static_cast<int>(move.getOps().size() - 1) * 4000;
     }
 
     for (const auto &op : move.getOps()) {
@@ -560,7 +592,7 @@ int scoreMoveHeuristic(const OctiBoard &board,
             const OctiHop &lastHop = op.hops.back();
             int endDist = minChebyshevToTargets(lastHop.x, lastHop.y, enemyTargets, w, h, edgeless);
 
-            score += (startDist - endDist) * 450;
+            score += (startDist - endDist) * 550;
 
             const OctiSquare &destSq = board.squareAt(lastHop.x, lastHop.y);
             if (isEnemyHomeSquareFor(destSq.getType(), mode, turn) &&
@@ -568,12 +600,12 @@ int scoreMoveHeuristic(const OctiBoard &board,
                 score += 55000;
             }
             if (destSq.getType() == NEUTRAL_OCTI_SQUARE && destSq.isEmpty()) {
-                score += 2000;
+                score += 3000;
             }
 
             for (const auto &hop : op.hops) {
                 if (hop.capture) {
-                    score += 9500;
+                    score += 14000;
                 } else {
                     score += 250;
                 }
@@ -583,61 +615,81 @@ int scoreMoveHeuristic(const OctiBoard &board,
             if (isEnemyHomeSquareFor(startSq.getType(), mode, turn)) {
                 if (startSq.getNumPods() <= 1 &&
                     !isEnemyHomeSquareFor(destSq.getType(), mode, turn)) {
-                    score -= 12000;
+                    score -= 22000;
                 }
             }
 
-            // 2001 opening heuristic: penalize premature 1-prong lone-pod rushes in opening (numMoves < 10)
-            if (numMoves < 10 && isAlliedHomeSquareFor(startSq.getType(), mode, turn)) {
-                if (startSq.getNumPods() == 1 && op.pod.getNumProngs() <= 1) {
-                    score -= 3500;
-                }
+            // Avoid stacking multiple friendly pods on non-enemy-base squares
+            if (!isEnemyHomeSquareFor(destSq.getType(), mode, turn) &&
+                destSq.getNumPods() >= 1) {
+                score -= 1200 * destSq.getNumPods();
+            }
+
+            // Penalize premature 1-prong lone-pod rushes during development
+            if (earlyDevelopment && op.pod.getNumProngs() <= 1 && endDist <= 3) {
+                score -= 3200;
             }
         } else if (op.addProngDir != DIR_UNDEF && op.rmProngDir == DIR_UNDEF) {
-            score += 350;
+            score += 650;
             if (op.superProng) {
-                score += 150;
+                score += 200;
             }
             int nx = op.x0 + dirDeltaX(op.addProngDir);
             int ny = op.y0 + dirDeltaY(op.addProngDir);
             int curDist = minChebyshevToTargets(op.x0, op.y0, enemyTargets, w, h, edgeless);
             int nextDist = minChebyshevToTargets(nx, ny, enemyTargets, w, h, edgeless);
             if (nextDist < curDist) {
-                score += 400;
+                score += 600;
             }
-            if (op.pod.getNumProngs() < 3) {
-                score += 200;
+            if (op.pod.getNumProngs() == 0) {
+                score += 900; // Strongly prioritize arming 0-prong pods first!
+            } else if (op.pod.getNumProngs() < 3) {
+                score += 450;
             }
 
-            // 2001 opening phalanx buildup bonuses (numMoves < 10)
-            if (numMoves < 10) {
-                const OctiSquare &sq = board.squareAt(op.x0, op.y0);
-                if (isAlliedHomeSquareFor(sq.getType(), mode, turn)) {
-                    if (turn == PLAYER_A || turn == PLAYER_C) {
-                        // Forward/diagonal prongs a, b, c, d, h for A
-                        if (op.addProngDir == DIR_N  || op.addProngDir == DIR_NE ||
-                            op.addProngDir == DIR_E  || op.addProngDir == DIR_SE ||
-                            op.addProngDir == DIR_NW) {
-                            score += 1600;
-                        }
-                    } else if (turn == PLAYER_B || turn == PLAYER_D) {
-                        // Forward/diagonal prongs d, e, f, g, h for B
-                        if (op.addProngDir == DIR_SE || op.addProngDir == DIR_S  ||
-                            op.addProngDir == DIR_SW || op.addProngDir == DIR_W  ||
-                            op.addProngDir == DIR_NW) {
-                            score += 1600;
-                        }
-                    }
+            bool hasOrth = isOrthogonalDir(op.addProngDir);
+            bool hasDiag = isDiagonalDir(op.addProngDir);
+            for (int d = 0; d < DIR_MAX; ++d) {
+                OctiDir dir = static_cast<OctiDir>(d);
+                if (op.pod.prongAt(dir) != NO_PRONG) {
+                    if (isOrthogonalDir(dir)) hasOrth = true;
+                    if (isDiagonalDir(dir)) hasDiag = true;
+                }
+            }
+            if (hasOrth && hasDiag) {
+                score += 650;
+            }
+
+            if (turn == PLAYER_A || turn == PLAYER_C) {
+                if (op.addProngDir == DIR_N) {
+                    score += 1100;
+                } else if (op.addProngDir == DIR_NE || op.addProngDir == DIR_NW) {
+                    score += 750;
+                } else if (op.addProngDir == DIR_E || op.addProngDir == DIR_W) {
+                    score += 400;
+                }
+            } else if (turn == PLAYER_B || turn == PLAYER_D) {
+                if (op.addProngDir == DIR_S) {
+                    score += 1100;
+                } else if (op.addProngDir == DIR_SE || op.addProngDir == DIR_SW) {
+                    score += 750;
+                } else if (op.addProngDir == DIR_E || op.addProngDir == DIR_W) {
+                    score += 400;
                 }
             }
         } else if (op.addPod) {
             if (op.liberate) {
-                score += 2200;
+                score += 6500;
             } else {
-                score += 350;
+                const OctiSquare &sq = board.squareAt(op.x0, op.y0);
+                if (sq.getNumPods() > 0 || hasUnarmedPodOnHomeSquare(board, turn)) {
+                    score -= 6000;
+                } else {
+                    score += 150;
+                }
             }
         } else if (op.rmProngDir != DIR_UNDEF) {
-            score += 40;
+            score += 60;
         }
     }
     return score;
@@ -647,9 +699,12 @@ std::vector<OctiMove> orderAndCapMoves(OctiBoard &board,
                                        std::vector<OctiMove> &rawMoves,
                                        OctiPlayer turn,
                                        const std::string &ttBestMove,
-                                       std::size_t maxBranch)
+                                       std::size_t maxBranch,
+                                       bool includeComposites = true)
 {
-    appendCompositeMoves(board, rawMoves, turn);
+    if (includeComposites) {
+        appendCompositeMoves(board, rawMoves, turn);
+    }
     std::vector<OctiMove> moves = filterDominatedMoves(rawMoves);
     std::vector<std::pair<int, int>> targets = targetEnemyBases(board, turn);
 
@@ -857,7 +912,6 @@ int OctiBotEngine::evaluatePosition(const OctiBoard &board,
     int w = board.getBoardWidth();
     int h = board.getBoardHeight();
     bool edgeless = game->useEdgelessBoard();
-    int numMoves = game->getNumMoves();
 
     std::vector<std::pair<int, int>> allyTargets = targetEnemyBases(board, perspective);
     OctiPlayer sampleEnemy = (perspective == PLAYER_A || perspective == PLAYER_C)
@@ -865,10 +919,15 @@ int OctiBotEngine::evaluatePosition(const OctiBoard &board,
     std::vector<std::pair<int, int>> enemyTargets = targetEnemyBases(board, sampleEnemy);
 
     int totalScore = 0;
+    int totalAllyPodsOnBoard = 0;
+    int totalEnemyPodsOnBoard = 0;
+    bool allyHasUnarmedHomePod = false;
+    bool enemyHasUnarmedHomePod = false;
 
-    // Track all friendly and enemy pod positions for multi-base distance sum
     std::vector<std::pair<int, int>> allyPodCoords;
     std::vector<std::pair<int, int>> enemyPodCoords;
+    std::uint64_t allyJumpThreatMask[2] = {0ULL, 0ULL};
+    std::uint64_t enemyJumpThreatMask[2] = {0ULL, 0ULL};
 
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
@@ -877,62 +936,89 @@ int OctiBotEngine::evaluatePosition(const OctiBoard &board,
 
             if (isEnemyHomeSquareFor(sqType, mode, perspective)) {
                 if (sq.isCapturedByTeamOf(perspective)) {
-                    totalScore += 26000;
+                    totalScore += 28000;
                 }
             } else if (isAlliedHomeSquareFor(sqType, mode, perspective)) {
                 if (sq.isCaptured() && !sq.isCapturedByTeamOf(perspective)) {
-                    totalScore -= 30000;
+                    totalScore -= 32000;
                 }
             } else if (sqType == NEUTRAL_OCTI_SQUARE) {
                 if (sq.isCapturedByTeamOf(perspective)) {
-                    totalScore += 3500;
+                    totalScore += 4000;
                 } else if (sq.isCaptured()) {
-                    totalScore -= 3500;
+                    totalScore -= 4000;
                 }
             }
 
-            for (int i = 0; i < sq.getNumPods(); ++i) {
+            int numPods = sq.getNumPods();
+            if (numPods > 0) {
+                OctiPlayer sqOwner = podTypeToPlayer(sq.getPodAt(0).getType());
+                bool sqAlly = areAlliedPlayers(mode, sqOwner, perspective);
+                if (sqAlly) {
+                    totalAllyPodsOnBoard += numPods;
+                } else {
+                    totalEnemyPodsOnBoard += numPods;
+                }
+
+                bool onCapturedEnemyBase = isEnemyHomeSquareFor(sqType, mode, sqOwner) &&
+                                           sq.isCapturedByTeamOf(sqOwner);
+                bool onAlliedHome = isAlliedHomeSquareFor(sqType, mode, sqOwner);
+                int unarmedCount = 0;
+                for (int i = 0; i < numPods; ++i) {
+                    const OctiPod &p = sq.getPodAt(i);
+                    if (p.getNumProngs() == 0) {
+                        ++unarmedCount;
+                    }
+                    if (onAlliedHome && p.getNumProngs() < 2) {
+                        if (sqAlly) {
+                            allyHasUnarmedHomePod = true;
+                        } else {
+                            enemyHasUnarmedHomePod = true;
+                        }
+                    }
+                }
+
+                if (numPods > 1 && !onCapturedEnemyBase) {
+                    int stackPen = (numPods - 1) * 450 + unarmedCount * 950;
+                    totalScore += sqAlly ? -stackPen : stackPen;
+                }
+            }
+
+            for (int i = 0; i < numPods; ++i) {
                 const OctiPod &pod = sq.getPodAt(i);
                 OctiPlayer owner = podTypeToPlayer(pod.getType());
                 bool isAlly = areAlliedPlayers(mode, owner, perspective);
                 const auto &targets = isAlly ? allyTargets : enemyTargets;
+                int numProngs = pod.getNumProngs();
 
-                if (isAlly) {
-                    allyPodCoords.push_back({x, y});
-                } else {
-                    enemyPodCoords.push_back({x, y});
-                }
-
-                int podVal = 1400;
-                int dist = minChebyshevToTargets(x, y, targets, w, h, edgeless);
-                podVal += std::max(0, (10 - dist)) * 160;
-
-                // 2001 opening phalanx buildup heuristics (numMoves < 10)
-                if (numMoves < 10) {
-                    if (isAlliedHomeSquareFor(sqType, mode, owner)) {
-                        // Reward forward/diagonal prongs on home base
-                        int forwardProngs = 0;
-                        for (int d = 0; d < DIR_MAX; ++d) {
-                            OctiDir dir = static_cast<OctiDir>(d);
-                            if (pod.prongAt(dir) == NO_PRONG) continue;
-                            if (owner == PLAYER_A || owner == PLAYER_C) {
-                                if (dir == DIR_N || dir == DIR_NE || dir == DIR_E ||
-                                    dir == DIR_SE || dir == DIR_NW) {
-                                    ++forwardProngs;
-                                }
-                            } else {
-                                if (dir == DIR_SE || dir == DIR_S || dir == DIR_SW ||
-                                    dir == DIR_W || dir == DIR_NW) {
-                                    ++forwardProngs;
-                                }
-                            }
-                        }
-                        podVal += forwardProngs * 250;
-                    } else if (pod.getNumProngs() <= 1 && sq.getNumPods() == 1) {
-                        // Penalize premature lone pod rush in the opening
-                        podVal -= 800;
+                if (numProngs > 0) {
+                    if (isAlly) {
+                        allyPodCoords.push_back({x, y});
+                    } else {
+                        enemyPodCoords.push_back({x, y});
                     }
                 }
+
+                int dist = minChebyshevToTargets(x, y, targets, w, h, edgeless);
+                bool onCapturedEnemyBase = isEnemyHomeSquareFor(sqType, mode, owner) &&
+                                           sq.isCapturedByTeamOf(owner);
+
+                int podVal = 0;
+                if (numProngs == 0 && !onCapturedEnemyBase && sqType != NEUTRAL_OCTI_SQUARE) {
+                    podVal = 320;
+                } else if (numProngs == 1) {
+                    podVal = 950 + std::max(0, (10 - dist)) * 110;
+                    if (!isAlliedHomeSquareFor(sqType, mode, owner) && dist <= 4 && dist >= 2) {
+                        podVal -= 550;
+                    }
+                } else if (numProngs == 2) {
+                    podVal = 1450 + std::max(0, (10 - dist)) * 180;
+                } else {
+                    podVal = 1750 + std::max(0, (10 - dist)) * 210;
+                }
+
+                bool hasOrth = false;
+                bool hasDiag = false;
 
                 for (int d = 0; d < DIR_MAX; ++d) {
                     OctiDir dir = static_cast<OctiDir>(d);
@@ -940,18 +1026,37 @@ int OctiBotEngine::evaluatePosition(const OctiBoard &board,
                     if (pt == NO_PRONG) {
                         continue;
                     }
-                    podVal += (pt == SUPER_PRONG) ? 320 : 180;
+                    podVal += (pt == SUPER_PRONG) ? 350 : 220;
+                    if (isOrthogonalDir(dir)) hasOrth = true;
+                    if (isDiagonalDir(dir)) hasDiag = true;
+
+                    if (owner == PLAYER_A || owner == PLAYER_C) {
+                        if (dir == DIR_N) {
+                            podVal += 380;
+                        } else if (dir == DIR_NE || dir == DIR_NW) {
+                            podVal += 260;
+                        } else if (dir == DIR_E || dir == DIR_W) {
+                            podVal += 120;
+                        }
+                    } else if (owner == PLAYER_B || owner == PLAYER_D) {
+                        if (dir == DIR_S) {
+                            podVal += 380;
+                        } else if (dir == DIR_SE || dir == DIR_SW) {
+                            podVal += 260;
+                        } else if (dir == DIR_E || dir == DIR_W) {
+                            podVal += 120;
+                        }
+                    }
 
                     int nx = edgeless ? (((x + dirDeltaX(dir)) % w + w) % w) : (x + dirDeltaX(dir));
                     int ny = edgeless ? (((y + dirDeltaY(dir)) % h + h) % h) : (y + dirDeltaY(dir));
                     if (board.isValidCoord(nx, ny)) {
                         int ndist = minChebyshevToTargets(nx, ny, targets, w, h, edgeless);
                         if (ndist < dist) {
-                            podVal += 110;
+                            podVal += 140;
                         }
-                        if (ndist == 0) {
-                            // 1 step away from an enemy home base with a prong aimed at it!
-                            podVal += 6500;
+                        if (ndist == 0 && !board.squareAt(nx, ny).hasEnemyOf(owner)) {
+                            podVal += 8500;
                         }
                     }
 
@@ -959,35 +1064,81 @@ int OctiBotEngine::evaluatePosition(const OctiBoard &board,
                     int jy = edgeless ? (((y + 2 * dirDeltaY(dir)) % h + h) % h) : (y + 2 * dirDeltaY(dir));
                     if (board.isValidCoord(nx, ny) && board.isValidCoord(jx, jy)) {
                         if (!board.squareAt(nx, ny).isEmpty() &&
-                            board.squareAt(jx, jy).isEmpty()) {
+                            !board.squareAt(jx, jy).hasEnemyOf(owner)) {
                             int jdist = minChebyshevToTargets(jx, jy, targets, w, h, edgeless);
                             if (jdist == 0) {
-                                // Ready to jump directly onto an enemy home base!
-                                podVal += 9500;
+                                podVal += 12000;
                             }
                         }
                     }
                 }
 
-                // 2001 recursive jump-capture reachability & threat evaluation
-                JumpMobilityThreat threat = evaluatePodJumpThreat(board, x, y, pod);
-                podVal += threat.reachableSquares * 35;
-                podVal += threat.capturablePods * 650;
-                podVal += threat.capturableProngs * 140;
+                if (hasOrth && hasDiag) {
+                    podVal += 550;
+                } else if (numProngs >= 2 && hasDiag && !hasOrth) {
+                    podVal -= 350;
+                }
+
+                if (numProngs > 0) {
+                    JumpMobilityThreat threat = evaluatePodJumpThreat(board, x, y, pod);
+                    podVal += threat.reachableSquares * 55;
+                    podVal += threat.capturablePods * 1100;
+                    podVal += threat.capturableProngs * 180;
+                    if (isAlly) {
+                        allyJumpThreatMask[0] |= threat.capturedSqMask[0];
+                        allyJumpThreatMask[1] |= threat.capturedSqMask[1];
+                    } else {
+                        enemyJumpThreatMask[0] |= threat.capturedSqMask[0];
+                        enemyJumpThreatMask[1] |= threat.capturedSqMask[1];
+                    }
+                }
 
                 totalScore += isAlly ? podVal : -podVal;
             }
         }
     }
 
+    // Hanging-Pod Vulnerability Penalty (squares that the opponent can jump over and capture)
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            const OctiSquare &sq = board.squareAt(x, y);
+            int numPods = sq.getNumPods();
+            if (numPods == 0) {
+                continue;
+            }
+            int sqBit = y * 9 + x;
+            int wordIdx = (sqBit >> 6) & 1;
+            std::uint64_t bitMask = 1ULL << (sqBit & 63);
+            OctiPlayer sqOwner = podTypeToPlayer(sq.getPodAt(0).getType());
+            bool sqAlly = areAlliedPlayers(mode, sqOwner, perspective);
+
+            int prongsOnSq = 0;
+            for (int i = 0; i < numPods; ++i) {
+                prongsOnSq += sq.getPodAt(i).getNumProngs();
+            }
+
+            if (sqAlly && (enemyJumpThreatMask[wordIdx] & bitMask) != 0ULL) {
+                int vulnPen = numPods * 1800 + prongsOnSq * 250;
+                if (numPods >= totalAllyPodsOnBoard) {
+                    vulnPen += 15000;
+                }
+                totalScore -= vulnPen;
+            } else if (!sqAlly && (allyJumpThreatMask[wordIdx] & bitMask) != 0ULL) {
+                int vulnPen = numPods * 1800 + prongsOnSq * 250;
+                if (numPods >= totalEnemyPodsOnBoard) {
+                    vulnPen += 15000;
+                }
+                totalScore += vulnPen;
+            }
+        }
+    }
+
     // 2001 Multi-Base Minimum Chebyshev Distance Sum across uncaptured enemy bases
-    if (!allyPodCoords.empty() && !allyTargets.empty()) {
+    if (!allyTargets.empty()) {
         int allyDistSum = 0;
-        int uncapturedTargets = 0;
         for (const auto &tb : allyTargets) {
             const OctiSquare &tsq = board.squareAt(tb.first, tb.second);
             if (!tsq.isCapturedByTeamOf(perspective)) {
-                ++uncapturedTargets;
                 int bestDist = 999;
                 for (const auto &ap : allyPodCoords) {
                     int d = chebyshevDist(ap.first, ap.second, tb.first, tb.second, w, h, edgeless);
@@ -995,21 +1146,17 @@ int OctiBotEngine::evaluatePosition(const OctiBoard &board,
                         bestDist = d;
                     }
                 }
-                allyDistSum += bestDist;
+                allyDistSum += (bestDist < 999) ? bestDist : 8;
             }
         }
-        if (uncapturedTargets > 0) {
-            totalScore += (12 * uncapturedTargets - allyDistSum) * 160;
-        }
+        totalScore += std::max(0, 30 - allyDistSum) * 320;
     }
 
-    if (!enemyPodCoords.empty() && !enemyTargets.empty()) {
+    if (!enemyTargets.empty()) {
         int enemyDistSum = 0;
-        int uncapturedEnemyTargets = 0;
         for (const auto &tb : enemyTargets) {
             const OctiSquare &tsq = board.squareAt(tb.first, tb.second);
             if (!tsq.isCapturedByTeamOf(sampleEnemy)) {
-                ++uncapturedEnemyTargets;
                 int bestDist = 999;
                 for (const auto &ep : enemyPodCoords) {
                     int d = chebyshevDist(ep.first, ep.second, tb.first, tb.second, w, h, edgeless);
@@ -1017,12 +1164,10 @@ int OctiBotEngine::evaluatePosition(const OctiBoard &board,
                         bestDist = d;
                     }
                 }
-                enemyDistSum += bestDist;
+                enemyDistSum += (bestDist < 999) ? bestDist : 8;
             }
         }
-        if (uncapturedEnemyTargets > 0) {
-            totalScore -= (12 * uncapturedEnemyTargets - enemyDistSum) * 160;
-        }
+        totalScore -= std::max(0, 30 - enemyDistSum) * 320;
     }
 
     // Reserves and material bonuses
@@ -1030,12 +1175,20 @@ int OctiBotEngine::evaluatePosition(const OctiBoard &board,
     for (int pIdx = 1; pIdx <= numPlayers; ++pIdx) {
         OctiPlayer p = static_cast<OctiPlayer>(pIdx);
         bool isAlly = areAlliedPlayers(mode, p, perspective);
-        int resVal = game->getFreePods(p) * 380
-                   - game->getCapturedPods(p) * 300
-                   + game->getFreeProngs(p) * 45
-                   + game->getFreeSuperProngs(p) * 140;
+        int freePods = game->getFreePods(p);
+        int resVal = freePods * 450
+                   - game->getCapturedPods(p) * 380
+                   + game->getFreeProngs(p) * 50
+                   + game->getFreeSuperProngs(p) * 150;
+        if (freePods < 4 && (isAlly ? allyHasUnarmedHomePod : enemyHasUnarmedHomePod) &&
+            game->getFreeProngs(p) >= 6) {
+            resVal -= (4 - freePods) * 1500;
+        }
         if (mode == GAME_MODE_4 && game->isPlayerEliminated(p)) {
-            resVal -= 18000;
+            resVal -= 20000;
+        }
+        if (board.canLiberate(p) && game->getCapturedPods(p) > 0) {
+            resVal += 2500;
         }
         totalScore += isAlly ? resVal : -resVal;
     }
@@ -1109,7 +1262,7 @@ int OctiBotEngine::negamax(OctiBoard &scratchBoard,
     OctiPlayer turn = game->getTurn();
     std::size_t maxBranch = branchCapForDifficulty(_difficulty);
     std::vector<OctiMove> ordered = orderAndCapMoves(
-        scratchBoard, rawMoves, turn, ttMove, maxBranch);
+        scratchBoard, rawMoves, turn, ttMove, maxBranch, (ply <= 1 && depth >= 2));
 
     int origAlpha = alpha;
     int bestVal = -INF_SCORE;
@@ -1267,29 +1420,13 @@ std::string OctiBotEngine::chooseMove(const OctiBoard &board,
                 OctiGame *tGame = threadBoard.getGame();
                 if (!tGame) return;
                 tGame->setSearchMode(true);
-
-                std::vector<OctiMove> tMoves = tGame->generateLegalMoves();
-                if (tMoves.empty()) return;
-                std::size_t rCap = rootCapForDifficulty(_difficulty);
-                std::vector<OctiMove> tRoot = orderAndCapMoves(
-                    threadBoard, tMoves, rootTurn, "", rCap);
-
-                OctiGameSnapshot tSnap = tGame->captureSnapshot();
                 std::uint64_t tNodes = 0;
 
-                for (int d = 1 + depthOffset; d <= maxTargetDepth + depthOffset && !stopFlag.load(); ++d) {
+                for (int d = 1 + depthOffset; d <= maxTargetDepth && !stopFlag.load(); ++d) {
+                    if (steadyClockMs() >= deadlineMs || stopFlag.load()) break;
                     bool tTimedOut = false;
-                    for (const auto &mv : tRoot) {
-                        if (stopFlag.load() || steadyClockMs() >= deadlineMs) break;
-                        try {
-                            tGame->move(mv);
-                            negamax(threadBoard, d - 1, 1, -INF_SCORE, INF_SCORE,
-                                    rootTurn, tNodes, deadlineMs, tTimedOut);
-                        } catch (...) {
-                        }
-                        tGame->restoreSnapshot(tSnap);
-                        if (tTimedOut) break;
-                    }
+                    negamax(threadBoard, d, 0, -INF_SCORE, INF_SCORE,
+                            rootTurn, tNodes, deadlineMs, tTimedOut);
                     if (tTimedOut || steadyClockMs() >= deadlineMs) break;
                 }
             });
@@ -1335,6 +1472,10 @@ std::string OctiBotEngine::chooseMove(const OctiBoard &board,
 
             game->restoreSnapshot(rootSnap);
 
+            if (timedOut && d > 1) {
+                break;
+            }
+
             if (_difficulty == BotDifficulty::CASUAL &&
                 std::abs(score) < WIN_SCORE / 2) {
                 int jitter = static_cast<int>(nextRandom() % 31ULL) - 15;
@@ -1347,10 +1488,6 @@ std::string OctiBotEngine::chooseMove(const OctiBoard &board,
             }
             if (score > alpha) {
                 alpha = score;
-            }
-
-            if (timedOut && d > 1) {
-                break;
             }
         }
 
