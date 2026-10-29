@@ -596,7 +596,7 @@ private:
  * 12. OctiSplashDialog:
  *     10.0-second (10000 ms) luxury procedural animated splash screen.
  *     Obsidian & Brass tabletop, rotating brass ring, animated OCTI pod & superprong snapping,
- *     game credits, authorship, copyright, version 2.1.0, progress bar,
+ *     game credits, authorship, copyright, version 2.1.1, progress bar,
  *     and early dismissal via ESC or mouse click.
  */
 class OctiSplashDialog : public QDialog {

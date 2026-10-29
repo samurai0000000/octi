@@ -476,8 +476,31 @@ bool OctiMoveComposer::stageOrCommitAddPod(int targetX, int targetY, bool libera
     }
 
     OctiPlayer turn = game->getTurn();
+    const OctiSquare &sq = _board->squareAt(bx, by);
+    bool isFriendlyOrPartnerBase = false;
+    if (_board->getGameMode() == GAME_MODE_2 || _board->getGameMode() == GAME_MODE_OFK) {
+        isFriendlyOrPartnerBase =
+            (sq.getType() == (turn == PLAYER_A ? A_HOME_SQUARE : B_HOME_SQUARE));
+    } else if (_board->getGameMode() == GAME_MODE_4) {
+        OctiSquareType homeType = (turn == PLAYER_A ? A_HOME_SQUARE :
+                                   turn == PLAYER_B ? B_HOME_SQUARE :
+                                   turn == PLAYER_C ? C_HOME_SQUARE : D_HOME_SQUARE);
+        OctiPlayer partner = (turn == PLAYER_A ? PLAYER_C :
+                              turn == PLAYER_C ? PLAYER_A :
+                              turn == PLAYER_B ? PLAYER_D : PLAYER_B);
+        OctiSquareType partnerHome = (partner == PLAYER_A ? A_HOME_SQUARE :
+                                      partner == PLAYER_B ? B_HOME_SQUARE :
+                                      partner == PLAYER_C ? C_HOME_SQUARE : D_HOME_SQUARE);
+        isFriendlyOrPartnerBase = (sq.getType() == homeType || sq.getType() == partnerHome);
+    }
+    bool isEnemyOctiSquare = (sq.getType() != NEUTRAL_SQUARE && !isFriendlyOrPartnerBase);
+    if (isEnemyOctiSquare && game->getCapturedPods(turn) > 0) {
+        liberate = true;
+    }
+
     if (liberate) {
-        if (game->getCapturedPods(turn) <= 0 || !_board->canLiberate(turn)) {
+        if (game->getCapturedPods(turn) <= 0 ||
+            (!isEnemyOctiSquare && !_board->canLiberate(turn))) {
             return false;
         }
     } else {
@@ -1794,7 +1817,7 @@ std::vector<std::pair<int, int>> OctiMoveComposer::legalPodDropSquares(bool libe
             return result;
         }
     } else {
-        if (game->getFreePods(turn) <= 0) {
+        if (game->getFreePods(turn) <= 0 && game->getCapturedPods(turn) <= 0) {
             return result;
         }
     }

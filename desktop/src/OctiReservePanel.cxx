@@ -195,6 +195,7 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
         int superProngs = game ? game->getFreeSuperProngs(player) : 0;
         bool canLib = (_board && _board->canLiberate(player) && capPods > 0);
         bool hasSuper = (game && game->useSuperProngs());
+        bool showCaptured = (capPods > 0);
 
         double wellY = cardRect.top() + 34.0;
         double wellH = cardH - 42.0;
@@ -204,17 +205,27 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
         QRectF rNormProng;
         QRectF rSupProng;
 
-        if (hasSuper) {
-            double wellW = (cardW - 30.0) / 4.0;
-            rFreePod = QRectF(cardRect.left() + 6.0, wellY, wellW, wellH);
-            rLibPod = QRectF(rFreePod.right() + 6.0, wellY, wellW, wellH);
-            rNormProng = QRectF(rLibPod.right() + 6.0, wellY, wellW, wellH);
-            rSupProng = QRectF(rNormProng.right() + 6.0, wellY, wellW, wellH);
+        int numWells = 2 + (showCaptured ? 1 : 0) + (hasSuper ? 1 : 0);
+        double totalGap = 6.0 * static_cast<double>(numWells + 1);
+        double wellW = (cardW - totalGap) / static_cast<double>(numWells);
+        double curX = cardRect.left() + 6.0;
+
+        rFreePod = QRectF(curX, wellY, wellW, wellH);
+        curX = rFreePod.right() + 6.0;
+
+        if (showCaptured) {
+            rLibPod = QRectF(curX, wellY, wellW, wellH);
+            curX = rLibPod.right() + 6.0;
         } else {
-            double wellW = (cardW - 24.0) / 3.0;
-            rFreePod = QRectF(cardRect.left() + 6.0, wellY, wellW, wellH);
-            rLibPod = QRectF(rFreePod.right() + 6.0, wellY, wellW, wellH);
-            rNormProng = QRectF(rLibPod.right() + 6.0, wellY, wellW, wellH);
+            rLibPod = QRectF();
+        }
+
+        rNormProng = QRectF(curX, wellY, wellW, wellH);
+        curX = rNormProng.right() + 6.0;
+
+        if (hasSuper) {
+            rSupProng = QRectF(curX, wellY, wellW, wellH);
+        } else {
             rSupProng = QRectF();
         }
 
@@ -251,8 +262,10 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
                                                   : DragKind::NONE;
         drawWell(rFreePod, "Pods (+)", freePods,
                  activeDrag == DragKind::ADD_POD_FROM_RESERVE);
-        drawWell(rLibPod, "Captured", capPods,
-                 canLib || activeDrag == DragKind::LIBERATE_POD_FROM_RESERVE);
+        if (showCaptured) {
+            drawWell(rLibPod, "Captured", capPods,
+                     canLib || activeDrag == DragKind::LIBERATE_POD_FROM_RESERVE);
+        }
         drawWell(rNormProng, "Prongs", freeProngs,
                  activeDrag == DragKind::ADD_PRONG_FROM_RESERVE);
         if (hasSuper) {
@@ -344,9 +357,15 @@ void OctiReservePanel::mousePressEvent(QMouseEvent *event)
     }
 
     if (_canvas) {
-        if (_freePodWellRect.contains(pos)) {
+        OctiGame *game = _board ? _board->getGame() : nullptr;
+        OctiPlayer turn = game ? game->getTurn() : PLAYER_A;
+        int freePods = game ? game->getFreePods(turn) : 0;
+        int capPods = game ? game->getCapturedPods(turn) : 0;
+        if (_freePodWellRect.contains(pos) && (freePods > 0 || capPods > 0)) {
+            _canvas->clearLastMoveModifiedSquares();
             _canvas->startExternalReserveDrag(DragKind::ADD_POD_FROM_RESERVE);
-        } else if (_liberatePodWellRect.contains(pos)) {
+        } else if (!_liberatePodWellRect.isEmpty() && _liberatePodWellRect.contains(pos) && capPods > 0) {
+            _canvas->clearLastMoveModifiedSquares();
             _canvas->startExternalReserveDrag(DragKind::LIBERATE_POD_FROM_RESERVE);
         }
         update();

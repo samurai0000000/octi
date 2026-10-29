@@ -11,6 +11,7 @@
 #include <cmath>
 #include <QApplication>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QFont>
 #include <QLineF>
 #include <QLinearGradient>
@@ -57,6 +58,7 @@ OctiBoardCanvas::OctiBoardCanvas(QWidget *parent)
     , _liveRotationOffsetDeg(0.0)
     , _pressRawPos(0.0, 0.0)
     , _handRotateRefAngleDeg(0.0)
+    , _lastMoveAnimStartMs(0)
 {
     setMinimumSize(420, 420);
     setMouseTracking(true);
@@ -87,10 +89,14 @@ OctiBoardCanvas::OctiBoardCanvas(QWidget *parent)
     });
 
     QObject::connect(&_animTimer, &QTimer::timeout, [this]() {
-        _animProgress += 0.12;
-        if (_animProgress >= 1.0) {
-            _animProgress = 1.0;
-            _animActive = false;
+        if (_animActive) {
+            _animProgress += 0.12;
+            if (_animProgress >= 1.0) {
+                _animProgress = 1.0;
+                _animActive = false;
+            }
+        }
+        if (!_animActive && _lastMoveModifiedSquares.empty()) {
             _animTimer.stop();
         }
         update();
@@ -270,6 +276,7 @@ std::pair<int, int> OctiBoardCanvas::activeStackFanSquare() const
 
 void OctiBoardCanvas::startExternalReserveDrag(DragKind kind)
 {
+    clearLastMoveModifiedSquares();
     _dragKind = kind;
     _dragStartX = -1;
     _dragStartY = -1;
@@ -278,6 +285,76 @@ void OctiBoardCanvas::startExternalReserveDrag(DragKind kind)
     _selectedSquareY = -1;
     _selectedPodIndex = -1;
     update();
+}
+
+void OctiBoardCanvas::setLastMoveModifiedSquares(const std::vector<QPoint> &squares)
+{
+    _lastMoveModifiedSquares = squares;
+    _lastMoveAnimStartMs = QDateTime::currentMSecsSinceEpoch();
+    if (!_lastMoveModifiedSquares.empty()) {
+        if (!_animTimer.isActive()) {
+            _animTimer.start(16);
+        }
+    } else if (!_animActive) {
+        _animTimer.stop();
+    }
+    update();
+}
+
+void OctiBoardCanvas::clearLastMoveModifiedSquares()
+{
+    if (_lastMoveModifiedSquares.empty()) {
+        return;
+    }
+    _lastMoveModifiedSquares.clear();
+    if (!_animActive) {
+        _animTimer.stop();
+    }
+    update();
+}
+
+std::vector<QPoint> OctiBoardCanvas::extractModifiedSquares(const OctiMove &move, bool edgeless)
+{
+    std::vector<QPoint> result;
+    auto addUnique = [&result](int x1, int y1) {
+        QPoint pt(x1, y1);
+        if (std::find(result.begin(), result.end(), pt) == result.end()) {
+            result.push_back(pt);
+        }
+    };
+
+    for (const auto &op : move.getOps()) {
+        addUnique(op.x0 + 1, op.y0 + 1);
+        if (!op.hops.empty()) {
+            int cx = op.x0;
+            int cy = op.y0;
+            for (const auto &h : op.hops) {
+                int dx = h.x - cx;
+                int dy = h.y - cy;
+                if (edgeless) {
+                    if (dx > 4) {
+                        dx -= 9;
+                    } else if (dx < -4) {
+                        dx += 9;
+                    }
+                    if (dy > 4) {
+                        dy -= 9;
+                    } else if (dy < -4) {
+                        dy += 9;
+                    }
+                }
+                if (std::max(std::abs(dx), std::abs(dy)) == 2) {
+                    int jx = edgeless ? ((cx + dx / 2 + 9) % 9) : (cx + dx / 2);
+                    int jy = edgeless ? ((cy + dy / 2 + 9) % 9) : (cy + dy / 2);
+                    addUnique(jx + 1, jy + 1);
+                }
+                addUnique(h.x + 1, h.y + 1);
+                cx = h.x;
+                cy = h.y;
+            }
+        }
+    }
+    return result;
 }
 
 DragKind OctiBoardCanvas::activeDragKind() const
@@ -966,6 +1043,56 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
         }
     }
 
+    // 7b. Clockwise orange line segment indicator around squares modified during the last move
+    if (!_lastMoveModifiedSquares.empty() &&
+        (!_composer || (!_composer->isAwaitingConfirmation() && !_composer->isGuidedMoveActive()))) {
+        qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - _lastMoveAnimStartMs;
+        double phase = static_cast<double>((elapsed >= 0 ? elapsed : 0) % 2000) / 2000.0;
+        double s0 = phase * 4.0;
+        double s1 = s0 + 1.2;
+
+        auto pointOnRectPerimeter = [](const QRectF &r, double s) -> QPointF {
+            double sw = std::fmod(s, 4.0);
+            if (sw < 0.0) {
+                sw += 4.0;
+            }
+            int edge = static_cast<int>(std::floor(sw)) % 4;
+            double t = sw - std::floor(sw);
+            switch (edge) {
+            case 0:
+                return QPointF(r.left() + t * r.width(), r.top());
+            case 1:
+                return QPointF(r.right(), r.top() + t * r.height());
+            case 2:
+                return QPointF(r.right() - t * r.width(), r.bottom());
+            default:
+                return QPointF(r.left(), r.bottom() - t * r.height());
+            }
+        };
+
+        p.save();
+        QPen orangePen(QColor(255, 140, 0), 3.2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        p.setPen(orangePen);
+        p.setBrush(Qt::NoBrush);
+        for (const QPoint &sq : _lastMoveModifiedSquares) {
+            QRectF cellRect = geom.squareRect(sq.x(), sq.y()).adjusted(1.5, 1.5, -1.5, -1.5);
+            if (cellRect.isEmpty()) {
+                continue;
+            }
+            QPainterPath segPath;
+            segPath.moveTo(pointOnRectPerimeter(cellRect, s0));
+            double cur = s0;
+            while (cur < s1 - 1e-6) {
+                double nextCorner = std::floor(cur) + 1.0;
+                double stepEnd = std::min(s1, nextCorner);
+                segPath.lineTo(pointOnRectPerimeter(cellRect, stepEnd));
+                cur = stepEnd;
+            }
+            p.drawPath(segPath);
+        }
+        p.restore();
+    }
+
     // 8. Smooth move transition animation
     if (_animActive) {
         QPointF curPt = _animFromPt + (_animToPt - _animFromPt) * _animProgress;
@@ -1079,6 +1206,7 @@ bool OctiBoardCanvas::openZoomedSquareAt(int sx, int sy)
 void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
 {
     cancelHandRotateHold();
+    clearLastMoveModifiedSquares();
     if (!event) {
         return;
     }
@@ -1112,7 +1240,14 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
     if (_composer->isAwaitingConfirmation()) {
         if (_commitBtnRect.contains(pos)) {
             cancelHandRotateHold();
-            _composer->commitStagedMove();
+            std::string stagedNot = _composer->stagedMoveNotation();
+            if (_composer->commitStagedMove() && _lastMoveModifiedSquares.empty() && !stagedNot.empty()) {
+                try {
+                    bool edgeless = _board && _board->getGame() && _board->getGame()->useEdgelessBoard();
+                    setLastMoveModifiedSquares(extractModifiedSquares(OctiMove(stagedNot), edgeless));
+                } catch (...) {
+                }
+            }
             update();
             return;
         }
@@ -1559,6 +1694,7 @@ void OctiBoardCanvas::presentPlyConfirmationIfNeeded()
 void OctiBoardCanvas::mouseDoubleClickEvent(QMouseEvent *event)
 {
     cancelHandRotateHold();
+    clearLastMoveModifiedSquares();
     if (!event) {
         return;
     }
@@ -1573,7 +1709,14 @@ void OctiBoardCanvas::mouseDoubleClickEvent(QMouseEvent *event)
         return;
     }
     if (_composer && _composer->isAwaitingConfirmation()) {
-        _composer->commitStagedMove();
+        std::string stagedNot = _composer->stagedMoveNotation();
+        if (_composer->commitStagedMove() && _lastMoveModifiedSquares.empty() && !stagedNot.empty()) {
+            try {
+                bool edgeless = _board && _board->getGame() && _board->getGame()->useEdgelessBoard();
+                setLastMoveModifiedSquares(extractModifiedSquares(OctiMove(stagedNot), edgeless));
+            } catch (...) {
+            }
+        }
         update();
         return;
     }
@@ -1627,6 +1770,7 @@ void OctiBoardCanvas::wheelEvent(QWheelEvent *event)
 
 void OctiBoardCanvas::keyPressEvent(QKeyEvent *event)
 {
+    clearLastMoveModifiedSquares();
     if (event && event->key() == Qt::Key_Escape && _boardZoomScale > 1.001) {
         resetBoardZoom();
     }
@@ -1639,7 +1783,14 @@ void OctiBoardCanvas::keyPressEvent(QKeyEvent *event)
         event->key() == Qt::Key_Enter ||
         event->key() == Qt::Key_Space) {
         if (_composer->isAwaitingConfirmation()) {
-            _composer->commitStagedMove();
+            std::string stagedNot = _composer->stagedMoveNotation();
+            if (_composer->commitStagedMove() && _lastMoveModifiedSquares.empty() && !stagedNot.empty()) {
+                try {
+                    bool edgeless = _board && _board->getGame() && _board->getGame()->useEdgelessBoard();
+                    setLastMoveModifiedSquares(extractModifiedSquares(OctiMove(stagedNot), edgeless));
+                } catch (...) {
+                }
+            }
             update();
             return;
         }

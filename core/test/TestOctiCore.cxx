@@ -1009,6 +1009,62 @@ TEST(Octi2PlayerGameTest, UserReported72MoveTranscriptRejectsEmptyBaseLiberation
     CHECK_THROWS(octi::IllegalMoveException, game->move("77*"));
 }
 
+TEST(Octi2PlayerGameTest, EnemySquarePodPlacementPrioritizesLiberationOverReserve)
+{
+    // 1. 2P mode: placing an unadorned pod ("57") on an occupied enemy OCTI square
+    // while holding both capturedPods > 0 and freePods > 0 must consume capturedPods first.
+    octi::OctiBoard board2p(octi::GAME_MODE_2);
+    octi::OctiGame *game2p = board2p.getGame();
+    game2p->start(octi::PLAYER_A);
+
+    board2p.squareAt(4, 6).clear(); // (5, 7) is a B_OCTI_SQUARE (enemy base for Player A)
+    board2p.squareAt(4, 6).addPod(octi::OctiPod(octi::A_POD));
+    octi::OctiGameSnapshot snap2p = game2p->captureSnapshot();
+    snap2p.players[octi::PLAYER_A].freePods = 3;
+    snap2p.players[octi::PLAYER_A].capturedPods = 2;
+    game2p->restoreSnapshot(snap2p);
+
+    game2p->move("57");
+    LONGS_EQUAL(3, game2p->getFreePods(octi::PLAYER_A));
+    LONGS_EQUAL(1, game2p->getCapturedPods(octi::PLAYER_A));
+    LONGS_EQUAL(2, board2p.squareAt(4, 6).getNumPods());
+
+    // Pass B's turn
+    game2p->move("37+d");
+
+    // Next placement on enemy base "57" consumes the last captured pod (1 -> 0), freePods stays 3
+    game2p->move("57");
+    LONGS_EQUAL(3, game2p->getFreePods(octi::PLAYER_A));
+    LONGS_EQUAL(0, game2p->getCapturedPods(octi::PLAYER_A));
+    LONGS_EQUAL(3, board2p.squareAt(4, 6).getNumPods());
+
+    // Pass B's turn
+    game2p->move("77+d");
+
+    // With capturedPods == 0, unadorned "57" falls back to consuming freePods (3 -> 2)
+    game2p->move("57");
+    LONGS_EQUAL(2, game2p->getFreePods(octi::PLAYER_A));
+    LONGS_EQUAL(0, game2p->getCapturedPods(octi::PLAYER_A));
+    LONGS_EQUAL(4, board2p.squareAt(4, 6).getNumPods());
+
+    // 2. 4P mode: placing an unadorned pod on a non-home OCTI square consumes capturedPods before freePods
+    octi::OctiBoard board4p(octi::GAME_MODE_4);
+    octi::OctiGame *game4p = board4p.getGame();
+    game4p->start(octi::PLAYER_A);
+
+    board4p.squareAt(4, 6).clear(); // (5, 7) is a NEUTRAL_OCTI_SQUARE in 4P mode
+    board4p.squareAt(4, 6).addPod(octi::OctiPod(octi::A_POD));
+    octi::OctiGameSnapshot snap4p = game4p->captureSnapshot();
+    snap4p.players[octi::PLAYER_A].freePods = 2;
+    snap4p.players[octi::PLAYER_A].capturedPods = 1;
+    game4p->restoreSnapshot(snap4p);
+
+    game4p->move("57");
+    LONGS_EQUAL(2, game4p->getFreePods(octi::PLAYER_A));
+    LONGS_EQUAL(0, game4p->getCapturedPods(octi::PLAYER_A));
+    LONGS_EQUAL(2, board4p.squareAt(4, 6).getNumPods());
+}
+
 TEST(Octi2PlayerGameTest, UndoRedoStack)
 {
     octi::OctiBoard board(octi::GAME_MODE_2);

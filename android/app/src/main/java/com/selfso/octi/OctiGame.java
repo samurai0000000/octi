@@ -759,11 +759,11 @@ public class OctiGame {
                         players[turnVal].capturedPods--;
                         sq.addPod(new OctiPod(turn.toPodType()));
                     } else {
-                        if (players[turnVal].freePods > 0) {
-                            players[turnVal].freePods--;
-                            sq.addPod(new OctiPod(turn.toPodType()));
-                        } else if (players[turnVal].capturedPods > 0) {
+                        if (players[turnVal].capturedPods > 0) {
                             players[turnVal].capturedPods--;
+                            sq.addPod(new OctiPod(turn.toPodType()));
+                        } else if (players[turnVal].freePods > 0) {
+                            players[turnVal].freePods--;
                             sq.addPod(new OctiPod(turn.toPodType()));
                         } else {
                             throw new IllegalMoveException("no free or capturable pods available to place");
@@ -819,11 +819,11 @@ public class OctiGame {
                         players[turnVal].capturedPods--;
                         sq.addPod(new OctiPod(turn.toPodType()));
                     } else {
-                        if (players[turnVal].freePods > 0) {
-                            players[turnVal].freePods--;
-                            sq.addPod(new OctiPod(turn.toPodType()));
-                        } else if (players[turnVal].capturedPods > 0) {
+                        if (players[turnVal].capturedPods > 0) {
                             players[turnVal].capturedPods--;
+                            sq.addPod(new OctiPod(turn.toPodType()));
+                        } else if (players[turnVal].freePods > 0) {
+                            players[turnVal].freePods--;
                             sq.addPod(new OctiPod(turn.toPodType()));
                         } else {
                             throw new IllegalMoveException("no free or capturable pods available");

@@ -296,7 +296,8 @@ public class OctiMoveComposer {
         if (!game.isGameStarted() || game.isGameOver()) {
             return false;
         }
-        if (game.getFreePods(game.getTurn()) <= 0) {
+        OctiPlayer turn = game.getTurn();
+        if (game.getFreePods(turn) <= 0 && game.getCapturedPods(turn) <= 0) {
             return false;
         }
         activeDragKind = DragKind.ADD_POD_FROM_RESERVE;
@@ -316,7 +317,7 @@ public class OctiMoveComposer {
             return false;
         }
         OctiPlayer turn = game.getTurn();
-        if (game.getCapturedPods(turn) <= 0 || !board.canLiberate(turn)) {
+        if (game.getCapturedPods(turn) <= 0) {
             return false;
         }
         activeDragKind = DragKind.LIBERATE_POD_FROM_RESERVE;
@@ -815,8 +816,34 @@ public class OctiMoveComposer {
         }
 
         OctiPlayer turn = game.getTurn();
+        OctiSquare sq = board.squareAt(bx, by);
+        boolean isFriendlyOrPartnerBase;
+        if (board.getGameMode() == OctiGameMode.GAME_MODE_4) {
+            OctiPlayer partner = (turn == OctiPlayer.PLAYER_A ? OctiPlayer.PLAYER_C :
+                                  turn == OctiPlayer.PLAYER_C ? OctiPlayer.PLAYER_A :
+                                  turn == OctiPlayer.PLAYER_B ? OctiPlayer.PLAYER_D
+                                                             : OctiPlayer.PLAYER_B);
+            OctiSquareType homeType = (turn == OctiPlayer.PLAYER_A ? OctiSquareType.A_HOME_SQUARE :
+                                       turn == OctiPlayer.PLAYER_B ? OctiSquareType.B_HOME_SQUARE :
+                                       turn == OctiPlayer.PLAYER_C ? OctiSquareType.C_HOME_SQUARE
+                                                                  : OctiSquareType.D_HOME_SQUARE);
+            OctiSquareType partnerHome = (partner == OctiPlayer.PLAYER_A ? OctiSquareType.A_HOME_SQUARE :
+                                          partner == OctiPlayer.PLAYER_B ? OctiSquareType.B_HOME_SQUARE :
+                                          partner == OctiPlayer.PLAYER_C ? OctiSquareType.C_HOME_SQUARE
+                                                                         : OctiSquareType.D_HOME_SQUARE);
+            isFriendlyOrPartnerBase = (sq.getType() == homeType || sq.getType() == partnerHome);
+        } else {
+            isFriendlyOrPartnerBase = (sq.getType() == (turn == OctiPlayer.PLAYER_A
+                    ? OctiSquareType.A_HOME_SQUARE : OctiSquareType.B_HOME_SQUARE));
+        }
+        boolean isNonFriendlyOctiSquare = (sq.getType() != OctiSquareType.NEUTRAL_SQUARE && !isFriendlyOrPartnerBase);
+        if (isNonFriendlyOctiSquare && game.getCapturedPods(turn) > 0) {
+            liberate = true;
+        }
+
         if (liberate) {
-            if (game.getCapturedPods(turn) <= 0 || !board.canLiberate(turn)) {
+            if (game.getCapturedPods(turn) <= 0
+                    || (!isNonFriendlyOctiSquare && !board.canLiberate(turn))) {
                 return false;
             }
         } else {
@@ -2144,11 +2171,11 @@ public class OctiMoveComposer {
 
         OctiPlayer turn = game.getTurn();
         if (liberate) {
-            if (game.getCapturedPods(turn) <= 0 || !board.canLiberate(turn)) {
+            if (game.getCapturedPods(turn) <= 0) {
                 return result;
             }
         } else {
-            if (game.getFreePods(turn) <= 0) {
+            if (game.getFreePods(turn) <= 0 && game.getCapturedPods(turn) <= 0) {
                 return result;
             }
         }

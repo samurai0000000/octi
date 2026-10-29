@@ -8,10 +8,19 @@ package com.selfso.octi;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 public final class OctiBoardRenderer {
+
+    public static final int LAST_MOVE_INDICATOR_COLOR = 0xFFFF8C00;
+
+    public static final class RenderConfig {
+        public List<int[]> lastMoveModifiedSquares = new ArrayList<>();
+        public float lastMoveAnimPhase = 0.0f;
+        public List<int[]> stagedPaths = new ArrayList<>();
+    }
 
     private int stackFanX = -1;
     private int stackFanY = -1;
@@ -20,6 +29,114 @@ public final class OctiBoardRenderer {
     private OctiDir hoverProngDir = OctiDir.DIR_UNDEF;
 
     public OctiBoardRenderer() {
+    }
+
+    private static void addUniqueSquare(List<int[]> list, int x1, int y1) {
+        for (int[] sq : list) {
+            if (sq != null && sq.length >= 2 && sq[0] == x1 && sq[1] == y1) {
+                return;
+            }
+        }
+        list.add(new int[]{x1, y1});
+    }
+
+    public static List<int[]> extractModifiedSquares(OctiMove move, boolean edgeless) {
+        List<int[]> result = new ArrayList<>();
+        if (move == null || move.getOps() == null) {
+            return result;
+        }
+        for (OctiMoveOp op : move.getOps()) {
+            addUniqueSquare(result, op.x0 + 1, op.y0 + 1);
+            if (op.hops != null && !op.hops.isEmpty()) {
+                int cx = op.x0;
+                int cy = op.y0;
+                for (OctiHop h : op.hops) {
+                    int dx = h.x - cx;
+                    int dy = h.y - cy;
+                    if (edgeless) {
+                        if (dx > 4) dx -= 9;
+                        else if (dx < -4) dx += 9;
+                        if (dy > 4) dy -= 9;
+                        else if (dy < -4) dy += 9;
+                    }
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) == 2) {
+                        int jx = edgeless ? (cx + dx / 2 + 9) % 9 : (cx + dx / 2);
+                        int jy = edgeless ? (cy + dy / 2 + 9) % 9 : (cy + dy / 2);
+                        addUniqueSquare(result, jx + 1, jy + 1);
+                    }
+                    addUniqueSquare(result, h.x + 1, h.y + 1);
+                    cx = h.x;
+                    cy = h.y;
+                }
+            }
+        }
+        return result;
+    }
+
+    public static List<int[]> extractModifiedSquares(String moveNotation, boolean edgeless) {
+        if (moveNotation == null || moveNotation.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        try {
+            return extractModifiedSquares(new OctiMove(moveNotation.trim()), edgeless);
+        } catch (Throwable t) {
+            return new ArrayList<>();
+        }
+    }
+
+    public static void paintClockwiseOrangeSquareSegment(int[] pixels, int w, int h,
+                                                         double[] sqRect, double phase) {
+        if (sqRect == null || sqRect.length < 4 || sqRect[2] <= 3.0 || sqRect[3] <= 3.0) {
+            return;
+        }
+        double left = sqRect[0] + 1.5;
+        double top = sqRect[1] + 1.5;
+        double right = sqRect[0] + sqRect[2] - 1.5;
+        double bottom = sqRect[1] + sqRect[3] - 1.5;
+        double thickness = Math.max(3.0, sqRect[2] * 0.055);
+
+        double normPhase = phase - Math.floor(phase);
+        double s0 = normPhase * 4.0;
+        double segLen = 1.2;
+        double cur = s0;
+        double end = s0 + segLen;
+        while (cur < end - 1e-6) {
+            double edgeBase = Math.floor(cur);
+            double nextBoundary = Math.min(end, edgeBase + 1.0);
+            int edgeIdx = ((int) edgeBase) % 4;
+            if (edgeIdx < 0) edgeIdx += 4;
+            double t0 = cur - edgeBase;
+            double t1 = nextBoundary - edgeBase;
+            double x1, y1, x2, y2;
+            switch (edgeIdx) {
+                case 0: // Top: left -> right
+                    x1 = left + t0 * (right - left);
+                    y1 = top;
+                    x2 = left + t1 * (right - left);
+                    y2 = top;
+                    break;
+                case 1: // Right: top -> bottom
+                    x1 = right;
+                    y1 = top + t0 * (bottom - top);
+                    x2 = right;
+                    y2 = top + t1 * (bottom - top);
+                    break;
+                case 2: // Bottom: right -> left
+                    x1 = right - t0 * (right - left);
+                    y1 = bottom;
+                    x2 = right - t1 * (right - left);
+                    y2 = bottom;
+                    break;
+                default: // Left: bottom -> top
+                    x1 = left;
+                    y1 = bottom - t0 * (bottom - top);
+                    x2 = left;
+                    y2 = bottom - t1 * (bottom - top);
+                    break;
+            }
+            OctiAppIconRenderer.drawLineSegment(pixels, w, h, x1, y1, x2, y2, thickness, LAST_MOVE_INDICATOR_COLOR);
+            cur = nextBoundary;
+        }
     }
 
     public void openStackFanAt(int x1, int y1) {
@@ -42,7 +159,23 @@ public final class OctiBoardRenderer {
                                           OctiMoveComposer composer,
                                           OctiBoardGeometry geo,
                                           OctiThemeId theme) {
-        return new OctiBoardRenderer().render(board, composer, geo, theme);
+        return new OctiBoardRenderer().render(board, composer, geo, theme, null);
+    }
+
+    public static int[] renderBoardPixels(OctiBoard board,
+                                          OctiMoveComposer composer,
+                                          OctiBoardGeometry geo,
+                                          OctiThemeId theme,
+                                          RenderConfig config) {
+        return new OctiBoardRenderer().render(board, composer, geo, theme, config);
+    }
+
+    public static int[] paintBoard(OctiBoard board,
+                                   OctiMoveComposer composer,
+                                   OctiBoardGeometry geo,
+                                   OctiThemeId theme,
+                                   RenderConfig config) {
+        return new OctiBoardRenderer().render(board, composer, geo, theme, config);
     }
 
     public static int[] renderBoardPixels(OctiBoard board,
@@ -57,13 +190,21 @@ public final class OctiBoardRenderer {
                 board != null ? board.getBoardWidth() : 9,
                 board != null ? board.getBoardHeight() : 9,
                 rotation);
-        return new OctiBoardRenderer().render(board, composer, geo, theme);
+        return new OctiBoardRenderer().render(board, composer, geo, theme, null);
     }
 
     public int[] render(OctiBoard board,
                         OctiMoveComposer composer,
                         OctiBoardGeometry geo,
                         OctiThemeId theme) {
+        return render(board, composer, geo, theme, null);
+    }
+
+    public int[] render(OctiBoard board,
+                        OctiMoveComposer composer,
+                        OctiBoardGeometry geo,
+                        OctiThemeId theme,
+                        RenderConfig config) {
         OctiBoardGeometry g = (geo != null)
                 ? geo
                 : new OctiBoardGeometry(
@@ -233,6 +374,26 @@ public final class OctiBoardRenderer {
                         paintOctagonalPod(pixels, w, h, layerRect, pod.getType(), pod, g, pal, hi, centerLabel);
                     }
                 }
+            }
+        }
+
+        // 9. Clockwise orange line segment around squares modified during the last committed move
+        if (config != null
+                && config.lastMoveModifiedSquares != null
+                && !config.lastMoveModifiedSquares.isEmpty()
+                && (config.stagedPaths == null || config.stagedPaths.isEmpty())
+                && (composer == null || !composer.isAwaitingConfirmation())) {
+            for (int[] sq : config.lastMoveModifiedSquares) {
+                if (sq == null || sq.length < 2) {
+                    continue;
+                }
+                int sx = sq[0];
+                int sy = sq[1];
+                if (sx < 1 || sx > gw || sy < 1 || sy > gh) {
+                    continue;
+                }
+                double[] sqRect = g.squareRect(sx, sy);
+                paintClockwiseOrangeSquareSegment(pixels, w, h, sqRect, config.lastMoveAnimPhase);
             }
         }
 
@@ -1425,13 +1586,15 @@ public final class OctiBoardRenderer {
             curX += 28.0;
         }
 
-        // 4. Captured Pod icon + capPods count
-        double capCx = curX + podR;
-        OctiAppIconRenderer.fillOctagonGradient(pixels, w, h, capCx, itemCy, podR, oppFp.highlight, oppFp.core, oppFp.shadow);
-        OctiAppIconRenderer.drawCircleStroke(pixels, w, h, capCx, itemCy, podR * 1.05, 1.5, pal.legalCaptureGlow);
-        OctiAppIconRenderer.drawLineSegment(pixels, w, h, capCx - podR * 0.7, itemCy - podR * 0.7, capCx + podR * 0.7, itemCy + podR * 0.7, 1.5, pal.legalCaptureGlow);
-        curX += podR * 2.0 + 5.0;
-        drawVectorString(pixels, w, h, curX, ry + 40.0, 15.0, Integer.toString(capPods), pal.textPrimary, 1.6);
+        // 4. Captured Pod icon + capPods count (only when capPods > 0)
+        if (capPods > 0) {
+            double capCx = curX + podR;
+            OctiAppIconRenderer.fillOctagonGradient(pixels, w, h, capCx, itemCy, podR, oppFp.highlight, oppFp.core, oppFp.shadow);
+            OctiAppIconRenderer.drawCircleStroke(pixels, w, h, capCx, itemCy, podR * 1.05, 1.5, pal.legalCaptureGlow);
+            OctiAppIconRenderer.drawLineSegment(pixels, w, h, capCx - podR * 0.7, itemCy - podR * 0.7, capCx + podR * 0.7, itemCy + podR * 0.7, 1.5, pal.legalCaptureGlow);
+            curX += podR * 2.0 + 5.0;
+            drawVectorString(pixels, w, h, curX, ry + 40.0, 15.0, Integer.toString(capPods), pal.textPrimary, 1.6);
+        }
     }
 
     public static int[] renderPlyConfirmScreenPixels(OctiBoard previewBoard,

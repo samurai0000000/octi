@@ -622,6 +622,7 @@ OctiMainWindow::OctiMainWindow(
             }
             _composer.refreshLegalMoves();
             if (_boardCanvas) {
+                _boardCanvas->clearLastMoveModifiedSquares();
                 _boardCanvas->update();
             }
             if (_reservePanel) {
@@ -1087,7 +1088,10 @@ void OctiMainWindow::setupMenuBar()
                 _board.getGame()->undo();
             }
             refreshMoveHistoryAndFenUi();
-            if (_boardCanvas) _boardCanvas->update();
+            if (_boardCanvas) {
+                _boardCanvas->clearLastMoveModifiedSquares();
+                _boardCanvas->update();
+            }
         }
     });
 
@@ -1270,6 +1274,7 @@ void OctiMainWindow::startNewLocalGame(const LocalGameConfig &cfg)
 
     _composer.attachBoard(&_board);
     if (_boardCanvas) {
+        _boardCanvas->clearLastMoveModifiedSquares();
         _boardCanvas->attachBoard(&_board, &_composer, &_soundSynth);
         _boardCanvas->autoOrientForSeat(cfg.humanSeat);
         if (_rotateBoardBtn) {
@@ -1319,6 +1324,7 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
 
     int safetyCount = 0;
     bool movedAny = false;
+    std::string lastBotMoveStr;
     while (!game->isGameOver() &&
            game->getTurn() != _localConfig.humanSeat &&
            safetyCount < 8) {
@@ -1364,6 +1370,7 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
         }
         try {
             game->move(botMove);
+            lastBotMoveStr = botMove;
             movedAny = true;
             _soundSynth.triggerCue(SoundCue::POD_STEP);
         } catch (...) {
@@ -1373,6 +1380,15 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
     if (movedAny) {
         _composer.refreshLegalMoves();
         if (_boardCanvas) {
+            if (!lastBotMoveStr.empty()) {
+                try {
+                    OctiMove parsedBotMove(lastBotMoveStr);
+                    _boardCanvas->setLastMoveModifiedSquares(
+                        OctiBoardCanvas::extractModifiedSquares(
+                            parsedBotMove, game->useEdgelessBoard()));
+                } catch (...) {
+                }
+            }
             _boardCanvas->update();
         }
         if (_reservePanel) {
@@ -1627,11 +1643,13 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
         _board.getGame()->start(PLAYER_A);
     }
 
+    std::string latestOnlineMoveStr;
     for (std::size_t i = _appliedOnlineMoves.size();
          i < view.moves.size(); ++i) {
         try {
             _board.getGame()->move(view.moves[i]);
             _appliedOnlineMoves.push_back(view.moves[i]);
+            latestOnlineMoveStr = view.moves[i];
         } catch (...) {
             if (!view.fen.empty()) {
                 try {
@@ -1655,6 +1673,15 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
     _composer.attachBoard(&_board);
     if (_boardCanvas) {
         _boardCanvas->attachBoard(&_board, &_composer, &_soundSynth);
+        if (!latestOnlineMoveStr.empty()) {
+            try {
+                OctiMove parsedOnlineMove(latestOnlineMoveStr);
+                _boardCanvas->setLastMoveModifiedSquares(
+                    OctiBoardCanvas::extractModifiedSquares(
+                        parsedOnlineMove, view.edgeless));
+            } catch (...) {
+            }
+        }
         _boardCanvas->update();
     }
     if (_reservePanel) {
@@ -1734,6 +1761,16 @@ void OctiMainWindow::pumpUiEvents()
 void OctiMainWindow::handleLocalOrOnlineMoveCommitted(
     const std::string &moveNotation)
 {
+    if (_boardCanvas && !moveNotation.empty()) {
+        try {
+            OctiMove parsedMove(moveNotation);
+            bool edgeless = _board.getGame() && _board.getGame()->useEdgelessBoard();
+            _boardCanvas->setLastMoveModifiedSquares(
+                OctiBoardCanvas::extractModifiedSquares(parsedMove, edgeless));
+        } catch (...) {
+        }
+    }
+
     if (_inOnlineRoom && !_onlineRoomId.empty() && _netClient) {
         _appliedOnlineMoves.push_back(moveNotation);
         auto res = _netClient->submitMove(_onlineRoomId, moveNotation);
@@ -2036,6 +2073,7 @@ void OctiMainWindow::vcrFirst()
     }
     _composer.refreshLegalMoves();
     if (_boardCanvas) {
+        _boardCanvas->clearLastMoveModifiedSquares();
         _boardCanvas->update();
     }
     if (_reservePanel) {
@@ -2053,6 +2091,7 @@ void OctiMainWindow::vcrPrev()
     g->undo();
     _composer.refreshLegalMoves();
     if (_boardCanvas) {
+        _boardCanvas->clearLastMoveModifiedSquares();
         _boardCanvas->update();
     }
     if (_reservePanel) {
@@ -2070,6 +2109,7 @@ void OctiMainWindow::vcrNext()
     g->redo();
     _composer.refreshLegalMoves();
     if (_boardCanvas) {
+        _boardCanvas->clearLastMoveModifiedSquares();
         _boardCanvas->update();
     }
     if (_reservePanel) {
@@ -2089,6 +2129,7 @@ void OctiMainWindow::vcrLast()
     }
     _composer.refreshLegalMoves();
     if (_boardCanvas) {
+        _boardCanvas->clearLastMoveModifiedSquares();
         _boardCanvas->update();
     }
     if (_reservePanel) {
@@ -2176,6 +2217,7 @@ bool OctiMainWindow::loadOctiTranscriptIntoReplay(
     _vcrTotalPlies = _board.getGame() ? _board.getGame()->getNumMoves() : 0;
     _composer.attachBoard(&_board);
     if (_boardCanvas) {
+        _boardCanvas->clearLastMoveModifiedSquares();
         _boardCanvas->attachBoard(&_board, &_composer, &_soundSynth);
         _boardCanvas->update();
     }

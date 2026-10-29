@@ -1739,6 +1739,14 @@ TEST(DesktopCommitDialogFixTest, ZoomedSquareDialogLiberateVisibilityAndArtifact
     OctiReservePanel panel;
     panel.attach(&boardStandard, &compStandard, &canvStandard);
     panel.setTheme(ThemeId::OBSIDIAN_BRASS);
+    QImage rImgZero = panel.renderToImage(340, 720);
+    CHECK_FALSE(rImgZero.isNull());
+    CHECK_TRUE(panel.superProngWellRect().isEmpty());
+    CHECK_TRUE(panel.liberatePodWellRect().isEmpty());
+
+    OctiGameSnapshot snapStd = boardStandard.getGame()->captureSnapshot();
+    snapStd.players[PLAYER_A].capturedPods = 2;
+    boardStandard.getGame()->restoreSnapshot(snapStd);
     QImage rImg = panel.renderToImage(340, 720);
     CHECK_FALSE(rImg.isNull());
     CHECK_TRUE(panel.superProngWellRect().isEmpty()); // 3 wells mode!
@@ -2238,6 +2246,94 @@ TEST(OctiZoomProngAndPodStackOrderTest, ZPB_D07_ThreeAndFourJumpGuidedAndDragCha
     STRCMP_EQUAL("22ac-24-26x-46-66x", composer.stagedMoveNotation().c_str());
     CHECK_TRUE(composer.commitStagedMove());
     LONGS_EQUAL(1, board.squareAt(5, 5).getNumPods());
+}
+
+TEST(OctiZoomProngAndPodStackOrderTest, ZPB_D08_LiberationPriorityZeroCapturedWellAndOrangeMoveIndicators)
+{
+    OctiBoard board(GAME_MODE_2, false, false, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+    composer.setConfirmAllMoves(true);
+    OctiBoardCanvas canvas;
+    canvas.resize(800, 800);
+    canvas.attachBoard(&board, &composer);
+
+    OctiReservePanel panel;
+    panel.attach(&board, &composer, &canvas);
+
+    // 1. Captured well is hidden when capPods == 0 and shown when capPods > 0
+    panel.renderToImage(340, 720);
+    CHECK_TRUE(panel.liberatePodWellRect().isEmpty());
+
+    // Place a friendly A pod on enemy OCTI square (5, 7) (0-based 4, 6)
+    board.squareAt(4, 6).clear();
+    board.squareAt(4, 6).addPod(OctiPod(A_POD));
+    OctiGameSnapshot snap1 = board.getGame()->captureSnapshot();
+    snap1.players[PLAYER_A].freePods = 3;
+    snap1.players[PLAYER_A].capturedPods = 2;
+    board.getGame()->restoreSnapshot(snap1);
+
+    panel.renderToImage(340, 720);
+    CHECK_FALSE(panel.liberatePodWellRect().isEmpty());
+
+    // 2. Staging a non-liberate pod placement on an enemy square when capturedPods > 0
+    // auto-promotes to liberation ("57*") and consumes capturedPods first
+    CHECK_TRUE(composer.stageOrCommitAddPod(5, 7, false));
+    STRCMP_EQUAL("57*", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.commitStagedMove());
+    LONGS_EQUAL(3, board.getGame()->getFreePods(PLAYER_A));
+    LONGS_EQUAL(1, board.getGame()->getCapturedPods(PLAYER_A));
+
+    // Pass B's turn
+    board.getGame()->move("37+d");
+
+    // 3. When freePods == 0 and capturedPods > 0, legalPodDropSquares(false) still returns
+    // the occupied enemy square (5, 7) because enemy-square liberation is prioritized
+    OctiGameSnapshot snap2 = board.getGame()->captureSnapshot();
+    snap2.players[PLAYER_A].freePods = 0;
+    snap2.players[PLAYER_A].capturedPods = 1;
+    board.getGame()->restoreSnapshot(snap2);
+    auto drops = composer.legalPodDropSquares(false);
+    bool has57 = false;
+    for (const auto &sq : drops) {
+        if (sq.first == 5 && sq.second == 7) {
+            has57 = true;
+            break;
+        }
+    }
+    CHECK_TRUE(has57);
+
+    // 4. Clockwise orange border animation modified-square extraction and lifecycle
+    auto modProng = OctiBoardCanvas::extractModifiedSquares(OctiMove("33+a"), false);
+    LONGS_EQUAL(1, modProng.size());
+    LONGS_EQUAL(3, modProng[0].x());
+    LONGS_EQUAL(3, modProng[0].y());
+
+    auto modJump = OctiBoardCanvas::extractModifiedSquares(OctiMove("33ac-35x-55x"), false);
+    LONGS_EQUAL(5, modJump.size()); // (3,3), (3,4), (3,5), (4,5), (5,5)
+
+    auto modWrap = OctiBoardCanvas::extractModifiedSquares(OctiMove("95c-25x"), true);
+    LONGS_EQUAL(3, modWrap.size()); // (9,5), (1,5), (2,5)
+    bool hasWrapMid = false;
+    for (const auto &sq : modWrap) {
+        if (sq.x() == 1 && sq.y() == 5) {
+            hasWrapMid = true;
+            break;
+        }
+    }
+    CHECK_TRUE(hasWrapMid);
+
+    canvas.setLastMoveModifiedSquares(modJump);
+    LONGS_EQUAL(5, canvas.lastMoveModifiedSquares().size());
+    QImage animImg = canvas.renderToImage(800, 800);
+    CHECK_FALSE(animImg.isNull());
+
+    // Any user mouse action on canvas clears lastMoveModifiedSquares
+    QPointF pt(100.0, 100.0);
+    QMouseEvent pr(QEvent::MouseButtonPress, pt, pt, pt,
+                   Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &pr);
+    LONGS_EQUAL(0, canvas.lastMoveModifiedSquares().size());
 }
 
 extern "C" const char *__lsan_default_suppressions()

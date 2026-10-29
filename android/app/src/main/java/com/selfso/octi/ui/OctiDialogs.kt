@@ -1034,7 +1034,17 @@ fun ZoomedSquareDialog(
                     if (canShowPodPlacement) {
                         val canLiberateHere = (capPods > 0) && sq.isOccupiedBy(turn) &&
                             (if (isFriendlyHome) board.canLiberate(turn) else true)
-                        if (canLiberateHere) {
+                        if (!isFriendlyHome && canLiberateHere) {
+                            Button(
+                                onClick = {
+                                    onPlaceReservePod(true)
+                                },
+                                enabled = true,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Liberate (*)")
+                            }
+                        } else if (canLiberateHere) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)

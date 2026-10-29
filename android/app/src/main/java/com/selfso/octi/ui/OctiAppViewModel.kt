@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import com.selfso.octi.ClientConfigStore
 import com.selfso.octi.OctiBoard
 import com.selfso.octi.OctiBoardGeometry
+import com.selfso.octi.OctiBoardRenderer
 import com.selfso.octi.OctiBotEngine
 import com.selfso.octi.OctiDefs
 import com.selfso.octi.OctiGameBases
@@ -215,6 +216,19 @@ class OctiAppViewModel @JvmOverloads constructor(
     private val _guidedMoveActive = MutableStateFlow(false)
     val guidedMoveActive: StateFlow<Boolean> = _guidedMoveActive.asStateFlow()
 
+    private val _lastMoveModifiedSquares = MutableStateFlow<List<IntArray>>(emptyList())
+    val lastMoveModifiedSquares: StateFlow<List<IntArray>> = _lastMoveModifiedSquares.asStateFlow()
+
+    fun getLastMoveModifiedSquaresList(): List<IntArray> {
+        return _lastMoveModifiedSquares.value
+    }
+
+    fun clearLastMoveIndicators() {
+        if (_lastMoveModifiedSquares.value.isNotEmpty()) {
+            _lastMoveModifiedSquares.value = emptyList()
+        }
+    }
+
     private val _statusBanner = MutableStateFlow("")
     val statusBanner: StateFlow<String> = _statusBanner.asStateFlow()
 
@@ -389,6 +403,7 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun openZoomedSquare(x: Int, y: Int) {
+        clearLastMoveIndicators()
         _isContinuingGuidedJump.value = false
         _zoomedSquare.value = Pair(x, y)
     }
@@ -631,6 +646,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             _fenHistory.add(initialFen)
         }
         _viewingPly.value = 0
+        clearLastMoveIndicators()
         _isContinuingGuidedJump.value = false
         _showGameOverDialog.value = false
         _zoomedSquare.value = null
@@ -689,6 +705,7 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun vcrSeekToPly(targetPly: Int): Int {
+        clearLastMoveIndicators()
         if (_fenHistory.isEmpty()) {
             _viewingPly.value = 0
             return 0
@@ -754,6 +771,7 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun rollbackStagedMove() {
+        clearLastMoveIndicators()
         _isContinuingGuidedJump.value = false
         composer.rollbackMove()
         displayBoard.fromPositionString(board.toPositionString())
@@ -766,6 +784,7 @@ class OctiAppViewModel @JvmOverloads constructor(
         ) {
             return false
         }
+        clearLastMoveIndicators()
         cancelActiveBotTurn()
         return synchronized(board) {
             _isContinuingGuidedJump.value = false
@@ -810,6 +829,7 @@ class OctiAppViewModel @JvmOverloads constructor(
         ) {
             return false
         }
+        clearLastMoveIndicators()
         cancelActiveBotTurn()
         return synchronized(board) {
             val g = board.game ?: return@synchronized false
@@ -995,6 +1015,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             displayBoard.fromPositionString(_fenHistory.last())
             composer.attachBoard(board)
             _viewingPly.value = livePlyCount()
+            clearLastMoveIndicators()
             bumpBoardRevision()
             true
         } catch (e: RuntimeException) {
@@ -1054,6 +1075,18 @@ class OctiAppViewModel @JvmOverloads constructor(
         displayBoard.fromPositionString(snap)
         _viewingPly.value = livePlyCount()
 
+        val lastMove = board.game?.moves?.lastOrNull()?.move ?: try {
+            OctiMove(notation)
+        } catch (_: Throwable) {
+            null
+        }
+        val edgeless = board.game?.useEdgelessBoard() == true
+        _lastMoveModifiedSquares.value = if (lastMove != null) {
+            OctiBoardRenderer.extractModifiedSquares(lastMove, edgeless)
+        } else {
+            OctiBoardRenderer.extractModifiedSquares(notation, edgeless)
+        }
+
         if (board.game.isGameOver) {
             soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
             _statusBanner.value = "Game Over — Winner: ${board.game.winner}"
@@ -1108,14 +1141,17 @@ class OctiAppViewModel @JvmOverloads constructor(
         val gameHistorySize = board.game?.numMoves ?: 0
         if (_fenHistory.isNotEmpty() && gameHistorySize > livePlyCount()) {
             val movesList = board.game.moves
-            val lastMoveStr = if (movesList.isNotEmpty()) {
-                movesList.last().move.asString()
-            } else {
-                ""
-            }
+            val lastMoveObj = if (movesList.isNotEmpty()) movesList.last().move else null
+            val lastMoveStr = lastMoveObj?.asString() ?: ""
             _moveHistory.add(lastMoveStr)
             _fenHistory.add(currentBoardFen)
             _viewingPly.value = livePlyCount()
+            val edgeless = board.game?.useEdgelessBoard() == true
+            _lastMoveModifiedSquares.value = if (lastMoveObj != null) {
+                OctiBoardRenderer.extractModifiedSquares(lastMoveObj, edgeless)
+            } else {
+                OctiBoardRenderer.extractModifiedSquares(lastMoveStr, edgeless)
+            }
             if (board.game.isGameOver) {
                 soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
                 _statusBanner.value = "Game Over — Winner: ${board.game.winner}"
@@ -1449,11 +1485,15 @@ class OctiAppViewModel @JvmOverloads constructor(
                         _fenHistory.clear()
                         _moveHistory.clear()
                         _fenHistory.add(gv.fen)
+                        clearLastMoveIndicators()
                     } else {
                         while (_moveHistory.size < gv.moves.size) {
                             _moveHistory.add(gv.moves[_moveHistory.size])
                         }
                         _fenHistory.add(gv.fen)
+                        val latestMoveStr = gv.moves.lastOrNull() ?: ""
+                        val edgeless = board.game?.useEdgelessBoard() == true
+                        _lastMoveModifiedSquares.value = OctiBoardRenderer.extractModifiedSquares(latestMoveStr, edgeless)
                     }
                 }
                 if (!isViewingHistory() || _viewingPly.value >= livePlyCount() - 1) {

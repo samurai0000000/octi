@@ -11,11 +11,13 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -40,6 +42,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -135,6 +139,7 @@ fun OctiReserveHud(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     for (p in players) {
+                        val activePlayerTurn = !isGameOver && (p == turn) && !viewModel.isViewingHistory()
                         PlayerReserveCard(
                             player = p,
                             isTurn = !isGameOver && (p == turn),
@@ -144,7 +149,23 @@ fun OctiReserveHud(
                             capPods = game?.getCapturedPods(p) ?: 0,
                             useSuperProngs = useSuperProngs,
                             pal = pal,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            onStartPodPlacement = if (activePlayerTurn) {
+                                {
+                                    viewModel.clearLastMoveIndicators()
+                                    if (viewModel.composer.beginAddPodFromReserve()) {
+                                        viewModel.bumpBoardRevision()
+                                    }
+                                }
+                            } else null,
+                            onStartLiberatePlacement = if (activePlayerTurn) {
+                                {
+                                    viewModel.clearLastMoveIndicators()
+                                    if (viewModel.composer.beginLiberatePodFromReserve()) {
+                                        viewModel.bumpBoardRevision()
+                                    }
+                                }
+                            } else null
                         )
                     }
                 }
@@ -160,6 +181,7 @@ fun OctiReserveHud(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             for (p in rowPlayers) {
+                                val activePlayerTurn = !isGameOver && (p == turn) && !viewModel.isViewingHistory()
                                 PlayerReserveCard(
                                     player = p,
                                     isTurn = !isGameOver && (p == turn),
@@ -169,7 +191,23 @@ fun OctiReserveHud(
                                     capPods = game?.getCapturedPods(p) ?: 0,
                                     useSuperProngs = useSuperProngs,
                                     pal = pal,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f),
+                                    onStartPodPlacement = if (activePlayerTurn) {
+                                        {
+                                            viewModel.clearLastMoveIndicators()
+                                            if (viewModel.composer.beginAddPodFromReserve()) {
+                                                viewModel.bumpBoardRevision()
+                                            }
+                                        }
+                                    } else null,
+                                    onStartLiberatePlacement = if (activePlayerTurn) {
+                                        {
+                                            viewModel.clearLastMoveIndicators()
+                                            if (viewModel.composer.beginLiberatePodFromReserve()) {
+                                                viewModel.bumpBoardRevision()
+                                            }
+                                        }
+                                    } else null
                                 )
                             }
                         }
@@ -224,13 +262,17 @@ fun OctiReserveHud(
                 ) {
                     OutlinedButton(
                         onClick = { viewModel.vcrFirst() },
-                        enabled = viewingPly > 0
+                        enabled = viewingPly > 0,
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                     ) {
                         Text("|<<")
                     }
                     OutlinedButton(
                         onClick = { viewModel.vcrPrev() },
-                        enabled = viewingPly > 0
+                        enabled = viewingPly > 0,
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                     ) {
                         Text("<")
                     }
@@ -242,13 +284,17 @@ fun OctiReserveHud(
                     )
                     OutlinedButton(
                         onClick = { viewModel.vcrNext() },
-                        enabled = viewingPly < totalPlies
+                        enabled = viewingPly < totalPlies,
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                     ) {
                         Text(">")
                     }
                     OutlinedButton(
                         onClick = { viewModel.vcrLast() },
-                        enabled = viewingPly < totalPlies
+                        enabled = viewingPly < totalPlies,
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                     ) {
                         Text(">>|")
                     }
@@ -256,14 +302,20 @@ fun OctiReserveHud(
                 val context = LocalContext.current
                 OutlinedButton(
                     onClick = {
+                        viewModel.clearLastMoveIndicators()
                         val text = viewModel.exportMoveHistoryText()
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                         val clip = ClipData.newPlainText("OCTI Moves", text)
                         clipboard?.setPrimaryClip(clip)
                         viewModel.setShowExportMovesDialog(true)
-                    }
+                    },
+                    modifier = Modifier.size(36.dp, 32.dp),
+                    contentPadding = PaddingValues(0.dp)
                 ) {
-                    Text("Export")
+                    ExportMovesIcon(
+                        color = OctiTheme.colors.accentBrass,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
 
@@ -325,7 +377,9 @@ fun PlayerReserveCard(
     capPods: Int,
     useSuperProngs: Boolean,
     pal: OctiPalette,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onStartPodPlacement: (() -> Unit)? = null,
+    onStartLiberatePlacement: (() -> Unit)? = null
 ) {
     val faction = pal.factionForPlayer(player)
     val oppPlayer = if (player == OctiPlayer.PLAYER_A) OctiPlayer.PLAYER_B else OctiPlayer.PLAYER_A
@@ -356,8 +410,14 @@ fun PlayerReserveCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // 1. Pod icon + count
+                // 1. Pod icon + count (allows starting pod placement when freePods > 0 || capPods > 0)
+                val canStartPod = isTurn && (freePods > 0 || capPods > 0) && onStartPodPlacement != null
                 Row(
+                    modifier = if (canStartPod) {
+                        Modifier.clickable { onStartPodPlacement?.invoke() }
+                    } else {
+                        Modifier
+                    },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
@@ -400,21 +460,75 @@ fun PlayerReserveCard(
                     }
                 }
 
-                // 4. Captured Pod icon + count
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    CapturedPodIcon(oppFaction = oppFaction, pal = pal, modifier = Modifier.size(20.dp))
-                    Text(
-                        text = "$capPods",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(pal.legalCaptureGlow.toLong() and 0xFFFFFFFFL)
-                    )
+                // 4. Captured Pod icon + count (hidden when capPods == 0)
+                if (capPods > 0) {
+                    val canStartLiberate = isTurn && onStartLiberatePlacement != null
+                    Row(
+                        modifier = if (canStartLiberate) {
+                            Modifier.clickable { onStartLiberatePlacement?.invoke() }
+                        } else {
+                            Modifier
+                        },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        CapturedPodIcon(oppFaction = oppFaction, pal = pal, modifier = Modifier.size(20.dp))
+                        Text(
+                            text = "$capPods",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(pal.legalCaptureGlow.toLong() and 0xFFFFFFFFL)
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ExportMovesIcon(
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val stroke = 1.6.dp.toPx()
+
+        // Open tray at bottom
+        val trayPath = Path().apply {
+            moveTo(w * 0.14f, h * 0.58f)
+            lineTo(w * 0.14f, h * 0.86f)
+            lineTo(w * 0.86f, h * 0.86f)
+            lineTo(w * 0.86f, h * 0.58f)
+        }
+        drawPath(
+            path = trayPath,
+            color = color,
+            style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+
+        // Upward arrow shaft
+        drawLine(
+            color = color,
+            start = Offset(w * 0.50f, h * 0.66f),
+            end = Offset(w * 0.50f, h * 0.14f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+
+        // Upward arrow head
+        val headPath = Path().apply {
+            moveTo(w * 0.28f, h * 0.36f)
+            lineTo(w * 0.50f, h * 0.14f)
+            lineTo(w * 0.72f, h * 0.36f)
+        }
+        drawPath(
+            path = headPath,
+            color = color,
+            style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
     }
 }
 

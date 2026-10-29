@@ -7,6 +7,7 @@
 package com.selfso.octi.ui
 
 import android.graphics.Bitmap
+import android.os.SystemClock
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -22,12 +23,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -41,6 +45,8 @@ import com.selfso.octi.OctiMoveComposer
 import com.selfso.octi.OctiPlayer
 import com.selfso.octi.OctiProngType
 import com.selfso.octi.ui.theme.OctiTheme
+import kotlin.math.floor
+import kotlinx.coroutines.delay
 
 /**
  * Interactive high-DPI OCTI board canvas with 4-quadrant rotation,
@@ -51,12 +57,22 @@ import com.selfso.octi.ui.theme.OctiTheme
 @Composable
 fun OctiBoardCanvas(
     viewModel: OctiAppViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    lastMoveModifiedSquares: List<IntArray> = emptyList(),
+    onUserInteraction: () -> Unit = { viewModel.clearLastMoveIndicators() }
 ) {
     val themeId by viewModel.theme.collectAsState()
     val rotation by viewModel.boardRotation.collectAsState()
     val boardRev by viewModel.boardRevision.collectAsState()
     val viewingPly by viewModel.viewingPly.collectAsState()
+    val awaitingConfirm by viewModel.awaitingConfirmation.collectAsState()
+    val vmLastMoveSquares by viewModel.lastMoveModifiedSquares.collectAsState()
+    val activeModifiedSquares = if (lastMoveModifiedSquares.isNotEmpty()) {
+        lastMoveModifiedSquares
+    } else {
+        vmLastMoveSquares
+    }
+    val currentOnUserInteraction by rememberUpdatedState(onUserInteraction)
     var canvasSize by remember { mutableStateOf(IntSize(640, 640)) }
     var selectedOriginSquare by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var zoomScale by remember { mutableStateOf(1.0f) }
@@ -65,6 +81,19 @@ fun OctiBoardCanvas(
     var multiTouchActive by remember { mutableStateOf(false) }
     var lastMultiTouchTimeMs by remember { mutableStateOf(0L) }
     var lastDragTimeMs by remember { mutableStateOf(0L) }
+
+    val lastMoveAnimPhase by produceState(0f, activeModifiedSquares.isNotEmpty(), awaitingConfirm) {
+        if (activeModifiedSquares.isNotEmpty() && !awaitingConfirm) {
+            val startMs = SystemClock.uptimeMillis()
+            while (true) {
+                val elapsedMs = (SystemClock.uptimeMillis() - startMs) % 2000L
+                value = elapsedMs.toFloat() / 2000f
+                delay(16L)
+            }
+        } else {
+            value = 0f
+        }
+    }
 
     val renderedBitmap = remember(themeId, rotation, boardRev, viewingPly, canvasSize) {
         val vw = Math.max(320, Math.min(1280, canvasSize.width))
@@ -147,6 +176,7 @@ fun OctiBoardCanvas(
                 awaitEachGesture {
                     var hadMultiTouch = false
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    currentOnUserInteraction()
                     val startPos = down.position
                     var lastPos = startPos
                     var totalMoveDist = 0f
@@ -265,12 +295,15 @@ fun OctiBoardCanvas(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onDoubleTap = { offset ->
+                        currentOnUserInteraction()
                         openZoomForOffset(offset, size)
                     },
                     onLongPress = { offset ->
+                        currentOnUserInteraction()
                         openZoomForOffset(offset, size)
                     },
                     onTap = { offset ->
+                        currentOnUserInteraction()
                         if (multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L || System.currentTimeMillis() - lastDragTimeMs < 250L) {
                             return@detectTapGestures
                         }
@@ -438,6 +471,78 @@ fun OctiBoardCanvas(
                 dstOffset = IntOffset.Zero,
                 dstSize = IntSize(size.width.toInt(), size.height.toInt())
             )
+            if (activeModifiedSquares.isNotEmpty() && !awaitingConfirm && !viewModel.composer.isAwaitingConfirmation) {
+                val scaleX = size.width / Math.max(1, currentRenderedBitmap.width).toFloat()
+                val scaleY = size.height / Math.max(1, currentRenderedBitmap.height).toFloat()
+                val geo = viewModel.geometry
+                val gw = geo.gridWidth()
+                val gh = geo.gridHeight()
+                val phase = lastMoveAnimPhase - floor(lastMoveAnimPhase)
+                val s0 = phase * 4.0f
+                val segLen = 1.2f
+                val orangeColor = Color(OctiBoardRenderer.LAST_MOVE_INDICATOR_COLOR.toLong() and 0xFFFFFFFFL)
+                for (sq in activeModifiedSquares) {
+                    if (sq.size < 2) continue
+                    val sx = sq[0]
+                    val sy = sq[1]
+                    if (sx < 1 || sx > gw || sy < 1 || sy > gh) continue
+                    val sqRect = geo.squareRect(sx, sy)
+                    if (sqRect.size < 4 || sqRect[2] <= 3.0 || sqRect[3] <= 3.0) continue
+                    val left = (sqRect[0] + 1.5).toFloat() * scaleX
+                    val top = (sqRect[1] + 1.5).toFloat() * scaleY
+                    val right = (sqRect[0] + sqRect[2] - 1.5).toFloat() * scaleX
+                    val bottom = (sqRect[1] + sqRect[3] - 1.5).toFloat() * scaleY
+                    val strokeW = Math.max(3.0f, (sqRect[2].toFloat() * scaleX) * 0.055f)
+                    var cur = s0
+                    val end = s0 + segLen
+                    while (cur < end - 1e-5f) {
+                        val edgeBase = floor(cur)
+                        val nextBoundary = Math.min(end, edgeBase + 1.0f)
+                        var edgeIdx = edgeBase.toInt() % 4
+                        if (edgeIdx < 0) edgeIdx += 4
+                        val t0 = cur - edgeBase
+                        val t1 = nextBoundary - edgeBase
+                        val x1: Float
+                        val y1: Float
+                        val x2: Float
+                        val y2: Float
+                        when (edgeIdx) {
+                            0 -> {
+                                x1 = left + t0 * (right - left)
+                                y1 = top
+                                x2 = left + t1 * (right - left)
+                                y2 = top
+                            }
+                            1 -> {
+                                x1 = right
+                                y1 = top + t0 * (bottom - top)
+                                x2 = right
+                                y2 = top + t1 * (bottom - top)
+                            }
+                            2 -> {
+                                x1 = right - t0 * (right - left)
+                                y1 = bottom
+                                x2 = right - t1 * (right - left)
+                                y2 = bottom
+                            }
+                            else -> {
+                                x1 = left
+                                y1 = bottom - t0 * (bottom - top)
+                                x2 = left
+                                y2 = bottom - t1 * (bottom - top)
+                            }
+                        }
+                        drawLine(
+                            color = orangeColor,
+                            start = Offset(x1, y1),
+                            end = Offset(x2, y2),
+                            strokeWidth = strokeW,
+                            cap = StrokeCap.Round
+                        )
+                        cur = nextBoundary
+                    }
+                }
+            }
         }
     }
 }

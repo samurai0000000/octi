@@ -710,11 +710,11 @@ void OctiGame::applyMoveOps(const std::vector<OctiMoveOp> &ops)
                     _players[_turn].capturedPods--;
                     sq.addPod(OctiPod(playerToPodType(_turn)));
                 } else {
-                    if (_players[_turn].freePods > 0) {
-                        _players[_turn].freePods--;
-                        sq.addPod(OctiPod(playerToPodType(_turn)));
-                    } else if (_players[_turn].capturedPods > 0) {
+                    if (_players[_turn].capturedPods > 0) {
                         _players[_turn].capturedPods--;
+                        sq.addPod(OctiPod(playerToPodType(_turn)));
+                    } else if (_players[_turn].freePods > 0) {
+                        _players[_turn].freePods--;
                         sq.addPod(OctiPod(playerToPodType(_turn)));
                     } else {
                         throw IllegalMoveException("no free or capturable pods available to place");
@@ -767,11 +767,11 @@ void OctiGame::applyMoveOps(const std::vector<OctiMoveOp> &ops)
                     _players[_turn].capturedPods--;
                     sq.addPod(OctiPod(playerToPodType(_turn)));
                 } else {
-                    if (_players[_turn].freePods > 0) {
-                        _players[_turn].freePods--;
-                        sq.addPod(OctiPod(playerToPodType(_turn)));
-                    } else if (_players[_turn].capturedPods > 0) {
+                    if (_players[_turn].capturedPods > 0) {
                         _players[_turn].capturedPods--;
+                        sq.addPod(OctiPod(playerToPodType(_turn)));
+                    } else if (_players[_turn].freePods > 0) {
+                        _players[_turn].freePods--;
                         sq.addPod(OctiPod(playerToPodType(_turn)));
                     } else {
                         throw IllegalMoveException("no free or capturable pods available");

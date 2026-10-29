@@ -3608,7 +3608,7 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         _placeReserveBtnRect = placeRect;
         _liberateBtnRect = libRect;
 
-        bool canPlace = (freePods > 0);
+        bool canPlace = (freePods > 0) || (!isFriendlyBase && canLiberateHere);
         p.setPen(QPen(canPlace ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
         p.setBrush(canPlace ? pal.podA.core : pal.panelCardBg.darker(130));
         p.drawRoundedRect(_placeReserveBtnRect, 6.0, 6.0);
@@ -3617,10 +3617,11 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         p.drawText(_placeReserveBtnRect, Qt::AlignCenter, "Place Reserve (+)");
 
         if (!_liberateBtnRect.isEmpty()) {
-            p.setPen(QPen(canLiberate ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
-            p.setBrush(canLiberate ? pal.accentBrass.darker(140) : pal.panelCardBg.darker(130));
+            bool canLibBtn = isFriendlyBase ? canLiberate : canLiberateHere;
+            p.setPen(QPen(canLibBtn ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
+            p.setBrush(canLibBtn ? pal.accentBrass.darker(140) : pal.panelCardBg.darker(130));
             p.drawRoundedRect(_liberateBtnRect, 6.0, 6.0);
-            p.setPen(canLiberate ? pal.prongSuperGold : pal.textSecondary);
+            p.setPen(canLibBtn ? pal.prongSuperGold : pal.textSecondary);
             p.setFont(QFont("SansSerif", fontSize, QFont::Bold));
             p.drawText(_liberateBtnRect, Qt::AlignCenter, "Liberate (*)");
         }

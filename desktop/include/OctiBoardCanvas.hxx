@@ -8,11 +8,13 @@
 #define OCTI_DESKTOP_OCTI_BOARD_CANVAS_HXX
 
 #include <utility>
+#include <vector>
 #include <QImage>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
+#include <QPoint>
 #include <QPointF>
 #include <QRectF>
 #include <QResizeEvent>
@@ -71,6 +73,11 @@ public:
     DragKind activeDragKind() const;
     void updateExternalReserveHover(const QPointF &canvasPos);
     bool finishExternalReserveDrop(const QPointF &canvasPos);
+
+    void setLastMoveModifiedSquares(const std::vector<QPoint> &squares);
+    void clearLastMoveModifiedSquares();
+    const std::vector<QPoint> &lastMoveModifiedSquares() const { return _lastMoveModifiedSquares; }
+    static std::vector<QPoint> extractModifiedSquares(const OctiMove &move, bool edgeless = false);
 
     // Deterministic programmatic drag simulation helpers for testing and HUD actions
     bool simulateDragFromReserveToSquare(DragKind kind, int targetX, int targetY);
@@ -166,6 +173,9 @@ private:
     double _liveRotationOffsetDeg;
     QPointF _pressRawPos;
     double _handRotateRefAngleDeg;
+
+    std::vector<QPoint> _lastMoveModifiedSquares;
+    qint64 _lastMoveAnimStartMs;
 };
 
 } // namespace octi

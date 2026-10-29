@@ -394,11 +394,14 @@ fun OctiMainAppContent(
                         val cols = viewModel.board.boardWidth
                         val rows = viewModel.board.boardHeight
                         val aspectRatio = cols.toFloat() / rows.toFloat()
+                        val lastMoveModifiedSquares by viewModel.lastMoveModifiedSquares.collectAsState()
                         OctiBoardCanvas(
                             viewModel = viewModel,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(aspectRatio)
+                                .aspectRatio(aspectRatio),
+                            lastMoveModifiedSquares = lastMoveModifiedSquares,
+                            onUserInteraction = { viewModel.clearLastMoveIndicators() }
                         )
                         OctiReserveHud(
                             viewModel = viewModel,
@@ -505,6 +508,7 @@ fun OctiMainAppContent(
                 themeId = themeId,
                 onDismiss = { viewModel.closeZoomedSquare() },
                 onBeginGuidedMove = { podIndex, moveAllStack ->
+                    viewModel.clearLastMoveIndicators()
                     val isOriginWithOther = viewModel.composer.isAwaitingConfirmation &&
                             viewModel.composer.hasOtherMovablePodAtOrigin() &&
                             viewModel.composer.guidedOriginSquare().let { it[0] == zx && it[1] == zy }
@@ -517,6 +521,7 @@ fun OctiMainAppContent(
                     }
                 },
                 onAddProng = { podIndex, dir, superProng ->
+                    viewModel.clearLastMoveIndicators()
                     if (viewModel.composer.isAwaitingConfirmation) {
                         viewModel.composer.cancelAndRollback()
                     }
@@ -528,6 +533,7 @@ fun OctiMainAppContent(
                     }
                 },
                 onRepositionProng = { podIndex, srcDir, dstDir ->
+                    viewModel.clearLastMoveIndicators()
                     if (viewModel.composer.isAwaitingConfirmation) {
                         viewModel.composer.cancelAndRollback()
                     }
@@ -539,6 +545,7 @@ fun OctiMainAppContent(
                     }
                 },
                 onPlaceReservePod = { liberate ->
+                    viewModel.clearLastMoveIndicators()
                     if (viewModel.composer.isAwaitingConfirmation) {
                         viewModel.composer.cancelAndRollback()
                     }
