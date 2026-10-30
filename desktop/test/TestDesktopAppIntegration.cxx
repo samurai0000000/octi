@@ -1671,6 +1671,190 @@ TEST(DesktopAppIntegrationTest, ExportMoveHistoryTextAndThinkingSliderDialog)
     std::remove(cfgPath.c_str());
 }
 
+TEST(DesktopAppIntegrationTest, JsonV3ExportOmitsExtendedTelemetry)
+{
+    std::string cfgPath = "/tmp/octi_export_json_v3_test.json";
+    std::remove(cfgPath.c_str());
+
+    OctiMainWindow win(nullptr, cfgPath, true);
+    win.setTelemetryConsentForTesting("share");
+
+    LocalGameConfig cfg;
+    cfg.playType = LocalPlayType::PASS_AND_PLAY;
+    cfg.mode = GAME_MODE_2;
+    win.startNewLocalGame(cfg);
+
+    win.board()->getGame()->move("33+a");
+    win.board()->getGame()->move("37+e");
+
+    std::string jsonStr = win.exportCurrentOctiTranscript();
+    CHECK_FALSE(jsonStr.empty());
+
+    Json j = Json::parse(jsonStr, nullptr, false);
+    CHECK_FALSE(j.is_discarded());
+    STRCMP_EQUAL("octi.transcript.v3", j.value("format", "").c_str());
+    CHECK_FALSE(j.contains("extended"));
+    if (j.contains("client") && j["client"].is_object()) {
+        CHECK_FALSE(j["client"].contains("extended"));
+    }
+
+    QString clip = win.copyExportedNotationToClipboard();
+    CHECK_TRUE(clip.contains("octi.transcript.v3"));
+    CHECK_FALSE(clip.contains("\"extended\""));
+
+    std::remove(cfgPath.c_str());
+}
+
+TEST(DesktopAppIntegrationTest, TelemetryConsentTriStatePersistenceAndDialogEscRejection)
+{
+    std::string cfgPath = "/tmp/octi_consent_persistence_test.json";
+    std::remove(cfgPath.c_str());
+
+    // 1. Initial defaults
+    {
+        ClientConfigStore store(cfgPath);
+        std::string err;
+        STRCMP_EQUAL("unset", store.preferences().telemetryConsent.c_str());
+        LONGS_EQUAL(0, store.preferences().telemetryConsentVersion);
+        CHECK_TRUE(store.preferences().installId.empty());
+
+        store.preferences().telemetryConsent = "share";
+        store.preferences().telemetryConsentVersion = ClientPreferences::CURRENT_TELEMETRY_CONSENT_VERSION;
+        store.resetInstallId();
+        CHECK_FALSE(store.preferences().installId.empty());
+        CHECK_TRUE(store.save(err));
+    }
+
+    // 2. Reload and verify
+    std::string id1;
+    {
+        ClientConfigStore store(cfgPath);
+        std::string err;
+        CHECK_TRUE(store.load(err));
+        STRCMP_EQUAL("share", store.preferences().telemetryConsent.c_str());
+        LONGS_EQUAL(ClientPreferences::CURRENT_TELEMETRY_CONSENT_VERSION, store.preferences().telemetryConsentVersion);
+        id1 = store.preferences().installId;
+        CHECK_FALSE(id1.empty());
+
+        // Reset ID
+        store.resetInstallId();
+        std::string id2 = store.preferences().installId;
+        CHECK_FALSE(id2.empty());
+        CHECK_TRUE(id1 != id2);
+    }
+
+    // 3. Test non-dismissible Esc behavior of OctiTelemetryConsentDialog
+    {
+        OctiTelemetryConsentDialog dlg;
+        CHECK_FALSE(dlg.userConsented());
+
+        QKeyEvent escKey(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+        QApplication::sendEvent(&dlg, &escKey);
+        LONGS_EQUAL(0, dlg.result());
+
+        dlg.reject();
+        LONGS_EQUAL(0, dlg.result());
+    }
+
+    std::remove(cfgPath.c_str());
+}
+
+TEST(DesktopAppIntegrationTest, AutomaticUploadOfCompletedBotGameLoopback)
+{
+    LiveServerEnv env;
+    std::string cfgPath = "/tmp/octi_upload_loopback_test.json";
+    std::remove(cfgPath.c_str());
+
+    auto netCli = OctiNetworkClient::createForLoopbackTest(env.port());
+    OctiMainWindow win(std::move(netCli), cfgPath, true);
+
+    LocalGameConfig cfg;
+    cfg.playType = LocalPlayType::VS_AI_BOT;
+    cfg.mode = GAME_MODE_2;
+    cfg.humanSeat = PLAYER_A;
+    cfg.botDifficulty = BotDifficulty::TACTICAL;
+    win.startNewLocalGame(cfg);
+
+    // 1. In-progress game is not uploaded
+    CHECK_FALSE(win.uploadCompletedBotGameIfEligible(true));
+
+    // Play a move so the match has valid plies (Human adds prong at (3,3), Bot replies automatically)
+    CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+    if (win.moveComposer()->isAwaitingConfirmation()) {
+        CHECK_TRUE(win.moveComposer()->commitStagedMove());
+    }
+    LONGS_EQUAL(2, win.vcrCurrentPly());
+
+    // 2. Unset consent holds the upload
+    win.setTelemetryConsentForTesting("unset");
+    win.resignCurrentGame();
+    CHECK_TRUE(win.board()->getGame()->isGameOver());
+    CHECK_FALSE(win.uploadCompletedBotGameIfEligible(true));
+
+    // 3. Setting consent to "share" triggers upload with extended telemetry
+    win.setTelemetryConsentForTesting("share");
+    CHECK_TRUE(win.uploadCompletedBotGameIfEligible(true));
+
+    ArchiveFilter f;
+    f.source = "client_upload";
+    int64_t total = 0;
+    std::vector<GameRecord> games;
+    CHECK_TRUE(env.store.listArchivedGames(f, games, &total));
+    LONGS_EQUAL(1, total);
+    CHECK_FALSE(games.empty());
+    STRCMP_EQUAL("client_upload", games[0].source.c_str());
+    STRCMP_EQUAL("RESIGNED", games[0].status.c_str());
+    STRCMP_EQUAL("B", games[0].winner.c_str());
+    CHECK_FALSE(games[0].installId.empty());
+
+    // 4. Delete install data endpoint
+    auto directClient = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto delRes = directClient->deleteInstallArchiveData(games[0].installId);
+    CHECK_TRUE_TEXT(delRes.ok, delRes.errorMessage.c_str());
+    LONGS_EQUAL(1, delRes.data);
+
+    std::vector<GameRecord> gamesAfter;
+    int64_t totalAfter = 0;
+    CHECK_TRUE(env.store.listArchivedGames(f, gamesAfter, &totalAfter));
+    LONGS_EQUAL(0, totalAfter);
+
+    // 5. Game finished with "decline" consent uploads Tier 0 only (omits extended telemetry)
+    win.startNewLocalGame(cfg);
+    CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+    if (win.moveComposer()->isAwaitingConfirmation()) {
+        CHECK_TRUE(win.moveComposer()->commitStagedMove());
+    }
+    LONGS_EQUAL(2, win.vcrCurrentPly());
+    win.setTelemetryConsentForTesting("unset");
+    win.resignCurrentGame();
+    win.setTelemetryConsentForTesting("decline");
+    CHECK_TRUE(win.uploadCompletedBotGameIfEligible(true));
+
+    std::vector<GameRecord> gamesDecline;
+    int64_t totalDecline = 0;
+    CHECK_TRUE(env.store.listArchivedGames(f, gamesDecline, &totalDecline));
+    LONGS_EQUAL(1, totalDecline);
+    STRCMP_EQUAL("", gamesDecline[0].installId.c_str());
+
+    // 6. Test asynchronous automatic upload when consent is already "share"
+    win.startNewLocalGame(cfg);
+    win.setTelemetryConsentForTesting("share");
+    CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(5, 3, 0, DIR_N, false));
+    if (win.moveComposer()->isAwaitingConfirmation()) {
+        CHECK_TRUE(win.moveComposer()->commitStagedMove());
+    }
+    win.resignCurrentGame();
+    // Resignation automatically triggered the background upload thread
+    win.waitForBackgroundUpload();
+
+    std::vector<GameRecord> gamesAsync;
+    int64_t totalAsync = 0;
+    CHECK_TRUE(env.store.listArchivedGames(f, gamesAsync, &totalAsync));
+    LONGS_EQUAL(2, totalAsync);
+
+    std::remove(cfgPath.c_str());
+}
+
 extern "C" const char *__lsan_default_suppressions()
 {
     return "leak:libqoffscreen.so\n";

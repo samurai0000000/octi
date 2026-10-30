@@ -7,6 +7,7 @@
 #ifndef OCTI_BOT_ENGINE_HXX
 #define OCTI_BOT_ENGINE_HXX
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -34,6 +35,8 @@ class OctiBotEngine {
 public:
     explicit OctiBotEngine(BotDifficulty difficulty = BotDifficulty::TACTICAL,
                            std::uint64_t rngSeed = 0x5EED2026ULL);
+    OctiBotEngine(const OctiBotEngine &other);
+    OctiBotEngine &operator=(const OctiBotEngine &other);
     ~OctiBotEngine();
 
     void setDifficulty(BotDifficulty d);
@@ -41,6 +44,10 @@ public:
 
     void setTimeBudgetMs(int maxTimeMs);
     int timeBudgetMs() const;
+
+    int liveDepthReached() const;
+    std::uint64_t liveNodesVisited() const;
+    int liveBestScore() const;
 
     std::string chooseMove(const OctiBoard &board,
                            BotSearchStats *outStats = nullptr);
@@ -80,6 +87,9 @@ private:
     bool _customTimeBudget;
     std::uint64_t _rngState;
     std::vector<TranspositionEntry> _tt;
+    std::atomic<int> _liveDepthReached{0};
+    std::atomic<std::uint64_t> _liveNodesVisited{0};
+    std::atomic<int> _liveBestScore{0};
 };
 
 } // namespace octi

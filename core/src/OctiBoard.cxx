@@ -8,6 +8,7 @@
 #include "OctiGame.hxx"
 #include <algorithm>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <sstream>
 
 namespace octi {
@@ -575,114 +576,153 @@ std::string OctiBoard::serializeGame() const
     return ss.str();
 }
 
+std::string OctiBoard::serializeJson(const OctiGameMetadata &meta) const
+{
+    return _game ? _game->serializeJson(meta) : "";
+}
+
+std::string OctiBoard::serializeJson() const
+{
+    return _game ? _game->serializeJson() : "";
+}
+
+std::string OctiBoard::exportCanonicalMovesText() const
+{
+    return _game ? _game->exportCanonicalMovesText() : "";
+}
+
+std::string OctiBoard::computeCanonicalGameId() const
+{
+    return _game ? _game->computeCanonicalGameId() : "";
+}
+
 void OctiBoard::deserializeGame(std::istream &in)
 {
-    std::string line;
+    nlohmann::json root;
+    try {
+        in >> root;
+    } catch (...) {
+        throw IllegalMoveSyntaxException("invalid JSON transcript");
+    }
+
+    if (!root.is_object() || root.value("format", "") != "octi.transcript.v3") {
+        throw IllegalMoveSyntaxException("unsupported transcript format; expected octi.transcript.v3");
+    }
+
+    std::string modeStr = root.value("mode", "2P");
     OctiGameMode mode = GAME_MODE_2;
-    OctiGameBases bases = GAME_BASES_3;
-    bool useSuper = false;
-    bool useEdgeless = false;
+    if (modeStr == "2P" || modeStr == "2" || modeStr == "1") {
+        mode = GAME_MODE_2;
+    } else if (modeStr == "4P" || modeStr == "4") {
+        mode = GAME_MODE_4;
+    } else if (modeStr == "OFK" || modeStr == "3") {
+        mode = GAME_MODE_OFK;
+    } else {
+        throw IllegalMoveSyntaxException("invalid mode: " + modeStr);
+    }
+
+    int basesInt = root.value("bases", 3);
+    OctiGameBases bases = (basesInt == 1) ? GAME_BASES_1 : GAME_BASES_3;
+
+    bool superProngs = root.value("superProngs", false);
+    bool edgeless = root.value("edgeless", false);
+
+    std::string startPlayerStr = root.value("startPlayer", "A");
     OctiPlayer startPlayer = PLAYER_A;
-    std::string statusStr = "IN_PROGRESS";
+    if (startPlayerStr == "A" || startPlayerStr == "1") startPlayer = PLAYER_A;
+    else if (startPlayerStr == "B" || startPlayerStr == "2") startPlayer = PLAYER_B;
+    else if (startPlayerStr == "C" || startPlayerStr == "3") startPlayer = PLAYER_C;
+    else if (startPlayerStr == "D" || startPlayerStr == "4") startPlayer = PLAYER_D;
+
+    std::string statusStr = root.value("status", "IN_PROGRESS");
+    std::string winnerStr = root.value("winner", "NONE");
     OctiPlayer winner = PLAYER_UNDEF;
-    std::vector<std::string> moveLines;
+    if (winnerStr == "A" || winnerStr == "1") winner = PLAYER_A;
+    else if (winnerStr == "B" || winnerStr == "2") winner = PLAYER_B;
+    else if (winnerStr == "C" || winnerStr == "3") winner = PLAYER_C;
+    else if (winnerStr == "D" || winnerStr == "4") winner = PLAYER_D;
 
-    bool inMoves = false;
+    OctiGameMetadata meta;
+    meta.gameId = root.value("gameId", "");
+    meta.source = root.value("source", "LOCAL");
+    meta.license = root.value("license", "");
+    meta.attribution = root.value("attribution", "");
+    meta.termination = root.value("termination", "");
+    meta.timeControl = root.value("timeControl", "untimed");
 
-    while (std::getline(in, line)) {
-        std::size_t start = 0;
-        while (start < line.size() && std::isspace(static_cast<unsigned char>(line[start]))) start++;
-        if (start == line.size()) continue;
-        std::size_t end = line.size();
-        while (end > start && std::isspace(static_cast<unsigned char>(line[end - 1]))) end--;
-        line = line.substr(start, end - start);
-
-        if (line.empty() || line[0] == ';' || line[0] == '#') {
-            continue;
-        }
-
-        if (inMoves) {
-            std::size_t bracePos = line.find('{');
-            if (bracePos != std::string::npos) {
-                line = line.substr(0, bracePos);
-                std::size_t e = line.size();
-                while (e > 0 && std::isspace(static_cast<unsigned char>(line[e - 1]))) e--;
-                line = line.substr(0, e);
-            }
-            std::size_t dotPos = line.find('.');
-            if (dotPos != std::string::npos && dotPos + 1 < line.size()) {
-                line = line.substr(dotPos + 1);
-                std::size_t s = 0;
-                while (s < line.size() && std::isspace(static_cast<unsigned char>(line[s]))) s++;
-                line = line.substr(s);
-                if (line.size() >= 2 && (line[0] >= 'A' && line[0] <= 'D') && (line[1] == ' ' || line[1] == ':')) {
-                    line = line.substr(2);
-                    std::size_t s2 = 0;
-                    while (s2 < line.size() && std::isspace(static_cast<unsigned char>(line[s2]))) s2++;
-                    line = line.substr(s2);
-                }
-            }
-            if (!line.empty()) {
-                moveLines.push_back(line);
-            }
-            continue;
-        }
-
-        std::size_t colonPos = line.find(':');
-        if (colonPos != std::string::npos) {
-            std::string key = line.substr(0, colonPos);
-            std::string val = line.substr(colonPos + 1);
-            auto trim = [](std::string s) {
-                std::size_t s_idx = 0;
-                while (s_idx < s.size() && std::isspace(static_cast<unsigned char>(s[s_idx]))) s_idx++;
-                if (s_idx == s.size()) return std::string("");
-                std::size_t e_idx = s.size();
-                while (e_idx > s_idx && std::isspace(static_cast<unsigned char>(s[e_idx - 1]))) e_idx--;
-                return s.substr(s_idx, e_idx - s_idx);
-            };
-            key = trim(key);
-            val = trim(val);
-
-            if (key == "GAME_MODE") {
-                if (val == "2" || val == "1") mode = GAME_MODE_2;
-                else if (val == "4") mode = GAME_MODE_4;
-                else if (val == "OFK" || val == "3") mode = GAME_MODE_OFK;
-            } else if (key == "GAME_BASES") {
-                bases = (val == "1") ? GAME_BASES_1 : GAME_BASES_3;
-            } else if (key == "USE_SUPER_PRONGS") {
-                useSuper = (val == "Yes" || val == "yes" || val == "1" || val == "true");
-            } else if (key == "USE_EDGELESS_BOARD") {
-                useEdgeless = (val == "Yes" || val == "yes" || val == "1" || val == "true");
-            } else if (key == "START_PLAYER") {
-                if (val == "A" || val == "1") startPlayer = PLAYER_A;
-                else if (val == "B" || val == "2") startPlayer = PLAYER_B;
-                else if (val == "C" || val == "3") startPlayer = PLAYER_C;
-                else if (val == "D" || val == "4") startPlayer = PLAYER_D;
-            } else if (key == "STATUS") {
-                statusStr = val;
-            } else if (key == "WINNER") {
-                if (val == "A" || val == "1") winner = PLAYER_A;
-                else if (val == "B" || val == "2") winner = PLAYER_B;
-                else if (val == "C" || val == "3") winner = PLAYER_C;
-                else if (val == "D" || val == "4") winner = PLAYER_D;
-                else winner = PLAYER_UNDEF;
-            } else if (key == "MOVES") {
-                inMoves = true;
-            }
+    if (root.contains("client") && root["client"].is_object()) {
+        const auto &clientObj = root["client"];
+        meta.appVersion = clientObj.value("appVersion", "");
+        meta.buildType = clientObj.value("buildType", "release");
+        meta.platform = clientObj.value("platform", "");
+        if (clientObj.contains("extended") && clientObj["extended"].is_object()) {
+            const auto &extObj = clientObj["extended"];
+            meta.extended.present = true;
+            meta.extended.startedAt = extObj.value("startedAt", 0LL);
+            meta.extended.endedAt = extObj.value("endedAt", 0LL);
+            meta.extended.utcOffsetMin = extObj.value("utcOffsetMin", 0);
+            meta.extended.locale = extObj.value("locale", "");
+            meta.extended.osVersion = extObj.value("osVersion", "");
+            meta.extended.installId = extObj.value("installId", "");
         }
     }
 
-    setGameMode(mode, useSuper, useEdgeless, bases);
+    if (root.contains("players") && root["players"].is_array()) {
+        for (const auto &pObj : root["players"]) {
+            if (!pObj.is_object()) continue;
+            OctiPlayerMetadata p;
+            p.seat = pObj.value("seat", 1);
+            std::string pStr = pObj.value("player", "A");
+            if (pStr == "A") p.player = PLAYER_A;
+            else if (pStr == "B") p.player = PLAYER_B;
+            else if (pStr == "C") p.player = PLAYER_C;
+            else if (pStr == "D") p.player = PLAYER_D;
+            p.type = pObj.value("type", "HUMAN");
+            p.handle = pObj.value("handle", "Player");
+            p.aiDifficulty = pObj.value("aiDifficulty", 0);
+            p.aiBudgetMs = pObj.value("aiBudgetMs", 0);
+            meta.players.push_back(p);
+        }
+    }
+
+    setGameMode(mode, superProngs, edgeless, bases);
     clear();
     _game->reset();
+    _game->setGameMetadata(meta);
 
     if (statusStr != "NOT_STARTED") {
         _game->start(startPlayer);
-        for (const auto &mStr : moveLines) {
-            _game->move(mStr);
+        if (root.contains("plies") && root["plies"].is_array()) {
+            for (const auto &plyObj : root["plies"]) {
+                if (!plyObj.is_object()) continue;
+                std::string moveStr = plyObj.value("move", "");
+                if (moveStr.empty()) {
+                    throw IllegalMoveSyntaxException("empty move string in ply");
+                }
+                _game->move(moveStr);
+
+                OctiPlyMetadata plyMeta;
+                plyMeta.elapsedMs = plyObj.value("elapsedMs", 0LL);
+                plyMeta.clockAfterMs = plyObj.value("clockAfterMs", -1LL);
+                if (plyObj.contains("ai") && plyObj["ai"].is_object()) {
+                    const auto &aiObj = plyObj["ai"];
+                    plyMeta.isAiMove = true;
+                    plyMeta.aiDifficulty = aiObj.value("difficulty", 0);
+                    plyMeta.aiBudgetMs = aiObj.value("budgetMs", 0);
+                    plyMeta.aiDepthReached = aiObj.value("depthReached", 0);
+                    plyMeta.aiNodesVisited = aiObj.value("nodesVisited", 0ULL);
+                    plyMeta.aiBestScore = aiObj.value("bestScore", 0);
+                }
+                _game->setLastPlyMetadata(plyMeta);
+            }
         }
+
         if (statusStr == "RESIGNED") {
-            _game->resign(winner == PLAYER_A ? PLAYER_B : PLAYER_A);
+            if (winner != PLAYER_UNDEF) {
+                _game->setResignedWinner(winner);
+            } else {
+                _game->resign(_game->getTurn());
+            }
         }
     }
 }

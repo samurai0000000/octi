@@ -6,9 +6,11 @@
 
 #include "OctiGame.hxx"
 #include "OctiBoard.hxx"
+#include "OctiCrypto.hxx"
 #include <algorithm>
 #include <cctype>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <set>
 #include <sstream>
 
@@ -262,6 +264,7 @@ void OctiGame::reset()
     _undoStack.clear();
     _redoStack.clear();
     _history.clear();
+    _plyMetadata.clear();
 
     _gameStarted = false;
     _gameOver = false;
@@ -486,6 +489,7 @@ void OctiGame::executeMoveInternal(const OctiMove &m, bool isRedo)
         _undoStack.push_back(snapBefore);
         _redoStack.clear();
         _history.push_back({snapBefore.turn, m});
+        _plyMetadata.push_back(OctiPlyMetadata{});
     }
 
     updateGameOverAndWinner();
@@ -1257,6 +1261,10 @@ void OctiGame::undo()
         currentSnap.lastMove = _history.back().second;
         _history.pop_back();
     }
+    if (!_plyMetadata.empty()) {
+        currentSnap.lastPlyMeta = _plyMetadata.back();
+        _plyMetadata.pop_back();
+    }
     OctiGameSnapshot prevSnap = _undoStack.back();
     _undoStack.pop_back();
     _redoStack.push_back(currentSnap);
@@ -1283,6 +1291,7 @@ void OctiGame::redo()
 
     if (targetSnap.lastPlayer != PLAYER_UNDEF && !targetSnap.lastMove.isEmpty()) {
         _history.push_back({targetSnap.lastPlayer, targetSnap.lastMove});
+        _plyMetadata.push_back(targetSnap.lastPlyMeta);
     }
 
     restoreSnapshot(targetSnap);
@@ -1735,83 +1744,274 @@ std::vector<OctiMove> OctiGame::generateLegalMoves() const
     return moves;
 }
 
-void OctiGame::serialize(std::ostream &out) const
+void OctiGame::setLastPlyMetadata(const OctiPlyMetadata &meta)
 {
-    out << "; OCTI Game Transcript v2.0\n";
+    while (_plyMetadata.size() < _history.size()) {
+        _plyMetadata.push_back(OctiPlyMetadata{});
+    }
+    if (!_plyMetadata.empty()) {
+        _plyMetadata.back() = meta;
+    }
+}
+
+void OctiGame::setPlyMetadata(std::size_t idx, const OctiPlyMetadata &meta)
+{
+    while (_plyMetadata.size() <= idx) {
+        _plyMetadata.push_back(OctiPlyMetadata{});
+    }
+    _plyMetadata[idx] = meta;
+}
+
+void OctiGame::setAllPlyMetadata(const std::vector<OctiPlyMetadata> &metas)
+{
+    _plyMetadata = metas;
+}
+
+OctiPlyMetadata OctiGame::getPlyMetadata(std::size_t idx) const
+{
+    if (idx < _plyMetadata.size()) {
+        return _plyMetadata[idx];
+    }
+    return OctiPlyMetadata{};
+}
+
+const std::vector<OctiPlyMetadata> &OctiGame::getAllPlyMetadata() const
+{
+    return _plyMetadata;
+}
+
+void OctiGame::setGameMetadata(const OctiGameMetadata &meta)
+{
+    _gameMetadata = meta;
+}
+
+const OctiGameMetadata &OctiGame::getGameMetadata() const
+{
+    return _gameMetadata;
+}
+
+void OctiGame::setResignedWinner(OctiPlayer winner)
+{
+    _gameResigned = true;
+    _gameOver = true;
+    _winner = winner;
+    notifyGameUpdated();
+    notifyUndoRedoStatusChanged();
+}
+
+std::string OctiGame::exportCanonicalMovesText() const
+{
+    std::ostringstream ss;
+    for (const auto &entry : _history) {
+        ss << entry.second.asString() << "\n";
+    }
+    return ss.str();
+}
+
+std::string OctiGame::computeCanonicalGameId() const
+{
+    std::ostringstream ss;
+    ss << "mode=";
+    if (_mode == GAME_MODE_2) ss << "2P";
+    else if (_mode == GAME_MODE_4) ss << "4P";
+    else ss << "OFK";
+    ss << ";bases=" << static_cast<int>(_bases);
+    ss << ";superProngs=" << (_useSuperProngs ? "1" : "0");
+    ss << ";edgeless=" << (_useEdgelessBoard ? "1" : "0");
+    ss << ";startPlayer=";
+    switch (_startPlayer) {
+    case PLAYER_A: ss << "A"; break;
+    case PLAYER_B: ss << "B"; break;
+    case PLAYER_C: ss << "C"; break;
+    case PLAYER_D: ss << "D"; break;
+    default: ss << "A"; break;
+    }
+    ss << ";moves=";
+    for (std::size_t i = 0; i < _history.size(); ++i) {
+        if (i > 0) ss << ",";
+        ss << _history[i].second.asString();
+    }
+    return OctiCrypto::sha256Hex(ss.str());
+}
+
+static inline std::string playerToString(OctiPlayer p)
+{
+    switch (p) {
+    case PLAYER_A: return "A";
+    case PLAYER_B: return "B";
+    case PLAYER_C: return "C";
+    case PLAYER_D: return "D";
+    default:       return "NONE";
+    }
+}
+
+std::string OctiGame::serializeJson(const OctiGameMetadata &meta) const
+{
+    nlohmann::json root;
+    root["format"] = "octi.transcript.v3";
+    root["gameId"] = meta.gameId.empty() ? computeCanonicalGameId() : meta.gameId;
+    root["source"] = meta.source.empty() ? "LOCAL" : meta.source;
+
+    if (!meta.license.empty()) {
+        root["license"] = meta.license;
+    }
+    if (!meta.attribution.empty()) {
+        root["attribution"] = meta.attribution;
+    }
+
+    if (!meta.appVersion.empty() || !meta.platform.empty() || meta.extended.present) {
+        nlohmann::json clientObj;
+        if (!meta.appVersion.empty()) {
+            clientObj["appVersion"] = meta.appVersion;
+        }
+        clientObj["buildType"] = meta.buildType.empty() ? "release" : meta.buildType;
+        if (!meta.platform.empty()) {
+            clientObj["platform"] = meta.platform;
+        }
+        if (meta.extended.present) {
+            nlohmann::json extObj;
+            extObj["startedAt"] = meta.extended.startedAt;
+            extObj["endedAt"] = meta.extended.endedAt;
+            extObj["utcOffsetMin"] = meta.extended.utcOffsetMin;
+            extObj["locale"] = meta.extended.locale;
+            extObj["osVersion"] = meta.extended.osVersion;
+            extObj["installId"] = meta.extended.installId;
+            clientObj["extended"] = extObj;
+        }
+        root["client"] = clientObj;
+    }
 
     if (_mode == GAME_MODE_2) {
-        out << "GAME_MODE: 2\n";
+        root["mode"] = "2P";
     } else if (_mode == GAME_MODE_4) {
-        out << "GAME_MODE: 4\n";
-    } else if (_mode == GAME_MODE_OFK) {
-        out << "GAME_MODE: OFK\n";
-    }
-
-    out << "GAME_BASES: " << static_cast<int>(_bases) << "\n";
-    out << "USE_SUPER_PRONGS: " << (_useSuperProngs ? "Yes" : "No") << "\n";
-    out << "USE_EDGELESS_BOARD: " << (_useEdgelessBoard ? "Yes" : "No") << "\n";
-
-    out << "START_PLAYER: ";
-    switch (_startPlayer) {
-    case PLAYER_A: out << "A\n"; break;
-    case PLAYER_B: out << "B\n"; break;
-    case PLAYER_C: out << "C\n"; break;
-    case PLAYER_D: out << "D\n"; break;
-    default:       out << "A\n"; break;
-    }
-
-    out << "STATUS: ";
-    if (!_gameStarted) {
-        out << "NOT_STARTED\n";
-    } else if (_gameResigned) {
-        out << "RESIGNED\n";
-    } else if (_gameOver) {
-        out << "GAME_OVER\n";
+        root["mode"] = "4P";
     } else {
-        out << "IN_PROGRESS\n";
+        root["mode"] = "OFK";
     }
 
-    out << "WINNER: ";
-    switch (_winner) {
-    case PLAYER_A: out << "A\n"; break;
-    case PLAYER_B: out << "B\n"; break;
-    case PLAYER_C: out << "C\n"; break;
-    case PLAYER_D: out << "D\n"; break;
-    default:       out << "NONE\n"; break;
+    root["bases"] = static_cast<int>(_bases);
+    root["superProngs"] = _useSuperProngs;
+    root["edgeless"] = _useEdgelessBoard;
+    root["startPlayer"] = playerToString(_startPlayer);
+
+    if (!meta.status.empty()) {
+        root["status"] = meta.status;
+    } else if (!_gameStarted) {
+        root["status"] = "NOT_STARTED";
+    } else if (_gameResigned) {
+        root["status"] = "RESIGNED";
+    } else if (_gameOver) {
+        root["status"] = "GAME_OVER";
+    } else {
+        root["status"] = "IN_PROGRESS";
     }
 
-    out << "MOVES: " << _history.size() << "\n";
-    for (const auto &entry : _history) {
-        out << entry.second.asString() << "\n";
+    root["winner"] = playerToString(_winner);
+
+    std::string term = meta.termination;
+    if (term.empty()) {
+        if (_gameResigned) {
+            term = "RESIGNATION";
+        } else if (_gameOver && _winner != PLAYER_UNDEF) {
+            term = "BASE_OCCUPATION";
+        }
     }
+    root["termination"] = term;
+    root["timeControl"] = meta.timeControl.empty() ? "untimed" : meta.timeControl;
+    root["finalFen"] = _board ? _board->toPositionString() : "";
+
+    // Players
+    nlohmann::json playersArr = nlohmann::json::array();
+    std::vector<OctiPlayerMetadata> players = meta.players;
+    if (players.empty()) {
+        int count = (_mode == GAME_MODE_4) ? 4 : 2;
+        for (int i = 0; i < count; ++i) {
+            OctiPlayerMetadata p;
+            p.seat = i + 1;
+            p.player = static_cast<OctiPlayer>(PLAYER_A + i);
+            p.type = "HUMAN";
+            p.handle = "Player";
+            players.push_back(p);
+        }
+    }
+    for (const auto &p : players) {
+        nlohmann::json pObj;
+        pObj["seat"] = p.seat;
+        pObj["player"] = playerToString(p.player);
+        pObj["type"] = p.type;
+        pObj["handle"] = p.handle;
+        if (p.type == "AI" || p.aiDifficulty > 0) {
+            pObj["aiDifficulty"] = p.aiDifficulty;
+            pObj["aiBudgetMs"] = p.aiBudgetMs;
+        }
+        playersArr.push_back(pObj);
+    }
+    root["players"] = playersArr;
+
+    std::string baseJson = root.dump(2);
+    std::ostringstream ss;
+    if (baseJson.size() >= 2 && baseJson.back() == '}') {
+        baseJson.pop_back();
+        while (!baseJson.empty() && std::isspace(static_cast<unsigned char>(baseJson.back()))) {
+            baseJson.pop_back();
+        }
+        ss << baseJson << ",\n  \"plies\": [";
+        for (std::size_t i = 0; i < _history.size(); ++i) {
+            if (i > 0) {
+                ss << ",";
+            }
+            ss << "\n    ";
+            nlohmann::json plyObj;
+            plyObj["ply"] = static_cast<int>(i + 1);
+            plyObj["player"] = playerToString(_history[i].first);
+            plyObj["move"] = _history[i].second.asString();
+            OctiPlyMetadata plyMeta = (i < _plyMetadata.size()) ? _plyMetadata[i] : OctiPlyMetadata{};
+            plyObj["elapsedMs"] = plyMeta.elapsedMs;
+            if (plyMeta.clockAfterMs >= 0) {
+                plyObj["clockAfterMs"] = plyMeta.clockAfterMs;
+            }
+            if (plyMeta.isAiMove) {
+                nlohmann::json aiObj;
+                aiObj["difficulty"] = plyMeta.aiDifficulty;
+                aiObj["budgetMs"] = plyMeta.aiBudgetMs;
+                aiObj["depthReached"] = plyMeta.aiDepthReached;
+                aiObj["nodesVisited"] = plyMeta.aiNodesVisited;
+                aiObj["bestScore"] = plyMeta.aiBestScore;
+                plyObj["ai"] = aiObj;
+            }
+            ss << plyObj.dump();
+        }
+        if (!_history.empty()) {
+            ss << "\n  ";
+        }
+        ss << "]\n}\n";
+    } else {
+        root["plies"] = nlohmann::json::array();
+        return root.dump(2) + "\n";
+    }
+
+    return ss.str();
+}
+
+std::string OctiGame::serializeJson() const
+{
+    return serializeJson(_gameMetadata);
+}
+
+void OctiGame::serialize(std::ostream &out) const
+{
+    out << serializeJson(_gameMetadata);
 }
 
 std::string OctiGame::serialize() const
 {
-    std::ostringstream ss;
-    serialize(ss);
-    return ss.str();
-}
-
-static inline std::string trimString(const std::string &s)
-{
-    std::size_t start = 0;
-    while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) {
-        start++;
-    }
-    if (start == s.size()) return "";
-    std::size_t end = s.size();
-    while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1]))) {
-        end--;
-    }
-    return s.substr(start, end - start);
+    return serializeJson(_gameMetadata);
 }
 
 void OctiGame::deserialize(std::istream &in)
 {
     if (_board) {
         _board->deserializeGame(in);
-        return;
     }
 }
 
@@ -1842,6 +2042,9 @@ OctiGameSnapshot OctiGame::captureSnapshot() const
     snap.gameOver = _gameOver;
     snap.gameResigned = _gameResigned;
     snap.searchPlyOffset = _searchPlyOffset;
+    if (!_searchMode) {
+        snap.plyMetadata = _plyMetadata;
+    }
     return snap;
 }
 
@@ -1869,6 +2072,9 @@ void OctiGame::restoreSnapshot(const OctiGameSnapshot &snap)
     _gameOver = snap.gameOver;
     _gameResigned = snap.gameResigned;
     _searchPlyOffset = snap.searchPlyOffset;
+    if (!_searchMode) {
+        _plyMetadata = snap.plyMetadata;
+    }
 }
 
 } // namespace octi

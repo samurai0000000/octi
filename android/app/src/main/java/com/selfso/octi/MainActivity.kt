@@ -69,6 +69,8 @@ import com.selfso.octi.ui.OctiAppViewModel
 import com.selfso.octi.ui.OctiBoardCanvas
 import com.selfso.octi.ui.OctiReserveHud
 import com.selfso.octi.ui.OctiSplashOverlay
+import com.selfso.octi.ui.OctiTelemetryConsentDialog
+import com.selfso.octi.ui.OctiTelemetrySettingsDialog
 import com.selfso.octi.ui.OctiThinkingDialog
 import com.selfso.octi.ui.PlyConfirmDialog
 import com.selfso.octi.ui.SsoSignInDialog
@@ -294,6 +296,13 @@ fun OctiMainAppContent(
                                     }
                                 )
                                 DropdownMenuItem(
+                                    text = { Text("Telemetry & Privacy") },
+                                    onClick = {
+                                        showTopMenu = false
+                                        viewModel.setShowTelemetrySettingsDialog(true)
+                                    }
+                                )
+                                DropdownMenuItem(
                                     text = { Text("About OCTI (Splash)") },
                                     onClick = {
                                         showTopMenu = false
@@ -453,10 +462,15 @@ fun OctiMainAppContent(
             if (isBotThinking) {
                 val botThinkingProgress by viewModel.botThinkingProgress.collectAsState()
                 val botThinkingRemainingSec by viewModel.botThinkingRemainingSec.collectAsState()
+                val botThinkingDepth by viewModel.botThinkingDepth.collectAsState()
+                val botThinkingNodes by viewModel.botThinkingNodes.collectAsState()
                 OctiThinkingDialog(
                     level = botDifficulty.level,
                     progress = botThinkingProgress,
-                    remainingSec = botThinkingRemainingSec
+                    remainingSec = botThinkingRemainingSec,
+                    depth = botThinkingDepth,
+                    nodes = botThinkingNodes,
+                    budgetMs = viewModel.botEngine.timeBudgetMs
                 )
             }
 
@@ -610,18 +624,47 @@ fun OctiMainAppContent(
                 movesText = movesText,
                 onCopy = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                    val clip = ClipData.newPlainText("OCTI Moves", movesText)
+                    val clip = ClipData.newPlainText("OCTI Transcript", movesText)
                     clipboard?.setPrimaryClip(clip)
                 },
                 onShare = {
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
+                        type = "application/json"
                         putExtra(Intent.EXTRA_TEXT, movesText)
                     }
-                    val shareIntent = Intent.createChooser(sendIntent, "Share OCTI Moves")
+                    val shareIntent = Intent.createChooser(sendIntent, "Share OCTI Transcript")
                     context.startActivity(shareIntent)
                 },
                 onDismiss = { viewModel.setShowExportMovesDialog(false) }
+            )
+        }
+
+        val showTelemetryConsentDialog by viewModel.showTelemetryConsentDialog.collectAsState()
+        val showTelemetrySettingsDialog by viewModel.showTelemetrySettingsDialog.collectAsState()
+        val telemetryConsent by viewModel.telemetryConsent.collectAsState()
+
+        if (showTelemetryConsentDialog) {
+            OctiTelemetryConsentDialog(
+                onChoice = { choice ->
+                    viewModel.setTelemetryConsentChoice(choice)
+                }
+            )
+        }
+
+        if (showTelemetrySettingsDialog) {
+            val installId = viewModel.configStore.preferences().installId ?: ""
+            OctiTelemetrySettingsDialog(
+                currentConsent = telemetryConsent,
+                installId = installId,
+                onToggleShare = { share ->
+                    viewModel.setTelemetryConsentChoice(if (share) "share" else "decline")
+                },
+                onResetInstallId = {
+                    viewModel.resetInstallIdAndRequestDeletion()
+                },
+                onDismiss = {
+                    viewModel.setShowTelemetrySettingsDialog(false)
+                }
             )
         }
     }

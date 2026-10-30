@@ -1053,14 +1053,14 @@ public class OctiBoardEngineTest {
         game.move("37");
 
         String minimal = board.serializeGame();
-        assertTrue(minimal.contains("MOVES: 4"));
+        assertTrue(minimal.contains("\"format\": \"octi.transcript.v3\"") || minimal.contains("\"format\":\"octi.transcript.v3\""));
 
         OctiBoard replayMinimal = new OctiBoard();
         replayMinimal.deserializeGame(minimal);
         assertEquals(4, replayMinimal.getGame().getNumMoves());
         assertEquals(board.toPositionString(), replayMinimal.toPositionString());
 
-        String annotated =
+        String legacyV2 =
                 "; OCTI Game Transcript v2.0\n"
                 + "GAME_MODE: 2\n"
                 + "GAME_BASES: 3\n"
@@ -1077,10 +1077,13 @@ public class OctiBoardEngineTest {
                 + "2. A 33 { clk=595200 emt=800 }\n"
                 + "2. B 37 { clk=596000 emt=1400 }\n";
 
-        OctiBoard replayAnnotated = new OctiBoard();
-        replayAnnotated.deserializeGame(annotated);
-        assertEquals(4, replayAnnotated.getGame().getNumMoves());
-        assertEquals(board.toPositionString(), replayAnnotated.toPositionString());
+        try {
+            OctiBoard replayLegacy = new OctiBoard();
+            replayLegacy.deserializeGame(legacyV2);
+            fail("Expected IllegalMoveSyntaxException for legacy v2.0 transcript text");
+        } catch (IllegalMoveSyntaxException expected) {
+            // Expected
+        }
     }
 
     // -------------------------------------------------------------------------

@@ -17,8 +17,11 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QIcon>
+#include <QMessageBox>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
+#include <QRadioButton>
 #include <QUrl>
 #include <QVBoxLayout>
 #include "OctiCore.hxx"
@@ -3017,6 +3020,11 @@ QImage OctiSplashDialog::renderSplashFrame(int width, int height, double progres
     p.drawText(cprtRect, Qt::AlignCenter,
                "Copyright (C) 2026, Charles Chiou. All Rights Reserved.");
 
+    QRectF ccRect(0, metaY + 84, w, 18);
+    p.setPen(QColor(160, 175, 195));
+    p.drawText(ccRect, Qt::AlignCenter,
+               "Public Game Data released under CC-BY 4.0 (selfso.com)");
+
     QFont hintFont("SansSerif", 9);
     p.setFont(hintFont);
     p.setPen(QColor(150, 160, 175));
@@ -4407,6 +4415,73 @@ void PlyConfirmDialog::keyPressEvent(QKeyEvent *event)
 /* OctiThinkingDialog (EMF-D02)                                         */
 /* ==================================================================== */
 
+class DownloadStyleProgressBar : public QWidget {
+public:
+    explicit DownloadStyleProgressBar(ThemeId theme, QWidget *parent = nullptr)
+        : QWidget(parent)
+        , _theme(theme)
+        , _progressVal(0)
+    {
+        setFixedHeight(26);
+    }
+
+    void setProgress(int val, const QString &text)
+    {
+        _progressVal = std::clamp(val, 0, 1000);
+        _text = text;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.setRenderHint(QPainter::TextAntialiasing, true);
+
+        const OctiPalette &pal = paletteForTheme(_theme);
+        QRectF trackRect = rect().adjusted(0.5, 0.5, -0.5, -0.5);
+
+        // Recessed track
+        p.setPen(QPen(pal.accentBrass.darker(160), 1.2));
+        p.setBrush(pal.panelCardBg.darker(150));
+        p.drawRoundedRect(trackRect, 6.0, 6.0);
+
+        // Filled portion
+        double pct = static_cast<double>(_progressVal) / 1000.0;
+        double fillW = trackRect.width() * pct;
+        if (fillW > 0.5) {
+            p.save();
+            QPainterPath clipPath;
+            clipPath.addRoundedRect(trackRect, 6.0, 6.0);
+            p.setClipPath(clipPath);
+
+            QRectF fillRect(trackRect.left(), trackRect.top(), fillW, trackRect.height());
+            QLinearGradient grad(trackRect.topLeft(), trackRect.topRight());
+            grad.setColorAt(0.0, pal.accentBrass);
+            grad.setColorAt(1.0, pal.prongSuperGold);
+            p.setPen(Qt::NoPen);
+            p.setBrush(grad);
+            p.drawRect(fillRect);
+            p.restore();
+        }
+
+        // High-contrast overlaid text
+        if (!_text.isEmpty()) {
+            p.setFont(QFont("SansSerif", 10, QFont::Bold));
+            p.setPen(QColor(0, 0, 0, 220));
+            p.drawText(trackRect.translated(1.0, 1.0), Qt::AlignCenter, _text);
+            p.setPen(QColor(255, 255, 255));
+            p.drawText(trackRect, Qt::AlignCenter, _text);
+        }
+    }
+
+private:
+    ThemeId _theme;
+    int _progressVal;
+    QString _text;
+};
+
 OctiThinkingDialog::OctiThinkingDialog(BotDifficulty difficulty,
                                        int budgetMs,
                                        ThemeId theme,
@@ -4414,8 +4489,10 @@ OctiThinkingDialog::OctiThinkingDialog(BotDifficulty difficulty,
     : QDialog(parent)
     , _difficulty(difficulty)
     , _budgetMs(std::max(10, budgetMs))
+    , _theme(theme)
     , _statusLabel(nullptr)
-    , _slider(nullptr)
+    , _progressBar(nullptr)
+    , _sliderVal(0)
 {
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setWindowModality(Qt::ApplicationModal);
@@ -4434,33 +4511,8 @@ OctiThinkingDialog::OctiThinkingDialog(BotDifficulty difficulty,
             .arg(pal.accentBrass.name()));
     layout->addWidget(_statusLabel);
 
-    _slider = new QSlider(Qt::Horizontal, this);
-    _slider->setRange(0, 1000);
-    _slider->setValue(0);
-    _slider->setEnabled(false);
-    _slider->setStyleSheet(
-        QString("QSlider::groove:horizontal {"
-                "  border: 1px solid %1;"
-                "  height: 8px;"
-                "  background: %2;"
-                "  border-radius: 4px;"
-                "}"
-                "QSlider::sub-page:horizontal {"
-                "  background: %3;"
-                "  border-radius: 4px;"
-                "}"
-                "QSlider::handle:horizontal {"
-                "  background: #ffffff;"
-                "  border: 1px solid %1;"
-                "  width: 14px;"
-                "  margin-top: -3px;"
-                "  margin-bottom: -3px;"
-                "  border-radius: 7px;"
-                "}")
-            .arg(pal.accentBrass.name())
-            .arg(pal.panelCardBg.name())
-            .arg(pal.accentBrass.name()));
-    layout->addWidget(_slider);
+    _progressBar = new DownloadStyleProgressBar(theme, this);
+    layout->addWidget(_progressBar);
 
     setStyleSheet(
         QString("QDialog {"
@@ -4471,14 +4523,18 @@ OctiThinkingDialog::OctiThinkingDialog(BotDifficulty difficulty,
             .arg(pal.panelCardBg.name())
             .arg(pal.accentBrass.name()));
 
-    resize(360, 72);
+    resize(380, 80);
     updateProgress(0, _budgetMs);
 }
 
 OctiThinkingDialog::~OctiThinkingDialog() = default;
 
-void OctiThinkingDialog::updateProgress(int elapsedMs, int totalBudgetMs)
+void OctiThinkingDialog::updateProgress(int elapsedMs, int totalBudgetMs,
+                                        int depthReached,
+                                        std::uint64_t nodesVisited,
+                                        int bestScore)
 {
+    Q_UNUSED(bestScore);
     int budget = std::max(1, totalBudgetMs > 0 ? totalBudgetMs : _budgetMs);
     int level = static_cast<int>(_difficulty);
     double remSec = std::max(0.0, static_cast<double>(budget - elapsedMs) / 1000.0);
@@ -4489,15 +4545,44 @@ void OctiThinkingDialog::updateProgress(int elapsedMs, int totalBudgetMs)
                 .arg(level)
                 .arg(remSec, 0, 'f', 1));
     }
-    if (_slider) {
-        int sVal = std::min(1000, std::max(0, static_cast<int>(elapsedMs * 1000ULL / budget)));
-        _slider->setValue(sVal);
+
+    _sliderVal = std::min(1000, std::max(0, static_cast<int>(elapsedMs * 1000ULL / budget)));
+
+    auto formatWithCommas = [](std::uint64_t n) -> QString {
+        QString s = QString::number(static_cast<qulonglong>(n));
+        int insertPos = s.length() - 3;
+        while (insertPos > 0) {
+            s.insert(insertPos, ',');
+            insertPos -= 3;
+        }
+        return s;
+    };
+
+    double elapsedSec = static_cast<double>(elapsedMs) / 1000.0;
+    double budgetSec = static_cast<double>(budget) / 1000.0;
+    int pct = std::min(100, std::max(0, static_cast<int>(elapsedMs * 100ULL / budget)));
+    QString nodesStr = formatWithCommas(nodesVisited);
+
+    _progressBarText = QString("Depth %1 \xE2\x80\xA2 %2 nodes \xE2\x80\xA2 %3s / %4s (%5%)")
+        .arg(depthReached)
+        .arg(nodesStr)
+        .arg(elapsedSec, 0, 'f', 1)
+        .arg(budgetSec, 0, 'f', 1)
+        .arg(pct);
+
+    if (_progressBar) {
+        static_cast<DownloadStyleProgressBar *>(_progressBar)->setProgress(_sliderVal, _progressBarText);
     }
 }
 
 int OctiThinkingDialog::sliderValue() const
 {
-    return _slider ? _slider->value() : 0;
+    return _sliderVal;
+}
+
+QString OctiThinkingDialog::progressBarText() const
+{
+    return _progressBarText;
 }
 
 QString OctiThinkingDialog::statusText() const
@@ -4766,6 +4851,251 @@ QIcon createMenuIcon(MenuIconKind kind, ThemeId theme)
     p.end();
     return QIcon(QPixmap::fromImage(img));
 }
+
+/* ==================================================================== */
+
+OctiTelemetryConsentDialog::OctiTelemetryConsentDialog(ThemeId theme, QWidget *parent)
+    : QDialog(parent)
+    , _consented(false)
+    , _choiceMade(false)
+    , _theme(theme)
+    , _sampleJsonEdit(nullptr)
+    , _togglePreviewBtn(nullptr)
+{
+    setWindowTitle("Public Training Telemetry & Privacy");
+    setModal(true);
+    setWindowFlags(windowFlags() & ~Qt::WindowCloseButtonHint);
+    resize(540, 430);
+    setStyleSheet(buildAppStyleSheet(theme));
+
+    const OctiPalette &pal = paletteForTheme(theme);
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(18, 18, 18, 18);
+    layout->setSpacing(12);
+
+    QLabel *hdr = new QLabel("Public Dataset & AI Training Notice", this);
+    hdr->setStyleSheet(QString("font-size: 15px; font-weight: bold; color: %1;")
+                           .arg(pal.accentBrass.name()));
+    layout->addWidget(hdr);
+
+    QLabel *body = new QLabel(
+        "Completed local AI matches are uploaded to help train and evaluate "
+        "autonomous bot models. In accordance with open research principles, all "
+        "archived match records are released under the Creative Commons "
+        "Attribution 4.0 International (CC-BY 4.0) license.\n\n"
+        "\xE2\x80\xA2 Tier 0 (Always Anonymous): Board moves, game outcome, AI difficulty, search depth, node counts, and client platform.\n"
+        "\xE2\x80\xA2 Tier 1 (Optional Extra Info): UTC timestamps, coarse locale/region, OS version, and an anonymous resettable Install ID for deletion requests.\n\n"
+        "No personal names, accounts, IP addresses, GPS coordinates, or hardware serial numbers are ever collected.",
+        this);
+    body->setWordWrap(true);
+    body->setStyleSheet("font-size: 11px; line-height: 1.4;");
+    layout->addWidget(body);
+
+    _togglePreviewBtn = new QPushButton("View what will be sent \xE2\x96\xBC", this);
+    _togglePreviewBtn->setCursor(Qt::PointingHandCursor);
+    layout->addWidget(_togglePreviewBtn);
+
+    _sampleJsonEdit = new QPlainTextEdit(this);
+    _sampleJsonEdit->setReadOnly(true);
+    QFont monoFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    monoFont.setPointSize(10);
+    _sampleJsonEdit->setFont(monoFont);
+    _sampleJsonEdit->setPlainText(
+        "{\n"
+        "  \"format\": \"octi.transcript.v3\",\n"
+        "  \"license\": \"CC-BY-4.0\",\n"
+        "  \"attribution\": \"Octi game data, Charles Chiou (selfso.com)\",\n"
+        "  \"client\": {\n"
+        "    \"appVersion\": \"" OCTI_VERSION_STRING "\",\n"
+        "    \"buildType\": \"release\",\n"
+        "    \"platform\": \"desktop-qt6\",\n"
+        "    \"extended\": {\n"
+        "      \"startedAt\": 1730246400,\n"
+        "      \"endedAt\": 1730246720,\n"
+        "      \"utcOffsetMin\": 480,\n"
+        "      \"locale\": \"en_US\",\n"
+        "      \"osVersion\": \"Linux 6.8\",\n"
+        "      \"installId\": \"3b24fc09-a7e8-42f0-9a25-c6bf2e987154\"\n"
+        "    }\n"
+        "  }\n"
+        "}");
+    _sampleJsonEdit->setFixedHeight(130);
+    _sampleJsonEdit->setVisible(false);
+    layout->addWidget(_sampleJsonEdit);
+
+    QObject::connect(_togglePreviewBtn, &QPushButton::clicked, this, [this]() {
+        bool show = !_sampleJsonEdit->isVisible();
+        _sampleJsonEdit->setVisible(show);
+        _togglePreviewBtn->setText(show ? "Hide preview \xE2\x96\xB2" : "View what will be sent \xE2\x96\xBC");
+        adjustSize();
+    });
+
+    QLabel *licenseLink = new QLabel(
+        "<a href=\"https://creativecommons.org/licenses/by/4.0/\" style=\"color: #FFB300;\">"
+        "Read CC-BY 4.0 License Terms (https://creativecommons.org/licenses/by/4.0/)</a>", this);
+    licenseLink->setOpenExternalLinks(true);
+    licenseLink->setStyleSheet("font-size: 10px;");
+    layout->addWidget(licenseLink);
+
+    layout->addStretch(1);
+
+    QHBoxLayout *btnRow = new QHBoxLayout();
+    QPushButton *declineBtn = new QPushButton("Don't share", this);
+    QPushButton *shareBtn = new QPushButton("Share extra info", this);
+    shareBtn->setDefault(true);
+    shareBtn->setStyleSheet(QString("background-color: %1; color: #000; font-weight: bold;")
+                                .arg(pal.accentBrass.name()));
+
+    btnRow->addWidget(declineBtn);
+    btnRow->addWidget(shareBtn);
+    layout->addLayout(btnRow);
+
+    QObject::connect(shareBtn, &QPushButton::clicked, this, [this]() {
+        _consented = true;
+        _choiceMade = true;
+        accept();
+    });
+    QObject::connect(declineBtn, &QPushButton::clicked, this, [this]() {
+        _consented = false;
+        _choiceMade = true;
+        reject();
+    });
+}
+
+OctiTelemetryConsentDialog::~OctiTelemetryConsentDialog() = default;
+
+void OctiTelemetryConsentDialog::reject()
+{
+    if (!_choiceMade) {
+        return;
+    }
+    QDialog::reject();
+}
+
+void OctiTelemetryConsentDialog::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Escape) {
+        event->ignore();
+        return;
+    }
+    QDialog::keyPressEvent(event);
+}
+
+void OctiTelemetryConsentDialog::closeEvent(QCloseEvent *event)
+{
+    if (!_choiceMade) {
+        event->ignore();
+        return;
+    }
+    QDialog::closeEvent(event);
+}
+
+/* ==================================================================== */
+
+OctiTelemetrySettingsDialog::OctiTelemetrySettingsDialog(ClientConfigStore *configStore,
+                                                       OctiNetworkClient *netClient,
+                                                       ThemeId theme,
+                                                       QWidget *parent)
+    : QDialog(parent)
+    , _configStore(configStore)
+    , _netClient(netClient)
+    , _theme(theme)
+    , _shareRadio(nullptr)
+    , _declineRadio(nullptr)
+    , _installIdLabel(nullptr)
+{
+    setWindowTitle("Telemetry & Privacy Preferences");
+    setModal(true);
+    resize(480, 320);
+    setStyleSheet(buildAppStyleSheet(theme));
+
+    const OctiPalette &pal = paletteForTheme(theme);
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(16, 16, 16, 16);
+    layout->setSpacing(10);
+
+    QLabel *title = new QLabel("Match Telemetry & CC-BY 4.0 Sharing", this);
+    title->setStyleSheet(QString("font-size: 14px; font-weight: bold; color: %1;").arg(pal.accentBrass.name()));
+    layout->addWidget(title);
+
+    QGroupBox *choiceBox = new QGroupBox("Telemetry Sharing Tier", this);
+    QVBoxLayout *choiceLayout = new QVBoxLayout(choiceBox);
+
+    _shareRadio = new QRadioButton("Share extra info (Tier 1: timestamps, locale, OS, anonymous Install ID)", choiceBox);
+    _declineRadio = new QRadioButton("Don't share extra info (Tier 0 only: anonymous game record)", choiceBox);
+
+    bool isShare = (_configStore && _configStore->preferences().telemetryConsent == "share");
+    _shareRadio->setChecked(isShare);
+    _declineRadio->setChecked(!isShare);
+
+    choiceLayout->addWidget(_shareRadio);
+    choiceLayout->addWidget(_declineRadio);
+    layout->addWidget(choiceBox);
+
+    QGroupBox *idBox = new QGroupBox("Anonymous Install ID", this);
+    QVBoxLayout *idLayout = new QVBoxLayout(idBox);
+    std::string curId = _configStore ? _configStore->preferences().installId : "";
+    _installIdLabel = new QLabel(curId.empty() ? "(none / declined)" : QString::fromStdString(curId), idBox);
+    _installIdLabel->setStyleSheet("font-family: monospace; font-size: 11px;");
+    idLayout->addWidget(_installIdLabel);
+
+    QHBoxLayout *idBtnRow = new QHBoxLayout();
+    QPushButton *resetBtn = new QPushButton("Reset Install ID", idBox);
+    QPushButton *deleteDataBtn = new QPushButton("Request Server Data Deletion", idBox);
+    idBtnRow->addWidget(resetBtn);
+    idBtnRow->addWidget(deleteDataBtn);
+    idLayout->addLayout(idBtnRow);
+    layout->addWidget(idBox);
+
+    QObject::connect(resetBtn, &QPushButton::clicked, this, [this]() {
+        if (_configStore) {
+            _configStore->resetInstallId();
+            _installIdLabel->setText(QString::fromStdString(_configStore->preferences().installId));
+        }
+    });
+
+    QObject::connect(deleteDataBtn, &QPushButton::clicked, this, [this]() {
+        if (_configStore && _netClient && !_configStore->preferences().installId.empty()) {
+            auto res = _netClient->deleteInstallArchiveData(_configStore->preferences().installId);
+            if (res.ok) {
+                QMessageBox::information(this, "Data Deleted",
+                    QString("Successfully deleted %1 uploaded games matching this Install ID.").arg(res.data));
+            } else {
+                QMessageBox::warning(this, "Deletion Failed",
+                    QString("Server returned error: %1").arg(QString::fromStdString(res.errorMessage)));
+            }
+        } else {
+            QMessageBox::information(this, "No Install ID", "No active Install ID to delete.");
+        }
+    });
+
+    layout->addStretch(1);
+
+    QHBoxLayout *btnRow = new QHBoxLayout();
+    QPushButton *saveBtn = new QPushButton("Save Preferences", this);
+    QPushButton *cancelBtn = new QPushButton("Cancel", this);
+    btnRow->addStretch(1);
+    btnRow->addWidget(cancelBtn);
+    btnRow->addWidget(saveBtn);
+    layout->addLayout(btnRow);
+
+    QObject::connect(saveBtn, &QPushButton::clicked, this, [this]() {
+        if (_configStore) {
+            ClientPreferences &prefs = _configStore->preferences();
+            prefs.telemetryConsent = _shareRadio->isChecked() ? "share" : "decline";
+            prefs.telemetryConsentVersion = ClientPreferences::CURRENT_TELEMETRY_CONSENT_VERSION;
+            if (prefs.telemetryConsent == "share" && prefs.installId.empty()) {
+                prefs.installId = ClientConfigStore::generateUuidV4();
+            }
+            std::string err;
+            _configStore->save(err);
+        }
+        accept();
+    });
+    QObject::connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+}
+
+OctiTelemetrySettingsDialog::~OctiTelemetrySettingsDialog() = default;
 
 } // namespace octi
 

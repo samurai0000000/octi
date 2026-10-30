@@ -25,6 +25,11 @@ struct ClientPreferences {
     bool confirmAllMoves = true;
     bool sfxMuted = false;
     int pttKey = 'V';
+
+    static constexpr int CURRENT_TELEMETRY_CONSENT_VERSION = 1;
+    std::string telemetryConsent = "unset"; // "unset" | "share" | "decline"
+    int telemetryConsentVersion = 0;
+    std::string installId; // random UUIDv4 generated when needed, resettable
 };
 
 /*
@@ -55,6 +60,9 @@ public:
 
     const ClientPreferences &preferences() const;
     ClientPreferences &preferences();
+
+    static std::string generateUuidV4();
+    void resetInstallId();
 
     static constexpr const char *serverHost() { return OCTI_SERVER_HOST; }
     static constexpr int serverPort() { return OCTI_SERVER_PORT; }

@@ -9,10 +9,13 @@
 #include <nlohmann/json.hpp>
 
 #include <cerrno>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <sstream>
 
 #ifndef _WIN32
@@ -259,6 +262,16 @@ bool ClientConfigStore::load(std::string &errorOut)
             parsed.pttKey = key;
         }
     }
+    if (doc.contains("telemetry_consent") && doc["telemetry_consent"].is_string()) {
+        parsed.telemetryConsent = doc["telemetry_consent"].get<std::string>();
+    }
+    if (doc.contains("telemetry_consent_version") &&
+        doc["telemetry_consent_version"].is_number_integer()) {
+        parsed.telemetryConsentVersion = doc["telemetry_consent_version"].get<int>();
+    }
+    if (doc.contains("install_id") && doc["install_id"].is_string()) {
+        parsed.installId = doc["install_id"].get<std::string>();
+    }
 
     _prefs = std::move(parsed);
     return true;
@@ -304,6 +317,9 @@ bool ClientConfigStore::save(std::string &errorOut) const
     doc["confirm_all_moves"] = _prefs.confirmAllMoves;
     doc["sfx_muted"] = _prefs.sfxMuted;
     doc["ptt_keycode"] = _prefs.pttKey;
+    doc["telemetry_consent"] = _prefs.telemetryConsent;
+    doc["telemetry_consent_version"] = _prefs.telemetryConsentVersion;
+    doc["install_id"] = _prefs.installId;
 
     std::string serialized = doc.dump(2) + "\n";
 
@@ -394,6 +410,36 @@ const ClientPreferences &ClientConfigStore::preferences() const
 ClientPreferences &ClientConfigStore::preferences()
 {
     return _prefs;
+}
+
+std::string ClientConfigStore::generateUuidV4()
+{
+    std::random_device rd;
+    std::mt19937_64 gen(rd());
+    std::uniform_int_distribution<std::uint64_t> dist;
+    std::uint64_t d1 = dist(gen);
+    std::uint64_t d2 = dist(gen);
+
+    // Set version 4 (bits 12-15 of time_hi_and_version to 0100)
+    d1 = (d1 & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;
+    // Set variant (bits 6-7 of clock_seq_hi_and_reserved to 10)
+    d2 = (d2 & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;
+
+    char buf[37];
+    std::snprintf(buf, sizeof(buf),
+                  "%08x-%04x-%04x-%02x%02x-%012llx",
+                  static_cast<unsigned int>(d1 >> 32),
+                  static_cast<unsigned int>((d1 >> 16) & 0xFFFF),
+                  static_cast<unsigned int>(d1 & 0xFFFF),
+                  static_cast<unsigned int>((d2 >> 56) & 0xFF),
+                  static_cast<unsigned int>((d2 >> 48) & 0xFF),
+                  static_cast<unsigned long long>(d2 & 0xFFFFFFFFFFFFULL));
+    return std::string(buf);
+}
+
+void ClientConfigStore::resetInstallId()
+{
+    _prefs.installId = generateUuidV4();
 }
 
 } // namespace octi

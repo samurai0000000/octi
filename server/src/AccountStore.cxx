@@ -6,6 +6,8 @@
 
 #include "AccountStore.hxx"
 
+#include <nlohmann/json.hpp>
+
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <sqlite3.h>
@@ -18,6 +20,7 @@
 #include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <set>
 #include <system_error>
 
 namespace octi {
@@ -97,12 +100,24 @@ const char kSchemaSql[] =
     " winner_seat INTEGER NOT NULL DEFAULT 0,"
     " termination TEXT NOT NULL,"
     " ply_count INTEGER NOT NULL,"
-    " octi_transcript TEXT NOT NULL,"
+    " octi_transcript TEXT NOT NULL DEFAULT '',"
+    " transcript_json TEXT NOT NULL DEFAULT '',"
     " final_fen TEXT NOT NULL,"
     " started_at INTEGER NOT NULL,"
-    " ended_at INTEGER NOT NULL"
+    " ended_at INTEGER NOT NULL,"
+    " source TEXT NOT NULL DEFAULT 'online',"
+    " uploaded_at INTEGER NOT NULL DEFAULT 0,"
+    " winner TEXT NOT NULL DEFAULT 'NONE',"
+    " status TEXT NOT NULL DEFAULT 'GAME_OVER',"
+    " ai_difficulty INTEGER NOT NULL DEFAULT 0,"
+    " app_version TEXT NOT NULL DEFAULT '',"
+    " platform TEXT NOT NULL DEFAULT '',"
+    " install_id TEXT NOT NULL DEFAULT ''"
     ");"
     "CREATE INDEX IF NOT EXISTS idx_games_ended_at ON games(ended_at DESC);"
+    "CREATE INDEX IF NOT EXISTS idx_games_uploaded_at ON games(uploaded_at DESC);"
+    "CREATE INDEX IF NOT EXISTS idx_games_source ON games(source);"
+    "CREATE INDEX IF NOT EXISTS idx_games_install_id ON games(install_id);"
     "CREATE INDEX IF NOT EXISTS idx_games_p1 ON games(p1_player_id);"
     "CREATE INDEX IF NOT EXISTS idx_games_p2 ON games(p2_player_id);"
     "CREATE TABLE IF NOT EXISTS live_rooms ("
@@ -126,10 +141,12 @@ const char kProfileCols[] =
     " COALESCE(p3_player_id, 0), COALESCE(p4_player_id, 0),"                   \
     " p1_handle, p2_handle, p3_handle, p4_handle, result, winner_seat,"        \
     " termination, ply_count, "
-#define OCTI_GAME_COLS_TAIL ", final_fen, started_at, ended_at"
+#define OCTI_GAME_COLS_TAIL                                                    \
+    ", final_fen, started_at, ended_at, source, uploaded_at, winner, status," \
+    " ai_difficulty, app_version, platform, install_id"
 
 const char kGameColsFull[] =
-    OCTI_GAME_COLS_HEAD "octi_transcript" OCTI_GAME_COLS_TAIL;
+    OCTI_GAME_COLS_HEAD "COALESCE(NULLIF(transcript_json, ''), octi_transcript) AS octi_transcript" OCTI_GAME_COLS_TAIL;
 const char kGameColsNoTranscript[] =
     OCTI_GAME_COLS_HEAD "'' AS octi_transcript" OCTI_GAME_COLS_TAIL;
 
@@ -162,6 +179,7 @@ public:
         return sqlite3_step(_stmt);
     }
     int64_t colInt(int c) const { return sqlite3_column_int64(_stmt, c); }
+    double colDouble(int c) const { return sqlite3_column_double(_stmt, c); }
     std::string colText(int c) const
     {
         const unsigned char *t = sqlite3_column_text(_stmt, c);
@@ -587,9 +605,9 @@ bool applyRatingsLocked(sqlite3 *db, const std::string &mode,
 
 bool validTermination(const std::string &t)
 {
-    return t == "BASE_CAPTURE" || t == "ELIMINATION" || t == "STALEMATE" ||
-           t == "RESIGNATION" || t == "TIMEOUT" || t == "DISCONNECT_FORFEIT" ||
-           t == "AGREED_DRAW";
+    return t == "BASE_CAPTURE" || t == "BASE_OCCUPATION" || t == "TOTAL_CAPTURE" ||
+           t == "ELIMINATION" || t == "STALEMATE" || t == "RESIGNATION" ||
+           t == "TIMEOUT" || t == "DISCONNECT_FORFEIT" || t == "AGREED_DRAW";
 }
 
 bool validResult(const std::string &r)
@@ -653,6 +671,20 @@ bool validateRecord(const GameRecord &g, std::string &error)
         error = "invalid player id";
     } else if (g.startedAt < 0 || g.endedAt < g.startedAt) {
         error = "invalid timestamps";
+    } else if (!g.source.empty() && g.source != "online" && g.source != "client_upload") {
+        error = "invalid source";
+    } else if (!g.winner.empty() && g.winner != "A" && g.winner != "B" && g.winner != "C" && g.winner != "D" && g.winner != "NONE") {
+        error = "invalid winner";
+    } else if (!g.status.empty() && g.status != "GAME_OVER" && g.status != "RESIGNED") {
+        error = "invalid status";
+    } else if (g.aiDifficulty < 0 || g.aiDifficulty > 5) {
+        error = "invalid ai difficulty";
+    } else if (g.appVersion.size() > 128 || hasControlChars(g.appVersion)) {
+        error = "invalid app version";
+    } else if (g.platform.size() > 128 || hasControlChars(g.platform)) {
+        error = "invalid platform";
+    } else if (g.installId.size() > 128 || hasControlChars(g.installId)) {
+        error = "invalid install id";
     } else {
         return true;
     }
@@ -688,9 +720,10 @@ ArchiveStatus archiveLocked(sqlite3 *db, const GameRecord &g,
                " edgeless, time_control, p1_player_id, p2_player_id,"
                " p3_player_id, p4_player_id, p1_handle, p2_handle, p3_handle,"
                " p4_handle, result, winner_seat, termination, ply_count,"
-               " octi_transcript, final_fen, started_at, ended_at)"
+               " octi_transcript, transcript_json, final_fen, started_at, ended_at,"
+               " source, uploaded_at, winner, status, ai_difficulty, app_version, platform, install_id)"
                " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,"
-               " ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)");
+               " ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31)");
     s.bindText(1, g.gameId);
     s.bindText(2, g.gameMode);
     s.bindInt(3, g.gameBases);
@@ -710,9 +743,18 @@ ArchiveStatus archiveLocked(sqlite3 *db, const GameRecord &g,
     s.bindText(17, g.termination);
     s.bindInt(18, g.plyCount);
     s.bindText(19, g.octiTranscript);
-    s.bindText(20, g.finalFen);
-    s.bindInt(21, g.startedAt);
-    s.bindInt(22, g.endedAt);
+    s.bindText(20, g.octiTranscript);
+    s.bindText(21, g.finalFen);
+    s.bindInt(22, g.startedAt);
+    s.bindInt(23, g.endedAt);
+    s.bindText(24, g.source.empty() ? "online" : g.source);
+    s.bindInt(25, g.uploadedAt);
+    s.bindText(26, g.winner.empty() ? "NONE" : g.winner);
+    s.bindText(27, g.status.empty() ? "GAME_OVER" : g.status);
+    s.bindInt(28, g.aiDifficulty);
+    s.bindText(29, g.appVersion);
+    s.bindText(30, g.platform);
+    s.bindText(31, g.installId);
     int rc = s.step();
     if (rc == SQLITE_DONE) {
         return ArchiveStatus::OK;
@@ -748,6 +790,14 @@ void readGame(const Stmt &s, GameRecord &g)
     g.finalFen = s.colText(19);
     g.startedAt = s.colInt(20);
     g.endedAt = s.colInt(21);
+    g.source = s.colText(22);
+    g.uploadedAt = s.colInt(23);
+    g.winner = s.colText(24);
+    g.status = s.colText(25);
+    g.aiDifficulty = static_cast<int>(s.colInt(26));
+    g.appVersion = s.colText(27);
+    g.platform = s.colText(28);
+    g.installId = s.colText(29);
 }
 
 bool tightenPermissions(const std::string &path, std::string &error)
@@ -923,6 +973,45 @@ bool AccountStore::openOrCreate(const std::string &path, std::string &error)
         ok = execSql(db, kSchemaSql);
         if (!ok) {
             error = sqlite3_errmsg(db);
+        } else {
+            std::set<std::string> cols;
+            Stmt info(db, "PRAGMA table_info(games)");
+            while (info.step() == SQLITE_ROW) {
+                cols.insert(info.colText(1));
+            }
+            if (!cols.empty()) {
+                if (cols.find("transcript_json") == cols.end()) {
+                    execSql(db, "ALTER TABLE games ADD COLUMN transcript_json TEXT NOT NULL DEFAULT '';");
+                    execSql(db, "UPDATE games SET transcript_json = octi_transcript WHERE transcript_json = '';");
+                }
+                if (cols.find("source") == cols.end()) {
+                    execSql(db, "ALTER TABLE games ADD COLUMN source TEXT NOT NULL DEFAULT 'online';");
+                }
+                if (cols.find("uploaded_at") == cols.end()) {
+                    execSql(db, "ALTER TABLE games ADD COLUMN uploaded_at INTEGER NOT NULL DEFAULT 0;");
+                }
+                if (cols.find("winner") == cols.end()) {
+                    execSql(db, "ALTER TABLE games ADD COLUMN winner TEXT NOT NULL DEFAULT 'NONE';");
+                }
+                if (cols.find("status") == cols.end()) {
+                    execSql(db, "ALTER TABLE games ADD COLUMN status TEXT NOT NULL DEFAULT 'GAME_OVER';");
+                }
+                if (cols.find("ai_difficulty") == cols.end()) {
+                    execSql(db, "ALTER TABLE games ADD COLUMN ai_difficulty INTEGER NOT NULL DEFAULT 0;");
+                }
+                if (cols.find("app_version") == cols.end()) {
+                    execSql(db, "ALTER TABLE games ADD COLUMN app_version TEXT NOT NULL DEFAULT '';");
+                }
+                if (cols.find("platform") == cols.end()) {
+                    execSql(db, "ALTER TABLE games ADD COLUMN platform TEXT NOT NULL DEFAULT '';");
+                }
+                if (cols.find("install_id") == cols.end()) {
+                    execSql(db, "ALTER TABLE games ADD COLUMN install_id TEXT NOT NULL DEFAULT '';");
+                }
+                execSql(db, "CREATE INDEX IF NOT EXISTS idx_games_uploaded_at ON games(uploaded_at DESC);");
+                execSql(db, "CREATE INDEX IF NOT EXISTS idx_games_source ON games(source);");
+                execSql(db, "CREATE INDEX IF NOT EXISTS idx_games_install_id ON games(install_id);");
+            }
         }
     }
     if (!ok) {
@@ -1565,6 +1654,14 @@ bool AccountStore::getArchivedGame(const std::string &gameId, GameRecord &out)
         return false;
     }
     readGame(s, out);
+    try {
+        auto j = nlohmann::json::parse(out.octiTranscript);
+        if (!j.is_object() || j.value("format", "") != "octi.transcript.v3") {
+            return false;
+        }
+    } catch (...) {
+        return false;
+    }
     return true;
 }
 
@@ -1575,12 +1672,20 @@ bool AccountStore::getArchivedTranscript(const std::string &gameId,
     if (!_db) {
         return false;
     }
-    Stmt s(_db, "SELECT octi_transcript FROM games WHERE game_id = ?1");
+    Stmt s(_db, "SELECT COALESCE(NULLIF(transcript_json, ''), octi_transcript) FROM games WHERE game_id = ?1");
     s.bindText(1, gameId);
     if (s.step() != SQLITE_ROW) {
         return false;
     }
     transcript = s.colText(0);
+    try {
+        auto j = nlohmann::json::parse(transcript);
+        if (!j.is_object() || j.value("format", "") != "octi.transcript.v3") {
+            return false;
+        }
+    } catch (...) {
+        return false;
+    }
     return true;
 }
 
@@ -1595,12 +1700,29 @@ bool AccountStore::listArchivedGames(const ArchiveFilter &filter,
     if (!filter.mode.empty() && !isValidMode(filter.mode)) {
         return false;
     }
+    if (!filter.source.empty() && filter.source != "online" && filter.source != "client_upload") {
+        return false;
+    }
+    if (!filter.status.empty() && filter.status != "GAME_OVER" && filter.status != "RESIGNED") {
+        return false;
+    }
+    if (!filter.winner.empty() && filter.winner != "A" && filter.winner != "B" && filter.winner != "C" && filter.winner != "D" && filter.winner != "NONE") {
+        return false;
+    }
+    if (filter.aiDifficulty < 0 || filter.aiDifficulty > 5) {
+        return false;
+    }
+    if (!filter.sortField.empty() && filter.sortField != "ended_at" && filter.sortField != "uploaded_at" && filter.sortField != "ply_count") {
+        return false;
+    }
+
+    int maxLimit = filter.maxLimit > 0 ? std::min(filter.maxLimit, kMaxExportLimit) : kMaxArchiveLimit;
     int limit = filter.limit;
     if (limit < 1) {
         limit = 1;
     }
-    if (limit > kMaxArchiveLimit) {
-        limit = kMaxArchiveLimit;
+    if (limit > maxLimit) {
+        limit = maxLimit;
     }
     int offset = filter.offset;
     if (offset < 0) {
@@ -1628,34 +1750,211 @@ bool AccountStore::listArchivedGames(const ArchiveFilter &filter,
         playerId = p.colInt(0);
     }
 
-    const char *where =
-        " WHERE (?1 = '' OR game_mode = ?1) AND (?2 = 0 OR p1_player_id = ?2"
-        " OR p2_player_id = ?2 OR p3_player_id = ?2 OR p4_player_id = ?2)";
+    // Build parameterized WHERE clause
+    std::string where = " WHERE 1=1";
+    std::vector<std::pair<int, std::string>> textParams;
+    std::vector<std::pair<int, int64_t>> intParams;
+    int paramIdx = 1;
+
+    if (!filter.mode.empty()) {
+        where += " AND game_mode = ?" + std::to_string(paramIdx);
+        textParams.push_back({paramIdx++, filter.mode});
+    }
+    if (playerId != 0) {
+        where += " AND (p1_player_id = ?" + std::to_string(paramIdx) +
+                 " OR p2_player_id = ?" + std::to_string(paramIdx) +
+                 " OR p3_player_id = ?" + std::to_string(paramIdx) +
+                 " OR p4_player_id = ?" + std::to_string(paramIdx) + ")";
+        intParams.push_back({paramIdx++, playerId});
+    }
+    if (!filter.source.empty()) {
+        where += " AND source = ?" + std::to_string(paramIdx);
+        textParams.push_back({paramIdx++, filter.source});
+    }
+    if (!filter.status.empty()) {
+        where += " AND status = ?" + std::to_string(paramIdx);
+        textParams.push_back({paramIdx++, filter.status});
+    }
+    if (!filter.winner.empty()) {
+        where += " AND winner = ?" + std::to_string(paramIdx);
+        textParams.push_back({paramIdx++, filter.winner});
+    }
+    if (filter.aiDifficulty > 0) {
+        where += " AND ai_difficulty = ?" + std::to_string(paramIdx);
+        intParams.push_back({paramIdx++, filter.aiDifficulty});
+    }
+    if (!filter.appVersion.empty()) {
+        where += " AND app_version = ?" + std::to_string(paramIdx);
+        textParams.push_back({paramIdx++, filter.appVersion});
+    }
+    if (!filter.platform.empty()) {
+        where += " AND platform = ?" + std::to_string(paramIdx);
+        textParams.push_back({paramIdx++, filter.platform});
+    }
+    if (filter.fromSec > 0) {
+        where += " AND COALESCE(NULLIF(uploaded_at, 0), ended_at) >= ?" + std::to_string(paramIdx);
+        intParams.push_back({paramIdx++, filter.fromSec});
+    }
+    if (filter.toSec > 0) {
+        where += " AND COALESCE(NULLIF(uploaded_at, 0), ended_at) <= ?" + std::to_string(paramIdx);
+        intParams.push_back({paramIdx++, filter.toSec});
+    }
+
     if (total) {
-        std::string csql = std::string("SELECT COUNT(*) FROM games") + where;
+        std::string csql = "SELECT COUNT(*) FROM games" + where;
         Stmt c(_db, csql.c_str());
-        c.bindText(1, filter.mode);
-        c.bindInt(2, playerId);
+        for (const auto &tp : textParams) {
+            c.bindText(tp.first, tp.second);
+        }
+        for (const auto &ip : intParams) {
+            c.bindInt(ip.first, ip.second);
+        }
         if (c.step() != SQLITE_ROW) {
             return false;
         }
         *total = c.colInt(0);
     }
-    std::string sql = std::string("SELECT ") + kGameColsNoTranscript +
-                      " FROM games" + where +
-                      " ORDER BY ended_at DESC, game_id DESC LIMIT ?3 OFFSET ?4";
+
+    std::string sortCol = "ended_at";
+    if (filter.sortField == "uploaded_at") {
+        sortCol = "COALESCE(NULLIF(uploaded_at, 0), ended_at)";
+    } else if (filter.sortField == "ply_count") {
+        sortCol = "ply_count";
+    }
+    std::string sortDir = filter.sortAsc ? "ASC" : "DESC";
+    std::string orderBy = " ORDER BY " + sortCol + " " + sortDir + ", game_id " + sortDir;
+
+    std::string sql = std::string("SELECT ") +
+                      (filter.includeTranscript ? kGameColsFull : kGameColsNoTranscript) +
+                      " FROM games" + where + orderBy +
+                      " LIMIT ?" + std::to_string(paramIdx) + " OFFSET ?" + std::to_string(paramIdx + 1);
     Stmt s(_db, sql.c_str());
-    s.bindText(1, filter.mode);
-    s.bindInt(2, playerId);
-    s.bindInt(3, limit);
-    s.bindInt(4, offset);
+    for (const auto &tp : textParams) {
+        s.bindText(tp.first, tp.second);
+    }
+    for (const auto &ip : intParams) {
+        s.bindInt(ip.first, ip.second);
+    }
+    s.bindInt(paramIdx, limit);
+    s.bindInt(paramIdx + 1, offset);
+
     int rc;
     while ((rc = s.step()) == SQLITE_ROW) {
         GameRecord g;
         readGame(s, g);
+        if (filter.includeTranscript) {
+            try {
+                auto j = nlohmann::json::parse(g.octiTranscript);
+                if (!j.is_object() || j.value("format", "") != "octi.transcript.v3") {
+                    continue;
+                }
+            } catch (...) {
+                continue;
+            }
+        }
         out.push_back(g);
     }
     return rc == SQLITE_DONE;
+}
+
+int AccountStore::deleteGamesByInstallId(const std::string &installId)
+{
+    if (installId.empty() || installId.size() > 64) {
+        return -1;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return -1;
+    }
+    Stmt s(_db, "DELETE FROM games WHERE install_id = ?1");
+    s.bindText(1, installId);
+    if (s.step() != SQLITE_DONE) {
+        return -1;
+    }
+    return static_cast<int>(sqlite3_changes(_db));
+}
+
+bool AccountStore::getArchiveStats(ArchiveStats &out)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    out = ArchiveStats{};
+
+    // 1. Total games and average plies
+    {
+        Stmt s(_db, "SELECT COUNT(*), COALESCE(AVG(ply_count), 0.0) FROM games");
+        if (s.step() == SQLITE_ROW) {
+            out.totalGames = s.colInt(0);
+            out.averagePlies = s.colDouble(1);
+        }
+    }
+
+    // 2. Counts by source
+    {
+        Stmt s(_db, "SELECT source, COUNT(*) FROM games GROUP BY source");
+        while (s.step() == SQLITE_ROW) {
+            out.bySource[s.colText(0)] = s.colInt(1);
+        }
+    }
+
+    // 3. Counts by mode
+    {
+        Stmt s(_db, "SELECT game_mode, COUNT(*) FROM games GROUP BY game_mode");
+        while (s.step() == SQLITE_ROW) {
+            out.byMode[s.colText(0)] = s.colInt(1);
+        }
+    }
+
+    // 4. Counts by aiDifficulty
+    {
+        Stmt s(_db, "SELECT ai_difficulty, COUNT(*) FROM games GROUP BY ai_difficulty");
+        while (s.step() == SQLITE_ROW) {
+            out.byAiDifficulty[static_cast<int>(s.colInt(0))] = s.colInt(1);
+        }
+    }
+
+    // 5. Counts by winner
+    {
+        Stmt s(_db, "SELECT winner, COUNT(*) FROM games GROUP BY winner");
+        while (s.step() == SQLITE_ROW) {
+            out.byWinner[s.colText(0)] = s.colInt(1);
+        }
+    }
+
+    // 6. AI win rates per difficulty (1..5)
+    {
+        Stmt s(_db, "SELECT ai_difficulty, COUNT(*),"
+                    " SUM(CASE WHEN (p2_handle LIKE 'AI%' AND winner = 'B') OR"
+                    "               (p1_handle LIKE 'AI%' AND winner = 'A')"
+                    "          THEN 1 ELSE 0 END)"
+                    " FROM games WHERE ai_difficulty > 0 GROUP BY ai_difficulty"
+                    " ORDER BY ai_difficulty ASC");
+        while (s.step() == SQLITE_ROW) {
+            AiDifficultyStats ds;
+            ds.difficulty = static_cast<int>(s.colInt(0));
+            ds.totalGames = s.colInt(1);
+            ds.aiWins = s.colInt(2);
+            ds.winRate = ds.totalGames > 0 ? static_cast<double>(ds.aiWins) / static_cast<double>(ds.totalGames) : 0.0;
+            out.aiDifficultyStats.push_back(ds);
+        }
+    }
+
+    // 7. Uploads by day
+    {
+        Stmt s(_db, "SELECT strftime('%Y-%m-%d', datetime(COALESCE(NULLIF(uploaded_at, 0), ended_at), 'unixepoch')) AS day,"
+                    " COUNT(*) FROM games WHERE COALESCE(NULLIF(uploaded_at, 0), ended_at) > 0"
+                    " GROUP BY day ORDER BY day ASC");
+        while (s.step() == SQLITE_ROW) {
+            std::string day = s.colText(0);
+            if (!day.empty()) {
+                out.uploadsByDay[day] = s.colInt(1);
+            }
+        }
+    }
+
+    return true;
 }
 
 bool AccountStore::upsertLiveRoom(const std::string &roomId,

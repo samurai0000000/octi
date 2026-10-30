@@ -169,6 +169,25 @@ public class OctiBotEngine {
     private final String[] ttBestMoves = new String[TT_SIZE];
     private final Object[] ttLocks = new Object[TT_LOCK_COUNT];
 
+    private final java.util.concurrent.atomic.AtomicInteger liveDepth =
+            new java.util.concurrent.atomic.AtomicInteger(0);
+    private final java.util.concurrent.atomic.AtomicLong liveNodes =
+            new java.util.concurrent.atomic.AtomicLong(0L);
+    private final java.util.concurrent.atomic.AtomicInteger liveScore =
+            new java.util.concurrent.atomic.AtomicInteger(0);
+
+    public int liveDepthReached() {
+        return liveDepth.get();
+    }
+
+    public long liveNodesVisited() {
+        return liveNodes.get();
+    }
+
+    public int liveBestScore() {
+        return liveScore.get();
+    }
+
     public OctiBotEngine() {
         this(BotDifficulty.TACTICAL, 0x5EED2026L);
     }
@@ -1298,6 +1317,9 @@ public class OctiBotEngine {
                         OctiPlayer currentPerspective,
                         SearchContext ctx) {
         ctx.nodesVisited++;
+        if ((ctx.nodesVisited & 63L) == 0L) {
+            liveNodes.set(ctx.nodesVisited);
+        }
         if ((ctx.nodesVisited & 31L) == 0L) {
             if ((ctx.stopSignal != null && ctx.stopSignal.get())
                     || steadyClockMs() >= ctx.deadlineMs
@@ -1446,6 +1468,10 @@ public class OctiBotEngine {
     }
 
     public String chooseMove(OctiBoard board, BotSearchStats outStats) {
+        liveDepth.set(0);
+        liveNodes.set(0L);
+        liveScore.set(0);
+
         if (outStats != null) {
             outStats.depthReached = 0;
             outStats.nodesVisited = 0;
@@ -1499,11 +1525,17 @@ public class OctiBotEngine {
         OctiGameSnapshot rootSnap = game.captureSnapshot();
         for (OctiMove mv : legalMoves) {
             ctx.nodesVisited++;
+            if ((ctx.nodesVisited & 63L) == 0L) {
+                liveNodes.set(ctx.nodesVisited);
+            }
             try {
                 game.move(mv);
                 if (game.isGameOver()
                         && OctiPlayer.areAllied(mode, game.getWinner(), rootTurn)) {
                     game.restoreSnapshot(rootSnap);
+                    liveDepth.set(1);
+                    liveNodes.set(ctx.nodesVisited);
+                    liveScore.set(WIN_SCORE);
                     if (outStats != null) {
                         outStats.depthReached = 1;
                         outStats.nodesVisited = ctx.nodesVisited;
@@ -1621,6 +1653,9 @@ public class OctiBotEngine {
                     bestMoveStr = iterBestMove;
                     bestScore = iterBestScore;
                     completedDepth = d;
+                    liveDepth.set(completedDepth);
+                    liveNodes.set(ctx.nodesVisited);
+                    liveScore.set(bestScore);
                     for (int idx = 1; idx < rootCandidates.size(); idx++) {
                         if (rootCandidates.get(idx).asString().equals(bestMoveStr)) {
                             OctiMove promoted = rootCandidates.remove(idx);
@@ -1647,6 +1682,10 @@ public class OctiBotEngine {
                 }
             }
         }
+
+        liveDepth.set(Math.max(1, completedDepth));
+        liveNodes.set(ctx.nodesVisited);
+        liveScore.set(bestScore);
 
         if (outStats != null) {
             outStats.depthReached = Math.max(1, completedDepth);

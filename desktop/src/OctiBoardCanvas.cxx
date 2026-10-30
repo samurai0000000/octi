@@ -89,6 +89,7 @@ OctiBoardCanvas::OctiBoardCanvas(QWidget *parent)
     });
 
     QObject::connect(&_animTimer, &QTimer::timeout, [this]() {
+        expireLastMoveModifiedSquaresIfElapsed();
         if (_animActive) {
             _animProgress += 0.12;
             if (_animProgress >= 1.0) {
@@ -96,7 +97,11 @@ OctiBoardCanvas::OctiBoardCanvas(QWidget *parent)
                 _animActive = false;
             }
         }
-        if (!_animActive && _lastMoveModifiedSquares.empty()) {
+        OctiBoard *displayBoard = _board;
+        bool gameActive = (displayBoard && displayBoard->getGame() &&
+                           displayBoard->getGame()->isGameStarted() &&
+                           !displayBoard->getGame()->isGameOver());
+        if (!_animActive && _lastMoveModifiedSquares.empty() && !gameActive) {
             _animTimer.stop();
         }
         update();
@@ -134,6 +139,14 @@ void OctiBoardCanvas::attachBoard(OctiBoard *board,
     _selectedPodIndex = -1;
     _dragKind = DragKind::NONE;
     syncGeometryToBoard(width(), height());
+    bool gameActive = (_board && _board->getGame() &&
+                       _board->getGame()->isGameStarted() &&
+                       !_board->getGame()->isGameOver());
+    if (gameActive || !_lastMoveModifiedSquares.empty() || _animActive) {
+        if (!_animTimer.isActive()) {
+            _animTimer.start(16);
+        }
+    }
     update();
 }
 
@@ -291,11 +304,15 @@ void OctiBoardCanvas::setLastMoveModifiedSquares(const std::vector<QPoint> &squa
 {
     _lastMoveModifiedSquares = squares;
     _lastMoveAnimStartMs = QDateTime::currentMSecsSinceEpoch();
-    if (!_lastMoveModifiedSquares.empty()) {
+    OctiBoard *displayBoard = _board;
+    bool gameActive = (displayBoard && displayBoard->getGame() &&
+                       displayBoard->getGame()->isGameStarted() &&
+                       !displayBoard->getGame()->isGameOver());
+    if (!_lastMoveModifiedSquares.empty() || gameActive || _animActive) {
         if (!_animTimer.isActive()) {
             _animTimer.start(16);
         }
-    } else if (!_animActive) {
+    } else {
         _animTimer.stop();
     }
     update();
@@ -307,10 +324,44 @@ void OctiBoardCanvas::clearLastMoveModifiedSquares()
         return;
     }
     _lastMoveModifiedSquares.clear();
-    if (!_animActive) {
+    OctiBoard *displayBoard = _board;
+    bool gameActive = (displayBoard && displayBoard->getGame() &&
+                       displayBoard->getGame()->isGameStarted() &&
+                       !displayBoard->getGame()->isGameOver());
+    if (!_animActive && !gameActive) {
         _animTimer.stop();
     }
     update();
+}
+
+bool OctiBoardCanvas::expireLastMoveModifiedSquaresIfElapsed(qint64 nowMs)
+{
+    if (nowMs < 0) {
+        nowMs = QDateTime::currentMSecsSinceEpoch();
+    }
+    if (!_lastMoveModifiedSquares.empty() && _lastMoveAnimStartMs > 0 &&
+        (nowMs - _lastMoveAnimStartMs) >= LAST_MOVE_INDICATOR_DURATION_MS) {
+        _lastMoveModifiedSquares.clear();
+        update();
+        return true;
+    }
+    return false;
+}
+
+int OctiBoardCanvas::activeTurnScreenEdge(OctiGameMode mode,
+                                         OctiPlayer activeTurn,
+                                         BoardRotation boardRotation)
+{
+    int seatDeg = static_cast<int>(OctiBoardGeometry::rotationForSeat(mode, activeTurn));
+    int viewDeg = static_cast<int>(boardRotation);
+    int relDeg = ((seatDeg - viewDeg) % 360 + 360) % 360;
+    switch (relDeg) {
+    case 0:   return 0; // Bottom
+    case 90:  return 1; // Left
+    case 180: return 2; // Top
+    case 270: return 3; // Right
+    default:  return 0;
+    }
 }
 
 std::vector<QPoint> OctiBoardCanvas::extractModifiedSquares(const OctiMove &move, bool edgeless)
@@ -1044,6 +1095,7 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
     }
 
     // 7b. Clockwise orange line segment indicator around squares modified during the last move
+    expireLastMoveModifiedSquaresIfElapsed();
     if (!_lastMoveModifiedSquares.empty() &&
         (!_composer || (!_composer->isAwaitingConfirmation() && !_composer->isGuidedMoveActive()))) {
         qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - _lastMoveAnimStartMs;
@@ -1089,6 +1141,81 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
                 cur = stepEnd;
             }
             p.drawPath(segPath);
+        }
+        p.restore();
+    }
+
+    // 7c. Continuous pink (#FF69B4) animated turn indicator along active player's board edge
+    if (displayBoard && displayBoard->getGame() &&
+        displayBoard->getGame()->isGameStarted() &&
+        !displayBoard->getGame()->isGameOver()) {
+        if (!_animTimer.isActive()) {
+            _animTimer.start(16);
+        }
+
+        OctiPlayer activeTurn = displayBoard->getGame()->getTurn();
+        int edge = activeTurnScreenEdge(displayBoard->getGame()->getMode(), activeTurn, _rotation);
+        QRectF gridRect = geom.gridInnerRect();
+        double inset = 1.0;
+        QPointF startPt, endPt;
+        switch (edge) {
+        case 0: // Bottom edge: left to right
+            startPt = QPointF(gridRect.left(), gridRect.bottom() - inset);
+            endPt   = QPointF(gridRect.right(), gridRect.bottom() - inset);
+            break;
+        case 1: // Left edge: top to bottom
+            startPt = QPointF(gridRect.left() + inset, gridRect.top());
+            endPt   = QPointF(gridRect.left() + inset, gridRect.bottom());
+            break;
+        case 2: // Top edge: right to left
+            startPt = QPointF(gridRect.right(), gridRect.top() + inset);
+            endPt   = QPointF(gridRect.left(), gridRect.top() + inset);
+            break;
+        case 3: // Right edge: bottom to top
+            startPt = QPointF(gridRect.right() - inset, gridRect.bottom());
+            endPt   = QPointF(gridRect.right() - inset, gridRect.top());
+            break;
+        default:
+            startPt = QPointF(gridRect.left(), gridRect.bottom() - inset);
+            endPt   = QPointF(gridRect.right(), gridRect.bottom() - inset);
+            break;
+        }
+
+        qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+        double phase = static_cast<double>((nowMs >= 0 ? nowMs : 0) % INDICATOR_CYCLE_PERIOD_MS) / static_cast<double>(INDICATOR_CYCLE_PERIOD_MS);
+        double segFrac = 0.30;
+        double t0 = phase;
+        double t1 = phase + segFrac;
+
+        auto lerpPt = [](const QPointF &a, const QPointF &b, double t) -> QPointF {
+            return QPointF(a.x() + t * (b.x() - a.x()), a.y() + t * (b.y() - a.y()));
+        };
+
+        double strokeW = std::max(3.5, geom.cellSize() * 0.065);
+        QColor pinkColor(255, 105, 180); // #FF69B4
+
+        p.save();
+        p.setRenderHint(QPainter::Antialiasing, true);
+
+        auto drawSubSegment = [&](double subStart, double subEnd) {
+            if (subStart >= subEnd) return;
+            QPointF p0 = lerpPt(startPt, endPt, subStart);
+            QPointF p1 = lerpPt(startPt, endPt, subEnd);
+            // Subtle outer glow
+            QPen glowPen(QColor(255, 105, 180, 70), strokeW + 3.0, Qt::SolidLine, Qt::RoundCap);
+            p.setPen(glowPen);
+            p.drawLine(p0, p1);
+            // Sharp core
+            QPen corePen(pinkColor, strokeW, Qt::SolidLine, Qt::RoundCap);
+            p.setPen(corePen);
+            p.drawLine(p0, p1);
+        };
+
+        if (t1 <= 1.0) {
+            drawSubSegment(t0, t1);
+        } else {
+            drawSubSegment(t0, 1.0);
+            drawSubSegment(0.0, t1 - 1.0);
         }
         p.restore();
     }

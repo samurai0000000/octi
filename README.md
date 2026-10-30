@@ -44,8 +44,22 @@ Full rules, board diagrams, and variant specifications are available in [`doc/oc
 
 | Path | Description |
 | :--- | :--- |
+| [`DATA_LICENSE.md`](DATA_LICENSE.md) | Creative Commons Attribution 4.0 International (CC-BY 4.0) license terms and attribution for game transcripts and archive data |
 | [`doc/octi_game_instructions.md`](doc/octi_game_instructions.md) | Complete OCTI rules, setup, four-player rules, player options, and illustrated board examples |
 | [`doc/octi_for_kids_instructions.md`](doc/octi_for_kids_instructions.md) | Official OCTI for Kids (6×7 board) rules, setup, and board diagram |
 | [`doc/octi_notation.md`](doc/octi_notation.md) | Formal EBNF ply move syntax, canonical normalization, `.octi` game transcript format, and OCTI-FEN position snapshot specification |
 | [`doc/octi_game_instructions.pdf`](doc/octi_game_instructions.pdf) | Searchable OCR-processed PDF of the original OCTI instruction leaflet |
 | [`doc/octi_game_instructions.png`](doc/octi_game_instructions.png) | High-resolution scan of the original OCTI instruction leaflet |
+
+---
+
+## Game Data License (CC-BY 4.0)
+
+All game transcripts, replay logs, and dataset exports published by the OCTI server and game archive are licensed under the **Creative Commons Attribution 4.0 International License (CC-BY 4.0)**.
+
+**Required Attribution:**
+```text
+Octi game data, Charles Chiou (selfso.com)
+```
+
+See [`DATA_LICENSE.md`](DATA_LICENSE.md) for full details on attribution and license terms when using archived game data for AI model training, game analysis, research, or redistribution.

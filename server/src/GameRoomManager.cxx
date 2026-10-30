@@ -2049,6 +2049,10 @@ RoomResult GameRoomManager::submitMove(const std::string &roomId,
         r->clockMs[seat] = ply.clockAfterMs;
     }
     r->plies.push_back(ply);
+    OctiPlyMetadata pmeta;
+    pmeta.elapsedMs = elapsed;
+    pmeta.clockAfterMs = r->config.timeControl.enabled ? ply.clockAfterMs : -1;
+    g->setLastPlyMetadata(pmeta);
     r->lastActivityMs = now;
 
     for (size_t i = 0; i < r->proposals.size();) {
@@ -2696,6 +2700,24 @@ bool GameRoomManager::archiveLocked(Room &r)
     rec.finalFen = r.board->toPositionString();
     rec.startedAt = r.startedAtSec;
     rec.endedAt = std::max(r.endedAtSec, r.startedAtSec);
+    rec.source = "online";
+    rec.uploadedAt = 0;
+    if (r.winnerSeat == 1) {
+        rec.winner = "A";
+    } else if (r.winnerSeat == 2) {
+        rec.winner = "B";
+    } else if (r.winnerSeat == 3) {
+        rec.winner = "C";
+    } else if (r.winnerSeat == 4) {
+        rec.winner = "D";
+    } else {
+        rec.winner = "NONE";
+    }
+    rec.status = (r.board->getGame() && r.board->getGame()->isGameResigned()) ? "RESIGNED" : "GAME_OVER";
+    rec.aiDifficulty = 0;
+    rec.appVersion = "";
+    rec.platform = "";
+    rec.installId = "";
 
     std::vector<RatingUpdate> updates;
     if (r.config.rated) {
@@ -2763,64 +2785,38 @@ bool GameRoomManager::archiveLocked(Room &r)
 
 std::string GameRoomManager::buildTranscriptLocked(const Room &r) const
 {
-    const OctiGame *g = r.board->getGame();
-    std::ostringstream out;
-    out << "; OCTI Game Transcript v2.0\n";
-    out << "GAME_MODE: ";
-    switch (r.config.mode) {
-    case GAME_MODE_4: out << "4"; break;
-    case GAME_MODE_OFK: out << "OFK"; break;
-    default: out << "2"; break;
+    if (!r.board) {
+        return "";
     }
-    out << "\n";
-    out << "GAME_BASES: " << static_cast<int>(g->getBases()) << "\n";
-    out << "USE_SUPER_PRONGS: " << (g->useSuperProngs() ? "Yes" : "No") << "\n";
-    out << "USE_EDGELESS_BOARD: " << (g->useEdgelessBoard() ? "Yes" : "No")
-        << "\n";
-    out << "START_PLAYER: A\n";
+    OctiGame *g = r.board->getGame();
+    if (!g) {
+        return "";
+    }
 
-    /*
-     * Timeout, resignation and disconnect forfeit all replay as RESIGNED
-     * (OctiBoard::deserializeGame re-applies them through resign()); an
-     * agreed draw has no engine state, so it stays GAME_OVER with no winner.
-     */
-    const char *status;
+    // Populate per-ply metadata on the game from r.plies
+    for (size_t i = 0; i < r.plies.size(); ++i) {
+        const Room::Ply &p = r.plies[i];
+        OctiPlyMetadata pmd;
+        pmd.elapsedMs = p.elapsedMs;
+        pmd.clockAfterMs = r.config.timeControl.enabled ? p.clockAfterMs : -1;
+        g->setPlyMetadata(i, pmd);
+    }
+
+    OctiGameMetadata meta;
+    meta.gameId = r.id;
+    meta.source = "ONLINE";
+    meta.timeControl = r.config.timeControl.enabled ? timeControlString(r.config.timeControl) : "untimed";
+
     if (!g->isGameStarted()) {
-        status = "NOT_STARTED";
+        meta.status = "NOT_STARTED";
     } else if (g->isGameResigned()) {
-        status = "RESIGNED";
+        meta.status = "RESIGNED";
     } else if (r.phase == RoomPhase::FINISHED) {
-        status = "GAME_OVER";
+        meta.status = "GAME_OVER";
     } else {
-        status = "IN_PROGRESS";
+        meta.status = "IN_PROGRESS";
     }
-    out << "STATUS: " << status << "\n";
 
-    const char *winner = "NONE";
-    if (r.phase == RoomPhase::FINISHED && r.winnerSeat != 0) {
-        switch (g->getWinner()) {
-        case PLAYER_A: winner = "A"; break;
-        case PLAYER_B: winner = "B"; break;
-        case PLAYER_C: winner = "C"; break;
-        case PLAYER_D: winner = "D"; break;
-        default: break;
-        }
-    }
-    out << "WINNER: " << winner << "\n";
-
-    out << "EVENT: OCTI Server " << cleanHeaderValue(r.id) << "\n";
-    out << "DATE: " << dateOf(r.startedAtSec != 0 ? r.startedAtSec : wallSec())
-        << "\n";
-    for (int s = 1; s <= r.seatCount; ++s) {
-        if (r.seatPlayer[s] != 0) {
-            out << "PLAYER_" << static_cast<char>('A' + s - 1) << ": "
-                << cleanHeaderValue(r.seatHandle[s]) << "\n";
-        }
-    }
-    if (r.config.timeControl.enabled) {
-        out << "TIME_CONTROL: " << timeControlString(r.config.timeControl)
-            << "\n";
-    }
     if (r.phase == RoomPhase::FINISHED) {
         std::string reason = r.termination;
         if (reason == "BASE_CAPTURE") {
@@ -2828,20 +2824,23 @@ std::string GameRoomManager::buildTranscriptLocked(const Room &r) const
         } else if (reason == "ELIMINATION") {
             reason = "TOTAL_CAPTURE";
         }
-        out << "RESULT_REASON: " << reason << "\n";
+        meta.termination = reason;
+    } else if (g->isGameResigned()) {
+        meta.termination = "RESIGNATION";
+    }
+    meta.license = "CC-BY-4.0";
+    meta.attribution = "Octi game data, Charles Chiou (selfso.com)";
+
+    for (int s = 1; s <= r.seatCount; ++s) {
+        OctiPlayerMetadata pmd;
+        pmd.seat = s;
+        pmd.player = static_cast<OctiPlayer>(PLAYER_A + s - 1);
+        pmd.type = "HUMAN";
+        pmd.handle = r.seatPlayer[s] != 0 ? cleanHeaderValue(r.seatHandle[s]) : ("Seat " + std::to_string(s));
+        meta.players.push_back(pmd);
     }
 
-    out << "MOVES: " << r.plies.size() << "\n";
-    for (size_t i = 0; i < r.plies.size(); ++i) {
-        const Room::Ply &p = r.plies[i];
-        out << (i / static_cast<size_t>(r.seatCount) + 1) << ". "
-            << static_cast<char>('A' + p.seat - 1) << " " << p.move;
-        if (r.config.timeControl.enabled) {
-            out << " { clk=" << p.clockAfterMs << " emt=" << p.elapsedMs << " }";
-        }
-        out << "\n";
-    }
-    return out.str();
+    return r.board->serializeJson(meta);
 }
 
 /* ------------------------------------------------------------------ */

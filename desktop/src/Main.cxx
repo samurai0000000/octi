@@ -42,6 +42,9 @@ int main(int argc, char *argv[])
     octi::OctiMainWindow window(
         nullptr, cliArgs.configPath, cliArgs.startOffline);
     window.show();
+    QTimer::singleShot(0, [&window]() {
+        window.checkPromptTelemetryConsentAtStartup();
+    });
     if (!cliArgs.startOffline) {
         QTimer::singleShot(0, [&window]() {
             window.checkForAppUpdates(false);

@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -156,6 +157,14 @@ struct GameRecord {
     std::string finalFen;
     int64_t startedAt = 0;
     int64_t endedAt = 0;
+    std::string source = "online";      // 'online' | 'client_upload'
+    int64_t uploadedAt = 0;             // server clock set on receipt
+    std::string winner = "NONE";        // 'A' | 'B' | 'C' | 'D' | 'NONE'
+    std::string status = "GAME_OVER";   // 'GAME_OVER' | 'RESIGNED'
+    int aiDifficulty = 0;               // 0 or 1..5
+    std::string appVersion;
+    std::string platform;
+    std::string installId;              // Internal only, never exposed in public responses
 };
 
 enum class ArchiveStatus {
@@ -168,8 +177,38 @@ enum class ArchiveStatus {
 struct ArchiveFilter {
     std::string mode;                   // empty = any
     std::string playerUuid;             // empty = any
-    int limit = 20;                     // clamped to 1..100
+    int limit = 20;                     // clamped to 1..maxLimit
     int offset = 0;                     // clamped to >= 0
+    std::string source;                 // "", "online", "client_upload"
+    std::string status;                 // "", "GAME_OVER", "RESIGNED"
+    std::string winner;                 // "", "A", "B", "C", "D", "NONE"
+    int aiDifficulty = 0;               // 0 = any, or 1..5
+    std::string appVersion;             // "" = any
+    std::string platform;               // "" = any
+    int64_t fromSec = 0;                // 0 = any
+    int64_t toSec = 0;                  // 0 = any
+    std::string sortField;              // "" / "ended_at" / "uploaded_at" / "ply_count"
+    bool sortAsc = false;               // default false = descending
+    int maxLimit = 100;                 // default kMaxArchiveLimit; up to kMaxExportLimit
+    bool includeTranscript = false;     // true for bulk export NDJSON
+};
+
+struct AiDifficultyStats {
+    int difficulty = 0;
+    int64_t totalGames = 0;
+    int64_t aiWins = 0;
+    double winRate = 0.0;
+};
+
+struct ArchiveStats {
+    int64_t totalGames = 0;
+    std::map<std::string, int64_t> bySource;        // "online", "client_upload"
+    std::map<std::string, int64_t> byMode;          // "2P", "4P", "OFK"
+    std::map<int, int64_t> byAiDifficulty;          // 0, 1..5
+    std::map<std::string, int64_t> byWinner;        // "A", "B", "C", "D", "NONE"
+    std::vector<AiDifficultyStats> aiDifficultyStats; // for difficulties 1..5
+    double averagePlies = 0.0;
+    std::map<std::string, int64_t> uploadsByDay;    // "YYYY-MM-DD" -> count
 };
 
 struct LiveRoomRow {
@@ -184,6 +223,7 @@ public:
     static constexpr int kMaxHandleLength = 24;
     static constexpr int kMaxLeaderboardLimit = 100;
     static constexpr int kMaxArchiveLimit = 100;
+    static constexpr int kMaxExportLimit = 5000;
     static constexpr int64_t kDefaultSessionTtlSec = 30LL * 24 * 3600;
 
     AccountStore();
@@ -256,6 +296,8 @@ public:
     bool listArchivedGames(const ArchiveFilter &filter,
                            std::vector<GameRecord> &out,
                            int64_t *total = nullptr);
+    int deleteGamesByInstallId(const std::string &installId);
+    bool getArchiveStats(ArchiveStats &out);
 
     /* Live room and lobby meta persistence. */
     bool upsertLiveRoom(const std::string &roomId, const std::string &stateJson,

@@ -7,6 +7,10 @@
 #include "OctiHttpServer.hxx"
 
 #include "OctiCore.hxx"
+#include "OctiBoard.hxx"
+#include "OctiCrypto.hxx"
+#include "OctiExceptions.hxx"
+#include "OctiGame.hxx"
 #include "WebUi.hxx"
 
 #include <httplib.h>
@@ -82,6 +86,17 @@ std::string upper(const std::string &s)
             std::toupper(static_cast<unsigned char>(out[i])));
     }
     return out;
+}
+
+bool hasControlChars(const std::string &s)
+{
+    for (size_t i = 0; i < s.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        if (c < 0x20 || c == 0x7f) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /* Digits only (no sign), at most 18 of them; values above max clamp. */
@@ -613,6 +628,8 @@ struct OctiHttpServer::Impl {
     bool verifyCredential(const Json &body, Response &res,
                           VerifiedClaims &claims);
     bool allowCredentialAttempt(const Request &req, Response &res);
+    bool allowUploadAttempt(const Request &req, Response &res);
+    bool allowExportAttempt(const Request &req, Response &res);
 
     /* json views needing the cache */
     Json seatJson(const SeatView &s);
@@ -663,9 +680,15 @@ struct OctiHttpServer::Impl {
     void handleMute(const Request &req, Response &res);
     void handleSettings(const Request &req, Response &res);
     void handleGameEvents(const Request &req, Response &res);
+    void handleArchiveUpload(const Request &req, Response &res);
+    void handleArchiveDeleteInstall(const Request &req, Response &res);
     void handleArchiveList(const Request &req, Response &res);
     void handleArchiveGet(const Request &req, Response &res);
+    void handleArchiveTranscript(const Request &req, Response &res);
     void handleArchiveOcti(const Request &req, Response &res);
+    void handleArchivePlies(const Request &req, Response &res);
+    void handleArchiveStats(const Request &req, Response &res);
+    void handleArchiveExport(const Request &req, Response &res);
     void handleIndex(const Request &req, Response &res);
 
     void finishRoom(Response &res, const RoomResult &r, Json body);
@@ -696,6 +719,8 @@ struct OctiHttpServer::Impl {
     };
     std::mutex rateMutex;
     std::map<std::string, RateWindow> credentialAttempts;
+    std::map<std::string, RateWindow> uploadAttempts;
+    std::map<std::string, RateWindow> exportAttempts;
 
     std::mutex cacheMutex;
     std::map<int64_t, std::string> uuidById;
@@ -1315,6 +1340,13 @@ Json OctiHttpServer::Impl::gameSummaryJson(const GameRecord &g)
     j["ply_count"] = g.plyCount;
     j["started_at"] = g.startedAt;
     j["ended_at"] = g.endedAt;
+    j["source"] = g.source;
+    j["uploaded_at"] = g.uploadedAt;
+    j["winner"] = g.winner;
+    j["status"] = g.status;
+    j["ai_difficulty"] = g.aiDifficulty;
+    j["app_version"] = g.appVersion;
+    j["platform"] = g.platform;
     return j;
 }
 
@@ -1592,6 +1624,100 @@ bool OctiHttpServer::Impl::allowCredentialAttempt(const Request &req,
     }
     sendError(res, 429, "RATE_LIMITED",
               "too many sign-in attempts; retry later");
+    res.set_header("Retry-After",
+                   std::to_string(std::max<int64_t>(1, (retryAfterMs + 999) / 1000)));
+    return false;
+}
+
+bool OctiHttpServer::Impl::allowUploadAttempt(const Request &req, Response &res)
+{
+    if (cfg.uploadRateLimitMax <= 0 || cfg.uploadRateLimitWindowMs <= 0) {
+        return true;
+    }
+    const size_t kMaxTrackedAddresses = 4096;
+    const int64_t now = steadyMs();
+    int64_t retryAfterMs = 0;
+    {
+        std::lock_guard<std::mutex> lock(rateMutex);
+        if (uploadAttempts.size() >= kMaxTrackedAddresses &&
+            uploadAttempts.find(req.remote_addr) == uploadAttempts.end()) {
+            for (auto it = uploadAttempts.begin(); it != uploadAttempts.end();) {
+                if (now - it->second.startMs >= cfg.uploadRateLimitWindowMs) {
+                    it = uploadAttempts.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+            if (uploadAttempts.size() >= kMaxTrackedAddresses) {
+                auto oldest = uploadAttempts.begin();
+                for (auto it = uploadAttempts.begin(); it != uploadAttempts.end(); ++it) {
+                    if (it->second.startMs < oldest->second.startMs) {
+                        oldest = it;
+                    }
+                }
+                uploadAttempts.erase(oldest);
+            }
+        }
+        RateWindow &w = uploadAttempts[req.remote_addr];
+        if (w.count == 0 || now - w.startMs >= cfg.uploadRateLimitWindowMs) {
+            w.startMs = now;
+            w.count = 0;
+        }
+        if (w.count < cfg.uploadRateLimitMax) {
+            ++w.count;
+            return true;
+        }
+        retryAfterMs = cfg.uploadRateLimitWindowMs - (now - w.startMs);
+    }
+    sendError(res, 429, "RATE_LIMITED",
+              "too many upload attempts; retry later");
+    res.set_header("Retry-After",
+                   std::to_string(std::max<int64_t>(1, (retryAfterMs + 999) / 1000)));
+    return false;
+}
+
+bool OctiHttpServer::Impl::allowExportAttempt(const Request &req, Response &res)
+{
+    if (cfg.exportRateLimitMax <= 0 || cfg.exportRateLimitWindowMs <= 0) {
+        return true;
+    }
+    const size_t kMaxTrackedAddresses = 4096;
+    const int64_t now = steadyMs();
+    int64_t retryAfterMs = 0;
+    {
+        std::lock_guard<std::mutex> lock(rateMutex);
+        if (exportAttempts.size() >= kMaxTrackedAddresses &&
+            exportAttempts.find(req.remote_addr) == exportAttempts.end()) {
+            for (auto it = exportAttempts.begin(); it != exportAttempts.end();) {
+                if (now - it->second.startMs >= cfg.exportRateLimitWindowMs) {
+                    it = exportAttempts.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+            if (exportAttempts.size() >= kMaxTrackedAddresses) {
+                auto oldest = exportAttempts.begin();
+                for (auto it = exportAttempts.begin(); it != exportAttempts.end(); ++it) {
+                    if (it->second.startMs < oldest->second.startMs) {
+                        oldest = it;
+                    }
+                }
+                exportAttempts.erase(oldest);
+            }
+        }
+        RateWindow &w = exportAttempts[req.remote_addr];
+        if (w.count == 0 || now - w.startMs >= cfg.exportRateLimitWindowMs) {
+            w.startMs = now;
+            w.count = 0;
+        }
+        if (w.count < cfg.exportRateLimitMax) {
+            ++w.count;
+            return true;
+        }
+        retryAfterMs = cfg.exportRateLimitWindowMs - (now - w.startMs);
+    }
+    sendError(res, 429, "RATE_LIMITED",
+              "too many export attempts; retry later");
     res.set_header("Retry-After",
                    std::to_string(std::max<int64_t>(1, (retryAfterMs + 999) / 1000)));
     return false;
@@ -2579,6 +2705,508 @@ void OctiHttpServer::Impl::handleGameEvents(const Request &req, Response &res)
 /* Handlers: archive and UI                                            */
 /* ------------------------------------------------------------------ */
 
+static std::string sanitizeTranscriptJson(const std::string &rawJsonStr, bool pretty = false)
+{
+    try {
+        auto j = nlohmann::json::parse(rawJsonStr);
+        if (j.is_object()) {
+            if (j.contains("client") && j["client"].is_object()) {
+                j["client"].erase("extended");
+            }
+            j["license"] = "CC-BY-4.0";
+            j["attribution"] = "Octi game data, Charles Chiou (selfso.com)";
+            return pretty ? j.dump(2) : j.dump();
+        }
+    } catch (...) {}
+    return rawJsonStr;
+}
+
+void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res)
+{
+    if (!allowUploadAttempt(req, res)) {
+        return;
+    }
+    if (req.body.empty() || req.body.size() > 65536) {
+        sendError(res, req.body.size() > 65536 ? 413 : 400,
+                  req.body.size() > 65536 ? "PAYLOAD_TOO_LARGE" : "MALFORMED_UPLOAD",
+                  "invalid payload size");
+        return;
+    }
+    Json root = Json::parse(req.body, nullptr, false);
+    if (root.is_discarded() || !root.is_object()) {
+        sendError(res, 400, "MALFORMED_UPLOAD", "invalid JSON payload");
+        return;
+    }
+
+    Json transcriptObj;
+    std::string clientId;
+
+    if (root.contains("transcript")) {
+        if (root["transcript"].is_string()) {
+            std::string tStr = root["transcript"].get<std::string>();
+            if (tStr.size() > 49152) {
+                sendError(res, 400, "MALFORMED_UPLOAD", "transcript exceeds 48 KiB");
+                return;
+            }
+            transcriptObj = Json::parse(tStr, nullptr, false);
+            if (transcriptObj.is_discarded() || !transcriptObj.is_object()) {
+                sendError(res, 400, "MALFORMED_UPLOAD", "transcript is not valid JSON");
+                return;
+            }
+        } else if (root["transcript"].is_object()) {
+            transcriptObj = root["transcript"];
+        } else {
+            sendError(res, 400, "MALFORMED_UPLOAD", "transcript must be a string or object");
+            return;
+        }
+        if (root.contains("clientId")) {
+            if (!root["clientId"].is_string() || root["clientId"].get<std::string>().size() > 128) {
+                sendError(res, 400, "MALFORMED_UPLOAD", "invalid clientId");
+                return;
+            }
+            clientId = root["clientId"].get<std::string>();
+        }
+    } else if (root.contains("format")) {
+        transcriptObj = root;
+    } else {
+        sendError(res, 400, "MALFORMED_UPLOAD", "missing transcript or format field");
+        return;
+    }
+
+    if (transcriptObj.dump().size() > 49152) {
+        sendError(res, 400, "MALFORMED_UPLOAD", "transcript exceeds 48 KiB");
+        return;
+    }
+
+    if (!transcriptObj.contains("format") || !transcriptObj["format"].is_string() ||
+        transcriptObj["format"].get<std::string>() != "octi.transcript.v3") {
+        sendError(res, 400, "MALFORMED_UPLOAD", "unsupported transcript format");
+        return;
+    }
+
+    if (!transcriptObj.contains("mode") || !transcriptObj["mode"].is_string()) {
+        sendError(res, 400, "MALFORMED_UPLOAD", "missing mode");
+        return;
+    }
+    std::string modeStr = transcriptObj["mode"].get<std::string>();
+    OctiGameMode mode;
+    if (modeStr == "2P") {
+        mode = GAME_MODE_2;
+    } else if (modeStr == "4P") {
+        mode = GAME_MODE_4;
+    } else if (modeStr == "OFK") {
+        mode = GAME_MODE_OFK;
+    } else {
+        sendError(res, 400, "MALFORMED_UPLOAD", "invalid mode");
+        return;
+    }
+
+    if (!transcriptObj.contains("bases") || !transcriptObj["bases"].is_number_integer()) {
+        sendError(res, 400, "MALFORMED_UPLOAD", "missing bases");
+        return;
+    }
+    int basesVal = transcriptObj["bases"].get<int>();
+    if (basesVal != 1 && basesVal != 3) {
+        sendError(res, 400, "MALFORMED_UPLOAD", "bases must be 1 or 3");
+        return;
+    }
+    OctiGameBases bases = (basesVal == 3) ? GAME_BASES_3 : GAME_BASES_1;
+
+    if (!transcriptObj.contains("superProngs") || !transcriptObj["superProngs"].is_boolean() ||
+        !transcriptObj.contains("edgeless") || !transcriptObj["edgeless"].is_boolean()) {
+        sendError(res, 400, "MALFORMED_UPLOAD", "missing superProngs or edgeless");
+        return;
+    }
+    bool superProngs = transcriptObj["superProngs"].get<bool>();
+    bool edgeless = transcriptObj["edgeless"].get<bool>();
+
+    std::string startPlayerStr = transcriptObj.value("startPlayer", "A");
+    OctiPlayer startPlayer = PLAYER_A;
+    if (startPlayerStr == "A") startPlayer = PLAYER_A;
+    else if (startPlayerStr == "B") startPlayer = PLAYER_B;
+    else if (startPlayerStr == "C") startPlayer = PLAYER_C;
+    else if (startPlayerStr == "D") startPlayer = PLAYER_D;
+    else {
+        sendError(res, 400, "MALFORMED_UPLOAD", "invalid startPlayer");
+        return;
+    }
+
+    if (!transcriptObj.contains("status") || !transcriptObj["status"].is_string()) {
+        sendError(res, 400, "MALFORMED_UPLOAD", "missing status");
+        return;
+    }
+    std::string statusStr = transcriptObj["status"].get<std::string>();
+    if (statusStr == "IN_PROGRESS" || statusStr == "NOT_STARTED") {
+        sendError(res, 400, "GAME_NOT_COMPLETED", "game is not completed");
+        return;
+    }
+    if (statusStr != "GAME_OVER" && statusStr != "RESIGNED") {
+        sendError(res, 400, "MALFORMED_UPLOAD", "invalid status");
+        return;
+    }
+
+    if (!transcriptObj.contains("winner") || !transcriptObj["winner"].is_string()) {
+        sendError(res, 400, "MALFORMED_UPLOAD", "missing winner");
+        return;
+    }
+    std::string claimedWinner = transcriptObj["winner"].get<std::string>();
+    if (claimedWinner != "A" && claimedWinner != "B" && claimedWinner != "C" &&
+        claimedWinner != "D" && claimedWinner != "NONE") {
+        sendError(res, 400, "MALFORMED_UPLOAD", "invalid winner value");
+        return;
+    }
+    if (!transcriptObj.contains("finalFen") || !transcriptObj["finalFen"].is_string()) {
+        sendError(res, 400, "MALFORMED_UPLOAD", "missing finalFen");
+        return;
+    }
+    std::string claimedFinalFen = transcriptObj["finalFen"].get<std::string>();
+
+    std::string appVersion;
+    std::string platform;
+    std::string installId = clientId;
+    if (transcriptObj.contains("client")) {
+        if (!transcriptObj["client"].is_object()) {
+            sendError(res, 400, "MALFORMED_UPLOAD", "client must be an object");
+            return;
+        }
+        const auto &clientObj = transcriptObj["client"];
+        for (auto it = clientObj.begin(); it != clientObj.end(); ++it) {
+            const std::string &k = it.key();
+            if (k != "appVersion" && k != "buildType" && k != "platform" && k != "extended") {
+                if (!it.value().is_string() && !it.value().is_number()) {
+                    sendError(res, 400, "MALFORMED_UPLOAD", "invalid unknown client field type");
+                    return;
+                }
+                if (it.value().is_string() && it.value().get<std::string>().size() > 128) {
+                    sendError(res, 400, "MALFORMED_UPLOAD", "oversized unknown client field");
+                    return;
+                }
+            }
+        }
+        if (clientObj.contains("appVersion")) {
+            if (!clientObj["appVersion"].is_string() || clientObj["appVersion"].get<std::string>().size() > 128) {
+                sendError(res, 400, "MALFORMED_UPLOAD", "invalid appVersion");
+                return;
+            }
+            appVersion = clientObj["appVersion"].get<std::string>();
+            if (hasControlChars(appVersion)) {
+                sendError(res, 400, "MALFORMED_UPLOAD", "appVersion has control chars");
+                return;
+            }
+        }
+        if (clientObj.contains("platform")) {
+            if (!clientObj["platform"].is_string() || clientObj["platform"].get<std::string>().size() > 128) {
+                sendError(res, 400, "MALFORMED_UPLOAD", "invalid platform");
+                return;
+            }
+            platform = clientObj["platform"].get<std::string>();
+            if (hasControlChars(platform)) {
+                sendError(res, 400, "MALFORMED_UPLOAD", "platform has control chars");
+                return;
+            }
+        }
+        if (clientObj.contains("extended")) {
+            if (!clientObj["extended"].is_object()) {
+                sendError(res, 400, "MALFORMED_UPLOAD", "extended must be an object");
+                return;
+            }
+            const auto &ext = clientObj["extended"];
+            for (auto it = ext.begin(); it != ext.end(); ++it) {
+                const std::string &k = it.key();
+                if (k != "startedAt" && k != "endedAt" && k != "utcOffsetMin" &&
+                    k != "locale" && k != "osVersion" && k != "installId") {
+                    if (it.value().is_string() && it.value().get<std::string>().size() > 128) {
+                        sendError(res, 400, "MALFORMED_UPLOAD", "oversized extended field");
+                        return;
+                    }
+                }
+            }
+            if (ext.contains("installId") && ext["installId"].is_string()) {
+                std::string iid = ext["installId"].get<std::string>();
+                if (iid.size() > 128 || hasControlChars(iid)) {
+                    sendError(res, 400, "MALFORMED_UPLOAD", "invalid installId in extended");
+                    return;
+                }
+                if (!iid.empty()) {
+                    installId = iid;
+                }
+            }
+            if (ext.contains("locale") && ext["locale"].is_string()) {
+                if (ext["locale"].get<std::string>().size() > 128 || hasControlChars(ext["locale"].get<std::string>())) {
+                    sendError(res, 400, "MALFORMED_UPLOAD", "invalid locale");
+                    return;
+                }
+            }
+            if (ext.contains("osVersion") && ext["osVersion"].is_string()) {
+                if (ext["osVersion"].get<std::string>().size() > 128 || hasControlChars(ext["osVersion"].get<std::string>())) {
+                    sendError(res, 400, "MALFORMED_UPLOAD", "invalid osVersion");
+                    return;
+                }
+            }
+        }
+    }
+
+    if (!transcriptObj.contains("plies") || !transcriptObj["plies"].is_array()) {
+        sendError(res, 400, "MALFORMED_UPLOAD", "missing plies array");
+        return;
+    }
+    const auto &plies = transcriptObj["plies"];
+    if (plies.empty()) {
+        sendError(res, 400, "GAME_NOT_COMPLETED", "plies array cannot be empty");
+        return;
+    }
+    if (plies.size() > 1000) {
+        sendError(res, 400, "MALFORMED_UPLOAD", "too many plies (> 1000)");
+        return;
+    }
+
+    int detectedAiDifficulty = 0;
+    std::string player1Handle = "Player";
+    std::string player2Handle = "Player";
+    if (transcriptObj.contains("players") && transcriptObj["players"].is_array()) {
+        for (const auto &p : transcriptObj["players"]) {
+            if (p.is_object()) {
+                int seat = p.value("seat", 0);
+                std::string h = p.value("handle", "");
+                if (seat == 1 && !h.empty()) player1Handle = h;
+                if (seat == 2 && !h.empty()) player2Handle = h;
+                if (p.value("type", "") == "AI" || p.value("aiDifficulty", 0) > 0) {
+                    int d = p.value("aiDifficulty", 0);
+                    if (d >= 1 && d <= 5) detectedAiDifficulty = d;
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < plies.size(); ++i) {
+        const auto &p = plies[i];
+        if (!p.is_object()) {
+            sendError(res, 400, "MALFORMED_UPLOAD", "ply must be an object");
+            return;
+        }
+        if (!p.contains("move") || !p["move"].is_string()) {
+            sendError(res, 400, "MALFORMED_UPLOAD", "ply missing move");
+            return;
+        }
+        std::string mv = p["move"].get<std::string>();
+        if (mv.empty() || mv.size() > 128 || hasControlChars(mv)) {
+            sendError(res, 400, "MALFORMED_UPLOAD", "invalid move in ply");
+            return;
+        }
+        if (p.contains("elapsedMs")) {
+            if (!p["elapsedMs"].is_number_integer() || p["elapsedMs"].get<int64_t>() < 0) {
+                sendError(res, 400, "MALFORMED_UPLOAD", "negative elapsedMs");
+                return;
+            }
+        }
+        if (p.contains("clockAfterMs")) {
+            if (!p["clockAfterMs"].is_number_integer() || p["clockAfterMs"].get<int64_t>() < -1) {
+                sendError(res, 400, "MALFORMED_UPLOAD", "invalid clockAfterMs");
+                return;
+            }
+        }
+        if (p.contains("ai") && p["ai"].is_object()) {
+            const auto &ai = p["ai"];
+            if (ai.contains("difficulty") && ai["difficulty"].is_number_integer()) {
+                int d = ai["difficulty"].get<int>();
+                if (d < 0 || d > 5) {
+                    sendError(res, 400, "MALFORMED_UPLOAD", "invalid ai difficulty");
+                    return;
+                }
+                if (d > 0 && detectedAiDifficulty == 0) detectedAiDifficulty = d;
+            }
+            if (ai.contains("budgetMs") && (!ai["budgetMs"].is_number_integer() || ai["budgetMs"].get<int64_t>() < 0)) {
+                sendError(res, 400, "MALFORMED_UPLOAD", "negative budgetMs");
+                return;
+            }
+            if (ai.contains("depthReached") && (!ai["depthReached"].is_number_integer() || ai["depthReached"].get<int>() < 0)) {
+                sendError(res, 400, "MALFORMED_UPLOAD", "negative depthReached");
+                return;
+            }
+            if (ai.contains("nodesVisited") && (!ai["nodesVisited"].is_number_unsigned() && !ai["nodesVisited"].is_number_integer())) {
+                sendError(res, 400, "MALFORMED_UPLOAD", "invalid nodesVisited");
+                return;
+            }
+        }
+    }
+
+    OctiBoard board(mode, superProngs, edgeless, bases);
+    OctiGame *game = board.getGame();
+    if (!game) {
+        sendError(res, 500, "INTERNAL_ERROR", "failed to initialize game engine");
+        return;
+    }
+    game->start(startPlayer);
+
+    for (size_t i = 0; i < plies.size(); ++i) {
+        const auto &p = plies[i];
+        std::string plyPlayerStr = p.value("player", "");
+        std::string mv = p["move"].get<std::string>();
+
+        OctiPlayer expectedPlayer = game->getTurn();
+        std::string expectedPlayerStr;
+        switch (expectedPlayer) {
+        case PLAYER_A: expectedPlayerStr = "A"; break;
+        case PLAYER_B: expectedPlayerStr = "B"; break;
+        case PLAYER_C: expectedPlayerStr = "C"; break;
+        case PLAYER_D: expectedPlayerStr = "D"; break;
+        default: break;
+        }
+        if (!plyPlayerStr.empty() && plyPlayerStr != expectedPlayerStr) {
+            sendError(res, 400, "INVALID_GAME", "turn mismatch in ply " + std::to_string(i + 1));
+            return;
+        }
+
+        try {
+            game->move(expectedPlayer, mv);
+        } catch (const IllegalMoveException &e) {
+            sendError(res, 400, "INVALID_GAME", std::string("illegal move: ") + e.what());
+            return;
+        } catch (const IllegalMoveSyntaxException &e) {
+            sendError(res, 400, "INVALID_GAME", std::string("illegal syntax: ") + e.what());
+            return;
+        } catch (const std::exception &e) {
+            sendError(res, 400, "INVALID_GAME", std::string("move failed: ") + e.what());
+            return;
+        }
+    }
+
+    if (statusStr == "GAME_OVER") {
+        if (!game->isGameOver()) {
+            sendError(res, 400, "GAME_NOT_COMPLETED", "game did not reach game over state");
+            return;
+        }
+    } else if (statusStr == "RESIGNED") {
+        if (claimedWinner == "NONE") {
+            sendError(res, 400, "INVALID_GAME", "resigned game must have a winner");
+            return;
+        }
+        OctiPlayer resWinner = PLAYER_UNDEF;
+        if (claimedWinner == "A") resWinner = PLAYER_A;
+        else if (claimedWinner == "B") resWinner = PLAYER_B;
+        else if (claimedWinner == "C") resWinner = PLAYER_C;
+        else if (claimedWinner == "D") resWinner = PLAYER_D;
+        game->setResignedWinner(resWinner);
+    }
+
+    std::string replayedWinner;
+    switch (game->getWinner()) {
+    case PLAYER_A: replayedWinner = "A"; break;
+    case PLAYER_B: replayedWinner = "B"; break;
+    case PLAYER_C: replayedWinner = "C"; break;
+    case PLAYER_D: replayedWinner = "D"; break;
+    default: replayedWinner = "NONE"; break;
+    }
+    if (claimedWinner != replayedWinner) {
+        sendError(res, 400, "INVALID_GAME", "claimed winner does not match replay");
+        return;
+    }
+
+    std::string replayedFinalFen = board.toPositionString();
+    if (claimedFinalFen != replayedFinalFen) {
+        sendError(res, 400, "INVALID_GAME", "claimed finalFen does not match replay");
+        return;
+    }
+
+    std::string serverGameId = board.computeCanonicalGameId();
+
+    Json storedJson = transcriptObj;
+    if (storedJson.contains("client") && storedJson["client"].is_object()) {
+        storedJson["client"].erase("extended");
+    }
+    storedJson["gameId"] = serverGameId;
+    storedJson["finalFen"] = replayedFinalFen;
+    storedJson["license"] = "CC-BY-4.0";
+    storedJson["attribution"] = "Octi game data, Charles Chiou (selfso.com)";
+    storedJson["winner"] = replayedWinner;
+    storedJson["status"] = statusStr;
+
+    int64_t now = epochSec();
+    int64_t startedAt = now;
+    int64_t endedAt = now;
+    if (transcriptObj.contains("client") && transcriptObj["client"].is_object() &&
+        transcriptObj["client"].contains("extended") && transcriptObj["client"]["extended"].is_object()) {
+        const auto &ext = transcriptObj["client"]["extended"];
+        if (ext.contains("startedAt") && ext["startedAt"].is_number_integer() && ext["startedAt"].get<int64_t>() > 0) {
+            startedAt = ext["startedAt"].get<int64_t>();
+        }
+        if (ext.contains("endedAt") && ext["endedAt"].is_number_integer() && ext["endedAt"].get<int64_t>() > 0) {
+            endedAt = ext["endedAt"].get<int64_t>();
+        }
+    }
+    if (endedAt < startedAt) {
+        endedAt = startedAt;
+    }
+
+    GameRecord rec;
+    rec.gameId = serverGameId;
+    rec.gameMode = modeStr;
+    rec.gameBases = basesVal;
+    rec.superProngs = superProngs;
+    rec.edgeless = edgeless;
+    rec.timeControl = transcriptObj.value("timeControl", "untimed");
+    rec.p1Handle = player1Handle;
+    rec.p2Handle = player2Handle;
+    rec.result = (replayedWinner == "A") ? "P1_WIN" : (replayedWinner == "B" ? "P2_WIN" : "DRAW");
+    if (replayedWinner == "A") rec.winnerSeat = 1;
+    else if (replayedWinner == "B") rec.winnerSeat = 2;
+    else if (replayedWinner == "C") rec.winnerSeat = 3;
+    else if (replayedWinner == "D") rec.winnerSeat = 4;
+    else rec.winnerSeat = 0;
+    rec.termination = transcriptObj.value("termination", statusStr == "RESIGNED" ? "RESIGNATION" : "BASE_OCCUPATION");
+    rec.plyCount = static_cast<int>(plies.size());
+    rec.octiTranscript = storedJson.dump();
+    rec.finalFen = replayedFinalFen;
+    rec.startedAt = startedAt;
+    rec.endedAt = endedAt;
+    rec.source = "client_upload";
+    rec.uploadedAt = now;
+    rec.winner = replayedWinner;
+    rec.status = statusStr;
+    rec.aiDifficulty = detectedAiDifficulty;
+    rec.appVersion = appVersion;
+    rec.platform = platform;
+    rec.installId = installId;
+
+    std::string archiveErr;
+    ArchiveStatus st = store.archiveGame(rec, archiveErr);
+    if (st == ArchiveStatus::DUPLICATE_ID) {
+        sendError(res, 409, "DUPLICATE_ID", "game already archived");
+        return;
+    }
+    if (st != ArchiveStatus::OK) {
+        sendError(res, 500, "INTERNAL_ERROR", "archive failed: " + archiveErr);
+        return;
+    }
+
+    Json resp;
+    resp["ok"] = true;
+    resp["game_id"] = rec.gameId;
+    resp["ply_count"] = rec.plyCount;
+    sendJson(res, 200, resp);
+}
+
+void OctiHttpServer::Impl::handleArchiveDeleteInstall(const Request &req, Response &res)
+{
+    std::string installId;
+    if (!pathId(req, "installId", res, installId)) {
+        return;
+    }
+    if (installId.empty() || installId.size() > 64 || !isSafeId(installId)) {
+        sendError(res, 400, "INVALID_ARGUMENT", "invalid installId");
+        return;
+    }
+    int deleted = store.deleteGamesByInstallId(installId);
+    if (deleted < 0) {
+        sendError(res, 500, "INTERNAL_ERROR", "failed to delete games");
+        return;
+    }
+    Json j;
+    j["ok"] = true;
+    j["deleted"] = deleted;
+    sendJson(res, 200, j);
+}
+
 void OctiHttpServer::Impl::handleArchiveList(const Request &req,
                                              Response &res)
 {
@@ -2600,6 +3228,103 @@ void OctiHttpServer::Impl::handleArchiveList(const Request &req,
             return;
         }
     }
+    if (req.has_param("source")) {
+        std::string src = lower(req.get_param_value("source"));
+        if (src != "online" && src != "client_upload") {
+            sendError(res, 400, "INVALID_ARGUMENT", "source must be online or client_upload");
+            return;
+        }
+        f.source = src;
+    }
+    if (req.has_param("status")) {
+        std::string st = upper(req.get_param_value("status"));
+        if (st != "GAME_OVER" && st != "RESIGNED") {
+            sendError(res, 400, "INVALID_ARGUMENT", "status must be GAME_OVER or RESIGNED");
+            return;
+        }
+        f.status = st;
+    }
+    if (req.has_param("winner")) {
+        std::string w = upper(req.get_param_value("winner"));
+        if (w != "A" && w != "B" && w != "C" && w != "D" && w != "NONE") {
+            sendError(res, 400, "INVALID_ARGUMENT", "winner must be A, B, C, D, or NONE");
+            return;
+        }
+        f.winner = w;
+    }
+    if (req.has_param("aiDifficulty") || req.has_param("ai_difficulty")) {
+        std::string dStr = req.has_param("aiDifficulty") ? req.get_param_value("aiDifficulty") : req.get_param_value("ai_difficulty");
+        int64_t diff = 0;
+        if (!parseUnsignedClamped(dStr, 5, diff) || diff < 1 || diff > 5) {
+            sendError(res, 400, "INVALID_ARGUMENT", "aiDifficulty must be 1..5");
+            return;
+        }
+        f.aiDifficulty = static_cast<int>(diff);
+    }
+    if (req.has_param("appVersion") || req.has_param("app_version")) {
+        std::string av = req.has_param("appVersion") ? req.get_param_value("appVersion") : req.get_param_value("app_version");
+        if (av.size() > 128 || hasControlChars(av)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "invalid appVersion");
+            return;
+        }
+        f.appVersion = av;
+    }
+    if (req.has_param("platform")) {
+        std::string plat = req.get_param_value("platform");
+        if (plat.size() > 128 || hasControlChars(plat)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "invalid platform");
+            return;
+        }
+        f.platform = plat;
+    }
+    if (req.has_param("from")) {
+        int64_t fromSec = 0;
+        if (!parseUnsignedClamped(req.get_param_value("from"), INT64_MAX, fromSec)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "from must be a non-negative integer");
+            return;
+        }
+        f.fromSec = fromSec;
+    }
+    if (req.has_param("to")) {
+        int64_t toSec = 0;
+        if (!parseUnsignedClamped(req.get_param_value("to"), INT64_MAX, toSec)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "to must be a non-negative integer");
+            return;
+        }
+        f.toSec = toSec;
+    }
+    if (req.has_param("sort")) {
+        std::string sVal = req.get_param_value("sort");
+        std::string field = sVal;
+        std::string dir = "";
+        size_t colon = sVal.find(':');
+        if (colon != std::string::npos) {
+            field = sVal.substr(0, colon);
+            dir = lower(sVal.substr(colon + 1));
+        }
+        if (field != "ended_at" && field != "uploaded_at" && field != "ply_count") {
+            sendError(res, 400, "INVALID_ARGUMENT", "invalid sort field");
+            return;
+        }
+        f.sortField = field;
+        if (dir == "asc") {
+            f.sortAsc = true;
+        } else if (dir == "desc") {
+            f.sortAsc = false;
+        }
+    }
+    if (req.has_param("order")) {
+        std::string ord = lower(req.get_param_value("order"));
+        if (ord == "asc") {
+            f.sortAsc = true;
+        } else if (ord == "desc") {
+            f.sortAsc = false;
+        } else {
+            sendError(res, 400, "INVALID_ARGUMENT", "order must be asc or desc");
+            return;
+        }
+    }
+
     int64_t limit = 20;
     int64_t offset = 0;
     if ((req.has_param("limit") &&
@@ -2647,12 +3372,16 @@ void OctiHttpServer::Impl::handleArchiveGet(const Request &req, Response &res)
     }
     Json j = gameSummaryJson(rec);
     j["final_fen"] = rec.finalFen;
-    j["octi_transcript"] = rec.octiTranscript;
+    std::string sanitized = sanitizeTranscriptJson(rec.octiTranscript, true);
+    j["transcript_json"] = sanitized;
+    j["octi_transcript"] = sanitized;
+    j["license"] = "CC-BY-4.0";
+    j["attribution"] = "Octi game data, Charles Chiou (selfso.com)";
     sendJson(res, 200, j);
 }
 
-void OctiHttpServer::Impl::handleArchiveOcti(const Request &req,
-                                             Response &res)
+void OctiHttpServer::Impl::handleArchiveTranscript(const Request &req,
+                                                   Response &res)
 {
     std::string id;
     if (!pathId(req, "id", res, id)) {
@@ -2663,11 +3392,315 @@ void OctiHttpServer::Impl::handleArchiveOcti(const Request &req,
         sendError(res, 404, "NOT_FOUND", "no such archived game");
         return;
     }
+    std::string sanitized = sanitizeTranscriptJson(transcript, true);
     res.status = 200;
     res.set_header("Cache-Control", "no-store");
     res.set_header("Content-Disposition",
-                   "attachment; filename=\"" + id + ".octi\"");
-    res.set_content(transcript, "text/plain; charset=utf-8");
+                   "attachment; filename=\"" + id + ".json\"");
+    res.set_content(sanitized, "application/json; charset=utf-8");
+}
+
+void OctiHttpServer::Impl::handleArchiveOcti(const Request &req,
+                                             Response &res)
+{
+    handleArchiveTranscript(req, res);
+}
+
+void OctiHttpServer::Impl::handleArchivePlies(const Request &req, Response &res)
+{
+    std::string id;
+    if (!pathId(req, "id", res, id)) {
+        return;
+    }
+    std::string transcript;
+    if (!store.getArchivedTranscript(id, transcript)) {
+        sendError(res, 404, "NOT_FOUND", "no such archived game");
+        return;
+    }
+
+    Json tObj;
+    try {
+        tObj = Json::parse(transcript);
+        if (!tObj.is_object() || tObj.value("format", "") != "octi.transcript.v3") {
+            sendError(res, 500, "INTERNAL_ERROR", "corrupt transcript");
+            return;
+        }
+    } catch (...) {
+        sendError(res, 500, "INTERNAL_ERROR", "corrupt transcript json");
+        return;
+    }
+
+    std::string modeStr = tObj.value("mode", "2P");
+    OctiGameMode mode = GAME_MODE_2;
+    if (modeStr == "4P") mode = GAME_MODE_4;
+    else if (modeStr == "OFK") mode = GAME_MODE_OFK;
+
+    int basesVal = tObj.value("bases", 1);
+    OctiGameBases bases = (basesVal == 3) ? GAME_BASES_3 : GAME_BASES_1;
+    bool superProngs = tObj.value("superProngs", false);
+    bool edgeless = tObj.value("edgeless", false);
+    std::string startPlayerStr = tObj.value("startPlayer", "A");
+    OctiPlayer startPlayer = PLAYER_A;
+    if (startPlayerStr == "B") startPlayer = PLAYER_B;
+    else if (startPlayerStr == "C") startPlayer = PLAYER_C;
+    else if (startPlayerStr == "D") startPlayer = PLAYER_D;
+
+    OctiBoard board(mode, superProngs, edgeless, bases);
+    std::string initialFen = board.toPositionString();
+    OctiGame *game = board.getGame();
+    if (!game) {
+        sendError(res, 500, "INTERNAL_ERROR", "engine initialization failed");
+        return;
+    }
+    game->start(startPlayer);
+
+    Json pliesArr = Json::array();
+    if (tObj.contains("plies") && tObj["plies"].is_array()) {
+        const auto &rawPlies = tObj["plies"];
+        for (size_t i = 0; i < rawPlies.size(); ++i) {
+            const auto &p = rawPlies[i];
+            if (!p.is_object() || !p.contains("move") || !p["move"].is_string()) {
+                continue;
+            }
+            std::string mv = p["move"].get<std::string>();
+            OctiPlayer turn = game->getTurn();
+            std::string playerStr;
+            switch (turn) {
+            case PLAYER_A: playerStr = "A"; break;
+            case PLAYER_B: playerStr = "B"; break;
+            case PLAYER_C: playerStr = "C"; break;
+            case PLAYER_D: playerStr = "D"; break;
+            default: break;
+            }
+            try {
+                game->move(turn, mv);
+            } catch (const std::exception &ex) {
+                sendError(res, 500, "INTERNAL_ERROR", std::string("replay error at ply ") + std::to_string(i + 1) + ": " + ex.what());
+                return;
+            }
+
+            Json plyOut;
+            plyOut["ply"] = i + 1;
+            plyOut["plyIndex"] = i + 1;
+            plyOut["player"] = playerStr;
+            plyOut["move"] = mv;
+            plyOut["elapsedMs"] = p.value("elapsedMs", 0LL);
+            if (p.contains("clockAfterMs") && p["clockAfterMs"].get<int64_t>() >= 0) {
+                plyOut["clockAfterMs"] = p["clockAfterMs"].get<int64_t>();
+            }
+            std::string fenCur = board.toPositionString();
+            plyOut["fen"] = fenCur;
+            plyOut["fenAfter"] = fenCur;
+            if (p.contains("ai") && p["ai"].is_object()) {
+                plyOut["ai"] = p["ai"];
+            }
+            pliesArr.push_back(plyOut);
+        }
+    }
+
+    Json resp;
+    resp["game_id"] = id;
+    resp["mode"] = modeStr;
+    resp["initialFen"] = initialFen;
+    resp["initial_fen"] = initialFen;
+    resp["plies"] = pliesArr;
+    sendJson(res, 200, resp);
+}
+
+void OctiHttpServer::Impl::handleArchiveStats(const Request &req, Response &res)
+{
+    (void)req;
+    ArchiveStats stats;
+    if (!store.getArchiveStats(stats)) {
+        sendError(res, 500, "INTERNAL_ERROR", "failed to calculate archive stats");
+        return;
+    }
+    Json j;
+    j["total_games"] = stats.totalGames;
+    j["by_source"] = stats.bySource;
+    j["by_mode"] = stats.byMode;
+    Json byDiff = Json::object();
+    for (const auto &kv : stats.byAiDifficulty) {
+        byDiff[std::to_string(kv.first)] = kv.second;
+    }
+    j["by_ai_difficulty"] = byDiff;
+    j["by_winner"] = stats.byWinner;
+
+    Json aiArr = Json::array();
+    for (const auto &ds : stats.aiDifficultyStats) {
+        Json d;
+        d["difficulty"] = ds.difficulty;
+        d["total_games"] = ds.totalGames;
+        d["ai_wins"] = ds.aiWins;
+        d["win_rate"] = ds.winRate;
+        aiArr.push_back(d);
+    }
+    j["ai_win_rates"] = aiArr;
+    j["average_plies"] = stats.averagePlies;
+    j["uploads_by_day"] = stats.uploadsByDay;
+    j["license"] = "CC-BY-4.0";
+    j["attribution"] = "Octi game data, Charles Chiou (selfso.com)";
+    sendJson(res, 200, j);
+}
+
+void OctiHttpServer::Impl::handleArchiveExport(const Request &req, Response &res)
+{
+    if (!allowExportAttempt(req, res)) {
+        return;
+    }
+
+    ArchiveFilter f;
+    f.includeTranscript = true;
+    f.maxLimit = AccountStore::kMaxExportLimit;
+
+    if (req.has_param("mode")) {
+        OctiGameMode m = GAME_MODE_2;
+        std::string mode = upper(req.get_param_value("mode"));
+        if (!parseModeName(mode, m)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "mode must be 2P, 4P or OFK");
+            return;
+        }
+        f.mode = mode;
+    }
+    if (req.has_param("player")) {
+        f.playerUuid = req.get_param_value("player");
+        if (!isSafeId(f.playerUuid)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "invalid player id");
+            return;
+        }
+    }
+    if (req.has_param("source")) {
+        std::string src = lower(req.get_param_value("source"));
+        if (src != "online" && src != "client_upload") {
+            sendError(res, 400, "INVALID_ARGUMENT", "source must be online or client_upload");
+            return;
+        }
+        f.source = src;
+    }
+    if (req.has_param("status")) {
+        std::string st = upper(req.get_param_value("status"));
+        if (st != "GAME_OVER" && st != "RESIGNED") {
+            sendError(res, 400, "INVALID_ARGUMENT", "status must be GAME_OVER or RESIGNED");
+            return;
+        }
+        f.status = st;
+    }
+    if (req.has_param("winner")) {
+        std::string w = upper(req.get_param_value("winner"));
+        if (w != "A" && w != "B" && w != "C" && w != "D" && w != "NONE") {
+            sendError(res, 400, "INVALID_ARGUMENT", "winner must be A, B, C, D, or NONE");
+            return;
+        }
+        f.winner = w;
+    }
+    if (req.has_param("aiDifficulty") || req.has_param("ai_difficulty")) {
+        std::string dStr = req.has_param("aiDifficulty") ? req.get_param_value("aiDifficulty") : req.get_param_value("ai_difficulty");
+        int64_t diff = 0;
+        if (!parseUnsignedClamped(dStr, 5, diff) || diff < 1 || diff > 5) {
+            sendError(res, 400, "INVALID_ARGUMENT", "aiDifficulty must be 1..5");
+            return;
+        }
+        f.aiDifficulty = static_cast<int>(diff);
+    }
+    if (req.has_param("appVersion") || req.has_param("app_version")) {
+        std::string av = req.has_param("appVersion") ? req.get_param_value("appVersion") : req.get_param_value("app_version");
+        if (av.size() > 128 || hasControlChars(av)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "invalid appVersion");
+            return;
+        }
+        f.appVersion = av;
+    }
+    if (req.has_param("platform")) {
+        std::string plat = req.get_param_value("platform");
+        if (plat.size() > 128 || hasControlChars(plat)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "invalid platform");
+            return;
+        }
+        f.platform = plat;
+    }
+    if (req.has_param("from")) {
+        int64_t fromSec = 0;
+        if (!parseUnsignedClamped(req.get_param_value("from"), INT64_MAX, fromSec)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "from must be a non-negative integer");
+            return;
+        }
+        f.fromSec = fromSec;
+    }
+    if (req.has_param("to")) {
+        int64_t toSec = 0;
+        if (!parseUnsignedClamped(req.get_param_value("to"), INT64_MAX, toSec)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "to must be a non-negative integer");
+            return;
+        }
+        f.toSec = toSec;
+    }
+    if (req.has_param("sort")) {
+        std::string sVal = req.get_param_value("sort");
+        std::string field = sVal;
+        std::string dir = "";
+        size_t colon = sVal.find(':');
+        if (colon != std::string::npos) {
+            field = sVal.substr(0, colon);
+            dir = lower(sVal.substr(colon + 1));
+        }
+        if (field != "ended_at" && field != "uploaded_at" && field != "ply_count") {
+            sendError(res, 400, "INVALID_ARGUMENT", "invalid sort field");
+            return;
+        }
+        f.sortField = field;
+        if (dir == "asc") {
+            f.sortAsc = true;
+        } else if (dir == "desc") {
+            f.sortAsc = false;
+        }
+    }
+    if (req.has_param("order")) {
+        std::string ord = lower(req.get_param_value("order"));
+        if (ord == "asc") {
+            f.sortAsc = true;
+        } else if (ord == "desc") {
+            f.sortAsc = false;
+        } else {
+            sendError(res, 400, "INVALID_ARGUMENT", "order must be asc or desc");
+            return;
+        }
+    }
+
+    int64_t limit = 1000;
+    int64_t offset = 0;
+    if ((req.has_param("limit") &&
+         !parseUnsignedClamped(req.get_param_value("limit"), INT32_MAX,
+                               limit)) ||
+        (req.has_param("offset") &&
+         !parseUnsignedClamped(req.get_param_value("offset"), INT32_MAX,
+                               offset))) {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "limit and offset must be non-negative integers");
+        return;
+    }
+    limit = std::max<int64_t>(1, std::min<int64_t>(limit, AccountStore::kMaxExportLimit));
+    f.limit = static_cast<int>(limit);
+    f.offset = static_cast<int>(offset);
+
+    std::vector<GameRecord> games;
+    if (!store.listArchivedGames(f, games)) {
+        sendError(res, 500, "INTERNAL_ERROR", "archive export query failed");
+        return;
+    }
+
+    std::string ndjson;
+    for (const auto &g : games) {
+        std::string line = sanitizeTranscriptJson(g.octiTranscript, false);
+        if (!line.empty()) {
+            ndjson += line;
+            ndjson += "\n";
+        }
+    }
+
+    res.status = 200;
+    res.set_header("Cache-Control", "no-store");
+    res.set_header("Content-Disposition", "attachment; filename=\"octi-archive-export.ndjson\"");
+    res.set_content(ndjson, "application/x-ndjson; charset=utf-8");
 }
 
 void OctiHttpServer::Impl::handleIndex(const Request &, Response &res)
@@ -2730,9 +3763,15 @@ void OctiHttpServer::Impl::registerRoutes()
         {"POST", "/api/v1/games/:id/mute", &Impl::handleMute},
         {"POST", "/api/v1/games/:id/settings", &Impl::handleSettings},
         {"GET", "/api/v1/games/:id/events", &Impl::handleGameEvents},
+        {"POST", "/api/v1/archive/upload", &Impl::handleArchiveUpload},
+        {"DELETE", "/api/v1/archive/install/:installId", &Impl::handleArchiveDeleteInstall},
         {"GET", "/api/v1/archive/games", &Impl::handleArchiveList},
         {"GET", "/api/v1/archive/games/:id", &Impl::handleArchiveGet},
+        {"GET", "/api/v1/archive/games/:id/transcript", &Impl::handleArchiveTranscript},
         {"GET", "/api/v1/archive/games/:id/octi", &Impl::handleArchiveOcti},
+        {"GET", "/api/v1/archive/games/:id/plies", &Impl::handleArchivePlies},
+        {"GET", "/api/v1/archive/stats", &Impl::handleArchiveStats},
+        {"GET", "/api/v1/archive/export", &Impl::handleArchiveExport},
     };
 
     server.set_default_headers({{"X-Content-Type-Options", "nosniff"},

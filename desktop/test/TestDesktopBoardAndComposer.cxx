@@ -2336,6 +2336,116 @@ TEST(OctiZoomProngAndPodStackOrderTest, ZPB_D08_LiberationPriorityZeroCapturedWe
     LONGS_EQUAL(0, canvas.lastMoveModifiedSquares().size());
 }
 
+TEST_GROUP(OctiBoardCanvasIndicatorTestSuite)
+{
+};
+
+TEST(OctiBoardCanvasIndicatorTestSuite, MoveIndicator5SecondAutoExpiry)
+{
+    OctiBoardCanvas canvas;
+    std::vector<QPoint> squares = { QPoint(2, 2), QPoint(3, 3) };
+    canvas.setLastMoveModifiedSquares(squares);
+    CHECK_TRUE(canvas.hasLastMoveHighlight());
+    LONGS_EQUAL(2, canvas.lastMoveModifiedSquares().size());
+
+    qint64 t0 = canvas.lastMoveAnimStartMs();
+    CHECK_TRUE(t0 > 0);
+
+    // At 4999 ms, modified squares must not expire
+    bool expiredEarly = canvas.expireLastMoveModifiedSquaresIfElapsed(t0 + 4999);
+    CHECK_FALSE(expiredEarly);
+    CHECK_TRUE(canvas.hasLastMoveHighlight());
+    LONGS_EQUAL(2, canvas.lastMoveModifiedSquares().size());
+
+    // At 5000 ms, modified squares must auto-expire
+    bool expiredAt5s = canvas.expireLastMoveModifiedSquaresIfElapsed(t0 + 5000);
+    CHECK_TRUE(expiredAt5s);
+    CHECK_FALSE(canvas.hasLastMoveHighlight());
+    LONGS_EQUAL(0, canvas.lastMoveModifiedSquares().size());
+
+    // Subsequent move resets start timestamp and indicator presence
+    canvas.setLastMoveModifiedSquares({ QPoint(4, 4) });
+    CHECK_TRUE(canvas.hasLastMoveHighlight());
+    LONGS_EQUAL(1, canvas.lastMoveModifiedSquares().size());
+    CHECK_TRUE(canvas.lastMoveAnimStartMs() >= t0);
+}
+
+TEST(OctiBoardCanvasIndicatorTestSuite, ActiveTurnScreenEdgeAndPinkEdgeIndicator)
+{
+    // Test activeTurnScreenEdge across seats and rotations
+    // 2-Player: Seat A is 0 deg, Seat B is 180 deg
+    LONGS_EQUAL(0, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_2, PLAYER_A, BoardRotation::ROT_0));
+    LONGS_EQUAL(3, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_2, PLAYER_A, BoardRotation::ROT_90));
+    LONGS_EQUAL(2, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_2, PLAYER_A, BoardRotation::ROT_180));
+    LONGS_EQUAL(1, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_2, PLAYER_A, BoardRotation::ROT_270));
+
+    LONGS_EQUAL(2, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_2, PLAYER_B, BoardRotation::ROT_0));
+    LONGS_EQUAL(1, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_2, PLAYER_B, BoardRotation::ROT_90));
+    LONGS_EQUAL(0, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_2, PLAYER_B, BoardRotation::ROT_180));
+    LONGS_EQUAL(3, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_2, PLAYER_B, BoardRotation::ROT_270));
+
+    // 4-Player: Seat A (0 deg), B (90 deg), C (180 deg), D (270 deg)
+    LONGS_EQUAL(0, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_4, PLAYER_A, BoardRotation::ROT_0));
+    LONGS_EQUAL(1, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_4, PLAYER_B, BoardRotation::ROT_0));
+    LONGS_EQUAL(2, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_4, PLAYER_C, BoardRotation::ROT_0));
+    LONGS_EQUAL(3, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_4, PLAYER_D, BoardRotation::ROT_0));
+
+    // OFK: Seat A (0 deg), B (180 deg)
+    LONGS_EQUAL(0, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_OFK, PLAYER_A, BoardRotation::ROT_0));
+    LONGS_EQUAL(2, OctiBoardCanvas::activeTurnScreenEdge(GAME_MODE_OFK, PLAYER_B, BoardRotation::ROT_0));
+
+    // Offscreen render test: active player pink indicator #FF69B4
+    OctiBoard board(GAME_MODE_2, false, false, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    OctiBoardCanvas canvas;
+    canvas.resize(800, 800);
+    canvas.attachBoard(&board);
+
+    QImage imgActive = canvas.renderToImage(800, 800);
+    CHECK_FALSE(imgActive.isNull());
+
+    int pinkPixelCount = 0;
+    for (int y = 0; y < imgActive.height(); ++y) {
+        for (int x = 0; x < imgActive.width(); ++x) {
+            QRgb c = imgActive.pixel(x, y);
+            if (qRed(c) >= 230 && qGreen(c) >= 75 && qGreen(c) <= 135 &&
+                qBlue(c) >= 155 && qBlue(c) <= 215) {
+                ++pinkPixelCount;
+            }
+        }
+    }
+    CHECK_TRUE_TEXT(pinkPixelCount > 0, "Pink turn indicator should be visible while game is active");
+
+    // Once the game is over, the pink turn indicator must disappear
+    board.getGame()->resign(PLAYER_A);
+    CHECK_TRUE(board.getGame()->isGameOver());
+
+    QImage imgOver = canvas.renderToImage(800, 800);
+    int pinkPixelsOver = 0;
+    for (int y = 0; y < imgOver.height(); ++y) {
+        for (int x = 0; x < imgOver.width(); ++x) {
+            QRgb c = imgOver.pixel(x, y);
+            if (qRed(c) >= 230 && qGreen(c) >= 75 && qGreen(c) <= 135 &&
+                qBlue(c) >= 155 && qBlue(c) <= 215) {
+                ++pinkPixelsOver;
+            }
+        }
+    }
+    LONGS_EQUAL(0, pinkPixelsOver);
+}
+
+TEST(OctiBoardCanvasIndicatorTestSuite, DownloadStyleThinkingDialogTelemetryProgress)
+{
+    OctiThinkingDialog dlg(BotDifficulty::MASTER, 3000, ThemeId::OBSIDIAN_BRASS);
+    dlg.updateProgress(1200, 3000, 5, 18420, 42);
+
+    LONGS_EQUAL(400, dlg.sliderValue());
+    QString text = dlg.progressBarText();
+    CHECK_TRUE_TEXT(text.contains("Depth 5"), text.toUtf8().constData());
+    CHECK_TRUE_TEXT(text.contains("18,420 nodes"), text.toUtf8().constData());
+    CHECK_TRUE_TEXT(text.contains("(40%)"), text.toUtf8().constData());
+}
+
 extern "C" const char *__lsan_default_suppressions()
 {
     return "leak:libqoffscreen.so\n";

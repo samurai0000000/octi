@@ -58,8 +58,15 @@ configure_file(
     @ONLY
 )
 
+set(OCTI_THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party")
+if(NOT EXISTS "${OCTI_THIRD_PARTY_DIR}/json/include/nlohmann/json.hpp")
+    message(FATAL_ERROR
+        "third_party submodules missing; run: git submodule update --init --recursive")
+endif()
+
 add_library(octi_core STATIC
     src/OctiCore.cxx
+    src/OctiCrypto.cxx
     src/OctiPod.cxx
     src/OctiSquare.cxx
     src/OctiMove.cxx
@@ -71,6 +78,10 @@ add_library(octi_core STATIC
 target_include_directories(octi_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+target_include_directories(octi_core SYSTEM PUBLIC
+    ${OCTI_THIRD_PARTY_DIR}/json/include
 )
 
 if(OCTI_CORE_BUILD_TESTS AND NOT WIN32)

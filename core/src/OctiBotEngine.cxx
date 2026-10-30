@@ -747,6 +747,33 @@ OctiBotEngine::OctiBotEngine(BotDifficulty difficulty, std::uint64_t rngSeed)
 {
 }
 
+OctiBotEngine::OctiBotEngine(const OctiBotEngine &other)
+    : _difficulty(other._difficulty)
+    , _timeBudgetMs(other._timeBudgetMs)
+    , _customTimeBudget(other._customTimeBudget)
+    , _rngState(other._rngState)
+    , _tt(other._tt)
+    , _liveDepthReached(other._liveDepthReached.load(std::memory_order_relaxed))
+    , _liveNodesVisited(other._liveNodesVisited.load(std::memory_order_relaxed))
+    , _liveBestScore(other._liveBestScore.load(std::memory_order_relaxed))
+{
+}
+
+OctiBotEngine &OctiBotEngine::operator=(const OctiBotEngine &other)
+{
+    if (this != &other) {
+        _difficulty = other._difficulty;
+        _timeBudgetMs = other._timeBudgetMs;
+        _customTimeBudget = other._customTimeBudget;
+        _rngState = other._rngState;
+        _tt = other._tt;
+        _liveDepthReached.store(other._liveDepthReached.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        _liveNodesVisited.store(other._liveNodesVisited.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        _liveBestScore.store(other._liveBestScore.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    }
+    return *this;
+}
+
 OctiBotEngine::~OctiBotEngine() = default;
 
 void OctiBotEngine::setDifficulty(BotDifficulty d)
@@ -771,6 +798,21 @@ void OctiBotEngine::setTimeBudgetMs(int maxTimeMs)
 int OctiBotEngine::timeBudgetMs() const
 {
     return _timeBudgetMs;
+}
+
+int OctiBotEngine::liveDepthReached() const
+{
+    return _liveDepthReached.load(std::memory_order_relaxed);
+}
+
+std::uint64_t OctiBotEngine::liveNodesVisited() const
+{
+    return _liveNodesVisited.load(std::memory_order_relaxed);
+}
+
+int OctiBotEngine::liveBestScore() const
+{
+    return _liveBestScore.load(std::memory_order_relaxed);
 }
 
 int OctiBotEngine::defaultBudgetForDifficulty(BotDifficulty d)
@@ -1211,9 +1253,12 @@ int OctiBotEngine::negamax(OctiBoard &scratchBoard,
                            bool &timedOut)
 {
     ++nodesVisited;
-    if ((nodesVisited & 63ULL) == 0ULL && steadyClockMs() >= deadlineMs) {
-        timedOut = true;
-        return evaluatePosition(scratchBoard, currentPerspective);
+    if ((nodesVisited & 63ULL) == 0ULL) {
+        _liveNodesVisited.store(nodesVisited, std::memory_order_relaxed);
+        if (steadyClockMs() >= deadlineMs) {
+            timedOut = true;
+            return evaluatePosition(scratchBoard, currentPerspective);
+        }
     }
 
     OctiGame *game = scratchBoard.getGame();
@@ -1341,6 +1386,10 @@ int OctiBotEngine::negamax(OctiBoard &scratchBoard,
 std::string OctiBotEngine::chooseMove(const OctiBoard &board,
                                       BotSearchStats *outStats)
 {
+    _liveDepthReached.store(0, std::memory_order_relaxed);
+    _liveNodesVisited.store(0, std::memory_order_relaxed);
+    _liveBestScore.store(0, std::memory_order_relaxed);
+
     if (outStats) {
         *outStats = BotSearchStats();
     }
@@ -1377,11 +1426,14 @@ std::string OctiBotEngine::chooseMove(const OctiBoard &board,
     OctiGameSnapshot rootSnap = game->captureSnapshot();
     for (const auto &mv : legalMoves) {
         ++nodesVisited;
+        _liveNodesVisited.store(nodesVisited, std::memory_order_relaxed);
         try {
             game->move(mv);
             if (game->isGameOver() &&
                 areAlliedPlayers(mode, game->getWinner(), rootTurn)) {
                 game->restoreSnapshot(rootSnap);
+                _liveDepthReached.store(1, std::memory_order_relaxed);
+                _liveBestScore.store(WIN_SCORE, std::memory_order_relaxed);
                 if (outStats) {
                     outStats->depthReached = 1;
                     outStats->nodesVisited = nodesVisited;
@@ -1471,6 +1523,7 @@ std::string OctiBotEngine::chooseMove(const OctiBoard &board,
             }
 
             game->restoreSnapshot(rootSnap);
+            _liveNodesVisited.store(nodesVisited, std::memory_order_relaxed);
 
             if (timedOut && d > 1) {
                 break;
@@ -1495,6 +1548,14 @@ std::string OctiBotEngine::chooseMove(const OctiBoard &board,
             bestMoveStr = iterBestMove;
             bestScore = iterBestScore;
             completedDepth = d;
+            _liveDepthReached.store(completedDepth, std::memory_order_relaxed);
+            _liveBestScore.store(bestScore, std::memory_order_relaxed);
+            if (outStats) {
+                outStats->depthReached = completedDepth;
+                outStats->nodesVisited = nodesVisited;
+                outStats->bestScore = bestScore;
+                outStats->elapsedMs = std::max(0L, steadyClockMs() - startMs);
+            }
             auto it = std::find_if(rootCandidates.begin(), rootCandidates.end(),
                                    [&](const OctiMove &m) {
                                        return m.asString() == bestMoveStr;
@@ -1516,6 +1577,10 @@ std::string OctiBotEngine::chooseMove(const OctiBoard &board,
             hTh.join();
         }
     }
+
+    _liveDepthReached.store(std::max(1, completedDepth), std::memory_order_relaxed);
+    _liveNodesVisited.store(nodesVisited, std::memory_order_relaxed);
+    _liveBestScore.store(bestScore, std::memory_order_relaxed);
 
     if (outStats) {
         outStats->depthReached = std::max(1, completedDepth);

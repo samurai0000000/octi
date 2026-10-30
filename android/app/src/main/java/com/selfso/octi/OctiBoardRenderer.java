@@ -15,10 +15,14 @@ import java.util.List;
 public final class OctiBoardRenderer {
 
     public static final int LAST_MOVE_INDICATOR_COLOR = 0xFFFF8C00;
+    public static final long LAST_MOVE_INDICATOR_DURATION_MS = 5000L;
+    public static final long INDICATOR_CYCLE_PERIOD_MS = 2000L;
+    public static final int ACTIVE_TURN_INDICATOR_COLOR = 0xFFFF69B4;
 
     public static final class RenderConfig {
         public List<int[]> lastMoveModifiedSquares = new ArrayList<>();
         public float lastMoveAnimPhase = 0.0f;
+        public float activeTurnAnimPhase = 0.0f;
         public List<int[]> stagedPaths = new ArrayList<>();
     }
 
@@ -137,6 +141,116 @@ public final class OctiBoardRenderer {
             OctiAppIconRenderer.drawLineSegment(pixels, w, h, x1, y1, x2, y2, thickness, LAST_MOVE_INDICATOR_COLOR);
             cur = nextBoundary;
         }
+    }
+
+    public static boolean expireLastMoveIndicatorsIfElapsed(long indicatorSetAtMs, long nowMs) {
+        if (indicatorSetAtMs <= 0L) {
+            return false;
+        }
+        return (nowMs - indicatorSetAtMs) >= LAST_MOVE_INDICATOR_DURATION_MS;
+    }
+
+    public static int activeTurnScreenEdge(OctiGameMode mode, OctiPlayer activeTurn, int boardRotationDeg) {
+        OctiBoardGeometry.BoardRotation seatRot = OctiBoardGeometry.rotationForSeat(mode, activeTurn);
+        int seatDeg = (seatRot != null) ? seatRot.degrees() : 0;
+        int relDeg = ((seatDeg - boardRotationDeg) % 360 + 360) % 360;
+        switch (relDeg) {
+            case 0:   return 0; // Bottom
+            case 90:  return 1; // Left
+            case 180: return 2; // Top
+            case 270: return 3; // Right
+            default:  return 0;
+        }
+    }
+
+    public static int activeTurnScreenEdge(OctiGameMode mode, OctiPlayer activeTurn,
+                                           OctiBoardGeometry.BoardRotation boardRotation) {
+        return activeTurnScreenEdge(mode, activeTurn, boardRotation != null ? boardRotation.degrees() : 0);
+    }
+
+    public static String formatThinkingProgressOverlay(int depth, long nodes, int elapsedMs, int budgetMs) {
+        int budget = Math.max(1, budgetMs);
+        double elapsedSec = Math.max(0, elapsedMs) / 1000.0;
+        double budgetSec = budget / 1000.0;
+        int pct = (int) Math.min(100, Math.max(0, ((long) elapsedMs * 100L) / budget));
+        return String.format(java.util.Locale.US, "Depth %d • %,d nodes • %.1fs / %.1fs (%d%%)",
+                depth, nodes, elapsedSec, budgetSec, pct);
+    }
+
+    public static void paintActiveTurnEdgeIndicator(int[] pixels, int w, int h,
+                                                    OctiBoardGeometry geo,
+                                                    OctiGameMode mode,
+                                                    OctiPlayer activeTurn,
+                                                    OctiBoardGeometry.BoardRotation rotation,
+                                                    double phase) {
+        if (pixels == null || geo == null || mode == null || activeTurn == null) {
+            return;
+        }
+        int edge = activeTurnScreenEdge(mode, activeTurn, rotation != null ? rotation.degrees() : 0);
+        double[] grid = geo.gridInnerRect();
+        double inset = 1.0;
+        double x1, y1, x2, y2;
+        switch (edge) {
+            case 0: // Bottom edge: left to right
+                x1 = grid[0];
+                y1 = grid[1] + grid[3] - inset;
+                x2 = grid[0] + grid[2];
+                y2 = grid[1] + grid[3] - inset;
+                break;
+            case 1: // Left edge: top to bottom
+                x1 = grid[0] + inset;
+                y1 = grid[1];
+                x2 = grid[0] + inset;
+                y2 = grid[1] + grid[3];
+                break;
+            case 2: // Top edge: right to left
+                x1 = grid[0] + grid[2];
+                y1 = grid[1] + inset;
+                x2 = grid[0];
+                y2 = grid[1] + inset;
+                break;
+            case 3: // Right edge: bottom to top
+                x1 = grid[0] + grid[2] - inset;
+                y1 = grid[1] + grid[3];
+                x2 = grid[0] + grid[2] - inset;
+                y2 = grid[1];
+                break;
+            default:
+                x1 = grid[0];
+                y1 = grid[1] + grid[3] - inset;
+                x2 = grid[0] + grid[2];
+                y2 = grid[1] + grid[3] - inset;
+                break;
+        }
+
+        double normPhase = phase - Math.floor(phase);
+        double segFrac = 0.30;
+        double strokeW = Math.max(3.5, geo.cellSize() * 0.065);
+
+        double s0 = normPhase;
+        double s1 = normPhase + segFrac;
+
+        if (s1 <= 1.0) {
+            drawSubEdgeSegment(pixels, w, h, x1, y1, x2, y2, s0, s1, strokeW);
+        } else {
+            drawSubEdgeSegment(pixels, w, h, x1, y1, x2, y2, s0, 1.0, strokeW);
+            drawSubEdgeSegment(pixels, w, h, x1, y1, x2, y2, 0.0, s1 - 1.0, strokeW);
+        }
+    }
+
+    private static void drawSubEdgeSegment(int[] pixels, int w, int h,
+                                           double ax, double ay, double bx, double by,
+                                           double t0, double t1, double strokeW) {
+        if (t0 >= t1) return;
+        double sx = ax + t0 * (bx - ax);
+        double sy = ay + t0 * (by - ay);
+        double ex = ax + t1 * (bx - ax);
+        double ey = ay + t1 * (by - ay);
+        // Subtle outer glow
+        int glowColor = 0x46FF69B4;
+        OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx, sy, ex, ey, strokeW + 3.0, glowColor);
+        // Core stroke
+        OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx, sy, ex, ey, strokeW, ACTIVE_TURN_INDICATOR_COLOR);
     }
 
     public void openStackFanAt(int x1, int y1) {
@@ -394,6 +508,23 @@ public final class OctiBoardRenderer {
                 }
                 double[] sqRect = g.squareRect(sx, sy);
                 paintClockwiseOrangeSquareSegment(pixels, w, h, sqRect, config.lastMoveAnimPhase);
+            }
+        }
+
+        // 9b. Pink active-player board-edge turn indicator
+        if (board != null && board.getGame() != null
+                && board.getGame().isGameStarted()
+                && !board.getGame().isGameOver()
+                && config != null) {
+            double turnPhase = config.activeTurnAnimPhase > 0f
+                    ? config.activeTurnAnimPhase
+                    : config.lastMoveAnimPhase;
+            if (turnPhase > 0.0) {
+                paintActiveTurnEdgeIndicator(pixels, w, h, g,
+                        board.getGame().getMode(),
+                        board.getGame().getTurn(),
+                        g.rotation(),
+                        turnPhase);
             }
         }
 

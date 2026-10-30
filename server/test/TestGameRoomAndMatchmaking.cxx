@@ -11,6 +11,7 @@
 #include "OctiBoard.hxx"
 #include "OctiGame.hxx"
 
+#include <nlohmann/json.hpp>
 #include <rapidcheck.h>
 
 #include <atomic>
@@ -1628,10 +1629,15 @@ TEST(GameRoomManagerTest, FischerClockDeductsElapsedAndAddsIncrement)
 
     std::string tr;
     EXPECT_OK(mgr->getTranscript(room, 0, tr));
-    CHECK_TRUE(tr.find("1. A 33+a { clk=60500 emt=1500 }\n") != std::string::npos);
-    CHECK_TRUE(tr.find("1. B 37+e { clk=61300 emt=700 }\n") != std::string::npos);
-    CHECK_TRUE(tr.find("TIME_CONTROL: 60+2\n") != std::string::npos);
-    CHECK_TRUE(tr.find("MOVES: 2\n") != std::string::npos);
+    auto jtr = nlohmann::json::parse(tr);
+    CHECK_EQUAL("60+2", jtr.value("timeControl", ""));
+    CHECK_EQUAL(2, static_cast<int>(jtr["plies"].size()));
+    CHECK_EQUAL("33+a", jtr["plies"][0].value("move", ""));
+    CHECK_EQUAL(60500, jtr["plies"][0].value("clockAfterMs", 0));
+    CHECK_EQUAL(1500, jtr["plies"][0].value("elapsedMs", 0));
+    CHECK_EQUAL("37+e", jtr["plies"][1].value("move", ""));
+    CHECK_EQUAL(61300, jtr["plies"][1].value("clockAfterMs", 0));
+    CHECK_EQUAL(700, jtr["plies"][1].value("elapsedMs", 0));
     /* annotated transcripts still replay through the engine parser */
     OctiBoard rb;
     rb.deserializeGame(tr);
@@ -1666,8 +1672,9 @@ TEST(GameRoomManagerTest, ClockReachingZeroForfeitsOnTime)
     GameRecord rec = archived(room);
     STRCMP_EQUAL("TIMEOUT", rec.termination.c_str());
     STRCMP_EQUAL("5+0", rec.timeControl.c_str());
-    CHECK_TRUE(rec.octiTranscript.find("RESULT_REASON: TIMEOUT\n") != std::string::npos);
-    CHECK_TRUE(rec.octiTranscript.find("STATUS: RESIGNED\n") != std::string::npos);
+    auto jrec = nlohmann::json::parse(rec.octiTranscript);
+    CHECK_EQUAL("TIMEOUT", jrec.value("termination", ""));
+    CHECK_EQUAL("RESIGNED", jrec.value("status", ""));
     checkTranscriptReplays(room, rec);
     CHECK_EQUAL(1216, profile(p[1]).elo2p);
     CHECK_EQUAL(1184, profile(p[0]).elo2p);
@@ -1706,9 +1713,11 @@ TEST(GameRoomManagerTest, UntimedGamesNeverFlagAndHaveNoClockAnnotations)
     EXPECT_OK(mgr->submitMove(room, p[0], "33+a"));
     std::string tr;
     EXPECT_OK(mgr->getTranscript(room, 0, tr));
-    CHECK_TRUE(tr.find("1. A 33+a\n") != std::string::npos);
-    CHECK_TRUE(tr.find("{") == std::string::npos);
-    CHECK_TRUE(tr.find("TIME_CONTROL") == std::string::npos);
+    auto jtr = nlohmann::json::parse(tr);
+    CHECK_EQUAL("untimed", jtr.value("timeControl", ""));
+    CHECK_EQUAL(1, static_cast<int>(jtr["plies"].size()));
+    CHECK_EQUAL("33+a", jtr["plies"][0].value("move", ""));
+    CHECK_FALSE(jtr["plies"][0].contains("clockAfterMs"));
 }
 
 /* ---- pause / resume ---------------------------------------------------- */
@@ -1805,7 +1814,8 @@ TEST(GameRoomManagerTest, MutualTakebackRollsBackTheLastPlyOnACasualTable)
 
     std::string tr;
     EXPECT_OK(mgr->getTranscript(room, 0, tr));
-    CHECK_TRUE(tr.find("MOVES: 1\n") != std::string::npos);
+    auto jtr = nlohmann::json::parse(tr);
+    CHECK_EQUAL(1, static_cast<int>(jtr["plies"].size()));
     CHECK_TRUE(tr.find("37+e") == std::string::npos);
 
     /* undo the first ply as well */
@@ -1894,9 +1904,10 @@ TEST(GameRoomManagerTest, AgreedDrawEndsTheGameAndPaysTheRatingGap)
     GameRecord rec = archived(room);
     STRCMP_EQUAL("DRAW", rec.result.c_str());
     CHECK_EQUAL(0, rec.winnerSeat);
-    CHECK_TRUE(rec.octiTranscript.find("STATUS: GAME_OVER\n") != std::string::npos);
-    CHECK_TRUE(rec.octiTranscript.find("WINNER: NONE\n") != std::string::npos);
-    CHECK_TRUE(rec.octiTranscript.find("RESULT_REASON: AGREED_DRAW\n") != std::string::npos);
+    auto jrec = nlohmann::json::parse(rec.octiTranscript);
+    CHECK_EQUAL("GAME_OVER", jrec.value("status", ""));
+    CHECK_EQUAL("NONE", jrec.value("winner", ""));
+    CHECK_EQUAL("AGREED_DRAW", jrec.value("termination", ""));
     PlayerProfile a = profile(p[0]);
     PlayerProfile b = profile(p[1]);
     CHECK_EQUAL(1387, a.elo2p);
@@ -1968,8 +1979,9 @@ TEST(GameRoomManagerTest, ResignationEndsTheGameForTheResigningSideOnly)
     STRCMP_EQUAL("P1_WIN", v.result.c_str());
     STRCMP_EQUAL("RESIGNATION", v.termination.c_str());
     GameRecord rec = archived(room);
-    CHECK_TRUE(rec.octiTranscript.find("STATUS: RESIGNED\n") != std::string::npos);
-    CHECK_TRUE(rec.octiTranscript.find("WINNER: A\n") != std::string::npos);
+    auto jrec = nlohmann::json::parse(rec.octiTranscript);
+    CHECK_EQUAL("RESIGNED", jrec.value("status", ""));
+    CHECK_EQUAL("A", jrec.value("winner", ""));
     checkTranscriptReplays(room, rec);
     CHECK_EQUAL(1216, profile(p[0]).elo2p);
     CHECK_EQUAL(1184, profile(p[1]).elo2p);
@@ -2084,7 +2096,8 @@ TEST(GameRoomManagerTest, DisconnectForfeitOnlyAfterTheGraceWindow)
     STRCMP_EQUAL("DISCONNECT_FORFEIT", done.termination.c_str());
     CHECK_EQUAL(1216, profile(p[0]).elo2p);
     GameRecord rec = archived(room);
-    CHECK_TRUE(rec.octiTranscript.find("RESULT_REASON: DISCONNECT_FORFEIT\n") != std::string::npos);
+    auto jrec = nlohmann::json::parse(rec.octiTranscript);
+    CHECK_EQUAL("DISCONNECT_FORFEIT", jrec.value("termination", ""));
     checkTranscriptReplays(room, rec);
 }
 
@@ -2922,21 +2935,23 @@ TEST(GameRoomManagerTest, TranscriptCarriesRulesetAndPlayerMetadata)
     CHECK_TRUE(rec.superProngs);
     CHECK_TRUE(rec.edgeless);
     CHECK_EQUAL(1, rec.gameBases);
-    std::string expected = "; OCTI Game Transcript v2.0\n"
-                           "GAME_MODE: 2\n"
-                           "GAME_BASES: 1\n"
-                           "USE_SUPER_PRONGS: Yes\n"
-                           "USE_EDGELESS_BOARD: Yes\n"
-                           "START_PLAYER: A\n"
-                           "STATUS: RESIGNED\n"
-                           "WINNER: B\n"
-                           "EVENT: OCTI Server " + room + "\n"
-                           "DATE: 2027-01-15\n"
-                           "PLAYER_A: " + handle[0] + "\n"
-                           "PLAYER_B: " + handle[1] + "\n"
-                           "RESULT_REASON: RESIGNATION\n"
-                           "MOVES: 0\n";
-    STRCMP_EQUAL(expected.c_str(), rec.octiTranscript.c_str());
+    auto jrec = nlohmann::json::parse(rec.octiTranscript);
+    CHECK_EQUAL("octi.transcript.v3", jrec.value("format", ""));
+    CHECK_EQUAL("2P", jrec.value("mode", ""));
+    CHECK_EQUAL(1, jrec.value("bases", 0));
+    CHECK_TRUE(jrec.value("superProngs", false));
+    CHECK_TRUE(jrec.value("edgeless", false));
+    CHECK_EQUAL("A", jrec.value("startPlayer", ""));
+    CHECK_EQUAL("RESIGNED", jrec.value("status", ""));
+    CHECK_EQUAL("B", jrec.value("winner", ""));
+    CHECK_EQUAL("RESIGNATION", jrec.value("termination", ""));
+    CHECK_EQUAL("CC-BY-4.0", jrec.value("license", ""));
+    CHECK_EQUAL("Octi game data, Charles Chiou (selfso.com)", jrec.value("attribution", ""));
+    CHECK_EQUAL(room, jrec.value("gameId", ""));
+    CHECK_TRUE(jrec.contains("players") && jrec["players"].is_array());
+    CHECK_EQUAL(2, static_cast<int>(jrec["players"].size()));
+    CHECK_EQUAL(handle[0], jrec["players"][0].value("handle", ""));
+    CHECK_EQUAL(handle[1], jrec["players"][1].value("handle", ""));
     checkTranscriptReplays(room, rec);
 }
 
@@ -2987,7 +3002,7 @@ TEST(GameRoomManagerTest, RoomIdsSkipIdsAlreadyArchived)
     rec.p2Handle = handle[1];
     rec.result = "DRAW";
     rec.termination = "AGREED_DRAW";
-    rec.octiTranscript = "; OCTI Game Transcript v2.0\nMOVES: 0\n";
+    rec.octiTranscript = "{\"attribution\":\"Octi game data, Charles Chiou (selfso.com)\",\"bases\":3,\"edgeless\":false,\"format\":\"octi.transcript.v3\",\"gameId\":\"g-20270115-0001\",\"license\":\"CC-BY-4.0\",\"mode\":\"2P\",\"plies\":[],\"source\":\"ONLINE\",\"startPlayer\":\"A\",\"status\":\"GAME_OVER\",\"superProngs\":false,\"termination\":\"AGREED_DRAW\",\"timeControl\":\"untimed\",\"winner\":\"NONE\"}";
     rec.finalFen = "2:3:0:0:P:A:-:0:4,0,25,0:4,0,25,0:A33,A53,A73,B37,B57,B77";
     rec.startedAt = kWall0;
     rec.endedAt = kWall0;

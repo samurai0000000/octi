@@ -82,6 +82,16 @@ struct ArchivedGamesPage {
     std::vector<ArchivedGameSummary> games;
 };
 
+struct UploadTranscriptRequest {
+    std::string transcriptJson;
+    std::string clientId;
+};
+
+struct UploadTranscriptResponse {
+    std::string gameId;
+    int plyCount = 0;
+};
+
 struct PlayerProfileInfo {
     std::string uuid;
     std::string handle;
@@ -482,6 +492,10 @@ public:
         const std::string &gameId);
     ApiResult<std::string> downloadOctiTranscript(
         const std::string &gameId);
+    ApiResult<UploadTranscriptResponse> uploadTrainingTranscript(
+        const UploadTranscriptRequest &req);
+    ApiResult<int> deleteInstallArchiveData(
+        const std::string &installId);
 
     /* ---- Poll & Server-Sent Events (SSE) Live Streams ---- */
     ApiResult<std::vector<SseEvent>> pollLobbyEvents(

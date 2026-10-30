@@ -514,6 +514,232 @@ public class OctiGuiRefinementV2Test {
         assertTrue("When capPods > 0, captured pod glow pixels must be drawn", glowNonZero > 10);
         assertTrue("Card pixels must differ when capPods > 0 vs capPods == 0", diffPixels > 50);
     }
+
+    @Test
+    public void testLastMoveIndicatorAutoExpiryBoundary() {
+        // 1. Static renderer boundary
+        long startMs = 1000000L;
+        assertFalse(OctiBoardRenderer.expireLastMoveIndicatorsIfElapsed(startMs, startMs + 4999L));
+        assertTrue(OctiBoardRenderer.expireLastMoveIndicatorsIfElapsed(startMs, startMs + 5000L));
+        assertTrue(OctiBoardRenderer.expireLastMoveIndicatorsIfElapsed(startMs, startMs + 6000L));
+
+        // 2. ViewModel deterministic expiry
+        com.selfso.octi.ui.OctiAppViewModel vm = new com.selfso.octi.ui.OctiAppViewModel();
+        vm.startNewLocalGame(OctiGameMode.GAME_MODE_2, false, false,
+                OctiGameBases.GAME_BASES_3, false,
+                OctiBotEngine.BotDifficulty.CASUAL, OctiPlayer.PLAYER_A);
+
+        assertTrue(vm.getLastMoveModifiedSquaresList().isEmpty());
+        assertTrue(vm.applyMoveNotation("33+a"));
+        assertFalse(vm.getLastMoveModifiedSquaresList().isEmpty());
+
+        long setAtMs = vm.getLastMoveIndicatorSetAtMs();
+        assertTrue(setAtMs > 0L);
+
+        // At 4999ms elapsed -> remains active
+        assertFalse(vm.expireLastMoveIndicatorsIfElapsed(setAtMs + 4999L));
+        assertFalse(vm.getLastMoveModifiedSquaresList().isEmpty());
+
+        // At 5000ms elapsed -> auto expires
+        assertTrue(vm.expireLastMoveIndicatorsIfElapsed(setAtMs + 5000L));
+        assertTrue(vm.getLastMoveModifiedSquaresList().isEmpty());
+        assertEquals(0L, vm.getLastMoveIndicatorSetAtMs());
+
+        // Subsequent call when empty returns false
+        assertFalse(vm.expireLastMoveIndicatorsIfElapsed(setAtMs + 6000L));
+
+        // Subsequent move resets the indicator timestamp
+        assertTrue(vm.applyMoveNotation("37+e"));
+        assertFalse(vm.getLastMoveModifiedSquaresList().isEmpty());
+        assertTrue(vm.getLastMoveIndicatorSetAtMs() > 0L);
+
+        vm.close();
+    }
+
+    @Test
+    public void testActiveTurnScreenEdgeCalculation() {
+        // 2-Player mode
+        // Seat A = 0 deg, Seat B = 180 deg
+        // Rot 0
+        assertEquals(0, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_A, 0));
+        assertEquals(2, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_B, 0));
+
+        // Rot 90
+        assertEquals(3, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_A, 90));
+        assertEquals(1, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_B, 90));
+
+        // Rot 180
+        assertEquals(2, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_A, 180));
+        assertEquals(0, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_B, 180));
+
+        // Rot 270
+        assertEquals(1, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_A, 270));
+        assertEquals(3, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_B, 270));
+
+        // 4-Player mode: A=0, B=90, C=180, D=270
+        assertEquals(0, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_A, 0));
+        assertEquals(1, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_B, 0));
+        assertEquals(2, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_C, 0));
+        assertEquals(3, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_D, 0));
+    }
+
+    @Test
+    public void testBotTelemetryAndThinkingProgressOverlayFormatting() {
+        // Format overlay verification
+        String formatted = OctiBoardRenderer.formatThinkingProgressOverlay(4, 18420L, 2400, 3000);
+        assertEquals("Depth 4 \u2022 18,420 nodes \u2022 2.4s / 3.0s (80%)", formatted);
+
+        // Bot engine live telemetry accessors
+        OctiBotEngine engine = new OctiBotEngine();
+        assertEquals(0, engine.liveDepthReached());
+        assertEquals(0L, engine.liveNodesVisited());
+        assertEquals(0, engine.liveBestScore());
+
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+        board.getGame().start(OctiPlayer.PLAYER_A);
+
+        engine.setTimeBudgetMs(100);
+        OctiBotEngine.BotSearchStats stats = new OctiBotEngine.BotSearchStats();
+        String move = engine.chooseMove(board, stats);
+        assertNotNull(move);
+        assertFalse(move.isEmpty());
+        assertTrue(stats.nodesVisited > 0L);
+        assertTrue(stats.depthReached > 0);
+        assertEquals(stats.depthReached, engine.liveDepthReached());
+        assertEquals(stats.nodesVisited, engine.liveNodesVisited());
+        assertEquals(stats.bestScore, engine.liveBestScore());
+    }
+
+    @Test
+    public void testJsonV3TranscriptRoundTripAndCanonicalExport() throws Exception {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+        game.start(OctiPlayer.PLAYER_A);
+        game.move("33+b");
+        game.move("37+e");
+        game.move("33");
+        game.move("37");
+
+        OctiGame.OctiGameMetadata meta = new OctiGame.OctiGameMetadata();
+        meta.gameId = "test-game-123";
+        meta.status = "COMPLETED";
+        meta.termination = "goal";
+
+        OctiGame.OctiPlayerMetadata pA = new OctiGame.OctiPlayerMetadata();
+        pA.seat = 1;
+        pA.player = OctiPlayer.PLAYER_A;
+        pA.type = "HUMAN";
+        pA.handle = "Player A";
+        meta.players.add(pA);
+
+        OctiGame.OctiPlayerMetadata pB = new OctiGame.OctiPlayerMetadata();
+        pB.seat = 2;
+        pB.player = OctiPlayer.PLAYER_B;
+        pB.type = "BOT";
+        pB.handle = "Bot Level 2";
+        pB.aiDifficulty = 2;
+        pB.aiBudgetMs = 1500;
+        meta.players.add(pB);
+
+        // Set ply metadata
+        OctiGame.OctiPlyMetadata ply0 = new OctiGame.OctiPlyMetadata();
+        ply0.elapsedMs = 450;
+        ply0.isAiMove = false;
+        game.setPlyMetadata(0, ply0);
+
+        OctiGame.OctiPlyMetadata ply1 = new OctiGame.OctiPlyMetadata();
+        ply1.elapsedMs = 1120;
+        ply1.isAiMove = true;
+        ply1.aiDifficulty = 2;
+        ply1.aiBudgetMs = 1500;
+        ply1.aiDepthReached = 4;
+        ply1.aiNodesVisited = 5420;
+        ply1.aiBestScore = 45;
+        game.setPlyMetadata(1, ply1);
+
+        String json = game.serializeJson(meta);
+        assertNotNull(json);
+        assertTrue(json.contains("\"format\": \"octi.transcript.v3\""));
+        assertTrue(json.contains("\"gameId\": \"test-game-123\"") || json.contains("\"gameId\":\"test-game-123\""));
+        assertTrue(json.contains("\"depthReached\": 4"));
+        assertTrue(json.contains("\"nodesVisited\": 5420"));
+
+        // Canonical moves export
+        String canonicalMoves = game.exportCanonicalMovesText();
+        assertEquals("33+b\n37+e\n33\n37", canonicalMoves.trim());
+
+        // Round-trip into new board
+        OctiBoard roundTripBoard = new OctiBoard();
+        roundTripBoard.deserializeGame(json);
+        assertEquals(4, roundTripBoard.getGame().getNumMoves());
+        assertEquals(board.toPositionString(), roundTripBoard.toPositionString());
+
+        // ViewModel export moves text must produce JSON v3 and omit client.extended
+        com.selfso.octi.ui.OctiAppViewModel vm = new com.selfso.octi.ui.OctiAppViewModel();
+        vm.startNewLocalGame(OctiGameMode.GAME_MODE_2, false, false,
+                OctiGameBases.GAME_BASES_3, false,
+                OctiBotEngine.BotDifficulty.CASUAL, OctiPlayer.PLAYER_A);
+        vm.applyMoveNotation("33+b");
+
+        String exportedText = vm.exportMoveHistoryText();
+        assertTrue(exportedText.contains("\"format\": \"octi.transcript.v3\""));
+        assertFalse("Local export must omit client.extended", exportedText.contains("\"extended\""));
+        assertFalse("Move notation must not have prefix '1. A:'", exportedText.contains("1. A:"));
+
+        // Extended telemetry is only present when explicitly included
+        String extendedJson = vm.buildCurrentGameTranscriptJson(true);
+        assertTrue(extendedJson.contains("\"extended\""));
+        assertTrue(extendedJson.contains("\"osVersion\""));
+
+        vm.close();
+    }
+
+    @Test
+    public void testTelemetryConsentTriStateAndInstallIdLifecycle() {
+        ClientConfigStore store = new ClientConfigStore();
+        ClientConfigStore.ClientPreferences prefs = store.preferences();
+
+        // Default tri-state is "unset" with version 0
+        assertEquals("unset", prefs.telemetryConsent);
+        assertEquals(0, prefs.telemetryConsentVersion);
+        assertNotNull(prefs.installId);
+        assertFalse(prefs.installId.isEmpty());
+
+        String initialId = prefs.installId;
+
+        // Reset install ID produces a new valid UUIDv4
+        String newId = store.resetInstallId();
+        assertNotNull(newId);
+        assertFalse(newId.isEmpty());
+        assertFalse(newId.equals(initialId));
+        assertEquals(newId, store.preferences().installId);
+
+        // Setting consent to "share" updates version
+        prefs.telemetryConsent = "share";
+        prefs.telemetryConsentVersion = ClientConfigStore.CURRENT_TELEMETRY_CONSENT_VERSION;
+        store.save();
+
+        assertEquals("share", store.preferences().telemetryConsent);
+        assertEquals(1, store.preferences().telemetryConsentVersion);
+
+        // Setting consent to "decline"
+        prefs.telemetryConsent = "decline";
+        store.save();
+        assertEquals("decline", store.preferences().telemetryConsent);
+
+        // ViewModel consent interaction
+        com.selfso.octi.ui.OctiAppViewModel vm = new com.selfso.octi.ui.OctiAppViewModel(store, new OctiNetworkClient());
+        vm.setTelemetryConsentChoice("share");
+        assertEquals("share", vm.getTelemetryConsent().getValue());
+        assertFalse(vm.getShowTelemetryConsentDialog().getValue());
+
+        vm.setTelemetryConsentChoice("decline");
+        assertEquals("decline", vm.getTelemetryConsent().getValue());
+
+        vm.resetInstallIdAndRequestDeletion();
+        assertFalse(store.preferences().installId.isEmpty());
+        vm.close();
+    }
 }
 
 /*

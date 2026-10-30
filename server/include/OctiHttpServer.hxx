@@ -45,6 +45,14 @@ struct HttpServerConfig {
     int ssoRateLimitMax = 30;
     int64_t ssoRateLimitWindowMs = 60 * 1000;
 
+    /* Archive upload rate limiting per IP. */
+    int uploadRateLimitMax = 6;
+    int64_t uploadRateLimitWindowMs = 60 * 1000;
+
+    /* Archive bulk export rate limiting per IP. */
+    int exportRateLimitMax = 6;
+    int64_t exportRateLimitWindowMs = 60 * 1000;
+
     /* Worker pool: base threads, dynamic ceiling, queued connections. */
     size_t workerThreads = 24;
     size_t maxWorkerThreads = 64;

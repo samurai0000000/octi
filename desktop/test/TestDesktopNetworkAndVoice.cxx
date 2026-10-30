@@ -800,8 +800,7 @@ TEST(OctiNetworkClientTest,
 
     auto octiFile = clientA->downloadOctiTranscript(roomId);
     CHECK_TRUE_TEXT(octiFile.ok, octiFile.errorMessage.c_str());
-    CHECK_TRUE(octiFile.data.find("OCTI Game Transcript") != std::string::npos);
-    CHECK_TRUE(octiFile.data.find("EVENT: OCTI Server") != std::string::npos);
+    CHECK_TRUE(octiFile.data.find("octi.transcript.v3") != std::string::npos);
 
     clientB->stopEventStreams();
     CHECK_FALSE(clientB->isGameEventStreamActive());

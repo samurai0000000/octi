@@ -210,10 +210,10 @@ public class OctiAndroidAppIntegrationTest {
             assertFalse(vm.isViewingHistory());
             assertEquals(liveFen, vm.getDisplayBoard().toPositionString());
 
-            // 4. Export .octi transcript and reload into VCR replay mode
+            // 4. Export JSON v3.0 transcript and reload into VCR replay mode
             String transcript = vm.exportCurrentTranscript();
             assertNotNull(transcript);
-            assertTrue(transcript.contains("GAME_MODE"));
+            assertTrue(transcript.contains("\"format\": \"octi.transcript.v3\"") || transcript.contains("\"format\":\"octi.transcript.v3\""));
 
             vm.startNewLocalGame(OctiGameMode.GAME_MODE_OFK);
             assertEquals(0, vm.livePlyCount());

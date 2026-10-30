@@ -43,6 +43,7 @@
 #include "QtCompat.hxx"
 #include "selfupdate/QtSelfUpdateBridge.hxx"
 #include "selfupdate/SelfUpdateController.hxx"
+#include <QRadioButton>
 
 namespace octi {
 
@@ -844,7 +845,7 @@ private:
 };
 
 /*
- * Modal Borderless Non-Obstructing "AI Thinking" Slider Dialog (EMF-D02)
+ * Modal Borderless Non-Obstructing "AI Thinking" Progress Dialog (EMF-D02)
  */
 class OctiThinkingDialog : public QDialog {
 public:
@@ -854,17 +855,68 @@ public:
                                 QWidget *parent = nullptr);
     ~OctiThinkingDialog() override;
 
-    void updateProgress(int elapsedMs, int totalBudgetMs);
+    void updateProgress(int elapsedMs, int totalBudgetMs,
+                        int depthReached = 0,
+                        std::uint64_t nodesVisited = 0,
+                        int bestScore = 0);
     int sliderValue() const;
     QString statusText() const;
+    QString progressBarText() const;
     bool isFrameless() const;
     void positionBelowBoard(QWidget *mainWindow, QWidget *canvas = nullptr);
 
 private:
     BotDifficulty _difficulty;
     int _budgetMs;
+    ThemeId _theme;
     QLabel *_statusLabel;
-    QSlider *_slider;
+    QWidget *_progressBar;
+    int _sliderVal;
+    QString _progressBarText;
+};
+
+/*
+ * Non-Dismissible Startup Telemetry Consent & CC-BY 4.0 Disclosure Modal
+ */
+class OctiTelemetryConsentDialog : public QDialog {
+public:
+    explicit OctiTelemetryConsentDialog(ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                                        QWidget *parent = nullptr);
+    ~OctiTelemetryConsentDialog() override;
+
+    bool userConsented() const { return _consented; }
+    void reject() override;
+
+protected:
+    void keyPressEvent(QKeyEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
+
+private:
+    bool _consented;
+    bool _choiceMade;
+    ThemeId _theme;
+    QPlainTextEdit *_sampleJsonEdit;
+    QPushButton *_togglePreviewBtn;
+};
+
+/*
+ * Settings Dialog for Telemetry & Privacy (Tier 1 Consent Toggle, Install ID Reset)
+ */
+class OctiTelemetrySettingsDialog : public QDialog {
+public:
+    explicit OctiTelemetrySettingsDialog(class ClientConfigStore *configStore,
+                                        class OctiNetworkClient *netClient = nullptr,
+                                        ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                                        QWidget *parent = nullptr);
+    ~OctiTelemetrySettingsDialog() override;
+
+private:
+    class ClientConfigStore *_configStore;
+    class OctiNetworkClient *_netClient;
+    ThemeId _theme;
+    QRadioButton *_shareRadio;
+    QRadioButton *_declineRadio;
+    QLabel *_installIdLabel;
 };
 
 /*

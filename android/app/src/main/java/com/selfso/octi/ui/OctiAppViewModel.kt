@@ -14,6 +14,7 @@ import com.selfso.octi.OctiBoardGeometry
 import com.selfso.octi.OctiBoardRenderer
 import com.selfso.octi.OctiBotEngine
 import com.selfso.octi.OctiDefs
+import com.selfso.octi.OctiGame
 import com.selfso.octi.OctiGameBases
 import com.selfso.octi.OctiGameMode
 import com.selfso.octi.OctiMove
@@ -27,6 +28,8 @@ import com.selfso.selfupdate.ApkDownloader
 import com.selfso.selfupdate.UpdateManifest
 import java.io.File
 import java.util.Collections
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -216,16 +219,34 @@ class OctiAppViewModel @JvmOverloads constructor(
     private val _guidedMoveActive = MutableStateFlow(false)
     val guidedMoveActive: StateFlow<Boolean> = _guidedMoveActive.asStateFlow()
 
+    val LAST_MOVE_INDICATOR_DURATION_MS: Long = OctiBoardRenderer.LAST_MOVE_INDICATOR_DURATION_MS
+
     private val _lastMoveModifiedSquares = MutableStateFlow<List<IntArray>>(emptyList())
     val lastMoveModifiedSquares: StateFlow<List<IntArray>> = _lastMoveModifiedSquares.asStateFlow()
+    private var _lastMoveIndicatorSetAtMs: Long = 0L
 
     fun getLastMoveModifiedSquaresList(): List<IntArray> {
         return _lastMoveModifiedSquares.value
     }
 
+    fun getLastMoveIndicatorSetAtMs(): Long = _lastMoveIndicatorSetAtMs
+
+    fun expireLastMoveIndicatorsIfElapsed(nowMs: Long = System.currentTimeMillis()): Boolean {
+        if (_lastMoveModifiedSquares.value.isEmpty()) {
+            return false
+        }
+        if (nowMs - _lastMoveIndicatorSetAtMs >= LAST_MOVE_INDICATOR_DURATION_MS) {
+            _lastMoveModifiedSquares.value = emptyList()
+            _lastMoveIndicatorSetAtMs = 0L
+            return true
+        }
+        return false
+    }
+
     fun clearLastMoveIndicators() {
         if (_lastMoveModifiedSquares.value.isNotEmpty()) {
             _lastMoveModifiedSquares.value = emptyList()
+            _lastMoveIndicatorSetAtMs = 0L
         }
     }
 
@@ -337,6 +358,79 @@ class OctiAppViewModel @JvmOverloads constructor(
     private val _botThinkingRemainingSec = MutableStateFlow(0f)
     val botThinkingRemainingSec: StateFlow<Float> = _botThinkingRemainingSec.asStateFlow()
 
+    private val _botThinkingDepth = MutableStateFlow(0)
+    val botThinkingDepth: StateFlow<Int> = _botThinkingDepth.asStateFlow()
+
+    private val _botThinkingNodes = MutableStateFlow(0L)
+    val botThinkingNodes: StateFlow<Long> = _botThinkingNodes.asStateFlow()
+
+    private val _botThinkingScore = MutableStateFlow(0)
+    val botThinkingScore: StateFlow<Int> = _botThinkingScore.asStateFlow()
+
+    private val _telemetryConsent = MutableStateFlow(configStore.preferences().telemetryConsent ?: "unset")
+    val telemetryConsent: StateFlow<String> = _telemetryConsent.asStateFlow()
+
+    private val _telemetryConsentVersion = MutableStateFlow(configStore.preferences().telemetryConsentVersion)
+    val telemetryConsentVersion: StateFlow<Int> = _telemetryConsentVersion.asStateFlow()
+
+    private val _installId = MutableStateFlow(configStore.preferences().installId ?: "")
+    val installId: StateFlow<String> = _installId.asStateFlow()
+
+    private val _showTelemetryConsentDialog = MutableStateFlow(false)
+    val showTelemetryConsentDialog: StateFlow<Boolean> = _showTelemetryConsentDialog.asStateFlow()
+
+    private val _showTelemetrySettingsDialog = MutableStateFlow(false)
+    val showTelemetrySettingsDialog: StateFlow<Boolean> = _showTelemetrySettingsDialog.asStateFlow()
+
+    private var _matchStartedEpochSec: Long = 0L
+    private var _currentTurnStartEpochMs: Long = 0L
+    private var _transcriptUploadedForCurrentMatch: Boolean = false
+    private var _heldTranscriptPendingConsent: Boolean = false
+
+    fun setShowTelemetryConsentDialog(show: Boolean) {
+        _showTelemetryConsentDialog.value = show
+    }
+
+    fun setShowTelemetrySettingsDialog(show: Boolean) {
+        _showTelemetrySettingsDialog.value = show
+    }
+
+    fun setTelemetryConsentChoice(choice: String) {
+        configStore.preferences().telemetryConsent = choice
+        configStore.preferences().telemetryConsentVersion = ClientConfigStore.ClientPreferences.CURRENT_TELEMETRY_CONSENT_VERSION
+        if (choice == "share" && configStore.preferences().installId.isEmpty()) {
+            configStore.preferences().installId = ClientConfigStore.generateUuidV4()
+        }
+        configStore.save()
+        _telemetryConsent.value = choice
+        _telemetryConsentVersion.value = ClientConfigStore.ClientPreferences.CURRENT_TELEMETRY_CONSENT_VERSION
+        _installId.value = configStore.preferences().installId ?: ""
+        _showTelemetryConsentDialog.value = false
+
+        if (_heldTranscriptPendingConsent) {
+            _heldTranscriptPendingConsent = false
+            uploadCompletedBotGameIfEligible()
+        }
+    }
+
+    fun resetInstallIdAndRequestDeletion() {
+        val oldId = configStore.preferences().installId
+        if (!oldId.isNullOrEmpty()) {
+            Thread({
+                try {
+                    netClient.deleteInstallArchiveData(oldId)
+                } catch (_: Throwable) {
+                }
+            }, "OctiDeleteInstallDataThread").apply {
+                isDaemon = true
+                start()
+            }
+        }
+        configStore.resetInstallId()
+        configStore.save()
+        _installId.value = configStore.preferences().installId ?: ""
+    }
+
     private val _asyncBotThinkingEnabled = MutableStateFlow(false)
     val asyncBotThinkingEnabled: StateFlow<Boolean> = _asyncBotThinkingEnabled.asStateFlow()
 
@@ -350,6 +444,9 @@ class OctiAppViewModel @JvmOverloads constructor(
         _isBotThinking.value = false
         _botThinkingProgress.value = 0f
         _botThinkingRemainingSec.value = 0f
+        _botThinkingDepth.value = 0
+        _botThinkingNodes.value = 0L
+        _botThinkingScore.value = 0
         val active = _activeBotThinkingThread
         _activeBotThinkingThread = null
         if (active != null && active !== Thread.currentThread()) {
@@ -361,7 +458,7 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     private fun runOnUiThreadOrSync(action: () -> Unit) {
-        val vmName = System.getProperty("java.vm.name", "").lowercase()
+        val vmName = (System.getProperty("java.vm.name") ?: "").lowercase()
         val isAndroidVm = vmName.contains("dalvik") || vmName.contains("art")
         if (isAndroidVm) {
             try {
@@ -396,10 +493,21 @@ class OctiAppViewModel @JvmOverloads constructor(
         _asyncBotThinkingEnabled.value = enabled
     }
 
-    fun updateBotThinkingProgressForTest(thinking: Boolean, progress: Float, remainingSec: Float) {
+    @JvmOverloads
+    fun updateBotThinkingProgressForTest(
+        thinking: Boolean,
+        progress: Float,
+        remainingSec: Float,
+        depth: Int = 0,
+        nodes: Long = 0L,
+        score: Int = 0
+    ) {
         _isBotThinking.value = thinking
         _botThinkingProgress.value = progress
         _botThinkingRemainingSec.value = remainingSec
+        _botThinkingDepth.value = depth
+        _botThinkingNodes.value = nodes
+        _botThinkingScore.value = score
     }
 
     fun openZoomedSquare(x: Int, y: Int) {
@@ -462,6 +570,14 @@ class OctiAppViewModel @JvmOverloads constructor(
                 avatarUrl = prefs.avatarUrl
             }
             _currentProfile.value = cachedProfile
+        }
+        _telemetryConsent.value = prefs.getTelemetryConsent()
+        _telemetryConsentVersion.value = prefs.getTelemetryConsentVersion()
+        _installId.value = prefs.getInstallId()
+        if (prefs.getTelemetryConsent() == "unset" ||
+            prefs.getTelemetryConsentVersion() < ClientConfigStore.ClientPreferences.CURRENT_TELEMETRY_CONSENT_VERSION
+        ) {
+            _showTelemetryConsentDialog.value = true
         }
         startNewLocalGame(
             OctiGameMode.GAME_MODE_2,
@@ -647,6 +763,10 @@ class OctiAppViewModel @JvmOverloads constructor(
         }
         _viewingPly.value = 0
         clearLastMoveIndicators()
+        _matchStartedEpochSec = System.currentTimeMillis() / 1000L
+        _currentTurnStartEpochMs = System.currentTimeMillis()
+        _transcriptUploadedForCurrentMatch = false
+        _heldTranscriptPendingConsent = false
         _isContinuingGuidedJump.value = false
         _showGameOverDialog.value = false
         _zoomedSquare.value = null
@@ -881,6 +1001,16 @@ class OctiAppViewModel @JvmOverloads constructor(
         if (chosen.isEmpty() || !applyMoveNotation(chosen)) {
             return ""
         }
+        val plyMeta = OctiGame.OctiPlyMetadata().apply {
+            this.elapsedMs = stats.elapsedMs
+            this.isAiMove = true
+            this.aiDifficulty = _botDifficulty.value.level
+            this.aiBudgetMs = botEngine.timeBudgetMs
+            this.aiDepthReached = stats.depthReached
+            this.aiNodesVisited = stats.nodesVisited
+            this.aiBestScore = stats.bestScore
+        }
+        board.game?.setLastPlyMetadata(plyMeta)
         return chosen
     }
 
@@ -913,15 +1043,18 @@ class OctiAppViewModel @JvmOverloads constructor(
                     val remaining = ((budgetMs - elapsedMs) / 1000f).coerceAtLeast(0f)
                     _botThinkingProgress.value = progress
                     _botThinkingRemainingSec.value = remaining
+                    _botThinkingDepth.value = botEngine.liveDepthReached()
+                    _botThinkingNodes.value = botEngine.liveNodesVisited()
+                    _botThinkingScore.value = botEngine.liveBestScore()
                 }
-            }, 100, 100, java.util.concurrent.TimeUnit.MILLISECONDS)
+            }, 50, 50, java.util.concurrent.TimeUnit.MILLISECONDS)
 
             var chosen = ""
+            val stats = OctiBotEngine.BotSearchStats()
             try {
                 val searchBoard = OctiBoard()
                 searchBoard.suppressBoardUpdateNotification(true)
                 searchBoard.fromPositionString(rootFen)
-                val stats = OctiBotEngine.BotSearchStats()
                 chosen = botEngine.chooseMove(searchBoard, stats)
             } catch (_: Throwable) {
                 chosen = ""
@@ -945,12 +1078,27 @@ class OctiAppViewModel @JvmOverloads constructor(
                                     moveApplied = applyMoveNotation(fallback)
                                 }
                             }
+                            if (moveApplied) {
+                                val plyMeta = OctiGame.OctiPlyMetadata().apply {
+                                    this.elapsedMs = stats.elapsedMs
+                                    this.isAiMove = true
+                                    this.aiDifficulty = _botDifficulty.value.level
+                                    this.aiBudgetMs = botEngine.timeBudgetMs
+                                    this.aiDepthReached = stats.depthReached
+                                    this.aiNodesVisited = stats.nodesVisited
+                                    this.aiBestScore = stats.bestScore
+                                }
+                                board.game?.setLastPlyMetadata(plyMeta)
+                            }
                         }
                     }
                 } finally {
                     _isBotThinking.value = false
                     _botThinkingProgress.value = 1f
                     _botThinkingRemainingSec.value = 0f
+                    _botThinkingDepth.value = 0
+                    _botThinkingNodes.value = 0L
+                    _botThinkingScore.value = 0
                     _activeBotThinkingThread = null
                 }
                 if (moveApplied) {
@@ -1024,48 +1172,114 @@ class OctiAppViewModel @JvmOverloads constructor(
         }
     }
 
+    fun buildCurrentGameTranscriptJson(includeExtendedTelemetry: Boolean = false): String {
+        val g = board.game ?: return ""
+        val meta = OctiGame.OctiGameMetadata().apply {
+            this.source = "ANDROID_LOCAL_AI"
+            this.appVersion = OctiDefs.OCTI_VERSION_STRING
+            val abi = try {
+                android.os.Build.SUPPORTED_ABIS?.firstOrNull() ?: "generic"
+            } catch (_: Throwable) {
+                "generic"
+            }
+            this.platform = "android-$abi"
+            this.buildType = "release"
+            this.license = "CC-BY-4.0"
+            this.attribution = "Octi game data, Charles Chiou (selfso.com)"
+
+            val humanSeat = _humanSeat.value
+            val botSeat = if (humanSeat == OctiPlayer.PLAYER_A) OctiPlayer.PLAYER_B else OctiPlayer.PLAYER_A
+            val p1 = OctiGame.OctiPlayerMetadata().apply {
+                this.seat = 1
+                this.player = humanSeat
+                this.type = "HUMAN"
+                this.handle = "Player"
+            }
+            val p2 = OctiGame.OctiPlayerMetadata().apply {
+                this.seat = 2
+                this.player = botSeat
+                this.type = "AI"
+                this.handle = "AI_L" + _botDifficulty.value.level
+                this.aiDifficulty = _botDifficulty.value.level
+                this.aiBudgetMs = botEngine.timeBudgetMs
+            }
+            this.players.add(p1)
+            this.players.add(p2)
+
+            if (includeExtendedTelemetry) {
+                this.extended.present = true
+                this.extended.startedAt = if (_matchStartedEpochSec > 0) _matchStartedEpochSec else System.currentTimeMillis() / 1000L
+                this.extended.endedAt = System.currentTimeMillis() / 1000L
+                val tz = TimeZone.getDefault()
+                this.extended.utcOffsetMin = tz.getOffset(System.currentTimeMillis()) / (60 * 1000)
+                this.extended.locale = Locale.getDefault().toLanguageTag()
+                val osRel = try {
+                    android.os.Build.VERSION.RELEASE
+                } catch (_: Throwable) {
+                    "unknown"
+                }
+                this.extended.osVersion = "Android $osRel"
+                this.extended.installId = configStore.preferences().installId ?: ""
+            } else {
+                this.extended.present = false
+            }
+        }
+        return g.serializeJson(meta)
+    }
+
     fun exportCurrentTranscript(): String {
-        return board.serializeGame()
+        return buildCurrentGameTranscriptJson(false)
     }
 
     /**
-     * Formats the committed move history as clean numbered lines for chat / Messenger:
-     * 1. A: 33
-     * 2. B: 37+d
-     * 3. A: 33+a
+     * Formats the committed move history as canonical JSON v3.0 transcript text.
      */
     fun exportMoveHistoryText(): String {
-        val game = board.game
-        if (game != null && game.moves.isNotEmpty()) {
-            val sb = StringBuilder()
-            val movesList = game.moves
-            for (i in movesList.indices) {
-                val entry = movesList[i]
-                val playerLetter = when (entry.player) {
-                    OctiPlayer.PLAYER_A -> "A"
-                    OctiPlayer.PLAYER_B -> "B"
-                    OctiPlayer.PLAYER_C -> "C"
-                    OctiPlayer.PLAYER_D -> "D"
-                    else -> "?"
-                }
-                if (i > 0) {
-                    sb.append("\n")
-                }
-                sb.append("${i + 1}. $playerLetter: ${entry.move.asString()}")
-            }
-            return sb.toString()
+        return exportCurrentTranscript()
+    }
+
+    fun uploadCompletedBotGameIfEligible(synchronousForTest: Boolean = false): Boolean {
+        if (_matchType.value != MatchType.LOCAL_VS_BOT) {
+            return false
         }
-        if (_moveHistory.isNotEmpty()) {
-            val sb = StringBuilder()
-            for (i in _moveHistory.indices) {
-                if (i > 0) {
-                    sb.append("\n")
-                }
-                sb.append("${i + 1}. ${_moveHistory[i]}")
-            }
-            return sb.toString()
+        val g = board.game ?: return false
+        if (!g.isGameStarted || !g.isGameOver) {
+            return false
         }
-        return ""
+        if (g.numMoves == 0) {
+            return false
+        }
+        if (_transcriptUploadedForCurrentMatch) {
+            return false
+        }
+        val consent = configStore.preferences().telemetryConsent ?: "unset"
+        if (consent == "unset" || configStore.preferences().telemetryConsentVersion < ClientConfigStore.ClientPreferences.CURRENT_TELEMETRY_CONSENT_VERSION) {
+            _heldTranscriptPendingConsent = true
+            return false
+        }
+        _transcriptUploadedForCurrentMatch = true
+        _heldTranscriptPendingConsent = false
+
+        val shareExtra = (consent == "share")
+        val jsonStr = buildCurrentGameTranscriptJson(shareExtra)
+        val installId = if (shareExtra) (configStore.preferences().installId ?: "") else ""
+
+        val req = OctiNetworkClient.UploadTranscriptRequest(jsonStr, installId)
+
+        if (synchronousForTest) {
+            val res = netClient.uploadTrainingTranscript(req)
+            return res.ok
+        } else {
+            val thread = Thread({
+                try {
+                    netClient.uploadTrainingTranscript(req)
+                } catch (_: Throwable) {
+                }
+            }, "OctiTrainingUploadThread")
+            thread.isDaemon = true
+            thread.start()
+            return true
+        }
     }
 
     private fun recordAppliedBoardPly(notation: String) {
@@ -1086,11 +1300,25 @@ class OctiAppViewModel @JvmOverloads constructor(
         } else {
             OctiBoardRenderer.extractModifiedSquares(notation, edgeless)
         }
+        _lastMoveIndicatorSetAtMs = System.currentTimeMillis()
+
+        val g = board.game
+        if (g != null && g.numMoves > 0) {
+            val lastMeta = g.getPlyMetadata(g.numMoves - 1)
+            if (!lastMeta.isAiMove && lastMeta.elapsedMs == 0L) {
+                val nowMs = System.currentTimeMillis()
+                val thinkMs = Math.max(0L, nowMs - _currentTurnStartEpochMs)
+                lastMeta.elapsedMs = thinkMs
+                g.setLastPlyMetadata(lastMeta)
+                _currentTurnStartEpochMs = nowMs
+            }
+        }
 
         if (board.game.isGameOver) {
             soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
             _statusBanner.value = "Game Over — Winner: ${board.game.winner}"
             _showGameOverDialog.value = true
+            uploadCompletedBotGameIfEligible()
         } else {
             val cue = when {
                 notation.contains("x") -> OctiSoundSynth.SoundCue.POD_CAPTURE
@@ -1152,10 +1380,25 @@ class OctiAppViewModel @JvmOverloads constructor(
             } else {
                 OctiBoardRenderer.extractModifiedSquares(lastMoveStr, edgeless)
             }
+            _lastMoveIndicatorSetAtMs = System.currentTimeMillis()
+
+            val g = board.game
+            if (g != null && g.numMoves > 0) {
+                val lastMeta = g.getPlyMetadata(g.numMoves - 1)
+                if (!lastMeta.isAiMove && lastMeta.elapsedMs == 0L) {
+                    val nowMs = System.currentTimeMillis()
+                    val thinkMs = Math.max(0L, nowMs - _currentTurnStartEpochMs)
+                    lastMeta.elapsedMs = thinkMs
+                    g.setLastPlyMetadata(lastMeta)
+                    _currentTurnStartEpochMs = nowMs
+                }
+            }
+
             if (board.game.isGameOver) {
                 soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
                 _statusBanner.value = "Game Over — Winner: ${board.game.winner}"
                 _showGameOverDialog.value = true
+                uploadCompletedBotGameIfEligible()
             } else {
                 soundSynth.triggerCue(OctiSoundSynth.SoundCue.POD_STEP)
             }
@@ -1494,6 +1737,7 @@ class OctiAppViewModel @JvmOverloads constructor(
                         val latestMoveStr = gv.moves.lastOrNull() ?: ""
                         val edgeless = board.game?.useEdgelessBoard() == true
                         _lastMoveModifiedSquares.value = OctiBoardRenderer.extractModifiedSquares(latestMoveStr, edgeless)
+                        _lastMoveIndicatorSetAtMs = System.currentTimeMillis()
                     }
                 }
                 if (!isViewingHistory() || _viewingPly.value >= livePlyCount() - 1) {

@@ -305,7 +305,7 @@ fun OctiReserveHud(
                         viewModel.clearLastMoveIndicators()
                         val text = viewModel.exportMoveHistoryText()
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        val clip = ClipData.newPlainText("OCTI Moves", text)
+                        val clip = ClipData.newPlainText("OCTI Transcript", text)
                         clipboard?.setPrimaryClip(clip)
                         viewModel.setShowExportMovesDialog(true)
                     },

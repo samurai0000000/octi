@@ -13,11 +13,15 @@
 #include "OctiBoard.hxx"
 #include "OctiGame.hxx"
 #include "OctiBotEngine.hxx"
+#include "OctiCrypto.hxx"
 #include "Version.hxx"
+#include <chrono>
+#include <nlohmann/json.hpp>
 #include <rapidcheck.h>
 #include <initializer_list>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 #include <CppUTest/CommandLineTestRunner.h>
@@ -1455,16 +1459,20 @@ TEST(OctiSerializationTest, GameTranscriptMinimalAndAnnotated)
     game->move("33");
     game->move("37");
 
+    std::string canonicalMoves = board.exportCanonicalMovesText();
+    STRCMP_EQUAL("33+b\n37+e\n33\n37\n", canonicalMoves.c_str());
+
     std::string minimal = board.serializeGame();
-    CHECK_TRUE(minimal.find("MOVES: 4") != std::string::npos);
+    CHECK_TRUE(minimal.find("\"format\": \"octi.transcript.v3\"") != std::string::npos);
+    CHECK_TRUE(minimal.find("\"plies\": [") != std::string::npos);
 
     octi::OctiBoard replayMinimal;
     replayMinimal.deserializeGame(minimal);
     CHECK_EQUAL(4, replayMinimal.getGame()->getNumMoves());
     CHECK_EQUAL(board.toPositionString(), replayMinimal.toPositionString());
 
-    // Annotated transcript with metadata
-    std::string annotated =
+    // Legacy v2.0 transcript must be rejected with IllegalMoveSyntaxException
+    std::string legacy =
         "; OCTI Game Transcript v2.0\n"
         "GAME_MODE: 2\n"
         "GAME_BASES: 3\n"
@@ -1473,18 +1481,11 @@ TEST(OctiSerializationTest, GameTranscriptMinimalAndAnnotated)
         "START_PLAYER: A\n"
         "STATUS: IN_PROGRESS\n"
         "WINNER: NONE\n"
-        "EVENT: Test Tournament\n"
-        "TIME_CONTROL: 600+5\n"
         "MOVES: 4\n"
-        "1. A 33+b { clk=600000 emt=1200 eval=0.15 depth=12 }\n"
-        "1. B 37+e { clk=598500 emt=2100 eval=-0.10 depth=11 }\n"
-        "2. A 33 { clk=595200 emt=800 }\n"
-        "2. B 37 { clk=596000 emt=1400 }\n";
+        "33+b\n37+e\n33\n37\n";
 
-    octi::OctiBoard replayAnnotated;
-    replayAnnotated.deserializeGame(annotated);
-    CHECK_EQUAL(4, replayAnnotated.getGame()->getNumMoves());
-    CHECK_EQUAL(board.toPositionString(), replayAnnotated.toPositionString());
+    octi::OctiBoard replayLegacy;
+    CHECK_THROWS(octi::IllegalMoveSyntaxException, replayLegacy.deserializeGame(legacy));
 }
 
 // ---------------------------------------------------------------------------
@@ -2183,6 +2184,283 @@ TEST(OctiBotEngineCoreTest, Level3MasterOpeningNeverDumpsUnarmedReservePodsOn37)
     }
 
     LONGS_EQUAL(4, game->getFreePods(octi::PLAYER_B));
+}
+
+// ---------------------------------------------------------------------------
+// OctiCryptoAndTranscriptV3Test
+// ---------------------------------------------------------------------------
+
+TEST_GROUP(OctiCryptoAndTranscriptV3Test)
+{
+};
+
+TEST(OctiCryptoAndTranscriptV3Test, NistSha256StandardVectors)
+{
+    // NIST Vector 1: Empty string
+    STRCMP_EQUAL("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                 octi::OctiCrypto::sha256Hex("").c_str());
+
+    // NIST Vector 2: "abc"
+    STRCMP_EQUAL("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+                 octi::OctiCrypto::sha256Hex("abc").c_str());
+
+    // NIST Vector 3: 56-byte multi-block boundary
+    const std::string v3 = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+    STRCMP_EQUAL("248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
+                 octi::OctiCrypto::sha256Hex(v3).c_str());
+
+    // sha256Bytes matches sha256Hex
+    std::array<std::uint8_t, 32> bytes = octi::OctiCrypto::sha256Bytes("abc", 3);
+    CHECK_EQUAL(0xba, bytes[0]);
+    CHECK_EQUAL(0x78, bytes[1]);
+    CHECK_EQUAL(0x16, bytes[2]);
+    CHECK_EQUAL(0xad, bytes[31]);
+}
+
+TEST(OctiCryptoAndTranscriptV3Test, OctiBotEngineLiveTelemetryAccessors)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    octi::OctiBotEngine bot(octi::BotDifficulty::CASUAL, 0x12345ULL);
+    bot.setTimeBudgetMs(100);
+
+    // Initial state before search
+    CHECK_EQUAL(0, bot.liveDepthReached());
+    CHECK_EQUAL(0, bot.liveNodesVisited());
+    CHECK_EQUAL(0, bot.liveBestScore());
+
+    octi::BotSearchStats stats;
+    std::string move = bot.chooseMove(board, &stats);
+    CHECK_FALSE(move.empty());
+
+    // Final live state matches returned stats
+    CHECK_TRUE(bot.liveDepthReached() >= 1);
+    CHECK_TRUE(bot.liveNodesVisited() > 0);
+    CHECK_EQUAL(stats.depthReached, bot.liveDepthReached());
+    CHECK_EQUAL(stats.nodesVisited, bot.liveNodesVisited());
+    CHECK_EQUAL(stats.bestScore, bot.liveBestScore());
+
+    // Concurrent thread polling check
+    std::atomic<bool> sawLiveNodes{false};
+    std::atomic<bool> threadRunning{true};
+    octi::OctiBotEngine pollBot(octi::BotDifficulty::TACTICAL, 0x9988ULL);
+    pollBot.setTimeBudgetMs(150);
+
+    std::thread poller([&]() {
+        while (threadRunning.load()) {
+            if (pollBot.liveNodesVisited() > 0) {
+                sawLiveNodes.store(true);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+    });
+
+    pollBot.chooseMove(board);
+    threadRunning.store(false);
+    poller.join();
+
+    CHECK_TRUE(sawLiveNodes.load());
+}
+
+TEST(OctiCryptoAndTranscriptV3Test, JsonV3MetadataAndPerPlyAiEffortRoundTrip)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2, true, false, octi::GAME_BASES_3);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    octi::OctiGameMetadata meta;
+    meta.gameId = "custom-test-game-12345";
+    meta.source = "TEST_SUITE";
+    meta.license = "CC-BY-4.0";
+    meta.attribution = "Octi game data, Charles Chiou (selfso.com)";
+    meta.appVersion = "2.1.1";
+    meta.buildType = "debug";
+    meta.platform = "linux-x86_64";
+    meta.extended.present = true;
+    meta.extended.startedAt = 1761724000LL;
+    meta.extended.endedAt = 1761724320LL;
+    meta.extended.utcOffsetMin = 480;
+    meta.extended.locale = "en-TW";
+    meta.extended.osVersion = "Ubuntu 24.04";
+    meta.extended.installId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
+    meta.timeControl = "600+5";
+
+    octi::OctiPlayerMetadata p1;
+    p1.seat = 1;
+    p1.player = octi::PLAYER_A;
+    p1.type = "HUMAN";
+    p1.handle = "Charles";
+    meta.players.push_back(p1);
+
+    octi::OctiPlayerMetadata p2;
+    p2.seat = 2;
+    p2.player = octi::PLAYER_B;
+    p2.type = "AI";
+    p2.handle = "AI_L3";
+    p2.aiDifficulty = 3;
+    p2.aiBudgetMs = 8000;
+    meta.players.push_back(p2);
+
+    game->setGameMetadata(meta);
+
+    // Human move
+    game->move("33+b");
+    octi::OctiPlyMetadata ply1;
+    ply1.elapsedMs = 1200;
+    ply1.clockAfterMs = 598800;
+    game->setLastPlyMetadata(ply1);
+
+    // AI move
+    game->move("37+e");
+    octi::OctiPlyMetadata ply2;
+    ply2.elapsedMs = 3400;
+    ply2.clockAfterMs = 596600;
+    ply2.isAiMove = true;
+    ply2.aiDifficulty = 3;
+    ply2.aiBudgetMs = 8000;
+    ply2.aiDepthReached = 5;
+    ply2.aiNodesVisited = 84200;
+    ply2.aiBestScore = 42;
+    game->setLastPlyMetadata(ply2);
+
+    std::string jsonStr = board.serializeJson(meta);
+    CHECK_TRUE(jsonStr.find("\"format\": \"octi.transcript.v3\"") != std::string::npos);
+    CHECK_TRUE(jsonStr.find("\"gameId\": \"custom-test-game-12345\"") != std::string::npos);
+    CHECK_TRUE(jsonStr.find("\"license\": \"CC-BY-4.0\"") != std::string::npos);
+    CHECK_TRUE(jsonStr.find("\"installId\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\"") != std::string::npos);
+    CHECK_TRUE(jsonStr.find("\"nodesVisited\":84200") != std::string::npos ||
+               jsonStr.find("\"nodesVisited\": 84200") != std::string::npos);
+
+    octi::OctiBoard replayBoard;
+    replayBoard.deserializeGame(jsonStr);
+
+    CHECK_EQUAL(2, replayBoard.getGame()->getNumMoves());
+    CHECK_EQUAL(board.toPositionString(), replayBoard.toPositionString());
+    CHECK_EQUAL(octi::GAME_MODE_2, replayBoard.getGameMode());
+    CHECK_TRUE(replayBoard.getGame()->useSuperProngs());
+
+    const octi::OctiGameMetadata &repMeta = replayBoard.getGame()->getGameMetadata();
+    STRCMP_EQUAL("custom-test-game-12345", repMeta.gameId.c_str());
+    STRCMP_EQUAL("CC-BY-4.0", repMeta.license.c_str());
+    CHECK_TRUE(repMeta.extended.present);
+    STRCMP_EQUAL("f47ac10b-58cc-4372-a567-0e02b2c3d479", repMeta.extended.installId.c_str());
+    CHECK_EQUAL(2, repMeta.players.size());
+    STRCMP_EQUAL("Charles", repMeta.players[0].handle.c_str());
+    STRCMP_EQUAL("AI_L3", repMeta.players[1].handle.c_str());
+    CHECK_EQUAL(3, repMeta.players[1].aiDifficulty);
+
+    octi::OctiPlyMetadata repPly1 = replayBoard.getGame()->getPlyMetadata(0);
+    CHECK_EQUAL(1200, repPly1.elapsedMs);
+    CHECK_EQUAL(598800, repPly1.clockAfterMs);
+    CHECK_FALSE(repPly1.isAiMove);
+
+    octi::OctiPlyMetadata repPly2 = replayBoard.getGame()->getPlyMetadata(1);
+    CHECK_EQUAL(3400, repPly2.elapsedMs);
+    CHECK_EQUAL(596600, repPly2.clockAfterMs);
+    CHECK_TRUE(repPly2.isAiMove);
+    CHECK_EQUAL(3, repPly2.aiDifficulty);
+    CHECK_EQUAL(8000, repPly2.aiBudgetMs);
+    CHECK_EQUAL(5, repPly2.aiDepthReached);
+    CHECK_EQUAL(84200ULL, repPly2.aiNodesVisited);
+    CHECK_EQUAL(42, repPly2.aiBestScore);
+}
+
+TEST(OctiCryptoAndTranscriptV3Test, JsonV3ResignedStatusRoundTrip)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    game->move("33+b");
+    game->move("37+e");
+    game->resign(octi::PLAYER_B);
+
+    CHECK_TRUE(game->isGameOver());
+    CHECK_TRUE(game->isGameResigned());
+    CHECK_EQUAL(octi::PLAYER_A, game->getWinner());
+
+    std::string jsonStr = board.serializeGame();
+    CHECK_TRUE(jsonStr.find("\"status\": \"RESIGNED\"") != std::string::npos);
+    CHECK_TRUE(jsonStr.find("\"winner\": \"A\"") != std::string::npos);
+    CHECK_TRUE(jsonStr.find("\"termination\": \"RESIGNATION\"") != std::string::npos);
+
+    octi::OctiBoard replayBoard;
+    replayBoard.deserializeGame(jsonStr);
+
+    CHECK_TRUE(replayBoard.getGame()->isGameOver());
+    CHECK_TRUE(replayBoard.getGame()->isGameResigned());
+    CHECK_EQUAL(octi::PLAYER_A, replayBoard.getGame()->getWinner());
+    CHECK_EQUAL(2, replayBoard.getGame()->getNumMoves());
+    CHECK_EQUAL(board.toPositionString(), replayBoard.toPositionString());
+}
+
+TEST(OctiCryptoAndTranscriptV3Test, UndoRedoPreservesPlyMetadata)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    game->move("33+b");
+    octi::OctiPlyMetadata p1;
+    p1.elapsedMs = 1111;
+    game->setLastPlyMetadata(p1);
+
+    game->move("37+e");
+    octi::OctiPlyMetadata p2;
+    p2.elapsedMs = 2222;
+    p2.isAiMove = true;
+    p2.aiNodesVisited = 999;
+    game->setLastPlyMetadata(p2);
+
+    CHECK_EQUAL(2, game->getAllPlyMetadata().size());
+    CHECK_EQUAL(1111, game->getPlyMetadata(0).elapsedMs);
+    CHECK_EQUAL(2222, game->getPlyMetadata(1).elapsedMs);
+
+    game->undo();
+    CHECK_EQUAL(1, game->getNumMoves());
+    CHECK_EQUAL(1, game->getAllPlyMetadata().size());
+    CHECK_EQUAL(1111, game->getPlyMetadata(0).elapsedMs);
+
+    game->redo();
+    CHECK_EQUAL(2, game->getNumMoves());
+    CHECK_EQUAL(2, game->getAllPlyMetadata().size());
+    CHECK_EQUAL(1111, game->getPlyMetadata(0).elapsedMs);
+    CHECK_EQUAL(2222, game->getPlyMetadata(1).elapsedMs);
+    CHECK_TRUE(game->getPlyMetadata(1).isAiMove);
+    CHECK_EQUAL(999ULL, game->getPlyMetadata(1).aiNodesVisited);
+}
+
+TEST(OctiCryptoAndTranscriptV3Test, CanonicalGameIdIsDeterministicAndDifferentiatesVariants)
+{
+    octi::OctiBoard b1(octi::GAME_MODE_2, false, false, octi::GAME_BASES_3);
+    b1.getGame()->start(octi::PLAYER_A);
+    b1.getGame()->move("33+b");
+    b1.getGame()->move("37+e");
+
+    octi::OctiBoard b2(octi::GAME_MODE_2, false, false, octi::GAME_BASES_3);
+    b2.getGame()->start(octi::PLAYER_A);
+    b2.getGame()->move("33+b");
+    b2.getGame()->move("37+e");
+
+    std::string id1 = b1.computeCanonicalGameId();
+    std::string id2 = b2.computeCanonicalGameId();
+    CHECK_EQUAL(64, id1.size());
+    STRCMP_EQUAL(id1.c_str(), id2.c_str());
+
+    // Different variant parameter (superProngs = true) gives different hash
+    octi::OctiBoard b3(octi::GAME_MODE_2, true, false, octi::GAME_BASES_3);
+    b3.getGame()->start(octi::PLAYER_A);
+    b3.getGame()->move("33+b");
+    b3.getGame()->move("37+e");
+    std::string id3 = b3.computeCanonicalGameId();
+    CHECK_FALSE(id1 == id3);
+
+    // Another move gives different hash
+    b1.getGame()->move("33");
+    std::string id1After = b1.computeCanonicalGameId();
+    CHECK_FALSE(id1 == id1After);
 }
 
 int main(int argc, char **argv)

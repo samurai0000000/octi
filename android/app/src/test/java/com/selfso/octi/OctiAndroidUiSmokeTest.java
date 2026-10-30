@@ -139,7 +139,8 @@ public class OctiAndroidUiSmokeTest {
 
         com.selfso.octi.ui.OctiAppViewModel vm = new com.selfso.octi.ui.OctiAppViewModel();
         try {
-            assertEquals("", vm.exportMoveHistoryText());
+            String initialExport = vm.exportMoveHistoryText();
+            assertTrue(initialExport.contains("\"format\": \"octi.transcript.v3\"") || initialExport.contains("\"format\":\"octi.transcript.v3\""));
             assertFalse(vm.getShowExportMovesDialog().getValue());
 
             vm.setShowExportMovesDialog(true);
@@ -147,16 +148,18 @@ public class OctiAndroidUiSmokeTest {
             vm.setShowExportMovesDialog(false);
             assertFalse(vm.getShowExportMovesDialog().getValue());
 
-            // Apply 3 moves and verify numbered chat format
+            // Apply 3 moves and verify canonical JSON v3 format
             assertTrue(vm.applyMoveNotation("33+a"));
             assertTrue(vm.applyMoveNotation("37+e"));
             assertTrue(vm.applyMoveNotation("33a-34"));
 
             String exported = vm.exportMoveHistoryText();
-            assertTrue(exported.contains("1. A: 33+a"));
-            assertTrue(exported.contains("2. B: 37+e"));
-            assertTrue(exported.contains("3. A: 33a-34"));
-            assertEquals("1. A: 33+a\n2. B: 37+e\n3. A: 33a-34", exported.trim());
+            assertTrue(exported.contains("\"format\": \"octi.transcript.v3\"") || exported.contains("\"format\":\"octi.transcript.v3\""));
+            assertTrue(exported.contains("33+a"));
+            assertTrue(exported.contains("37+e"));
+            assertTrue(exported.contains("33a-34"));
+            assertFalse("Export must omit '1. A:' prefixes", exported.contains("1. A:"));
+            assertFalse("Export must omit client.extended", exported.contains("\"extended\""));
         } finally {
             vm.close();
         }

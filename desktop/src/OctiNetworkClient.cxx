@@ -1832,14 +1832,74 @@ ApiResult<std::string> OctiNetworkClient::downloadOctiTranscript(
 {
     ApiResult<std::string> res;
     Impl::RawResponse raw =
-        _impl->doGet("/api/v1/archive/games/" + urlEncode(gameId) + "/octi");
+        _impl->doGet("/api/v1/archive/games/" + urlEncode(gameId) + "/transcript");
+    if (!raw.transportOk || raw.status != 200) {
+        raw = _impl->doGet("/api/v1/archive/games/" + urlEncode(gameId) + "/octi");
+        if (!raw.transportOk || raw.status != 200) {
+            Impl::populateError(raw, res);
+            return res;
+        }
+    }
+    res.ok = true;
+    res.httpStatus = raw.status;
+    res.data = raw.body;
+    return res;
+}
+
+ApiResult<UploadTranscriptResponse> OctiNetworkClient::uploadTrainingTranscript(
+    const UploadTranscriptRequest &req)
+{
+    ApiResult<UploadTranscriptResponse> res;
+    Json body;
+    Json parsed = Json::parse(req.transcriptJson, nullptr, false);
+    if (!parsed.is_discarded() && parsed.is_object()) {
+        body["transcript"] = parsed;
+    } else {
+        body["transcript"] = req.transcriptJson;
+    }
+    if (!req.clientId.empty()) {
+        body["clientId"] = req.clientId;
+    }
+
+    Impl::RawResponse raw = _impl->doPost("/api/v1/archive/upload", body);
+    if (!raw.transportOk || raw.status != 200) {
+        Impl::populateError(raw, res);
+        return res;
+    }
+
+    res.ok = true;
+    res.httpStatus = raw.status;
+    if (raw.json.is_object()) {
+        if (raw.json.contains("game_id") && raw.json["game_id"].is_string()) {
+            res.data.gameId = raw.json["game_id"].get<std::string>();
+        } else if (raw.json.contains("gameId") && raw.json["gameId"].is_string()) {
+            res.data.gameId = raw.json["gameId"].get<std::string>();
+        }
+        if (raw.json.contains("ply_count") && raw.json["ply_count"].is_number_integer()) {
+            res.data.plyCount = raw.json["ply_count"].get<int>();
+        } else if (raw.json.contains("plyCount") && raw.json["plyCount"].is_number_integer()) {
+            res.data.plyCount = raw.json["plyCount"].get<int>();
+        }
+    }
+    return res;
+}
+
+ApiResult<int> OctiNetworkClient::deleteInstallArchiveData(
+    const std::string &installId)
+{
+    ApiResult<int> res;
+    Impl::RawResponse raw =
+        _impl->doDelete("/api/v1/archive/install/" + urlEncode(installId));
     if (!raw.transportOk || raw.status != 200) {
         Impl::populateError(raw, res);
         return res;
     }
     res.ok = true;
     res.httpStatus = raw.status;
-    res.data = raw.body;
+    if (raw.json.is_object() && raw.json.contains("deleted") &&
+        raw.json["deleted"].is_number_integer()) {
+        res.data = raw.json["deleted"].get<int>();
+    }
     return res;
 }
 

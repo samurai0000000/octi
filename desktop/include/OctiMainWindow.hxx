@@ -178,6 +178,12 @@ public:
 
     bool loadOctiTranscriptIntoReplay(const std::string &octiTranscript);
     std::string exportCurrentOctiTranscript() const;
+    std::string buildCurrentGameTranscriptJson(bool includeExtendedTelemetry = false) const;
+    void setTelemetryConsentForTesting(const std::string &choice);
+    bool uploadCompletedBotGameIfEligible(bool synchronousForTest = false);
+    void waitForBackgroundUpload();
+    void checkPromptTelemetryConsentAtStartup();
+    void showTelemetrySettingsDialog();
     QString copyExportedNotationToClipboard() const;
     void showExportNotationDialog();
     bool saveTranscriptToFile(const std::string &filePath) const;
@@ -244,6 +250,11 @@ private:
 
     bool _isLocalBotGame;
     LocalGameConfig _localConfig;
+    qint64 _currentTurnStartedEpochMs;
+    std::int64_t _matchStartedEpochSec;
+    bool _transcriptUploadedForCurrentMatch;
+    bool _heldTranscriptPendingConsent;
+    std::thread _uploadThread;
 
     bool _inOnlineRoom;
     std::string _onlineRoomId;

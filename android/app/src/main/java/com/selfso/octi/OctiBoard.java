@@ -596,103 +596,150 @@ public class OctiBoard {
     }
 
     public void deserializeGame(String transcript) {
-        if (transcript == null) {
-            return;
+        if (transcript == null || transcript.trim().isEmpty()) {
+            throw new IllegalMoveSyntaxException("empty JSON transcript");
         }
 
+        org.json.JSONObject root;
+        try {
+            root = new org.json.JSONObject(transcript);
+        } catch (org.json.JSONException e) {
+            throw new IllegalMoveSyntaxException("invalid JSON transcript: " + e.getMessage());
+        }
+
+        String format = root.optString("format", "");
+        if (!"octi.transcript.v3".equals(format)) {
+            throw new IllegalMoveSyntaxException("unsupported transcript format; expected octi.transcript.v3");
+        }
+
+        String modeStr = root.optString("mode", "2P");
         OctiGameMode parsedMode = OctiGameMode.GAME_MODE_2;
-        OctiGameBases parsedBases = OctiGameBases.GAME_BASES_3;
-        boolean useSuper = false;
-        boolean useEdgeless = false;
+        if ("2P".equalsIgnoreCase(modeStr) || "2".equals(modeStr) || "1".equals(modeStr)) {
+            parsedMode = OctiGameMode.GAME_MODE_2;
+        } else if ("4P".equalsIgnoreCase(modeStr) || "4".equals(modeStr)) {
+            parsedMode = OctiGameMode.GAME_MODE_4;
+        } else if ("OFK".equalsIgnoreCase(modeStr) || "3".equals(modeStr)) {
+            parsedMode = OctiGameMode.GAME_MODE_OFK;
+        } else {
+            throw new IllegalMoveSyntaxException("invalid mode: " + modeStr);
+        }
+
+        int basesInt = root.optInt("bases", 3);
+        OctiGameBases parsedBases = (basesInt == 1) ? OctiGameBases.GAME_BASES_1 : OctiGameBases.GAME_BASES_3;
+
+        boolean useSuper = root.optBoolean("superProngs", false);
+        boolean useEdgeless = root.optBoolean("edgeless", false);
+
+        String startPlayerStr = root.optString("startPlayer", "A");
         OctiPlayer startPlayer = OctiPlayer.PLAYER_A;
-        String statusStr = "IN_PROGRESS";
+        if ("A".equalsIgnoreCase(startPlayerStr) || "1".equals(startPlayerStr)) startPlayer = OctiPlayer.PLAYER_A;
+        else if ("B".equalsIgnoreCase(startPlayerStr) || "2".equals(startPlayerStr)) startPlayer = OctiPlayer.PLAYER_B;
+        else if ("C".equalsIgnoreCase(startPlayerStr) || "3".equals(startPlayerStr)) startPlayer = OctiPlayer.PLAYER_C;
+        else if ("D".equalsIgnoreCase(startPlayerStr) || "4".equals(startPlayerStr)) startPlayer = OctiPlayer.PLAYER_D;
+
+        String statusStr = root.optString("status", "IN_PROGRESS");
+        String winnerStr = root.optString("winner", "NONE");
         OctiPlayer winner = OctiPlayer.PLAYER_UNDEF;
-        List<String> moveLines = new ArrayList<>();
-        boolean inMoves = false;
+        if ("A".equalsIgnoreCase(winnerStr) || "1".equals(winnerStr)) winner = OctiPlayer.PLAYER_A;
+        else if ("B".equalsIgnoreCase(winnerStr) || "2".equals(winnerStr)) winner = OctiPlayer.PLAYER_B;
+        else if ("C".equalsIgnoreCase(winnerStr) || "3".equals(winnerStr)) winner = OctiPlayer.PLAYER_C;
+        else if ("D".equalsIgnoreCase(winnerStr) || "4".equals(winnerStr)) winner = OctiPlayer.PLAYER_D;
 
-        try (BufferedReader reader = new BufferedReader(new StringReader(transcript))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                line = line.trim();
-                if (line.isEmpty() || line.startsWith(";") || line.startsWith("#")) {
-                    continue;
-                }
+        OctiGame.OctiGameMetadata meta = new OctiGame.OctiGameMetadata();
+        meta.gameId = root.optString("gameId", "");
+        meta.source = root.optString("source", "LOCAL");
+        meta.license = root.optString("license", "");
+        meta.attribution = root.optString("attribution", "");
+        meta.termination = root.optString("termination", "");
+        meta.timeControl = root.optString("timeControl", "untimed");
 
-                if (inMoves) {
-                    int bracePos = line.indexOf('{');
-                    if (bracePos != -1) {
-                        line = line.substring(0, bracePos).trim();
-                    }
-                    int dotPos = line.indexOf('.');
-                    if (dotPos != -1 && dotPos + 1 < line.length()) {
-                        line = line.substring(dotPos + 1).trim();
-                        if (line.length() >= 2 && (line.charAt(0) >= 'A' && line.charAt(0) <= 'D')
-                                && (line.charAt(1) == ' ' || line.charAt(1) == ':')) {
-                            line = line.substring(2).trim();
-                        }
-                    }
-                    if (!line.isEmpty()) {
-                        moveLines.add(line);
-                    }
-                    continue;
-                }
-
-                int colonPos = line.indexOf(':');
-                if (colonPos != -1) {
-                    String key = line.substring(0, colonPos).trim();
-                    String val = line.substring(colonPos + 1).trim();
-
-                    if ("GAME_MODE".equals(key)) {
-                        if ("2".equals(val) || "1".equals(val)) {
-                            parsedMode = OctiGameMode.GAME_MODE_2;
-                        } else if ("4".equals(val)) {
-                            parsedMode = OctiGameMode.GAME_MODE_4;
-                        } else if ("OFK".equalsIgnoreCase(val) || "3".equals(val)) {
-                            parsedMode = OctiGameMode.GAME_MODE_OFK;
-                        }
-                    } else if ("GAME_BASES".equals(key)) {
-                        parsedBases = "1".equals(val) ? OctiGameBases.GAME_BASES_1
-                                                      : OctiGameBases.GAME_BASES_3;
-                    } else if ("USE_SUPER_PRONGS".equals(key)) {
-                        useSuper = ("Yes".equalsIgnoreCase(val) || "1".equals(val)
-                                || "true".equalsIgnoreCase(val));
-                    } else if ("USE_EDGELESS_BOARD".equals(key)) {
-                        useEdgeless = ("Yes".equalsIgnoreCase(val) || "1".equals(val)
-                                || "true".equalsIgnoreCase(val));
-                    } else if ("START_PLAYER".equals(key)) {
-                        if ("A".equals(val) || "1".equals(val)) startPlayer = OctiPlayer.PLAYER_A;
-                        else if ("B".equals(val) || "2".equals(val)) startPlayer = OctiPlayer.PLAYER_B;
-                        else if ("C".equals(val) || "3".equals(val)) startPlayer = OctiPlayer.PLAYER_C;
-                        else if ("D".equals(val) || "4".equals(val)) startPlayer = OctiPlayer.PLAYER_D;
-                    } else if ("STATUS".equals(key)) {
-                        statusStr = val;
-                    } else if ("WINNER".equals(key)) {
-                        if ("A".equals(val) || "1".equals(val)) winner = OctiPlayer.PLAYER_A;
-                        else if ("B".equals(val) || "2".equals(val)) winner = OctiPlayer.PLAYER_B;
-                        else if ("C".equals(val) || "3".equals(val)) winner = OctiPlayer.PLAYER_C;
-                        else if ("D".equals(val) || "4".equals(val)) winner = OctiPlayer.PLAYER_D;
-                        else winner = OctiPlayer.PLAYER_UNDEF;
-                    } else if ("MOVES".equals(key)) {
-                        inMoves = true;
+        if (root.has("client") && !root.isNull("client")) {
+            org.json.JSONObject clientObj = root.optJSONObject("client");
+            if (clientObj != null) {
+                meta.appVersion = clientObj.optString("appVersion", "");
+                meta.buildType = clientObj.optString("buildType", "release");
+                meta.platform = clientObj.optString("platform", "");
+                if (clientObj.has("extended") && !clientObj.isNull("extended")) {
+                    org.json.JSONObject extObj = clientObj.optJSONObject("extended");
+                    if (extObj != null) {
+                        meta.extended.present = true;
+                        meta.extended.startedAt = extObj.optLong("startedAt", 0L);
+                        meta.extended.endedAt = extObj.optLong("endedAt", 0L);
+                        meta.extended.utcOffsetMin = extObj.optInt("utcOffsetMin", 0);
+                        meta.extended.locale = extObj.optString("locale", "");
+                        meta.extended.osVersion = extObj.optString("osVersion", "");
+                        meta.extended.installId = extObj.optString("installId", "");
                     }
                 }
             }
-        } catch (IOException e) {
-            throw new RuntimeException("failed to read transcript", e);
+        }
+
+        if (root.has("players") && !root.isNull("players")) {
+            org.json.JSONArray pArr = root.optJSONArray("players");
+            if (pArr != null) {
+                for (int i = 0; i < pArr.length(); i++) {
+                    org.json.JSONObject pObj = pArr.optJSONObject(i);
+                    if (pObj == null) continue;
+                    OctiGame.OctiPlayerMetadata p = new OctiGame.OctiPlayerMetadata();
+                    p.seat = pObj.optInt("seat", i + 1);
+                    String pStr = pObj.optString("player", "A");
+                    if ("A".equalsIgnoreCase(pStr)) p.player = OctiPlayer.PLAYER_A;
+                    else if ("B".equalsIgnoreCase(pStr)) p.player = OctiPlayer.PLAYER_B;
+                    else if ("C".equalsIgnoreCase(pStr)) p.player = OctiPlayer.PLAYER_C;
+                    else if ("D".equalsIgnoreCase(pStr)) p.player = OctiPlayer.PLAYER_D;
+                    p.type = pObj.optString("type", "HUMAN");
+                    p.handle = pObj.optString("handle", "Player");
+                    p.aiDifficulty = pObj.optInt("aiDifficulty", 0);
+                    p.aiBudgetMs = pObj.optInt("aiBudgetMs", 0);
+                    meta.players.add(p);
+                }
+            }
         }
 
         setGameMode(parsedMode, useSuper, useEdgeless, parsedBases);
         clear();
         game.reset();
+        game.setGameMetadata(meta);
 
         if (!"NOT_STARTED".equals(statusStr)) {
             game.start(startPlayer);
-            for (String mStr : moveLines) {
-                game.move(mStr);
+            if (root.has("plies") && !root.isNull("plies")) {
+                org.json.JSONArray plies = root.optJSONArray("plies");
+                if (plies != null) {
+                    for (int i = 0; i < plies.length(); i++) {
+                        org.json.JSONObject plyObj = plies.optJSONObject(i);
+                        if (plyObj == null) continue;
+                        String moveStr = plyObj.optString("move", "");
+                        if (moveStr.isEmpty()) {
+                            throw new IllegalMoveSyntaxException("empty move string in ply");
+                        }
+                        game.move(moveStr);
+
+                        OctiGame.OctiPlyMetadata plyMeta = new OctiGame.OctiPlyMetadata();
+                        plyMeta.elapsedMs = plyObj.optLong("elapsedMs", 0L);
+                        plyMeta.clockAfterMs = plyObj.optLong("clockAfterMs", -1L);
+                        if (plyObj.has("ai") && !plyObj.isNull("ai")) {
+                            org.json.JSONObject aiObj = plyObj.optJSONObject("ai");
+                            if (aiObj != null) {
+                                plyMeta.isAiMove = true;
+                                plyMeta.aiDifficulty = aiObj.optInt("difficulty", 0);
+                                plyMeta.aiBudgetMs = aiObj.optInt("budgetMs", 0);
+                                plyMeta.aiDepthReached = aiObj.optInt("depthReached", 0);
+                                plyMeta.aiNodesVisited = aiObj.optLong("nodesVisited", 0L);
+                                plyMeta.aiBestScore = aiObj.optInt("bestScore", 0);
+                            }
+                        }
+                        game.setLastPlyMetadata(plyMeta);
+                    }
+                }
             }
+
             if ("RESIGNED".equals(statusStr)) {
-                game.resign(winner == OctiPlayer.PLAYER_A ? OctiPlayer.PLAYER_B
-                                                         : OctiPlayer.PLAYER_A);
+                if (winner != OctiPlayer.PLAYER_UNDEF) {
+                    game.setResignedWinner(winner);
+                } else {
+                    game.resign(game.getTurn());
+                }
             }
         }
     }

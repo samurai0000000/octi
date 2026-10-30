@@ -11,6 +11,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -1740,6 +1741,12 @@ fun OctiSplashOverlay(
                     color = OctiTheme.colors.accentBrass,
                     fontWeight = FontWeight.Bold
                 )
+                Text(
+                    text = "Public Game Archive: CC-BY 4.0 (Octi game data, Charles Chiou, selfso.com)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = OctiTheme.colors.textSecondary,
+                    textAlign = TextAlign.Center
+                )
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = "Tap anywhere or press ESC / Back to skip",
@@ -1763,14 +1770,14 @@ fun ExportMovesDialog(
         containerColor = OctiTheme.colors.panelCardBg,
         titleContentColor = OctiTheme.colors.accentBrass,
         textContentColor = OctiTheme.colors.textPrimary,
-        title = { Text("Export Moves") },
+        title = { Text("Export OCTI Game Notation") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Moves formatted for chat / Messenger:",
+                    text = "Canonical OCTI Transcript (JSON v3.0):",
                     style = MaterialTheme.typography.bodySmall,
                     color = OctiTheme.colors.textSecondary
                 )
@@ -1789,7 +1796,7 @@ fun ExportMovesDialog(
                         text = movesText.ifEmpty { "(No moves yet)" },
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                            fontSize = 13.sp
+                            fontSize = 12.sp
                         ),
                         color = OctiTheme.colors.textPrimary
                     )
@@ -1805,7 +1812,7 @@ fun ExportMovesDialog(
                         contentColor = OctiTheme.colors.windowBg
                     )
                 ) {
-                    Text("Copy Moves", fontWeight = FontWeight.Bold)
+                    Text("Copy Transcript", fontWeight = FontWeight.Bold)
                 }
                 Button(
                     onClick = onShare,
@@ -1831,9 +1838,22 @@ fun OctiThinkingDialog(
     level: Int,
     progress: Float,
     remainingSec: Float,
+    depth: Int = 0,
+    nodes: Long = 0L,
+    budgetMs: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val clampedProgress = progress.coerceIn(0f, 1f)
+    val totalBudgetSec = if (budgetMs > 0) {
+        budgetMs / 1000f
+    } else {
+        max(1.0f, remainingSec / max(0.001f, 1f - clampedProgress))
+    }
+    val elapsedSec = max(0f, totalBudgetSec - remainingSec)
+    val elapsedMs = (elapsedSec * 1000f).toInt()
+    val effBudgetMs = (totalBudgetSec * 1000f).toInt()
+    val overlayText = OctiBoardRenderer.formatThinkingProgressOverlay(depth, nodes, elapsedMs, effBudgetMs)
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -1861,7 +1881,7 @@ fun OctiThinkingDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "AI Thinking (Level $level) — ${String.format(java.util.Locale.US, "%.1fs", remainingSec)} remaining",
+                    text = "AI Thinking (Level $level)",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = OctiTheme.colors.accentBrass
@@ -1869,25 +1889,279 @@ fun OctiThinkingDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(10.dp)
+                        .height(26.dp)
                         .background(
-                            color = OctiTheme.colors.windowBg,
-                            shape = RoundedCornerShape(5.dp)
+                            color = Color(0xFF14181E),
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = Color(0xFF3B4252),
+                            shape = RoundedCornerShape(6.dp)
                         )
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(fraction = clampedProgress)
-                            .height(10.dp)
-                            .background(
-                                color = OctiTheme.colors.accentBrass,
-                                shape = RoundedCornerShape(5.dp)
-                            )
+                    if (clampedProgress > 0.001f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(fraction = clampedProgress)
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.horizontalGradient(
+                                        listOf(
+                                            Color(0xFFB8860B),
+                                            Color(0xFFFFD700),
+                                            Color(0xFFDAA520)
+                                        )
+                                    ),
+                                    shape = RoundedCornerShape(6.dp)
+                                )
+                        )
+                    }
+                    Text(
+                        text = overlayText,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        ),
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        modifier = Modifier.align(Alignment.Center)
                     )
                 }
             }
         }
     }
+}
+
+@Composable
+fun OctiTelemetryConsentDialog(
+    onChoice: (String) -> Unit
+) {
+    androidx.activity.compose.BackHandler(enabled = true) {
+        // Non-dismissible: ignore back press until choice is made
+    }
+
+    var showDetails by remember { mutableStateOf(false) }
+
+    val sampleJsonPreview = remember {
+        """{
+  "client": {
+    "extended": {
+      "startedAt": 1730250000,
+      "endedAt": 1730250120,
+      "utcOffsetMin": 480,
+      "locale": "en-US",
+      "osVersion": "Android 14",
+      "installId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+    }
+  }
+}"""
+    }
+
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false
+        )
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+            border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Help Improve OCTI AI",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = OctiTheme.colors.accentBrass
+                )
+
+                Text(
+                    text = "When you complete games against AI bots, OCTI can automatically upload anonymized transcripts to help train and refine bot heuristics.\n\n" +
+                            "You can choose whether to include extra contextual telemetry (match duration, regional locale, OS version, and an anonymous install ID) with uploads.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OctiTheme.colors.textPrimary
+                )
+
+                Text(
+                    text = "Public Game Archive License:\nCreative Commons Attribution 4.0 International (CC-BY 4.0)\nOcti game data, Charles Chiou (selfso.com)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = OctiTheme.colors.textSecondary
+                )
+
+                Row(
+                    modifier = Modifier
+                        .clickable { showDetails = !showDetails }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (showDetails) "▾ Hide what will be sent" else "▸ View what will be sent",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = OctiTheme.colors.accentBrass
+                    )
+                }
+
+                if (showDetails) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(OctiTheme.colors.windowBg, RoundedCornerShape(6.dp))
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = sampleJsonPreview,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                fontSize = 11.sp
+                            ),
+                            color = OctiTheme.colors.textSecondary
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        modifier = Modifier.weight(1f),
+                        onClick = { onChoice("decline") }
+                    ) {
+                        Text("Don't share", maxLines = 1)
+                    }
+                    Button(
+                        modifier = Modifier.weight(1f),
+                        onClick = { onChoice("share") },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OctiTheme.colors.accentBrass,
+                            contentColor = OctiTheme.colors.windowBg
+                        )
+                    ) {
+                        Text("Share extra info", fontWeight = FontWeight.Bold, maxLines = 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun OctiTelemetrySettingsDialog(
+    currentConsent: String,
+    installId: String,
+    onToggleShare: (Boolean) -> Unit,
+    onResetInstallId: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val isSharing = (currentConsent == "share")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = OctiTheme.colors.panelCardBg,
+        titleContentColor = OctiTheme.colors.accentBrass,
+        textContentColor = OctiTheme.colors.textPrimary,
+        title = { Text("Telemetry & Privacy") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "OCTI automatically shares completed games against AI bots with the public research dataset to improve bot play.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = OctiTheme.colors.textPrimary
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onToggleShare(!isSharing) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = isSharing,
+                        onCheckedChange = { onToggleShare(it) }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Include extra info (time, region, install ID) with uploaded games",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = OctiTheme.colors.textPrimary
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(OctiTheme.colors.windowBg, RoundedCornerShape(6.dp))
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Anonymous Install ID:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = OctiTheme.colors.textSecondary
+                    )
+                    Text(
+                        text = installId.ifEmpty { "(None)" },
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 11.sp
+                        ),
+                        color = OctiTheme.colors.accentBrass
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    OutlinedButton(
+                        onClick = onResetInstallId
+                    ) {
+                        Text("Reset Install ID")
+                    }
+                }
+
+                Text(
+                    text = "Public Dataset License:\nCreative Commons Attribution 4.0 (CC-BY 4.0)\nOcti game data, Charles Chiou (selfso.com)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = OctiTheme.colors.textSecondary
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = OctiTheme.colors.accentBrass,
+                    contentColor = OctiTheme.colors.windowBg
+                )
+            ) {
+                Text("Close", fontWeight = FontWeight.Bold)
+            }
+        }
+    )
 }
 
 /*

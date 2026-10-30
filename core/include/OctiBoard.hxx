@@ -20,6 +20,7 @@ namespace octi {
 
 class OctiBoard;
 class OctiGame;
+struct OctiGameMetadata;
 
 class OctiBoardListener {
 public:
@@ -74,6 +75,11 @@ public:
     std::string serializeGame() const;
     void deserializeGame(std::istream &in);
     void deserializeGame(const std::string &transcript);
+
+    std::string serializeJson(const OctiGameMetadata &meta) const;
+    std::string serializeJson() const;
+    std::string exportCanonicalMovesText() const;
+    std::string computeCanonicalGameId() const;
 
     friend std::ostream &operator<<(std::ostream &os, const OctiBoard &board);
 

@@ -1525,7 +1525,7 @@ TEST(AccountStoreTest, SchemaMatchesPlanAndHasNoGuestSupport)
     CHECK_EQUAL(8, countRows(
                        "SELECT COUNT(*) FROM pragma_table_info('linked_identities')"));
     CHECK_EQUAL(7, countRows("SELECT COUNT(*) FROM pragma_table_info('sessions')"));
-    CHECK_EQUAL(22, countRows("SELECT COUNT(*) FROM pragma_table_info('games')"));
+    CHECK_EQUAL(31, countRows("SELECT COUNT(*) FROM pragma_table_info('games')"));
     CHECK_TRUE(countRows("SELECT COUNT(*) FROM sqlite_master WHERE type='index'"
                          " AND name='idx_games_ended_at'") == 1);
 
@@ -2381,8 +2381,8 @@ TEST(AccountStoreTest, ArchiveAndQueryOctiTranscript)
     CHECK_EQUAL(kNow - 300, got.startedAt);
     CHECK_EQUAL(kNow, got.endedAt);
 
-    /* the stored transcript is a real .octi that replays to the stored FEN */
-    CHECK_TRUE(got.octiTranscript.find("; OCTI Game Transcript v2.0") !=
+    /* the stored transcript is a real JSON v3.0 transcript that replays to the stored FEN */
+    CHECK_TRUE(got.octiTranscript.find("\"octi.transcript.v3\"") !=
                std::string::npos);
     octi::OctiBoard replay;
     replay.deserializeGame(got.octiTranscript);

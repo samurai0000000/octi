@@ -36,6 +36,7 @@ import java.util.Set;
  */
 public final class ClientConfigStore {
 
+    public static final int CURRENT_TELEMETRY_CONSENT_VERSION = 1;
     public static final int MAX_CONFIG_FILE_BYTES = 65536;
 
     public static final class ClientPreferences {
@@ -50,6 +51,11 @@ public final class ClientConfigStore {
         public boolean sfxMuted = false;
         public boolean volumeKeyPtt = true;
         public int pttKey = 'V';
+
+        public static final int CURRENT_TELEMETRY_CONSENT_VERSION = 1;
+        public String telemetryConsent = "unset";
+        public int telemetryConsentVersion = 0;
+        public String installId = generateUuidV4();
 
         public ClientPreferences() {
         }
@@ -144,6 +150,30 @@ public final class ClientConfigStore {
             }
         }
 
+        public String getTelemetryConsent() {
+            return telemetryConsent != null ? telemetryConsent : "unset";
+        }
+
+        public void setTelemetryConsent(String telemetryConsent) {
+            this.telemetryConsent = telemetryConsent != null ? telemetryConsent : "unset";
+        }
+
+        public int getTelemetryConsentVersion() {
+            return telemetryConsentVersion;
+        }
+
+        public void setTelemetryConsentVersion(int telemetryConsentVersion) {
+            this.telemetryConsentVersion = telemetryConsentVersion;
+        }
+
+        public String getInstallId() {
+            return installId != null ? installId : "";
+        }
+
+        public void setInstallId(String installId) {
+            this.installId = installId != null ? installId : "";
+        }
+
         public ClientPreferences copy() {
             ClientPreferences c = new ClientPreferences();
             c.sessionToken = this.sessionToken;
@@ -157,6 +187,9 @@ public final class ClientConfigStore {
             c.sfxMuted = this.sfxMuted;
             c.volumeKeyPtt = this.volumeKeyPtt;
             c.pttKey = this.pttKey;
+            c.telemetryConsent = this.telemetryConsent;
+            c.telemetryConsentVersion = this.telemetryConsentVersion;
+            c.installId = this.installId;
             return c;
         }
     }
@@ -264,6 +297,18 @@ public final class ClientConfigStore {
     public void clearSession() {
         _prefs.sessionToken = "";
         _prefs.playerUuid = "";
+    }
+
+    public static String generateUuidV4() {
+        return java.util.UUID.randomUUID().toString();
+    }
+
+    public String resetInstallId() {
+        String id = generateUuidV4();
+        if (_prefs != null) {
+            _prefs.installId = id;
+        }
+        return id;
     }
 
     public boolean load() {
@@ -390,6 +435,17 @@ public final class ClientConfigStore {
                 parsed.pttKey = key;
             }
         }
+        if (doc.get("telemetry_consent") instanceof String s) {
+            parsed.telemetryConsent = s;
+        }
+        if (doc.get("telemetry_consent_version") instanceof Number n) {
+            parsed.telemetryConsentVersion = n.intValue();
+        }
+        if (doc.get("install_id") instanceof String s && !s.isEmpty()) {
+            parsed.installId = s;
+        } else {
+            parsed.installId = generateUuidV4();
+        }
 
         _prefs = parsed;
         return true;
@@ -436,6 +492,9 @@ public final class ClientConfigStore {
         doc.put("sfx_muted", _prefs.sfxMuted);
         doc.put("volume_key_ptt", _prefs.volumeKeyPtt);
         doc.put("ptt_keycode", _prefs.pttKey);
+        doc.put("telemetry_consent", _prefs.telemetryConsent != null ? _prefs.telemetryConsent : "unset");
+        doc.put("telemetry_consent_version", _prefs.telemetryConsentVersion);
+        doc.put("install_id", _prefs.installId != null ? _prefs.installId : "");
 
         String serialized = OctiMiniJson.stringifyPretty(doc) + "\n";
         byte[] bytes = serialized.getBytes(StandardCharsets.UTF_8);

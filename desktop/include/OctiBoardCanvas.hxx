@@ -79,6 +79,17 @@ public:
     const std::vector<QPoint> &lastMoveModifiedSquares() const { return _lastMoveModifiedSquares; }
     static std::vector<QPoint> extractModifiedSquares(const OctiMove &move, bool edgeless = false);
 
+    static constexpr qint64 LAST_MOVE_INDICATOR_DURATION_MS = 5000;
+    static constexpr qint64 INDICATOR_CYCLE_PERIOD_MS = 2000;
+
+    bool expireLastMoveModifiedSquaresIfElapsed(qint64 nowMs = -1);
+    bool hasLastMoveHighlight() const { return !_lastMoveModifiedSquares.empty(); }
+    qint64 lastMoveAnimStartMs() const { return _lastMoveAnimStartMs; }
+
+    static int activeTurnScreenEdge(OctiGameMode mode,
+                                   OctiPlayer activeTurn,
+                                   BoardRotation boardRotation);
+
     // Deterministic programmatic drag simulation helpers for testing and HUD actions
     bool simulateDragFromReserveToSquare(DragKind kind, int targetX, int targetY);
     bool simulateDragProngToPod(int x, int y, int podIndex, OctiDir dir, bool superProng);

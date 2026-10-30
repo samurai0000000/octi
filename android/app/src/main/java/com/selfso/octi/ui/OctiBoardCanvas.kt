@@ -82,12 +82,23 @@ fun OctiBoardCanvas(
     var lastMultiTouchTimeMs by remember { mutableStateOf(0L) }
     var lastDragTimeMs by remember { mutableStateOf(0L) }
 
-    val lastMoveAnimPhase by produceState(0f, activeModifiedSquares.isNotEmpty(), awaitingConfirm) {
-        if (activeModifiedSquares.isNotEmpty() && !awaitingConfirm) {
+    val game = viewModel.board.game
+    val isGameInProgress = game != null && game.isGameStarted && !game.isGameOver && !viewModel.isViewingHistory()
+
+    val lastMoveAnimPhase by produceState(
+        initialValue = 0f,
+        isGameInProgress,
+        activeModifiedSquares.isNotEmpty(),
+        awaitingConfirm,
+        boardRev
+    ) {
+        val shouldAnimate = (isGameInProgress || activeModifiedSquares.isNotEmpty()) && !awaitingConfirm
+        if (shouldAnimate) {
             val startMs = SystemClock.uptimeMillis()
             while (true) {
-                val elapsedMs = (SystemClock.uptimeMillis() - startMs) % 2000L
-                value = elapsedMs.toFloat() / 2000f
+                viewModel.expireLastMoveIndicatorsIfElapsed()
+                val elapsedMs = (SystemClock.uptimeMillis() - startMs) % OctiBoardRenderer.INDICATOR_CYCLE_PERIOD_MS
+                value = elapsedMs.toFloat() / OctiBoardRenderer.INDICATOR_CYCLE_PERIOD_MS.toFloat()
                 delay(16L)
             }
         } else {
@@ -471,6 +482,79 @@ fun OctiBoardCanvas(
                 dstOffset = IntOffset.Zero,
                 dstSize = IntSize(size.width.toInt(), size.height.toInt())
             )
+            if (isGameInProgress) {
+                val scaleX = size.width / Math.max(1, currentRenderedBitmap.width).toFloat()
+                val scaleY = size.height / Math.max(1, currentRenderedBitmap.height).toFloat()
+                val geo = viewModel.geometry
+                val grid = geo.gridInnerRect()
+                val activeTurn = game?.turn
+                if (grid != null && grid.size >= 4 && grid[2] > 0.0 && grid[3] > 0.0 && activeTurn != null) {
+                    val edge = OctiBoardRenderer.activeTurnScreenEdge(game.mode, activeTurn, rotation.degrees)
+                    val inset = 1.0f
+                    val left = (grid[0].toFloat() + inset) * scaleX
+                    val top = (grid[1].toFloat() + inset) * scaleY
+                    val right = (grid[0] + grid[2] - inset).toFloat() * scaleX
+                    val bottom = (grid[1] + grid[3] - inset).toFloat() * scaleY
+
+                    val x1: Float
+                    val y1: Float
+                    val x2: Float
+                    val y2: Float
+                    when (edge) {
+                        0 -> { // Bottom edge: left to right
+                            x1 = left; y1 = bottom; x2 = right; y2 = bottom
+                        }
+                        1 -> { // Left edge: top to bottom
+                            x1 = left; y1 = top; x2 = left; y2 = bottom
+                        }
+                        2 -> { // Top edge: right to left
+                            x1 = right; y1 = top; x2 = left; y2 = top
+                        }
+                        3 -> { // Right edge: bottom to top
+                            x1 = right; y1 = bottom; x2 = right; y2 = top
+                        }
+                        else -> {
+                            x1 = left; y1 = bottom; x2 = right; y2 = bottom
+                        }
+                    }
+
+                    val segFrac = 0.30f
+                    val strokeW = Math.max(3.5f, (geo.cellSize().toFloat() * scaleX) * 0.065f)
+                    val normPhase = lastMoveAnimPhase - floor(lastMoveAnimPhase)
+                    val s0 = normPhase
+                    val s1 = normPhase + segFrac
+
+                    fun drawTurnSeg(t0: Float, t1: Float) {
+                        val sx = x1 + t0 * (x2 - x1)
+                        val sy = y1 + t0 * (y2 - y1)
+                        val ex = x1 + t1 * (x2 - x1)
+                        val ey = y1 + t1 * (y2 - y1)
+                        // Glow stroke
+                        drawLine(
+                            color = Color(0x55FF69B4),
+                            start = Offset(sx, sy),
+                            end = Offset(ex, ey),
+                            strokeWidth = strokeW + 3.0f,
+                            cap = StrokeCap.Round
+                        )
+                        // Core stroke
+                        drawLine(
+                            color = Color(0xFFFF69B4),
+                            start = Offset(sx, sy),
+                            end = Offset(ex, ey),
+                            strokeWidth = strokeW,
+                            cap = StrokeCap.Round
+                        )
+                    }
+
+                    if (s1 <= 1.0f) {
+                        drawTurnSeg(s0, s1)
+                    } else {
+                        drawTurnSeg(s0, 1.0f)
+                        drawTurnSeg(0.0f, s1 - 1.0f)
+                    }
+                }
+            }
             if (activeModifiedSquares.isNotEmpty() && !awaitingConfirm && !viewModel.composer.isAwaitingConfirmation) {
                 val scaleX = size.width / Math.max(1, currentRenderedBitmap.width).toFloat()
                 val scaleY = size.height / Math.max(1, currentRenderedBitmap.height).toFloat()

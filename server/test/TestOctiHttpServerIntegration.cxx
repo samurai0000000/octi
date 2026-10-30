@@ -371,6 +371,8 @@ HttpServerConfig testConfig()
     c.ssePollMs = 25;
     c.sseHeartbeatMs = 200;
     c.sseSessionRecheckMs = 100;
+    c.uploadRateLimitMax = 100;
+    c.exportRateLimitMax = 100;
     for (int i = 0; i < 5; ++i) {
         static const char *names[] = {"google", "apple", "microsoft",
                                       "facebook", "line"};
@@ -1220,12 +1222,12 @@ TEST(OctiHttpServerIntegrationTest, NominalFullScenario)
     STRCMP_EQUAL(a.handle.c_str(),
                  detail.json["players"][0].value("handle", "").c_str());
 
-    Reply octi = http().get("/api/v1/archive/games/" + room + "/octi");
+    Reply octi = http().get("/api/v1/archive/games/" + room + "/transcript");
     EXPECT_STATUS(200, octi);
-    STRCMP_EQUAL("text/plain; charset=utf-8", octi.contentType.c_str());
+    STRCMP_EQUAL("application/json; charset=utf-8", octi.contentType.c_str());
     STRCMP_EQUAL(detail.json.value("octi_transcript", "").c_str(),
                  octi.body.c_str());
-    CHECK_TRUE(octi.header("Content-Disposition").find(room + ".octi") !=
+    CHECK_TRUE(octi.header("Content-Disposition").find(room + ".json") !=
                std::string::npos);
     /* The downloaded transcript replays to the archived final position. */
     OctiBoard replay;
@@ -2753,6 +2755,466 @@ TEST(OctiHttpServerIntegrationTest, ProtocolVersionGateRejectsOutdatedClientsWit
         STRCMP_EQUAL("INVALID_PROTOCOL_VERSION",
                      rBad.json.value("error", "").c_str());
     }
+}
+
+/* ------------------------------------------------------------------ */
+/* Envelope 2: Archive upload, legality replay, privacy, export & DoS */
+/* ------------------------------------------------------------------ */
+
+namespace {
+
+std::string makeWonTranscript(const std::string &installId = "11111111-1111-1111-1111-111111111111",
+                             int aiDiff = 3,
+                             const std::string &platform = "linux-x86_64")
+{
+    octi::OctiBoard board(octi::GAME_MODE_2, false, false, octi::GAME_BASES_1);
+    octi::OctiGame *g = board.getGame();
+    g->start(octi::PLAYER_A);
+    const char *moves[] = {
+        "73+a", "77+e", "73a-74", "77e-76", "74a-75", "57+h", "75a-77"
+    };
+    for (size_t i = 0; i < 7; ++i) {
+        octi::OctiPlayer p = (i % 2 == 0) ? octi::PLAYER_A : octi::PLAYER_B;
+        g->move(p, moves[i]);
+    }
+    octi::OctiGameMetadata meta;
+    meta.status = "GAME_OVER";
+    meta.termination = "BASE_OCCUPATION";
+    meta.appVersion = "2.1.1";
+    meta.platform = platform;
+    meta.buildType = "release";
+    meta.extended.present = true;
+    meta.extended.installId = installId;
+    meta.extended.locale = "en-US";
+    meta.extended.osVersion = "Linux 6.6";
+    meta.extended.startedAt = 1730000000;
+    meta.extended.endedAt = 1730000100;
+    meta.extended.utcOffsetMin = 480;
+    meta.players.push_back({1, octi::PLAYER_A, "HUMAN", "Player", 0, 0});
+    meta.players.push_back({2, octi::PLAYER_B, "AI", "AI_L" + std::to_string(aiDiff), aiDiff, 2000});
+
+    std::vector<octi::OctiPlyMetadata> plyMeta(7);
+    for (size_t i = 0; i < 7; ++i) {
+        plyMeta[i].elapsedMs = 1200 + i * 100;
+        plyMeta[i].clockAfterMs = -1;
+        if (i % 2 == 1) {
+            plyMeta[i].isAiMove = true;
+            plyMeta[i].aiDifficulty = aiDiff;
+            plyMeta[i].aiDepthReached = 4;
+            plyMeta[i].aiNodesVisited = 5000;
+            plyMeta[i].aiBestScore = -150;
+            plyMeta[i].aiBudgetMs = 2000;
+        }
+    }
+    g->setAllPlyMetadata(plyMeta);
+    return board.serializeJson(meta);
+}
+
+std::string makeResignedTranscript(const std::vector<std::string> &moves,
+                                  const std::string &installId,
+                                  int aiDiff,
+                                  const std::string &platform = "android-arm64")
+{
+    octi::OctiBoard board(octi::GAME_MODE_2, false, false, octi::GAME_BASES_3);
+    octi::OctiGame *g = board.getGame();
+    g->start(octi::PLAYER_A);
+    for (size_t i = 0; i < moves.size(); ++i) {
+        octi::OctiPlayer p = (i % 2 == 0) ? octi::PLAYER_A : octi::PLAYER_B;
+        g->move(p, moves[i]);
+    }
+    g->resign(octi::PLAYER_A);
+
+    octi::OctiGameMetadata meta;
+    meta.status = "RESIGNED";
+    meta.termination = "RESIGNATION";
+    meta.appVersion = "2.1.1";
+    meta.platform = platform;
+    meta.buildType = "release";
+    meta.extended.present = true;
+    meta.extended.installId = installId;
+    meta.extended.locale = "zh-TW";
+    meta.extended.osVersion = "Android 14";
+    meta.extended.startedAt = 1730000200;
+    meta.extended.endedAt = 1730000300;
+    meta.extended.utcOffsetMin = 480;
+    meta.players.push_back({1, octi::PLAYER_A, "HUMAN", "Player", 0, 0});
+    meta.players.push_back({2, octi::PLAYER_B, "AI", "AI_L" + std::to_string(aiDiff), aiDiff, 1000});
+
+    std::vector<octi::OctiPlyMetadata> plyMeta(moves.size());
+    for (size_t i = 0; i < moves.size(); ++i) {
+        plyMeta[i].elapsedMs = 500 + i * 50;
+        plyMeta[i].clockAfterMs = -1;
+        if (i % 2 == 1) {
+            plyMeta[i].isAiMove = true;
+            plyMeta[i].aiDifficulty = aiDiff;
+            plyMeta[i].aiDepthReached = 2;
+            plyMeta[i].aiNodesVisited = 800;
+            plyMeta[i].aiBestScore = 50;
+            plyMeta[i].aiBudgetMs = 1000;
+        }
+    }
+    g->setAllPlyMetadata(plyMeta);
+    return board.serializeJson(meta);
+}
+
+} // namespace
+
+TEST(OctiHttpServerIntegrationTest, ArchiveUploadNominalWonAndResigned)
+{
+    std::string wonTr = makeWonTranscript("inst-won-01", 3, "linux-x86_64");
+    Reply rWon = http().post("/api/v1/archive/upload", "", Json{{"transcript", wonTr}});
+    EXPECT_STATUS(200, rWon);
+    CHECK_TRUE(rWon.json.value("ok", false));
+    std::string wonId = rWon.json.value("game_id", "");
+    CHECK_FALSE(wonId.empty());
+    CHECK_EQUAL(7, rWon.json.value("ply_count", 0));
+
+    /* Verify retrieval through /api/v1/archive/games/:id */
+    Reply rGet = http().get("/api/v1/archive/games/" + wonId);
+    EXPECT_STATUS(200, rGet);
+    STRCMP_EQUAL(wonId.c_str(), rGet.json.value("game_id", "").c_str());
+    STRCMP_EQUAL("2P", rGet.json.value("mode", "").c_str());
+    STRCMP_EQUAL("client_upload", rGet.json.value("source", "").c_str());
+    STRCMP_EQUAL("A", rGet.json.value("winner", "").c_str());
+    STRCMP_EQUAL("GAME_OVER", rGet.json.value("status", "").c_str());
+    CHECK_EQUAL(3, rGet.json.value("ai_difficulty", 0));
+    STRCMP_EQUAL("2.1.1", rGet.json.value("app_version", "").c_str());
+    STRCMP_EQUAL("linux-x86_64", rGet.json.value("platform", "").c_str());
+    STRCMP_EQUAL("CC-BY-4.0", rGet.json.value("license", "").c_str());
+    STRCMP_EQUAL("Octi game data, Charles Chiou (selfso.com)",
+                 rGet.json.value("attribution", "").c_str());
+
+    /* Privacy check: installId and client.extended never leak in public response */
+    CHECK_TRUE(rGet.body.find("inst-won-01") == std::string::npos);
+    CHECK_TRUE(rGet.body.find("\"extended\"") == std::string::npos);
+
+    /* Verify /api/v1/archive/games/:id/transcript */
+    Reply rTr = http().get("/api/v1/archive/games/" + wonId + "/transcript");
+    EXPECT_STATUS(200, rTr);
+    STRCMP_EQUAL("application/json; charset=utf-8", rTr.contentType.c_str());
+    CHECK_TRUE(rTr.header("Content-Disposition").find(wonId + ".json") != std::string::npos);
+    CHECK_TRUE(rTr.body.find("inst-won-01") == std::string::npos);
+    CHECK_TRUE(rTr.body.find("\"extended\"") == std::string::npos);
+
+    /* Downloaded transcript must parse as JSON v3.0 and replay through the engine */
+    octi::OctiBoard replayWon;
+    replayWon.deserializeGame(rTr.body);
+    STRCMP_EQUAL(rGet.json.value("final_fen", "").c_str(),
+                 replayWon.toPositionString().c_str());
+    CHECK_EQUAL(7, replayWon.getGame()->getNumMoves());
+
+    /* Verify legacy alias /octi also serves JSON */
+    Reply rOcti = http().get("/api/v1/archive/games/" + wonId + "/octi");
+    EXPECT_STATUS(200, rOcti);
+    STRCMP_EQUAL("application/json; charset=utf-8", rOcti.contentType.c_str());
+    STRCMP_EQUAL(rTr.body.c_str(), rOcti.body.c_str());
+
+    /* Upload resigned game */
+    std::string resTr = makeResignedTranscript({"33+a", "37+e"}, "inst-res-02", 1, "android-arm64");
+    Reply rRes = http().post("/api/v1/archive/upload", "", Json{{"transcript", resTr}});
+    EXPECT_STATUS(200, rRes);
+    std::string resId = rRes.json.value("game_id", "");
+    CHECK_FALSE(resId.empty());
+    CHECK_EQUAL(2, rRes.json.value("ply_count", 0));
+
+    Reply rGetRes = http().get("/api/v1/archive/games/" + resId);
+    EXPECT_STATUS(200, rGetRes);
+    STRCMP_EQUAL("RESIGNED", rGetRes.json.value("status", "").c_str());
+    STRCMP_EQUAL("B", rGetRes.json.value("winner", "").c_str());
+    CHECK_EQUAL(1, rGetRes.json.value("ai_difficulty", 0));
+    STRCMP_EQUAL("android-arm64", rGetRes.json.value("platform", "").c_str());
+    CHECK_TRUE(rGetRes.body.find("inst-res-02") == std::string::npos);
+
+    /* Verify /api/v1/archive/games/:id/plies endpoint */
+    Reply rPlies = http().get("/api/v1/archive/games/" + resId + "/plies");
+    EXPECT_STATUS(200, rPlies);
+    STRCMP_EQUAL(resId.c_str(), rPlies.json.value("game_id", "").c_str());
+    STRCMP_EQUAL("2P", rPlies.json.value("mode", "").c_str());
+    CHECK_FALSE(rPlies.json.value("initialFen", "").empty());
+    CHECK_EQUAL(2, static_cast<int>(rPlies.json["plies"].size()));
+    CHECK_EQUAL(1, rPlies.json["plies"][0].value("plyIndex", 0));
+    STRCMP_EQUAL("A", rPlies.json["plies"][0].value("player", "").c_str());
+    STRCMP_EQUAL("33+a", rPlies.json["plies"][0].value("move", "").c_str());
+    CHECK_FALSE(rPlies.json["plies"][0].value("fenAfter", "").empty());
+    CHECK_EQUAL(2, rPlies.json["plies"][1].value("plyIndex", 0));
+    STRCMP_EQUAL("B", rPlies.json["plies"][1].value("player", "").c_str());
+    STRCMP_EQUAL("37+e", rPlies.json["plies"][1].value("move", "").c_str());
+    CHECK_FALSE(rPlies.json["plies"][1].value("fenAfter", "").empty());
+}
+
+TEST(OctiHttpServerIntegrationTest, ArchiveUploadRejectsUncompletedAndTamperedGames)
+{
+    /* 1. In-progress game rejected with 400 GAME_NOT_COMPLETED */
+    Json jInProg = Json::parse(makeWonTranscript());
+    jInProg["status"] = "IN_PROGRESS";
+    Reply rInProg = http().post("/api/v1/archive/upload", "", Json{{"transcript", jInProg.dump()}});
+    EXPECT_STATUS(400, rInProg);
+    STRCMP_EQUAL("GAME_NOT_COMPLETED", rInProg.json.value("error", "").c_str());
+
+    /* 2. False claim of GAME_OVER when engine replay shows game not over */
+    Json jPremature = Json::parse(makeResignedTranscript({"33+a", "37+e"}, "inst-1", 1));
+    jPremature["status"] = "GAME_OVER";
+    Reply rPremature = http().post("/api/v1/archive/upload", "", Json{{"transcript", jPremature.dump()}});
+    EXPECT_STATUS(400, rPremature);
+    STRCMP_EQUAL("GAME_NOT_COMPLETED", rPremature.json.value("error", "").c_str());
+
+    /* 3. Empty plies rejected with 400 GAME_NOT_COMPLETED */
+    Json jEmpty = Json::parse(makeWonTranscript());
+    jEmpty["plies"] = Json::array();
+    Reply rEmpty = http().post("/api/v1/archive/upload", "", Json{{"transcript", jEmpty.dump()}});
+    EXPECT_STATUS(400, rEmpty);
+    STRCMP_EQUAL("GAME_NOT_COMPLETED", rEmpty.json.value("error", "").c_str());
+
+    /* 4. Tampered winner rejected with 400 INVALID_GAME */
+    Json jTamperWinner = Json::parse(makeWonTranscript());
+    jTamperWinner["winner"] = "B";
+    Reply rTamperWinner = http().post("/api/v1/archive/upload", "", Json{{"transcript", jTamperWinner.dump()}});
+    EXPECT_STATUS(400, rTamperWinner);
+    STRCMP_EQUAL("INVALID_GAME", rTamperWinner.json.value("error", "").c_str());
+
+    /* 5. Tampered finalFen rejected with 400 INVALID_GAME */
+    Json jTamperFen = Json::parse(makeWonTranscript());
+    jTamperFen["finalFen"] = "2:1:1:1:P:A:-:0:4,0,24,1:4,0,24,1:A11,B11";
+    Reply rTamperFen = http().post("/api/v1/archive/upload", "", Json{{"transcript", jTamperFen.dump()}});
+    EXPECT_STATUS(400, rTamperFen);
+    STRCMP_EQUAL("INVALID_GAME", rTamperFen.json.value("error", "").c_str());
+
+    /* 6. Illegal move syntax rejected with 400 INVALID_GAME */
+    Json jBadSyntax = Json::parse(makeWonTranscript());
+    jBadSyntax["plies"][0]["move"] = "invalid_move_text";
+    Reply rBadSyntax = http().post("/api/v1/archive/upload", "", Json{{"transcript", jBadSyntax.dump()}});
+    EXPECT_STATUS(400, rBadSyntax);
+    STRCMP_EQUAL("INVALID_GAME", rBadSyntax.json.value("error", "").c_str());
+
+    /* 7. Illegal move semantics (e.g. jumping to illegal square) rejected with 400 INVALID_GAME */
+    Json jBadSemantics = Json::parse(makeWonTranscript());
+    jBadSemantics["plies"][0]["move"] = "73a-79";  // jump 6 squares without pods
+    Reply rBadSemantics = http().post("/api/v1/archive/upload", "", Json{{"transcript", jBadSemantics.dump()}});
+    EXPECT_STATUS(400, rBadSemantics);
+    STRCMP_EQUAL("INVALID_GAME", rBadSemantics.json.value("error", "").c_str());
+
+    /* 8. Turn order mismatch rejected with 400 INVALID_GAME */
+    Json jWrongTurn = Json::parse(makeWonTranscript());
+    jWrongTurn["plies"][0]["player"] = "B";
+    Reply rWrongTurn = http().post("/api/v1/archive/upload", "", Json{{"transcript", jWrongTurn.dump()}});
+    EXPECT_STATUS(400, rWrongTurn);
+    STRCMP_EQUAL("INVALID_GAME", rWrongTurn.json.value("error", "").c_str());
+}
+
+TEST(OctiHttpServerIntegrationTest, ArchiveUploadRejectsMalformedPayloadsAndEnforcesCaps)
+{
+    /* 1. Non-JSON body */
+    Reply rNonJson = http().raw("POST", "/api/v1/archive/upload", "", "random garbage string", "application/json");
+    EXPECT_STATUS(400, rNonJson);
+    STRCMP_EQUAL("MALFORMED_UPLOAD", rNonJson.json.value("error", "").c_str());
+
+    /* 2. Missing format field */
+    Json jNoFmt = Json::parse(makeWonTranscript());
+    jNoFmt.erase("format");
+    Reply rNoFmt = http().post("/api/v1/archive/upload", "", Json{{"transcript", jNoFmt.dump()}});
+    EXPECT_STATUS(400, rNoFmt);
+    STRCMP_EQUAL("MALFORMED_UPLOAD", rNoFmt.json.value("error", "").c_str());
+
+    /* 3. Wrong format string */
+    Json jWrongFmt = Json::parse(makeWonTranscript());
+    jWrongFmt["format"] = "octi.transcript.v2";
+    Reply rWrongFmt = http().post("/api/v1/archive/upload", "", Json{{"transcript", jWrongFmt.dump()}});
+    EXPECT_STATUS(400, rWrongFmt);
+    STRCMP_EQUAL("MALFORMED_UPLOAD", rWrongFmt.json.value("error", "").c_str());
+
+    /* 4. Negative elapsedMs */
+    Json jNegElapsed = Json::parse(makeWonTranscript());
+    jNegElapsed["plies"][0]["elapsedMs"] = -10;
+    Reply rNegElapsed = http().post("/api/v1/archive/upload", "", Json{{"transcript", jNegElapsed.dump()}});
+    EXPECT_STATUS(400, rNegElapsed);
+    STRCMP_EQUAL("MALFORMED_UPLOAD", rNegElapsed.json.value("error", "").c_str());
+
+    /* 5. Negative AI budgetMs */
+    Json jNegBudget = Json::parse(makeWonTranscript());
+    jNegBudget["plies"][1]["ai"]["budgetMs"] = -500;
+    Reply rNegBudget = http().post("/api/v1/archive/upload", "", Json{{"transcript", jNegBudget.dump()}});
+    EXPECT_STATUS(400, rNegBudget);
+    STRCMP_EQUAL("MALFORMED_UPLOAD", rNegBudget.json.value("error", "").c_str());
+
+    /* 6. Invalid type inside client block */
+    Json jUnknownClient = Json::parse(makeWonTranscript());
+    jUnknownClient["client"]["extraBogus"] = Json::array({"not", "allowed"});
+    Reply rUnknownClient = http().post("/api/v1/archive/upload", "", Json{{"transcript", jUnknownClient.dump()}});
+    EXPECT_STATUS(400, rUnknownClient);
+    STRCMP_EQUAL("MALFORMED_UPLOAD", rUnknownClient.json.value("error", "").c_str());
+
+    /* 7. Oversized client string (> 128 bytes) */
+    Json jOversizedClient = Json::parse(makeWonTranscript());
+    jOversizedClient["client"]["platform"] = std::string(150, 'a');
+    Reply rOversizedClient = http().post("/api/v1/archive/upload", "", Json{{"transcript", jOversizedClient.dump()}});
+    EXPECT_STATUS(400, rOversizedClient);
+    STRCMP_EQUAL("MALFORMED_UPLOAD", rOversizedClient.json.value("error", "").c_str());
+
+    /* 8. Oversized transcript string (> 48 KiB) */
+    std::string hugeTranscript(49153, 'x');
+    Reply rHuge = http().post("/api/v1/archive/upload", "", Json{{"transcript", hugeTranscript}});
+    EXPECT_STATUS(400, rHuge);
+    STRCMP_EQUAL("MALFORMED_UPLOAD", rHuge.json.value("error", "").c_str());
+}
+
+TEST(OctiHttpServerIntegrationTest, ArchiveUploadDeduplicationAndInstallIdDeletion)
+{
+    std::string wonTr = makeWonTranscript("inst-delete-test", 3);
+    Reply r1 = http().post("/api/v1/archive/upload", "", Json{{"transcript", wonTr}});
+    EXPECT_STATUS(200, r1);
+    std::string gameId = r1.json.value("game_id", "");
+    CHECK_FALSE(gameId.empty());
+
+    /* Submitting the exact same game twice returns 409 DUPLICATE_ID */
+    Reply rDup = http().post("/api/v1/archive/upload", "", Json{{"transcript", wonTr}});
+    EXPECT_STATUS(409, rDup);
+    STRCMP_EQUAL("DUPLICATE_ID", rDup.json.value("error", "").c_str());
+
+    /* Verify game exists before deletion */
+    EXPECT_STATUS(200, http().get("/api/v1/archive/games/" + gameId));
+
+    /* DELETE /api/v1/archive/install/:installId removes all games uploaded under this install ID */
+    Reply rDel = http().del("/api/v1/archive/install/inst-delete-test", "");
+    EXPECT_STATUS(200, rDel);
+    CHECK_TRUE(rDel.json.value("ok", false));
+    CHECK_EQUAL(1, rDel.json.value("deleted", 0));
+
+    /* Deleted game is now gone */
+    Reply rGone = http().get("/api/v1/archive/games/" + gameId);
+    EXPECT_STATUS(404, rGone);
+
+    /* Second deletion returns 0 deleted */
+    Reply rDel2 = http().del("/api/v1/archive/install/inst-delete-test", "");
+    EXPECT_STATUS(200, rDel2);
+    CHECK_EQUAL(0, rDel2.json.value("deleted", -1));
+
+    /* Malformed installId returns 404 NOT_FOUND per pathId validator */
+    Reply rBadDel = http().del("/api/v1/archive/install/bad_id_that_exceeds_the_sixty_four_character_limit_01234567890123456", "");
+    EXPECT_STATUS(404, rBadDel);
+}
+
+TEST(OctiHttpServerIntegrationTest, ArchiveUploadRateLimiting)
+{
+    HttpServerConfig cfg = testConfig();
+    cfg.uploadRateLimitMax = 3;
+    cfg.uploadRateLimitWindowMs = 60000;
+    startEnv(cfg, true, nullptr);
+
+    /* First 3 uploads from the same IP succeed */
+    std::string t1 = makeWonTranscript("inst-rl-1", 1);
+    std::string t2 = makeResignedTranscript({"33+a", "37+e"}, "inst-rl-2", 2);
+    std::string t3 = makeResignedTranscript({"33+b", "37+f"}, "inst-rl-3", 3);
+    EXPECT_STATUS(200, http().post("/api/v1/archive/upload", "", Json{{"transcript", t1}}));
+    EXPECT_STATUS(200, http().post("/api/v1/archive/upload", "", Json{{"transcript", t2}}));
+    EXPECT_STATUS(200, http().post("/api/v1/archive/upload", "", Json{{"transcript", t3}}));
+
+    /* 4th upload from the same IP is rate-limited */
+    std::string t4 = makeResignedTranscript({"33+c", "37+g"}, "inst-rl-4", 4);
+    Reply r4 = http().post("/api/v1/archive/upload", "", Json{{"transcript", t4}});
+    EXPECT_STATUS(429, r4);
+    STRCMP_EQUAL("RATE_LIMITED", r4.json.value("error", "").c_str());
+    CHECK_FALSE(r4.header("Retry-After").empty());
+}
+
+TEST(OctiHttpServerIntegrationTest, ArchiveFilteringSortingStatsAndNdjsonExport)
+{
+    /* Upload two distinct games with different properties */
+    std::string wonTr = makeWonTranscript("inst-filt-1", 3, "linux-x86_64");
+    std::string resTr = makeResignedTranscript({"33+a", "37+e"}, "inst-filt-2", 1, "android-arm64");
+    Reply r1 = http().post("/api/v1/archive/upload", "", Json{{"transcript", wonTr}});
+    Reply r2 = http().post("/api/v1/archive/upload", "", Json{{"transcript", resTr}});
+    EXPECT_STATUS(200, r1);
+    EXPECT_STATUS(200, r2);
+
+    /* Test filtering by source */
+    Reply rFiltSrc = http().get("/api/v1/archive/games?source=client_upload");
+    EXPECT_STATUS(200, rFiltSrc);
+    CHECK_EQUAL(2, rFiltSrc.json.value("total", 0));
+
+    Reply rFiltOnline = http().get("/api/v1/archive/games?source=online");
+    EXPECT_STATUS(200, rFiltOnline);
+    CHECK_EQUAL(0, rFiltOnline.json.value("total", 0));
+
+    /* Test filtering by winner */
+    Reply rWinA = http().get("/api/v1/archive/games?winner=A");
+    EXPECT_STATUS(200, rWinA);
+    CHECK_EQUAL(1, rWinA.json.value("total", 0));
+
+    Reply rWinB = http().get("/api/v1/archive/games?winner=B");
+    EXPECT_STATUS(200, rWinB);
+    CHECK_EQUAL(1, rWinB.json.value("total", 0));
+
+    /* Test filtering by status */
+    Reply rStGov = http().get("/api/v1/archive/games?status=GAME_OVER");
+    EXPECT_STATUS(200, rStGov);
+    CHECK_EQUAL(1, rStGov.json.value("total", 0));
+
+    Reply rStRes = http().get("/api/v1/archive/games?status=RESIGNED");
+    EXPECT_STATUS(200, rStRes);
+    CHECK_EQUAL(1, rStRes.json.value("total", 0));
+
+    /* Test filtering by AI difficulty */
+    Reply rAi3 = http().get("/api/v1/archive/games?aiDifficulty=3");
+    EXPECT_STATUS(200, rAi3);
+    CHECK_EQUAL(1, rAi3.json.value("total", 0));
+
+    Reply rAi1 = http().get("/api/v1/archive/games?aiDifficulty=1");
+    EXPECT_STATUS(200, rAi1);
+    CHECK_EQUAL(1, rAi1.json.value("total", 0));
+
+    Reply rAi5 = http().get("/api/v1/archive/games?aiDifficulty=5");
+    EXPECT_STATUS(200, rAi5);
+    CHECK_EQUAL(0, rAi5.json.value("total", 0));
+
+    /* Test sorting */
+    Reply rSortDesc = http().get("/api/v1/archive/games?sort=ply_count:desc");
+    EXPECT_STATUS(200, rSortDesc);
+    CHECK_EQUAL(2, static_cast<int>(rSortDesc.json["games"].size()));
+    CHECK_EQUAL(7, rSortDesc.json["games"][0].value("ply_count", 0));
+    CHECK_EQUAL(2, rSortDesc.json["games"][1].value("ply_count", 0));
+
+    Reply rSortAsc = http().get("/api/v1/archive/games?sort=ply_count:asc");
+    EXPECT_STATUS(200, rSortAsc);
+    CHECK_EQUAL(2, rSortAsc.json["games"][0].value("ply_count", 0));
+    CHECK_EQUAL(7, rSortAsc.json["games"][1].value("ply_count", 0));
+
+    /* Invalid filter argument produces 400 INVALID_ARGUMENT */
+    Reply rBadArg = http().get("/api/v1/archive/games?source=invalid_src");
+    EXPECT_STATUS(400, rBadArg);
+    STRCMP_EQUAL("INVALID_ARGUMENT", rBadArg.json.value("error", "").c_str());
+
+    /* Test /api/v1/archive/stats */
+    Reply rStats = http().get("/api/v1/archive/stats");
+    EXPECT_STATUS(200, rStats);
+    CHECK_EQUAL(2, rStats.json.value("total_games", 0));
+    CHECK_EQUAL(2, rStats.json["by_source"].value("client_upload", 0));
+    CHECK_EQUAL(2, rStats.json["by_mode"].value("2P", 0));
+    CHECK_EQUAL(1, rStats.json["by_winner"].value("A", 0));
+    CHECK_EQUAL(1, rStats.json["by_winner"].value("B", 0));
+    CHECK_TRUE(rStats.json.contains("ai_win_rates") && rStats.json["ai_win_rates"].is_array());
+
+    /* Test /api/v1/archive/export (NDJSON streaming) */
+    Reply rExp = http().get("/api/v1/archive/export");
+    EXPECT_STATUS(200, rExp);
+    STRCMP_EQUAL("application/x-ndjson; charset=utf-8", rExp.contentType.c_str());
+    CHECK_TRUE(rExp.header("Content-Disposition").find("octi-archive-export.ndjson") != std::string::npos);
+
+    /* Split NDJSON lines */
+    std::stringstream ss(rExp.body);
+    std::string line;
+    int lineCount = 0;
+    while (std::getline(ss, line)) {
+        if (line.empty()) continue;
+        ++lineCount;
+        auto jRow = Json::parse(line);
+        STRCMP_EQUAL("octi.transcript.v3", jRow.value("format", "").c_str());
+        STRCMP_EQUAL("CC-BY-4.0", jRow.value("license", "").c_str());
+        STRCMP_EQUAL("Octi game data, Charles Chiou (selfso.com)",
+                     jRow.value("attribution", "").c_str());
+        CHECK_TRUE(line.find("inst-filt") == std::string::npos);
+        CHECK_TRUE(line.find("\"extended\"") == std::string::npos);
+    }
+    CHECK_EQUAL(2, lineCount);
 }
 
 /* ================================================================== */

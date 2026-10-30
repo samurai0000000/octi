@@ -7,6 +7,7 @@
 #ifndef OCTI_GAME_HXX
 #define OCTI_GAME_HXX
 
+#include <cstdint>
 #include <iosfwd>
 #include <memory>
 #include <string>
@@ -38,6 +39,51 @@ struct OctiPlayerState {
     bool eliminated = false;
 };
 
+struct OctiPlyMetadata {
+    std::int64_t elapsedMs = 0;      // Turn thinking / composition time in ms
+    std::int64_t clockAfterMs = -1;  // Remaining clock after move (-1 if untimed)
+    bool isAiMove = false;           // True if played by OctiBotEngine
+    int aiDifficulty = 0;            // BotDifficulty level (1..5)
+    int aiBudgetMs = 0;              // Configured AI time budget in ms
+    int aiDepthReached = 0;          // Iterative deepening depth completed
+    std::uint64_t aiNodesVisited = 0;// Minimax + quiescence nodes searched
+    int aiBestScore = 0;             // Evaluation score in centipawns/units
+};
+
+struct OctiPlayerMetadata {
+    int seat = 1;
+    OctiPlayer player = PLAYER_A;
+    std::string type = "HUMAN";      // "HUMAN" or "AI"
+    std::string handle = "Player";
+    int aiDifficulty = 0;
+    int aiBudgetMs = 0;
+};
+
+struct OctiClientExtendedMetadata {
+    bool present = false;
+    std::int64_t startedAt = 0;
+    std::int64_t endedAt = 0;
+    int utcOffsetMin = 0;
+    std::string locale;
+    std::string osVersion;
+    std::string installId;
+};
+
+struct OctiGameMetadata {
+    std::string gameId;
+    std::string source = "LOCAL";
+    std::string status;
+    std::string appVersion;
+    std::string buildType = "release";
+    std::string platform;
+    OctiClientExtendedMetadata extended;
+    std::string termination;
+    std::string timeControl = "untimed";
+    std::string license;
+    std::string attribution;
+    std::vector<OctiPlayerMetadata> players;
+};
+
 struct OctiGameSnapshot {
     std::vector<OctiPod> squares[9][9];
     OctiPlayerState players[5];
@@ -49,6 +95,8 @@ struct OctiGameSnapshot {
     OctiMove lastMove;
     OctiPlayer lastPlayer = PLAYER_UNDEF;
     int searchPlyOffset = 0;
+    std::vector<OctiPlyMetadata> plyMetadata;
+    OctiPlyMetadata lastPlyMeta;
 };
 
 class OctiGame {
@@ -132,6 +180,20 @@ public:
     void deserialize(std::istream &in);
     void deserialize(const std::string &transcript);
 
+    // Metadata accessors and JSON v3.0 export
+    void setLastPlyMetadata(const OctiPlyMetadata &meta);
+    void setPlyMetadata(std::size_t idx, const OctiPlyMetadata &meta);
+    void setAllPlyMetadata(const std::vector<OctiPlyMetadata> &metas);
+    OctiPlyMetadata getPlyMetadata(std::size_t idx) const;
+    const std::vector<OctiPlyMetadata> &getAllPlyMetadata() const;
+    void setGameMetadata(const OctiGameMetadata &meta);
+    const OctiGameMetadata &getGameMetadata() const;
+    std::string serializeJson(const OctiGameMetadata &meta) const;
+    std::string serializeJson() const;
+    std::string exportCanonicalMovesText() const;
+    std::string computeCanonicalGameId() const;
+    void setResignedWinner(OctiPlayer winner);
+
     // Snapshot / state restore
     OctiGameSnapshot captureSnapshot() const;
     void restoreSnapshot(const OctiGameSnapshot &snap);
@@ -164,6 +226,8 @@ private:
     OctiPlayerState _players[5];
 
     std::vector<std::pair<OctiPlayer, OctiMove>> _history;
+    std::vector<OctiPlyMetadata> _plyMetadata;
+    OctiGameMetadata _gameMetadata;
     std::vector<OctiGameSnapshot> _undoStack;
     std::vector<OctiGameSnapshot> _redoStack;
 

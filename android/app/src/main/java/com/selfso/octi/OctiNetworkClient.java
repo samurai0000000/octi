@@ -110,6 +110,24 @@ public final class OctiNetworkClient implements AutoCloseable {
         public List<ArchivedGameSummary> games = new ArrayList<>();
     }
 
+    public static final class UploadTranscriptRequest {
+        public String transcriptJson = "";
+        public String clientId = "";
+
+        public UploadTranscriptRequest() {
+        }
+
+        public UploadTranscriptRequest(String transcriptJson, String clientId) {
+            this.transcriptJson = transcriptJson != null ? transcriptJson : "";
+            this.clientId = clientId != null ? clientId : "";
+        }
+    }
+
+    public static final class UploadTranscriptResponse {
+        public String gameId = "";
+        public int plyCount = 0;
+    }
+
     public static final class PlayerProfileInfo {
         public String uuid = "";
         public String handle = "";
@@ -1785,7 +1803,7 @@ public final class OctiNetworkClient implements AutoCloseable {
 
     public ApiResult<String> downloadOctiTranscript(String gameId) {
         ApiResult<String> res = new ApiResult<>("");
-        RawResponse raw = doGet("/api/v1/archive/games/" + urlEncode(gameId) + "/octi");
+        RawResponse raw = doGet("/api/v1/archive/games/" + urlEncode(gameId) + "/transcript");
         if (!raw.transportOk || raw.status != 200) {
             populateError(raw, res);
             return res;
@@ -1793,6 +1811,71 @@ public final class OctiNetworkClient implements AutoCloseable {
         res.ok = true;
         res.httpStatus = raw.status;
         res.data = raw.body != null ? raw.body : "";
+        return res;
+    }
+
+    public ApiResult<UploadTranscriptResponse> uploadTrainingTranscript(UploadTranscriptRequest req) {
+        ApiResult<UploadTranscriptResponse> res = new ApiResult<>(new UploadTranscriptResponse());
+        if (req == null) {
+            res.errorCode = "INVALID_REQUEST";
+            res.errorMessage = "null request";
+            return res;
+        }
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (req.transcriptJson != null && req.transcriptJson.trim().startsWith("{")) {
+            try {
+                Object parsed = OctiMiniJson.parse(req.transcriptJson);
+                body.put("transcript", parsed != null ? parsed : req.transcriptJson);
+            } catch (RuntimeException ignored) {
+                body.put("transcript", req.transcriptJson);
+            }
+        } else {
+            body.put("transcript", req.transcriptJson != null ? req.transcriptJson : "");
+        }
+        if (req.clientId != null && !req.clientId.trim().isEmpty()) {
+            body.put("clientId", req.clientId);
+        }
+
+        RawResponse raw = doPost("/api/v1/archive/upload", body);
+        if (!raw.transportOk || raw.status != 200) {
+            populateError(raw, res);
+            return res;
+        }
+
+        res.ok = true;
+        res.httpStatus = raw.status;
+        if (raw.json != null) {
+            Object gid = raw.json.get("game_id");
+            if (gid == null) gid = raw.json.get("gameId");
+            if (gid != null) res.data.gameId = gid.toString();
+
+            Object pc = raw.json.get("ply_count");
+            if (pc == null) pc = raw.json.get("plyCount");
+            if (pc instanceof Number n) res.data.plyCount = n.intValue();
+        }
+        return res;
+    }
+
+    public ApiResult<UploadTranscriptResponse> uploadTrainingTranscript(String transcriptJson, String clientId) {
+        return uploadTrainingTranscript(new UploadTranscriptRequest(transcriptJson, clientId));
+    }
+
+    public ApiResult<Integer> deleteInstallArchiveData(String installId) {
+        ApiResult<Integer> res = new ApiResult<>(0);
+        RawResponse raw = doDelete("/api/v1/archive/install/" + urlEncode(installId != null ? installId : ""));
+        if (!raw.transportOk || raw.status != 200) {
+            populateError(raw, res);
+            return res;
+        }
+        res.ok = true;
+        res.httpStatus = raw.status;
+        if (raw.json != null) {
+            Object del = raw.json.get("deleted");
+            if (del instanceof Number n) {
+                res.data = n.intValue();
+            }
+        }
         return res;
     }
 

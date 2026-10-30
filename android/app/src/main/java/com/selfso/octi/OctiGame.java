@@ -50,6 +50,119 @@ public class OctiGame {
         }
     }
 
+    public static class OctiPlyMetadata {
+        public long elapsedMs = 0;
+        public long clockAfterMs = -1;
+        public boolean isAiMove = false;
+        public int aiDifficulty = 0;
+        public int aiBudgetMs = 0;
+        public int aiDepthReached = 0;
+        public long aiNodesVisited = 0;
+        public int aiBestScore = 0;
+
+        public OctiPlyMetadata() {}
+
+        public OctiPlyMetadata(OctiPlyMetadata other) {
+            if (other != null) {
+                this.elapsedMs = other.elapsedMs;
+                this.clockAfterMs = other.clockAfterMs;
+                this.isAiMove = other.isAiMove;
+                this.aiDifficulty = other.aiDifficulty;
+                this.aiBudgetMs = other.aiBudgetMs;
+                this.aiDepthReached = other.aiDepthReached;
+                this.aiNodesVisited = other.aiNodesVisited;
+                this.aiBestScore = other.aiBestScore;
+            }
+        }
+    }
+
+    public static class OctiPlayerMetadata {
+        public int seat = 1;
+        public OctiPlayer player = OctiPlayer.PLAYER_A;
+        public String type = "HUMAN";
+        public String handle = "Player";
+        public int aiDifficulty = 0;
+        public int aiBudgetMs = 0;
+
+        public OctiPlayerMetadata() {}
+
+        public OctiPlayerMetadata(OctiPlayerMetadata other) {
+            if (other != null) {
+                this.seat = other.seat;
+                this.player = other.player;
+                this.type = other.type;
+                this.handle = other.handle;
+                this.aiDifficulty = other.aiDifficulty;
+                this.aiBudgetMs = other.aiBudgetMs;
+            }
+        }
+    }
+
+    public static class OctiClientExtendedMetadata {
+        public boolean present = false;
+        public long startedAt = 0;
+        public long endedAt = 0;
+        public int utcOffsetMin = 0;
+        public String locale = "";
+        public String osVersion = "";
+        public String installId = "";
+
+        public OctiClientExtendedMetadata() {}
+
+        public OctiClientExtendedMetadata(OctiClientExtendedMetadata other) {
+            if (other != null) {
+                this.present = other.present;
+                this.startedAt = other.startedAt;
+                this.endedAt = other.endedAt;
+                this.utcOffsetMin = other.utcOffsetMin;
+                this.locale = other.locale;
+                this.osVersion = other.osVersion;
+                this.installId = other.installId;
+            }
+        }
+    }
+
+    public static class OctiGameMetadata {
+        public String gameId = "";
+        public String source = "LOCAL";
+        public String status = "";
+        public String appVersion = "";
+        public String buildType = "release";
+        public String platform = "";
+        public OctiClientExtendedMetadata extended = new OctiClientExtendedMetadata();
+        public String termination = "";
+        public String timeControl = "untimed";
+        public String license = "";
+        public String attribution = "";
+        public List<OctiPlayerMetadata> players = new ArrayList<>();
+
+        public OctiGameMetadata() {}
+
+        public OctiGameMetadata(OctiGameMetadata other) {
+            if (other != null) {
+                this.gameId = other.gameId;
+                this.source = other.source;
+                this.status = other.status;
+                this.appVersion = other.appVersion;
+                this.buildType = other.buildType;
+                this.platform = other.platform;
+                this.extended = (other.extended != null)
+                        ? new OctiClientExtendedMetadata(other.extended)
+                        : new OctiClientExtendedMetadata();
+                this.termination = other.termination;
+                this.timeControl = other.timeControl;
+                this.license = other.license;
+                this.attribution = other.attribution;
+                this.players = new ArrayList<>();
+                if (other.players != null) {
+                    for (OctiPlayerMetadata pm : other.players) {
+                        this.players.add(new OctiPlayerMetadata(pm));
+                    }
+                }
+            }
+        }
+    }
+
     private static class Coord {
         final int x;
         final int y;
@@ -89,6 +202,9 @@ public class OctiGame {
     private final OctiPlayerState[] players = new OctiPlayerState[5];
 
     private final List<MoveHistoryEntry> history = new ArrayList<>();
+    private final List<OctiPlyMetadata> plyMetadata = new ArrayList<>();
+    private OctiPlyMetadata lastPlyMeta = new OctiPlyMetadata();
+    private OctiGameMetadata gameMetadata = new OctiGameMetadata();
     private final List<OctiGameSnapshot> undoStack = new ArrayList<>();
     private final List<OctiGameSnapshot> redoStack = new ArrayList<>();
 
@@ -260,6 +376,8 @@ public class OctiGame {
         undoStack.clear();
         redoStack.clear();
         history.clear();
+        plyMetadata.clear();
+        lastPlyMeta = new OctiPlyMetadata();
 
         gameStarted = false;
         gameOver = false;
@@ -482,6 +600,8 @@ public class OctiGame {
             undoStack.add(snapBefore);
             redoStack.clear();
             history.add(new MoveHistoryEntry(snapBefore.turn, m));
+            plyMetadata.add(new OctiPlyMetadata(lastPlyMeta));
+            lastPlyMeta = new OctiPlyMetadata();
         }
 
         updateGameOverAndWinner();
@@ -1318,6 +1438,9 @@ public class OctiGame {
         if (!history.isEmpty()) {
             history.remove(history.size() - 1);
         }
+        if (!plyMetadata.isEmpty()) {
+            plyMetadata.remove(plyMetadata.size() - 1);
+        }
 
         restoreSnapshot(prevSnap);
 
@@ -1822,77 +1945,266 @@ public class OctiGame {
         return moves;
     }
 
-    public String serialize() {
-        StringBuilder out = new StringBuilder();
-        out.append("; OCTI Game Transcript v2.0\n");
-
-        if (mode == OctiGameMode.GAME_MODE_2) {
-            out.append("GAME_MODE: 2\n");
-        } else if (mode == OctiGameMode.GAME_MODE_4) {
-            out.append("GAME_MODE: 4\n");
-        } else if (mode == OctiGameMode.GAME_MODE_OFK) {
-            out.append("GAME_MODE: OFK\n");
+    public void setLastPlyMetadata(OctiPlyMetadata meta) {
+        if (meta == null) {
+            return;
         }
-
-        out.append("GAME_BASES: ").append(bases.getValue()).append("\n");
-        out.append("USE_SUPER_PRONGS: ").append(useSuperProngs ? "Yes" : "No").append("\n");
-        out.append("USE_EDGELESS_BOARD: ").append(useEdgelessBoard ? "Yes" : "No").append("\n");
-
-        out.append("START_PLAYER: ");
-        switch (startPlayer) {
-            case PLAYER_A:
-                out.append("A\n");
-                break;
-            case PLAYER_B:
-                out.append("B\n");
-                break;
-            case PLAYER_C:
-                out.append("C\n");
-                break;
-            case PLAYER_D:
-                out.append("D\n");
-                break;
-            default:
-                out.append("A\n");
-                break;
-        }
-
-        out.append("STATUS: ");
-        if (!gameStarted) {
-            out.append("NOT_STARTED\n");
-        } else if (gameResigned) {
-            out.append("RESIGNED\n");
-        } else if (gameOver) {
-            out.append("GAME_OVER\n");
+        if (!plyMetadata.isEmpty()) {
+            plyMetadata.set(plyMetadata.size() - 1, new OctiPlyMetadata(meta));
         } else {
-            out.append("IN_PROGRESS\n");
+            lastPlyMeta = new OctiPlyMetadata(meta);
         }
+    }
 
-        out.append("WINNER: ");
-        switch (winner) {
-            case PLAYER_A:
-                out.append("A\n");
-                break;
-            case PLAYER_B:
-                out.append("B\n");
-                break;
-            case PLAYER_C:
-                out.append("C\n");
-                break;
-            case PLAYER_D:
-                out.append("D\n");
-                break;
-            default:
-                out.append("NONE\n");
-                break;
+    public void setPlyMetadata(int idx, OctiPlyMetadata meta) {
+        if (meta == null) {
+            return;
         }
+        while (plyMetadata.size() <= idx) {
+            plyMetadata.add(new OctiPlyMetadata());
+        }
+        plyMetadata.set(idx, new OctiPlyMetadata(meta));
+    }
 
-        out.append("MOVES: ").append(history.size()).append("\n");
+    public void setAllPlyMetadata(List<OctiPlyMetadata> metas) {
+        plyMetadata.clear();
+        if (metas != null) {
+            for (OctiPlyMetadata pm : metas) {
+                plyMetadata.add(new OctiPlyMetadata(pm));
+            }
+        }
+    }
+
+    public OctiPlyMetadata getPlyMetadata(int idx) {
+        if (idx >= 0 && idx < plyMetadata.size()) {
+            return plyMetadata.get(idx);
+        }
+        return new OctiPlyMetadata();
+    }
+
+    public List<OctiPlyMetadata> getAllPlyMetadata() {
+        return Collections.unmodifiableList(plyMetadata);
+    }
+
+    public void setGameMetadata(OctiGameMetadata meta) {
+        this.gameMetadata = (meta != null) ? new OctiGameMetadata(meta) : new OctiGameMetadata();
+    }
+
+    public OctiGameMetadata getGameMetadata() {
+        return gameMetadata;
+    }
+
+    public void setResignedWinner(OctiPlayer winner) {
+        this.gameResigned = true;
+        this.gameOver = true;
+        this.winner = winner;
+        notifyGameUpdated();
+        notifyUndoRedoStatusChanged();
+    }
+
+    public String exportCanonicalMovesText() {
+        StringBuilder ss = new StringBuilder();
         for (MoveHistoryEntry entry : history) {
-            out.append(entry.getMove().asString()).append("\n");
+            ss.append(entry.getMove().asString()).append("\n");
         }
+        return ss.toString();
+    }
 
-        return out.toString();
+    public String computeCanonicalGameId() {
+        StringBuilder ss = new StringBuilder();
+        ss.append("mode=");
+        if (mode == OctiGameMode.GAME_MODE_2) ss.append("2P");
+        else if (mode == OctiGameMode.GAME_MODE_4) ss.append("4P");
+        else ss.append("OFK");
+        ss.append(";bases=").append(bases == OctiGameBases.GAME_BASES_1 ? 1 : 3);
+        ss.append(";superProngs=").append(useSuperProngs ? "1" : "0");
+        ss.append(";edgeless=").append(useEdgelessBoard ? "1" : "0");
+        ss.append(";startPlayer=");
+        switch (startPlayer) {
+            case PLAYER_A: ss.append("A"); break;
+            case PLAYER_B: ss.append("B"); break;
+            case PLAYER_C: ss.append("C"); break;
+            case PLAYER_D: ss.append("D"); break;
+            default: ss.append("A"); break;
+        }
+        ss.append(";moves=");
+        for (int i = 0; i < history.size(); i++) {
+            if (i > 0) ss.append(",");
+            ss.append(history.get(i).getMove().asString());
+        }
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(ss.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(64);
+            for (byte b : hash) {
+                hex.append(String.format("%02x", b & 0xFF));
+            }
+            return hex.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private static String playerToString(OctiPlayer p) {
+        if (p == null) return "NONE";
+        switch (p) {
+            case PLAYER_A: return "A";
+            case PLAYER_B: return "B";
+            case PLAYER_C: return "C";
+            case PLAYER_D: return "D";
+            default:       return "NONE";
+        }
+    }
+
+    public String serializeJson(OctiGameMetadata meta) {
+        OctiGameMetadata m = (meta != null) ? meta : this.gameMetadata;
+        try {
+            org.json.JSONObject root = new org.json.JSONObject();
+            root.put("format", "octi.transcript.v3");
+            String gid = (m.gameId != null && !m.gameId.isEmpty()) ? m.gameId : computeCanonicalGameId();
+            root.put("gameId", gid);
+            root.put("source", (m.source != null && !m.source.isEmpty()) ? m.source : "LOCAL");
+
+            if (m.license != null && !m.license.isEmpty()) {
+                root.put("license", m.license);
+            }
+            if (m.attribution != null && !m.attribution.isEmpty()) {
+                root.put("attribution", m.attribution);
+            }
+
+            if ((m.appVersion != null && !m.appVersion.isEmpty())
+                    || (m.platform != null && !m.platform.isEmpty())
+                    || (m.extended != null && m.extended.present)) {
+                org.json.JSONObject clientObj = new org.json.JSONObject();
+                if (m.appVersion != null && !m.appVersion.isEmpty()) {
+                    clientObj.put("appVersion", m.appVersion);
+                }
+                clientObj.put("buildType", (m.buildType != null && !m.buildType.isEmpty()) ? m.buildType : "release");
+                if (m.platform != null && !m.platform.isEmpty()) {
+                    clientObj.put("platform", m.platform);
+                }
+                if (m.extended != null && m.extended.present) {
+                    org.json.JSONObject extObj = new org.json.JSONObject();
+                    extObj.put("startedAt", m.extended.startedAt);
+                    extObj.put("endedAt", m.extended.endedAt);
+                    extObj.put("utcOffsetMin", m.extended.utcOffsetMin);
+                    extObj.put("locale", m.extended.locale != null ? m.extended.locale : "");
+                    extObj.put("osVersion", m.extended.osVersion != null ? m.extended.osVersion : "");
+                    extObj.put("installId", m.extended.installId != null ? m.extended.installId : "");
+                    clientObj.put("extended", extObj);
+                }
+                root.put("client", clientObj);
+            }
+
+            if (mode == OctiGameMode.GAME_MODE_2) {
+                root.put("mode", "2P");
+            } else if (mode == OctiGameMode.GAME_MODE_4) {
+                root.put("mode", "4P");
+            } else {
+                root.put("mode", "OFK");
+            }
+
+            root.put("bases", bases == OctiGameBases.GAME_BASES_1 ? 1 : 3);
+            root.put("superProngs", useSuperProngs);
+            root.put("edgeless", useEdgelessBoard);
+            root.put("startPlayer", playerToString(startPlayer));
+
+            String st = m.status;
+            if (st == null || st.isEmpty()) {
+                if (!gameStarted) {
+                    st = "NOT_STARTED";
+                } else if (gameResigned) {
+                    st = "RESIGNED";
+                } else if (gameOver) {
+                    st = "GAME_OVER";
+                } else {
+                    st = "IN_PROGRESS";
+                }
+            }
+            root.put("status", st);
+            root.put("winner", playerToString(winner));
+
+            String term = m.termination;
+            if (term == null || term.isEmpty()) {
+                if (gameResigned) {
+                    term = "RESIGNATION";
+                } else if (gameOver && winner != OctiPlayer.PLAYER_UNDEF) {
+                    term = "BASE_OCCUPATION";
+                } else {
+                    term = "";
+                }
+            }
+            root.put("termination", term);
+            root.put("timeControl", (m.timeControl != null && !m.timeControl.isEmpty()) ? m.timeControl : "untimed");
+            root.put("finalFen", board != null ? board.toPositionString() : "");
+
+            // Players
+            org.json.JSONArray playersArr = new org.json.JSONArray();
+            List<OctiPlayerMetadata> playersList = m.players;
+            if (playersList == null || playersList.isEmpty()) {
+                playersList = new ArrayList<>();
+                int count = (mode == OctiGameMode.GAME_MODE_4) ? 4 : 2;
+                for (int i = 0; i < count; i++) {
+                    OctiPlayerMetadata pm = new OctiPlayerMetadata();
+                    pm.seat = i + 1;
+                    pm.player = OctiPlayer.fromValue(i + 1);
+                    pm.type = "HUMAN";
+                    pm.handle = "Player";
+                    playersList.add(pm);
+                }
+            }
+            for (OctiPlayerMetadata pm : playersList) {
+                org.json.JSONObject pObj = new org.json.JSONObject();
+                pObj.put("seat", pm.seat);
+                pObj.put("player", playerToString(pm.player));
+                pObj.put("type", pm.type != null ? pm.type : "HUMAN");
+                pObj.put("handle", pm.handle != null ? pm.handle : "Player");
+                if ("AI".equals(pm.type) || pm.aiDifficulty > 0) {
+                    pObj.put("aiDifficulty", pm.aiDifficulty);
+                    pObj.put("aiBudgetMs", pm.aiBudgetMs);
+                }
+                playersArr.put(pObj);
+            }
+            root.put("players", playersArr);
+
+            // Plies
+            org.json.JSONArray pliesArr = new org.json.JSONArray();
+            for (int i = 0; i < history.size(); i++) {
+                MoveHistoryEntry entry = history.get(i);
+                org.json.JSONObject plyObj = new org.json.JSONObject();
+                plyObj.put("ply", i + 1);
+                plyObj.put("player", playerToString(entry.getPlayer()));
+                plyObj.put("move", entry.getMove().asString());
+                OctiPlyMetadata plyMeta = (i < plyMetadata.size()) ? plyMetadata.get(i) : new OctiPlyMetadata();
+                plyObj.put("elapsedMs", plyMeta.elapsedMs);
+                if (plyMeta.clockAfterMs >= 0) {
+                    plyObj.put("clockAfterMs", plyMeta.clockAfterMs);
+                }
+                if (plyMeta.isAiMove) {
+                    org.json.JSONObject aiObj = new org.json.JSONObject();
+                    aiObj.put("difficulty", plyMeta.aiDifficulty);
+                    aiObj.put("budgetMs", plyMeta.aiBudgetMs);
+                    aiObj.put("depthReached", plyMeta.aiDepthReached);
+                    aiObj.put("nodesVisited", plyMeta.aiNodesVisited);
+                    aiObj.put("bestScore", plyMeta.aiBestScore);
+                    plyObj.put("ai", aiObj);
+                }
+                pliesArr.put(plyObj);
+            }
+            root.put("plies", pliesArr);
+
+            return root.toString(2) + "\n";
+        } catch (org.json.JSONException e) {
+            throw new RuntimeException("failed to serialize game json", e);
+        }
+    }
+
+    public String serializeJson() {
+        return serializeJson(this.gameMetadata);
+    }
+
+    public String serialize() {
+        return serializeJson(this.gameMetadata);
     }
 
     public void deserialize(String transcript) {
@@ -1943,6 +2255,15 @@ public class OctiGame {
         snap.gameOver = gameOver;
         snap.gameResigned = gameResigned;
         snap.searchPlyOffset = searchPlyOffset;
+        if (!searchMode) {
+            snap.plyMetadata = new ArrayList<>();
+            for (OctiPlyMetadata pm : plyMetadata) {
+                snap.plyMetadata.add(new OctiPlyMetadata(pm));
+            }
+            snap.lastPlyMeta = (lastPlyMeta != null)
+                    ? new OctiPlyMetadata(lastPlyMeta)
+                    : new OctiPlyMetadata();
+        }
     }
 
     public void restoreSnapshot(OctiGameSnapshot snap) {
@@ -1984,5 +2305,14 @@ public class OctiGame {
         this.gameOver = snap.gameOver;
         this.gameResigned = snap.gameResigned;
         this.searchPlyOffset = snap.searchPlyOffset;
+        if (!searchMode && snap.plyMetadata != null) {
+            this.plyMetadata.clear();
+            for (OctiPlyMetadata pm : snap.plyMetadata) {
+                this.plyMetadata.add(new OctiPlyMetadata(pm));
+            }
+            this.lastPlyMeta = (snap.lastPlyMeta != null)
+                    ? new OctiPlyMetadata(snap.lastPlyMeta)
+                    : new OctiPlyMetadata();
+        }
     }
 }

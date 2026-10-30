@@ -13,7 +13,9 @@
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
+#include <QDateTime>
 #include <QDialog>
+#include <QFileDialog>
 #include <QFontDatabase>
 #include <QGroupBox>
 #include <QGuiApplication>
@@ -24,9 +26,11 @@
 #include <QMenuBar>
 #include <QPainter>
 #include <QShortcut>
+#include <QSysInfo>
 #include <QVBoxLayout>
 #include "OctiCore.hxx"
 #include "OctiMainWindow.hxx"
+#include "Version.hxx"
 #include "selfupdate/UpdateInstaller.hxx"
 
 namespace octi {
@@ -157,6 +161,10 @@ OctiMainWindow::OctiMainWindow(
       _offlineMode(startOffline),
       _authenticated(false),
       _isLocalBotGame(true),
+      _currentTurnStartedEpochMs(0),
+      _matchStartedEpochSec(0),
+      _transcriptUploadedForCurrentMatch(false),
+      _heldTranscriptPendingConsent(false),
       _inOnlineRoom(false),
       _onlineViewerSeat(0),
       _onlineAutoOriented(false),
@@ -777,6 +785,9 @@ OctiMainWindow::~OctiMainWindow()
         _updateController.reset();
     }
     leaveOnlineRoom();
+    if (_uploadThread.joinable()) {
+        _uploadThread.join();
+    }
     if (_netClient) {
         _netClient->stopEventStreams();
     }
@@ -1229,6 +1240,11 @@ void OctiMainWindow::setupMenuBar()
     QObject::connect(actSplash, &QAction::triggered, this, [this]() {
         showSplashAboutDialog();
     });
+
+    QAction *actTelemetry = helpMenu->addAction(createMenuIcon(MenuIconKind::MODERATION, _theme), "Telemetry & Privacy Preferences...");
+    QObject::connect(actTelemetry, &QAction::triggered, this, [this]() {
+        showTelemetrySettingsDialog();
+    });
 }
 
 void OctiMainWindow::setSfxMuted(bool muted)
@@ -1253,6 +1269,10 @@ void OctiMainWindow::startNewLocalGame(const LocalGameConfig &cfg)
 {
     leaveOnlineRoom();
     _gameOverDialogShownForCurrentMatch = false;
+    _transcriptUploadedForCurrentMatch = false;
+    _heldTranscriptPendingConsent = false;
+    _matchStartedEpochSec = QDateTime::currentSecsSinceEpoch();
+    _currentTurnStartedEpochMs = QDateTime::currentMSecsSinceEpoch();
     _localConfig = cfg;
     _isLocalBotGame = (cfg.playType == LocalPlayType::VS_AI_BOT);
     _botEngine.setDifficulty(cfg.botDifficulty);
@@ -1325,32 +1345,36 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
     int safetyCount = 0;
     bool movedAny = false;
     std::string lastBotMoveStr;
+    BotSearchStats botStats;
     while (!game->isGameOver() &&
            game->getTurn() != _localConfig.humanSeat &&
            safetyCount < 8) {
         ++safetyCount;
 
         std::string botMove;
+        QElapsedTimer timer;
+        timer.start();
+        int budgetMs = _botEngine.timeBudgetMs();
         if (!isVisible()) {
-            botMove = _botEngine.chooseMove(_board);
+            botMove = _botEngine.chooseMove(_board, &botStats);
         } else {
-            int budgetMs = _botEngine.timeBudgetMs();
             OctiThinkingDialog thinkingDlg(_botEngine.difficulty(), budgetMs, _theme, this);
             thinkingDlg.positionBelowBoard(this, _boardCanvas);
 
             std::atomic<bool> done{false};
             std::string chosen;
-            std::thread worker([this, &done, &chosen]() {
-                chosen = _botEngine.chooseMove(_board);
+            std::thread worker([this, &done, &chosen, &botStats]() {
+                chosen = _botEngine.chooseMove(_board, &botStats);
                 done.store(true);
             });
 
-            QElapsedTimer timer;
-            timer.start();
             QTimer tickTimer;
             QObject::connect(&tickTimer, &QTimer::timeout, &thinkingDlg, [&]() {
                 int elapsed = static_cast<int>(timer.elapsed());
-                thinkingDlg.updateProgress(elapsed, budgetMs);
+                int depth = _botEngine.liveDepthReached();
+                std::uint64_t nodes = _botEngine.liveNodesVisited();
+                int score = _botEngine.liveBestScore();
+                thinkingDlg.updateProgress(elapsed, budgetMs, depth, nodes, score);
                 if (done.load()) {
                     thinkingDlg.accept();
                 }
@@ -1373,6 +1397,17 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
             lastBotMoveStr = botMove;
             movedAny = true;
             _soundSynth.triggerCue(SoundCue::POD_STEP);
+
+            OctiPlyMetadata plyMeta;
+            plyMeta.isAiMove = true;
+            plyMeta.aiDifficulty = static_cast<int>(_botEngine.difficulty());
+            plyMeta.aiBudgetMs = budgetMs;
+            plyMeta.aiDepthReached = botStats.depthReached;
+            plyMeta.aiNodesVisited = botStats.nodesVisited;
+            plyMeta.aiBestScore = botStats.bestScore;
+            plyMeta.elapsedMs = botStats.elapsedMs > 0 ? botStats.elapsedMs : static_cast<int>(timer.elapsed());
+            game->setLastPlyMetadata(plyMeta);
+            _currentTurnStartedEpochMs = QDateTime::currentMSecsSinceEpoch();
         } catch (...) {
             break;
         }
@@ -1789,6 +1824,18 @@ void OctiMainWindow::handleLocalOrOnlineMoveCommitted(
     }
     if (_reservePanel) {
         _reservePanel->refresh();
+    }
+    if (_board.getGame()) {
+        qint64 now = QDateTime::currentMSecsSinceEpoch();
+        int elapsedMs = 0;
+        if (_currentTurnStartedEpochMs > 0) {
+            elapsedMs = static_cast<int>(std::max<qint64>(0, now - _currentTurnStartedEpochMs));
+        }
+        OctiPlyMetadata plyMeta;
+        plyMeta.isAiMove = false;
+        plyMeta.elapsedMs = elapsedMs;
+        _board.getGame()->setLastPlyMetadata(plyMeta);
+        _currentTurnStartedEpochMs = now;
     }
     refreshMoveHistoryAndFenUi();
     checkAndPresentGameOver();
@@ -2229,9 +2276,73 @@ bool OctiMainWindow::loadOctiTranscriptIntoReplay(
     return true;
 }
 
+std::string OctiMainWindow::buildCurrentGameTranscriptJson(
+    bool includeExtendedTelemetry) const
+{
+    const OctiGame *game = _board.getGame();
+    if (!game) {
+        return "{}";
+    }
+
+    OctiGameMetadata meta;
+    meta.source = _inOnlineRoom ? "ONLINE" : (_isLocalBotGame ? "LOCAL_BOT" : "LOCAL");
+    if (game->isGameResigned()) {
+        meta.status = "RESIGNED";
+        meta.termination = "RESIGNATION";
+    } else if (game->isGameOver()) {
+        meta.status = "GAME_OVER";
+        meta.termination = "BASE_OCCUPATION";
+    } else if (game->isGameStarted()) {
+        meta.status = "IN_PROGRESS";
+    } else {
+        meta.status = "NOT_STARTED";
+    }
+
+    meta.appVersion = OCTI_VERSION_STRING;
+    meta.buildType = "release";
+    meta.platform = "desktop-qt6";
+
+    int numPlayers = (game->getMode() == GAME_MODE_4) ? 4 : 2;
+    for (int i = 1; i <= numPlayers; ++i) {
+        OctiPlayerMetadata pm;
+        pm.seat = i;
+        pm.player = static_cast<OctiPlayer>(i);
+        if (_isLocalBotGame) {
+            if (pm.player == _localConfig.humanSeat) {
+                pm.type = "HUMAN";
+                pm.handle = _profile.handle.empty() ? "Player" : _profile.handle;
+            } else {
+                pm.type = "AI";
+                int lvl = static_cast<int>(_botEngine.difficulty());
+                pm.handle = "AI_L" + std::to_string(lvl);
+                pm.aiDifficulty = lvl;
+                pm.aiBudgetMs = _botEngine.timeBudgetMs();
+            }
+        } else {
+            pm.type = "HUMAN";
+            pm.handle = "Player " + std::string(1, 'A' + i - 1);
+        }
+        meta.players.push_back(pm);
+    }
+
+    if (includeExtendedTelemetry) {
+        meta.extended.present = true;
+        meta.extended.startedAt = _matchStartedEpochSec > 0 ? _matchStartedEpochSec : QDateTime::currentSecsSinceEpoch();
+        meta.extended.endedAt = QDateTime::currentSecsSinceEpoch();
+        meta.extended.utcOffsetMin = static_cast<int>(QDateTime::currentDateTime().offsetFromUtc() / 60);
+        meta.extended.locale = QLocale::system().name().toStdString();
+        meta.extended.osVersion = QSysInfo::prettyProductName().toStdString();
+        meta.extended.installId = _configStore.preferences().installId;
+    } else {
+        meta.extended.present = false;
+    }
+
+    return game->serializeJson(meta);
+}
+
 std::string OctiMainWindow::exportCurrentOctiTranscript() const
 {
-    return _board.serializeGame();
+    return buildCurrentGameTranscriptJson(false);
 }
 
 QString OctiMainWindow::copyExportedNotationToClipboard() const
@@ -2256,7 +2367,7 @@ void OctiMainWindow::showExportNotationDialog()
     layout->setSpacing(10);
 
     QLabel *hdr = new QLabel(
-        "Canonical OCTI Transcript & Move Notation:", &dlg);
+        "Canonical OCTI Transcript (JSON v3.0):", &dlg);
     hdr->setStyleSheet("font-weight: bold; font-size: 13px;");
     layout->addWidget(hdr);
 
@@ -2265,25 +2376,34 @@ void OctiMainWindow::showExportNotationDialog()
     QFont monoFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
     monoFont.setPointSize(10);
     editor->setFont(monoFont);
-    editor->setPlainText(QString::fromStdString(exportCurrentOctiTranscript()));
+    std::string jsonStr = exportCurrentOctiTranscript();
+    try {
+        Json j = Json::parse(jsonStr, nullptr, false);
+        if (!j.is_discarded()) {
+            jsonStr = j.dump(2);
+        }
+    } catch (...) {}
+    editor->setPlainText(QString::fromStdString(jsonStr));
     layout->addWidget(editor, 1);
 
     QHBoxLayout *btnRow = new QHBoxLayout();
     btnRow->addStretch(1);
-    QPushButton *copyMovesBtn = new QPushButton("Copy Moves (Messenger)", &dlg);
-    QPushButton *copyTranscriptBtn = new QPushButton("Copy Full Transcript", &dlg);
+    QPushButton *saveBtn = new QPushButton("Save to File...", &dlg);
+    QPushButton *copyTranscriptBtn = new QPushButton("Copy Transcript", &dlg);
     QPushButton *closeBtn = new QPushButton("Close", &dlg);
-    btnRow->addWidget(copyMovesBtn);
+    btnRow->addWidget(saveBtn);
     btnRow->addWidget(copyTranscriptBtn);
     btnRow->addWidget(closeBtn);
     layout->addLayout(btnRow);
 
-    QObject::connect(copyMovesBtn, &QPushButton::clicked, &dlg, [this, copyMovesBtn]() {
-        QString text = exportMoveHistoryText();
-        if (QClipboard *cb = QGuiApplication::clipboard()) {
-            cb->setText(text);
+    QObject::connect(saveBtn, &QPushButton::clicked, &dlg, [this, &dlg, saveBtn]() {
+        QString fileName = QFileDialog::getSaveFileName(
+            &dlg, "Save OCTI Transcript", QString(), "OCTI JSON Transcript (*.json *.octi)");
+        if (!fileName.isEmpty()) {
+            if (saveTranscriptToFile(fileName.toStdString())) {
+                saveBtn->setText("Saved!");
+            }
         }
-        copyMovesBtn->setText("Copied Moves!");
     });
     QObject::connect(copyTranscriptBtn, &QPushButton::clicked, &dlg, [this, copyTranscriptBtn]() {
         copyExportedNotationToClipboard();
@@ -2505,6 +2625,7 @@ void OctiMainWindow::checkAndPresentGameOver()
     if (_reservePanel) {
         _reservePanel->refresh();
     }
+    uploadCompletedBotGameIfEligible(false);
     if (isVisible()) {
         GameOverDialog dlg(&_board, _theme, this);
         dlg.exec();
@@ -2518,6 +2639,121 @@ void OctiMainWindow::checkAndPresentGameOver()
                     startNewLocalGame(newDlg.config());
                 }
             }
+        }
+    }
+}
+
+void OctiMainWindow::checkPromptTelemetryConsentAtStartup()
+{
+    if (!isVisible()) {
+        return;
+    }
+    ClientPreferences &prefs = _configStore.preferences();
+    if (prefs.telemetryConsent == "unset" ||
+        prefs.telemetryConsentVersion < ClientPreferences::CURRENT_TELEMETRY_CONSENT_VERSION) {
+        OctiTelemetryConsentDialog dlg(_theme, this);
+        dlg.exec();
+        if (dlg.userConsented()) {
+            prefs.telemetryConsent = "share";
+            if (prefs.installId.empty()) {
+                prefs.installId = ClientConfigStore::generateUuidV4();
+            }
+        } else {
+            prefs.telemetryConsent = "decline";
+        }
+        prefs.telemetryConsentVersion = ClientPreferences::CURRENT_TELEMETRY_CONSENT_VERSION;
+        std::string err;
+        _configStore.save(err);
+
+        if (_heldTranscriptPendingConsent) {
+            _heldTranscriptPendingConsent = false;
+            uploadCompletedBotGameIfEligible(false);
+        }
+    }
+}
+
+void OctiMainWindow::setTelemetryConsentForTesting(const std::string &choice)
+{
+    ClientPreferences &prefs = _configStore.preferences();
+    prefs.telemetryConsent = choice;
+    prefs.telemetryConsentVersion = ClientPreferences::CURRENT_TELEMETRY_CONSENT_VERSION;
+    if (choice == "share" && prefs.installId.empty()) {
+        prefs.installId = ClientConfigStore::generateUuidV4();
+    }
+    std::string err;
+    _configStore.save(err);
+    if (choice != "unset") {
+        _heldTranscriptPendingConsent = false;
+    }
+}
+
+bool OctiMainWindow::uploadCompletedBotGameIfEligible(bool synchronousForTest)
+{
+    if (!_isLocalBotGame || _inOnlineRoom) {
+        return false;
+    }
+    OctiGame *game = _board.getGame();
+    if (!game || !game->isGameStarted() || !game->isGameOver()) {
+        return false;
+    }
+    if (game->getNumMoves() == 0) {
+        return false;
+    }
+    if (_transcriptUploadedForCurrentMatch) {
+        return false;
+    }
+
+    const ClientPreferences &prefs = _configStore.preferences();
+    if (prefs.telemetryConsent == "unset") {
+        _heldTranscriptPendingConsent = true;
+        return false;
+    }
+
+    _transcriptUploadedForCurrentMatch = true;
+    _heldTranscriptPendingConsent = false;
+
+    bool shareExtra = (prefs.telemetryConsent == "share");
+    std::string jsonStr = buildCurrentGameTranscriptJson(shareExtra);
+
+    UploadTranscriptRequest req;
+    req.transcriptJson = jsonStr;
+    if (shareExtra && !prefs.installId.empty()) {
+        req.clientId = prefs.installId;
+    }
+
+    if (synchronousForTest) {
+        if (_netClient) {
+            auto res = _netClient->uploadTrainingTranscript(req);
+            return res.ok;
+        }
+        return false;
+    } else {
+        if (_netClient) {
+            if (_uploadThread.joinable()) {
+                _uploadThread.join();
+            }
+            _uploadThread = std::thread([client = _netClient.get(), req]() {
+                client->uploadTrainingTranscript(req);
+            });
+        }
+        return true;
+    }
+}
+
+void OctiMainWindow::waitForBackgroundUpload()
+{
+    if (_uploadThread.joinable()) {
+        _uploadThread.join();
+    }
+}
+
+void OctiMainWindow::showTelemetrySettingsDialog()
+{
+    OctiTelemetrySettingsDialog dlg(&_configStore, _netClient.get(), _theme, this);
+    if (dlg.exec() == QDialog::Accepted) {
+        if (_heldTranscriptPendingConsent && _configStore.preferences().telemetryConsent != "unset") {
+            _heldTranscriptPendingConsent = false;
+            uploadCompletedBotGameIfEligible(false);
         }
     }
 }
