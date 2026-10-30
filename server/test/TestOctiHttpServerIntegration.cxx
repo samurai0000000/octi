@@ -1242,6 +1242,10 @@ TEST(OctiHttpServerIntegrationTest, NominalFullScenario)
     CHECK_TRUE(ui.contentType.find("text/html") == 0);
     CHECK_TRUE(ui.body.find("<!DOCTYPE html>") != std::string::npos);
     CHECK_TRUE(ui.body.find("<title>OCTI") != std::string::npos);
+    CHECK_TRUE(ui.body.find("Live Arena") == std::string::npos);
+    CHECK_TRUE(ui.body.find("tab-live") == std::string::npos);
+    CHECK_TRUE(ui.body.find("Game Archive") != std::string::npos);
+    CHECK_TRUE(ui.body.find("Leaderboard") != std::string::npos);
     CHECK_TRUE(ui.body.find("<canvas id=\"board-canvas\">") != std::string::npos);
     CHECK_TRUE(ui.body.find("THEME_PALETTES") != std::string::npos);
     CHECK_TRUE(ui.body.find("renderBoardCanvas") != std::string::npos);
@@ -1254,7 +1258,10 @@ TEST(OctiHttpServerIntegrationTest, NominalFullScenario)
     CHECK_TRUE(ui.body.find("res-card-b") != std::string::npos);
     CHECK_TRUE(ui.body.find("stack-inspector-body") != std::string::npos);
     CHECK_TRUE(ui.body.find("Archive Replay") != std::string::npos);
-    CHECK_TRUE(ui.body.find("EventSource") != std::string::npos);
+    CHECK_TRUE(ui.body.find("scrollIntoView") == std::string::npos);
+    CHECK_TRUE(ui.body.find("value=\"2200\">0.5x") != std::string::npos);
+    CHECK_TRUE(ui.body.find("value=\"1100\" selected>1.0x") != std::string::npos);
+    CHECK_TRUE(ui.body.find("value=\"550\">2.0x") != std::string::npos);
     CHECK_TRUE(ui.body.find("/api/v1/leaderboard") != std::string::npos);
     CHECK_TRUE(ui.body.find("/api/v1/archive/games") != std::string::npos);
     CHECK_FALSE(ui.header("Content-Security-Policy").empty());

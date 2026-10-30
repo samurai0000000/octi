@@ -18,95 +18,122 @@ const char kPage[] = R"OCTIUI(<!DOCTYPE html>
 <title>OCTI Web Player &amp; Archive</title>
 <style>
 :root {
-  --bg: #0b0f17;
-  --panel: #141b29;
-  --panel-elev: #1a2336;
-  --line: #b49148;
-  --line-dim: rgba(180, 145, 72, 0.36);
-  --fg: #f2ece0;
-  --dim: #a8b2c6;
-  --acc: #c8a253;
-  --acc-bright: #e4c070;
-  --input-bg: #090d14;
+  --bg: #fbfbfa;
+  --panel: #ffffff;
+  --panel-elev: #f4f4f5;
+  --line: #e4e4e7;
+  --line-dim: #e4e4e7;
+  --fg: #18181b;
+  --dim: #52525b;
+  --acc: #18181b;
+  --acc-bright: #2563eb;
+  --input-bg: #ffffff;
   --a: #10b981;
   --b: #f43f5e;
   --c: #3b82f6;
   --d: #f59e0b;
-}
-body.theme-rosewood {
-  --bg: #2a1812;
-  --panel: #3e241b;
-  --panel-elev: #4d2d22;
-  --line: #cea660;
-  --line-dim: rgba(206, 166, 96, 0.40);
-  --fg: #fbf5e8;
-  --dim: #d6c2a8;
-  --acc: #d6ac5c;
-  --acc-bright: #eecc84;
-  --input-bg: #1f110c;
 }
 * { box-sizing: border-box; }
 body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font: 14px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  padding: 10px 18px;
-  background: var(--panel);
+  padding: 12px 24px;
+  background: rgba(251, 251, 250, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
-  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 .brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 10px;
+  text-decoration: none !important;
 }
-.brand-gem {
-  width: 28px;
-  height: 28px;
-  background: radial-gradient(circle at 35% 35%, #6ee7b7, #10b981 55%, #064e3b);
-  border: 2px solid var(--acc-bright);
-  clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
-}
-header h1 {
-  margin: 0;
-  font-size: 18px;
-  letter-spacing: 1.2px;
-  color: var(--acc-bright);
+.brand-badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.82rem;
   font-weight: 700;
+  color: #ffffff;
+  background: var(--fg);
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  letter-spacing: 0.05em;
+}
+.brand-badge::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background-color: #dc2626;
+  border-radius: 50%;
+}
+.brand-text {
+  display: flex;
+  flex-direction: column;
+}
+.brand-name {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: 0.05em;
+  line-height: 1.2;
 }
 nav { display: flex; gap: 6px; flex-wrap: wrap; }
 nav button, .btn {
-  background: var(--panel-elev);
+  background: #ffffff;
   color: var(--fg);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 6px 12px;
+  padding: 6px 14px;
   cursor: pointer;
   font: inherit;
+  font-size: 13.5px;
   font-weight: 600;
-  text-decoration: none;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  text-decoration: none !important;
+  touch-action: manipulation;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
-nav button:hover, .btn:hover:not(:disabled) {
-  background: var(--acc);
-  color: #0b0f17;
-  border-color: var(--acc-bright);
+nav button:hover:not(:disabled), .btn:hover:not(:disabled) {
+  background: #f4f4f5;
+  border-color: #d4d4d8;
+  color: var(--fg);
 }
-nav button.on {
-  background: linear-gradient(180deg, var(--acc-bright), var(--acc));
-  color: #0b0f17;
-  border-color: var(--acc-bright);
+nav button.on, .btn.btn-primary {
+  background: var(--fg);
+  color: #ffffff;
+  border-color: var(--fg);
+}
+nav button.on:hover, .btn.btn-primary:hover {
+  background: #27272a;
+  border-color: #27272a;
+  color: #ffffff;
 }
 .btn:disabled {
   opacity: 0.42;
-  cursor: default;
+  cursor: not-allowed;
 }
 .header-right {
   margin-left: auto;
@@ -115,73 +142,79 @@ nav button.on {
   gap: 10px;
   flex-wrap: wrap;
 }
-main { max-width: 1260px; margin: 0 auto; padding: 16px; }
+main { max-width: 1260px; margin: 0 auto; padding: 20px 16px 40px 16px; }
 section { display: none; }
 section.on { display: block; }
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 14px;
-  margin-bottom: 14px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 .panel h2, .panel h3 {
-  margin: 0 0 10px 0;
-  color: var(--acc-bright);
-  letter-spacing: 0.4px;
+  margin: 0 0 12px 0;
+  color: var(--fg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 select, input {
   background: var(--input-bg);
   color: var(--fg);
-  border: 1px solid var(--line-dim);
-  border-radius: 5px;
-  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
   font: inherit;
+  transition: border-color 0.15s ease;
 }
 select:focus, input:focus {
   outline: none;
   border-color: var(--acc-bright);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 table { width: 100%; border-collapse: collapse; }
 th, td {
   text-align: left;
-  padding: 7px 9px;
-  border-bottom: 1px solid var(--line-dim);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
   vertical-align: middle;
 }
 th {
-  color: var(--acc-bright);
-  font-weight: 700;
-  font-size: 12px;
+  color: var(--dim);
+  font-weight: 600;
+  font-size: 11.5px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.05em;
+  background: #fafafa;
 }
 tr.click { cursor: pointer; }
-tr.click:hover { background: rgba(200, 162, 83, 0.12); }
+tr.click:hover { background: #f4f4f5; }
 .dim { color: var(--dim); }
-.err { color: #ff8a80; }
+.err { color: #dc2626; }
 pre {
-  background: var(--input-bg);
-  border: 1px solid var(--line-dim);
+  background: #f8fafc;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 10px;
+  padding: 12px;
   overflow: auto;
   max-height: 280px;
   margin: 8px 0;
   font-size: 12px;
+  color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 .cols {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
+  gap: 20px;
   align-items: flex-start;
 }
 .col-board {
@@ -201,7 +234,7 @@ pre {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 .board {
   width: 100%;
@@ -209,7 +242,7 @@ pre {
   aspect-ratio: 1 / 1;
   position: relative;
   border-radius: 12px;
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 .board canvas {
   width: 100%;
@@ -226,18 +259,19 @@ pre {
   gap: 8px;
 }
 .hud-card {
-  background: var(--input-bg);
-  border: 1px solid var(--line-dim);
-  border-radius: 7px;
-  padding: 7px 10px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 .hud-card.active-turn {
-  border-color: #ff69b4;
-  box-shadow: 0 0 10px rgba(255, 105, 180, 0.35);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
 }
 .hud-left {
   display: flex;
@@ -246,15 +280,15 @@ pre {
   font-weight: 700;
 }
 .pod-dot {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 11px;
   font-weight: 800;
   color: #fff;
-  border: 1.5px solid var(--acc-bright);
+  border: 1.5px solid rgba(0, 0, 0, 0.2);
   clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
 }
 .pod-dot.A { background: #10b981; }
@@ -271,132 +305,95 @@ pre {
 .sq-inspector {
   width: 100%;
   max-width: 560px;
-  min-height: 28px;
-  background: var(--input-bg);
-  border: 1px solid var(--line-dim);
-  border-radius: 6px;
-  padding: 5px 10px;
+  min-height: 32px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 12px;
   font-size: 12px;
   color: var(--dim);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-.log {
-  max-height: 240px;
-  overflow: auto;
-  font-size: 13px;
-  background: var(--input-bg);
-  border: 1px solid var(--line-dim);
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-.log div { border-bottom: 1px solid var(--line-dim); padding: 3px 0; }
 .badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
   padding: 2px 7px;
   border-radius: 4px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   display: inline-block;
 }
-.badge-online { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; border: 1px solid #059669; }
-.badge-upload { background: rgba(59, 130, 246, 0.18); color: #93c5fd; border: 1px solid #2563eb; }
-.badge-winner { background: rgba(200, 162, 83, 0.22); color: var(--acc-bright); border: 1px solid var(--line); }
+.badge-online { background: rgba(16, 185, 129, 0.1); color: #059669; border: 1px solid rgba(5, 150, 105, 0.3); }
+.badge-upload { background: rgba(37, 99, 235, 0.1); color: #2563eb; border: 1px solid rgba(37, 99, 235, 0.3); }
+.badge-winner { background: rgba(220, 38, 38, 0.1); color: #dc2626; border: 1px solid rgba(220, 38, 38, 0.3); }
 .replay-table-wrap {
-  max-height: 310px;
+  max-height: 320px;
   overflow-y: auto;
-  border: 1px solid var(--line-dim);
-  border-radius: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   margin: 8px 0;
-  background: var(--input-bg);
+  background: #ffffff;
 }
 tr.active-ply {
-  background: rgba(200, 162, 83, 0.28) !important;
+  background: rgba(37, 99, 235, 0.1) !important;
   font-weight: 700;
+  color: var(--acc-bright);
 }
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
-  gap: 8px;
-  margin-top: 6px;
+  gap: 10px;
+  margin-top: 8px;
 }
 .stat-box {
-  background: var(--input-bg);
-  border: 1px solid var(--line-dim);
-  border-radius: 6px;
-  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
-.stat-box .lbl { font-size: 11px; color: var(--dim); text-transform: uppercase; }
-.stat-box .val { font-size: 18px; font-weight: 700; color: var(--acc-bright); margin-top: 2px; }
+.stat-box .lbl { font-size: 11px; color: var(--dim); text-transform: uppercase; font-weight: 600; }
+.stat-box .val { font-size: 20px; font-weight: 700; color: var(--fg); margin-top: 2px; }
 .license-box {
   margin-top: 14px;
   font-size: 12px;
   color: var(--dim);
-  border-top: 1px solid var(--line-dim);
-  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
 }
 @media (max-width: 640px) {
-  main { padding: 8px; }
-  th, td { padding: 5px; font-size: 12px; }
+  main { padding: 10px 8px; }
+  header { padding: 10px 14px; }
+  th, td { padding: 6px 8px; font-size: 12px; }
 }
 </style>
 </head>
 <body>
 <header>
   <div class="brand">
-    <div class="brand-gem"></div>
-    <h1>OCTI ARENA &amp; ARCHIVE</h1>
+    <span class="brand-badge">OCTI</span>
+    <div class="brand-text">
+      <span class="brand-name">OCTI ARCHIVE</span>
+    </div>
   </div>
   <nav id="nav">
-    <button data-tab="live" class="on">Live Arena</button>
-    <button data-tab="archive">Game Archive</button>
-    <button data-tab="board">Leaderboard</button>
+    <button type="button" data-tab="archive" class="btn on">Game Archive</button>
+    <button type="button" data-tab="board" class="btn">Leaderboard</button>
   </nav>
   <div class="header-right">
-    <button class="btn" id="btn-theme" title="Switch Visual Theme">Theme: Obsidian Brass</button>
+    <button type="button" class="btn" id="btn-theme" title="Switch Board Palette">Theme: Obsidian Brass</button>
     <select class="btn" id="theme-select" style="display:none">
       <option value="obsidian">Obsidian Brass</option>
       <option value="rosewood">Rosewood Ivory</option>
     </select>
-    <button class="btn" id="btn-rotate" title="Rotate Board 90 degrees CW">Rotate 90&deg;</button>
+    <button type="button" class="btn" id="btn-rotate" title="Rotate Board 90 degrees CW">Rotate 90&deg;</button>
     <span id="health" class="dim"></span>
   </div>
 </header>
 <main>
-<section id="tab-live" class="on">
-  <div class="panel">
-    <h2>Open &amp; Live Multiplayer Tables</h2>
-    <div id="tables-msg" class="dim">Loading...</div>
-    <table id="tables"><thead><tr><th>Table</th><th>Mode</th><th>State</th>
-      <th>Players</th><th>Watching</th><th></th></tr></thead>
-      <tbody></tbody></table>
-  </div>
-  <div class="panel" id="watch" style="display:none">
-    <div class="row"><strong id="watch-title"></strong>
-      <button class="btn" id="watch-close">Stop Watching</button></div>
-    <div class="cols">
-      <div class="col-board">
-        <div class="board-stage">
-          <div id="live-hud" class="hud-strip">
-            <div id="res-card-a" class="res-card" style="display:none"></div>
-            <div id="res-card-b" class="res-card" style="display:none"></div>
-          </div>
-          <div id="live-board" class="board"><canvas id="board-canvas"></canvas></div>
-          <div id="live-inspector" class="sq-inspector"><span id="stack-inspector-body">Hover or tap any square to inspect pod stacks &amp; prongs.</span></div>
-          <div id="live-info" class="dim"></div>
-        </div>
-      </div>
-      <div class="col-side">
-        <h3>Live Event Stream</h3>
-        <div id="live-log" class="log"></div>
-        <h3 style="margin-top:12px;">Move Notation</h3>
-        <pre id="live-moves"></pre>
-      </div>
-    </div>
-  </div>
-</section>
-<section id="tab-archive">
+<section id="tab-archive" class="on">
   <div class="panel" id="ar-stats-panel">
     <h3>Archive Telemetry &amp; Dataset Statistics</h3>
     <div id="ar-stats-summary" class="dim">Loading stats...</div>
@@ -433,7 +430,7 @@ tr.active-ply {
       </label>
       <label>Player <input id="ar-player" size="20"
         placeholder="uuid (optional)"></label>
-      <button class="btn" id="ar-go">Filter</button>
+      <button type="button" class="btn" id="ar-go">Filter</button>
       <a class="btn" id="ar-export-btn" href="/api/v1/archive/export" target="_blank">Export Filtered (NDJSON)</a>
     </div>
     <div id="ar-msg" class="dim"></div>
@@ -441,8 +438,8 @@ tr.active-ply {
       <th>Players</th><th>Winner</th><th>Outcome</th><th>Plies</th><th>Date (UTC)</th></tr></thead>
       <tbody></tbody></table>
     <div class="row" style="margin-top:10px">
-      <button class="btn" id="ar-prev">Previous</button>
-      <button class="btn" id="ar-next">Next</button>
+      <button type="button" class="btn" id="ar-prev">Previous</button>
+      <button type="button" class="btn" id="ar-next">Next</button>
       <span id="ar-page" class="dim"></span>
     </div>
   </div>
@@ -450,27 +447,30 @@ tr.active-ply {
     <div class="row">
       <strong id="ar-title" style="color:var(--acc-bright);font-size:15px;"></strong>
       <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn" id="ar-copy-json">Copy JSON</button>
+        <button type="button" class="btn" id="ar-copy-json">Copy JSON</button>
         <a class="btn" id="ar-dl" href="#">Download .json</a>
-        <button class="btn" id="ar-close">Close</button>
+        <button type="button" class="btn" id="ar-close">Close</button>
       </div>
     </div>
     <div class="cols">
       <div class="col-board">
         <div class="board-stage">
-          <div id="ar-hud" class="hud-strip"></div>
-          <div id="ar-board" class="board"></div>
-          <div id="ar-inspector" class="sq-inspector">Hover or tap any square to inspect pod stacks &amp; prongs.</div>
+          <div id="ar-hud" class="hud-strip">
+            <div id="res-card-a" class="res-card" style="display:none"></div>
+            <div id="res-card-b" class="res-card" style="display:none"></div>
+          </div>
+          <div id="ar-board" class="board"><canvas id="board-canvas"></canvas></div>
+          <div id="ar-inspector" class="sq-inspector"><span id="stack-inspector-body">Hover or tap any square to inspect pod stacks &amp; prongs.</span></div>
           <div class="row" style="margin-top:4px; justify-content:center;">
-            <button class="btn" id="rp-start" title="First Ply (Home)">|&lt;</button>
-            <button class="btn" id="rp-prev" title="Previous Ply (Left Arrow)">&lt; Prev</button>
-            <button class="btn" id="rp-play" title="Play / Pause (Space)">Play</button>
-            <button class="btn" id="rp-next" title="Next Ply (Right Arrow)">Next &gt;</button>
-            <button class="btn" id="rp-end" title="Final Ply (End)">&gt;|</button>
+            <button type="button" class="btn" id="rp-start" title="First Ply (Home)">|&lt;</button>
+            <button type="button" class="btn" id="rp-prev" title="Previous Ply (Left Arrow)">&lt; Prev</button>
+            <button type="button" class="btn" id="rp-play" title="Play / Pause (Space)">Play</button>
+            <button type="button" class="btn" id="rp-next" title="Next Ply (Right Arrow)">Next &gt;</button>
+            <button type="button" class="btn" id="rp-end" title="Final Ply (End)">&gt;|</button>
             <select id="rp-speed" title="Playback Speed">
-              <option value="1100">0.5x</option>
-              <option value="650" selected>1.0x</option>
-              <option value="320">2.0x</option>
+              <option value="2200">0.5x</option>
+              <option value="1100" selected>1.0x</option>
+              <option value="550">2.0x</option>
             </select>
             <span id="rp-ply-label" class="dim" style="margin-left:6px;font-weight:700;"></span>
           </div>
@@ -497,7 +497,7 @@ tr.active-ply {
     <div class="row">
       <label>Mode <select id="lb-mode"><option>2P</option><option>4P</option>
         <option>OFK</option></select></label>
-      <button class="btn" id="lb-go">Refresh</button>
+      <button type="button" class="btn" id="lb-go">Refresh</button>
     </div>
     <div id="lb-msg" class="dim"></div>
     <table id="lb-table"><thead><tr><th>#</th><th>Player</th><th>Elo</th>
@@ -1396,8 +1396,8 @@ function ensureBoardState(container, hudId, inspectorId) {
 
 function renderBoard(container, fen, moveStr, playerHandles) {
   if (!container || !fen) { return; }
-  var hudId = container.id === "live-board" ? "live-hud" : "ar-hud";
-  var inspId = container.id === "live-board" ? "live-inspector" : "ar-inspector";
+  var hudId = "ar-hud";
+  var inspId = "ar-inspector";
   var state = ensureBoardState(container, hudId, inspId);
   var parsed = parseOctiFen(fen);
   if (!parsed) { return; }
@@ -1442,7 +1442,6 @@ window.addEventListener("resize", function () {
 
 $("btn-theme").addEventListener("click", function () {
   currentTheme = (currentTheme === "obsidian") ? "rosewood" : "obsidian";
-  document.body.classList.toggle("theme-rosewood", currentTheme === "rosewood");
   $("btn-theme").textContent = "Theme: " + PALETTES[currentTheme].name;
   Object.keys(boardStates).forEach(function (k) {
     drawBoardState(boardStates[k]);
@@ -1457,8 +1456,7 @@ $("btn-rotate").addEventListener("click", function () {
 });
 
 /* ---- tabs ---- */
-var tabs = { live: $("tab-live"), archive: $("tab-archive"),
-             board: $("tab-board") };
+var tabs = { archive: $("tab-archive"), board: $("tab-board") };
 
 function switchTab(name) {
   Array.prototype.forEach.call($("nav").querySelectorAll("button"),
@@ -1486,102 +1484,6 @@ function loadHealth() {
       " tables | " + h.online_players + " online";
   }).catch(function () { $("health").textContent = "server unreachable"; });
 }
-
-/* ---- live tables ---- */
-function loadTables() {
-  api("/api/v1/tables").then(function (j) {
-    var body = $("tables").querySelector("tbody");
-    clear(body);
-    $("tables-msg").textContent = j.tables.length ? "" : "No tables right now.";
-    j.tables.forEach(function (t) {
-      var tr = el("tr");
-      cellRow(tr, [t.room_id, t.mode, t.phase,
-        t.players.join(", ") + " (" + t.seats_filled + "/" + t.seats_total + ")",
-        t.observer_count]);
-      var td = el("td");
-      var b = el("button", "Watch", "btn");
-      b.addEventListener("click", function () { watch(t.room_id); });
-      td.appendChild(b);
-      tr.appendChild(td);
-      body.appendChild(tr);
-    });
-  }).catch(function (e) { $("tables-msg").textContent = "Error: " + e.message; });
-}
-
-var es = null;
-var watchedId = null;
-var refreshTimer = null;
-var EVENT_TYPES = ["ROOM_CREATED", "SEAT_JOINED", "SEAT_LEFT", "SEAT_KICKED",
-  "HOST_CHANGED", "OBSERVER_JOINED", "OBSERVER_LEFT", "GAME_STARTED", "MOVE",
-  "CHAT", "VOICE_META", "OBSERVER_BANNED", "USER_MUTED", "POLICY_UPDATED",
-  "PROPOSAL_OFFERED", "PROPOSAL_ACCEPTED", "PROPOSAL_DECLINED",
-  "PROPOSAL_EXPIRED", "GAME_PAUSED", "GAME_RESUMED", "UNDO_APPLIED",
-  "REMATCH_CREATED", "GAME_OVER", "PLAYER_DISCONNECTED",
-  "PLAYER_RECONNECTED"];
-
-function stopWatching() {
-  if (es) { es.close(); es = null; }
-  if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
-  watchedId = null;
-  $("watch").style.display = "none";
-}
-
-function describeEvent(ev) {
-  var who = ev.handle ? ev.handle + " " : "";
-  if (ev.type === "CHAT") { return (ev.handle || "?") + ": " + ev.text; }
-  if (ev.type === "MOVE") { return who + "moved " + ev.move; }
-  if (ev.type === "GAME_OVER") { return "Game over: " + ev.result + " (" + ev.termination + ")"; }
-  return ev.type + (who ? " - " + who : "");
-}
-
-function loadGame(id) {
-  api("/api/v1/games/" + encodeURIComponent(id)).then(function (g) {
-    if (watchedId !== id) { return; }
-    $("watch-title").textContent = "Table " + g.room_id + " - " + g.phase;
-    var handles = (g.seats || []).map(function (s) { return s.handle || ("Seat " + s.seat); });
-    var lastMove = (g.moves && g.moves.length) ? g.moves[g.moves.length - 1] : "";
-    renderBoard($("live-board"), g.fen, lastMove, handles);
-    var seats = g.seats.map(function (s) {
-      return "Seat " + s.seat + ": " + (s.handle || "(empty)") +
-        (s.clock_ms >= 0 ? " [" + Math.floor(s.clock_ms / 1000) + "s]" : "");
-    }).join("  |  ");
-    $("live-info").textContent = seats + (g.paused ? "  (paused)" : "") +
-      (g.result ? "  Result: " + g.result : "");
-    $("live-moves").textContent = g.moves.join(" ");
-  }).catch(function (e) { $("live-info").textContent = "Error: " + e.message; });
-}
-
-function scheduleRefresh(id) {
-  if (refreshTimer) { return; }
-  refreshTimer = setTimeout(function () {
-    refreshTimer = null;
-    if (watchedId === id) { loadGame(id); }
-  }, 250);
-}
-
-function watch(id) {
-  stopWatching();
-  watchedId = id;
-  $("watch").style.display = "block";
-  clear($("live-log"));
-  loadGame(id);
-  es = new EventSource("/api/v1/games/" + encodeURIComponent(id) +
-                       "/events?stream=1&since_seq=0");
-  EVENT_TYPES.forEach(function (t) {
-    es.addEventListener(t, function (m) {
-      var ev = {};
-      try { ev = JSON.parse(m.data); } catch (e) { return; }
-      var log = $("live-log");
-      log.appendChild(el("div", describeEvent(ev)));
-      while (log.childNodes.length > 200) { log.removeChild(log.firstChild); }
-      log.scrollTop = log.scrollHeight;
-      scheduleRefresh(id);
-    });
-  });
-  es.addEventListener("closed", function () { if (es) { es.close(); } });
-}
-
-$("watch-close").addEventListener("click", stopWatching);
 
 /* ---- archive ---- */
 var arOffset = 0, arLimit = 20, arTotal = 0, arLoaded = false;
@@ -1718,7 +1620,16 @@ function showReplayPly(idx) {
     var active = (i === idx);
     rows[i].classList.toggle("active-ply", active);
     if (active) {
-      rows[i].scrollIntoView({ block: "nearest" });
+      var wrap = $("rp-table").parentNode;
+      if (wrap) {
+        var rowTop = rows[i].offsetTop;
+        var rowBot = rowTop + rows[i].offsetHeight;
+        if (rowTop < wrap.scrollTop) {
+          wrap.scrollTop = rowTop;
+        } else if (rowBot > wrap.scrollTop + wrap.clientHeight) {
+          wrap.scrollTop = rowBot - wrap.clientHeight;
+        }
+      }
     }
   }
 }
@@ -1830,7 +1741,7 @@ $("ar-copy-json").addEventListener("click", function () {
 });
 
 function startReplayTimer() {
-  var delay = parseInt($("rp-speed").value || "650", 10);
+  var delay = parseInt($("rp-speed").value || "1100", 10);
   rpTimer = setInterval(function () {
     if (rpIdx < rpPlies.length - 1) {
       showReplayPly(rpIdx + 1);
@@ -1915,9 +1826,9 @@ $("lb-go").addEventListener("click", lbLoad);
 $("lb-mode").addEventListener("change", lbLoad);
 
 loadHealth();
-loadTables();
+loadArchiveStats();
+arSearch(0);
 checkHash();
-setInterval(loadTables, 4000);
 setInterval(loadHealth, 15000);
 })();
 </script>
