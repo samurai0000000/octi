@@ -92,6 +92,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        volumeControlStream = android.media.AudioManager.STREAM_MUSIC
 
         val configFile = ClientConfigStore.configFileForDirectory(filesDir ?: File("."))
         appViewModel = OctiAppViewModel(ClientConfigStore(configFile))
@@ -542,6 +543,9 @@ fun OctiMainAppContent(
                     viewModel.composer.selectStackPodIndex(zx, zy, podIndex)
                     viewModel.composer.beginAddProngFromReserve(superProng)
                     if (viewModel.composer.dropOnCompassSector(zx, zy, podIndex, dir)) {
+                        if (viewModel.composer.isAwaitingConfirmation) {
+                            OctiSoundSynth.playCue(OctiSoundSynth.Cue.PRONG_SNAP, !viewModel.sfxMuted.value)
+                        }
                         viewModel.closeZoomedSquare()
                         viewModel.notifyComposerUpdated()
                     }
@@ -554,6 +558,9 @@ fun OctiMainAppContent(
                     viewModel.composer.selectStackPodIndex(zx, zy, podIndex)
                     viewModel.composer.beginRepositionProng(zx, zy, podIndex, srcDir)
                     if (viewModel.composer.dropOnCompassSector(zx, zy, podIndex, dstDir)) {
+                        if (viewModel.composer.isAwaitingConfirmation) {
+                            OctiSoundSynth.playCue(OctiSoundSynth.Cue.PRONG_SNAP, !viewModel.sfxMuted.value)
+                        }
                         viewModel.closeZoomedSquare()
                         viewModel.notifyComposerUpdated()
                     }
@@ -569,6 +576,9 @@ fun OctiMainAppContent(
                         viewModel.composer.beginAddPodFromReserve()
                     }
                     if (canStart && viewModel.composer.dropOnSquare(zx, zy)) {
+                        if (viewModel.composer.isAwaitingConfirmation) {
+                            OctiSoundSynth.playCue(OctiSoundSynth.Cue.POD_PLACE, !viewModel.sfxMuted.value)
+                        }
                         viewModel.closeZoomedSquare()
                         viewModel.notifyComposerUpdated()
                     }

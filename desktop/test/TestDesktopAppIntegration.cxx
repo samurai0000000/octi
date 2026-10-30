@@ -350,15 +350,19 @@ TEST(DesktopAppIntegrationTest, HardCodedEndpointAndCliOptionGuard)
             errMsg.c_str());
     }
 
-    /* 3. Default OctiMainWindow and SsoOnboardingDialog bind to trumpet.selfso.com:6874 */
+    /* 3. Default OctiMainWindow and SsoOnboardingDialog bind to octi.selfso.com:443 */
     std::string cfgPath = "/tmp/octi_default_win_test.json";
     OctiMainWindow defaultWin(nullptr, cfgPath, false);
-    STRCMP_EQUAL("trumpet.selfso.com", defaultWin.netClient()->host().c_str());
-    LONGS_EQUAL(6874, defaultWin.netClient()->port());
+    STRCMP_EQUAL("octi.selfso.com", defaultWin.netClient()->host().c_str());
+    LONGS_EQUAL(443, defaultWin.netClient()->port());
+    CHECK_FALSE(defaultWin.windowTitle().contains("octi.selfso.com"));
     CHECK_FALSE(defaultWin.windowTitle().contains("trumpet.selfso.com"));
     CHECK_FALSE(defaultWin.windowTitle().contains("6874"));
+    CHECK_FALSE(defaultWin.windowTitle().contains("443"));
+    CHECK_FALSE(defaultWin.serverStatusText().contains("octi.selfso.com"));
     CHECK_FALSE(defaultWin.serverStatusText().contains("trumpet.selfso.com"));
     CHECK_FALSE(defaultWin.serverStatusText().contains("6874"));
+    CHECK_FALSE(defaultWin.serverStatusText().contains("443"));
     CHECK_TRUE(defaultWin.serverStatusText() == "Ready");
     CHECK_FALSE(defaultWin.hasEditableServerOrPortField());
     LONGS_EQUAL(23, defaultWin.menuActionCountWithIconsAndShortcuts());

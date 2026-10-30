@@ -37,7 +37,7 @@ struct ClientPreferences {
  * 0700 directory / 0600 file permissions on POSIX.
  *
  * Hard-coded endpoint invariant: the server address is permanently compiled as
- * OCTI_SERVER_HOST ("trumpet.selfso.com") and OCTI_SERVER_PORT (6874). Any
+ * OCTI_SERVER_HOST ("octi.selfso.com") and OCTI_SERVER_PORT (443). Any
  * server_url, server_host, or server_port fields injected into the JSON file
  * are ignored on load and never written on save.
  */

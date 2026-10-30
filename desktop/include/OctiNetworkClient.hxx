@@ -354,11 +354,10 @@ private:
 };
 
 /*
- * Hard-coded REST + Server-Sent Events (SSE) client for trumpet.selfso.com:6874.
+ * REST + Server-Sent Events (SSE) client for octi.selfso.com:443 (with fallback to trumpet.selfso.com:6874).
  *
- * Production instances created via OctiNetworkClient() always connect to
- * OCTI_SERVER_HOST ("trumpet.selfso.com") and OCTI_SERVER_PORT (6874), with no
- * public mutator to change the server host or port.
+ * Production instances created via OctiNetworkClient() connect to
+ * OCTI_SERVER_HOST ("octi.selfso.com") and OCTI_SERVER_PORT (443).
  */
 class OctiNetworkClient {
 public:
@@ -381,6 +380,8 @@ public:
 
     const std::string &host() const;
     int port() const;
+    void setEndpoint(const std::string &host, int port);
+    std::string buildUrl(const std::string &path = "") const;
 
     void setSessionToken(const std::string &token);
     std::string sessionToken() const;

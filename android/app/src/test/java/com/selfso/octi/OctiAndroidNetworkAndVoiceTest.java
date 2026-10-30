@@ -73,16 +73,17 @@ public class OctiAndroidNetworkAndVoiceTest {
 
     @Test
     public void testHardCodedServerEndpointAndZeroOverrideSurface() {
-        assertEquals("trumpet.selfso.com", OctiDefs.OCTI_SERVER_HOST);
-        assertEquals(6874, OctiDefs.OCTI_SERVER_PORT);
-        assertEquals("trumpet.selfso.com", OctiNetworkClient.canonicalHost());
-        assertEquals(6874, OctiNetworkClient.canonicalPort());
+        assertEquals("octi.selfso.com", OctiDefs.OCTI_SERVER_HOST);
+        assertEquals(443, OctiDefs.OCTI_SERVER_PORT);
+        assertEquals("octi.selfso.com", OctiNetworkClient.canonicalHost());
+        assertEquals(443, OctiNetworkClient.canonicalPort());
 
         try (OctiNetworkClient prodClient = new OctiNetworkClient()) {
-            assertEquals("trumpet.selfso.com", prodClient.host());
-            assertEquals(6874, prodClient.port());
-            assertEquals("trumpet.selfso.com", prodClient.serverHost());
-            assertEquals(6874, prodClient.serverPort());
+            assertEquals("octi.selfso.com", prodClient.host());
+            assertEquals(443, prodClient.port());
+            assertEquals("octi.selfso.com", prodClient.serverHost());
+            assertEquals(443, prodClient.serverPort());
+            assertEquals("https://octi.selfso.com", prodClient.baseUrl());
         }
 
         for (Method m : OctiNetworkClient.class.getDeclaredMethods()) {

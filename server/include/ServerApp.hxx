@@ -42,7 +42,7 @@ struct OidcProviderConfig {
 typedef std::map<std::string, OidcProviderConfig> OidcConfig;
 
 struct ServerConfig {
-    uint16_t port = static_cast<uint16_t>(OCTI_SERVER_PORT); // 0 = ephemeral, reported at start
+    uint16_t port = static_cast<uint16_t>(OCTI_SERVER_DAEMON_PORT); // 0 = ephemeral, reported at start
     std::string bindAddress = "127.0.0.1";
     std::string dbPath;                 // required to serve (--db)
     std::string oidcConfigPath;         // optional (--oidc-config)

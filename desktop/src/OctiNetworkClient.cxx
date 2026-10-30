@@ -690,7 +690,10 @@ struct OctiNetworkClient::Impl {
 
     std::unique_ptr<httplib::Client> makeClient(int readTimeoutSec = 10) const
     {
-        std::unique_ptr<httplib::Client> cli(new httplib::Client(host, port));
+        std::unique_ptr<httplib::Client> cli(
+            (port == 443)
+                ? new httplib::Client("https://" + host)
+                : new httplib::Client(host, port));
         cli->set_connection_timeout(5, 0);
         cli->set_read_timeout(readTimeoutSec, 0);
         cli->set_write_timeout(10, 0);
@@ -735,6 +738,17 @@ struct OctiNetworkClient::Impl {
             if (attempt < 5) {
                 std::this_thread::sleep_for(
                     std::chrono::milliseconds(100 * attempt));
+            }
+        }
+        if (host == OCTI_SERVER_HOST && port == OCTI_SERVER_PORT) {
+            std::unique_ptr<httplib::Client> fbCli(
+                new httplib::Client(OCTI_SERVER_FALLBACK_HOST, OCTI_SERVER_FALLBACK_PORT));
+            fbCli->set_connection_timeout(5, 0);
+            fbCli->set_read_timeout(10, 0);
+            fbCli->set_write_timeout(10, 0);
+            httplib::Result fbRes = requestFn(fbCli.get());
+            if (fbRes) {
+                return wrapResult(fbRes);
             }
         }
         return wrapResult(res);
@@ -813,7 +827,9 @@ struct OctiNetworkClient::Impl {
                                        std::to_string(curSeq);
 
                     std::shared_ptr<httplib::Client> cli(
-                        new httplib::Client(host, port));
+                        (host == OCTI_SERVER_HOST && port == 443) || port == 443
+                            ? new httplib::Client("https://" + host)
+                            : new httplib::Client(host, port));
                     cli->set_connection_timeout(5, 0);
                     cli->set_read_timeout(30, 0);
                     cli->set_write_timeout(5, 0);
@@ -926,6 +942,31 @@ const std::string &OctiNetworkClient::host() const
 int OctiNetworkClient::port() const
 {
     return _port;
+}
+
+void OctiNetworkClient::setEndpoint(const std::string &host, int port)
+{
+    _host = host;
+    _port = port;
+    _impl->host = host;
+    _impl->port = port;
+}
+
+std::string OctiNetworkClient::buildUrl(const std::string &path) const
+{
+    std::string prefix;
+    if (_port == 443 || (_host == "octi.selfso.com" && _port == 443)) {
+        prefix = "https://" + _host;
+    } else {
+        prefix = "http://" + _host + ":" + std::to_string(_port);
+    }
+    if (path.empty()) {
+        return prefix;
+    }
+    if (path.front() != '/') {
+        return prefix + "/" + path;
+    }
+    return prefix + path;
 }
 
 void OctiNetworkClient::setSessionToken(const std::string &token)

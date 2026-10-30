@@ -44,6 +44,7 @@ import com.selfso.octi.OctiDir
 import com.selfso.octi.OctiMoveComposer
 import com.selfso.octi.OctiPlayer
 import com.selfso.octi.OctiProngType
+import com.selfso.octi.OctiSoundSynth
 import com.selfso.octi.ui.theme.OctiTheme
 import kotlin.math.floor
 import kotlinx.coroutines.delay
@@ -269,9 +270,19 @@ fun OctiBoardCanvas(
                                 val hasFriendlyPod = !startSq.isEmpty && turn != null && !startSq.hasEnemyOf(turn)
                                 if (composer.isGuidedMoveActive) {
                                     val prevCapCount = composer.captureChoices().size
+                                    val curSq = composer.guidedCurrentSquare()
                                     if (composer.clickBoardSquareForGuidedMove(endX, endY)) {
                                         viewModel.refreshDisplayBoard()
                                         val capChoices = composer.captureChoices()
+                                        if (composer.isAwaitingConfirmation) {
+                                            val dx = Math.abs(endX - curSq[0])
+                                            val dy = Math.abs(endY - curSq[1])
+                                            val isCap = capChoices.size > prevCapCount
+                                            val cue = if (isCap) OctiSoundSynth.Cue.POD_CAPTURE
+                                                else if (dx > 1 || dy > 1) OctiSoundSynth.Cue.POD_JUMP
+                                                else OctiSoundSynth.Cue.POD_STEP
+                                            OctiSoundSynth.playCue(cue, !viewModel.sfxMuted.value)
+                                        }
                                         if (capChoices.size > prevCapCount) {
                                             val latestCap = capChoices.lastOrNull { !it.mandatory }
                                             if (latestCap != null) {
@@ -288,6 +299,15 @@ fun OctiBoardCanvas(
                                     if (composer.stageOrCommitPodMoveOrJump(startX, startY, resolvedIdx, endX, endY, viewModel.moveEntireMatchingStack.value)) {
                                         viewModel.refreshDisplayBoard()
                                         val capChoices = composer.captureChoices()
+                                        if (composer.isAwaitingConfirmation) {
+                                            val dx = Math.abs(endX - startX)
+                                            val dy = Math.abs(endY - startY)
+                                            val isCap = capChoices.size > prevCapCount
+                                            val cue = if (isCap) OctiSoundSynth.Cue.POD_CAPTURE
+                                                else if (dx > 1 || dy > 1) OctiSoundSynth.Cue.POD_JUMP
+                                                else OctiSoundSynth.Cue.POD_STEP
+                                            OctiSoundSynth.playCue(cue, !viewModel.sfxMuted.value)
+                                        }
                                         if (capChoices.size > prevCapCount) {
                                             val latestCap = capChoices.lastOrNull { !it.mandatory }
                                             if (latestCap != null) {
@@ -392,8 +412,18 @@ fun OctiBoardCanvas(
                             val isDestination = composer.isGuidedLegalDestination(sqX, sqY)
                             if (isDestination) {
                                 val prevCapCount = composer.captureChoices().size
+                                val curSq = composer.guidedCurrentSquare()
                                 if (composer.selectGuidedDestination(sqX, sqY)) {
                                     val capChoices = composer.captureChoices()
+                                    if (composer.isAwaitingConfirmation) {
+                                        val dx = Math.abs(sqX - curSq[0])
+                                        val dy = Math.abs(sqY - curSq[1])
+                                        val isCap = capChoices.size > prevCapCount
+                                        val cue = if (isCap) OctiSoundSynth.Cue.POD_CAPTURE
+                                            else if (dx > 1 || dy > 1) OctiSoundSynth.Cue.POD_JUMP
+                                            else OctiSoundSynth.Cue.POD_STEP
+                                        OctiSoundSynth.playCue(cue, !viewModel.sfxMuted.value)
+                                    }
                                     if (capChoices.size > prevCapCount) {
                                         val latestCap = capChoices.lastOrNull { !it.mandatory }
                                         if (latestCap != null) {
@@ -445,6 +475,9 @@ fun OctiBoardCanvas(
                             dragKind == OctiMoveComposer.DragKind.LIBERATE_POD_FROM_RESERVE
                         ) {
                             if (composer.dropOnSquare(sqX, sqY)) {
+                                if (composer.isAwaitingConfirmation) {
+                                    OctiSoundSynth.playCue(OctiSoundSynth.Cue.POD_PLACE, !viewModel.sfxMuted.value)
+                                }
                                 selectedOriginSquare = null
                                 viewModel.notifyComposerUpdated()
                                 return@detectTapGestures

@@ -9,8 +9,11 @@
 
 namespace octi {
 
-constexpr const char *OCTI_SERVER_HOST = "trumpet.selfso.com";
-constexpr int OCTI_SERVER_PORT = 6874;
+constexpr const char *OCTI_SERVER_HOST = "octi.selfso.com";
+constexpr int OCTI_SERVER_PORT = 443;
+constexpr const char *OCTI_SERVER_FALLBACK_HOST = "trumpet.selfso.com";
+constexpr int OCTI_SERVER_FALLBACK_PORT = 6874;
+constexpr int OCTI_SERVER_DAEMON_PORT = 6874;
 constexpr int OCTI_PROTOCOL_VERSION = 1;
 constexpr int OCTI_MIN_PROTOCOL_VERSION = 1;
 

@@ -94,8 +94,10 @@ TEST_GROUP(OctiBoardGeometryTest)
 
 TEST(OctiBoardGeometryTest, CanonicalServerEndpointConstants)
 {
-    STRCMP_EQUAL("trumpet.selfso.com", OCTI_SERVER_HOST);
-    LONGS_EQUAL(6874, OCTI_SERVER_PORT);
+    STRCMP_EQUAL("octi.selfso.com", OCTI_SERVER_HOST);
+    LONGS_EQUAL(443, OCTI_SERVER_PORT);
+    STRCMP_EQUAL("trumpet.selfso.com", OCTI_SERVER_FALLBACK_HOST);
+    LONGS_EQUAL(6874, OCTI_SERVER_FALLBACK_PORT);
 }
 
 TEST(OctiBoardGeometryTest, SquareCenterRoundTrip9x9And6x7AllRotations)

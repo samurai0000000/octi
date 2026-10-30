@@ -87,8 +87,11 @@ public class OctiAndroidBoardAndComposerTest {
 
     @Test
     public void testCanonicalServerHostAndPortConstants() {
-        assertEquals("trumpet.selfso.com", OctiDefs.OCTI_SERVER_HOST);
-        assertEquals(6874, OctiDefs.OCTI_SERVER_PORT);
+        assertEquals("octi.selfso.com", OctiDefs.OCTI_SERVER_HOST);
+        assertEquals(443, OctiDefs.OCTI_SERVER_PORT);
+        assertEquals("trumpet.selfso.com", OctiDefs.OCTI_SERVER_FALLBACK_HOST);
+        assertEquals(6874, OctiDefs.OCTI_SERVER_FALLBACK_PORT);
+        assertEquals(6874, OctiDefs.OCTI_SERVER_DAEMON_PORT);
     }
 
     @Test
@@ -678,6 +681,18 @@ public class OctiAndroidBoardAndComposerTest {
         assertTrue(synth.isMuted());
         synth.triggerCue(OctiSoundSynth.SoundCue.POD_CAPTURE);
         assertEquals(OctiSoundSynth.SoundCue.values().length, playbackCount.get());
+
+        // Verify Cue alias, playCue static method and shutdown
+        assertEquals(OctiSoundSynth.SoundCue.values().length, OctiSoundSynth.Cue.values().length);
+        assertEquals(OctiSoundSynth.SoundCue.POD_PLACE, OctiSoundSynth.Cue.POD_PLACE);
+        assertEquals(OctiSoundSynth.SoundCue.PRONG_SNAP, OctiSoundSynth.Cue.PRONG_SNAP);
+        assertEquals(OctiSoundSynth.SoundCue.POD_STEP, OctiSoundSynth.Cue.POD_STEP);
+        assertEquals(OctiSoundSynth.SoundCue.POD_JUMP, OctiSoundSynth.Cue.POD_JUMP);
+        assertEquals(OctiSoundSynth.SoundCue.POD_CAPTURE, OctiSoundSynth.Cue.POD_CAPTURE);
+
+        OctiSoundSynth.playCue(OctiSoundSynth.Cue.POD_PLACE, false);
+        OctiSoundSynth.playCue(OctiSoundSynth.Cue.POD_PLACE, true);
+        synth.shutdown();
     }
 
     // -------------------------------------------------------------------------

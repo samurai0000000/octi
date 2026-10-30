@@ -18,6 +18,37 @@ public class OctiSoundSynth {
         GAME_VICTORY
     }
 
+    public static final class Cue {
+        public static final SoundCue POD_PLACE = SoundCue.POD_PLACE;
+        public static final SoundCue PRONG_SNAP = SoundCue.PRONG_SNAP;
+        public static final SoundCue POD_STEP = SoundCue.POD_STEP;
+        public static final SoundCue POD_JUMP = SoundCue.POD_JUMP;
+        public static final SoundCue POD_CAPTURE = SoundCue.POD_CAPTURE;
+        public static final SoundCue CLOCK_LOW_TICK = SoundCue.CLOCK_LOW_TICK;
+        public static final SoundCue GAME_VICTORY = SoundCue.GAME_VICTORY;
+
+        public static SoundCue[] values() {
+            return SoundCue.values();
+        }
+
+        public static SoundCue valueOf(String name) {
+            return SoundCue.valueOf(name);
+        }
+    }
+
+    private static final OctiSoundSynth sDefaultInstance = new OctiSoundSynth();
+
+    public static OctiSoundSynth getDefaultInstance() {
+        return sDefaultInstance;
+    }
+
+    public static void playCue(SoundCue cue, boolean soundEnabled) {
+        if (!soundEnabled || cue == null) {
+            return;
+        }
+        sDefaultInstance.triggerCue(cue);
+    }
+
     public interface PlaybackCallback {
         void onPlayPcm(short[] samples);
     }
@@ -29,7 +60,8 @@ public class OctiSoundSynth {
     private long triggeredCount = 0;
     private SoundCue lastCue = SoundCue.POD_PLACE;
     private PlaybackCallback playbackCallback = null;
-    private Object activeAudioTrackRef = null;
+    private final Object[] trackPool = new Object[4];
+    private int trackPoolCursor = 0;
 
     public OctiSoundSynth() {
     }
@@ -185,17 +217,36 @@ public class OctiSoundSynth {
                     && !vmName.toLowerCase().contains("art")) {
                 return;
             }
-            if (activeAudioTrackRef instanceof android.media.AudioTrack) {
-                android.media.AudioTrack prev = (android.media.AudioTrack) activeAudioTrackRef;
-                activeAudioTrackRef = null;
+
+            int minBufBytes = android.media.AudioTrack.getMinBufferSize(
+                    SAMPLE_RATE,
+                    android.media.AudioFormat.CHANNEL_OUT_MONO,
+                    android.media.AudioFormat.ENCODING_PCM_16BIT);
+            int pcmBytes = samples.length * 2;
+            int bufferSizeBytes = Math.max(pcmBytes, minBufBytes > 0 ? minBufBytes : pcmBytes);
+            int bufferSizeFrames = bufferSizeBytes / 2;
+
+            short[] paddedSamples;
+            if (bufferSizeFrames > samples.length) {
+                paddedSamples = new short[bufferSizeFrames];
+                System.arraycopy(samples, 0, paddedSamples, 0, samples.length);
+            } else {
+                paddedSamples = samples;
+            }
+
+            int slot = trackPoolCursor;
+            trackPoolCursor = (trackPoolCursor + 1) % trackPool.length;
+            if (trackPool[slot] instanceof android.media.AudioTrack) {
                 try {
-                    prev.release();
+                    ((android.media.AudioTrack) trackPool[slot]).release();
                 } catch (Throwable ignored) {
                 }
+                trackPool[slot] = null;
             }
+
             android.media.AudioAttributes attrs = new android.media.AudioAttributes.Builder()
                     .setUsage(android.media.AudioAttributes.USAGE_GAME)
-                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
                     .build();
             android.media.AudioFormat format = new android.media.AudioFormat.Builder()
                     .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
@@ -205,18 +256,30 @@ public class OctiSoundSynth {
             android.media.AudioTrack track = new android.media.AudioTrack(
                     attrs,
                     format,
-                    samples.length * 2,
+                    bufferSizeBytes,
                     android.media.AudioTrack.MODE_STATIC,
                     android.media.AudioManager.AUDIO_SESSION_ID_GENERATE);
             if (track.getState() == android.media.AudioTrack.STATE_INITIALIZED) {
-                activeAudioTrackRef = track;
-                track.write(samples, 0, samples.length);
+                track.write(paddedSamples, 0, paddedSamples.length);
                 track.play();
+                trackPool[slot] = track;
             } else {
                 track.release();
             }
         } catch (Throwable ignored) {
             // Headless JVM unit test environment or audio device unavailable
+        }
+    }
+
+    public synchronized void shutdown() {
+        for (int i = 0; i < trackPool.length; i++) {
+            if (trackPool[i] instanceof android.media.AudioTrack) {
+                try {
+                    ((android.media.AudioTrack) trackPool[i]).release();
+                } catch (Throwable ignored) {
+                }
+                trackPool[i] = null;
+            }
         }
     }
 

@@ -24,7 +24,7 @@ namespace octi {
 /* Tunable HTTP layer bounds. Defaults are production values. */
 struct HttpServerConfig {
     std::string bindAddress = "127.0.0.1";
-    int port = OCTI_SERVER_PORT;        // 0 = pick an ephemeral port
+    int port = OCTI_SERVER_DAEMON_PORT;        // 0 = pick an ephemeral port
 
     /* Requests with a larger body are rejected with 413. */
     size_t maxBodyBytes = 65536;

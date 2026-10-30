@@ -30,12 +30,12 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Hard-coded REST + Server-Sent Events (SSE) client for
- * {@code trumpet.selfso.com:6874}.
+ * {@code octi.selfso.com:443} (with fallback to {@code trumpet.selfso.com:6874}).
  *
  * <p>Production instances created via {@link #OctiNetworkClient()} always
- * connect strictly to {@link OctiDefs#OCTI_SERVER_HOST}
- * ({@code "trumpet.selfso.com"}) and {@link OctiDefs#OCTI_SERVER_PORT}
- * ({@code 6874}), with zero public mutators to alter the server host or port.
+ * connect to {@link OctiDefs#OCTI_SERVER_HOST}
+ * ({@code "octi.selfso.com"}) and {@link OctiDefs#OCTI_SERVER_PORT}
+ * ({@code 443}), with zero public mutators to alter the server host or port.
  */
 public final class OctiNetworkClient implements AutoCloseable {
 
@@ -818,6 +818,9 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     public String baseUrl() {
+        if (_port == 443) {
+            return "https://" + _host;
+        }
         return "http://" + _host + ":" + _port;
     }
 
@@ -2095,115 +2098,151 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     private RawResponse doHttpRequest(String method, String path, String jsonBody) {
-        RawResponse r = new RawResponse();
         byte[] bodyBytes = jsonBody != null ? jsonBody.getBytes(StandardCharsets.UTF_8) : null;
         String token = sessionToken();
 
+        RawResponse r = executeSingleEndpointRequest(_host, _port, method, path, bodyBytes, token);
+        if (!r.transportOk && "octi.selfso.com".equals(_host) && _port == 443) {
+            RawResponse fb = executeSingleEndpointRequest(
+                OctiDefs.OCTI_SERVER_FALLBACK_HOST, OctiDefs.OCTI_SERVER_FALLBACK_PORT,
+                method, path, bodyBytes, token);
+            if (fb.transportOk) {
+                return fb;
+            }
+        }
+        return r;
+    }
+
+    private RawResponse executeSingleEndpointRequest(
+            String targetHost, int targetPort, String method, String path,
+            byte[] bodyBytes, String token) {
+        RawResponse r = new RawResponse();
         for (int attempt = 1; attempt <= 5; attempt++) {
             r = new RawResponse();
-            try (Socket sock = new Socket()) {
-                sock.connect(new InetSocketAddress(_host, _port), 5000);
-                sock.setSoTimeout(10000);
-
-                OutputStream out = sock.getOutputStream();
-                InputStream in = sock.getInputStream();
-
-                StringBuilder req = new StringBuilder(256);
-                req.append(method).append(' ').append(path).append(" HTTP/1.1\r\n");
-                req.append("Host: ").append(_host).append(':').append(_port).append("\r\n");
-                req.append("User-Agent: octi-android/1.0\r\n");
-                req.append("Accept: application/json, text/plain, */*\r\n");
-                req.append("Connection: close\r\n");
-                req.append("X-Octi-Protocol-Version: ").append(OctiDefs.OCTI_PROTOCOL_VERSION).append("\r\n");
-                if (!token.isEmpty()) {
-                    req.append("Authorization: Bearer ").append(token).append("\r\n");
-                }
-                if (bodyBytes != null) {
-                    req.append("Content-Type: application/json\r\n");
-                    req.append("Content-Length: ").append(bodyBytes.length).append("\r\n");
-                }
-                req.append("\r\n");
-
-                out.write(req.toString().getBytes(StandardCharsets.US_ASCII));
-                if (bodyBytes != null && bodyBytes.length > 0) {
-                    out.write(bodyBytes);
-                }
-                out.flush();
-
-                String statusLine = readHttpLine(in);
-                if (statusLine == null || statusLine.isEmpty()) {
-                    r.transportOk = false;
-                    r.transportError = "empty HTTP response";
-                    if (attempt < 5) {
-                        try {
-                            Thread.sleep(100L * attempt);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                            return r;
-                        }
-                        continue;
-                    }
-                    return r;
-                }
-                String[] stParts = statusLine.split(" ", 3);
-                if (stParts.length < 2) {
-                    r.transportOk = false;
-                    r.transportError = "malformed status line: " + statusLine;
-                    return r;
-                }
-                r.status = Integer.parseInt(stParts[1].trim());
-                r.transportOk = true;
-
-                int contentLength = -1;
-                boolean chunked = false;
-                String line;
-                while ((line = readHttpLine(in)) != null && !line.isEmpty()) {
-                    int colon = line.indexOf(':');
-                    if (colon <= 0) {
-                        continue;
-                    }
-                    String hName = line.substring(0, colon).trim().toLowerCase(Locale.ROOT);
-                    String hVal = line.substring(colon + 1).trim();
-                    switch (hName) {
-                        case "content-type":
-                            r.contentType = hVal;
-                            break;
-                        case "content-length":
-                            try {
-                                contentLength = Integer.parseInt(hVal);
-                            } catch (NumberFormatException ignored) {
-                            }
-                            break;
-                        case "transfer-encoding":
-                            if (hVal.toLowerCase(Locale.ROOT).contains("chunked")) {
-                                chunked = true;
-                            }
-                            break;
-                        case "retry-after":
-                            try {
-                                r.retryAfterSec = Math.max(0, Integer.parseInt(hVal));
-                            } catch (NumberFormatException ignored) {
-                            }
-                            break;
-                        default:
-                            break;
-                    }
-                }
-
-                byte[] respBytes;
-                if (chunked) {
-                    respBytes = readChunkedBody(in);
-                } else if (contentLength >= 0) {
-                    respBytes = readExactBytes(in, contentLength);
+            Socket rawSock = null;
+            try {
+                if (targetPort == 443) {
+                    rawSock = javax.net.ssl.SSLSocketFactory.getDefault().createSocket();
                 } else {
-                    respBytes = readUntilEof(in);
+                    rawSock = new Socket();
                 }
-                r.body = new String(respBytes, StandardCharsets.UTF_8);
-                String trimmed = r.body.trim();
-                if (!trimmed.isEmpty() && (trimmed.charAt(0) == '{' || trimmed.charAt(0) == '[')) {
-                    r.json = OctiMiniJson.parseObjectOrNull(trimmed);
+                final Socket sock = rawSock;
+                try {
+                    sock.connect(new InetSocketAddress(targetHost, targetPort), 5000);
+                    sock.setSoTimeout(10000);
+                    if (sock instanceof javax.net.ssl.SSLSocket) {
+                        ((javax.net.ssl.SSLSocket) sock).startHandshake();
+                    }
+
+                    OutputStream out = sock.getOutputStream();
+                    InputStream in = sock.getInputStream();
+
+                    StringBuilder req = new StringBuilder(256);
+                    req.append(method).append(' ').append(path).append(" HTTP/1.1\r\n");
+                    if (targetPort == 443) {
+                        req.append("Host: ").append(targetHost).append("\r\n");
+                    } else {
+                        req.append("Host: ").append(targetHost).append(':').append(targetPort).append("\r\n");
+                    }
+                    req.append("User-Agent: octi-android/1.0\r\n");
+                    req.append("Accept: application/json, text/plain, */*\r\n");
+                    req.append("Connection: close\r\n");
+                    req.append("X-Octi-Protocol-Version: ").append(OctiDefs.OCTI_PROTOCOL_VERSION).append("\r\n");
+                    if (!token.isEmpty()) {
+                        req.append("Authorization: Bearer ").append(token).append("\r\n");
+                    }
+                    if (bodyBytes != null) {
+                        req.append("Content-Type: application/json\r\n");
+                        req.append("Content-Length: ").append(bodyBytes.length).append("\r\n");
+                    }
+                    req.append("\r\n");
+
+                    out.write(req.toString().getBytes(StandardCharsets.US_ASCII));
+                    if (bodyBytes != null && bodyBytes.length > 0) {
+                        out.write(bodyBytes);
+                    }
+                    out.flush();
+
+                    String statusLine = readHttpLine(in);
+                    if (statusLine == null || statusLine.isEmpty()) {
+                        r.transportOk = false;
+                        r.transportError = "empty HTTP response";
+                        if (attempt < 5) {
+                            try {
+                                Thread.sleep(100L * attempt);
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                return r;
+                            }
+                            continue;
+                        }
+                        return r;
+                    }
+                    String[] stParts = statusLine.split(" ", 3);
+                    if (stParts.length < 2) {
+                        r.transportOk = false;
+                        r.transportError = "malformed status line: " + statusLine;
+                        return r;
+                    }
+                    r.status = Integer.parseInt(stParts[1].trim());
+                    r.transportOk = true;
+
+                    int contentLength = -1;
+                    boolean chunked = false;
+                    String line;
+                    while ((line = readHttpLine(in)) != null && !line.isEmpty()) {
+                        int colon = line.indexOf(':');
+                        if (colon <= 0) {
+                            continue;
+                        }
+                        String hName = line.substring(0, colon).trim().toLowerCase(Locale.ROOT);
+                        String hVal = line.substring(colon + 1).trim();
+                        switch (hName) {
+                            case "content-type":
+                                r.contentType = hVal;
+                                break;
+                            case "content-length":
+                                try {
+                                    contentLength = Integer.parseInt(hVal);
+                                } catch (NumberFormatException ignored) {
+                                }
+                                break;
+                            case "transfer-encoding":
+                                if (hVal.toLowerCase(Locale.ROOT).contains("chunked")) {
+                                    chunked = true;
+                                }
+                                break;
+                            case "retry-after":
+                                try {
+                                    r.retryAfterSec = Math.max(0, Integer.parseInt(hVal));
+                                } catch (NumberFormatException ignored) {
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+
+                    byte[] respBytes;
+                    if (chunked) {
+                        respBytes = readChunkedBody(in);
+                    } else if (contentLength >= 0) {
+                        respBytes = readExactBytes(in, contentLength);
+                    } else {
+                        respBytes = readUntilEof(in);
+                    }
+                    r.body = new String(respBytes, StandardCharsets.UTF_8);
+                    String trimmed = r.body.trim();
+                    if (!trimmed.isEmpty() && (trimmed.charAt(0) == '{' || trimmed.charAt(0) == '[')) {
+                        r.json = OctiMiniJson.parseObjectOrNull(trimmed);
+                    }
+                    return r;
+                } finally {
+                    try {
+                        sock.close();
+                    } catch (IOException ignored) {
+                    }
                 }
-                return r;
             } catch (Exception e) {
                 r.transportOk = false;
                 r.transportError = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
@@ -2238,7 +2277,20 @@ public final class OctiNetworkClient implements AutoCloseable {
 
                 int httpStatus = 0;
                 boolean terminalEventSeen = false;
-                Socket sock = new Socket();
+                Socket sock;
+                try {
+                    sock = (_port == 443)
+                        ? javax.net.ssl.SSLSocketFactory.getDefault().createSocket()
+                        : new Socket();
+                } catch (IOException ioe) {
+                    try {
+                        Thread.sleep(1000L);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    continue;
+                }
                 synchronized (runner.mutex) {
                     if (runner.stopRequested.get()) {
                         try {
@@ -2253,13 +2305,20 @@ public final class OctiNetworkClient implements AutoCloseable {
                 try {
                     sock.connect(new InetSocketAddress(_host, _port), 5000);
                     sock.setSoTimeout(30000);
+                    if (sock instanceof javax.net.ssl.SSLSocket) {
+                        ((javax.net.ssl.SSLSocket) sock).startHandshake();
+                    }
 
                     OutputStream out = sock.getOutputStream();
                     InputStream in = sock.getInputStream();
 
                     StringBuilder req = new StringBuilder(256);
                     req.append("GET ").append(path).append(" HTTP/1.1\r\n");
-                    req.append("Host: ").append(_host).append(':').append(_port).append("\r\n");
+                    if (_port == 443) {
+                        req.append("Host: ").append(_host).append("\r\n");
+                    } else {
+                        req.append("Host: ").append(_host).append(':').append(_port).append("\r\n");
+                    }
                     req.append("Accept: text/event-stream\r\n");
                     req.append("Cache-Control: no-cache\r\n");
                     req.append("Connection: close\r\n");

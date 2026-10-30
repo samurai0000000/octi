@@ -71,9 +71,9 @@ public class OctiAndroidAppIntegrationTest {
 
     @Test
     public void testHardCodedEndpointAndZeroOverrideInViewModelAndConfig() throws Exception {
-        assertEquals("trumpet.selfso.com:6874", OctiAppViewModel.canonicalServerEndpoint());
-        assertEquals("trumpet.selfso.com", OctiAppViewModel.canonicalServerHost());
-        assertEquals(6874, OctiAppViewModel.canonicalServerPort());
+        assertEquals("octi.selfso.com:443", OctiAppViewModel.canonicalServerEndpoint());
+        assertEquals("octi.selfso.com", OctiAppViewModel.canonicalServerHost());
+        assertEquals(443, OctiAppViewModel.canonicalServerPort());
         assertFalse(OctiAppViewModel.hasEditableServerOrPortField());
 
         File cfgFile = new File(_tempDir, "client_config.json");
@@ -91,9 +91,9 @@ public class OctiAndroidAppIntegrationTest {
         Files.write(cfgFile.toPath(), rogueJson.getBytes(StandardCharsets.UTF_8));
 
         try (OctiAppViewModel vm = new OctiAppViewModel(new ClientConfigStore(cfgFile))) {
-            assertEquals("trumpet.selfso.com", vm.getNetClient().serverHost());
-            assertEquals(6874, vm.getNetClient().serverPort());
-            assertEquals("trumpet.selfso.com:6874", OctiAppViewModel.canonicalServerEndpoint());
+            assertEquals("octi.selfso.com", vm.getNetClient().serverHost());
+            assertEquals(443, vm.getNetClient().serverPort());
+            assertEquals("octi.selfso.com:443", OctiAppViewModel.canonicalServerEndpoint());
             assertEquals(OctiThemeId.ROSEWOOD_IVORY, vm.getTheme().getValue());
 
             Map<String, String> rogueExtras = new HashMap<>();
@@ -103,8 +103,8 @@ public class OctiAndroidAppIntegrationTest {
             rogueExtras.put("tab", "LOBBY");
             vm.applyExternalArguments(rogueExtras);
 
-            assertEquals("trumpet.selfso.com", vm.getNetClient().serverHost());
-            assertEquals(6874, vm.getNetClient().serverPort());
+            assertEquals("octi.selfso.com", vm.getNetClient().serverHost());
+            assertEquals(443, vm.getNetClient().serverPort());
             assertEquals(OctiAppViewModel.AppTab.ONLINE_LOBBY, vm.getCurrentTab().getValue());
 
             vm.setTheme(OctiThemeId.OBSIDIAN_BRASS);

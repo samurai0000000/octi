@@ -28,8 +28,8 @@ import java.util.Set;
  * 0700 directory / 0600 file permissions.
  *
  * <p>Hard-coded endpoint invariant: the server address is permanently compiled
- * as {@link OctiDefs#OCTI_SERVER_HOST} ({@code "trumpet.selfso.com"}) and
- * {@link OctiDefs#OCTI_SERVER_PORT} ({@code 6874}). Any {@code server_url},
+ * as {@link OctiDefs#OCTI_SERVER_HOST} ({@code "octi.selfso.com"}) and
+ * {@link OctiDefs#OCTI_SERVER_PORT} ({@code 443}). Any {@code server_url},
  * {@code server_host}, {@code server_port}, {@code host}, or {@code port}
  * fields injected into the JSON file are explicitly ignored on load and never
  * written on save.

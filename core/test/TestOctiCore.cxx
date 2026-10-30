@@ -1953,8 +1953,11 @@ TEST_GROUP(OctiBotEngineCoreTest)
 
 TEST(OctiBotEngineCoreTest, CanonicalServerHostAndPortConstants)
 {
-    STRCMP_EQUAL("trumpet.selfso.com", octi::OCTI_SERVER_HOST);
-    LONGS_EQUAL(6874, octi::OCTI_SERVER_PORT);
+    STRCMP_EQUAL("octi.selfso.com", octi::OCTI_SERVER_HOST);
+    LONGS_EQUAL(443, octi::OCTI_SERVER_PORT);
+    STRCMP_EQUAL("trumpet.selfso.com", octi::OCTI_SERVER_FALLBACK_HOST);
+    LONGS_EQUAL(6874, octi::OCTI_SERVER_FALLBACK_PORT);
+    LONGS_EQUAL(6874, octi::OCTI_SERVER_DAEMON_PORT);
 }
 
 TEST(OctiBotEngineCoreTest, DefaultBudgetAndDepthPerDifficultyLevel)

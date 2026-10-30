@@ -349,8 +349,8 @@ TEST(ClientConfigStoreTest, SaveLoadAndPosix0600Permissions)
     std::string cfgPath = tempDir + "/nested/config.json";
     ClientConfigStore store(cfgPath);
 
-    STRCMP_EQUAL("trumpet.selfso.com", ClientConfigStore::serverHost());
-    LONGS_EQUAL(6874, ClientConfigStore::serverPort());
+    STRCMP_EQUAL("octi.selfso.com", ClientConfigStore::serverHost());
+    LONGS_EQUAL(443, ClientConfigStore::serverPort());
 
     ClientPreferences &prefs = store.preferences();
     prefs.sessionToken = "secret_session_tok_12345";
@@ -419,8 +419,8 @@ TEST(ClientConfigStoreTest, IgnoresAndStripsInjectedServerHostAndPortKeys)
     CHECK_TRUE_TEXT(store.load(err), err.c_str());
     STRCMP_EQUAL("tok_abc", store.preferences().sessionToken.c_str());
     STRCMP_EQUAL("Samurai", store.preferences().handle.c_str());
-    STRCMP_EQUAL("trumpet.selfso.com", store.serverHost());
-    LONGS_EQUAL(6874, store.serverPort());
+    STRCMP_EQUAL("octi.selfso.com", store.serverHost());
+    LONGS_EQUAL(443, store.serverPort());
 
     /* Re-saving must strip any server_url / server_host / server_port keys */
     CHECK_TRUE_TEXT(store.save(err), err.c_str());
@@ -461,14 +461,25 @@ TEST_GROUP(OctiNetworkClientTest)
 {
 };
 
-TEST(OctiNetworkClientTest, DefaultConstructorHardCodesTrumpetSelfsoComPort6874)
+TEST(OctiNetworkClientTest, DefaultConstructorHardCodesOctiSelfsoComPort443)
 {
-    STRCMP_EQUAL("trumpet.selfso.com", OctiNetworkClient::canonicalHost());
-    LONGS_EQUAL(6874, OctiNetworkClient::canonicalPort());
+    STRCMP_EQUAL("octi.selfso.com", OctiNetworkClient::canonicalHost());
+    LONGS_EQUAL(443, OctiNetworkClient::canonicalPort());
 
     OctiNetworkClient prodClient;
+    STRCMP_EQUAL("octi.selfso.com", prodClient.host().c_str());
+    LONGS_EQUAL(443, prodClient.port());
+    STRCMP_EQUAL("https://octi.selfso.com/api/v1/health",
+                 prodClient.buildUrl("/api/v1/health").c_str());
+    STRCMP_EQUAL("https://octi.selfso.com",
+                 prodClient.buildUrl().c_str());
+
+    /* Test fallback / legacy endpoint buildUrl */
+    prodClient.setEndpoint(OCTI_SERVER_FALLBACK_HOST, OCTI_SERVER_FALLBACK_PORT);
     STRCMP_EQUAL("trumpet.selfso.com", prodClient.host().c_str());
     LONGS_EQUAL(6874, prodClient.port());
+    STRCMP_EQUAL("http://trumpet.selfso.com:6874/api/v1/health",
+                 prodClient.buildUrl("/api/v1/health").c_str());
 }
 
 TEST(OctiNetworkClientTest,
