@@ -2847,6 +2847,61 @@ TEST(AccountStoreTest, LivePersistenceBoundaryAndFaults)
     CHECK_FALSE(closedStore.getLiveMeta("m", maxJson, err));
 }
 
+TEST(AccountStoreTest, LegacyV207GamesSchemaMigration)
+{
+    std::string legacyPath = dbPath() + "-legacy-v207.db";
+    ::unlink(legacyPath.c_str());
+
+    sqlite3 *raw = nullptr;
+    CHECK_EQUAL(SQLITE_OK, sqlite3_open(legacyPath.c_str(), &raw));
+    const char *legacySql =
+        "CREATE TABLE games ("
+        " game_id TEXT PRIMARY KEY,"
+        " game_mode TEXT NOT NULL,"
+        " game_bases INTEGER NOT NULL,"
+        " super_prongs INTEGER NOT NULL,"
+        " edgeless INTEGER NOT NULL,"
+        " time_control TEXT NOT NULL DEFAULT 'untimed',"
+        " p1_player_id INTEGER,"
+        " p2_player_id INTEGER,"
+        " p3_player_id INTEGER,"
+        " p4_player_id INTEGER,"
+        " p1_handle TEXT NOT NULL,"
+        " p2_handle TEXT NOT NULL,"
+        " p3_handle TEXT NOT NULL DEFAULT '',"
+        " p4_handle TEXT NOT NULL DEFAULT '',"
+        " result TEXT NOT NULL,"
+        " winner_seat INTEGER NOT NULL DEFAULT 0,"
+        " termination TEXT NOT NULL,"
+        " ply_count INTEGER NOT NULL,"
+        " octi_transcript TEXT NOT NULL,"
+        " final_fen TEXT NOT NULL,"
+        " started_at INTEGER NOT NULL,"
+        " ended_at INTEGER NOT NULL"
+        ");"
+        "INSERT INTO games VALUES ("
+        " 'g-legacy-1', '2P', 1, 0, 0, 'untimed', NULL, NULL, NULL, NULL,"
+        " 'Alice', 'Bob', '', '', 'P1_WIN', 1, 'BASE_CAPTURE', 2,"
+        " '{\"format\":\"octi.transcript.v3\"}', 'fen', 1000, 1010"
+        ");";
+    CHECK_EQUAL(SQLITE_OK, sqlite3_exec(raw, legacySql, nullptr, nullptr, nullptr));
+    sqlite3_close(raw);
+
+    AccountStore migrated;
+    std::string err;
+    CHECK_TEXT(migrated.openOrCreate(legacyPath, err), err.c_str());
+
+    octi::GameRecord rec;
+    CHECK_TRUE(migrated.getArchivedGame("g-legacy-1", rec));
+    STRCMP_EQUAL("online", rec.source.c_str());
+    STRCMP_EQUAL("{\"format\":\"octi.transcript.v3\"}", rec.octiTranscript.c_str());
+
+    migrated.close();
+    ::unlink(legacyPath.c_str());
+    ::unlink((legacyPath + "-wal").c_str());
+    ::unlink((legacyPath + "-shm").c_str());
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();
