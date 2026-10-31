@@ -10,6 +10,7 @@
 #include <QAbstractItemView>
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QFile>
 #include <QFormLayout>
@@ -24,6 +25,7 @@
 #include <QRadioButton>
 #include <QUrl>
 #include <QVBoxLayout>
+#include "OctiBoardCanvas.hxx"
 #include "OctiCore.hxx"
 #include "OctiDialogs.hxx"
 #include "OctiMainWindow.hxx"
@@ -3622,7 +3624,7 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         p.drawRoundedRect(_placeReserveBtnRect, 6.0, 6.0);
         p.setPen(canPlace ? Qt::white : pal.textSecondary);
         p.setFont(QFont("SansSerif", fontSize, QFont::Bold));
-        p.drawText(_placeReserveBtnRect, Qt::AlignCenter, "Place Reserve (+)");
+        p.drawText(_placeReserveBtnRect, Qt::AlignCenter, "Place Reserve Pod");
 
         if (!_liberateBtnRect.isEmpty()) {
             bool canLibBtn = isFriendlyBase ? canLiberate : canLiberateHere;
@@ -4245,13 +4247,14 @@ void CompositePodMoveDialog::paintEvent(QPaintEvent *event)
 /* ==================================================================== */
 
 PlyConfirmDialog::PlyConfirmDialog(OctiMoveComposer *composer,
-                                  ThemeId theme,
-                                  QWidget *parent)
+                                   ThemeId theme,
+                                   QWidget *parent)
     : QDialog(parent)
     , _composer(composer)
     , _theme(theme)
     , _chosenAction(ResultAction::CANCEL)
     , _notation()
+    , _flashTimer(this)
     , _commitBtnRect()
     , _cancelBtnRect()
 {
@@ -4263,9 +4266,17 @@ PlyConfirmDialog::PlyConfirmDialog(OctiMoveComposer *composer,
     if (_composer) {
         _notation = QString::fromStdString(_composer->stagedMoveNotation());
     }
+
+    connect(&_flashTimer, &QTimer::timeout, this, [this]() {
+        update();
+    });
+    _flashTimer.start(100);
 }
 
-PlyConfirmDialog::~PlyConfirmDialog() = default;
+PlyConfirmDialog::~PlyConfirmDialog()
+{
+    _flashTimer.stop();
+}
 
 PlyConfirmDialog::ResultAction PlyConfirmDialog::chosenAction() const
 {
@@ -4277,7 +4288,7 @@ QString PlyConfirmDialog::stagedMoveText() const
     return _notation;
 }
 
-QImage PlyConfirmDialog::renderToImage(int width, int height)
+QImage PlyConfirmDialog::renderToImage(int width, int height, qint64 nowMs)
 {
     QImage img(width, height, QImage::Format_ARGB32_Premultiplied);
     img.fill(Qt::transparent);
@@ -4321,13 +4332,24 @@ QImage PlyConfirmDialog::renderToImage(int width, int height)
     _commitBtnRect = QRectF(startX, btnY, btnW, btnH);
     _cancelBtnRect = QRectF(startX + btnW + gap, btnY, btnW, btnH);
 
-    // Commit Button
-    p.setPen(QPen(pal.prongSuperCore, 1.2));
-    p.setBrush(pal.podA.core);
-    p.drawRoundedRect(_commitBtnRect, 6.0, 6.0);
-    p.setPen(Qt::white);
-    p.setFont(QFont("SansSerif", 10, QFont::Bold));
-    p.drawText(_commitBtnRect, Qt::AlignCenter, "Commit [Enter]");
+    // Commit Button (1Hz Flashing)
+    qint64 ts = (nowMs >= 0) ? nowMs : QDateTime::currentMSecsSinceEpoch();
+    bool flashBright = OctiBoardCanvas::isCommitButtonFlashBright(ts);
+    if (flashBright) {
+        p.setPen(QPen(QColor(254, 240, 138), 2.2));
+        p.setBrush(QColor(245, 158, 11));
+        p.drawRoundedRect(_commitBtnRect, 6.0, 6.0);
+        p.setPen(QColor(15, 23, 42));
+        p.setFont(QFont("SansSerif", 10, QFont::Bold));
+        p.drawText(_commitBtnRect, Qt::AlignCenter, "Commit [Enter]");
+    } else {
+        p.setPen(QPen(pal.prongSuperCore, 1.2));
+        p.setBrush(pal.podA.core);
+        p.drawRoundedRect(_commitBtnRect, 6.0, 6.0);
+        p.setPen(Qt::white);
+        p.setFont(QFont("SansSerif", 10, QFont::Bold));
+        p.drawText(_commitBtnRect, Qt::AlignCenter, "Commit [Enter]");
+    }
 
     // Cancel Button
     p.setPen(QPen(pal.accentBrass, 1.2));
@@ -4496,7 +4518,8 @@ OctiThinkingDialog::OctiThinkingDialog(BotDifficulty difficulty,
 {
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setWindowModality(Qt::ApplicationModal);
-    setAttribute(Qt::WA_TranslucentBackground, true);
+    setAttribute(Qt::WA_TranslucentBackground, false);
+    setAutoFillBackground(true);
 
     const OctiPalette &pal = paletteForTheme(theme);
 
@@ -4617,6 +4640,33 @@ void OctiThinkingDialog::positionBelowBoard(QWidget *mainWindow, QWidget *canvas
     int posY = mainTopLeft.y() + mainH - dlgH - 28;
 
     move(posX, posY);
+}
+
+void OctiThinkingDialog::paintEvent(QPaintEvent *event)
+{
+    (void)event;
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    const OctiPalette &pal = paletteForTheme(_theme);
+    QColor bg = pal.panelCardBg;
+    bg.setAlpha(255);
+    p.fillRect(rect(), bg);
+    p.setPen(QPen(pal.accentBrass, 2.0));
+    p.setBrush(bg);
+    p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 10.0, 10.0);
+}
+
+QImage OctiThinkingDialog::renderToImage(int width, int height)
+{
+    int w = std::max(240, width);
+    int h = std::max(64, height);
+    resize(w, h);
+    QImage img(w, h, QImage::Format_ARGB32_Premultiplied);
+    QColor bg = paletteForTheme(_theme).panelCardBg;
+    bg.setAlpha(255);
+    img.fill(bg);
+    render(&img);
+    return img;
 }
 
 /* ==================================================================== */
@@ -5099,75 +5149,217 @@ OctiTelemetrySettingsDialog::~OctiTelemetrySettingsDialog() = default;
 
 /* ==================================================================== */
 
+OctiStartMatchDialog::OctiStartMatchDialog(const LocalGameConfig &cfg,
+                                           ThemeId theme,
+                                           QWidget *parent)
+    : QDialog(parent)
+    , _config(cfg)
+    , _theme(theme)
+    , _changeTypeRequested(false)
+    , _configLabel(nullptr)
+    , _changeTypeBtn(nullptr)
+    , _startBtn(nullptr)
+{
+    initUi();
+}
+
 OctiStartMatchDialog::OctiStartMatchDialog(OctiPlayer humanSeat,
                                            bool vsBot,
                                            ThemeId theme,
                                            QWidget *parent)
     : QDialog(parent)
-    , _humanSeat(humanSeat)
-    , _vsBot(vsBot)
     , _theme(theme)
+    , _changeTypeRequested(false)
+    , _configLabel(nullptr)
+    , _changeTypeBtn(nullptr)
+    , _startBtn(nullptr)
+{
+    _config.humanSeat = humanSeat;
+    _config.playType = vsBot ? LocalPlayType::VS_AI_BOT : LocalPlayType::PASS_AND_PLAY;
+    initUi();
+}
+
+OctiStartMatchDialog::~OctiStartMatchDialog() = default;
+
+QString OctiStartMatchDialog::formatConfigSummary(const LocalGameConfig &cfg)
+{
+    QString seatStr;
+    switch (cfg.humanSeat) {
+    case PLAYER_A: seatStr = "Seat A (Red)"; break;
+    case PLAYER_B: seatStr = "Seat B (Green)"; break;
+    case PLAYER_C: seatStr = "Seat C"; break;
+    case PLAYER_D: seatStr = "Seat D"; break;
+    default:       seatStr = "Seat A (Red)"; break;
+    }
+
+    QString line1;
+    if (cfg.playType == LocalPlayType::VS_AI_BOT) {
+        QString lvStr;
+        switch (cfg.botDifficulty) {
+        case BotDifficulty::CASUAL:   lvStr = "Lv1 \xE2\x80\xA2 3s"; break;
+        case BotDifficulty::TACTICAL: lvStr = "Lv2 \xE2\x80\xA2 8s"; break;
+        case BotDifficulty::MASTER:   lvStr = "Lv3 \xE2\x80\xA2 15s"; break;
+        default:                      lvStr = "Lv2 \xE2\x80\xA2 8s"; break;
+        }
+        line1 = QString("vs AI Bot (%1) \xE2\x80\xA2 %2").arg(lvStr, seatStr);
+    } else {
+        line1 = QString("Local Pass-and-Play \xE2\x80\xA2 %1").arg(seatStr);
+    }
+
+    QString modeStr;
+    switch (cfg.mode) {
+    case GAME_MODE_2:   modeStr = "2P (9x9)"; break;
+    case GAME_MODE_4:   modeStr = "4P (9x9)"; break;
+    case GAME_MODE_OFK: modeStr = "OFK (6x7)"; break;
+    default:            modeStr = "2P (9x9)"; break;
+    }
+
+    QString basesStr = (cfg.bases == GAME_BASES_1 || cfg.mode == GAME_MODE_4 || cfg.mode == GAME_MODE_OFK)
+        ? "1 Base"
+        : "3 Bases";
+
+    QString line2 = QString("%1 \xE2\x80\xA2 %2").arg(modeStr, basesStr);
+    if (cfg.useSuperProngs) {
+        line2 += " \xE2\x80\xA2 Super-Prongs";
+    }
+    if (cfg.useEdgelessBoard) {
+        line2 += " \xE2\x80\xA2 Edgeless";
+    }
+    if (cfg.timeControlEnabled) {
+        line2 += " \xE2\x80\xA2 Clock";
+    }
+    if (cfg.mode != GAME_MODE_OFK && !cfg.useSuperProngs && !cfg.useEdgelessBoard && !cfg.timeControlEnabled) {
+        line2 += " \xE2\x80\xA2 Standard";
+    }
+
+    return line1 + "\n" + line2;
+}
+
+QString OctiStartMatchDialog::configSummaryText() const
+{
+    return formatConfigSummary(_config);
+}
+
+void OctiStartMatchDialog::triggerChangeType()
+{
+    _changeTypeRequested = true;
+    accept();
+}
+
+void OctiStartMatchDialog::initUi()
 {
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setModal(true);
-    setAttribute(Qt::WA_TranslucentBackground, true);
+    setAttribute(Qt::WA_TranslucentBackground, false);
+    setAutoFillBackground(true);
+
+    const OctiPalette &pal = paletteForTheme(_theme);
 
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(20, 16, 20, 16);
     layout->setSpacing(10);
 
-    QLabel *titleLabel = new QLabel("Ready to Play?", this);
+    QLabel *titleLabel = new QLabel(QStringLiteral("Ready to Play?"), this);
     titleLabel->setAlignment(Qt::AlignCenter);
-    titleLabel->setStyleSheet("color: #FFFFFF; font-weight: bold; font-size: 15px;");
+    titleLabel->setStyleSheet(QStringLiteral("color: #FFFFFF; font-weight: bold; font-size: 15px;"));
     layout->addWidget(titleLabel);
 
-    QString seatText;
-    if (vsBot) {
-        seatText = (humanSeat == PLAYER_A) ? "Playing as Player A (Red)"
-                                           : "Playing as Player B (Green)";
-    } else {
-        seatText = "Local Pass-and-Play";
-    }
-    QLabel *subLabel = new QLabel(seatText, this);
-    subLabel->setAlignment(Qt::AlignCenter);
-    subLabel->setStyleSheet("color: #8B9BB4; font-size: 12px;");
-    layout->addWidget(subLabel);
+    _configLabel = new QLabel(formatConfigSummary(_config), this);
+    _configLabel->setAlignment(Qt::AlignCenter);
+    _configLabel->setWordWrap(true);
+    _configLabel->setStyleSheet(QStringLiteral("color: #C8D4E3; font-size: 12px; line-height: 1.3;"));
+    layout->addWidget(_configLabel);
 
-    QPushButton *startBtn = new QPushButton("Start Match", this);
-    startBtn->setCursor(Qt::PointingHandCursor);
-    startBtn->setStyleSheet(
-        "QPushButton {"
-        "  background-color: #D4AF37;"
-        "  color: #161D26;"
-        "  font-weight: bold;"
-        "  font-size: 14px;"
-        "  border: none;"
-        "  border-radius: 6px;"
-        "  padding: 8px 16px;"
-        "}"
-        "QPushButton:hover {"
-        "  background-color: #F3E5AB;"
-        "}"
-        "QPushButton:pressed {"
-        "  background-color: #AA8C2C;"
-        "}"
-    );
-    QObject::connect(startBtn, &QPushButton::clicked, this, &QDialog::accept);
-    layout->addWidget(startBtn);
+    QHBoxLayout *btnRow = new QHBoxLayout();
+    btnRow->setSpacing(12);
+
+    _changeTypeBtn = new QPushButton(QStringLiteral("Change Type"), this);
+    _changeTypeBtn->setCursor(Qt::PointingHandCursor);
+    _changeTypeBtn->setStyleSheet(
+        QStringLiteral("QPushButton {"
+                       "  background-color: #2E4057;"
+                       "  color: #E2E8F0;"
+                       "  font-weight: bold;"
+                       "  font-size: 13px;"
+                       "  border: 1px solid #4B6382;"
+                       "  border-radius: 6px;"
+                       "  padding: 8px 14px;"
+                       "}"
+                       "QPushButton:hover {"
+                       "  background-color: #3D5473;"
+                       "}"
+                       "QPushButton:pressed {"
+                       "  background-color: #243346;"
+                       "}"));
+    connect(_changeTypeBtn, &QPushButton::clicked, this, [this]() {
+        triggerChangeType();
+    });
+    btnRow->addWidget(_changeTypeBtn);
+
+    _startBtn = new QPushButton(QStringLiteral("Start Match"), this);
+    _startBtn->setCursor(Qt::PointingHandCursor);
+    _startBtn->setStyleSheet(
+        QStringLiteral("QPushButton {"
+                       "  background-color: #D4AF37;"
+                       "  color: #161D26;"
+                       "  font-weight: bold;"
+                       "  font-size: 13px;"
+                       "  border: none;"
+                       "  border-radius: 6px;"
+                       "  padding: 8px 14px;"
+                       "}"
+                       "QPushButton:hover {"
+                       "  background-color: #F3E5AB;"
+                       "}"
+                       "QPushButton:pressed {"
+                       "  background-color: #AA8C2C;"
+                       "}"));
+    connect(_startBtn, &QPushButton::clicked, this, [this]() {
+        _changeTypeRequested = false;
+        accept();
+    });
+    btnRow->addWidget(_startBtn);
+
+    layout->addLayout(btnRow);
 
     setStyleSheet(
-        "QDialog {"
-        "  background-color: #161D26;"
-        "  border: 2px solid #2E4057;"
-        "  border-radius: 12px;"
-        "}"
-    );
+        QString("QDialog {"
+                "  background-color: %1;"
+                "  border: 2px solid %2;"
+                "  border-radius: 12px;"
+                "}")
+            .arg(pal.panelCardBg.name())
+            .arg(pal.accentBrass.name()));
 
-    setFixedWidth(260);
-    adjustSize();
+    setFixedSize(320, 195);
 }
 
-OctiStartMatchDialog::~OctiStartMatchDialog() = default;
+void OctiStartMatchDialog::paintEvent(QPaintEvent *event)
+{
+    (void)event;
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    const OctiPalette &pal = paletteForTheme(_theme);
+    QColor bg = pal.panelCardBg;
+    bg.setAlpha(255);
+    p.fillRect(rect(), bg);
+    p.setPen(QPen(pal.accentBrass, 2.0));
+    p.setBrush(bg);
+    p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 10.0, 10.0);
+}
+
+QImage OctiStartMatchDialog::renderToImage(int width, int height)
+{
+    int w = std::max(260, width);
+    int h = std::max(140, height);
+    resize(w, h);
+    QImage img(w, h, QImage::Format_ARGB32_Premultiplied);
+    QColor bg = paletteForTheme(_theme).panelCardBg;
+    bg.setAlpha(255);
+    img.fill(bg);
+    render(&img);
+    return img;
+}
 
 void OctiStartMatchDialog::positionCenterOfBoard(QWidget *mainWin, QWidget *boardCanvas)
 {
@@ -5190,6 +5382,7 @@ void OctiStartMatchDialog::keyPressEvent(QKeyEvent *event)
                   event->key() == Qt::Key_Return ||
                   event->key() == Qt::Key_Enter ||
                   event->key() == Qt::Key_Space)) {
+        _changeTypeRequested = false;
         accept();
         return;
     }
@@ -5198,6 +5391,7 @@ void OctiStartMatchDialog::keyPressEvent(QKeyEvent *event)
 
 void OctiStartMatchDialog::reject()
 {
+    _changeTypeRequested = false;
     accept();
 }
 

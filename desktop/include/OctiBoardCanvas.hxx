@@ -63,7 +63,9 @@ public:
     const OctiBoardGeometry &geometry() const;
 
     QImage renderToImage(int width = 960, int height = 960);
+    QImage renderToImageAtTime(int width, int height, qint64 nowMs);
     void paintBoardScene(QPainter &p, int width, int height);
+    void syncGeometryToBoard(int w, int h);
 
     void openStackFanAt(int x, int y);
     void closeStackFan();
@@ -81,6 +83,9 @@ public:
 
     static constexpr qint64 LAST_MOVE_INDICATOR_DURATION_MS = 5000;
     static constexpr qint64 INDICATOR_CYCLE_PERIOD_MS = 2000;
+    static constexpr qint64 COMMIT_FLASH_PERIOD_MS = 1000;
+    static bool isCommitButtonFlashBright(qint64 nowMs);
+    static double commitButtonFlashFactor(qint64 nowMs);
 
     bool expireLastMoveModifiedSquaresIfElapsed(qint64 nowMs = -1);
     bool hasLastMoveHighlight() const { return !_lastMoveModifiedSquares.empty(); }
@@ -116,7 +121,6 @@ private:
     QPointF rawMousePosF(const QWheelEvent *event) const;
     QPointF mousePosF(const QMouseEvent *event) const;
     bool openZoomedSquareAt(int sx, int sy);
-    void syncGeometryToBoard(int w, int h);
     void triggerMoveAnimation(const QPointF &fromPt, const QPointF &toPt,
                               OctiPodType podType, const OctiPod &pod);
     void paintEdgelessPortals(QPainter &p, const OctiBoardGeometry &geom,
@@ -191,6 +195,7 @@ private:
     std::vector<QPoint> _lastMoveModifiedSquares;
     qint64 _lastMoveAnimStartMs;
     bool _turnIndicatorVisible;
+    qint64 _renderTimeOverrideMs = -1;
 };
 
 } // namespace octi

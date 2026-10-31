@@ -22,6 +22,8 @@
 #include <QPlainTextEdit>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QResizeEvent>
+#include <QShowEvent>
 #include <QStackedWidget>
 #include <QTimer>
 #include <QWidget>
@@ -118,6 +120,10 @@ public:
     void beginAwaitingMatchStart();
     void confirmMatchStart();
     void promptStartMatchIfVisible();
+    void reconfigurePendingMatch(const LocalGameConfig &cfg);
+    void syncSidePanelsToBoardEdges();
+    QRect rightPanelTopWidgetGeometry() const;
+    QRect rightPanelBottomWidgetGeometry() const;
     std::int64_t matchStartedEpochSec() const { return _matchStartedEpochSec; }
     std::int64_t currentTurnStartedEpochMs() const { return _currentTurnStartedEpochMs; }
 
@@ -222,6 +228,8 @@ public:
     void unregisterUpdateDialog(SelfUpdateDialog *dlg);
 
 protected:
+    void resizeEvent(QResizeEvent *event) override;
+    void showEvent(QShowEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -346,6 +354,12 @@ private:
     QPushButton *_updateActionBtn;
     QPushButton *_updateDetailsBtn;
     QPushButton *_updateDismissBtn;
+
+    QWidget *_rightSide = nullptr;
+    class QVBoxLayout *_rightLayout = nullptr;
+    class QGroupBox *_statusBox = nullptr;
+    class QGroupBox *_historyBox = nullptr;
+    class QGroupBox *_actionsBox = nullptr;
 };
 
 } // namespace octi

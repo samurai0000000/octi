@@ -651,6 +651,7 @@ public:
     OctiDir hoverProngDir() const { return _hoverProngDir; }
     const std::map<OctiDir, QPointF> &socketCenters() const { return _socketCenters; }
     QRectF movePodBtnRect() const { return _movePodBtnRect; }
+    QString placeReserveButtonText() const { return QStringLiteral("Place Reserve Pod"); }
     QRectF placeReserveBtnRect() const { return _placeReserveBtnRect; }
     QRectF liberateBtnRect() const { return _liberateBtnRect; }
     QRectF liberateButtonRect() const { return _liberateBtnRect; }
@@ -827,7 +828,7 @@ public:
     ResultAction chosenAction() const;
     QString stagedMoveText() const;
 
-    QImage renderToImage(int width = 420, int height = 150);
+    QImage renderToImage(int width = 420, int height = 150, qint64 nowMs = -1);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -839,6 +840,7 @@ private:
     ThemeId _theme;
     ResultAction _chosenAction;
     QString _notation;
+    QTimer _flashTimer;
 
     QRectF _commitBtnRect;
     QRectF _cancelBtnRect;
@@ -864,6 +866,10 @@ public:
     QString progressBarText() const;
     bool isFrameless() const;
     void positionBelowBoard(QWidget *mainWindow, QWidget *canvas = nullptr);
+    QImage renderToImage(int width = 380, int height = 80);
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
 
 private:
     BotDifficulty _difficulty;
@@ -924,22 +930,36 @@ private:
  */
 class OctiStartMatchDialog : public QDialog {
 public:
+    explicit OctiStartMatchDialog(const LocalGameConfig &cfg,
+                                  ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                                  QWidget *parent = nullptr);
     explicit OctiStartMatchDialog(OctiPlayer humanSeat = PLAYER_A,
                                   bool vsBot = true,
                                   ThemeId theme = ThemeId::OBSIDIAN_BRASS,
                                   QWidget *parent = nullptr);
     ~OctiStartMatchDialog() override;
 
+    static QString formatConfigSummary(const LocalGameConfig &cfg);
+    QString configSummaryText() const;
+    bool changeTypeRequested() const { return _changeTypeRequested; }
+    void triggerChangeType();
+    QImage renderToImage(int width = 320, int height = 195);
+
     void positionCenterOfBoard(QWidget *mainWin, QWidget *boardCanvas = nullptr);
     void reject() override;
 
 protected:
+    void paintEvent(QPaintEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
 
 private:
-    OctiPlayer _humanSeat;
-    bool _vsBot;
+    void initUi();
+    LocalGameConfig _config;
     ThemeId _theme;
+    bool _changeTypeRequested;
+    QLabel *_configLabel;
+    QPushButton *_changeTypeBtn;
+    QPushButton *_startBtn;
 };
 
 /*

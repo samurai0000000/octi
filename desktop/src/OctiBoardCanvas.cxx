@@ -102,7 +102,8 @@ OctiBoardCanvas::OctiBoardCanvas(QWidget *parent)
         bool gameActive = (displayBoard && displayBoard->getGame() &&
                            displayBoard->getGame()->isGameStarted() &&
                            !displayBoard->getGame()->isGameOver());
-        if (!_animActive && _lastMoveModifiedSquares.empty() && !gameActive) {
+        bool awaitingConfirm = (_composer && _composer->isAwaitingConfirmation());
+        if (!_animActive && _lastMoveModifiedSquares.empty() && !gameActive && !awaitingConfirm) {
             _animTimer.stop();
         }
         update();
@@ -574,6 +575,17 @@ void OctiBoardCanvas::setTurnIndicatorVisible(bool visible)
     }
 }
 
+bool OctiBoardCanvas::isCommitButtonFlashBright(qint64 nowMs)
+{
+    qint64 mod = ((nowMs % COMMIT_FLASH_PERIOD_MS) + COMMIT_FLASH_PERIOD_MS) % COMMIT_FLASH_PERIOD_MS;
+    return mod < (COMMIT_FLASH_PERIOD_MS / 2);
+}
+
+double OctiBoardCanvas::commitButtonFlashFactor(qint64 nowMs)
+{
+    return isCommitButtonFlashBright(nowMs) ? 1.0 : 0.0;
+}
+
 QImage OctiBoardCanvas::renderToImage(int width, int height)
 {
     int w = std::max(120, width);
@@ -591,6 +603,14 @@ QImage OctiBoardCanvas::renderToImage(int width, int height)
     paintBoardScene(painter, w, h);
     painter.end();
 
+    return img;
+}
+
+QImage OctiBoardCanvas::renderToImageAtTime(int width, int height, qint64 nowMs)
+{
+    _renderTimeOverrideMs = nowMs;
+    QImage img = renderToImage(width, height);
+    _renderTimeOverrideMs = -1;
     return img;
 }
 
@@ -888,11 +908,31 @@ void OctiBoardCanvas::paintCommitBanner(QPainter &p,
     _rollbackBtnRect = QRectF(barRect.right() - btnW - 8.0,
                               barRect.top() + 5.0, btnW, btnH);
 
-    p.setPen(QPen(pal.prongSuperCore, 1.2));
-    p.setBrush(pal.legalStepGuide.darker(135));
-    p.drawRoundedRect(_commitBtnRect, 5.0, 5.0);
-    p.setPen(Qt::white);
-    p.drawText(_commitBtnRect, Qt::AlignCenter, "Commit [Enter]");
+    if (!_animTimer.isActive() && _renderTimeOverrideMs < 0) {
+        _animTimer.start(16);
+    }
+
+    qint64 nowMs = (_renderTimeOverrideMs >= 0)
+        ? _renderTimeOverrideMs
+        : QDateTime::currentMSecsSinceEpoch();
+    bool flashBright = isCommitButtonFlashBright(nowMs);
+    if (flashBright) {
+        p.setPen(QPen(QColor(254, 240, 138), 2.2));
+        p.setBrush(QColor(245, 158, 11));
+        p.drawRoundedRect(_commitBtnRect, 5.0, 5.0);
+        p.setPen(QColor(15, 23, 42));
+        QFont boldFont = p.font();
+        boldFont.setBold(true);
+        p.setFont(boldFont);
+        p.drawText(_commitBtnRect, Qt::AlignCenter, "Commit [Enter]");
+        p.setFont(f);
+    } else {
+        p.setPen(QPen(pal.prongSuperCore, 1.2));
+        p.setBrush(pal.legalStepGuide.darker(135));
+        p.drawRoundedRect(_commitBtnRect, 5.0, 5.0);
+        p.setPen(Qt::white);
+        p.drawText(_commitBtnRect, Qt::AlignCenter, "Commit [Enter]");
+    }
 
     p.setPen(QPen(pal.accentBrass, 1.2));
     p.setBrush(pal.legalCaptureGlow.darker(150));

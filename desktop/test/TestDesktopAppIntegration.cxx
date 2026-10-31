@@ -2023,6 +2023,141 @@ TEST(DesktopAppIntegrationTest, CenteredStartMatchPromptAndPreStartGatingForPlay
     LONGS_EQUAL(1, win.board()->getGame()->getNumMoves());
     LONGS_EQUAL(PLAYER_B, win.board()->getGame()->getTurn());
 
+    // 4. OctiStartMatchDialog brief 2-line config summary tests across modes, seats, modifiers
+    LocalGameConfig c1;
+    c1.playType = LocalPlayType::VS_AI_BOT;
+    c1.botDifficulty = BotDifficulty::CASUAL;
+    c1.humanSeat = PLAYER_A;
+    c1.mode = GAME_MODE_2;
+    c1.bases = GAME_BASES_3;
+    c1.useSuperProngs = false;
+    c1.useEdgelessBoard = false;
+    c1.timeControlEnabled = false;
+    QString s1 = OctiStartMatchDialog::formatConfigSummary(c1);
+    STRCMP_EQUAL("vs AI Bot (Lv1 \xE2\x80\xA2 3s) \xE2\x80\xA2 Seat A (Red)\n2P (9x9) \xE2\x80\xA2 3 Bases \xE2\x80\xA2 Standard", s1.toUtf8().constData());
+
+    LocalGameConfig c2;
+    c2.playType = LocalPlayType::VS_AI_BOT;
+    c2.botDifficulty = BotDifficulty::TACTICAL;
+    c2.humanSeat = PLAYER_B;
+    c2.mode = GAME_MODE_4;
+    c2.bases = GAME_BASES_1;
+    c2.useSuperProngs = true;
+    QString s2 = OctiStartMatchDialog::formatConfigSummary(c2);
+    STRCMP_EQUAL("vs AI Bot (Lv2 \xE2\x80\xA2 8s) \xE2\x80\xA2 Seat B (Green)\n4P (9x9) \xE2\x80\xA2 1 Base \xE2\x80\xA2 Super-Prongs", s2.toUtf8().constData());
+
+    LocalGameConfig c3;
+    c3.playType = LocalPlayType::PASS_AND_PLAY;
+    c3.humanSeat = PLAYER_A;
+    c3.mode = GAME_MODE_OFK;
+    c3.bases = GAME_BASES_1;
+    QString s3 = OctiStartMatchDialog::formatConfigSummary(c3);
+    STRCMP_EQUAL("Local Pass-and-Play \xE2\x80\xA2 Seat A (Red)\nOFK (6x7) \xE2\x80\xA2 1 Base", s3.toUtf8().constData());
+
+    LocalGameConfig c4;
+    c4.playType = LocalPlayType::VS_AI_BOT;
+    c4.botDifficulty = BotDifficulty::MASTER;
+    c4.humanSeat = PLAYER_A;
+    c4.mode = GAME_MODE_2;
+    c4.bases = GAME_BASES_3;
+    c4.useEdgelessBoard = true;
+    c4.timeControlEnabled = true;
+    QString s4 = OctiStartMatchDialog::formatConfigSummary(c4);
+    STRCMP_EQUAL("vs AI Bot (Lv3 \xE2\x80\xA2 15s) \xE2\x80\xA2 Seat A (Red)\n2P (9x9) \xE2\x80\xA2 3 Bases \xE2\x80\xA2 Edgeless \xE2\x80\xA2 Clock", s4.toUtf8().constData());
+
+    OctiStartMatchDialog dlgConfig(c1, ThemeId::OBSIDIAN_BRASS, &win);
+    STRCMP_EQUAL(s1.toUtf8().constData(), dlgConfig.configSummaryText().toUtf8().constData());
+    CHECK_FALSE(dlgConfig.changeTypeRequested());
+    dlgConfig.triggerChangeType();
+    CHECK_TRUE(dlgConfig.changeTypeRequested());
+
+    // 5. Change Type reconfiguration flow via reconfigurePendingMatch
+    LocalGameConfig reconfiguredCfg;
+    reconfiguredCfg.playType = LocalPlayType::PASS_AND_PLAY;
+    reconfiguredCfg.humanSeat = PLAYER_B;
+    reconfiguredCfg.mode = GAME_MODE_4;
+    reconfiguredCfg.bases = GAME_BASES_1;
+    win.reconfigurePendingMatch(reconfiguredCfg);
+    CHECK_TRUE(win.isAwaitingMatchStart());
+    LONGS_EQUAL(0, win.matchStartedEpochSec());
+    LONGS_EQUAL(0, win.board()->getGame()->getNumMoves());
+    LONGS_EQUAL(GAME_MODE_4, win.localGameConfig().mode);
+    LONGS_EQUAL(PLAYER_B, win.localGameConfig().humanSeat);
+    LONGS_EQUAL(static_cast<int>(LocalPlayType::PASS_AND_PLAY), static_cast<int>(win.localGameConfig().playType));
+
+    // 6. 1Hz Flashing "Commit [Enter]" Button
+    LONGS_EQUAL(1000, OctiBoardCanvas::COMMIT_FLASH_PERIOD_MS);
+    CHECK_TRUE(OctiBoardCanvas::isCommitButtonFlashBright(0));
+    CHECK_TRUE(OctiBoardCanvas::isCommitButtonFlashBright(499));
+    CHECK_FALSE(OctiBoardCanvas::isCommitButtonFlashBright(500));
+    CHECK_FALSE(OctiBoardCanvas::isCommitButtonFlashBright(999));
+    CHECK_TRUE(OctiBoardCanvas::isCommitButtonFlashBright(1000));
+    DOUBLES_EQUAL(1.0, OctiBoardCanvas::commitButtonFlashFactor(200), 0.001);
+    DOUBLES_EQUAL(0.0, OctiBoardCanvas::commitButtonFlashFactor(700), 0.001);
+
+    // Staged move flash rendering
+    LocalGameConfig stageCfg;
+    stageCfg.playType = LocalPlayType::PASS_AND_PLAY;
+    stageCfg.humanSeat = PLAYER_A;
+    stageCfg.mode = GAME_MODE_2;
+    stageCfg.bases = GAME_BASES_3;
+    win.startNewLocalGame(stageCfg);
+    win.confirmMatchStart();
+    CHECK_TRUE(win.moveComposer()->stageOrCommitAddProng(3, 3, 0, DIR_N, false));
+    CHECK_TRUE(win.moveComposer()->isAwaitingConfirmation());
+
+    QImage imgBright = win.boardCanvas()->renderToImageAtTime(800, 800, 100);
+    QImage imgDark = win.boardCanvas()->renderToImageAtTime(800, 800, 600);
+    QRectF cBtn = win.boardCanvas()->commitBtnRect();
+    CHECK_FALSE(cBtn.isEmpty());
+    QRgb pxBright = imgBright.pixel(static_cast<int>(cBtn.center().x()), static_cast<int>(cBtn.center().y()));
+    QRgb pxDark = imgDark.pixel(static_cast<int>(cBtn.center().x()), static_cast<int>(cBtn.center().y()));
+    CHECK_TRUE(pxBright != pxDark);
+
+    PlyConfirmDialog pcd(win.moveComposer(), ThemeId::OBSIDIAN_BRASS, &win);
+    QImage pcdImgBright = pcd.renderToImage(460, 150, 100);
+    QImage pcdImgDark = pcd.renderToImage(460, 150, 600);
+    QRgb pcdPxBright = pcdImgBright.pixel(143, 113);
+    QRgb pcdPxDark = pcdImgDark.pixel(143, 113);
+    CHECK_TRUE(pcdPxBright != pcdPxDark);
+    win.moveComposer()->cancelAndRollback();
+
+    // 7. 100% Opaque AI Thinking & Start Match Dialogs
+    OctiThinkingDialog thinkingDlg(BotDifficulty::TACTICAL, 8000, ThemeId::OBSIDIAN_BRASS, &win);
+    CHECK_FALSE(thinkingDlg.testAttribute(Qt::WA_TranslucentBackground));
+    CHECK_TRUE(thinkingDlg.autoFillBackground());
+    CHECK_FALSE(dlgConfig.testAttribute(Qt::WA_TranslucentBackground));
+    CHECK_TRUE(dlgConfig.autoFillBackground());
+
+    QImage thinkImg = thinkingDlg.renderToImage(380, 80);
+    for (int ty = 10; ty < 70; ty += 15) {
+        for (int tx = 10; tx < 370; tx += 40) {
+            LONGS_EQUAL(255, qAlpha(thinkImg.pixel(tx, ty)));
+        }
+    }
+
+    QImage startImg = dlgConfig.renderToImage(320, 195);
+    for (int sy = 10; sy < 185; sy += 25) {
+        for (int sx = 10; sx < 310; sx += 40) {
+            LONGS_EQUAL(255, qAlpha(startImg.pixel(sx, sy)));
+        }
+    }
+
+    // 8. Left-Side OctiReservePanel & Zoom View Enhancements
+    win.startNewLocalGame(stageCfg);
+    win.renderWindowToImage(1440, 900);
+    CHECK_TRUE(win.reservePanel()->playerCardRect(PLAYER_B).top() < win.reservePanel()->playerCardRect(PLAYER_A).top());
+    DOUBLES_EQUAL(win.boardCanvas()->geometry().boardOuterRect().top(), win.reservePanel()->playerCardRect(PLAYER_B).top(), 2.0);
+    DOUBLES_EQUAL(win.boardCanvas()->geometry().boardOuterRect().bottom(), win.reservePanel()->playerCardRect(PLAYER_A).bottom(), 2.0);
+    CHECK_TRUE(win.reservePanel()->iconGlyphCountRendered() >= 4);
+
+    ZoomedSquareDialog zoomDlg(win.board(), win.moveComposer(), 4, 4, BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS, &win);
+    STRCMP_EQUAL("Place Reserve Pod", zoomDlg.placeReserveButtonText().toUtf8().constData());
+
+    // 9. Right-Side Panel Top/Bottom Alignment to Board Outer Rect
+    DOUBLES_EQUAL(win.boardCanvas()->geometry().boardOuterRect().top(), win.rightPanelTopWidgetGeometry().top(), 2.0);
+    DOUBLES_EQUAL(win.boardCanvas()->geometry().boardOuterRect().bottom(), win.rightPanelBottomWidgetGeometry().bottom(), 2.0);
+
     std::filesystem::remove_all(testDir);
 }
 

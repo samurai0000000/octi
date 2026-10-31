@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -89,6 +91,7 @@ import com.selfso.octi.OctiSquare
 import com.selfso.octi.OctiSquareType
 import com.selfso.octi.OctiThemeId
 import com.selfso.octi.ui.theme.OctiTheme
+import kotlinx.coroutines.delay
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
@@ -97,6 +100,12 @@ import kotlin.math.sin
 
 object OctiDialogs {
     const val SPLASH_DURATION_MS: Long = 10000L
+    const val PLACE_RESERVE_POD_LABEL = "Place Reserve Pod"
+    const val CHANGE_TYPE_BUTTON_LABEL = "Change Type"
+    const val START_MATCH_BUTTON_LABEL = "Start Match"
+    const val START_MATCH_CARD_MIN_WIDTH_DP = 300
+    const val START_MATCH_CARD_MAX_WIDTH_DP = 360
+    const val START_MATCH_BUTTON_HORIZONTAL_PADDING_DP = 10
 
     @JvmStatic
     fun hitTestZoomedSocket(
@@ -1057,7 +1066,7 @@ fun ZoomedSquareDialog(
                                     enabled = freePods > 0,
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Text("Place Reserve (+)")
+                                    Text(OctiDialogs.PLACE_RESERVE_POD_LABEL)
                                 }
                                 OutlinedButton(
                                     onClick = {
@@ -1077,7 +1086,7 @@ fun ZoomedSquareDialog(
                                 enabled = freePods > 0,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Place Reserve (+)")
+                                Text(OctiDialogs.PLACE_RESERVE_POD_LABEL)
                             }
                         }
                     }
@@ -1213,6 +1222,21 @@ fun PlyConfirmDialog(
     subtitleHint: String? = null,
     modifier: Modifier = Modifier
 ) {
+    var flashBright by remember {
+        mutableStateOf(OctiBoardRenderer.isCommitButtonFlashBright(System.currentTimeMillis()))
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            flashBright = OctiBoardRenderer.isCommitButtonFlashBright(System.currentTimeMillis())
+            delay(50L)
+        }
+    }
+    val stateTs = if (flashBright) 0L else 500L
+    val commitBgColor = Color(OctiBoardRenderer.commitButtonBgColor(stateTs))
+    val commitBorderColor = Color(OctiBoardRenderer.commitButtonBorderColor(stateTs))
+    val commitTextColor = Color(OctiBoardRenderer.commitButtonTextColor(stateTs))
+    val commitBorderWidth = if (flashBright) 2.2.dp else 1.2.dp
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -1262,9 +1286,10 @@ fun PlyConfirmDialog(
                     onClick = onCommit,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = OctiTheme.colors.accentBrass,
-                        contentColor = OctiTheme.colors.windowBg
-                    )
+                        containerColor = commitBgColor,
+                        contentColor = commitTextColor
+                    ),
+                    border = BorderStroke(commitBorderWidth, commitBorderColor)
                 ) {
                     Text("Commit", fontWeight = FontWeight.Bold)
                 }
@@ -1870,7 +1895,7 @@ fun OctiThinkingDialog(
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp),
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg.copy(alpha = 1.0f)),
             border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
         ) {
             Column(
@@ -2170,26 +2195,32 @@ fun OctiTelemetrySettingsDialog(
  */
 @Composable
 fun StartMatchOverlayDialog(
+    mode: OctiGameMode = OctiGameMode.GAME_MODE_2,
+    bases: OctiGameBases = OctiGameBases.GAME_BASES_3,
+    useSuperProngs: Boolean = false,
+    useEdgeless: Boolean = false,
     humanSeat: OctiPlayer = OctiPlayer.PLAYER_A,
     vsBot: Boolean = true,
     difficulty: OctiBotEngine.BotDifficulty = OctiBotEngine.BotDifficulty.TACTICAL,
+    onChangeType: () -> Unit = {},
     onStartMatch: () -> Unit
 ) {
     Card(
         modifier = Modifier
-            .width(260.dp)
+            .fillMaxWidth(0.92f)
+            .widthIn(min = 300.dp, max = 360.dp)
             .padding(8.dp),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xF0161D26)
+            containerColor = Color(0xFF161D26)
         ),
-        border = BorderStroke(2.dp, Color(0xFF2E4057)),
+        border = BorderStroke(2.dp, Color(0xFFC8A253)),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -2200,32 +2231,74 @@ fun StartMatchOverlayDialog(
                 fontSize = 15.sp,
                 textAlign = TextAlign.Center
             )
-            val subtitle = if (vsBot) {
-                if (humanSeat == OctiPlayer.PLAYER_A) "Playing as Player A (Red)"
-                else "Playing as Player B (Green)"
-            } else {
-                "Local Pass-and-Play"
-            }
-            Text(
-                text = subtitle,
-                color = Color(0xFF8B9BB4),
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center
+            val configSummary = OctiBoardRenderer.formatStartMatchConfigSummary(
+                mode, bases, useSuperProngs, useEdgeless, vsBot, difficulty, humanSeat
             )
-            Button(
-                onClick = onStartMatch,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFD4AF37),
-                    contentColor = Color(0xFF161D26)
-                ),
-                shape = RoundedCornerShape(6.dp),
-                modifier = Modifier.fillMaxWidth()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color = Color(0xFF0F151D),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = Color(0xFF2E4057),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Start Match",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
+                    text = configSummary,
+                    color = Color(0xFFC8D4E3),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    textAlign = TextAlign.Center
                 )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = onChangeType,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF2E4057),
+                        contentColor = Color(0xFFE2E8F0)
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFF4B6382)),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = OctiDialogs.CHANGE_TYPE_BUTTON_LABEL,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        softWrap = false,
+                        maxLines = 1
+                    )
+                }
+                Button(
+                    onClick = onStartMatch,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFD4AF37),
+                        contentColor = Color(0xFF161D26)
+                    ),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = OctiDialogs.START_MATCH_BUTTON_LABEL,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        softWrap = false,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
@@ -2237,9 +2310,14 @@ fun StartMatchOverlayDialog(
     onStartMatch: () -> Unit
 ) {
     StartMatchOverlayDialog(
+        mode = OctiGameMode.GAME_MODE_2,
+        bases = OctiGameBases.GAME_BASES_3,
+        useSuperProngs = false,
+        useEdgeless = false,
         humanSeat = humanSeat,
         vsBot = true,
         difficulty = OctiBotEngine.BotDifficulty.TACTICAL,
+        onChangeType = {},
         onStartMatch = onStartMatch
     )
 }

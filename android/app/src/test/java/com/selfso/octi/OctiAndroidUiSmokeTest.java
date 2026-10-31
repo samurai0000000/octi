@@ -56,8 +56,11 @@ public class OctiAndroidUiSmokeTest {
         }
 
         if (dialogsKt != null) {
+            boolean found = false;
             for (Method m : dialogsKt.getDeclaredMethods()) {
-                if (m.getName().startsWith("PlyConfirmDialog")) {
+                if (m.getName().equals("PlyConfirmDialog")
+                        || (m.getName().startsWith("PlyConfirmDialog") && !m.isSynthetic() && !m.getName().contains("$"))) {
+                    found = true;
                     // Method signature should NOT have more than 2 function/lambda parameters (onCancel, onCommit)
                     // and should take subtitleHint (String)
                     int functionParamCount = 0;
@@ -72,6 +75,7 @@ public class OctiAndroidUiSmokeTest {
                             2, functionParamCount);
                 }
             }
+            assertTrue("Expected PlyConfirmDialog composable function in OctiDialogsKt", found);
         }
     }
 

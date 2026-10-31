@@ -18,6 +18,13 @@ public final class OctiBoardRenderer {
     public static final long LAST_MOVE_INDICATOR_DURATION_MS = 5000L;
     public static final long INDICATOR_CYCLE_PERIOD_MS = 2000L;
     public static final int ACTIVE_TURN_INDICATOR_COLOR = 0xFFFF69B4;
+    public static final long COMMIT_FLASH_PERIOD_MS = 1000L;
+    public static final int COMMIT_FLASH_BRIGHT_BG_COLOR = 0xFFF59E0B;
+    public static final int COMMIT_FLASH_BRIGHT_BORDER_COLOR = 0xFFFEF08A;
+    public static final int COMMIT_FLASH_BRIGHT_TEXT_COLOR = 0xFF0F172A;
+    public static final int COMMIT_FLASH_GREEN_BG_COLOR = 0xFF10B981;
+    public static final int COMMIT_FLASH_GREEN_BORDER_COLOR = 0xFFFFFBEB;
+    public static final int COMMIT_FLASH_GREEN_TEXT_COLOR = 0xFFFFFFFF;
 
     public static final class RenderConfig {
         public List<int[]> lastMoveModifiedSquares = new ArrayList<>();
@@ -205,6 +212,115 @@ public final class OctiBoardRenderer {
         int pct = (int) Math.min(100, Math.max(0, ((long) elapsedMs * 100L) / budget));
         return String.format(java.util.Locale.US, "Depth %d • %,d nodes • %.1fs / %.1fs (%d%%)",
                 depth, nodes, elapsedSec, budgetSec, pct);
+    }
+
+    public static boolean isCommitButtonFlashBright(long nowMs) {
+        long mod = ((nowMs % COMMIT_FLASH_PERIOD_MS) + COMMIT_FLASH_PERIOD_MS) % COMMIT_FLASH_PERIOD_MS;
+        return mod < (COMMIT_FLASH_PERIOD_MS / 2L);
+    }
+
+    public static float commitButtonFlashFactor(long nowMs) {
+        return isCommitButtonFlashBright(nowMs) ? 1.0f : 0.0f;
+    }
+
+    public static int commitButtonBgColor(long nowMs) {
+        return isCommitButtonFlashBright(nowMs)
+                ? COMMIT_FLASH_BRIGHT_BG_COLOR
+                : COMMIT_FLASH_GREEN_BG_COLOR;
+    }
+
+    public static int commitButtonBorderColor(long nowMs) {
+        return isCommitButtonFlashBright(nowMs)
+                ? COMMIT_FLASH_BRIGHT_BORDER_COLOR
+                : COMMIT_FLASH_GREEN_BORDER_COLOR;
+    }
+
+    public static int commitButtonTextColor(long nowMs) {
+        return isCommitButtonFlashBright(nowMs)
+                ? COMMIT_FLASH_BRIGHT_TEXT_COLOR
+                : COMMIT_FLASH_GREEN_TEXT_COLOR;
+    }
+
+    public static String formatStartMatchConfigSummary(
+            OctiGameMode mode,
+            OctiGameBases bases,
+            boolean useSuperProngs,
+            boolean useEdgeless,
+            boolean vsBot,
+            OctiBotEngine.BotDifficulty difficulty,
+            OctiPlayer humanSeat) {
+        if (mode == null) {
+            mode = OctiGameMode.GAME_MODE_2;
+        }
+        if (bases == null) {
+            bases = OctiGameBases.GAME_BASES_3;
+        }
+        if (humanSeat == null) {
+            humanSeat = OctiPlayer.PLAYER_A;
+        }
+
+        String seatShort;
+        switch (humanSeat) {
+            case PLAYER_B: seatShort = "B"; break;
+            case PLAYER_C: seatShort = "C"; break;
+            case PLAYER_D: seatShort = "D"; break;
+            case PLAYER_A:
+            default:       seatShort = "A"; break;
+        }
+
+        String seatLabel;
+        if (mode == OctiGameMode.GAME_MODE_4) {
+            seatLabel = seatShort;
+        } else {
+            switch (humanSeat) {
+                case PLAYER_B: seatLabel = "B (Green)"; break;
+                case PLAYER_C: seatLabel = "C"; break;
+                case PLAYER_D: seatLabel = "D"; break;
+                case PLAYER_A:
+                default:       seatLabel = "A (Red)"; break;
+            }
+        }
+
+        String line1;
+        if (vsBot) {
+            String botLabel = "Lv2 • 8s";
+            if (difficulty != null) {
+                String name = difficulty.name();
+                if ("QUICK".equalsIgnoreCase(name) || difficulty == OctiBotEngine.BotDifficulty.CASUAL) {
+                    botLabel = "Lv1 • 3s";
+                } else if ("TACTICAL".equalsIgnoreCase(name) || difficulty == OctiBotEngine.BotDifficulty.TACTICAL) {
+                    botLabel = "Lv2 • 8s";
+                } else if ("STRATEGIC".equalsIgnoreCase(name) || difficulty == OctiBotEngine.BotDifficulty.MASTER) {
+                    botLabel = "Lv3 • 20s";
+                } else if ("DEEP".equalsIgnoreCase(name)) {
+                    botLabel = "Lv4 • 45s";
+                }
+            }
+            line1 = "vs AI Bot (" + botLabel + ") • Seat " + seatLabel;
+        } else {
+            line1 = "Local Pass-and-Play • Seat " + seatShort;
+        }
+
+        String line2;
+        if (mode == OctiGameMode.GAME_MODE_OFK) {
+            line2 = "OFK (6x7) • 1 Base";
+        } else {
+            String modeStr = (mode == OctiGameMode.GAME_MODE_4) ? "4P (9x9)" : "2P (9x9)";
+            String basesStr = (bases == OctiGameBases.GAME_BASES_3) ? "3 Bases" : "1 Base";
+            line2 = modeStr + " • " + basesStr;
+            if (!useSuperProngs && !useEdgeless) {
+                line2 += " • Standard";
+            } else {
+                if (useSuperProngs) {
+                    line2 += " • Super-Prongs";
+                }
+                if (useEdgeless) {
+                    line2 += " • Edgeless";
+                }
+            }
+        }
+
+        return line1 + "\n" + line2;
     }
 
     public static void paintActiveTurnEdgeIndicator(int[] pixels, int w, int h,

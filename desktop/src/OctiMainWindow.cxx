@@ -376,14 +376,17 @@ OctiMainWindow::OctiMainWindow(
 
     /* ---- Right Side Panel (Move History / VCR, Proposals, Chat, PTT Voice) ---- */
     QWidget *rightSide = new QWidget(_boardPage);
+    _rightSide = rightSide;
     rightSide->setMinimumWidth(330);
     rightSide->setMaximumWidth(390);
     QVBoxLayout *rightLayout = new QVBoxLayout(rightSide);
+    _rightLayout = rightLayout;
     rightLayout->setContentsMargins(0, 0, 0, 0);
     rightLayout->setSpacing(8);
 
     /* 0. Match Status Card (PCE-D06 / PCE-D09) */
     QGroupBox *statusBox = new QGroupBox("Match Status", rightSide);
+    _statusBox = statusBox;
     QVBoxLayout *statusLayout = new QVBoxLayout(statusBox);
     _matchModeLabel = new QLabel("Local vs AI Bot", statusBox);
     _matchTurnStatusLabel = new QLabel("Active Turn: Player A", statusBox);
@@ -395,6 +398,7 @@ OctiMainWindow::OctiMainWindow(
 
     /* 1. Move History & VCR Replay */
     QGroupBox *historyBox = new QGroupBox("Move History • VCR Replay", rightSide);
+    _historyBox = historyBox;
     QVBoxLayout *histLayout = new QVBoxLayout(historyBox);
     _moveHistoryList = new QListWidget(historyBox);
     _moveHistoryList->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -461,6 +465,7 @@ OctiMainWindow::OctiMainWindow(
     rightLayout->addWidget(_proposalBannerWidget);
 
     QGroupBox *actionsBox = new QGroupBox("Match Actions", rightSide);
+    _actionsBox = actionsBox;
     QVBoxLayout *actLayout = new QVBoxLayout(actionsBox);
     QHBoxLayout *actRow1 = new QHBoxLayout();
     _sidebarNewGameBtn = new QPushButton("New Game...", actionsBox);
@@ -948,6 +953,7 @@ void OctiMainWindow::rotateBoardClockwise()
             QString("Rotate Board (%1°)")
                 .arg(_boardCanvas->geometry().rotationDegrees()));
     }
+    syncSidePanelsToBoardEdges();
 }
 
 void OctiMainWindow::setBoardRotation(BoardRotation rot)
@@ -961,6 +967,7 @@ void OctiMainWindow::setBoardRotation(BoardRotation rot)
             QString("Rotate Board (%1°)")
                 .arg(_boardCanvas->geometry().rotationDegrees()));
     }
+    syncSidePanelsToBoardEdges();
 }
 
 BoardRotation OctiMainWindow::boardRotation() const
@@ -1320,6 +1327,7 @@ void OctiMainWindow::startNewLocalGame(const LocalGameConfig &cfg)
     refreshMoveHistoryAndFenUi();
     updateProposalBannerUi();
     updateMatchActionsVisibility();
+    syncSidePanelsToBoardEdges();
 
     if (_isLocalBotGame && !_awaitingMatchStart) {
         executeBotTurnIfNeeded();
@@ -1364,15 +1372,70 @@ void OctiMainWindow::confirmMatchStart()
     }
 }
 
+void OctiMainWindow::reconfigurePendingMatch(const LocalGameConfig &cfg)
+{
+    startNewLocalGame(cfg);
+    beginAwaitingMatchStart();
+}
+
 void OctiMainWindow::promptStartMatchIfVisible()
 {
-    if (!isVisible() || !_awaitingMatchStart) {
-        return;
+    while (isVisible() && _awaitingMatchStart) {
+        OctiStartMatchDialog dlg(_localConfig, _theme, this);
+        dlg.positionCenterOfBoard(this, _boardCanvas);
+        dlg.exec();
+        if (dlg.changeTypeRequested()) {
+            NewLocalGameDialog setupDlg(_theme, this);
+            setupDlg.setConfig(_localConfig);
+            if (setupDlg.exec() == QDialog::Accepted) {
+                reconfigurePendingMatch(setupDlg.config());
+            }
+            continue;
+        }
+        confirmMatchStart();
+        break;
     }
-    OctiStartMatchDialog dlg(_localConfig.humanSeat, _isLocalBotGame, _theme, this);
-    dlg.positionCenterOfBoard(this, _boardCanvas);
-    dlg.exec();
-    confirmMatchStart();
+}
+
+void OctiMainWindow::syncSidePanelsToBoardEdges()
+{
+    if (_boardCanvas && _rightLayout) {
+        if (_boardCanvas->width() > 0 && _boardCanvas->height() > 0) {
+            _boardCanvas->syncGeometryToBoard(_boardCanvas->width(), _boardCanvas->height());
+        }
+        QRectF outer = _boardCanvas->geometry().boardOuterRect();
+        if (outer.height() > 0 && _boardCanvas->height() > 0) {
+            int topMargin = std::max(0, static_cast<int>(std::round(outer.top())));
+            int bottomMargin = std::max(0, _boardCanvas->height() - static_cast<int>(std::round(outer.bottom())));
+            _rightLayout->setContentsMargins(0, topMargin, 0, bottomMargin);
+            _rightLayout->invalidate();
+            if (_rightSide && _rightSide->layout()) {
+                _rightSide->layout()->activate();
+            }
+        }
+    }
+    if (_reservePanel) {
+        _reservePanel->update();
+    }
+}
+
+QRect OctiMainWindow::rightPanelTopWidgetGeometry() const
+{
+    return _statusBox ? _statusBox->geometry() : QRect();
+}
+
+QRect OctiMainWindow::rightPanelBottomWidgetGeometry() const
+{
+    if (_voiceBox && !_voiceBox->isHidden()) {
+        return _voiceBox->geometry();
+    }
+    if (_chatBox && !_chatBox->isHidden()) {
+        return _chatBox->geometry();
+    }
+    if (_actionsBox) {
+        return _actionsBox->geometry();
+    }
+    return QRect();
 }
 
 bool OctiMainWindow::isLocalBotGame() const
@@ -2516,11 +2579,43 @@ bool OctiMainWindow::loadTranscriptFromFile(const std::string &filePath)
 QImage OctiMainWindow::renderWindowToImage(int width, int height)
 {
     resize(width, height);
+    if (layout()) {
+        layout()->activate();
+    }
+    if (centralWidget() && centralWidget()->layout()) {
+        centralWidget()->layout()->activate();
+    }
+    if (_boardPage && _boardPage->layout()) {
+        _boardPage->layout()->activate();
+    }
+    syncSidePanelsToBoardEdges();
+    if (_rightSide && _rightSide->layout()) {
+        _rightSide->layout()->activate();
+    }
     pumpUiEvents();
+
     QImage img(width, height, QImage::Format_ARGB32_Premultiplied);
     img.fill(paletteForTheme(_theme).windowBg);
     render(&img);
+
+    syncSidePanelsToBoardEdges();
+    if (_rightSide && _rightSide->layout()) {
+        _rightSide->layout()->activate();
+    }
+    pumpUiEvents();
     return img;
+}
+
+void OctiMainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    syncSidePanelsToBoardEdges();
+}
+
+void OctiMainWindow::showEvent(QShowEvent *event)
+{
+    QMainWindow::showEvent(event);
+    syncSidePanelsToBoardEdges();
 }
 
 void OctiMainWindow::keyPressEvent(QKeyEvent *event)
@@ -2684,6 +2779,8 @@ void OctiMainWindow::updateMatchActionsVisibility()
             }
         }
     }
+
+    syncSidePanelsToBoardEdges();
 }
 
 void OctiMainWindow::checkAndPresentGameOver()

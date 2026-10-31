@@ -54,6 +54,9 @@ public:
     QRectF normalProngWellRect() const;
     QRectF superProngWellRect() const;
 
+    QRectF playerCardRect(OctiPlayer player) const;
+    int iconGlyphCountRendered() const { return _iconGlyphCountRendered; }
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
@@ -76,6 +79,8 @@ private:
     QRectF _normalProngWellRect;
     QRectF _superProngWellRect;
     QRectF _pttButtonRect;
+    QRectF _playerCardRects[5];
+    int _iconGlyphCountRendered = 0;
 };
 
 } // namespace octi

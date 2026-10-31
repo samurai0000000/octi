@@ -436,9 +436,14 @@ fun OctiMainAppContent(
                             )
                             if (awaitingMatchStart && matchType != OctiAppViewModel.MatchType.ONLINE_ROOM && !gameOver) {
                                 StartMatchOverlayDialog(
+                                    mode = viewModel.board.gameMode,
+                                    bases = viewModel.board.game?.bases ?: OctiGameBases.GAME_BASES_3,
+                                    useSuperProngs = viewModel.board.game?.useSuperProngs() == true,
+                                    useEdgeless = viewModel.board.game?.useEdgelessBoard() == true,
                                     humanSeat = humanSeat,
                                     vsBot = vsBot,
                                     difficulty = botDifficulty,
+                                    onChangeType = { viewModel.setShowNewGameDialog(true) },
                                     onStartMatch = { viewModel.confirmStartMatch() }
                                 )
                             }

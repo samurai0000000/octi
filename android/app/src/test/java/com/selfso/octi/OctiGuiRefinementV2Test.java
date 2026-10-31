@@ -853,6 +853,148 @@ public class OctiGuiRefinementV2Test {
 
         vm.close();
     }
+
+    @Test
+    public void testFormatStartMatchConfigSummary() {
+        // 1. 2P vs Bot (TACTICAL, Seat A)
+        String sA = OctiBoardRenderer.formatStartMatchConfigSummary(
+                OctiGameMode.GAME_MODE_2,
+                OctiGameBases.GAME_BASES_3,
+                false,
+                false,
+                true,
+                OctiBotEngine.BotDifficulty.TACTICAL,
+                OctiPlayer.PLAYER_A
+        );
+        assertEquals("vs AI Bot (Lv2 • 8s) • Seat A (Red)\n2P (9x9) • 3 Bases • Standard", sA);
+
+        // 2. 2P vs Bot (TACTICAL, Seat B)
+        String sB = OctiBoardRenderer.formatStartMatchConfigSummary(
+                OctiGameMode.GAME_MODE_2,
+                OctiGameBases.GAME_BASES_3,
+                false,
+                false,
+                true,
+                OctiBotEngine.BotDifficulty.TACTICAL,
+                OctiPlayer.PLAYER_B
+        );
+        assertEquals("vs AI Bot (Lv2 • 8s) • Seat B (Green)\n2P (9x9) • 3 Bases • Standard", sB);
+
+        // 3. 2P Pass-and-Play with Super-Prongs + Edgeless
+        String sPass = OctiBoardRenderer.formatStartMatchConfigSummary(
+                OctiGameMode.GAME_MODE_2,
+                OctiGameBases.GAME_BASES_3,
+                true,
+                true,
+                false,
+                OctiBotEngine.BotDifficulty.TACTICAL,
+                OctiPlayer.PLAYER_A
+        );
+        assertEquals("Local Pass-and-Play • Seat A\n2P (9x9) • 3 Bases • Super-Prongs • Edgeless", sPass);
+
+        // 4. OFK mode
+        String sOfk = OctiBoardRenderer.formatStartMatchConfigSummary(
+                OctiGameMode.GAME_MODE_OFK,
+                OctiGameBases.GAME_BASES_1,
+                false,
+                false,
+                true,
+                OctiBotEngine.BotDifficulty.TACTICAL,
+                OctiPlayer.PLAYER_A
+        );
+        assertEquals("vs AI Bot (Lv2 • 8s) • Seat A (Red)\nOFK (6x7) • 1 Base", sOfk);
+    }
+
+    @Test
+    public void testCommitButtonFlashPeriodAndBrightnessFactors() {
+        assertEquals(1000L, OctiBoardRenderer.COMMIT_FLASH_PERIOD_MS);
+
+        // Cycle boundaries: [0..499] bright yellow/amber-gold (1.0f), [500..999] emerald green (0.0f), no fade
+        assertTrue(OctiBoardRenderer.isCommitButtonFlashBright(0L));
+        assertEquals(1.0f, OctiBoardRenderer.commitButtonFlashFactor(0L), 1e-4f);
+        assertEquals(OctiBoardRenderer.COMMIT_FLASH_BRIGHT_BG_COLOR, OctiBoardRenderer.commitButtonBgColor(0L));
+        assertEquals(OctiBoardRenderer.COMMIT_FLASH_BRIGHT_BG_COLOR, OctiBoardRenderer.commitButtonBgColor(250L));
+        assertEquals(OctiBoardRenderer.COMMIT_FLASH_BRIGHT_BORDER_COLOR, OctiBoardRenderer.commitButtonBorderColor(250L));
+        assertEquals(OctiBoardRenderer.COMMIT_FLASH_BRIGHT_TEXT_COLOR, OctiBoardRenderer.commitButtonTextColor(250L));
+
+        assertTrue(OctiBoardRenderer.isCommitButtonFlashBright(499L));
+        assertEquals(1.0f, OctiBoardRenderer.commitButtonFlashFactor(499L), 1e-4f);
+        assertEquals(OctiBoardRenderer.COMMIT_FLASH_BRIGHT_BG_COLOR, OctiBoardRenderer.commitButtonBgColor(499L));
+
+        assertFalse(OctiBoardRenderer.isCommitButtonFlashBright(500L));
+        assertEquals(0.0f, OctiBoardRenderer.commitButtonFlashFactor(500L), 1e-4f);
+        assertEquals(OctiBoardRenderer.COMMIT_FLASH_GREEN_BG_COLOR, OctiBoardRenderer.commitButtonBgColor(500L));
+        assertEquals(OctiBoardRenderer.COMMIT_FLASH_GREEN_BG_COLOR, OctiBoardRenderer.commitButtonBgColor(750L));
+        assertEquals(OctiBoardRenderer.COMMIT_FLASH_GREEN_BORDER_COLOR, OctiBoardRenderer.commitButtonBorderColor(750L));
+        assertEquals(OctiBoardRenderer.COMMIT_FLASH_GREEN_TEXT_COLOR, OctiBoardRenderer.commitButtonTextColor(750L));
+
+        assertFalse(OctiBoardRenderer.isCommitButtonFlashBright(999L));
+        assertEquals(0.0f, OctiBoardRenderer.commitButtonFlashFactor(999L), 1e-4f);
+        assertEquals(OctiBoardRenderer.COMMIT_FLASH_GREEN_BG_COLOR, OctiBoardRenderer.commitButtonBgColor(999L));
+
+        assertTrue(OctiBoardRenderer.isCommitButtonFlashBright(1000L));
+        assertEquals(1.0f, OctiBoardRenderer.commitButtonFlashFactor(1000L), 1e-4f);
+        assertEquals(OctiBoardRenderer.COMMIT_FLASH_BRIGHT_BG_COLOR, OctiBoardRenderer.commitButtonBgColor(1000L));
+    }
+
+    @Test
+    public void testPlaceReservePodLabelConstant() {
+        assertEquals("Place Reserve Pod", com.selfso.octi.ui.OctiDialogs.PLACE_RESERVE_POD_LABEL);
+        assertEquals("Change Type", com.selfso.octi.ui.OctiDialogs.CHANGE_TYPE_BUTTON_LABEL);
+        assertEquals("Start Match", com.selfso.octi.ui.OctiDialogs.START_MATCH_BUTTON_LABEL);
+        assertTrue(com.selfso.octi.ui.OctiDialogs.START_MATCH_CARD_MIN_WIDTH_DP >= 300);
+        assertTrue(com.selfso.octi.ui.OctiDialogs.START_MATCH_BUTTON_HORIZONTAL_PADDING_DP <= 12);
+    }
+
+    @Test
+    public void testReconfigurePendingMatchKeepsAwaitingMatchStart() {
+        ClientConfigStore store = new ClientConfigStore();
+        com.selfso.octi.ui.OctiAppViewModel vm = new com.selfso.octi.ui.OctiAppViewModel(
+                store, new OctiNetworkClient());
+        vm.setRequireStartMatchPrompt(true);
+
+        // Initial setup: 2P Standard vs Bot (Seat A)
+        vm.startNewLocalGame(
+                OctiGameMode.GAME_MODE_2,
+                false,
+                false,
+                OctiGameBases.GAME_BASES_3,
+                true,
+                OctiBotEngine.BotDifficulty.TACTICAL,
+                OctiPlayer.PLAYER_A
+        );
+        assertTrue(vm.getAwaitingMatchStart().getValue());
+        assertEquals(OctiGameMode.GAME_MODE_2, vm.getBoard().getGameMode());
+        assertEquals(OctiGameBases.GAME_BASES_3, vm.getBoard().getGame().getBases());
+        assertFalse(vm.getBoard().getGame().useSuperProngs());
+        assertEquals(0L, vm.matchStartedEpochSec());
+
+        // Simulate "Change Type": reconfigure pending match to OFK (Seat B)
+        vm.startNewLocalGame(
+                OctiGameMode.GAME_MODE_OFK,
+                false,
+                false,
+                OctiGameBases.GAME_BASES_1,
+                true,
+                OctiBotEngine.BotDifficulty.TACTICAL,
+                OctiPlayer.PLAYER_B
+        );
+        // Board configuration updated
+        assertEquals(OctiGameMode.GAME_MODE_OFK, vm.getBoard().getGameMode());
+        assertEquals(OctiGameBases.GAME_BASES_1, vm.getBoard().getGame().getBases());
+        assertEquals(OctiPlayer.PLAYER_B, vm.getHumanSeat().getValue());
+        // Pre-start awaiting state preserved!
+        assertTrue(vm.getAwaitingMatchStart().getValue());
+        assertEquals(0L, vm.matchStartedEpochSec());
+        assertEquals(0, vm.currentBoardSnapshot().getMoveCount());
+
+        // User finally taps "Start Match"
+        vm.confirmStartMatch();
+        assertFalse(vm.getAwaitingMatchStart().getValue());
+        assertTrue(vm.matchStartedEpochSec() > 0L);
+
+        vm.close();
+    }
 }
 
 /*
