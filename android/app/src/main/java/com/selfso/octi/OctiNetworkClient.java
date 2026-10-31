@@ -128,6 +128,34 @@ public final class OctiNetworkClient implements AutoCloseable {
         public int plyCount = 0;
     }
 
+    public static final class CrashReportRequest {
+        public String crashId = "";
+        public long createdAt = 0L;
+        public String platform = "android";
+        public String appVersion = "2.1.2";
+        public String osVersion = "";
+        public String exceptionType = "";
+        public String exceptionMessage = "";
+        public String threadName = "";
+        public String stackTrace = "";
+        public String contextJson = "{}";
+        public String installId = "";
+
+        public CrashReportRequest() {
+        }
+    }
+
+    public static final class CrashReportResponse {
+        public boolean ok;
+        public int httpStatus;
+        public String crashId = "";
+        public boolean deduplicated;
+        public String errorMessage = "";
+
+        public CrashReportResponse() {
+        }
+    }
+
     public static final class PlayerProfileInfo {
         public String uuid = "";
         public String handle = "";
@@ -1862,6 +1890,85 @@ public final class OctiNetworkClient implements AutoCloseable {
 
     public ApiResult<UploadTranscriptResponse> uploadTrainingTranscript(String transcriptJson, String clientId) {
         return uploadTrainingTranscript(new UploadTranscriptRequest(transcriptJson, clientId));
+    }
+
+    public CrashReportResponse uploadCrashReport(CrashReportRequest req) {
+        CrashReportResponse res = new CrashReportResponse();
+        if (req == null) {
+            res.ok = false;
+            res.httpStatus = 400;
+            res.errorMessage = "null request";
+            return res;
+        }
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (req.crashId != null && !req.crashId.isEmpty()) {
+            body.put("crash_id", req.crashId);
+        }
+        body.put("created_at", req.createdAt > 0 ? req.createdAt : (System.currentTimeMillis() / 1000L));
+        body.put("platform", req.platform != null && !req.platform.isEmpty() ? req.platform : "android");
+        body.put("app_version", req.appVersion != null && !req.appVersion.isEmpty() ? req.appVersion : "2.1.2");
+        body.put("os_version", req.osVersion != null ? req.osVersion : "");
+        body.put("exception_type", req.exceptionType != null ? req.exceptionType : "");
+        body.put("exception_message", req.exceptionMessage != null ? req.exceptionMessage : "");
+        body.put("thread_name", req.threadName != null ? req.threadName : "");
+        body.put("stack_trace", req.stackTrace != null ? req.stackTrace : "");
+
+        if (req.contextJson != null && req.contextJson.trim().startsWith("{")) {
+            try {
+                Object parsed = OctiMiniJson.parse(req.contextJson);
+                body.put("context", parsed != null ? parsed : req.contextJson);
+            } catch (RuntimeException ignored) {
+                body.put("context", req.contextJson);
+            }
+        } else if (req.contextJson != null && !req.contextJson.trim().isEmpty()) {
+            body.put("context", req.contextJson);
+        } else {
+            body.put("context", Collections.emptyMap());
+        }
+
+        if (req.installId != null && !req.installId.isEmpty()) {
+            body.put("install_id", req.installId);
+        }
+
+        RawResponse raw = doPost("/api/v1/telemetry/crash", body);
+        res.httpStatus = raw.status;
+        if (!raw.transportOk) {
+            res.ok = false;
+            res.errorMessage = raw.transportError != null ? raw.transportError : "Transport failure";
+            return res;
+        }
+
+        if (raw.status == 200 || raw.status == 201) {
+            res.ok = true;
+            if (raw.json != null) {
+                Object cid = raw.json.get("crash_id");
+                if (cid == null) cid = raw.json.get("crashId");
+                if (cid != null) res.crashId = cid.toString();
+
+                Object dedup = raw.json.get("deduplicated");
+                if (dedup instanceof Boolean) {
+                    res.deduplicated = (Boolean) dedup;
+                } else if (dedup != null) {
+                    res.deduplicated = Boolean.parseBoolean(dedup.toString());
+                }
+            }
+            if (res.crashId.isEmpty() && req.crashId != null) {
+                res.crashId = req.crashId;
+            }
+            return res;
+        } else {
+            res.ok = false;
+            if (raw.json != null) {
+                Object err = raw.json.get("error");
+                if (err == null) err = raw.json.get("message");
+                if (err != null) res.errorMessage = err.toString();
+            }
+            if (res.errorMessage.isEmpty()) {
+                res.errorMessage = "HTTP " + raw.status;
+            }
+            return res;
+        }
     }
 
     public ApiResult<Integer> deleteInstallArchiveData(String installId) {

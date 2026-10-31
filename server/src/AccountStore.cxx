@@ -126,7 +126,29 @@ const char kSchemaSql[] =
     " meta_key TEXT PRIMARY KEY,"
     " meta_json TEXT NOT NULL,"
     " updated_at INTEGER NOT NULL"
-    ");";
+    ");"
+    "CREATE TABLE IF NOT EXISTS crash_reports ("
+    " crash_id TEXT PRIMARY KEY,"
+    " created_at INTEGER NOT NULL,"
+    " uploaded_at INTEGER NOT NULL,"
+    " platform TEXT NOT NULL,"
+    " app_version TEXT NOT NULL DEFAULT '',"
+    " os_version TEXT NOT NULL DEFAULT '',"
+    " exception_type TEXT NOT NULL,"
+    " exception_message TEXT NOT NULL DEFAULT '',"
+    " thread_name TEXT NOT NULL DEFAULT '',"
+    " stack_trace TEXT NOT NULL DEFAULT '',"
+    " context_json TEXT NOT NULL DEFAULT '{}',"
+    " install_id TEXT NOT NULL DEFAULT ''"
+    ");"
+    "CREATE INDEX IF NOT EXISTS idx_crash_reports_uploaded"
+    " ON crash_reports(uploaded_at DESC, created_at DESC);"
+    "CREATE INDEX IF NOT EXISTS idx_crash_reports_platform"
+    " ON crash_reports(platform);"
+    "CREATE INDEX IF NOT EXISTS idx_crash_reports_app_version"
+    " ON crash_reports(app_version);"
+    "CREATE INDEX IF NOT EXISTS idx_crash_reports_install_id"
+    " ON crash_reports(install_id);";
 
 const char kProfileCols[] =
     "player_id, uuid, handle, display_name, avatar_url, elo_2p, elo_4p,"
@@ -1856,19 +1878,31 @@ bool AccountStore::listArchivedGames(const ArchiveFilter &filter,
 
 int AccountStore::deleteGamesByInstallId(const std::string &installId)
 {
-    if (installId.empty() || installId.size() > 64) {
+    if (installId.empty() || installId.size() > 128) {
         return -1;
     }
     std::lock_guard<std::mutex> lock(_mutex);
     if (!_db) {
         return -1;
     }
-    Stmt s(_db, "DELETE FROM games WHERE install_id = ?1");
-    s.bindText(1, installId);
-    if (s.step() != SQLITE_DONE) {
-        return -1;
+    int totalDeleted = 0;
+    {
+        Stmt s(_db, "DELETE FROM games WHERE install_id = ?1");
+        s.bindText(1, installId);
+        if (s.step() != SQLITE_DONE) {
+            return -1;
+        }
+        totalDeleted += static_cast<int>(sqlite3_changes(_db));
     }
-    return static_cast<int>(sqlite3_changes(_db));
+    {
+        Stmt s(_db, "DELETE FROM crash_reports WHERE install_id = ?1");
+        s.bindText(1, installId);
+        if (s.step() != SQLITE_DONE) {
+            return -1;
+        }
+        totalDeleted += static_cast<int>(sqlite3_changes(_db));
+    }
+    return totalDeleted;
 }
 
 bool AccountStore::getArchiveStats(ArchiveStats &out)
@@ -2085,6 +2119,188 @@ bool AccountStore::getLiveMeta(const std::string &metaKey,
     }
     error = sqlite3_errmsg(_db);
     return false;
+}
+
+ArchiveStatus AccountStore::recordCrashReport(const CrashReportRecord &report,
+                                              std::string &error)
+{
+    if (report.crashId.empty() || report.crashId.size() > 128) {
+        error = "invalid crashId";
+        return ArchiveStatus::INVALID;
+    }
+    if (report.platform.empty() || report.platform.size() > 64) {
+        error = "invalid platform";
+        return ArchiveStatus::INVALID;
+    }
+    if (report.exceptionType.empty() || report.exceptionType.size() > 256) {
+        error = "invalid exceptionType";
+        return ArchiveStatus::INVALID;
+    }
+
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        error = "database not open";
+        return ArchiveStatus::ERROR;
+    }
+
+    {
+        Stmt check(_db, "SELECT 1 FROM crash_reports WHERE crash_id = ?1");
+        check.bindText(1, report.crashId);
+        int rc = check.step();
+        if (rc == SQLITE_ROW) {
+            return ArchiveStatus::DUPLICATE;
+        }
+    }
+
+    int64_t uploadedAt = report.uploadedAt > 0 ? report.uploadedAt : nowSec();
+    int64_t createdAt = report.createdAt > 0 ? report.createdAt : uploadedAt;
+
+    const char *sql =
+        "INSERT INTO crash_reports ("
+        " crash_id, created_at, uploaded_at, platform, app_version,"
+        " os_version, exception_type, exception_message, thread_name,"
+        " stack_trace, context_json, install_id"
+        ") VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)";
+
+    Stmt s(_db, sql);
+    s.bindText(1, report.crashId);
+    s.bindInt(2, createdAt);
+    s.bindInt(3, uploadedAt);
+    s.bindText(4, report.platform);
+    s.bindText(5, report.appVersion);
+    s.bindText(6, report.osVersion);
+    s.bindText(7, report.exceptionType);
+    s.bindText(8, report.exceptionMessage);
+    s.bindText(9, report.threadName);
+    s.bindText(10, report.stackTrace);
+    s.bindText(11, report.contextJson.empty() ? "{}" : report.contextJson);
+    s.bindText(12, report.installId);
+
+    int rc = s.step();
+    if (rc == SQLITE_CONSTRAINT) {
+        return ArchiveStatus::DUPLICATE;
+    }
+    if (rc != SQLITE_DONE) {
+        error = sqlite3_errmsg(_db);
+        return ArchiveStatus::ERROR;
+    }
+    return ArchiveStatus::STORED;
+}
+
+bool AccountStore::getCrashReport(const std::string &crashId,
+                                  CrashReportRecord &out)
+{
+    if (crashId.empty() || crashId.size() > 128) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    const char *sql =
+        "SELECT crash_id, created_at, uploaded_at, platform, app_version,"
+        " os_version, exception_type, exception_message, thread_name,"
+        " stack_trace, context_json, install_id"
+        " FROM crash_reports WHERE crash_id = ?1";
+    Stmt s(_db, sql);
+    s.bindText(1, crashId);
+    if (s.step() != SQLITE_ROW) {
+        return false;
+    }
+    out.crashId = s.colText(0);
+    out.createdAt = s.colInt(1);
+    out.uploadedAt = s.colInt(2);
+    out.platform = s.colText(3);
+    out.appVersion = s.colText(4);
+    out.osVersion = s.colText(5);
+    out.exceptionType = s.colText(6);
+    out.exceptionMessage = s.colText(7);
+    out.threadName = s.colText(8);
+    out.stackTrace = s.colText(9);
+    out.contextJson = s.colText(10);
+    out.installId = s.colText(11);
+    return true;
+}
+
+bool AccountStore::listCrashReports(const CrashReportFilter &filter,
+                                    std::vector<CrashReportRecord> &out,
+                                    int64_t *total)
+{
+    int limit = filter.limit <= 0 ? 20 : std::min(filter.limit, 100);
+    int offset = filter.offset < 0 ? 0 : filter.offset;
+    if (offset > kMaxOffset) {
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+
+    std::string where = " WHERE 1=1";
+    std::vector<std::pair<int, std::string>> textParams;
+    int paramIdx = 1;
+
+    if (!filter.platform.empty()) {
+        where += " AND platform = ?" + std::to_string(paramIdx);
+        textParams.push_back({paramIdx++, filter.platform});
+    }
+    if (!filter.appVersion.empty()) {
+        where += " AND app_version = ?" + std::to_string(paramIdx);
+        textParams.push_back({paramIdx++, filter.appVersion});
+    }
+    if (!filter.exceptionType.empty()) {
+        where += " AND exception_type = ?" + std::to_string(paramIdx);
+        textParams.push_back({paramIdx++, filter.exceptionType});
+    }
+
+    if (total) {
+        std::string countSql = "SELECT COUNT(*) FROM crash_reports" + where;
+        Stmt c(_db, countSql.c_str());
+        for (const auto &tp : textParams) {
+            c.bindText(tp.first, tp.second);
+        }
+        if (c.step() != SQLITE_ROW) {
+            return false;
+        }
+        *total = c.colInt(0);
+    }
+
+    std::string sql =
+        "SELECT crash_id, created_at, uploaded_at, platform, app_version,"
+        " os_version, exception_type, exception_message, thread_name,"
+        " stack_trace, context_json, install_id"
+        " FROM crash_reports" + where +
+        " ORDER BY uploaded_at DESC, created_at DESC"
+        " LIMIT ?" + std::to_string(paramIdx) +
+        " OFFSET ?" + std::to_string(paramIdx + 1);
+
+    Stmt s(_db, sql.c_str());
+    for (const auto &tp : textParams) {
+        s.bindText(tp.first, tp.second);
+    }
+    s.bindInt(paramIdx, limit);
+    s.bindInt(paramIdx + 1, offset);
+
+    out.clear();
+    int rc;
+    while ((rc = s.step()) == SQLITE_ROW) {
+        CrashReportRecord r;
+        r.crashId = s.colText(0);
+        r.createdAt = s.colInt(1);
+        r.uploadedAt = s.colInt(2);
+        r.platform = s.colText(3);
+        r.appVersion = s.colText(4);
+        r.osVersion = s.colText(5);
+        r.exceptionType = s.colText(6);
+        r.exceptionMessage = s.colText(7);
+        r.threadName = s.colText(8);
+        r.stackTrace = s.colText(9);
+        r.contextJson = s.colText(10);
+        r.installId = s.colText(11);
+        out.push_back(r);
+    }
+    return rc == SQLITE_DONE;
 }
 
 } // namespace octi

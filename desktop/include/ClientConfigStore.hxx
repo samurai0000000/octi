@@ -50,6 +50,7 @@ public:
     ~ClientConfigStore();
 
     static std::string defaultConfigFilePath();
+    static std::string defaultConfigDir();
 
     const std::string &configFilePath() const;
 

@@ -92,6 +92,28 @@ struct UploadTranscriptResponse {
     int plyCount = 0;
 };
 
+struct CrashReportRequest {
+    std::string crashId;
+    std::int64_t createdAt = 0;
+    std::string platform;
+    std::string appVersion;
+    std::string osVersion;
+    std::string exceptionType;
+    std::string exceptionMessage;
+    std::string threadName;
+    std::string stackTrace;
+    std::string contextJson = "{}";
+    std::string installId;
+};
+
+struct CrashReportResponse {
+    bool ok = false;
+    int httpStatus = 0;
+    std::string crashId;
+    bool deduplicated = false;
+    std::string errorMessage;
+};
+
 struct PlayerProfileInfo {
     std::string uuid;
     std::string handle;
@@ -495,6 +517,8 @@ public:
         const std::string &gameId);
     ApiResult<UploadTranscriptResponse> uploadTrainingTranscript(
         const UploadTranscriptRequest &req);
+    CrashReportResponse uploadCrashReport(
+        const CrashReportRequest &req);
     ApiResult<int> deleteInstallArchiveData(
         const std::string &installId);
 

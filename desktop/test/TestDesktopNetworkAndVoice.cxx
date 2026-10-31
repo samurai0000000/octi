@@ -5,6 +5,7 @@
  */
 
 #include "ClientConfigStore.hxx"
+#include "OctiCrashReporter.hxx"
 #include "OctiNetworkClient.hxx"
 #include "P2pVoiceEngine.hxx"
 
@@ -1041,6 +1042,98 @@ TEST(OctiNetworkClientTest, TransientTransportRetryRecoversAcrossServerDowntime)
 
     CHECK_TRUE_TEXT(health2.ok, health2.errorMessage.c_str());
     LONGS_EQUAL(200, health2.httpStatus);
+}
+
+TEST(OctiNetworkClientTest, Port443ClientConstructionDoesNotThrowAndFallsBackSafely)
+{
+    /* Construct standard client targeting port 443 */
+    OctiNetworkClient prodClient;
+    LONGS_EQUAL(443, prodClient.port());
+    STRCMP_EQUAL("octi.selfso.com", prodClient.host().c_str());
+
+    /* Calling fetchHealth() must NEVER throw std::invalid_argument ("'https' scheme is not supported.") */
+    bool threwException = false;
+    try {
+        auto res = prodClient.fetchHealth();
+        (void)res;
+    } catch (...) {
+        threwException = true;
+    }
+    CHECK_FALSE_TEXT(threwException, "OctiNetworkClient targeting port 443 must not throw exceptions");
+}
+
+TEST(OctiNetworkClientTest, UploadCrashReportAndOctiCrashReporterDurableSpoolAndFlush)
+{
+    LiveServerEnv env;
+    auto client = OctiNetworkClient::forHermeticTest(env.port());
+
+    /* 1. Direct upload of CrashReportRequest to server */
+    CrashReportRequest req;
+    req.crashId = "crash_test_hermetic_01";
+    req.createdAt = 1761837000;
+    req.platform = "linux-x86_64";
+    req.appVersion = "2.1.2";
+    req.osVersion = "Linux";
+    req.exceptionType = "std::runtime_error";
+    req.exceptionMessage = "Hermetic test crash";
+    req.threadName = "WorkerThread";
+    req.stackTrace = "#0 test+0x1000\n#1 test+0x2000";
+    req.contextJson = "{\"match_mode\":\"LOCAL_BOT\",\"ply_count\":10}";
+    req.installId = "install_uuid_hermetic_999";
+
+    auto resp1 = client->uploadCrashReport(req);
+    CHECK_TRUE_TEXT(resp1.ok, resp1.errorMessage.c_str());
+    LONGS_EQUAL(201, resp1.httpStatus);
+    CHECK_FALSE(resp1.deduplicated);
+    STRCMP_EQUAL("crash_test_hermetic_01", resp1.crashId.c_str());
+
+    /* Deduplication on repeat upload */
+    auto resp2 = client->uploadCrashReport(req);
+    CHECK_TRUE_TEXT(resp2.ok, resp2.errorMessage.c_str());
+    LONGS_EQUAL(200, resp2.httpStatus);
+    CHECK_TRUE(resp2.deduplicated);
+
+    /* 2. OctiCrashReporter spooling and flushing */
+    std::string testDir = env.dir + "/crash_reporter_test";
+    std::filesystem::remove_all(testDir);
+    octi::desktop::OctiCrashReporter::setStorageRootDir(testDir);
+
+    octi::desktop::OctiCrashReporter::updateGameContext("LOCAL_BOT", 15, "test_fen");
+    std::string recordedFile = octi::desktop::OctiCrashReporter::recordHandledException(
+        "SimulatedThread", "std::out_of_range", "Index out of range",
+        "{\"ply\":15}", "install_uuid_hermetic_999");
+    CHECK_FALSE(recordedFile.empty());
+    CHECK_TRUE(std::filesystem::exists(recordedFile));
+    LONGS_EQUAL(1, static_cast<long>(octi::desktop::OctiCrashReporter::listPendingCrashFiles().size()));
+
+    std::string transcriptJson = "{\"game_id\":\"game_spool_01\",\"fen\":\"test_fen\",\"num_moves\":4}";
+    std::string spooledFile = octi::desktop::OctiCrashReporter::spoolTrainingTranscript(
+        "game_spool_01", transcriptJson, "install_uuid_hermetic_999");
+    CHECK_FALSE(spooledFile.empty());
+    CHECK_TRUE(std::filesystem::exists(spooledFile));
+    LONGS_EQUAL(1, static_cast<long>(octi::desktop::OctiCrashReporter::listPendingTranscriptFiles().size()));
+
+    /* Offline retention: when server is down, spooled files remain intact */
+    env.stop();
+    int flushedOfflineCrash = octi::desktop::OctiCrashReporter::flushPendingCrashReports(*client, "install_uuid_hermetic_999");
+    LONGS_EQUAL(0, flushedOfflineCrash);
+    LONGS_EQUAL(1, static_cast<long>(octi::desktop::OctiCrashReporter::listPendingCrashFiles().size()));
+
+    int flushedOfflineTx = octi::desktop::OctiCrashReporter::flushPendingTranscripts(*client, "install_uuid_hermetic_999");
+    LONGS_EQUAL(0, flushedOfflineTx);
+    LONGS_EQUAL(1, static_cast<long>(octi::desktop::OctiCrashReporter::listPendingTranscriptFiles().size()));
+
+    /* Online flush: when server is back up, flush uploads and deletes spooled files */
+    env.startAgain();
+    int flushedOnlineCrash = octi::desktop::OctiCrashReporter::flushPendingCrashReports(*client, "install_uuid_hermetic_999");
+    LONGS_EQUAL(1, flushedOnlineCrash);
+    LONGS_EQUAL(0, static_cast<long>(octi::desktop::OctiCrashReporter::listPendingCrashFiles().size()));
+
+    int flushedOnlineTx = octi::desktop::OctiCrashReporter::flushPendingTranscripts(*client, "install_uuid_hermetic_999");
+    LONGS_EQUAL(1, flushedOnlineTx);
+    LONGS_EQUAL(0, static_cast<long>(octi::desktop::OctiCrashReporter::listPendingTranscriptFiles().size()));
+
+    std::filesystem::remove_all(testDir);
 }
 
 /* ==================================================================== */

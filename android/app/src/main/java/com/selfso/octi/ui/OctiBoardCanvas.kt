@@ -60,7 +60,8 @@ fun OctiBoardCanvas(
     viewModel: OctiAppViewModel,
     modifier: Modifier = Modifier,
     lastMoveModifiedSquares: List<IntArray> = emptyList(),
-    onUserInteraction: () -> Unit = { viewModel.clearLastMoveIndicators() }
+    onUserInteraction: () -> Unit = { viewModel.clearLastMoveIndicators() },
+    awaitingMatchStart: Boolean = false
 ) {
     val themeId by viewModel.theme.collectAsState()
     val rotation by viewModel.boardRotation.collectAsState()
@@ -84,7 +85,7 @@ fun OctiBoardCanvas(
     var lastDragTimeMs by remember { mutableStateOf(0L) }
 
     val game = viewModel.board.game
-    val isGameInProgress = game != null && game.isGameStarted && !game.isGameOver && !viewModel.isViewingHistory()
+    val isGameInProgress = game != null && game.isGameStarted && !game.isGameOver && !viewModel.isViewingHistory() && !awaitingMatchStart
 
     val lastMoveAnimPhase by produceState(
         initialValue = 0f,
@@ -107,7 +108,7 @@ fun OctiBoardCanvas(
         }
     }
 
-    val renderedBitmap = remember(themeId, rotation, boardRev, viewingPly, canvasSize) {
+    val renderedBitmap = remember(themeId, rotation, boardRev, viewingPly, canvasSize, awaitingMatchStart) {
         val vw = Math.max(320, Math.min(1280, canvasSize.width))
         val vh = Math.max(320, Math.min(1280, canvasSize.height))
         val pixels = synchronized(viewModel.board) {
@@ -125,11 +126,16 @@ fun OctiBoardCanvas(
                 activeBoard.boardHeight,
                 rotation
             )
+            val cfg = OctiBoardRenderer.RenderConfig()
+            cfg.showTurnIndicator = !awaitingMatchStart
+            cfg.lastMoveAnimPhase = lastMoveAnimPhase
+            cfg.activeTurnAnimPhase = lastMoveAnimPhase
             OctiBoardRenderer.renderBoardPixels(
                 activeBoard,
                 viewModel.composer,
                 viewModel.geometry,
-                themeId
+                themeId,
+                cfg
             )
         }
         Bitmap.createBitmap(pixels, vw, vh, Bitmap.Config.ARGB_8888).asImageBitmap()
@@ -137,7 +143,7 @@ fun OctiBoardCanvas(
     val currentRenderedBitmap by rememberUpdatedState(renderedBitmap)
 
     fun openZoomForOffset(offset: Offset, viewportSize: IntSize) {
-        if (multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L) {
+        if (awaitingMatchStart || multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L) {
             return
         }
         if (viewModel.isViewingHistory()) {
@@ -184,7 +190,10 @@ fun OctiBoardCanvas(
                     canvasSize = newSize
                 }
             }
-            .pointerInput(Unit) {
+            .pointerInput(awaitingMatchStart) {
+                if (awaitingMatchStart) {
+                    return@pointerInput
+                }
                 awaitEachGesture {
                     var hadMultiTouch = false
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -323,7 +332,10 @@ fun OctiBoardCanvas(
                     }
                 }
             }
-            .pointerInput(Unit) {
+            .pointerInput(awaitingMatchStart) {
+                if (awaitingMatchStart) {
+                    return@pointerInput
+                }
                 detectTapGestures(
                     onDoubleTap = { offset ->
                         currentOnUserInteraction()
@@ -515,7 +527,7 @@ fun OctiBoardCanvas(
                 dstOffset = IntOffset.Zero,
                 dstSize = IntSize(size.width.toInt(), size.height.toInt())
             )
-            if (isGameInProgress) {
+            if (isGameInProgress && !awaitingMatchStart) {
                 val scaleX = size.width / Math.max(1, currentRenderedBitmap.width).toFloat()
                 val scaleY = size.height / Math.max(1, currentRenderedBitmap.height).toFloat()
                 val geo = viewModel.geometry

@@ -27,7 +27,9 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
@@ -917,6 +919,260 @@ public class OctiAndroidAppIntegrationTest {
                 _serverSocket.close();
             } catch (Exception ignored) {
             }
+        }
+    }
+
+    private static final class MockTelemetryServer implements AutoCloseable {
+        private final ServerSocket _serverSocket;
+        private final AtomicBoolean _running = new AtomicBoolean(true);
+        private final Thread _acceptThread;
+        private volatile boolean _crashEndpointOnline = true;
+        private volatile boolean _uploadEndpointOnline = true;
+        private final List<String> _receivedCrashBodies = new ArrayList<>();
+        private final List<String> _receivedUploadBodies = new ArrayList<>();
+
+        MockTelemetryServer() throws Exception {
+            _serverSocket = new ServerSocket();
+            _serverSocket.setReuseAddress(true);
+            _serverSocket.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0));
+            _acceptThread = new Thread(this::acceptLoop, "mock-telemetry-server");
+            _acceptThread.setDaemon(true);
+            _acceptThread.start();
+        }
+
+        int port() {
+            return _serverSocket.getLocalPort();
+        }
+
+        void setCrashEndpointOnline(boolean online) {
+            _crashEndpointOnline = online;
+        }
+
+        void setUploadEndpointOnline(boolean online) {
+            _uploadEndpointOnline = online;
+        }
+
+        List<String> receivedCrashBodies() {
+            synchronized (_receivedCrashBodies) {
+                return new ArrayList<>(_receivedCrashBodies);
+            }
+        }
+
+        List<String> receivedUploadBodies() {
+            synchronized (_receivedUploadBodies) {
+                return new ArrayList<>(_receivedUploadBodies);
+            }
+        }
+
+        private void acceptLoop() {
+            while (_running.get()) {
+                try (Socket s = _serverSocket.accept()) {
+                    s.setSoTimeout(2000);
+                    BufferedReader r = new BufferedReader(
+                            new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+                    String reqLine = r.readLine();
+                    if (reqLine == null) {
+                        continue;
+                    }
+                    int contentLength = 0;
+                    String h;
+                    while ((h = r.readLine()) != null && !h.isEmpty()) {
+                        int colon = h.indexOf(':');
+                        if (colon > 0 && h.substring(0, colon).trim().equalsIgnoreCase("Content-Length")) {
+                            contentLength = Integer.parseInt(h.substring(colon + 1).trim());
+                        }
+                    }
+                    char[] bodyChars = new char[Math.max(0, contentLength)];
+                    int readTotal = 0;
+                    while (readTotal < contentLength) {
+                        int n = r.read(bodyChars, readTotal, contentLength - readTotal);
+                        if (n < 0) {
+                            break;
+                        }
+                        readTotal += n;
+                    }
+                    String body = new String(bodyChars, 0, readTotal);
+
+                    int status = 200;
+                    String respBody;
+
+                    if (reqLine.contains("/api/v1/telemetry/crash")) {
+                        if (!_crashEndpointOnline) {
+                            status = 503;
+                            respBody = "{\"error\":\"service_unavailable\"}";
+                        } else {
+                            synchronized (_receivedCrashBodies) {
+                                _receivedCrashBodies.add(body);
+                            }
+                            status = 201;
+                            respBody = "{\"crash_id\":\"c-" + System.currentTimeMillis() + "\",\"deduplicated\":false}";
+                        }
+                    } else if (reqLine.contains("/api/v1/archive/upload")) {
+                        if (!_uploadEndpointOnline) {
+                            status = 503;
+                            respBody = "{\"error\":\"service_unavailable\"}";
+                        } else {
+                            synchronized (_receivedUploadBodies) {
+                                _receivedUploadBodies.add(body);
+                            }
+                            status = 200;
+                            respBody = "{\"game_id\":\"mock-game-id\",\"ply_count\":42}";
+                        }
+                    } else {
+                        status = 404;
+                        respBody = "{\"error\":\"not_found\"}";
+                    }
+
+                    byte[] payload = respBody.getBytes(StandardCharsets.UTF_8);
+                    String statusText = (status == 201) ? "Created"
+                            : (status == 200) ? "OK"
+                            : (status == 503) ? "Service Unavailable" : "Not Found";
+                    String headers = "HTTP/1.1 " + status + " " + statusText + "\r\n"
+                            + "Content-Type: application/json\r\n"
+                            + "Content-Length: " + payload.length + "\r\n"
+                            + "Connection: close\r\n\r\n";
+                    OutputStream os = s.getOutputStream();
+                    os.write(headers.getBytes(StandardCharsets.UTF_8));
+                    os.write(payload);
+                    os.flush();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+
+        @Override
+        public void close() {
+            _running.set(false);
+            try {
+                _serverSocket.close();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @Test
+    public void testOctiCrashReporterHandledAndUncaughtSpoolCapAndFlushing() throws Exception {
+        OctiCrashReporter.setStorageRootDir(_tempDir);
+        OctiCrashReporter.updateGameContext("LOCAL_VS_BOT", 5, "fake-fen-context");
+        String ctx = OctiCrashReporter.getGameContextJson();
+        assertTrue(ctx.contains("LOCAL_VS_BOT"));
+        assertTrue(ctx.contains("fake-fen-context"));
+
+        File handled = OctiCrashReporter.recordHandledException(
+                _tempDir, "TestWorkerThread", new RuntimeException("TestHandledCrash"), "2.1.2", "install-001");
+        assertNotNull(handled);
+        assertTrue(handled.exists());
+        String content = new String(Files.readAllBytes(handled.toPath()), StandardCharsets.UTF_8);
+        assertTrue(content.contains("TestHandledCrash"));
+        assertTrue(content.contains("TestWorkerThread"));
+        assertTrue(content.contains("install-001"));
+        assertTrue(content.contains("fake-fen-context"));
+
+        // Enforce 32-file cap
+        for (int i = 0; i < 35; i++) {
+            OctiCrashReporter.recordHandledException(
+                    _tempDir, "Worker_" + i, new RuntimeException("Crash_" + i), "2.1.2", "inst-" + i);
+        }
+        List<File> pendingCrashes = OctiCrashReporter.listPendingCrashFiles(_tempDir);
+        assertTrue("Pending crashes count must not exceed 32", pendingCrashes.size() <= 32);
+
+        // Global uncaught exception handler
+        OctiCrashReporter.installGlobalHandler(_tempDir, "2.1.2", "install-uncaught-999");
+        Thread.UncaughtExceptionHandler h = Thread.getDefaultUncaughtExceptionHandler();
+        assertNotNull(h);
+        h.uncaughtException(Thread.currentThread(), new IllegalStateException("SimulatedFatalJvmCrash"));
+        OctiCrashReporter.uninstallGlobalHandler();
+
+        boolean foundFatal = false;
+        for (File f : OctiCrashReporter.listPendingCrashFiles(_tempDir)) {
+            String c = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
+            if (c.contains("SimulatedFatalJvmCrash")) {
+                foundFatal = true;
+                break;
+            }
+        }
+        assertTrue("SimulatedFatalJvmCrash must be spooled to disk", foundFatal);
+
+        // Test flushing with mock server: 503 retains on disk, 201 deletes
+        try (MockTelemetryServer server = new MockTelemetryServer()) {
+            OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port());
+
+            server.setCrashEndpointOnline(false);
+            int beforeCount = OctiCrashReporter.listPendingCrashFiles(_tempDir).size();
+            assertTrue(beforeCount > 0);
+
+            int flushed503 = OctiCrashReporter.flushPendingCrashReports(_tempDir, client, "fallback-id");
+            assertEquals(0, flushed503);
+            assertEquals(beforeCount, OctiCrashReporter.listPendingCrashFiles(_tempDir).size());
+
+            server.setCrashEndpointOnline(true);
+            int flushed201 = OctiCrashReporter.flushPendingCrashReports(_tempDir, client, "fallback-id");
+            assertEquals(beforeCount, flushed201);
+            assertEquals(0, OctiCrashReporter.listPendingCrashFiles(_tempDir).size());
+            assertTrue(server.receivedCrashBodies().size() >= beforeCount);
+        }
+    }
+
+    @Test
+    public void testCompletedAiGameSpoolsTranscriptWhenOfflineAndFlushesWhenOnline() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config.json");
+        String json = "{\n"
+                + "  \"telemetry_consent\": \"share\",\n"
+                + "  \"telemetry_consent_version\": 1,\n"
+                + "  \"install_id\": \"inst-durable-test-888\"\n"
+                + "}\n";
+        Files.write(cfgFile.toPath(), json.getBytes(StandardCharsets.UTF_8));
+
+        try (MockTelemetryServer server = new MockTelemetryServer()) {
+            server.setUploadEndpointOnline(false);
+            OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port());
+            ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+
+            try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                vm.setStorageRootDir(_tempDir);
+                vm.setAsyncBotThinkingEnabled(false);
+                vm.startNewLocalGame(
+                        OctiGameMode.GAME_MODE_2,
+                        false,
+                        false,
+                        OctiGameBases.GAME_BASES_3,
+                        true,
+                        OctiBotEngine.BotDifficulty.CASUAL,
+                        OctiPlayer.PLAYER_A);
+
+                String legal = vm.getBoard().getGame().generateLegalMoves().get(0).asString();
+                assertTrue(vm.applyMoveNotation(legal));
+
+                vm.getBoard().getGame().resign(OctiPlayer.PLAYER_B);
+                assertTrue(vm.getBoard().getGame().isGameOver());
+
+                // Attempt upload while server is offline
+                boolean uploadedSync = vm.uploadCompletedBotGameIfEligible(false, true);
+                assertFalse("Upload must return false when server returns 503", uploadedSync);
+
+                // Spooled file must exist in pending_uploads
+                List<File> pending = OctiCrashReporter.listPendingTranscriptFiles(_tempDir);
+                assertEquals(1, pending.size());
+                String spooledContent = new String(Files.readAllBytes(pending.get(0).toPath()), StandardCharsets.UTF_8);
+                assertTrue(spooledContent.contains("octi.transcript.v3") || spooledContent.contains("transcript"));
+
+                // Bring server online and flush telemetry
+                server.setUploadEndpointOnline(true);
+                vm.flushPendingTelemetry(false);
+
+                // Spooled file must now be deleted
+                assertEquals(0, OctiCrashReporter.listPendingTranscriptFiles(_tempDir).size());
+                assertEquals(1, server.receivedUploadBodies().size());
+                assertTrue(server.receivedUploadBodies().get(0).contains("transcript"));
+            }
+
+            // Verify bounded 32-file cap on pending_uploads spooling
+            for (int i = 0; i < 35; i++) {
+                OctiCrashReporter.spoolTrainingTranscript(
+                        _tempDir, "game_" + i, "{\"game_id\":\"g" + i + "\"}", "client-test");
+            }
+            List<File> spooled = OctiCrashReporter.listPendingTranscriptFiles(_tempDir);
+            assertTrue("Pending transcripts count must not exceed 32", spooled.size() <= 32);
         }
     }
 }

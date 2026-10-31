@@ -86,6 +86,9 @@ public:
     bool hasLastMoveHighlight() const { return !_lastMoveModifiedSquares.empty(); }
     qint64 lastMoveAnimStartMs() const { return _lastMoveAnimStartMs; }
 
+    void setTurnIndicatorVisible(bool visible);
+    bool isTurnIndicatorVisible() const { return _turnIndicatorVisible; }
+
     static int activeTurnScreenEdge(OctiGameMode mode,
                                    OctiPlayer activeTurn,
                                    BoardRotation boardRotation);
@@ -187,6 +190,7 @@ private:
 
     std::vector<QPoint> _lastMoveModifiedSquares;
     qint64 _lastMoveAnimStartMs;
+    bool _turnIndicatorVisible;
 };
 
 } // namespace octi

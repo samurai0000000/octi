@@ -689,6 +689,10 @@ struct OctiHttpServer::Impl {
     void handleArchivePlies(const Request &req, Response &res);
     void handleArchiveStats(const Request &req, Response &res);
     void handleArchiveExport(const Request &req, Response &res);
+    void handleTelemetryCrash(const Request &req, Response &res);
+    void handleTelemetryCrashes(const Request &req, Response &res);
+    void handleTelemetryCrashGet(const Request &req, Response &res);
+    bool pathCrashId(const Request &req, Response &res, std::string &out);
     void handleIndex(const Request &req, Response &res);
 
     void finishRoom(Response &res, const RoomResult &r, Json body);
@@ -3715,6 +3719,276 @@ void OctiHttpServer::Impl::handleIndex(const Request &, Response &res)
     res.set_content(webUiHtml(), "text/html; charset=utf-8");
 }
 
+void OctiHttpServer::Impl::handleTelemetryCrash(const Request &req, Response &res)
+{
+    if (!allowUploadAttempt(req, res)) {
+        return;
+    }
+    if (req.body.empty() || req.body.size() > 65536) {
+        sendError(res, req.body.size() > 65536 ? 413 : 400,
+                  req.body.size() > 65536 ? "PAYLOAD_TOO_LARGE" : "MALFORMED_UPLOAD",
+                  "invalid payload size");
+        return;
+    }
+    Json root = Json::parse(req.body, nullptr, false);
+    if (root.is_discarded() || !root.is_object()) {
+        sendError(res, 400, "INVALID_ARGUMENT", "invalid JSON payload");
+        return;
+    }
+
+    if (!root.contains("platform") || !root["platform"].is_string() ||
+        root["platform"].get<std::string>().empty() ||
+        root["platform"].get<std::string>().size() > 64) {
+        sendError(res, 400, "INVALID_ARGUMENT", "missing or invalid platform");
+        return;
+    }
+    std::string platform = root["platform"].get<std::string>();
+
+    if (!root.contains("exception_type") || !root["exception_type"].is_string() ||
+        root["exception_type"].get<std::string>().empty() ||
+        root["exception_type"].get<std::string>().size() > 256) {
+        sendError(res, 400, "INVALID_ARGUMENT", "missing or invalid exception_type");
+        return;
+    }
+    std::string exceptionType = root["exception_type"].get<std::string>();
+
+    int64_t createdAt = 0;
+    if (root.contains("created_at") && root["created_at"].is_number_integer()) {
+        createdAt = root["created_at"].get<int64_t>();
+    }
+    if (createdAt <= 0) {
+        createdAt = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+    }
+
+    std::string appVersion;
+    if (root.contains("app_version") && root["app_version"].is_string()) {
+        appVersion = root["app_version"].get<std::string>();
+        if (appVersion.size() > 64) {
+            sendError(res, 400, "INVALID_ARGUMENT", "app_version exceeds 64 chars");
+            return;
+        }
+    }
+
+    std::string osVersion;
+    if (root.contains("os_version") && root["os_version"].is_string()) {
+        osVersion = root["os_version"].get<std::string>();
+        if (osVersion.size() > 128) {
+            sendError(res, 400, "INVALID_ARGUMENT", "os_version exceeds 128 chars");
+            return;
+        }
+    }
+
+    std::string exceptionMessage;
+    if (root.contains("exception_message") && root["exception_message"].is_string()) {
+        exceptionMessage = root["exception_message"].get<std::string>();
+        if (exceptionMessage.size() > 2048) {
+            sendError(res, 400, "INVALID_ARGUMENT", "exception_message exceeds 2048 chars");
+            return;
+        }
+    }
+
+    std::string threadName;
+    if (root.contains("thread_name") && root["thread_name"].is_string()) {
+        threadName = root["thread_name"].get<std::string>();
+        if (threadName.size() > 128) {
+            sendError(res, 400, "INVALID_ARGUMENT", "thread_name exceeds 128 chars");
+            return;
+        }
+    }
+
+    std::string stackTrace;
+    if (root.contains("stack_trace") && root["stack_trace"].is_string()) {
+        stackTrace = root["stack_trace"].get<std::string>();
+        if (stackTrace.size() > 32768) {
+            sendError(res, 400, "INVALID_ARGUMENT", "stack_trace exceeds 32768 chars");
+            return;
+        }
+    }
+
+    std::string contextJson = "{}";
+    if (root.contains("context")) {
+        if (root["context"].is_object()) {
+            contextJson = root["context"].dump();
+        } else if (root["context"].is_string()) {
+            contextJson = root["context"].get<std::string>();
+        } else if (!root["context"].is_null()) {
+            contextJson = root["context"].dump();
+        }
+        if (contextJson.size() > 16384) {
+            sendError(res, 400, "INVALID_ARGUMENT", "context exceeds 16384 chars");
+            return;
+        }
+    }
+
+    std::string installId;
+    if (root.contains("install_id") && root["install_id"].is_string()) {
+        installId = root["install_id"].get<std::string>();
+        if (installId.size() > 128) {
+            sendError(res, 400, "INVALID_ARGUMENT", "install_id exceeds 128 chars");
+            return;
+        }
+    }
+
+    std::string crashId;
+    if (root.contains("crash_id") && root["crash_id"].is_string()) {
+        crashId = root["crash_id"].get<std::string>();
+    }
+    if (crashId.empty()) {
+        std::string seed = platform + "|" + appVersion + "|" + exceptionType + "|" +
+                           exceptionMessage + "|" + stackTrace + "|" + std::to_string(createdAt);
+        crashId = AccountStore::sha256Hex(seed);
+    } else if (crashId.size() > 128) {
+        sendError(res, 400, "INVALID_ARGUMENT", "crash_id exceeds 128 chars");
+        return;
+    }
+
+    CrashReportRecord rec;
+    rec.crashId = crashId;
+    rec.createdAt = createdAt;
+    rec.uploadedAt = 0;
+    rec.platform = platform;
+    rec.appVersion = appVersion;
+    rec.osVersion = osVersion;
+    rec.exceptionType = exceptionType;
+    rec.exceptionMessage = exceptionMessage;
+    rec.threadName = threadName;
+    rec.stackTrace = stackTrace;
+    rec.contextJson = contextJson.empty() ? "{}" : contextJson;
+    rec.installId = installId;
+
+    std::string err;
+    ArchiveStatus st = store.recordCrashReport(rec, err);
+    if (st == ArchiveStatus::STORED) {
+        Json j;
+        j["crash_id"] = rec.crashId;
+        j["deduplicated"] = false;
+        sendJson(res, 201, j);
+    } else if (st == ArchiveStatus::DUPLICATE) {
+        Json j;
+        j["crash_id"] = rec.crashId;
+        j["deduplicated"] = true;
+        sendJson(res, 200, j);
+    } else {
+        sendError(res, 400, "INVALID_ARGUMENT", err.empty() ? "invalid crash report" : err);
+    }
+}
+
+void OctiHttpServer::Impl::handleTelemetryCrashes(const Request &req, Response &res)
+{
+    CrashReportFilter f;
+    if (req.has_param("platform")) {
+        f.platform = req.get_param_value("platform");
+    }
+    if (req.has_param("app_version")) {
+        f.appVersion = req.get_param_value("app_version");
+    } else if (req.has_param("appVersion")) {
+        f.appVersion = req.get_param_value("appVersion");
+    }
+    if (req.has_param("exception_type")) {
+        f.exceptionType = req.get_param_value("exception_type");
+    } else if (req.has_param("exceptionType")) {
+        f.exceptionType = req.get_param_value("exceptionType");
+    }
+
+    int64_t limit = 20;
+    int64_t offset = 0;
+    if ((req.has_param("limit") &&
+         !parseUnsignedClamped(req.get_param_value("limit"), INT32_MAX, limit)) ||
+        (req.has_param("offset") &&
+         !parseUnsignedClamped(req.get_param_value("offset"), INT32_MAX, offset))) {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "limit and offset must be non-negative integers");
+        return;
+    }
+    limit = std::max<int64_t>(1, std::min<int64_t>(limit, 100));
+    f.limit = static_cast<int>(limit);
+    f.offset = static_cast<int>(offset);
+
+    std::vector<CrashReportRecord> records;
+    int64_t total = 0;
+    if (!store.listCrashReports(f, records, &total)) {
+        sendError(res, 500, "INTERNAL_ERROR", "failed to list crash reports");
+        return;
+    }
+
+    Json arr = Json::array();
+    for (const auto &r : records) {
+        Json item;
+        item["crash_id"] = r.crashId;
+        item["created_at"] = r.createdAt;
+        item["uploaded_at"] = r.uploadedAt;
+        item["platform"] = r.platform;
+        item["app_version"] = r.appVersion;
+        item["os_version"] = r.osVersion;
+        item["exception_type"] = r.exceptionType;
+        item["exception_message"] = r.exceptionMessage;
+        item["thread_name"] = r.threadName;
+        arr.push_back(item);
+    }
+    Json j;
+    j["total"] = total;
+    j["crashes"] = arr;
+    sendJson(res, 200, j);
+}
+
+bool OctiHttpServer::Impl::pathCrashId(const Request &req, Response &res,
+                                       std::string &out)
+{
+    std::string val;
+    auto it = req.path_params.find("id");
+    if (it != req.path_params.end()) {
+        val = it->second;
+    } else if (req.matches.size() > 1) {
+        val = req.matches[1].str();
+    }
+    if (val.empty() || val.size() > 128) {
+        sendError(res, 404, "NOT_FOUND", "no such resource");
+        return false;
+    }
+    for (char c : val) {
+        unsigned char uc = static_cast<unsigned char>(c);
+        if (!std::isalnum(uc) && uc != '-' && uc != '_') {
+            sendError(res, 404, "NOT_FOUND", "no such resource");
+            return false;
+        }
+    }
+    out = val;
+    return true;
+}
+
+void OctiHttpServer::Impl::handleTelemetryCrashGet(const Request &req, Response &res)
+{
+    std::string id;
+    if (!pathCrashId(req, res, id)) {
+        return;
+    }
+    CrashReportRecord rec;
+    if (!store.getCrashReport(id, rec)) {
+        sendError(res, 404, "NOT_FOUND", "no such crash report");
+        return;
+    }
+    Json j;
+    j["crash_id"] = rec.crashId;
+    j["created_at"] = rec.createdAt;
+    j["uploaded_at"] = rec.uploadedAt;
+    j["platform"] = rec.platform;
+    j["app_version"] = rec.appVersion;
+    j["os_version"] = rec.osVersion;
+    j["exception_type"] = rec.exceptionType;
+    j["exception_message"] = rec.exceptionMessage;
+    j["thread_name"] = rec.threadName;
+    j["stack_trace"] = rec.stackTrace;
+    Json ctx = Json::parse(rec.contextJson, nullptr, false);
+    if (!ctx.is_discarded()) {
+        j["context"] = ctx;
+    } else {
+        j["context"] = Json::object();
+    }
+    j["context_json"] = rec.contextJson;
+    sendJson(res, 200, j);
+}
+
 /* ------------------------------------------------------------------ */
 /* Routing                                                             */
 /* ------------------------------------------------------------------ */
@@ -3772,6 +4046,9 @@ void OctiHttpServer::Impl::registerRoutes()
         {"GET", "/api/v1/archive/games/:id/plies", &Impl::handleArchivePlies},
         {"GET", "/api/v1/archive/stats", &Impl::handleArchiveStats},
         {"GET", "/api/v1/archive/export", &Impl::handleArchiveExport},
+        {"POST", "/api/v1/telemetry/crash", &Impl::handleTelemetryCrash},
+        {"GET", "/api/v1/telemetry/crashes", &Impl::handleTelemetryCrashes},
+        {"GET", "/api/v1/telemetry/crashes/:id", &Impl::handleTelemetryCrashGet},
     };
 
     server.set_default_headers({{"X-Content-Type-Options", "nosniff"},

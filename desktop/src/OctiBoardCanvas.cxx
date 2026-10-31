@@ -59,6 +59,7 @@ OctiBoardCanvas::OctiBoardCanvas(QWidget *parent)
     , _pressRawPos(0.0, 0.0)
     , _handRotateRefAngleDeg(0.0)
     , _lastMoveAnimStartMs(0)
+    , _turnIndicatorVisible(true)
 {
     setMinimumSize(420, 420);
     setMouseTracking(true);
@@ -563,6 +564,14 @@ bool OctiBoardCanvas::simulateRepositionProngOnPod(int x, int y,
     }
     update();
     return ok;
+}
+
+void OctiBoardCanvas::setTurnIndicatorVisible(bool visible)
+{
+    if (_turnIndicatorVisible != visible) {
+        _turnIndicatorVisible = visible;
+        update();
+    }
 }
 
 QImage OctiBoardCanvas::renderToImage(int width, int height)
@@ -1146,7 +1155,7 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
     }
 
     // 7c. Continuous pink (#FF69B4) animated turn indicator along active player's board edge
-    if (displayBoard && displayBoard->getGame() &&
+    if (_turnIndicatorVisible && displayBoard && displayBoard->getGame() &&
         displayBoard->getGame()->isGameStarted() &&
         !displayBoard->getGame()->isGameOver()) {
         if (!_animTimer.isActive()) {
@@ -1335,6 +1344,9 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
     cancelHandRotateHold();
     clearLastMoveModifiedSquares();
     if (!event) {
+        return;
+    }
+    if (!_turnIndicatorVisible) {
         return;
     }
     if (event->button() == Qt::RightButton && _boardZoomScale > 1.001) {
@@ -1621,6 +1633,9 @@ void OctiBoardCanvas::mouseMoveEvent(QMouseEvent *event)
     if (!event) {
         return;
     }
+    if (!_turnIndicatorVisible) {
+        return;
+    }
     QPointF curRaw = rawMousePosF(event);
 
     if (_leftMouseHeld && _boardZoomScale > 1.001 &&
@@ -1825,6 +1840,9 @@ void OctiBoardCanvas::mouseDoubleClickEvent(QMouseEvent *event)
     if (!event) {
         return;
     }
+    if (!_turnIndicatorVisible) {
+        return;
+    }
     if (_boardZoomScale > 1.001) {
         resetBoardZoom();
         return;
@@ -1858,6 +1876,9 @@ void OctiBoardCanvas::wheelEvent(QWheelEvent *event)
 {
     cancelHandRotateHold();
     if (!event) {
+        return;
+    }
+    if (!_turnIndicatorVisible) {
         return;
     }
     int deltaY = event->angleDelta().y();

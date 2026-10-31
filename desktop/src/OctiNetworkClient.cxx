@@ -11,6 +11,8 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#include <windows.h>
+#include <winhttp.h>
 #endif
 
 #include "OctiNetworkClient.hxx"
@@ -31,6 +33,22 @@
 namespace octi {
 
 namespace {
+
+#ifdef _WIN32
+std::wstring toWide(const std::string &str)
+{
+    if (str.empty()) {
+        return std::wstring();
+    }
+    int len = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
+    if (len <= 0) {
+        return std::wstring();
+    }
+    std::vector<wchar_t> buf(len);
+    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, buf.data(), len);
+    return std::wstring(buf.data());
+}
+#endif
 
 typedef nlohmann::json Json;
 
@@ -617,6 +635,9 @@ struct OctiNetworkClient::Impl {
         std::mutex mutex;
         std::condition_variable cv;
         std::shared_ptr<httplib::Client> activeClient;
+#ifdef _WIN32
+        HINTERNET activeRequest = nullptr;
+#endif
         std::thread worker;
         std::atomic<bool> stopRequested{false};
         std::atomic<bool> active{false};
@@ -631,13 +652,25 @@ struct OctiNetworkClient::Impl {
         {
             stopRequested.store(true);
             std::shared_ptr<httplib::Client> cli;
+#ifdef _WIN32
+            HINTERNET req = nullptr;
+#endif
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 cli = activeClient;
+#ifdef _WIN32
+                req = activeRequest;
+                activeRequest = nullptr;
+#endif
             }
             if (cli) {
                 cli->stop();
             }
+#ifdef _WIN32
+            if (req) {
+                WinHttpCloseHandle(req);
+            }
+#endif
             cv.notify_all();
             if (worker.joinable()) {
                 worker.join();
@@ -690,14 +723,33 @@ struct OctiNetworkClient::Impl {
 
     std::unique_ptr<httplib::Client> makeClient(int readTimeoutSec = 10) const
     {
-        std::unique_ptr<httplib::Client> cli(
-            (port == 443)
-                ? new httplib::Client("https://" + host)
-                : new httplib::Client(host, port));
-        cli->set_connection_timeout(5, 0);
-        cli->set_read_timeout(readTimeoutSec, 0);
-        cli->set_write_timeout(10, 0);
-        return cli;
+        if (port == 443) {
+#ifdef CPPHTTPLIB_SSL_ENABLED
+            try {
+                std::unique_ptr<httplib::Client> cli(
+                    new httplib::Client("https://" + host));
+                cli->set_connection_timeout(5, 0);
+                cli->set_read_timeout(readTimeoutSec, 0);
+                cli->set_write_timeout(10, 0);
+                return cli;
+            } catch (...) {
+                return nullptr;
+            }
+#else
+            return nullptr;
+#endif
+        }
+
+        try {
+            std::unique_ptr<httplib::Client> cli(
+                new httplib::Client(host, port));
+            cli->set_connection_timeout(5, 0);
+            cli->set_read_timeout(readTimeoutSec, 0);
+            cli->set_write_timeout(10, 0);
+            return cli;
+        } catch (...) {
+            return nullptr;
+        }
     }
 
     static RawResponse wrapResult(const httplib::Result &res)
@@ -725,64 +777,338 @@ struct OctiNetworkClient::Impl {
         return r;
     }
 
-    template <typename Fn>
-    RawResponse executeWithRetry(Fn &&requestFn) const
+    static httplib::Result executeHttplib(
+        httplib::Client *cli,
+        const std::string &verb,
+        const std::string &path,
+        const httplib::Headers &headers,
+        const std::string &body,
+        const std::string &contentType)
     {
-        httplib::Result res;
-        for (int attempt = 1; attempt <= 5; ++attempt) {
-            std::unique_ptr<httplib::Client> cli = makeClient();
-            res = requestFn(cli.get());
-            if (res) {
+        if (!cli) {
+            return httplib::Result(nullptr, httplib::Error::Connection);
+        }
+        try {
+            if (verb == "GET") {
+                return cli->Get(path, headers);
+            } else if (verb == "POST") {
+                return cli->Post(path, headers, body,
+                                 contentType.empty() ? "application/json" : contentType);
+            } else if (verb == "PATCH") {
+                return cli->Patch(path, headers, body,
+                                  contentType.empty() ? "application/json" : contentType);
+            } else if (verb == "DELETE") {
+                return cli->Delete(path, headers);
+            }
+        } catch (...) {
+            return httplib::Result(nullptr, httplib::Error::Connection);
+        }
+        return httplib::Result(nullptr, httplib::Error::Connection);
+    }
+
+#ifdef _WIN32
+    httplib::Result executeWinHttp(
+        const std::string &verb,
+        const std::string &path,
+        const httplib::Headers &headers,
+        const std::string &body = "",
+        const std::string &contentType = "",
+        int timeoutSec = 10) const
+    {
+        try {
+            HINTERNET hSession = WinHttpOpen(
+                L"octi-desktop/2.1",
+                WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                WINHTTP_NO_PROXY_NAME,
+                WINHTTP_NO_PROXY_BYPASS,
+                0);
+            if (!hSession) {
+                return httplib::Result(nullptr, httplib::Error::Connection);
+            }
+
+            WinHttpSetTimeouts(
+                hSession,
+                5000,
+                5000,
+                timeoutSec * 1000,
+                timeoutSec * 1000);
+
+            std::wstring wideHost = toWide(host);
+            HINTERNET hConnect = WinHttpConnect(
+                hSession,
+                wideHost.c_str(),
+                static_cast<INTERNET_PORT>(port),
+                0);
+            if (!hConnect) {
+                WinHttpCloseHandle(hSession);
+                return httplib::Result(nullptr, httplib::Error::Connection);
+            }
+
+            std::wstring wideVerb = toWide(verb);
+            std::wstring widePath = toWide(path);
+            DWORD flags = (port == 443) ? WINHTTP_FLAG_SECURE : 0;
+            HINTERNET hRequest = WinHttpOpenRequest(
+                hConnect,
+                wideVerb.c_str(),
+                widePath.c_str(),
+                nullptr,
+                WINHTTP_NO_REFERER,
+                WINHTTP_DEFAULT_ACCEPT_TYPES,
+                flags);
+            if (!hRequest) {
+                WinHttpCloseHandle(hConnect);
+                WinHttpCloseHandle(hSession);
+                return httplib::Result(nullptr, httplib::Error::Connection);
+            }
+
+            std::string headerStr;
+            for (const auto &kv : headers) {
+                headerStr += kv.first + ": " + kv.second + "\r\n";
+            }
+            if (!contentType.empty()) {
+                headerStr += "Content-Type: " + contentType + "\r\n";
+            }
+            headerStr += "User-Agent: octi-desktop\r\n";
+
+            std::wstring wideHeaders = toWide(headerStr);
+            if (!wideHeaders.empty()) {
+                WinHttpAddRequestHeaders(
+                    hRequest,
+                    wideHeaders.c_str(),
+                    static_cast<DWORD>(wideHeaders.length()),
+                    WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
+            }
+
+            DWORD bodyLen = static_cast<DWORD>(body.size());
+            LPVOID bodyPtr = bodyLen > 0
+                ? const_cast<char *>(body.data())
+                : WINHTTP_NO_REQUEST_DATA;
+
+            BOOL sent = WinHttpSendRequest(
+                hRequest,
+                WINHTTP_NO_ADDITIONAL_HEADERS,
+                0,
+                bodyPtr,
+                bodyLen,
+                bodyLen,
+                0);
+            if (!sent) {
+                WinHttpCloseHandle(hRequest);
+                WinHttpCloseHandle(hConnect);
+                WinHttpCloseHandle(hSession);
+                return httplib::Result(nullptr, httplib::Error::Connection);
+            }
+
+            BOOL received = WinHttpReceiveResponse(hRequest, nullptr);
+            if (!received) {
+                WinHttpCloseHandle(hRequest);
+                WinHttpCloseHandle(hConnect);
+                WinHttpCloseHandle(hSession);
+                return httplib::Result(nullptr, httplib::Error::Connection);
+            }
+
+            DWORD statusCode = 0;
+            DWORD statusSize = sizeof(statusCode);
+            if (!WinHttpQueryHeaders(
+                    hRequest,
+                    WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                    WINHTTP_HEADER_NAME_BY_INDEX,
+                    &statusCode,
+                    &statusSize,
+                    WINHTTP_NO_HEADER_INDEX)) {
+                WinHttpCloseHandle(hRequest);
+                WinHttpCloseHandle(hConnect);
+                WinHttpCloseHandle(hSession);
+                return httplib::Result(nullptr, httplib::Error::Connection);
+            }
+
+            std::unique_ptr<httplib::Response> res(new httplib::Response());
+            res->status = static_cast<int>(statusCode);
+
+            DWORD headersSize = 0;
+            WinHttpQueryHeaders(
+                hRequest,
+                WINHTTP_QUERY_RAW_HEADERS_CRLF,
+                WINHTTP_HEADER_NAME_BY_INDEX,
+                nullptr,
+                &headersSize,
+                WINHTTP_NO_HEADER_INDEX);
+            if (GetLastError() == ERROR_INSUFFICIENT_BUFFER && headersSize > 0) {
+                std::vector<wchar_t> rawHdr(headersSize / sizeof(wchar_t) + 1, 0);
+                if (WinHttpQueryHeaders(
+                        hRequest,
+                        WINHTTP_QUERY_RAW_HEADERS_CRLF,
+                        WINHTTP_HEADER_NAME_BY_INDEX,
+                        rawHdr.data(),
+                        &headersSize,
+                        WINHTTP_NO_HEADER_INDEX)) {
+                    std::wstring wHeaders(rawHdr.data());
+                    std::wistringstream wiss(wHeaders);
+                    std::wstring wLine;
+                    while (std::getline(wiss, wLine)) {
+                        if (!wLine.empty() && wLine.back() == L'\r') {
+                            wLine.pop_back();
+                        }
+                        size_t colon = wLine.find(L':');
+                        if (colon != std::wstring::npos) {
+                            std::wstring wKey = wLine.substr(0, colon);
+                            std::wstring wVal = wLine.substr(colon + 1);
+                            while (!wVal.empty() && wVal.front() == L' ') {
+                                wVal.erase(wVal.begin());
+                            }
+                            int kLen = WideCharToMultiByte(
+                                CP_UTF8, 0, wKey.c_str(), -1, nullptr, 0, nullptr, nullptr);
+                            int vLen = WideCharToMultiByte(
+                                CP_UTF8, 0, wVal.c_str(), -1, nullptr, 0, nullptr, nullptr);
+                            if (kLen > 0 && vLen > 0) {
+                                std::vector<char> kBuf(kLen);
+                                std::vector<char> vBuf(vLen);
+                                WideCharToMultiByte(
+                                    CP_UTF8, 0, wKey.c_str(), -1, kBuf.data(), kLen, nullptr, nullptr);
+                                WideCharToMultiByte(
+                                    CP_UTF8, 0, wVal.c_str(), -1, vBuf.data(), vLen, nullptr, nullptr);
+                                res->headers.emplace(kBuf.data(), vBuf.data());
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (;;) {
+                DWORD bytesAvail = 0;
+                if (!WinHttpQueryDataAvailable(hRequest, &bytesAvail) || bytesAvail == 0) {
+                    break;
+                }
+                std::vector<char> chunk(bytesAvail);
+                DWORD bytesRead = 0;
+                if (!WinHttpReadData(hRequest, chunk.data(), bytesAvail, &bytesRead) || bytesRead == 0) {
+                    break;
+                }
+                res->body.append(chunk.data(), bytesRead);
+            }
+
+            WinHttpCloseHandle(hRequest);
+            WinHttpCloseHandle(hConnect);
+            WinHttpCloseHandle(hSession);
+
+            return httplib::Result(std::move(res), httplib::Error::Success);
+        } catch (...) {
+            return httplib::Result(nullptr, httplib::Error::Connection);
+        }
+    }
+#endif
+
+    RawResponse executeWithRetry(
+        const std::string &verb,
+        const std::string &path,
+        const httplib::Headers &headers,
+        const std::string &body = "",
+        const std::string &contentType = "") const
+    {
+        try {
+            httplib::Result res;
+
+#ifdef _WIN32
+            if (port == 443) {
+                for (int attempt = 1; attempt <= 5; ++attempt) {
+                    res = executeWinHttp(verb, path, headers, body, contentType);
+                    if (res) {
+                        return wrapResult(res);
+                    }
+                    if (attempt < 5) {
+                        std::this_thread::sleep_for(
+                            std::chrono::milliseconds(100 * attempt));
+                    }
+                }
+                if (host == OCTI_SERVER_HOST && port == OCTI_SERVER_PORT) {
+                    try {
+                        std::unique_ptr<httplib::Client> fbCli(
+                            new httplib::Client(
+                                OCTI_SERVER_FALLBACK_HOST,
+                                OCTI_SERVER_FALLBACK_PORT));
+                        fbCli->set_connection_timeout(5, 0);
+                        fbCli->set_read_timeout(10, 0);
+                        fbCli->set_write_timeout(10, 0);
+                        httplib::Result fbRes = executeHttplib(
+                            fbCli.get(), verb, path, headers, body, contentType);
+                        if (fbRes) {
+                            return wrapResult(fbRes);
+                        }
+                    } catch (...) {
+                    }
+                }
                 return wrapResult(res);
             }
-            if (attempt < 5) {
-                std::this_thread::sleep_for(
-                    std::chrono::milliseconds(100 * attempt));
+#endif
+
+            for (int attempt = 1; attempt <= 5; ++attempt) {
+                std::unique_ptr<httplib::Client> cli = makeClient();
+                if (cli) {
+                    res = executeHttplib(
+                        cli.get(), verb, path, headers, body, contentType);
+                    if (res) {
+                        return wrapResult(res);
+                    }
+                } else {
+                    res = httplib::Result(nullptr, httplib::Error::Connection);
+                    break;
+                }
+                if (attempt < 5) {
+                    std::this_thread::sleep_for(
+                        std::chrono::milliseconds(100 * attempt));
+                }
             }
-        }
-        if (host == OCTI_SERVER_HOST && port == OCTI_SERVER_PORT) {
-            std::unique_ptr<httplib::Client> fbCli(
-                new httplib::Client(OCTI_SERVER_FALLBACK_HOST, OCTI_SERVER_FALLBACK_PORT));
-            fbCli->set_connection_timeout(5, 0);
-            fbCli->set_read_timeout(10, 0);
-            fbCli->set_write_timeout(10, 0);
-            httplib::Result fbRes = requestFn(fbCli.get());
-            if (fbRes) {
-                return wrapResult(fbRes);
+
+            if (host == OCTI_SERVER_HOST && port == OCTI_SERVER_PORT) {
+                try {
+                    std::unique_ptr<httplib::Client> fbCli(
+                        new httplib::Client(
+                            OCTI_SERVER_FALLBACK_HOST,
+                            OCTI_SERVER_FALLBACK_PORT));
+                    fbCli->set_connection_timeout(5, 0);
+                    fbCli->set_read_timeout(10, 0);
+                    fbCli->set_write_timeout(10, 0);
+                    httplib::Result fbRes = executeHttplib(
+                        fbCli.get(), verb, path, headers, body, contentType);
+                    if (fbRes) {
+                        return wrapResult(fbRes);
+                    }
+                } catch (...) {
+                }
             }
+            return wrapResult(res);
+        } catch (const std::exception &e) {
+            RawResponse err;
+            err.transportOk = false;
+            err.transportError = e.what();
+            return err;
+        } catch (...) {
+            RawResponse err;
+            err.transportOk = false;
+            err.transportError = "Unknown exception in network execution";
+            return err;
         }
-        return wrapResult(res);
     }
 
     RawResponse doGet(const std::string &path,
                       const httplib::Headers &extra = httplib::Headers()) const
     {
-        return executeWithRetry([&](httplib::Client *cli) {
-            return cli->Get(path, authHeaders(extra));
-        });
+        return executeWithRetry("GET", path, authHeaders(extra));
     }
 
     RawResponse doPost(const std::string &path, const Json &body) const
     {
-        std::string payload = body.dump();
-        return executeWithRetry([&](httplib::Client *cli) {
-            return cli->Post(path, authHeaders(), payload, "application/json");
-        });
+        return executeWithRetry("POST", path, authHeaders(), body.dump(), "application/json");
     }
 
     RawResponse doPatch(const std::string &path, const Json &body) const
     {
-        std::string payload = body.dump();
-        return executeWithRetry([&](httplib::Client *cli) {
-            return cli->Patch(path, authHeaders(), payload, "application/json");
-        });
+        return executeWithRetry("PATCH", path, authHeaders(), body.dump(), "application/json");
     }
 
     RawResponse doDelete(const std::string &path) const
     {
-        return executeWithRetry([&](httplib::Client *cli) {
-            return cli->Delete(path, authHeaders());
-        });
+        return executeWithRetry("DELETE", path, authHeaders());
     }
 
     template <typename T>
@@ -805,6 +1131,279 @@ struct OctiNetworkClient::Impl {
         }
     }
 
+#ifdef _WIN32
+    bool streamWinHttpSse(
+        SseRunner &runner,
+        const std::string &path,
+        std::uint64_t curSeq,
+        const std::function<void(const SseEvent &)> &onEvent) const
+    {
+        try {
+            HINTERNET hSession = WinHttpOpen(
+                L"octi-desktop/2.1",
+                WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                WINHTTP_NO_PROXY_NAME,
+                WINHTTP_NO_PROXY_BYPASS,
+                0);
+            if (!hSession) {
+                return false;
+            }
+
+            WinHttpSetTimeouts(hSession, 5000, 5000, 30000, 30000);
+
+            std::wstring wideHost = toWide(host);
+            HINTERNET hConnect = WinHttpConnect(
+                hSession, wideHost.c_str(), static_cast<INTERNET_PORT>(port), 0);
+            if (!hConnect) {
+                WinHttpCloseHandle(hSession);
+                return false;
+            }
+
+            std::wstring widePath = toWide(path);
+            HINTERNET hRequest = WinHttpOpenRequest(
+                hConnect,
+                L"GET",
+                widePath.c_str(),
+                nullptr,
+                WINHTTP_NO_REFERER,
+                WINHTTP_DEFAULT_ACCEPT_TYPES,
+                WINHTTP_FLAG_SECURE);
+            if (!hRequest) {
+                WinHttpCloseHandle(hConnect);
+                WinHttpCloseHandle(hSession);
+                return false;
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(runner.mutex);
+                if (runner.stopRequested.load()) {
+                    WinHttpCloseHandle(hRequest);
+                    WinHttpCloseHandle(hConnect);
+                    WinHttpCloseHandle(hSession);
+                    return false;
+                }
+                runner.activeRequest = hRequest;
+            }
+
+            std::string headerStr;
+            httplib::Headers hdrs = authHeaders();
+            for (const auto &kv : hdrs) {
+                headerStr += kv.first + ": " + kv.second + "\r\n";
+            }
+            headerStr += "Accept: text/event-stream\r\n";
+            if (curSeq > 0) {
+                headerStr += "Last-Event-ID: " + std::to_string(curSeq) + "\r\n";
+            }
+            std::wstring wideHeaders = toWide(headerStr);
+            WinHttpAddRequestHeaders(
+                hRequest,
+                wideHeaders.c_str(),
+                static_cast<DWORD>(wideHeaders.length()),
+                WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
+
+            BOOL sent = WinHttpSendRequest(
+                hRequest,
+                WINHTTP_NO_ADDITIONAL_HEADERS,
+                0,
+                WINHTTP_NO_REQUEST_DATA,
+                0,
+                0,
+                0);
+            if (!sent) {
+                {
+                    std::lock_guard<std::mutex> lock(runner.mutex);
+                    runner.activeRequest = nullptr;
+                }
+                WinHttpCloseHandle(hRequest);
+                WinHttpCloseHandle(hConnect);
+                WinHttpCloseHandle(hSession);
+                return false;
+            }
+
+            BOOL received = WinHttpReceiveResponse(hRequest, nullptr);
+            if (!received) {
+                {
+                    std::lock_guard<std::mutex> lock(runner.mutex);
+                    runner.activeRequest = nullptr;
+                }
+                WinHttpCloseHandle(hRequest);
+                WinHttpCloseHandle(hConnect);
+                WinHttpCloseHandle(hSession);
+                return false;
+            }
+
+            DWORD statusCode = 0;
+            DWORD statusSize = sizeof(statusCode);
+            WinHttpQueryHeaders(
+                hRequest,
+                WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                WINHTTP_HEADER_NAME_BY_INDEX,
+                &statusCode,
+                &statusSize,
+                WINHTTP_NO_HEADER_INDEX);
+
+            if (statusCode != 200) {
+                if (statusCode >= 400 && statusCode < 500 && statusCode != 429) {
+                    runner.stopRequested.store(true);
+                }
+                {
+                    std::lock_guard<std::mutex> lock(runner.mutex);
+                    runner.activeRequest = nullptr;
+                }
+                WinHttpCloseHandle(hRequest);
+                WinHttpCloseHandle(hConnect);
+                WinHttpCloseHandle(hSession);
+                return (statusCode < 500);
+            }
+
+            std::string sseBuffer;
+            bool terminalEventSeen = false;
+            while (!runner.stopRequested.load()) {
+                DWORD bytesAvail = 0;
+                if (!WinHttpQueryDataAvailable(hRequest, &bytesAvail) || bytesAvail == 0) {
+                    break;
+                }
+                std::vector<char> buf(bytesAvail);
+                DWORD bytesRead = 0;
+                if (!WinHttpReadData(hRequest, buf.data(), bytesAvail, &bytesRead) || bytesRead == 0) {
+                    break;
+                }
+                sseBuffer.append(buf.data(), bytesRead);
+                std::vector<SseEvent> parsed =
+                    OctiNetworkClient::parseSseBuffer(sseBuffer);
+                for (std::size_t i = 0; i < parsed.size(); ++i) {
+                    if (parsed[i].id > runner.lastId.load()) {
+                        runner.lastId.store(parsed[i].id);
+                    }
+                    if (parsed[i].event == "closed") {
+                        terminalEventSeen = true;
+                    }
+                    if (onEvent) {
+                        onEvent(parsed[i]);
+                    }
+                }
+                if (terminalEventSeen) {
+                    break;
+                }
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(runner.mutex);
+                runner.activeRequest = nullptr;
+            }
+            WinHttpCloseHandle(hRequest);
+            WinHttpCloseHandle(hConnect);
+            WinHttpCloseHandle(hSession);
+            return true;
+        } catch (...) {
+            {
+                std::lock_guard<std::mutex> lock(runner.mutex);
+                runner.activeRequest = nullptr;
+            }
+            return false;
+        }
+    }
+#endif
+
+    bool streamHttplibSse(
+        SseRunner &runner,
+        const std::string &targetHost,
+        int targetPort,
+        const std::string &path,
+        std::uint64_t curSeq,
+        const std::function<void(const SseEvent &)> &onEvent) const
+    {
+        try {
+            std::shared_ptr<httplib::Client> cli;
+            if (targetPort == 443) {
+#ifdef CPPHTTPLIB_SSL_ENABLED
+                try {
+                    cli.reset(new httplib::Client("https://" + targetHost));
+                } catch (...) {
+                    return false;
+                }
+#else
+                return false;
+#endif
+            } else {
+                try {
+                    cli.reset(new httplib::Client(targetHost, targetPort));
+                } catch (...) {
+                    return false;
+                }
+            }
+            if (!cli) {
+                return false;
+            }
+            cli->set_connection_timeout(5, 0);
+            cli->set_read_timeout(30, 0);
+            cli->set_write_timeout(5, 0);
+
+            {
+                std::lock_guard<std::mutex> lock(runner.mutex);
+                if (runner.stopRequested.load()) {
+                    return false;
+                }
+                runner.activeClient = cli;
+            }
+
+            httplib::Headers hdrs = authHeaders();
+            hdrs.emplace("Accept", "text/event-stream");
+            if (curSeq > 0) {
+                hdrs.emplace("Last-Event-ID", std::to_string(curSeq));
+            }
+
+            int httpStatus = 0;
+            bool terminalEventSeen = false;
+            std::string chunkBuffer;
+
+            httplib::Result res = cli->Get(
+                path, hdrs,
+                [&runner, &httpStatus](const httplib::Response &resp) {
+                    httpStatus = resp.status;
+                    return !runner.stopRequested.load() &&
+                           resp.status == 200;
+                },
+                [&runner, &chunkBuffer, &terminalEventSeen, &onEvent](
+                    const char *data, std::size_t len) {
+                    if (runner.stopRequested.load()) {
+                        return false;
+                    }
+                    chunkBuffer.append(data, len);
+                    std::vector<SseEvent> parsed =
+                        OctiNetworkClient::parseSseBuffer(chunkBuffer);
+                    for (std::size_t i = 0; i < parsed.size(); ++i) {
+                        if (parsed[i].id > runner.lastId.load()) {
+                            runner.lastId.store(parsed[i].id);
+                        }
+                        if (parsed[i].event == "closed") {
+                            terminalEventSeen = true;
+                        }
+                        if (onEvent) {
+                            onEvent(parsed[i]);
+                        }
+                    }
+                    return !runner.stopRequested.load();
+                });
+
+            {
+                std::lock_guard<std::mutex> lock(runner.mutex);
+                runner.activeClient.reset();
+            }
+
+            if (terminalEventSeen || (httpStatus >= 400 && httpStatus < 500 && httpStatus != 429)) {
+                runner.stopRequested.store(true);
+            }
+            return (httpStatus == 200);
+        } catch (...) {
+            {
+                std::lock_guard<std::mutex> lock(runner.mutex);
+                runner.activeClient.reset();
+            }
+            return false;
+        }
+    }
+
     void launchSseStream(
         SseRunner &runner,
         const std::string &basePath,
@@ -818,86 +1417,62 @@ struct OctiNetworkClient::Impl {
 
         runner.worker = std::thread(
             [this, &runner, basePath, onEvent]() {
-                while (!runner.stopRequested.load()) {
-                    std::uint64_t curSeq = runner.lastId.load();
-                    std::string path = basePath +
-                                       (basePath.find('?') == std::string::npos
-                                            ? "?stream=1&since_seq="
-                                            : "&stream=1&since_seq=") +
-                                       std::to_string(curSeq);
+                try {
+                    while (!runner.stopRequested.load()) {
+                        std::uint64_t curSeq = runner.lastId.load();
+                        std::string path = basePath +
+                                           (basePath.find('?') == std::string::npos
+                                                ? "?stream=1&since_seq="
+                                                : "&stream=1&since_seq=") +
+                                           std::to_string(curSeq);
 
-                    std::shared_ptr<httplib::Client> cli(
-                        (host == OCTI_SERVER_HOST && port == 443) || port == 443
-                            ? new httplib::Client("https://" + host)
-                            : new httplib::Client(host, port));
-                    cli->set_connection_timeout(5, 0);
-                    cli->set_read_timeout(30, 0);
-                    cli->set_write_timeout(5, 0);
+#ifdef _WIN32
+                        if (port == 443) {
+                            bool winHttpOk = streamWinHttpSse(
+                                runner, path, curSeq, onEvent);
+                            if (runner.stopRequested.load()) {
+                                break;
+                            }
+                            if (!winHttpOk && host == OCTI_SERVER_HOST && port == OCTI_SERVER_PORT) {
+                                streamHttplibSse(
+                                    runner, OCTI_SERVER_FALLBACK_HOST,
+                                    OCTI_SERVER_FALLBACK_PORT, path, curSeq, onEvent);
+                            }
+                        } else {
+                            streamHttplibSse(
+                                runner, host, port, path, curSeq, onEvent);
+                        }
+#else
+                        bool clientConstructed = false;
+                        if (port == 443) {
+#ifdef CPPHTTPLIB_SSL_ENABLED
+                            clientConstructed = true;
+                            streamHttplibSse(runner, host, port, path, curSeq, onEvent);
+#else
+                            clientConstructed = false;
+#endif
+                        } else {
+                            clientConstructed = true;
+                            streamHttplibSse(runner, host, port, path, curSeq, onEvent);
+                        }
+                        if (!clientConstructed && host == OCTI_SERVER_HOST && port == OCTI_SERVER_PORT) {
+                            streamHttplibSse(
+                                runner, OCTI_SERVER_FALLBACK_HOST,
+                                OCTI_SERVER_FALLBACK_PORT, path, curSeq, onEvent);
+                        }
+#endif
 
-                    {
-                        std::lock_guard<std::mutex> lock(runner.mutex);
                         if (runner.stopRequested.load()) {
                             break;
                         }
-                        runner.activeClient = cli;
+
+                        std::unique_lock<std::mutex> lock(runner.mutex);
+                        runner.cv.wait_for(
+                            lock, std::chrono::milliseconds(150),
+                            [&runner]() { return runner.stopRequested.load(); });
                     }
-
-                    httplib::Headers hdrs = authHeaders();
-                    hdrs.emplace("Accept", "text/event-stream");
-                    if (curSeq > 0) {
-                        hdrs.emplace("Last-Event-ID", std::to_string(curSeq));
-                    }
-
-                    int httpStatus = 0;
-                    bool terminalEventSeen = false;
-                    std::string chunkBuffer;
-
-                    httplib::Result res = cli->Get(
-                        path, hdrs,
-                        [&runner, &httpStatus](const httplib::Response &resp) {
-                            httpStatus = resp.status;
-                            return !runner.stopRequested.load() &&
-                                   resp.status == 200;
-                        },
-                        [&runner, &chunkBuffer, &terminalEventSeen, &onEvent](
-                            const char *data, std::size_t len) {
-                            if (runner.stopRequested.load()) {
-                                return false;
-                            }
-                            chunkBuffer.append(data, len);
-                            std::vector<SseEvent> parsed =
-                                OctiNetworkClient::parseSseBuffer(chunkBuffer);
-                            for (std::size_t i = 0; i < parsed.size(); ++i) {
-                                if (parsed[i].id > runner.lastId.load()) {
-                                    runner.lastId.store(parsed[i].id);
-                                }
-                                if (parsed[i].event == "closed") {
-                                    terminalEventSeen = true;
-                                }
-                                if (onEvent) {
-                                    onEvent(parsed[i]);
-                                }
-                            }
-                            return !runner.stopRequested.load();
-                        });
-
-                    {
-                        std::lock_guard<std::mutex> lock(runner.mutex);
-                        runner.activeClient.reset();
-                    }
-
-                    if (runner.stopRequested.load() || terminalEventSeen) {
-                        break;
-                    }
-                    if (httpStatus >= 400 && httpStatus < 500 &&
-                        httpStatus != 429) {
-                        break;
-                    }
-
-                    std::unique_lock<std::mutex> lock(runner.mutex);
-                    runner.cv.wait_for(
-                        lock, std::chrono::milliseconds(150),
-                        [&runner]() { return runner.stopRequested.load(); });
+                } catch (const std::exception &) {
+                } catch (...) {
                 }
                 runner.active.store(false);
             });
@@ -1920,6 +2495,60 @@ ApiResult<UploadTranscriptResponse> OctiNetworkClient::uploadTrainingTranscript(
             res.data.plyCount = raw.json["ply_count"].get<int>();
         } else if (raw.json.contains("plyCount") && raw.json["plyCount"].is_number_integer()) {
             res.data.plyCount = raw.json["plyCount"].get<int>();
+        }
+    }
+    return res;
+}
+
+CrashReportResponse OctiNetworkClient::uploadCrashReport(
+    const CrashReportRequest &req)
+{
+    CrashReportResponse res;
+    Json body;
+    if (!req.crashId.empty()) {
+        body["crash_id"] = req.crashId;
+    }
+    if (req.createdAt > 0) {
+        body["created_at"] = req.createdAt;
+    }
+    body["platform"] = req.platform;
+    body["app_version"] = req.appVersion;
+    body["os_version"] = req.osVersion;
+    body["exception_type"] = req.exceptionType;
+    body["exception_message"] = req.exceptionMessage;
+    body["thread_name"] = req.threadName;
+    body["stack_trace"] = req.stackTrace;
+
+    Json ctx = Json::parse(req.contextJson, nullptr, false);
+    if (!ctx.is_discarded() && ctx.is_object()) {
+        body["context"] = ctx;
+    } else if (!req.contextJson.empty()) {
+        body["context"] = req.contextJson;
+    } else {
+        body["context"] = Json::object();
+    }
+
+    if (!req.installId.empty()) {
+        body["install_id"] = req.installId;
+    }
+
+    Impl::RawResponse raw = _impl->doPost("/api/v1/telemetry/crash", body);
+    res.httpStatus = raw.status;
+
+    if (raw.transportOk && (raw.status == 200 || raw.status == 201)) {
+        res.ok = true;
+        if (raw.json.is_object()) {
+            res.crashId = raw.json.value("crash_id", "");
+            res.deduplicated = raw.json.value("deduplicated", false);
+        }
+    } else {
+        res.ok = false;
+        if (raw.json.is_object()) {
+            res.errorMessage =
+                raw.json.value("message", raw.json.value("error", ""));
+        }
+        if (res.errorMessage.empty() && !raw.transportError.empty()) {
+            res.errorMessage = raw.transportError;
         }
     }
     return res;

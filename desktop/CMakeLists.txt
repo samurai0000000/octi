@@ -71,6 +71,7 @@ set(OCTI_DESKTOP_LIB_SOURCES
     src/OctiReservePanel.cxx
     src/ClientConfigStore.cxx
     src/OctiNetworkClient.cxx
+    src/OctiCrashReporter.cxx
     src/P2pVoiceEngine.cxx
     src/OctiDialogs.cxx
     src/LobbyView.cxx
@@ -112,6 +113,8 @@ if(WIN32)
         ws2_32
         crypt32
         winmm
+        winhttp
+        dbghelp
         ole32
         shell32
         user32

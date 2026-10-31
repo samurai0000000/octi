@@ -9,6 +9,8 @@ package com.selfso.octi;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -738,6 +740,117 @@ public class OctiGuiRefinementV2Test {
 
         vm.resetInstallIdAndRequestDeletion();
         assertFalse(store.preferences().installId.isEmpty());
+        vm.close();
+    }
+
+    @Test
+    public void testOctiSoundSynthPreCachingAndSingletonSharing() {
+        OctiSoundSynth synth = OctiSoundSynth.getDefaultInstance();
+        assertNotNull(synth);
+
+        // Pre-cached 7 cues are non-empty and non-null
+        for (OctiSoundSynth.SoundCue cue : OctiSoundSynth.SoundCue.values()) {
+            short[] pcm1 = synth.synthesizeCuePcm(cue);
+            assertNotNull(pcm1);
+            assertTrue(pcm1.length > 0);
+            short[] pcm2 = synth.synthesizeCuePcm(cue);
+            assertEquals(pcm1.length, pcm2.length);
+        }
+
+        // Shared singleton across ViewModel
+        com.selfso.octi.ui.OctiAppViewModel vm = new com.selfso.octi.ui.OctiAppViewModel(
+                new ClientConfigStore(), new OctiNetworkClient());
+        assertSame(synth, vm.getSoundSynth());
+
+        // Playback executes safely
+        long countBefore = synth.triggeredCueCount();
+        OctiSoundSynth.playCue(OctiSoundSynth.SoundCue.POD_PLACE, true);
+        assertEquals(countBefore + 1, synth.triggeredCueCount());
+        assertEquals(OctiSoundSynth.SoundCue.POD_PLACE, synth.lastTriggeredCue());
+
+        vm.close();
+    }
+
+    @Test
+    public void testStartMatchPreStartGatingForPlayerAAndB() {
+        ClientConfigStore store = new ClientConfigStore();
+        com.selfso.octi.ui.OctiAppViewModel vm = new com.selfso.octi.ui.OctiAppViewModel(
+                store, new OctiNetworkClient());
+        vm.setRequireStartMatchPrompt(true);
+
+        // 1. Scenario 1: Human is Player A
+        vm.startNewLocalGame(
+                OctiGameMode.GAME_MODE_2,
+                false,
+                false,
+                OctiGameBases.GAME_BASES_3,
+                true,
+                OctiBotEngine.BotDifficulty.TACTICAL,
+                OctiPlayer.PLAYER_A
+        );
+
+        assertTrue(vm.getAwaitingMatchStart().getValue());
+        assertEquals(0L, vm.matchStartedEpochSec());
+        assertEquals(0L, vm.currentTurnStartEpochMs());
+        vm.tickClock();
+        assertEquals(0, (int) vm.getTurnElapsedSec().getValue());
+        assertEquals(0, (int) vm.getTotalGameSec().getValue());
+        assertEquals(0, vm.currentBoardSnapshot().getMoveCount());
+
+        // Test OctiBoardRenderer computeLayout with showTurnIndicator=false
+        OctiBoardRenderer.RenderConfig cfg = new OctiBoardRenderer.RenderConfig();
+        cfg.showTurnIndicator = false;
+        OctiBoardRenderer.RenderFrame frameHidden = OctiBoardRenderer.computeLayout(
+                vm.getBoard(), vm.getGeometry(), cfg);
+        assertNull(frameHidden.activeTurnIndicatorRect);
+
+        // Confirm Start Match for Player A
+        vm.confirmStartMatch();
+        assertFalse(vm.getAwaitingMatchStart().getValue());
+        assertTrue(vm.matchStartedEpochSec() > 0L);
+        assertTrue(vm.currentTurnStartEpochMs() > 0L);
+        // Bot does not move because it is Player A's turn
+        assertEquals(0, vm.currentBoardSnapshot().getMoveCount());
+
+        cfg.showTurnIndicator = true;
+        OctiBoardRenderer.RenderFrame frameVisible = OctiBoardRenderer.computeLayout(
+                vm.getBoard(), vm.getGeometry(), cfg);
+        assertNotNull(frameVisible.activeTurnIndicatorRect);
+
+        // 2. Scenario 2: Human is Player B -> Player A is AI bot
+        vm.startNewLocalGame(
+                OctiGameMode.GAME_MODE_2,
+                false,
+                false,
+                OctiGameBases.GAME_BASES_3,
+                true,
+                OctiBotEngine.BotDifficulty.TACTICAL,
+                OctiPlayer.PLAYER_B
+        );
+
+        assertTrue(vm.getAwaitingMatchStart().getValue());
+        assertEquals(0L, vm.matchStartedEpochSec());
+        assertEquals(0L, vm.currentTurnStartEpochMs());
+        // CRITICAL: Bot MUST NOT make a move while awaiting match start, even though turn is Player A!
+        assertEquals(0, vm.currentBoardSnapshot().getMoveCount());
+
+        cfg.showTurnIndicator = false;
+        frameHidden = OctiBoardRenderer.computeLayout(vm.getBoard(), vm.getGeometry(), cfg);
+        assertNull(frameHidden.activeTurnIndicatorRect);
+
+        // Confirm Start Match for Player B
+        vm.confirmStartMatch();
+        assertFalse(vm.getAwaitingMatchStart().getValue());
+        assertTrue(vm.matchStartedEpochSec() > 0L);
+        assertTrue(vm.currentTurnStartEpochMs() > 0L);
+        // CRITICAL: Now that match is confirmed, AI bot has executed Player A's opening move!
+        assertEquals(1, vm.currentBoardSnapshot().getMoveCount());
+        assertEquals(OctiPlayer.PLAYER_B, vm.currentBoardSnapshot().getTurn());
+
+        cfg.showTurnIndicator = true;
+        frameVisible = OctiBoardRenderer.computeLayout(vm.getBoard(), vm.getGeometry(), cfg);
+        assertNotNull(frameVisible.activeTurnIndicatorRect);
+
         vm.close();
     }
 }

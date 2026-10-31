@@ -3237,6 +3237,213 @@ TEST(OctiHttpServerIntegrationTest, ArchiveFilteringSortingStatsAndNdjsonExport)
     CHECK_EQUAL(2, lineCount);
 }
 
+TEST(OctiHttpServerIntegrationTest, CrashTelemetryNominalUploadAndRetrieval)
+{
+    /* 1. Upload nominal crash report without crash_id (server computes deterministic SHA-256) */
+    Json payload = {
+        {"platform", "windows-x86_64"},
+        {"app_version", "2.1.2"},
+        {"os_version", "Windows 11 Version 23H2"},
+        {"exception_type", "std::invalid_argument"},
+        {"exception_message", "'https' scheme is not supported."},
+        {"thread_name", "OctiUploadThread"},
+        {"stack_trace", "#0 octi.exe+0x0004a2b0\n#1 octi.exe+0x000511c4"},
+        {"context", {{"match_mode", "LOCAL_BOT"}, {"ply_count", 42}}},
+        {"install_id", "inst-crash-test-01"},
+        {"created_at", 1761837000}
+    };
+
+    Reply rUpload = http().post("/api/v1/telemetry/crash", "", payload);
+    EXPECT_STATUS(201, rUpload);
+    CHECK_FALSE(rUpload.json.value("deduplicated", true));
+    std::string crashId = rUpload.json.value("crash_id", "");
+    CHECK_EQUAL(64, static_cast<int>(crashId.size()));
+
+    /* 2. List crash reports and check filtering */
+    Reply rList = http().get("/api/v1/telemetry/crashes");
+    EXPECT_STATUS(200, rList);
+    CHECK_EQUAL(1, rList.json.value("total", 0));
+    CHECK_TRUE(rList.json.contains("crashes") && rList.json["crashes"].is_array());
+    CHECK_EQUAL(1, static_cast<int>(rList.json["crashes"].size()));
+
+    const auto &item = rList.json["crashes"][0];
+    STRCMP_EQUAL(crashId.c_str(), item.value("crash_id", "").c_str());
+    STRCMP_EQUAL("windows-x86_64", item.value("platform", "").c_str());
+    STRCMP_EQUAL("2.1.2", item.value("app_version", "").c_str());
+    STRCMP_EQUAL("Windows 11 Version 23H2", item.value("os_version", "").c_str());
+    STRCMP_EQUAL("std::invalid_argument", item.value("exception_type", "").c_str());
+    STRCMP_EQUAL("'https' scheme is not supported.", item.value("exception_message", "").c_str());
+    STRCMP_EQUAL("OctiUploadThread", item.value("thread_name", "").c_str());
+    /* Privacy check: install_id must NEVER be exposed in list */
+    CHECK_FALSE(item.contains("install_id"));
+    CHECK_TRUE(rList.body.find("inst-crash-test-01") == std::string::npos);
+
+    /* Filter by platform */
+    Reply rWin = http().get("/api/v1/telemetry/crashes?platform=windows-x86_64");
+    EXPECT_STATUS(200, rWin);
+    CHECK_EQUAL(1, rWin.json.value("total", 0));
+
+    Reply rLin = http().get("/api/v1/telemetry/crashes?platform=linux-x86_64");
+    EXPECT_STATUS(200, rLin);
+    CHECK_EQUAL(0, rLin.json.value("total", 0));
+
+    /* Filter by app_version */
+    Reply rVer = http().get("/api/v1/telemetry/crashes?app_version=2.1.2");
+    EXPECT_STATUS(200, rVer);
+    CHECK_EQUAL(1, rVer.json.value("total", 0));
+
+    Reply rOldVer = http().get("/api/v1/telemetry/crashes?app_version=1.0.0");
+    EXPECT_STATUS(200, rOldVer);
+    CHECK_EQUAL(0, rOldVer.json.value("total", 0));
+
+    /* Filter by exception_type */
+    Reply rExc = http().get("/api/v1/telemetry/crashes?exception_type=std::invalid_argument");
+    EXPECT_STATUS(200, rExc);
+    CHECK_EQUAL(1, rExc.json.value("total", 0));
+
+    Reply rOtherExc = http().get("/api/v1/telemetry/crashes?exception_type=std::out_of_range");
+    EXPECT_STATUS(200, rOtherExc);
+    CHECK_EQUAL(0, rOtherExc.json.value("total", 0));
+
+    /* Pagination */
+    Reply rPage0 = http().get("/api/v1/telemetry/crashes?limit=1&offset=0");
+    EXPECT_STATUS(200, rPage0);
+    CHECK_EQUAL(1, static_cast<int>(rPage0.json["crashes"].size()));
+
+    Reply rPage1 = http().get("/api/v1/telemetry/crashes?limit=1&offset=1");
+    EXPECT_STATUS(200, rPage1);
+    CHECK_EQUAL(0, static_cast<int>(rPage1.json["crashes"].size()));
+
+    /* 3. Get single crash report detail */
+    Reply rDetail = http().get("/api/v1/telemetry/crashes/" + crashId);
+    EXPECT_STATUS(200, rDetail);
+    STRCMP_EQUAL(crashId.c_str(), rDetail.json.value("crash_id", "").c_str());
+    STRCMP_EQUAL("#0 octi.exe+0x0004a2b0\n#1 octi.exe+0x000511c4",
+                 rDetail.json.value("stack_trace", "").c_str());
+    CHECK_TRUE(rDetail.json.contains("context") && rDetail.json["context"].is_object());
+    STRCMP_EQUAL("LOCAL_BOT", rDetail.json["context"].value("match_mode", "").c_str());
+    CHECK_EQUAL(42, rDetail.json["context"].value("ply_count", 0));
+
+    /* Privacy check: install_id must NEVER be exposed in detail */
+    CHECK_FALSE(rDetail.json.contains("install_id"));
+    CHECK_TRUE(rDetail.body.find("inst-crash-test-01") == std::string::npos);
+
+    /* 4. Non-existent crash returns 404 */
+    Reply rNotFound = http().get("/api/v1/telemetry/crashes/non-existent-crash-id-12345");
+    EXPECT_STATUS(404, rNotFound);
+}
+
+TEST(OctiHttpServerIntegrationTest, CrashTelemetryDeduplicationAndPayloadBounds)
+{
+    /* 1. First upload succeeds with 201 Created */
+    Json payload = {
+        {"crash_id", "explicit-crash-id-001"},
+        {"platform", "android-arm64"},
+        {"app_version", "2.1.2"},
+        {"exception_type", "java.lang.NullPointerException"},
+        {"exception_message", "Attempt to invoke virtual method on a null object reference"},
+        {"thread_name", "OctiBotThinkingThread"},
+        {"stack_trace", "com.selfso.octi.ai.OctiBotEngine.think(OctiBotEngine.java:123)"},
+        {"context", {{"turn", 5}}},
+        {"install_id", "inst-dup-test"}
+    };
+
+    Reply r1 = http().post("/api/v1/telemetry/crash", "", payload);
+    EXPECT_STATUS(201, r1);
+    STRCMP_EQUAL("explicit-crash-id-001", r1.json.value("crash_id", "").c_str());
+    CHECK_FALSE(r1.json.value("deduplicated", true));
+
+    /* 2. Submitting duplicate crash_id returns 200 OK with deduplicated: true */
+    Reply rDup = http().post("/api/v1/telemetry/crash", "", payload);
+    EXPECT_STATUS(200, rDup);
+    STRCMP_EQUAL("explicit-crash-id-001", rDup.json.value("crash_id", "").c_str());
+    CHECK_TRUE(rDup.json.value("deduplicated", false));
+
+    /* 3. Oversized payload (>64 KiB) rejected with 413 */
+    std::string huge(70000, 'x');
+    Reply rHuge = http().raw("POST", "/api/v1/telemetry/crash", "", huge, "application/json");
+    EXPECT_STATUS(413, rHuge);
+}
+
+TEST(OctiHttpServerIntegrationTest, CrashTelemetryFaultInjectionAndInstallIdPurge)
+{
+    /* 1. Missing platform returns 400 */
+    Json noPlatform = {
+        {"exception_type", "std::runtime_error"},
+        {"exception_message", "test error"}
+    };
+    Reply rNoPlat = http().post("/api/v1/telemetry/crash", "", noPlatform);
+    EXPECT_STATUS(400, rNoPlat);
+
+    /* 2. Missing exception_type returns 400 */
+    Json noExc = {
+        {"platform", "linux-x86_64"},
+        {"exception_message", "test error"}
+    };
+    Reply rNoExc = http().post("/api/v1/telemetry/crash", "", noExc);
+    EXPECT_STATUS(400, rNoExc);
+
+    /* 3. Empty platform returns 400 */
+    Json emptyPlat = {
+        {"platform", ""},
+        {"exception_type", "std::runtime_error"}
+    };
+    EXPECT_STATUS(400, http().post("/api/v1/telemetry/crash", "", emptyPlat));
+
+    /* 4. Empty exception_type returns 400 */
+    Json emptyExc = {
+        {"platform", "linux-x86_64"},
+        {"exception_type", ""}
+    };
+    EXPECT_STATUS(400, http().post("/api/v1/telemetry/crash", "", emptyExc));
+
+    /* 5. Non-JSON body returns 400 */
+    Reply rGarbage = http().raw("POST", "/api/v1/telemetry/crash", "", "this is not json", "application/json");
+    EXPECT_STATUS(400, rGarbage);
+
+    /* 6. Verify DELETE /api/v1/archive/install/:installId purges both games and crash reports */
+    std::string installToPurge = "purge-install-id-99";
+    std::string crashId = "crash-to-be-purged-001";
+
+    Json crashPayload = {
+        {"crash_id", crashId},
+        {"platform", "linux-x86_64"},
+        {"app_version", "2.1.2"},
+        {"exception_type", "std::logic_error"},
+        {"exception_message", "privacy purge test"},
+        {"install_id", installToPurge}
+    };
+    Reply rUpload = http().post("/api/v1/telemetry/crash", "", crashPayload);
+    EXPECT_STATUS(201, rUpload);
+
+    /* Also upload a game for the same install_id */
+    std::string gameTr = makeWonTranscript(installToPurge, 3);
+    Reply rGame = http().post("/api/v1/archive/upload", "", Json{{"transcript", gameTr}});
+    EXPECT_STATUS(200, rGame);
+    std::string gameId = rGame.json.value("game_id", "");
+    CHECK_FALSE(gameId.empty());
+
+    /* Both game and crash report exist */
+    EXPECT_STATUS(200, http().get("/api/v1/archive/games/" + gameId));
+    EXPECT_STATUS(200, http().get("/api/v1/telemetry/crashes/" + crashId));
+
+    /* Execute privacy deletion for installId */
+    Reply rDel = http().del("/api/v1/archive/install/" + installToPurge, "");
+    EXPECT_STATUS(200, rDel);
+    CHECK_TRUE(rDel.json.value("ok", false));
+    /* Expect 2 records deleted: 1 game + 1 crash report */
+    CHECK_EQUAL(2, rDel.json.value("deleted", 0));
+
+    /* Both game and crash report are now purged (404) */
+    EXPECT_STATUS(404, http().get("/api/v1/archive/games/" + gameId));
+    EXPECT_STATUS(404, http().get("/api/v1/telemetry/crashes/" + crashId));
+
+    /* Crash report list no longer includes crashId */
+    Reply rListAfter = http().get("/api/v1/telemetry/crashes");
+    EXPECT_STATUS(200, rListAfter);
+    CHECK_TRUE(rListAfter.body.find(crashId) == std::string::npos);
+}
+
 /* ================================================================== */
 /* ServerApp: options and a real process-style run                     */
 /* ================================================================== */

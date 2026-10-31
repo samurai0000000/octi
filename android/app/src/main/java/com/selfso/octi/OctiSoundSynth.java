@@ -6,6 +6,9 @@
 
 package com.selfso.octi;
 
+import java.util.EnumMap;
+import java.util.Map;
+
 public class OctiSoundSynth {
 
     public enum SoundCue {
@@ -62,8 +65,12 @@ public class OctiSoundSynth {
     private PlaybackCallback playbackCallback = null;
     private final Object[] trackPool = new Object[4];
     private int trackPoolCursor = 0;
+    private final Map<SoundCue, short[]> cachedCuePcm = new EnumMap<>(SoundCue.class);
 
     public OctiSoundSynth() {
+        for (SoundCue cue : SoundCue.values()) {
+            cachedCuePcm.put(cue, generateCuePcm(cue));
+        }
     }
 
     private static short clampPcm16(double sample) {
@@ -75,6 +82,14 @@ public class OctiSoundSynth {
         if (cue == null) {
             cue = SoundCue.POD_PLACE;
         }
+        short[] cached = cachedCuePcm.get(cue);
+        if (cached != null) {
+            return cached.clone();
+        }
+        return generateCuePcm(cue);
+    }
+
+    private static short[] generateCuePcm(SoundCue cue) {
 
         int durationMs = 110;
         switch (cue) {
@@ -218,21 +233,11 @@ public class OctiSoundSynth {
                 return;
             }
 
+            int pcmBytes = samples.length * 2;
             int minBufBytes = android.media.AudioTrack.getMinBufferSize(
                     SAMPLE_RATE,
                     android.media.AudioFormat.CHANNEL_OUT_MONO,
                     android.media.AudioFormat.ENCODING_PCM_16BIT);
-            int pcmBytes = samples.length * 2;
-            int bufferSizeBytes = Math.max(pcmBytes, minBufBytes > 0 ? minBufBytes : pcmBytes);
-            int bufferSizeFrames = bufferSizeBytes / 2;
-
-            short[] paddedSamples;
-            if (bufferSizeFrames > samples.length) {
-                paddedSamples = new short[bufferSizeFrames];
-                System.arraycopy(samples, 0, paddedSamples, 0, samples.length);
-            } else {
-                paddedSamples = samples;
-            }
 
             int slot = trackPoolCursor;
             trackPoolCursor = (trackPoolCursor + 1) % trackPool.length;
@@ -253,18 +258,50 @@ public class OctiSoundSynth {
                     .setSampleRate(SAMPLE_RATE)
                     .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO)
                     .build();
+
+            // 1. Primary: MODE_STATIC with exact static buffer size (samples.length * 2)
             android.media.AudioTrack track = new android.media.AudioTrack(
                     attrs,
                     format,
-                    bufferSizeBytes,
+                    pcmBytes,
                     android.media.AudioTrack.MODE_STATIC,
                     android.media.AudioManager.AUDIO_SESSION_ID_GENERATE);
-            if (track.getState() == android.media.AudioTrack.STATE_INITIALIZED) {
-                track.write(paddedSamples, 0, paddedSamples.length);
-                track.play();
-                trackPool[slot] = track;
-            } else {
-                track.release();
+
+            boolean played = false;
+            // MODE_STATIC track starts in STATE_NO_STATIC_DATA (2). It only transitions
+            // to STATE_INITIALIZED (1) after track.write() loads the full buffer.
+            if (track.getState() != android.media.AudioTrack.STATE_UNINITIALIZED) {
+                int written = track.write(samples, 0, samples.length);
+                if (written > 0 && track.getState() == android.media.AudioTrack.STATE_INITIALIZED) {
+                    track.play();
+                    trackPool[slot] = track;
+                    played = true;
+                }
+            }
+
+            // 2. Fallback: MODE_STREAM if MODE_STATIC fails to reach STATE_INITIALIZED
+            if (!played) {
+                try {
+                    track.release();
+                } catch (Throwable ignored) {
+                }
+                int streamBufSize = Math.max(pcmBytes, minBufBytes > 0 ? minBufBytes : pcmBytes);
+                android.media.AudioTrack streamTrack = new android.media.AudioTrack(
+                        attrs,
+                        format,
+                        streamBufSize,
+                        android.media.AudioTrack.MODE_STREAM,
+                        android.media.AudioManager.AUDIO_SESSION_ID_GENERATE);
+                if (streamTrack.getState() == android.media.AudioTrack.STATE_INITIALIZED) {
+                    streamTrack.play();
+                    streamTrack.write(samples, 0, samples.length);
+                    trackPool[slot] = streamTrack;
+                } else {
+                    try {
+                        streamTrack.release();
+                    } catch (Throwable ignored) {
+                    }
+                }
             }
         } catch (Throwable ignored) {
             // Headless JVM unit test environment or audio device unavailable

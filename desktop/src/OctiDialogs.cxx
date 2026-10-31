@@ -5097,6 +5097,110 @@ OctiTelemetrySettingsDialog::OctiTelemetrySettingsDialog(ClientConfigStore *conf
 
 OctiTelemetrySettingsDialog::~OctiTelemetrySettingsDialog() = default;
 
+/* ==================================================================== */
+
+OctiStartMatchDialog::OctiStartMatchDialog(OctiPlayer humanSeat,
+                                           bool vsBot,
+                                           ThemeId theme,
+                                           QWidget *parent)
+    : QDialog(parent)
+    , _humanSeat(humanSeat)
+    , _vsBot(vsBot)
+    , _theme(theme)
+{
+    setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+    setModal(true);
+    setAttribute(Qt::WA_TranslucentBackground, true);
+
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(20, 16, 20, 16);
+    layout->setSpacing(10);
+
+    QLabel *titleLabel = new QLabel("Ready to Play?", this);
+    titleLabel->setAlignment(Qt::AlignCenter);
+    titleLabel->setStyleSheet("color: #FFFFFF; font-weight: bold; font-size: 15px;");
+    layout->addWidget(titleLabel);
+
+    QString seatText;
+    if (vsBot) {
+        seatText = (humanSeat == PLAYER_A) ? "Playing as Player A (Red)"
+                                           : "Playing as Player B (Green)";
+    } else {
+        seatText = "Local Pass-and-Play";
+    }
+    QLabel *subLabel = new QLabel(seatText, this);
+    subLabel->setAlignment(Qt::AlignCenter);
+    subLabel->setStyleSheet("color: #8B9BB4; font-size: 12px;");
+    layout->addWidget(subLabel);
+
+    QPushButton *startBtn = new QPushButton("Start Match", this);
+    startBtn->setCursor(Qt::PointingHandCursor);
+    startBtn->setStyleSheet(
+        "QPushButton {"
+        "  background-color: #D4AF37;"
+        "  color: #161D26;"
+        "  font-weight: bold;"
+        "  font-size: 14px;"
+        "  border: none;"
+        "  border-radius: 6px;"
+        "  padding: 8px 16px;"
+        "}"
+        "QPushButton:hover {"
+        "  background-color: #F3E5AB;"
+        "}"
+        "QPushButton:pressed {"
+        "  background-color: #AA8C2C;"
+        "}"
+    );
+    QObject::connect(startBtn, &QPushButton::clicked, this, &QDialog::accept);
+    layout->addWidget(startBtn);
+
+    setStyleSheet(
+        "QDialog {"
+        "  background-color: #161D26;"
+        "  border: 2px solid #2E4057;"
+        "  border-radius: 12px;"
+        "}"
+    );
+
+    setFixedWidth(260);
+    adjustSize();
+}
+
+OctiStartMatchDialog::~OctiStartMatchDialog() = default;
+
+void OctiStartMatchDialog::positionCenterOfBoard(QWidget *mainWin, QWidget *boardCanvas)
+{
+    if (boardCanvas && boardCanvas->isVisible()) {
+        QPoint cPos = boardCanvas->mapToGlobal(QPoint(0, 0));
+        int cx = cPos.x() + boardCanvas->width() / 2;
+        int cy = cPos.y() + boardCanvas->height() / 2;
+        move(cx - width() / 2, cy - height() / 2);
+    } else if (mainWin) {
+        QPoint mPos = mainWin->mapToGlobal(QPoint(0, 0));
+        int cx = mPos.x() + mainWin->width() / 2;
+        int cy = mPos.y() + mainWin->height() / 2;
+        move(cx - width() / 2, cy - height() / 2);
+    }
+}
+
+void OctiStartMatchDialog::keyPressEvent(QKeyEvent *event)
+{
+    if (event && (event->key() == Qt::Key_Escape ||
+                  event->key() == Qt::Key_Return ||
+                  event->key() == Qt::Key_Enter ||
+                  event->key() == Qt::Key_Space)) {
+        accept();
+        return;
+    }
+    QDialog::keyPressEvent(event);
+}
+
+void OctiStartMatchDialog::reject()
+{
+    accept();
+}
+
 } // namespace octi
 
 /*

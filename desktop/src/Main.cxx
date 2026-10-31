@@ -8,11 +8,16 @@
 #include <string>
 #include <QApplication>
 #include <QTimer>
+#include "ClientConfigStore.hxx"
+#include "OctiCrashReporter.hxx"
 #include "OctiMainWindow.hxx"
 #include "selfupdate/UpdateInstaller.hxx"
 
 int main(int argc, char *argv[])
 {
+    octi::desktop::OctiCrashReporter::installGlobalHandlers(
+        octi::ClientConfigStore::defaultConfigDir());
+
     octi::DesktopCliArgs cliArgs;
     std::string errMsg;
     if (!octi::DesktopCliArgs::parse(
@@ -41,7 +46,10 @@ int main(int argc, char *argv[])
     splash.exec();
     octi::OctiMainWindow window(
         nullptr, cliArgs.configPath, cliArgs.startOffline);
+    window.flushPendingTelemetry(true);
     window.show();
+    window.beginAwaitingMatchStart();
+    QTimer::singleShot(0, &window, &octi::OctiMainWindow::promptStartMatchIfVisible);
     QTimer::singleShot(0, [&window]() {
         window.checkPromptTelemetryConsentAtStartup();
     });

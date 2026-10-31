@@ -74,6 +74,7 @@ import com.selfso.octi.ui.OctiTelemetrySettingsDialog
 import com.selfso.octi.ui.OctiThinkingDialog
 import com.selfso.octi.ui.PlyConfirmDialog
 import com.selfso.octi.ui.SsoSignInDialog
+import com.selfso.octi.ui.StartMatchOverlayDialog
 import com.selfso.octi.ui.SuperProngBonusDialog
 import com.selfso.octi.ui.UpToDateModalDialog
 import com.selfso.octi.ui.ZoomedSquareDialog
@@ -97,6 +98,14 @@ class MainActivity : ComponentActivity() {
         val configFile = ClientConfigStore.configFileForDirectory(filesDir ?: File("."))
         appViewModel = OctiAppViewModel(ClientConfigStore(configFile))
         appViewModel.setAsyncBotThinkingEnabled(true)
+
+        val storageRoot = filesDir ?: File(".")
+        val appVersion = try { BuildConfig.VERSION_NAME } catch (_: Throwable) { "2.1.2" }
+        OctiCrashReporter.installGlobalHandler(storageRoot, appVersion, appViewModel.installId.value)
+        appViewModel.setStorageRootDir(storageRoot)
+        appViewModel.flushPendingTelemetry(async = true)
+        appViewModel.setRequireStartMatchPrompt(true)
+        appViewModel.beginAwaitingMatchStart()
 
         // Extract intent extras while strictly ignoring any server_url / server_host / server_port override
         val extrasMap = LinkedHashMap<String, String>()
@@ -405,14 +414,35 @@ fun OctiMainAppContent(
                         val rows = viewModel.board.boardHeight
                         val aspectRatio = cols.toFloat() / rows.toFloat()
                         val lastMoveModifiedSquares by viewModel.lastMoveModifiedSquares.collectAsState()
-                        OctiBoardCanvas(
-                            viewModel = viewModel,
+                        val awaitingMatchStart by viewModel.awaitingMatchStart.collectAsState()
+                        val matchType by viewModel.matchType.collectAsState()
+                        val gameOver = viewModel.board.game?.isGameOver == true
+                        val humanSeat by viewModel.humanSeat.collectAsState()
+                        val vsBot = matchType != OctiAppViewModel.MatchType.LOCAL_PASS_AND_PLAY
+                        val botDifficulty by viewModel.botDifficulty.collectAsState()
+
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(aspectRatio),
-                            lastMoveModifiedSquares = lastMoveModifiedSquares,
-                            onUserInteraction = { viewModel.clearLastMoveIndicators() }
-                        )
+                            contentAlignment = Alignment.Center
+                        ) {
+                            OctiBoardCanvas(
+                                viewModel = viewModel,
+                                modifier = Modifier.fillMaxSize(),
+                                lastMoveModifiedSquares = lastMoveModifiedSquares,
+                                onUserInteraction = { viewModel.clearLastMoveIndicators() },
+                                awaitingMatchStart = awaitingMatchStart
+                            )
+                            if (awaitingMatchStart && matchType != OctiAppViewModel.MatchType.ONLINE_ROOM && !gameOver) {
+                                StartMatchOverlayDialog(
+                                    humanSeat = humanSeat,
+                                    vsBot = vsBot,
+                                    difficulty = botDifficulty,
+                                    onStartMatch = { viewModel.confirmStartMatch() }
+                                )
+                            }
+                        }
                         OctiReserveHud(
                             viewModel = viewModel,
                             modifier = Modifier

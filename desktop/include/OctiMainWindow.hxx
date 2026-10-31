@@ -114,6 +114,12 @@ public:
     bool isLocalBotGame() const;
     const LocalGameConfig &localGameConfig() const;
     bool executeBotTurnIfNeeded();
+    bool isAwaitingMatchStart() const { return _awaitingMatchStart; }
+    void beginAwaitingMatchStart();
+    void confirmMatchStart();
+    void promptStartMatchIfVisible();
+    std::int64_t matchStartedEpochSec() const { return _matchStartedEpochSec; }
+    std::int64_t currentTurnStartedEpochMs() const { return _currentTurnStartedEpochMs; }
 
     /* ---- Online Multiplayer Room Lifecycle ---- */
     ApiResult<CreateTableResponse> createAndEnterOnlineTable(
@@ -182,6 +188,7 @@ public:
     void setTelemetryConsentForTesting(const std::string &choice);
     bool uploadCompletedBotGameIfEligible(bool synchronousForTest = false);
     void waitForBackgroundUpload();
+    void flushPendingTelemetry(bool async = true);
     void checkPromptTelemetryConsentAtStartup();
     void showTelemetrySettingsDialog();
     QString copyExportedNotationToClipboard() const;
@@ -250,6 +257,7 @@ private:
 
     bool _isLocalBotGame;
     LocalGameConfig _localConfig;
+    bool _awaitingMatchStart;
     qint64 _currentTurnStartedEpochMs;
     std::int64_t _matchStartedEpochSec;
     bool _transcriptUploadedForCurrentMatch;

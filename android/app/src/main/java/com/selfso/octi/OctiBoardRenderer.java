@@ -24,6 +24,36 @@ public final class OctiBoardRenderer {
         public float lastMoveAnimPhase = 0.0f;
         public float activeTurnAnimPhase = 0.0f;
         public List<int[]> stagedPaths = new ArrayList<>();
+        public boolean showTurnIndicator = true;
+    }
+
+    public static final class RenderFrame {
+        public double[] activeTurnIndicatorRect = null;
+        public int activeTurnEdge = 0;
+    }
+
+    public static RenderFrame computeLayout(OctiBoard board,
+                                            OctiBoardGeometry geo,
+                                            RenderConfig cfg) {
+        RenderFrame frame = new RenderFrame();
+        if (board != null && board.getGame() != null
+                && board.getGame().isGameStarted()
+                && !board.getGame().isGameOver()
+                && (cfg == null || cfg.showTurnIndicator)) {
+            OctiPlayer turn = board.getGame().getTurn();
+            int edge = activeTurnScreenEdge(board.getGame().getMode(), turn,
+                    geo != null && geo.rotation() != null ? geo.rotation().degrees() : 0);
+            frame.activeTurnEdge = edge;
+            if (geo != null) {
+                double[] grid = geo.gridInnerRect();
+                if (grid != null && grid.length >= 4) {
+                    frame.activeTurnIndicatorRect = new double[]{grid[0], grid[1], grid[2], grid[3]};
+                }
+            }
+        } else {
+            frame.activeTurnIndicatorRect = null;
+        }
+        return frame;
     }
 
     private int stackFanX = -1;
@@ -515,7 +545,8 @@ public final class OctiBoardRenderer {
         if (board != null && board.getGame() != null
                 && board.getGame().isGameStarted()
                 && !board.getGame().isGameOver()
-                && config != null) {
+                && config != null
+                && config.showTurnIndicator) {
             double turnPhase = config.activeTurnAnimPhase > 0f
                     ? config.activeTurnAnimPhase
                     : config.lastMoveAnimPhase;

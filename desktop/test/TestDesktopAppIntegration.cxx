@@ -28,6 +28,7 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
@@ -42,6 +43,7 @@
 #include "LobbyView.hxx"
 #include "OctiBoardCanvas.hxx"
 #include "OctiCore.hxx"
+#include "OctiCrashReporter.hxx"
 #include "OctiDialogs.hxx"
 #include "OctiMainWindow.hxx"
 #include "OctiNetworkClient.hxx"
@@ -237,6 +239,8 @@ struct LiveServerEnv {
     OidcVerifier verifier;
     std::unique_ptr<GameRoomManager> rooms;
     std::unique_ptr<OctiHttpServer> server;
+    int savedPort = 0;
+    HttpServerConfig savedCfg;
 
     LiveServerEnv()
     {
@@ -250,18 +254,17 @@ struct LiveServerEnv {
         if (!store.openOrCreate(dbPath, err)) {
             FAIL(err.c_str());
         }
-        HttpServerConfig cfg;
-        cfg.bindAddress = "127.0.0.1";
-        cfg.port = 0;
-        cfg.tickIntervalMs = 30;
-        cfg.ssePollMs = 15;
-        cfg.sseHeartbeatMs = 200;
-        cfg.sseSessionRecheckMs = 100;
+        savedCfg.bindAddress = "127.0.0.1";
+        savedCfg.port = 0;
+        savedCfg.tickIntervalMs = 30;
+        savedCfg.ssePollMs = 15;
+        savedCfg.sseHeartbeatMs = 200;
+        savedCfg.sseSessionRecheckMs = 100;
         static const char *names[] = {
             "google", "apple", "microsoft", "facebook", "line"
         };
         for (const char *n : names) {
-            cfg.providerClientIds[n].push_back(std::string("client-") + n);
+            savedCfg.providerClientIds[n].push_back(std::string("client-") + n);
             verifier.setClientId(n, std::string("client-") + n);
             if (!verifier.setKeySet(n, jwks())) {
                 FAIL("setKeySet failed");
@@ -269,10 +272,11 @@ struct LiveServerEnv {
         }
         rooms = std::make_unique<GameRoomManager>(store);
         server = std::make_unique<OctiHttpServer>(
-            store, verifier, *rooms, cfg);
+            store, verifier, *rooms, savedCfg);
         if (!server->start(err)) {
             FAIL(err.c_str());
         }
+        savedPort = server->port();
     }
 
     ~LiveServerEnv()
@@ -284,7 +288,32 @@ struct LiveServerEnv {
         std::filesystem::remove_all(dir, ec);
     }
 
-    int port() const { return server->port(); }
+    int port() const { return server ? server->port() : savedPort; }
+
+    void stop()
+    {
+        if (rooms) {
+            rooms->checkpointToStore();
+        }
+        if (server) {
+            server->stop();
+        }
+        server.reset();
+        rooms.reset();
+    }
+
+    void startAgain()
+    {
+        HttpServerConfig c = savedCfg;
+        c.port = savedPort;
+        rooms = std::make_unique<GameRoomManager>(store);
+        server = std::make_unique<OctiHttpServer>(store, verifier, *rooms, c);
+        std::string err;
+        if (!server->start(err)) {
+            FAIL(err.c_str());
+        }
+        savedPort = server->port();
+    }
 };
 
 } // namespace
@@ -1857,6 +1886,144 @@ TEST(DesktopAppIntegrationTest, AutomaticUploadOfCompletedBotGameLoopback)
     LONGS_EQUAL(2, totalAsync);
 
     std::remove(cfgPath.c_str());
+}
+
+TEST(DesktopAppIntegrationTest, OfflineAiGameSpoolsTranscriptAndFlushesWhenReachable)
+{
+    LiveServerEnv env;
+    std::string testDir = env.dir + "/offline_spool_test";
+    std::filesystem::remove_all(testDir);
+    std::filesystem::create_directories(testDir);
+
+    std::string cfgPath = testDir + "/client_config.json";
+    octi::desktop::OctiCrashReporter::setStorageRootDir(testDir);
+
+    /* Start hermetic client pointed to env.port() */
+    auto netCli = OctiNetworkClient::createForLoopbackTest(env.port());
+    OctiMainWindow win(std::move(netCli), cfgPath, false);
+
+    LocalGameConfig cfg;
+    cfg.playType = LocalPlayType::VS_AI_BOT;
+    cfg.mode = GAME_MODE_2;
+    cfg.humanSeat = PLAYER_A;
+    cfg.botDifficulty = BotDifficulty::TACTICAL;
+    win.startNewLocalGame(cfg);
+
+    /* Set consent to "share" */
+    win.setTelemetryConsentForTesting("share");
+
+    /* Play a valid human move so plies > 0 */
+    CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+    if (win.moveComposer()->isAwaitingConfirmation()) {
+        CHECK_TRUE(win.moveComposer()->commitStagedMove());
+    }
+    LONGS_EQUAL(2, win.vcrCurrentPly());
+
+    /* Shut down the server so it is completely offline */
+    env.stop();
+
+    /* Human resigns game -> match is game over, upload is triggered */
+    win.resignCurrentGame();
+    CHECK_TRUE(win.board()->getGame()->isGameOver());
+    win.waitForBackgroundUpload();
+
+    /* Since server is offline, the transcript file must remain spooled in pending_uploads/ */
+    auto pending = octi::desktop::OctiCrashReporter::listPendingTranscriptFiles();
+    CHECK_TRUE_TEXT(pending.size() >= 1, "Transcript must remain spooled on disk while server is offline");
+
+    /* Server comes back online */
+    env.startAgain();
+
+    /* flushPendingTelemetry(false) synchronously flushes all spooled transcripts */
+    win.flushPendingTelemetry(false);
+
+    /* Verify spool directory is now empty */
+    auto pendingAfter = octi::desktop::OctiCrashReporter::listPendingTranscriptFiles();
+    LONGS_EQUAL(0, static_cast<long>(pendingAfter.size()));
+
+    /* Verify server database received the archived game */
+    ArchiveFilter f;
+    f.source = "client_upload";
+    int64_t total = 0;
+    std::vector<GameRecord> games;
+    CHECK_TRUE(env.store.listArchivedGames(f, games, &total));
+    LONGS_EQUAL(1, total);
+    CHECK_FALSE(games.empty());
+    STRCMP_EQUAL("RESIGNED", games[0].status.c_str());
+
+    std::filesystem::remove_all(testDir);
+}
+
+TEST(DesktopAppIntegrationTest, CenteredStartMatchPromptAndPreStartGatingForPlayerAAndB)
+{
+    std::string testDir = "/tmp/octi_start_match_test_" + std::to_string(QDateTime::currentMSecsSinceEpoch());
+    std::filesystem::create_directories(testDir);
+    std::string cfgFile = testDir + "/client.json";
+
+    OctiMainWindow win(nullptr, cfgFile, true);
+
+    // 1. Verify OctiStartMatchDialog properties & styling
+    OctiStartMatchDialog dlg(PLAYER_A, true, ThemeId::OBSIDIAN_BRASS, &win);
+    CHECK_TRUE(dlg.windowFlags() & Qt::FramelessWindowHint);
+    CHECK_TRUE(dlg.isModal());
+    dlg.positionCenterOfBoard(&win, win.boardCanvas());
+    // Esc/reject is mapped to accept
+    dlg.reject();
+    LONGS_EQUAL(QDialog::Accepted, dlg.result());
+
+    // 2. Scenario 1: Human is Player A (Red)
+    LocalGameConfig cfgA;
+    cfgA.playType = LocalPlayType::VS_AI_BOT;
+    cfgA.humanSeat = PLAYER_A;
+    cfgA.mode = GAME_MODE_2;
+    cfgA.botDifficulty = BotDifficulty::TACTICAL;
+
+    win.startNewLocalGame(cfgA);
+    win.beginAwaitingMatchStart();
+
+    CHECK_TRUE(win.isAwaitingMatchStart());
+    LONGS_EQUAL(0, win.matchStartedEpochSec());
+    LONGS_EQUAL(0, win.currentTurnStartedEpochMs());
+    CHECK_FALSE(win.boardCanvas()->isTurnIndicatorVisible());
+    LONGS_EQUAL(0, win.board()->getGame()->getNumMoves());
+
+    // Confirm match start as Player A
+    win.confirmMatchStart();
+    CHECK_FALSE(win.isAwaitingMatchStart());
+    CHECK_TRUE(win.matchStartedEpochSec() > 0);
+    CHECK_TRUE(win.currentTurnStartedEpochMs() > 0);
+    CHECK_TRUE(win.boardCanvas()->isTurnIndicatorVisible());
+    // Bot should not move because it is human Player A's turn
+    LONGS_EQUAL(0, win.board()->getGame()->getNumMoves());
+
+    // 3. Scenario 2: Human is Player B (Green) -> Player A is the AI Bot
+    LocalGameConfig cfgB;
+    cfgB.playType = LocalPlayType::VS_AI_BOT;
+    cfgB.humanSeat = PLAYER_B;
+    cfgB.mode = GAME_MODE_2;
+    cfgB.botDifficulty = BotDifficulty::TACTICAL;
+
+    win.startNewLocalGame(cfgB);
+    win.beginAwaitingMatchStart();
+
+    CHECK_TRUE(win.isAwaitingMatchStart());
+    LONGS_EQUAL(0, win.matchStartedEpochSec());
+    LONGS_EQUAL(0, win.currentTurnStartedEpochMs());
+    CHECK_FALSE(win.boardCanvas()->isTurnIndicatorVisible());
+    // CRITICAL: Bot MUST NOT make a move while awaiting match start, even though turn is Player A!
+    LONGS_EQUAL(0, win.board()->getGame()->getNumMoves());
+
+    // Confirm match start as Player B
+    win.confirmMatchStart();
+    CHECK_FALSE(win.isAwaitingMatchStart());
+    CHECK_TRUE(win.matchStartedEpochSec() > 0);
+    CHECK_TRUE(win.currentTurnStartedEpochMs() > 0);
+    CHECK_TRUE(win.boardCanvas()->isTurnIndicatorVisible());
+    // CRITICAL: Now that match is confirmed, AI bot has executed Player A's opening move!
+    LONGS_EQUAL(1, win.board()->getGame()->getNumMoves());
+    LONGS_EQUAL(PLAYER_B, win.board()->getGame()->getTurn());
+
+    std::filesystem::remove_all(testDir);
 }
 
 extern "C" const char *__lsan_default_suppressions()

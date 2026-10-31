@@ -145,6 +145,12 @@ std::string ClientConfigStore::defaultConfigFilePath()
 #endif
 }
 
+std::string ClientConfigStore::defaultConfigDir()
+{
+    std::filesystem::path p(defaultConfigFilePath());
+    return p.parent_path().string();
+}
+
 const std::string &ClientConfigStore::configFilePath() const
 {
     return _configFilePath;

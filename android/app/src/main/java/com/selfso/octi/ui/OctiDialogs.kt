@@ -2164,6 +2164,86 @@ fun OctiTelemetrySettingsDialog(
     )
 }
 
+/**
+ * Centered borderless modal card overlay prompting "Start Match"
+ * before the game clock, turn indicators, or AI opening move starts.
+ */
+@Composable
+fun StartMatchOverlayDialog(
+    humanSeat: OctiPlayer = OctiPlayer.PLAYER_A,
+    vsBot: Boolean = true,
+    difficulty: OctiBotEngine.BotDifficulty = OctiBotEngine.BotDifficulty.TACTICAL,
+    onStartMatch: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .width(260.dp)
+            .padding(8.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xF0161D26)
+        ),
+        border = BorderStroke(2.dp, Color(0xFF2E4057)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "Ready to Play?",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                textAlign = TextAlign.Center
+            )
+            val subtitle = if (vsBot) {
+                if (humanSeat == OctiPlayer.PLAYER_A) "Playing as Player A (Red)"
+                else "Playing as Player B (Green)"
+            } else {
+                "Local Pass-and-Play"
+            }
+            Text(
+                text = subtitle,
+                color = Color(0xFF8B9BB4),
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center
+            )
+            Button(
+                onClick = onStartMatch,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFD4AF37),
+                    contentColor = Color(0xFF161D26)
+                ),
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Start Match",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun StartMatchOverlayDialog(
+    humanSeat: OctiPlayer,
+    onStartMatch: () -> Unit
+) {
+    StartMatchOverlayDialog(
+        humanSeat = humanSeat,
+        vsBot = true,
+        difficulty = OctiBotEngine.BotDifficulty.TACTICAL,
+        onStartMatch = onStartMatch
+    )
+}
+
 /*
  * Local variables:
  * mode: Kotlin

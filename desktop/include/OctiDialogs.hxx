@@ -920,6 +920,29 @@ private:
 };
 
 /*
+ * Modal Borderless "Start Match" Dialog Centered Over Board
+ */
+class OctiStartMatchDialog : public QDialog {
+public:
+    explicit OctiStartMatchDialog(OctiPlayer humanSeat = PLAYER_A,
+                                  bool vsBot = true,
+                                  ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                                  QWidget *parent = nullptr);
+    ~OctiStartMatchDialog() override;
+
+    void positionCenterOfBoard(QWidget *mainWin, QWidget *boardCanvas = nullptr);
+    void reject() override;
+
+protected:
+    void keyPressEvent(QKeyEvent *event) override;
+
+private:
+    OctiPlayer _humanSeat;
+    bool _vsBot;
+    ThemeId _theme;
+};
+
+/*
  * Procedural Vector Menu Icon Generator (GUI-04)
  */
 enum class MenuIconKind {

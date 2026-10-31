@@ -171,7 +171,9 @@ enum class ArchiveStatus {
     OK,
     DUPLICATE_ID,
     INVALID,
-    ERROR
+    ERROR,
+    STORED = OK,
+    DUPLICATE = DUPLICATE_ID
 };
 
 struct ArchiveFilter {
@@ -215,6 +217,29 @@ struct LiveRoomRow {
     std::string roomId;
     std::string stateJson;
     int64_t updatedAt = 0;
+};
+
+struct CrashReportRecord {
+    std::string crashId;
+    int64_t createdAt = 0;
+    int64_t uploadedAt = 0;
+    std::string platform;
+    std::string appVersion;
+    std::string osVersion;
+    std::string exceptionType;
+    std::string exceptionMessage;
+    std::string threadName;
+    std::string stackTrace;
+    std::string contextJson = "{}";
+    std::string installId;
+};
+
+struct CrashReportFilter {
+    std::string platform;
+    std::string appVersion;
+    std::string exceptionType;
+    int limit = 20;
+    int offset = 0;
 };
 
 class AccountStore {
@@ -298,6 +323,13 @@ public:
                            int64_t *total = nullptr);
     int deleteGamesByInstallId(const std::string &installId);
     bool getArchiveStats(ArchiveStats &out);
+
+    ArchiveStatus recordCrashReport(const CrashReportRecord &report,
+                                    std::string &error);
+    bool getCrashReport(const std::string &crashId, CrashReportRecord &out);
+    bool listCrashReports(const CrashReportFilter &filter,
+                          std::vector<CrashReportRecord> &out,
+                          int64_t *total = nullptr);
 
     /* Live room and lobby meta persistence. */
     bool upsertLiveRoom(const std::string &roomId, const std::string &stateJson,

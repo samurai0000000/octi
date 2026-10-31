@@ -29,6 +29,7 @@
 #include <QSysInfo>
 #include <QVBoxLayout>
 #include "OctiCore.hxx"
+#include "OctiCrashReporter.hxx"
 #include "OctiMainWindow.hxx"
 #include "Version.hxx"
 #include "selfupdate/UpdateInstaller.hxx"
@@ -161,6 +162,7 @@ OctiMainWindow::OctiMainWindow(
       _offlineMode(startOffline),
       _authenticated(false),
       _isLocalBotGame(true),
+      _awaitingMatchStart(false),
       _currentTurnStartedEpochMs(0),
       _matchStartedEpochSec(0),
       _transcriptUploadedForCurrentMatch(false),
@@ -564,6 +566,8 @@ OctiMainWindow::OctiMainWindow(
         dlg.setConfig(_localConfig);
         if (dlg.exec() == QDialog::Accepted) {
             startNewLocalGame(dlg.config());
+            beginAwaitingMatchStart();
+            promptStartMatchIfVisible();
         }
     });
     QObject::connect(_sidebarNewGameBtn, &QPushButton::clicked, [this]() {
@@ -571,6 +575,8 @@ OctiMainWindow::OctiMainWindow(
         dlg.setConfig(_localConfig);
         if (dlg.exec() == QDialog::Accepted) {
             startNewLocalGame(dlg.config());
+            beginAwaitingMatchStart();
+            promptStartMatchIfVisible();
         }
     });
     QObject::connect(_archiveBtn, &QPushButton::clicked, [this]() {
@@ -1058,6 +1064,8 @@ void OctiMainWindow::setupMenuBar()
         dlg.setConfig(_localConfig);
         if (dlg.exec() == QDialog::Accepted) {
             startNewLocalGame(dlg.config());
+            beginAwaitingMatchStart();
+            promptStartMatchIfVisible();
         }
     });
 
@@ -1271,8 +1279,8 @@ void OctiMainWindow::startNewLocalGame(const LocalGameConfig &cfg)
     _gameOverDialogShownForCurrentMatch = false;
     _transcriptUploadedForCurrentMatch = false;
     _heldTranscriptPendingConsent = false;
-    _matchStartedEpochSec = QDateTime::currentSecsSinceEpoch();
-    _currentTurnStartedEpochMs = QDateTime::currentMSecsSinceEpoch();
+    _matchStartedEpochSec = _awaitingMatchStart ? 0 : QDateTime::currentSecsSinceEpoch();
+    _currentTurnStartedEpochMs = _awaitingMatchStart ? 0 : QDateTime::currentMSecsSinceEpoch();
     _localConfig = cfg;
     _isLocalBotGame = (cfg.playType == LocalPlayType::VS_AI_BOT);
     _botEngine.setDifficulty(cfg.botDifficulty);
@@ -1313,9 +1321,58 @@ void OctiMainWindow::startNewLocalGame(const LocalGameConfig &cfg)
     updateProposalBannerUi();
     updateMatchActionsVisibility();
 
+    if (_isLocalBotGame && !_awaitingMatchStart) {
+        executeBotTurnIfNeeded();
+    }
+}
+
+void OctiMainWindow::beginAwaitingMatchStart()
+{
+    _awaitingMatchStart = true;
+    _matchStartedEpochSec = 0;
+    _currentTurnStartedEpochMs = 0;
+    if (_boardCanvas) {
+        _boardCanvas->setTurnIndicatorVisible(false);
+    }
+    if (_isLocalBotGame && _localConfig.humanSeat == PLAYER_B &&
+        _board.getGame() && _board.getGame()->getNumMoves() == 1) {
+        _board.getGame()->reset();
+        _board.getGame()->start(PLAYER_A);
+        if (_boardCanvas) {
+            _boardCanvas->clearLastMoveModifiedSquares();
+        }
+        refreshMoveHistoryAndFenUi();
+    }
+    updateTopBarLabels();
+}
+
+void OctiMainWindow::confirmMatchStart()
+{
+    if (!_awaitingMatchStart) {
+        return;
+    }
+    _awaitingMatchStart = false;
+    _matchStartedEpochSec = QDateTime::currentSecsSinceEpoch();
+    _currentTurnStartedEpochMs = QDateTime::currentMSecsSinceEpoch();
+    if (_boardCanvas) {
+        _boardCanvas->setTurnIndicatorVisible(true);
+    }
+    _soundSynth.triggerCue(SoundCue::POD_PLACE);
+    updateTopBarLabels();
     if (_isLocalBotGame) {
         executeBotTurnIfNeeded();
     }
+}
+
+void OctiMainWindow::promptStartMatchIfVisible()
+{
+    if (!isVisible() || !_awaitingMatchStart) {
+        return;
+    }
+    OctiStartMatchDialog dlg(_localConfig.humanSeat, _isLocalBotGame, _theme, this);
+    dlg.positionCenterOfBoard(this, _boardCanvas);
+    dlg.exec();
+    confirmMatchStart();
 }
 
 bool OctiMainWindow::isLocalBotGame() const
@@ -1330,6 +1387,9 @@ const LocalGameConfig &OctiMainWindow::localGameConfig() const
 
 bool OctiMainWindow::executeBotTurnIfNeeded()
 {
+    if (_awaitingMatchStart) {
+        return false;
+    }
     if (!_isLocalBotGame || _inOnlineRoom) {
         return false;
     }
@@ -1364,7 +1424,22 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
             std::atomic<bool> done{false};
             std::string chosen;
             std::thread worker([this, &done, &chosen, &botStats]() {
-                chosen = _botEngine.chooseMove(_board, &botStats);
+                try {
+                    chosen = _botEngine.chooseMove(_board, &botStats);
+                } catch (const std::exception &ex) {
+                    octi::desktop::OctiCrashReporter::recordHandledException(
+                        "OctiBotWorkerThread", typeid(ex).name(), ex.what(),
+                        octi::desktop::OctiCrashReporter::getGameContextJson(),
+                        _configStore.preferences().installId);
+                    chosen.clear();
+                } catch (...) {
+                    octi::desktop::OctiCrashReporter::recordHandledException(
+                        "OctiBotWorkerThread", "unknown_exception",
+                        "Unknown exception in bot worker thread",
+                        octi::desktop::OctiCrashReporter::getGameContextJson(),
+                        _configStore.preferences().installId);
+                    chosen.clear();
+                }
                 done.store(true);
             });
 
@@ -2590,19 +2665,23 @@ void OctiMainWindow::updateMatchActionsVisibility()
     }
 
     if (_matchTurnStatusLabel) {
-        const OctiGame *g = _board.getGame();
-        if (g && g->isGameOver()) {
-            _matchTurnStatusLabel->setText(
-                QString::fromUtf8("%1 \xE2\x80\x94 %2")
-                    .arg(GameOverDialog::describeWinnerBanner(&_board))
-                    .arg(GameOverDialog::describeTerminationReason(&_board)));
-        } else if (g) {
-            int pIdx = static_cast<int>(g->getTurn());
-            QChar pCh = (pIdx >= 1 && pIdx <= 4) ? QChar('A' + pIdx - 1) : QChar('A');
-            _matchTurnStatusLabel->setText(
-                QString("Active Turn: Player %1").arg(pCh));
+        if (_awaitingMatchStart) {
+            _matchTurnStatusLabel->setText("Awaiting Match Start");
         } else {
-            _matchTurnStatusLabel->setText("Match Idle");
+            const OctiGame *g = _board.getGame();
+            if (g && g->isGameOver()) {
+                _matchTurnStatusLabel->setText(
+                    QString::fromUtf8("%1 \xE2\x80\x94 %2")
+                        .arg(GameOverDialog::describeWinnerBanner(&_board))
+                        .arg(GameOverDialog::describeTerminationReason(&_board)));
+            } else if (g) {
+                int pIdx = static_cast<int>(g->getTurn());
+                QChar pCh = (pIdx >= 1 && pIdx <= 4) ? QChar('A' + pIdx - 1) : QChar('A');
+                _matchTurnStatusLabel->setText(
+                    QString("Active Turn: Player %1").arg(pCh));
+            } else {
+                _matchTurnStatusLabel->setText("Match Idle");
+            }
         }
     }
 }
@@ -2637,6 +2716,8 @@ void OctiMainWindow::checkAndPresentGameOver()
                 newDlg.setConfig(_localConfig);
                 if (newDlg.exec() == QDialog::Accepted) {
                     startNewLocalGame(newDlg.config());
+                    beginAwaitingMatchStart();
+                    promptStartMatchIfVisible();
                 }
             }
         }
@@ -2715,16 +2796,24 @@ bool OctiMainWindow::uploadCompletedBotGameIfEligible(bool synchronousForTest)
     bool shareExtra = (prefs.telemetryConsent == "share");
     std::string jsonStr = buildCurrentGameTranscriptJson(shareExtra);
 
-    UploadTranscriptRequest req;
-    req.transcriptJson = jsonStr;
-    if (shareExtra && !prefs.installId.empty()) {
-        req.clientId = prefs.installId;
-    }
+    std::string gameId = "game_" + std::to_string(QDateTime::currentSecsSinceEpoch()) +
+                         "_" + std::to_string(game ? game->getNumMoves() : 0);
+    std::string clientId = (shareExtra && !prefs.installId.empty()) ? prefs.installId : "";
 
+    std::string configDir = std::filesystem::path(_configStore.configFilePath()).parent_path().string();
+    if (!configDir.empty()) {
+        octi::desktop::OctiCrashReporter::setStorageRootDir(configDir);
+    }
+    octi::desktop::OctiCrashReporter::spoolTrainingTranscript(gameId, jsonStr, clientId);
+
+    std::string uploadInstallId = shareExtra ? prefs.installId : "";
     if (synchronousForTest) {
         if (_netClient) {
-            auto res = _netClient->uploadTrainingTranscript(req);
-            return res.ok;
+            int flushed = octi::desktop::OctiCrashReporter::flushPendingTranscripts(
+                *_netClient, uploadInstallId);
+            octi::desktop::OctiCrashReporter::flushPendingCrashReports(
+                *_netClient, uploadInstallId);
+            return flushed > 0;
         }
         return false;
     } else {
@@ -2732,8 +2821,26 @@ bool OctiMainWindow::uploadCompletedBotGameIfEligible(bool synchronousForTest)
             if (_uploadThread.joinable()) {
                 _uploadThread.join();
             }
-            _uploadThread = std::thread([client = _netClient.get(), req]() {
-                client->uploadTrainingTranscript(req);
+            _uploadThread = std::thread([this, installId = uploadInstallId]() {
+                try {
+                    if (_netClient) {
+                        octi::desktop::OctiCrashReporter::flushPendingTranscripts(
+                            *_netClient, installId);
+                        octi::desktop::OctiCrashReporter::flushPendingCrashReports(
+                            *_netClient, installId);
+                    }
+                } catch (const std::exception &ex) {
+                    octi::desktop::OctiCrashReporter::recordHandledException(
+                        "OctiUploadThread", typeid(ex).name(), ex.what(),
+                        octi::desktop::OctiCrashReporter::getGameContextJson(),
+                        installId);
+                } catch (...) {
+                    octi::desktop::OctiCrashReporter::recordHandledException(
+                        "OctiUploadThread", "unknown_exception",
+                        "Unknown exception in upload thread",
+                        octi::desktop::OctiCrashReporter::getGameContextJson(),
+                        installId);
+                }
             });
         }
         return true;
@@ -2744,6 +2851,51 @@ void OctiMainWindow::waitForBackgroundUpload()
 {
     if (_uploadThread.joinable()) {
         _uploadThread.join();
+    }
+}
+
+void OctiMainWindow::flushPendingTelemetry(bool async)
+{
+    if (_offlineMode || !_netClient) {
+        return;
+    }
+    std::string configDir = std::filesystem::path(_configStore.configFilePath()).parent_path().string();
+    if (!configDir.empty()) {
+        octi::desktop::OctiCrashReporter::setStorageRootDir(configDir);
+    }
+    const ClientPreferences &prefs = _configStore.preferences();
+    bool shareExtra = (prefs.telemetryConsent == "share");
+    std::string uploadInstallId = shareExtra ? prefs.installId : "";
+    if (async) {
+        if (_uploadThread.joinable()) {
+            _uploadThread.join();
+        }
+        _uploadThread = std::thread([this, installId = uploadInstallId]() {
+            try {
+                if (_netClient) {
+                    octi::desktop::OctiCrashReporter::flushPendingTranscripts(
+                        *_netClient, installId);
+                    octi::desktop::OctiCrashReporter::flushPendingCrashReports(
+                        *_netClient, installId);
+                }
+            } catch (const std::exception &ex) {
+                octi::desktop::OctiCrashReporter::recordHandledException(
+                    "OctiUploadThread", typeid(ex).name(), ex.what(),
+                    octi::desktop::OctiCrashReporter::getGameContextJson(),
+                    installId);
+            } catch (...) {
+                octi::desktop::OctiCrashReporter::recordHandledException(
+                    "OctiUploadThread", "unknown_exception",
+                    "Unknown exception in upload thread",
+                    octi::desktop::OctiCrashReporter::getGameContextJson(),
+                    installId);
+            }
+        });
+    } else {
+        octi::desktop::OctiCrashReporter::flushPendingTranscripts(
+            *_netClient, uploadInstallId);
+        octi::desktop::OctiCrashReporter::flushPendingCrashReports(
+            *_netClient, uploadInstallId);
     }
 }
 
