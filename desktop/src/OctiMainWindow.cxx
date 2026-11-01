@@ -915,6 +915,10 @@ void OctiMainWindow::applyAuthenticatedProfile(const PlayerProfileInfo &profile)
             _lobbyView->refreshLobby();
         }
     }
+    if (_lobbyView) {
+        _lobbyView->updateAuthUiState();
+    }
+    updateMatchActionsVisibility();
 }
 
 void OctiMainWindow::showBoardView()
@@ -1617,6 +1621,7 @@ ApiResult<CreateTableResponse> OctiMainWindow::createAndEnterOnlineTable(
 
     refreshOnlineGameView();
     showBoardView();
+    updateMatchActionsVisibility();
     return res;
 }
 
@@ -1659,6 +1664,7 @@ ApiResult<JoinTableResponse> OctiMainWindow::joinAndEnterOnlineTable(
 
     refreshOnlineGameView();
     showBoardView();
+    updateMatchActionsVisibility();
     return res;
 }
 
@@ -1700,6 +1706,7 @@ ApiResult<bool> OctiMainWindow::observeOnlineTable(
 
     refreshOnlineGameView();
     showBoardView();
+    updateMatchActionsVisibility();
     return res;
 }
 
@@ -1991,6 +1998,9 @@ bool OctiMainWindow::sendGameChatMessage(const std::string &scope,
         return false;
     }
     if (_inOnlineRoom && !_onlineRoomId.empty() && _netClient) {
+        if (!isAuthenticated()) {
+            return false;
+        }
         auto res = _netClient->postGameChat(_onlineRoomId, scope, text);
         if (!res.ok) {
             return false;
@@ -2743,6 +2753,20 @@ void OctiMainWindow::updateMatchActionsVisibility()
     }
     if (_voiceBox) {
         _voiceBox->setVisible(online);
+    }
+
+    bool isObservingUnauthed = (online && !isAuthenticated());
+    if (_gameChatInput) {
+        if (isObservingUnauthed) {
+            _gameChatInput->setEnabled(false);
+            _gameChatInput->setPlaceholderText("Sign in to chat");
+        } else {
+            _gameChatInput->setEnabled(true);
+            _gameChatInput->setPlaceholderText("Send board message...");
+        }
+    }
+    if (_sendGameChatBtn) {
+        _sendGameChatBtn->setEnabled(!isObservingUnauthed);
     }
 
     if (_matchModeLabel) {

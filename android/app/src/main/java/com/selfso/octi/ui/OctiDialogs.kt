@@ -6,7 +6,10 @@
 
 package com.selfso.octi.ui
 
+import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -107,6 +110,17 @@ object OctiDialogs {
     const val START_MATCH_CARD_MAX_WIDTH_DP = 360
     const val START_MATCH_BUTTON_HORIZONTAL_PADDING_DP = 10
 
+    @JvmField
+    val CANONICAL_SSO_PROVIDERS: List<Pair<String, String>> = listOf(
+        "google" to "Google"
+    )
+
+    @JvmField
+    val ALL_SSO_PROVIDERS: List<Pair<String, String>> = listOf(
+        "google" to "Google",
+        "facebook" to "Facebook"
+    )
+
     @JvmStatic
     fun hitTestZoomedSocket(
         canvasWidthPx: Float,
@@ -150,13 +164,7 @@ fun hitTestZoomedSocket(
     rotation: OctiBoardGeometry.BoardRotation
 ): OctiDir = OctiDialogs.hitTestZoomedSocket(canvasWidthPx, canvasHeightPx, touchX, touchY, rotation)
 
-private val CANONICAL_SSO_PROVIDERS = listOf(
-    "google" to "Google",
-    "apple" to "Apple",
-    "microsoft" to "Microsoft",
-    "github" to "GitHub",
-    "facebook" to "Facebook"
-)
+val CANONICAL_SSO_PROVIDERS: List<Pair<String, String>> = OctiDialogs.CANONICAL_SSO_PROVIDERS
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -340,84 +348,115 @@ fun SsoSignInDialog(
     viewModel: OctiAppViewModel,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val onboardingRequired by viewModel.onboardingRequired.collectAsState()
-    var selectedProvider by remember { mutableStateOf("google") }
-    var tokenInput by remember { mutableStateOf("") }
-    var desiredHandle by remember { mutableStateOf("") }
+    val currentProfile by viewModel.currentProfile.collectAsState()
+    val isBrowserAuthInProgress by viewModel.isBrowserAuthInProgress.collectAsState()
+    val browserAuthStatusText by viewModel.browserAuthStatusText.collectAsState()
+    var desiredHandle by remember(currentProfile?.handle) {
+        mutableStateOf(currentProfile?.handle ?: "")
+    }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            viewModel.cancelBrowserAuth()
+            onDismiss()
+        },
         containerColor = OctiTheme.colors.panelCardBg,
         titleContentColor = OctiTheme.colors.accentBrass,
         textContentColor = OctiTheme.colors.textPrimary,
         title = {
             Text(
                 if (onboardingRequired) {
-                    "Choose Your OCTI Handle"
+                    "Welcome to OCTI!"
                 } else {
-                    "Sign In — 5-Provider SSO"
+                    "Sign In to OCTI"
                 }
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (!onboardingRequired) {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        CANONICAL_SSO_PROVIDERS.forEach { (id, label) ->
-                            FilterChip(
-                                selected = selectedProvider == id,
-                                onClick = { selectedProvider = id },
-                                label = { Text(label) }
-                            )
-                        }
-                    }
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (onboardingRequired) {
+                    Text(
+                        text = "Choose the player name others will see:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = OctiTheme.colors.textSecondary
+                    )
                     OutlinedTextField(
-                        value = tokenInput,
-                        onValueChange = { tokenInput = it },
-                        label = { Text("OAuth ID/Access Token") },
+                        value = desiredHandle,
+                        onValueChange = { desiredHandle = it },
+                        label = { Text("Player Name") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                } else {
+                    Text(
+                        text = "Sign in to play online, chat with players, and track your rating.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = OctiTheme.colors.textSecondary
+                    )
+                    CANONICAL_SSO_PROVIDERS.forEach { (id, label) ->
+                        Button(
+                            onClick = {
+                                viewModel.startBrowserSignIn(id) { url ->
+                                    try {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                        context.startActivity(intent)
+                                    } catch (_: Throwable) {
+                                    }
+                                }
+                            },
+                            enabled = !isBrowserAuthInProgress,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = OctiTheme.colors.accentBrass,
+                                contentColor = OctiTheme.colors.windowBg
+                            )
+                        ) {
+                            Text(
+                                text = "Continue with $label",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    if (browserAuthStatusText.isNotEmpty()) {
+                        Text(
+                            text = browserAuthStatusText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OctiTheme.colors.textSecondary
+                        )
+                    }
                 }
-                OutlinedTextField(
-                    value = desiredHandle,
-                    onValueChange = { desiredHandle = it },
-                    label = { Text("Player Handle (3..20 chars)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    if (onboardingRequired) {
+            if (onboardingRequired) {
+                Button(
+                    onClick = {
                         val res = viewModel.completeHandleOnboarding(desiredHandle.trim())
                         if (res.ok) {
                             onDismiss()
                         }
-                    } else {
-                        val res = viewModel.loginWithSso(
-                            selectedProvider,
-                            tokenInput.trim(),
-                            desiredHandle.trim()
-                        )
-                        if (res.ok && !viewModel.onboardingRequired.value) {
-                            onDismiss()
-                        }
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = OctiTheme.colors.accentBrass,
-                    contentColor = OctiTheme.colors.windowBg
-                )
-            ) {
-                Text(if (onboardingRequired) "Save Handle" else "Sign In")
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OctiTheme.colors.accentBrass,
+                        contentColor = OctiTheme.colors.windowBg
+                    )
+                ) {
+                    Text("Continue")
+                }
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
-                Text("Close")
+            OutlinedButton(
+                onClick = {
+                    viewModel.cancelBrowserAuth()
+                    onDismiss()
+                }
+            ) {
+                Text(if (isBrowserAuthInProgress) "Cancel" else "Close")
             }
         }
     )
@@ -427,62 +466,112 @@ fun SsoSignInDialog(
 @Composable
 fun AccountIdentitiesDialog(
     viewModel: OctiAppViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onMergeConflict: () -> Unit = { viewModel.mergeConflictingIdentityIntoCurrentAccount() }
 ) {
+    val context = LocalContext.current
     val profile by viewModel.currentProfile.collectAsState()
     val identities by viewModel.linkedIdentities.collectAsState()
     val conflictProfile by viewModel.linkConflictProfile.collectAsState()
-
-    var linkProvider by remember { mutableStateOf("github") }
-    var linkToken by remember { mutableStateOf("") }
+    val isBrowserAuthInProgress by viewModel.isBrowserAuthInProgress.collectAsState()
+    val browserAuthStatusText by viewModel.browserAuthStatusText.collectAsState()
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            viewModel.cancelBrowserAuth()
+            onDismiss()
+        },
         containerColor = OctiTheme.colors.panelCardBg,
         titleContentColor = OctiTheme.colors.accentBrass,
         textContentColor = OctiTheme.colors.textPrimary,
-        title = { Text("Account & Linked SSO Identities") },
+        title = { Text("My Account") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val p = profile
                 if (p != null) {
                     Text(
-                        text = "Handle: ${p.handle}  (UUID: ${p.uuid})",
+                        text = "@${p.handle}",
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Elo 2P: ${p.elo2p}  •  4P: ${p.elo4p}  •  OFK: ${p.eloOfk}",
+                        text = "Rating — 2P: ${p.elo2p}  •  4P: ${p.elo4p}  •  OFK: ${p.eloOfk}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = OctiTheme.colors.textSecondary
                     )
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Linked Providers (${identities.size}):", fontWeight = FontWeight.SemiBold)
-                identities.forEach { idInfo ->
+                Text("Connected Accounts", fontWeight = FontWeight.SemiBold)
+                CANONICAL_SSO_PROVIDERS.forEach { (provId, provLabel) ->
+                    val linked = identities.firstOrNull {
+                        it.provider.equals(provId, ignoreCase = true)
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("${idInfo.provider}: ${idInfo.providerEmail}")
-                        OutlinedButton(
-                            onClick = { viewModel.unlinkIdentity(idInfo.provider) },
-                            enabled = identities.size > 1
-                        ) {
-                            Text("Unlink")
+                        if (linked != null) {
+                            val detail = linked.providerEmail.ifEmpty { linked.displayHint }
+                            Text(
+                                text = if (detail.isNotEmpty()) "$provLabel • $detail" else "$provLabel (Connected)",
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedButton(
+                                onClick = { viewModel.unlinkIdentity(linked.provider) },
+                                enabled = identities.size > 1
+                            ) {
+                                Text("Disconnect")
+                            }
+                        } else {
+                            Text(
+                                text = provLabel,
+                                modifier = Modifier.weight(1f),
+                                color = OctiTheme.colors.textSecondary
+                            )
+                            Button(
+                                onClick = {
+                                    viewModel.startBrowserLink(provId) { url ->
+                                        try {
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                            context.startActivity(intent)
+                                        } catch (_: Throwable) {
+                                        }
+                                    }
+                                },
+                                enabled = !isBrowserAuthInProgress,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = OctiTheme.colors.accentBrass,
+                                    contentColor = OctiTheme.colors.windowBg
+                                )
+                            ) {
+                                Text("Connect $provLabel")
+                            }
                         }
                     }
+                }
+
+                if (browserAuthStatusText.isNotEmpty()) {
+                    Text(
+                        text = browserAuthStatusText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = OctiTheme.colors.textSecondary
+                    )
                 }
 
                 if (conflictProfile != null) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "409 Conflict: Identity is already linked to account '${conflictProfile?.handle}'.",
+                        text = "This account is already connected to @${conflictProfile?.handle}.",
                         color = OctiTheme.colors.legalCapture,
                         fontWeight = FontWeight.Bold
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         Button(
                             onClick = { viewModel.confirmSwitchToConflictAccount() },
                             colors = ButtonDefaults.buttonColors(
@@ -490,44 +579,20 @@ fun AccountIdentitiesDialog(
                                 contentColor = OctiTheme.colors.windowBg
                             )
                         ) {
-                            Text("Switch to ${conflictProfile?.handle}")
+                            Text("Switch to @${conflictProfile?.handle}")
+                        }
+                        Button(
+                            onClick = { onMergeConflict() },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = OctiTheme.colors.accentBrass,
+                                contentColor = OctiTheme.colors.windowBg
+                            )
+                        ) {
+                            Text("Combine Accounts")
                         }
                         OutlinedButton(onClick = { viewModel.dismissLinkConflict() }) {
                             Text("Cancel")
                         }
-                    }
-                } else {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text("Link Additional SSO Provider:", fontWeight = FontWeight.SemiBold)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        CANONICAL_SSO_PROVIDERS.forEach { (id, label) ->
-                            FilterChip(
-                                selected = linkProvider == id,
-                                onClick = { linkProvider = id },
-                                label = { Text(label) }
-                            )
-                        }
-                    }
-                    OutlinedTextField(
-                        value = linkToken,
-                        onValueChange = { linkToken = it },
-                        label = { Text("Provider Token to Link") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Button(
-                        onClick = {
-                            if (linkToken.isNotBlank()) {
-                                viewModel.linkIdentity(linkProvider, linkToken.trim())
-                                linkToken = ""
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = OctiTheme.colors.accentBrass,
-                            contentColor = OctiTheme.colors.windowBg
-                        )
-                    ) {
-                        Text("Link $linkProvider")
                     }
                 }
             }
@@ -543,8 +608,13 @@ fun AccountIdentitiesDialog(
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
-                Text("Close")
+            OutlinedButton(
+                onClick = {
+                    viewModel.cancelBrowserAuth()
+                    onDismiss()
+                }
+            ) {
+                Text("Done")
             }
         }
     )

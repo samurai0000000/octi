@@ -40,14 +40,22 @@
 
 using octi::AccountStore;
 using octi::ArchiveStatus;
+using octi::CreateRobotResult;
 using octi::GameOutcome;
 using octi::GameRecord;
+using octi::LinkResult;
 using octi::LinkStatus;
 using octi::LoginResult;
 using octi::OidcVerifier;
 using octi::PlayerProfile;
+using octi::ProfileUpdate;
+using octi::RobotRecord;
+using octi::RobotStatus;
+using octi::RobotTokenValidation;
 using octi::UnlinkStatus;
 using octi::UpdateStatus;
+using octi::UserDirectoryEntry;
+using octi::UserDirectoryFilter;
 using octi::VerifiedClaims;
 using octi::VerifyResult;
 using octi::VerifyStatus;
@@ -369,6 +377,10 @@ const char *updateName(UpdateStatus s)
         return "INVALID_DISPLAY_NAME";
     case UpdateStatus::INVALID_AVATAR_URL:
         return "INVALID_AVATAR_URL";
+    case UpdateStatus::INVALID_BIO:
+        return "INVALID_BIO";
+    case UpdateStatus::INVALID_LOCATION:
+        return "INVALID_LOCATION";
     case UpdateStatus::ERROR:
         return "ERROR";
     }
@@ -1521,7 +1533,7 @@ TEST(AccountStoreTest, SchemaMatchesPlanAndHasNoGuestSupport)
                              "'linked_identities','sessions','games')"));
     CHECK_EQUAL(0, countRows("SELECT COUNT(*) FROM pragma_table_info('players')"
                              " WHERE name LIKE '%guest%'"));
-    CHECK_EQUAL(14, countRows("SELECT COUNT(*) FROM pragma_table_info('players')"));
+    CHECK_EQUAL(17, countRows("SELECT COUNT(*) FROM pragma_table_info('players')"));
     CHECK_EQUAL(8, countRows(
                        "SELECT COUNT(*) FROM pragma_table_info('linked_identities')"));
     CHECK_EQUAL(7, countRows("SELECT COUNT(*) FROM pragma_table_info('sessions')"));
@@ -2900,6 +2912,322 @@ TEST(AccountStoreTest, LegacyV207GamesSchemaMigration)
     ::unlink(legacyPath.c_str());
     ::unlink((legacyPath + "-wal").c_str());
     ::unlink((legacyPath + "-shm").c_str());
+}
+
+TEST(AccountStoreTest, BioLocationAndDataUriAvatar)
+{
+    int64_t pid = newPlayer("sub-bio-loc", "Bio Player");
+    PlayerProfile prof;
+    CHECK_TRUE(store->getProfile(pid, prof));
+    STRCMP_EQUAL("", prof.bio.c_str());
+    STRCMP_EQUAL("", prof.location.c_str());
+
+    // Validation rules
+    CHECK_TRUE(AccountStore::validBio("Hello, world! I love Octi."));
+    CHECK_TRUE(AccountStore::validBio(std::string(500, 'x')));
+    CHECK_FALSE(AccountStore::validBio(std::string(501, 'x')));
+    CHECK_FALSE(AccountStore::validBio("Bad\x01char"));
+    CHECK_TRUE(AccountStore::validBio("Line 1\nLine 2\r\nLine 3\tTab"));
+
+    CHECK_TRUE(AccountStore::validLocation("Tokyo, Japan"));
+    CHECK_TRUE(AccountStore::validLocation(std::string(64, 'y')));
+    CHECK_FALSE(AccountStore::validLocation(std::string(65, 'y')));
+    CHECK_FALSE(AccountStore::validLocation("Bad\x05Location"));
+
+    // Avatar URL validation
+    CHECK_TRUE(AccountStore::validAvatarUrl(""));
+    CHECK_TRUE(AccountStore::validAvatarUrl("https://example.com/pic.png"));
+    CHECK_TRUE(AccountStore::validAvatarUrl("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="));
+    CHECK_TRUE(AccountStore::validAvatarUrl("data:image/jpeg;base64,/9j/4AAQSkZJRg=="));
+    CHECK_TRUE(AccountStore::validAvatarUrl("data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAD8D+JaQAA3AA/ua1AAA="));
+    CHECK_TRUE(AccountStore::validAvatarUrl("data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"));
+    CHECK_TRUE(AccountStore::validAvatarUrl("data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="));
+    CHECK_FALSE(AccountStore::validAvatarUrl("data:image/unknown;base64,abc"));
+    CHECK_FALSE(AccountStore::validAvatarUrl("data:image/png;base64,"));
+    CHECK_FALSE(AccountStore::validAvatarUrl("data:image/png;base64,bad!char@"));
+    CHECK_FALSE(AccountStore::validAvatarUrl("data:image/png;base64," + std::string(32769, 'A')));
+
+    // Rejections via updateProfile
+    ProfileUpdate badBio;
+    badBio.setBio = true;
+    badBio.bio = std::string(501, 'x');
+    CHECK_EQUAL((int)UpdateStatus::INVALID_BIO, (int)store->updateProfile(pid, badBio));
+
+    ProfileUpdate badLoc;
+    badLoc.setLocation = true;
+    badLoc.location = "Bad\x07Location";
+    CHECK_EQUAL((int)UpdateStatus::INVALID_LOCATION, (int)store->updateProfile(pid, badLoc));
+
+    ProfileUpdate badAv;
+    badAv.setAvatarUrl = true;
+    badAv.avatarUrl = "http://insecure.example.com/avatar.png";
+    CHECK_EQUAL((int)UpdateStatus::INVALID_AVATAR_URL, (int)store->updateProfile(pid, badAv));
+
+    // Successful update
+    ProfileUpdate upd;
+    upd.setBio = true;
+    upd.bio = "Master Octi strategist.";
+    upd.setLocation = true;
+    upd.location = "San Francisco, CA";
+    upd.setAvatarUrl = true;
+    upd.avatarUrl = "data:image/png;base64,iVBORw0KGgo=";
+    PlayerProfile updated;
+    CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(pid, upd, &updated));
+    STRCMP_EQUAL("Master Octi strategist.", updated.bio.c_str());
+    STRCMP_EQUAL("San Francisco, CA", updated.location.c_str());
+    STRCMP_EQUAL("data:image/png;base64,iVBORw0KGgo=", updated.avatarUrl.c_str());
+
+    // Verify lookup by id, uuid, handle
+    PlayerProfile p1, p2, p3;
+    CHECK_TRUE(store->getProfile(pid, p1));
+    STRCMP_EQUAL("Master Octi strategist.", p1.bio.c_str());
+    STRCMP_EQUAL("San Francisco, CA", p1.location.c_str());
+
+    CHECK_TRUE(store->getProfileByUuid(updated.uuid, p2));
+    STRCMP_EQUAL("San Francisco, CA", p2.location.c_str());
+
+    CHECK_TRUE(store->getProfileByHandle(updated.handle, p3));
+    STRCMP_EQUAL("Master Octi strategist.", p3.bio.c_str());
+    STRCMP_EQUAL("data:image/png;base64,iVBORw0KGgo=", p3.avatarUrl.c_str());
+
+    CHECK_FALSE(store->getProfileByHandle("non-existent-handle-xyz", p3));
+}
+
+TEST(AccountStoreTest, ListUsersDirectory)
+{
+    int64_t p1 = newPlayer("sub-dir-1", "Alice Alpha");
+    int64_t p2 = newPlayer("sub-dir-2", "Bob Beta");
+    int64_t p3 = newPlayer("sub-dir-3", "Charlie Gamma");
+
+    ProfileUpdate u1;
+    u1.setBio = true;
+    u1.bio = "Alpha player from NY";
+    u1.setLocation = true;
+    u1.location = "New York, USA";
+    CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(p1, u1));
+
+    ProfileUpdate u2;
+    u2.setBio = true;
+    u2.bio = "Beta tactician in LA";
+    u2.setLocation = true;
+    u2.location = "Los Angeles, CA";
+    CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(p2, u2));
+
+    ProfileUpdate u3;
+    u3.setBio = true;
+    u3.bio = "Gamma solver in London";
+    u3.setLocation = true;
+    u3.location = "London, UK";
+    CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(p3, u3));
+
+    // List all
+    UserDirectoryFilter f;
+    std::vector<UserDirectoryEntry> entries;
+    int64_t total = 0;
+    CHECK_TRUE(store->listUsers(f, entries, &total));
+    CHECK_EQUAL(3, (int)total);
+    CHECK_EQUAL(3, (int)entries.size());
+
+    // Substring queries (case-insensitive across handle, display_name, location, bio)
+    f.query = "alpha";
+    CHECK_TRUE(store->listUsers(f, entries, &total));
+    CHECK_EQUAL(1, (int)total);
+    CHECK_EQUAL(1, (int)entries.size());
+    STRCMP_EQUAL("Alice Alpha", entries[0].profile.displayName.c_str());
+
+    f.query = "LONDON";
+    CHECK_TRUE(store->listUsers(f, entries, &total));
+    CHECK_EQUAL(1, (int)total);
+    STRCMP_EQUAL("Charlie Gamma", entries[0].profile.displayName.c_str());
+
+    f.query = "tactician";
+    CHECK_TRUE(store->listUsers(f, entries, &total));
+    CHECK_EQUAL(1, (int)total);
+    STRCMP_EQUAL("Bob Beta", entries[0].profile.displayName.c_str());
+
+    // Pagination
+    f.query.clear();
+    f.limit = 2;
+    f.offset = 0;
+    CHECK_TRUE(store->listUsers(f, entries, &total));
+    CHECK_EQUAL(3, (int)total);
+    CHECK_EQUAL(2, (int)entries.size());
+
+    f.offset = 2;
+    CHECK_TRUE(store->listUsers(f, entries, &total));
+    CHECK_EQUAL(3, (int)total);
+    CHECK_EQUAL(1, (int)entries.size());
+
+    // Sorting
+    f.offset = 0;
+    f.limit = 50;
+    f.sortField = "display_name";
+    f.sortAsc = true;
+    CHECK_TRUE(store->listUsers(f, entries, &total));
+    CHECK_EQUAL(3, (int)entries.size());
+    STRCMP_EQUAL("Alice Alpha", entries[0].profile.displayName.c_str());
+    STRCMP_EQUAL("Bob Beta", entries[1].profile.displayName.c_str());
+    STRCMP_EQUAL("Charlie Gamma", entries[2].profile.displayName.c_str());
+
+    // Active robots count
+    CHECK_EQUAL(0, entries[0].activeRobotsCount);
+    CreateRobotResult cr = store->createRobot(p1, "alpha-bot-1", "Test bot");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)cr.status);
+
+    CHECK_TRUE(store->listUsers(f, entries, &total));
+    CHECK_EQUAL(1, entries[0].activeRobotsCount);
+
+    // Banned player exclusion
+    CHECK_TRUE(store->setBanned(p2, true));
+    f.sortField = "display_name";
+    f.sortAsc = true;
+    CHECK_TRUE(store->listUsers(f, entries, &total));
+    CHECK_EQUAL(2, (int)total);
+    CHECK_EQUAL(2, (int)entries.size());
+    STRCMP_EQUAL("Alice Alpha", entries[0].profile.displayName.c_str());
+    STRCMP_EQUAL("Charlie Gamma", entries[1].profile.displayName.c_str());
+}
+
+TEST(AccountStoreTest, RobotCrudAndTokenValidation)
+{
+    int64_t pid = newPlayer("sub-robot-owner", "Bot Master");
+
+    // Validators
+    CHECK_FALSE(AccountStore::validRobotName("a"));
+    CHECK_FALSE(AccountStore::validRobotName("ab"));
+    CHECK_TRUE(AccountStore::validRobotName("abc"));
+    CHECK_TRUE(AccountStore::validRobotName("My-Robot_01"));
+    CHECK_FALSE(AccountStore::validRobotName("super-long-name-exceeding-24-chars-now"));
+    CHECK_FALSE(AccountStore::validRobotName("has spaces"));
+    CHECK_FALSE(AccountStore::validRobotName("has$invalid@chars"));
+
+    CHECK_TRUE(AccountStore::validRobotDescription(std::string(256, 'x')));
+    CHECK_FALSE(AccountStore::validRobotDescription(std::string(257, 'x')));
+    CHECK_FALSE(AccountStore::validRobotDescription("bad\003desc"));
+
+    // Create robot 1
+    CreateRobotResult r1 = store->createRobot(pid, "bot-one", "First bot");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)r1.status);
+    CHECK_TRUE(!r1.rawToken.empty());
+    CHECK_EQUAL(0, r1.rawToken.rfind("octi_bot_", 0));
+    STRCMP_EQUAL("bot-one", r1.robot.robotName.c_str());
+    STRCMP_EQUAL("First bot", r1.robot.description.c_str());
+    CHECK_EQUAL(pid, r1.robot.ownerPlayerId);
+
+    // Active name collision (case-insensitive)
+    CreateRobotResult rDup = store->createRobot(pid, "BOT-ONE", "Duplicate");
+    CHECK_EQUAL((int)RobotStatus::ROBOT_NAME_TAKEN, (int)rDup.status);
+
+    // Non-existent owner
+    CreateRobotResult rMissing = store->createRobot(999999, "bot-missing", "No owner");
+    CHECK_EQUAL((int)RobotStatus::NOT_FOUND, (int)rMissing.status);
+
+    // Create 2 more to hit max limit (3)
+    CreateRobotResult r2 = store->createRobot(pid, "bot-two", "Second bot");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)r2.status);
+    CreateRobotResult r3 = store->createRobot(pid, "bot-three", "Third bot");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)r3.status);
+
+    // 4th robot rejected by quota limit
+    CreateRobotResult r4 = store->createRobot(pid, "bot-four", "Fourth bot");
+    CHECK_EQUAL((int)RobotStatus::ROBOT_LIMIT_REACHED, (int)r4.status);
+
+    // Update description
+    CHECK_EQUAL((int)RobotStatus::OK,
+                (int)store->updateRobotDescription(pid, r1.robot.robotUuid, "Updated bot description"));
+
+    // Owner list contains full token
+    std::vector<RobotRecord> ownerBots;
+    CHECK_TRUE(store->listRobots(pid, ownerBots));
+    CHECK_EQUAL(3, (int)ownerBots.size());
+    CHECK_TRUE(!ownerBots[0].token.empty());
+    CHECK_TRUE(!ownerBots[0].tokenPrefix.empty());
+
+    // Public list strips token and tokenPrefix
+    std::vector<RobotRecord> pubBots;
+    CHECK_TRUE(store->listPublicRobotsByOwner(pid, pubBots));
+    CHECK_EQUAL(3, (int)pubBots.size());
+    for (size_t i = 0; i < pubBots.size(); ++i) {
+        CHECK_TRUE(pubBots[i].token.empty());
+        CHECK_TRUE(pubBots[i].tokenPrefix.empty());
+    }
+
+    // Token validation
+    RobotTokenValidation v1 = store->validateRobotToken(r1.rawToken);
+    CHECK_TRUE(v1.valid);
+    STRCMP_EQUAL("bot-one", v1.robot.robotName.c_str());
+    CHECK_EQUAL(pid, v1.owner.playerId);
+
+    // Invalid token validation
+    RobotTokenValidation vBad = store->validateRobotToken("octi_bot_bogus_token_1234567890");
+    CHECK_FALSE(vBad.valid);
+
+    // Revocation
+    CHECK_EQUAL((int)RobotStatus::OK, (int)store->revokeRobot(pid, r1.robot.robotUuid));
+    CHECK_EQUAL((int)RobotStatus::ALREADY_REVOKED, (int)store->revokeRobot(pid, r1.robot.robotUuid));
+
+    // Revoked token no longer validates
+    RobotTokenValidation vRevoked = store->validateRobotToken(r1.rawToken);
+    CHECK_FALSE(vRevoked.valid);
+
+    // Revoking frees a quota slot -> revoked name can now be reused
+    CreateRobotResult rReuse = store->createRobot(pid, "bot-one", "Recreated bot one");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)rReuse.status);
+
+    // Active count is now 3 again (bot-two, bot-three, bot-one) -> creating 4th robot hits limit
+    CreateRobotResult r4New = store->createRobot(pid, "bot-four", "Fourth bot");
+    CHECK_EQUAL((int)RobotStatus::ROBOT_LIMIT_REACHED, (int)r4New.status);
+
+    // Banned owner revokes token validation
+    CHECK_TRUE(store->setBanned(pid, true));
+    RobotTokenValidation vBanned = store->validateRobotToken(r2.rawToken);
+    CHECK_FALSE(vBanned.valid);
+}
+
+TEST(AccountStoreTest, LinkIdentityForceRelinkEmpty)
+{
+    LoginResult l1 = login("google", "sub-relink-p1", "Player One");
+    CHECK_TRUE(l1.ok);
+    int64_t p1 = l1.profile.playerId;
+
+    LoginResult l2 = login("facebook", "sub-relink-p2", "Player Two");
+    CHECK_TRUE(l2.ok);
+    int64_t p2 = l2.profile.playerId;
+
+    // Normal link conflict: p1 tries to link p2's claim
+    LinkResult lr1 = store->linkIdentity(p1, makeClaims("facebook", "sub-relink-p2"), false);
+    CHECK_FALSE(lr1.ok);
+    CHECK_EQUAL((int)LinkStatus::CONFLICT_OTHER_ACCOUNT, (int)lr1.status);
+    CHECK_EQUAL(p2, lr1.conflictingPlayerId);
+    STRCMP_EQUAL(l2.profile.uuid.c_str(), lr1.conflictingPlayerUuid.c_str());
+
+    // Record a game played by p2 so p2 is not empty
+    GameRecord gr = record("game-relink-01", kNow, p2, p1);
+    std::string err;
+    CHECK_EQUAL((int)ArchiveStatus::OK, (int)store->archiveGame(gr, err));
+
+    // Force relink on non-empty account should STILL fail
+    LinkResult lr2 = store->linkIdentity(p1, makeClaims("facebook", "sub-relink-p2"), true);
+    CHECK_FALSE(lr2.ok);
+    CHECK_EQUAL((int)LinkStatus::CONFLICT_OTHER_ACCOUNT, (int)lr2.status);
+
+    // Now test force relink on a truly empty orphan account
+    LoginResult l3 = login("facebook", "sub-relink-empty-p3", "Empty Three");
+    CHECK_TRUE(l3.ok);
+    int64_t p3 = l3.profile.playerId;
+
+    LinkResult lr3 = store->linkIdentity(p1, makeClaims("facebook", "sub-relink-empty-p3"), true);
+    CHECK_TRUE(lr3.ok);
+    CHECK_EQUAL((int)LinkStatus::OK, (int)lr3.status);
+
+    // Orphan player p3 was deleted
+    PlayerProfile p3Prof;
+    CHECK_FALSE(store->getProfile(p3, p3Prof));
+
+    // Logging in with p3's Facebook claim now authenticates as p1
+    LoginResult lRelinked = login("facebook", "sub-relink-empty-p3");
+    CHECK_TRUE(lRelinked.ok);
+    CHECK_EQUAL(p1, lRelinked.profile.playerId);
 }
 
 int main(int argc, char **argv)

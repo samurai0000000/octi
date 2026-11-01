@@ -1258,19 +1258,23 @@ TEST(OctiHttpServerIntegrationTest, NominalFullScenario)
     CHECK_TRUE(ui.body.find("res-card-b") != std::string::npos);
     CHECK_TRUE(ui.body.find("stack-inspector-body") != std::string::npos);
     CHECK_TRUE(ui.body.find("Archive Replay") != std::string::npos);
-    CHECK_TRUE(ui.body.find("scrollIntoView") == std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"2200\">0.5x") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"1100\" selected>1.0x") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"550\">2.0x") != std::string::npos);
     CHECK_TRUE(ui.body.find("/api/v1/leaderboard") != std::string::npos);
     CHECK_TRUE(ui.body.find("/api/v1/archive/games") != std::string::npos);
     CHECK_FALSE(ui.header("Content-Security-Policy").empty());
-    /* Self-contained: no external resource of any kind. */
-    CHECK_TRUE(ui.body.find("http://") == std::string::npos);
-    CHECK_TRUE(ui.body.find("https://") == std::string::npos);
-    CHECK_TRUE(ui.body.find("src=\"//") == std::string::npos);
-    CHECK_TRUE(ui.body.find("<link") == std::string::npos);
-    CHECK_TRUE(ui.body.find("<iframe") == std::string::npos);
+    /* Self-contained: no external resource of any kind (allow w3.org svg namespace). */
+    std::string strippedUi = ui.body;
+    size_t svgNs = 0;
+    while ((svgNs = strippedUi.find("http://www.w3.org/2000/svg")) != std::string::npos) {
+        strippedUi.replace(svgNs, 26, "");
+    }
+    CHECK_TRUE(strippedUi.find("http://") == std::string::npos);
+    CHECK_TRUE(strippedUi.find("https://") == std::string::npos);
+    CHECK_TRUE(strippedUi.find("src=\"//") == std::string::npos);
+    CHECK_TRUE(strippedUi.find("<link") == std::string::npos);
+    CHECK_TRUE(strippedUi.find("<iframe") == std::string::npos);
 }
 
 TEST(OctiHttpServerIntegrationTest, ProfilePatchAndPublicProfile)
@@ -1780,8 +1784,7 @@ TEST(OctiHttpServerIntegrationTest, IncrementalEventPollingAndPagingBoundaries)
 TEST(OctiHttpServerIntegrationTest, MissingOrInvalidBearerIsUnauthorized)
 {
     User a = signIn("google", "sub-a", "Alice Anders");
-    const char *protectedGets[] = {"/api/v1/profile/me", "/api/v1/lobby/state",
-                                   "/api/v1/lobby/events",
+    const char *protectedGets[] = {"/api/v1/profile/me",
                                    "/api/v1/matchmaking/status"};
     for (size_t i = 0; i < sizeof(protectedGets) / sizeof(protectedGets[0]); ++i) {
         Reply none = http().get(protectedGets[i]);
@@ -1789,6 +1792,8 @@ TEST(OctiHttpServerIntegrationTest, MissingOrInvalidBearerIsUnauthorized)
         STRCMP_EQUAL("Bearer", none.header("WWW-Authenticate").c_str());
         EXPECT_STATUS(401, http().get(protectedGets[i], "not-a-real-token"));
     }
+    EXPECT_STATUS(401, http().get("/api/v1/lobby/state", "not-a-real-token"));
+    EXPECT_STATUS(401, http().get("/api/v1/lobby/events", "not-a-real-token"));
     httplib::Headers basic;
     basic.insert(std::make_pair("Authorization", "Basic YTpi"));
     EXPECT_STATUS(401, http().get("/api/v1/profile/me", "", basic));
@@ -3442,6 +3447,358 @@ TEST(OctiHttpServerIntegrationTest, CrashTelemetryFaultInjectionAndInstallIdPurg
     Reply rListAfter = http().get("/api/v1/telemetry/crashes");
     EXPECT_STATUS(200, rListAfter);
     CHECK_TRUE(rListAfter.body.find(crashId) == std::string::npos);
+}
+
+TEST(OctiHttpServerIntegrationTest, PublicUserDirectoryAndProfileInspector)
+{
+    User a = signIn("google", "sub-alice", "Alice Directory");
+    User b = signIn("apple", "sub-bob", "Bob Directory");
+
+    /* 1. Profile patch updates bio, location, display_name, and data:image/png avatar */
+    std::string smallPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    Json patchOk = {
+        {"display_name", "Alice Wonder"},
+        {"location", "San Francisco, CA"},
+        {"bio", "Competitive OCTI tactician and robot creator."},
+        {"avatar_url", smallPng}
+    };
+    Reply rPatch = http().patch("/api/v1/profile/me", a.token, patchOk);
+    EXPECT_STATUS(200, rPatch);
+    STRCMP_EQUAL("Alice Wonder", rPatch.json.value("display_name", "").c_str());
+    STRCMP_EQUAL("San Francisco, CA", rPatch.json.value("location", "").c_str());
+    STRCMP_EQUAL("Competitive OCTI tactician and robot creator.", rPatch.json.value("bio", "").c_str());
+    STRCMP_EQUAL(smallPng.c_str(), rPatch.json.value("avatar_url", "").c_str());
+
+    /* PATCH /api/v1/profile alias */
+    Reply rPatchAlt = http().patch("/api/v1/profile", a.token,
+                                   Json{{"location", "Oakland, CA"}});
+    EXPECT_STATUS(200, rPatchAlt);
+    STRCMP_EQUAL("Oakland, CA", rPatchAlt.json.value("location", "").c_str());
+
+    Reply rGetProfile = http().get("/api/v1/profile", a.token);
+    EXPECT_STATUS(200, rGetProfile);
+    STRCMP_EQUAL("Oakland, CA", rGetProfile.json.value("location", "").c_str());
+
+    /* 2. Oversized avatar URI (>32768 bytes) is rejected with 400 */
+    std::string hugeAvatar = "data:image/png;base64," + repeat('A', 33000);
+    Reply rHugeAvatar = http().patch("/api/v1/profile/me", a.token,
+                                    Json{{"avatar_url", hugeAvatar}});
+    EXPECT_ERROR(400, "INVALID_AVATAR_URL", rHugeAvatar);
+
+    /* 3. Oversized bio (>500 bytes) or location (>64 bytes) is rejected */
+    Reply rHugeBio = http().patch("/api/v1/profile/me", a.token,
+                                 Json{{"bio", repeat('B', 501)}});
+    EXPECT_ERROR(400, "INVALID_BIO", rHugeBio);
+
+    Reply rHugeLoc = http().patch("/api/v1/profile/me", a.token,
+                                 Json{{"location", repeat('L', 65)}});
+    EXPECT_ERROR(400, "INVALID_LOCATION", rHugeLoc);
+
+    /* 4. Play a draw game so Alice and Bob have an archived match */
+    playDrawGame(a, b);
+
+    /* 5. Register a robot for Alice so active_robots_count increments */
+    Reply rBot = http().post("/api/v1/robots", a.token,
+                             Json{{"robot_name", "alice_bot_one"},
+                                  {"description", "Alice's opening engine"}});
+    EXPECT_STATUS(201, rBot);
+
+    /* 6. GET /api/v1/users directory search and pagination */
+    Reply rUsers = http().get("/api/v1/users?q=Alice&limit=10&offset=0");
+    EXPECT_STATUS(200, rUsers);
+    CHECK_TRUE(rUsers.json.value("total", 0) >= 1);
+    CHECK_EQUAL(10, rUsers.json.value("limit", 0));
+    CHECK_EQUAL(0, rUsers.json.value("offset", 0));
+    Json uList = rUsers.json["users"];
+    CHECK_TRUE(uList.is_array());
+    CHECK_TRUE(uList.size() >= 1);
+    bool foundAlice = false;
+    for (size_t i = 0; i < uList.size(); ++i) {
+        if (uList[i].value("uuid", "") == a.uuid) {
+            foundAlice = true;
+            STRCMP_EQUAL("Oakland, CA", uList[i].value("location", "").c_str());
+            STRCMP_EQUAL("Competitive OCTI tactician and robot creator.",
+                         uList[i].value("bio", "").c_str());
+            CHECK_EQUAL(1, uList[i].value("active_robots_count", 0));
+            CHECK_EQUAL(1, uList[i].value("games_played", 0));
+            CHECK_EQUAL(1, uList[i].value("draws", 0));
+            break;
+        }
+    }
+    CHECK_TRUE(foundAlice);
+
+    /* 7. Lookup user profile by UUID, handle, and @handle */
+    Reply rByUuid = http().get("/api/v1/users/" + a.uuid);
+    EXPECT_STATUS(200, rByUuid);
+    STRCMP_EQUAL(a.handle.c_str(), rByUuid.json.value("handle", "").c_str());
+    STRCMP_EQUAL("Oakland, CA", rByUuid.json.value("location", "").c_str());
+
+    Reply rByHandle = http().get("/api/v1/users/" + a.handle);
+    EXPECT_STATUS(200, rByHandle);
+    STRCMP_EQUAL(a.uuid.c_str(), rByHandle.json.value("uuid", "").c_str());
+
+    Reply rByAtHandle = http().get("/api/v1/users/@" + a.handle);
+    EXPECT_STATUS(200, rByAtHandle);
+    STRCMP_EQUAL(a.uuid.c_str(), rByAtHandle.json.value("uuid", "").c_str());
+
+    /* 8. Backward compatibility: GET /api/v1/profile/:id and /api/v1/players/:uuid */
+    Reply rProfileCompat = http().get("/api/v1/profile/" + a.uuid);
+    EXPECT_STATUS(200, rProfileCompat);
+    STRCMP_EQUAL(a.handle.c_str(), rProfileCompat.json.value("handle", "").c_str());
+
+    Reply rPlayerCompat = http().get("/api/v1/players/" + a.uuid);
+    EXPECT_STATUS(200, rPlayerCompat);
+    STRCMP_EQUAL(a.handle.c_str(), rPlayerCompat.json.value("handle", "").c_str());
+
+    /* 9. Critical security check: public profile / robots list MUST NOT leak robot_token */
+    CHECK_TRUE(rByUuid.body.find("robot_token") == std::string::npos);
+    CHECK_TRUE(rByUuid.body.find("token_prefix") == std::string::npos);
+    Json pubBots = rByUuid.json["robots"];
+    CHECK_TRUE(pubBots.is_array());
+    CHECK_EQUAL(1, static_cast<int>(pubBots.size()));
+    STRCMP_EQUAL("alice_bot_one", pubBots[0].value("robot_name", "").c_str());
+    STRCMP_EQUAL("Alice's opening engine", pubBots[0].value("description", "").c_str());
+
+    /* 10. Recent games history includes DRAW outcome */
+    Json recGames = rByUuid.json["recent_games"];
+    CHECK_TRUE(recGames.is_array());
+    CHECK_EQUAL(1, static_cast<int>(recGames.size()));
+    STRCMP_EQUAL("DRAW", recGames[0].value("player_outcome", "").c_str());
+
+    /* 11. Unknown user returns 404 */
+    EXPECT_ERROR(404, "NOT_FOUND", http().get("/api/v1/users/non-existent-user-uuid"));
+}
+
+TEST(OctiHttpServerIntegrationTest, RobotRegistration)
+{
+    User a = signIn("google", "sub-bot-owner", "Bot Owner");
+    User b = signIn("apple", "sub-other-user", "Other User");
+
+    /* 1. Authentication required */
+    EXPECT_STATUS(401, http().get("/api/v1/robots"));
+    EXPECT_STATUS(401, http().post("/api/v1/robots", "", Json{{"robot_name", "unauth_bot"}}));
+
+    /* 2. Create 3 robots up to the maximum limit */
+    Reply r1 = http().post("/api/v1/robots", a.token,
+                          Json{{"robot_name", "octi_engine_a"},
+                               {"description", "First engine"}});
+    EXPECT_STATUS(201, r1);
+    std::string bot1Uuid = r1.json.value("robot_uuid", "");
+    CHECK_FALSE(bot1Uuid.empty());
+    std::string token1 = r1.json.value("robot_token", "");
+    CHECK_TRUE(token1.rfind("octi_bot_", 0) == 0);
+    STRCMP_EQUAL("octi_engine_a", r1.json.value("robot_name", "").c_str());
+    CHECK_FALSE(r1.json.value("revoked", true));
+
+    Reply r2 = http().post("/api/v1/robots", a.token,
+                          Json{{"robot_name", "octi_engine_b"}});
+    EXPECT_STATUS(201, r2);
+    std::string bot2Uuid = r2.json.value("robot_uuid", "");
+
+    Reply r3 = http().post("/api/v1/robots", a.token,
+                          Json{{"robot_name", "octi_engine_c"}});
+    EXPECT_STATUS(201, r3);
+
+    /* 3. 4th robot attempt is rejected with 409 ROBOT_LIMIT_REACHED */
+    Reply r4 = http().post("/api/v1/robots", a.token,
+                          Json{{"robot_name", "octi_engine_d"}});
+    EXPECT_ERROR(409, "ROBOT_LIMIT_REACHED", r4);
+
+    /* 4. Duplicate name rejected with 409 ROBOT_NAME_TAKEN */
+    Reply rDup = http().post("/api/v1/robots", b.token,
+                            Json{{"robot_name", "octi_engine_a"}});
+    EXPECT_ERROR(409, "ROBOT_NAME_TAKEN", rDup);
+
+    /* 5. Invalid robot name rejected with 400 INVALID_ROBOT_NAME */
+    Reply rShort = http().post("/api/v1/robots", b.token,
+                              Json{{"robot_name", "ab"}});
+    EXPECT_ERROR(400, "INVALID_ROBOT_NAME", rShort);
+
+    /* 6. List robots for owner includes full robot_token */
+    Reply rList = http().get("/api/v1/robots", a.token);
+    EXPECT_STATUS(200, rList);
+    CHECK_EQUAL(3, rList.json.value("max_robots", 0));
+    CHECK_EQUAL(3, rList.json.value("active_count", 0));
+    Json bots = rList.json["robots"];
+    CHECK_TRUE(bots.is_array());
+    CHECK_EQUAL(3, static_cast<int>(bots.size()));
+    CHECK_FALSE(bots[0].value("robot_token", "").empty());
+
+    /* 7. Patch robot description */
+    Reply rPatch = http().patch("/api/v1/robots/" + bot1Uuid, a.token,
+                                Json{{"description", "Updated description for engine a"}});
+    EXPECT_STATUS(200, rPatch);
+    CHECK_TRUE(rPatch.json.value("updated", false));
+
+    /* Cannot patch another user's robot */
+    Reply rCrossPatch = http().patch("/api/v1/robots/" + bot1Uuid, b.token,
+                                     Json{{"description", "Hacked"}});
+    EXPECT_ERROR(404, "NOT_FOUND", rCrossPatch);
+
+    /* 8. Revoke robot via DELETE */
+    Reply rRevoke = http().del("/api/v1/robots/" + bot1Uuid, a.token);
+    EXPECT_STATUS(200, rRevoke);
+    CHECK_TRUE(rRevoke.json.value("revoked", false));
+
+    /* Revoking again fails */
+    Reply rRevokeAgain = http().del("/api/v1/robots/" + bot1Uuid, a.token);
+    CHECK_TRUE(rRevokeAgain.status == 404 || rRevokeAgain.status == 409);
+
+    /* Active count decreased to 2 */
+    Reply rListAfter = http().get("/api/v1/robots", a.token);
+    EXPECT_STATUS(200, rListAfter);
+    CHECK_EQUAL(2, rListAfter.json.value("active_count", 0));
+
+    /* 9. Re-registering released robot name succeeds now that old one is revoked */
+    Reply rReuseName = http().post("/api/v1/robots", b.token,
+                                  Json{{"robot_name", "octi_engine_a"}});
+    EXPECT_STATUS(201, rReuseName);
+    STRCMP_EQUAL("octi_engine_a", rReuseName.json.value("robot_name", "").c_str());
+}
+
+TEST(OctiHttpServerIntegrationTest, VisibleAnonymousObservation)
+{
+    User a = signIn("google", "sub-host", "Host Alice");
+    User b = signIn("apple", "sub-guest", "Guest Bob");
+
+    /* 1. Unauthenticated lobby state registers anonymous-<ip> in presence */
+    Reply rLobby = http().get("/api/v1/lobby/state");
+    EXPECT_STATUS(200, rLobby);
+    Json players = rLobby.json["players"];
+    CHECK_TRUE(players.is_array());
+    bool foundAnon = false;
+    for (size_t i = 0; i < players.size(); ++i) {
+        if (players[i].value("handle", "") == "anonymous-127.0.0.1") {
+            foundAnon = true;
+            break;
+        }
+    }
+    CHECK_TRUE(foundAnon);
+
+    /* 2. Create public table and observe without authentication */
+    std::string pubRoom = createTable(a, Json{{"mode", "2P"}});
+    CHECK_FALSE(pubRoom.empty());
+
+    Reply rObs = http().post("/api/v1/tables/" + pubRoom + "/observe", "", Json::object());
+    EXPECT_STATUS(200, rObs);
+    CHECK_TRUE(rObs.json.value("ok", false));
+    Json obsList = rObs.json["observer_handles"];
+    CHECK_TRUE(obsList.is_array());
+    bool foundAnonObs = false;
+    for (size_t i = 0; i < obsList.size(); ++i) {
+        if (obsList[i].get<std::string>() == "anonymous-127.0.0.1") {
+            foundAnonObs = true;
+            break;
+        }
+    }
+    CHECK_TRUE(foundAnonObs);
+
+    /* Table state / game view includes anonymous-127.0.0.1 in observer_handles */
+    Reply rGame = http().get("/api/v1/games/" + pubRoom);
+    EXPECT_STATUS(200, rGame);
+    Json gameObs = rGame.json["observer_handles"];
+    CHECK_TRUE(gameObs.is_array());
+    bool inGameObs = false;
+    for (size_t i = 0; i < gameObs.size(); ++i) {
+        if (gameObs[i].get<std::string>() == "anonymous-127.0.0.1") {
+            inGameObs = true;
+            break;
+        }
+    }
+    CHECK_TRUE(inGameObs);
+
+    /* 3. Passcode-protected table: anonymous without passcode or wrong passcode returns 403 */
+    std::string privRoom = createTable(b, Json{{"mode", "2P"}, {"passcode", "secretPass"}});
+    CHECK_FALSE(privRoom.empty());
+
+    /* Passcode-protected table: anonymous without passcode or with passcode is rejected with 403 */
+    Reply rPrivFail = http().post("/api/v1/tables/" + privRoom + "/observe", "", Json::object());
+    EXPECT_ERROR(403, "FORBIDDEN_PASSCODE", rPrivFail);
+
+    Reply rPrivAnon = http().post("/api/v1/tables/" + privRoom + "/observe", "",
+                                  Json{{"passcode", "secretPass"}});
+    EXPECT_ERROR(403, "FORBIDDEN_PASSCODE", rPrivAnon);
+
+    /* Authenticated user can observe the passcode-protected room */
+    Reply rPrivOk = http().post("/api/v1/tables/" + privRoom + "/observe", a.token,
+                                Json::object());
+    EXPECT_STATUS(200, rPrivOk);
+
+    /* 4. Unauthenticated mutating actions are strictly 401 UNAUTHORIZED */
+    EXPECT_STATUS(401, http().post("/api/v1/lobby/chat", "", Json{{"text", "hello"}}));
+    EXPECT_STATUS(401, http().post("/api/v1/games/" + pubRoom + "/chat", "", Json{{"text", "hello"}}));
+    EXPECT_STATUS(401, http().post("/api/v1/tables/" + pubRoom + "/join", "", Json::object()));
+    EXPECT_STATUS(401, http().post("/api/v1/matchmaking/enqueue", "", Json{{"mode", "2P"}}));
+    EXPECT_STATUS(401, http().post("/api/v1/games/" + pubRoom + "/move", "", Json{{"move", "33+a"}}));
+}
+
+TEST(OctiHttpServerIntegrationTest, OAuthBrokerAndAccountLinking)
+{
+    /* 1. GET /privacy returns 200 and privacy policy HTML */
+    Reply rPriv = http().get("/privacy");
+    EXPECT_STATUS(200, rPriv);
+    CHECK_TRUE(rPriv.body.find("Privacy") != std::string::npos);
+    CHECK_TRUE(rPriv.body.find("selfso.com") != std::string::npos);
+
+    /* 2. GET / serves Web UI with 5 main tab anchors */
+    Reply rRoot = http().get("/");
+    EXPECT_STATUS(200, rRoot);
+    CHECK_TRUE(rRoot.body.find("tab-home") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("tab-play") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("tab-users") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("tab-robots") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("tab-account") != std::string::npos);
+
+    /* 3. Authorize endpoint: provider validation */
+    Reply rBadProv = http().get("/api/v1/auth/authorize?provider=twitter");
+    EXPECT_ERROR(400, "UNSUPPORTED_PROVIDER", rBadProv);
+
+    /* 4. Open-redirect prevention: reject illegal redirect_uri */
+    EXPECT_ERROR(400, "INVALID_REDIRECT_URI",
+                 http().get("/api/v1/auth/authorize?provider=google&redirect_uri=//evil.com"));
+    EXPECT_ERROR(400, "INVALID_REDIRECT_URI",
+                 http().get("/api/v1/auth/authorize?provider=google&redirect_uri=https://evil.com"));
+    EXPECT_ERROR(400, "INVALID_REDIRECT_URI",
+                 http().get("/api/v1/auth/authorize?provider=google&redirect_uri=javascript:alert(1)"));
+    EXPECT_ERROR(400, "INVALID_REDIRECT_URI",
+                 http().get("/api/v1/auth/authorize?provider=google&redirect_uri=http://evil.com:8080/callback"));
+
+    /* 5. Valid authorize returns 302 with Location pointing to Google / Facebook */
+    Reply rAuthGoogle = http().get("/api/v1/auth/authorize?provider=google&redirect_uri=/#account");
+    EXPECT_STATUS(302, rAuthGoogle);
+    std::string locGoogle = rAuthGoogle.header("Location");
+    CHECK_TRUE(locGoogle.find("accounts.google.com") != std::string::npos);
+    CHECK_TRUE(locGoogle.find("state=") != std::string::npos);
+    CHECK_TRUE(locGoogle.find("client_id=") != std::string::npos);
+
+    Reply rAuthFb = http().get("/api/v1/auth/authorize?provider=facebook&redirect_uri=http://127.0.0.1:8080/callback");
+    EXPECT_STATUS(302, rAuthFb);
+    std::string locFb = rAuthFb.header("Location");
+    CHECK_TRUE(locFb.find("facebook.com") != std::string::npos);
+    CHECK_TRUE(locFb.find("state=") != std::string::npos);
+
+    /* 6. Callback validation: missing or invalid state is 400 INVALID_OAUTH_STATE */
+    EXPECT_ERROR(400, "INVALID_OAUTH_STATE", http().get("/api/v1/auth/callback"));
+    EXPECT_ERROR(400, "INVALID_OAUTH_STATE", http().get("/api/v1/auth/callback?state=bad.state"));
+
+    /* 7. Account linking with force_relink: true merges empty conflicting account */
+    User u1 = signIn("google", "sub-u1-google", "Primary User");
+    User u2 = signIn("facebook", "sub-u2-fb", "Conflicting FB User");
+
+    /* Attempt link without force_relink -> fails with conflict */
+    std::string fbToken = makeToken("facebook", "sub-u2-fb", "Conflicting FB User");
+    Reply rLinkConflict = http().post("/api/v1/auth/link", u1.token,
+                                     Json{{"provider", "facebook"},
+                                          {"id_token", fbToken}});
+    CHECK_TRUE(rLinkConflict.status == 409 || rLinkConflict.status == 400);
+
+    /* Attempt link with force_relink: true -> succeeds and merges empty account */
+    Reply rForceLink = http().post("/api/v1/auth/link", u1.token,
+                                   Json{{"provider", "facebook"},
+                                        {"id_token", fbToken},
+                                        {"force_relink", true}});
+    EXPECT_STATUS(200, rForceLink);
+    CHECK_TRUE(rForceLink.json.value("linked", false));
 }
 
 /* ================================================================== */

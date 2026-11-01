@@ -9,6 +9,7 @@ package com.selfso.octi;
 import android.view.KeyEvent;
 
 import com.selfso.octi.ui.OctiAppViewModel;
+import com.selfso.octi.ui.OctiDialogs;
 import com.selfso.selfupdate.UpdateManifest;
 
 import org.junit.After;
@@ -231,6 +232,34 @@ public class OctiAndroidAppIntegrationTest {
     }
 
     @Test
+    public void testCanonicalSsoProvidersOnlyGoogleAndFacebook() throws Exception {
+        assertEquals(1, OctiDialogs.CANONICAL_SSO_PROVIDERS.size());
+        assertEquals("google", OctiDialogs.CANONICAL_SSO_PROVIDERS.get(0).getFirst());
+        assertEquals("Google", OctiDialogs.CANONICAL_SSO_PROVIDERS.get(0).getSecond());
+        assertEquals(2, OctiDialogs.ALL_SSO_PROVIDERS.size());
+        assertEquals("google", OctiDialogs.ALL_SSO_PROVIDERS.get(0).getFirst());
+        assertEquals("facebook", OctiDialogs.ALL_SSO_PROVIDERS.get(1).getFirst());
+
+        try (MockSsoHarnessServer ssoServer = new MockSsoHarnessServer();
+             OctiNetworkClient netClient = OctiNetworkClient.forHermeticTest(ssoServer.port());
+             OctiAppViewModel vm = new OctiAppViewModel(
+                     new ClientConfigStore(new File(_tempDir, "browser_sso_vm.json")),
+                     netClient)) {
+            final String[] openedUrl = new String[]{""};
+            String url = vm.startBrowserSignIn("google", u -> {
+                openedUrl[0] = u;
+                return kotlin.Unit.INSTANCE;
+            });
+            assertTrue(url.contains("/api/v1/auth/authorize?provider=google"));
+            assertEquals(url, openedUrl[0]);
+            assertTrue(vm.isBrowserAuthInProgress().getValue());
+            assertTrue(vm.loopbackAuthPort() > 0);
+            vm.cancelBrowserAuth();
+            assertFalse(vm.isBrowserAuthInProgress().getValue());
+        }
+    }
+
+    @Test
     public void testViewModelSsoLoginMultiProviderLinkingAnd409ConflictAccountSwitch() throws Exception {
         try (MockSsoHarnessServer ssoServer = new MockSsoHarnessServer();
              OctiNetworkClient netClient = OctiNetworkClient.forHermeticTest(ssoServer.port());
@@ -259,14 +288,95 @@ public class OctiAndroidAppIntegrationTest {
             assertFalse(linkConflict.ok);
             assertEquals(409, linkConflict.httpStatus);
             assertNotNull(vm.getLinkConflictProfile().getValue());
+            assertNotNull(vm.getLinkConflict().getValue());
             assertEquals("GrandmasterVega", vm.getLinkConflictProfile().getValue().handle);
 
-            // 4. Confirm switching to the conflict account
+            // 4. Merge conflicting identity into current account (force_relink=true) on background executor
+            java.util.concurrent.Future<?> mergeFuture = vm.mergeConflictingIdentityIntoCurrentAccount();
+            assertNotNull(mergeFuture);
+            mergeFuture.get(5, TimeUnit.SECONDS);
+            assertNull(vm.getLinkConflictProfile().getValue());
+            assertNull(vm.getLinkConflict().getValue());
+            assertTrue(vm.getStatusBanner().getValue().contains("Merged microsoft"));
+
+            // 5. Trigger conflict again and confirm switching to the conflict account
+            OctiNetworkClient.ApiResult<OctiNetworkClient.LinkIdentityData> linkConflict2 =
+                    vm.linkIdentity("microsoft", "token-conflict-vega");
+            assertFalse(linkConflict2.ok);
+            assertEquals(409, linkConflict2.httpStatus);
+            assertNotNull(vm.getLinkConflictProfile().getValue());
+
             OctiNetworkClient.ApiResult<OctiNetworkClient.SsoLoginData> switched =
                     vm.confirmSwitchToConflictAccount();
             assertTrue(switched.ok);
             assertNull(vm.getLinkConflictProfile().getValue());
             assertEquals("p-microsoft", vm.getCurrentProfile().getValue().uuid);
+        }
+    }
+
+    @Test
+    public void testForceRelinkAndGuestObservationVersusChatGating() throws Exception {
+        try (MockSsoHarnessServer ssoServer = new MockSsoHarnessServer();
+             OctiNetworkClient netClient = OctiNetworkClient.forHermeticTest(ssoServer.port());
+             OctiAppViewModel vm = new OctiAppViewModel(
+                     new ClientConfigStore(new File(_tempDir, "guest_vm.json")),
+                     netClient)) {
+
+            // 1. Guest observation vs. chat gating when unauthenticated
+            assertTrue(netClient.canGuestObserve());
+            assertFalse(netClient.canGuestChat());
+            assertFalse(netClient.isAuthenticated());
+            assertFalse(vm.isAuthenticated().getValue());
+
+            // Chatting while unauthenticated must fail immediately with 401 UNAUTHENTICATED
+            OctiNetworkClient.ApiResult<Long> lobbyChatRes = netClient.postLobbyChat("Hello from guest");
+            assertFalse(lobbyChatRes.ok);
+            assertEquals(401, lobbyChatRes.httpStatus);
+            assertEquals("UNAUTHENTICATED", lobbyChatRes.errorCode);
+
+            OctiNetworkClient.ApiResult<Long> vmLobbyChatRes = vm.sendLobbyChat("Hello from vm guest");
+            assertFalse(vmLobbyChatRes.ok);
+            assertEquals(401, vmLobbyChatRes.httpStatus);
+            assertEquals("UNAUTHENTICATED", vmLobbyChatRes.errorCode);
+
+            OctiNetworkClient.ApiResult<Long> vmGameChatRes = vm.sendGameChat("all", "Hello game from guest");
+            assertFalse(vmGameChatRes.ok);
+            assertEquals(401, vmGameChatRes.httpStatus);
+            assertEquals("UNAUTHENTICATED", vmGameChatRes.errorCode);
+
+            // Guest can refresh lobby and observe tables
+            OctiNetworkClient.ApiResult<OctiNetworkClient.LobbyStateData> lobbyRes = vm.refreshLobby();
+            assertTrue(lobbyRes.ok);
+
+            OctiNetworkClient.ApiResult<Boolean> observeRes = vm.observeTable("room-test-123", "");
+            assertTrue(observeRes.ok);
+            assertTrue(vm.getStatusBanner().getValue().contains("Observing as anonymous"));
+
+            // 2. Direct AuthResult linkIdentity with forceRelink=true
+            netClient.setSessionToken("sess-test-token");
+            assertTrue(netClient.isAuthenticated());
+            assertTrue(netClient.canGuestChat());
+
+            // Linking conflict without forceRelink fails with 409
+            OctiNetworkClient.AuthResult conflictRes =
+                    netClient.linkIdentity("facebook", "token-conflict-user", "", false);
+            assertFalse(conflictRes.ok);
+            assertEquals(409, conflictRes.httpStatus);
+            assertTrue(conflictRes.data.conflictAlreadyLinked);
+
+            // Linking conflict with forceRelink=true succeeds with 200 OK
+            OctiNetworkClient.AuthResult forceRes =
+                    netClient.linkIdentity("facebook", "token-conflict-user", "", true);
+            assertTrue(forceRes.ok);
+            assertEquals(200, forceRes.httpStatus);
+            assertEquals("linked", forceRes.data.status);
+            assertFalse(forceRes.data.identities.isEmpty());
+
+            // Programmatic linkIdentity works with any arbitrary provider string
+            OctiNetworkClient.AuthResult customProvRes =
+                    netClient.linkIdentity("custom_provider", "token-custom-ok", "", false);
+            assertTrue(customProvRes.ok);
+            assertEquals(200, customProvRes.httpStatus);
         }
     }
 
@@ -843,7 +953,9 @@ public class OctiAndroidAppIntegrationTest {
                         readTotal += n;
                     }
                     String body = new String(bodyChars, 0, readTotal);
-                    Map<String, Object> reqJson = OctiMiniJson.parseObject(body);
+                    Map<String, Object> reqJson = body.trim().isEmpty()
+                            ? java.util.Collections.emptyMap()
+                            : OctiMiniJson.parseObject(body);
                     String provider = OctiMiniJson.getString(reqJson, "provider", "google");
                     String token = OctiMiniJson.getString(reqJson, "id_token",
                             OctiMiniJson.getString(reqJson, "access_token", ""));
@@ -869,7 +981,8 @@ public class OctiAndroidAppIntegrationTest {
                                 + "  ]\n"
                                 + "}";
                     } else if (reqLine.contains("/api/v1/auth/link")) {
-                        if (token.contains("conflict")) {
+                        boolean forceRelink = Boolean.TRUE.equals(reqJson.get("force_relink"));
+                        if (token.contains("conflict") && !forceRelink) {
                             status = 409;
                             respBody = "{\n"
                                     + "  \"error\": \"identity_conflict\",\n"
@@ -890,6 +1003,26 @@ public class OctiAndroidAppIntegrationTest {
                                     + "  ]\n"
                                     + "}";
                         }
+                    } else if (reqLine.contains("/api/v1/lobby/state")) {
+                        status = 200;
+                        respBody = "{\n"
+                                + "  \"players\": [],\n"
+                                + "  \"tables\": [],\n"
+                                + "  \"recent_chat\": [],\n"
+                                + "  \"latest_seq\": 0\n"
+                                + "}";
+                    } else if (reqLine.contains("/observe")) {
+                        status = 200;
+                        respBody = "{\"ok\":true}";
+                    } else if (reqLine.contains("/view")) {
+                        status = 200;
+                        respBody = "{\n"
+                                + "  \"room_id\": \"room-test-123\",\n"
+                                + "  \"mode\": \"2P\",\n"
+                                + "  \"fen\": \"\",\n"
+                                + "  \"seats\": [],\n"
+                                + "  \"observers\": []\n"
+                                + "}";
                     } else {
                         status = 404;
                         respBody = "{\"error\":\"not_found\"}";

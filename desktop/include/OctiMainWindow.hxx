@@ -153,6 +153,8 @@ public:
     bool sendGameChatMessage(const std::string &scope,
                              const std::string &text);
     const std::vector<std::string> &gameChatLines() const;
+    QLineEdit *gameChatInput() const { return _gameChatInput; }
+    QPushButton *sendGameChatButton() const { return _sendGameChatBtn; }
 
     bool hasActiveProposal() const;
     std::string activeProposalType() const;

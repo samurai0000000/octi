@@ -34,6 +34,9 @@ struct PlayerProfile {
     std::string handle;
     std::string displayName;
     std::string avatarUrl;
+    std::string bio;
+    std::string location;
+    bool banned = false;
     int elo2p = 1200;
     int elo4p = 1200;
     int eloOfk = 1200;
@@ -65,9 +68,11 @@ struct LoginResult {
 };
 
 enum class LinkStatus {
-    LINKED,
+    OK = 0,
+    LINKED = OK,
     ALREADY_LINKED_SELF,
     CONFLICT_ALREADY_LINKED,
+    CONFLICT_OTHER_ACCOUNT = CONFLICT_ALREADY_LINKED,
     PLAYER_NOT_FOUND,
     INVALID_CLAIMS,
     ERROR
@@ -75,7 +80,11 @@ enum class LinkStatus {
 
 struct LinkResult {
     LinkStatus status = LinkStatus::ERROR;
+    bool ok = false;
     PublicProfile conflictProfile;      // set for CONFLICT_ALREADY_LINKED
+    int64_t conflictingPlayerId = 0;
+    std::string conflictingPlayerUuid;
+    std::string conflictingHandle;
     std::string error;
 };
 
@@ -100,6 +109,10 @@ struct ProfileUpdate {
     std::string displayName;
     bool setAvatarUrl = false;
     std::string avatarUrl;
+    bool setBio = false;
+    std::string bio;
+    bool setLocation = false;
+    std::string location;
 };
 
 enum class UpdateStatus {
@@ -109,6 +122,8 @@ enum class UpdateStatus {
     HANDLE_TAKEN,
     INVALID_DISPLAY_NAME,
     INVALID_AVATAR_URL,
+    INVALID_BIO,
+    INVALID_LOCATION,
     ERROR
 };
 
@@ -242,6 +257,63 @@ struct CrashReportFilter {
     int offset = 0;
 };
 
+static constexpr int kDefaultUsersPageLimit = 50;
+static constexpr int kMaxUsersPageLimit = 100;
+
+struct UserDirectoryFilter {
+    std::string query;      // case-insensitive substring on handle, display_name, location, bio
+    std::string sortField;  // "handle" | "display_name" | "elo_2p" | "elo_4p" | "elo_ofk" | "games_played" | "wins" | "created_at" | "last_seen_at"
+    bool sortAsc = false;
+    int limit = kDefaultUsersPageLimit; // clamped to 1..100
+    int offset = 0;         // clamped >= 0
+};
+
+struct UserDirectoryEntry {
+    PlayerProfile profile;
+    int activeRobotsCount = 0;
+};
+
+static constexpr int kMaxRobotsPerPlayer = 3;
+
+struct RobotRecord {
+    int64_t robotId = 0;
+    std::string robotUuid;
+    int64_t ownerPlayerId = 0;
+    std::string ownerUuid;
+    std::string ownerHandle;
+    std::string robotName;
+    std::string description;
+    std::string token;       // Full "octi_bot_<base64url>" for owner; cleared in public queries
+    std::string tokenPrefix; // "octi_bot_xxxx..."
+    int64_t createdAt = 0;
+    bool revoked = false;
+    int64_t revokedAt = 0;
+};
+
+enum class RobotStatus {
+    OK = 0,
+    INVALID_ROBOT_NAME,
+    INVALID_ROBOT_DESCRIPTION,
+    ROBOT_NAME_TAKEN,
+    ROBOT_LIMIT_REACHED,
+    NOT_FOUND,
+    ALREADY_REVOKED,
+    DB_ERROR,
+};
+
+struct CreateRobotResult {
+    RobotStatus status = RobotStatus::DB_ERROR;
+    RobotRecord robot;
+    std::string rawToken; // "octi_bot_<43-char-base64url>"
+    std::string errorMessage;
+};
+
+struct RobotTokenValidation {
+    bool valid = false;
+    RobotRecord robot;
+    PlayerProfile owner;
+};
+
 class AccountStore {
 public:
     static constexpr int kMinHandleLength = 3;
@@ -272,10 +344,16 @@ public:
 
     static bool isValidHandle(const std::string &handle);
     static std::string sha256Hex(const std::string &data);
+    static bool validBio(const std::string &bio);
+    static bool validLocation(const std::string &location);
+    static bool validAvatarUrl(const std::string &url);
+    static bool validRobotName(const std::string &name);
+    static bool validRobotDescription(const std::string &desc);
 
     LoginResult loginWithSso(const VerifiedClaims &claims,
                              const std::string &clientAgent);
-    LinkResult linkIdentity(int64_t playerId, const VerifiedClaims &claims);
+    LinkResult linkIdentity(int64_t playerId, const VerifiedClaims &claims,
+                            bool forceRelinkEmpty = false);
     UnlinkStatus unlinkIdentity(int64_t playerId, const std::string &provider);
     bool listLinkedIdentities(int64_t playerId,
                               std::vector<LinkedIdentity> &out);
@@ -297,9 +375,30 @@ public:
     /* Deletes expired or revoked sessions; returns rows removed, -1 on error. */
     int purgeExpiredSessions(int64_t now);
 
+    bool getProfile(int64_t playerId, PlayerProfile &out);
     bool getProfileById(int64_t playerId, PlayerProfile &out);
     bool getProfileByUuid(const std::string &uuid, PlayerProfile &out);
-    UpdateStatus updateProfile(int64_t playerId, const ProfileUpdate &update);
+    bool getProfileByHandle(const std::string &handle, PlayerProfile &out);
+    UpdateStatus updateProfile(int64_t playerId, const ProfileUpdate &update,
+                               PlayerProfile *updated = nullptr);
+    bool setBanned(int64_t playerId, bool banned);
+
+    bool listUsers(const UserDirectoryFilter &filter,
+                   std::vector<UserDirectoryEntry> &out,
+                   int64_t *total = nullptr);
+
+    CreateRobotResult createRobot(int64_t ownerPlayerId,
+                                  const std::string &robotName,
+                                  const std::string &description = "");
+    RobotStatus updateRobotDescription(int64_t ownerPlayerId,
+                                       const std::string &robotUuidOrName,
+                                       const std::string &description);
+    bool listRobots(int64_t ownerPlayerId, std::vector<RobotRecord> &out);
+    bool listPublicRobotsByOwner(int64_t ownerPlayerId,
+                                 std::vector<RobotRecord> &out);
+    RobotStatus revokeRobot(int64_t ownerPlayerId,
+                            const std::string &robotUuidOrName);
+    RobotTokenValidation validateRobotToken(const std::string &rawToken);
 
     /* mode: '2P' | '4P' | 'OFK'; limit clamped to 1..kMaxLeaderboardLimit. */
     bool leaderboard(const std::string &mode, int limit,

@@ -279,9 +279,29 @@ class OctiAppViewModel @JvmOverloads constructor(
         MutableStateFlow<OctiNetworkClient.PlayerProfileInfo?>(null)
     val linkConflictProfile: StateFlow<OctiNetworkClient.PlayerProfileInfo?> =
         _linkConflictProfile.asStateFlow()
+    val linkConflict: StateFlow<OctiNetworkClient.PlayerProfileInfo?>
+        get() = _linkConflictProfile.asStateFlow()
 
     private var _pendingConflictProvider: String = ""
     private var _pendingConflictToken: String = ""
+    private var _pendingConflictIdToken: String = ""
+    private var _pendingConflictAccessToken: String = ""
+    private val _isBrowserAuthInProgress = MutableStateFlow(false)
+    val isBrowserAuthInProgress: StateFlow<Boolean> = _isBrowserAuthInProgress.asStateFlow()
+    private val _browserAuthStatusText = MutableStateFlow("")
+    val browserAuthStatusText: StateFlow<String> = _browserAuthStatusText.asStateFlow()
+    private val _loopbackAuthListener = OctiNetworkClient.OAuthLoopbackListener()
+    @Volatile
+    private var _browserAuthLinkMode: Boolean = false
+    @Volatile
+    private var _browserAuthProvider: String = "google"
+    @Volatile
+    private var _preferDeepLinkRedirect: Boolean = false
+    @Volatile
+    var nativeSocialAuthLauncher: ((provider: String, linkMode: Boolean, clientId: String, onFallbackToBrowser: () -> Unit) -> Boolean)? = null
+    private val _backgroundExecutor = java.util.concurrent.Executors.newCachedThreadPool { r ->
+        Thread(r, "OctiAppViewModelBackgroundWorker").apply { isDaemon = true }
+    }
 
     // Online Lobby, Matchmaking, Live Room & Archive State
     private val _lobbyState = MutableStateFlow(OctiNetworkClient.LobbyStateData())
@@ -1692,23 +1712,65 @@ class OctiAppViewModel @JvmOverloads constructor(
         provider: String,
         token: String
     ): OctiNetworkClient.ApiResult<OctiNetworkClient.LinkIdentityData> {
-        val res = netClient.linkIdentity(provider, token)
+        val isAccess = "facebook".equals(provider, ignoreCase = true)
+        val idToken = if (isAccess) "" else token
+        val accessToken = if (isAccess) token else ""
+        return linkIdentity(provider, idToken, accessToken)
+    }
+
+    fun linkIdentity(
+        provider: String,
+        idToken: String,
+        accessToken: String
+    ): OctiNetworkClient.ApiResult<OctiNetworkClient.LinkIdentityData> {
+        val res = netClient.linkIdentity(provider, idToken, accessToken, false)
         if (res.ok && res.data != null) {
             _linkedIdentities.value = ArrayList(res.data.identities)
             _linkConflictProfile.value = null
             _pendingConflictProvider = ""
             _pendingConflictToken = ""
+            _pendingConflictIdToken = ""
+            _pendingConflictAccessToken = ""
             _statusBanner.value = "Linked $provider identity"
         } else if (res.httpStatus == 409 && res.data != null && res.data.conflictAlreadyLinked) {
             _linkConflictProfile.value = res.data.existingProfile
             _pendingConflictProvider = provider
-            _pendingConflictToken = token
+            _pendingConflictToken = if (idToken.isNotEmpty()) idToken else accessToken
+            _pendingConflictIdToken = idToken
+            _pendingConflictAccessToken = accessToken
             _statusBanner.value =
                 "Identity already linked to ${res.data.existingProfile.handle}"
         } else {
             _statusBanner.value = "Link failed: ${res.errorMessage}"
         }
         return res
+    }
+
+    fun mergeConflictingIdentityIntoCurrentAccount(): java.util.concurrent.Future<*>? {
+        val prov = _pendingConflictProvider
+        val idTok = _pendingConflictIdToken
+        val accTok = _pendingConflictAccessToken
+        if (prov.isEmpty()) {
+            return null
+        }
+        return _backgroundExecutor.submit {
+            val res = netClient.linkIdentity(prov, idTok, accTok, true)
+            if (res.ok && res.data != null) {
+                runOnUiThreadOrSync {
+                    _linkedIdentities.value = ArrayList(res.data.identities)
+                    _linkConflictProfile.value = null
+                    _pendingConflictProvider = ""
+                    _pendingConflictToken = ""
+                    _pendingConflictIdToken = ""
+                    _pendingConflictAccessToken = ""
+                    _statusBanner.value = "Merged $prov identity into current account"
+                }
+            } else {
+                runOnUiThreadOrSync {
+                    _statusBanner.value = "Merge failed: ${res.errorMessage}"
+                }
+            }
+        }
     }
 
     /**
@@ -1721,6 +1783,8 @@ class OctiAppViewModel @JvmOverloads constructor(
         _linkConflictProfile.value = null
         _pendingConflictProvider = ""
         _pendingConflictToken = ""
+        _pendingConflictIdToken = ""
+        _pendingConflictAccessToken = ""
         return loginWithSso(prov, tok)
     }
 
@@ -1728,6 +1792,8 @@ class OctiAppViewModel @JvmOverloads constructor(
         _linkConflictProfile.value = null
         _pendingConflictProvider = ""
         _pendingConflictToken = ""
+        _pendingConflictIdToken = ""
+        _pendingConflictAccessToken = ""
     }
 
     fun unlinkIdentity(
@@ -1753,6 +1819,7 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun logoutOnline(): OctiNetworkClient.ApiResult<Boolean> {
+        cancelBrowserAuth()
         leaveVoiceChannel()
         netClient.stopEventStreams()
         val res = netClient.logout()
@@ -1767,9 +1834,310 @@ class OctiAppViewModel @JvmOverloads constructor(
         return res
     }
 
+    fun setPreferDeepLinkRedirect(prefer: Boolean) {
+        _preferDeepLinkRedirect = prefer
+    }
+
+    private fun resolveProviderClientId(provider: String): String {
+        val existing = _authProviders.value.firstOrNull {
+            it.name.equals(provider, ignoreCase = true)
+        }?.clientIds?.firstOrNull()
+        if (!existing.isNullOrBlank()) {
+            return existing
+        }
+        val fetched = refreshAuthProviders()
+        if (fetched.ok && fetched.data != null) {
+            val found = fetched.data.firstOrNull {
+                it.name.equals(provider, ignoreCase = true)
+            }?.clientIds?.firstOrNull()
+            if (!found.isNullOrBlank()) {
+                return found
+            }
+        }
+        return ""
+    }
+
+    fun completeNativeSocialAuth(provider: String, token: String) {
+        val prov = provider.trim().lowercase().ifEmpty { _browserAuthProvider }
+        val isLink = _browserAuthLinkMode
+        _isBrowserAuthInProgress.value = true
+        _browserAuthStatusText.value = "Signing in with ${if (prov == "facebook") "Facebook" else "Google"}..."
+        _backgroundExecutor.submit {
+            if (isLink) {
+                val res = linkIdentity(prov, token)
+                runOnUiThreadOrSync {
+                    _isBrowserAuthInProgress.value = false
+                    if (res.ok || res.httpStatus == 409) {
+                        _browserAuthStatusText.value = ""
+                    } else {
+                        _browserAuthStatusText.value =
+                            res.errorMessage.ifEmpty { "Could not connect account right now." }
+                    }
+                }
+            } else {
+                val res = loginWithSso(prov, token)
+                runOnUiThreadOrSync {
+                    _isBrowserAuthInProgress.value = false
+                    if (res.ok) {
+                        _browserAuthStatusText.value = ""
+                        if (!_onboardingRequired.value) {
+                            _showSsoDialog.value = false
+                        }
+                    } else {
+                        _browserAuthStatusText.value =
+                            res.errorMessage.ifEmpty { "Could not sign in right now. Please try again." }
+                    }
+                }
+            }
+        }
+    }
+
+    fun failNativeSocialAuth(errorMessage: String) {
+        runOnUiThreadOrSync {
+            _isBrowserAuthInProgress.value = false
+            _browserAuthStatusText.value = errorMessage
+        }
+    }
+
+    @JvmOverloads
+    fun startBrowserSignIn(
+        provider: String,
+        openUrlCallback: ((String) -> Unit)? = null
+    ): String {
+        val prov = provider.trim().lowercase()
+        _browserAuthLinkMode = false
+        _browserAuthProvider = prov
+        _loopbackAuthListener.stop()
+        val provLabel = if (prov == "facebook") "Facebook" else "Google"
+
+        val nativeLauncher = nativeSocialAuthLauncher
+        if (nativeLauncher != null && prov == "facebook") {
+            _isBrowserAuthInProgress.value = true
+            _browserAuthStatusText.value = "Opening $provLabel app..."
+            _backgroundExecutor.submit {
+                val clientId = resolveProviderClientId(prov)
+                runOnUiThreadOrSync {
+                    val handled = if (clientId.isNotEmpty()) {
+                        nativeLauncher.invoke(prov, false, clientId) {
+                            val fallbackUrl = netClient.buildBrowserAuthorizeUrl(prov, "octi://auth/callback")
+                            _browserAuthStatusText.value = "Completing sign-in with $provLabel..."
+                            openUrlCallback?.invoke(fallbackUrl)
+                        }
+                    } else {
+                        false
+                    }
+                    if (!handled) {
+                        val fallbackUrl = netClient.buildBrowserAuthorizeUrl(prov, "octi://auth/callback")
+                        _browserAuthStatusText.value = "Completing sign-in with $provLabel..."
+                        openUrlCallback?.invoke(fallbackUrl)
+                    }
+                }
+            }
+            return netClient.buildBrowserAuthorizeUrl(prov, "octi://auth/callback")
+        }
+
+        val redirectUri = if (_preferDeepLinkRedirect) {
+            "octi://auth/callback"
+        } else {
+            val errOut = StringBuilder()
+            val started = _loopbackAuthListener.start({ cbProv, cbTok ->
+                val resolvedProv = cbProv.ifEmpty { prov }
+                _backgroundExecutor.submit {
+                    val res = loginWithSso(resolvedProv, cbTok)
+                    runOnUiThreadOrSync {
+                        _isBrowserAuthInProgress.value = false
+                        if (res.ok) {
+                            _browserAuthStatusText.value = ""
+                            if (!_onboardingRequired.value) {
+                                _showSsoDialog.value = false
+                            }
+                        } else {
+                            _browserAuthStatusText.value =
+                                res.errorMessage.ifEmpty { "Could not sign in right now. Please try again." }
+                        }
+                    }
+                }
+            }, errOut)
+            if (started && _loopbackAuthListener.callbackUrl().isNotEmpty()) {
+                _loopbackAuthListener.callbackUrl()
+            } else {
+                "octi://auth/callback"
+            }
+        }
+        val url = netClient.buildBrowserAuthorizeUrl(prov, redirectUri)
+        _isBrowserAuthInProgress.value = true
+        _browserAuthStatusText.value = "Completing sign-in with $provLabel in your browser..."
+        openUrlCallback?.invoke(url)
+        return url
+    }
+
+    @JvmOverloads
+    fun startBrowserLink(
+        provider: String,
+        openUrlCallback: ((String) -> Unit)? = null
+    ): String {
+        val prov = provider.trim().lowercase()
+        _browserAuthLinkMode = true
+        _browserAuthProvider = prov
+        _loopbackAuthListener.stop()
+        val provLabel = if (prov == "facebook") "Facebook" else "Google"
+
+        val nativeLauncher = nativeSocialAuthLauncher
+        if (nativeLauncher != null && prov == "facebook") {
+            _isBrowserAuthInProgress.value = true
+            _browserAuthStatusText.value = "Opening $provLabel app..."
+            _backgroundExecutor.submit {
+                val clientId = resolveProviderClientId(prov)
+                runOnUiThreadOrSync {
+                    val handled = if (clientId.isNotEmpty()) {
+                        nativeLauncher.invoke(prov, true, clientId) {
+                            val fallbackUrl = netClient.buildBrowserAuthorizeUrl(prov, "octi://auth/callback")
+                            _browserAuthStatusText.value = "Connecting $provLabel..."
+                            openUrlCallback?.invoke(fallbackUrl)
+                        }
+                    } else {
+                        false
+                    }
+                    if (!handled) {
+                        val fallbackUrl = netClient.buildBrowserAuthorizeUrl(prov, "octi://auth/callback")
+                        _browserAuthStatusText.value = "Connecting $provLabel..."
+                        openUrlCallback?.invoke(fallbackUrl)
+                    }
+                }
+            }
+            return netClient.buildBrowserAuthorizeUrl(prov, "octi://auth/callback")
+        }
+
+        val redirectUri = if (_preferDeepLinkRedirect) {
+            "octi://auth/callback"
+        } else {
+            val errOut = StringBuilder()
+            val started = _loopbackAuthListener.start({ cbProv, cbTok ->
+                val resolvedProv = cbProv.ifEmpty { prov }
+                _backgroundExecutor.submit {
+                    val res = linkIdentity(resolvedProv, cbTok)
+                    runOnUiThreadOrSync {
+                        _isBrowserAuthInProgress.value = false
+                        if (res.ok) {
+                            _browserAuthStatusText.value = ""
+                        } else if (res.httpStatus == 409) {
+                            _browserAuthStatusText.value = ""
+                        } else {
+                            _browserAuthStatusText.value =
+                                res.errorMessage.ifEmpty { "Could not connect account right now." }
+                        }
+                    }
+                }
+            }, errOut)
+            if (started && _loopbackAuthListener.callbackUrl().isNotEmpty()) {
+                _loopbackAuthListener.callbackUrl()
+            } else {
+                "octi://auth/callback"
+            }
+        }
+        val url = netClient.buildBrowserAuthorizeUrl(prov, redirectUri)
+        _isBrowserAuthInProgress.value = true
+        _browserAuthStatusText.value = "Connecting $provLabel in your browser..."
+        openUrlCallback?.invoke(url)
+        return url
+    }
+
+    fun cancelBrowserAuth() {
+        _loopbackAuthListener.stop()
+        _isBrowserAuthInProgress.value = false
+        _browserAuthStatusText.value = ""
+    }
+
+    fun loopbackAuthPort(): Int = _loopbackAuthListener.boundPort()
+
+    fun handleOAuthRedirectUri(uriString: String?): Boolean {
+        if (uriString.isNullOrBlank()) {
+            return false
+        }
+        val qIdx = uriString.indexOf('?')
+        val fIdx = uriString.indexOf('#')
+        val queryPart = when {
+            qIdx >= 0 && fIdx > qIdx -> uriString.substring(qIdx + 1, fIdx)
+            qIdx >= 0 -> uriString.substring(qIdx + 1)
+            fIdx >= 0 -> uriString.substring(fIdx + 1)
+            else -> ""
+        }
+        if (queryPart.isEmpty()) {
+            return false
+        }
+        val params = LinkedHashMap<String, String>()
+        for (pair in queryPart.split("&")) {
+            if (pair.isEmpty()) continue
+            val eq = pair.indexOf('=')
+            if (eq >= 0) {
+                val k = java.net.URLDecoder.decode(pair.substring(0, eq), "UTF-8")
+                val v = java.net.URLDecoder.decode(pair.substring(eq + 1), "UTF-8")
+                params[k] = v
+            }
+        }
+        val prov = params["provider"]?.ifEmpty { _browserAuthProvider } ?: _browserAuthProvider
+        val authTok = params["auth_token"] ?: ""
+        val idTok = params["id_token"] ?: params["access_token"] ?: params["token"] ?: ""
+        val isNew = params["is_new_account"] == "true"
+        val handle = params["handle"] ?: ""
+        val playerUuid = params["player_uuid"] ?: ""
+
+        _loopbackAuthListener.stop()
+
+        if (_browserAuthLinkMode && idTok.isNotEmpty()) {
+            _backgroundExecutor.submit {
+                linkIdentity(prov, idTok)
+                runOnUiThreadOrSync {
+                    _isBrowserAuthInProgress.value = false
+                    _browserAuthStatusText.value = ""
+                }
+            }
+            return true
+        }
+
+        if (authTok.isNotEmpty() && !_browserAuthLinkMode) {
+            _backgroundExecutor.submit {
+                val res = attachAuthenticatedSession(authTok, playerUuid, handle)
+                runOnUiThreadOrSync {
+                    _isBrowserAuthInProgress.value = false
+                    _browserAuthStatusText.value = ""
+                    if (res.ok) {
+                        _onboardingRequired.value = isNew
+                        if (isNew) {
+                            _showSsoDialog.value = true
+                        } else {
+                            _showSsoDialog.value = false
+                        }
+                    }
+                }
+            }
+            return true
+        }
+
+        if (idTok.isNotEmpty()) {
+            _backgroundExecutor.submit {
+                val res = loginWithSso(prov, idTok)
+                runOnUiThreadOrSync {
+                    _isBrowserAuthInProgress.value = false
+                    _browserAuthStatusText.value = ""
+                    if (res.ok && !_onboardingRequired.value) {
+                        _showSsoDialog.value = false
+                    }
+                }
+            }
+            return true
+        }
+
+        return false
+    }
+
     /* ================================================================== */
     /* Online Lobby, Tables, Matchmaking & Live Room                      */
     /* ================================================================== */
+
+    fun refreshLobby(): OctiNetworkClient.ApiResult<OctiNetworkClient.LobbyStateData> {
+        return refreshLobbyState()
+    }
 
     fun refreshLobbyState(): OctiNetworkClient.ApiResult<OctiNetworkClient.LobbyStateData> {
         val res = netClient.fetchLobbyState()
@@ -1780,6 +2148,14 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun sendLobbyChat(text: String): OctiNetworkClient.ApiResult<Long> {
+        if (!netClient.isAuthenticated) {
+            val res = OctiNetworkClient.ApiResult<Long>(0L)
+            res.ok = false
+            res.httpStatus = 401
+            res.errorCode = "UNAUTHENTICATED"
+            res.errorMessage = "Sign in to chat"
+            return res
+        }
         val res = netClient.postLobbyChat(text)
         if (res.ok) {
             refreshLobbyState()
@@ -1811,12 +2187,23 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     @JvmOverloads
+    fun observeTable(
+        roomId: String,
+        passcode: String = ""
+    ): OctiNetworkClient.ApiResult<Boolean> {
+        return observeOnlineTable(roomId, passcode)
+    }
+
+    @JvmOverloads
     fun observeOnlineTable(
         roomId: String,
         passcode: String = ""
     ): OctiNetworkClient.ApiResult<Boolean> {
         val res = netClient.observeTable(roomId, passcode)
         if (res.ok) {
+            if (!netClient.isAuthenticated) {
+                _statusBanner.value = "Observing as anonymous-<ip> — Sign in to play or chat"
+            }
             enterOnlineRoom(roomId)
         }
         return res
@@ -1964,9 +2351,24 @@ class OctiAppViewModel @JvmOverloads constructor(
         return res
     }
 
-    fun sendGameChat(scope: String, text: String): OctiNetworkClient.ApiResult<Long> {
+    fun sendGameChat(
+        scope: String,
+        text: String
+    ): OctiNetworkClient.ApiResult<Long> {
+        if (!netClient.isAuthenticated) {
+            val res = OctiNetworkClient.ApiResult<Long>(0L)
+            res.ok = false
+            res.httpStatus = 401
+            res.errorCode = "UNAUTHENTICATED"
+            res.errorMessage = "Sign in to chat"
+            return res
+        }
         val roomId = _activeRoomId.value
         return netClient.postGameChat(roomId, scope, text)
+    }
+
+    fun sendGameChat(text: String): OctiNetworkClient.ApiResult<Long> {
+        return sendGameChat("ALL", text)
     }
 
     fun submitGameAction(
@@ -2193,7 +2595,9 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     override fun close() {
+        cancelBrowserAuth()
         cancelActiveBotTurn()
+        _backgroundExecutor.shutdownNow()
         voiceEngine.close()
         netClient.close()
     }

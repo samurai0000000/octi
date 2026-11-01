@@ -420,6 +420,8 @@ TEST(DesktopAppIntegrationTest,
         SsoOnboardingDialog dlgA(winA.netClient(), winA.configStore());
         CHECK_TRUE(dlgA.serverBadgeText().isEmpty());
         CHECK_FALSE(dlgA.hasEditableServerOrPortField());
+        LONGS_EQUAL(1, dlgA.providerCombo()->count());
+        STRCMP_EQUAL("google", dlgA.providerCombo()->itemData(0).toString().toUtf8().constData());
 
         CHECK_TRUE(dlgA.startBrowserLoopbackFlow("google", false));
         CHECK_TRUE(dlgA.loopbackBoundPort() > 0);
@@ -471,6 +473,8 @@ TEST(DesktopAppIntegrationTest,
     /* 3. AccountLinkDialog: link providers, 409 Conflict switch, 400 last-unlink guard */
     {
         AccountLinkDialog linkDlg(winA.netClient(), winA.configStore());
+        LONGS_EQUAL(1, linkDlg.providerCombo()->count());
+        STRCMP_EQUAL("google", linkDlg.providerCombo()->itemData(0).toString().toUtf8().constData());
         LONGS_EQUAL(1, static_cast<long>(linkDlg.linkedIdentities().size()));
 
         auto linkMs = linkDlg.linkProviderIdentity(
@@ -512,6 +516,110 @@ TEST(DesktopAppIntegrationTest,
         auto switched = switchDlg.confirmSwitchToConflictAccount();
         CHECK_TRUE(switched.ok);
         STRCMP_EQUAL(uuidB.c_str(), switched.data.profile.uuid.c_str());
+
+        /* Verify AccountLinkDialog::mergeConflictIntoCurrentAccount() sends force_relink: true */
+        httplib::Server mockRelinkServer;
+        bool forceRelinkReceived = false;
+        mockRelinkServer.Post("/api/v1/auth/link", [&](const httplib::Request &req, httplib::Response &res) {
+            Json body = Json::parse(req.body, nullptr, false);
+            if (body.is_object() && body.value("force_relink", false)) {
+                forceRelinkReceived = true;
+                Json reply;
+                reply["status"] = "linked";
+                reply["linked_identities"] = Json::array({
+                    Json{{"provider", "google"}, {"provider_email", "user@gmail.com"}, {"display_hint", "user"}},
+                    Json{{"provider", "facebook"}, {"provider_email", "user@fb.com"}, {"display_hint", "user_fb"}}
+                });
+                res.status = 200;
+                res.set_content(reply.dump(), "application/json");
+            } else {
+                Json conflict;
+                conflict["error"] = "conflict";
+                conflict["existing_profile"] = Json{{"uuid", "u-conflict"}, {"handle", "ConflictedUser"}};
+                res.status = 409;
+                res.set_content(conflict.dump(), "application/json");
+            }
+        });
+        mockRelinkServer.Get("/api/v1/profile/me", [&](const httplib::Request &, httplib::Response &res) {
+            Json profile;
+            profile["uuid"] = "u-main";
+            profile["handle"] = "MainUser";
+            profile["identities"] = Json::array({
+                Json{{"provider", "google"}, {"provider_email", "user@gmail.com"}, {"display_hint", "user"}},
+                Json{{"provider", "facebook"}, {"provider_email", "user@fb.com"}, {"display_hint", "user_fb"}}
+            });
+            res.status = 200;
+            res.set_content(profile.dump(), "application/json");
+        });
+
+        int mockPort = mockRelinkServer.bind_to_any_port("127.0.0.1");
+        std::thread mockThread([&]() { mockRelinkServer.listen_after_bind(); });
+
+        auto mockClient = OctiNetworkClient::createForLoopbackTest(mockPort);
+        mockClient->setSessionToken("mock-session-token");
+        AccountLinkDialog mergeDlg(mockClient.get());
+
+        /* Initial link fails with 409 Conflict */
+        auto mergeConflict =
+            mergeDlg.linkProviderIdentity("facebook", "mock-fb-token");
+        CHECK_FALSE(mergeConflict.ok);
+        LONGS_EQUAL(409, mergeConflict.httpStatus);
+        CHECK_TRUE(mergeDlg.hasPendingConflict());
+        CHECK_TRUE(mergeDlg.mergeConflictButton() != nullptr);
+
+        /* Merge empty account into current account -> sends force_relink: true */
+        CHECK_TRUE(mergeDlg.mergeConflictIntoCurrentAccount());
+        CHECK_TRUE(forceRelinkReceived);
+        CHECK_FALSE(mergeDlg.hasPendingConflict());
+        LONGS_EQUAL(2, static_cast<long>(mergeDlg.linkedIdentities().size()));
+
+        /* Verify unauthenticated online observation without chat */
+        bool observeWithoutAuthReceived = false;
+        mockRelinkServer.Post("/api/v1/tables/room-guest-obs/observe", [&](const httplib::Request &req, httplib::Response &res) {
+            if (!req.has_header("Authorization")) {
+                observeWithoutAuthReceived = true;
+            }
+            res.status = 200;
+            res.set_content("{\"ok\": true}", "application/json");
+        });
+        mockRelinkServer.Get("/api/v1/games/room-guest-obs", [&](const httplib::Request &, httplib::Response &res) {
+            Json gv;
+            gv["room_id"] = "room-guest-obs";
+            gv["mode"] = "2P";
+            gv["bases"] = 3;
+            gv["live"] = true;
+            gv["phase"] = "IN_PROGRESS";
+            res.status = 200;
+            res.set_content(gv.dump(), "application/json");
+        });
+        mockRelinkServer.Get("/api/v1/games/room-guest-obs/events", [&](const httplib::Request &, httplib::Response &res) {
+            res.status = 200;
+            res.set_content("", "text/event-stream");
+        });
+
+        auto guestObsClient = OctiNetworkClient::createForLoopbackTest(mockPort);
+        std::string guestObsCfgPath = env.dir + "/guest_obs_cfg.json";
+        OctiMainWindow guestObsWin(std::move(guestObsClient), guestObsCfgPath, false);
+        CHECK_FALSE(guestObsWin.isAuthenticated());
+
+        auto obsRes = guestObsWin.observeOnlineTable("room-guest-obs");
+        CHECK_TRUE_TEXT(obsRes.ok, obsRes.errorMessage.c_str());
+        CHECK_TRUE(observeWithoutAuthReceived);
+
+        guestObsWin.showBoardView();
+        CHECK_TRUE(guestObsWin.isBoardViewVisible());
+        CHECK_FALSE(guestObsWin.gameChatInput()->isEnabled());
+        STRCMP_EQUAL("Sign in to chat",
+                     guestObsWin.gameChatInput()->placeholderText().toUtf8().constData());
+        CHECK_FALSE(guestObsWin.sendGameChatButton()->isEnabled());
+        CHECK_FALSE(guestObsWin.sendGameChatMessage("ALL", "Guest cannot send game chat"));
+
+        guestObsWin.leaveOnlineRoom();
+
+        mockRelinkServer.stop();
+        if (mockThread.joinable()) {
+            mockThread.join();
+        }
     }
 
     /* 4. Global Lobby View & Chat + Matchmaking Dialog */
@@ -548,6 +656,50 @@ TEST(DesktopAppIntegrationTest,
         CHECK_TRUE(st.ok);
         CHECK_TRUE(st.data.queued);
         CHECK_TRUE(mmDlg.cancelMatchmaking().ok);
+    }
+
+    /* Test Unauthenticated LobbyView & Visible Anonymous Observation */
+    {
+        std::string guestCfgPath = "/tmp/octi_guest_lobby_test.json";
+        auto guestClient = OctiNetworkClient::createForLoopbackTest(env.port());
+        OctiMainWindow guestWin(std::move(guestClient), guestCfgPath, false);
+        CHECK_FALSE(guestWin.isAuthenticated());
+
+        guestWin.showLobbyView();
+        CHECK_TRUE(guestWin.isLobbyViewVisible());
+
+        /* Verify Unauthenticated LobbyView controls: Refresh & Observe enabled, others disabled */
+        CHECK_TRUE(guestWin.lobbyView()->refreshButton()->isEnabled());
+        CHECK_TRUE(guestWin.lobbyView()->observeButton()->isEnabled());
+        CHECK_FALSE(guestWin.lobbyView()->createTableButton()->isEnabled());
+        CHECK_FALSE(guestWin.lobbyView()->joinButton()->isEnabled());
+        CHECK_FALSE(guestWin.lobbyView()->quickMatchButton()->isEnabled());
+        CHECK_FALSE(guestWin.lobbyView()->chatInput()->isEnabled());
+        CHECK_FALSE(guestWin.lobbyView()->chatSendButton()->isEnabled());
+        STRCMP_EQUAL("Sign in to chat",
+                     guestWin.lobbyView()->chatInput()->placeholderText().toUtf8().constData());
+        CHECK_TRUE(guestWin.lobbyView()->statusLabel()->text().contains("Guest observation mode"));
+        CHECK_FALSE(guestWin.lobbyView()->sendLobbyChatMessage("Guest chat should fail"));
+
+        /* Verify that when authenticated, LobbyView controls become enabled */
+        auto guestLogin = guestWin.netClient()->loginWithSso(
+            "google",
+            makeToken("google", "sub-guest-authenticated", "GuestAuthed"),
+            "GuestAuthed");
+        CHECK_TRUE(guestLogin.ok);
+        guestWin.applyAuthenticatedProfile(guestLogin.data.profile);
+        CHECK_TRUE(guestWin.isAuthenticated());
+
+        guestWin.showLobbyView();
+        CHECK_TRUE(guestWin.lobbyView()->createTableButton()->isEnabled());
+        CHECK_TRUE(guestWin.lobbyView()->joinButton()->isEnabled());
+        CHECK_TRUE(guestWin.lobbyView()->quickMatchButton()->isEnabled());
+        CHECK_TRUE(guestWin.lobbyView()->chatInput()->isEnabled());
+        CHECK_TRUE(guestWin.lobbyView()->chatSendButton()->isEnabled());
+        STRCMP_EQUAL("Message the global lobby...",
+                     guestWin.lobbyView()->chatInput()->placeholderText().toUtf8().constData());
+
+        std::remove(guestCfgPath.c_str());
     }
 
     /* 5. Passcode-Protected Table Creation, Join, and Auto-Orientation */

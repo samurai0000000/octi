@@ -1678,16 +1678,21 @@ ApiResult<SsoLoginData> OctiNetworkClient::loginWithSso(
 
 ApiResult<LinkIdentityData> OctiNetworkClient::linkIdentity(
     const std::string &provider,
-    const std::string &token,
-    bool isAccessToken)
+    const std::string &idToken,
+    const std::string &accessToken,
+    bool forceRelink)
 {
     ApiResult<LinkIdentityData> res;
     Json body;
     body["provider"] = provider;
-    if (isAccessToken) {
-        body["access_token"] = token;
-    } else {
-        body["id_token"] = token;
+    if (!accessToken.empty()) {
+        body["access_token"] = accessToken;
+    }
+    if (!idToken.empty() || accessToken.empty()) {
+        body["id_token"] = idToken;
+    }
+    if (forceRelink) {
+        body["force_relink"] = true;
     }
 
     Impl::RawResponse raw = _impl->doPost("/api/v1/auth/link", body);
@@ -1720,6 +1725,18 @@ ApiResult<LinkIdentityData> OctiNetworkClient::linkIdentity(
             parseLinkedIdentities(raw.json["linked_identities"]);
     }
     return res;
+}
+
+ApiResult<LinkIdentityData> OctiNetworkClient::linkIdentity(
+    const std::string &provider,
+    const std::string &token,
+    bool isAccessToken,
+    bool forceRelink)
+{
+    return linkIdentity(provider,
+                        isAccessToken ? "" : token,
+                        isAccessToken ? token : "",
+                        forceRelink);
 }
 
 ApiResult<UnlinkIdentityData> OctiNetworkClient::unlinkIdentity(

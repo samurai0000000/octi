@@ -154,6 +154,7 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     });
 
     setTheme(_theme);
+    updateAuthUiState();
 }
 
 LobbyView::~LobbyView() = default;
@@ -161,6 +162,7 @@ LobbyView::~LobbyView() = default;
 void LobbyView::attachNetworkClient(OctiNetworkClient *netClient)
 {
     _netClient = netClient;
+    updateAuthUiState();
 }
 
 OctiNetworkClient *LobbyView::networkClient() const
@@ -177,6 +179,50 @@ void LobbyView::setTheme(ThemeId theme)
 ThemeId LobbyView::theme() const
 {
     return _theme;
+}
+
+void LobbyView::updateAuthUiState()
+{
+    bool authed = (_netClient && _netClient->isAuthenticated());
+    if (_refreshBtn) {
+        _refreshBtn->setEnabled(true);
+    }
+    if (_observeSelectedBtn) {
+        _observeSelectedBtn->setEnabled(true);
+    }
+    if (_createTableBtn) {
+        _createTableBtn->setEnabled(authed);
+    }
+    if (_joinSelectedBtn) {
+        _joinSelectedBtn->setEnabled(authed);
+    }
+    if (_matchmakingBtn) {
+        _matchmakingBtn->setEnabled(authed);
+    }
+    if (_chatInput) {
+        _chatInput->setEnabled(authed);
+        if (!authed) {
+            _chatInput->setPlaceholderText("Sign in to chat");
+        } else {
+            _chatInput->setPlaceholderText("Message the global lobby...");
+        }
+    }
+    if (_sendChatBtn) {
+        _sendChatBtn->setEnabled(authed);
+    }
+    if (_statusLabel) {
+        if (!authed) {
+            _statusLabel->setText(
+                QString("Guest observation mode • %1 online player(s) • %2 active table(s)")
+                    .arg(static_cast<int>(_players.size()))
+                    .arg(static_cast<int>(_tables.size())));
+        } else {
+            _statusLabel->setText(
+                QString("%1 online player(s) • %2 active table(s)")
+                    .arg(static_cast<int>(_players.size()))
+                    .arg(static_cast<int>(_tables.size())));
+        }
+    }
 }
 
 bool LobbyView::refreshLobby()
@@ -203,12 +249,7 @@ void LobbyView::refreshFromLobbyState(const LobbyStateData &state)
     rebuildPlayersTable();
     rebuildTablesWidget();
     rebuildChatTranscript();
-    if (_statusLabel) {
-        _statusLabel->setText(
-            QString("%1 online player(s) • %2 active table(s)")
-                .arg(static_cast<int>(_players.size()))
-                .arg(static_cast<int>(_tables.size())));
-    }
+    updateAuthUiState();
 }
 
 void LobbyView::handleLobbySseEvent(const SseEvent &ev)
@@ -240,7 +281,7 @@ void LobbyView::handleLobbySseEvent(const SseEvent &ev)
 
 bool LobbyView::sendLobbyChatMessage(const std::string &text)
 {
-    if (!_netClient || text.empty()) {
+    if (!_netClient || !_netClient->isAuthenticated() || text.empty()) {
         return false;
     }
     auto res = _netClient->postLobbyChat(text);

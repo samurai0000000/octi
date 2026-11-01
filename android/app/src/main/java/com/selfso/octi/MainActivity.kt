@@ -6,6 +6,7 @@
 
 package com.selfso.octi
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -14,6 +15,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -90,6 +92,63 @@ class MainActivity : ComponentActivity() {
         private set
 
     var isSplashActive: Boolean = true
+    private val isFacebookAuthEnabled: Boolean = false
+
+    private val facebookNativeAuthLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (!::appViewModel.isInitialized) return@registerForActivityResult
+        val extras = result.data?.extras
+        val resultArgs = extras?.getBundle("com.facebook.platform.protocol.RESULT_ARGS")
+        val accessToken = extras?.getString("access_token")
+            ?: extras?.getString("com.facebook.platform.extra.ACCESS_TOKEN")
+            ?: resultArgs?.getString("access_token")
+            ?: resultArgs?.getString("com.facebook.platform.extra.ACCESS_TOKEN")
+            ?: ""
+        val errorMsg = extras?.getString("error_message")
+            ?: extras?.getString("error_description")
+            ?: extras?.getString("com.facebook.platform.status.ERROR_DESCRIPTION")
+            ?: resultArgs?.getString("com.facebook.platform.status.ERROR_DESCRIPTION")
+            ?: resultArgs?.getString("error_message")
+            ?: extras?.getString("error")
+            ?: ""
+
+        if (accessToken.isNotEmpty()) {
+            appViewModel.completeNativeSocialAuth("facebook", accessToken)
+        } else if (errorMsg.isNotEmpty()) {
+            appViewModel.failNativeSocialAuth("Facebook sign-in failed: $errorMsg")
+        } else if (result.resultCode == Activity.RESULT_CANCELED) {
+            appViewModel.cancelBrowserAuth()
+        } else {
+            appViewModel.failNativeSocialAuth("Could not complete Facebook sign-in.")
+        }
+    }
+
+    private fun launchNativeFacebookProxyAuth(clientId: String): Boolean {
+        if (!isFacebookAuthEnabled) return false
+        val fbPackages = listOf("com.facebook.katana", "com.facebook.wakizashi")
+        for (pkg in fbPackages) {
+            val intent = Intent().apply {
+                setClassName(pkg, "com.facebook.katana.ProxyAuth")
+                putExtra("client_id", clientId)
+                putExtra("scope", "public_profile,email")
+                putExtra("e2e", "{}")
+                putExtra("response_type", "token,signed_request,graph_domain")
+                putExtra("return_scopes", "true")
+                putExtra("default_audience", "friends")
+                putExtra("legacy_override", "v19.0")
+                putExtra("auth_type", "rerequest")
+            }
+            try {
+                if (packageManager.resolveActivity(intent, 0) != null) {
+                    facebookNativeAuthLauncher.launch(intent)
+                    return true
+                }
+            } catch (_: Throwable) {
+            }
+        }
+        return false
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,6 +156,14 @@ class MainActivity : ComponentActivity() {
 
         val configFile = ClientConfigStore.configFileForDirectory(filesDir ?: File("."))
         appViewModel = OctiAppViewModel(ClientConfigStore(configFile))
+        appViewModel.setPreferDeepLinkRedirect(true)
+        appViewModel.nativeSocialAuthLauncher = { provider, _, clientId, _ ->
+            if (isFacebookAuthEnabled && provider.equals("facebook", ignoreCase = true) && clientId.isNotEmpty()) {
+                launchNativeFacebookProxyAuth(clientId)
+            } else {
+                false
+            }
+        }
         appViewModel.setAsyncBotThinkingEnabled(true)
 
         val storageRoot = filesDir ?: File(".")
@@ -116,6 +183,11 @@ class MainActivity : ComponentActivity() {
             }
         }
         appViewModel.applyExternalArguments(extrasMap)
+        intent?.dataString?.let { uriStr ->
+            if (uriStr.startsWith("octi://")) {
+                appViewModel.handleOAuthRedirectUri(uriStr)
+            }
+        }
 
         setContent {
             val themeId by appViewModel.theme.collectAsState()
@@ -124,6 +196,18 @@ class MainActivity : ComponentActivity() {
                     viewModel = appViewModel,
                     onSplashDismissed = { isSplashActive = false }
                 )
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (::appViewModel.isInitialized) {
+            intent.dataString?.let { uriStr ->
+                if (uriStr.startsWith("octi://")) {
+                    appViewModel.handleOAuthRedirectUri(uriStr)
+                }
             }
         }
     }

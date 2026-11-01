@@ -4142,6 +4142,88 @@ TEST(GameRoomManagerTest, RapidCheckMoveSequenceRoundTripsAcrossManagerRestart)
     CHECK_TRUE(passed);
 }
 
+TEST(GameRoomManagerTest, VisibleAnonymousObservers)
+{
+    int64_t a1 = mgr->ensureAnonymousObserver("203.0.113.42");
+    CHECK_TRUE(a1 < 0);
+    // Idempotent with same IP
+    int64_t a1Again = mgr->ensureAnonymousObserver("203.0.113.42");
+    CHECK_EQUAL(a1, a1Again);
+
+    // Different IP gets different negative ID
+    int64_t a2 = mgr->ensureAnonymousObserver("198.51.100.99");
+    CHECK_TRUE(a2 < 0);
+    CHECK_TRUE(a1 != a2);
+
+    // Host opens a public table
+    std::string room = startTable(cfg(), 1);
+
+    // Anonymous observer enters lobby
+    mgr->enterLobby(a1);
+
+    // Anonymous observer starts observing
+    RoomResult obsRes = mgr->observeRoom(room, a1);
+    CHECK_TRUE(obsRes.ok());
+
+    // Check Lobby TableSummary has observerCount and observerHandles
+    std::vector<TableSummary> tables = mgr->listTables();
+    CHECK_EQUAL(1, (int)tables.size());
+    CHECK_EQUAL(1, tables[0].observerCount);
+    CHECK_EQUAL(1, (int)tables[0].observerHandles.size());
+    STRCMP_EQUAL("anonymous-203.0.113.42", tables[0].observerHandles[0].c_str());
+
+    // Check RoomView
+    RoomView view;
+    CHECK_TRUE(mgr->getRoomView(room, a1, view).ok());
+    CHECK_EQUAL(1, (int)view.observerIds.size());
+    CHECK_EQUAL(1, (int)view.observerHandles.size());
+    STRCMP_EQUAL("anonymous-203.0.113.42", view.observerHandles[0].c_str());
+
+    // Room events show OBSERVER_JOINED
+    RoomPoll poll1;
+    CHECK_TRUE(mgr->pollRoomEvents(room, p[0], 0, 100, poll1).ok());
+    bool foundJoined = false;
+    for (size_t i = 0; i < poll1.events.size(); ++i) {
+        if (poll1.events[i].type == RoomEventType::OBSERVER_JOINED) {
+            foundJoined = true;
+            CHECK_EQUAL(a1, poll1.events[i].playerId);
+            STRCMP_EQUAL("anonymous-203.0.113.42", poll1.events[i].handle.c_str());
+            break;
+        }
+    }
+    CHECK_TRUE(foundJoined);
+
+    // Stop observing emits OBSERVER_LEFT
+    CHECK_TRUE(mgr->stopObserving(room, a1).ok());
+    RoomPoll poll2;
+    CHECK_TRUE(mgr->pollRoomEvents(room, p[0], poll1.latestSeq, 100, poll2).ok());
+    bool foundLeft = false;
+    for (size_t i = 0; i < poll2.events.size(); ++i) {
+        if (poll2.events[i].type == RoomEventType::OBSERVER_LEFT) {
+            foundLeft = true;
+            CHECK_EQUAL(a1, poll2.events[i].playerId);
+            STRCMP_EQUAL("anonymous-203.0.113.42", poll2.events[i].handle.c_str());
+            break;
+        }
+    }
+    CHECK_TRUE(foundLeft);
+
+    // Passcode protected room cannot be observed anonymously
+    GameTableConfig passCfg = cfg();
+    passCfg.passcode = "secret123";
+    RoomResult passRoom = mgr->createTable(p[1], passCfg);
+    CHECK_TRUE(passRoom.ok());
+    RoomResult obsPass = mgr->observeRoom(passRoom.roomId, a1);
+    CHECK_FALSE(obsPass.ok());
+    CHECK_EQUAL((int)RoomCode::FORBIDDEN_PASSCODE, (int)obsPass.code);
+
+    // Mutating actions fail for anonymous observer
+    CHECK_FALSE(mgr->postLobbyChat(a1, "hello").ok());
+    CHECK_FALSE(mgr->postBoardChat(room, a1, ChatScope::ALL, "hi").ok());
+    CHECK_FALSE(mgr->joinTable(room, a1, 0, "").ok());
+    CHECK_FALSE(mgr->createTable(a1, cfg()).ok());
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

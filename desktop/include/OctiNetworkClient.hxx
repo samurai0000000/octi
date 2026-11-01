@@ -15,6 +15,10 @@
 #include <vector>
 #include "OctiDefs.hxx"
 
+#if defined(QT_CORE_LIB) || defined(QT_VERSION) || defined(QT_WIDGETS_LIB)
+#include <QString>
+#endif
+
 namespace octi {
 
 template <typename T>
@@ -408,6 +412,7 @@ public:
     void setSessionToken(const std::string &token);
     std::string sessionToken() const;
     void clearSessionToken();
+    bool isAuthenticated() const { return !sessionToken().empty(); }
 
     /* ---- 1..10: Health, Auth, Profile & Leaderboard ---- */
     ApiResult<HealthInfo> fetchHealth();
@@ -424,7 +429,13 @@ public:
     ApiResult<LinkIdentityData> linkIdentity(
         const std::string &provider,
         const std::string &token,
-        bool isAccessToken = false);
+        bool isAccessToken = false,
+        bool forceRelink = false);
+    ApiResult<LinkIdentityData> linkIdentity(
+        const std::string &provider,
+        const std::string &idToken,
+        const std::string &accessToken,
+        bool forceRelink = false);
     ApiResult<UnlinkIdentityData> unlinkIdentity(const std::string &provider);
     ApiResult<bool> logout();
     ApiResult<PlayerProfileInfo> fetchMyProfile();
@@ -440,6 +451,10 @@ public:
 
     /* ---- 11..22: Lobby, Tables & Matchmaking ---- */
     ApiResult<LobbyStateData> fetchLobbyState();
+    ApiResult<LobbyStateData> refreshLobby()
+    {
+        return fetchLobbyState();
+    }
     ApiResult<std::int64_t> postLobbyChat(const std::string &text);
     ApiResult<std::vector<TableSummaryInfo>> listTables(
         bool includeFinished = false);
@@ -465,6 +480,10 @@ public:
 
     /* ---- 23..32: Live Game, Chat, Voice Signaling & Moderation ---- */
     ApiResult<GameViewData> fetchGameView(const std::string &roomId);
+    ApiResult<GameViewData> fetchRoomState(const std::string &roomId)
+    {
+        return fetchGameView(roomId);
+    }
     ApiResult<MoveSubmitData> submitMove(
         const std::string &roomId,
         const std::string &moveStr);
@@ -530,6 +549,50 @@ public:
         const std::string &roomId,
         std::uint64_t sinceSeq = 0,
         int limit = 100);
+    ApiResult<std::vector<SseEvent>> pollRoomEvents(
+        const std::string &roomId,
+        std::int64_t sinceSeq = 0,
+        int limit = 100)
+    {
+        return pollGameEvents(
+            roomId,
+            sinceSeq < 0 ? 0 : static_cast<std::uint64_t>(sinceSeq),
+            limit);
+    }
+
+#if defined(QT_CORE_LIB) || defined(QT_VERSION) || defined(QT_WIDGETS_LIB)
+    ApiResult<bool> observeTable(const QString &roomId,
+                                 const QString &passcode = QString())
+    {
+        return observeTable(roomId.toStdString(), passcode.toStdString());
+    }
+    ApiResult<bool> unobserveTable(const QString &roomId)
+    {
+        return unobserveTable(roomId.toStdString());
+    }
+    ApiResult<GameViewData> fetchRoomState(const QString &roomId)
+    {
+        return fetchGameView(roomId.toStdString());
+    }
+    ApiResult<std::vector<SseEvent>> pollRoomEvents(
+        const QString &roomId,
+        std::int64_t sinceSeq = 0,
+        int limit = 100)
+    {
+        return pollRoomEvents(roomId.toStdString(), sinceSeq, limit);
+    }
+    ApiResult<LinkIdentityData> linkIdentity(
+        const QString &provider,
+        const QString &idToken,
+        const QString &accessToken = QString(),
+        bool forceRelink = false)
+    {
+        return linkIdentity(provider.toStdString(),
+                            idToken.toStdString(),
+                            accessToken.toStdString(),
+                            forceRelink);
+    }
+#endif
 
     void startLobbyEventStream(
         std::uint64_t sinceSeq,

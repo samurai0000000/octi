@@ -54,6 +54,7 @@ fun LobbyScreen(
     val profile by viewModel.currentProfile.collectAsState()
     val lobbyState by viewModel.lobbyState.collectAsState()
     val mmStatus by viewModel.matchmakingStatus.collectAsState()
+    val statusBanner by viewModel.statusBanner.collectAsState()
 
     var selectedQueueMode by remember { mutableStateOf("2P") }
     var chatDraft by remember { mutableStateOf("") }
@@ -99,12 +100,28 @@ fun LobbyScreen(
                             OutlinedButton(onClick = { viewModel.setShowAccountDialog(true) }) {
                                 Text(profile?.handle?.ifEmpty { "Account" } ?: "Account")
                             }
-                            OutlinedButton(onClick = { viewModel.refreshLobbyState() }) {
-                                Text("Refresh")
-                            }
+                        }
+                        OutlinedButton(onClick = { viewModel.refreshLobbyState() }) {
+                            Text("Refresh")
                         }
                     }
                 }
+            }
+        }
+
+        if (statusBanner.isNotBlank()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+                border = BorderStroke(1.dp, OctiTheme.colors.accentBrass)
+            ) {
+                Text(
+                    text = statusBanner,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OctiTheme.colors.accentBrass,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(10.dp)
+                )
             }
         }
 
@@ -257,7 +274,7 @@ fun LobbyScreen(
                                                 passcodeInput
                                             )
                                         },
-                                        enabled = isAuthenticated
+                                        enabled = isAuthenticated || !table.hasPasscode
                                     ) {
                                         Text("Observe")
                                     }
@@ -303,7 +320,10 @@ fun LobbyScreen(
                     OutlinedTextField(
                         value = chatDraft,
                         onValueChange = { chatDraft = it },
-                        placeholder = { Text("Lobby chat message...") },
+                        placeholder = {
+                            Text(if (isAuthenticated) "Lobby chat message..." else "Sign in to chat")
+                        },
+                        enabled = isAuthenticated,
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )

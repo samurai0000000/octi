@@ -110,6 +110,18 @@ public:
     const PlayerProfileInfo &loggedInProfile() const;
     QString statusText() const;
 
+    QComboBox *providerCombo() const { return _providerCombo; }
+    QComboBox *providerComboBox() const { return _providerCombo; }
+
+    ApiResult<SsoLoginData> signInWithProvider(
+        const std::string &provider,
+        const std::string &token,
+        const std::string &desiredHandle = "",
+        bool isAccessToken = false)
+    {
+        return signInWithToken(provider, token, desiredHandle, isAccessToken);
+    }
+
     void setOnSignedInCallback(
         std::function<void(const PlayerProfileInfo &)> cb);
 
@@ -167,6 +179,26 @@ public:
         const std::string &provider,
         const std::string &token,
         bool isAccessToken = false);
+    ApiResult<LinkIdentityData> linkProvider(
+        const std::string &provider,
+        const std::string &token,
+        bool isAccessToken = false)
+    {
+        return linkProviderIdentity(provider, token, isAccessToken);
+    }
+
+    bool mergeConflictIntoCurrentAccount();
+    QPushButton *mergeConflictButton() const { return _mergeConflictBtn; }
+    QTableWidget *identitiesTable() const { return _identitiesTable; }
+    QComboBox *providerCombo() const { return _providerCombo; }
+    QComboBox *providerComboBox() const { return _providerCombo; }
+
+    bool startBrowserLoopbackFlow(const std::string &provider,
+                                  bool openSystemBrowser = false);
+    void stopBrowserLoopbackFlow();
+    int loopbackBoundPort() const;
+    std::string loopbackCallbackUrl() const;
+    bool pollLoopbackCallback(int timeoutMs = 200);
 
     bool hasPendingConflict() const;
     const PlayerProfileInfo &conflictExistingProfile() const;
@@ -190,6 +222,8 @@ private:
     OctiNetworkClient *_netClient;
     ClientConfigStore *_configStore;
     ThemeId _theme;
+    UiDispatcher _dispatcher;
+    OAuthLoopbackListener _loopbackListener;
 
     QTableWidget *_identitiesTable;
     QComboBox *_providerCombo;
@@ -200,6 +234,7 @@ private:
     QWidget *_conflictBox;
     QLabel *_conflictBannerLabel;
     QPushButton *_switchConflictBtn;
+    QPushButton *_mergeConflictBtn;
     QPushButton *_cancelConflictBtn;
 
     PlayerProfileInfo _currentProfile;

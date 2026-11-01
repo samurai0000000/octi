@@ -58,6 +58,20 @@ public:
     void setOnMatchFoundCallback(
         std::function<void(const std::string &roomId)> cb);
 
+    void updateAuthUiState();
+
+    QPushButton *createTableButton() const { return _createTableBtn; }
+    QPushButton *joinTableButton() const { return _joinSelectedBtn; }
+    QPushButton *joinButton() const { return _joinSelectedBtn; }
+    QPushButton *observeTableButton() const { return _observeSelectedBtn; }
+    QPushButton *observeButton() const { return _observeSelectedBtn; }
+    QPushButton *matchmakingButton() const { return _matchmakingBtn; }
+    QPushButton *quickMatchButton() const { return _matchmakingBtn; }
+    QPushButton *refreshButton() const { return _refreshBtn; }
+    QLineEdit *chatInput() const { return _chatInput; }
+    QPushButton *chatSendButton() const { return _sendChatBtn; }
+    QLabel *statusLabel() const { return _statusLabel; }
+
 private:
     void rebuildPlayersTable();
     void rebuildTablesWidget();

@@ -688,10 +688,47 @@ int64_t GameRoomManager::wallSec() const
     return _wallClock();
 }
 
+int64_t GameRoomManager::ensureAnonymousObserver(const std::string &ipAddress)
+{
+    std::string sanitized;
+    for (size_t i = 0; i < ipAddress.size(); ++i) {
+        char c = ipAddress[i];
+        if ((c >= '0' && c <= '9') ||
+            (c >= 'a' && c <= 'f') ||
+            (c >= 'A' && c <= 'F') ||
+            c == ':' || c == '.' || c == '_' || c == '-') {
+            sanitized.push_back(c);
+            if (sanitized.size() >= 45) {
+                break;
+            }
+        }
+    }
+    if (sanitized.empty()) {
+        sanitized = "unknown";
+    }
+
+    std::lock_guard<std::mutex> lock(_mutex);
+    std::map<std::string, int64_t>::iterator it = _anonIpToId.find(sanitized);
+    if (it != _anonIpToId.end()) {
+        int64_t anonId = it->second;
+        _players[anonId].online = true;
+        return anonId;
+    }
+
+    int64_t anonId = _nextAnonId--;
+    _anonIpToId[sanitized] = anonId;
+    PlayerInfo pi;
+    pi.handle = "anonymous-" + sanitized;
+    pi.online = true;
+    pi.lastPresence = PresenceStatus::OFFLINE;
+    _players[anonId] = pi;
+    return anonId;
+}
+
 bool GameRoomManager::ensurePlayerLocked(int64_t playerId, bool refresh)
 {
     if (playerId <= 0) {
-        return false;
+        return playerId < 0 && _players.find(playerId) != _players.end();
     }
     std::map<int64_t, PlayerInfo>::iterator it = _players.find(playerId);
     if (it != _players.end() && !refresh) {
@@ -835,7 +872,7 @@ void GameRoomManager::announceTableLocked(const Room &r, bool closed)
 RoomResult GameRoomManager::enterLobby(int64_t playerId)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    if (!ensurePlayerLocked(playerId, true)) {
+    if (!ensurePlayerLocked(playerId, playerId > 0)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -925,7 +962,7 @@ RoomResult GameRoomManager::postLobbyChat(int64_t playerId,
                                           const std::string &text)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    if (!ensurePlayerLocked(playerId)) {
+    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     std::string clean;
@@ -993,6 +1030,10 @@ TableSummary GameRoomManager::summarize(const Room &r) const
         }
     }
     t.observerCount = static_cast<int>(r.observers.size());
+    for (std::set<int64_t>::const_iterator oit = r.observers.begin();
+         oit != r.observers.end(); ++oit) {
+        t.observerHandles.push_back(handleOf(*oit));
+    }
     return t;
 }
 
@@ -1454,7 +1495,7 @@ RoomResult GameRoomManager::createTable(int64_t hostPlayerId,
                                         const GameTableConfig &config)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    if (!ensurePlayerLocked(hostPlayerId)) {
+    if (hostPlayerId <= 0 || !ensurePlayerLocked(hostPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     GameTableConfig cfg;
@@ -1490,7 +1531,7 @@ RoomResult GameRoomManager::joinTable(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(playerId)) {
+    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -1553,7 +1594,7 @@ RoomResult GameRoomManager::leaveTable(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(playerId)) {
+    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -1582,7 +1623,7 @@ RoomResult GameRoomManager::kickSeat(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(hostPlayerId)) {
+    if (hostPlayerId <= 0 || !ensurePlayerLocked(hostPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -1625,8 +1666,12 @@ RoomResult GameRoomManager::observeRoom(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(playerId)) {
+    if (playerId == 0 || !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
+    }
+    if (!r->config.passcode.empty() && playerId < 0) {
+        return fail(RoomCode::FORBIDDEN_PASSCODE,
+                    "passcode-protected table requires authentication");
     }
     int64_t now = nowMs();
     advanceRoomLocked(*r, now);
@@ -1650,6 +1695,7 @@ RoomResult GameRoomManager::observeRoom(const std::string &roomId,
     RoomEvent e;
     e.type = RoomEventType::OBSERVER_JOINED;
     e.playerId = playerId;
+    e.handle = handleOf(playerId);
     res.seq = emitLocked(*r, e, now);
     saveRoomLocked(*r);
     return res;
@@ -1663,7 +1709,7 @@ RoomResult GameRoomManager::stopObserving(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(playerId)) {
+    if (playerId == 0 || !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -1675,6 +1721,7 @@ RoomResult GameRoomManager::stopObserving(const std::string &roomId,
     RoomEvent e;
     e.type = RoomEventType::OBSERVER_LEFT;
     e.playerId = playerId;
+    e.handle = handleOf(playerId);
     e.detail = "left";
     RoomResult res = success();
     res.seq = emitLocked(*r, e, now);
@@ -1690,7 +1737,7 @@ RoomResult GameRoomManager::enqueueMatchmaking(int64_t playerId,
                                                const MatchRuleset &ruleset)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    if (!ensurePlayerLocked(playerId)) {
+    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     MatchRuleset rs = ruleset.normalized();
@@ -1726,7 +1773,7 @@ RoomResult GameRoomManager::enqueueMatchmaking(int64_t playerId,
 RoomResult GameRoomManager::dequeueMatchmaking(int64_t playerId)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    if (!ensurePlayerLocked(playerId)) {
+    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     if (!_queue.dequeue(playerId)) {
@@ -1983,7 +2030,7 @@ RoomResult GameRoomManager::submitMove(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(playerId)) {
+    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2121,7 +2168,7 @@ RoomResult GameRoomManager::resign(const std::string &roomId, int64_t playerId)
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(playerId)) {
+    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2224,7 +2271,7 @@ RoomResult GameRoomManager::claimDisconnectForfeit(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(claimantPlayerId)) {
+    if (claimantPlayerId <= 0 || !ensurePlayerLocked(claimantPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2304,7 +2351,7 @@ RoomResult GameRoomManager::submitProposal(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(playerId)) {
+    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2394,7 +2441,7 @@ RoomResult GameRoomManager::respondProposal(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(playerId)) {
+    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2541,7 +2588,7 @@ RoomResult GameRoomManager::resumeGame(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(playerId)) {
+    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2857,7 +2904,7 @@ RoomResult GameRoomManager::postBoardChat(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(senderPlayerId)) {
+    if (senderPlayerId <= 0 || !ensurePlayerLocked(senderPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2926,7 +2973,7 @@ RoomResult GameRoomManager::submitVoiceSignal(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(senderPlayerId)) {
+    if (senderPlayerId <= 0 || !ensurePlayerLocked(senderPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2984,7 +3031,7 @@ RoomResult GameRoomManager::submitVoiceMeta(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(senderPlayerId)) {
+    if (senderPlayerId <= 0 || !ensurePlayerLocked(senderPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -3053,7 +3100,7 @@ RoomResult GameRoomManager::banUser(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(actorPlayerId)) {
+    if (actorPlayerId <= 0 || !ensurePlayerLocked(actorPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -3068,7 +3115,7 @@ RoomResult GameRoomManager::banUser(const std::string &roomId,
     if (targetPlayerId == actorPlayerId) {
         return fail(RoomCode::INVALID_ARGUMENT, "cannot ban yourself");
     }
-    if (!ensurePlayerLocked(targetPlayerId)) {
+    if (targetPlayerId <= 0 || !ensurePlayerLocked(targetPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown target player");
     }
     std::string cleanReason;
@@ -3132,7 +3179,7 @@ RoomResult GameRoomManager::muteUser(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(actorPlayerId)) {
+    if (actorPlayerId <= 0 || !ensurePlayerLocked(actorPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -3147,7 +3194,7 @@ RoomResult GameRoomManager::muteUser(const std::string &roomId,
     if (targetPlayerId == actorPlayerId) {
         return fail(RoomCode::INVALID_ARGUMENT, "cannot mute yourself");
     }
-    if (!ensurePlayerLocked(targetPlayerId)) {
+    if (targetPlayerId <= 0 || !ensurePlayerLocked(targetPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown target player");
     }
     /* Mutes are room-wide, so a seated player cannot be silenced. */
@@ -3201,7 +3248,7 @@ RoomResult GameRoomManager::updateRoomPolicies(
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (!ensurePlayerLocked(actorPlayerId)) {
+    if (actorPlayerId <= 0 || !ensurePlayerLocked(actorPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     if (!observerPolicyIn && !voicePolicyIn) {
@@ -3290,6 +3337,10 @@ void GameRoomManager::fillView(const Room &r, int64_t viewerId, int64_t now,
         out.seats.push_back(sv);
     }
     out.observerIds.assign(r.observers.begin(), r.observers.end());
+    for (std::set<int64_t>::const_iterator oit = r.observers.begin();
+         oit != r.observers.end(); ++oit) {
+        out.observerHandles.push_back(handleOf(*oit));
+    }
     out.fen = r.board->toPositionString();
     out.turnSeat = r.phase == RoomPhase::IN_PROGRESS
                        ? static_cast<int>(g->getTurn())

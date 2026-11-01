@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class OctiNetworkClient implements AutoCloseable {
 
-    public static final class ApiResult<T> {
+    public static class ApiResult<T> {
         public boolean ok = false;
         public int httpStatus = 0;
         public String errorCode = "";
@@ -188,6 +188,16 @@ public final class OctiNetworkClient implements AutoCloseable {
         public List<LinkedIdentityInfo> identities = new ArrayList<>();
         public boolean conflictAlreadyLinked = false;
         public PlayerProfileInfo existingProfile = new PlayerProfileInfo();
+    }
+
+    public static class AuthResult extends ApiResult<LinkIdentityData> {
+        public AuthResult() {
+            super(new LinkIdentityData());
+        }
+
+        public AuthResult(LinkIdentityData data) {
+            super(data != null ? data : new LinkIdentityData());
+        }
     }
 
     public static final class UnlinkIdentityData {
@@ -667,9 +677,10 @@ public final class OctiNetworkClient implements AutoCloseable {
             }
             String idTok = params.getOrDefault("id_token", "");
             String accTok = params.getOrDefault("access_token", "");
+            String authTok = params.getOrDefault("auth_token", "");
             String tok = params.getOrDefault("token", "");
             if (tok.isEmpty()) {
-                tok = !idTok.isEmpty() ? idTok : accTok;
+                tok = !idTok.isEmpty() ? idTok : (!accTok.isEmpty() ? accTok : authTok);
             }
 
             if (tok.isEmpty()) {
@@ -695,11 +706,19 @@ public final class OctiNetworkClient implements AutoCloseable {
             }
 
             String okHtml = "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
-                    + "<title>Sign-in complete</title></head>"
+                    + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+                    + "<title>Signed in to OCTI</title></head>"
                     + "<body style=\"background:#0B0F17;color:#F8FAFC;"
                     + "font-family:sans-serif;text-align:center;padding:48px;\">"
-                    + "<h2 style=\"color:#C8A253;\">Sign-in complete — you may return to OCTI</h2>"
-                    + "<p>Your mobile session has been authenticated.</p>"
+                    + "<h2 style=\"color:#C8A253;\">Signed in to OCTI!</h2>"
+                    + "<p>Returning to the OCTI app...</p>"
+                    + "<p style=\"margin-top:24px;\"><a href=\"octi://auth/callback?provider="
+                    + URLEncoder.encode(prov, StandardCharsets.UTF_8)
+                    + "&id_token=" + URLEncoder.encode(tok, StandardCharsets.UTF_8)
+                    + "\" style=\"display:inline-block;padding:12px 24px;background:#C8A253;"
+                    + "color:#0B0F17;font-weight:bold;border-radius:8px;text-decoration:none;\">"
+                    + "Return to OCTI</a></p>"
+                    + "<script>try{window.close();}catch(e){}</script>"
                     + "</body></html>";
             writeHttpResponse(out, 200, "OK", "text/html; charset=utf-8", okHtml);
         }
@@ -852,6 +871,23 @@ public final class OctiNetworkClient implements AutoCloseable {
         return "http://" + _host + ":" + _port;
     }
 
+    public String buildBrowserAuthorizeUrl(String provider, String redirectUri) {
+        String base;
+        if ("127.0.0.1".equals(_host) || "localhost".equals(_host)) {
+            base = baseUrl();
+        } else {
+            base = "https://octi.selfso.com";
+        }
+        String prov = provider != null ? provider.trim().toLowerCase(Locale.ROOT) : "google";
+        String redir = (redirectUri != null && !redirectUri.isEmpty())
+                ? redirectUri
+                : "octi://auth/callback";
+        return base + "/api/v1/auth/authorize?provider="
+                + URLEncoder.encode(prov, StandardCharsets.UTF_8)
+                + "&redirect_uri="
+                + URLEncoder.encode(redir, StandardCharsets.UTF_8);
+    }
+
     @Override
     public void close() {
         stopEventStreams();
@@ -873,6 +909,18 @@ public final class OctiNetworkClient implements AutoCloseable {
         synchronized (_tokenLock) {
             _sessionToken = "";
         }
+    }
+
+    public boolean isAuthenticated() {
+        return !sessionToken().isEmpty();
+    }
+
+    public boolean canGuestObserve() {
+        return true;
+    }
+
+    public boolean canGuestChat() {
+        return isAuthenticated();
     }
 
     /* ================================================================== */
@@ -939,11 +987,13 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     public ApiResult<SsoLoginData> loginWithSso(String provider, String token) {
-        return loginWithSso(provider, token, "", false);
+        boolean isAccess = "facebook".equalsIgnoreCase(provider) && (token == null || token.indexOf('.') < 0);
+        return loginWithSso(provider, token, "", isAccess);
     }
 
     public ApiResult<SsoLoginData> loginWithSso(String provider, String token, String desiredHandle) {
-        return loginWithSso(provider, token, desiredHandle, false);
+        boolean isAccess = "facebook".equalsIgnoreCase(provider) && (token == null || token.indexOf('.') < 0);
+        return loginWithSso(provider, token, desiredHandle, isAccess);
     }
 
     public ApiResult<SsoLoginData> loginWithSso(
@@ -1005,27 +1055,40 @@ public final class OctiNetworkClient implements AutoCloseable {
         return res;
     }
 
-    public ApiResult<LinkIdentityData> linkIdentity(String provider, String token) {
+    public AuthResult linkIdentity(String provider, String token) {
         return linkIdentity(provider, token, false);
     }
 
-    public ApiResult<LinkIdentityData> linkIdentity(
+    public AuthResult linkIdentity(
             String provider, String idToken, String accessToken) {
-        boolean useAccess = (idToken == null || idToken.isEmpty())
-                && (accessToken != null && !accessToken.isEmpty());
-        String tok = useAccess ? accessToken : (idToken != null ? idToken : "");
-        return linkIdentity(provider, tok, useAccess);
+        return linkIdentity(provider, idToken, accessToken, false);
     }
 
-    public ApiResult<LinkIdentityData> linkIdentity(
+    public AuthResult linkIdentity(
             String provider, String token, boolean isAccessToken) {
-        ApiResult<LinkIdentityData> res = new ApiResult<>(new LinkIdentityData());
+        return linkIdentity(
+                provider,
+                isAccessToken ? null : token,
+                isAccessToken ? token : null,
+                false);
+    }
+
+    public AuthResult linkIdentity(
+            String provider, String idToken, String accessToken, boolean forceRelink) {
+        AuthResult res = new AuthResult(new LinkIdentityData());
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("provider", provider != null ? provider : "");
-        if (isAccessToken) {
-            body.put("access_token", token != null ? token : "");
-        } else {
-            body.put("id_token", token != null ? token : "");
+        if (idToken != null && !idToken.isEmpty()) {
+            body.put("id_token", idToken);
+        }
+        if (accessToken != null && !accessToken.isEmpty()) {
+            body.put("access_token", accessToken);
+        }
+        if ((idToken == null || idToken.isEmpty()) && (accessToken == null || accessToken.isEmpty())) {
+            body.put("id_token", "");
+        }
+        if (forceRelink) {
+            body.put("force_relink", true);
         }
 
         RawResponse raw = doPost("/api/v1/auth/link", body);
@@ -1249,6 +1312,14 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     public ApiResult<Long> postLobbyChat(String message) {
+        if (!canGuestChat()) {
+            ApiResult<Long> res = new ApiResult<>(0L);
+            res.ok = false;
+            res.httpStatus = 401;
+            res.errorCode = "UNAUTHENTICATED";
+            res.errorMessage = "Sign in to chat";
+            return res;
+        }
         ApiResult<Long> res = new ApiResult<>(0L);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("text", message != null ? message : "");
@@ -1609,6 +1680,14 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     public ApiResult<Long> postGameChat(String roomId, String scope, String text) {
+        if (!canGuestChat()) {
+            ApiResult<Long> res = new ApiResult<>(0L);
+            res.ok = false;
+            res.httpStatus = 401;
+            res.errorCode = "UNAUTHENTICATED";
+            res.errorMessage = "Sign in to chat";
+            return res;
+        }
         ApiResult<Long> res = new ApiResult<>(0L);
         String sc = (scope == null || scope.isEmpty()) ? "all" : scope.toLowerCase(Locale.ROOT);
         Map<String, Object> body = new LinkedHashMap<>();

@@ -108,36 +108,45 @@ SsoOnboardingDialog::SsoOnboardingDialog(OctiNetworkClient *netClient,
       _signedIn(false),
       _step2Active(false)
 {
-    setWindowTitle("OCTI — Sign In & Onboarding");
-    setMinimumSize(520, 480);
+    setWindowTitle("Sign In to OCTI");
+    setMinimumSize(460, 280);
 
     QVBoxLayout *root = new QVBoxLayout(this);
     root->setSpacing(12);
     root->setContentsMargins(20, 20, 20, 20);
 
-    QLabel *title = new QLabel("OCTI Online Authentication", this);
+    QLabel *title = new QLabel("Sign In to OCTI", this);
     title->setStyleSheet("font-size: 18px; font-weight: bold;");
     root->addWidget(title);
 
+    QLabel *subtitle = new QLabel(
+        "Sign in with your Google account to play online, chat, and track your rating.",
+        this);
+    subtitle->setWordWrap(true);
+    root->addWidget(subtitle);
+
     _serverBadgeLabel = nullptr;
 
-    QGroupBox *browserGroup = new QGroupBox("1-Click Browser SSO Sign-In", this);
+    QGroupBox *browserGroup = new QGroupBox("Choose Sign-In Method", this);
     QHBoxLayout *browserRow = new QHBoxLayout(browserGroup);
     static const struct {
         const char *id;
         const char *label;
-    } kProviders[5] = {
-        {"google",    "Google"},
-        {"apple",     "Apple"},
-        {"microsoft", "Microsoft"},
-        {"facebook",  "Facebook"},
-        {"line",      "LINE"},
+        const char *btnText;
+        bool enabled;
+    } kProviders[2] = {
+        {"google",   "Google",   "Continue with Google",   true},
+        {"facebook", "Facebook", "Continue with Facebook", false},
     };
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 2; ++i) {
+        if (!kProviders[i].enabled) {
+            continue;
+        }
         const std::string provId = kProviders[i].id;
         QPushButton *btn = new QPushButton(
-            QString::fromUtf8(kProviders[i].label), browserGroup);
+            QString::fromUtf8(kProviders[i].btnText), browserGroup);
         btn->setIcon(makeProviderIcon(QString::fromUtf8(kProviders[i].id)));
+        btn->setMinimumHeight(40);
         QObject::connect(btn, &QPushButton::clicked, [this, provId]() {
             startBrowserLoopbackFlow(provId, true);
         });
@@ -148,7 +157,10 @@ SsoOnboardingDialog::SsoOnboardingDialog(OctiNetworkClient *netClient,
     QGroupBox *manualGroup = new QGroupBox("Direct / Token Sign-In", this);
     QFormLayout *manualForm = new QFormLayout(manualGroup);
     _providerCombo = new QComboBox(manualGroup);
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 2; ++i) {
+        if (!kProviders[i].enabled) {
+            continue;
+        }
         _providerCombo->addItem(
             makeProviderIcon(QString::fromUtf8(kProviders[i].id)),
             QString::fromUtf8(kProviders[i].label),
@@ -156,7 +168,7 @@ SsoOnboardingDialog::SsoOnboardingDialog(OctiNetworkClient *netClient,
     }
     _tokenEdit = new QLineEdit(manualGroup);
     _tokenEdit->setObjectName("ssoTokenEdit");
-    _tokenEdit->setPlaceholderText("Paste OIDC id_token (or Facebook access_token)...");
+    _tokenEdit->setPlaceholderText("Paste OIDC id_token...");
 
     _handleEdit = new QLineEdit(manualGroup);
     _handleEdit->setObjectName("desiredHandleEdit");
@@ -175,16 +187,17 @@ SsoOnboardingDialog::SsoOnboardingDialog(OctiNetworkClient *netClient,
     manualForm->addRow("ID Token:", _tokenEdit);
     manualForm->addRow("Initial Handle:", _handleEdit);
     manualForm->addRow("", _signInBtn);
+    manualGroup->setVisible(false);
     root->addWidget(manualGroup);
 
     _step2Container = new QGroupBox(
-        "Step 2: Welcome! Customize Your Player Handle", this);
+        "Welcome to OCTI! Choose Your Player Name", this);
     QVBoxLayout *step2Layout = new QVBoxLayout(_step2Container);
     _onboardingHandleEdit = new QLineEdit(_step2Container);
     _onboardingHandleEdit->setObjectName("onboardingHandleEdit");
-    _onboardingHandleEdit->setPlaceholderText("Choose your public OCTI handle...");
+    _onboardingHandleEdit->setPlaceholderText("Choose your player name...");
     _completeOnboardingBtn = new QPushButton(
-        "Complete Onboarding", _step2Container);
+        "Continue", _step2Container);
     QObject::connect(_completeOnboardingBtn, &QPushButton::clicked, [this]() {
         finalizeOnboardingHandle(
             _onboardingHandleEdit->text().trimmed().toStdString());
@@ -194,7 +207,7 @@ SsoOnboardingDialog::SsoOnboardingDialog(OctiNetworkClient *netClient,
     _step2Container->setVisible(false);
     root->addWidget(_step2Container);
 
-    _statusLabel = new QLabel("Ready to authenticate.", this);
+    _statusLabel = new QLabel("", this);
     _statusLabel->setWordWrap(true);
     root->addWidget(_statusLabel);
 
@@ -276,17 +289,28 @@ bool SsoOnboardingDialog::startBrowserLoopbackFlow(const std::string &provider,
         return false;
     }
     if (_statusLabel) {
+        QString provName = (provider == "facebook") ? "Facebook" : "Google";
         _statusLabel->setText(
-            QString("Listening for %1 callback on %2")
-                .arg(QString::fromStdString(provider))
-                .arg(QString::fromStdString(_loopbackListener.callbackUrl())));
+            QString("Completing sign-in with %1 in your browser...")
+                .arg(provName));
     }
     if (openSystemBrowser) {
-        QString url = QString("https://%1:%2/api/v1/auth/providers?provider=%3&redirect_uri=%4")
-            .arg(QString::fromUtf8(OCTI_SERVER_HOST))
-            .arg(OCTI_SERVER_PORT)
+        QString host = _netClient ? QString::fromStdString(_netClient->host())
+                                  : QString::fromUtf8(OCTI_SERVER_HOST);
+        int port = _netClient ? _netClient->port() : OCTI_SERVER_PORT;
+        QString encodedCallback = QString::fromUtf8(
+            QUrl::toPercentEncoding(
+                QString::fromStdString(_loopbackListener.callbackUrl())));
+        QString base;
+        if (host == "127.0.0.1" || host == "localhost") {
+            base = QString("http://%1:%2").arg(host).arg(port);
+        } else {
+            base = "https://octi.selfso.com";
+        }
+        QString url = QString("%1/api/v1/auth/authorize?provider=%2&redirect_uri=%3")
+            .arg(base)
             .arg(QString::fromStdString(provider))
-            .arg(QString::fromStdString(_loopbackListener.callbackUrl()));
+            .arg(encodedCallback);
         QDesktopServices::openUrl(QUrl(url));
     }
     return true;
@@ -493,49 +517,62 @@ AccountLinkDialog::AccountLinkDialog(OctiNetworkClient *netClient,
       _conflictBox(nullptr),
       _conflictBannerLabel(nullptr),
       _switchConflictBtn(nullptr),
+      _mergeConflictBtn(nullptr),
       _cancelConflictBtn(nullptr),
       _hasConflict(false),
       _conflictIsAccessToken(false)
 {
-    setWindowTitle("OCTI — Linked SSO Identities");
-    setMinimumSize(560, 460);
+    setWindowTitle("My Account");
+    setMinimumSize(520, 420);
 
     QVBoxLayout *root = new QVBoxLayout(this);
     root->setSpacing(10);
 
-    QLabel *hdr = new QLabel("Manage Linked SSO Providers", this);
+    QLabel *hdr = new QLabel("Connected Accounts", this);
     hdr->setStyleSheet("font-size: 16px; font-weight: bold;");
     root->addWidget(hdr);
 
     _identitiesTable = new QTableWidget(0, 3, this);
     _identitiesTable->setHorizontalHeaderLabels(
-        QStringList() << "Provider" << "Email" << "Display Hint");
+        QStringList() << "Account" << "Email" << "Name");
     _identitiesTable->horizontalHeader()->setSectionResizeMode(
         QHeaderView::Stretch);
     _identitiesTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     _identitiesTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     root->addWidget(_identitiesTable);
 
-    QGroupBox *linkGroup = new QGroupBox("Link or Unlink Provider", this);
+    QGroupBox *linkGroup = new QGroupBox("Connect or Disconnect Account", this);
     QFormLayout *form = new QFormLayout(linkGroup);
     _providerCombo = new QComboBox(linkGroup);
-    static const char *kProvs[5] = {
-        "google", "apple", "microsoft", "facebook", "line"
+    static const struct {
+        const char *id;
+        const char *label;
+        bool enabled;
+    } kProvs[2] = {
+        {"google",   "Google",   true},
+        {"facebook", "Facebook", false},
     };
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 2; ++i) {
+        if (!kProvs[i].enabled) {
+            continue;
+        }
         _providerCombo->addItem(
-            makeProviderIcon(QString::fromUtf8(kProvs[i])),
-            QString::fromUtf8(kProvs[i]),
-            QString::fromUtf8(kProvs[i]));
+            makeProviderIcon(QString::fromUtf8(kProvs[i].id)),
+            QString::fromUtf8(kProvs[i].label),
+            QString::fromUtf8(kProvs[i].id));
     }
     _tokenEdit = new QLineEdit(linkGroup);
     _tokenEdit->setPlaceholderText("ID Token to link...");
+    _tokenEdit->setVisible(false);
 
     QHBoxLayout *btnRow = new QHBoxLayout();
     _linkBtn = new QPushButton("Link Provider", linkGroup);
-    _unlinkBtn = new QPushButton("Unlink Provider", linkGroup);
-    btnRow->addWidget(_linkBtn);
+    _linkBtn->setVisible(false);
+    QPushButton *browserLinkBtn = new QPushButton("Connect Account", linkGroup);
+    _unlinkBtn = new QPushButton("Disconnect Account", linkGroup);
+    btnRow->addWidget(browserLinkBtn);
     btnRow->addWidget(_unlinkBtn);
+    btnRow->addWidget(_linkBtn);
 
     QObject::connect(_linkBtn, &QPushButton::clicked, [this]() {
         linkProviderIdentity(
@@ -547,9 +584,12 @@ AccountLinkDialog::AccountLinkDialog(OctiNetworkClient *netClient,
         unlinkProviderIdentity(
             _providerCombo->currentData().toString().toStdString());
     });
+    QObject::connect(browserLinkBtn, &QPushButton::clicked, [this]() {
+        startBrowserLoopbackFlow(
+            _providerCombo->currentData().toString().toStdString(), true);
+    });
 
-    form->addRow("Provider:", _providerCombo);
-    form->addRow("Token:", _tokenEdit);
+    form->addRow("Account:", _providerCombo);
     form->addRow("", btnRow);
     root->addWidget(linkGroup);
 
@@ -558,7 +598,7 @@ AccountLinkDialog::AccountLinkDialog(OctiNetworkClient *netClient,
     _errorBannerLabel->setVisible(false);
     root->addWidget(_errorBannerLabel);
 
-    _conflictBox = new QGroupBox("Identity Already Linked (409 Conflict)", this);
+    _conflictBox = new QGroupBox("Account Already Connected", this);
     QVBoxLayout *cLayout = new QVBoxLayout(_conflictBox);
     _conflictBannerLabel = new QLabel("", _conflictBox);
     _conflictBannerLabel->setWordWrap(true);
@@ -567,13 +607,19 @@ AccountLinkDialog::AccountLinkDialog(OctiNetworkClient *netClient,
     QHBoxLayout *cBtns = new QHBoxLayout();
     _switchConflictBtn = new QPushButton(
         "Switch to Existing Account", _conflictBox);
+    _mergeConflictBtn = new QPushButton(
+        "Combine Accounts", _conflictBox);
     _cancelConflictBtn = new QPushButton("Cancel", _conflictBox);
     cBtns->addWidget(_switchConflictBtn);
+    cBtns->addWidget(_mergeConflictBtn);
     cBtns->addWidget(_cancelConflictBtn);
     cLayout->addLayout(cBtns);
 
     QObject::connect(_switchConflictBtn, &QPushButton::clicked, [this]() {
         confirmSwitchToConflictAccount();
+    });
+    QObject::connect(_mergeConflictBtn, &QPushButton::clicked, [this]() {
+        mergeConflictIntoCurrentAccount();
     });
     QObject::connect(_cancelConflictBtn, &QPushButton::clicked, [this]() {
         cancelConflictSwitch();
@@ -684,11 +730,10 @@ ApiResult<LinkIdentityData> AccountLinkDialog::linkProviderIdentity(
         _conflictProfile = res.data.existingProfile;
         if (_conflictBannerLabel) {
             _conflictBannerLabel->setText(
-                QString("This %1 identity is already linked to account '%2' (%3). "
-                        "Would you like to switch to that existing account?")
+                QString("This %1 account is already connected to '%2'. "
+                        "Would you like to switch to that account or combine them?")
                     .arg(QString::fromStdString(provider))
-                    .arg(QString::fromStdString(_conflictProfile.handle))
-                    .arg(QString::fromStdString(_conflictProfile.uuid)));
+                    .arg(QString::fromStdString(_conflictProfile.handle)));
         }
         if (_conflictBox) {
             _conflictBox->setVisible(true);
@@ -827,6 +872,120 @@ void AccountLinkDialog::setOnAccountSwitchedCallback(
     std::function<void(const PlayerProfileInfo &)> cb)
 {
     _onAccountSwitchedCallback = std::move(cb);
+}
+
+bool AccountLinkDialog::mergeConflictIntoCurrentAccount()
+{
+    if (!_netClient || !_hasConflict) {
+        return false;
+    }
+
+    auto res = _netClient->linkIdentity(
+        QString::fromStdString(_conflictProvider),
+        QString::fromStdString(_conflictIsAccessToken ? "" : _conflictToken),
+        QString::fromStdString(_conflictIsAccessToken ? _conflictToken : ""),
+        true);
+
+    if (!res.ok) {
+        if (_errorBannerLabel) {
+            _errorBannerLabel->setText(
+                QString("Merge conflict failed (%1): %2")
+                    .arg(res.httpStatus)
+                    .arg(QString::fromStdString(res.errorMessage)));
+            _errorBannerLabel->setVisible(true);
+        }
+        return false;
+    }
+
+    _hasConflict = false;
+    _conflictProvider.clear();
+    _conflictToken.clear();
+    _conflictProfile = PlayerProfileInfo();
+    if (_conflictBannerLabel) {
+        _conflictBannerLabel->clear();
+    }
+    if (_conflictBox) {
+        _conflictBox->setVisible(false);
+    }
+    if (_errorBannerLabel) {
+        _errorBannerLabel->clear();
+        _errorBannerLabel->setVisible(false);
+    }
+
+    if (!res.data.identities.empty()) {
+        _identities = res.data.identities;
+        rebuildIdentitiesTable();
+    } else {
+        refreshProfile();
+    }
+
+    return true;
+}
+
+bool AccountLinkDialog::startBrowserLoopbackFlow(const std::string &provider,
+                                                 bool openSystemBrowser)
+{
+    stopBrowserLoopbackFlow();
+    std::string err;
+    bool ok = _loopbackListener.start(
+        [this](const std::string &cbProvider, const std::string &cbToken) {
+            _dispatcher.post([this, cbProvider, cbToken]() {
+                std::string prov = cbProvider.empty()
+                    ? _providerCombo->currentData().toString().toStdString()
+                    : cbProvider;
+                linkProviderIdentity(prov, cbToken, false);
+            });
+        },
+        err);
+    if (!ok) {
+        if (_errorBannerLabel) {
+            _errorBannerLabel->setText(QString::fromStdString(err));
+            _errorBannerLabel->setVisible(true);
+        }
+        return false;
+    }
+    if (openSystemBrowser) {
+        QString host = _netClient ? QString::fromStdString(_netClient->host())
+                                  : QString::fromUtf8(OCTI_SERVER_HOST);
+        int port = _netClient ? _netClient->port() : OCTI_SERVER_PORT;
+        QString encodedCallback = QString::fromUtf8(
+            QUrl::toPercentEncoding(
+                QString::fromStdString(_loopbackListener.callbackUrl())));
+        QString base;
+        if (host == "127.0.0.1" || host == "localhost") {
+            base = QString("http://%1:%2").arg(host).arg(port);
+        } else {
+            base = "https://octi.selfso.com";
+        }
+        QString url = QString("%1/api/v1/auth/authorize?provider=%2&redirect_uri=%3")
+            .arg(base)
+            .arg(QString::fromStdString(provider))
+            .arg(encodedCallback);
+        QDesktopServices::openUrl(QUrl(url));
+    }
+    return true;
+}
+
+void AccountLinkDialog::stopBrowserLoopbackFlow()
+{
+    _loopbackListener.stop();
+}
+
+int AccountLinkDialog::loopbackBoundPort() const
+{
+    return _loopbackListener.boundPort();
+}
+
+std::string AccountLinkDialog::loopbackCallbackUrl() const
+{
+    return _loopbackListener.callbackUrl();
+}
+
+bool AccountLinkDialog::pollLoopbackCallback(int timeoutMs)
+{
+    std::string prov;
+    std::string tok;
+    return _loopbackListener.waitForCallback(timeoutMs, prov, tok);
 }
 
 /* ==================================================================== */

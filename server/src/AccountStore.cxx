@@ -48,6 +48,9 @@ const char kSchemaSql[] =
     " handle TEXT NOT NULL UNIQUE,"
     " display_name TEXT NOT NULL,"
     " avatar_url TEXT NOT NULL DEFAULT '',"
+    " bio TEXT NOT NULL DEFAULT '',"
+    " location TEXT NOT NULL DEFAULT '',"
+    " banned INTEGER NOT NULL DEFAULT 0,"
     " elo_2p INTEGER NOT NULL DEFAULT 1200,"
     " elo_4p INTEGER NOT NULL DEFAULT 1200,"
     " elo_ofk INTEGER NOT NULL DEFAULT 1200,"
@@ -71,6 +74,22 @@ const char kSchemaSql[] =
     ");"
     "CREATE INDEX IF NOT EXISTS idx_linked_identities_player"
     " ON linked_identities(player_id);"
+    "CREATE TABLE IF NOT EXISTS robots ("
+    " robot_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+    " robot_uuid TEXT NOT NULL UNIQUE,"
+    " owner_player_id INTEGER NOT NULL REFERENCES players(player_id) ON DELETE CASCADE,"
+    " robot_name TEXT NOT NULL COLLATE NOCASE,"
+    " description TEXT NOT NULL DEFAULT '',"
+    " token TEXT NOT NULL DEFAULT '',"
+    " token_hash TEXT NOT NULL UNIQUE,"
+    " token_prefix TEXT NOT NULL DEFAULT '',"
+    " created_at INTEGER NOT NULL,"
+    " revoked INTEGER NOT NULL DEFAULT 0,"
+    " revoked_at INTEGER NOT NULL DEFAULT 0"
+    ");"
+    "CREATE INDEX IF NOT EXISTS idx_robots_owner ON robots(owner_player_id);"
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_robots_active_name"
+    " ON robots(robot_name COLLATE NOCASE) WHERE revoked = 0;"
     "CREATE TABLE IF NOT EXISTS sessions ("
     " session_id INTEGER PRIMARY KEY AUTOINCREMENT,"
     " token_hash TEXT NOT NULL UNIQUE,"
@@ -151,8 +170,8 @@ const char kSchemaSql[] =
     " ON crash_reports(install_id);";
 
 const char kProfileCols[] =
-    "player_id, uuid, handle, display_name, avatar_url, elo_2p, elo_4p,"
-    " elo_ofk, games_played, wins, losses, draws, created_at, last_seen_at";
+    "player_id, uuid, handle, display_name, avatar_url, bio, location, banned,"
+    " elo_2p, elo_4p, elo_ofk, games_played, wins, losses, draws, created_at, last_seen_at";
 
 #define OCTI_GAME_COLS_HEAD                                                    \
     "game_id, game_mode, game_bases, super_prongs, edgeless, time_control,"    \
@@ -466,15 +485,18 @@ void readProfile(const Stmt &s, PlayerProfile &p)
     p.handle = s.colText(2);
     p.displayName = s.colText(3);
     p.avatarUrl = s.colText(4);
-    p.elo2p = static_cast<int>(s.colInt(5));
-    p.elo4p = static_cast<int>(s.colInt(6));
-    p.eloOfk = static_cast<int>(s.colInt(7));
-    p.gamesPlayed = static_cast<int>(s.colInt(8));
-    p.wins = static_cast<int>(s.colInt(9));
-    p.losses = static_cast<int>(s.colInt(10));
-    p.draws = static_cast<int>(s.colInt(11));
-    p.createdAt = s.colInt(12);
-    p.lastSeenAt = s.colInt(13);
+    p.bio = s.colText(5);
+    p.location = s.colText(6);
+    p.banned = s.colInt(7) != 0;
+    p.elo2p = static_cast<int>(s.colInt(8));
+    p.elo4p = static_cast<int>(s.colInt(9));
+    p.eloOfk = static_cast<int>(s.colInt(10));
+    p.gamesPlayed = static_cast<int>(s.colInt(11));
+    p.wins = static_cast<int>(s.colInt(12));
+    p.losses = static_cast<int>(s.colInt(13));
+    p.draws = static_cast<int>(s.colInt(14));
+    p.createdAt = s.colInt(15);
+    p.lastSeenAt = s.colInt(16);
 }
 
 bool loadProfileById(sqlite3 *db, int64_t playerId, PlayerProfile &out)
@@ -521,24 +543,6 @@ bool validClaims(const VerifiedClaims &c)
 {
     return OidcVerifier::isSupportedProvider(c.provider) && !c.sub.empty() &&
            c.sub.size() <= kMaxSubBytes && isValidUtf8(c.sub);
-}
-
-bool validAvatarUrl(const std::string &url)
-{
-    if (url.empty()) {
-        return true;
-    }
-    if (url.size() > kMaxAvatarUrlBytes ||
-        url.compare(0, 8, "https://") != 0 || url.size() == 8) {
-        return false;
-    }
-    for (size_t i = 0; i < url.size(); ++i) {
-        unsigned char c = static_cast<unsigned char>(url[i]);
-        if (c <= 0x20 || c >= 0x7F) {
-            return false;
-        }
-    }
-    return true;
 }
 
 bool mintSessionLocked(sqlite3 *db, int64_t playerId,
@@ -911,6 +915,126 @@ std::string AccountStore::sha256Hex(const std::string &data)
     return out;
 }
 
+bool AccountStore::validBio(const std::string &bio)
+{
+    if (bio.size() > 500) {
+        return false;
+    }
+    if (!isValidUtf8(bio)) {
+        return false;
+    }
+    for (size_t i = 0; i < bio.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(bio[i]);
+        if (c < 0x20 && c != '\n' && c != '\r' && c != '\t') {
+            return false;
+        }
+        if (c == 0x7F) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool AccountStore::validLocation(const std::string &location)
+{
+    if (location.size() > 64) {
+        return false;
+    }
+    if (!isValidUtf8(location)) {
+        return false;
+    }
+    for (size_t i = 0; i < location.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(location[i]);
+        if (c < 0x20 || c == 0x7F) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool AccountStore::validAvatarUrl(const std::string &url)
+{
+    if (url.empty()) {
+        return true;
+    }
+    static const std::string dataPrefixes[] = {
+        "data:image/png;base64,",
+        "data:image/jpeg;base64,",
+        "data:image/webp;base64,",
+        "data:image/gif;base64,",
+        "data:image/svg+xml;base64,"
+    };
+    for (size_t i = 0; i < sizeof(dataPrefixes) / sizeof(dataPrefixes[0]); ++i) {
+        const std::string &pfx = dataPrefixes[i];
+        if (url.size() >= pfx.size() && url.compare(0, pfx.size(), pfx) == 0) {
+            if (url.size() > 32768) {
+                return false;
+            }
+            std::string payload = url.substr(pfx.size());
+            if (payload.empty()) {
+                return false;
+            }
+            for (size_t j = 0; j < payload.size(); ++j) {
+                char c = payload[j];
+                bool isB64 = (c >= 'A' && c <= 'Z') ||
+                             (c >= 'a' && c <= 'z') ||
+                             (c >= '0' && c <= '9') ||
+                             c == '+' || c == '/' || c == '=';
+                if (!isB64) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+    if (url.size() > kMaxAvatarUrlBytes ||
+        url.compare(0, 8, "https://") != 0 || url.size() == 8) {
+        return false;
+    }
+    for (size_t i = 0; i < url.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(url[i]);
+        if (c <= 0x20 || c >= 0x7F) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool AccountStore::validRobotName(const std::string &name)
+{
+    if (name.size() < 3 || name.size() > 24) {
+        return false;
+    }
+    for (char c : name) {
+        bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                  (c >= '0' && c <= '9') || c == '_' || c == '-';
+        if (!ok) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool AccountStore::validRobotDescription(const std::string &desc)
+{
+    if (desc.size() > 256) {
+        return false;
+    }
+    if (!isValidUtf8(desc)) {
+        return false;
+    }
+    for (size_t i = 0; i < desc.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(desc[i]);
+        if (c < 0x20 && c != '\n' && c != '\r' && c != '\t') {
+            return false;
+        }
+        if (c == 0x7F) {
+            return false;
+        }
+    }
+    return true;
+}
+
 int64_t AccountStore::nowSec() const
 {
     return _clock();
@@ -993,6 +1117,23 @@ bool AccountStore::openOrCreate(const std::string &path, std::string &error)
         if (!ok) {
             error = sqlite3_errmsg(db);
         } else {
+            std::set<std::string> pcols;
+            Stmt pinfo(db, "PRAGMA table_info(players)");
+            while (pinfo.step() == SQLITE_ROW) {
+                pcols.insert(pinfo.colText(1));
+            }
+            if (!pcols.empty()) {
+                if (pcols.find("bio") == pcols.end()) {
+                    execSql(db, "ALTER TABLE players ADD COLUMN bio TEXT NOT NULL DEFAULT '';");
+                }
+                if (pcols.find("location") == pcols.end()) {
+                    execSql(db, "ALTER TABLE players ADD COLUMN location TEXT NOT NULL DEFAULT '';");
+                }
+                if (pcols.find("banned") == pcols.end()) {
+                    execSql(db, "ALTER TABLE players ADD COLUMN banned INTEGER NOT NULL DEFAULT 0;");
+                }
+            }
+
             std::set<std::string> cols;
             Stmt info(db, "PRAGMA table_info(games)");
             while (info.step() == SQLITE_ROW) {
@@ -1174,7 +1315,8 @@ LoginResult AccountStore::loginWithSso(const VerifiedClaims &claims,
 }
 
 LinkResult AccountStore::linkIdentity(int64_t playerId,
-                                      const VerifiedClaims &claims)
+                                      const VerifiedClaims &claims,
+                                      bool forceRelinkEmpty)
 {
     LinkResult res;
     std::lock_guard<std::mutex> lock(_mutex);
@@ -1226,11 +1368,61 @@ LinkResult AccountStore::linkIdentity(int64_t playerId,
             res.error = "cannot load conflicting profile";
             return res;
         }
-        res.status = LinkStatus::CONFLICT_ALREADY_LINKED;
+        res.status = LinkStatus::CONFLICT_OTHER_ACCOUNT;
+        res.ok = false;
         res.conflictProfile.uuid = other.uuid;
         res.conflictProfile.handle = other.handle;
         res.conflictProfile.elo2p = other.elo2p;
         res.conflictProfile.gamesPlayed = other.gamesPlayed;
+        res.conflictingPlayerId = ownerId;
+        res.conflictingPlayerUuid = other.uuid;
+        res.conflictingHandle = other.handle;
+
+        if (forceRelinkEmpty) {
+            int64_t identitiesCount = 0;
+            {
+                Stmt cnt(_db, "SELECT COUNT(*) FROM linked_identities WHERE player_id = ?1");
+                cnt.bindInt(1, ownerId);
+                if (cnt.step() == SQLITE_ROW) {
+                    identitiesCount = cnt.colInt(0);
+                }
+            }
+            int64_t activeRobotsCount = 0;
+            {
+                Stmt rcnt(_db, "SELECT COUNT(*) FROM robots WHERE owner_player_id = ?1 AND revoked = 0");
+                rcnt.bindInt(1, ownerId);
+                if (rcnt.step() == SQLITE_ROW) {
+                    activeRobotsCount = rcnt.colInt(0);
+                }
+            }
+            if (other.gamesPlayed == 0 && identitiesCount == 1 && activeRobotsCount == 0) {
+                Stmt upd(_db, "UPDATE linked_identities SET player_id = ?1,"
+                              " provider_email = COALESCE(NULLIF(?2, ''), provider_email),"
+                              " last_login_at = ?3 WHERE provider = ?4 AND provider_sub = ?5");
+                upd.bindInt(1, playerId);
+                upd.bindText(2, email);
+                upd.bindInt(3, now);
+                upd.bindText(4, claims.provider);
+                upd.bindText(5, claims.sub);
+                if (upd.step() != SQLITE_DONE) {
+                    res.error = sqlite3_errmsg(_db);
+                    return res;
+                }
+                Stmt del(_db, "DELETE FROM players WHERE player_id = ?1");
+                del.bindInt(1, ownerId);
+                if (del.step() != SQLITE_DONE || !tx.commit()) {
+                    res.error = sqlite3_errmsg(_db);
+                    return res;
+                }
+                res.status = LinkStatus::OK;
+                res.ok = true;
+                res.conflictingPlayerId = 0;
+                res.conflictProfile = PublicProfile();
+                res.conflictingPlayerUuid.clear();
+                res.conflictingHandle.clear();
+                return res;
+            }
+        }
         return res;
     }
 
@@ -1265,6 +1457,7 @@ LinkResult AccountStore::linkIdentity(int64_t playerId,
         return res;
     }
     res.status = LinkStatus::LINKED;
+    res.ok = true;
     return res;
 }
 
@@ -1455,6 +1648,11 @@ int AccountStore::purgeExpiredSessions(int64_t now)
     return sqlite3_changes(_db);
 }
 
+bool AccountStore::getProfile(int64_t playerId, PlayerProfile &out)
+{
+    return getProfileById(playerId, out);
+}
+
 bool AccountStore::getProfileById(int64_t playerId, PlayerProfile &out)
 {
     std::lock_guard<std::mutex> lock(_mutex);
@@ -1478,8 +1676,26 @@ bool AccountStore::getProfileByUuid(const std::string &uuid, PlayerProfile &out)
     return true;
 }
 
+bool AccountStore::getProfileByHandle(const std::string &handle, PlayerProfile &out)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    std::string sql = std::string("SELECT ") + kProfileCols +
+                      " FROM players WHERE handle = ?1 COLLATE NOCASE";
+    Stmt s(_db, sql.c_str());
+    s.bindText(1, handle);
+    if (s.step() != SQLITE_ROW) {
+        return false;
+    }
+    readProfile(s, out);
+    return true;
+}
+
 UpdateStatus AccountStore::updateProfile(int64_t playerId,
-                                         const ProfileUpdate &update)
+                                         const ProfileUpdate &update,
+                                         PlayerProfile *updated)
 {
     if (update.setHandle && !isValidHandle(update.handle)) {
         return UpdateStatus::INVALID_HANDLE;
@@ -1495,6 +1711,12 @@ UpdateStatus AccountStore::updateProfile(int64_t playerId,
     }
     if (update.setAvatarUrl && !validAvatarUrl(update.avatarUrl)) {
         return UpdateStatus::INVALID_AVATAR_URL;
+    }
+    if (update.setBio && !validBio(update.bio)) {
+        return UpdateStatus::INVALID_BIO;
+    }
+    if (update.setLocation && !validLocation(update.location)) {
+        return UpdateStatus::INVALID_LOCATION;
     }
 
     std::lock_guard<std::mutex> lock(_mutex);
@@ -1513,17 +1735,447 @@ UpdateStatus AccountStore::updateProfile(int64_t playerId,
         return UpdateStatus::HANDLE_TAKEN;
     }
     Stmt s(_db, "UPDATE players SET handle = ?1, display_name = ?2,"
-                " avatar_url = ?3 WHERE player_id = ?4");
+                " avatar_url = ?3, bio = ?4, location = ?5 WHERE player_id = ?6");
     s.bindText(1, update.setHandle ? update.handle : current.handle);
     s.bindText(2, update.setDisplayName ? displayName : current.displayName);
     s.bindText(3, update.setAvatarUrl ? update.avatarUrl : current.avatarUrl);
-    s.bindInt(4, playerId);
+    s.bindText(4, update.setBio ? update.bio : current.bio);
+    s.bindText(5, update.setLocation ? update.location : current.location);
+    s.bindInt(6, playerId);
     int rc = s.step();
     if (rc != SQLITE_DONE) {
         return (rc & 0xFF) == SQLITE_CONSTRAINT ? UpdateStatus::HANDLE_TAKEN
                                                 : UpdateStatus::ERROR;
     }
-    return tx.commit() ? UpdateStatus::OK : UpdateStatus::ERROR;
+    if (!tx.commit()) {
+        return UpdateStatus::ERROR;
+    }
+    if (updated != nullptr) {
+        loadProfileById(_db, playerId, *updated);
+    }
+    return UpdateStatus::OK;
+}
+
+bool AccountStore::setBanned(int64_t playerId, bool banned)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    sqlite3_stmt *stmt = nullptr;
+    const char *sql = "UPDATE players SET banned = ? WHERE player_id = ?;";
+    if (sqlite3_prepare_v2(_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return false;
+    }
+    sqlite3_bind_int(stmt, 1, banned ? 1 : 0);
+    sqlite3_bind_int64(stmt, 2, playerId);
+    bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
+bool AccountStore::listUsers(const UserDirectoryFilter &filter,
+                             std::vector<UserDirectoryEntry> &out,
+                             int64_t *total)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    out.clear();
+
+    std::string whereClause = " WHERE p.banned = 0";
+    std::string qLike;
+    bool hasQuery = !filter.query.empty();
+    if (hasQuery) {
+        whereClause += " AND (LOWER(p.handle) LIKE ?1 OR LOWER(p.display_name) LIKE ?1"
+                       " OR LOWER(p.location) LIKE ?1 OR LOWER(p.bio) LIKE ?1)";
+        std::string lowerQ = filter.query;
+        std::transform(lowerQ.begin(), lowerQ.end(), lowerQ.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        qLike = "%" + lowerQ + "%";
+    }
+
+    if (total != nullptr) {
+        std::string countSql = "SELECT COUNT(*) FROM players p" + whereClause;
+        Stmt cStmt(_db, countSql.c_str());
+        if (hasQuery) {
+            cStmt.bindText(1, qLike);
+        }
+        if (cStmt.step() != SQLITE_ROW) {
+            return false;
+        }
+        *total = cStmt.colInt(0);
+    }
+
+    std::string orderCol = "p.elo_2p";
+    if (filter.sortField == "handle") {
+        orderCol = "p.handle COLLATE NOCASE";
+    } else if (filter.sortField == "display_name") {
+        orderCol = "p.display_name COLLATE NOCASE";
+    } else if (filter.sortField == "elo_2p") {
+        orderCol = "p.elo_2p";
+    } else if (filter.sortField == "elo_4p") {
+        orderCol = "p.elo_4p";
+    } else if (filter.sortField == "elo_ofk") {
+        orderCol = "p.elo_ofk";
+    } else if (filter.sortField == "games_played") {
+        orderCol = "p.games_played";
+    } else if (filter.sortField == "wins") {
+        orderCol = "p.wins";
+    } else if (filter.sortField == "created_at") {
+        orderCol = "p.created_at";
+    } else if (filter.sortField == "last_seen_at") {
+        orderCol = "p.last_seen_at";
+    }
+
+    int limit = filter.limit <= 0 ? kDefaultUsersPageLimit : filter.limit;
+    if (limit > kMaxUsersPageLimit) {
+        limit = kMaxUsersPageLimit;
+    }
+    int offset = std::max(0, filter.offset);
+
+    std::string sql = "SELECT p.player_id, p.uuid, p.handle, p.display_name, p.avatar_url,"
+                      " p.bio, p.location, p.banned, p.elo_2p, p.elo_4p, p.elo_ofk,"
+                      " p.games_played, p.wins, p.losses, p.draws, p.created_at, p.last_seen_at,"
+                      " (SELECT COUNT(*) FROM robots r WHERE r.owner_player_id = p.player_id AND r.revoked = 0) AS active_robots"
+                      " FROM players p" + whereClause +
+                      " ORDER BY " + orderCol + (filter.sortAsc ? " ASC" : " DESC") +
+                      ", p.player_id ASC LIMIT ?" + (hasQuery ? "2" : "1") +
+                      " OFFSET ?" + (hasQuery ? "3" : "2");
+
+    Stmt s(_db, sql.c_str());
+    int paramIdx = 1;
+    if (hasQuery) {
+        s.bindText(paramIdx++, qLike);
+    }
+    s.bindInt(paramIdx++, limit);
+    s.bindInt(paramIdx++, offset);
+
+    int rc;
+    while ((rc = s.step()) == SQLITE_ROW) {
+        UserDirectoryEntry entry;
+        readProfile(s, entry.profile);
+        entry.activeRobotsCount = static_cast<int>(s.colInt(17));
+        out.push_back(entry);
+    }
+    return rc == SQLITE_DONE;
+}
+
+CreateRobotResult AccountStore::createRobot(int64_t ownerPlayerId,
+                                            const std::string &robotName,
+                                            const std::string &description)
+{
+    CreateRobotResult res;
+    if (!validRobotName(robotName)) {
+        res.status = RobotStatus::INVALID_ROBOT_NAME;
+        res.errorMessage = "invalid robot name";
+        return res;
+    }
+    if (!validRobotDescription(description)) {
+        res.status = RobotStatus::INVALID_ROBOT_DESCRIPTION;
+        res.errorMessage = "invalid robot description";
+        return res;
+    }
+
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        res.status = RobotStatus::DB_ERROR;
+        res.errorMessage = "database not open";
+        return res;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        res.status = RobotStatus::DB_ERROR;
+        res.errorMessage = sqlite3_errmsg(_db);
+        return res;
+    }
+
+    PlayerProfile owner;
+    if (!loadProfileById(_db, ownerPlayerId, owner)) {
+        res.status = RobotStatus::NOT_FOUND;
+        res.errorMessage = "owner player not found";
+        return res;
+    }
+
+    {
+        Stmt cnt(_db, "SELECT COUNT(*) FROM robots WHERE owner_player_id = ?1 AND revoked = 0");
+        cnt.bindInt(1, ownerPlayerId);
+        if (cnt.step() != SQLITE_ROW) {
+            res.status = RobotStatus::DB_ERROR;
+            res.errorMessage = sqlite3_errmsg(_db);
+            return res;
+        }
+        if (cnt.colInt(0) >= kMaxRobotsPerPlayer) {
+            res.status = RobotStatus::ROBOT_LIMIT_REACHED;
+            res.errorMessage = "robot limit reached";
+            return res;
+        }
+    }
+
+    {
+        Stmt chk(_db, "SELECT 1 FROM robots WHERE robot_name = ?1 COLLATE NOCASE AND revoked = 0");
+        chk.bindText(1, robotName);
+        if (chk.step() == SQLITE_ROW) {
+            res.status = RobotStatus::ROBOT_NAME_TAKEN;
+            res.errorMessage = "robot name already taken";
+            return res;
+        }
+    }
+
+    std::string rUuid;
+    if (!uuidV4(rUuid)) {
+        res.status = RobotStatus::DB_ERROR;
+        res.errorMessage = "UUID generator failure";
+        return res;
+    }
+
+    unsigned char rawBytes[32];
+    if (!randomBytes(rawBytes, sizeof(rawBytes))) {
+        res.status = RobotStatus::DB_ERROR;
+        res.errorMessage = "random generator failure";
+        return res;
+    }
+    std::string b64token = base64UrlEncode(rawBytes, sizeof(rawBytes));
+    OPENSSL_cleanse(rawBytes, sizeof(rawBytes));
+
+    std::string rawToken = "octi_bot_" + b64token;
+    std::string tokenHash = sha256Hex(rawToken);
+    std::string tokenPrefix = rawToken.substr(0, 16) + "...";
+    int64_t now = nowSec();
+
+    Stmt ins(_db, "INSERT INTO robots(robot_uuid, owner_player_id, robot_name, description,"
+                  " token, token_hash, token_prefix, created_at, revoked, revoked_at)"
+                  " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, 0)");
+    ins.bindText(1, rUuid);
+    ins.bindInt(2, ownerPlayerId);
+    ins.bindText(3, robotName);
+    ins.bindText(4, description);
+    ins.bindText(5, rawToken);
+    ins.bindText(6, tokenHash);
+    ins.bindText(7, tokenPrefix);
+    ins.bindInt(8, now);
+
+    if (ins.step() != SQLITE_DONE || !tx.commit()) {
+        res.status = RobotStatus::DB_ERROR;
+        res.errorMessage = sqlite3_errmsg(_db);
+        return res;
+    }
+
+    int64_t newRobotId = sqlite3_last_insert_rowid(_db);
+    res.status = RobotStatus::OK;
+    res.rawToken = rawToken;
+    res.robot.robotId = newRobotId;
+    res.robot.robotUuid = rUuid;
+    res.robot.ownerPlayerId = ownerPlayerId;
+    res.robot.ownerUuid = owner.uuid;
+    res.robot.ownerHandle = owner.handle;
+    res.robot.robotName = robotName;
+    res.robot.description = description;
+    res.robot.token = rawToken;
+    res.robot.tokenPrefix = tokenPrefix;
+    res.robot.createdAt = now;
+    res.robot.revoked = false;
+    res.robot.revokedAt = 0;
+    return res;
+}
+
+RobotStatus AccountStore::updateRobotDescription(int64_t ownerPlayerId,
+                                                 const std::string &robotUuidOrName,
+                                                 const std::string &description)
+{
+    if (!validRobotDescription(description)) {
+        return RobotStatus::INVALID_ROBOT_DESCRIPTION;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return RobotStatus::DB_ERROR;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        return RobotStatus::DB_ERROR;
+    }
+
+    int64_t robotId = 0;
+    bool revoked = false;
+    {
+        Stmt find(_db, "SELECT robot_id, revoked FROM robots WHERE owner_player_id = ?1"
+                       " AND (robot_uuid = ?2 OR robot_name = ?2 COLLATE NOCASE)");
+        find.bindInt(1, ownerPlayerId);
+        find.bindText(2, robotUuidOrName);
+        if (find.step() != SQLITE_ROW) {
+            return RobotStatus::NOT_FOUND;
+        }
+        robotId = find.colInt(0);
+        revoked = find.colInt(1) != 0;
+    }
+
+    if (revoked) {
+        return RobotStatus::ALREADY_REVOKED;
+    }
+
+    Stmt upd(_db, "UPDATE robots SET description = ?1 WHERE robot_id = ?2");
+    upd.bindText(1, description);
+    upd.bindInt(2, robotId);
+    if (upd.step() != SQLITE_DONE || !tx.commit()) {
+        return RobotStatus::DB_ERROR;
+    }
+    return RobotStatus::OK;
+}
+
+bool AccountStore::listRobots(int64_t ownerPlayerId, std::vector<RobotRecord> &out)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    out.clear();
+    Stmt s(_db, "SELECT r.robot_id, r.robot_uuid, r.owner_player_id, p.uuid, p.handle,"
+                " r.robot_name, r.description, r.token, r.token_prefix, r.created_at,"
+                " r.revoked, r.revoked_at FROM robots r"
+                " JOIN players p ON p.player_id = r.owner_player_id"
+                " WHERE r.owner_player_id = ?1"
+                " ORDER BY r.revoked ASC, r.created_at DESC, r.robot_id DESC");
+    s.bindInt(1, ownerPlayerId);
+    int rc;
+    while ((rc = s.step()) == SQLITE_ROW) {
+        RobotRecord r;
+        r.robotId = s.colInt(0);
+        r.robotUuid = s.colText(1);
+        r.ownerPlayerId = s.colInt(2);
+        r.ownerUuid = s.colText(3);
+        r.ownerHandle = s.colText(4);
+        r.robotName = s.colText(5);
+        r.description = s.colText(6);
+        r.token = s.colText(7);
+        r.tokenPrefix = s.colText(8);
+        r.createdAt = s.colInt(9);
+        r.revoked = s.colInt(10) != 0;
+        r.revokedAt = s.colInt(11);
+        out.push_back(r);
+    }
+    return rc == SQLITE_DONE;
+}
+
+bool AccountStore::listPublicRobotsByOwner(int64_t ownerPlayerId, std::vector<RobotRecord> &out)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    out.clear();
+    Stmt s(_db, "SELECT r.robot_id, r.robot_uuid, r.owner_player_id, p.uuid, p.handle,"
+                " r.robot_name, r.description, r.created_at, r.revoked, r.revoked_at"
+                " FROM robots r"
+                " JOIN players p ON p.player_id = r.owner_player_id"
+                " WHERE r.owner_player_id = ?1 AND r.revoked = 0"
+                " ORDER BY r.created_at ASC, r.robot_id ASC");
+    s.bindInt(1, ownerPlayerId);
+    int rc;
+    while ((rc = s.step()) == SQLITE_ROW) {
+        RobotRecord r;
+        r.robotId = s.colInt(0);
+        r.robotUuid = s.colText(1);
+        r.ownerPlayerId = s.colInt(2);
+        r.ownerUuid = s.colText(3);
+        r.ownerHandle = s.colText(4);
+        r.robotName = s.colText(5);
+        r.description = s.colText(6);
+        r.token.clear();
+        r.tokenPrefix.clear();
+        r.createdAt = s.colInt(7);
+        r.revoked = s.colInt(8) != 0;
+        r.revokedAt = s.colInt(9);
+        out.push_back(r);
+    }
+    return rc == SQLITE_DONE;
+}
+
+RobotStatus AccountStore::revokeRobot(int64_t ownerPlayerId,
+                                      const std::string &robotUuidOrName)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return RobotStatus::DB_ERROR;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        return RobotStatus::DB_ERROR;
+    }
+
+    int64_t robotId = 0;
+    bool revoked = false;
+    {
+        Stmt find(_db, "SELECT robot_id, revoked FROM robots WHERE owner_player_id = ?1"
+                       " AND (robot_uuid = ?2 OR robot_name = ?2 COLLATE NOCASE)");
+        find.bindInt(1, ownerPlayerId);
+        find.bindText(2, robotUuidOrName);
+        if (find.step() != SQLITE_ROW) {
+            return RobotStatus::NOT_FOUND;
+        }
+        robotId = find.colInt(0);
+        revoked = find.colInt(1) != 0;
+    }
+
+    if (revoked) {
+        return RobotStatus::ALREADY_REVOKED;
+    }
+
+    int64_t now = nowSec();
+    Stmt upd(_db, "UPDATE robots SET revoked = 1, revoked_at = ?1 WHERE robot_id = ?2");
+    upd.bindInt(1, now);
+    upd.bindInt(2, robotId);
+    if (upd.step() != SQLITE_DONE || !tx.commit()) {
+        return RobotStatus::DB_ERROR;
+    }
+    return RobotStatus::OK;
+}
+
+RobotTokenValidation AccountStore::validateRobotToken(const std::string &rawToken)
+{
+    RobotTokenValidation res;
+    res.valid = false;
+    if (rawToken.empty()) {
+        return res;
+    }
+    std::string tokenHash = sha256Hex(rawToken);
+
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return res;
+    }
+
+    Stmt s(_db, "SELECT r.robot_id, r.robot_uuid, r.owner_player_id, p.uuid, p.handle,"
+                " r.robot_name, r.description, r.token, r.token_prefix, r.created_at,"
+                " r.revoked, r.revoked_at FROM robots r"
+                " JOIN players p ON p.player_id = r.owner_player_id"
+                " WHERE r.token_hash = ?1 AND r.revoked = 0");
+    s.bindText(1, tokenHash);
+    if (s.step() != SQLITE_ROW) {
+        return res;
+    }
+
+    res.robot.robotId = s.colInt(0);
+    res.robot.robotUuid = s.colText(1);
+    res.robot.ownerPlayerId = s.colInt(2);
+    res.robot.ownerUuid = s.colText(3);
+    res.robot.ownerHandle = s.colText(4);
+    res.robot.robotName = s.colText(5);
+    res.robot.description = s.colText(6);
+    res.robot.token = s.colText(7);
+    res.robot.tokenPrefix = s.colText(8);
+    res.robot.createdAt = s.colInt(9);
+    res.robot.revoked = s.colInt(10) != 0;
+    res.robot.revokedAt = s.colInt(11);
+
+    if (!loadProfileById(_db, res.robot.ownerPlayerId, res.owner)) {
+        return res;
+    }
+    if (res.owner.banned) {
+        return res;
+    }
+    res.valid = true;
+    return res;
 }
 
 bool AccountStore::leaderboard(const std::string &mode, int limit,

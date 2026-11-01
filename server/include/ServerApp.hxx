@@ -36,6 +36,7 @@ namespace octi {
  */
 struct OidcProviderConfig {
     std::vector<std::string> clientIds;
+    std::string clientSecret;
     std::string appSecret;
 };
 

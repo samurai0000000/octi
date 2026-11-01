@@ -10,12 +10,12 @@ namespace octi {
 
 namespace {
 
-const char kPage[] = R"OCTIUI(<!DOCTYPE html>
+const char kIndexHtml[] = R"OCTIUI(<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OCTI Web Player &amp; Archive</title>
+<title>OCTI &mdash; Official Platform, Web Player, Archive &amp; Leaderboard</title>
 <style>
 :root {
   --bg: #fbfbfa;
@@ -52,7 +52,7 @@ header {
   align-items: center;
   gap: 12px;
   padding: 12px 24px;
-  background: rgba(251, 251, 250, 0.92);
+  background: rgba(251, 251, 250, 0.94);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
@@ -96,6 +96,10 @@ header {
   color: var(--fg);
   letter-spacing: 0.05em;
   line-height: 1.2;
+}
+.brand-sub {
+  font-size: 11px;
+  color: var(--dim);
 }
 nav { display: flex; gap: 6px; flex-wrap: wrap; }
 nav button, .btn {
@@ -142,9 +146,18 @@ nav button.on:hover, .btn.btn-primary:hover {
   gap: 10px;
   flex-wrap: wrap;
 }
+#nav-auth-pill {
+  border-color: #3b82f6;
+  color: #1d4ed8;
+  background: #eff6ff;
+  font-size: 13px;
+}
+#nav-auth-pill:hover {
+  background: #dbeafe;
+}
 main { max-width: 1260px; margin: 0 auto; padding: 20px 16px 40px 16px; }
-section { display: none; }
-section.on { display: block; }
+section.tab { display: none; }
+section.tab.on { display: block; }
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -153,7 +166,7 @@ section.on { display: block; }
   margin-bottom: 16px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
 }
-.panel h2, .panel h3 {
+.panel h2, .panel h3, .panel h4 {
   margin: 0 0 12px 0;
   color: var(--fg);
   font-weight: 600;
@@ -166,7 +179,7 @@ section.on { display: block; }
   align-items: center;
   margin-bottom: 12px;
 }
-select, input {
+select, input, textarea {
   background: var(--input-bg);
   color: var(--fg);
   border: 1px solid var(--line);
@@ -175,7 +188,7 @@ select, input {
   font: inherit;
   transition: border-color 0.15s ease;
 }
-select:focus, input:focus {
+select:focus, input:focus, textarea:focus {
   outline: none;
   border-color: var(--acc-bright);
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
@@ -328,6 +341,8 @@ pre {
 .badge-online { background: rgba(16, 185, 129, 0.1); color: #059669; border: 1px solid rgba(5, 150, 105, 0.3); }
 .badge-upload { background: rgba(37, 99, 235, 0.1); color: #2563eb; border: 1px solid rgba(37, 99, 235, 0.3); }
 .badge-winner { background: rgba(220, 38, 38, 0.1); color: #dc2626; border: 1px solid rgba(220, 38, 38, 0.3); }
+.badge-active { background: rgba(16, 185, 129, 0.12); color: #059669; border: 1px solid rgba(5, 150, 105, 0.3); }
+.badge-revoked { background: rgba(220, 38, 38, 0.12); color: #dc2626; border: 1px solid rgba(220, 38, 38, 0.3); }
 .replay-table-wrap {
   max-height: 320px;
   overflow-y: auto;
@@ -363,6 +378,53 @@ tr.active-ply {
   border-top: 1px solid var(--line);
   padding-top: 10px;
 }
+/* Features grid */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.feature-card {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.feature-card h3 {
+  margin: 0 0 6px 0;
+  font-size: 16px;
+  color: var(--fg);
+}
+.feature-card p {
+  margin: 0;
+  color: var(--dim);
+  font-size: 13.5px;
+}
+/* Rules grid */
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+.rule-box {
+  background: #fbfbfa;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+}
+.rule-box h4 {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  color: var(--acc-bright);
+}
+.rule-box p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dim);
+}
 @media (max-width: 640px) {
   main { padding: 10px 8px; }
   header { padding: 10px 14px; }
@@ -375,12 +437,18 @@ tr.active-ply {
   <div class="brand">
     <span class="brand-badge">OCTI</span>
     <div class="brand-text">
-      <span class="brand-name">OCTI ARCHIVE</span>
+      <span class="brand-name">OCTI</span>
+      <span class="brand-sub">octi.selfso.com &mdash; Official Platform, Web Player, Players, Archive, Leaderboard &amp; Robot Registry</span>
     </div>
   </div>
   <nav id="nav">
-    <button type="button" data-tab="archive" class="btn on">Game Archive</button>
-    <button type="button" data-tab="board" class="btn">Leaderboard</button>
+    <button type="button" data-tab="home" id="nav-home-btn" class="btn on">Home</button>
+    <button type="button" data-tab="play" id="nav-play-btn" class="btn">Web Player</button>
+    <button type="button" data-tab="users" id="nav-users-btn" class="btn">Players</button>
+    <button type="button" data-tab="archive" id="nav-archive-btn" class="btn">Game Archive</button>
+    <button type="button" data-tab="board" id="nav-board-btn" class="btn">Leaderboard</button>
+    <button type="button" data-tab="robots" id="nav-robots-btn" class="btn">Robot Registration</button>
+    <button type="button" data-tab="account" id="nav-account-btn" class="btn">Account</button>
   </nav>
   <div class="header-right">
     <button type="button" class="btn" id="btn-theme" title="Switch Board Palette">Theme: Obsidian Brass</button>
@@ -390,10 +458,279 @@ tr.active-ply {
     </select>
     <button type="button" class="btn" id="btn-rotate" title="Rotate Board 90 degrees CW">Rotate 90&deg;</button>
     <span id="health" class="dim"></span>
+    <button type="button" class="btn" id="nav-auth-pill" title="Click to view Account">Guest (Not Signed In)</button>
   </div>
 </header>
 <main>
-<section id="tab-archive" class="on">
+
+<!-- Tab 1: Home (Default Top Page) -->
+<section id="tab-home" class="tab on">
+  <div class="panel" style="background:linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);">
+    <div style="max-width:800px;margin:10px 0;">
+      <h1 style="margin:0 0 8px 0;font-size:28px;letter-spacing:-0.02em;">OCTI &amp; OCTI for Kids (OFK)</h1>
+      <p style="font-size:15px;color:var(--dim);margin:0 0 16px 0;line-height:1.6;">
+        The timeless strategy game of tactical growth, prong directional control, multi-hop jumping, and base infiltration.
+        Compete directly in your browser against client-side minimax JS robots, join real-time multiplayer tables, explore grandmaster replays, or register automated bots.
+      </p>
+      <div class="row">
+        <button type="button" class="btn btn-primary" id="home-cta-play" style="padding:10px 18px;font-size:14px;">Play in Browser (vs. JS Robot or Online)</button>
+        <button type="button" class="btn" id="home-cta-users" style="padding:10px 18px;font-size:14px;">Browse Registered Players</button>
+        <button type="button" class="btn" id="home-cta-account" style="padding:10px 18px;font-size:14px;">Sign In with Google</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Platform Features</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <h3>Web Player (2P / OFK / 4P)</h3>
+        <p>Play locally against asynchronous minimax JS robots (0% server load) or join online multiplayer tables and observe active matches.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Registered Players &amp; Profiles</h3>
+        <p>Public member directory, detailed player dossiers, Elo rating curves, win/loss breakdowns, and linked Google authentication.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Game Archive &amp; Replays</h3>
+        <p>Comprehensive transcript dataset with step-by-step visual move replays, ply timeline navigation, AI search metrics, and NDJSON exports.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Global ELO Leaderboard</h3>
+        <p>Official rankings across 2-Player (9x9 3-Base), 4-Player, and OCTI for Kids (7x7) modes updated continuously.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Bot &amp; Robot Token Registry</h3>
+        <p>Registered players can register up to 3 automated bots, generate secret bearer tokens, and compete programmatically via the table API.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Desktop &amp; Android Apps</h3>
+        <p>Native client applications featuring hardware-accelerated 3D boards, AI engine analysis, and offline matches. Download: <a href="/software/windows/" target="_blank">Windows Desktop</a> | <a href="/software/android/" target="_blank">Android APK</a></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>How to Play OCTI</h2>
+    <div class="rules-grid">
+      <div class="rule-box">
+        <h4>1. Pods &amp; Reserves</h4>
+        <p>Players begin with pods on their home base squares and in reserve. Pods are octagonal pieces that can hold prongs and stack upon each other.</p>
+      </div>
+      <div class="rule-box">
+        <h4>2. Prongs &amp; Direction</h4>
+        <p>On your turn, you can allocate a directional prong (North, North-East, East, etc.) to one of your pods, granting movement and jumping vectors.</p>
+      </div>
+      <div class="rule-box">
+        <h4>3. Move, Jump &amp; Capture</h4>
+        <p>Pods can step into adjacent empty squares or jump over adjacent pods along prong directions. Jumping enemy pods allows capturing or stacking.</p>
+      </div>
+      <div class="rule-box">
+        <h4>4. Victory Conditions</h4>
+        <p>Win immediately by moving any of your pods onto any opponent's home base square, or by capturing all opponent pods so none remain.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Tab 2: Web Player (Local vs. JS Robot & Online Play/Observe) -->
+<section id="tab-play" class="tab">
+  <div class="panel">
+    <div class="row">
+      <button type="button" class="btn btn-primary" id="subtab-play-local">Play vs. Browser JS Robot</button>
+      <button type="button" class="btn" id="subtab-play-online">Online Lobby &amp; Observation</button>
+    </div>
+
+    <!-- Sub-Panel: Play vs. Browser JS Robot -->
+    <div id="play-local-panel">
+      <div class="row" style="background:#f9fafb;padding:12px;border-radius:8px;border:1px solid var(--line);">
+        <label>Mode:
+          <select id="web-play-mode">
+            <option value="2P" selected>2P (9x9, 3-Base)</option>
+            <option value="2P_1BASE">2P 1-Base (9x9, Rapid)</option>
+            <option value="OFK">OFK (7x7, OCTI for Kids)</option>
+            <option value="4P">4P (9x9, Human vs. 3 JS Robots)</option>
+          </select>
+        </label>
+        <label>Difficulty:
+          <select id="web-bot-difficulty">
+            <option value="1">Easy (Depth 1, ~120ms)</option>
+            <option value="2" selected>Medium (Depth 2, ~350ms)</option>
+            <option value="3">Hard (Depth 3, ~900ms)</option>
+          </select>
+        </label>
+        <label>Human Side:
+          <select id="web-human-side">
+            <option value="A" selected>Red (First)</option>
+            <option value="B">Green (Second)</option>
+          </select>
+        </label>
+        <button type="button" class="btn btn-primary" id="btn-web-new-bot-game">New Game vs. JS Robot</button>
+        <button type="button" class="btn" id="btn-web-resign">Resign</button>
+      </div>
+
+      <div id="web-play-status" style="margin:12px 0 8px 0;font-size:15px;font-weight:700;padding:8px 12px;background:#f4f4f5;border-radius:6px;">
+        Starting game...
+      </div>
+      <div id="web-play-archive-status" class="dim" style="margin-bottom:12px;font-size:13px;"></div>
+
+      <div class="cols">
+        <div class="col-board">
+          <div class="board-stage">
+            <div id="web-play-reserves" class="hud-strip"></div>
+            <div id="web-play-board-wrap" style="width:100%;max-width:580px;aspect-ratio:1/1;margin:0 auto;background:#182133;border-radius:12px;padding:6px;box-shadow:0 4px 16px rgba(0,0,0,0.12);">
+              <svg id="web-play-svg" viewBox="0 0 580 580" style="width:100%;height:100%;display:block;border-radius:8px;cursor:pointer;"></svg>
+            </div>
+            <div class="panel" style="width:100%;max-width:580px;margin-top:10px;padding:12px;">
+              <div class="row" style="margin-bottom:8px;">
+                <strong style="margin-right:6px;">Action:</strong>
+                <button type="button" class="btn on" id="btn-act-move">Move / Jump Pod</button>
+                <button type="button" class="btn" id="btn-act-prong">Add Prong</button>
+                <button type="button" class="btn" id="btn-act-place">Place Pod</button>
+              </div>
+              <div id="prong-dir-picker" class="row" style="display:none;margin-bottom:8px;">
+                <span class="dim" style="font-size:12px;">Prong:</span>
+                <button type="button" class="btn" data-dir="a">N (&uarr;)</button>
+                <button type="button" class="btn" data-dir="b">NE (&nearr;)</button>
+                <button type="button" class="btn" data-dir="c">E (&rarr;)</button>
+                <button type="button" class="btn" data-dir="d">SE (&searr;)</button>
+                <button type="button" class="btn" data-dir="e">S (&darr;)</button>
+                <button type="button" class="btn" data-dir="f">SW (&swarr;)</button>
+                <button type="button" class="btn" data-dir="g">W (&larr;)</button>
+                <button type="button" class="btn" data-dir="h">NW (&nwarr;)</button>
+              </div>
+              <div class="row">
+                <label style="font-size:13px;"><input type="checkbox" id="web-play-capture-toggle" checked> Capture jumped pods</label>
+                <span id="web-selected-move-text" style="margin-left:auto;font-weight:700;color:var(--acc-bright);">Selected: (None)</span>
+                <button type="button" class="btn btn-primary" id="btn-web-commit-move" disabled>Commit Move</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-side">
+          <h3>Move List</h3>
+          <div id="web-play-moves" style="max-height:480px;overflow-y:auto;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;">
+            <div class="dim">Game started.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sub-Panel: Online Lobby, Live Tables & Observation -->
+    <div id="play-online-panel" style="display:none;">
+      <div class="row">
+        <button type="button" class="btn" id="btn-web-refresh-tables">Refresh Tables</button>
+        <button type="button" class="btn btn-primary" id="btn-web-create-table" title="Sign in to play online">Create Online Table</button>
+        <button type="button" class="btn" id="btn-web-quick-match" title="Sign in to play online">Quick Match</button>
+        <span id="web-online-notice" class="dim" style="margin-left:auto;"></span>
+      </div>
+
+      <div style="background:#f4f4f5;border:1px solid var(--line);border-radius:6px;padding:8px 12px;margin:10px 0;font-size:13px;">
+        <strong>Active Room Observers:</strong> <span id="web-room-observers">anonymous-127.0.0.1</span>
+      </div>
+
+      <div id="web-online-tables" style="margin-top:12px;">Loading live tables...</div>
+
+      <div class="cols" style="margin-top:18px;">
+        <div class="col-side" style="flex:1;">
+          <h4>Lobby Chat</h4>
+          <div id="web-lobby-chat-log" style="height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:8px;background:#fff;margin-bottom:8px;font-size:13px;">
+            <div class="dim">Connected to lobby chat.</div>
+          </div>
+        </div>
+        <div class="col-side" style="flex:1;">
+          <h4>Game Room Chat</h4>
+          <div id="web-room-chat-log" style="height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:8px;background:#fff;margin-bottom:8px;font-size:13px;">
+            <div class="dim">No active table selected.</div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <input id="web-chat-input" placeholder="Sign in to chat (observing as anonymous-127.0.0.1)" style="flex:1;" disabled>
+        <button type="button" class="btn" id="btn-web-chat-send" disabled>Send</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Tab 3: Users (Public Directory & Detailed Profiles) -->
+<section id="tab-users" class="tab">
+  <div class="panel">
+    <div class="row">
+      <input id="users-search-input" placeholder="Search handle, display name, location, or bio..." style="min-width:280px;flex:1;">
+      <select id="users-sort-select">
+        <option value="elo_2p" selected>2P ELO</option>
+        <option value="elo_4p">4P ELO</option>
+        <option value="elo_ofk">OFK ELO</option>
+        <option value="games_played">Games Played</option>
+        <option value="wins">Wins</option>
+        <option value="handle">Handle</option>
+        <option value="display_name">Display Name</option>
+        <option value="created_at">Joined Date</option>
+        <option value="last_seen_at">Last Seen</option>
+      </select>
+      <select id="users-order-select">
+        <option value="desc" selected>Descending</option>
+        <option value="asc">Ascending</option>
+      </select>
+      <button type="button" class="btn" id="btn-users-search">Search</button>
+    </div>
+
+    <div id="users-msg" class="dim" style="margin-bottom:8px;"></div>
+    <table id="users-table">
+      <thead>
+        <tr>
+          <th>Avatar</th>
+          <th>Handle</th>
+          <th>Display Name</th>
+          <th>Location</th>
+          <th>2P ELO</th>
+          <th>4P ELO</th>
+          <th>OFK ELO</th>
+          <th>Games (W-L-D)</th>
+          <th>Robots</th>
+          <th>Joined</th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody"></tbody>
+    </table>
+
+    <div class="row" style="margin-top:12px;">
+      <button type="button" class="btn" id="users-prev-btn">Prev</button>
+      <span id="users-page-info" class="dim"></span>
+      <button type="button" class="btn" id="users-next-btn">Next</button>
+    </div>
+  </div>
+
+  <!-- Detailed User Profile Panel -->
+  <div class="panel" id="user-profile-detail" style="display:none;">
+    <div class="row" style="align-items:flex-start;">
+      <div id="user-detail-avatar" style="width:96px;height:96px;border-radius:50%;overflow:hidden;flex-shrink:0;"></div>
+      <div style="flex:1;">
+        <h2 id="user-detail-name" style="margin:0 0 4px 0;"></h2>
+        <div id="user-detail-handle" style="font-weight:700;color:var(--acc-bright);"></div>
+        <div id="user-detail-location" class="dim" style="font-size:12px;"></div>
+        <p id="user-detail-bio" style="margin:8px 0;"></p>
+        <div id="user-detail-meta" class="dim" style="font-size:12px;"></div>
+      </div>
+      <div>
+        <button type="button" class="btn" id="btn-user-edit-self" style="display:none;margin-right:8px;">Edit My Profile &amp; Avatar</button>
+        <button type="button" class="btn" id="user-detail-close">Close</button>
+      </div>
+    </div>
+
+    <div id="user-detail-stats" class="stats-grid" style="margin-top:14px;"></div>
+
+    <h3 style="margin-top:18px;">Registered Robots</h3>
+    <div id="user-detail-robots" class="dim">Loading robots...</div>
+
+    <h3 style="margin-top:18px;">Recent Match History</h3>
+    <div id="user-detail-games" class="dim">Loading recent matches...</div>
+  </div>
+</section>
+
+<!-- Tab 4: Game Archive (100% Preserved) -->
+<section id="tab-archive" class="tab">
   <div class="panel" id="ar-stats-panel">
     <h3>Archive Telemetry &amp; Dataset Statistics</h3>
     <div id="ar-stats-summary" class="dim">Loading stats...</div>
@@ -492,7 +829,9 @@ tr.active-ply {
     </div>
   </div>
 </section>
-<section id="tab-board">
+
+<!-- Tab 5: Leaderboard (100% Preserved) -->
+<section id="tab-board" class="tab">
   <div class="panel">
     <div class="row">
       <label>Mode <select id="lb-mode"><option>2P</option><option>4P</option>
@@ -505,7 +844,127 @@ tr.active-ply {
       <tbody></tbody></table>
   </div>
 </section>
+
+<!-- Tab 6: Robot Registration & Token Management -->
+<section id="tab-robots" class="tab">
+  <div class="panel">
+    <h2>OCTI Robot Registration &amp; Token Management</h2>
+    <p class="dim">Each registered user can register up to <strong>3 active robots</strong> (<code>octi_bot_&lt;token&gt;</code>) with a globally unique <code>robot_name</code>.</p>
+  </div>
+
+  <div class="panel" id="robots-guest-card">
+    <h3>Sign In Required</h3>
+    <p class="dim">Please sign in with your Google account on the Account tab to register and manage your automated bots.</p>
+    <button type="button" class="btn btn-primary" id="btn-robots-to-account">Go to Account Tab</button>
+  </div>
+
+  <div id="robots-owner-card" style="display:none;">
+    <div class="panel">
+      <div class="row">
+        <h3>Register a New Robot</h3>
+        <span id="robots-quota-badge" class="badge" style="margin-left:auto;">Active Robots: 0 / 3</span>
+      </div>
+      <div class="row">
+        <input id="robot-name-input" placeholder="Robot Name (3..24 chars [A-Za-z0-9_-])" maxlength="24" style="flex:1;">
+        <input id="robot-desc-input" placeholder="Robot Description (optional, max 256 chars)" maxlength="256" style="flex:2;">
+        <button type="button" class="btn btn-primary" id="btn-create-robot">Create Robot &amp; Generate Token</button>
+      </div>
+      <div id="robot-new-token-box" style="display:none;background:#eff6ff;border:1px solid #93c5fd;padding:12px;border-radius:8px;margin-top:10px;"></div>
+    </div>
+
+    <div class="panel">
+      <h3>My Registered Robots</h3>
+      <table id="robots-table">
+        <thead>
+          <tr>
+            <th>Robot Name</th>
+            <th>Description</th>
+            <th>Secret Token</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="robots-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Tab 7: Account (Sign In, Profile/Avatar Editor & Linked Identities) -->
+<section id="tab-account" class="tab">
+  <div class="panel" id="account-guest-card" style="max-width:480px;margin:24px auto;text-align:center;">
+    <h2>Sign In to OCTI Platform</h2>
+    <p class="dim">Sign in using your Google account to create a player profile, track Elo ratings, play online games, and register automated bots.</p>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:20px;">
+      <button type="button" class="btn btn-primary" id="btn-web-google" style="padding:10px 16px;font-size:14px;">Sign in with Google</button>
+      <button type="button" class="btn btn-primary" id="btn-web-facebook" style="display:none;padding:10px 16px;font-size:14px;background:#1877f2;border-color:#1877f2;">Sign in with Facebook</button>
+    </div>
+  </div>
+
+  <div id="account-profile-card" style="display:none;">
+    <div class="panel">
+      <div class="row">
+        <h2>Authenticated Profile &amp; Avatar Editor</h2>
+        <button type="button" class="btn" id="btn-web-logout" style="margin-left:auto;">Sign Out</button>
+      </div>
+      <div class="cols">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+          <div id="web-avatar-preview" style="width:96px;height:96px;border-radius:50%;overflow:hidden;background:#e4e4e7;display:flex;align-items:center;justify-content:center;"></div>
+          <label class="btn" style="cursor:pointer;">
+            Upload Avatar
+            <input type="file" id="web-avatar-file" accept="image/*" style="display:none;">
+          </label>
+          <button type="button" class="btn" id="btn-web-clear-avatar">Clear Avatar</button>
+        </div>
+        <div style="flex:1;">
+          <div class="row">
+            <label style="flex:1;">Handle <input id="web-handle-input" style="width:100%;"></label>
+            <button type="button" class="btn" id="btn-web-save-handle" style="margin-top:20px;">Save Handle</button>
+          </div>
+          <div class="row">
+            <label style="flex:1;">Display Name <input id="web-display-name-input" style="width:100%;"></label>
+            <label style="flex:1;">Location <input id="web-location-input" style="width:100%;"></label>
+          </div>
+          <div class="row">
+            <label style="flex:1;">Avatar URL / Data URI <input id="web-avatar-url" style="width:100%;" readonly></label>
+          </div>
+          <div class="row">
+            <label style="width:100%;">Bio <textarea id="web-bio-input" maxlength="500" style="width:100%;height:80px;"></textarea></label>
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <button type="button" class="btn btn-primary" id="btn-web-save-profile">Save Profile</button>
+            <button type="button" class="btn" id="btn-web-view-public-profile">View My Public Profile</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="account-identities-card">
+      <h3>Linked Sign-In Identities</h3>
+      <div id="web-link-conflict-box" style="display:none;background:#fef2f2;border:1px solid #f87171;color:#991b1b;padding:12px;border-radius:8px;margin-bottom:12px;">
+        <div><strong>Account Conflict (409 identity_already_bound):</strong> This social identity is already associated with another OCTI user.</div>
+        <div class="row" style="margin-top:8px;">
+          <button type="button" class="btn" id="btn-conflict-switch">Switch to That Account</button>
+          <button type="button" class="btn btn-primary" id="btn-conflict-merge">Merge Empty Account Into Current Account</button>
+        </div>
+      </div>
+      <table id="web-identities-table">
+        <thead>
+          <tr>
+            <th>Provider</th>
+            <th>Status / Email</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="web-identities-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
 </main>
+
 <script>
 (function () {
 "use strict";
@@ -524,16 +983,35 @@ function clear(node) {
   while (node.firstChild) { node.removeChild(node.firstChild); }
 }
 
-function api(path) {
-  return fetch(path, { headers: { "Accept": "application/json" } })
-    .then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (j) {
-        if (!r.ok) {
-          throw new Error((j && j.error ? j.error : "HTTP " + r.status));
-        }
-        return j;
-      });
+function escapeHtml(s) {
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function api(path, opts) {
+  opts = opts || {};
+  opts.headers = opts.headers || {};
+  if (!opts.headers["Accept"]) { opts.headers["Accept"] = "application/json"; }
+  var token = null;
+  try { token = localStorage.getItem("octi_jwt_token"); } catch (e) {}
+  if (token && !opts.headers["Authorization"]) {
+    opts.headers["Authorization"] = "Bearer " + token;
+  }
+  if (opts.body && typeof opts.body === "object" && !(opts.body instanceof FormData)) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(opts.body);
+  }
+  return fetch(path, opts).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (!r.ok) {
+        var msg = (j && (j.error || j.message)) ? (j.error || j.message) : ("HTTP " + r.status);
+        var err = new Error(msg);
+        err.status = r.status;
+        err.data = j;
+        throw err;
+      }
+      return j;
     });
+  });
 }
 
 function fmtTime(sec) {
@@ -542,8 +1020,57 @@ function fmtTime(sec) {
 }
 
 function cellRow(tr, values) {
-  values.forEach(function (v) { tr.appendChild(el("td", v)); });
+  values.forEach(function (v) {
+    if (v instanceof Node) {
+      var td = document.createElement("td");
+      td.appendChild(v);
+      tr.appendChild(td);
+    } else {
+      tr.appendChild(el("td", v));
+    }
+  });
 }
+
+function createAvatarEl(url, nameOrHandle, sizePx) {
+  sizePx = sizePx || 32;
+  if (url && (url.indexOf("http") === 0 || url.indexOf("data:image/") === 0)) {
+    var img = document.createElement("img");
+    img.src = url;
+    img.width = sizePx;
+    img.height = sizePx;
+    img.style.width = sizePx + "px";
+    img.style.height = sizePx + "px";
+    img.style.borderRadius = "50%";
+    img.style.objectFit = "cover";
+    img.alt = nameOrHandle || "avatar";
+    return img;
+  }
+  var ch = (nameOrHandle ? nameOrHandle.charAt(0) : "U").toUpperCase();
+  var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", sizePx);
+  svg.setAttribute("height", sizePx);
+  svg.setAttribute("viewBox", "0 0 " + sizePx + " " + sizePx);
+  svg.style.borderRadius = "50%";
+  svg.style.verticalAlign = "middle";
+  svg.style.display = "inline-block";
+  var circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  circle.setAttribute("cx", sizePx / 2);
+  circle.setAttribute("cy", sizePx / 2);
+  circle.setAttribute("r", sizePx / 2);
+  circle.setAttribute("fill", "#2563eb");
+  var text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  text.setAttribute("x", sizePx / 2);
+  text.setAttribute("y", sizePx * 0.65);
+  text.setAttribute("text-anchor", "middle");
+  text.setAttribute("fill", "#ffffff");
+  text.setAttribute("font-size", Math.round(sizePx * 0.5));
+  text.setAttribute("font-weight", "bold");
+  text.textContent = ch;
+  svg.appendChild(circle);
+  svg.appendChild(text);
+  return svg;
+}
+
 
 /* =========================================================================
  * Desktop & Android Theme Palettes + HTML5 2D Canvas Board Renderer
@@ -1455,35 +1982,1910 @@ $("btn-rotate").addEventListener("click", function () {
   });
 });
 
-/* ---- tabs ---- */
-var tabs = { archive: $("tab-archive"), board: $("tab-board") };
+
+/* =========================================================================
+ * Bot Minimax & Heuristic Search Engine
+ * ========================================================================= */
+var DIR_CHARS = ["a", "b", "c", "d", "e", "f", "g", "h"];
+
+function cloneState(s) {
+  var newRes = s.reserves.map(function (r) {
+    return {
+      player: r.player,
+      freePods: r.freePods,
+      capturedPods: r.capturedPods,
+      freeProngs: r.freeProngs,
+      freeSuper: r.freeSuper
+    };
+  });
+  var newMap = {};
+  Object.keys(s.map).forEach(function (k) {
+    newMap[k] = s.map[k].map(function (pod) {
+      return {
+        owner: pod.owner,
+        cfg: {
+          prongs: pod.cfg.prongs.slice(),
+          count: pod.cfg.count,
+          text: pod.cfg.text
+        }
+      };
+    });
+  });
+  return {
+    mode: s.mode,
+    bases: s.bases,
+    superProngs: s.superProngs,
+    edgeless: s.edgeless,
+    status: s.status,
+    turn: s.turn,
+    winner: s.winner,
+    elimMask: s.elimMask,
+    reserves: newRes,
+    gw: s.gw,
+    gh: s.gh,
+    map: newMap
+  };
+}
+
+function serializeOctiFen(s) {
+  var parts = [];
+  parts.push(s.mode);
+  parts.push(String(s.bases));
+  parts.push(s.superProngs ? "1" : "0");
+  parts.push(s.edgeless ? "1" : "0");
+  parts.push(s.status || "P");
+  parts.push(s.turn || "-");
+  parts.push(s.winner || "-");
+  parts.push(String(s.elimMask || 0));
+  s.reserves.forEach(function (r) {
+    parts.push(r.freePods + "," + r.capturedPods + "," + r.freeProngs + "," + r.freeSuper);
+  });
+  var sqTokens = [];
+  Object.keys(s.map).forEach(function (k) {
+    var p = k.split(",");
+    var px = p[0], py = p[1];
+    s.map[k].forEach(function (pod) {
+      sqTokens.push(pod.owner + px + py + (pod.cfg.text || ""));
+    });
+  });
+  parts.push(sqTokens.length ? sqTokens.join(",") : "-");
+  return parts.join(":");
+}
+
+function getHomeSquares(mode, player) {
+  if (mode === "OFK") {
+    return (player === "A")
+      ? [{x:2, y:2}, {x:3, y:2}, {x:4, y:2}, {x:5, y:2}]
+      : [{x:2, y:6}, {x:3, y:6}, {x:4, y:6}, {x:5, y:6}];
+  }
+  if (mode === "4" || mode === "4P") {
+    if (player === "A") return [{x:3, y:3}];
+    if (player === "B") return [{x:3, y:7}];
+    if (player === "C") return [{x:7, y:7}];
+    return [{x:7, y:3}];
+  }
+  if (mode === "2P_1BASE") {
+    return (player === "A") ? [{x:5, y:3}] : [{x:5, y:7}];
+  }
+  return (player === "A")
+    ? [{x:3, y:3}, {x:5, y:3}, {x:7, y:3}]
+    : [{x:3, y:7}, {x:5, y:7}, {x:7, y:7}];
+}
+
+function getOpponentBases(mode, player) {
+  if (mode === "4" || mode === "4P") {
+    var all = ["A", "B", "C", "D"];
+    var out = [];
+    all.forEach(function (p) {
+      if (p !== player) {
+        out = out.concat(getHomeSquares(mode, p));
+      }
+    });
+    return out;
+  }
+  return getHomeSquares(mode, player === "A" ? "B" : "A");
+}
+
+function generateMoves(s, player) {
+  var moves = [];
+  var pIdx = (player === "A" ? 0 : (player === "B" ? 1 : (player === "C" ? 2 : 3)));
+  var res = s.reserves[pIdx];
+
+  /* 1. Pod placements */
+  if (res && res.freePods > 0) {
+    var homes = getHomeSquares(s.mode, player);
+    homes.forEach(function (h) {
+      var k = h.x + "," + h.y;
+      if (!s.map[k] || !s.map[k].length) {
+        moves.push("(" + h.x + h.y + ")");
+      }
+    });
+  }
+
+  /* 2. Prong additions */
+  if (res && res.freeProngs > 0) {
+    Object.keys(s.map).forEach(function (k) {
+      var stack = s.map[k];
+      if (!stack || !stack.length) return;
+      var top = stack[stack.length - 1];
+      if (top.owner === player) {
+        var coords = k.split(",");
+        for (var d = 0; d < 8; d++) {
+          if (!top.cfg.prongs[d]) {
+            moves.push(coords[0] + coords[1] + DIR_CHARS[d]);
+          }
+        }
+      }
+    });
+  }
+
+  /* 3. Moves and Jumps */
+  Object.keys(s.map).forEach(function (k) {
+    var stack = s.map[k];
+    if (!stack || !stack.length) return;
+    var top = stack[stack.length - 1];
+    if (top.owner === player) {
+      var px = parseInt(k.split(",")[0], 10);
+      var py = parseInt(k.split(",")[1], 10);
+      for (var d = 0; d < 8; d++) {
+        if (top.cfg.prongs[d]) {
+          var dx = DIR_DELTAS[d][0], dy = DIR_DELTAS[d][1];
+          var stepX = px + dx, stepY = py + dy;
+          if (stepX >= 1 && stepX <= s.gw && stepY >= 1 && stepY <= s.gh) {
+            var stepK = stepX + "," + stepY;
+            var stepStack = s.map[stepK];
+            if (!stepStack || !stepStack.length) {
+              moves.push(px + "" + py + "-" + stepX + "" + stepY);
+            } else {
+              var jumpX = stepX + dx, jumpY = stepY + dy;
+              if (jumpX >= 1 && jumpX <= s.gw && jumpY >= 1 && jumpY <= s.gh) {
+                var jumpK = jumpX + "," + jumpY;
+                var jumpStack = s.map[jumpK];
+                if (!jumpStack || !jumpStack.length) {
+                  var jumpedTop = stepStack[stepStack.length - 1];
+                  if (jumpedTop.owner !== player) {
+                    moves.push(px + "" + py + "-" + jumpX + "" + jumpY + "x");
+                  }
+                  moves.push(px + "" + py + "-" + jumpX + "" + jumpY);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  return moves;
+}
+
+function applyMoveToState(s, move, player) {
+  var pIdx = (player === "A" ? 0 : (player === "B" ? 1 : (player === "C" ? 2 : 3)));
+  var res = s.reserves[pIdx];
+
+  if (move.charAt(0) === "(") {
+    var x = parseInt(move.charAt(1), 10);
+    var y = parseInt(move.charAt(2), 10);
+    if (res) { res.freePods = Math.max(0, res.freePods - 1); }
+    var k = x + "," + y;
+    if (!s.map[k]) { s.map[k] = []; }
+    s.map[k].push({
+      owner: player,
+      cfg: { prongs: [0, 0, 0, 0, 0, 0, 0, 0], count: 0, text: "" }
+    });
+  } else if (/^([1-9])([1-9])([a-hA-H])$/.test(move)) {
+    var mx = RegExp.$1, my = RegExp.$2, dirCh = RegExp.$3.toLowerCase();
+    var dIdx = DIR_CHARS.indexOf(dirCh);
+    var mk = mx + "," + my;
+    if (s.map[mk] && s.map[mk].length) {
+      var top = s.map[mk][s.map[mk].length - 1];
+      if (dIdx >= 0 && !top.cfg.prongs[dIdx]) {
+        top.cfg.prongs[dIdx] = 1;
+        top.cfg.count++;
+        top.cfg.text += dirCh;
+        if (res) { res.freeProngs = Math.max(0, res.freeProngs - 1); }
+      }
+    }
+  } else if (/^([1-9])([1-9])-([1-9])([1-9])(x?)$/.test(move)) {
+    var x1 = parseInt(RegExp.$1, 10), y1 = parseInt(RegExp.$2, 10);
+    var x2 = parseInt(RegExp.$3, 10), y2 = parseInt(RegExp.$4, 10);
+    var isCap = (RegExp.$5 === "x");
+    var fromK = x1 + "," + y1;
+    var toK = x2 + "," + y2;
+    if (s.map[fromK] && s.map[fromK].length) {
+      var pod = s.map[fromK].pop();
+      if (!s.map[fromK].length) { delete s.map[fromK]; }
+      if (Math.abs(x2 - x1) === 2 || Math.abs(y2 - y1) === 2) {
+        var midK = ((x1 + x2) / 2) + "," + ((y1 + y2) / 2);
+        if (isCap && s.map[midK] && s.map[midK].length) {
+          s.map[midK].pop();
+          if (!s.map[midK].length) { delete s.map[midK]; }
+          if (res) { res.capturedPods++; }
+        }
+      }
+      if (!s.map[toK]) { s.map[toK] = []; }
+      s.map[toK].push(pod);
+
+      /* Check Victory */
+      var oppBases = getOpponentBases(s.mode, player);
+      for (var b = 0; b < oppBases.length; b++) {
+        if (x2 === oppBases[b].x && y2 === oppBases[b].y) {
+          s.status = "O";
+          s.winner = player;
+          return s;
+        }
+      }
+    }
+  }
+
+  if (s.mode === "4" || s.mode === "4P") {
+    var seats = ["A", "B", "C", "D"];
+    s.turn = seats[(seats.indexOf(player) + 1) % 4];
+  } else {
+    s.turn = (player === "A") ? "B" : "A";
+  }
+  return s;
+}
+
+function evaluateState(s, player) {
+  if (s.status === "O") {
+    if (s.winner === player) return 100000;
+    if (s.winner && s.winner !== "-") return -100000;
+  }
+  var oppBases = getOpponentBases(s.mode, player);
+  var myBases = getHomeSquares(s.mode, player);
+  var score = 0;
+
+  Object.keys(s.map).forEach(function (k) {
+    var stack = s.map[k];
+    if (!stack || !stack.length) return;
+    var top = stack[stack.length - 1];
+    var px = parseInt(k.split(",")[0], 10);
+    var py = parseInt(k.split(",")[1], 10);
+
+    if (top.owner === player) {
+      score += 200;
+      score += top.cfg.count * 30;
+      var minDist = 999;
+      oppBases.forEach(function (b) {
+        var d = Math.abs(px - b.x) + Math.abs(py - b.y);
+        if (d < minDist) minDist = d;
+      });
+      score += (18 - minDist) * 120;
+    } else {
+      score -= 200;
+      score -= top.cfg.count * 30;
+      var threatDist = 999;
+      myBases.forEach(function (b) {
+        var td = Math.abs(px - b.x) + Math.abs(py - b.y);
+        if (td < threatDist) threatDist = td;
+      });
+      score -= (18 - threatDist) * 160;
+    }
+  });
+
+  var pIdx = (player === "A" ? 0 : (player === "B" ? 1 : (player === "C" ? 2 : 3)));
+  var oppIdx = (pIdx === 0 ? 1 : 0);
+  if (s.reserves[pIdx]) score += s.reserves[pIdx].capturedPods * 150;
+  if (s.reserves[oppIdx]) score -= s.reserves[oppIdx].capturedPods * 150;
+
+  return score;
+}
+
+function alphaBeta(s, depth, alpha, beta, isMaximizing, botSide, curPlayer, nodes) {
+  nodes.count++;
+  if (s.status === "O") {
+    if (s.winner === botSide) return 100000;
+    if (s.winner && s.winner !== "-") return -100000;
+  }
+  if (depth <= 0) {
+    return evaluateState(s, botSide);
+  }
+
+  var moves = generateMoves(s, curPlayer);
+  if (!moves.length) {
+    return isMaximizing ? -50000 : 50000;
+  }
+
+  if (isMaximizing) {
+    var maxVal = -Infinity;
+    for (var i = 0; i < moves.length; i++) {
+      var nextS = applyMoveToState(cloneState(s), moves[i], curPlayer);
+      var val = alphaBeta(nextS, depth - 1, alpha, beta, false, botSide, nextS.turn, nodes);
+      if (val > maxVal) maxVal = val;
+      if (val > alpha) alpha = val;
+      if (beta <= alpha) break;
+    }
+    return maxVal;
+  } else {
+    var minVal = Infinity;
+    for (var j = 0; j < moves.length; j++) {
+      var nextS2 = applyMoveToState(cloneState(s), moves[j], curPlayer);
+      var val2 = alphaBeta(nextS2, depth - 1, alpha, beta, true, botSide, nextS2.turn, nodes);
+      if (val2 < minVal) minVal = val2;
+      if (val2 < beta) beta = val2;
+      if (beta <= alpha) break;
+    }
+    return minVal;
+  }
+}
+
+function botSearch(fen, depth, mode, botSide) {
+  var s = parseOctiFen(fen);
+  if (!s) return { bestMove: null, score: 0, nodes: 0 };
+  var moves = generateMoves(s, botSide);
+  if (!moves.length) return { bestMove: null, score: -100000, nodes: 1 };
+
+  moves.sort(function (a, b) {
+    function rank(m) {
+      if (m.indexOf("x") !== -1) return 5;
+      if (m.indexOf("-") !== -1) {
+        var p = m.split("-");
+        var d = Math.abs(p[0].charAt(0) - p[1].charAt(0)) + Math.abs(p[0].charAt(1) - p[1].charAt(1));
+        return d > 1 ? 4 : 3;
+      }
+      if (m.charAt(0) !== "(") return 2;
+      return 1;
+    }
+    return rank(b) - rank(a);
+  });
+
+  var nodes = { count: 0 };
+  var bestMove = moves[0];
+  var bestScore = -Infinity;
+
+  for (var i = 0; i < moves.length; i++) {
+    var mv = moves[i];
+    var nextS = applyMoveToState(cloneState(s), mv, botSide);
+    nodes.count++;
+    var sc;
+    if (nextS.status === "O" && nextS.winner === botSide) {
+      sc = 100000;
+    } else if (depth <= 1) {
+      sc = evaluateState(nextS, botSide);
+    } else {
+      sc = -alphaBeta(nextS, depth - 1, -100000, 100000, false, botSide, nextS.turn, nodes);
+    }
+    if (sc > bestScore) {
+      bestScore = sc;
+      bestMove = mv;
+    }
+  }
+
+  return { bestMove: bestMove, score: bestScore, nodes: nodes.count };
+}
+
+/* Inline Web Worker Initialization */
+var botWorker = null;
+try {
+  var workerParts = [
+    "self.onmessage = function (e) {",
+    "  var d = e.data;",
+    "  if (d.type === 'search') {",
+    "    var t0 = Date.now();",
+    "    var res = (" + botSearch.toString() + ")(d.fen, d.depth, d.mode, d.side);",
+    "    var elapsed = Date.now() - t0;",
+    "    self.postMessage({",
+    "      type: 'result',",
+    "      bestMove: res.bestMove,",
+    "      score: res.score,",
+    "      nodes: res.nodes,",
+    "      elapsedMs: elapsed",
+    "    });",
+    "  }",
+    "};",
+    "var DIR_DELTAS = " + JSON.stringify(DIR_DELTAS) + ";",
+    "var DIR_CHARS = " + JSON.stringify(DIR_CHARS) + ";",
+    parseProngConfig.toString(),
+    parseOctiFen.toString(),
+    cloneState.toString(),
+    getHomeSquares.toString(),
+    getOpponentBases.toString(),
+    generateMoves.toString(),
+    applyMoveToState.toString(),
+    evaluateState.toString(),
+    alphaBeta.toString()
+  ];
+  var workerCode = workerParts.join(String.fromCharCode(10));
+  var blob = new Blob([workerCode], { type: "application/javascript" });
+  botWorker = new Worker(URL.createObjectURL(blob));
+} catch (e) {
+  botWorker = null;
+}
+
+
+
+/* =========================================================================
+ * 7 Navigation Tabs & URL Hash Router
+ * ========================================================================= */
+var tabs = {
+  home: $("tab-home"),
+  play: $("tab-play"),
+  users: $("tab-users"),
+  archive: $("tab-archive"),
+  board: $("tab-board"),
+  robots: $("tab-robots"),
+  account: $("tab-account")
+};
 
 function switchTab(name) {
-  Array.prototype.forEach.call($("nav").querySelectorAll("button"),
-    function (o) { o.classList.toggle("on", o.getAttribute("data-tab") === name); });
-  Object.keys(tabs).forEach(function (k) {
-    tabs[k].classList.toggle("on", k === name);
+  if (!tabs[name]) { name = "home"; }
+  Array.prototype.forEach.call($("nav").querySelectorAll("button"), function (b) {
+    b.classList.toggle("on", b.getAttribute("data-tab") === name);
   });
+  Object.keys(tabs).forEach(function (k) {
+    if (tabs[k]) {
+      tabs[k].classList.toggle("on", k === name);
+    }
+  });
+
   if (name === "archive") {
     if (!arLoaded) { arSearch(0); }
     loadArchiveStats();
+  } else if (name === "board") {
+    lbLoad();
+  } else if (name === "users") {
+    if (!usersLoaded) { usersSearch(0); }
+  } else if (name === "robots") {
+    if (currentUser) { loadMyRobots(); }
+  } else if (name === "account") {
+    if (currentUser) { loadMyProfile(); }
+  } else if (name === "play") {
+    if (!localBotState) { initLocalBotGame(); }
   }
-  if (name === "board") { lbLoad(); }
 }
 
 Array.prototype.forEach.call($("nav").querySelectorAll("button"), function (b) {
   b.addEventListener("click", function () {
-    switchTab(b.getAttribute("data-tab"));
+    var targetTab = b.getAttribute("data-tab");
+    if (history.replaceState) {
+      history.replaceState(null, "", window.location.pathname + "#" + targetTab);
+    } else {
+      location.hash = "#" + targetTab;
+    }
+    switchTab(targetTab);
   });
 });
 
-/* ---- health ---- */
-function loadHealth() {
-  api("/api/v1/health").then(function (h) {
-    $("health").textContent = "v" + h.version + " | " + h.active_tables +
-      " tables | " + h.online_players + " online";
-  }).catch(function () { $("health").textContent = "server unreachable"; });
+$("nav-auth-pill").addEventListener("click", function () {
+  switchTab("account");
+});
+
+function handleAuthHash() {
+  if (location.hash && location.hash.indexOf("#auth_token=") === 0) {
+    var raw = location.hash.substring(1);
+    var params = new URLSearchParams(raw);
+    var token = params.get("auth_token");
+    if (token) {
+      try { localStorage.setItem("octi_jwt_token", token); } catch (e) {}
+    }
+    if (history.replaceState) {
+      history.replaceState(null, "", window.location.pathname + "#account");
+    } else {
+      location.hash = "#account";
+    }
+    switchTab("account");
+    loadMyProfile();
+    return true;
+  }
+  return false;
 }
+
+function checkHash() {
+  if (handleAuthHash()) return;
+  var h = location.hash;
+  if (!h || h === "#") {
+    if (window.location.pathname && window.location.pathname.indexOf("/archives") === 0) {
+      switchTab("archive");
+    } else {
+      switchTab("home");
+    }
+  } else if (h === "#home") {
+    switchTab("home");
+  } else if (h.indexOf("#archive/") === 0) {
+    var id = decodeURIComponent(h.substring(9));
+    switchTab("archive");
+    if (id) { arOpen(id); }
+  } else if (h.indexOf("#users/") === 0) {
+    var uid = decodeURIComponent(h.substring(7));
+    switchTab("users");
+    if (uid) { openUserProfile(uid); }
+  } else {
+    var tabName = h.substring(1);
+    if (tabs[tabName]) {
+      switchTab(tabName);
+    } else {
+      switchTab("home");
+    }
+  }
+}
+window.addEventListener("hashchange", checkHash);
+
+/* =========================================================================
+ * Tab 1: Home (Default Top Page)
+ * ========================================================================= */
+$("home-cta-play").addEventListener("click", function () { switchTab("play"); });
+$("home-cta-users").addEventListener("click", function () { switchTab("users"); });
+$("home-cta-account").addEventListener("click", function () { switchTab("account"); });
+
+/* =========================================================================
+ * Tab 7: Account & Authentication
+ * ========================================================================= */
+var currentUser = null;
+
+function updateAuthPill() {
+  var pill = $("nav-auth-pill");
+  if (!pill) return;
+  clear(pill);
+  if (currentUser && currentUser.handle) {
+    var av = createAvatarEl(currentUser.avatar_url, currentUser.handle, 20);
+    pill.appendChild(av);
+    var sp = el("span", " @" + currentUser.handle);
+    sp.style.marginLeft = "4px";
+    pill.appendChild(sp);
+    pill.title = "Signed in as @" + currentUser.handle + ". Click to view Account.";
+  } else {
+    pill.textContent = "Guest (Not Signed In)";
+    pill.title = "Not signed in. Click to sign in.";
+  }
+}
+
+function renderGuestState() {
+  if ($("account-guest-card")) $("account-guest-card").style.display = "block";
+  if ($("account-profile-card")) $("account-profile-card").style.display = "none";
+  if ($("robots-guest-card")) $("robots-guest-card").style.display = "block";
+  if ($("robots-owner-card")) $("robots-owner-card").style.display = "none";
+
+  if ($("btn-web-create-table")) {
+    $("btn-web-create-table").disabled = true;
+    $("btn-web-create-table").title = "Sign in to play online";
+  }
+  if ($("btn-web-quick-match")) {
+    $("btn-web-quick-match").disabled = true;
+    $("btn-web-quick-match").title = "Sign in to play online";
+  }
+  if ($("web-chat-input")) {
+    $("web-chat-input").disabled = true;
+    $("web-chat-input").placeholder = "Sign in to chat (observing as anonymous-127.0.0.1)";
+  }
+  if ($("btn-web-chat-send")) {
+    $("btn-web-chat-send").disabled = true;
+  }
+}
+
+function renderAuthState() {
+  if (!currentUser) return;
+  if ($("account-guest-card")) $("account-guest-card").style.display = "none";
+  if ($("account-profile-card")) $("account-profile-card").style.display = "block";
+  if ($("robots-guest-card")) $("robots-guest-card").style.display = "none";
+  if ($("robots-owner-card")) $("robots-owner-card").style.display = "block";
+
+  $("web-handle-input").value = currentUser.handle || "";
+  $("web-display-name-input").value = currentUser.display_name || "";
+  $("web-location-input").value = currentUser.location || "";
+  $("web-avatar-url").value = currentUser.avatar_url || "";
+  $("web-bio-input").value = currentUser.bio || "";
+
+  var prev = $("web-avatar-preview");
+  clear(prev);
+  prev.appendChild(createAvatarEl(currentUser.avatar_url, currentUser.handle, 96));
+
+  if ($("btn-web-create-table")) {
+    $("btn-web-create-table").disabled = false;
+    $("btn-web-create-table").title = "";
+  }
+  if ($("btn-web-quick-match")) {
+    $("btn-web-quick-match").disabled = false;
+    $("btn-web-quick-match").title = "";
+  }
+  if ($("web-chat-input")) {
+    $("web-chat-input").disabled = false;
+    $("web-chat-input").placeholder = "Type message and press Enter...";
+  }
+  if ($("btn-web-chat-send")) {
+    $("btn-web-chat-send").disabled = false;
+  }
+}
+
+function loadMyProfile() {
+  var token = null;
+  try { token = localStorage.getItem("octi_jwt_token"); } catch (e) {}
+  if (!token) {
+    currentUser = null;
+    updateAuthPill();
+    renderGuestState();
+    return;
+  }
+  api("/api/v1/profile/me").then(function (res) {
+    currentUser = res.user || res;
+    updateAuthPill();
+    renderAuthState();
+    loadIdentities();
+    loadMyRobots();
+  }).catch(function () {
+    try { localStorage.removeItem("octi_jwt_token"); } catch (e) {}
+    currentUser = null;
+    updateAuthPill();
+    renderGuestState();
+  });
+}
+
+$("btn-web-google").addEventListener("click", function () {
+  window.location.href = "/api/v1/auth/authorize?provider=google&redirect_uri=" + encodeURIComponent("/#account");
+});
+
+$("btn-web-facebook").addEventListener("click", function () {
+  window.location.href = "/api/v1/auth/authorize?provider=facebook&redirect_uri=" + encodeURIComponent("/#account");
+});
+
+$("btn-robots-to-account").addEventListener("click", function () {
+  switchTab("account");
+});
+
+$("btn-web-logout").addEventListener("click", function () {
+  try { localStorage.removeItem("octi_jwt_token"); } catch (e) {}
+  currentUser = null;
+  loadMyProfile();
+  switchTab("account");
+});
+
+$("web-avatar-file").addEventListener("change", function (ev) {
+  var file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function (re) {
+    var img = new Image();
+    img.onload = function () {
+      var canvas = document.createElement("canvas");
+      canvas.width = 96;
+      canvas.height = 96;
+      var ctx = canvas.getContext("2d");
+      var minDim = Math.min(img.width, img.height);
+      var sx = (img.width - minDim) / 2;
+      var sy = (img.height - minDim) / 2;
+      ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, 96, 96);
+      var dataUri = canvas.toDataURL("image/png");
+      $("web-avatar-url").value = dataUri;
+      var prev = $("web-avatar-preview");
+      clear(prev);
+      prev.appendChild(createAvatarEl(dataUri, $("web-handle-input").value || "U", 96));
+    };
+    img.src = re.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+$("btn-web-clear-avatar").addEventListener("click", function () {
+  $("web-avatar-url").value = "";
+  $("web-avatar-file").value = "";
+  var prev = $("web-avatar-preview");
+  clear(prev);
+  prev.appendChild(createAvatarEl("", $("web-handle-input").value || "U", 96));
+});
+
+$("btn-web-save-handle").addEventListener("click", function () {
+  var h = $("web-handle-input").value.trim();
+  if (!h) { alert("Handle cannot be empty."); return; }
+  api("/api/v1/profile/me", { method: "PATCH", body: { handle: h } }).then(function (res) {
+    currentUser = res.user || res;
+    updateAuthPill();
+    alert("Handle updated successfully!");
+  }).catch(function (e) {
+    alert("Failed to update handle: " + e.message);
+  });
+});
+
+$("btn-web-save-profile").addEventListener("click", function () {
+  var payload = {
+    display_name: $("web-display-name-input").value.trim(),
+    location: $("web-location-input").value.trim(),
+    avatar_url: $("web-avatar-url").value.trim(),
+    bio: $("web-bio-input").value.trim()
+  };
+  api("/api/v1/profile/me", { method: "PATCH", body: payload }).then(function (res) {
+    currentUser = res.user || res;
+    updateAuthPill();
+    alert("Profile saved successfully!");
+  }).catch(function (e) {
+    alert("Failed to save profile: " + e.message);
+  });
+});
+
+$("btn-web-view-public-profile").addEventListener("click", function () {
+  if (currentUser) {
+    switchTab("users");
+    openUserProfile(currentUser.uuid || currentUser.user_id || currentUser.handle);
+  }
+});
+
+var serverAuthProviders = ["google"];
+
+function loadAuthProviders() {
+  return api("/api/v1/auth/providers").then(function (res) {
+    var list = [];
+    if (Array.isArray(res)) {
+      list = res;
+    } else if (res && Array.isArray(res.providers)) {
+      list = res.providers;
+    } else if (res && typeof res.providers === "object") {
+      list = Object.keys(res.providers).filter(function (k) { return res.providers[k]; });
+    }
+    if (list.length > 0) {
+      serverAuthProviders = list.map(function (x) {
+        return (typeof x === "string" ? x : (x.id || x.provider || x.key || "")).toLowerCase();
+      });
+    }
+    var fbBtn = $("btn-web-facebook");
+    if (fbBtn) {
+      fbBtn.style.display = (serverAuthProviders.indexOf("facebook") !== -1) ? "block" : "none";
+    }
+    return serverAuthProviders;
+  }).catch(function () {
+    var fbBtn = $("btn-web-facebook");
+    if (fbBtn) {
+      fbBtn.style.display = (serverAuthProviders.indexOf("facebook") !== -1) ? "block" : "none";
+    }
+    return serverAuthProviders;
+  });
+}
+
+function loadIdentities() {
+  loadAuthProviders().then(function (enabledProviders) {
+    api("/api/v1/auth/identities").then(function (res) {
+      var tbody = $("web-identities-tbody");
+      if (!tbody) return;
+      clear(tbody);
+      var ids = res.identities || [];
+      var allProviders = [
+        { key: "google", name: "Google" },
+        { key: "facebook", name: "Facebook" }
+      ];
+      var activeProviders = enabledProviders || serverAuthProviders;
+      var providers = allProviders.filter(function (p) {
+        var isLinked = ids.some(function (x) { return (x.provider || "").toLowerCase() === p.key; });
+        var isEnabled = activeProviders.indexOf(p.key) !== -1;
+        return isLinked || isEnabled;
+      });
+      providers.forEach(function (p) {
+        var tr = el("tr");
+        var matched = ids.find(function (x) { return (x.provider || "").toLowerCase() === p.key; });
+        tr.appendChild(el("td", p.name));
+        if (matched) {
+          tr.appendChild(el("td", "Linked (" + (matched.email || matched.provider_id || "Active") + ")"));
+          var actTd = el("td");
+          var unlinkBtn = el("button", "Unlink", "btn");
+          unlinkBtn.disabled = (ids.length <= 1);
+          if (unlinkBtn.disabled) { unlinkBtn.title = "Cannot unlink the only active identity."; }
+          unlinkBtn.addEventListener("click", function () {
+            if (!confirm("Are you sure you want to unlink your " + p.name + " account?")) return;
+            api("/api/v1/auth/identities/" + p.key, { method: "DELETE" }).then(function () {
+              loadIdentities();
+            }).catch(function (e) { alert("Unlink failed: " + e.message); });
+          });
+          actTd.appendChild(unlinkBtn);
+          tr.appendChild(actTd);
+        } else {
+          tr.appendChild(el("td", "Not Linked", "dim"));
+          var actTd2 = el("td");
+          var linkBtn = el("button", "Link " + p.name, "btn btn-primary");
+          linkBtn.addEventListener("click", function () {
+            window.location.href = "/api/v1/auth/authorize?provider=" + p.key + "&redirect_uri=" + encodeURIComponent("/#account");
+          });
+          actTd2.appendChild(linkBtn);
+          tr.appendChild(actTd2);
+        }
+        tbody.appendChild(tr);
+      });
+    }).catch(function () {});
+  });
+}
+
+$("btn-conflict-switch").addEventListener("click", function () {
+  try { localStorage.removeItem("octi_jwt_token"); } catch (e) {}
+  currentUser = null;
+  loadMyProfile();
+  $("web-link-conflict-box").style.display = "none";
+});
+
+$("btn-conflict-merge").addEventListener("click", function () {
+  api("/api/v1/auth/link", { method: "POST", body: { force_relink: true } }).then(function () {
+    $("web-link-conflict-box").style.display = "none";
+    loadIdentities();
+    alert("Account merged successfully!");
+  }).catch(function (e) {
+    alert("Merge failed: " + e.message);
+  });
+});
+
+/* =========================================================================
+ * Tab 6: Robot Registration & Token Management
+ * ========================================================================= */
+function loadMyRobots() {
+  if (!currentUser) return;
+  api("/api/v1/robots").then(function (res) {
+    var robots = res.robots || [];
+    var activeCount = 0;
+    robots.forEach(function (r) {
+      if (!r.revoked && (r.status || "ACTIVE").toUpperCase() === "ACTIVE") activeCount++;
+    });
+    var badge = $("robots-quota-badge");
+    if (badge) {
+      badge.textContent = "Active Robots: " + activeCount + " / 3";
+      badge.className = "badge " + (activeCount >= 3 ? "badge-revoked" : "badge-active");
+    }
+    var createBtn = $("btn-create-robot");
+    if (createBtn) {
+      createBtn.disabled = (activeCount >= 3);
+      createBtn.title = activeCount >= 3 ? "Maximum quota of 3 active robots reached" : "";
+    }
+
+    var tbody = $("robots-tbody");
+    if (!tbody) return;
+    clear(tbody);
+    if (!robots.length) {
+      var trEmpty = el("tr");
+      var tdEmpty = el("td", "No robots registered yet.", "dim");
+      tdEmpty.colSpan = 6;
+      trEmpty.appendChild(tdEmpty);
+      tbody.appendChild(trEmpty);
+      return;
+    }
+
+    robots.forEach(function (r) {
+      var tr = el("tr");
+      var tdName = el("td", r.robot_name);
+      tdName.style.fontWeight = "700";
+
+      /* Description with inline editing */
+      var tdDesc = el("td");
+      var descSpan = el("span", r.description || "(no description)", r.description ? "" : "dim");
+      var descInput = el("input");
+      descInput.value = r.description || "";
+      descInput.style.display = "none";
+      descInput.style.width = "160px";
+      var editBtn = el("button", "Edit", "btn");
+      editBtn.style.marginLeft = "6px";
+      editBtn.style.padding = "2px 8px";
+      editBtn.style.fontSize = "12px";
+      var saveBtn = el("button", "Save", "btn btn-primary");
+      saveBtn.style.marginLeft = "6px";
+      saveBtn.style.padding = "2px 8px";
+      saveBtn.style.fontSize = "12px";
+      saveBtn.style.display = "none";
+
+      editBtn.addEventListener("click", function () {
+        descSpan.style.display = "none";
+        editBtn.style.display = "none";
+        descInput.style.display = "inline-block";
+        saveBtn.style.display = "inline-block";
+        descInput.focus();
+      });
+
+      saveBtn.addEventListener("click", function () {
+        var newDesc = descInput.value.trim();
+        var rid = r.robot_uuid || r.robot_id || r.robot_name;
+        api("/api/v1/robots/" + encodeURIComponent(rid), {
+          method: "PATCH",
+          body: { description: newDesc }
+        }).then(function () {
+          descSpan.textContent = newDesc || "(no description)";
+          descSpan.className = newDesc ? "" : "dim";
+          descSpan.style.display = "inline";
+          editBtn.style.display = "inline-block";
+          descInput.style.display = "none";
+          saveBtn.style.display = "none";
+        }).catch(function (e) { alert("Save failed: " + e.message); });
+      });
+
+      tdDesc.appendChild(descSpan);
+      tdDesc.appendChild(descInput);
+      tdDesc.appendChild(editBtn);
+      tdDesc.appendChild(saveBtn);
+
+      /* Secret Token with Show/Hide & Copy */
+      var tdTok = el("td");
+      var tokMasked = true;
+      var tokSpan = el("span", "••••••••••••••••");
+      tokSpan.style.fontFamily = "ui-monospace,SFMono-Regular,monospace";
+      tokSpan.style.fontSize = "12px";
+      var toggleBtn = el("button", "Show", "btn");
+      toggleBtn.style.marginLeft = "6px";
+      toggleBtn.style.padding = "2px 8px";
+      toggleBtn.style.fontSize = "12px";
+      var copyBtn = el("button", "Copy", "btn");
+      copyBtn.style.marginLeft = "4px";
+      copyBtn.style.padding = "2px 8px";
+      copyBtn.style.fontSize = "12px";
+
+      toggleBtn.addEventListener("click", function () {
+        tokMasked = !tokMasked;
+        tokSpan.textContent = tokMasked ? "••••••••••••••••" : (r.robot_token || r.token || r.secret_token || "octi_bot_hidden");
+        toggleBtn.textContent = tokMasked ? "Show" : "Hide";
+      });
+
+      copyBtn.addEventListener("click", function () {
+        var val = r.robot_token || r.token || r.secret_token || "";
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(val).then(function () {
+            copyBtn.textContent = "Copied!";
+            setTimeout(function () { copyBtn.textContent = "Copy"; }, 1500);
+          });
+        }
+      });
+
+      tdTok.appendChild(tokSpan);
+      tdTok.appendChild(toggleBtn);
+      tdTok.appendChild(copyBtn);
+
+      /* Status */
+      var isAct = !r.revoked && ((r.status || "ACTIVE").toUpperCase() === "ACTIVE");
+      var tdStat = el("td");
+      var statBadge = el("span", isAct ? "ACTIVE" : "REVOKED", isAct ? "badge badge-active" : "badge badge-revoked");
+      tdStat.appendChild(statBadge);
+
+      /* Created */
+      var tdCreated = el("td", fmtTime(r.created_at));
+
+      /* Revoke Action */
+      var tdAct = el("td");
+      if (isAct) {
+        var revokeBtn = el("button", "Revoke", "btn");
+        revokeBtn.style.padding = "4px 10px";
+        revokeBtn.style.fontSize = "12px";
+        revokeBtn.addEventListener("click", function () {
+          if (!confirm("Are you sure you want to revoke robot " + r.robot_name + "? This cannot be undone.")) return;
+          var rid = r.robot_uuid || r.robot_id || r.robot_name;
+          api("/api/v1/robots/" + encodeURIComponent(rid), { method: "DELETE" }).then(function () {
+            loadMyRobots();
+          }).catch(function (e) { alert("Revocation failed: " + e.message); });
+        });
+        tdAct.appendChild(revokeBtn);
+      } else {
+        tdAct.textContent = "-";
+      }
+
+      [tdName, tdDesc, tdTok, tdStat, tdCreated, tdAct].forEach(function (td) { tr.appendChild(td); });
+      tbody.appendChild(tr);
+    });
+  }).catch(function () {});
+}
+
+$("btn-create-robot").addEventListener("click", function () {
+  var name = $("robot-name-input").value.trim();
+  var desc = $("robot-desc-input").value.trim();
+  if (!name || name.length < 3 || name.length > 24) {
+    alert("Robot name must be between 3 and 24 characters.");
+    return;
+  }
+  if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+    alert("Robot name can only contain letters, numbers, hyphens, and underscores.");
+    return;
+  }
+  api("/api/v1/robots", {
+    method: "POST",
+    body: { robot_name: name, description: desc }
+  }).then(function (res) {
+    $("robot-name-input").value = "";
+    $("robot-desc-input").value = "";
+    var box = $("robot-new-token-box");
+    if (box) {
+      clear(box);
+      box.style.display = "block";
+      var rawTok = res.robot_token || res.token || res.secret_token || "";
+      var tSpan = el("div");
+      tSpan.innerHTML = "<strong>Robot Created!</strong> Save your secret bearer token now: <code style='font-size:13px;background:#fff;padding:2px 6px;border-radius:4px;'>" +
+        escapeHtml(rawTok) + "</code>";
+      var cp = el("button", "Copy Token", "btn btn-primary");
+      cp.style.marginTop = "8px";
+      cp.addEventListener("click", function () {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(rawTok);
+          cp.textContent = "Copied!";
+          setTimeout(function () { cp.textContent = "Copy Token"; }, 1500);
+        }
+      });
+      box.appendChild(tSpan);
+      box.appendChild(cp);
+    }
+    loadMyRobots();
+  }).catch(function (e) { alert("Failed to create robot: " + e.message); });
+});
+
+/* =========================================================================
+ * Tab 3: Users (Directory & Profiles)
+ * ========================================================================= */
+var usersOffset = 0, USERS_PAGE_LIMIT = 50, usersTotal = 0, usersLoaded = false;
+
+function usersSearch(offset) {
+  usersLoaded = true;
+  usersOffset = Math.max(0, offset);
+  var q = $("users-search-input").value.trim();
+  var sort = $("users-sort-select").value;
+  var order = $("users-order-select").value;
+  var url = "/api/v1/users?limit=" + USERS_PAGE_LIMIT + "&offset=" + usersOffset +
+    "&sort=" + encodeURIComponent(sort) + "&order=" + encodeURIComponent(order);
+  if (q) { url += "&q=" + encodeURIComponent(q); }
+
+  api(url).then(function (res) {
+    usersTotal = res.total !== undefined ? res.total : (res.users ? res.users.length : 0);
+    var tbody = $("users-tbody");
+    clear(tbody);
+    var users = res.users || [];
+    $("users-msg").textContent = users.length ? "" : "No registered players found matching query.";
+
+    users.forEach(function (u) {
+      var tr = el("tr", null, "click");
+      var tdAv = el("td");
+      tdAv.appendChild(createAvatarEl(u.avatar_url, u.handle, 32));
+      var tdHandle = el("td", "@" + u.handle);
+      tdHandle.style.fontWeight = "700";
+      var tdName = el("td", u.display_name || "-");
+      var tdLoc = el("td", u.location || "-");
+      var tdElo2p = el("td", u.elo_2p !== undefined ? u.elo_2p : 1200);
+      var tdElo4p = el("td", u.elo_4p !== undefined ? u.elo_4p : 1200);
+      var tdEloOfk = el("td", u.elo_ofk !== undefined ? u.elo_ofk : 1200);
+      var wld = (u.wins || 0) + "-" + (u.losses || 0) + "-" + (u.draws || 0);
+      var tdGames = el("td", wld);
+      var tdRobots = el("td", u.active_robots_count !== undefined ? u.active_robots_count : 0);
+      var tdJoined = el("td", fmtTime(u.created_at));
+
+      [tdAv, tdHandle, tdName, tdLoc, tdElo2p, tdElo4p, tdEloOfk, tdGames, tdRobots, tdJoined].forEach(function (td) {
+        tr.appendChild(td);
+      });
+
+      tr.addEventListener("click", function () {
+        openUserProfile(u.uuid || u.user_id || u.handle);
+      });
+      tbody.appendChild(tr);
+    });
+
+    var last = Math.min(usersOffset + users.length, usersTotal);
+    $("users-page-info").textContent = usersTotal ? (usersOffset + 1) + "-" + last + " of " + usersTotal : "";
+    $("users-prev-btn").disabled = usersOffset <= 0;
+    $("users-next-btn").disabled = usersOffset + USERS_PAGE_LIMIT >= usersTotal;
+  }).catch(function (e) {
+    $("users-msg").textContent = "Error: " + e.message;
+    $("users-msg").className = "err";
+  });
+}
+
+$("btn-users-search").addEventListener("click", function () { usersSearch(0); });
+$("users-sort-select").addEventListener("change", function () { usersSearch(0); });
+$("users-order-select").addEventListener("change", function () { usersSearch(0); });
+$("users-prev-btn").addEventListener("click", function () { usersSearch(usersOffset - USERS_PAGE_LIMIT); });
+$("users-next-btn").addEventListener("click", function () { usersSearch(usersOffset + USERS_PAGE_LIMIT); });
+$("users-search-input").addEventListener("keydown", function (ev) {
+  if (ev.key === "Enter") { usersSearch(0); }
+});
+
+function openUserProfile(id) {
+  location.hash = "#users/" + encodeURIComponent(id);
+  api("/api/v1/users/" + encodeURIComponent(id)).then(function (u) {
+    var panel = $("user-profile-detail");
+    panel.style.display = "block";
+    panel.scrollIntoView({ behavior: "smooth" });
+
+    var avBox = $("user-detail-avatar");
+    clear(avBox);
+    avBox.appendChild(createAvatarEl(u.avatar_url, u.handle, 96));
+
+    $("user-detail-name").textContent = u.display_name || u.handle;
+    $("user-detail-handle").textContent = "@" + u.handle;
+    $("user-detail-location").textContent = u.location ? ("📍 " + u.location) : "";
+    $("user-detail-bio").textContent = u.bio || "No bio written yet.";
+    $("user-detail-meta").textContent = "Joined: " + fmtTime(u.created_at) +
+      (u.last_seen_at ? (" • Last Seen: " + fmtTime(u.last_seen_at)) : "");
+
+    var isSelf = currentUser && ((currentUser.uuid && currentUser.uuid === u.uuid) || currentUser.handle === u.handle);
+    $("btn-user-edit-self").style.display = isSelf ? "inline-block" : "none";
+
+    var statsBox = $("user-detail-stats");
+    clear(statsBox);
+    var statItems = [
+      ["2P Elo", u.elo_2p !== undefined ? u.elo_2p : 1200],
+      ["4P Elo", u.elo_4p !== undefined ? u.elo_4p : 1200],
+      ["OFK Elo", u.elo_ofk !== undefined ? u.elo_ofk : 1200],
+      ["Games", u.games_played || 0],
+      ["Wins", u.wins || 0],
+      ["Losses", u.losses || 0],
+      ["Draws", u.draws || 0],
+      ["Win Rate", (u.games_played ? ((u.wins / u.games_played) * 100).toFixed(1) + "%" : "0.0%")]
+    ];
+    statItems.forEach(function (it) {
+      var box = el("div", null, "stat-box");
+      box.appendChild(el("div", it[0], "lbl"));
+      box.appendChild(el("div", String(it[1]), "val"));
+      statsBox.appendChild(box);
+    });
+
+    var rBox = $("user-detail-robots");
+    clear(rBox);
+    var rList = u.robots || [];
+    if (!rList.length) {
+      rBox.textContent = "No active public robots.";
+    } else {
+      var rTable = el("table");
+      rTable.innerHTML = "<thead><tr><th>Robot Name</th><th>Description</th><th>Created</th></tr></thead>";
+      var rTbody = el("tbody");
+      rList.forEach(function (rb) {
+        var rtr = el("tr");
+        rtr.appendChild(el("td", rb.robot_name));
+        rtr.appendChild(el("td", rb.description || "-"));
+        rtr.appendChild(el("td", fmtTime(rb.created_at)));
+        rTbody.appendChild(rtr);
+      });
+      rTable.appendChild(rTbody);
+      rBox.appendChild(rTable);
+    }
+
+    var gBox = $("user-detail-games");
+    clear(gBox);
+    var gList = u.recent_games || u.games || [];
+    if (!gList.length) {
+      gBox.textContent = "No match history available.";
+    } else {
+      var gTable = el("table");
+      gTable.innerHTML = "<thead><tr><th>Outcome</th><th>Mode</th><th>Players</th><th>Result</th><th>Plies</th><th>Date</th><th>Action</th></tr></thead>";
+      var gTbody = el("tbody");
+      gList.forEach(function (gm) {
+        var gtr = el("tr");
+        var outStr = gm.player_outcome || gm.outcome || "";
+        var isWin = (outStr === "WIN" || (gm.winner && gm.player_seat && gm.winner === gm.player_seat));
+        var isLoss = (outStr === "LOSS" || (gm.winner && gm.winner !== "NONE" && gm.player_seat && gm.winner !== gm.player_seat));
+        var badgeCls = isWin ? "badge badge-active" : (isLoss ? "badge badge-revoked" : "badge");
+        var tdOut = el("td");
+        tdOut.appendChild(el("span", outStr || (isWin ? "WIN" : (isLoss ? "LOSS" : "DRAW")), badgeCls));
+        var tdMode = el("td", gm.mode || "2P");
+        var pList = (gm.players && gm.players.length)
+          ? gm.players.map(function (p) { return p.handle; }).join(" vs ")
+          : [gm.p1_handle, gm.p2_handle, gm.p3_handle, gm.p4_handle].filter(Boolean).join(" vs ");
+        var tdPl = el("td", pList || "-");
+        var tdRes = el("td", (gm.status || gm.result || "") + (gm.termination ? (" (" + gm.termination + ")") : ""));
+        var tdPlies = el("td", gm.ply_count !== undefined ? gm.ply_count : "-");
+        var tdDate = el("td", fmtTime(gm.ended_at || gm.created_at));
+        var tdAct = el("td");
+        var rpBtn = el("button", "View Replay", "btn");
+        rpBtn.style.padding = "3px 8px";
+        rpBtn.style.fontSize = "12px";
+        rpBtn.addEventListener("click", function () {
+          switchTab("archive");
+          arOpen(gm.game_id);
+        });
+        tdAct.appendChild(rpBtn);
+
+        [tdOut, tdMode, tdPl, tdRes, tdPlies, tdDate, tdAct].forEach(function (td) { gtr.appendChild(td); });
+        gTbody.appendChild(gtr);
+      });
+      gTable.appendChild(gTbody);
+      gBox.appendChild(gTable);
+    }
+  }).catch(function (e) {
+    alert("Failed to load user profile: " + e.message);
+  });
+}
+
+$("btn-user-edit-self").addEventListener("click", function () {
+  switchTab("account");
+});
+$("user-detail-close").addEventListener("click", function () {
+  $("user-profile-detail").style.display = "none";
+});
+
+/* =========================================================================
+ * Tab 2: Web Player (Local vs. JS Robot & Online Lobby)
+ * ========================================================================= */
+var localBotState = null;
+var localGameMoves = [];
+var localGamePlies = [];
+var localGameInitialFen = "";
+var localGameStartedAt = 0;
+var localSelectedSq = null;
+var localSelectedMove = null;
+var localLegalDests = {};
+var localActionMode = "move";
+var localSelectedProngDir = "a";
+
+$("subtab-play-local").addEventListener("click", function () {
+  $("subtab-play-local").className = "btn btn-primary";
+  $("subtab-play-online").className = "btn";
+  $("play-local-panel").style.display = "block";
+  $("play-online-panel").style.display = "none";
+});
+
+$("subtab-play-online").addEventListener("click", function () {
+  $("subtab-play-online").className = "btn btn-primary";
+  $("subtab-play-local").className = "btn";
+  $("play-online-panel").style.display = "block";
+  $("play-local-panel").style.display = "none";
+  loadOnlineTables();
+});
+
+function initLocalBotGame() {
+  var mode = $("web-play-mode").value;
+  var humanSide = $("web-human-side").value;
+  var fen = "";
+  if (mode === "OFK") {
+    fen = "OFK:4:0:0:P:A:-:0:0,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56";
+  } else if (mode === "2P_1BASE") {
+    fen = "2P:1:0:0:P:A:-:0:6,0,25,0:6,0,25,0:A53,B57";
+  } else if (mode === "4P") {
+    fen = "4P:1:0:0:P:A:-:0:3,0,15,0:3,0,15,0:3,0,15,0:3,0,15,0:A33,B37,C77,D73";
+  } else {
+    fen = "2P:3:0:0:P:A:-:0:4,0,25,0:4,0,25,0:A33,A53,A73,B37,B57,B77";
+  }
+  localBotState = parseOctiFen(fen);
+  localGameInitialFen = fen;
+  localGameStartedAt = Math.floor(Date.now() / 1000);
+  localGameMoves = [];
+  localGamePlies = [{
+    plyIndex: 0,
+    player: "-",
+    move: "(Initial Setup)",
+    fenAfter: fen
+  }];
+  localSelectedSq = null;
+  localSelectedMove = null;
+  localLegalDests = {};
+  $("web-selected-move-text").textContent = "Selected: (None)";
+  $("btn-web-commit-move").disabled = true;
+  $("web-play-archive-status").textContent = "";
+
+  var movesBox = $("web-play-moves");
+  clear(movesBox);
+  movesBox.appendChild(el("div", "Game initialized. Mode: " + mode));
+
+  updatePlayHud();
+  renderSvgBoard();
+  checkPlayTurn();
+}
+
+function updatePlayHud() {
+  var container = $("web-play-reserves");
+  if (!container || !localBotState) return;
+  clear(container);
+  var names = {
+    A: $("web-human-side").value === "A" ? (currentUser ? currentUser.handle : "Human (Red)") : "JS Robot A",
+    B: $("web-human-side").value === "B" ? (currentUser ? currentUser.handle : "Human (Green)") : "JS Robot B",
+    C: "JS Robot C",
+    D: "JS Robot D"
+  };
+  localBotState.reserves.forEach(function (r) {
+    var card = el("div", null, "hud-card" + (localBotState.turn === r.player ? " active-turn" : ""));
+    var left = el("div", null, "hud-left");
+    left.appendChild(el("span", r.player, "pod-dot " + r.player));
+    left.appendChild(el("span", names[r.player] || ("Player " + r.player)));
+
+    var metrics = el("div", null, "hud-metrics");
+    function addM(lbl, val) {
+      var s = el("span", lbl + ": ");
+      s.appendChild(el("strong", val));
+      metrics.appendChild(s);
+    }
+    addM("Pods", r.freePods);
+    addM("Cap", r.capturedPods);
+    addM("Prongs", r.freeProngs);
+    card.appendChild(left);
+    card.appendChild(metrics);
+    container.appendChild(card);
+  });
+}
+
+function checkPlayTurn() {
+  if (!localBotState) return;
+  var humanSide = $("web-human-side").value;
+  var statusBanner = $("web-play-status");
+
+  if (localBotState.status === "O" || localBotState.status === "R") {
+    var winStr = localBotState.status === "R" ? "Game Over - Resigned" :
+      (localBotState.winner === humanSide ? "Victory! You won the match!" : ("Game Over - Player " + localBotState.winner + " won"));
+    statusBanner.textContent = winStr;
+    statusBanner.style.background = (localBotState.winner === humanSide ? "#ecfdf5" : "#fff1f2");
+    uploadLocalGameArchive();
+    return;
+  }
+
+  if (localBotState.turn === humanSide) {
+    statusBanner.textContent = "Your Turn (" + (humanSide === "A" ? "Red" : "Green") + ")";
+    statusBanner.style.background = "#eff6ff";
+  } else {
+    statusBanner.textContent = "Bot is thinking (" + localBotState.turn + ")...";
+    statusBanner.style.background = "#f4f4f5";
+    triggerBotTurn();
+  }
+}
+
+function triggerBotTurn() {
+  var fen = serializeOctiFen(localBotState);
+  var diff = parseInt($("web-bot-difficulty").value || "2", 10);
+  var side = localBotState.turn;
+  var mode = localBotState.mode;
+
+  function onBotResult(res) {
+    if (!localBotState || localBotState.status === "O") return;
+    if (res.bestMove) {
+      applyMoveToState(localBotState, res.bestMove, side);
+      localGameMoves.push(res.bestMove);
+      var plyIdx = localGamePlies.length;
+      localGamePlies.push({
+        plyIndex: plyIdx,
+        player: side,
+        move: res.bestMove,
+        fenAfter: serializeOctiFen(localBotState),
+        ai: { depthReached: diff, nodesVisited: res.nodes, evalScore: res.score }
+      });
+      var movesBox = $("web-play-moves");
+      var moveDiv = el("div", "#" + plyIdx + " [" + side + "] " + res.bestMove + " (" + (res.elapsedMs || 0) + "ms, " + (res.nodes || 0) + " nodes)");
+      movesBox.appendChild(moveDiv);
+      movesBox.scrollTop = movesBox.scrollHeight;
+    }
+    updatePlayHud();
+    renderSvgBoard();
+    checkPlayTurn();
+  }
+
+  if (botWorker) {
+    botWorker.onmessage = function (e) {
+      if (e.data && e.data.type === "result") {
+        onBotResult(e.data);
+      }
+    };
+    botWorker.postMessage({ type: "search", fen: fen, depth: diff, mode: mode, side: side });
+  } else {
+    setTimeout(function () {
+      var t0 = Date.now();
+      var r = botSearch(fen, diff, mode, side);
+      r.elapsedMs = Date.now() - t0;
+      onBotResult(r);
+    }, 80);
+  }
+}
+
+function uploadLocalGameArchive() {
+  if (!localBotState || localBotState.archiveUploaded) return;
+  localBotState.archiveUploaded = true;
+  var humanSide = $("web-human-side").value;
+  var diff = $("web-bot-difficulty").value;
+  var diffName = diff === "1" ? "Easy" : (diff === "3" ? "Hard" : "Medium");
+  var nowSec = Math.floor(Date.now() / 1000);
+  var gId = "web-" + Date.now().toString(36) + "-" + Math.random().toString(36).substr(2, 6);
+
+  var payload = {
+    format: "octi.transcript.v3",
+    version: "3.0",
+    platform: "web",
+    game_id: gId,
+    mode: (localBotState.mode === "2P_1BASE" ? "2P" : localBotState.mode),
+    players: [
+      { seat: "A", handle: (humanSide === "A" ? (currentUser ? currentUser.handle : "Guest Player") : ("Browser JS Robot (" + diffName + ")")), is_ai: humanSide !== "A", ai_difficulty: humanSide === "A" ? undefined : parseInt(diff, 10) },
+      { seat: "B", handle: (humanSide === "B" ? (currentUser ? currentUser.handle : "Guest Player") : ("Browser JS Robot (" + diffName + ")")), is_ai: humanSide !== "B", ai_difficulty: humanSide === "B" ? undefined : parseInt(diff, 10) }
+    ],
+    result: (localBotState.status === "R" ? "RESIGNED" : ("WIN_" + (localBotState.winner || "NONE"))),
+    winner: localBotState.winner || "NONE",
+    termination: (localBotState.status === "R" ? "resignation" : "normal"),
+    initial_fen: localGameInitialFen,
+    final_fen: serializeOctiFen(localBotState),
+    ply_count: localGamePlies.length - 1,
+    plies: localGamePlies,
+    started_at: localGameStartedAt,
+    ended_at: nowSec
+  };
+
+  $("web-play-archive-status").innerHTML = "Uploading game transcript to archive...";
+  api("/api/v1/archive/upload", { method: "POST", body: payload }).then(function () {
+    $("web-play-archive-status").innerHTML = "Game uploaded to archive! <a href='#archive/" + encodeURIComponent(gId) + "' style='font-weight:700;color:var(--acc-bright);'>View in Game Archive &rarr;</a>";
+  }).catch(function (e) {
+    $("web-play-archive-status").textContent = "Archive upload notice: " + e.message;
+  });
+}
+
+$("btn-web-new-bot-game").addEventListener("click", function () {
+  initLocalBotGame();
+});
+
+$("btn-web-resign").addEventListener("click", function () {
+  if (!localBotState || localBotState.status === "O") return;
+  if (!confirm("Are you sure you want to resign this game?")) return;
+  var humanSide = $("web-human-side").value;
+  localBotState.status = "R";
+  localBotState.winner = (humanSide === "A" ? "B" : "A");
+  checkPlayTurn();
+});
+
+/* Action Mode Buttons */
+$("btn-act-move").addEventListener("click", function () {
+  localActionMode = "move";
+  $("btn-act-move").className = "btn on";
+  $("btn-act-prong").className = "btn";
+  $("btn-act-place").className = "btn";
+  $("prong-dir-picker").style.display = "none";
+  localSelectedMove = null;
+  $("web-selected-move-text").textContent = "Selected: (None)";
+  $("btn-web-commit-move").disabled = true;
+  renderSvgBoard();
+});
+
+$("btn-act-prong").addEventListener("click", function () {
+  localActionMode = "prong";
+  $("btn-act-move").className = "btn";
+  $("btn-act-prong").className = "btn on";
+  $("btn-act-place").className = "btn";
+  $("prong-dir-picker").style.display = "flex";
+  localSelectedMove = null;
+  $("web-selected-move-text").textContent = "Selected: (None)";
+  $("btn-web-commit-move").disabled = true;
+  renderSvgBoard();
+});
+
+$("btn-act-place").addEventListener("click", function () {
+  localActionMode = "place";
+  $("btn-act-move").className = "btn";
+  $("btn-act-prong").className = "btn";
+  $("btn-act-place").className = "btn on";
+  $("prong-dir-picker").style.display = "none";
+  localSelectedMove = null;
+  $("web-selected-move-text").textContent = "Selected: (None)";
+  $("btn-web-commit-move").disabled = true;
+  renderSvgBoard();
+});
+
+Array.prototype.forEach.call($("prong-dir-picker").querySelectorAll("button"), function (b) {
+  b.addEventListener("click", function () {
+    Array.prototype.forEach.call($("prong-dir-picker").querySelectorAll("button"), function (x) { x.classList.remove("on"); });
+    b.classList.add("on");
+    localSelectedProngDir = b.getAttribute("data-dir") || "a";
+    if (localSelectedSq) {
+      localSelectedMove = localSelectedSq.x + "" + localSelectedSq.y + localSelectedProngDir;
+      $("web-selected-move-text").textContent = "Selected: " + localSelectedMove;
+      $("btn-web-commit-move").disabled = false;
+    }
+  });
+});
+
+$("btn-web-commit-move").addEventListener("click", function () {
+  if (!localSelectedMove || !localBotState) return;
+  var humanSide = $("web-human-side").value;
+  applyMoveToState(localBotState, localSelectedMove, humanSide);
+  localGameMoves.push(localSelectedMove);
+  var plyIdx = localGamePlies.length;
+  localGamePlies.push({
+    plyIndex: plyIdx,
+    player: humanSide,
+    move: localSelectedMove,
+    fenAfter: serializeOctiFen(localBotState)
+  });
+  var movesBox = $("web-play-moves");
+  var mDiv = el("div", "#" + plyIdx + " [" + humanSide + "] " + localSelectedMove);
+  mDiv.style.fontWeight = "700";
+  movesBox.appendChild(mDiv);
+  movesBox.scrollTop = movesBox.scrollHeight;
+
+  localSelectedMove = null;
+  localSelectedSq = null;
+  localLegalDests = {};
+  $("web-selected-move-text").textContent = "Selected: (None)";
+  $("btn-web-commit-move").disabled = true;
+
+  updatePlayHud();
+  renderSvgBoard();
+  checkPlayTurn();
+});
+
+function onPlaySquareClick(x, y) {
+  if (!localBotState || localBotState.status === "O" || localBotState.status === "R") return;
+  var humanSide = $("web-human-side").value;
+  if (localBotState.turn !== humanSide) return;
+
+  var k = x + "," + y;
+  var stack = localBotState.map[k] || [];
+  var top = stack.length ? stack[stack.length - 1] : null;
+
+  if (localActionMode === "place") {
+    var homes = getHomeSquares(localBotState.mode, humanSide);
+    var isHome = homes.some(function (h) { return h.x === x && h.y === y; });
+    var pIdx = humanSide === "A" ? 0 : 1;
+    var freePods = localBotState.reserves[pIdx] ? localBotState.reserves[pIdx].freePods : 0;
+    if (!isHome || freePods <= 0 || stack.length > 0) return;
+    localSelectedSq = { x: x, y: y };
+    localSelectedMove = "(" + x + y + ")";
+    $("web-selected-move-text").textContent = "Selected: Place Pod at (" + x + "," + y + ")";
+    $("btn-web-commit-move").disabled = false;
+    renderSvgBoard();
+    return;
+  }
+
+  if (localActionMode === "prong") {
+    if (!top || top.owner !== humanSide) return;
+    var pIdx2 = humanSide === "A" ? 0 : 1;
+    var freeProngs = localBotState.reserves[pIdx2] ? localBotState.reserves[pIdx2].freeProngs : 0;
+    if (freeProngs <= 0) {
+      alert("No free prongs left in reserve!");
+      return;
+    }
+    localSelectedSq = { x: x, y: y };
+    localSelectedMove = x + "" + y + localSelectedProngDir;
+    $("web-selected-move-text").textContent = "Selected: Add Prong " + localSelectedProngDir + " at (" + x + "," + y + ")";
+    $("btn-web-commit-move").disabled = false;
+    renderSvgBoard();
+    return;
+  }
+
+  /* Action Mode: Move / Jump */
+  if (localLegalDests[k]) {
+    localSelectedMove = localLegalDests[k];
+    $("web-selected-move-text").textContent = "Selected: " + localSelectedMove;
+    $("btn-web-commit-move").disabled = false;
+    renderSvgBoard();
+    return;
+  }
+
+  if (top && top.owner === humanSide) {
+    localSelectedSq = { x: x, y: y };
+    localLegalDests = {};
+    localSelectedMove = null;
+    $("btn-web-commit-move").disabled = true;
+    $("web-selected-move-text").textContent = "Selected Pod (" + x + "," + y + ")";
+
+    var capChecked = $("web-play-capture-toggle").checked;
+    for (var d = 0; d < 8; d++) {
+      if (top.cfg.prongs[d]) {
+        var dx = DIR_DELTAS[d][0], dy = DIR_DELTAS[d][1];
+        var sx = x + dx, sy = y + dy;
+        if (sx >= 1 && sx <= localBotState.gw && sy >= 1 && sy <= localBotState.gh) {
+          var stepK = sx + "," + sy;
+          var stepStack = localBotState.map[stepK];
+          if (!stepStack || !stepStack.length) {
+            localLegalDests[stepK] = x + "" + y + "-" + sx + "" + sy;
+          } else {
+            var jx = sx + dx, jy = sy + dy;
+            if (jx >= 1 && jx <= localBotState.gw && jy >= 1 && jy <= localBotState.gh) {
+              var jumpK = jx + "," + jy;
+              var jumpStack = localBotState.map[jumpK];
+              if (!jumpStack || !jumpStack.length) {
+                var jumpedTop = stepStack[stepStack.length - 1];
+                var isCap = (jumpedTop.owner !== humanSide && capChecked);
+                localLegalDests[jumpK] = x + "" + y + "-" + jx + "" + jy + (isCap ? "x" : "");
+              }
+            }
+          }
+        }
+      }
+    }
+    renderSvgBoard();
+  }
+}
+
+window.onPlaySquareClick = onPlaySquareClick;
+
+function renderSvgBoard() {
+  var svg = $("web-play-svg");
+  if (!svg || !localBotState) return;
+  clear(svg);
+
+  var gw = localBotState.gw, gh = localBotState.gh;
+  var pad = 36;
+  var cell = Math.min((580 - pad * 2) / gw, (580 - pad * 2) / gh);
+  var gridW = gw * cell, gridH = gh * cell;
+  var originX = (580 - gridW) / 2, originY = (580 - gridH) / 2;
+
+  /* Board Frame */
+  var bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  bgRect.setAttribute("x", "0");
+  bgRect.setAttribute("y", "0");
+  bgRect.setAttribute("width", "580");
+  bgRect.setAttribute("height", "580");
+  bgRect.setAttribute("rx", "14");
+  bgRect.setAttribute("fill", "#101622");
+  bgRect.setAttribute("stroke", "#E4C070");
+  bgRect.setAttribute("stroke-width", "3");
+  svg.appendChild(bgRect);
+
+  /* Coordinate labels */
+  for (var cx = 1; cx <= gw; cx++) {
+    var sqCol = cx - 1;
+    var xMid = originX + (sqCol + 0.5) * cell;
+    var tTop = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    tTop.setAttribute("x", xMid);
+    tTop.setAttribute("y", originY - 10);
+    tTop.setAttribute("fill", "#D8B66C");
+    tTop.setAttribute("font-size", "11");
+    tTop.setAttribute("font-weight", "bold");
+    tTop.setAttribute("text-anchor", "middle");
+    tTop.textContent = String(cx);
+    svg.appendChild(tTop);
+
+    var tBot = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    tBot.setAttribute("x", xMid);
+    tBot.setAttribute("y", originY + gridH + 18);
+    tBot.setAttribute("fill", "#D8B66C");
+    tBot.setAttribute("font-size", "11");
+    tBot.setAttribute("font-weight", "bold");
+    tBot.setAttribute("text-anchor", "middle");
+    tBot.textContent = String(cx);
+    svg.appendChild(tBot);
+  }
+
+  for (var cy = 1; cy <= gh; cy++) {
+    var sqRow = gh - cy;
+    var yMid = originY + (sqRow + 0.5) * cell;
+    var tLeft = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    tLeft.setAttribute("x", originX - 12);
+    tLeft.setAttribute("y", yMid + 4);
+    tLeft.setAttribute("fill", "#D8B66C");
+    tLeft.setAttribute("font-size", "11");
+    tLeft.setAttribute("font-weight", "bold");
+    tLeft.setAttribute("text-anchor", "middle");
+    tLeft.textContent = String(cy);
+    svg.appendChild(tLeft);
+
+    var tRight = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    tRight.setAttribute("x", originX + gridW + 12);
+    tRight.setAttribute("y", yMid + 4);
+    tRight.setAttribute("fill", "#D8B66C");
+    tRight.setAttribute("font-size", "11");
+    tRight.setAttribute("font-weight", "bold");
+    tRight.setAttribute("text-anchor", "middle");
+    tRight.textContent = String(cy);
+    svg.appendChild(tRight);
+  }
+
+  /* Grid Squares */
+  for (var y = 1; y <= gh; y++) {
+    for (var x = 1; x <= gw; x++) {
+      var col = x - 1, row = gh - y;
+      var sqX = originX + col * cell;
+      var sqY = originY + row * cell;
+      var isDark = ((x + y) % 2 === 0);
+
+      var cellRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      cellRect.setAttribute("x", sqX);
+      cellRect.setAttribute("y", sqY);
+      cellRect.setAttribute("width", cell);
+      cellRect.setAttribute("height", cell);
+      cellRect.setAttribute("fill", isDark ? "#151E30" : "#1D2940");
+      cellRect.setAttribute("stroke", "rgba(184, 148, 76, 0.4)");
+      cellRect.setAttribute("stroke-width", "1");
+      svg.appendChild(cellRect);
+
+      /* Socket Ring */
+      var socket = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      socket.setAttribute("cx", sqX + cell / 2);
+      socket.setAttribute("cy", sqY + cell / 2);
+      socket.setAttribute("r", cell * 0.33);
+      socket.setAttribute("fill", "none");
+      socket.setAttribute("stroke", "rgba(8, 12, 20, 0.7)");
+      socket.setAttribute("stroke-width", "1");
+      svg.appendChild(socket);
+
+      /* Home Base indicator */
+      var st = squareTypeAt(localBotState.mode, x, y);
+      if (st.indexOf("HOME") !== -1) {
+        var hRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        hRect.setAttribute("x", sqX + 2);
+        hRect.setAttribute("y", sqY + 2);
+        hRect.setAttribute("width", cell - 4);
+        hRect.setAttribute("height", cell - 4);
+        hRect.setAttribute("rx", "4");
+        hRect.setAttribute("fill", "none");
+        hRect.setAttribute("stroke", "#C8A253");
+        hRect.setAttribute("stroke-width", "1.5");
+        svg.appendChild(hRect);
+
+        var stack = localBotState.map[x + "," + y];
+        if (!stack || !stack.length) {
+          var hTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          hTxt.setAttribute("x", sqX + cell / 2);
+          hTxt.setAttribute("y", sqY + cell / 2 + 3);
+          hTxt.setAttribute("fill", "#D8B66C");
+          hTxt.setAttribute("font-size", "9");
+          hTxt.setAttribute("font-weight", "bold");
+          hTxt.setAttribute("text-anchor", "middle");
+          hTxt.textContent = "OCTI";
+          svg.appendChild(hTxt);
+        }
+      }
+
+      /* Highlight destination squares */
+      var k = x + "," + y;
+      if (localLegalDests[k]) {
+        var dCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        dCircle.setAttribute("cx", sqX + cell / 2);
+        dCircle.setAttribute("cy", sqY + cell / 2);
+        dCircle.setAttribute("r", cell * 0.28);
+        dCircle.setAttribute("fill", "rgba(16, 185, 129, 0.35)");
+        dCircle.setAttribute("stroke", "#10B981");
+        dCircle.setAttribute("stroke-width", "2");
+        svg.appendChild(dCircle);
+      }
+
+      /* Highlight selected square */
+      if (localSelectedSq && localSelectedSq.x === x && localSelectedSq.y === y) {
+        var sRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        sRect.setAttribute("x", sqX + 1);
+        sRect.setAttribute("y", sqY + 1);
+        sRect.setAttribute("width", cell - 2);
+        sRect.setAttribute("height", cell - 2);
+        sRect.setAttribute("rx", "4");
+        sRect.setAttribute("fill", "none");
+        sRect.setAttribute("stroke", "#FDE047");
+        sRect.setAttribute("stroke-width", "2.5");
+        svg.appendChild(sRect);
+      }
+    }
+  }
+
+  /* Draw Pods */
+  Object.keys(localBotState.map).forEach(function (mk) {
+    var stack = localBotState.map[mk];
+    if (!stack || !stack.length) return;
+    var top = stack[stack.length - 1];
+    var pcoords = mk.split(",");
+    var px = parseInt(pcoords[0], 10), py = parseInt(pcoords[1], 10);
+    var pcol = px - 1, prow = gh - py;
+    var pcx = originX + (pcol + 0.5) * cell;
+    var pcy = originY + (prow + 0.5) * cell;
+    var radius = cell * 0.36;
+
+    /* Radial Prongs */
+    for (var d = 0; d < 8; d++) {
+      if (top.cfg.prongs[d]) {
+        var u = DIR_DELTAS[d];
+        var ux = u[0], uy = -u[1];
+        var ulen = Math.hypot(ux, uy);
+        if (ulen > 1e-6) { ux /= ulen; uy /= ulen; }
+        var perpX = -uy, perpY = ux;
+        var rInner = radius * 0.65;
+        var rOuter = radius * 1.45;
+        var hw = radius * 0.22;
+
+        var prongPoly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+        var pts = [
+          (pcx + ux * rInner - perpX * hw) + "," + (pcy + uy * rInner - perpY * hw),
+          (pcx + ux * (rOuter * 0.85) - perpX * (hw * 0.8)) + "," + (pcy + uy * (rOuter * 0.85) - perpY * (hw * 0.8)),
+          (pcx + ux * rOuter) + "," + (pcy + uy * rOuter),
+          (pcx + ux * (rOuter * 0.85) + perpX * (hw * 0.8)) + "," + (pcy + uy * (rOuter * 0.85) + perpY * (hw * 0.8)),
+          (pcx + ux * rInner + perpX * hw) + "," + (pcy + uy * rInner + perpY * hw)
+        ].join(" ");
+        prongPoly.setAttribute("points", pts);
+        prongPoly.setAttribute("fill", "#F8FAFC");
+        prongPoly.setAttribute("stroke", "#18181b");
+        prongPoly.setAttribute("stroke-width", "1");
+        svg.appendChild(prongPoly);
+      }
+    }
+
+    /* Octagon Pod Body */
+    var podPoly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    var polyPts = [];
+    for (var i = 0; i < 8; i++) {
+      var ang = (i * 45 + 22.5) * Math.PI / 180;
+      polyPts.push((pcx + radius * Math.cos(ang)).toFixed(1) + "," + (pcy + radius * Math.sin(ang)).toFixed(1));
+    }
+    podPoly.setAttribute("points", polyPts.join(" "));
+    var podColor = (top.owner === "A" ? "#10B981" : (top.owner === "B" ? "#F43F5E" : (top.owner === "C" ? "#3B82F6" : "#F59E0B")));
+    podPoly.setAttribute("fill", podColor);
+    podPoly.setAttribute("stroke", "#C8A253");
+    podPoly.setAttribute("stroke-width", "1.5");
+    svg.appendChild(podPoly);
+
+    /* Center Emblem */
+    var centerTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    centerTxt.setAttribute("x", pcx);
+    centerTxt.setAttribute("y", pcy + 4);
+    centerTxt.setAttribute("fill", "#ffffff");
+    centerTxt.setAttribute("font-size", String(Math.round(radius * 0.75)));
+    centerTxt.setAttribute("font-weight", "bold");
+    centerTxt.setAttribute("text-anchor", "middle");
+    centerTxt.textContent = stack.length > 1 ? ("x" + stack.length) : top.owner;
+    svg.appendChild(centerTxt);
+  });
+
+  /* Click Handler rects */
+  for (var y2 = 1; y2 <= gh; y2++) {
+    for (var x2 = 1; x2 <= gw; x2++) {
+      var c2 = x2 - 1, r2 = gh - y2;
+      var cx2 = originX + c2 * cell, cy2 = originY + r2 * cell;
+      var clickRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      clickRect.setAttribute("x", cx2);
+      clickRect.setAttribute("y", cy2);
+      clickRect.setAttribute("width", cell);
+      clickRect.setAttribute("height", cell);
+      clickRect.setAttribute("fill", "transparent");
+      clickRect.setAttribute("cursor", "pointer");
+      clickRect.setAttribute("onclick", "window.onPlaySquareClick(" + x2 + "," + y2 + ")");
+      svg.appendChild(clickRect);
+    }
+  }
+}
+
+/* Online Lobby & Tables */
+function loadOnlineTables() {
+  api("/api/v1/tables").then(function (res) {
+    var container = $("web-online-tables");
+    if (!container) return;
+    clear(container);
+    var tables = res.tables || [];
+    if (!tables.length) {
+      container.innerHTML = "<div class='dim' style='padding:12px;text-align:center;'>No active online tables found. Click Create Online Table to host one.</div>";
+      return;
+    }
+    var tbl = el("table");
+    tbl.innerHTML = "<thead><tr><th>Table ID</th><th>Mode</th><th>State</th><th>Players</th><th>Observers</th><th>Action</th></tr></thead>";
+    var tbody = el("tbody");
+    tables.forEach(function (t) {
+      var tr = el("tr");
+      tr.appendChild(el("td", t.table_id));
+      tr.appendChild(el("td", t.mode || "2P"));
+      tr.appendChild(el("td", t.state || "WAITING"));
+      var plStr = (t.players || []).map(function (p) { return p.handle; }).join(" vs ") || "-";
+      tr.appendChild(el("td", plStr));
+      tr.appendChild(el("td", String(t.observers_count || 0)));
+
+      var tdAct = el("td");
+      var obsBtn = el("button", "Observe", "btn");
+      obsBtn.addEventListener("click", function () {
+        api("/api/v1/tables/" + encodeURIComponent(t.table_id) + "/observe", { method: "POST" }).then(function (oRes) {
+          $("web-room-observers").textContent = (oRes.observer_handles || ["anonymous-127.0.0.1"]).join(", ");
+          var roomLog = $("web-room-chat-log");
+          clear(roomLog);
+          roomLog.appendChild(el("div", "Observing table " + t.table_id));
+        }).catch(function (e) { alert("Failed to observe: " + e.message); });
+      });
+      tdAct.appendChild(obsBtn);
+
+      if (currentUser) {
+        var joinBtn = el("button", "Join Seat", "btn btn-primary");
+        joinBtn.style.marginLeft = "6px";
+        joinBtn.addEventListener("click", function () {
+          api("/api/v1/tables/" + encodeURIComponent(t.table_id) + "/join", { method: "POST" }).then(function () {
+            alert("Joined table " + t.table_id);
+            loadOnlineTables();
+          }).catch(function (e) { alert("Failed to join: " + e.message); });
+        });
+        tdAct.appendChild(joinBtn);
+      }
+
+      tr.appendChild(tdAct);
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    container.appendChild(tbl);
+  }).catch(function () {});
+}
+
+$("btn-web-refresh-tables").addEventListener("click", loadOnlineTables);
+
+$("btn-web-create-table").addEventListener("click", function () {
+  if (!currentUser) return;
+  api("/api/v1/tables", { method: "POST", body: { mode: "2P" } }).then(function () {
+    loadOnlineTables();
+  }).catch(function (e) { alert("Failed to create table: " + e.message); });
+});
+
+$("btn-web-quick-match").addEventListener("click", function () {
+  if (!currentUser) return;
+  api("/api/v1/lobby/quickmatch", { method: "POST" }).then(function (res) {
+    alert("Quick match matched table: " + res.table_id);
+    loadOnlineTables();
+  }).catch(function (e) { alert("Quick match: " + e.message); });
+});
+
+$("btn-web-chat-send").addEventListener("click", function () {
+  var input = $("web-chat-input");
+  var msg = input.value.trim();
+  if (!msg || !currentUser) return;
+  input.value = "";
+  api("/api/v1/lobby/chat", { method: "POST", body: { message: msg } }).then(function () {
+    var log = $("web-lobby-chat-log");
+    var div = el("div", "[" + currentUser.handle + "]: " + msg);
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }).catch(function (e) { alert("Chat failed: " + e.message); });
+});
+
+$("web-chat-input").addEventListener("keydown", function (ev) {
+  if (ev.key === "Enter") { $("btn-web-chat-send").click(); }
+});
+
 
 /* ---- archive ---- */
 var arOffset = 0, arLimit = 20, arTotal = 0, arLoaded = false;
@@ -1797,15 +4199,6 @@ window.addEventListener("keydown", function (ev) {
   }
 });
 
-function checkHash() {
-  if (location.hash && location.hash.indexOf("#archive/") === 0) {
-    var id = decodeURIComponent(location.hash.substring(9));
-    switchTab("archive");
-    if (id) { arOpen(id); }
-  }
-}
-window.addEventListener("hashchange", checkHash);
-
 /* ---- leaderboard ---- */
 function lbLoad() {
   api("/api/v1/leaderboard?mode=" + encodeURIComponent($("lb-mode").value) +
@@ -1825,22 +4218,28 @@ function lbLoad() {
 $("lb-go").addEventListener("click", lbLoad);
 $("lb-mode").addEventListener("change", lbLoad);
 
+
+/* =========================================================================
+ * Application Initialization
+ * ========================================================================= */
 loadHealth();
 loadArchiveStats();
-arSearch(0);
 checkHash();
+loadMyProfile();
+loadAuthProviders();
 setInterval(loadHealth, 15000);
 })();
 </script>
 </body>
 </html>
+
 )OCTIUI";
 
 } // namespace
 
 const char *webUiHtml()
 {
-    return kPage;
+    return kIndexHtml;
 }
 
 } // namespace octi

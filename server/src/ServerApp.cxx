@@ -292,7 +292,21 @@ bool ServerApp::loadOidcConfig(const std::string &path, OidcConfig &out,
                     return false;
                 }
                 pc.appSecret = sec->get<std::string>();
+                pc.clientSecret = pc.appSecret;
                 hasSecret = hasSecret || !pc.appSecret.empty();
+            }
+            Json::const_iterator csec = it->find("client_secret");
+            if (csec != it->end()) {
+                if (!csec->is_string() ||
+                    csec->get<std::string>().size() > kMaxSecretBytes) {
+                    error = "client_secret must be a string";
+                    return false;
+                }
+                pc.clientSecret = csec->get<std::string>();
+                if (name == "facebook" && pc.appSecret.empty()) {
+                    pc.appSecret = pc.clientSecret;
+                }
+                hasSecret = hasSecret || !pc.clientSecret.empty();
             }
             out[name] = pc;
         }
@@ -359,6 +373,11 @@ int ServerApp::run(std::ostream &out, std::ostream &err)
                 return 2;
             }
             http.providerClientIds[it->first] = it->second.clientIds;
+        }
+        if (!it->second.clientSecret.empty()) {
+            http.providerClientSecrets[it->first] = it->second.clientSecret;
+        } else if (!it->second.appSecret.empty()) {
+            http.providerClientSecrets[it->first] = it->second.appSecret;
         }
         if (it->first == "facebook" && !it->second.appSecret.empty()) {
             verifier.setFacebookAppSecret(it->second.appSecret);

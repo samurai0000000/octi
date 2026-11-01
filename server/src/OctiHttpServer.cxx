@@ -6,6 +6,9 @@
 
 #include "OctiHttpServer.hxx"
 
+#ifndef CPPHTTPLIB_OPENSSL_SUPPORT
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+#endif
 #include "OctiCore.hxx"
 #include "OctiBoard.hxx"
 #include "OctiCrypto.hxx"
@@ -15,6 +18,8 @@
 
 #include <httplib.h>
 #include <nlohmann/json.hpp>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
 
 #include <algorithm>
 #include <atomic>
@@ -25,10 +30,12 @@
 #include <cstring>
 #include <exception>
 #include <functional>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <thread>
 
 namespace octi {
@@ -136,12 +143,49 @@ bool isSafeId(const std::string &s)
     }
     for (size_t i = 0; i < s.size(); ++i) {
         unsigned char c = static_cast<unsigned char>(s[i]);
-        if (!(std::isalnum(c) || c == '-' || c == '_' || c == '.')) {
+        if (!(std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '@')) {
             return false;
         }
     }
     return true;
 }
+
+const std::string kOauthStateSecret = "octi_oauth_state_hmac_secret_2026";
+
+std::string hmacSha256(const std::string &data, const std::string &key)
+{
+    unsigned char md[EVP_MAX_MD_SIZE];
+    unsigned int mdLen = 0;
+    HMAC(EVP_sha256(), key.data(), key.size(),
+         reinterpret_cast<const unsigned char *>(data.data()), data.size(),
+         md, &mdLen);
+    return std::string(reinterpret_cast<const char *>(md), mdLen);
+}
+
+std::string urlEncode(const std::string &value)
+{
+    std::ostringstream escaped;
+    escaped.fill('0');
+    escaped << std::hex;
+    for (size_t i = 0; i < value.size(); ++i) {
+        char c = value[i];
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' ||
+            c == '.' || c == '~') {
+            escaped << c;
+        } else {
+            escaped << '%' << std::uppercase << std::setw(2)
+                    << int(static_cast<unsigned char>(c));
+        }
+    }
+    return escaped.str();
+}
+
+struct InitOidcRegistry {
+    InitOidcRegistry()
+    {
+        (void)OidcVerifier::providerRegistry();
+    }
+} g_initOidcRegistry;
 
 std::string cleanAgent(const std::string &in)
 {
@@ -364,6 +408,8 @@ Json profileJson(const PlayerProfile &p, bool includeSeen)
     j["handle"] = p.handle;
     j["display_name"] = p.displayName;
     j["avatar_url"] = p.avatarUrl;
+    j["location"] = p.location;
+    j["bio"] = p.bio;
     j["elo_2p"] = p.elo2p;
     j["elo_4p"] = p.elo4p;
     j["elo_ofk"] = p.eloOfk;
@@ -424,6 +470,7 @@ Json tableJson(const TableSummary &t)
     j["seats_filled"] = t.seatsFilled;
     j["players"] = t.playerHandles;
     j["observer_count"] = t.observerCount;
+    j["observer_handles"] = t.observerHandles;
     return j;
 }
 
@@ -647,6 +694,10 @@ struct OctiHttpServer::Impl {
 
     /* handlers */
     void handleHealth(const Request &req, Response &res);
+    void handlePrivacy(const Request &req, Response &res);
+    void handleDataDeletion(const Request &req, Response &res);
+    void handleAuthAuthorize(const Request &req, Response &res);
+    void handleAuthCallback(const Request &req, Response &res);
     void handleProviders(const Request &req, Response &res);
     void handleSso(const Request &req, Response &res);
     void handleLink(const Request &req, Response &res);
@@ -655,6 +706,12 @@ struct OctiHttpServer::Impl {
     void handleProfileGet(const Request &req, Response &res);
     void handleProfilePatch(const Request &req, Response &res);
     void handlePlayer(const Request &req, Response &res);
+    void handleUsersList(const Request &req, Response &res);
+    void handleUserGet(const Request &req, Response &res);
+    void handleRobotsList(const Request &req, Response &res);
+    void handleRobotCreate(const Request &req, Response &res);
+    void handleRobotPatch(const Request &req, Response &res);
+    void handleRobotDelete(const Request &req, Response &res);
     void handleLeaderboard(const Request &req, Response &res);
     void handleLobbyState(const Request &req, Response &res);
     void handleLobbyChat(const Request &req, Response &res);
@@ -1094,6 +1151,18 @@ bool OctiHttpServer::Impl::verifyCredential(const Json &body, Response &res,
                   "send either id_token or access_token, not both");
         return false;
     }
+    if (provider == "facebook" && accessToken.empty() && !idToken.empty()) {
+        int dots = 0;
+        for (size_t i = 0; i < idToken.size(); ++i) {
+            if (idToken[i] == '.') {
+                ++dots;
+            }
+        }
+        if (dots < 2) {
+            accessToken = idToken;
+            idToken.clear();
+        }
+    }
     VerifyResult vr;
     if (!accessToken.empty()) {
         if (provider != "facebook") {
@@ -1139,6 +1208,7 @@ Json OctiHttpServer::Impl::seatJson(const SeatView &s)
 Json OctiHttpServer::Impl::roomViewJson(const RoomView &v)
 {
     Json j = configJson(v.config);
+    j["ok"] = true;
     j["live"] = true;
     j["room_id"] = v.roomId;
     j["phase"] = toString(v.phase);
@@ -1157,6 +1227,7 @@ Json OctiHttpServer::Impl::roomViewJson(const RoomView &v)
     }
     j["observers"] = obs;
     j["observer_count"] = static_cast<int>(v.observerIds.size());
+    j["observer_handles"] = v.observerHandles;
     j["fen"] = v.fen;
     j["turn_seat"] = v.turnSeat;
     j["ply_count"] = v.plyCount;
@@ -1546,6 +1617,312 @@ void OctiHttpServer::Impl::handleHealth(const Request &, Response &res)
     sendJson(res, 200, j);
 }
 
+void OctiHttpServer::Impl::handlePrivacy(const Request &, Response &res)
+{
+    res.status = 200;
+    res.set_header("Content-Type", "text/html; charset=utf-8");
+    res.set_header("Cache-Control", "public, max-age=86400");
+    res.set_content(
+        "<!DOCTYPE html>\n"
+        "<html lang=\"en\">\n"
+        "<head>\n"
+        "<meta charset=\"utf-8\">\n"
+        "<title>OCTI - Privacy &amp; Data Deletion Policy</title>\n"
+        "<style>body{font-family:sans-serif;max-width:800px;margin:40px auto;line-height:1.6;padding:0 20px;color:#333;}\n"
+        "h1,h2{color:#111;}code{background:#f4f4f4;padding:2px 6px;border-radius:4px;}</style>\n"
+        "</head>\n"
+        "<body>\n"
+        "<h1>OCTI Privacy &amp; Data Deletion Policy</h1>\n"
+        "<p>Last updated: 2026</p>\n"
+        "<h2>1. Data Collection &amp; Use</h2>\n"
+        "<p>OCTI collects minimal public profile information through single sign-on (Google, Apple, Microsoft, Facebook, LINE), "
+        "including your display name, email, avatar URL, and provider-specific subject identifier. Passwords are never collected or stored.</p>\n"
+        "<h2>2. Game Telemetry &amp; Analytics</h2>\n"
+        "<p>Online and uploaded game transcripts (board moves, game results, ELO ratings) are archived for leaderboards, replays, and AI research under CC-BY-4.0.</p>\n"
+        "<h2>3. Data Deletion &amp; Account Unlinking</h2>\n"
+        "<p>Players can unlink single sign-on identities via the in-app Account Settings tab or delete client-uploaded transcripts by calling the telemetry erasure endpoint with their install ID. "
+        "To request complete deletion of your account and associated profile data, contact samurai@selfso.com.</p>\n"
+        "</body>\n"
+        "</html>\n",
+        "text/html; charset=utf-8");
+}
+
+void OctiHttpServer::Impl::handleDataDeletion(const Request &req, Response &res)
+{
+    std::string code = AccountStore::sha256Hex(std::to_string(epochSec()) + ":" + req.body).substr(0, 12);
+    Json j;
+    j["url"] = "https://octi.selfso.com/privacy/?confirmation_code=" + code;
+    j["confirmation_code"] = code;
+    sendJson(res, 200, j);
+}
+
+void OctiHttpServer::Impl::handleAuthAuthorize(const Request &req, Response &res)
+{
+    std::string provider = req.get_param_value("provider");
+    if (provider != "google" && provider != "facebook") {
+        sendError(res, 400, "UNSUPPORTED_PROVIDER", "unsupported provider");
+        return;
+    }
+
+    if (!verifier.isProviderEnabled(provider)) {
+        sendError(res, 503, "SSO_PROVIDER_NOT_CONFIGURED", "SSO provider is not enabled");
+        return;
+    }
+
+    std::map<std::string, std::vector<std::string>>::const_iterator it =
+        cfg.providerClientIds.find(provider);
+    if (it == cfg.providerClientIds.end() || it->second.empty() || it->second[0].empty()) {
+        sendError(res, 503, "SSO_PROVIDER_NOT_CONFIGURED", "SSO provider client_id not configured");
+        return;
+    }
+    const std::string &clientId = it->second[0];
+
+    std::string redirectUri = "/#account";
+    if (req.has_param("redirect_uri")) {
+        redirectUri = req.get_param_value("redirect_uri");
+    }
+
+    bool redirectValid = false;
+    if (!redirectUri.empty() && redirectUri[0] == '/' && (redirectUri.size() == 1 || redirectUri[1] != '/')) {
+        redirectValid = true;
+    } else if (redirectUri == "octi://auth/callback" || redirectUri == "octi://callback") {
+        redirectValid = true;
+    } else if (redirectUri.rfind("http://127.0.0.1:", 0) == 0 || redirectUri.rfind("http://localhost:", 0) == 0) {
+        size_t colon = redirectUri.find(':', 7);
+        if (colon != std::string::npos) {
+            size_t slash = redirectUri.find('/', colon);
+            if (slash != std::string::npos) {
+                std::string portStr = redirectUri.substr(colon + 1, slash - (colon + 1));
+                int64_t portNum = 0;
+                if (parseUnsignedStrict(portStr, 65535, portNum) && portNum >= 1) {
+                    std::string pathPart = redirectUri.substr(slash);
+                    if (pathPart == "/callback" || pathPart == "/oauth/callback") {
+                        redirectValid = true;
+                    }
+                }
+            }
+        }
+    }
+    if (!redirectValid) {
+        sendError(res, 400, "INVALID_REDIRECT_URI", "invalid redirect_uri");
+        return;
+    }
+
+    int64_t now = epochSec();
+    std::string host = req.get_header_value("Host");
+    if (host.empty()) {
+        host = cfg.bindAddress + ":" + std::to_string(boundPort.load());
+    }
+    std::string proto = req.get_header_value("X-Forwarded-Proto");
+    if (proto.empty()) {
+        proto = (host.find("selfso.com") != std::string::npos) ? "https" : "http";
+    }
+    std::string callbackUrl = proto + "://" + host + "/api/v1/auth/callback";
+
+    Json stateObj;
+    stateObj["provider"] = provider;
+    stateObj["redirect_uri"] = redirectUri;
+    stateObj["callback_url"] = callbackUrl;
+    stateObj["nonce"] = AccountStore::sha256Hex(std::to_string(steadyMs()) + ":" + redirectUri);
+    stateObj["exp"] = now + 600;
+
+    std::string statePayload = stateObj.dump();
+    std::string stateB64 = base64UrlEncode(statePayload);
+    std::string sig = hmacSha256(stateB64, kOauthStateSecret);
+    std::string sigB64 = base64UrlEncode(sig);
+    std::string stateParam = stateB64 + "." + sigB64;
+
+    std::string authUrl;
+    if (provider == "google") {
+        authUrl = "https://accounts.google.com/o/oauth2/v2/auth?client_id=" +
+                  urlEncode(clientId) +
+                  "&response_type=code&scope=openid%20email%20profile&redirect_uri=" +
+                  urlEncode(callbackUrl) + "&state=" + urlEncode(stateParam);
+    } else {
+        authUrl = "https://www.facebook.com/v19.0/dialog/oauth?client_id=" +
+                  urlEncode(clientId) +
+                  "&response_type=code&scope=public_profile,email&redirect_uri=" +
+                  urlEncode(callbackUrl) + "&state=" + urlEncode(stateParam);
+    }
+
+    res.status = 302;
+    res.set_header("Location", authUrl);
+    res.set_header("Cache-Control", "no-store");
+}
+
+void OctiHttpServer::Impl::handleAuthCallback(const Request &req, Response &res)
+{
+    std::string stateParam = req.get_param_value("state");
+    size_t dot = stateParam.find('.');
+    if (dot == std::string::npos) {
+        sendError(res, 400, "INVALID_OAUTH_STATE", "invalid state parameter");
+        return;
+    }
+
+    std::string stateB64 = stateParam.substr(0, dot);
+    std::string sigB64 = stateParam.substr(dot + 1);
+    std::string sig;
+    if (!base64UrlDecode(sigB64, sig)) {
+        sendError(res, 400, "INVALID_OAUTH_STATE", "malformed state signature");
+        return;
+    }
+    std::string expectedSig = hmacSha256(stateB64, kOauthStateSecret);
+    if (sig != expectedSig) {
+        sendError(res, 400, "INVALID_OAUTH_STATE", "state signature mismatch");
+        return;
+    }
+
+    std::string payloadJson;
+    if (!base64UrlDecode(stateB64, payloadJson)) {
+        sendError(res, 400, "INVALID_OAUTH_STATE", "malformed state payload");
+        return;
+    }
+    Json stateObj = Json::parse(payloadJson, nullptr, false);
+    if (stateObj.is_discarded() || !stateObj.is_object()) {
+        sendError(res, 400, "INVALID_OAUTH_STATE", "invalid state JSON");
+        return;
+    }
+
+    int64_t exp = stateObj.value("exp", 0LL);
+    if (exp < epochSec()) {
+        sendError(res, 400, "INVALID_OAUTH_STATE", "state has expired");
+        return;
+    }
+
+    std::string provider = stateObj.value("provider", "");
+    std::string redirectUri = stateObj.value("redirect_uri", "/#account");
+    std::string callbackUrl = stateObj.value("callback_url", "https://octi.selfso.com/api/v1/auth/callback");
+
+    std::string idToken = req.get_param_value("id_token");
+    std::string accessToken = req.get_param_value("access_token");
+    std::string code = req.get_param_value("code");
+
+    if (!code.empty() && idToken.empty() && accessToken.empty()) {
+        int dots = 0;
+        for (size_t i = 0; i < code.size(); ++i) {
+            if (code[i] == '.') {
+                ++dots;
+            }
+        }
+        if (dots >= 2) {
+            idToken = code;
+        } else {
+            std::string clientId;
+            std::map<std::string, std::vector<std::string>>::const_iterator cit =
+                cfg.providerClientIds.find(provider);
+            if (cit != cfg.providerClientIds.end() && !cit->second.empty()) {
+                clientId = cit->second[0];
+            }
+            std::string clientSecret;
+            std::map<std::string, std::string>::const_iterator sit =
+                cfg.providerClientSecrets.find(provider);
+            if (sit != cfg.providerClientSecrets.end()) {
+                clientSecret = sit->second;
+            }
+            if (!clientId.empty() && !clientSecret.empty()) {
+                if (provider == "google") {
+                    httplib::SSLClient gcli("oauth2.googleapis.com", 443);
+                    gcli.enable_server_certificate_verification(true);
+                    gcli.set_connection_timeout(5, 0);
+                    gcli.set_read_timeout(5, 0);
+                    httplib::Params params{
+                        {"code", code},
+                        {"client_id", clientId},
+                        {"client_secret", clientSecret},
+                        {"redirect_uri", callbackUrl},
+                        {"grant_type", "authorization_code"}
+                    };
+                    if (auto gres = gcli.Post("/token", params)) {
+                        Json tj = Json::parse(gres->body, nullptr, false);
+                        if (tj.is_object() && tj.contains("id_token") && tj["id_token"].is_string()) {
+                            idToken = tj["id_token"].get<std::string>();
+                        }
+                    }
+                } else if (provider == "facebook") {
+                    httplib::SSLClient fbcli("graph.facebook.com", 443);
+                    fbcli.enable_server_certificate_verification(true);
+                    fbcli.set_connection_timeout(5, 0);
+                    fbcli.set_read_timeout(5, 0);
+                    std::string fbPath = "/v19.0/oauth/access_token?client_id=" + urlEncode(clientId) +
+                                         "&redirect_uri=" + urlEncode(callbackUrl) +
+                                         "&client_secret=" + urlEncode(clientSecret) +
+                                         "&code=" + urlEncode(code);
+                    if (auto fbres = fbcli.Get(fbPath.c_str())) {
+                        Json tj = Json::parse(fbres->body, nullptr, false);
+                        if (tj.is_object() && tj.contains("access_token") && tj["access_token"].is_string()) {
+                            accessToken = tj["access_token"].get<std::string>();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (provider == "facebook" && accessToken.empty() && !idToken.empty()) {
+        int dots = 0;
+        for (size_t i = 0; i < idToken.size(); ++i) {
+            if (idToken[i] == '.') {
+                ++dots;
+            }
+        }
+        if (dots < 2) {
+            accessToken = idToken;
+            idToken.clear();
+        }
+    }
+
+    VerifyResult vr;
+    if (!accessToken.empty()) {
+        if (provider != "facebook") {
+            sendError(res, 400, "INVALID_ARGUMENT", "access_token is only accepted for facebook");
+            return;
+        }
+        vr = verifier.verifyFacebookAccessToken(accessToken);
+    } else if (!idToken.empty()) {
+        vr = verifier.verifyIdToken(provider, idToken);
+    } else if (!code.empty()) {
+        vr = verifier.verifyIdToken(provider, code);
+    } else {
+        sendError(res, 400, "INVALID_ARGUMENT", "missing id_token or access_token");
+        return;
+    }
+
+    if (!vr.ok()) {
+        sendError(res, statusForVerify(vr.status), verifyStatusName(vr.status), vr.detail);
+        return;
+    }
+
+    LoginResult lr = store.loginWithSso(vr.claims, "octi-oauth-broker/1.0");
+    if (!lr.ok) {
+        sendError(res, 500, "INTERNAL_ERROR", "sign-in failed");
+        return;
+    }
+    rooms.enterLobby(lr.profile.playerId);
+
+    std::string targetLoc;
+    std::string isNewStr = lr.created ? "true" : "false";
+    if (redirectUri.rfind("http://127.0.0.1:", 0) == 0 ||
+        redirectUri.rfind("http://localhost:", 0) == 0 ||
+        redirectUri.rfind("octi://", 0) == 0) {
+        std::string rawTok = !idToken.empty() ? idToken : (!accessToken.empty() ? accessToken : code);
+        targetLoc = redirectUri + (redirectUri.find('?') != std::string::npos ? "&" : "?") +
+                    "id_token=" + urlEncode(rawTok) +
+                    "&auth_token=" + urlEncode(lr.sessionToken) +
+                    "&provider=" + urlEncode(provider) +
+                    "&is_new_account=" + isNewStr +
+                    "&handle=" + urlEncode(lr.profile.handle) +
+                    "&player_uuid=" + urlEncode(lr.profile.uuid);
+    } else {
+        targetLoc = "/#auth_token=" + urlEncode(lr.sessionToken) +
+                    "&provider=" + urlEncode(provider) +
+                    "&is_new_account=" + isNewStr;
+    }
+
+    res.status = 302;
+    res.set_header("Location", targetLoc);
+    res.set_header("Cache-Control", "no-store");
+}
+
 void OctiHttpServer::Impl::handleProviders(const Request &, Response &res)
 {
     Json arr = Json::array();
@@ -1775,13 +2152,18 @@ void OctiHttpServer::Impl::handleLink(const Request &req, Response &res)
     if (!verifyCredential(body, res, claims)) {
         return;
     }
-    LinkResult lr = store.linkIdentity(auth.playerId, claims);
+    bool forceRelink = false;
+    std::string err;
+    fieldBool(body, "force_relink", false, forceRelink, err);
+    LinkResult lr = store.linkIdentity(auth.playerId, claims, forceRelink);
     switch (lr.status) {
     case LinkStatus::LINKED:
     case LinkStatus::ALREADY_LINKED_SELF: {
         std::vector<LinkedIdentity> ids;
         store.listLinkedIdentities(auth.playerId, ids);
         Json j;
+        j["ok"] = true;
+        j["linked"] = lr.status == LinkStatus::LINKED;
         j["status"] = lr.status == LinkStatus::LINKED ? "linked"
                                                        : "already_linked";
         j["linked_identities"] = identitiesJson(ids);
@@ -1921,9 +2303,24 @@ void OctiHttpServer::Impl::handleProfilePatch(const Request &req,
             return;
         }
     }
-    if (!up.setHandle && !up.setDisplayName && !up.setAvatarUrl) {
+    if (fieldPresent(body, "bio")) {
+        up.setBio = true;
+        if (!fieldString(body, "bio", true, up.bio, err)) {
+            sendError(res, 400, "INVALID_ARGUMENT", err);
+            return;
+        }
+    }
+    if (fieldPresent(body, "location")) {
+        up.setLocation = true;
+        if (!fieldString(body, "location", true, up.location, err)) {
+            sendError(res, 400, "INVALID_ARGUMENT", err);
+            return;
+        }
+    }
+    if (!up.setHandle && !up.setDisplayName && !up.setAvatarUrl && !up.setBio &&
+        !up.setLocation) {
         sendError(res, 400, "INVALID_ARGUMENT",
-                  "nothing to update: send handle, display_name or avatar_url");
+                  "nothing to update: send handle, display_name, avatar_url, bio or location");
         return;
     }
     switch (store.updateProfile(auth.playerId, up)) {
@@ -1953,6 +2350,12 @@ void OctiHttpServer::Impl::handleProfilePatch(const Request &req,
     case UpdateStatus::INVALID_AVATAR_URL:
         sendError(res, 400, "INVALID_AVATAR_URL", "invalid avatar_url");
         return;
+    case UpdateStatus::INVALID_BIO:
+        sendError(res, 400, "INVALID_BIO", "invalid bio");
+        return;
+    case UpdateStatus::INVALID_LOCATION:
+        sendError(res, 400, "INVALID_LOCATION", "invalid location");
+        return;
     case UpdateStatus::ERROR:
         break;
     }
@@ -1961,28 +2364,352 @@ void OctiHttpServer::Impl::handleProfilePatch(const Request &req,
 
 void OctiHttpServer::Impl::handlePlayer(const Request &req, Response &res)
 {
-    std::string uuid;
-    if (!pathId(req, "uuid", res, uuid)) {
-        return;
+    handleUserGet(req, res);
+}
+
+void OctiHttpServer::Impl::handleUsersList(const Request &req, Response &res)
+{
+    UserDirectoryFilter filter;
+    if (req.has_param("q")) {
+        filter.query = req.get_param_value("q");
     }
-    PlayerProfile p;
-    if (!store.getProfileByUuid(uuid, p)) {
-        sendError(res, 404, "NOT_FOUND", "no such player");
-        return;
+    if (req.has_param("sort")) {
+        filter.sortField = req.get_param_value("sort");
     }
-    Json j = profileJson(p, false);
-    ArchiveFilter f;
-    f.playerUuid = uuid;
-    f.limit = 10;
-    std::vector<GameRecord> games;
-    Json recent = Json::array();
-    if (store.listArchivedGames(f, games)) {
-        for (size_t i = 0; i < games.size(); ++i) {
-            recent.push_back(gameSummaryJson(games[i]));
+    if (filter.sortField.empty()) {
+        filter.sortField = "elo_2p";
+    }
+    if (req.has_param("order")) {
+        std::string ord = lower(req.get_param_value("order"));
+        if (ord == "asc") {
+            filter.sortAsc = true;
+        } else if (ord == "desc") {
+            filter.sortAsc = false;
         }
     }
-    j["recent_games"] = recent;
+    int64_t limit = 50;
+    if (req.has_param("limit")) {
+        if (!parseUnsignedClamped(req.get_param_value("limit"), 100, limit) || limit < 1) {
+            sendError(res, 400, "INVALID_ARGUMENT", "limit must be a positive integer");
+            return;
+        }
+    }
+    filter.limit = static_cast<int>(std::max<int64_t>(1, std::min<int64_t>(limit, 100)));
+
+    int64_t offset = 0;
+    if (req.has_param("offset")) {
+        if (!parseUnsignedClamped(req.get_param_value("offset"), INT64_MAX, offset) || offset < 0) {
+            sendError(res, 400, "INVALID_ARGUMENT", "offset must be a non-negative integer");
+            return;
+        }
+    }
+    filter.offset = static_cast<int>(offset);
+
+    std::vector<UserDirectoryEntry> entries;
+    int64_t total = 0;
+    if (!store.listUsers(filter, entries, &total)) {
+        sendError(res, 500, "INTERNAL_ERROR", "failed to list users");
+        return;
+    }
+
+    Json usersArr = Json::array();
+    for (size_t i = 0; i < entries.size(); ++i) {
+        const auto &e = entries[i];
+        Json uj;
+        uj["uuid"] = e.profile.uuid;
+        uj["handle"] = e.profile.handle;
+        uj["display_name"] = e.profile.displayName;
+        uj["avatar_url"] = e.profile.avatarUrl;
+        uj["location"] = e.profile.location;
+        uj["bio"] = e.profile.bio;
+        uj["elo_2p"] = e.profile.elo2p;
+        uj["elo_4p"] = e.profile.elo4p;
+        uj["elo_ofk"] = e.profile.eloOfk;
+        uj["games_played"] = e.profile.gamesPlayed;
+        uj["wins"] = e.profile.wins;
+        uj["losses"] = e.profile.losses;
+        uj["draws"] = e.profile.draws;
+        uj["active_robots_count"] = e.activeRobotsCount;
+        uj["created_at"] = e.profile.createdAt;
+        uj["last_seen_at"] = e.profile.lastSeenAt;
+        usersArr.push_back(uj);
+    }
+
+    Json j;
+    j["total"] = total;
+    j["limit"] = filter.limit;
+    j["offset"] = filter.offset;
+    j["users"] = usersArr;
     sendJson(res, 200, j);
+}
+
+void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
+{
+    std::string id;
+    std::unordered_map<std::string, std::string>::const_iterator it =
+        req.path_params.find("id");
+    if (it == req.path_params.end()) {
+        it = req.path_params.find("uuid");
+    }
+    if (it == req.path_params.end() || !isSafeId(it->second)) {
+        sendError(res, 404, "NOT_FOUND", "no such resource");
+        return;
+    }
+    id = it->second;
+
+    PlayerProfile prof;
+    bool found = store.getProfileByUuid(id, prof);
+    if (!found) {
+        std::string h = id;
+        if (!h.empty() && h[0] == '@') {
+            h = h.substr(1);
+        }
+        found = store.getProfileByHandle(h, prof);
+    }
+    if (!found || prof.banned) {
+        sendError(res, 404, "NOT_FOUND", "no such user");
+        return;
+    }
+
+    std::vector<RobotRecord> robots;
+    store.listPublicRobotsByOwner(prof.playerId, robots);
+    Json robotsArr = Json::array();
+    for (size_t i = 0; i < robots.size(); ++i) {
+        const auto &r = robots[i];
+        Json rj;
+        rj["robot_uuid"] = r.robotUuid;
+        rj["robot_name"] = r.robotName;
+        rj["description"] = r.description;
+        rj["created_at"] = r.createdAt;
+        robotsArr.push_back(rj);
+    }
+
+    ArchiveFilter af;
+    af.playerUuid = prof.uuid;
+    af.limit = 20;
+    af.offset = 0;
+    std::vector<GameRecord> games;
+    store.listArchivedGames(af, games, nullptr);
+    Json gamesArr = Json::array();
+    for (size_t i = 0; i < games.size(); ++i) {
+        const auto &g = games[i];
+        Json gj;
+        gj["game_id"] = g.gameId;
+        gj["mode"] = g.gameMode;
+        gj["p1_handle"] = g.p1Handle;
+        gj["p2_handle"] = g.p2Handle;
+        gj["p3_handle"] = g.p3Handle;
+        gj["p4_handle"] = g.p4Handle;
+        gj["result"] = g.result;
+        gj["winner"] = g.winner;
+        gj["winner_seat"] = g.winnerSeat;
+        gj["termination"] = g.termination;
+        gj["ply_count"] = g.plyCount;
+        gj["ended_at"] = g.endedAt;
+
+        int mySeat = 0;
+        if (prof.playerId > 0 && prof.playerId == g.p1PlayerId) mySeat = 1;
+        else if (prof.playerId > 0 && prof.playerId == g.p2PlayerId) mySeat = 2;
+        else if (prof.playerId > 0 && prof.playerId == g.p3PlayerId) mySeat = 3;
+        else if (prof.playerId > 0 && prof.playerId == g.p4PlayerId) mySeat = 4;
+        else if (!prof.handle.empty() && prof.handle == g.p1Handle) mySeat = 1;
+        else if (!prof.handle.empty() && prof.handle == g.p2Handle) mySeat = 2;
+        else if (!prof.handle.empty() && prof.handle == g.p3Handle) mySeat = 3;
+        else if (!prof.handle.empty() && prof.handle == g.p4Handle) mySeat = 4;
+
+        std::string outcome = "DRAW";
+        if (g.result == "DRAW" || (g.winnerSeat == 0 && g.winner == "NONE")) {
+            outcome = "DRAW";
+        } else if (g.result == "TEAM_13_WIN") {
+            outcome = (mySeat == 1 || mySeat == 3) ? "WIN" : "LOSS";
+        } else if (g.result == "TEAM_24_WIN") {
+            outcome = (mySeat == 2 || mySeat == 4) ? "WIN" : "LOSS";
+        } else if (g.winnerSeat > 0) {
+            outcome = (mySeat == g.winnerSeat) ? "WIN" : "LOSS";
+        } else if (g.winner == "A") {
+            outcome = (mySeat == 1) ? "WIN" : "LOSS";
+        } else if (g.winner == "B") {
+            outcome = (mySeat == 2) ? "WIN" : "LOSS";
+        } else if (g.winner == "C") {
+            outcome = (mySeat == 3) ? "WIN" : "LOSS";
+        } else if (g.winner == "D") {
+            outcome = (mySeat == 4) ? "WIN" : "LOSS";
+        }
+        gj["player_outcome"] = outcome;
+        gamesArr.push_back(gj);
+    }
+
+    Json j = profileJson(prof, true);
+    j["profile"] = profileJson(prof, true);
+    j["robots"] = robotsArr;
+    j["recent_games"] = gamesArr;
+    sendJson(res, 200, j);
+}
+
+void OctiHttpServer::Impl::handleRobotsList(const Request &req, Response &res)
+{
+    Auth auth;
+    if (!requireAuth(req, res, auth)) {
+        return;
+    }
+    std::vector<RobotRecord> robots;
+    if (!store.listRobots(auth.playerId, robots)) {
+        sendError(res, 500, "INTERNAL_ERROR", "failed to list robots");
+        return;
+    }
+    int activeCount = 0;
+    Json arr = Json::array();
+    for (size_t i = 0; i < robots.size(); ++i) {
+        const auto &r = robots[i];
+        if (!r.revoked) {
+            ++activeCount;
+        }
+        Json rj;
+        rj["robot_uuid"] = r.robotUuid;
+        rj["robot_name"] = r.robotName;
+        rj["description"] = r.description;
+        rj["owner_uuid"] = r.ownerUuid;
+        rj["owner_handle"] = r.ownerHandle;
+        rj["robot_token"] = r.token;
+        rj["token_prefix"] = r.tokenPrefix;
+        rj["created_at"] = r.createdAt;
+        rj["revoked"] = r.revoked;
+        rj["revoked_at"] = r.revokedAt;
+        arr.push_back(rj);
+    }
+    Json j;
+    j["max_robots"] = kMaxRobotsPerPlayer;
+    j["active_count"] = activeCount;
+    j["robots"] = arr;
+    sendJson(res, 200, j);
+}
+
+void OctiHttpServer::Impl::handleRobotCreate(const Request &req, Response &res)
+{
+    Auth auth;
+    if (!requireAuth(req, res, auth)) {
+        return;
+    }
+    Json body;
+    if (!readJsonBody(req, res, body, false)) {
+        return;
+    }
+    std::string name;
+    std::string err;
+    if (fieldPresent(body, "robot_name")) {
+        fieldString(body, "robot_name", false, name, err);
+    } else if (fieldPresent(body, "name")) {
+        fieldString(body, "name", false, name, err);
+    }
+    if (name.empty()) {
+        sendError(res, 400, "INVALID_ROBOT_NAME", "missing robot_name");
+        return;
+    }
+    std::string desc;
+    fieldString(body, "description", false, desc, err);
+
+    CreateRobotResult cr = store.createRobot(auth.playerId, name, desc);
+    switch (cr.status) {
+    case RobotStatus::OK: {
+        Json j;
+        j["robot_uuid"] = cr.robot.robotUuid;
+        j["robot_name"] = cr.robot.robotName;
+        j["description"] = cr.robot.description;
+        j["owner_uuid"] = cr.robot.ownerUuid;
+        j["owner_handle"] = cr.robot.ownerHandle;
+        j["robot_token"] = cr.rawToken;
+        j["token_prefix"] = cr.robot.tokenPrefix;
+        j["created_at"] = cr.robot.createdAt;
+        j["revoked"] = cr.robot.revoked;
+        sendJson(res, 201, j);
+        return;
+    }
+    case RobotStatus::INVALID_ROBOT_NAME:
+        sendError(res, 400, "INVALID_ROBOT_NAME",
+                  cr.errorMessage.empty() ? "invalid robot name" : cr.errorMessage);
+        return;
+    case RobotStatus::INVALID_ROBOT_DESCRIPTION:
+        sendError(res, 400, "INVALID_ROBOT_DESCRIPTION",
+                  cr.errorMessage.empty() ? "invalid robot description" : cr.errorMessage);
+        return;
+    case RobotStatus::ROBOT_NAME_TAKEN:
+        sendError(res, 409, "ROBOT_NAME_TAKEN", "robot name already taken");
+        return;
+    case RobotStatus::ROBOT_LIMIT_REACHED:
+        sendError(res, 409, "ROBOT_LIMIT_REACHED", "robot limit reached (max 3)");
+        return;
+    default:
+        break;
+    }
+    sendError(res, 500, "INTERNAL_ERROR", "failed to create robot");
+}
+
+void OctiHttpServer::Impl::handleRobotPatch(const Request &req, Response &res)
+{
+    Auth auth;
+    std::string id;
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+        return;
+    }
+    Json body;
+    if (!readJsonBody(req, res, body, false)) {
+        return;
+    }
+    std::string desc;
+    std::string err;
+    if (!fieldString(body, "description", true, desc, err)) {
+        sendError(res, 400, "INVALID_ARGUMENT", err);
+        return;
+    }
+    RobotStatus st = store.updateRobotDescription(auth.playerId, id, desc);
+    switch (st) {
+    case RobotStatus::OK: {
+        Json j;
+        j["updated"] = true;
+        j["robot_uuid"] = id;
+        j["description"] = desc;
+        sendJson(res, 200, j);
+        return;
+    }
+    case RobotStatus::INVALID_ROBOT_DESCRIPTION:
+        sendError(res, 400, "INVALID_ROBOT_DESCRIPTION", "invalid robot description");
+        return;
+    case RobotStatus::NOT_FOUND:
+        sendError(res, 404, "NOT_FOUND", "robot not found");
+        return;
+    default:
+        break;
+    }
+    sendError(res, 500, "INTERNAL_ERROR", "failed to update robot");
+}
+
+void OctiHttpServer::Impl::handleRobotDelete(const Request &req, Response &res)
+{
+    Auth auth;
+    std::string id;
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+        return;
+    }
+    RobotStatus st = store.revokeRobot(auth.playerId, id);
+    switch (st) {
+    case RobotStatus::OK: {
+        Json j;
+        j["revoked"] = true;
+        j["id"] = id;
+        j["robot_uuid"] = id;
+        sendJson(res, 200, j);
+        return;
+    }
+    case RobotStatus::NOT_FOUND:
+        sendError(res, 404, "NOT_FOUND", "robot not found");
+        return;
+    case RobotStatus::ALREADY_REVOKED:
+        sendError(res, 409, "ALREADY_REVOKED", "robot is already revoked");
+        return;
+    default:
+        break;
+    }
+    sendError(res, 500, "INTERNAL_ERROR", "failed to revoke robot");
 }
 
 void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
@@ -2052,10 +2779,15 @@ void OctiHttpServer::Impl::finishRoom(Response &res, const RoomResult &r,
 void OctiHttpServer::Impl::handleLobbyState(const Request &req, Response &res)
 {
     Auth auth;
-    if (!requireAuth(req, res, auth)) {
+    if (!optionalAuth(req, res, auth)) {
         return;
     }
-    rooms.enterLobby(auth.playerId);
+    if (auth.playerId == 0) {
+        int64_t viewerId = rooms.ensureAnonymousObserver(req.remote_addr);
+        rooms.enterLobby(viewerId);
+    } else {
+        rooms.enterLobby(auth.playerId);
+    }
     LobbySnapshot snap = rooms.lobbyState();
     Json j;
     Json players = Json::array();
@@ -2105,10 +2837,12 @@ void OctiHttpServer::Impl::handleLobbyEvents(const Request &req,
                                              Response &res)
 {
     Auth auth;
-    if (!requireAuth(req, res, auth)) {
+    if (!optionalAuth(req, res, auth)) {
         return;
     }
-    const int64_t viewer = auth.playerId;
+    const int64_t viewer = (auth.playerId > 0)
+                               ? auth.playerId
+                               : rooms.ensureAnonymousObserver(req.remote_addr);
     PollFn fetch = [this, viewer](int64_t since, size_t limit,
                                   PollBatch &out) -> int {
         LobbyPoll poll = rooms.pollLobbyEvents(viewer, since, limit);
@@ -2239,13 +2973,20 @@ void OctiHttpServer::Impl::handleTableObserve(const Request &req,
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!pathId(req, "id", res, id) || !optionalAuth(req, res, auth)) {
         return;
     }
-    RoomResult r = rooms.observeRoom(id, auth.playerId);
-    Json j;
-    j["room_id"] = r.roomId;
-    finishRoom(res, r, j);
+    int64_t viewerId = (auth.playerId > 0)
+                           ? auth.playerId
+                           : rooms.ensureAnonymousObserver(req.remote_addr);
+    RoomResult r = rooms.observeRoom(id, viewerId);
+    if (!r.ok()) {
+        sendRoomError(res, r);
+        return;
+    }
+    RoomView view;
+    rooms.getRoomView(id, viewerId, view);
+    sendJson(res, 200, roomViewJson(view));
 }
 
 void OctiHttpServer::Impl::handleTableUnobserve(const Request &req,
@@ -2253,10 +2994,13 @@ void OctiHttpServer::Impl::handleTableUnobserve(const Request &req,
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!pathId(req, "id", res, id) || !optionalAuth(req, res, auth)) {
         return;
     }
-    finishRoom(res, rooms.stopObserving(id, auth.playerId), Json::object());
+    int64_t viewerId = (auth.playerId > 0)
+                           ? auth.playerId
+                           : rooms.ensureAnonymousObserver(req.remote_addr);
+    finishRoom(res, rooms.stopObserving(id, viewerId), Json::object());
 }
 
 void OctiHttpServer::Impl::handleEnqueue(const Request &req, Response &res)
@@ -2326,8 +3070,11 @@ void OctiHttpServer::Impl::handleGameGet(const Request &req, Response &res)
     if (!pathId(req, "id", res, id) || !optionalAuth(req, res, auth)) {
         return;
     }
+    const int64_t viewerId = (auth.playerId > 0)
+                                 ? auth.playerId
+                                 : rooms.ensureAnonymousObserver(req.remote_addr);
     RoomView view;
-    RoomResult r = rooms.getRoomView(id, auth.playerId, view);
+    RoomResult r = rooms.getRoomView(id, viewerId, view);
     if (r.code == RoomCode::NOT_FOUND) {
         GameRecord rec;
         if (store.getArchivedGame(id, rec)) {
@@ -2677,7 +3424,9 @@ void OctiHttpServer::Impl::handleGameEvents(const Request &req, Response &res)
     if (!pathId(req, "id", res, id) || !optionalAuth(req, res, auth)) {
         return;
     }
-    const int64_t viewer = auth.playerId;
+    const int64_t viewer = (auth.playerId > 0)
+                               ? auth.playerId
+                               : rooms.ensureAnonymousObserver(req.remote_addr);
     PollFn fetch = [this, id, viewer](int64_t since, size_t limit,
                                       PollBatch &out) -> int {
         RoomPoll poll;
@@ -4003,14 +4752,30 @@ void OctiHttpServer::Impl::registerRoutes()
     };
     static const Route routes[] = {
         {"GET", "/", &Impl::handleIndex},
+        {"GET", "/privacy", &Impl::handlePrivacy},
+        {"POST", "/privacy", &Impl::handleDataDeletion},
         {"GET", "/api/v1/health", &Impl::handleHealth},
+        {"GET", "/api/v1/auth/data-deletion", &Impl::handleDataDeletion},
+        {"POST", "/api/v1/auth/data-deletion", &Impl::handleDataDeletion},
+        {"GET", "/api/v1/auth/authorize", &Impl::handleAuthAuthorize},
+        {"GET", "/api/v1/auth/callback", &Impl::handleAuthCallback},
         {"GET", "/api/v1/auth/providers", &Impl::handleProviders},
         {"POST", "/api/v1/auth/sso", &Impl::handleSso},
         {"POST", "/api/v1/auth/link", &Impl::handleLink},
         {"DELETE", "/api/v1/auth/link/:provider", &Impl::handleUnlink},
         {"POST", "/api/v1/auth/logout", &Impl::handleLogout},
         {"GET", "/api/v1/profile/me", &Impl::handleProfileGet},
+        {"GET", "/api/v1/profile", &Impl::handleProfileGet},
         {"PATCH", "/api/v1/profile/me", &Impl::handleProfilePatch},
+        {"PATCH", "/api/v1/profile", &Impl::handleProfilePatch},
+        {"GET", "/api/v1/profile/:id", &Impl::handleUserGet},
+        {"GET", "/api/v1/users", &Impl::handleUsersList},
+        {"GET", "/api/v1/users/:id", &Impl::handleUserGet},
+        {"GET", "/api/v1/robots", &Impl::handleRobotsList},
+        {"POST", "/api/v1/robots", &Impl::handleRobotCreate},
+        {"PATCH", "/api/v1/robots/:id", &Impl::handleRobotPatch},
+        {"DELETE", "/api/v1/robots/:id", &Impl::handleRobotDelete},
+        {"POST", "/api/v1/robots/:id/revoke", &Impl::handleRobotDelete},
         {"GET", "/api/v1/players/:uuid", &Impl::handlePlayer},
         {"GET", "/api/v1/leaderboard", &Impl::handleLeaderboard},
         {"GET", "/api/v1/lobby/state", &Impl::handleLobbyState},
@@ -4124,7 +4889,9 @@ void OctiHttpServer::Impl::registerRoutes()
             }
 
             if (rq.method == "GET" || rq.method == "HEAD" ||
-                rq.method == "OPTIONS") {
+                rq.method == "OPTIONS" ||
+                rq.path == "/api/v1/auth/data-deletion" ||
+                rq.path == "/privacy") {
                 return httplib::Server::HandlerResponse::Unhandled;
             }
             const bool hasBody = rq.get_header_value("Content-Length") != "" ||

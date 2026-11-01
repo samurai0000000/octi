@@ -289,6 +289,7 @@ struct RoomView {
     int viewerSeat = 0;             // 0 when the viewer is not seated
     std::vector<SeatView> seats;
     std::vector<int64_t> observerIds;
+    std::vector<std::string> observerHandles;
     std::string fen;
     int turnSeat = 0;               // 0 when no one is to move
     int plyCount = 0;
@@ -315,6 +316,7 @@ struct TableSummary {
     int seatsFilled = 0;
     std::vector<std::string> playerHandles;
     int observerCount = 0;
+    std::vector<std::string> observerHandles;
 };
 
 /* ------------------------------------------------------------------ */
@@ -522,6 +524,8 @@ public:
     /* Number of players currently online (cheap; no snapshot is built). */
     size_t onlinePlayerCount() const;
 
+    int64_t ensureAnonymousObserver(const std::string &ipAddress);
+
 private:
     struct Room;
     struct PlayerInfo {
@@ -613,6 +617,8 @@ private:
     std::map<int64_t, std::set<std::string>> _observing;
     std::map<int64_t, std::string> _matchAssignments;
     std::map<int64_t, std::deque<int64_t>> _lobbyChatTimes;
+    std::map<std::string, int64_t> _anonIpToId;
+    int64_t _nextAnonId = -1;
 
     std::deque<LobbyEvent> _lobbyEvents;
     int64_t _lobbySeq;
