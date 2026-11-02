@@ -742,6 +742,7 @@ struct OctiHttpServer::Impl {
     void handleTelemetryCrashes(const Request &req, Response &res);
     void handleTelemetryCrashGet(const Request &req, Response &res);
     bool pathCrashId(const Request &req, Response &res, std::string &out);
+    void handleFavicon(const Request &req, Response &res);
     void handleIndex(const Request &req, Response &res);
 
     void finishRoom(Response &res, const RoomResult &r, Json body);
@@ -4743,12 +4744,19 @@ void OctiHttpServer::Impl::handleArchiveExport(const Request &req, Response &res
     res.set_content(ndjson, "application/x-ndjson; charset=utf-8");
 }
 
+void OctiHttpServer::Impl::handleFavicon(const Request &, Response &res)
+{
+    res.status = 204;
+    res.set_header("Cache-Control", "public, max-age=86400");
+}
+
 void OctiHttpServer::Impl::handleIndex(const Request &, Response &res)
 {
     res.status = 200;
     res.set_header("Cache-Control", "no-cache");
     res.set_header("Content-Security-Policy",
                    "default-src 'none'; script-src 'unsafe-inline'; "
+                   "worker-src 'self' blob:; "
                    "style-src 'unsafe-inline'; connect-src 'self'; "
                    "img-src 'self' data:; base-uri 'none'; "
                    "form-action 'none'; frame-ancestors 'none'");
@@ -5039,6 +5047,7 @@ void OctiHttpServer::Impl::registerRoutes()
     };
     static const Route routes[] = {
         {"GET", "/", &Impl::handleIndex},
+        {"GET", "/favicon.ico", &Impl::handleFavicon},
         {"GET", "/health", &Impl::handleHealth},
         {"GET", "/privacy", &Impl::handlePrivacy},
         {"POST", "/privacy", &Impl::handleDataDeletion},

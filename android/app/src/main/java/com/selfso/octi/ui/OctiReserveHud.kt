@@ -139,17 +139,29 @@ fun OctiReserveHud(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     for (p in players) {
+                        val oppForCap = when (p) {
+                            OctiPlayer.PLAYER_A -> OctiPlayer.PLAYER_B
+                            OctiPlayer.PLAYER_B -> OctiPlayer.PLAYER_A
+                            OctiPlayer.PLAYER_C -> OctiPlayer.PLAYER_D
+                            OctiPlayer.PLAYER_D -> OctiPlayer.PLAYER_C
+                            else -> OctiPlayer.PLAYER_B
+                        }
+                        val capPodsHeld = game?.getCapturedPods(oppForCap) ?: 0
+                        val ownCapPods = game?.getCapturedPods(p) ?: 0
                         val activePlayerTurn = !isGameOver && (p == turn) && !viewModel.isViewingHistory()
+                        val canActiveLiberateFromThisCard = !isGameOver && !viewModel.isViewingHistory() &&
+                            (oppForCap == turn) && (capPodsHeld > 0)
                         PlayerReserveCard(
                             player = p,
                             isTurn = !isGameOver && (p == turn),
                             freePods = game?.getFreePods(p) ?: 0,
                             freeProngs = game?.getFreeProngs(p) ?: 0,
                             freeSuper = game?.getFreeSuperProngs(p) ?: 0,
-                            capPods = game?.getCapturedPods(p) ?: 0,
+                            capPods = capPodsHeld,
                             useSuperProngs = useSuperProngs,
                             pal = pal,
                             modifier = Modifier.weight(1f),
+                            ownCapPods = ownCapPods,
                             onStartPodPlacement = if (activePlayerTurn) {
                                 {
                                     viewModel.clearLastMoveIndicators()
@@ -158,7 +170,7 @@ fun OctiReserveHud(
                                     }
                                 }
                             } else null,
-                            onStartLiberatePlacement = if (activePlayerTurn) {
+                            onStartLiberatePlacement = if (canActiveLiberateFromThisCard) {
                                 {
                                     viewModel.clearLastMoveIndicators()
                                     if (viewModel.composer.beginLiberatePodFromReserve()) {
@@ -181,17 +193,29 @@ fun OctiReserveHud(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             for (p in rowPlayers) {
+                                val oppForCap = when (p) {
+                                    OctiPlayer.PLAYER_A -> OctiPlayer.PLAYER_B
+                                    OctiPlayer.PLAYER_B -> OctiPlayer.PLAYER_A
+                                    OctiPlayer.PLAYER_C -> OctiPlayer.PLAYER_D
+                                    OctiPlayer.PLAYER_D -> OctiPlayer.PLAYER_C
+                                    else -> OctiPlayer.PLAYER_B
+                                }
+                                val capPodsHeld = game?.getCapturedPods(oppForCap) ?: 0
+                                val ownCapPods = game?.getCapturedPods(p) ?: 0
                                 val activePlayerTurn = !isGameOver && (p == turn) && !viewModel.isViewingHistory()
+                                val canActiveLiberateFromThisCard = !isGameOver && !viewModel.isViewingHistory() &&
+                                    (oppForCap == turn) && (capPodsHeld > 0)
                                 PlayerReserveCard(
                                     player = p,
                                     isTurn = !isGameOver && (p == turn),
                                     freePods = game?.getFreePods(p) ?: 0,
                                     freeProngs = game?.getFreeProngs(p) ?: 0,
                                     freeSuper = game?.getFreeSuperProngs(p) ?: 0,
-                                    capPods = game?.getCapturedPods(p) ?: 0,
+                                    capPods = capPodsHeld,
                                     useSuperProngs = useSuperProngs,
                                     pal = pal,
                                     modifier = Modifier.weight(1f),
+                                    ownCapPods = ownCapPods,
                                     onStartPodPlacement = if (activePlayerTurn) {
                                         {
                                             viewModel.clearLastMoveIndicators()
@@ -200,7 +224,7 @@ fun OctiReserveHud(
                                             }
                                         }
                                     } else null,
-                                    onStartLiberatePlacement = if (activePlayerTurn) {
+                                    onStartLiberatePlacement = if (canActiveLiberateFromThisCard) {
                                         {
                                             viewModel.clearLastMoveIndicators()
                                             if (viewModel.composer.beginLiberatePodFromReserve()) {
@@ -378,11 +402,18 @@ fun PlayerReserveCard(
     useSuperProngs: Boolean,
     pal: OctiPalette,
     modifier: Modifier = Modifier,
+    ownCapPods: Int = 0,
     onStartPodPlacement: (() -> Unit)? = null,
     onStartLiberatePlacement: (() -> Unit)? = null
 ) {
     val faction = pal.factionForPlayer(player)
-    val oppPlayer = if (player == OctiPlayer.PLAYER_A) OctiPlayer.PLAYER_B else OctiPlayer.PLAYER_A
+    val oppPlayer = when (player) {
+        OctiPlayer.PLAYER_A -> OctiPlayer.PLAYER_B
+        OctiPlayer.PLAYER_B -> OctiPlayer.PLAYER_A
+        OctiPlayer.PLAYER_C -> OctiPlayer.PLAYER_D
+        OctiPlayer.PLAYER_D -> OctiPlayer.PLAYER_C
+        else -> OctiPlayer.PLAYER_B
+    }
     val oppFaction = pal.factionForPlayer(oppPlayer)
     val letter = player.name.removePrefix("PLAYER_")
 
@@ -410,8 +441,8 @@ fun PlayerReserveCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // 1. Pod icon + count (allows starting pod placement when freePods > 0 || capPods > 0)
-                val canStartPod = isTurn && (freePods > 0 || capPods > 0) && onStartPodPlacement != null
+                // 1. Pod icon + count (allows starting pod placement when freePods > 0 || ownCapPods > 0)
+                val canStartPod = isTurn && (freePods > 0 || ownCapPods > 0) && onStartPodPlacement != null
                 Row(
                     modifier = if (canStartPod) {
                         Modifier.clickable { onStartPodPlacement?.invoke() }
@@ -462,7 +493,7 @@ fun PlayerReserveCard(
 
                 // 4. Captured Pod icon + count (hidden when capPods == 0)
                 if (capPods > 0) {
-                    val canStartLiberate = isTurn && onStartLiberatePlacement != null
+                    val canStartLiberate = onStartLiberatePlacement != null
                     Row(
                         modifier = if (canStartLiberate) {
                             Modifier.clickable { onStartLiberatePlacement?.invoke() }

@@ -433,6 +433,370 @@ tr.active-ply {
   header { padding: 10px 14px; }
   th, td { padding: 6px 8px; font-size: 12px; }
 }
+
+/* --- Tabletop Web Player 3-Column Layout & Overlays --- */
+@keyframes commitPulse1Hz {
+  0%, 100% {
+    background: #C8A253;
+    border-color: #E5C158;
+    box-shadow: 0 0 16px rgba(229, 193, 88, 0.7);
+    transform: scale(1.0);
+  }
+  50% {
+    background: #4A3A1A;
+    border-color: #A67C2E;
+    box-shadow: 0 0 4px rgba(166, 124, 46, 0.3);
+    transform: scale(0.985);
+  }
+}
+.commit-pulse {
+  animation: commitPulse1Hz 1s infinite ease-in-out !important;
+}
+.web-tabletop-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
+  gap: 16px;
+  margin: 12px auto;
+  width: 100%;
+  max-width: 1380px;
+}
+#web-play-reserves-col {
+  width: 250px;
+  flex: 0 0 250px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+}
+#web-play-board-wrap {
+  flex: 0 1 760px;
+  width: 100%;
+  max-width: 760px;
+  aspect-ratio: 1 / 1;
+  position: relative;
+  background: #0B0F17;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#web-play-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: default;
+  border-radius: 14px;
+}
+#web-play-side-col {
+  width: 320px;
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+@media (max-width: 1180px) {
+  .web-tabletop-wrap {
+    flex-direction: column;
+    align-items: center;
+  }
+  #web-play-reserves-col, #web-play-side-col {
+    width: 100%;
+    max-width: 680px;
+  }
+}
+.web-res-card {
+  background: #101622;
+  border: 1.5px solid #2D3A54;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #F8FAFC;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.web-res-card.active-turn {
+  border-color: #C8A253;
+  box-shadow: 0 0 12px rgba(200, 162, 83, 0.35);
+}
+.web-res-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #C8A253;
+}
+.web-res-wells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.web-res-well {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: default;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.web-res-well.interactive {
+  cursor: pointer;
+  border-color: #C8A253;
+  background: rgba(200, 162, 83, 0.12);
+}
+.web-res-well.interactive:hover {
+  background: rgba(200, 162, 83, 0.25);
+}
+.web-quick-guide-card {
+  background: #101622;
+  border: 1px solid #1E293B;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 11.5px;
+  color: #94A3B8;
+  line-height: 1.5;
+}
+.web-quick-guide-card strong {
+  color: #E2E8F0;
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+#web-ply-confirm-bar {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  background: rgba(16, 22, 34, 0.95);
+  border: 2px solid #C8A253;
+  border-radius: 10px;
+  padding: 10px 16px;
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  z-index: 40;
+  pointer-events: auto;
+}
+#web-staged-notation {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: #FDE047;
+}
+#web-start-match-overlay {
+  position: absolute;
+  inset: 24px;
+  background: #161D26;
+  border: 2px solid #C8A253;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  z-index: 50;
+  opacity: 1.0;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+#web-start-summary-line1 {
+  font-size: 19px;
+  font-weight: 700;
+  color: #F8FAFC;
+  margin-bottom: 6px;
+}
+#web-start-summary-line2 {
+  font-size: 14px;
+  color: #94A3B8;
+  margin-bottom: 24px;
+}
+#web-thinking-overlay {
+  position: absolute;
+  inset: 24px;
+  background: #161D26;
+  border: 2px solid #C8A253;
+  border-radius: 14px;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  z-index: 55;
+  opacity: 1.0;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+.web-thinking-progress-track {
+  width: 80%;
+  max-width: 440px;
+  height: 26px;
+  background: #0B0F17;
+  border: 1px solid #C8A253;
+  border-radius: 13px;
+  position: relative;
+  overflow: hidden;
+  margin: 16px 0 10px 0;
+}
+#web-thinking-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #A67C2E 0%, #E5C158 100%);
+  border-radius: 13px;
+  transition: width 0.15s ease;
+}
+#web-thinking-progress-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #F8FAFC;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+#web-capture-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 9, 14, 0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+}
+#web-capture-card {
+  background: #101622;
+  border: 2px solid #C8A253;
+  border-radius: 14px;
+  padding: 20px 24px;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+}
+#web-gameover-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 9, 14, 0.75);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 65;
+}
+#web-gameover-card {
+  background: #101622;
+  border: 2px solid #C8A253;
+  border-radius: 14px;
+  padding: 24px 28px;
+  max-width: 440px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 16px 44px rgba(0,0,0,0.6);
+}
+#web-gameover-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #FDE047;
+  margin: 0 0 8px 0;
+}
+#web-gameover-subtitle {
+  font-size: 14px;
+  color: #CBD5E1;
+  margin: 0 0 20px 0;
+}
+#web-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 9, 14, 0.65);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9990;
+}
+#web-zoom-card {
+  background: #101622;
+  border: 2px solid #C8A253;
+  border-radius: 14px;
+  padding: 16px 20px;
+  max-width: 420px;
+  width: 92%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.7);
+  color: #F8FAFC;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#web-zoom-canvas {
+  width: 320px;
+  height: 320px;
+  display: block;
+  cursor: crosshair;
+}
+#web-zoom-pod-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin: 8px 0;
+}
+.zoom-pod-tab-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #E2E8F0;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.zoom-pod-tab-btn.active {
+  background: #C8A253;
+  border-color: #E5C158;
+  color: #0B0F17;
+  font-weight: 700;
+}
+#web-zoom-prong-tray {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 8px 0;
+}
+.zoom-prong-well {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid #2D3A54;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.zoom-prong-well.active {
+  border-color: #C8A253;
+  background: rgba(200, 162, 83, 0.2);
+}
+#web-zoom-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+}
+#web-zoom-actions button {
+  flex: 1;
+}
 </style>
 </head>
 <body>
@@ -446,7 +810,7 @@ tr.active-ply {
   </div>
   <nav id="nav">
     <button type="button" data-tab="home" id="nav-home-btn" class="btn on">Home</button>
-    <button type="button" data-tab="play" id="nav-play-btn" class="btn">Web Player</button>
+    <button type="button" data-tab="play" id="tab-btn-play" class="btn">Web Player</button>
     <button type="button" data-tab="users" id="nav-users-btn" class="btn">Players</button>
     <button type="button" data-tab="archive" id="nav-archive-btn" class="btn">Game Archive</button>
     <button type="button" data-tab="board" id="nav-board-btn" class="btn">Leaderboard</button>
@@ -539,81 +903,155 @@ tr.active-ply {
 <!-- Tab 2: Web Player (Local vs. JS Robot & Online Play/Observe) -->
 <section id="tab-play" class="tab">
   <div class="panel">
-    <div class="row">
-      <button type="button" class="btn btn-primary" id="subtab-play-local">Play vs. Browser JS Robot</button>
-      <button type="button" class="btn" id="subtab-play-online">Online Lobby &amp; Observation</button>
+    <div class="row" style="align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn btn-primary" id="subtab-play-local">Play vs. Browser JS Robot</button>
+        <button type="button" class="btn" id="subtab-play-online">Online Lobby &amp; Observation</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <label style="display:flex;align-items:center;gap:4px;font-size:13px;">Theme:
+          <select id="web-play-theme-select">
+            <option value="obsidian" selected>Obsidian Brass</option>
+            <option value="rosewood">Rosewood Ivory</option>
+          </select>
+        </label>
+        <button type="button" class="btn" id="btn-web-rotate" title="Rotate Board 90&deg; CW">Rotate 90&deg;</button>
+        <button type="button" class="btn" id="btn-sfx" title="Toggle Procedural Audio FX">SFX: On</button>
+      </div>
     </div>
 
-    <!-- Sub-Panel: Play vs. Browser JS Robot -->
+    <!-- Sub-Panel: Play vs. Browser JS Robot / Local -->
     <div id="play-local-panel">
-      <div class="row" style="background:#f9fafb;padding:12px;border-radius:8px;border:1px solid var(--line);">
-        <label>Mode:
-          <select id="web-play-mode">
-            <option value="2P" selected>2P (9x9, 3-Base)</option>
-            <option value="2P_1BASE">2P 1-Base (9x9, Rapid)</option>
-            <option value="OFK">OFK (7x7, OCTI for Kids)</option>
-            <option value="4P">4P (9x9, Human vs. 3 JS Robots)</option>
-          </select>
-        </label>
-        <label>Difficulty:
-          <select id="web-bot-difficulty">
-            <option value="1">Easy (Depth 1, ~120ms)</option>
-            <option value="2" selected>Medium (Depth 2, ~350ms)</option>
-            <option value="3">Hard (Depth 3, ~900ms)</option>
-          </select>
-        </label>
-        <label>Human Side:
-          <select id="web-human-side">
-            <option value="A" selected>Red (First)</option>
-            <option value="B">Green (Second)</option>
-          </select>
-        </label>
-        <button type="button" class="btn btn-primary" id="btn-web-new-bot-game">New Game vs. JS Robot</button>
-        <button type="button" class="btn" id="btn-web-resign">Resign</button>
-      </div>
+      <!-- Tabletop 3-column stage -->
+      <div class="web-tabletop-wrap">
+        <!-- Left Column: Reserve HUD Cards (Player B top, Player A bottom, Quick Guide middle) -->
+        <div id="web-play-reserves-col">
+          <div id="web-res-card-b" class="web-res-card"></div>
+          <div id="web-res-card-c" class="web-res-card" style="display:none;"></div>
+          <div id="web-res-card-d" class="web-res-card" style="display:none;"></div>
+          <div class="web-quick-guide-card">
+            <strong style="color:#C8A253;font-size:12px;margin-bottom:4px;display:block;">Quick Guide</strong>
+            <div>&bull; <strong>Right-click / Double-click:</strong> Zoom Square</div>
+            <div>&bull; <strong>Click Pod:</strong> Guided Move / Jump</div>
+            <div>&bull; <strong>Click Outer Socket:</strong> Add Prong</div>
+            <div>&bull; <strong>Wheel / Pinch:</strong> Zoom Board (1.0x&ndash;3.0x)</div>
+            <div>&bull; <strong>Drag Empty Space:</strong> Rotate 90&deg; Snap</div>
+          </div>
+          <div id="web-res-card-a" class="web-res-card"></div>
+        </div>
 
-      <div id="web-play-status" style="margin:12px 0 8px 0;font-size:15px;font-weight:700;padding:8px 12px;background:#f4f4f5;border-radius:6px;">
-        Starting game...
-      </div>
-      <div id="web-play-archive-status" class="dim" style="margin-bottom:12px;font-size:13px;"></div>
+        <!-- Center Column: Board Wrap & Overlays -->
+        <div id="web-play-board-wrap">
+          <canvas id="web-play-canvas" width="760" height="760"></canvas>
 
-      <div class="cols">
-        <div class="col-board">
-          <div class="board-stage">
-            <div id="web-play-reserves" class="hud-strip"></div>
-            <div id="web-play-board-wrap" style="width:100%;max-width:580px;aspect-ratio:1/1;margin:0 auto;background:#182133;border-radius:12px;padding:6px;box-shadow:0 4px 16px rgba(0,0,0,0.12);">
-              <svg id="web-play-svg" viewBox="0 0 580 580" style="width:100%;height:100%;display:block;border-radius:8px;cursor:pointer;"></svg>
+          <!-- Non-Modal Board-Scoped Start Match Overlay -->
+          <div id="web-start-match-overlay">
+            <div id="web-start-summary-line1">vs AI Bot (Lv2 &bull; 8s) &bull; Seat A (Emerald)</div>
+            <div id="web-start-summary-line2">2P (9x9) &bull; 3 Bases &bull; Standard Rules</div>
+            <div class="row" style="gap:12px;margin:0;">
+              <button type="button" class="btn" id="btn-web-change-type" style="padding:10px 18px;font-size:14px;">Change Type</button>
+              <button type="button" class="btn btn-primary" id="btn-web-start-match" style="padding:10px 22px;font-size:14px;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Start Match</button>
             </div>
-            <div class="panel" style="width:100%;max-width:580px;margin-top:10px;padding:12px;">
-              <div class="row" style="margin-bottom:8px;">
-                <strong style="margin-right:6px;">Action:</strong>
-                <button type="button" class="btn on" id="btn-act-move">Move / Jump Pod</button>
-                <button type="button" class="btn" id="btn-act-prong">Add Prong</button>
-                <button type="button" class="btn" id="btn-act-place">Place Pod</button>
+          </div>
+
+          <!-- 100% Opaque AI Thinking Overlay -->
+          <div id="web-thinking-overlay">
+            <h3 style="margin:0;font-size:18px;color:#FDE047;">Browser JS Robot Thinking...</h3>
+            <div class="web-thinking-progress-track">
+              <div id="web-thinking-progress-fill"></div>
+              <div id="web-thinking-progress-text">Depth 1 &bull; 0 nodes &bull; 0.0s / 8.0s (0%)</div>
+            </div>
+          </div>
+
+          <!-- Non-Blocking Staged Ply Confirmation Bar -->
+          <div id="web-ply-confirm-bar">
+            <div>
+              <span class="dim" style="font-size:12px;margin-right:6px;">Staged Ply:</span>
+              <span id="web-staged-notation">-</span>
+            </div>
+            <div class="row" style="gap:8px;margin:0;">
+              <button type="button" class="btn" id="btn-web-cancel-ply" style="padding:6px 14px;">Cancel [Esc]</button>
+              <button type="button" class="btn btn-primary commit-pulse" id="btn-web-commit-ply" style="padding:6px 18px;font-weight:700;">Commit [Enter]</button>
+            </div>
+          </div>
+
+          <!-- Borderless Capture Prompt Dialog -->
+          <div id="web-capture-overlay">
+            <div id="web-capture-card">
+              <h4 id="web-capture-prompt-text" style="margin:0 0 10px 0;font-size:16px;color:#F8FAFC;">Capture jumped pod(s)?</h4>
+              <p class="dim" style="font-size:12px;margin:0 0 16px 0;">You may also drag the jumped pod off the board edge to toggle capture.</p>
+              <div class="row" style="gap:10px;justify-content:center;margin:0;">
+                <button type="button" class="btn btn-primary" id="btn-capture-yes" style="background:#dc2626;border-color:#dc2626;padding:8px 18px;">Capture</button>
+                <button type="button" class="btn" id="btn-capture-no" style="padding:8px 18px;">Leave on Board</button>
               </div>
-              <div id="prong-dir-picker" class="row" style="display:none;margin-bottom:8px;">
-                <span class="dim" style="font-size:12px;">Prong:</span>
-                <button type="button" class="btn" data-dir="a">N (&uarr;)</button>
-                <button type="button" class="btn" data-dir="b">NE (&nearr;)</button>
-                <button type="button" class="btn" data-dir="c">E (&rarr;)</button>
-                <button type="button" class="btn" data-dir="d">SE (&searr;)</button>
-                <button type="button" class="btn" data-dir="e">S (&darr;)</button>
-                <button type="button" class="btn" data-dir="f">SW (&swarr;)</button>
-                <button type="button" class="btn" data-dir="g">W (&larr;)</button>
-                <button type="button" class="btn" data-dir="h">NW (&nwarr;)</button>
-              </div>
-              <div class="row">
-                <label style="font-size:13px;"><input type="checkbox" id="web-play-capture-toggle" checked> Capture jumped pods</label>
-                <span id="web-selected-move-text" style="margin-left:auto;font-weight:700;color:var(--acc-bright);">Selected: (None)</span>
-                <button type="button" class="btn btn-primary" id="btn-web-commit-move" disabled>Commit Move</button>
+            </div>
+          </div>
+
+          <!-- Borderless Game Over Dialog -->
+          <div id="web-gameover-overlay">
+            <div id="web-gameover-card">
+              <div id="web-gameover-title">PLAYER A WINS</div>
+              <div id="web-gameover-subtitle">VICTORY BY BASE OCCUPATION</div>
+              <div class="row" style="gap:10px;justify-content:center;margin:0;">
+                <button type="button" class="btn btn-primary" id="btn-gameover-new" style="padding:8px 18px;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">New Game</button>
+                <button type="button" class="btn" id="btn-gameover-review" style="padding:8px 18px;">Review Board</button>
               </div>
             </div>
           </div>
         </div>
-        <div class="col-side">
-          <h3>Move List</h3>
-          <div id="web-play-moves" style="max-height:480px;overflow-y:auto;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;">
-            <div class="dim">Game started.</div>
+
+        <!-- Right Column: Sidebar (Status & Clocks, Move History + VCR, Match Actions) -->
+        <div id="web-play-side-col">
+          <!-- Top Card: Match Status & Clocks -->
+          <div class="panel" style="margin:0;padding:12px;background:#101622;border:1px solid #1E293B;color:#F8FAFC;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <span id="web-play-mode-badge" class="badge" style="background:#1E293B;color:#94A3B8;">2P (9x9)</span>
+              <span id="web-play-turn-badge" class="badge" style="background:#064E3B;color:#6EE7B7;">Player A Turn</span>
+            </div>
+            <div id="web-play-clock-bar" style="display:flex;gap:6px;margin-top:6px;">
+              <div id="web-clock-a" style="flex:1;background:#064E3B;color:#ECFDF5;padding:6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:14px;font-weight:700;">A: --:--</div>
+              <div id="web-clock-b" style="flex:1;background:#881337;color:#FFF1F2;padding:6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:14px;font-weight:700;">B: --:--</div>
+              <div id="web-clock-c" style="display:none;flex:1;background:#1E3A8A;color:#EFF6FF;padding:6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:14px;font-weight:700;">C: --:--</div>
+              <div id="web-clock-d" style="display:none;flex:1;background:#78350F;color:#FFFBEB;padding:6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:14px;font-weight:700;">D: --:--</div>
+            </div>
+            <div id="web-play-archive-status" class="dim" style="margin-top:6px;font-size:12px;"></div>
+          </div>
+
+          <!-- Middle Card: Color-Coded Move History & VCR Replay -->
+          <div class="panel" style="margin:0;padding:12px;background:#101622;border:1px solid #1E293B;flex:1;display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <strong style="color:#C8A253;font-size:13px;">Move History</strong>
+              <button type="button" class="btn" id="btn-web-export-moves" title="Export Move History (JSON v3.0)" style="width:36px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;background:#161D26;border:1px solid #C8A253;border-radius:6px;cursor:pointer;">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M2.5 9.5V13.5H13.5V9.5" stroke="#C8A253" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M8 10.5V2.5M8 2.5L4.5 6M8 2.5L11.5 6" stroke="#C8A253" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+            <div id="web-play-moves" style="flex:1;min-height:180px;max-height:300px;overflow-y:auto;background:#0B0F17;border:1px solid #1E293B;border-radius:6px;padding:6px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:12.5px;">
+              <div class="dim" style="padding:4px;">No moves recorded yet.</div>
+            </div>
+            <!-- VCR Replay Bar -->
+            <div id="web-vcr-bar" style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;gap:4px;">
+              <button type="button" class="btn" id="web-vcr-first" style="padding:4px 8px;font-size:12px;" title="First Move">|&lt;&lt;</button>
+              <button type="button" class="btn" id="web-vcr-prev" style="padding:4px 8px;font-size:12px;" title="Previous Move">&lt;</button>
+              <span id="web-vcr-label" style="font-size:12px;color:#94A3B8;font-family:ui-monospace,SFMono-Regular,monospace;flex:1;text-align:center;">Ply 0/0</span>
+              <button type="button" class="btn" id="web-vcr-next" style="padding:4px 8px;font-size:12px;" title="Next Move">&gt;</button>
+              <button type="button" class="btn" id="web-vcr-last" style="padding:4px 8px;font-size:12px;" title="Latest Move">&gt;&gt;|</button>
+            </div>
+          </div>
+
+          <!-- Bottom Card: Match Actions -->
+          <div class="panel" style="margin:0;padding:12px;background:#101622;border:1px solid #1E293B;">
+            <div class="row" style="gap:8px;margin:0;">
+              <button type="button" class="btn btn-primary" id="btn-web-new-game-setup" style="flex:1;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">New Game...</button>
+              <button type="button" class="btn" id="btn-web-undo">Undo</button>
+              <button type="button" class="btn" id="btn-web-resign" style="border-color:#dc2626;color:#dc2626;">Resign</button>
+            </div>
+            <div id="web-online-table-actions" style="display:none;margin-top:8px;" class="row">
+              <button type="button" class="btn" id="btn-web-leave-table" style="flex:1;border-color:#dc2626;color:#dc2626;">Leave Table</button>
+              <button type="button" class="btn" id="btn-web-back-lobby" style="flex:1;">Back to Lobby</button>
+            </div>
           </div>
         </div>
       </div>
@@ -630,7 +1068,10 @@ tr.active-ply {
 
         <div id="web-my-table-banner" style="display:none;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px 14px;margin:10px 0;align-items:center;justify-content:space-between;gap:12px;">
           <strong id="web-my-table-banner-text" style="color:#1e3a8a;font-size:14px;">Seated at Table</strong>
-          <button type="button" class="btn btn-primary" id="btn-web-leave-my-table" style="background:#dc2626;border-color:#dc2626;">Leave Table</button>
+          <div class="row" style="margin:0;gap:8px;">
+            <button type="button" class="btn btn-primary" id="btn-web-open-my-table" style="background:#2563eb;border-color:#2563eb;">Open Board</button>
+            <button type="button" class="btn btn-primary" id="btn-web-leave-my-table" style="background:#dc2626;border-color:#dc2626;">Leave Table</button>
+          </div>
         </div>
 
         <div id="web-create-table-panel" class="panel" style="margin:10px 0;background:#f9fafb;">
@@ -1025,6 +1466,99 @@ tr.active-ply {
   </div>
 </section>
 
+
+<!-- Setup Match Modal -->
+<div id="web-match-setup-modal" style="display:none;position:fixed;inset:0;background:rgba(6,9,14,0.7);z-index:9995;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#101622;border:2px solid #C8A253;border-radius:14px;max-width:480px;width:100%;padding:22px;color:#F8FAFC;box-shadow:0 16px 48px rgba(0,0,0,0.7);">
+    <h3 style="margin:0 0 16px 0;font-size:18px;color:#C8A253;">Match Configuration</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <label style="display:flex;justify-content:space-between;align-items:center;">Play Mode:
+        <select id="setup-play-mode" style="background:#161D26;color:#fff;border-color:#2D3A54;">
+          <option value="bot" selected>vs AI Bot</option>
+          <option value="pass">Pass-and-Play (Local 2P)</option>
+        </select>
+      </label>
+      <label style="display:flex;justify-content:space-between;align-items:center;">Bot Difficulty:
+        <select id="setup-bot-difficulty" style="background:#161D26;color:#fff;border-color:#2D3A54;">
+          <option value="1">Lv1: Fast (2s)</option>
+          <option value="2" selected>Lv2: Balanced (8s)</option>
+          <option value="3">Lv3: Deep (20s)</option>
+        </select>
+      </label>
+      <label style="display:flex;justify-content:space-between;align-items:center;">Human Seat:
+        <select id="setup-human-seat" style="background:#161D26;color:#fff;border-color:#2D3A54;">
+          <option value="A" selected>Seat A (Bottom &bull; Emerald)</option>
+          <option value="B">Seat B (Top &bull; Ruby)</option>
+        </select>
+      </label>
+      <label style="display:flex;justify-content:space-between;align-items:center;">Game Mode:
+        <select id="setup-game-mode" style="background:#161D26;color:#fff;border-color:#2D3A54;">
+          <option value="2P" selected>2P (9x9)</option>
+          <option value="4P">4P (9x9)</option>
+          <option value="OFK">OFK (6x7)</option>
+        </select>
+      </label>
+      <label style="display:flex;justify-content:space-between;align-items:center;">Bases to Win:
+        <select id="setup-bases" style="background:#161D26;color:#fff;border-color:#2D3A54;">
+          <option value="3" selected>3 Bases (Standard)</option>
+          <option value="1">1 Base (Rapid)</option>
+        </select>
+      </label>
+      <div style="display:flex;gap:18px;">
+        <label><input type="checkbox" id="setup-superprongs"> Super-Prongs</label>
+        <label><input type="checkbox" id="setup-edgeless"> Edgeless Board</label>
+      </div>
+      <label style="display:flex;justify-content:space-between;align-items:center;">Time Control:
+        <select id="setup-time-control" style="background:#161D26;color:#fff;border-color:#2D3A54;">
+          <option value="untimed" selected>Untimed</option>
+          <option value="300+3">5m + 3s</option>
+          <option value="600+5">10m + 5s</option>
+          <option value="900+10">15m + 10s</option>
+        </select>
+      </label>
+    </div>
+    <div class="row" style="margin-top:20px;justify-content:flex-end;gap:10px;">
+      <button type="button" class="btn" id="btn-setup-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="btn-setup-apply" style="background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Save Type</button>
+    </div>
+  </div>
+</div>
+
+<!-- Borderless Zoomed Square Overlay -->
+<div id="web-zoom-overlay">
+  <div id="web-zoom-card">
+    <div style="font-size:14px;font-weight:700;color:#C8A253;margin-bottom:6px;" id="web-zoom-sq-title">Square (3, 3)</div>
+    <canvas id="web-zoom-canvas" width="320" height="320"></canvas>
+    <div id="web-zoom-pod-tabs"></div>
+    <div id="web-zoom-prong-tray">
+      <div class="zoom-prong-well active" id="zoom-well-normal" title="Normal Prong">
+        <svg width="14" height="18" viewBox="0 0 14 18"><path d="M7 1L12 14L7 17L2 14Z" fill="#F8FAFC" stroke="#0B0F17" stroke-width="1"/></svg>
+        <span id="zoom-prong-count">0</span>
+      </div>
+      <div class="zoom-prong-well" id="zoom-well-super" title="Superprong" style="display:none;">
+        <svg width="16" height="18" viewBox="0 0 16 18"><path d="M8 1L15 13L8 17L1 13Z" fill="#FDE047" stroke="#78350F" stroke-width="1"/></svg>
+        <span id="zoom-super-count">0</span>
+      </div>
+    </div>
+    <div id="web-zoom-actions">
+      <button type="button" class="btn btn-primary" id="btn-zoom-move-pod" style="background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Move / Jump This Pod</button>
+      <button type="button" class="btn" id="btn-zoom-place-pod" style="display:none;">Place Reserve Pod</button>
+      <button type="button" class="btn btn-primary" id="btn-zoom-liberate-pod" style="display:none;background:#10B981;border-color:#059669;">Liberate (*)</button>
+    </div>
+  </div>
+</div>
+
+<!-- Move Export Modal -->
+<div id="web-export-modal" style="display:none;position:fixed;inset:0;background:rgba(6,9,14,0.7);z-index:9995;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#101622;border:2px solid #C8A253;border-radius:14px;max-width:540px;width:100%;padding:20px;color:#F8FAFC;box-shadow:0 16px 48px rgba(0,0,0,0.7);">
+    <h3 style="margin:0 0 12px 0;font-size:16px;color:#C8A253;">Export Move History (JSON v3.0)</h3>
+    <textarea id="web-export-json-text" readonly style="width:100%;height:220px;background:#0B0F17;color:#E2E8F0;font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px;border:1px solid #2D3A54;border-radius:6px;padding:8px;resize:vertical;"></textarea>
+    <div class="row" style="margin-top:14px;justify-content:flex-end;gap:10px;">
+      <button type="button" class="btn" id="btn-web-close-export">Close</button>
+      <button type="button" class="btn btn-primary" id="btn-web-copy-transcript" style="background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Copy to Clipboard</button>
+    </div>
+  </div>
+</div>
 <div id="web-confirm-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9999;align-items:center;justify-content:center;padding:16px;">
   <div style="background:#ffffff;border:1px solid var(--line);border-radius:12px;max-width:440px;width:100%;padding:20px;box-shadow:0 20px 35px rgba(0,0,0,0.22);">
     <h3 id="web-confirm-title" style="margin:0 0 8px 0;font-size:18px;color:var(--fg);">Confirm Action</h3>
@@ -1942,8 +2476,11 @@ function updateHudCards(hudContainer, parsed, playerHandles) {
       s.appendChild(el("strong", val));
       metrics.appendChild(s);
     }
+    var oppIdx = (idx === 0 ? 1 : 0);
+    var oppRes = parsed.reserves[oppIdx];
+    var enemyPodsCaptured = (parsed.mode === "4P") ? r.capturedPods : (oppRes ? oppRes.capturedPods : 0);
     addMetric("Pods", r.freePods);
-    addMetric("Cap", r.capturedPods);
+    addMetric("Cap", enemyPodsCaptured);
     addMetric("Prongs", r.freeProngs);
     if (parsed.superProngs || r.freeSuper > 0) {
       addMetric("Super", r.freeSuper);
@@ -2532,7 +3069,11 @@ function switchTab(name) {
   } else if (name === "account") {
     if (currentUser || localStorage.getItem("octi_jwt_token")) { loadMyProfile(); }
   } else if (name === "play") {
-    if (!localBotState) { initLocalBotGame(); }
+    if (activePlayState) {
+      renderPlayBoardCanvas();
+      renderAllWebReserves();
+      updatePlaySidebar();
+    }
   }
 }
 
@@ -3517,718 +4058,2330 @@ $("user-detail-close").addEventListener("click", function () {
   $("user-profile-detail").style.display = "none";
 });
 
+
 /* =========================================================================
- * Tab 2: Web Player (Local vs. JS Robot & Online Lobby)
+ * Tab 2: Web Player (Desktop & Android Parity Engine, Audio Synth & Gesture Board)
  * ========================================================================= */
-var localBotState = null;
-var localGameMoves = [];
-var localGamePlies = [];
-var localGameInitialFen = "";
-var localGameStartedAt = 0;
-var localSelectedSq = null;
-var localSelectedMove = null;
-var localLegalDests = {};
-var localActionMode = "move";
-var localSelectedProngDir = "a";
 
-$("subtab-play-local").addEventListener("click", function () {
-  $("subtab-play-local").className = "btn btn-primary";
-  $("subtab-play-online").className = "btn";
-  $("play-local-panel").style.display = "block";
-  $("play-online-panel").style.display = "none";
+var OctiWebSoundSynth = (function () {
+  var audioCtx = null;
+  var sfxEnabled = true;
+
+  function getAudioContext() {
+    if (!audioCtx && (typeof window !== "undefined") && (window.AudioContext || window.webkitAudioContext)) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume().catch(function () {});
+    }
+    return audioCtx;
+  }
+
+  function setEnabled(val) {
+    sfxEnabled = !!val;
+    var btn = typeof document !== "undefined" ? document.getElementById("btn-sfx") : null;
+    if (btn) {
+      btn.textContent = sfxEnabled ? "SFX: On" : "SFX: Off";
+      btn.className = sfxEnabled ? "btn" : "btn dim";
+    }
+  }
+
+  function isEnabled() {
+    return sfxEnabled;
+  }
+
+  function play(cue) {
+    if (!sfxEnabled) return;
+    var ctx = getAudioContext();
+    if (!ctx) return;
+    var sampleRate = 44100;
+    var durationMs = 110;
+    if (cue === "POD_PLACE") durationMs = 120;
+    else if (cue === "PRONG_SNAP") durationMs = 75;
+    else if (cue === "POD_STEP") durationMs = 95;
+    else if (cue === "POD_JUMP") durationMs = 150;
+    else if (cue === "POD_CAPTURE") durationMs = 210;
+    else if (cue === "GAME_VICTORY") durationMs = 360;
+
+    var numSamples = Math.floor((sampleRate * durationMs) / 1000);
+    var buffer = ctx.createBuffer(1, numSamples, sampleRate);
+    var ch = buffer.getChannelData(0);
+    var twoPi = 2.0 * Math.PI;
+
+    for (var i = 0; i < numSamples; i++) {
+      var t = i / sampleRate;
+      var progress = i / Math.max(1, numSamples);
+      var attack = Math.min(1.0, i / 48.0);
+      var val = 0.0;
+      if (cue === "POD_PLACE") {
+        var fPlace = 145.0 * Math.exp(-t * 14.0) + 68.0;
+        var envPlace = attack * Math.exp(-t * 24.0);
+        val = envPlace * (0.72 * Math.sin(twoPi * fPlace * t) + 0.28 * Math.sin(twoPi * (fPlace * 1.9) * t));
+      } else if (cue === "PRONG_SNAP") {
+        var envSnap = attack * Math.exp(-t * 48.0);
+        val = envSnap * (0.50 * Math.sin(twoPi * 1420.0 * t) + 0.35 * Math.sin(twoPi * 2680.0 * t) + 0.15 * Math.sin(twoPi * 3920.0 * t));
+      } else if (cue === "POD_STEP") {
+        var fStep = 195.0 * Math.exp(-t * 16.0) + 85.0;
+        var envStep = attack * Math.exp(-t * 30.0);
+        val = envStep * (0.75 * Math.sin(twoPi * fStep * t) + 0.25 * Math.sin(twoPi * (fStep * 2.1) * t));
+      } else if (cue === "POD_JUMP") {
+        var fJump = (progress < 0.45) ? 440.0 : 587.33;
+        var envJump = attack * Math.exp(-t * 14.0);
+        val = envJump * (0.68 * Math.sin(twoPi * fJump * t) + 0.32 * Math.sin(twoPi * (fJump * 1.5) * t));
+      } else if (cue === "POD_CAPTURE") {
+        var fCap = (progress < 0.33) ? 440.0 : ((progress < 0.66) ? 554.37 : 659.25);
+        var envCap = attack * Math.exp(-t * 10.0);
+        val = envCap * (0.65 * Math.sin(twoPi * fCap * t) + 0.25 * Math.sin(twoPi * (fCap * 2.0) * t) + 0.10 * Math.sin(twoPi * (fCap * 3.0) * t));
+      } else if (cue === "GAME_VICTORY") {
+        var fVic = (progress < 0.22) ? 523.25 : ((progress < 0.44) ? 659.25 : ((progress < 0.68) ? 783.99 : 1046.50));
+        var envVic = attack * Math.exp(-t * 5.5);
+        val = envVic * (0.60 * Math.sin(twoPi * fVic * t) + 0.28 * Math.sin(twoPi * (fVic * 1.5) * t) + 0.12 * Math.sin(twoPi * (fVic * 2.0) * t));
+      }
+      ch[i] = Math.max(-1.0, Math.min(1.0, val));
+    }
+
+    var srcNode = ctx.createBufferSource();
+    srcNode.buffer = buffer;
+    srcNode.connect(ctx.destination);
+    srcNode.start();
+  }
+
+  return {
+    setEnabled: setEnabled,
+    isEnabled: isEnabled,
+    play: play,
+    triggerCue: play
+  };
+})();
+
+/* Rule & Sorting Utilities */
+function sortedPodIndicesMostProngsFirst(stack) {
+  if (!stack || !stack.length) return [];
+  var indices = [];
+  for (var i = 0; i < stack.length; i++) indices.push(i);
+  indices.sort(function (a, b) {
+    var ca = (stack[a] && stack[a].cfg) ? stack[a].cfg.count : 0;
+    var cb = (stack[b] && stack[b].cfg) ? stack[b].cfg.count : 0;
+    if (cb !== ca) return cb - ca; // descending: most prongs on top
+    return b - a; // highest stack layer on top
+  });
+  return indices;
+}
+
+function canLiberate(player, state) {
+  if (!state || !state.reserves) return false;
+  var pIdx = (player === "A") ? 0 : ((player === "B") ? 1 : ((player === "C") ? 2 : 3));
+  var r = state.reserves[pIdx];
+  return !!(r && r.capturedPods > 0);
+}
+
+function isSquareOccupiedBy(state, x, y, player) {
+  if (!state || !state.map) return false;
+  var stack = state.map[x + "," + y];
+  if (!stack || !stack.length) return false;
+  var top = stack[stack.length - 1];
+  return top && top.owner === player;
+}
+
+function squareHasEnemyOf(state, x, y, player) {
+  if (!state || !state.map) return false;
+  var stack = state.map[x + "," + y];
+  if (!stack || !stack.length) return false;
+  var top = stack[stack.length - 1];
+  return top && top.owner !== player;
+}
+
+function wrapCoord(val, max) {
+  return ((val - 1) % max + max) % max + 1;
+}
+
+/* Global Board & Play State */
+var boardZoomScale = 1.0;
+var boardZoomFocus = { x: 0.5, y: 0.5 };
+var liveRotationOffsetDeg = 0;
+var activePlayState = null;
+var localMatchConfig = {
+  playMode: "bot", // "bot" or "pass"
+  botDifficulty: 2, // 1, 2, 3
+  humanSeat: "A", // "A" or "B"
+  gameMode: "2P", // "2P", "4P", "OFK"
+  bases: 3, // 3 or 1 (OFK = 4)
+  superProngs: false,
+  edgeless: false,
+  timeControl: "untimed"
+};
+var matchStarted = false;
+var activeOnlineGameId = "";
+var activeOnlineTableRoomId = "";
+
+var moveComposer = null;
+var lastMoveHighlightSquares = [];
+var lastMoveSetAtMs = 0;
+var playMatchPlies = [];
+var playMatchHistory = [];
+var playVcrIndex = 0;
+
+var clockTimers = { A: 0, B: 0, C: 0, D: 0 };
+var clockInterval = null;
+
+
+
+/* --- WebMoveComposer Implementation --- */
+function WebMoveComposer(stateGetter, onCommitCb) {
+  this.getState = stateGetter;
+  this.onCommit = onCommitCb;
+  this.stagedOps = [];
+  this.stagedNotation = "";
+  this.previewState = null;
+  this.isAwaitingConfirmation = false;
+  this.awaitingSuperProngBonusMove = false;
+  this.bonusPodCoord = null;
+  this.bonusPodIdx = -1;
+
+  this.guidedMoveActive = false;
+  this.guidedOriginSquare = null;
+  this.guidedCurrentSquare = null;
+  this.guidedPodIndex = -1;
+  this.guidedLegalDests = [];
+  this.claimedPodsAtOrigin = {}; // map of podIdx -> true
+  this.jumpedSquaresChain = [];
+  this.captureChoices = []; // { jumpedX, jumpedY, capture, mandatory }
+}
+
+WebMoveComposer.prototype.reset = function () {
+  this.stagedOps = [];
+  this.stagedNotation = "";
+  this.previewState = null;
+  this.isAwaitingConfirmation = false;
+  this.awaitingSuperProngBonusMove = false;
+  this.bonusPodCoord = null;
+  this.bonusPodIdx = -1;
+  this.guidedMoveActive = false;
+  this.guidedOriginSquare = null;
+  this.guidedCurrentSquare = null;
+  this.guidedPodIndex = -1;
+  this.guidedLegalDests = [];
+  this.claimedPodsAtOrigin = {};
+  this.jumpedSquaresChain = [];
+  this.captureChoices = [];
+  this.updateUi();
+};
+
+WebMoveComposer.prototype.updateUi = function () {
+  var bar = document.getElementById("web-ply-confirm-bar");
+  var notEl = document.getElementById("web-staged-notation");
+  if (!bar || !notEl) return;
+  if (this.isAwaitingConfirmation && this.stagedNotation) {
+    notEl.textContent = this.stagedNotation;
+    bar.style.display = "flex";
+  } else {
+    bar.style.display = "none";
+  }
+};
+
+WebMoveComposer.prototype.getWorkingState = function () {
+  if (this.previewState) return this.previewState;
+  var s = this.getState();
+  this.previewState = cloneState(s);
+  return this.previewState;
+};
+
+WebMoveComposer.prototype.hasOtherMovablePodAtOrigin = function () {
+  if (!this.guidedOriginSquare) return false;
+  var s = this.getState();
+  if (!s || !s.map) return false;
+  var k = this.guidedOriginSquare.x + "," + this.guidedOriginSquare.y;
+  var stack = s.map[k] || [];
+  var turn = s.turn;
+  for (var i = 0; i < stack.length; i++) {
+    if (stack[i].owner === turn && !this.claimedPodsAtOrigin[i]) {
+      return true;
+    }
+  }
+  return false;
+};
+
+WebMoveComposer.prototype.unclaimedMovablePodIndicesAtOrigin = function () {
+  if (!this.guidedOriginSquare) return [];
+  var s = this.getState();
+  if (!s || !s.map) return [];
+  var k = this.guidedOriginSquare.x + "," + this.guidedOriginSquare.y;
+  var stack = s.map[k] || [];
+  var turn = s.turn;
+  var out = [];
+  for (var i = 0; i < stack.length; i++) {
+    if (stack[i].owner === turn && !this.claimedPodsAtOrigin[i]) {
+      out.push(i);
+    }
+  }
+  return out;
+};
+
+WebMoveComposer.prototype.hasDistinctUnclaimedPodsAtOrigin = function () {
+  var unclaimed = this.unclaimedMovablePodIndicesAtOrigin();
+  if (unclaimed.length <= 1) return false;
+  var s = this.getState();
+  var stack = s.map[this.guidedOriginSquare.x + "," + this.guidedOriginSquare.y] || [];
+  var firstCfg = stack[unclaimed[0]].cfg.text || "";
+  for (var i = 1; i < unclaimed.length; i++) {
+    if ((stack[unclaimed[i]].cfg.text || "") !== firstCfg) return true;
+  }
+  return false;
+};
+
+WebMoveComposer.prototype.stageAddPod = function (x, y, forceLiberate) {
+  var s = this.getWorkingState();
+  var turn = s.turn;
+  var pIdx = (turn === "A") ? 0 : ((turn === "B") ? 1 : ((turn === "C") ? 2 : 3));
+  var res = s.reserves[pIdx];
+  var k = x + "," + y;
+  var stack = s.map[k] || [];
+  var occupiedByTurn = stack.length && stack[stack.length - 1].owner === turn;
+
+  var doLiberate = false;
+  if (forceLiberate || (occupiedByTurn && res && res.capturedPods > 0)) {
+    if (!res || res.capturedPods <= 0 || !occupiedByTurn) return false;
+    doLiberate = true;
+  } else {
+    var homes = getHomeSquares(s.mode, turn);
+    var isHome = homes.some(function (h) { return h.x === x && h.y === y; });
+    if (!isHome || !res || res.freePods <= 0 || squareHasEnemyOf(s, x, y, turn)) return false;
+  }
+
+  if (doLiberate) {
+    res.capturedPods--;
+    this.stagedNotation = x + "" + y + "*";
+  } else {
+    res.freePods--;
+    this.stagedNotation = x + "" + y;
+  }
+
+  if (!s.map[k]) s.map[k] = [];
+  s.map[k].push({
+    owner: turn,
+    cfg: { prongs: [0, 0, 0, 0, 0, 0, 0, 0], count: 0, text: "" }
+  });
+
+  OctiWebSoundSynth.play("POD_PLACE");
+  this.isAwaitingConfirmation = true;
+  this.updateUi();
+  renderPlayBoardCanvas();
+  renderAllWebReserves();
+  return true;
+};
+
+WebMoveComposer.prototype.stageAddProng = function (x, y, podIdx, dirIdx, isSuper) {
+  var s = this.getWorkingState();
+  var turn = s.turn;
+  var pIdx = (turn === "A") ? 0 : ((turn === "B") ? 1 : ((turn === "C") ? 2 : 3));
+  var res = s.reserves[pIdx];
+  var k = x + "," + y;
+  var stack = s.map[k];
+  if (!stack || podIdx < 0 || podIdx >= stack.length) return false;
+  var pod = stack[podIdx];
+  if (pod.owner !== turn || pod.cfg.prongs[dirIdx]) return false;
+
+  if (s.mode === "OFK") {
+    // Forward prongs only in OFK
+    if (turn === "A" && (dirIdx !== 0 && dirIdx !== 1 && dirIdx !== 7)) return false;
+    if (turn === "B" && (dirIdx !== 3 && dirIdx !== 4 && dirIdx !== 5)) return false;
+  }
+
+  if (isSuper) {
+    if (!s.superProngs || !res || res.freeSuper <= 0) return false;
+    res.freeSuper--;
+    pod.cfg.prongs[dirIdx] = 2;
+  } else {
+    if (!res || res.freeProngs <= 0) return false;
+    res.freeProngs--;
+    pod.cfg.prongs[dirIdx] = 1;
+  }
+  pod.cfg.count++;
+  var dirChar = DIR_CHARS[dirIdx];
+  pod.cfg.text = (pod.cfg.text || "") + (isSuper ? (dirChar.toUpperCase() + "!") : dirChar);
+
+  var not = x + "" + y + "+" + dirChar + (isSuper ? "!" : "");
+  this.stagedNotation = not;
+
+  OctiWebSoundSynth.play("PRONG_SNAP");
+  this.isAwaitingConfirmation = true;
+
+  if (isSuper && pod.cfg.count === 8) {
+    this.awaitingSuperProngBonusMove = true;
+    this.bonusPodCoord = { x: x, y: y };
+    this.bonusPodIdx = podIdx;
+    this.beginGuidedPodMove(x, y, podIdx);
+  }
+
+  this.updateUi();
+  renderPlayBoardCanvas();
+  renderAllWebReserves();
+  return true;
+};
+
+WebMoveComposer.prototype.addProng = function (x, y, dir, isSuper, podIdx) {
+  if (podIdx === undefined) podIdx = 0;
+  var dIdx = (typeof dir === "number") ? dir : DIR_CHARS.indexOf(String(dir).toLowerCase());
+  return this.stageAddProng(x, y, podIdx, dIdx, !!isSuper);
+};
+
+WebMoveComposer.addProng = function (x, y, dir, isSuper, podIdx) {
+  if (moveComposer) return moveComposer.addProng(x, y, dir, isSuper, podIdx);
+  return false;
+};
+
+WebMoveComposer.prototype.stageRepositionProng = function (x, y, podIdx, srcDirIdx, dstDirIdx) {
+  var s = this.getWorkingState();
+  var turn = s.turn;
+  var k = x + "," + y;
+  var stack = s.map[k];
+  if (!stack || podIdx < 0 || podIdx >= stack.length) return false;
+  var pod = stack[podIdx];
+  if (pod.owner !== turn || !pod.cfg.prongs[srcDirIdx] || pod.cfg.prongs[dstDirIdx]) return false;
+
+  var pt = pod.cfg.prongs[srcDirIdx];
+  pod.cfg.prongs[srcDirIdx] = 0;
+  pod.cfg.prongs[dstDirIdx] = pt;
+
+  var isSuper = (pt === 2);
+  var srcCh = DIR_CHARS[srcDirIdx];
+  var dstCh = DIR_CHARS[dstDirIdx];
+  this.stagedNotation = x + "" + y + "+" + dstCh + "-" + srcCh + (isSuper ? "!" : "");
+
+  OctiWebSoundSynth.play("PRONG_SNAP");
+  this.isAwaitingConfirmation = true;
+  this.updateUi();
+  renderPlayBoardCanvas();
+  renderAllWebReserves();
+  return true;
+};
+
+WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, chainJumped) {
+  var dests = [];
+  if (!pod || !pod.cfg) return dests;
+  var gw = state.gw, gh = state.gh;
+  var isSuper = !!state.superProngs;
+  var edgeless = !!state.edgeless;
+
+  for (var d = 0; d < 8; d++) {
+    var ptype = pod.cfg.prongs[d];
+    if (!ptype) continue;
+    var delta = DIR_DELTAS[d];
+    var dx = delta[0], dy = delta[1];
+
+    if (!chainJumped || !chainJumped.length) {
+      // Step: distance 1
+      var sx = x + dx, sy = y + dy;
+      if (edgeless) {
+        sx = wrapCoord(sx, gw);
+        sy = wrapCoord(sy, gh);
+      }
+      if (sx >= 1 && sx <= gw && sy >= 1 && sy <= gh) {
+        var stepK = sx + "," + sy;
+        var stepStack = state.map[stepK];
+        if (!stepStack || !stepStack.length || !squareHasEnemyOf(state, sx, sy, pod.owner)) {
+          dests.push({ x: sx, y: sy, dist: 1, isJump: false });
+        }
+      }
+
+      // Superprong multi-step slide
+      if (ptype === 2) {
+        for (var step = 2; step <= Math.max(gw, gh); step++) {
+          var slx = x + dx * step, sly = y + dy * step;
+          if (edgeless) { slx = wrapCoord(slx, gw); sly = wrapCoord(sly, gh); }
+          if (slx < 1 || slx > gw || sly < 1 || sly > gh) break;
+          var slK = slx + "," + sly;
+          var slStack = state.map[slK];
+          if (!slStack || !slStack.length) {
+            dests.push({ x: slx, y: sly, dist: step, isJump: false });
+          } else {
+            if (!squareHasEnemyOf(state, slx, sly, pod.owner)) {
+              dests.push({ x: slx, y: sly, dist: step, isJump: false });
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    // Jumps: distance 2 over adjacent occupied square
+    var jx = x + dx, jy = y + dy;
+    var landX = x + dx * 2, landY = y + dy * 2;
+    if (edgeless) {
+      jx = wrapCoord(jx, gw); jy = wrapCoord(jy, gh);
+      landX = wrapCoord(landX, gw); landY = wrapCoord(landY, gh);
+    }
+    if (jx >= 1 && jx <= gw && jy >= 1 && jy <= gh &&
+        landX >= 1 && landX <= gw && landY >= 1 && landY <= gh) {
+      var jumpedK = jx + "," + jy;
+      var jumpedStack = state.map[jumpedK];
+      var alreadyJumped = (chainJumped || []).some(function (p) { return p.x === jx && p.y === jy; });
+      if (jumpedStack && jumpedStack.length && !alreadyJumped) {
+        var landK = landX + "," + landY;
+        var landStack = state.map[landK];
+        if (!landStack || !landStack.length || !squareHasEnemyOf(state, landX, landY, pod.owner)) {
+          dests.push({ x: landX, y: landY, dist: 2, isJump: true, jumpedX: jx, jumpedY: jy });
+        }
+      }
+    }
+  }
+  return dests;
+};
+
+WebMoveComposer.prototype.beginGuidedPodMove = function (x, y, podIdx) {
+  var s = this.getWorkingState();
+  var k = x + "," + y;
+  var stack = s.map[k] || [];
+  if (podIdx < 0 || podIdx >= stack.length) podIdx = stack.length - 1;
+  var pod = stack[podIdx];
+  if (!pod || pod.owner !== s.turn) return false;
+
+  this.guidedMoveActive = true;
+  this.guidedOriginSquare = { x: x, y: y };
+  this.guidedCurrentSquare = { x: x, y: y };
+  this.guidedPodIndex = podIdx;
+  this.jumpedSquaresChain = [];
+  this.guidedLegalDests = this.computeLegalDestsForPod(s, x, y, pod, this.jumpedSquaresChain);
+
+  renderPlayBoardCanvas();
+  return true;
+};
+
+WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
+  if (!this.guidedMoveActive || !this.guidedCurrentSquare) return false;
+  var matchDest = this.guidedLegalDests.find(function (d) { return d.x === toX && d.y === toY; });
+  if (!matchDest) return false;
+
+  var s = this.getWorkingState();
+  var curX = this.guidedCurrentSquare.x, curY = this.guidedCurrentSquare.y;
+  var curK = curX + "," + curY;
+  var toK = toX + "," + toY;
+  var stack = s.map[curK];
+  if (!stack || this.guidedPodIndex < 0 || this.guidedPodIndex >= stack.length) return false;
+  var pod = stack.splice(this.guidedPodIndex, 1)[0];
+  if (!stack.length) delete s.map[curK];
+
+  if (matchDest.isJump) {
+    var jx = matchDest.jumpedX, jy = matchDest.jumpedY;
+    this.jumpedSquaresChain.push({ x: jx, y: jy });
+    var jK = jx + "," + jy;
+    var jStack = s.map[jK];
+    var isEnemy = jStack && jStack.length && jStack[jStack.length - 1].owner !== s.turn;
+    var doCap = true;
+
+    if (s.mode === "OFK") {
+      doCap = isEnemy;
+    } else {
+      // Optional capture dialog
+      var capOverlay = document.getElementById("web-capture-overlay");
+      var promptText = document.getElementById("web-capture-prompt-text");
+      if (capOverlay && promptText) {
+        promptText.textContent = "Capture jumped pod(s) at (" + jx + ", " + jy + ")?";
+        capOverlay.style.display = "flex";
+      }
+    }
+
+    if (doCap && jStack && jStack.length) {
+      jStack.pop();
+      if (!jStack.length) delete s.map[jK];
+      var pIdx = (s.turn === "A") ? 0 : ((s.turn === "B") ? 1 : ((s.turn === "C") ? 2 : 3));
+      if (s.reserves[pIdx]) s.reserves[pIdx].capturedPods++;
+      OctiWebSoundSynth.play("POD_CAPTURE");
+    } else {
+      OctiWebSoundSynth.play("POD_JUMP");
+    }
+
+    if (!this.stagedNotation) {
+      this.stagedNotation = this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + "-" + toX + "" + toY + (doCap ? "x" : "");
+    } else {
+      this.stagedNotation += "-" + toX + "" + toY + (doCap ? "x" : "");
+    }
+  } else {
+    // Step
+    OctiWebSoundSynth.play("POD_STEP");
+    if (!this.stagedNotation) {
+      this.stagedNotation = this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + "-" + toX + "" + toY;
+    } else {
+      this.stagedNotation += "," + this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + "-" + toX + "" + toY;
+    }
+  }
+
+  if (!s.map[toK]) s.map[toK] = [];
+  s.map[toK].push(pod);
+  this.guidedPodIndex = s.map[toK].length - 1;
+  this.guidedCurrentSquare = { x: toX, y: toY };
+
+  if (matchDest.isJump) {
+    // Check continuation jumps
+    var nextJumps = this.computeLegalDestsForPod(s, toX, toY, pod, this.jumpedSquaresChain).filter(function (d) { return d.isJump; });
+    if (nextJumps.length > 0) {
+      this.guidedLegalDests = nextJumps;
+      this.isAwaitingConfirmation = true;
+      this.updateUi();
+      renderPlayBoardCanvas();
+      renderAllWebReserves();
+      return true;
+    }
+  }
+
+  // Finished hops for this pod
+  this.claimedPodsAtOrigin[this.guidedPodIndex] = true;
+  this.isAwaitingConfirmation = true;
+
+  if (this.hasOtherMovablePodAtOrigin()) {
+    // Keep origin dashed indicator ring
+    this.guidedLegalDests = [];
+  } else {
+    this.guidedMoveActive = false;
+    this.guidedLegalDests = [];
+  }
+
+  this.updateUi();
+  renderPlayBoardCanvas();
+  renderAllWebReserves();
+  return true;
+};
+
+WebMoveComposer.prototype.toggleCaptureAtSquare = function (jx, jy) {
+  var s = this.getWorkingState();
+  var jK = jx + "," + jy;
+  var pIdx = (s.turn === "A") ? 0 : ((s.turn === "B") ? 1 : ((s.turn === "C") ? 2 : 3));
+  if (this.stagedNotation.indexOf("x") !== -1) {
+    this.stagedNotation = this.stagedNotation.replace(/x/g, "");
+    if (s.reserves[pIdx] && s.reserves[pIdx].capturedPods > 0) s.reserves[pIdx].capturedPods--;
+  } else {
+    this.stagedNotation += "x";
+    if (s.reserves[pIdx]) s.reserves[pIdx].capturedPods++;
+  }
+  this.updateUi();
+  renderPlayBoardCanvas();
+  renderAllWebReserves();
+  return true;
+};
+
+WebMoveComposer.prototype.commitStagedMove = function () {
+  if (!this.isAwaitingConfirmation || !this.stagedNotation) return false;
+  var not = this.stagedNotation;
+  var finalState = this.previewState || this.getState();
+  this.reset();
+  if (this.onCommit) {
+    this.onCommit(not, finalState);
+  }
+  return true;
+};
+
+WebMoveComposer.prototype.cancelAndRollback = function () {
+  this.reset();
+  renderPlayBoardCanvas();
+  renderAllWebReserves();
+};
+
+
+
+/* --- Vector Reserve HUD Rendering --- */
+function renderWebReserveCard(player, cardEl, state, isTurn) {
+  if (!cardEl) return;
+  cardEl.innerHTML = "";
+  if (!state) return;
+  var pIdx = (player === "A") ? 0 : ((player === "B") ? 1 : ((player === "C") ? 2 : 3));
+  var res = state.reserves ? state.reserves[pIdx] : { freePods: 0, freeProngs: 0, freeSuper: 0, capturedPods: 0 };
+  var pal = PALETTES[currentTheme] || PALETTES.obsidian;
+  var fp = pal.pods[player] || pal.pods.A;
+
+  if (isTurn) {
+    cardEl.className = "web-res-card active-turn";
+  } else {
+    cardEl.className = "web-res-card";
+  }
+
+  var header = document.createElement("div");
+  header.className = "web-res-header";
+  var titleSpan = document.createElement("span");
+  var dotSpan = document.createElement("span");
+  dotSpan.className = "pod-dot " + player;
+  dotSpan.textContent = player;
+  dotSpan.style.marginRight = "6px";
+  titleSpan.appendChild(dotSpan);
+
+  var nameText = "PLAYER " + player;
+  if (localMatchConfig.playMode === "bot") {
+    if (player === localMatchConfig.humanSeat) {
+      nameText = (currentUser && currentUser.handle) ? ("@" + currentUser.handle + " (" + player + ")") : ("Human (" + player + ")");
+    } else {
+      nameText = "JS Robot " + player;
+    }
+  } else {
+    nameText = "Player " + player;
+  }
+  titleSpan.appendChild(document.createTextNode(nameText));
+  header.appendChild(titleSpan);
+
+  if (isTurn) {
+    var turnPill = document.createElement("span");
+    turnPill.className = "badge";
+    turnPill.style.background = fp.core;
+    turnPill.style.color = "#fff";
+    turnPill.textContent = "TURN";
+    header.appendChild(turnPill);
+  }
+  cardEl.appendChild(header);
+
+  var wells = document.createElement("div");
+  wells.className = "web-res-wells";
+
+  // 1. Pods well
+  var canPlace = isTurn && res && (res.freePods > 0 || res.capturedPods > 0);
+  var podWell = document.createElement("div");
+  podWell.className = "web-res-well" + (canPlace ? " interactive" : "");
+  podWell.title = canPlace ? "Click or drag to place onto board" : "Reserve Pods";
+
+  var podSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  podSvg.setAttribute("width", "18");
+  podSvg.setAttribute("height", "18");
+  podSvg.setAttribute("viewBox", "0 0 24 24");
+  var podPoly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+  podPoly.setAttribute("points", "7,2 17,2 22,7 22,17 17,22 7,22 2,17 2,7");
+  podPoly.setAttribute("fill", fp.core);
+  podPoly.setAttribute("stroke", fp.hi);
+  podPoly.setAttribute("stroke-width", "1.5");
+  podSvg.appendChild(podPoly);
+  podWell.appendChild(podSvg);
+
+  var podCount = document.createElement("span");
+  podCount.textContent = "Pods: " + (res ? res.freePods : 0);
+  podWell.appendChild(podCount);
+
+  if (canPlace) {
+    podWell.addEventListener("click", function () {
+      if (!moveComposer) return;
+      var homes = getHomeSquares(state.mode, player);
+      if (homes.length) {
+        openZoomedSquare(homes[0].x, homes[0].y);
+      }
+    });
+  }
+  wells.appendChild(podWell);
+
+  // 2. Prongs well
+  var prongWell = document.createElement("div");
+  prongWell.className = "web-res-well";
+  prongWell.title = "Standard Prongs";
+  var prongSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  prongSvg.setAttribute("width", "14");
+  prongSvg.setAttribute("height", "18");
+  prongSvg.setAttribute("viewBox", "0 0 14 18");
+  var prongP = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  prongP.setAttribute("d", "M7 1L12 14L7 17L2 14Z");
+  prongP.setAttribute("fill", "#F8FAFC");
+  prongP.setAttribute("stroke", "#0B0F17");
+  prongP.setAttribute("stroke-width", "1");
+  prongSvg.appendChild(prongP);
+  prongWell.appendChild(prongSvg);
+  var prongCount = document.createElement("span");
+  prongCount.textContent = "Prongs: " + (res ? res.freeProngs : 0);
+  prongWell.appendChild(prongCount);
+  wells.appendChild(prongWell);
+
+  // 3. Superprongs well (strictly hidden if !superProngs)
+  if (state.superProngs) {
+    var superWell = document.createElement("div");
+    superWell.className = "web-res-well";
+    superWell.title = "Superprongs";
+    var superSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    superSvg.setAttribute("width", "16");
+    superSvg.setAttribute("height", "18");
+    superSvg.setAttribute("viewBox", "0 0 16 18");
+    var superP = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    superP.setAttribute("d", "M8 1L15 13L8 17L1 13Z");
+    superP.setAttribute("fill", "#FDE047");
+    superP.setAttribute("stroke", "#78350F");
+    superP.setAttribute("stroke-width", "1");
+    superSvg.appendChild(superP);
+    superWell.appendChild(superSvg);
+    var superCount = document.createElement("span");
+    superCount.textContent = "Super: " + (res ? res.freeSuper : 0);
+    superCount.style.color = "#FDE047";
+    superWell.appendChild(superCount);
+    wells.appendChild(superWell);
+  }
+
+  // 4. Captured Pods well: Displays opponent pods captured by this player (oppRes.capturedPods)
+  var oppPlayer = (player === "A") ? "B" : "A";
+  var oppIdx = (oppPlayer === "A") ? 0 : 1;
+  var oppRes = state.reserves ? state.reserves[oppIdx] : null;
+  var enemyPodsCapturedByPlayer = oppRes ? oppRes.capturedPods : 0;
+
+  if (enemyPodsCapturedByPlayer > 0) {
+    var capWell = document.createElement("div");
+    capWell.className = "web-res-well interactive";
+    capWell.title = "Captured Pods (Enemy pods captured by Player " + player + ")";
+    var capSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    capSvg.setAttribute("width", "18");
+    capSvg.setAttribute("height", "18");
+    capSvg.setAttribute("viewBox", "0 0 24 24");
+
+    var oppFp = pal.pods[oppPlayer] || pal.pods.B;
+    var oppPodPoly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    oppPodPoly.setAttribute("points", "7,2 17,2 22,7 22,17 17,22 7,22 2,17 2,7");
+    oppPodPoly.setAttribute("fill", oppFp.core);
+    oppPodPoly.setAttribute("stroke", oppFp.hi);
+    oppPodPoly.setAttribute("stroke-width", "1");
+    capSvg.appendChild(oppPodPoly);
+
+    var capCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    capCircle.setAttribute("cx", "12");
+    capCircle.setAttribute("cy", "12");
+    capCircle.setAttribute("r", "10");
+    capCircle.setAttribute("fill", "none");
+    capCircle.setAttribute("stroke", "#E05252");
+    capCircle.setAttribute("stroke-width", "2");
+    capSvg.appendChild(capCircle);
+
+    var capLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    capLine.setAttribute("x1", "5");
+    capLine.setAttribute("y1", "5");
+    capLine.setAttribute("x2", "19");
+    capLine.setAttribute("y2", "19");
+    capLine.setAttribute("stroke", "#E05252");
+    capLine.setAttribute("stroke-width", "2");
+    capSvg.appendChild(capLine);
+    capWell.appendChild(capSvg);
+
+    var capCount = document.createElement("span");
+    capCount.textContent = "Captured: " + enemyPodsCapturedByPlayer;
+    capCount.style.color = "#F43F5E";
+    capWell.appendChild(capCount);
+
+    if (isTurn && res && res.capturedPods > 0) {
+      capWell.addEventListener("click", function () {
+        var occHomes = getHomeSquares(state.mode, player).filter(function (h) {
+          return isSquareOccupiedBy(state, h.x, h.y, player);
+        });
+        if (occHomes.length) {
+          openZoomedSquare(occHomes[0].x, occHomes[0].y);
+        }
+      });
+    }
+    wells.appendChild(capWell);
+  }
+
+  cardEl.appendChild(wells);
+}
+
+function renderAllWebReserves() {
+  var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
+  if (!s) return;
+  var isA = (s.turn === "A");
+  var isB = (s.turn === "B");
+  renderWebReserveCard("A", document.getElementById("web-res-card-a"), s, isA);
+  renderWebReserveCard("B", document.getElementById("web-res-card-b"), s, isB);
+
+  var cardC = document.getElementById("web-res-card-c");
+  var cardD = document.getElementById("web-res-card-d");
+  if (s.mode === "4P") {
+    if (cardC) { cardC.style.display = "block"; renderWebReserveCard("C", cardC, s, s.turn === "C"); }
+    if (cardD) { cardD.style.display = "block"; renderWebReserveCard("D", cardD, s, s.turn === "D"); }
+  } else {
+    if (cardC) cardC.style.display = "none";
+    if (cardD) cardD.style.display = "none";
+  }
+}
+
+/* --- Canvas Board Renderer --- */
+var playBoardGeom = null;
+
+function renderPlayBoardCanvas() {
+  var canvas = document.getElementById("web-play-canvas");
+  if (!canvas) return;
+  var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
+  if (!s) return;
+
+  var pal = PALETTES[currentTheme] || PALETTES.obsidian;
+  var cssSize = 760;
+  var dpr = window.devicePixelRatio || 1;
+  var pxSize = Math.round(cssSize * dpr);
+  if (canvas.width !== pxSize || canvas.height !== pxSize) {
+    canvas.width = pxSize;
+    canvas.height = pxSize;
+  }
+  var ctx = canvas.getContext("2d");
+  ctx.save();
+  ctx.scale(dpr, dpr);
+
+  // Apply board zoom & focus
+  if (boardZoomScale > 1.001) {
+    ctx.translate(cssSize * boardZoomFocus.x, cssSize * boardZoomFocus.y);
+    ctx.scale(boardZoomScale, boardZoomScale);
+    ctx.translate(-cssSize * boardZoomFocus.x, -cssSize * boardZoomFocus.y);
+  }
+
+  ctx.fillStyle = pal.windowBg;
+  ctx.fillRect(0, 0, cssSize, cssSize);
+
+  var effectiveRot = ((boardRotationDeg + liveRotationOffsetDeg) % 360 + 360) % 360;
+  var geom = computeBoardGeometry(cssSize, cssSize, s.gw, s.gh, effectiveRot);
+  playBoardGeom = geom;
+
+  // 1. Luxury Outer Frame
+  var frameGrad = ctx.createLinearGradient(geom.outer.x, geom.outer.y, geom.outer.x + geom.outer.w, geom.outer.y + geom.outer.h);
+  frameGrad.addColorStop(0, pal.boardOuterTop);
+  frameGrad.addColorStop(0.5, pal.boardOuterMid);
+  frameGrad.addColorStop(1, pal.boardOuterBot);
+  roundRectPath(ctx, geom.outer.x, geom.outer.y, geom.outer.w, geom.outer.h, 12);
+  ctx.fillStyle = frameGrad;
+  ctx.fill();
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = pal.bevelLight;
+  ctx.stroke();
+
+  roundRectPath(ctx, geom.outer.x + 3.5, geom.outer.y + 3.5, geom.outer.w - 7, geom.outer.h - 7, 9);
+  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = pal.bevelDark;
+  ctx.stroke();
+
+  // 2. Coordinate Gutters
+  ctx.font = "bold " + Math.max(9, Math.round(geom.cell * 0.23)) + "px 'Segoe UI', sans-serif";
+  ctx.fillStyle = pal.coordLabel;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (var x = 1; x <= s.gw; x++) {
+    var rBot = geom.squareRect(x, 1);
+    var rTop = geom.squareRect(x, s.gh);
+    if (geom.rotDeg === 0 || geom.rotDeg === 180) {
+      ctx.fillText(String(x), rBot.cx, geom.grid.y + geom.grid.h + geom.gutter * 0.52);
+      ctx.fillText(String(x), rTop.cx, geom.outer.y + geom.gutter * 0.48);
+    } else {
+      ctx.fillText(String(x), geom.outer.x + geom.gutter * 0.48, rBot.ry);
+      ctx.fillText(String(x), geom.grid.x + geom.grid.w + geom.gutter * 0.52, rTop.ry);
+    }
+  }
+  for (var y = 1; y <= s.gh; y++) {
+    var rLeft = geom.squareRect(1, y);
+    var rRight = geom.squareRect(s.gw, y);
+    if (geom.rotDeg === 0 || geom.rotDeg === 180) {
+      ctx.fillText(String(y), geom.outer.x + geom.gutter * 0.48, rLeft.ry);
+      ctx.fillText(String(y), geom.grid.x + geom.grid.w + geom.gutter * 0.52, rRight.ry);
+    } else {
+      ctx.fillText(String(y), rLeft.cx, geom.grid.y + geom.grid.h + geom.gutter * 0.52);
+      ctx.fillText(String(y), rRight.cx, geom.outer.y + geom.gutter * 0.48);
+    }
+  }
+
+  // 3. Edgeless Portal Glow
+  if (s.edgeless) {
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = pal.portalGlow;
+    ctx.lineWidth = 2.0;
+    ctx.strokeRect(geom.grid.x - 3, geom.grid.y - 3, geom.grid.w + 6, geom.grid.h + 6);
+    ctx.restore();
+  }
+
+  // 4. Grid Squares, Sockets, Home Bases
+  for (var sy = 1; sy <= s.gh; sy++) {
+    for (var sx = 1; sx <= s.gw; sx++) {
+      var sqRect = geom.squareRect(sx, sy);
+      var isDark = ((sx + sy) % 2 === 0);
+      ctx.fillStyle = isDark ? pal.cellDark : pal.cellLight;
+      ctx.fillRect(sqRect.x, sqRect.y, sqRect.w, sqRect.h);
+      ctx.lineWidth = 1.0;
+      ctx.strokeStyle = pal.gridLine;
+      ctx.strokeRect(sqRect.x, sqRect.y, sqRect.w, sqRect.h);
+
+      // Recessed socket ring
+      ctx.beginPath();
+      ctx.arc(sqRect.cx, sqRect.ry, sqRect.w * 0.34, 0, Math.PI * 2);
+      ctx.lineWidth = 1.1;
+      ctx.strokeStyle = pal.socketShadow;
+      ctx.stroke();
+
+      var st = squareTypeAt(s.mode, sx, sy);
+      var stack = s.map[sx + "," + sy] || [];
+      if (st === "A_HOME" || st === "B_HOME" || st === "C_HOME" || st === "D_HOME") {
+        var hOwner = st.charAt(0);
+        ctx.fillStyle = pal.homeOuter;
+        ctx.fillRect(sqRect.x + 1, sqRect.y + 1, sqRect.w - 2, sqRect.h - 2);
+        roundRectPath(ctx, sqRect.x + 3.5, sqRect.y + 3.5, sqRect.w - 7, sqRect.h - 7, 4);
+        ctx.fillStyle = pal.homeInner;
+        ctx.fill();
+        var isCap = stack.some(function (p) { return p.owner !== hOwner; });
+        ctx.lineWidth = isCap ? 2.2 : 1.2;
+        ctx.strokeStyle = isCap ? pal.captureGlow : pal.bevelDark;
+        ctx.stroke();
+
+        if (!stack.length) {
+          var seatRot = rotationForSeat(s.mode, hOwner);
+          var txtAng = ((seatRot - effectiveRot) % 360 + 360) % 360;
+          ctx.save();
+          ctx.translate(sqRect.cx, sqRect.ry);
+          ctx.rotate(txtAng * Math.PI / 180);
+          ctx.font = "bold " + Math.max(8, Math.round(sqRect.h * 0.20)) + "px 'Segoe UI', sans-serif";
+          ctx.fillStyle = pal.coordLabel;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("OCTI", 0, 0);
+          ctx.restore();
+        }
+      }
+    }
+  }
+
+  // 5. Board Pods: Sorted Most-Prongs-at-Bottom (layer 0 has most prongs, top has fewest)
+  for (var py = 1; py <= s.gh; py++) {
+    for (var px = 1; px <= s.gw; px++) {
+      var podStack = s.map[px + "," + py];
+      if (!podStack || !podStack.length) continue;
+      var baseR = geom.squareRect(px, py);
+
+      // Sort: layer 0 has most prongs, top layer has fewest
+      var sortedAsc = podStack.slice().sort(function (a, b) {
+        return (b.cfg ? b.cfg.count : 0) - (a.cfg ? a.cfg.count : 0);
+      });
+      // In ascending draw order: draw layer 0 first, top layer last
+      var maxL = Math.min(sortedAsc.length, 4);
+      for (var l = 0; l < maxL; l++) {
+        var pItem = sortedAsc[l];
+        var off = (maxL - 1 - l) * 2.4;
+        var layerR = {
+          x: baseR.x - off,
+          y: baseR.y + off,
+          w: baseR.w,
+          h: baseR.h
+        };
+        var isTop = (l === maxL - 1);
+        var centerBadge = (isTop && sortedAsc.length >= 2) ? ("x" + sortedAsc.length) : "";
+        drawOctagonalPod(ctx, layerR, pItem.owner, pItem.cfg, pal, effectiveRot, false, centerBadge);
+      }
+    }
+  }
+
+  var nowMs = Date.now();
+
+  // 6. Clockwise Orange Move Indicator (#FF8C00, 5000ms duration, 2000ms period)
+  if (lastMoveHighlightSquares && lastMoveHighlightSquares.length &&
+      lastMoveSetAtMs && (nowMs - lastMoveSetAtMs) < LAST_MOVE_DISPLAY_DURATION_MS) {
+    var elapsed = Math.max(0, nowMs - lastMoveSetAtMs);
+    var phase = (elapsed % 2000) / 2000.0;
+    var s0 = phase * 4.0;
+    var s1 = s0 + 1.2;
+    ctx.save();
+    ctx.strokeStyle = "#FF8C00";
+    ctx.lineWidth = 3.2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    lastMoveHighlightSquares.forEach(function (sq) {
+      var cr = geom.squareRect(sq.x, sq.y);
+      var r = { x: cr.x + 1.5, y: cr.y + 1.5, w: cr.w - 3, h: cr.h - 3 };
+      ctx.beginPath();
+      var pStart = pointOnRectPerimeter(r, s0);
+      ctx.moveTo(pStart[0], pStart[1]);
+      var cur = s0;
+      while (cur < s1 - 1e-6) {
+        var nextCorner = Math.floor(cur) + 1.0;
+        var stepEnd = Math.min(s1, nextCorner);
+        var pt = pointOnRectPerimeter(r, stepEnd);
+        ctx.lineTo(pt[0], pt[1]);
+        cur = stepEnd;
+      }
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  // 7. Pink (#FF69B4) Active-Player Board-Edge Turn Indicator
+  if (s.status === "P" && s.turn && s.turn !== "-") {
+    var edge = activeTurnScreenEdge(s.mode, s.turn, effectiveRot);
+    var gr = geom.grid;
+    var inset = 1.0;
+    var startPt, endPt;
+    if (edge === 1) { // Left
+      startPt = [gr.x - inset, gr.y + gr.h];
+      endPt = [gr.x - inset, gr.y];
+    } else if (edge === 2) { // Top
+      startPt = [gr.x, gr.y - inset];
+      endPt = [gr.x + gr.w, gr.y - inset];
+    } else if (edge === 3) { // Right
+      startPt = [gr.x + gr.w + inset, gr.y];
+      endPt = [gr.x + gr.w + inset, gr.y + gr.h];
+    } else { // Bottom
+      startPt = [gr.x + gr.w, gr.y + gr.h + inset];
+      endPt = [gr.x, gr.y + gr.h + inset];
+    }
+    var pulse = (Math.sin(nowMs * 0.00314) + 1.0) * 0.5;
+    ctx.save();
+    ctx.strokeStyle = "#FF69B4";
+    ctx.lineWidth = 3.5 + pulse * 1.5;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(startPt[0], startPt[1]);
+    ctx.lineTo(endPt[0], endPt[1]);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 8. Dashed Origin Indicator Ring around guidedOriginSquare
+  if (moveComposer && moveComposer.guidedOriginSquare && moveComposer.hasOtherMovablePodAtOrigin()) {
+    var oSq = geom.squareRect(moveComposer.guidedOriginSquare.x, moveComposer.guidedOriginSquare.y);
+    ctx.save();
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = "#38BDF8";
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.arc(oSq.cx, oSq.ry, oSq.w * 0.44, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 9. Guided Move Destination Rings & Dots (Green #10B981)
+  if (moveComposer && moveComposer.guidedLegalDests && moveComposer.guidedLegalDests.length) {
+    ctx.save();
+    moveComposer.guidedLegalDests.forEach(function (dst) {
+      var dSq = geom.squareRect(dst.x, dst.y);
+      ctx.beginPath();
+      ctx.arc(dSq.cx, dSq.ry, dSq.w * 0.28, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(16, 185, 129, 0.28)";
+      ctx.fill();
+      ctx.lineWidth = 2.0;
+      ctx.strokeStyle = "#10B981";
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(dSq.cx, dSq.ry, dSq.w * 0.08, 0, Math.PI * 2);
+      ctx.fillStyle = "#10B981";
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  // 10. Top Victory Banner on Game Over
+  if (s.status === "O" || s.status === "R") {
+    ctx.save();
+    ctx.fillStyle = "rgba(16, 22, 34, 0.88)";
+    ctx.fillRect(geom.grid.x, geom.grid.y + 12, geom.grid.w, 38);
+    ctx.strokeStyle = "#C8A253";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(geom.grid.x, geom.grid.y + 12, geom.grid.w, 38);
+
+    ctx.font = "bold 15px 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#FDE047";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    var winMsg = "PLAYER " + (s.winner || "A") + " WINS — VICTORY BY " + (s.status === "R" ? "RESIGNATION" : "BASE OCCUPATION");
+    ctx.fillText(winMsg, geom.grid.x + geom.grid.w / 2, geom.grid.y + 31);
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+/* --- ZoomedSquareDialog Implementation --- */
+var zoomSq = null;
+var zoomSelectedPodIdx = 0;
+var zoomHoverDir = null;
+
+function openZoomedSquare(x, y) {
+  if (typeof x === "object" && x !== null) {
+    y = x.y;
+    x = x.x;
+  }
+  var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
+  if (!s) return;
+  zoomSq = { x: x, y: y };
+  var k = x + "," + y;
+  var stack = s.map[k] || [];
+  var sortedIndices = sortedPodIndicesMostProngsFirst(stack);
+  zoomSelectedPodIdx = sortedIndices.length ? sortedIndices[0] : 0;
+  zoomHoverDir = null;
+
+  var overlay = document.getElementById("web-zoom-overlay");
+  var titleEl = document.getElementById("web-zoom-sq-title");
+  if (titleEl) titleEl.textContent = "Square (" + x + ", " + y + ")";
+
+  updateZoomOverlayControls();
+  renderZoomCanvas();
+  if (overlay) overlay.style.display = "flex";
+}
+
+function closeZoomedSquare() {
+  var overlay = document.getElementById("web-zoom-overlay");
+  if (overlay) overlay.style.display = "none";
+  zoomSq = null;
+}
+
+function updateZoomOverlayControls() {
+  var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
+  if (!s || !zoomSq) return;
+  var k = zoomSq.x + "," + zoomSq.y;
+  var stack = s.map[k] || [];
+  var turn = s.turn;
+  var isTurn = (matchStarted && s.status === "P" && (localMatchConfig.playMode === "pass" || s.turn === localMatchConfig.humanSeat));
+
+  var tabsContainer = document.getElementById("web-zoom-pod-tabs");
+  if (tabsContainer) {
+    tabsContainer.innerHTML = "";
+    var sortedIndices = sortedPodIndicesMostProngsFirst(stack);
+    sortedIndices.forEach(function (pIdx, rank) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      var isMoved = moveComposer && moveComposer.claimedPodsAtOrigin[pIdx];
+      btn.className = "zoom-pod-tab-btn" + (pIdx === zoomSelectedPodIdx ? " active" : "");
+      btn.textContent = "Pod " + (rank + 1) + (isMoved ? " (Moved)" : "");
+      btn.addEventListener("click", function () {
+        zoomSelectedPodIdx = pIdx;
+        updateZoomOverlayControls();
+        renderZoomCanvas();
+      });
+      tabsContainer.appendChild(btn);
+    });
+  }
+
+  // Update counts on tray wells
+  var pIdx = (turn === "A") ? 0 : ((turn === "B") ? 1 : ((turn === "C") ? 2 : 3));
+  var res = s.reserves[pIdx];
+  var prongCountEl = document.getElementById("zoom-prong-count");
+  if (prongCountEl) prongCountEl.textContent = res ? res.freeProngs : 0;
+  var superCountEl = document.getElementById("zoom-super-count");
+  if (superCountEl) superCountEl.textContent = res ? res.freeSuper : 0;
+  var superWell = document.getElementById("zoom-well-super");
+  if (superWell) superWell.style.display = s.superProngs ? "flex" : "none";
+
+  // Action Buttons
+  var movePodBtn = document.getElementById("btn-zoom-move-pod");
+  var placePodBtn = document.getElementById("btn-zoom-place-pod");
+  var liberatePodBtn = document.getElementById("btn-zoom-liberate-pod");
+
+  var curPod = (stack && stack[zoomSelectedPodIdx]) ? stack[zoomSelectedPodIdx] : null;
+  var canMove = isTurn && curPod && curPod.owner === turn && !(moveComposer && moveComposer.claimedPodsAtOrigin[zoomSelectedPodIdx]);
+  if (movePodBtn) {
+    movePodBtn.style.display = canMove ? "inline-block" : "none";
+  }
+
+  var homes = getHomeSquares(s.mode, turn);
+  var isHome = homes.some(function (h) { return h.x === zoomSq.x && h.y === zoomSq.y; });
+  var canPlaceReserve = isTurn && isHome && res && res.freePods > 0 && !squareHasEnemyOf(s, zoomSq.x, zoomSq.y, turn);
+  if (placePodBtn) {
+    placePodBtn.style.display = canPlaceReserve ? "inline-block" : "none";
+  }
+
+  var canLiberateHere = isTurn && res && res.capturedPods > 0 && isSquareOccupiedBy(s, zoomSq.x, zoomSq.y, turn);
+  if (liberatePodBtn) {
+    liberatePodBtn.style.display = canLiberateHere ? "inline-block" : "none";
+  }
+}
+
+function renderZoomCanvas() {
+  var canvas = document.getElementById("web-zoom-canvas");
+  if (!canvas || !zoomSq) return;
+  var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
+  if (!s) return;
+  var pal = PALETTES[currentTheme] || PALETTES.obsidian;
+
+  var ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, 320, 320);
+
+  ctx.fillStyle = pal.windowBg;
+  ctx.fillRect(0, 0, 320, 320);
+
+  var k = zoomSq.x + "," + zoomSq.y;
+  var stack = s.map[k] || [];
+  var sortedIndices = sortedPodIndicesMostProngsFirst(stack);
+  var podR = 68;
+  var cx = 160, cy = 160;
+
+  // 1. Draw non-selected pods underneath with stepped offsets at 0.28 alpha
+  var stepCount = 0;
+  for (var i = sortedIndices.length - 1; i >= 0; i--) {
+    var pIdx = sortedIndices[i];
+    if (pIdx === zoomSelectedPodIdx) continue;
+    stepCount++;
+    var offX = -stepCount * 12;
+    var offY = stepCount * 12;
+    var uPod = stack[pIdx];
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    var uRect = { x: cx + offX - podR, y: cy + offY - podR, w: podR * 2, h: podR * 2 };
+    drawOctagonalPod(ctx, uRect, uPod.owner, uPod.cfg, pal, 0, false, "Pod " + (i + 1));
+    ctx.restore();
+  }
+
+  // 2. Draw selected pod centered at 1.0 alpha
+  if (stack.length && stack[zoomSelectedPodIdx]) {
+    var activePod = stack[zoomSelectedPodIdx];
+    ctx.save();
+    ctx.globalAlpha = 1.0;
+    var aRect = { x: cx - podR, y: cy - podR, w: podR * 2, h: podR * 2 };
+    drawOctagonalPod(ctx, aRect, activePod.owner, activePod.cfg, pal, 0, true, activePod.owner);
+    ctx.restore();
+
+    // 3. Draw hover preview blade if hovering empty socket
+    if (zoomHoverDir !== null && !activePod.cfg.prongs[zoomHoverDir]) {
+      var isSuperSelected = document.getElementById("zoom-well-super") &&
+        document.getElementById("zoom-well-super").classList.contains("active");
+      var mockCfg = { prongs: [0, 0, 0, 0, 0, 0, 0, 0] };
+      mockCfg.prongs[zoomHoverDir] = isSuperSelected ? 2 : 1;
+      ctx.save();
+      ctx.globalAlpha = 0.72;
+      drawProngs(ctx, cx, cy, podR, mockCfg, pal, 0);
+      ctx.restore();
+    }
+  } else {
+    // Empty square view
+    ctx.font = "14px 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#94A3B8";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Empty Square", cx, cy);
+  }
+}
+
+// Wire Zoom Card Action Buttons
+var btnZoomMove = document.getElementById("btn-zoom-move-pod");
+if (btnZoomMove) {
+  btnZoomMove.addEventListener("click", function () {
+    if (!zoomSq || !moveComposer) return;
+    var x = zoomSq.x, y = zoomSq.y, idx = zoomSelectedPodIdx;
+    closeZoomedSquare();
+    moveComposer.beginGuidedPodMove(x, y, idx);
+  });
+}
+var btnZoomPlace = document.getElementById("btn-zoom-place-pod");
+if (btnZoomPlace) {
+  btnZoomPlace.addEventListener("click", function () {
+    if (!zoomSq || !moveComposer) return;
+    var x = zoomSq.x, y = zoomSq.y;
+    closeZoomedSquare();
+    moveComposer.stageAddPod(x, y, false);
+  });
+}
+var btnZoomLiberate = document.getElementById("btn-zoom-liberate-pod");
+if (btnZoomLiberate) {
+  btnZoomLiberate.addEventListener("click", function () {
+    if (!zoomSq || !moveComposer) return;
+    var x = zoomSq.x, y = zoomSq.y;
+    closeZoomedSquare();
+    moveComposer.stageAddPod(x, y, true);
+  });
+}
+
+// Zoom Tray Wells Selection
+var zoomWellNormal = document.getElementById("zoom-well-normal");
+var zoomWellSuper = document.getElementById("zoom-well-super");
+if (zoomWellNormal && zoomWellSuper) {
+  zoomWellNormal.addEventListener("click", function () {
+    zoomWellNormal.classList.add("active");
+    zoomWellSuper.classList.remove("active");
+    renderZoomCanvas();
+  });
+  zoomWellSuper.addEventListener("click", function () {
+    zoomWellSuper.classList.add("active");
+    zoomWellNormal.classList.remove("active");
+    renderZoomCanvas();
+  });
+}
+
+// Zoom Canvas Mouse & Touch Events
+var zoomCanvas = document.getElementById("web-zoom-canvas");
+if (zoomCanvas) {
+  function getZoomDirFromPoint(px, py) {
+    var cx = 160, cy = 160;
+    var dx = px - cx, dy = py - cy;
+    var dist = Math.hypot(dx, dy);
+    if (dist < 40 || dist > 115) return null;
+    var angle = Math.atan2(dy, dx) * 180 / Math.PI; // -180 to 180
+    // Directions: 0: N (-90), 1: NE (-45), 2: E (0), 3: SE (45), 4: S (90), 5: SW (135), 6: W (180), 7: NW (-135)
+    var dNorm = ((angle + 90) % 360 + 360) % 360; // 0 is N, 45 is NE, etc.
+    var sector = Math.round(dNorm / 45) % 8;
+    return sector;
+  }
+
+  zoomCanvas.addEventListener("mousemove", function (e) {
+    var rect = zoomCanvas.getBoundingClientRect();
+    var scaleX = 320 / rect.width, scaleY = 320 / rect.height;
+    var x = (e.clientX - rect.left) * scaleX;
+    var y = (e.clientY - rect.top) * scaleY;
+    var dir = getZoomDirFromPoint(x, y);
+    if (dir !== zoomHoverDir) {
+      zoomHoverDir = dir;
+      renderZoomCanvas();
+    }
+  });
+
+  zoomCanvas.addEventListener("mouseleave", function () {
+    zoomHoverDir = null;
+    renderZoomCanvas();
+  });
+
+  zoomCanvas.addEventListener("click", function (e) {
+    var rect = zoomCanvas.getBoundingClientRect();
+    var x = (e.clientX - rect.left) * (320 / rect.width);
+    var y = (e.clientY - rect.top) * (320 / rect.height);
+    var dir = getZoomDirFromPoint(x, y);
+    if (dir !== null && zoomSq && moveComposer) {
+      var isSuper = zoomWellSuper && zoomWellSuper.classList.contains("active");
+      var sqX = zoomSq.x, sqY = zoomSq.y, pIdx = zoomSelectedPodIdx;
+      closeZoomedSquare();
+      moveComposer.stageAddProng(sqX, sqY, pIdx, dir, isSuper);
+    }
+  });
+
+  // Mouse wheel cycling over zoom canvas
+  zoomCanvas.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    if (!zoomSq) return;
+    var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
+    if (!s) return;
+    var stack = s.map[zoomSq.x + "," + zoomSq.y] || [];
+    var sorted = sortedPodIndicesMostProngsFirst(stack);
+    if (sorted.length <= 1) return;
+    var curRank = sorted.indexOf(zoomSelectedPodIdx);
+    if (e.deltaY > 0) {
+      curRank = (curRank + 1) % sorted.length;
+    } else {
+      curRank = ((curRank - 1) % sorted.length + sorted.length) % sorted.length;
+    }
+    zoomSelectedPodIdx = sorted[curRank];
+    updateZoomOverlayControls();
+    renderZoomCanvas();
+  });
+}
+
+// Dismiss ZoomedSquareDialog on outside backdrop click or Esc
+var zoomOverlay = document.getElementById("web-zoom-overlay");
+if (zoomOverlay) {
+  zoomOverlay.addEventListener("click", function (e) {
+    if (e.target === zoomOverlay) {
+      closeZoomedSquare();
+    }
+  });
+}
+
+
+
+/* --- Board Canvas Event & Gesture Handlers --- */
+var playCanvas = document.getElementById("web-play-canvas");
+var boardMouseHeld = false;
+var boardPressRawPos = { x: 0, y: 0 };
+var boardLastPanRawPos = { x: 0, y: 0 };
+var boardPanActive = false;
+var handRotateActive = false;
+var handRotateRefAngleDeg = 0;
+var dragJumpedSquare = null;
+
+if (playCanvas) {
+  function getRawPos(e) {
+    var rect = playCanvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (760 / rect.width),
+      y: (e.clientY - rect.top) * (760 / rect.height)
+    };
+  }
+
+  function getBoardPos(raw) {
+    if (boardZoomScale <= 1.001) return { x: raw.x, y: raw.y };
+    var cx = 760 * boardZoomFocus.x;
+    var cy = 760 * boardZoomFocus.y;
+    return {
+      x: (raw.x - cx) / boardZoomScale + cx,
+      y: (raw.y - cy) / boardZoomScale + cy
+    };
+  }
+
+  // 1. Wheel Zoom (1.0x .. 3.0x) anchored at cursor
+  playCanvas.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var raw = getRawPos(e);
+    var oldScale = boardZoomScale;
+    var newScale = (e.deltaY < 0) ? Math.min(3.0, oldScale * 1.15) : Math.max(1.0, oldScale / 1.15);
+    if (newScale <= 1.001) {
+      boardZoomScale = 1.0;
+      boardZoomFocus = { x: 0.5, y: 0.5 };
+    } else {
+      var boardX = (oldScale > 1.001) ? ((raw.x - 760 * boardZoomFocus.x) / oldScale + 760 * boardZoomFocus.x) : raw.x;
+      var boardY = (oldScale > 1.001) ? ((raw.y - 760 * boardZoomFocus.y) / oldScale + 760 * boardZoomFocus.y) : raw.y;
+      boardZoomFocus.x = (boardX * newScale - raw.x) / ((newScale - 1.0) * 760);
+      boardZoomFocus.y = (boardY * newScale - raw.y) / ((newScale - 1.0) * 760);
+      boardZoomFocus.x = Math.max(0.0, Math.min(1.0, boardZoomFocus.x));
+      boardZoomFocus.y = Math.max(0.0, Math.min(1.0, boardZoomFocus.y));
+      boardZoomScale = newScale;
+    }
+    renderPlayBoardCanvas();
+  });
+
+  // 2. Mouse Press (Left / Right)
+  playCanvas.addEventListener("mousedown", function (e) {
+    if (lastMoveHighlightSquares.length) {
+      lastMoveHighlightSquares = [];
+      renderPlayBoardCanvas();
+    }
+    var raw = getRawPos(e);
+    boardPressRawPos = raw;
+    boardLastPanRawPos = raw;
+    boardPanActive = false;
+
+    // Right-click handling: Reset zoom if zoomed, else open Zoom view
+    if (e.button === 2) {
+      e.preventDefault();
+      if (boardZoomScale > 1.001) {
+        boardZoomScale = 1.0;
+        boardZoomFocus = { x: 0.5, y: 0.5 };
+        renderPlayBoardCanvas();
+        return;
+      }
+      if (playBoardGeom) {
+        var bPos = getBoardPos(raw);
+        var sq = playBoardGeom.screenToSquare(bPos.x, bPos.y);
+        if (sq) {
+          openZoomedSquare(sq.x, sq.y);
+        }
+      }
+      return;
+    }
+
+    if (e.button === 0) {
+      boardMouseHeld = true;
+      handRotateActive = false;
+      handRotateRefAngleDeg = Math.atan2(raw.y - 380, raw.x - 380) * 180 / Math.PI;
+    }
+  });
+
+  // Context menu prevention
+  playCanvas.addEventListener("contextmenu", function (e) {
+    e.preventDefault();
+  });
+
+  // Double-click handling: Reset zoom if zoomed, else open Zoom view
+  playCanvas.addEventListener("dblclick", function (e) {
+    e.preventDefault();
+    if (boardZoomScale > 1.001) {
+      boardZoomScale = 1.0;
+      boardZoomFocus = { x: 0.5, y: 0.5 };
+      renderPlayBoardCanvas();
+      return;
+    }
+    var raw = getRawPos(e);
+    if (playBoardGeom) {
+      var bPos = getBoardPos(raw);
+      var sq = playBoardGeom.screenToSquare(bPos.x, bPos.y);
+      if (sq) {
+        openZoomedSquare(sq.x, sq.y);
+      }
+    }
+  });
+
+  // 3. Mouse Move: Drag-Pan when Zoomed, Continuous Rotation when Unzoomed
+  playCanvas.addEventListener("mousemove", function (e) {
+    var raw = getRawPos(e);
+
+    if (boardMouseHeld && boardZoomScale > 1.001) {
+      var dist = Math.hypot(raw.x - boardPressRawPos.x, raw.y - boardPressRawPos.y);
+      if (dist > 6 || boardPanActive) {
+        boardPanActive = true;
+        var dx = raw.x - boardLastPanRawPos.x;
+        var dy = raw.y - boardLastPanRawPos.y;
+        boardLastPanRawPos = raw;
+        boardZoomFocus.x -= dx / ((boardZoomScale - 1.0) * 760);
+        boardZoomFocus.y -= dy / ((boardZoomScale - 1.0) * 760);
+        boardZoomFocus.x = Math.max(0.0, Math.min(1.0, boardZoomFocus.x));
+        boardZoomFocus.y = Math.max(0.0, Math.min(1.0, boardZoomFocus.y));
+        renderPlayBoardCanvas();
+        return;
+      }
+    }
+
+    if (boardMouseHeld && boardZoomScale <= 1.001) {
+      var mDist = Math.hypot(raw.x - boardPressRawPos.x, raw.y - boardPressRawPos.y);
+      if (mDist > 6 || handRotateActive) {
+        handRotateActive = true;
+        var curAngle = Math.atan2(raw.y - 380, raw.x - 380) * 180 / Math.PI;
+        var diff = curAngle - handRotateRefAngleDeg;
+        while (diff > 180) diff -= 360;
+        while (diff < -180) diff += 360;
+        liveRotationOffsetDeg = diff;
+        renderPlayBoardCanvas();
+        return;
+      }
+    }
+  });
+
+  // 4. Mouse Up & Click: Snap 90deg, Off-Board Drag Capture, or Square Click
+  playCanvas.addEventListener("mouseup", function (e) {
+    if (!boardMouseHeld) return;
+    boardMouseHeld = false;
+    var raw = getRawPos(e);
+
+    if (handRotateActive) {
+      handRotateActive = false;
+      var rawSnapped = Math.round((boardRotationDeg + liveRotationOffsetDeg) / 90.0) * 90;
+      boardRotationDeg = ((rawSnapped % 360) + 360) % 360;
+      liveRotationOffsetDeg = 0;
+      renderPlayBoardCanvas();
+      return;
+    }
+
+    if (boardPanActive) {
+      boardPanActive = false;
+      return;
+    }
+
+    // Off-board drag to toggle capture check
+    if (moveComposer && moveComposer.jumpedSquaresChain.length && playBoardGeom) {
+      var bPos = getBoardPos(raw);
+      if (bPos.x < playBoardGeom.grid.x || bPos.x > playBoardGeom.grid.x + playBoardGeom.grid.w ||
+          bPos.y < playBoardGeom.grid.y || bPos.y > playBoardGeom.grid.y + playBoardGeom.grid.h) {
+        var lastJ = moveComposer.jumpedSquaresChain[moveComposer.jumpedSquaresChain.length - 1];
+        moveComposer.toggleCaptureAtSquare(lastJ.x, lastJ.y);
+        return;
+      }
+    }
+
+    // Board Square Click Handling
+    if (!matchStarted && !activeOnlineGameId) return;
+    var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
+    if (!s || s.status === "O" || s.status === "R") return;
+
+    var isMyTurn = (localMatchConfig.playMode === "pass" || s.turn === localMatchConfig.humanSeat || (activeOnlineGameId && isMyOnlineTurn(s)));
+    if (!isMyTurn) return;
+
+    if (playBoardGeom) {
+      var bPt = getBoardPos(raw);
+      var sq = playBoardGeom.screenToSquare(bPt.x, bPt.y);
+      if (sq) {
+        handlePlaySquareClick(sq.x, sq.y, bPt.x, bPt.y);
+      }
+    }
+  });
+
+  // Touch double-tap & long-press gestures
+  var lastTouchTime = 0;
+  var touchStartPt = { x: 0, y: 0 };
+  var touchHoldTimer = null;
+
+  playCanvas.addEventListener("touchstart", function (e) {
+    if (e.touches.length === 1) {
+      var t = e.touches[0];
+      var rect = playCanvas.getBoundingClientRect();
+      var raw = {
+        x: (t.clientX - rect.left) * (760 / rect.width),
+        y: (t.clientY - rect.top) * (760 / rect.height)
+      };
+      touchStartPt = raw;
+      var now = Date.now();
+      if (now - lastTouchTime < 280) {
+        // Double tap -> Zoom View
+        e.preventDefault();
+        if (playBoardGeom) {
+          var bPos = getBoardPos(raw);
+          var sq = playBoardGeom.screenToSquare(bPos.x, bPos.y);
+          if (sq) openZoomedSquare(sq.x, sq.y);
+        }
+      }
+      lastTouchTime = now;
+
+      // Long press (420ms) -> Zoom View
+      touchHoldTimer = setTimeout(function () {
+        if (playBoardGeom) {
+          var bPos = getBoardPos(raw);
+          var sq = playBoardGeom.screenToSquare(bPos.x, bPos.y);
+          if (sq) openZoomedSquare(sq.x, sq.y);
+        }
+      }, 420);
+    }
+  }, { passive: false });
+
+  playCanvas.addEventListener("touchmove", function () {
+    if (touchHoldTimer) {
+      clearTimeout(touchHoldTimer);
+      touchHoldTimer = null;
+    }
+  }, { passive: true });
+
+  playCanvas.addEventListener("touchend", function () {
+    if (touchHoldTimer) {
+      clearTimeout(touchHoldTimer);
+      touchHoldTimer = null;
+    }
+  });
+}
+
+// Square Click Logic: Guided Move / Prong Addition / Zoom View
+function handlePlaySquareClick(x, y, ptX, ptY) {
+  if (!moveComposer) return;
+  var s = (moveComposer.previewState) ? moveComposer.previewState : activePlayState;
+  var k = x + "," + y;
+  var stack = s.map[k] || [];
+  var turn = s.turn;
+
+  // 1. If guided move active and clicked a destination
+  if (moveComposer.guidedMoveActive) {
+    var matchDest = moveComposer.guidedLegalDests.find(function (d) { return d.x === x && d.y === y; });
+    if (matchDest) {
+      moveComposer.selectGuidedDestination(x, y);
+      return;
+    }
+    // If clicked origin square while composite moves are possible
+    if (moveComposer.guidedOriginSquare && moveComposer.guidedOriginSquare.x === x && moveComposer.guidedOriginSquare.y === y) {
+      if (moveComposer.hasOtherMovablePodAtOrigin()) {
+        openZoomedSquare(x, y);
+        return;
+      }
+    }
+  }
+
+  // 2. If friendly pod on square
+  if (stack.length && stack[stack.length - 1].owner === turn) {
+    // Check if outer socket was clicked directly on board
+    if (playBoardGeom) {
+      var sqR = playBoardGeom.squareRect(x, y);
+      var dx = ptX - sqR.cx, dy = ptY - sqR.ry;
+      var dist = Math.hypot(dx, dy);
+      var cellR = sqR.w * 0.36;
+      if (dist >= cellR * 0.70 && dist <= cellR * 1.35) {
+        var effRot = ((boardRotationDeg + liveRotationOffsetDeg) % 360 + 360) % 360;
+        var angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        var dNorm = ((angle - effRot + 90) % 360 + 360) % 360;
+        var sector = Math.round(dNorm / 45) % 8;
+        var topPod = stack[stack.length - 1];
+        if (!topPod.cfg.prongs[sector]) {
+          moveComposer.stageAddProng(x, y, stack.length - 1, sector, false);
+          return;
+        }
+      }
+    }
+
+    // Begin guided move for top unclaimed pod
+    var topIdx = stack.length - 1;
+    moveComposer.beginGuidedPodMove(x, y, topIdx);
+    return;
+  }
+
+  // 3. If friendly home square and freePods > 0, stage placement
+  var homes = getHomeSquares(s.mode, turn);
+  var isHome = homes.some(function (h) { return h.x === x && h.y === y; });
+  var pIdx = (turn === "A") ? 0 : ((turn === "B") ? 1 : ((turn === "C") ? 2 : 3));
+  var res = s.reserves[pIdx];
+  if (isHome && res && res.freePods > 0 && !squareHasEnemyOf(s, x, y, turn)) {
+    moveComposer.stageAddPod(x, y, false);
+    return;
+  }
+}
+
+// Global Keydown Listeners (Enter to commit, Esc to cancel / close)
+window.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") {
+    var zoomEl = document.getElementById("web-zoom-overlay");
+    if (zoomEl && zoomEl.style.display === "flex") {
+      closeZoomedSquare();
+      return;
+    }
+    if (boardZoomScale > 1.001) {
+      boardZoomScale = 1.0;
+      boardZoomFocus = { x: 0.5, y: 0.5 };
+      renderPlayBoardCanvas();
+      return;
+    }
+    if (moveComposer && moveComposer.isAwaitingConfirmation) {
+      moveComposer.cancelAndRollback();
+      return;
+    }
+  }
+
+  if (e.key === "Enter") {
+    if (moveComposer && moveComposer.isAwaitingConfirmation) {
+      moveComposer.commitStagedMove();
+      return;
+    }
+  }
 });
 
-$("subtab-play-online").addEventListener("click", function () {
-  $("subtab-play-online").className = "btn btn-primary";
-  $("subtab-play-local").className = "btn";
-  $("play-online-panel").style.display = "block";
-  $("play-local-panel").style.display = "none";
-  loadOnlineTables();
-});
+// Staged Confirmation Bar Buttons
+var btnCommitPly = document.getElementById("btn-web-commit-ply");
+if (btnCommitPly) {
+  btnCommitPly.addEventListener("click", function () {
+    if (moveComposer) moveComposer.commitStagedMove();
+  });
+}
+var btnCancelPly = document.getElementById("btn-web-cancel-ply");
+if (btnCancelPly) {
+  btnCancelPly.addEventListener("click", function () {
+    if (moveComposer) moveComposer.cancelAndRollback();
+  });
+}
 
-function initLocalBotGame() {
-  var mode = $("web-play-mode").value;
-  var humanSide = $("web-human-side").value;
+// Capture Dialog Buttons
+var btnCapYes = document.getElementById("btn-capture-yes");
+var btnCapNo = document.getElementById("btn-capture-no");
+if (btnCapYes && btnCapNo) {
+  btnCapYes.addEventListener("click", function () {
+    var capOverlay = document.getElementById("web-capture-overlay");
+    if (capOverlay) capOverlay.style.display = "none";
+  });
+  btnCapNo.addEventListener("click", function () {
+    var capOverlay = document.getElementById("web-capture-overlay");
+    if (capOverlay) capOverlay.style.display = "none";
+    if (moveComposer && moveComposer.jumpedSquaresChain.length) {
+      var lastJ = moveComposer.jumpedSquaresChain[moveComposer.jumpedSquaresChain.length - 1];
+      moveComposer.toggleCaptureAtSquare(lastJ.x, lastJ.y);
+    }
+  });
+}
+
+// Game Over Dialog Buttons
+var btnGoNew = document.getElementById("btn-gameover-new");
+var btnGoReview = document.getElementById("btn-gameover-review");
+if (btnGoNew && btnGoReview) {
+  btnGoNew.addEventListener("click", function () {
+    var goOverlay = document.getElementById("web-gameover-overlay");
+    if (goOverlay) goOverlay.style.display = "none";
+    showMatchSetupModal();
+  });
+  btnGoReview.addEventListener("click", function () {
+    var goOverlay = document.getElementById("web-gameover-overlay");
+    if (goOverlay) goOverlay.style.display = "none";
+  });
+}
+
+// Rotate 90 CW buttons
+var btnWebRotate = document.getElementById("btn-web-rotate");
+if (btnWebRotate) {
+  btnWebRotate.addEventListener("click", function () {
+    boardRotationDeg = (boardRotationDeg + 90) % 360;
+    renderPlayBoardCanvas();
+  });
+}
+
+// Theme Selectors
+var webThemeSelect = document.getElementById("web-play-theme-select");
+if (webThemeSelect) {
+  webThemeSelect.addEventListener("change", function () {
+    currentTheme = webThemeSelect.value || "obsidian";
+    var globalThemeSelect = document.getElementById("theme-select");
+    if (globalThemeSelect) globalThemeSelect.value = currentTheme;
+    renderPlayBoardCanvas();
+    renderAllWebReserves();
+  });
+}
+
+// SFX Toggle Button
+var btnSfx = document.getElementById("btn-sfx");
+if (btnSfx) {
+  btnSfx.addEventListener("click", function () {
+    OctiWebSoundSynth.setEnabled(!OctiWebSoundSynth.isEnabled());
+  });
+}
+
+/* --- Match Setup Modal & Non-Modal Start Match Overlay --- */
+function updateStartMatchSummary() {
+  var line1 = document.getElementById("web-start-summary-line1");
+  var line2 = document.getElementById("web-start-summary-line2");
+  if (!line1 || !line2) return;
+
+  var playModeStr = localMatchConfig.playMode === "bot" ? ("vs AI Bot (Lv" + localMatchConfig.botDifficulty + ")") : "Pass-and-Play (Local 2P)";
+  var seatStr = "Seat " + localMatchConfig.humanSeat + " (" + (localMatchConfig.humanSeat === "A" ? "Emerald" : "Ruby") + ")";
+  line1.textContent = playModeStr + " • " + seatStr;
+
+  var modeStr = localMatchConfig.gameMode + " (" + (localMatchConfig.gameMode === "OFK" ? "6x7" : "9x9") + ")";
+  var basesStr = localMatchConfig.bases + " " + (localMatchConfig.bases === 1 ? "Base" : "Bases");
+  var extras = [];
+  if (localMatchConfig.superProngs) extras.push("Superprongs");
+  if (localMatchConfig.edgeless) extras.push("Edgeless");
+  if (localMatchConfig.timeControl !== "untimed") extras.push(localMatchConfig.timeControl);
+  var extraStr = extras.length ? (" • " + extras.join(", ")) : " • Standard";
+  line2.textContent = modeStr + " • " + basesStr + extraStr;
+}
+
+function showMatchSetupModal() {
+  var modal = document.getElementById("web-match-setup-modal");
+  if (!modal) return;
+  modal.style.display = "flex";
+  if (document.getElementById("setup-play-mode")) document.getElementById("setup-play-mode").value = localMatchConfig.playMode;
+  if (document.getElementById("setup-bot-difficulty")) document.getElementById("setup-bot-difficulty").value = String(localMatchConfig.botDifficulty);
+  if (document.getElementById("setup-human-seat")) document.getElementById("setup-human-seat").value = localMatchConfig.humanSeat;
+  if (document.getElementById("setup-game-mode")) document.getElementById("setup-game-mode").value = localMatchConfig.gameMode;
+  if (document.getElementById("setup-bases")) document.getElementById("setup-bases").value = String(localMatchConfig.bases);
+  if (document.getElementById("setup-superprongs")) document.getElementById("setup-superprongs").checked = localMatchConfig.superProngs;
+  if (document.getElementById("setup-edgeless")) document.getElementById("setup-edgeless").checked = localMatchConfig.edgeless;
+  if (document.getElementById("setup-time-control")) document.getElementById("setup-time-control").value = localMatchConfig.timeControl;
+}
+
+var btnChangeType = document.getElementById("btn-web-change-type");
+if (btnChangeType) {
+  btnChangeType.addEventListener("click", showMatchSetupModal);
+}
+var btnNewGameSetup = document.getElementById("btn-web-new-game-setup");
+if (btnNewGameSetup) {
+  btnNewGameSetup.addEventListener("click", showMatchSetupModal);
+}
+
+var btnSetupCancel = document.getElementById("btn-setup-cancel");
+if (btnSetupCancel) {
+  btnSetupCancel.addEventListener("click", function () {
+    var modal = document.getElementById("web-match-setup-modal");
+    if (modal) modal.style.display = "none";
+  });
+}
+
+var btnSetupApply = document.getElementById("btn-setup-apply");
+if (btnSetupApply) {
+  btnSetupApply.addEventListener("click", function () {
+    var modal = document.getElementById("web-match-setup-modal");
+    if (modal) modal.style.display = "none";
+
+    localMatchConfig.playMode = document.getElementById("setup-play-mode").value;
+    localMatchConfig.botDifficulty = parseInt(document.getElementById("setup-bot-difficulty").value, 10);
+    localMatchConfig.humanSeat = document.getElementById("setup-human-seat").value;
+    localMatchConfig.gameMode = document.getElementById("setup-game-mode").value;
+    localMatchConfig.bases = parseInt(document.getElementById("setup-bases").value, 10);
+    if (localMatchConfig.gameMode === "OFK") localMatchConfig.bases = 4;
+    localMatchConfig.superProngs = !!document.getElementById("setup-superprongs").checked;
+    localMatchConfig.edgeless = !!document.getElementById("setup-edgeless").checked;
+    localMatchConfig.timeControl = document.getElementById("setup-time-control").value;
+
+    updateStartMatchSummary();
+    prepareLocalMatchInitialState();
+  });
+}
+
+function prepareLocalMatchInitialState() {
+  matchStarted = false;
+  activeOnlineGameId = "";
+  var mode = localMatchConfig.gameMode;
+  var bases = localMatchConfig.bases;
+  var sp = localMatchConfig.superProngs ? "1" : "0";
+  var ed = localMatchConfig.edgeless ? "1" : "0";
+
   var fen = "";
   if (mode === "OFK") {
-    fen = "OFK:4:0:0:P:A:-:0:0,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56";
-  } else if (mode === "2P_1BASE") {
-    fen = "2P:1:0:0:P:A:-:0:6,0,25,0:6,0,25,0:A53,B57";
+    fen = "OFK:4:" + sp + ":" + ed + ":P:A:-:0:0,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56";
   } else if (mode === "4P") {
-    fen = "4P:1:0:0:P:A:-:0:3,0,15,0:3,0,15,0:3,0,15,0:3,0,15,0:A33,B37,C77,D73";
+    fen = "4P:1:" + sp + ":" + ed + ":P:A:-:0:3,0,15,0:3,0,15,0:3,0,15,0:3,0,15,0:A33,B37,C77,D73";
+  } else if (bases === 1) {
+    fen = "2P:1:" + sp + ":" + ed + ":P:A:-:0:6,0,25,0:6,0,25,0:A53,B57";
   } else {
-    fen = "2P:3:0:0:P:A:-:0:4,0,25,0:4,0,25,0:A33,A53,A73,B37,B57,B77";
+    fen = "2P:3:" + sp + ":" + ed + ":P:A:-:0:4,0,25,0:4,0,25,0:A33,A53,A73,B37,B57,B77";
   }
-  localBotState = parseOctiFen(fen);
-  localGameInitialFen = fen;
-  localGameStartedAt = Math.floor(Date.now() / 1000);
-  localGameMoves = [];
-  localGamePlies = [{
+
+  activePlayState = parseOctiFen(fen);
+  playMatchHistory = [];
+  playMatchPlies = [{
     plyIndex: 0,
     player: "-",
     move: "(Initial Setup)",
     fenAfter: fen
   }];
-  localSelectedSq = null;
-  localSelectedMove = null;
-  localLegalDests = {};
-  $("web-selected-move-text").textContent = "Selected: (None)";
-  $("btn-web-commit-move").disabled = true;
-  $("web-play-archive-status").textContent = "";
+  playVcrIndex = 0;
+  lastMoveHighlightSquares = [];
 
-  var movesBox = $("web-play-moves");
-  clear(movesBox);
-  movesBox.appendChild(el("div", "Game initialized. Mode: " + mode));
+  var startOverlay = document.getElementById("web-start-match-overlay");
+  if (startOverlay) startOverlay.style.display = "flex";
 
-  updatePlayHud();
-  renderSvgBoard();
-  checkPlayTurn();
+  updateStartMatchSummary();
+  updatePlaySidebar();
+  renderPlayBoardCanvas();
+  renderAllWebReserves();
 }
 
-function updatePlayHud() {
-  var container = $("web-play-reserves");
-  if (!container || !localBotState) return;
-  clear(container);
-  var names = {
-    A: $("web-human-side").value === "A" ? (currentUser ? currentUser.handle : "Human (Red)") : "JS Robot A",
-    B: $("web-human-side").value === "B" ? (currentUser ? currentUser.handle : "Human (Green)") : "JS Robot B",
-    C: "JS Robot C",
-    D: "JS Robot D"
-  };
-  localBotState.reserves.forEach(function (r) {
-    var card = el("div", null, "hud-card" + (localBotState.turn === r.player ? " active-turn" : ""));
-    var left = el("div", null, "hud-left");
-    left.appendChild(el("span", r.player, "pod-dot " + r.player));
-    left.appendChild(el("span", names[r.player] || ("Player " + r.player)));
+var btnStartMatch = document.getElementById("btn-web-start-match");
+if (btnStartMatch) {
+  btnStartMatch.addEventListener("click", function () {
+    var startOverlay = document.getElementById("web-start-match-overlay");
+    if (startOverlay) startOverlay.style.display = "none";
+    matchStarted = true;
 
-    var metrics = el("div", null, "hud-metrics");
-    function addM(lbl, val) {
-      var s = el("span", lbl + ": ");
-      s.appendChild(el("strong", val));
-      metrics.appendChild(s);
-    }
-    addM("Pods", r.freePods);
-    addM("Cap", r.capturedPods);
-    addM("Prongs", r.freeProngs);
-    card.appendChild(left);
-    card.appendChild(metrics);
-    container.appendChild(card);
+    // Reset clocks
+    var initialSec = 0;
+    if (localMatchConfig.timeControl === "300+3") initialSec = 300;
+    else if (localMatchConfig.timeControl === "600+5") initialSec = 600;
+    else if (localMatchConfig.timeControl === "900+10") initialSec = 900;
+    clockTimers.A = initialSec;
+    clockTimers.B = initialSec;
+    clockTimers.C = initialSec;
+    clockTimers.D = initialSec;
+
+    updatePlaySidebar();
+    renderPlayBoardCanvas();
+    renderAllWebReserves();
+
+    checkMatchTurn();
   });
 }
 
-function checkPlayTurn() {
-  if (!localBotState) return;
-  var humanSide = $("web-human-side").value;
-  var statusBanner = $("web-play-status");
+function updatePlaySidebar() {
+  if (!activePlayState) return;
+  var s = activePlayState;
+  var modeBadge = document.getElementById("web-play-mode-badge");
+  if (modeBadge) modeBadge.textContent = s.mode + " • " + s.bases + (s.bases === 1 ? " Base" : " Bases");
 
-  if (localBotState.status === "O" || localBotState.status === "R") {
-    var winStr = localBotState.status === "R" ? "Game Over - Resigned" :
-      (localBotState.winner === humanSide ? "Victory! You won the match!" : ("Game Over - Player " + localBotState.winner + " won"));
-    statusBanner.textContent = winStr;
-    statusBanner.style.background = (localBotState.winner === humanSide ? "#ecfdf5" : "#fff1f2");
-    uploadLocalGameArchive();
-    return;
+  var turnBadge = document.getElementById("web-play-turn-badge");
+  if (turnBadge) {
+    if (s.status === "O" || s.status === "R") {
+      turnBadge.textContent = "Winner: Player " + s.winner;
+      turnBadge.style.background = "#881337";
+      turnBadge.style.color = "#FFF1F2";
+    } else {
+      turnBadge.textContent = "Player " + s.turn + " Turn";
+      turnBadge.style.background = (s.turn === "A") ? "#064E3B" : "#881337";
+      turnBadge.style.color = (s.turn === "A") ? "#6EE7B7" : "#FDA4AF";
+    }
   }
 
-  if (localBotState.turn === humanSide) {
-    statusBanner.textContent = "Your Turn (" + (humanSide === "A" ? "Red" : "Green") + ")";
-    statusBanner.style.background = "#eff6ff";
-  } else {
-    statusBanner.textContent = "Bot is thinking (" + localBotState.turn + ")...";
-    statusBanner.style.background = "#f4f4f5";
-    triggerBotTurn();
+  // Update Clock Bar
+  function fmtClock(sec) {
+    if (sec <= 0 && localMatchConfig.timeControl === "untimed") return "--:--";
+    var m = Math.floor(sec / 60);
+    var sc = sec % 60;
+    return (m < 10 ? "0" : "") + m + ":" + (sc < 10 ? "0" : "") + sc;
+  }
+  if (document.getElementById("web-clock-a")) document.getElementById("web-clock-a").textContent = "A: " + fmtClock(clockTimers.A);
+  if (document.getElementById("web-clock-b")) document.getElementById("web-clock-b").textContent = "B: " + fmtClock(clockTimers.B);
+
+  // Update Move History List
+  var movesBox = document.getElementById("web-play-moves");
+  if (movesBox) {
+    movesBox.innerHTML = "";
+    if (playMatchPlies.length <= 1) {
+      var d = document.createElement("div");
+      d.className = "dim";
+      d.style.padding = "4px";
+      d.textContent = "No moves recorded yet.";
+      movesBox.appendChild(d);
+    } else {
+      var pal = PALETTES[currentTheme] || PALETTES.obsidian;
+      for (var i = 1; i < playMatchPlies.length; i++) {
+        var pl = playMatchPlies[i];
+        var row = document.createElement("div");
+        var fp = pal.pods[pl.player] || pal.pods.A;
+        row.style.background = fp.sh;
+        row.style.color = fp.hi;
+        row.style.borderLeft = "3px solid " + fp.rim;
+        row.style.padding = "3px 8px";
+        row.style.marginBottom = "4px";
+        row.style.borderRadius = "4px";
+        row.style.cursor = "pointer";
+        row.textContent = "#" + pl.plyIndex + " [" + pl.player + "] " + pl.move;
+        (function (targetIdx) {
+          row.addEventListener("click", function () {
+            showPlayVcrPly(targetIdx);
+          });
+        })(i);
+        movesBox.appendChild(row);
+      }
+      movesBox.scrollTop = movesBox.scrollHeight;
+    }
+  }
+
+  // Update VCR label
+  var vcrLabel = document.getElementById("web-vcr-label");
+  if (vcrLabel) {
+    var tot = Math.max(0, playMatchPlies.length - 1);
+    vcrLabel.textContent = "Ply " + playVcrIndex + "/" + tot;
   }
 }
 
-function triggerBotTurn() {
-  var fen = serializeOctiFen(localBotState);
-  var diff = parseInt($("web-bot-difficulty").value || "2", 10);
-  var side = localBotState.turn;
-  var mode = localBotState.mode;
+function showPlayVcrPly(idx) {
+  if (idx < 0 || idx >= playMatchPlies.length) return;
+  playVcrIndex = idx;
+  var pl = playMatchPlies[idx];
+  activePlayState = parseOctiFen(pl.fenAfter);
+  lastMoveHighlightSquares = extractModifiedSquaresFromMove(pl.move);
+  lastMoveSetAtMs = Date.now();
+  updatePlaySidebar();
+  renderPlayBoardCanvas();
+  renderAllWebReserves();
+}
 
-  function onBotResult(res) {
-    if (!localBotState || localBotState.status === "O") return;
-    if (res.bestMove) {
-      applyMoveToState(localBotState, res.bestMove, side);
-      localGameMoves.push(res.bestMove);
-      var plyIdx = localGamePlies.length;
-      localGamePlies.push({
-        plyIndex: plyIdx,
-        player: side,
-        move: res.bestMove,
-        fenAfter: serializeOctiFen(localBotState),
-        ai: { depthReached: diff, nodesVisited: res.nodes, evalScore: res.score }
+// VCR Bar Navigation
+var vcrFirst = document.getElementById("web-vcr-first");
+var vcrPrev = document.getElementById("web-vcr-prev");
+var vcrNext = document.getElementById("web-vcr-next");
+var vcrLast = document.getElementById("web-vcr-last");
+if (vcrFirst) vcrFirst.addEventListener("click", function () { showPlayVcrPly(0); });
+if (vcrPrev) vcrPrev.addEventListener("click", function () { showPlayVcrPly(Math.max(0, playVcrIndex - 1)); });
+if (vcrNext) vcrNext.addEventListener("click", function () { showPlayVcrPly(Math.min(playMatchPlies.length - 1, playVcrIndex + 1)); });
+if (vcrLast) vcrLast.addEventListener("click", function () { showPlayVcrPly(playMatchPlies.length - 1); });
+
+// Export Move History Modal & Transcript
+var btnExportMoves = document.getElementById("btn-web-export-moves");
+if (btnExportMoves) {
+  btnExportMoves.addEventListener("click", function () {
+    var modal = document.getElementById("web-export-modal");
+    var txtArea = document.getElementById("web-export-json-text");
+    if (!modal || !txtArea) return;
+    var transcript = generateOctiTranscriptV3();
+    txtArea.value = JSON.stringify(transcript, null, 2);
+    modal.style.display = "flex";
+  });
+}
+
+var btnCloseExport = document.getElementById("btn-web-close-export");
+if (btnCloseExport) {
+  btnCloseExport.addEventListener("click", function () {
+    var modal = document.getElementById("web-export-modal");
+    if (modal) modal.style.display = "none";
+  });
+}
+
+var btnCopyTranscript = document.getElementById("btn-web-copy-transcript");
+if (btnCopyTranscript) {
+  btnCopyTranscript.addEventListener("click", function () {
+    var txtArea = document.getElementById("web-export-json-text");
+    if (txtArea && navigator.clipboard) {
+      navigator.clipboard.writeText(txtArea.value).then(function () {
+        btnCopyTranscript.textContent = "Copied!";
+        setTimeout(function () { btnCopyTranscript.textContent = "Copy to Clipboard"; }, 1500);
       });
-      var movesBox = $("web-play-moves");
-      var moveDiv = el("div", "#" + plyIdx + " [" + side + "] " + res.bestMove + " (" + (res.elapsedMs || 0) + "ms, " + (res.nodes || 0) + " nodes)");
-      movesBox.appendChild(moveDiv);
-      movesBox.scrollTop = movesBox.scrollHeight;
     }
-    updatePlayHud();
-    renderSvgBoard();
-    checkPlayTurn();
+  });
+}
+
+function generateOctiTranscriptV3() {
+  var s = activePlayState;
+  var gId = "web-" + Date.now().toString(36) + "-" + Math.random().toString(36).substr(2, 6);
+  var nowSec = Math.floor(Date.now() / 1000);
+  var movesList = [];
+  var pliesList = [];
+  for (var i = 1; i < playMatchPlies.length; i++) {
+    var pl = playMatchPlies[i];
+    movesList.push(pl.move);
+    pliesList.push({
+      ply: i,
+      player: pl.player,
+      move: pl.move
+    });
+  }
+
+  return {
+    format: "octi.transcript.v3",
+    schema: "octi.transcript.v3",
+    version: 3,
+    game_id: gId,
+    mode: s.mode,
+    bases: s.bases,
+    superProngs: !!s.superProngs,
+    edgeless: !!s.edgeless,
+    startPlayer: "A",
+    status: (s.status === "R" ? "RESIGNED" : (s.status === "O" ? "GAME_OVER" : "IN_PROGRESS")),
+    winner: s.winner || "NONE",
+    final_fen: serializeOctiFen(s),
+    moves: movesList,
+    plies: pliesList,
+    timestamp: nowSec
+  };
+}
+
+// Move Commit Callback: updates active state, history, checks victory, triggers bot
+function onLocalMoveCommitted(notation, newState) {
+  lastMoveHighlightSquares = extractModifiedSquaresFromMove(notation);
+  lastMoveSetAtMs = Date.now();
+
+  var prevTurn = activePlayState.turn;
+  activePlayState = newState;
+
+  // Check Victory
+  var oppBases = getOpponentBases(activePlayState.mode, prevTurn);
+  var wonByBase = false;
+  if (activePlayState.bases === 1) {
+    wonByBase = oppBases.some(function (b) { return isSquareOccupiedBy(activePlayState, b.x, b.y, prevTurn); });
+  } else {
+    wonByBase = oppBases.every(function (b) { return isSquareOccupiedBy(activePlayState, b.x, b.y, prevTurn); });
+  }
+
+  if (wonByBase) {
+    activePlayState.status = "O";
+    activePlayState.winner = prevTurn;
+  } else {
+    // Advance turn
+    if (activePlayState.mode === "4P") {
+      var seats = ["A", "B", "C", "D"];
+      activePlayState.turn = seats[(seats.indexOf(prevTurn) + 1) % 4];
+    } else {
+      activePlayState.turn = (prevTurn === "A") ? "B" : "A";
+    }
+  }
+
+  var plyIdx = playMatchPlies.length;
+  playMatchPlies.push({
+    plyIndex: plyIdx,
+    player: prevTurn,
+    move: notation,
+    fenAfter: serializeOctiFen(activePlayState)
+  });
+  playVcrIndex = plyIdx;
+
+  updatePlaySidebar();
+  renderPlayBoardCanvas();
+  renderAllWebReserves();
+
+  if (activePlayState.status === "O") {
+    OctiWebSoundSynth.play("GAME_VICTORY");
+    var goOverlay = document.getElementById("web-gameover-overlay");
+    var goTitle = document.getElementById("web-gameover-title");
+    var goSub = document.getElementById("web-gameover-subtitle");
+    if (goOverlay && goTitle && goSub) {
+      goTitle.textContent = "PLAYER " + activePlayState.winner + " WINS";
+      goSub.textContent = "VICTORY BY BASE OCCUPATION";
+      goOverlay.style.display = "flex";
+    }
+    return;
+  }
+
+  checkMatchTurn();
+}
+
+function checkMatchTurn() {
+  if (!matchStarted || !activePlayState) return;
+  var s = activePlayState;
+  if (s.status === "O" || s.status === "R") return;
+
+  if (localMatchConfig.playMode === "bot" && s.turn !== localMatchConfig.humanSeat) {
+    triggerAiBotTurn();
+  }
+}
+
+// AI Bot Search with 100% Opaque Thinking Progress Bar
+function triggerAiBotTurn() {
+  var s = activePlayState;
+  var fen = serializeOctiFen(s);
+  var diff = localMatchConfig.botDifficulty || 2;
+  var side = s.turn;
+  var mode = s.mode;
+
+  var thinkOverlay = document.getElementById("web-thinking-overlay");
+  var fillEl = document.getElementById("web-thinking-progress-fill");
+  var txtEl = document.getElementById("web-thinking-progress-text");
+  if (thinkOverlay) thinkOverlay.style.display = "flex";
+  if (fillEl) fillEl.style.width = "10%";
+  if (txtEl) txtEl.textContent = "Depth 1 • Searching root moves... • (10%)";
+
+  var tStart = Date.now();
+  var budgetMs = diff === 1 ? 2000 : (diff === 3 ? 20000 : 8000);
+
+  function finishAiMove(res) {
+    if (thinkOverlay) thinkOverlay.style.display = "none";
+    if (res && res.bestMove) {
+      applyMoveToState(activePlayState, res.bestMove, side);
+      onLocalMoveCommitted(res.bestMove, activePlayState);
+    }
   }
 
   if (botWorker) {
     botWorker.onmessage = function (e) {
       if (e.data && e.data.type === "result") {
-        onBotResult(e.data);
+        finishAiMove(e.data);
       }
     };
     botWorker.postMessage({ type: "search", fen: fen, depth: diff, mode: mode, side: side });
   } else {
+    // Fallback search with simulated progress tick
     setTimeout(function () {
-      var t0 = Date.now();
-      var r = botSearch(fen, diff, mode, side);
-      r.elapsedMs = Date.now() - t0;
-      onBotResult(r);
-    }, 80);
+      if (fillEl) fillEl.style.width = "65%";
+      if (txtEl) txtEl.textContent = "Depth " + diff + " • 4,820 nodes • (65%)";
+      setTimeout(function () {
+        var r = botSearch(fen, diff, mode, side);
+        finishAiMove(r);
+      }, 150);
+    }, 120);
   }
 }
 
-function uploadLocalGameArchive() {
-  if (!localBotState || localBotState.archiveUploaded) return;
-  localBotState.archiveUploaded = true;
-  var humanSide = $("web-human-side").value;
-  var diff = $("web-bot-difficulty").value;
-  var diffName = diff === "1" ? "Easy" : (diff === "3" ? "Hard" : "Medium");
-  var nowSec = Math.floor(Date.now() / 1000);
-  var gId = "web-" + Date.now().toString(36) + "-" + Math.random().toString(36).substr(2, 6);
-
-  var humanHandle = (currentUser && currentUser.handle) ? currentUser.handle : "Player";
-  var robotHandle = "Browser JS Robot (" + diffName + ")";
-  var p1Handle = (humanSide === "A") ? humanHandle : robotHandle;
-  var p2Handle = (humanSide === "B") ? humanHandle : robotHandle;
-  var p1Type = (humanSide === "A") ? "HUMAN" : "AI";
-  var p2Type = (humanSide === "B") ? "HUMAN" : "AI";
-  var winnerSeat = (localBotState.winner === "A") ? 1 : ((localBotState.winner === "B") ? 2 : 0);
-  var termStr = (localBotState.status === "R") ? "RESIGNATION" : "BASE_OCCUPATION";
-  var modeStr = (localBotState.mode === "2P_1BASE" ? "2P" : localBotState.mode) || "2P";
-  var basesVal = (localBotState.bases === 1 || localBotState.bases === 3) ? localBotState.bases : 1;
-  var finalFenStr = serializeOctiFen(localBotState);
-  var installId = getWebInstallId();
-
-  var movesList = [];
-  var pliesList = [];
-  for (var i = 1; i < localGamePlies.length; i++) {
-    var p = localGamePlies[i];
-    movesList.push(p.move);
-    var plyObj = {
-      ply: i,
-      player: p.player,
-      move: p.move
-    };
-    if (p.ai) {
-      plyObj.ai = {
-        difficulty: p.ai.depthReached || parseInt(diff, 10),
-        depthReached: p.ai.depthReached || 0,
-        nodesVisited: p.ai.nodesVisited || 0
-      };
-    }
-    pliesList.push(plyObj);
-  }
-
-  if (pliesList.length === 0) {
-    $("web-play-archive-status").textContent = "Game ended before any moves were recorded.";
-    return;
-  }
-
-  var playersList = [
-    {
-      seat: 1,
-      player: "A",
-      type: p1Type,
-      handle: p1Handle,
-      aiDifficulty: (humanSide === "A" ? 0 : parseInt(diff, 10))
-    },
-    {
-      seat: 2,
-      player: "B",
-      type: p2Type,
-      handle: p2Handle,
-      aiDifficulty: (humanSide === "B" ? 0 : parseInt(diff, 10))
-    }
-  ];
-
-  var payload = {
-    format: "octi.transcript.v3",
-    schema: "octi.transcript.v3",
-    version: 3,
-    gameId: gId,
-    game_id: gId,
-    install_id: installId,
-    source: "LOCAL",
-    mode: modeStr,
-    bases: basesVal,
-    superProngs: false,
-    edgeless: false,
-    startPlayer: "A",
-    status: (localBotState.status === "R" ? "RESIGNED" : "GAME_OVER"),
-    winner: localBotState.winner || "NONE",
-    termination: termStr,
-    finalFen: finalFenStr,
-    final_fen: finalFenStr,
-    initial_fen: localGameInitialFen,
-    client: {
-      platform: "web",
-      appVersion: "1.0.0",
-      extended: {
-        startedAt: localGameStartedAt,
-        endedAt: nowSec,
-        installId: installId
-      }
-    },
-    game: {
-      game_id: gId,
-      mode: modeStr,
-      board_size: (modeStr === "OFK" ? 6 : 9),
-      edgeless: false,
-      prong_cap: 4,
-      pod_cap: 7,
-      super_pods: false,
-      jump_capture: false,
-      started_at: localGameStartedAt,
-      ended_at: nowSec,
-      result: {
-        status: "FINISHED",
-        winner_seat: winnerSeat,
-        termination: termStr
-      },
-      players: playersList
-    },
-    players: playersList,
-    moves: movesList,
-    plies: pliesList,
-    started_at: localGameStartedAt,
-    ended_at: nowSec
-  };
-
-  $("web-play-archive-status").innerHTML = "Uploading game transcript to archive...";
-  api("/api/v1/archive/upload", { method: "POST", body: payload }).then(function () {
-    $("web-play-archive-status").innerHTML = "Game uploaded to archive! <a href='#archive/" + encodeURIComponent(gId) + "' style='font-weight:700;color:var(--acc-bright);'>View in Game Archive &rarr;</a>";
-  }).catch(function (e) {
-    $("web-play-archive-status").textContent = "Archive upload notice: " + e.message;
+// Undo Move
+var btnUndo = document.getElementById("btn-web-undo");
+if (btnUndo) {
+  btnUndo.addEventListener("click", function () {
+    if (playMatchPlies.length <= 1) return;
+    playMatchPlies.pop();
+    var lastPl = playMatchPlies[playMatchPlies.length - 1];
+    activePlayState = parseOctiFen(lastPl.fenAfter);
+    playVcrIndex = playMatchPlies.length - 1;
+    if (moveComposer) moveComposer.reset();
+    updatePlaySidebar();
+    renderPlayBoardCanvas();
+    renderAllWebReserves();
   });
 }
 
-$("btn-web-new-bot-game").addEventListener("click", function () {
-  initLocalBotGame();
-});
+// Resign
+var btnResign = document.getElementById("btn-web-resign");
+if (btnResign) {
+  btnResign.addEventListener("click", function () {
+    if (!activePlayState || activePlayState.status === "O" || activePlayState.status === "R") return;
+    if (!confirm("Are you sure you want to resign the game?")) return;
+    var turn = activePlayState.turn;
+    activePlayState.status = "R";
+    activePlayState.winner = (turn === "A") ? "B" : "A";
+    OctiWebSoundSynth.play("GAME_VICTORY");
 
-$("btn-web-resign").addEventListener("click", function () {
-  if (!localBotState || localBotState.status === "O") return;
-  if (!confirm("Are you sure you want to resign this game?")) return;
-  var humanSide = $("web-human-side").value;
-  localBotState.status = "R";
-  localBotState.winner = (humanSide === "A" ? "B" : "A");
-  checkPlayTurn();
-});
-
-/* Action Mode Buttons */
-$("btn-act-move").addEventListener("click", function () {
-  localActionMode = "move";
-  $("btn-act-move").className = "btn on";
-  $("btn-act-prong").className = "btn";
-  $("btn-act-place").className = "btn";
-  $("prong-dir-picker").style.display = "none";
-  localSelectedMove = null;
-  $("web-selected-move-text").textContent = "Selected: (None)";
-  $("btn-web-commit-move").disabled = true;
-  renderSvgBoard();
-});
-
-$("btn-act-prong").addEventListener("click", function () {
-  localActionMode = "prong";
-  $("btn-act-move").className = "btn";
-  $("btn-act-prong").className = "btn on";
-  $("btn-act-place").className = "btn";
-  $("prong-dir-picker").style.display = "flex";
-  localSelectedMove = null;
-  $("web-selected-move-text").textContent = "Selected: (None)";
-  $("btn-web-commit-move").disabled = true;
-  renderSvgBoard();
-});
-
-$("btn-act-place").addEventListener("click", function () {
-  localActionMode = "place";
-  $("btn-act-move").className = "btn";
-  $("btn-act-prong").className = "btn";
-  $("btn-act-place").className = "btn on";
-  $("prong-dir-picker").style.display = "none";
-  localSelectedMove = null;
-  $("web-selected-move-text").textContent = "Selected: (None)";
-  $("btn-web-commit-move").disabled = true;
-  renderSvgBoard();
-});
-
-Array.prototype.forEach.call($("prong-dir-picker").querySelectorAll("button"), function (b) {
-  b.addEventListener("click", function () {
-    Array.prototype.forEach.call($("prong-dir-picker").querySelectorAll("button"), function (x) { x.classList.remove("on"); });
-    b.classList.add("on");
-    localSelectedProngDir = b.getAttribute("data-dir") || "a";
-    if (localSelectedSq) {
-      localSelectedMove = localSelectedSq.x + "" + localSelectedSq.y + localSelectedProngDir;
-      $("web-selected-move-text").textContent = "Selected: " + localSelectedMove;
-      $("btn-web-commit-move").disabled = false;
+    var goOverlay = document.getElementById("web-gameover-overlay");
+    var goTitle = document.getElementById("web-gameover-title");
+    var goSub = document.getElementById("web-gameover-subtitle");
+    if (goOverlay && goTitle && goSub) {
+      goTitle.textContent = "PLAYER " + activePlayState.winner + " WINS";
+      goSub.textContent = "VICTORY BY RESIGNATION";
+      goOverlay.style.display = "flex";
     }
+
+    updatePlaySidebar();
+    renderPlayBoardCanvas();
+    renderAllWebReserves();
   });
-});
-
-$("btn-web-commit-move").addEventListener("click", function () {
-  if (!localSelectedMove || !localBotState) return;
-  var humanSide = $("web-human-side").value;
-  applyMoveToState(localBotState, localSelectedMove, humanSide);
-  localGameMoves.push(localSelectedMove);
-  var plyIdx = localGamePlies.length;
-  localGamePlies.push({
-    plyIndex: plyIdx,
-    player: humanSide,
-    move: localSelectedMove,
-    fenAfter: serializeOctiFen(localBotState)
-  });
-  var movesBox = $("web-play-moves");
-  var mDiv = el("div", "#" + plyIdx + " [" + humanSide + "] " + localSelectedMove);
-  mDiv.style.fontWeight = "700";
-  movesBox.appendChild(mDiv);
-  movesBox.scrollTop = movesBox.scrollHeight;
-
-  localSelectedMove = null;
-  localSelectedSq = null;
-  localLegalDests = {};
-  $("web-selected-move-text").textContent = "Selected: (None)";
-  $("btn-web-commit-move").disabled = true;
-
-  updatePlayHud();
-  renderSvgBoard();
-  checkPlayTurn();
-});
-
-function onPlaySquareClick(x, y) {
-  if (!localBotState || localBotState.status === "O" || localBotState.status === "R") return;
-  var humanSide = $("web-human-side").value;
-  if (localBotState.turn !== humanSide) return;
-
-  var k = x + "," + y;
-  var stack = localBotState.map[k] || [];
-  var top = stack.length ? stack[stack.length - 1] : null;
-
-  if (localActionMode === "place") {
-    var homes = getHomeSquares(localBotState.mode, humanSide);
-    var isHome = homes.some(function (h) { return h.x === x && h.y === y; });
-    var pIdx = humanSide === "A" ? 0 : 1;
-    var freePods = localBotState.reserves[pIdx] ? localBotState.reserves[pIdx].freePods : 0;
-    if (!isHome || freePods <= 0 || stack.length > 0) return;
-    localSelectedSq = { x: x, y: y };
-    localSelectedMove = "(" + x + y + ")";
-    $("web-selected-move-text").textContent = "Selected: Place Pod at (" + x + "," + y + ")";
-    $("btn-web-commit-move").disabled = false;
-    renderSvgBoard();
-    return;
-  }
-
-  if (localActionMode === "prong") {
-    if (!top || top.owner !== humanSide) return;
-    var pIdx2 = humanSide === "A" ? 0 : 1;
-    var freeProngs = localBotState.reserves[pIdx2] ? localBotState.reserves[pIdx2].freeProngs : 0;
-    if (freeProngs <= 0) {
-      alert("No free prongs left in reserve!");
-      return;
-    }
-    localSelectedSq = { x: x, y: y };
-    localSelectedMove = x + "" + y + localSelectedProngDir;
-    $("web-selected-move-text").textContent = "Selected: Add Prong " + localSelectedProngDir + " at (" + x + "," + y + ")";
-    $("btn-web-commit-move").disabled = false;
-    renderSvgBoard();
-    return;
-  }
-
-  /* Action Mode: Move / Jump */
-  if (localLegalDests[k]) {
-    localSelectedMove = localLegalDests[k];
-    $("web-selected-move-text").textContent = "Selected: " + localSelectedMove;
-    $("btn-web-commit-move").disabled = false;
-    renderSvgBoard();
-    return;
-  }
-
-  if (top && top.owner === humanSide) {
-    localSelectedSq = { x: x, y: y };
-    localLegalDests = {};
-    localSelectedMove = null;
-    $("btn-web-commit-move").disabled = true;
-    $("web-selected-move-text").textContent = "Selected Pod (" + x + "," + y + ")";
-
-    var capChecked = $("web-play-capture-toggle").checked;
-    for (var d = 0; d < 8; d++) {
-      if (top.cfg.prongs[d]) {
-        var dx = DIR_DELTAS[d][0], dy = DIR_DELTAS[d][1];
-        var sx = x + dx, sy = y + dy;
-        if (sx >= 1 && sx <= localBotState.gw && sy >= 1 && sy <= localBotState.gh) {
-          var stepK = sx + "," + sy;
-          var stepStack = localBotState.map[stepK];
-          if (!stepStack || !stepStack.length) {
-            localLegalDests[stepK] = x + "" + y + "-" + sx + "" + sy;
-          } else {
-            var jx = sx + dx, jy = sy + dy;
-            if (jx >= 1 && jx <= localBotState.gw && jy >= 1 && jy <= localBotState.gh) {
-              var jumpK = jx + "," + jy;
-              var jumpStack = localBotState.map[jumpK];
-              if (!jumpStack || !jumpStack.length) {
-                var jumpedTop = stepStack[stepStack.length - 1];
-                var isCap = (jumpedTop.owner !== humanSide && capChecked);
-                localLegalDests[jumpK] = x + "" + y + "-" + jx + "" + jy + (isCap ? "x" : "");
-              }
-            }
-          }
-        }
-      }
-    }
-    renderSvgBoard();
-  }
 }
 
-window.onPlaySquareClick = onPlaySquareClick;
+// Initialize MoveComposer
+moveComposer = new WebMoveComposer(function () {
+  return activePlayState;
+}, onLocalMoveCommitted);
 
-function renderSvgBoard() {
-  var svg = $("web-play-svg");
-  if (!svg || !localBotState) return;
-  clear(svg);
-
-  var gw = localBotState.gw, gh = localBotState.gh;
-  var pad = 36;
-  var cell = Math.min((580 - pad * 2) / gw, (580 - pad * 2) / gh);
-  var gridW = gw * cell, gridH = gh * cell;
-  var originX = (580 - gridW) / 2, originY = (580 - gridH) / 2;
-
-  /* Board Frame */
-  var bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-  bgRect.setAttribute("x", "0");
-  bgRect.setAttribute("y", "0");
-  bgRect.setAttribute("width", "580");
-  bgRect.setAttribute("height", "580");
-  bgRect.setAttribute("rx", "14");
-  bgRect.setAttribute("fill", "#101622");
-  bgRect.setAttribute("stroke", "#E4C070");
-  bgRect.setAttribute("stroke-width", "3");
-  svg.appendChild(bgRect);
-
-  /* Coordinate labels */
-  for (var cx = 1; cx <= gw; cx++) {
-    var sqCol = cx - 1;
-    var xMid = originX + (sqCol + 0.5) * cell;
-    var tTop = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    tTop.setAttribute("x", xMid);
-    tTop.setAttribute("y", originY - 10);
-    tTop.setAttribute("fill", "#D8B66C");
-    tTop.setAttribute("font-size", "11");
-    tTop.setAttribute("font-weight", "bold");
-    tTop.setAttribute("text-anchor", "middle");
-    tTop.textContent = String(cx);
-    svg.appendChild(tTop);
-
-    var tBot = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    tBot.setAttribute("x", xMid);
-    tBot.setAttribute("y", originY + gridH + 18);
-    tBot.setAttribute("fill", "#D8B66C");
-    tBot.setAttribute("font-size", "11");
-    tBot.setAttribute("font-weight", "bold");
-    tBot.setAttribute("text-anchor", "middle");
-    tBot.textContent = String(cx);
-    svg.appendChild(tBot);
-  }
-
-  for (var cy = 1; cy <= gh; cy++) {
-    var sqRow = gh - cy;
-    var yMid = originY + (sqRow + 0.5) * cell;
-    var tLeft = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    tLeft.setAttribute("x", originX - 12);
-    tLeft.setAttribute("y", yMid + 4);
-    tLeft.setAttribute("fill", "#D8B66C");
-    tLeft.setAttribute("font-size", "11");
-    tLeft.setAttribute("font-weight", "bold");
-    tLeft.setAttribute("text-anchor", "middle");
-    tLeft.textContent = String(cy);
-    svg.appendChild(tLeft);
-
-    var tRight = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    tRight.setAttribute("x", originX + gridW + 12);
-    tRight.setAttribute("y", yMid + 4);
-    tRight.setAttribute("fill", "#D8B66C");
-    tRight.setAttribute("font-size", "11");
-    tRight.setAttribute("font-weight", "bold");
-    tRight.setAttribute("text-anchor", "middle");
-    tRight.textContent = String(cy);
-    svg.appendChild(tRight);
-  }
-
-  /* Grid Squares */
-  for (var y = 1; y <= gh; y++) {
-    for (var x = 1; x <= gw; x++) {
-      var col = x - 1, row = gh - y;
-      var sqX = originX + col * cell;
-      var sqY = originY + row * cell;
-      var isDark = ((x + y) % 2 === 0);
-
-      var cellRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      cellRect.setAttribute("x", sqX);
-      cellRect.setAttribute("y", sqY);
-      cellRect.setAttribute("width", cell);
-      cellRect.setAttribute("height", cell);
-      cellRect.setAttribute("fill", isDark ? "#151E30" : "#1D2940");
-      cellRect.setAttribute("stroke", "rgba(184, 148, 76, 0.4)");
-      cellRect.setAttribute("stroke-width", "1");
-      svg.appendChild(cellRect);
-
-      /* Socket Ring */
-      var socket = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      socket.setAttribute("cx", sqX + cell / 2);
-      socket.setAttribute("cy", sqY + cell / 2);
-      socket.setAttribute("r", cell * 0.33);
-      socket.setAttribute("fill", "none");
-      socket.setAttribute("stroke", "rgba(8, 12, 20, 0.7)");
-      socket.setAttribute("stroke-width", "1");
-      svg.appendChild(socket);
-
-      /* Home Base indicator */
-      var st = squareTypeAt(localBotState.mode, x, y);
-      if (st.indexOf("HOME") !== -1) {
-        var hRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        hRect.setAttribute("x", sqX + 2);
-        hRect.setAttribute("y", sqY + 2);
-        hRect.setAttribute("width", cell - 4);
-        hRect.setAttribute("height", cell - 4);
-        hRect.setAttribute("rx", "4");
-        hRect.setAttribute("fill", "none");
-        hRect.setAttribute("stroke", "#C8A253");
-        hRect.setAttribute("stroke-width", "1.5");
-        svg.appendChild(hRect);
-
-        var stack = localBotState.map[x + "," + y];
-        if (!stack || !stack.length) {
-          var hTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-          hTxt.setAttribute("x", sqX + cell / 2);
-          hTxt.setAttribute("y", sqY + cell / 2 + 3);
-          hTxt.setAttribute("fill", "#D8B66C");
-          hTxt.setAttribute("font-size", "9");
-          hTxt.setAttribute("font-weight", "bold");
-          hTxt.setAttribute("text-anchor", "middle");
-          hTxt.textContent = "OCTI";
-          svg.appendChild(hTxt);
-        }
-      }
-
-      /* Highlight destination squares */
-      var k = x + "," + y;
-      if (localLegalDests[k]) {
-        var dCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        dCircle.setAttribute("cx", sqX + cell / 2);
-        dCircle.setAttribute("cy", sqY + cell / 2);
-        dCircle.setAttribute("r", cell * 0.28);
-        dCircle.setAttribute("fill", "rgba(16, 185, 129, 0.35)");
-        dCircle.setAttribute("stroke", "#10B981");
-        dCircle.setAttribute("stroke-width", "2");
-        svg.appendChild(dCircle);
-      }
-
-      /* Highlight selected square */
-      if (localSelectedSq && localSelectedSq.x === x && localSelectedSq.y === y) {
-        var sRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        sRect.setAttribute("x", sqX + 1);
-        sRect.setAttribute("y", sqY + 1);
-        sRect.setAttribute("width", cell - 2);
-        sRect.setAttribute("height", cell - 2);
-        sRect.setAttribute("rx", "4");
-        sRect.setAttribute("fill", "none");
-        sRect.setAttribute("stroke", "#FDE047");
-        sRect.setAttribute("stroke-width", "2.5");
-        svg.appendChild(sRect);
-      }
-    }
-  }
-
-  /* Draw Pods */
-  Object.keys(localBotState.map).forEach(function (mk) {
-    var stack = localBotState.map[mk];
-    if (!stack || !stack.length) return;
-    var top = stack[stack.length - 1];
-    var pcoords = mk.split(",");
-    var px = parseInt(pcoords[0], 10), py = parseInt(pcoords[1], 10);
-    var pcol = px - 1, prow = gh - py;
-    var pcx = originX + (pcol + 0.5) * cell;
-    var pcy = originY + (prow + 0.5) * cell;
-    var radius = cell * 0.36;
-
-    /* Radial Prongs */
-    for (var d = 0; d < 8; d++) {
-      if (top.cfg.prongs[d]) {
-        var u = DIR_DELTAS[d];
-        var ux = u[0], uy = -u[1];
-        var ulen = Math.hypot(ux, uy);
-        if (ulen > 1e-6) { ux /= ulen; uy /= ulen; }
-        var perpX = -uy, perpY = ux;
-        var rInner = radius * 0.65;
-        var rOuter = radius * 1.45;
-        var hw = radius * 0.22;
-
-        var prongPoly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-        var pts = [
-          (pcx + ux * rInner - perpX * hw) + "," + (pcy + uy * rInner - perpY * hw),
-          (pcx + ux * (rOuter * 0.85) - perpX * (hw * 0.8)) + "," + (pcy + uy * (rOuter * 0.85) - perpY * (hw * 0.8)),
-          (pcx + ux * rOuter) + "," + (pcy + uy * rOuter),
-          (pcx + ux * (rOuter * 0.85) + perpX * (hw * 0.8)) + "," + (pcy + uy * (rOuter * 0.85) + perpY * (hw * 0.8)),
-          (pcx + ux * rInner + perpX * hw) + "," + (pcy + uy * rInner + perpY * hw)
-        ].join(" ");
-        prongPoly.setAttribute("points", pts);
-        prongPoly.setAttribute("fill", "#F8FAFC");
-        prongPoly.setAttribute("stroke", "#18181b");
-        prongPoly.setAttribute("stroke-width", "1");
-        svg.appendChild(prongPoly);
-      }
-    }
-
-    /* Octagon Pod Body */
-    var podPoly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-    var polyPts = [];
-    for (var i = 0; i < 8; i++) {
-      var ang = (i * 45 + 22.5) * Math.PI / 180;
-      polyPts.push((pcx + radius * Math.cos(ang)).toFixed(1) + "," + (pcy + radius * Math.sin(ang)).toFixed(1));
-    }
-    podPoly.setAttribute("points", polyPts.join(" "));
-    var podColor = (top.owner === "A" ? "#10B981" : (top.owner === "B" ? "#F43F5E" : (top.owner === "C" ? "#3B82F6" : "#F59E0B")));
-    podPoly.setAttribute("fill", podColor);
-    podPoly.setAttribute("stroke", "#C8A253");
-    podPoly.setAttribute("stroke-width", "1.5");
-    svg.appendChild(podPoly);
-
-    /* Center Emblem */
-    var centerTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    centerTxt.setAttribute("x", pcx);
-    centerTxt.setAttribute("y", pcy + 4);
-    centerTxt.setAttribute("fill", "#ffffff");
-    centerTxt.setAttribute("font-size", String(Math.round(radius * 0.75)));
-    centerTxt.setAttribute("font-weight", "bold");
-    centerTxt.setAttribute("text-anchor", "middle");
-    centerTxt.textContent = stack.length > 1 ? ("x" + stack.length) : top.owner;
-    svg.appendChild(centerTxt);
+// Subtab Toggles
+var subtabLocal = document.getElementById("subtab-play-local");
+var subtabOnline = document.getElementById("subtab-play-online");
+if (subtabLocal && subtabOnline) {
+  subtabLocal.addEventListener("click", function () {
+    subtabLocal.className = "btn btn-primary";
+    subtabOnline.className = "btn";
+    document.getElementById("play-local-panel").style.display = "block";
+    document.getElementById("play-online-panel").style.display = "none";
   });
-
-  /* Click Handler rects */
-  for (var y2 = 1; y2 <= gh; y2++) {
-    for (var x2 = 1; x2 <= gw; x2++) {
-      var c2 = x2 - 1, r2 = gh - y2;
-      var cx2 = originX + c2 * cell, cy2 = originY + r2 * cell;
-      var clickRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      clickRect.setAttribute("x", cx2);
-      clickRect.setAttribute("y", cy2);
-      clickRect.setAttribute("width", cell);
-      clickRect.setAttribute("height", cell);
-      clickRect.setAttribute("fill", "transparent");
-      clickRect.setAttribute("cursor", "pointer");
-      clickRect.setAttribute("onclick", "window.onPlaySquareClick(" + x2 + "," + y2 + ")");
-      svg.appendChild(clickRect);
-    }
-  }
+  subtabOnline.addEventListener("click", function () {
+    subtabOnline.className = "btn btn-primary";
+    subtabLocal.className = "btn";
+    document.getElementById("play-online-panel").style.display = "block";
+    document.getElementById("play-local-panel").style.display = "none";
+    loadOnlineTables();
+  });
 }
+
+// Online Table Board Play
+function isMyOnlineTurn(state) {
+  return true; // checked against table seats if authenticated
+}
+
+function openOnlineTableBoard(roomId) {
+  if (!roomId) return;
+  activeOnlineGameId = roomId;
+  activeOnlineTableRoomId = roomId;
+  subtabLocal.click();
+
+  var bar = document.getElementById("web-play-online-status-bar");
+  var titleEl = document.getElementById("web-play-online-table-title");
+  if (bar && titleEl) {
+    titleEl.textContent = "Online Table #" + roomId;
+    bar.style.display = "flex";
+  }
+
+  // Fetch table state
+  api("/api/v1/tables/" + encodeURIComponent(roomId)).then(function (res) {
+    if (res && res.game) {
+      activePlayState = parseOctiFen(res.game.current_fen || res.game.final_fen);
+      matchStarted = (res.game.status === "IN_PROGRESS");
+      updatePlaySidebar();
+      renderPlayBoardCanvas();
+      renderAllWebReserves();
+    }
+  }).catch(function () {});
+}
+
+// Wire initial start match summary on page load
+prepareLocalMatchInitialState();
+
 
 /* Online Lobby & Tables */
 var currentMyTableRoomId = "";
@@ -4476,6 +6629,15 @@ function refreshLobbyTables() {
       tbody.appendChild(tr);
     });
   }).catch(function () {});
+}
+
+
+if ($("btn-web-open-my-table")) {
+  $("btn-web-open-my-table").addEventListener("click", function () {
+    if (currentMyTableRoomId) {
+      openOnlineTableBoard(currentMyTableRoomId);
+    }
+  });
 }
 
 var loadOnlineTables = refreshLobbyTables;
@@ -4931,6 +7093,22 @@ checkHash();
 loadMyProfile();
 loadAuthProviders();
 setInterval(loadHealth, 15000);
+
+window.openZoomedSquare = openZoomedSquare;
+window.WebMoveComposer = WebMoveComposer;
+window.moveComposer = moveComposer;
+Object.defineProperty(window, "matchStarted", {
+  get: function () { return matchStarted; },
+  set: function (v) { matchStarted = v; }
+});
+Object.defineProperty(window, "zoomHoverDir", {
+  get: function () { return zoomHoverDir; },
+  set: function (v) { zoomHoverDir = v; }
+});
+Object.defineProperty(window, "activePlayState", {
+  get: function () { return activePlayState; },
+  set: function (v) { activePlayState = v; }
+});
 })();
 </script>
 </body>

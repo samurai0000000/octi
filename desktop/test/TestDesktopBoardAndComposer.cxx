@@ -2278,6 +2278,32 @@ TEST(OctiZoomProngAndPodStackOrderTest, ZPB_D08_LiberationPriorityZeroCapturedWe
     panel.renderToImage(340, 720);
     CHECK_FALSE(panel.liberatePodWellRect().isEmpty());
 
+    // 1b. Verify that when Player A captures 1 of Player B's pods (so PLAYER_B has 1 captured pod,
+    // and PLAYER_A has 0), Player A's card displays the "Captured" well containing 1 B pod,
+    // while Player B's card hides the "Captured" well.
+    OctiGameSnapshot snapCap = board.getGame()->captureSnapshot();
+    snapCap.players[PLAYER_A].capturedPods = 0;
+    snapCap.players[PLAYER_B].capturedPods = 1;
+    board.getGame()->restoreSnapshot(snapCap);
+
+    panel.renderToImage(340, 720);
+    CHECK_FALSE(panel.capturedPodWellRect(PLAYER_A).isEmpty());
+    CHECK_TRUE(panel.capturedPodWellRect(PLAYER_B).isEmpty());
+    CHECK_TRUE(panel.playerCardRect(PLAYER_A).contains(panel.capturedPodWellRect(PLAYER_A)));
+
+    // When turn is Player B (the owner of the captured pod), the liberatePodWellRect points
+    // to this well inside Player A's card.
+    snapCap.turn = PLAYER_B;
+    board.getGame()->restoreSnapshot(snapCap);
+    panel.renderToImage(340, 720);
+    CHECK_FALSE(panel.liberatePodWellRect().isEmpty());
+    CHECK_TRUE(panel.playerCardRect(PLAYER_A).contains(panel.liberatePodWellRect()));
+
+    // Restore snap1 so subsequent tests on PLAYER_A's turn continue seamlessly
+    board.getGame()->restoreSnapshot(snap1);
+    panel.renderToImage(340, 720);
+    CHECK_FALSE(panel.liberatePodWellRect().isEmpty());
+
     // 2. Staging a non-liberate pod placement on an enemy square when capturedPods > 0
     // auto-promotes to liberation ("57*") and consumes capturedPods first
     CHECK_TRUE(composer.stageOrCommitAddPod(5, 7, false));

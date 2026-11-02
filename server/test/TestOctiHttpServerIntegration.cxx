@@ -4738,6 +4738,77 @@ TEST(OctiHttpServerIntegrationTest, LobbyTablesSeatRosterChatTimestampAndWebUiRe
     CHECK_TRUE(rUi.body.find("btn-web-quick-match") == std::string::npos);
 }
 
+TEST(OctiHttpServerIntegrationTest, WebPlayerDesktopAndroidParityElements)
+{
+    Reply rUi = http().get("/");
+    EXPECT_STATUS(200, rUi);
+
+    // 1. Tabletop 3-column stage & Reserve HUD containers
+    CHECK_TRUE(rUi.body.find("web-play-reserves-col") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-play-board-wrap") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-play-canvas") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-play-side-col") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-res-card-a") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-res-card-b") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-web-rotate") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-sfx") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-play-theme-select") != std::string::npos);
+
+    // 2. Overlays & Dialogs
+    CHECK_TRUE(rUi.body.find("web-start-match-overlay") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-web-change-type") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-web-start-match") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-match-setup-modal") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-zoom-overlay") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-zoom-canvas") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-zoom-move-pod") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-zoom-place-pod") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-zoom-liberate-pod") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-ply-confirm-bar") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-web-commit-ply") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-web-cancel-ply") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("commitPulse1Hz") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-capture-overlay") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-thinking-overlay") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-thinking-progress-fill") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-gameover-overlay") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-export-modal") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-web-export-moves") != std::string::npos);
+
+    // 3. Core parity JS functions & variables
+    CHECK_TRUE(rUi.body.find("WebMoveComposer") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("OctiWebSoundSynth") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("openZoomedSquare") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("sortedPodIndicesMostProngsFirst") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("canLiberate") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("boardZoomScale") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("liveRotationOffsetDeg") != std::string::npos);
+
+    // 4. Opponent pods captured display in reserve & replay HUD cards
+    CHECK_TRUE(rUi.body.find("enemyPodsCapturedByPlayer = oppRes ? oppRes.capturedPods : 0") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("enemyPodsCaptured = (parsed.mode === \"4P\") ? r.capturedPods : (oppRes ? oppRes.capturedPods : 0)") != std::string::npos);
+
+    // 5. Strict absence of banned strings
+    CHECK_TRUE(rUi.body.find("Close Inspector") == std::string::npos);
+    CHECK_TRUE(rUi.body.find("Live Arena") == std::string::npos);
+    CHECK_TRUE(rUi.body.find("tab-live") == std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-web-save-handle") == std::string::npos);
+    CHECK_TRUE(rUi.body.find("Save Handle") == std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-web-quick-match") == std::string::npos);
+
+    // 6. Strict self-contained CSP: zero external URLs
+    std::string strippedUi = rUi.body;
+    size_t svgNs = 0;
+    while ((svgNs = strippedUi.find("http://www.w3.org/2000/svg")) != std::string::npos) {
+        strippedUi.replace(svgNs, 26, "");
+    }
+    CHECK_TRUE(strippedUi.find("http://") == std::string::npos);
+    CHECK_TRUE(strippedUi.find("https://") == std::string::npos);
+    CHECK_TRUE(strippedUi.find("src=\"//") == std::string::npos);
+    CHECK_TRUE(strippedUi.find("<link") == std::string::npos);
+    CHECK_TRUE(strippedUi.find("<iframe") == std::string::npos);
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

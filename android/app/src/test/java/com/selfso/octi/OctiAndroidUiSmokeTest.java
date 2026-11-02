@@ -207,6 +207,61 @@ public class OctiAndroidUiSmokeTest {
             vm.close();
         }
     }
+
+    @Test
+    public void testAndroidManifestLocksMainActivityToPortraitOrientation() throws Exception {
+        java.io.File manifestFile = new java.io.File("src/main/AndroidManifest.xml");
+        if (!manifestFile.exists()) {
+            manifestFile = new java.io.File("android/app/src/main/AndroidManifest.xml");
+        }
+        assertTrue("AndroidManifest.xml should exist", manifestFile.exists());
+        String manifestContent = new String(java.nio.file.Files.readAllBytes(manifestFile.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue("AndroidManifest.xml must declare android:screenOrientation=\"portrait\"",
+                manifestContent.contains("android:screenOrientation=\"portrait\""));
+        assertFalse("AndroidManifest.xml must never declare landscape orientation",
+                manifestContent.contains("landscape"));
+        assertFalse("AndroidManifest.xml must never declare fullSensor orientation",
+                manifestContent.contains("fullSensor"));
+        assertFalse("AndroidManifest.xml must never declare sensorLandscape orientation",
+                manifestContent.contains("sensorLandscape"));
+
+        java.io.File mainActivityFile = new java.io.File("src/main/java/com/selfso/octi/MainActivity.kt");
+        if (!mainActivityFile.exists()) {
+            mainActivityFile = new java.io.File("android/app/src/main/java/com/selfso/octi/MainActivity.kt");
+        }
+        assertTrue("MainActivity.kt should exist", mainActivityFile.exists());
+        String activityContent = new String(java.nio.file.Files.readAllBytes(mainActivityFile.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue("MainActivity.kt must enforce ActivityInfo.SCREEN_ORIENTATION_PORTRAIT in onCreate",
+                activityContent.contains("ActivityInfo.SCREEN_ORIENTATION_PORTRAIT"));
+    }
+
+    @Test
+    public void testReserveHudDisplaysOpponentPodsCapturedByPlayer() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+        OctiGame game = board.getGame();
+        game.start(OctiPlayer.PLAYER_A);
+
+        // Snapshot with Player B having 1 captured pod (i.e. Player A captured 1 of B's pods)
+        OctiGameSnapshot snap = game.captureSnapshot();
+        snap.players[OctiPlayer.PLAYER_A.ordinal()].capturedPods = 0;
+        snap.players[OctiPlayer.PLAYER_B.ordinal()].capturedPods = 1;
+        game.restoreSnapshot(snap);
+
+        assertEquals("Player A card must display 1 captured pod (B pod held by A)",
+                1, OctiBoardRenderer.getDisplayedCapturedPodsForPlayerCard(game, OctiPlayer.PLAYER_A));
+        assertEquals("Player B card must display 0 captured pods (B has captured 0 A pods)",
+                0, OctiBoardRenderer.getDisplayedCapturedPodsForPlayerCard(game, OctiPlayer.PLAYER_B));
+
+        // When Player B captures 2 of Player A's pods
+        snap.players[OctiPlayer.PLAYER_A.ordinal()].capturedPods = 2;
+        snap.players[OctiPlayer.PLAYER_B.ordinal()].capturedPods = 1;
+        game.restoreSnapshot(snap);
+
+        assertEquals("Player A card displays 1 captured B pod",
+                1, OctiBoardRenderer.getDisplayedCapturedPodsForPlayerCard(game, OctiPlayer.PLAYER_A));
+        assertEquals("Player B card displays 2 captured A pods",
+                2, OctiBoardRenderer.getDisplayedCapturedPodsForPlayerCard(game, OctiPlayer.PLAYER_B));
+    }
 }
 
 /*

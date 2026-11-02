@@ -1875,6 +1875,31 @@ public final class OctiBoardRenderer {
         }
     }
 
+    public static int getDisplayedCapturedPodsForPlayerCard(OctiGame game, OctiPlayer cardPlayer) {
+        if (game == null || cardPlayer == null) {
+            return 0;
+        }
+        OctiPlayer opp;
+        switch (cardPlayer) {
+            case PLAYER_A:
+                opp = OctiPlayer.PLAYER_B;
+                break;
+            case PLAYER_B:
+                opp = OctiPlayer.PLAYER_A;
+                break;
+            case PLAYER_C:
+                opp = OctiPlayer.PLAYER_D;
+                break;
+            case PLAYER_D:
+                opp = OctiPlayer.PLAYER_C;
+                break;
+            default:
+                opp = OctiPlayer.PLAYER_B;
+                break;
+        }
+        return game.getCapturedPods(opp);
+    }
+
     public static int[] renderPlyConfirmScreenPixels(OctiBoard previewBoard,
                                                      OctiMoveComposer composer,
                                                      OctiThemeId theme) {
@@ -1907,11 +1932,11 @@ public final class OctiBoardRenderer {
         // 3. Player A & Player B Reserve Cards
         OctiGame game = boardToRender != null ? boardToRender.getGame() : null;
         int freePodsA = game != null ? game.getFreePods(OctiPlayer.PLAYER_A) : 4;
-        int capPodsA = game != null ? game.getCapturedPods(OctiPlayer.PLAYER_A) : 0;
+        int capPodsA = getDisplayedCapturedPodsForPlayerCard(game, OctiPlayer.PLAYER_A);
         int freeProngsA = game != null ? game.getFreeProngs(OctiPlayer.PLAYER_A) : 25;
         int freeSuperA = game != null ? game.getFreeSuperProngs(OctiPlayer.PLAYER_A) : 0;
         int freePodsB = game != null ? game.getFreePods(OctiPlayer.PLAYER_B) : 4;
-        int capPodsB = game != null ? game.getCapturedPods(OctiPlayer.PLAYER_B) : 0;
+        int capPodsB = getDisplayedCapturedPodsForPlayerCard(game, OctiPlayer.PLAYER_B);
         int freeProngsB = game != null ? game.getFreeProngs(OctiPlayer.PLAYER_B) : 25;
         int freeSuperB = game != null ? game.getFreeSuperProngs(OctiPlayer.PLAYER_B) : 0;
         boolean useSuper = game != null && game.useSuperProngs();
@@ -1992,11 +2017,11 @@ public final class OctiBoardRenderer {
         // 3b. Reserve HUD + Bottom Navigation Bar under Scrim
         OctiGame gme = board != null ? board.getGame() : null;
         int freePodsA_go = gme != null ? gme.getFreePods(OctiPlayer.PLAYER_A) : 4;
-        int capPodsA_go = gme != null ? gme.getCapturedPods(OctiPlayer.PLAYER_A) : 0;
+        int capPodsA_go = getDisplayedCapturedPodsForPlayerCard(gme, OctiPlayer.PLAYER_A);
         int freeProngsA_go = gme != null ? gme.getFreeProngs(OctiPlayer.PLAYER_A) : 25;
         int freeSuperA_go = gme != null ? gme.getFreeSuperProngs(OctiPlayer.PLAYER_A) : 0;
         int freePodsB_go = gme != null ? gme.getFreePods(OctiPlayer.PLAYER_B) : 4;
-        int capPodsB_go = gme != null ? gme.getCapturedPods(OctiPlayer.PLAYER_B) : 0;
+        int capPodsB_go = getDisplayedCapturedPodsForPlayerCard(gme, OctiPlayer.PLAYER_B);
         int freeProngsB_go = gme != null ? gme.getFreeProngs(OctiPlayer.PLAYER_B) : 25;
         int freeSuperB_go = gme != null ? gme.getFreeSuperProngs(OctiPlayer.PLAYER_B) : 0;
         boolean useSuper_go = gme != null && gme.useSuperProngs();

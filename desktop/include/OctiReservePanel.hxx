@@ -51,6 +51,7 @@ public:
 
     QRectF freePodWellRect() const;
     QRectF liberatePodWellRect() const;
+    QRectF capturedPodWellRect(OctiPlayer player) const;
     QRectF normalProngWellRect() const;
     QRectF superProngWellRect() const;
 
@@ -80,6 +81,7 @@ private:
     QRectF _superProngWellRect;
     QRectF _pttButtonRect;
     QRectF _playerCardRects[5];
+    QRectF _capturedPodWellRects[5];
     int _iconGlyphCountRendered = 0;
 };
 
