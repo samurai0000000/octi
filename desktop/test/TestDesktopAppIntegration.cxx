@@ -2527,6 +2527,84 @@ TEST(DesktopAppIntegrationTest, ProfileAndAvatarEditorFullParityAndInstallIdAttr
     STRCMP_EQUAL(win.currentProfile().uuid.c_str(), boundProfile.uuid.c_str());
 }
 
+TEST(DesktopAppIntegrationTest, StartupProfileAndAvatarSyncWithAuthenticatedSessionToken)
+{
+    LiveServerEnv env;
+    std::string avatarDir = env.dir + "/avatars";
+    env.store.setAvatarDir(avatarDir);
+
+    /* 1. Create a user on the server via client1 */
+    auto client1 = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginRes = client1->loginWithSso(
+        "google", makeToken("google", "sub-startup-sync", "SyncUser"), "SyncUser");
+    CHECK_TRUE_TEXT(loginRes.ok, loginRes.errorMessage.c_str());
+    std::string sessionTok = loginRes.data.sessionToken;
+    std::string playerUuid = loginRes.data.profile.uuid;
+
+    /* Create a 64x64 valid avatar image and encode to data URI */
+    QImage srcImg(64, 64, QImage::Format_RGB32);
+    srcImg.fill(QColor(40, 140, 220));
+    std::string avatarDataUri = AccountLinkDialog::encodeAvatarImageToDataUri(srcImg);
+
+    /* Update profile on server with bio, location, display_name, avatar */
+    auto updateRes = client1->updateMyProfile(
+        "SyncUser",
+        avatarDataUri,
+        "Synchronized User",
+        "A bio written on another client or web UI.",
+        "Kyoto, Japan",
+        false);
+    CHECK_TRUE_TEXT(updateRes.ok, updateRes.errorMessage.c_str());
+    std::string serverAvatarUrl = updateRes.data.avatarUrl;
+    CHECK_FALSE(serverAvatarUrl.empty());
+
+    /* 2. Prepare client configuration simulating a saved session token on disk,
+     * but with EMPTY avatarUrl, bio, and location (e.g. outdated prefs) */
+    std::string cfgPath = env.dir + "/client_sync_startup.json";
+    {
+        ClientConfigStore cfg(cfgPath);
+        cfg.preferences().sessionToken = sessionTok;
+        cfg.preferences().playerUuid = playerUuid;
+        cfg.preferences().handle = "SyncUser";
+        cfg.preferences().displayName = "Old Name";
+        cfg.preferences().avatarUrl = "";
+        cfg.preferences().bio = "";
+        cfg.preferences().location = "";
+        std::string err;
+        CHECK_TRUE(cfg.save(err));
+    }
+
+    /* 3. Launch OctiMainWindow with this config.
+     * On construction, _authenticated is true (from sessionToken + playerUuid).
+     * The singleShot timer schedules refreshAuthenticatedProfileFromServer(). */
+    OctiMainWindow win(
+        OctiNetworkClient::createForLoopbackTest(env.port()), cfgPath);
+    win.resize(1024, 768);
+    win.show();
+
+    /* Pump UI events to allow singleShot(0) to execute and fetch /api/v1/profile/me */
+    win.pumpUiEvents();
+
+    /* Verify OctiMainWindow fetched and applied server bio, location, displayName, and avatarUrl */
+    STRCMP_EQUAL("SyncUser", win.currentProfile().handle.c_str());
+    STRCMP_EQUAL("Synchronized User", win.currentProfile().displayName.c_str());
+    STRCMP_EQUAL("A bio written on another client or web UI.", win.currentProfile().bio.c_str());
+    STRCMP_EQUAL("Kyoto, Japan", win.currentProfile().location.c_str());
+    STRCMP_EQUAL(serverAvatarUrl.c_str(), win.currentProfile().avatarUrl.c_str());
+
+    /* Verify _profileAvatarLabel has a non-null, valid pixmap rendered */
+    CHECK_TRUE(win.profileAvatarLabel() != nullptr);
+    CHECK_TRUE(win.profileAvatarLabel()->pixmap() != nullptr);
+    CHECK_FALSE(win.profileAvatarLabel()->pixmap()->isNull());
+
+    /* Also verify preferences file on disk was synced */
+    const ClientPreferences &diskPrefs = win.configStore()->preferences();
+    STRCMP_EQUAL("Synchronized User", diskPrefs.displayName.c_str());
+    STRCMP_EQUAL("A bio written on another client or web UI.", diskPrefs.bio.c_str());
+    STRCMP_EQUAL("Kyoto, Japan", diskPrefs.location.c_str());
+    STRCMP_EQUAL(serverAvatarUrl.c_str(), diskPrefs.avatarUrl.c_str());
+}
+
 extern "C" const char *__lsan_default_suppressions()
 {
     return "leak:libqoffscreen.so\n";

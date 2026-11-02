@@ -2449,7 +2449,11 @@ void OctiHttpServer::Impl::handleProfilePatch(const Request &req,
             return;
         }
         rooms.enterLobby(auth.playerId);    // refresh the cached handle
-        sendJson(res, 200, profileJson(p, true));
+        std::vector<LinkedIdentity> ids;
+        store.listLinkedIdentities(auth.playerId, ids);
+        Json j = profileJson(p, true);
+        j["linked_identities"] = identitiesJson(ids);
+        sendJson(res, 200, j);
         return;
     }
     case UpdateStatus::NOT_FOUND:

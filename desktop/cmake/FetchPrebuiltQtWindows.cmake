@@ -17,8 +17,12 @@ endif()
 
 set(OCTI_QT_MINGW_ROOT "${OCTI_QT_PREBUILT_ROOT}/${OCTI_QT_WIN_VERSION}/${OCTI_QT_WIN_SUBDIR}")
 
+find_program(AQT_EXECUTABLE NAMES aqt PATHS
+    "$ENV{HOME}/work/aimon/build/.venv-aqt/bin"
+    "$ENV{HOME}/.local/bin"
+)
+
 if(NOT EXISTS "${OCTI_QT_MINGW_ROOT}/include/QtCore/qconfig.h")
-    find_program(AQT_EXECUTABLE NAMES aqt PATHS "$ENV{HOME}/.local/bin")
     if(NOT AQT_EXECUTABLE)
         find_package(Python3 COMPONENTS Interpreter REQUIRED)
         message(STATUS "Installing aqtinstall via pip...")
@@ -29,7 +33,11 @@ if(NOT EXISTS "${OCTI_QT_MINGW_ROOT}/include/QtCore/qconfig.h")
         if(NOT _pip_rc EQUAL 0)
             message(FATAL_ERROR "Failed to install aqtinstall via pip")
         endif()
-        find_program(AQT_EXECUTABLE NAMES aqt PATHS "$ENV{HOME}/.local/bin" REQUIRED)
+        find_program(AQT_EXECUTABLE NAMES aqt PATHS
+            "$ENV{HOME}/work/aimon/build/.venv-aqt/bin"
+            "$ENV{HOME}/.local/bin"
+            REQUIRED
+        )
     endif()
 
     file(MAKE_DIRECTORY "${OCTI_QT_PREBUILT_ROOT}")
@@ -39,10 +47,33 @@ if(NOT EXISTS "${OCTI_QT_MINGW_ROOT}/include/QtCore/qconfig.h")
                 "${OCTI_QT_WIN_VERSION}" "${OCTI_QT_WIN_ARCH}"
                 -O "${OCTI_QT_PREBUILT_ROOT}"
                 --archives qtbase icu
+                -m qtimageformats
         RESULT_VARIABLE _aqt_rc
     )
     if(NOT _aqt_rc EQUAL 0)
         message(FATAL_ERROR "aqt install-qt failed with exit code ${_aqt_rc}")
+    endif()
+endif()
+
+if(NOT EXISTS "${OCTI_QT_MINGW_ROOT}/plugins/imageformats/qwebp.dll")
+    if(NOT AQT_EXECUTABLE)
+        find_program(AQT_EXECUTABLE NAMES aqt PATHS
+            "$ENV{HOME}/work/aimon/build/.venv-aqt/bin"
+            "$ENV{HOME}/.local/bin"
+        )
+    endif()
+    if(AQT_EXECUTABLE)
+        message(STATUS "Installing qtimageformats for Windows Qt ${OCTI_QT_WIN_VERSION} (${OCTI_QT_WIN_ARCH})...")
+        execute_process(
+            COMMAND "${AQT_EXECUTABLE}" install-qt windows desktop
+                    "${OCTI_QT_WIN_VERSION}" "${OCTI_QT_WIN_ARCH}"
+                    -O "${OCTI_QT_PREBUILT_ROOT}"
+                    -m qtimageformats
+            RESULT_VARIABLE _aqt_img_rc
+        )
+        if(NOT _aqt_img_rc EQUAL 0)
+            message(WARNING "Failed to install qtimageformats via aqt: ${_aqt_img_rc}")
+        endif()
     endif()
 endif()
 

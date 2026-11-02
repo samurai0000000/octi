@@ -24,6 +24,7 @@
 #include <QListWidgetItem>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QShortcut>
 #include <QSysInfo>
@@ -303,6 +304,7 @@ OctiMainWindow::OctiMainWindow(
     _profileAvatarLabel->setFixedSize(28, 28);
     _profileAvatarLabel->setStyleSheet("border: none; background: transparent;");
     _profileAvatarLabel->setCursor(Qt::PointingHandCursor);
+    _profileAvatarLabel->installEventFilter(this);
     topBarLayout->addWidget(_profileAvatarLabel);
 
     rootLayout->addWidget(topBar);
@@ -819,6 +821,11 @@ OctiMainWindow::OctiMainWindow(
     updateMatchActionsVisibility();
     setupMenuBar();
     updateStartMatchOverlay();
+    if (_authenticated) {
+        QTimer::singleShot(0, this, [this]() {
+            refreshAuthenticatedProfileFromServer();
+        });
+    }
 }
 
 OctiMainWindow::~OctiMainWindow()
@@ -930,6 +937,10 @@ const PlayerProfileInfo &OctiMainWindow::currentProfile() const
 
 void OctiMainWindow::applyAuthenticatedProfile(const PlayerProfileInfo &profile)
 {
+    if (profile.avatarUrl != _profile.avatarUrl) {
+        _cachedAvatarUrl.clear();
+        _cachedAvatarImage = QImage();
+    }
     _profile = profile;
     _authenticated = !profile.uuid.empty();
     _offlineMode = false;
@@ -966,6 +977,17 @@ void OctiMainWindow::applyAuthenticatedProfile(const PlayerProfileInfo &profile)
     updateMatchActionsVisibility();
 }
 
+void OctiMainWindow::refreshAuthenticatedProfileFromServer()
+{
+    if (!_authenticated || !_netClient || _configStore.preferences().sessionToken.empty()) {
+        return;
+    }
+    auto res = _netClient->fetchMyProfile();
+    if (res.ok && !res.data.uuid.empty()) {
+        applyAuthenticatedProfile(res.data);
+    }
+}
+
 void OctiMainWindow::showBoardView()
 {
     if (_viewStack && _boardPage) {
@@ -979,6 +1001,9 @@ void OctiMainWindow::showLobbyView()
     if (_viewStack && _lobbyView) {
         _viewStack->setCurrentWidget(_lobbyView);
         _lobbyView->refreshLobby();
+        if (_authenticated) {
+            refreshAuthenticatedProfileFromServer();
+        }
     }
     updateStartMatchOverlay();
 }
@@ -1261,6 +1286,9 @@ void OctiMainWindow::setupMenuBar()
             applyAuthenticatedProfile(prof);
         });
         dlg.exec();
+        if (!dlg.currentProfile().uuid.empty()) {
+            applyAuthenticatedProfile(dlg.currentProfile());
+        }
     });
 
     QAction *actArchive = onlineMenu->addAction(createMenuIcon(MenuIconKind::GAME_ARCHIVE, _theme), "Game Archive & Replay Browser...");
@@ -2719,6 +2747,32 @@ void OctiMainWindow::keyReleaseEvent(QKeyEvent *event)
 
 bool OctiMainWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    if (watched == _profileAvatarLabel && event && event->type() == QEvent::MouseButtonRelease) {
+        QMouseEvent *me = static_cast<QMouseEvent *>(event);
+        if (me && me->button() == Qt::LeftButton) {
+            if (_authenticated) {
+                AccountLinkDialog dlg(_netClient.get(), &_configStore, _theme, this);
+                dlg.setOnAccountSwitchedCallback([this](const PlayerProfileInfo &prof) {
+                    applyAuthenticatedProfile(prof);
+                });
+                dlg.exec();
+                if (!dlg.currentProfile().uuid.empty()) {
+                    applyAuthenticatedProfile(dlg.currentProfile());
+                }
+            } else {
+                SsoOnboardingDialog dlg(_netClient.get(), &_configStore, _theme, this);
+                dlg.setOnSignedInCallback([this](const PlayerProfileInfo &prof) {
+                    applyAuthenticatedProfile(prof);
+                });
+                if (dlg.exec() == QDialog::Accepted) {
+                    _authenticated = true;
+                    updateTopBarLabels();
+                }
+            }
+            return true;
+        }
+    }
+
     if (event && (event->type() == QEvent::KeyPress ||
                   event->type() == QEvent::KeyRelease)) {
         QKeyEvent *ke = static_cast<QKeyEvent *>(event);
@@ -2758,23 +2812,15 @@ void OctiMainWindow::updateTopBarLabels()
         }
     }
     if (_profileAvatarLabel) {
-        QImage avatarImg;
-        if (!_profile.avatarUrl.empty()) {
-            if (_profile.avatarUrl.rfind("data:image/", 0) == 0) {
-                auto comma = _profile.avatarUrl.find(',');
-                if (comma != std::string::npos) {
-                    QByteArray b64 = QByteArray::fromStdString(_profile.avatarUrl.substr(comma + 1));
-                    avatarImg.loadFromData(QByteArray::fromBase64(b64));
-                }
-            } else if (_profile.avatarUrl[0] == '/' && _netClient) {
-                std::string bytes, ctype;
-                if (_netClient->fetchAvatarBytes(_profile.avatarUrl, bytes, ctype)) {
-                    avatarImg.loadFromData(reinterpret_cast<const uchar *>(bytes.data()), static_cast<int>(bytes.size()));
-                }
-            }
+        if (_profile.avatarUrl.empty()) {
+            _cachedAvatarUrl.clear();
+            _cachedAvatarImage = QImage();
+        } else if (_profile.avatarUrl != _cachedAvatarUrl) {
+            _cachedAvatarUrl = _profile.avatarUrl;
+            _cachedAvatarImage = AccountLinkDialog::loadAvatarImage(_profile.avatarUrl, _netClient.get());
         }
         QString hStr = _authenticated ? QString::fromStdString(_profile.handle) : QString("Guest");
-        QPixmap pm = AccountLinkDialog::renderCircularAvatarPixmap(avatarImg, hStr, 28, _theme);
+        QPixmap pm = AccountLinkDialog::renderCircularAvatarPixmap(_cachedAvatarImage, hStr, 28, _theme);
         _profileAvatarLabel->setPixmap(pm);
         _profileAvatarLabel->setToolTip(_authenticated ? ("@" + hStr) : "Guest");
         _profileAvatarLabel->setVisible(true);

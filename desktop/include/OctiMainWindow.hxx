@@ -88,6 +88,7 @@ public:
     bool isAuthenticated() const;
     const PlayerProfileInfo &currentProfile() const;
     void applyAuthenticatedProfile(const PlayerProfileInfo &profile);
+    void refreshAuthenticatedProfileFromServer();
 
     /* ---- View Mode & Tabletop Controls ---- */
     void showBoardView();
@@ -268,6 +269,8 @@ private:
     bool _offlineMode;
     bool _authenticated;
     PlayerProfileInfo _profile;
+    std::string _cachedAvatarUrl;
+    QImage _cachedAvatarImage;
 
     bool _isLocalBotGame;
     LocalGameConfig _localConfig;

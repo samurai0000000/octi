@@ -39,6 +39,9 @@ endif()
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(SQLite3 REQUIRED)
+find_package(PNG REQUIRED)
+find_library(WEBP_LIBRARY webp REQUIRED)
+find_path(WEBP_INCLUDE_DIR webp/decode.h REQUIRED)
 if(OCTI_SERVER_BUILD_TESTS)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(CPPUTEST REQUIRED cpputest)
@@ -71,6 +74,8 @@ target_include_directories(octi_server_lib PUBLIC
 target_include_directories(octi_server_lib SYSTEM PUBLIC
     ${OCTI_THIRD_PARTY_DIR}/cpp-httplib
     ${OCTI_THIRD_PARTY_DIR}/json/include
+    ${PNG_INCLUDE_DIRS}
+    ${WEBP_INCLUDE_DIR}
 )
 
 target_compile_definitions(octi_server_lib PUBLIC
@@ -83,6 +88,8 @@ target_link_libraries(octi_server_lib PUBLIC
     OpenSSL::SSL
     OpenSSL::Crypto
     SQLite::SQLite3
+    PNG::PNG
+    ${WEBP_LIBRARY}
 )
 
 if(OCTI_SERVER_BUILD_TESTS)

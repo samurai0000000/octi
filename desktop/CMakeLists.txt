@@ -165,6 +165,13 @@ if(WIN32)
         qminimal.dll
         qoffscreen.dll
     )
+    set(OCTI_WIN_IMAGEFORMATS_PLUGINS
+        qjpeg.dll
+        qgif.dll
+        qico.dll
+        qsvg.dll
+        qwebp.dll
+    )
     set(OCTI_WIN_STYLE_PLUGINS)
     if(EXISTS "${OCTI_QT_PLUGINS_DIR}/styles/qmodernwindowsstyle.dll")
         list(APPEND OCTI_WIN_STYLE_PLUGINS qmodernwindowsstyle.dll)
@@ -173,6 +180,7 @@ if(WIN32)
     set(OCTI_STAGED_FILES)
     set(OCTI_STAGE_COMMANDS
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/platforms"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/imageformats"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/styles"
     )
     foreach(_dll IN LISTS OCTI_WIN_QT_DLLS)
@@ -205,6 +213,14 @@ if(WIN32)
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different
                 "${OCTI_QT_PLUGINS_DIR}/platforms/${_plug}"
                 "${CMAKE_CURRENT_BINARY_DIR}/platforms/${_plug}"
+        )
+    endforeach()
+    foreach(_img IN LISTS OCTI_WIN_IMAGEFORMATS_PLUGINS)
+        list(APPEND OCTI_STAGED_FILES "${CMAKE_CURRENT_BINARY_DIR}/imageformats/${_img}")
+        list(APPEND OCTI_STAGE_COMMANDS
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${OCTI_QT_PLUGINS_DIR}/imageformats/${_img}"
+                "${CMAKE_CURRENT_BINARY_DIR}/imageformats/${_img}"
         )
     endforeach()
     foreach(_style IN LISTS OCTI_WIN_STYLE_PLUGINS)

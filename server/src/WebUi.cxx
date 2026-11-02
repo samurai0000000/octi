@@ -687,6 +687,7 @@ tr.active-ply {
           <th>Handle</th>
           <th>Display Name</th>
           <th>Location</th>
+          <th>Bio</th>
           <th>2P ELO</th>
           <th>4P ELO</th>
           <th>OFK ELO</th>
@@ -2457,11 +2458,11 @@ function switchTab(name) {
   } else if (name === "board") {
     lbLoad();
   } else if (name === "users") {
-    if (!usersLoaded) { usersSearch(0); }
+    usersSearch(usersOffset || 0);
   } else if (name === "robots") {
     if (currentUser) { loadMyRobots(); }
   } else if (name === "account") {
-    if (currentUser) { loadMyProfile(); }
+    if (currentUser || localStorage.getItem("octi_jwt_token")) { loadMyProfile(); }
   } else if (name === "play") {
     if (!localBotState) { initLocalBotGame(); }
   }
@@ -2735,14 +2736,8 @@ $("web-avatar-file").addEventListener("change", function (ev) {
       var sx = (img.width - minDim) / 2;
       var sy = (img.height - minDim) / 2;
       var sizes = [192, 128, 96];
-      var qualities = [0.85, 0.70, 0.55];
+      var jpegQualities = [0.85, 0.70, 0.55];
       var bestDataUri = null;
-
-      // Test WebP format support
-      var testCanvas = document.createElement("canvas");
-      testCanvas.width = 1;
-      testCanvas.height = 1;
-      var mimeType = (testCanvas.toDataURL("image/webp").indexOf("data:image/webp") === 0) ? "image/webp" : "image/jpeg";
 
       for (var s = 0; s < sizes.length && !bestDataUri; ++s) {
         var targetSize = sizes[s];
@@ -2754,8 +2749,16 @@ $("web-avatar-file").addEventListener("change", function (ev) {
         ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
 
-        for (var q = 0; q < qualities.length; ++q) {
-          var uri = canvas.toDataURL(mimeType, qualities[q]);
+        // Try PNG first (lossless)
+        var pngUri = canvas.toDataURL("image/png");
+        if (pngUri && pngUri.length <= 200000) {
+          bestDataUri = pngUri;
+          break;
+        }
+
+        // Fall back to JPEG at various qualities
+        for (var q = 0; q < jpegQualities.length; ++q) {
+          var uri = canvas.toDataURL("image/jpeg", jpegQualities[q]);
           if (uri && uri.length <= 200000) {
             bestDataUri = uri;
             break;
@@ -2859,6 +2862,7 @@ $("btn-web-save-profile").addEventListener("click", function () {
     if (typeof loadGames === "function") { loadGames(); }
     if (typeof lbLoad === "function") { lbLoad(); }
     if (typeof arSearch === "function") { arSearch(0); }
+    if (typeof usersSearch === "function" && usersLoaded) { usersSearch(usersOffset || 0); }
     if (statusEl) {
       statusEl.textContent = "Profile saved.";
       statusEl.style.color = "#10b981";
@@ -2878,6 +2882,33 @@ $("btn-web-view-public-profile").addEventListener("click", function () {
   if (currentUser) {
     switchTab("users");
     openUserProfile(currentUser.uuid || currentUser.user_id || currentUser.handle);
+  }
+});
+
+function refreshAccountIfIdle() {
+  var accTab = $("tab-account");
+  if (!accTab || !accTab.classList.contains("on")) {
+    return;
+  }
+  var active = document.activeElement;
+  var editing = active && (
+    active.id === "web-handle-input" ||
+    active.id === "web-display-name-input" ||
+    active.id === "web-location-input" ||
+    active.id === "web-bio-input"
+  );
+  if (!editing && (currentUser || localStorage.getItem("octi_jwt_token"))) {
+    loadMyProfile();
+  }
+}
+
+window.addEventListener("focus", function () {
+  refreshAccountIfIdle();
+});
+
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState === "visible") {
+    refreshAccountIfIdle();
   }
 });
 
@@ -3218,6 +3249,10 @@ function usersSearch(offset) {
       tdHandle.style.fontWeight = "700";
       var tdName = el("td", u.display_name || "-");
       var tdLoc = el("td", u.location || "-");
+      var bioRaw = (u.bio || "").trim();
+      var bioDisplay = bioRaw ? (bioRaw.length > 60 ? bioRaw.substring(0, 57) + "..." : bioRaw) : "—";
+      var tdBio = el("td", bioDisplay);
+      if (bioRaw) { tdBio.title = bioRaw; }
       var tdElo2p = el("td", u.elo_2p !== undefined ? u.elo_2p : 1200);
       var tdElo4p = el("td", u.elo_4p !== undefined ? u.elo_4p : 1200);
       var tdEloOfk = el("td", u.elo_ofk !== undefined ? u.elo_ofk : 1200);
@@ -3226,7 +3261,7 @@ function usersSearch(offset) {
       var tdRobots = el("td", u.active_robots_count !== undefined ? u.active_robots_count : 0);
       var tdJoined = el("td", fmtTime(u.created_at));
 
-      [tdAv, tdHandle, tdName, tdLoc, tdElo2p, tdElo4p, tdEloOfk, tdGames, tdRobots, tdJoined].forEach(function (td) {
+      [tdAv, tdHandle, tdName, tdLoc, tdBio, tdElo2p, tdElo4p, tdEloOfk, tdGames, tdRobots, tdJoined].forEach(function (td) {
         tr.appendChild(td);
       });
 

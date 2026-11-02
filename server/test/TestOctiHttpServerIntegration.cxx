@@ -4269,7 +4269,8 @@ TEST(OctiHttpServerIntegrationTest, WebAuthAndIdentitiesManagement)
     CHECK_TRUE(rRoot.body.find("/api/v1/health") != std::string::npos);
     CHECK_TRUE(rRoot.body.find("btn-web-save-profile") != std::string::npos);
     CHECK_TRUE(rRoot.body.find("octi.transcript.v3") != std::string::npos);
-    CHECK_TRUE(rRoot.body.find("image/webp") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("image/png") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("<th>Bio</th>") != std::string::npos);
     CHECK_TRUE(rRoot.body.find("btn-web-save-handle") == std::string::npos);
     CHECK_TRUE(rRoot.body.find("Save Handle") == std::string::npos);
 
@@ -4410,6 +4411,90 @@ TEST(OctiHttpServerIntegrationTest, ServerAvatarStorageAndEndpointServing)
     // Non-existent avatar returns 404
     Reply rMissing = http().get("/api/v1/avatars/999999.png");
     EXPECT_STATUS(404, rMissing);
+}
+
+TEST(OctiHttpServerIntegrationTest, WebpAvatarTranscodingAndProfilePatchParity)
+{
+    std::string avDir = env->dir + "/avatars_webp";
+    env->store.setAvatarDir(avDir);
+
+    User a = signIn("google", "sub-webp-user", "WebP Alice");
+
+    // 1. Direct transcoding verification
+    std::string rawWebp(
+        "\x52\x49\x46\x46\x3c\x00\x00\x00\x57\x45\x42\x50\x56\x50\x38\x20"
+        "\x30\x00\x00\x00\xd0\x01\x00\x9d\x01\x2a\x02\x00\x02\x00\x02\x00"
+        "\x34\x25\xa0\x02\x74\xba\x01\xf8\x00\x03\xb0\x00\xfe\xf0\xc4\x0b"
+        "\xff\x20\xb9\x61\x75\xc8\xd7\xff\x20\x3f\xe4\x07\xfc\x80\xff\xf8"
+        "\xf2\x00\x00\x00",
+        68);
+    std::string directPng;
+    CHECK_TRUE(transcodeWebpToPng(rawWebp, directPng));
+    CHECK_TRUE(directPng.size() >= 8);
+    CHECK_EQUAL(0, std::memcmp(directPng.data(), "\x89PNG\r\n\x1a\n", 8));
+
+    // 2. PATCH /api/v1/profile/me with WebP avatar, bio, and location
+    std::string webpUri = "data:image/webp;base64,UklGRjwAAABXRUJQVlA4IDAAAADQAQCdASoCAAIAAgA0JaACdLoB+AADsAD+8MQL/yC5YXXI1/8gP+QH/ID/+PIAAAA=";
+    Reply rPatch = http().patch("/api/v1/profile/me", a.token, Json{
+        {"bio", "Master OCTI strategist"},
+        {"location", "Tokyo, Japan"},
+        {"avatar_url", webpUri}
+    });
+    EXPECT_STATUS(200, rPatch);
+
+    // Verify linked_identities is present in PATCH response
+    CHECK_TRUE(rPatch.json.contains("linked_identities"));
+    CHECK_TRUE(rPatch.json["linked_identities"].is_array());
+    CHECK_EQUAL(1, static_cast<int>(rPatch.json["linked_identities"].size()));
+    STRCMP_EQUAL("google", rPatch.json["linked_identities"][0].value("provider", "").c_str());
+
+    // Verify bio and location are persisted and last_seen_at updated
+    STRCMP_EQUAL("Master OCTI strategist", rPatch.json.value("bio", "").c_str());
+    STRCMP_EQUAL("Tokyo, Japan", rPatch.json.value("location", "").c_str());
+    CHECK_TRUE(rPatch.json.value("last_seen_at", 0) > 0);
+
+    // Verify avatar was transcoded to PNG and stored with .png extension
+    std::string avUrl = rPatch.json.value("avatar_url", "");
+    CHECK_TRUE(avUrl.rfind("/api/v1/avatars/", 0) == 0);
+    size_t q = avUrl.find('?');
+    std::string avPath = (q != std::string::npos) ? avUrl.substr(0, q) : avUrl;
+    CHECK_TRUE(avPath.size() >= 4 && avPath.substr(avPath.size() - 4) == ".png");
+
+    // Fetch avatar via GET /api/v1/avatars/... and verify PNG magic bytes and Content-Type
+    Reply rGetAv = http().get(avPath);
+    EXPECT_STATUS(200, rGetAv);
+    STRCMP_EQUAL("image/png", rGetAv.contentType.c_str());
+    CHECK_TRUE(rGetAv.body.size() >= 8);
+    CHECK_EQUAL(0, std::memcmp(rGetAv.body.data(), "\x89PNG\r\n\x1a\n", 8));
+
+    // GET /api/v1/profile/me matches PATCH response
+    Reply rGetMe = http().get("/api/v1/profile/me", a.token);
+    EXPECT_STATUS(200, rGetMe);
+    STRCMP_EQUAL("Master OCTI strategist", rGetMe.json.value("bio", "").c_str());
+    STRCMP_EQUAL("Tokyo, Japan", rGetMe.json.value("location", "").c_str());
+    STRCMP_EQUAL(avUrl.c_str(), rGetMe.json.value("avatar_url", "").c_str());
+    CHECK_TRUE(rGetMe.json.contains("linked_identities"));
+    CHECK_EQUAL(1, static_cast<int>(rGetMe.json["linked_identities"].size()));
+
+    // 3. Existing .webp file in avatarDir is served as image/png
+    std::string diskWebpFile = avDir + "/7777.webp";
+    {
+        std::ofstream out(diskWebpFile.c_str(), std::ios::binary | std::ios::trunc);
+        out.write(rawWebp.data(), rawWebp.size());
+    }
+    // GET /api/v1/avatars/7777.webp returns image/png
+    Reply rGetWebp = http().get("/api/v1/avatars/7777.webp");
+    EXPECT_STATUS(200, rGetWebp);
+    STRCMP_EQUAL("image/png", rGetWebp.contentType.c_str());
+    CHECK_TRUE(rGetWebp.body.size() >= 8);
+    CHECK_EQUAL(0, std::memcmp(rGetWebp.body.data(), "\x89PNG\r\n\x1a\n", 8));
+
+    // GET /api/v1/avatars/7777.png (where only 7777.webp exists on disk) also returns image/png
+    Reply rGetFallback = http().get("/api/v1/avatars/7777.png");
+    EXPECT_STATUS(200, rGetFallback);
+    STRCMP_EQUAL("image/png", rGetFallback.contentType.c_str());
+    CHECK_TRUE(rGetFallback.body.size() >= 8);
+    CHECK_EQUAL(0, std::memcmp(rGetFallback.body.data(), "\x89PNG\r\n\x1a\n", 8));
 }
 
 TEST(OctiHttpServerIntegrationTest, AuthenticatedGameArchiveAndInstallAttribution)

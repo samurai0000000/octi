@@ -1175,6 +1175,47 @@ public class OctiAndroidNetworkAndVoiceTest {
             }
         }
     }
+
+    @Test
+    public void testTlsSniAndDnsHostnameClassification() throws Exception {
+        // DNS hostnames
+        assertTrue(OctiNetworkClient.isDnsHostName("octi.selfso.com"));
+        assertTrue(OctiNetworkClient.isDnsHostName("trumpet.selfso.com"));
+        assertTrue(OctiNetworkClient.isDnsHostName("sub.domain.example.org"));
+
+        // Non-DNS hostnames (IPv4, IPv6, localhost, null, empty)
+        assertFalse(OctiNetworkClient.isDnsHostName("localhost"));
+        assertFalse(OctiNetworkClient.isDnsHostName("LOCALHOST"));
+        assertFalse(OctiNetworkClient.isDnsHostName("127.0.0.1"));
+        assertFalse(OctiNetworkClient.isDnsHostName("192.168.1.1"));
+        assertFalse(OctiNetworkClient.isDnsHostName("::1"));
+        assertFalse(OctiNetworkClient.isDnsHostName("fe80::1"));
+        assertFalse(OctiNetworkClient.isDnsHostName(""));
+        assertFalse(OctiNetworkClient.isDnsHostName(null));
+
+        // Test createConnectedSocket with plain non-443 socket
+        try (ServerSocket localServer = new ServerSocket()) {
+            localServer.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0));
+            int port = localServer.getLocalPort();
+
+            Thread acceptThread = new Thread(() -> {
+                try (Socket s = localServer.accept()) {
+                    // accepted
+                } catch (Exception ignored) {
+                }
+            });
+            acceptThread.start();
+
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(port)) {
+                Socket sock = client.createConnectedSocket("127.0.0.1", port, 2000, 2000);
+                assertNotNull(sock);
+                assertTrue(sock.isConnected());
+                assertFalse("Non-443 port must create plain Socket, not SSLSocket", sock instanceof javax.net.ssl.SSLSocket);
+                sock.close();
+            }
+            acceptThread.join(1000);
+        }
+    }
 }
 
 /*

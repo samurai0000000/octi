@@ -54,6 +54,8 @@ class OctiAppViewModel @JvmOverloads constructor(
     val netClient: OctiNetworkClient = OctiNetworkClient()
 ) : ViewModel(), AutoCloseable {
 
+    fun networkClient(): OctiNetworkClient = netClient
+
     enum class AppTab {
         BOARD,
         ONLINE_LOBBY,
@@ -78,8 +80,17 @@ class OctiAppViewModel @JvmOverloads constructor(
     )
 
     companion object {
+        @Volatile
+        @JvmField
+        var avatarEncoderForTest: java.util.function.Function<android.graphics.Bitmap, String>? = null
+
         @JvmStatic
         fun encodeAvatarBitmapToDataUri(src: android.graphics.Bitmap): String {
+            val hook = avatarEncoderForTest
+            if (hook != null) {
+                val forced = hook.apply(src)
+                if (forced != null && forced.isNotEmpty()) return forced
+            }
             try {
                 val edge = minOf(src.width, src.height)
                 if (edge <= 0) return ""
@@ -92,7 +103,8 @@ class OctiAppViewModel @JvmOverloads constructor(
                 } ?: src
 
                 val dims = intArrayOf(192, 128, 96)
-                val qualities = intArrayOf(85, 70, 55)
+                val jpegQualities = intArrayOf(92, 85, 75, 65, 50)
+                val maxRawBytes = 200000
 
                 for (dim in dims) {
                     val scaled = if (cropped.width == dim && cropped.height == dim) {
@@ -101,38 +113,42 @@ class OctiAppViewModel @JvmOverloads constructor(
                         android.graphics.Bitmap.createScaledBitmap(cropped, dim, dim, true)
                     } ?: cropped
 
-                    for (q in qualities) {
-                        for (fmt in listOf("webp", "jpeg")) {
-                            val baos = java.io.ByteArrayOutputStream()
-                            val compressFormat = if (fmt == "webp") {
-                                if (android.os.Build.VERSION.SDK_INT >= 30) {
-                                    android.graphics.Bitmap.CompressFormat.WEBP_LOSSY
-                                } else {
-                                    @Suppress("DEPRECATION")
-                                    android.graphics.Bitmap.CompressFormat.WEBP
-                                }
-                            } else {
-                                android.graphics.Bitmap.CompressFormat.JPEG
-                            }
-                            val mime = if (fmt == "webp") "image/webp" else "image/jpeg"
-                            val ok = try {
-                                scaled.compress(compressFormat, q, baos)
-                            } catch (_: Throwable) {
-                                false
-                            }
-                            if (ok && baos.size() > 0) {
-                                val bytes = baos.toByteArray()
-                                if (bytes.size <= 200000) {
-                                    val b64 = java.util.Base64.getEncoder().encodeToString(bytes)
-                                    return "data:$mime;base64,$b64"
-                                }
-                            }
+                    if (scaled.hasAlpha()) {
+                        val baos = java.io.ByteArrayOutputStream()
+                        val ok = try {
+                            scaled.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, baos)
+                        } catch (_: Throwable) {
+                            false
+                        }
+                        if (ok && baos.size() in 1..maxRawBytes) {
+                            val b64 = java.util.Base64.getEncoder().encodeToString(baos.toByteArray())
+                            return "data:image/png;base64,$b64"
+                        }
+                    }
+
+                    for (q in jpegQualities) {
+                        val baos = java.io.ByteArrayOutputStream()
+                        val ok = try {
+                            scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, q, baos)
+                        } catch (_: Throwable) {
+                            false
+                        }
+                        if (ok && baos.size() in 1..maxRawBytes) {
+                            val b64 = java.util.Base64.getEncoder().encodeToString(baos.toByteArray())
+                            return "data:image/jpeg;base64,$b64"
                         }
                     }
                 }
             } catch (_: Throwable) {
             }
             return ""
+        }
+
+        private val avatarBytesCache = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
+
+        @JvmStatic
+        fun clearAvatarBytesCacheForTest() {
+            avatarBytesCache.clear()
         }
 
         @JvmStatic
@@ -156,9 +172,17 @@ class OctiAppViewModel @JvmOverloads constructor(
                 }
                 return null
             }
+            val cached = avatarBytesCache[avatarUrl]
+            if (cached != null) {
+                return cached
+            }
             if (netClient != null) {
                 return try {
-                    netClient.fetchAvatarBytes(avatarUrl)
+                    val bytes = netClient.fetchAvatarBytes(avatarUrl)
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        avatarBytesCache[avatarUrl] = bytes
+                    }
+                    bytes
                 } catch (_: Throwable) {
                     null
                 }
@@ -876,6 +900,9 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     fun setShowAccountDialog(visible: Boolean) {
         _showAccountDialog.value = visible
+        if (visible && _isAuthenticated.value) {
+            refreshMyProfileAsync()
+        }
     }
 
     fun setShowCreateTableDialog(visible: Boolean) {
@@ -1900,24 +1927,26 @@ class OctiAppViewModel @JvmOverloads constructor(
         val apiRes = netClient.updateMyProfile(handle, avatarUrl, displayName, bio, location, setAvatarUrl)
         val res = OctiNetworkClient.ProfileResult.fromApiResult(apiRes)
         if (res.ok && res.profile != null) {
-            _currentProfile.value = res.profile
-            _onboardingRequired.value = false
-            val prefs = configStore.preferences()
-            if (res.profile.handle.isNotEmpty()) {
-                prefs.setHandle(res.profile.handle)
+            runOnUiThreadOrSync {
+                _currentProfile.value = res.profile
+                _onboardingRequired.value = false
+                val prefs = configStore.preferences()
+                if (res.profile.handle.isNotEmpty()) {
+                    prefs.setHandle(res.profile.handle)
+                }
+                prefs.setDisplayName(res.profile.displayName)
+                prefs.setAvatarUrl(res.profile.avatarUrl)
+                prefs.setBio(res.profile.bio)
+                prefs.setLocation(res.profile.location)
+                configStore.save()
+                _profileActionMessage.value = if (res.profile.handle.isNotEmpty() && res.profile.handle != oldHandle) {
+                    "Profile saved. Handle updated to @${res.profile.handle}"
+                } else {
+                    "Profile saved."
+                }
+                _browserAuthStatusText.value = ""
+                _statusBanner.value = "Profile saved."
             }
-            prefs.setDisplayName(res.profile.displayName)
-            prefs.setAvatarUrl(res.profile.avatarUrl)
-            prefs.setBio(res.profile.bio)
-            prefs.setLocation(res.profile.location)
-            configStore.save()
-            _profileActionMessage.value = if (res.profile.handle.isNotEmpty() && res.profile.handle != oldHandle) {
-                "Profile saved. Handle updated to @${res.profile.handle}"
-            } else {
-                "Profile saved."
-            }
-            _browserAuthStatusText.value = ""
-            _statusBanner.value = "Profile saved."
         } else {
             val errRaw = (res.errorMessage.ifEmpty { res.errorCode ?: "" }).lowercase()
             val userMsg = when {
@@ -1932,8 +1961,10 @@ class OctiAppViewModel @JvmOverloads constructor(
                 res.errorMessage.isNotEmpty() -> res.errorMessage
                 else -> "Failed to save profile: ${res.error.ifEmpty { "network error" }}"
             }
-            _profileActionMessage.value = userMsg
-            _statusBanner.value = "Profile update failed: ${res.errorMessage}"
+            runOnUiThreadOrSync {
+                _profileActionMessage.value = userMsg
+                _statusBanner.value = "Profile update failed: ${res.errorMessage}"
+            }
         }
         return res
     }
@@ -1953,6 +1984,33 @@ class OctiAppViewModel @JvmOverloads constructor(
             runOnUiThreadOrSync {
                 _profileActionBusy.value = false
                 onDone?.onDone(res)
+            }
+        }
+    }
+
+    @JvmName("updateMyProfileWithBoolCallbackAsync")
+    fun updateMyProfileAsync(
+        handle: String,
+        avatarUrl: String,
+        displayName: String,
+        bio: String,
+        location: String,
+        setAvatarUrl: Boolean,
+        onDone: ActionCallback<Boolean>? = null
+    ) {
+        _profileActionBusy.value = true
+        _backgroundExecutor.submit {
+            val res = updateMyProfile(
+                desiredHandle = handle,
+                displayName = displayName,
+                location = location,
+                bio = bio,
+                avatarUrl = avatarUrl,
+                setAvatarUrl = setAvatarUrl
+            )
+            runOnUiThreadOrSync {
+                _profileActionBusy.value = false
+                onDone?.onComplete(res.ok)
             }
         }
     }
@@ -1987,6 +2045,10 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     fun interface ActionCallback<in T> {
         fun onDone(result: T)
+    }
+
+    fun <T> ActionCallback<T>.onComplete(result: T) {
+        onDone(result)
     }
 
     fun completeHandleOnboardingAsync(
@@ -2281,17 +2343,34 @@ class OctiAppViewModel @JvmOverloads constructor(
     fun refreshMyProfile(): OctiNetworkClient.ApiResult<OctiNetworkClient.PlayerProfileInfo> {
         val res = netClient.fetchMyProfile()
         if (res.ok && res.data != null) {
-            _currentProfile.value = res.data
-            _linkedIdentities.value = ArrayList(res.data.identities)
-            val prefs = configStore.preferences()
-            prefs.setHandle(res.data.handle)
-            prefs.setDisplayName(res.data.displayName)
-            prefs.setAvatarUrl(res.data.avatarUrl)
-            prefs.setBio(res.data.bio)
-            prefs.setLocation(res.data.location)
-            configStore.save()
+            runOnUiThreadOrSync {
+                _currentProfile.value = res.data
+                _linkedIdentities.value = ArrayList(res.data.identities)
+                val prefs = configStore.preferences()
+                prefs.setHandle(res.data.handle)
+                prefs.setDisplayName(res.data.displayName)
+                prefs.setAvatarUrl(res.data.avatarUrl)
+                prefs.setBio(res.data.bio)
+                prefs.setLocation(res.data.location)
+                configStore.save()
+            }
         }
         return res
+    }
+
+    fun refreshMyProfileAsync(onDone: ActionCallback<Boolean>? = null) {
+        if (!_isAuthenticated.value || configStore.preferences().sessionToken.isEmpty()) {
+            runOnUiThreadOrSync {
+                onDone?.onComplete(false)
+            }
+            return
+        }
+        _backgroundExecutor.submit {
+            val res = refreshMyProfile()
+            runOnUiThreadOrSync {
+                onDone?.onComplete(res.ok)
+            }
+        }
     }
 
     fun logoutOnline(): OctiNetworkClient.ApiResult<Boolean> {
@@ -2522,6 +2601,7 @@ class OctiAppViewModel @JvmOverloads constructor(
         _loopbackAuthListener.stop()
         _isBrowserAuthInProgress.value = false
         _browserAuthStatusText.value = ""
+        _browserAuthLinkMode = false
     }
 
     fun loopbackAuthPort(): Int = _loopbackAuthListener.boundPort()

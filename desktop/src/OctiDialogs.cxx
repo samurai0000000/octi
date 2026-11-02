@@ -725,10 +725,7 @@ void AccountLinkDialog::setTheme(ThemeId theme)
 {
     _theme = theme;
     setStyleSheet(buildAppStyleSheet(_theme));
-    if (_avatarPreviewLabel) {
-        QString h = _handleEdit ? _handleEdit->text() : QString::fromStdString(_currentProfile.handle);
-        _avatarPreviewLabel->setPixmap(renderCircularAvatarPixmap(_currentAvatarImage, h, 72, _theme));
-    }
+    updateCurrentAvatarPreview();
 }
 
 ThemeId AccountLinkDialog::theme() const
@@ -839,6 +836,50 @@ QPixmap AccountLinkDialog::renderCircularAvatarPixmap(const QImage &srcImg,
     return pix;
 }
 
+QImage AccountLinkDialog::loadAvatarImage(const std::string &avatarUrl,
+                                          OctiNetworkClient *netClient)
+{
+    if (avatarUrl.empty()) {
+        return QImage();
+    }
+    if (avatarUrl.rfind("data:image/", 0) == 0 || avatarUrl.rfind("data:", 0) == 0) {
+        auto comma = avatarUrl.find(',');
+        if (comma != std::string::npos) {
+            QByteArray b64 = QByteArray::fromStdString(avatarUrl.substr(comma + 1));
+            QByteArray decoded = QByteArray::fromBase64(b64);
+            QImage img;
+            if (img.loadFromData(decoded)) {
+                return img;
+            }
+        }
+        return QImage();
+    }
+
+    if (!netClient) {
+        return QImage();
+    }
+
+    std::string bytes, ctype;
+    if (netClient->fetchAvatarBytes(avatarUrl, bytes, ctype) && !bytes.empty()) {
+        QImage img;
+        if (img.loadFromData(reinterpret_cast<const uchar *>(bytes.data()), static_cast<int>(bytes.size()))) {
+            return img;
+        }
+    }
+
+    return QImage();
+}
+
+void AccountLinkDialog::updateCurrentAvatarPreview()
+{
+    if (_avatarPreviewLabel) {
+        QString h = (_handleEdit && !_handleEdit->text().trimmed().isEmpty())
+            ? _handleEdit->text().trimmed()
+            : QString::fromStdString(_currentProfile.handle);
+        _avatarPreviewLabel->setPixmap(renderCircularAvatarPixmap(_currentAvatarImage, h, 72, _theme));
+    }
+}
+
 QString AccountLinkDialog::profileStatusText() const
 {
     return _profileStatusLabel ? _profileStatusLabel->text() : QString();
@@ -864,10 +905,7 @@ bool AccountLinkDialog::selectAvatarFromImage(const QImage &img)
     _pendingAvatarDataUri = dataUri;
     _avatarCleared = false;
     _currentAvatarImage = img;
-    if (_avatarPreviewLabel) {
-        QString h = _handleEdit ? _handleEdit->text() : QString::fromStdString(_currentProfile.handle);
-        _avatarPreviewLabel->setPixmap(renderCircularAvatarPixmap(_currentAvatarImage, h, 72, _theme));
-    }
+    updateCurrentAvatarPreview();
     if (_profileStatusLabel) {
         _profileStatusLabel->setText("Avatar selected. Click Save Profile to apply.");
         _profileStatusLabel->setStyleSheet("");
@@ -880,10 +918,7 @@ void AccountLinkDialog::clearPendingAvatar()
     _avatarCleared = true;
     _pendingAvatarDataUri.clear();
     _currentAvatarImage = QImage();
-    if (_avatarPreviewLabel) {
-        QString h = _handleEdit ? _handleEdit->text() : QString::fromStdString(_currentProfile.handle);
-        _avatarPreviewLabel->setPixmap(renderCircularAvatarPixmap(QImage(), h, 72, _theme));
-    }
+    updateCurrentAvatarPreview();
     if (_profileStatusLabel) {
         _profileStatusLabel->setText("Avatar cleared. Click Save Profile to apply.");
         _profileStatusLabel->setStyleSheet("");
@@ -941,27 +976,8 @@ ApiResult<PlayerProfileInfo> AccountLinkDialog::saveProfile()
         _currentProfile = res.data;
         _pendingAvatarDataUri.clear();
         _avatarCleared = false;
-
-        if (!_currentProfile.avatarUrl.empty()) {
-            if (_currentProfile.avatarUrl.rfind("data:image/", 0) == 0) {
-                auto comma = _currentProfile.avatarUrl.find(',');
-                if (comma != std::string::npos) {
-                    QByteArray b64 = QByteArray::fromStdString(_currentProfile.avatarUrl.substr(comma + 1));
-                    _currentAvatarImage.loadFromData(QByteArray::fromBase64(b64));
-                }
-            } else if (_currentProfile.avatarUrl[0] == '/') {
-                std::string bytes, ctype;
-                if (_netClient->fetchAvatarBytes(_currentProfile.avatarUrl, bytes, ctype)) {
-                    _currentAvatarImage.loadFromData(reinterpret_cast<const uchar *>(bytes.data()), static_cast<int>(bytes.size()));
-                }
-            }
-        } else {
-            _currentAvatarImage = QImage();
-        }
-        if (_avatarPreviewLabel) {
-            QString h = QString::fromStdString(_currentProfile.handle);
-            _avatarPreviewLabel->setPixmap(renderCircularAvatarPixmap(_currentAvatarImage, h, 72, _theme));
-        }
+        _currentAvatarImage = loadAvatarImage(_currentProfile.avatarUrl, _netClient);
+        updateCurrentAvatarPreview();
 
         if (_configStore) {
             ClientPreferences &prefs = _configStore->preferences();
@@ -1027,26 +1043,8 @@ bool AccountLinkDialog::refreshProfile()
 
     _pendingAvatarDataUri.clear();
     _avatarCleared = false;
-    if (!_currentProfile.avatarUrl.empty()) {
-        if (_currentProfile.avatarUrl.rfind("data:image/", 0) == 0) {
-            auto comma = _currentProfile.avatarUrl.find(',');
-            if (comma != std::string::npos) {
-                QByteArray b64 = QByteArray::fromStdString(_currentProfile.avatarUrl.substr(comma + 1));
-                _currentAvatarImage.loadFromData(QByteArray::fromBase64(b64));
-            }
-        } else if (_currentProfile.avatarUrl[0] == '/') {
-            std::string bytes, ctype;
-            if (_netClient->fetchAvatarBytes(_currentProfile.avatarUrl, bytes, ctype)) {
-                _currentAvatarImage.loadFromData(reinterpret_cast<const uchar *>(bytes.data()), static_cast<int>(bytes.size()));
-            }
-        }
-    } else {
-        _currentAvatarImage = QImage();
-    }
-    if (_avatarPreviewLabel) {
-        QString h = QString::fromStdString(_currentProfile.handle);
-        _avatarPreviewLabel->setPixmap(renderCircularAvatarPixmap(_currentAvatarImage, h, 72, _theme));
-    }
+    _currentAvatarImage = loadAvatarImage(_currentProfile.avatarUrl, _netClient);
+    updateCurrentAvatarPreview();
 
     if (_configStore) {
         ClientPreferences &prefs = _configStore->preferences();
@@ -1057,6 +1055,10 @@ bool AccountLinkDialog::refreshProfile()
         prefs.location = _currentProfile.location;
         std::string saveErr;
         _configStore->save(saveErr);
+    }
+
+    if (_onAccountSwitchedCallback) {
+        _onAccountSwitchedCallback(_currentProfile);
     }
 
     rebuildIdentitiesTable();

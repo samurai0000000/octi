@@ -1152,6 +1152,48 @@ TEST(OctiNetworkClientTest, UploadCrashReportAndOctiCrashReporterDurableSpoolAnd
     std::filesystem::remove_all(testDir);
 }
 
+TEST(OctiNetworkClientTest, ThreeArgumentUpdateMyProfilePreservesBioLocationAndAvatar)
+{
+    LiveServerEnv env;
+    auto client = OctiNetworkClient::forHermeticTest(env.port());
+
+    auto login = client->loginWithSso(
+        "google", makeToken("google", "sub-three-arg", "ThreeArgUser"));
+    CHECK_TRUE_TEXT(login.ok, login.errorMessage.c_str());
+
+    /* Initial setup with bio, location, and avatar */
+    auto initial = client->updateMyProfile(
+        "InitHandle",
+        "/api/v1/avatars/test.png",
+        "Initial Name",
+        "Original bio text.",
+        "Tokyo, Japan",
+        false);
+    CHECK_TRUE_TEXT(initial.ok, initial.errorMessage.c_str());
+    STRCMP_EQUAL("InitHandle", initial.data.handle.c_str());
+    STRCMP_EQUAL("Original bio text.", initial.data.bio.c_str());
+    STRCMP_EQUAL("Tokyo, Japan", initial.data.location.c_str());
+    STRCMP_EQUAL("Initial Name", initial.data.displayName.c_str());
+    CHECK_FALSE(initial.data.avatarUrl.empty());
+
+    /* Call 3-argument updateMyProfile with new display_name only */
+    auto update1 = client->updateMyProfile("", "", "Updated Name");
+    CHECK_TRUE_TEXT(update1.ok, update1.errorMessage.c_str());
+    STRCMP_EQUAL("Updated Name", update1.data.displayName.c_str());
+    /* Verify bio, location, and avatarUrl were preserved and NOT wiped! */
+    STRCMP_EQUAL("Original bio text.", update1.data.bio.c_str());
+    STRCMP_EQUAL("Tokyo, Japan", update1.data.location.c_str());
+    STRCMP_EQUAL(initial.data.avatarUrl.c_str(), update1.data.avatarUrl.c_str());
+
+    /* Fetch from server directly to verify database state on server */
+    auto fetched = client->fetchMyProfile();
+    CHECK_TRUE_TEXT(fetched.ok, fetched.errorMessage.c_str());
+    STRCMP_EQUAL("Updated Name", fetched.data.displayName.c_str());
+    STRCMP_EQUAL("Original bio text.", fetched.data.bio.c_str());
+    STRCMP_EQUAL("Tokyo, Japan", fetched.data.location.c_str());
+    STRCMP_EQUAL(initial.data.avatarUrl.c_str(), fetched.data.avatarUrl.c_str());
+}
+
 /* ==================================================================== */
 /* Group 3: P2pVoiceEngineTest                                          */
 /* ==================================================================== */

@@ -3304,21 +3304,37 @@ TEST(AccountStoreTest, AvatarMaterializationAndDiskCleanup)
     STRCMP_EQUAL("image/png", mime.c_str());
     CHECK_TRUE(bytes.size() > 0);
 
-    // Replacing with webp removes the png file and creates webp
+    // Replacing with webp transcodes it to png on disk and updates avatar_url with .png
     std::string webpData = "data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAD8D+JaQAA3AA/ua1AAA=";
     u.avatarUrl = webpData;
     CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(pid, u));
 
-    CHECK_TRUE(::access(diskPng.c_str(), F_OK) != 0);
-    std::string diskWebp = avDir + "/" + std::to_string(pid) + ".webp";
-    CHECK_EQUAL(0, ::access(diskWebp.c_str(), F_OK));
-    CHECK_TRUE(store->readAvatarFile(std::to_string(pid) + ".webp", bytes, mime));
-    STRCMP_EQUAL("image/webp", mime.c_str());
+    CHECK_EQUAL(0, ::access(diskPng.c_str(), F_OK));
+    CHECK_TRUE(store->readAvatarFile(std::to_string(pid) + ".png", bytes, mime));
+    STRCMP_EQUAL("image/png", mime.c_str());
+    CHECK_TRUE(bytes.size() >= 8);
+    CHECK_EQUAL(0, std::memcmp(bytes.data(), "\x89PNG\r\n\x1a\n", 8));
+
+    // An existing legacy .webp file on disk is read and transcoded to image/png
+    std::string diskWebp = avDir + "/9999.webp";
+    std::string rawWebp(
+        "\x52\x49\x46\x46\x24\x00\x00\x00\x57\x45\x42\x50\x56\x50\x38\x20"
+        "\x18\x00\x00\x00\x30\x01\x00\x9d\x01\x2a\x01\x00\x01\x00\x0f\xc0"
+        "\xfe\x25\xa4\x00\x03\x70\x00\xfe\xe6\xb5\x00\x00",
+        44);
+    {
+        std::ofstream out(diskWebp.c_str(), std::ios::binary | std::ios::trunc);
+        out.write(rawWebp.data(), rawWebp.size());
+    }
+    CHECK_TRUE(store->readAvatarFile("9999.webp", bytes, mime));
+    STRCMP_EQUAL("image/png", mime.c_str());
+    CHECK_TRUE(bytes.size() >= 8);
+    CHECK_EQUAL(0, std::memcmp(bytes.data(), "\x89PNG\r\n\x1a\n", 8));
 
     // Clearing avatar removes the disk file
     u.avatarUrl = "";
     CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(pid, u));
-    CHECK_TRUE(::access(diskWebp.c_str(), F_OK) != 0);
+    CHECK_TRUE(::access(diskPng.c_str(), F_OK) != 0);
 
     // Negative tests for readAvatarFile path safety
     CHECK_FALSE(store->readAvatarFile("../secret.png", bytes, mime));

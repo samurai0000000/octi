@@ -87,6 +87,13 @@ Section "OCTI Desktop Player" SecMain
     File "@CMAKE_CURRENT_BINARY_DIR@/platforms/qminimal.dll"
     File "@CMAKE_CURRENT_BINARY_DIR@/platforms/qoffscreen.dll"
 
+    SetOutPath "$INSTDIR\imageformats"
+    File "@CMAKE_CURRENT_BINARY_DIR@/imageformats/qjpeg.dll"
+    File "@CMAKE_CURRENT_BINARY_DIR@/imageformats/qgif.dll"
+    File "@CMAKE_CURRENT_BINARY_DIR@/imageformats/qico.dll"
+    File "@CMAKE_CURRENT_BINARY_DIR@/imageformats/qsvg.dll"
+    File "@CMAKE_CURRENT_BINARY_DIR@/imageformats/qwebp.dll"
+
     SetOutPath "$INSTDIR\styles"
     File "@CMAKE_CURRENT_BINARY_DIR@/styles/qmodernwindowsstyle.dll"
 
@@ -132,6 +139,13 @@ Section "Uninstall"
     Delete "$INSTDIR\platforms\qminimal.dll"
     Delete "$INSTDIR\platforms\qoffscreen.dll"
     RMDir "$INSTDIR\platforms"
+
+    Delete "$INSTDIR\imageformats\qjpeg.dll"
+    Delete "$INSTDIR\imageformats\qgif.dll"
+    Delete "$INSTDIR\imageformats\qico.dll"
+    Delete "$INSTDIR\imageformats\qsvg.dll"
+    Delete "$INSTDIR\imageformats\qwebp.dll"
+    RMDir "$INSTDIR\imageformats"
 
     Delete "$INSTDIR\styles\qmodernwindowsstyle.dll"
     RMDir "$INSTDIR\styles"

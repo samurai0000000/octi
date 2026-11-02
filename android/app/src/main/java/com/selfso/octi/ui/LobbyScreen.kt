@@ -98,7 +98,20 @@ fun LobbyScreen(
                             }
                         } else {
                             OutlinedButton(onClick = { viewModel.setShowAccountDialog(true) }) {
-                                Text(profile?.handle?.ifEmpty { "Account" } ?: "Account")
+                                val prof = profile
+                                if (prof != null) {
+                                    OctiPlayerAvatar(
+                                        avatarUrl = prof.avatarUrl,
+                                        label = prof.handle,
+                                        netClient = viewModel.networkClient(),
+                                        size = 20.dp,
+                                        modifier = Modifier.padding(end = 6.dp)
+                                    )
+                                    val handleText = if (prof.handle.isNotEmpty()) "@${prof.handle}" else "Account"
+                                    Text(handleText)
+                                } else {
+                                    Text("Account")
+                                }
                             }
                         }
                         OutlinedButton(onClick = { viewModel.refreshLobbyStateAsync() }) {

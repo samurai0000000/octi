@@ -27,6 +27,10 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import javax.net.ssl.SNIHostName;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
 
 /**
  * Hard-coded REST + Server-Sent Events (SSE) client for
@@ -1316,13 +1320,26 @@ public final class OctiNetworkClient implements AutoCloseable {
 
     public ApiResult<PlayerProfileInfo> updateMyProfile(
             String handle, String avatarUrl, String displayName) {
-        return updateMyProfile(
-                handle,
-                avatarUrl,
-                displayName,
-                null,
-                null,
-                avatarUrl != null && !avatarUrl.isEmpty());
+        ApiResult<PlayerProfileInfo> res = new ApiResult<>(new PlayerProfileInfo());
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (handle != null && !handle.isEmpty()) {
+            body.put("handle", handle);
+        }
+        if (avatarUrl != null && !avatarUrl.isEmpty()) {
+            body.put("avatar_url", avatarUrl);
+        }
+        if (displayName != null && !displayName.trim().isEmpty()) {
+            body.put("display_name", displayName.trim());
+        }
+        RawResponse raw = doPatch("/api/v1/profile/me", body);
+        if (!raw.transportOk || raw.status != 200 || raw.json == null) {
+            populateError(raw, res);
+            return res;
+        }
+        res.ok = true;
+        res.httpStatus = raw.status;
+        res.data = parsePlayerProfile(raw.json);
+        return res;
     }
 
     public ApiResult<PlayerProfileInfo> updateMyProfile(
@@ -1337,7 +1354,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         if (handle != null && !handle.isEmpty()) {
             body.put("handle", handle);
         }
-        if (setAvatarUrl || (avatarUrl != null && !avatarUrl.isEmpty())) {
+        if (setAvatarUrl) {
             body.put("avatar_url", avatarUrl != null ? avatarUrl : "");
         }
         if (displayName != null && !displayName.trim().isEmpty()) {
@@ -2490,6 +2507,52 @@ public final class OctiNetworkClient implements AutoCloseable {
         return r;
     }
 
+    static boolean isDnsHostName(String host) {
+        if (host == null || host.isEmpty()) {
+            return false;
+        }
+        if (host.equalsIgnoreCase("localhost")) {
+            return false;
+        }
+        if (host.matches("^\\d+\\.\\d+\\.\\d+\\.\\d+$") || host.contains(":")) {
+            return false;
+        }
+        return true;
+    }
+
+    Socket createConnectedSocket(
+            String targetHost, int targetPort, int connectTimeoutMs, int soTimeoutMs)
+            throws Exception {
+        Socket plainSock = new Socket();
+        try {
+            plainSock.setSoTimeout(soTimeoutMs);
+            plainSock.connect(new InetSocketAddress(targetHost, targetPort), connectTimeoutMs);
+            if (targetPort != 443) {
+                return plainSock;
+            }
+            SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+            SSLSocket sslSock = (SSLSocket) factory.createSocket(plainSock, targetHost, targetPort, true);
+            sslSock.setSoTimeout(soTimeoutMs);
+            SSLParameters params = sslSock.getSSLParameters();
+            if (isDnsHostName(targetHost)) {
+                try {
+                    params.setServerNames(Collections.singletonList(new SNIHostName(targetHost)));
+                } catch (Exception ignored) {
+                }
+                params.setEndpointIdentificationAlgorithm("HTTPS");
+            }
+            sslSock.setSSLParameters(params);
+            sslSock.startHandshake();
+            return sslSock;
+        } catch (Exception e) {
+            try {
+                plainSock.close();
+            } catch (IOException ignored) {
+            }
+            throw e;
+        }
+    }
+
     private RawResponse executeSingleEndpointRequest(
             String targetHost, int targetPort, String method, String path,
             byte[] bodyBytes, String token) {
@@ -2501,19 +2564,9 @@ public final class OctiNetworkClient implements AutoCloseable {
                 if (_injectedRuntimeException != null) {
                     throw _injectedRuntimeException;
                 }
-                if (targetPort == 443) {
-                    rawSock = javax.net.ssl.SSLSocketFactory.getDefault().createSocket();
-                } else {
-                    rawSock = new Socket();
-                }
+                rawSock = createConnectedSocket(targetHost, targetPort, 5000, 10000);
                 final Socket sock = rawSock;
                 try {
-                    sock.connect(new InetSocketAddress(targetHost, targetPort), 5000);
-                    sock.setSoTimeout(10000);
-                    if (sock instanceof javax.net.ssl.SSLSocket) {
-                        ((javax.net.ssl.SSLSocket) sock).startHandshake();
-                    }
-
                     OutputStream out = sock.getOutputStream();
                     InputStream in = sock.getInputStream();
 
@@ -2674,10 +2727,8 @@ public final class OctiNetworkClient implements AutoCloseable {
                 boolean terminalEventSeen = false;
                 Socket sock;
                 try {
-                    sock = (_port == 443)
-                        ? javax.net.ssl.SSLSocketFactory.getDefault().createSocket()
-                        : new Socket();
-                } catch (IOException ioe) {
+                    sock = createConnectedSocket(_host, _port, 5000, 30000);
+                } catch (Exception ioe) {
                     try {
                         Thread.sleep(1000L);
                     } catch (InterruptedException ie) {
@@ -2698,12 +2749,6 @@ public final class OctiNetworkClient implements AutoCloseable {
                 }
 
                 try {
-                    sock.connect(new InetSocketAddress(_host, _port), 5000);
-                    sock.setSoTimeout(30000);
-                    if (sock instanceof javax.net.ssl.SSLSocket) {
-                        ((javax.net.ssl.SSLSocket) sock).startHandshake();
-                    }
-
                     OutputStream out = sock.getOutputStream();
                     InputStream in = sock.getInputStream();
 

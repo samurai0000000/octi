@@ -492,10 +492,12 @@ fun SsoSignInDialog(
 @Composable
 fun OctiPlayerAvatar(
     avatarUrl: String,
-    handle: String,
+    handle: String = "",
     size: androidx.compose.ui.unit.Dp,
-    viewModel: OctiAppViewModel,
-    modifier: Modifier = Modifier
+    viewModel: OctiAppViewModel? = null,
+    modifier: Modifier = Modifier,
+    netClient: OctiNetworkClient? = viewModel?.netClient,
+    label: String = handle
 ) {
     var avatarBitmap by remember(avatarUrl) { mutableStateOf<ImageBitmap?>(null) }
 
@@ -505,7 +507,7 @@ fun OctiPlayerAvatar(
             return@LaunchedEffect
         }
         withContext(Dispatchers.IO) {
-            val bytes = OctiAppViewModel.decodeAvatarDataUriOrBytes(avatarUrl, viewModel.netClient)
+            val bytes = OctiAppViewModel.decodeAvatarDataUriOrBytes(avatarUrl, netClient ?: viewModel?.netClient)
             if (bytes != null && bytes.isNotEmpty()) {
                 try {
                     val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
@@ -523,8 +525,9 @@ fun OctiPlayerAvatar(
         }
     }
 
-    val initialLetter = remember(handle) {
-        handle.trim().takeIf { it.isNotEmpty() }?.first()?.uppercaseChar()?.toString() ?: "?"
+    val displayHandle = label.ifEmpty { handle }
+    val initialLetter = remember(displayHandle) {
+        displayHandle.trim().takeIf { it.isNotEmpty() }?.first()?.uppercaseChar()?.toString() ?: "?"
     }
 
     val shape = CircleShape
@@ -541,7 +544,7 @@ fun OctiPlayerAvatar(
         if (bmp != null) {
             Image(
                 bitmap = bmp,
-                contentDescription = "Avatar of $handle",
+                contentDescription = "Avatar of $displayHandle",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
@@ -574,14 +577,29 @@ fun AccountIdentitiesDialog(
     val profileActionBusy by viewModel.profileActionBusy.collectAsState()
     val profileActionMessage by viewModel.profileActionMessage.collectAsState()
 
-    var editableHandle by remember(profile?.handle) { mutableStateOf(profile?.handle ?: "") }
-    var editableDisplayName by remember(profile?.displayName) { mutableStateOf(profile?.displayName ?: "") }
-    var editableLocation by remember(profile?.location) { mutableStateOf(profile?.location ?: "") }
-    var editableBio by remember(profile?.bio) { mutableStateOf(profile?.bio ?: "") }
-    var pendingAvatarUrl by remember(profile?.avatarUrl) { mutableStateOf(profile?.avatarUrl ?: "") }
-    var avatarModified by remember(profile?.avatarUrl) { mutableStateOf(false) }
+    var fieldsDirty by remember { mutableStateOf(false) }
+    var savingProfile by remember { mutableStateOf(false) }
+    var avatarChanged by remember { mutableStateOf(false) }
+    var editableHandle by remember { mutableStateOf(profile?.handle ?: "") }
+    var editableDisplayName by remember { mutableStateOf(profile?.displayName ?: "") }
+    var editableLocation by remember { mutableStateOf(profile?.location ?: "") }
+    var editableBio by remember { mutableStateOf(profile?.bio ?: "") }
+    var pendingAvatarUrl by remember { mutableStateOf(profile?.avatarUrl ?: "") }
     var avatarInlineFeedback by remember { mutableStateOf("") }
     var statusMessage by remember { mutableStateOf("") }
+
+    val prof = profile
+    LaunchedEffect(prof?.handle, prof?.displayName, prof?.location, prof?.bio, prof?.avatarUrl) {
+        if (!fieldsDirty && !savingProfile && prof != null) {
+            editableHandle = prof.handle
+            editableDisplayName = prof.displayName
+            editableLocation = prof.location
+            editableBio = prof.bio
+            if (!avatarChanged) {
+                pendingAvatarUrl = prof.avatarUrl
+            }
+        }
+    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -594,7 +612,9 @@ fun AccountIdentitiesDialog(
                         val encoded = OctiAppViewModel.encodeAvatarBitmapToDataUri(bmp)
                         if (encoded.isNotEmpty()) {
                             pendingAvatarUrl = encoded
-                            avatarModified = true
+                            avatarChanged = true
+                            fieldsDirty = true
+                            viewModel.clearProfileActionMessage()
                             avatarInlineFeedback = "Avatar selected (auto-cropped square)."
                         } else {
                             avatarInlineFeedback = "Could not compress image under size limit."
@@ -609,11 +629,21 @@ fun AccountIdentitiesDialog(
         }
     }
 
+    val hasUnsavedChanges = prof != null && (
+        avatarChanged ||
+        editableHandle.trim() != prof.handle ||
+        editableDisplayName.trim() != prof.displayName ||
+        editableLocation.trim() != prof.location ||
+        editableBio.trim() != prof.bio
+    )
+
     AlertDialog(
         onDismissRequest = {
-            viewModel.cancelBrowserAuth()
-            viewModel.clearProfileActionMessage()
-            onDismiss()
+            if (!savingProfile) {
+                viewModel.cancelBrowserAuth()
+                viewModel.clearProfileActionMessage()
+                onDismiss()
+            }
         },
         containerColor = OctiTheme.colors.panelCardBg,
         titleContentColor = OctiTheme.colors.accentBrass,
@@ -659,10 +689,12 @@ fun AccountIdentitiesDialog(
                             OutlinedButton(
                                 onClick = {
                                     pendingAvatarUrl = ""
-                                    avatarModified = true
+                                    avatarChanged = true
+                                    fieldsDirty = true
+                                    viewModel.clearProfileActionMessage()
                                     avatarInlineFeedback = "Avatar cleared (save to commit)."
                                 },
-                                enabled = !profileActionBusy && (pendingAvatarUrl.isNotEmpty() || p.avatarUrl.isNotEmpty()),
+                                enabled = !profileActionBusy && !savingProfile && (pendingAvatarUrl.isNotEmpty() || p.avatarUrl.isNotEmpty()),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text("Clear Avatar")
@@ -680,7 +712,11 @@ fun AccountIdentitiesDialog(
 
                     OutlinedTextField(
                         value = editableHandle,
-                        onValueChange = { editableHandle = it },
+                        onValueChange = {
+                            editableHandle = it
+                            fieldsDirty = true
+                            viewModel.clearProfileActionMessage()
+                        },
                         label = { Text("Player Handle") },
                         supportingText = { Text("3-32 chars • 1 handle change per 24h") },
                         singleLine = true,
@@ -689,7 +725,11 @@ fun AccountIdentitiesDialog(
 
                     OutlinedTextField(
                         value = editableDisplayName,
-                        onValueChange = { editableDisplayName = it },
+                        onValueChange = {
+                            editableDisplayName = it
+                            fieldsDirty = true
+                            viewModel.clearProfileActionMessage()
+                        },
                         label = { Text("Display Name") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -697,7 +737,11 @@ fun AccountIdentitiesDialog(
 
                     OutlinedTextField(
                         value = editableLocation,
-                        onValueChange = { editableLocation = it },
+                        onValueChange = {
+                            editableLocation = it
+                            fieldsDirty = true
+                            viewModel.clearProfileActionMessage()
+                        },
                         label = { Text("Location") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -705,7 +749,11 @@ fun AccountIdentitiesDialog(
 
                     OutlinedTextField(
                         value = editableBio,
-                        onValueChange = { editableBio = it },
+                        onValueChange = {
+                            editableBio = it
+                            fieldsDirty = true
+                            viewModel.clearProfileActionMessage()
+                        },
                         label = { Text("Bio") },
                         minLines = 2,
                         maxLines = 3,
@@ -714,39 +762,32 @@ fun AccountIdentitiesDialog(
 
                     Button(
                         onClick = {
+                            savingProfile = true
+                            viewModel.clearProfileActionMessage()
                             viewModel.updateMyProfileAsync(
-                                desiredHandle = editableHandle.trim(),
-                                displayName = editableDisplayName.trim(),
-                                location = editableLocation.trim(),
-                                bio = editableBio.trim(),
-                                avatarUrl = pendingAvatarUrl,
-                                setAvatarUrl = avatarModified
-                            ) { res ->
-                                if (res.ok && res.profile != null) {
-                                    avatarModified = false
+                                editableHandle.trim(),
+                                if (avatarChanged) pendingAvatarUrl else "",
+                                editableDisplayName.trim(),
+                                editableBio.trim(),
+                                editableLocation.trim(),
+                                avatarChanged
+                            ) { ok: Boolean ->
+                                savingProfile = false
+                                if (ok) {
+                                    avatarChanged = false
+                                    fieldsDirty = false
                                     avatarInlineFeedback = ""
-                                    editableHandle = res.profile.handle
-                                    editableDisplayName = res.profile.displayName
-                                    editableLocation = res.profile.location
-                                    editableBio = res.profile.bio
-                                    pendingAvatarUrl = res.profile.avatarUrl
                                 }
                             }
                         },
-                        enabled = !profileActionBusy && (
-                            avatarModified ||
-                            editableHandle.trim() != p.handle ||
-                            editableDisplayName.trim() != p.displayName ||
-                            editableLocation.trim() != p.location ||
-                            editableBio.trim() != p.bio
-                        ),
+                        enabled = !profileActionBusy && !savingProfile && hasUnsavedChanges && editableHandle.trim().isNotEmpty(),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = OctiTheme.colors.accentBrass,
                             contentColor = OctiTheme.colors.windowBg
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (profileActionBusy) "Saving Profile..." else "Save Profile")
+                        Text(if (profileActionBusy || savingProfile) "Saving Profile..." else "Save Profile")
                     }
 
                     if (profileActionMessage.isNotEmpty()) {
@@ -885,7 +926,7 @@ fun AccountIdentitiesDialog(
                         onDismiss()
                     }
                 },
-                enabled = !profileActionBusy
+                enabled = !profileActionBusy && !savingProfile
             ) {
                 Text("Sign Out")
             }
@@ -893,12 +934,33 @@ fun AccountIdentitiesDialog(
         dismissButton = {
             OutlinedButton(
                 onClick = {
-                    viewModel.cancelBrowserAuth()
-                    viewModel.clearProfileActionMessage()
-                    onDismiss()
-                }
+                    if (hasUnsavedChanges && editableHandle.trim().isNotEmpty()) {
+                        savingProfile = true
+                        viewModel.clearProfileActionMessage()
+                        viewModel.updateMyProfileAsync(
+                            editableHandle.trim(),
+                            if (avatarChanged) pendingAvatarUrl else "",
+                            editableDisplayName.trim(),
+                            editableBio.trim(),
+                            editableLocation.trim(),
+                            avatarChanged
+                        ) { ok: Boolean ->
+                            savingProfile = false
+                            if (ok) {
+                                avatarChanged = false
+                                fieldsDirty = false
+                                onDismiss()
+                            }
+                        }
+                    } else {
+                        viewModel.cancelBrowserAuth()
+                        viewModel.clearProfileActionMessage()
+                        onDismiss()
+                    }
+                },
+                enabled = !savingProfile && !profileActionBusy
             ) {
-                Text("Done")
+                Text(if (savingProfile) "Saving..." else "Done")
             }
         }
     )

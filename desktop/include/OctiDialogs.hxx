@@ -176,7 +176,10 @@ public:
                                               const QString &fallbackHandle,
                                               int sizePx,
                                               ThemeId theme);
+    static QImage loadAvatarImage(const std::string &avatarUrl,
+                                  OctiNetworkClient *netClient);
 
+    void updateCurrentAvatarPreview();
     bool selectAvatarFromImage(const QImage &img);
     void clearPendingAvatar();
     ApiResult<PlayerProfileInfo> saveProfile();

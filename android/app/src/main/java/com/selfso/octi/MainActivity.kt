@@ -190,6 +190,9 @@ class MainActivity : ComponentActivity() {
                 appViewModel.handleOAuthRedirectUri(uriStr)
             }
         }
+        if (appViewModel.isAuthenticated.value) {
+            appViewModel.refreshMyProfileAsync()
+        }
 
         setContent {
             val themeId by appViewModel.theme.collectAsState()
@@ -236,6 +239,9 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         if (::appViewModel.isInitialized) {
             appViewModel.flushPendingTelemetry(async = true)
+            if (appViewModel.isAuthenticated.value) {
+                appViewModel.refreshMyProfileAsync()
+            }
         }
     }
 

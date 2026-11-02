@@ -16,8 +16,12 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <png.h>
+#include <webp/decode.h>
+
 #include <algorithm>
 #include <chrono>
+#include <csetjmp>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -482,6 +486,100 @@ bool base64Decode(const std::string &in, std::string &out)
     }
     return true;
 }
+
+struct PngStringWriter {
+    std::string *output;
+};
+
+static void userPngWriteFn(png_structp pngPtr, png_bytep data, png_size_t length)
+{
+    PngStringWriter *writer = static_cast<PngStringWriter *>(png_get_io_ptr(pngPtr));
+    if (writer && writer->output) {
+        writer->output->append(reinterpret_cast<const char *>(data), length);
+    }
+}
+
+static void userPngFlushFn(png_structp /*pngPtr*/)
+{
+}
+
+} // anonymous namespace
+
+bool transcodeWebpToPng(const std::string &webpBytes, std::string &outPngBytes)
+{
+    outPngBytes.clear();
+    if (webpBytes.empty()) {
+        return false;
+    }
+
+    int width = 0;
+    int height = 0;
+    uint8_t *rgba = WebPDecodeRGBA(reinterpret_cast<const uint8_t *>(webpBytes.data()),
+                                   webpBytes.size(), &width, &height);
+    if (!rgba || width <= 0 || height <= 0) {
+        if (rgba) {
+            WebPFree(rgba);
+        }
+        return false;
+    }
+
+    png_structp pngPtr = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+    if (!pngPtr) {
+        WebPFree(rgba);
+        return false;
+    }
+
+    png_infop infoPtr = png_create_info_struct(pngPtr);
+    if (!infoPtr) {
+        png_destroy_write_struct(&pngPtr, nullptr);
+        WebPFree(rgba);
+        return false;
+    }
+
+    png_bytep *rowPointers = static_cast<png_bytep *>(malloc(sizeof(png_bytep) * height));
+    if (!rowPointers) {
+        png_destroy_write_struct(&pngPtr, &infoPtr);
+        WebPFree(rgba);
+        return false;
+    }
+    size_t stride = static_cast<size_t>(width) * 4;
+    for (int y = 0; y < height; ++y) {
+        rowPointers[y] = rgba + (static_cast<size_t>(y) * stride);
+    }
+
+    if (setjmp(png_jmpbuf(pngPtr))) {
+        free(rowPointers);
+        png_destroy_write_struct(&pngPtr, &infoPtr);
+        WebPFree(rgba);
+        outPngBytes.clear();
+        return false;
+    }
+
+    PngStringWriter writer{&outPngBytes};
+    png_set_write_fn(pngPtr, &writer, userPngWriteFn, userPngFlushFn);
+
+    png_set_IHDR(pngPtr, infoPtr, static_cast<png_uint_32>(width),
+                 static_cast<png_uint_32>(height), 8,
+                 PNG_COLOR_TYPE_RGBA, PNG_INTERLACE_NONE,
+                 PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+    png_write_info(pngPtr, infoPtr);
+    png_write_image(pngPtr, rowPointers);
+    png_write_end(pngPtr, nullptr);
+
+    free(rowPointers);
+    png_destroy_write_struct(&pngPtr, &infoPtr);
+    WebPFree(rgba);
+
+    return !outPngBytes.empty();
+}
+
+bool AccountStore::transcodeWebpToPng(const std::string &webpBytes,
+                                       std::string &outPngBytes)
+{
+    return octi::transcodeWebpToPng(webpBytes, outPngBytes);
+}
+
+namespace {
 
 void cleanupPlayerAvatarFilesLocked(const std::string &avatarDir, int64_t playerId)
 {
@@ -1195,6 +1293,7 @@ bool AccountStore::readAvatarFile(const std::string &fileName,
             return false;
         }
     }
+    std::string idPrefix = fileName.substr(0, dot);
     std::string ext = fileName.substr(dot + 1);
     if (ext == "png") {
         outMimeType = "image/png";
@@ -1220,13 +1319,42 @@ bool AccountStore::readAvatarFile(const std::string &fileName,
     }
 
     std::filesystem::path filePath = std::filesystem::path(dir) / fileName;
+    if (ext == "png" && !std::filesystem::exists(filePath)) {
+        std::filesystem::path fallbackWebp = std::filesystem::path(dir) / (idPrefix + ".webp");
+        if (std::filesystem::exists(fallbackWebp)) {
+            filePath = fallbackWebp;
+            ext = "webp";
+        }
+    }
+
     std::ifstream in(filePath.c_str(), std::ios::binary);
     if (!in) {
         return false;
     }
     std::ostringstream ss;
     ss << in.rdbuf();
-    outBytes = ss.str();
+    std::string rawBytes = ss.str();
+
+    bool isWebp = (ext == "webp");
+    if (!isWebp && rawBytes.size() >= 12) {
+        if (rawBytes.substr(0, 4) == "RIFF" && rawBytes.substr(8, 4) == "WEBP") {
+            isWebp = true;
+        }
+    }
+
+    if (isWebp) {
+        std::string pngBytes;
+        if (transcodeWebpToPng(rawBytes, pngBytes)) {
+            outBytes = std::move(pngBytes);
+            outMimeType = "image/png";
+            return true;
+        }
+        outBytes = std::move(rawBytes);
+        outMimeType = "image/webp";
+        return true;
+    }
+
+    outBytes = std::move(rawBytes);
     return true;
 }
 
@@ -2181,6 +2309,13 @@ UpdateStatus AccountStore::updateProfile(int64_t playerId,
                     !base64Decode(update.avatarUrl.substr(prefix.size()), decodedBytes)) {
                     return UpdateStatus::INVALID_AVATAR_URL;
                 }
+                if (ext == "webp") {
+                    std::string pngBytes;
+                    if (transcodeWebpToPng(decodedBytes, pngBytes)) {
+                        ext = "png";
+                        decodedBytes = std::move(pngBytes);
+                    }
+                }
                 std::error_code ec;
                 std::filesystem::create_directories(_avatarDir, ec);
                 cleanupPlayerAvatarFilesLocked(_avatarDir, playerId);
@@ -2222,15 +2357,16 @@ UpdateStatus AccountStore::updateProfile(int64_t playerId,
     }
 
     Stmt s(_db, "UPDATE players SET handle = ?1, display_name = ?2,"
-                " avatar_url = ?3, bio = ?4, location = ?5, handle_changed_at = ?6"
-                " WHERE player_id = ?7");
+                " avatar_url = ?3, bio = ?4, location = ?5, handle_changed_at = ?6,"
+                " last_seen_at = ?7 WHERE player_id = ?8");
     s.bindText(1, update.setHandle ? update.handle : current.handle);
     s.bindText(2, update.setDisplayName ? displayName : current.displayName);
     s.bindText(3, finalAvatarUrl);
     s.bindText(4, update.setBio ? update.bio : current.bio);
     s.bindText(5, update.setLocation ? update.location : current.location);
     s.bindInt(6, newHandleChangedAt);
-    s.bindInt(7, playerId);
+    s.bindInt(7, nowSec());
+    s.bindInt(8, playerId);
     int rc = s.step();
     if (rc != SQLITE_DONE) {
         return (rc & 0xFF) == SQLITE_CONSTRAINT ? UpdateStatus::HANDLE_TAKEN

@@ -20,6 +20,8 @@ struct sqlite3;
 
 namespace octi {
 
+bool transcodeWebpToPng(const std::string &webpBytes, std::string &outPngBytes);
+
 /* Public subset of a profile, safe to show to another player. */
 struct PublicProfile {
     std::string uuid;
@@ -349,6 +351,9 @@ public:
     std::string avatarDir() const;
     bool readAvatarFile(const std::string &fileName, std::string &outBytes,
                         std::string &outMimeType) const;
+
+    static bool transcodeWebpToPng(const std::string &webpBytes,
+                                   std::string &outPngBytes);
 
     static bool isValidHandle(const std::string &handle);
     static std::string sha256Hex(const std::string &data);

@@ -1863,7 +1863,26 @@ ApiResult<PlayerProfileInfo> OctiNetworkClient::updateMyProfile(
     const std::string &avatarUrl,
     const std::string &displayName)
 {
-    return updateMyProfile(handle, avatarUrl, displayName, "", "", false);
+    ApiResult<PlayerProfileInfo> res;
+    Json body = Json::object();
+    if (!handle.empty()) {
+        body["handle"] = handle;
+    }
+    if (!displayName.empty()) {
+        body["display_name"] = displayName;
+    }
+    if (!avatarUrl.empty()) {
+        body["avatar_url"] = avatarUrl;
+    }
+    Impl::RawResponse raw = _impl->doPatch("/api/v1/profile/me", body);
+    if (!raw.transportOk || raw.status != 200 || !raw.json.is_object()) {
+        Impl::populateError(raw, res);
+        return res;
+    }
+    res.ok = true;
+    res.httpStatus = raw.status;
+    res.data = parsePlayerProfile(raw.json);
+    return res;
 }
 
 bool OctiNetworkClient::fetchAvatarBytes(const std::string &avatarUrl,

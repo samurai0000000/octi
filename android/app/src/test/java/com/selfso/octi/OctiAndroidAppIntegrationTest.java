@@ -6,6 +6,7 @@
 
 package com.selfso.octi;
 
+import android.graphics.Bitmap;
 import android.view.KeyEvent;
 
 import com.selfso.octi.ui.OctiAppViewModel;
@@ -21,6 +22,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.lang.reflect.Constructor;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -914,6 +916,12 @@ public class OctiAndroidAppIntegrationTest {
         private final Thread _acceptThread;
         final List<String> receivedInstallIds = new ArrayList<>();
         final List<Map<String, Object>> receivedPatchBodies = new ArrayList<>();
+        volatile String currentHandle = "samurai";
+        volatile String currentDisplayName = "User";
+        volatile String currentAvatarUrl = "/api/v1/avatars/1.png";
+        volatile String currentBio = "Octi Master";
+        volatile String currentLocation = "Kyoto, Japan";
+        volatile int avatarFetchCount = 0;
 
         MockSsoHarnessServer() throws Exception {
             _serverSocket = new ServerSocket();
@@ -1037,30 +1045,51 @@ public class OctiAndroidAppIntegrationTest {
                                 respBody = "{\"error\":\"invalid_handle\",\"message\":\"Invalid handle format\"}";
                             } else {
                                 status = 200;
-                                String dVal = OctiMiniJson.getString(reqJson, "display_name", "User");
-                                String bVal = OctiMiniJson.getString(reqJson, "bio", "");
-                                String lVal = OctiMiniJson.getString(reqJson, "location", "");
-                                String aVal = OctiMiniJson.getString(reqJson, "avatar_url", "");
+                                if (reqJson.containsKey("handle")) {
+                                    currentHandle = hVal;
+                                }
+                                if (reqJson.containsKey("display_name")) {
+                                    currentDisplayName = OctiMiniJson.getString(reqJson, "display_name", currentDisplayName);
+                                }
+                                if (reqJson.containsKey("bio")) {
+                                    currentBio = OctiMiniJson.getString(reqJson, "bio", currentBio);
+                                }
+                                if (reqJson.containsKey("location")) {
+                                    currentLocation = OctiMiniJson.getString(reqJson, "location", currentLocation);
+                                }
+                                if (reqJson.containsKey("avatar_url")) {
+                                    currentAvatarUrl = OctiMiniJson.getString(reqJson, "avatar_url", currentAvatarUrl);
+                                }
                                 respBody = "{\n"
                                         + "  \"uuid\": \"p-me\",\n"
-                                        + "  \"handle\": \"" + hVal + "\",\n"
-                                        + "  \"display_name\": \"" + dVal + "\",\n"
-                                        + "  \"avatar_url\": \"" + aVal + "\",\n"
-                                        + "  \"bio\": \"" + bVal + "\",\n"
-                                        + "  \"location\": \"" + lVal + "\",\n"
-                                        + "  \"elo_2p\": 1500\n"
+                                        + "  \"handle\": \"" + currentHandle + "\",\n"
+                                        + "  \"display_name\": \"" + currentDisplayName + "\",\n"
+                                        + "  \"avatar_url\": \"" + currentAvatarUrl + "\",\n"
+                                        + "  \"bio\": \"" + currentBio + "\",\n"
+                                        + "  \"location\": \"" + currentLocation + "\",\n"
+                                        + "  \"elo_2p\": 1500,\n"
+                                        + "  \"linked_identities\": [\n"
+                                        + "    {\"provider\": \"google\", \"provider_email\": \"u@selfso.com\"}\n"
+                                        + "  ]\n"
                                         + "}";
                             }
                         } else {
                             status = 200;
                             respBody = "{\n"
                                     + "  \"uuid\": \"p-me\",\n"
-                                    + "  \"handle\": \"samurai\",\n"
-                                    + "  \"display_name\": \"User\",\n"
-                                    + "  \"elo_2p\": 1500\n"
+                                    + "  \"handle\": \"" + currentHandle + "\",\n"
+                                    + "  \"display_name\": \"" + currentDisplayName + "\",\n"
+                                    + "  \"avatar_url\": \"" + currentAvatarUrl + "\",\n"
+                                    + "  \"bio\": \"" + currentBio + "\",\n"
+                                    + "  \"location\": \"" + currentLocation + "\",\n"
+                                    + "  \"elo_2p\": 1500,\n"
+                                    + "  \"linked_identities\": [\n"
+                                    + "    {\"provider\": \"google\", \"provider_email\": \"u@selfso.com\"}\n"
+                                    + "  ]\n"
                                     + "}";
                         }
                     } else if (reqLine.contains("/api/v1/avatars/")) {
+                        avatarFetchCount++;
                         byte[] avatarPayload = new byte[]{0x01, 0x02, 0x03, 0x04};
                         String headers = "HTTP/1.1 200 OK\r\n"
                                 + "Content-Type: image/jpeg\r\n"
@@ -1653,6 +1682,181 @@ public class OctiAndroidAppIntegrationTest {
                 assertEquals(0x02, avatarBytes[1]);
                 assertEquals(0x03, avatarBytes[2]);
                 assertEquals(0x04, avatarBytes[3]);
+            }
+        }
+    }
+
+    @Test
+    public void testProfilePartialPatchAndAvatarPreservationParity() throws Exception {
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            server.currentBio = "Server Bio Baseline";
+            server.currentLocation = "Tokyo, Japan";
+            server.currentAvatarUrl = "/api/v1/avatars/existing.png";
+            server.currentDisplayName = "Initial Display";
+            server.currentHandle = "baselineuser";
+
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                client.setSessionToken("sess-test");
+
+                // 1. 3-arg updateMyProfile(handle, avatarUrl, displayName) must NOT overwrite bio or location
+                OctiNetworkClient.ApiResult<OctiNetworkClient.PlayerProfileInfo> res3 =
+                        client.updateMyProfile("updatedhandle", null, "New Name");
+                assertTrue(res3.ok);
+                assertEquals("updatedhandle", res3.data.handle);
+                assertEquals("New Name", res3.data.displayName);
+                assertEquals("Server Bio Baseline", res3.data.bio);
+                assertEquals("Tokyo, Japan", res3.data.location);
+                assertEquals("/api/v1/avatars/existing.png", res3.data.avatarUrl);
+
+                synchronized (server.receivedPatchBodies) {
+                    Map<String, Object> lastPatch = server.receivedPatchBodies.get(server.receivedPatchBodies.size() - 1);
+                    assertEquals("updatedhandle", lastPatch.get("handle"));
+                    assertEquals("New Name", lastPatch.get("display_name"));
+                    assertFalse("3-arg updateMyProfile must not send bio", lastPatch.containsKey("bio"));
+                    assertFalse("3-arg updateMyProfile must not send location", lastPatch.containsKey("location"));
+                    assertFalse("3-arg updateMyProfile must not send avatar_url when null/empty", lastPatch.containsKey("avatar_url"));
+                }
+
+                // 2. 6-arg updateMyProfile with setAvatarUrl = false must preserve existing avatar_url
+                OctiNetworkClient.ApiResult<OctiNetworkClient.PlayerProfileInfo> res6 =
+                        client.updateMyProfile(
+                                "updatedhandle2",
+                                "data:image/jpeg;base64,ignored",
+                                "Display 2",
+                                "Updated Bio 2",
+                                "Osaka, Japan",
+                                false);
+                assertTrue(res6.ok);
+                assertEquals("updatedhandle2", res6.data.handle);
+                assertEquals("Display 2", res6.data.displayName);
+                assertEquals("Updated Bio 2", res6.data.bio);
+                assertEquals("Osaka, Japan", res6.data.location);
+                assertEquals("/api/v1/avatars/existing.png", res6.data.avatarUrl);
+
+                synchronized (server.receivedPatchBodies) {
+                    Map<String, Object> lastPatch = server.receivedPatchBodies.get(server.receivedPatchBodies.size() - 1);
+                    assertEquals("updatedhandle2", lastPatch.get("handle"));
+                    assertEquals("Display 2", lastPatch.get("display_name"));
+                    assertEquals("Updated Bio 2", lastPatch.get("bio"));
+                    assertEquals("Osaka, Japan", lastPatch.get("location"));
+                    assertFalse("setAvatarUrl=false must omit avatar_url from PATCH", lastPatch.containsKey("avatar_url"));
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testAvatarEncodingAndDecodingCacheParity() throws Exception {
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                // Test 1: Hook avatarEncoderForTest and verify non-webp encoding & decode round-trip
+                OctiAppViewModel.avatarEncoderForTest = bmp -> "data:image/jpeg;base64,ZmFrZWF2YXRhcg==";
+                try {
+                    Constructor<Bitmap> ctor = Bitmap.class.getDeclaredConstructor();
+                    ctor.setAccessible(true);
+                    Bitmap b = ctor.newInstance();
+
+                    String dataUri = OctiAppViewModel.encodeAvatarBitmapToDataUri(b);
+                    assertTrue(dataUri.startsWith("data:image/jpeg;base64,") || dataUri.startsWith("data:image/png;base64,"));
+                    assertFalse("Avatar data URI must never use webp", dataUri.contains("webp"));
+
+                    byte[] decoded = OctiAppViewModel.decodeAvatarDataUriOrBytes(dataUri, null);
+                    assertNotNull(decoded);
+                    assertEquals("fakeavatar", new String(decoded, StandardCharsets.UTF_8));
+                } finally {
+                    OctiAppViewModel.avatarEncoderForTest = null;
+                }
+
+                // Test 2: In-memory avatar caching
+                OctiAppViewModel.clearAvatarBytesCacheForTest();
+                server.avatarFetchCount = 0;
+
+                String avatarPath = "/api/v1/avatars/cached_test.png";
+                byte[] fetch1 = OctiAppViewModel.decodeAvatarDataUriOrBytes(avatarPath, client);
+                assertNotNull(fetch1);
+                assertEquals(4, fetch1.length);
+                assertEquals(1, server.avatarFetchCount);
+
+                // Second fetch must hit in-memory cache without hitting server
+                byte[] fetch2 = OctiAppViewModel.decodeAvatarDataUriOrBytes(avatarPath, client);
+                assertNotNull(fetch2);
+                assertEquals(4, fetch2.length);
+                assertEquals("Second fetch must be served from in-memory cache", 1, server.avatarFetchCount);
+
+                // Calling with null netClient must also return from cache
+                byte[] fetchCached = OctiAppViewModel.decodeAvatarDataUriOrBytes(avatarPath, null);
+                assertNotNull(fetchCached);
+                assertEquals(4, fetchCached.length);
+                assertEquals(1, server.avatarFetchCount);
+
+                // Clearing cache forces subsequent fetch to hit server
+                OctiAppViewModel.clearAvatarBytesCacheForTest();
+                byte[] fetch3 = OctiAppViewModel.decodeAvatarDataUriOrBytes(avatarPath, client);
+                assertNotNull(fetch3);
+                assertEquals(2, server.avatarFetchCount);
+            }
+        }
+    }
+
+    @Test
+    public void testStartupAndDialogProfileSyncParity() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_sync.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            server.currentHandle = "synchandle";
+            server.currentDisplayName = "Server User";
+            server.currentAvatarUrl = "/api/v1/avatars/synced_avatar.png";
+            server.currentBio = "Server bio for sync verification";
+            server.currentLocation = "Sapporo, Japan";
+
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+                configStore.preferences().setSessionToken("sess-valid-token");
+                configStore.preferences().setHandle("stale_handle");
+                configStore.preferences().setBio("Stale local bio");
+                configStore.save();
+
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+
+                    // 1. refreshMyProfileAsync pulls server bio, avatarUrl, location, displayName, and identities
+                    CountDownLatch latch = new CountDownLatch(1);
+                    vm.refreshMyProfileAsync(ok -> {
+                        assertTrue(ok);
+                        latch.countDown();
+                    });
+                    assertTrue("refreshMyProfileAsync timed out", latch.await(5, TimeUnit.SECONDS));
+
+                    assertEquals("synchandle", vm.getOnlineProfile().getValue().handle);
+                    assertEquals("Server User", vm.getOnlineProfile().getValue().displayName);
+                    assertEquals("/api/v1/avatars/synced_avatar.png", vm.getOnlineProfile().getValue().avatarUrl);
+                    assertEquals("Server bio for sync verification", vm.getOnlineProfile().getValue().bio);
+                    assertEquals("Sapporo, Japan", vm.getOnlineProfile().getValue().location);
+                    assertFalse(vm.getLinkedIdentities().getValue().isEmpty());
+
+                    // Verify ClientConfigStore was synced
+                    assertEquals("synchandle", configStore.preferences().getHandle());
+                    assertEquals("Server bio for sync verification", configStore.preferences().getBio());
+                    assertEquals("/api/v1/avatars/synced_avatar.png", configStore.preferences().getAvatarUrl());
+
+                    // 2. setShowAccountDialog(true) triggers refreshMyProfileAsync
+                    server.currentBio = "Updated Server Bio After Dialog Opened";
+                    server.currentAvatarUrl = "/api/v1/avatars/synced_avatar_v2.png";
+
+                    CountDownLatch dialogLatch = new CountDownLatch(1);
+                    vm.setShowAccountDialog(true);
+                    vm.refreshMyProfileAsync(ok -> {
+                        assertTrue(ok);
+                        dialogLatch.countDown();
+                    });
+                    assertTrue("refreshMyProfileAsync after showAccountDialog timed out", dialogLatch.await(5, TimeUnit.SECONDS));
+
+                    assertEquals("Updated Server Bio After Dialog Opened", vm.getOnlineProfile().getValue().bio);
+                    assertEquals("/api/v1/avatars/synced_avatar_v2.png", vm.getOnlineProfile().getValue().avatarUrl);
+                    assertEquals("Updated Server Bio After Dialog Opened", configStore.preferences().getBio());
+                }
             }
         }
     }

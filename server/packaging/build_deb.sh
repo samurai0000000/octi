@@ -77,7 +77,7 @@ EOF
 fi
 
 if [ -z "$SHLIBS" ]; then
-    SHLIBS="libc6 (>= 2.38), libgcc-s1 (>= 3.0), libsqlite3-0 (>= 3.37.2), libssl3t64 (>= 3.0.0), libstdc++6 (>= 13.1)"
+    SHLIBS="libc6 (>= 2.38), libgcc-s1 (>= 3.0), libsqlite3-0 (>= 3.37.2), libssl3t64 (>= 3.0.0), libstdc++6 (>= 13.1), libwebp7 | libwebp6, libpng16-16t64 | libpng16-16"
 fi
 DEPS="${SHLIBS}, adduser"
 
