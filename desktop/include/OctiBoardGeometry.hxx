@@ -40,6 +40,7 @@ public:
 
     BoardRotation rotation() const;
     int rotationDegrees() const;
+    bool isBoardFlipped() const { return _rotation == BoardRotation::ROT_180; }
     int viewportWidth() const;
     int viewportHeight() const;
     int gridWidth() const;

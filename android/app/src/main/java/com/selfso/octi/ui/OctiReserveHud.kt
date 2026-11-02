@@ -216,6 +216,7 @@ fun OctiReserveHud(
                                     pal = pal,
                                     modifier = Modifier.weight(1f),
                                     ownCapPods = ownCapPods,
+                                    gameMode = game?.mode ?: OctiGameMode.GAME_MODE_2,
                                     onStartPodPlacement = if (activePlayerTurn) {
                                         {
                                             viewModel.clearLastMoveIndicators()
@@ -230,6 +231,28 @@ fun OctiReserveHud(
                                             if (viewModel.composer.beginLiberatePodFromReserve()) {
                                                 viewModel.bumpBoardRevision()
                                             }
+                                        }
+                                    } else null,
+                                    onStartProngPlacement = if (activePlayerTurn && (game?.getFreeProngs(p) ?: 0) > 0) {
+                                        {
+                                            viewModel.clearLastMoveIndicators()
+                                            viewModel.composer.beginAddProngFromReserve(false)
+                                            val orig = viewModel.composer.guidedOriginSquare()
+                                            if (orig != null && orig.size >= 2 && orig[0] >= 1 && orig[1] >= 1) {
+                                                viewModel.openZoomedSquare(orig[0], orig[1])
+                                            }
+                                            viewModel.bumpBoardRevision()
+                                        }
+                                    } else null,
+                                    onStartSuperProngPlacement = if (activePlayerTurn && useSuperProngs && (game?.getFreeSuperProngs(p) ?: 0) > 0) {
+                                        {
+                                            viewModel.clearLastMoveIndicators()
+                                            viewModel.composer.beginAddProngFromReserve(true)
+                                            val orig = viewModel.composer.guidedOriginSquare()
+                                            if (orig != null && orig.size >= 2 && orig[0] >= 1 && orig[1] >= 1) {
+                                                viewModel.openZoomedSquare(orig[0], orig[1])
+                                            }
+                                            viewModel.bumpBoardRevision()
                                         }
                                     } else null
                                 )
@@ -403,8 +426,11 @@ fun PlayerReserveCard(
     pal: OctiPalette,
     modifier: Modifier = Modifier,
     ownCapPods: Int = 0,
+    gameMode: OctiGameMode = OctiGameMode.GAME_MODE_2,
     onStartPodPlacement: (() -> Unit)? = null,
-    onStartLiberatePlacement: (() -> Unit)? = null
+    onStartLiberatePlacement: (() -> Unit)? = null,
+    onStartProngPlacement: (() -> Unit)? = null,
+    onStartSuperProngPlacement: (() -> Unit)? = null
 ) {
     val faction = pal.factionForPlayer(player)
     val oppPlayer = when (player) {
@@ -441,28 +467,36 @@ fun PlayerReserveCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // 1. Pod icon + count (allows starting pod placement when freePods > 0 || ownCapPods > 0)
-                val canStartPod = isTurn && (freePods > 0 || ownCapPods > 0) && onStartPodPlacement != null
-                Row(
-                    modifier = if (canStartPod) {
-                        Modifier.clickable { onStartPodPlacement?.invoke() }
-                    } else {
-                        Modifier
-                    },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    PodIcon(faction = faction, letter = letter, modifier = Modifier.size(20.dp))
-                    Text(
-                        text = "$freePods",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = OctiTheme.colors.textPrimary
-                    )
+                // 1. Pod icon + count (hidden in OFK)
+                if (gameMode != OctiGameMode.GAME_MODE_OFK) {
+                    val canStartPod = isTurn && (freePods > 0 || ownCapPods > 0) && onStartPodPlacement != null
+                    Row(
+                        modifier = if (canStartPod) {
+                            Modifier.clickable { onStartPodPlacement?.invoke() }
+                        } else {
+                            Modifier
+                        },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        PodIcon(faction = faction, letter = letter, modifier = Modifier.size(20.dp))
+                        Text(
+                            text = "$freePods",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = OctiTheme.colors.textPrimary
+                        )
+                    }
                 }
 
                 // 2. Prong icon + count
+                val canStartProng = isTurn && freeProngs > 0 && onStartProngPlacement != null
                 Row(
+                    modifier = if (canStartProng) {
+                        Modifier.clickable { onStartProngPlacement?.invoke() }
+                    } else {
+                        Modifier
+                    },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
@@ -477,7 +511,13 @@ fun PlayerReserveCard(
 
                 // 3. Superprong icon + count (if enabled)
                 if (useSuperProngs) {
+                    val canStartSuper = isTurn && freeSuper > 0 && onStartSuperProngPlacement != null
                     Row(
+                        modifier = if (canStartSuper) {
+                            Modifier.clickable { onStartSuperProngPlacement?.invoke() }
+                        } else {
+                            Modifier
+                        },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
@@ -491,9 +531,9 @@ fun PlayerReserveCard(
                     }
                 }
 
-                // 4. Captured Pod icon + count (hidden when capPods == 0)
+                // 4. Captured Pod icon + count (hidden when capPods == 0, disabled in OFK)
                 if (capPods > 0) {
-                    val canStartLiberate = onStartLiberatePlacement != null
+                    val canStartLiberate = onStartLiberatePlacement != null && gameMode != OctiGameMode.GAME_MODE_OFK
                     Row(
                         modifier = if (canStartLiberate) {
                             Modifier.clickable { onStartLiberatePlacement?.invoke() }

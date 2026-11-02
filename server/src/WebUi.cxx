@@ -51,10 +51,11 @@ header {
   top: 0;
   z-index: 100;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
   align-items: center;
   gap: 12px;
-  padding: 12px 24px;
+  padding: 10px 20px;
   background: rgba(251, 251, 250, 0.94);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -104,7 +105,7 @@ header {
   font-size: 11px;
   color: var(--dim);
 }
-nav { display: flex; gap: 6px; flex-wrap: wrap; }
+nav { display: flex; gap: 6px; flex-wrap: nowrap; white-space: nowrap; }
 nav button, .btn {
   background: #ffffff;
   color: var(--fg);
@@ -147,7 +148,8 @@ nav button.on:hover, .btn.btn-primary:hover {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 #nav-auth-pill {
   border-color: #3b82f6;
@@ -805,7 +807,7 @@ tr.active-ply {
     <span class="brand-badge">OCTI</span>
     <div class="brand-text">
       <span class="brand-name">OCTI</span>
-      <span class="brand-sub">octi.selfso.com &mdash; Official Platform, Web Player, Players, Archive, Leaderboard &amp; Robot Registry</span>
+      <span class="brand-sub">octi.selfso.com &mdash; Official Platform</span>
     </div>
   </div>
   <nav id="nav">
@@ -814,16 +816,9 @@ tr.active-ply {
     <button type="button" data-tab="users" id="nav-users-btn" class="btn">Players</button>
     <button type="button" data-tab="archive" id="nav-archive-btn" class="btn">Game Archive</button>
     <button type="button" data-tab="board" id="nav-board-btn" class="btn">Leaderboard</button>
-    <button type="button" data-tab="robots" id="nav-robots-btn" class="btn">Robot Registration</button>
     <button type="button" data-tab="account" id="nav-account-btn" class="btn">Account</button>
   </nav>
   <div class="header-right">
-    <button type="button" class="btn" id="btn-theme" title="Switch Board Palette">Theme: Obsidian Brass</button>
-    <select class="btn" id="theme-select" style="display:none">
-      <option value="obsidian">Obsidian Brass</option>
-      <option value="rosewood">Rosewood Ivory</option>
-    </select>
-    <button type="button" class="btn" id="btn-rotate" title="Rotate Board 90 degrees CW">Rotate 90&deg;</button>
     <span id="health" class="dim"></span>
     <button type="button" class="btn" id="nav-auth-pill" title="Click to view Account">Guest (Not Signed In)</button>
   </div>
@@ -864,7 +859,7 @@ tr.active-ply {
       </div>
       <div class="feature-card">
         <h3>Global ELO Leaderboard</h3>
-        <p>Official rankings across 2-Player (9x9 3-Base), 4-Player, and OCTI for Kids (7x7) modes updated continuously.</p>
+        <p>Official rankings across 2-Player (9x9 3-Base), 4-Player, and OCTI for Kids (6x7) modes updated continuously.</p>
       </div>
       <div class="feature-card">
         <h3>Bot &amp; Robot Token Registry</h3>
@@ -1088,7 +1083,6 @@ tr.active-ply {
               <select id="web-create-bases">
                 <option value="1">1-Base (Fast)</option>
                 <option value="3" selected>3-Base (Standard)</option>
-                <option value="4">4-Base (OFK)</option>
               </select>
             </label>
             <label>Time Control:
@@ -1282,10 +1276,19 @@ tr.active-ply {
       <span id="ar-page" class="dim"></span>
     </div>
   </div>
+</section>
+
+<!-- Standalone Tab: Replay Viewer (Spawned in New Browser Tab) -->
+<section id="tab-replay" class="tab">
   <div class="panel" id="ar-detail" style="display:none">
-    <div class="row">
+    <div class="row" style="align-items:center;">
       <strong id="ar-title" style="color:var(--acc-bright);font-size:15px;"></strong>
-      <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
+      <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <select class="btn" id="replay-theme-select" title="Switch Replay Board Palette">
+          <option value="obsidian">Obsidian Brass</option>
+          <option value="rosewood">Rosewood Ivory</option>
+        </select>
+        <button type="button" class="btn" id="btn-replay-rotate" title="Rotate Board 90 degrees CW">Rotate 90&deg;</button>
         <button type="button" class="btn" id="ar-copy-json">Copy JSON</button>
         <a class="btn" id="ar-dl" href="#">Download .json</a>
         <button type="button" class="btn" id="ar-close">Close</button>
@@ -1344,52 +1347,6 @@ tr.active-ply {
     <table id="lb-table"><thead><tr><th>#</th><th>Player</th><th>Elo</th>
       <th>Games</th><th>W</th><th>L</th><th>D</th></tr></thead>
       <tbody></tbody></table>
-  </div>
-</section>
-
-<!-- Tab 6: Robot Registration & Token Management -->
-<section id="tab-robots" class="tab">
-  <div class="panel">
-    <h2>OCTI Robot Registration &amp; Token Management</h2>
-    <p class="dim">Each registered user can register up to <strong>3 active robots</strong> (<code>octi_bot_&lt;token&gt;</code>) with a globally unique <code>robot_name</code>.</p>
-  </div>
-
-  <div class="panel" id="robots-guest-card">
-    <h3>Sign In Required</h3>
-    <p class="dim">Please sign in with your Google account on the Account tab to register and manage your automated bots.</p>
-    <button type="button" class="btn btn-primary" id="btn-robots-to-account">Go to Account Tab</button>
-  </div>
-
-  <div id="robots-owner-card" style="display:none;">
-    <div class="panel">
-      <div class="row">
-        <h3>Register a New Robot</h3>
-        <span id="robots-quota-badge" class="badge" style="margin-left:auto;">Active Robots: 0 / 3</span>
-      </div>
-      <div class="row">
-        <input id="robot-name-input" placeholder="Robot Name (3..24 chars [A-Za-z0-9_-])" maxlength="24" style="flex:1;">
-        <input id="robot-desc-input" placeholder="Robot Description (optional, max 256 chars)" maxlength="256" style="flex:2;">
-        <button type="button" class="btn btn-primary" id="btn-create-robot">Create Robot &amp; Generate Token</button>
-      </div>
-      <div id="robot-new-token-box" style="display:none;background:#eff6ff;border:1px solid #93c5fd;padding:12px;border-radius:8px;margin-top:10px;"></div>
-    </div>
-
-    <div class="panel">
-      <h3>My Registered Robots</h3>
-      <table id="robots-table">
-        <thead>
-          <tr>
-            <th>Robot Name</th>
-            <th>Description</th>
-            <th>Secret Token</th>
-            <th>Status</th>
-            <th>Created</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="robots-tbody"></tbody>
-      </table>
-    </div>
   </div>
 </section>
 
@@ -1462,6 +1419,39 @@ tr.active-ply {
         </thead>
         <tbody id="web-identities-tbody"></tbody>
       </table>
+    </div>
+
+    <div class="panel" id="account-robots-panel" style="margin-top:16px;">
+      <div class="row" style="align-items:center;">
+        <h3 style="margin:0;">Robot Registration &amp; Token Management</h3>
+        <span id="robots-quota-badge" class="badge" style="margin-left:12px;">Active Robots: 0 / 3</span>
+        <button type="button" class="btn" id="btn-toggle-robots-section" aria-expanded="false" style="margin-left:auto;">Show Robot Registration &#9662;</button>
+      </div>
+      <div id="account-robots-expand-body" style="display:none;margin-top:14px;">
+        <p class="dim" style="margin-top:0;">Each registered user can register up to <strong>3 active robots</strong> (<code>octi_bot_&lt;token&gt;</code>) with a globally unique <code>robot_name</code>.</p>
+        <div class="row" style="margin-top:10px;">
+          <input id="robot-name-input" placeholder="Robot Name (3..24 chars [A-Za-z0-9_-])" maxlength="24" style="flex:1;">
+          <input id="robot-desc-input" placeholder="Robot Description (optional, max 256 chars)" maxlength="256" style="flex:2;">
+          <button type="button" class="btn btn-primary" id="btn-create-robot">Create Robot &amp; Generate Token</button>
+        </div>
+        <div id="robot-new-token-box" style="display:none;background:#eff6ff;border:1px solid #93c5fd;padding:12px;border-radius:8px;margin-top:10px;"></div>
+        <div style="margin-top:14px;">
+          <h4 style="margin:0 0 8px 0;">My Registered Robots</h4>
+          <table id="robots-table">
+            <thead>
+              <tr>
+                <th>Robot Name</th>
+                <th>Description</th>
+                <th>Secret Token</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="robots-tbody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -2605,20 +2595,43 @@ window.addEventListener("resize", function () {
   });
 });
 
-$("btn-theme").addEventListener("click", function () {
-  currentTheme = (currentTheme === "obsidian") ? "rosewood" : "obsidian";
-  $("btn-theme").textContent = "Theme: " + PALETTES[currentTheme].name;
-  Object.keys(boardStates).forEach(function (k) {
-    drawBoardState(boardStates[k]);
+if ($("btn-theme")) {
+  $("btn-theme").addEventListener("click", function () {
+    currentTheme = (currentTheme === "obsidian") ? "rosewood" : "obsidian";
+    $("btn-theme").textContent = "Theme: " + PALETTES[currentTheme].name;
+    Object.keys(boardStates).forEach(function (k) {
+      drawBoardState(boardStates[k]);
+    });
   });
-});
+}
 
-$("btn-rotate").addEventListener("click", function () {
-  boardRotationDeg = (boardRotationDeg + 90) % 360;
-  Object.keys(boardStates).forEach(function (k) {
-    drawBoardState(boardStates[k]);
+if ($("btn-rotate")) {
+  $("btn-rotate").addEventListener("click", function () {
+    boardRotationDeg = (boardRotationDeg + 90) % 360;
+    Object.keys(boardStates).forEach(function (k) {
+      drawBoardState(boardStates[k]);
+    });
   });
-});
+}
+
+if ($("replay-theme-select")) {
+  $("replay-theme-select").value = currentTheme;
+  $("replay-theme-select").addEventListener("change", function () {
+    currentTheme = $("replay-theme-select").value;
+    Object.keys(boardStates).forEach(function (k) {
+      drawBoardState(boardStates[k]);
+    });
+  });
+}
+
+if ($("btn-replay-rotate")) {
+  $("btn-replay-rotate").addEventListener("click", function () {
+    boardRotationDeg = (boardRotationDeg + 90) % 360;
+    Object.keys(boardStates).forEach(function (k) {
+      drawBoardState(boardStates[k]);
+    });
+  });
+}
 
 
 /* =========================================================================
@@ -2690,7 +2703,12 @@ function serializeOctiFen(s) {
   return parts.join(":");
 }
 
-function getHomeSquares(mode, player) {
+function getHomeSquares(mode, player, bases) {
+  if (typeof mode === "object" && mode !== null) {
+    bases = mode.bases;
+    player = player || mode.turn;
+    mode = mode.mode;
+  }
   if (mode === "OFK") {
     return (player === "A")
       ? [{x:2, y:2}, {x:3, y:2}, {x:4, y:2}, {x:5, y:2}]
@@ -2702,7 +2720,7 @@ function getHomeSquares(mode, player) {
     if (player === "C") return [{x:7, y:7}];
     return [{x:7, y:3}];
   }
-  if (mode === "2P_1BASE") {
+  if (mode === "2P_1BASE" || bases === 1) {
     return (player === "A") ? [{x:5, y:3}] : [{x:5, y:7}];
   }
   return (player === "A")
@@ -2710,18 +2728,23 @@ function getHomeSquares(mode, player) {
     : [{x:3, y:7}, {x:5, y:7}, {x:7, y:7}];
 }
 
-function getOpponentBases(mode, player) {
+function getOpponentBases(mode, player, bases) {
+  if (typeof mode === "object" && mode !== null) {
+    bases = mode.bases;
+    player = player || mode.turn;
+    mode = mode.mode;
+  }
   if (mode === "4" || mode === "4P") {
     var all = ["A", "B", "C", "D"];
     var out = [];
     all.forEach(function (p) {
       if (p !== player) {
-        out = out.concat(getHomeSquares(mode, p));
+        out = out.concat(getHomeSquares(mode, p, bases));
       }
     });
     return out;
   }
-  return getHomeSquares(mode, player === "A" ? "B" : "A");
+  return getHomeSquares(mode, player === "A" ? "B" : "A", bases);
 }
 
 function generateMoves(s, player) {
@@ -2730,12 +2753,12 @@ function generateMoves(s, player) {
   var res = s.reserves[pIdx];
 
   /* 1. Pod placements */
-  if (res && res.freePods > 0) {
-    var homes = getHomeSquares(s.mode, player);
+  if (res && res.freePods > 0 && s.mode !== "OFK") {
+    var homes = getHomeSquares(s.mode, player, s.bases);
     homes.forEach(function (h) {
       var k = h.x + "," + h.y;
       if (!s.map[k] || !s.map[k].length) {
-        moves.push("(" + h.x + h.y + ")");
+        moves.push(h.x + "" + h.y);
       }
     });
   }
@@ -2748,9 +2771,11 @@ function generateMoves(s, player) {
       var top = stack[stack.length - 1];
       if (top.owner === player) {
         var coords = k.split(",");
+        var px = coords[0], py = coords[1];
+        var cfgText = top.cfg.text || "";
         for (var d = 0; d < 8; d++) {
           if (!top.cfg.prongs[d]) {
-            moves.push(coords[0] + coords[1] + DIR_CHARS[d]);
+            moves.push(px + "" + py + cfgText + "+" + DIR_CHARS[d]);
           }
         }
       }
@@ -2765,6 +2790,7 @@ function generateMoves(s, player) {
     if (top.owner === player) {
       var px = parseInt(k.split(",")[0], 10);
       var py = parseInt(k.split(",")[1], 10);
+      var cfgText = top.cfg.text || "";
       for (var d = 0; d < 8; d++) {
         if (top.cfg.prongs[d]) {
           var dx = DIR_DELTAS[d][0], dy = DIR_DELTAS[d][1];
@@ -2773,18 +2799,23 @@ function generateMoves(s, player) {
             var stepK = stepX + "," + stepY;
             var stepStack = s.map[stepK];
             if (!stepStack || !stepStack.length) {
-              moves.push(px + "" + py + "-" + stepX + "" + stepY);
-            } else {
+              moves.push(px + "" + py + cfgText + "-" + stepX + "" + stepY);
+            } else if (s.mode !== "OFK" && stepStack[stepStack.length - 1].owner === player) {
+              moves.push(px + "" + py + cfgText + "-" + stepX + "" + stepY);
+            }
+
+            if (stepStack && stepStack.length) {
               var jumpX = stepX + dx, jumpY = stepY + dy;
               if (jumpX >= 1 && jumpX <= s.gw && jumpY >= 1 && jumpY <= s.gh) {
                 var jumpK = jumpX + "," + jumpY;
                 var jumpStack = s.map[jumpK];
-                if (!jumpStack || !jumpStack.length) {
+                var canLand = (!jumpStack || !jumpStack.length) || (s.mode !== "OFK" && jumpStack[jumpStack.length - 1].owner === player);
+                if (canLand) {
                   var jumpedTop = stepStack[stepStack.length - 1];
                   if (jumpedTop.owner !== player) {
-                    moves.push(px + "" + py + "-" + jumpX + "" + jumpY + "x");
+                    moves.push(px + "" + py + cfgText + "-" + jumpX + "" + jumpY + "x");
                   }
-                  moves.push(px + "" + py + "-" + jumpX + "" + jumpY);
+                  moves.push(px + "" + py + cfgText + "-" + jumpX + "" + jumpY);
                 }
               }
             }
@@ -2801,55 +2832,146 @@ function applyMoveToState(s, move, player) {
   var pIdx = (player === "A" ? 0 : (player === "B" ? 1 : (player === "C" ? 2 : 3)));
   var res = s.reserves[pIdx];
 
-  if (move.charAt(0) === "(") {
-    var x = parseInt(move.charAt(1), 10);
-    var y = parseInt(move.charAt(2), 10);
-    if (res) { res.freePods = Math.max(0, res.freePods - 1); }
+  // 1. Pod placement: (33), 33, or 33*
+  var mPlace = /^\(?([1-9])([1-9])\)?(\*?)$/.exec(move);
+  if (mPlace && move.indexOf("-") === -1 && move.indexOf("+") === -1) {
+    var x = parseInt(mPlace[1], 10);
+    var y = parseInt(mPlace[2], 10);
+    var isLib = (mPlace[3] === "*");
+    if (isLib && s.mode !== "OFK") {
+      if (res) { res.capturedPods = Math.max(0, res.capturedPods - 1); }
+    } else {
+      if (res) { res.freePods = Math.max(0, res.freePods - 1); }
+    }
     var k = x + "," + y;
     if (!s.map[k]) { s.map[k] = []; }
     s.map[k].push({
       owner: player,
       cfg: { prongs: [0, 0, 0, 0, 0, 0, 0, 0], count: 0, text: "" }
     });
-  } else if (/^([1-9])([1-9])([a-hA-H])$/.test(move)) {
-    var mx = RegExp.$1, my = RegExp.$2, dirCh = RegExp.$3.toLowerCase();
-    var dIdx = DIR_CHARS.indexOf(dirCh);
+  }
+  // 2. Prong reposition: 22+b-a, 22a+b-a
+  else if (/^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])-([a-hA-H])(!?)$/.test(move)) {
+    if (s.mode !== "OFK") {
+      var mx = RegExp.$1, my = RegExp.$2;
+      var addCh = RegExp.$4.toLowerCase(), remCh = RegExp.$5.toLowerCase();
+      var addIdx = DIR_CHARS.indexOf(addCh), remIdx = DIR_CHARS.indexOf(remCh);
+      var isSuper = (RegExp.$6 === "!" || RegExp.$4 === RegExp.$4.toUpperCase());
+      var mk = mx + "," + my;
+      if (s.map[mk] && s.map[mk].length) {
+        var top = s.map[mk][s.map[mk].length - 1];
+        if (remIdx >= 0 && top.cfg.prongs[remIdx] && addIdx >= 0 && !top.cfg.prongs[addIdx]) {
+          var pt = top.cfg.prongs[remIdx];
+          top.cfg.prongs[remIdx] = 0;
+          top.cfg.prongs[addIdx] = pt;
+          top.cfg.text = (top.cfg.text || "").replace(remCh, "") + (isSuper ? (addCh.toUpperCase() + "!") : addCh);
+        }
+      }
+    }
+  }
+  // 3. Prong addition: 22+a, 22a+b, or legacy 22a
+  else if (/^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])(!?)$/.test(move) || /^([1-9])([1-9])([a-hA-H])$/.test(move)) {
+    var mx, my, addCh, isSuper = false;
+    if (move.indexOf("+") !== -1) {
+      /^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])(!?)$/.test(move);
+      mx = RegExp.$1; my = RegExp.$2; addCh = RegExp.$4.toLowerCase();
+      isSuper = (RegExp.$5 === "!" || RegExp.$4 === RegExp.$4.toUpperCase());
+    } else {
+      /^([1-9])([1-9])([a-hA-H])$/.test(move);
+      mx = RegExp.$1; my = RegExp.$2; addCh = RegExp.$3.toLowerCase();
+    }
+    var dIdx = DIR_CHARS.indexOf(addCh);
     var mk = mx + "," + my;
     if (s.map[mk] && s.map[mk].length) {
       var top = s.map[mk][s.map[mk].length - 1];
       if (dIdx >= 0 && !top.cfg.prongs[dIdx]) {
-        top.cfg.prongs[dIdx] = 1;
+        top.cfg.prongs[dIdx] = isSuper ? 2 : 1;
         top.cfg.count++;
-        top.cfg.text += dirCh;
-        if (res) { res.freeProngs = Math.max(0, res.freeProngs - 1); }
-      }
-    }
-  } else if (/^([1-9])([1-9])-([1-9])([1-9])(x?)$/.test(move)) {
-    var x1 = parseInt(RegExp.$1, 10), y1 = parseInt(RegExp.$2, 10);
-    var x2 = parseInt(RegExp.$3, 10), y2 = parseInt(RegExp.$4, 10);
-    var isCap = (RegExp.$5 === "x");
-    var fromK = x1 + "," + y1;
-    var toK = x2 + "," + y2;
-    if (s.map[fromK] && s.map[fromK].length) {
-      var pod = s.map[fromK].pop();
-      if (!s.map[fromK].length) { delete s.map[fromK]; }
-      if (Math.abs(x2 - x1) === 2 || Math.abs(y2 - y1) === 2) {
-        var midK = ((x1 + x2) / 2) + "," + ((y1 + y2) / 2);
-        if (isCap && s.map[midK] && s.map[midK].length) {
-          s.map[midK].pop();
-          if (!s.map[midK].length) { delete s.map[midK]; }
-          if (res) { res.capturedPods++; }
+        top.cfg.text = (top.cfg.text || "") + (isSuper ? (addCh.toUpperCase() + "!") : addCh);
+        if (res) {
+          if (isSuper && s.superProngs && res.freeSuper > 0) res.freeSuper--;
+          else res.freeProngs = Math.max(0, res.freeProngs - 1);
         }
       }
-      if (!s.map[toK]) { s.map[toK] = []; }
-      s.map[toK].push(pod);
+    }
+  }
+  // 4. Pod moves / jump chains: 22a-23, 22-23, 22a-24x-44x, etc.
+  else if (move.indexOf("-") !== -1) {
+    var hops = move.split("-");
+    var origM = /^([1-9])([1-9])/.exec(hops[0]);
+    if (origM) {
+      var curX = parseInt(origM[1], 10);
+      var curY = parseInt(origM[2], 10);
+      var fromK = curX + "," + curY;
+      if (s.map[fromK] && s.map[fromK].length) {
+        var pod = s.map[fromK].pop();
+        if (!s.map[fromK].length) { delete s.map[fromK]; }
 
-      /* Check Victory */
-      var oppBases = getOpponentBases(s.mode, player);
-      for (var b = 0; b < oppBases.length; b++) {
-        if (x2 === oppBases[b].x && y2 === oppBases[b].y) {
+        for (var h = 1; h < hops.length; h++) {
+          var hopM = /^([1-9])([1-9])(x?)/.exec(hops[h]);
+          if (!hopM) break;
+          var toX = parseInt(hopM[1], 10);
+          var toY = parseInt(hopM[2], 10);
+          var isCap = (hopM[3] === "x");
+
+          if (isCap || Math.abs(toX - curX) === 2 || Math.abs(toY - curY) === 2) {
+            var midK = ((curX + toX) / 2) + "," + ((curY + toY) / 2);
+            if (isCap && s.map[midK] && s.map[midK].length) {
+              var victimPod = s.map[midK].pop();
+              if (!s.map[midK].length) { delete s.map[midK]; }
+              var victimIdx = (victimPod.owner === "A" ? 0 : (victimPod.owner === "B" ? 1 : (victimPod.owner === "C" ? 2 : 3)));
+              s.reserves[victimIdx].capturedPods++;
+              var seizedNormal = 0, seizedSuper = 0;
+              for (var pi = 0; pi < 8; pi++) {
+                if (victimPod.cfg.prongs[pi] === 1) seizedNormal++;
+                else if (victimPod.cfg.prongs[pi] === 2) seizedSuper++;
+              }
+              if (res) {
+                res.freeProngs += (seizedNormal + (s.superProngs ? 0 : seizedSuper));
+                if (s.superProngs) res.freeSuper += seizedSuper;
+              }
+            }
+          }
+          curX = toX;
+          curY = toY;
+        }
+
+        var toK = curX + "," + curY;
+        if (!s.map[toK]) { s.map[toK] = []; }
+        s.map[toK].push(pod);
+
+        /* Check Victory */
+        var needAll = (s.mode !== "OFK" && s.bases === 3);
+        var oppBases = getOpponentBases(s.mode, player, s.bases);
+        var wonByBase = needAll
+          ? oppBases.every(function (b) { var stk = s.map[b.x + "," + b.y]; return (stk && stk.length && stk[stk.length - 1].owner === player); })
+          : oppBases.some(function (b) { var stk = s.map[b.x + "," + b.y]; return (stk && stk.length && stk[stk.length - 1].owner === player); });
+
+        if (wonByBase) {
           s.status = "O";
           s.winner = player;
+          return s;
+        }
+
+        /* Check Elimination */
+        var podsA = 0, podsB = 0;
+        Object.keys(s.map).forEach(function (k2) {
+          (s.map[k2] || []).forEach(function (p) {
+            if (p.owner === "A") podsA++;
+            else if (p.owner === "B") podsB++;
+          });
+        });
+        var resA = s.reserves[0], resB = s.reserves[1];
+        var canSpawnA = (s.mode !== "OFK" && resA && (resA.freePods > 0 || resA.capturedPods > 0));
+        var canSpawnB = (s.mode !== "OFK" && resB && (resB.freePods > 0 || resB.capturedPods > 0));
+        if (podsA === 0 && !canSpawnA) {
+          s.status = "O";
+          s.winner = "B";
+          return s;
+        }
+        if (podsB === 0 && !canSpawnB) {
+          s.status = "O";
+          s.winner = "A";
           return s;
         }
       }
@@ -2870,8 +2992,8 @@ function evaluateState(s, player) {
     if (s.winner === player) return 100000;
     if (s.winner && s.winner !== "-") return -100000;
   }
-  var oppBases = getOpponentBases(s.mode, player);
-  var myBases = getHomeSquares(s.mode, player);
+  var oppBases = getOpponentBases(s.mode, player, s.bases);
+  var myBases = getHomeSquares(s.mode, player, s.bases);
   var score = 0;
 
   Object.keys(s.map).forEach(function (k) {
@@ -2910,8 +3032,11 @@ function evaluateState(s, player) {
   return score;
 }
 
-function alphaBeta(s, depth, alpha, beta, isMaximizing, botSide, curPlayer, nodes) {
+function alphaBeta(s, depth, alpha, beta, isMaximizing, botSide, curPlayer, nodes, deadlineMs) {
   nodes.count++;
+  if (deadlineMs && Date.now() >= deadlineMs) {
+    return evaluateState(s, botSide);
+  }
   if (s.status === "O") {
     if (s.winner === botSide) return 100000;
     if (s.winner && s.winner !== "-") return -100000;
@@ -2928,8 +3053,9 @@ function alphaBeta(s, depth, alpha, beta, isMaximizing, botSide, curPlayer, node
   if (isMaximizing) {
     var maxVal = -Infinity;
     for (var i = 0; i < moves.length; i++) {
+      if (deadlineMs && Date.now() >= deadlineMs) break;
       var nextS = applyMoveToState(cloneState(s), moves[i], curPlayer);
-      var val = alphaBeta(nextS, depth - 1, alpha, beta, false, botSide, nextS.turn, nodes);
+      var val = alphaBeta(nextS, depth - 1, alpha, beta, false, botSide, nextS.turn, nodes, deadlineMs);
       if (val > maxVal) maxVal = val;
       if (val > alpha) alpha = val;
       if (beta <= alpha) break;
@@ -2938,8 +3064,9 @@ function alphaBeta(s, depth, alpha, beta, isMaximizing, botSide, curPlayer, node
   } else {
     var minVal = Infinity;
     for (var j = 0; j < moves.length; j++) {
+      if (deadlineMs && Date.now() >= deadlineMs) break;
       var nextS2 = applyMoveToState(cloneState(s), moves[j], curPlayer);
-      var val2 = alphaBeta(nextS2, depth - 1, alpha, beta, true, botSide, nextS2.turn, nodes);
+      var val2 = alphaBeta(nextS2, depth - 1, alpha, beta, true, botSide, nextS2.turn, nodes, deadlineMs);
       if (val2 < minVal) minVal = val2;
       if (val2 < beta) beta = val2;
       if (beta <= alpha) break;
@@ -2948,49 +3075,112 @@ function alphaBeta(s, depth, alpha, beta, isMaximizing, botSide, curPlayer, node
   }
 }
 
-function botSearch(fen, depth, mode, botSide) {
+function botSearch(fen, difficulty, mode, botSide, progressCb) {
   var s = parseOctiFen(fen);
-  if (!s) return { bestMove: null, score: 0, nodes: 0 };
+  if (!s) return { bestMove: null, score: 0, nodes: 0, depth: 0 };
   var moves = generateMoves(s, botSide);
-  if (!moves.length) return { bestMove: null, score: -100000, nodes: 1 };
+  if (!moves.length) return { bestMove: null, score: -100000, nodes: 1, depth: 0 };
+
+  var diff = parseInt(difficulty, 10) || 2;
+  var maxDepth = 4;
+  var budgetMs = 3000;
+  if (diff === 1) { maxDepth = 2; budgetMs = 1200; }
+  else if (diff === 3) { maxDepth = 6; budgetMs = 5000; }
+
+  var t0 = Date.now();
+  var deadlineMs = t0 + budgetMs;
 
   moves.sort(function (a, b) {
     function rank(m) {
       if (m.indexOf("x") !== -1) return 5;
-      if (m.indexOf("-") !== -1) {
-        var p = m.split("-");
-        var d = Math.abs(p[0].charAt(0) - p[1].charAt(0)) + Math.abs(p[0].charAt(1) - p[1].charAt(1));
-        return d > 1 ? 4 : 3;
-      }
-      if (m.charAt(0) !== "(") return 2;
+      if (m.indexOf("-") !== -1) return 4;
+      if (m.indexOf("+") !== -1) return 3;
       return 1;
     }
     return rank(b) - rank(a);
   });
 
   var nodes = { count: 0 };
-  var bestMove = moves[0];
-  var bestScore = -Infinity;
+  var bestOverallMove = moves[0];
+  var bestOverallScore = -Infinity;
+  var completedDepth = 1;
 
-  for (var i = 0; i < moves.length; i++) {
-    var mv = moves[i];
-    var nextS = applyMoveToState(cloneState(s), mv, botSide);
-    nodes.count++;
-    var sc;
-    if (nextS.status === "O" && nextS.winner === botSide) {
-      sc = 100000;
-    } else if (depth <= 1) {
-      sc = evaluateState(nextS, botSide);
-    } else {
-      sc = -alphaBeta(nextS, depth - 1, -100000, 100000, false, botSide, nextS.turn, nodes);
+  for (var d = 1; d <= maxDepth; d++) {
+    if (Date.now() >= deadlineMs && d > 1) break;
+
+    if (bestOverallMove) {
+      var prevBestIdx = moves.indexOf(bestOverallMove);
+      if (prevBestIdx > 0) {
+        moves.splice(prevBestIdx, 1);
+        moves.unshift(bestOverallMove);
+      }
     }
-    if (sc > bestScore) {
-      bestScore = sc;
-      bestMove = mv;
+
+    var depthBestMove = moves[0];
+    var depthBestScore = -Infinity;
+    var depthTimedOut = false;
+
+    for (var i = 0; i < moves.length; i++) {
+      if (Date.now() >= deadlineMs && d > 1) {
+        depthTimedOut = true;
+        break;
+      }
+      var mv = moves[i];
+      var nextS = applyMoveToState(cloneState(s), mv, botSide);
+      nodes.count++;
+      var sc;
+      if (nextS.status === "O" && nextS.winner === botSide) {
+        sc = 100000;
+      } else if (d <= 1) {
+        sc = evaluateState(nextS, botSide);
+      } else {
+        sc = alphaBeta(nextS, d - 1, -100000, 100000, false, botSide, nextS.turn, nodes, deadlineMs);
+      }
+
+      if (sc > depthBestScore) {
+        depthBestScore = sc;
+        depthBestMove = mv;
+      }
+
+      if (progressCb && (nodes.count % 128 === 0)) {
+        progressCb({
+          depth: d,
+          maxDepth: maxDepth,
+          nodes: nodes.count,
+          score: depthBestScore,
+          bestMove: depthBestMove,
+          elapsedMs: Date.now() - t0,
+          budgetMs: budgetMs
+        });
+      }
     }
+
+    if (!depthTimedOut || d === 1) {
+      bestOverallMove = depthBestMove;
+      bestOverallScore = depthBestScore;
+      completedDepth = d;
+      if (progressCb) {
+        progressCb({
+          depth: d,
+          maxDepth: maxDepth,
+          nodes: nodes.count,
+          score: bestOverallScore,
+          bestMove: bestOverallMove,
+          elapsedMs: Date.now() - t0,
+          budgetMs: budgetMs
+        });
+      }
+    }
+    if (bestOverallScore >= 100000) break;
   }
 
-  return { bestMove: bestMove, score: bestScore, nodes: nodes.count };
+  return {
+    bestMove: bestOverallMove,
+    score: bestOverallScore,
+    nodes: nodes.count,
+    depth: completedDepth,
+    elapsedMs: Date.now() - t0
+  };
 }
 
 /* Inline Web Worker Initialization */
@@ -3001,13 +3191,16 @@ try {
     "  var d = e.data;",
     "  if (d.type === 'search') {",
     "    var t0 = Date.now();",
-    "    var res = (" + botSearch.toString() + ")(d.fen, d.depth, d.mode, d.side);",
+    "    var res = (" + botSearch.toString() + ")(d.fen, d.depth, d.mode, d.side, function (prog) {",
+    "      self.postMessage(Object.assign({ type: 'progress' }, prog));",
+    "    });",
     "    var elapsed = Date.now() - t0;",
     "    self.postMessage({",
-    "      type: 'result',",
+    "      type: 'done',",
     "      bestMove: res.bestMove,",
     "      score: res.score,",
     "      nodes: res.nodes,",
+    "      depth: res.depth,",
     "      elapsedMs: elapsed",
     "    });",
     "  }",
@@ -3042,11 +3235,35 @@ var tabs = {
   users: $("tab-users"),
   archive: $("tab-archive"),
   board: $("tab-board"),
-  robots: $("tab-robots"),
+  replay: $("tab-replay"),
   account: $("tab-account")
 };
 
+function toggleAccountRobots(forceOpen) {
+  var btn = $("btn-toggle-robots-section");
+  var body = $("account-robots-expand-body");
+  if (!btn || !body) return;
+  var isExpanded = btn.getAttribute("aria-expanded") === "true";
+  var willExpand = (forceOpen !== undefined) ? forceOpen : !isExpanded;
+  btn.setAttribute("aria-expanded", willExpand ? "true" : "false");
+  btn.innerHTML = willExpand ? "Hide Robot Registration &#9652;" : "Show Robot Registration &#9662;";
+  body.style.display = willExpand ? "block" : "none";
+  if (willExpand && currentUser) {
+    loadMyRobots();
+  }
+}
+
+if ($("btn-toggle-robots-section")) {
+  $("btn-toggle-robots-section").addEventListener("click", function () {
+    toggleAccountRobots();
+  });
+}
+
 function switchTab(name) {
+  if (name === "robots") {
+    name = "account";
+    toggleAccountRobots(true);
+  }
   if (!tabs[name]) { name = "home"; }
   Array.prototype.forEach.call($("nav").querySelectorAll("button"), function (b) {
     b.classList.toggle("on", b.getAttribute("data-tab") === name);
@@ -3064,10 +3281,11 @@ function switchTab(name) {
     lbLoad();
   } else if (name === "users") {
     usersSearch(usersOffset || 0);
-  } else if (name === "robots") {
-    if (currentUser) { loadMyRobots(); }
   } else if (name === "account") {
-    if (currentUser || localStorage.getItem("octi_jwt_token")) { loadMyProfile(); }
+    if (currentUser || localStorage.getItem("octi_jwt_token")) {
+      loadMyProfile();
+      loadMyRobots();
+    }
   } else if (name === "play") {
     if (activePlayState) {
       renderPlayBoardCanvas();
@@ -3168,10 +3386,13 @@ function checkHash() {
     }
   } else if (h === "#home") {
     switchTab("home");
-  } else if (h.indexOf("#archive/") === 0) {
-    var id = decodeURIComponent(h.substring(9));
-    switchTab("archive");
+  } else if (h.indexOf("#replay/") === 0 || h.indexOf("#archive/") === 0) {
+    var id = (h.indexOf("#replay/") === 0) ? decodeURIComponent(h.substring(8)) : decodeURIComponent(h.substring(9));
+    switchTab("replay");
     if (id) { arOpen(id); }
+  } else if (h === "#robots") {
+    switchTab("account");
+    toggleAccountRobots(true);
   } else if (h.indexOf("#users/") === 0) {
     var uid = decodeURIComponent(h.substring(7));
     switchTab("users");
@@ -3306,9 +3527,11 @@ $("btn-web-facebook").addEventListener("click", function () {
   window.location.href = "/api/v1/auth/authorize?provider=facebook&redirect_uri=" + encodeURIComponent("/#account");
 });
 
-$("btn-robots-to-account").addEventListener("click", function () {
-  switchTab("account");
-});
+if ($("btn-robots-to-account")) {
+  $("btn-robots-to-account").addEventListener("click", function () {
+    switchTab("account");
+  });
+}
 
 function getAuthHeaders() {
   var headers = { "Accept": "application/json" };
@@ -4035,8 +4258,7 @@ function openUserProfile(id) {
         rpBtn.style.padding = "3px 8px";
         rpBtn.style.fontSize = "12px";
         rpBtn.addEventListener("click", function () {
-          switchTab("archive");
-          arOpen(gm.game_id);
+          window.open(window.location.pathname + "#replay/" + encodeURIComponent(gm.game_id), "_blank");
         });
         tdAct.appendChild(rpBtn);
 
@@ -4205,7 +4427,7 @@ var localMatchConfig = {
   botDifficulty: 2, // 1, 2, 3
   humanSeat: "A", // "A" or "B"
   gameMode: "2P", // "2P", "4P", "OFK"
-  bases: 3, // 3 or 1 (OFK = 4)
+  bases: 3, // 3 or 1 (OFK = 1)
   superProngs: false,
   edgeless: false,
   timeControl: "untimed"
@@ -4242,11 +4464,22 @@ function WebMoveComposer(stateGetter, onCommitCb) {
   this.guidedOriginSquare = null;
   this.guidedCurrentSquare = null;
   this.guidedPodIndex = -1;
+  this.guidedPodConfig = "";
   this.guidedLegalDests = [];
   this.claimedPodsAtOrigin = {}; // map of podIdx -> true
   this.jumpedSquaresChain = [];
   this.captureChoices = []; // { jumpedX, jumpedY, capture, mandatory }
 }
+
+Object.defineProperty(WebMoveComposer.prototype, "isGuidedMoveActive", {
+  get: function () { return this.guidedMoveActive; }
+});
+
+WebMoveComposer.prototype.cancel = function () {
+  this.reset();
+  renderPlayBoardCanvas();
+  renderAllWebReserves();
+};
 
 WebMoveComposer.prototype.reset = function () {
   this.stagedOps = [];
@@ -4260,6 +4493,7 @@ WebMoveComposer.prototype.reset = function () {
   this.guidedOriginSquare = null;
   this.guidedCurrentSquare = null;
   this.guidedPodIndex = -1;
+  this.guidedPodConfig = "";
   this.guidedLegalDests = [];
   this.claimedPodsAtOrigin = {};
   this.jumpedSquaresChain = [];
@@ -4340,10 +4574,10 @@ WebMoveComposer.prototype.stageAddPod = function (x, y, forceLiberate) {
 
   var doLiberate = false;
   if (forceLiberate || (occupiedByTurn && res && res.capturedPods > 0)) {
-    if (!res || res.capturedPods <= 0 || !occupiedByTurn) return false;
+    if (s.mode === "OFK" || !res || res.capturedPods <= 0 || !occupiedByTurn) return false;
     doLiberate = true;
   } else {
-    var homes = getHomeSquares(s.mode, turn);
+    var homes = getHomeSquares(s.mode, turn, s.bases);
     var isHome = homes.some(function (h) { return h.x === x && h.y === y; });
     if (!isHome || !res || res.freePods <= 0 || squareHasEnemyOf(s, x, y, turn)) return false;
   }
@@ -4381,11 +4615,7 @@ WebMoveComposer.prototype.stageAddProng = function (x, y, podIdx, dirIdx, isSupe
   var pod = stack[podIdx];
   if (pod.owner !== turn || pod.cfg.prongs[dirIdx]) return false;
 
-  if (s.mode === "OFK") {
-    // Forward prongs only in OFK
-    if (turn === "A" && (dirIdx !== 0 && dirIdx !== 1 && dirIdx !== 7)) return false;
-    if (turn === "B" && (dirIdx !== 3 && dirIdx !== 4 && dirIdx !== 5)) return false;
-  }
+  var prevCfg = pod.cfg.text || "";
 
   if (isSuper) {
     if (!s.superProngs || !res || res.freeSuper <= 0) return false;
@@ -4398,9 +4628,9 @@ WebMoveComposer.prototype.stageAddProng = function (x, y, podIdx, dirIdx, isSupe
   }
   pod.cfg.count++;
   var dirChar = DIR_CHARS[dirIdx];
-  pod.cfg.text = (pod.cfg.text || "") + (isSuper ? (dirChar.toUpperCase() + "!") : dirChar);
+  pod.cfg.text = prevCfg + (isSuper ? (dirChar.toUpperCase() + "!") : dirChar);
 
-  var not = x + "" + y + "+" + dirChar + (isSuper ? "!" : "");
+  var not = x + "" + y + prevCfg + "+" + dirChar + (isSuper ? "!" : "");
   this.stagedNotation = not;
 
   OctiWebSoundSynth.play("PRONG_SNAP");
@@ -4432,6 +4662,7 @@ WebMoveComposer.addProng = function (x, y, dir, isSuper, podIdx) {
 
 WebMoveComposer.prototype.stageRepositionProng = function (x, y, podIdx, srcDirIdx, dstDirIdx) {
   var s = this.getWorkingState();
+  if (s.mode === "OFK") return false;
   var turn = s.turn;
   var k = x + "," + y;
   var stack = s.map[k];
@@ -4439,6 +4670,7 @@ WebMoveComposer.prototype.stageRepositionProng = function (x, y, podIdx, srcDirI
   var pod = stack[podIdx];
   if (pod.owner !== turn || !pod.cfg.prongs[srcDirIdx] || pod.cfg.prongs[dstDirIdx]) return false;
 
+  var prevCfg = pod.cfg.text || "";
   var pt = pod.cfg.prongs[srcDirIdx];
   pod.cfg.prongs[srcDirIdx] = 0;
   pod.cfg.prongs[dstDirIdx] = pt;
@@ -4446,7 +4678,8 @@ WebMoveComposer.prototype.stageRepositionProng = function (x, y, podIdx, srcDirI
   var isSuper = (pt === 2);
   var srcCh = DIR_CHARS[srcDirIdx];
   var dstCh = DIR_CHARS[dstDirIdx];
-  this.stagedNotation = x + "" + y + "+" + dstCh + "-" + srcCh + (isSuper ? "!" : "");
+  pod.cfg.text = prevCfg.replace(srcCh, "") + (isSuper ? (dstCh.toUpperCase() + "!") : dstCh);
+  this.stagedNotation = x + "" + y + prevCfg + "+" + dstCh + "-" + srcCh + (isSuper ? "!" : "");
 
   OctiWebSoundSynth.play("PRONG_SNAP");
   this.isAwaitingConfirmation = true;
@@ -4479,7 +4712,8 @@ WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, 
       if (sx >= 1 && sx <= gw && sy >= 1 && sy <= gh) {
         var stepK = sx + "," + sy;
         var stepStack = state.map[stepK];
-        if (!stepStack || !stepStack.length || !squareHasEnemyOf(state, sx, sy, pod.owner)) {
+        var canLandStep = (!stepStack || !stepStack.length) || (state.mode !== "OFK" && !squareHasEnemyOf(state, sx, sy, pod.owner));
+        if (canLandStep) {
           dests.push({ x: sx, y: sy, dist: 1, isJump: false });
         }
       }
@@ -4495,7 +4729,7 @@ WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, 
           if (!slStack || !slStack.length) {
             dests.push({ x: slx, y: sly, dist: step, isJump: false });
           } else {
-            if (!squareHasEnemyOf(state, slx, sly, pod.owner)) {
+            if (state.mode !== "OFK" && !squareHasEnemyOf(state, slx, sly, pod.owner)) {
               dests.push({ x: slx, y: sly, dist: step, isJump: false });
             }
             break;
@@ -4519,7 +4753,8 @@ WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, 
       if (jumpedStack && jumpedStack.length && !alreadyJumped) {
         var landK = landX + "," + landY;
         var landStack = state.map[landK];
-        if (!landStack || !landStack.length || !squareHasEnemyOf(state, landX, landY, pod.owner)) {
+        var canLandJump = (!landStack || !landStack.length) || (state.mode !== "OFK" && !squareHasEnemyOf(state, landX, landY, pod.owner));
+        if (canLandJump) {
           dests.push({ x: landX, y: landY, dist: 2, isJump: true, jumpedX: jx, jumpedY: jy });
         }
       }
@@ -4540,6 +4775,7 @@ WebMoveComposer.prototype.beginGuidedPodMove = function (x, y, podIdx) {
   this.guidedOriginSquare = { x: x, y: y };
   this.guidedCurrentSquare = { x: x, y: y };
   this.guidedPodIndex = podIdx;
+  this.guidedPodConfig = pod.cfg.text || "";
   this.jumpedSquaresChain = [];
   this.guidedLegalDests = this.computeLegalDestsForPod(s, x, y, pod, this.jumpedSquaresChain);
 
@@ -4563,36 +4799,46 @@ WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
 
   if (matchDest.isJump) {
     var jx = matchDest.jumpedX, jy = matchDest.jumpedY;
-    this.jumpedSquaresChain.push({ x: jx, y: jy });
     var jK = jx + "," + jy;
     var jStack = s.map[jK];
     var isEnemy = jStack && jStack.length && jStack[jStack.length - 1].owner !== s.turn;
-    var doCap = true;
+    var doCap = isEnemy;
 
-    if (s.mode === "OFK") {
-      doCap = isEnemy;
-    } else {
-      // Optional capture dialog
-      var capOverlay = document.getElementById("web-capture-overlay");
-      var promptText = document.getElementById("web-capture-prompt-text");
-      if (capOverlay && promptText) {
-        promptText.textContent = "Capture jumped pod(s) at (" + jx + ", " + jy + ")?";
-        capOverlay.style.display = "flex";
-      }
-    }
+    var capSnapshot = [];
+    var victimIdx = -1;
+    var capturerIdx = (s.turn === "A" ? 0 : (s.turn === "B" ? 1 : (s.turn === "C" ? 2 : 3)));
+    var seizedNormal = 0;
+    var seizedSuper = 0;
 
     if (doCap && jStack && jStack.length) {
-      jStack.pop();
+      var victimPod = jStack.pop();
       if (!jStack.length) delete s.map[jK];
-      var pIdx = (s.turn === "A") ? 0 : ((s.turn === "B") ? 1 : ((s.turn === "C") ? 2 : 3));
-      if (s.reserves[pIdx]) s.reserves[pIdx].capturedPods++;
+      capSnapshot.push(victimPod);
+      victimIdx = (victimPod.owner === "A" ? 0 : (victimPod.owner === "B" ? 1 : (victimPod.owner === "C" ? 2 : 3)));
+      s.reserves[victimIdx].capturedPods++;
+      for (var pi = 0; pi < 8; pi++) {
+        if (victimPod.cfg.prongs[pi] === 1) seizedNormal++;
+        else if (victimPod.cfg.prongs[pi] === 2) seizedSuper++;
+      }
+      s.reserves[capturerIdx].freeProngs += (seizedNormal + (s.superProngs ? 0 : seizedSuper));
+      if (s.superProngs) s.reserves[capturerIdx].freeSuper += seizedSuper;
       OctiWebSoundSynth.play("POD_CAPTURE");
     } else {
       OctiWebSoundSynth.play("POD_JUMP");
     }
 
+    this.jumpedSquaresChain.push({
+      x: jx, y: jy,
+      capturedPodsSnapshot: capSnapshot,
+      victimIdx: victimIdx,
+      capturerIdx: capturerIdx,
+      seizedNormal: seizedNormal,
+      seizedSuper: seizedSuper,
+      capture: (capSnapshot.length > 0)
+    });
+
     if (!this.stagedNotation) {
-      this.stagedNotation = this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + "-" + toX + "" + toY + (doCap ? "x" : "");
+      this.stagedNotation = this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + this.guidedPodConfig + "-" + toX + "" + toY + (doCap ? "x" : "");
     } else {
       this.stagedNotation += "-" + toX + "" + toY + (doCap ? "x" : "");
     }
@@ -4600,9 +4846,9 @@ WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
     // Step
     OctiWebSoundSynth.play("POD_STEP");
     if (!this.stagedNotation) {
-      this.stagedNotation = this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + "-" + toX + "" + toY;
+      this.stagedNotation = this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + this.guidedPodConfig + "-" + toX + "" + toY;
     } else {
-      this.stagedNotation += "," + this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + "-" + toX + "" + toY;
+      this.stagedNotation += "-" + toX + "" + toY;
     }
   }
 
@@ -4612,7 +4858,6 @@ WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
   this.guidedCurrentSquare = { x: toX, y: toY };
 
   if (matchDest.isJump) {
-    // Check continuation jumps
     var nextJumps = this.computeLegalDestsForPod(s, toX, toY, pod, this.jumpedSquaresChain).filter(function (d) { return d.isJump; });
     if (nextJumps.length > 0) {
       this.guidedLegalDests = nextJumps;
@@ -4624,12 +4869,10 @@ WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
     }
   }
 
-  // Finished hops for this pod
   this.claimedPodsAtOrigin[this.guidedPodIndex] = true;
   this.isAwaitingConfirmation = true;
 
   if (this.hasOtherMovablePodAtOrigin()) {
-    // Keep origin dashed indicator ring
     this.guidedLegalDests = [];
   } else {
     this.guidedMoveActive = false;
@@ -4643,15 +4886,29 @@ WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
 };
 
 WebMoveComposer.prototype.toggleCaptureAtSquare = function (jx, jy) {
+  var hop = this.jumpedSquaresChain.find(function (h) { return h.x === jx && h.y === jy; });
+  if (!hop || !hop.capturedPodsSnapshot || !hop.capturedPodsSnapshot.length) return false;
   var s = this.getWorkingState();
   var jK = jx + "," + jy;
-  var pIdx = (s.turn === "A") ? 0 : ((s.turn === "B") ? 1 : ((s.turn === "C") ? 2 : 3));
-  if (this.stagedNotation.indexOf("x") !== -1) {
+
+  if (hop.capture) {
+    if (!s.map[jK]) s.map[jK] = [];
+    s.map[jK].push(hop.capturedPodsSnapshot[0]);
+    s.reserves[hop.victimIdx].capturedPods--;
+    s.reserves[hop.capturerIdx].freeProngs -= (hop.seizedNormal + (s.superProngs ? 0 : hop.seizedSuper));
+    if (s.superProngs) s.reserves[hop.capturerIdx].freeSuper -= hop.seizedSuper;
+    hop.capture = false;
     this.stagedNotation = this.stagedNotation.replace(/x/g, "");
-    if (s.reserves[pIdx] && s.reserves[pIdx].capturedPods > 0) s.reserves[pIdx].capturedPods--;
   } else {
-    this.stagedNotation += "x";
-    if (s.reserves[pIdx]) s.reserves[pIdx].capturedPods++;
+    var victimPod = s.map[jK].pop();
+    if (!s.map[jK].length) delete s.map[jK];
+    s.reserves[hop.victimIdx].capturedPods++;
+    s.reserves[hop.capturerIdx].freeProngs += (hop.seizedNormal + (s.superProngs ? 0 : hop.seizedSuper));
+    if (s.superProngs) s.reserves[hop.capturerIdx].freeSuper += hop.seizedSuper;
+    hop.capture = true;
+    if (this.stagedNotation.indexOf("x") === -1) {
+      this.stagedNotation += "x";
+    }
   }
   this.updateUi();
   renderPlayBoardCanvas();
@@ -4754,18 +5011,21 @@ function renderWebReserveCard(player, cardEl, state, isTurn) {
   if (canPlace) {
     podWell.addEventListener("click", function () {
       if (!moveComposer) return;
-      var homes = getHomeSquares(state.mode, player);
+      var homes = getHomeSquares(state.mode, player, state.bases);
       if (homes.length) {
         openZoomedSquare(homes[0].x, homes[0].y);
       }
     });
   }
-  wells.appendChild(podWell);
+  if (state.mode !== "OFK") {
+    wells.appendChild(podWell);
+  }
 
   // 2. Prongs well
   var prongWell = document.createElement("div");
-  prongWell.className = "web-res-well";
-  prongWell.title = "Standard Prongs";
+  prongWell.setAttribute("data-well", "prongs");
+  prongWell.className = "web-res-well" + (isTurn && res && res.freeProngs > 0 ? " interactive" : "");
+  prongWell.title = isTurn ? "Standard Prongs (Click to add to friendly pod)" : "Standard Prongs";
   var prongSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   prongSvg.setAttribute("width", "14");
   prongSvg.setAttribute("height", "18");
@@ -4780,6 +5040,30 @@ function renderWebReserveCard(player, cardEl, state, isTurn) {
   var prongCount = document.createElement("span");
   prongCount.textContent = "Prongs: " + (res ? res.freeProngs : 0);
   prongWell.appendChild(prongCount);
+
+  if (isTurn && res && res.freeProngs > 0) {
+    prongWell.addEventListener("click", function () {
+      if (!moveComposer) return;
+      var targetSq = null;
+      if (moveComposer.guidedOriginSquare) {
+        targetSq = moveComposer.guidedOriginSquare;
+      } else {
+        for (var y = 1; y <= state.gh; y++) {
+          for (var x = 1; x <= state.gw; x++) {
+            var st = state.map[x + "," + y];
+            if (st && st.length && st[st.length - 1].owner === player) {
+              targetSq = { x: x, y: y };
+              break;
+            }
+          }
+          if (targetSq) break;
+        }
+      }
+      if (targetSq) {
+        openZoomedSquare(targetSq.x, targetSq.y);
+      }
+    });
+  }
   wells.appendChild(prongWell);
 
   // 3. Superprongs well (strictly hidden if !superProngs)
@@ -5287,6 +5571,7 @@ function renderZoomCanvas() {
   var sortedIndices = sortedPodIndicesMostProngsFirst(stack);
   var podR = 68;
   var cx = 160, cy = 160;
+  var rotDeg = ((boardRotationDeg + liveRotationOffsetDeg) % 360 + 360) % 360;
 
   // 1. Draw non-selected pods underneath with stepped offsets at 0.28 alpha
   var stepCount = 0;
@@ -5300,7 +5585,7 @@ function renderZoomCanvas() {
     ctx.save();
     ctx.globalAlpha = 0.28;
     var uRect = { x: cx + offX - podR, y: cy + offY - podR, w: podR * 2, h: podR * 2 };
-    drawOctagonalPod(ctx, uRect, uPod.owner, uPod.cfg, pal, 0, false, "Pod " + (i + 1));
+    drawOctagonalPod(ctx, uRect, uPod.owner, uPod.cfg, pal, rotDeg, false, "Pod " + (i + 1));
     ctx.restore();
   }
 
@@ -5310,7 +5595,7 @@ function renderZoomCanvas() {
     ctx.save();
     ctx.globalAlpha = 1.0;
     var aRect = { x: cx - podR, y: cy - podR, w: podR * 2, h: podR * 2 };
-    drawOctagonalPod(ctx, aRect, activePod.owner, activePod.cfg, pal, 0, true, activePod.owner);
+    drawOctagonalPod(ctx, aRect, activePod.owner, activePod.cfg, pal, rotDeg, true, activePod.owner);
     ctx.restore();
 
     // 3. Draw hover preview blade if hovering empty socket
@@ -5321,7 +5606,7 @@ function renderZoomCanvas() {
       mockCfg.prongs[zoomHoverDir] = isSuperSelected ? 2 : 1;
       ctx.save();
       ctx.globalAlpha = 0.72;
-      drawProngs(ctx, cx, cy, podR, mockCfg, pal, 0);
+      drawProngs(ctx, cx, cy, podR, mockCfg, pal, rotDeg);
       ctx.restore();
     }
   } else {
@@ -5389,7 +5674,8 @@ if (zoomCanvas) {
     if (dist < 40 || dist > 115) return null;
     var angle = Math.atan2(dy, dx) * 180 / Math.PI; // -180 to 180
     // Directions: 0: N (-90), 1: NE (-45), 2: E (0), 3: SE (45), 4: S (90), 5: SW (135), 6: W (180), 7: NW (-135)
-    var dNorm = ((angle + 90) % 360 + 360) % 360; // 0 is N, 45 is NE, etc.
+    var rotDeg = ((boardRotationDeg + liveRotationOffsetDeg) % 360 + 360) % 360;
+    var dNorm = ((angle - rotDeg + 90) % 360 + 360) % 360; // 0 is N, 45 is NE, etc.
     var sector = Math.round(dNorm / 45) % 8;
     return sector;
   }
@@ -5419,8 +5705,10 @@ if (zoomCanvas) {
     if (dir !== null && zoomSq && moveComposer) {
       var isSuper = zoomWellSuper && zoomWellSuper.classList.contains("active");
       var sqX = zoomSq.x, sqY = zoomSq.y, pIdx = zoomSelectedPodIdx;
-      closeZoomedSquare();
-      moveComposer.stageAddProng(sqX, sqY, pIdx, dir, isSuper);
+      var ok = moveComposer.stageAddProng(sqX, sqY, pIdx, dir, isSuper);
+      if (ok) {
+        closeZoomedSquare();
+      }
     }
   });
 
@@ -5460,6 +5748,7 @@ if (zoomOverlay) {
 /* --- Board Canvas Event & Gesture Handlers --- */
 var playCanvas = document.getElementById("web-play-canvas");
 var boardMouseHeld = false;
+var boardPressInGrid = false;
 var boardPressRawPos = { x: 0, y: 0 };
 var boardLastPanRawPos = { x: 0, y: 0 };
 var boardPanActive = false;
@@ -5518,21 +5807,22 @@ if (playCanvas) {
     boardLastPanRawPos = raw;
     boardPanActive = false;
 
-    // Right-click handling: Reset zoom if zoomed, else open Zoom view
+    // Right-click handling: open zoom on valid board square even when boardZoomScale > 1.001
     if (e.button === 2) {
       e.preventDefault();
-      if (boardZoomScale > 1.001) {
-        boardZoomScale = 1.0;
-        boardZoomFocus = { x: 0.5, y: 0.5 };
-        renderPlayBoardCanvas();
-        return;
-      }
+      e.stopPropagation();
       if (playBoardGeom) {
         var bPos = getBoardPos(raw);
         var sq = playBoardGeom.screenToSquare(bPos.x, bPos.y);
         if (sq) {
           openZoomedSquare(sq.x, sq.y);
+          return;
         }
+      }
+      if (boardZoomScale > 1.001) {
+        boardZoomScale = 1.0;
+        boardZoomFocus = { x: 0.5, y: 0.5 };
+        renderPlayBoardCanvas();
       }
       return;
     }
@@ -5540,35 +5830,46 @@ if (playCanvas) {
     if (e.button === 0) {
       boardMouseHeld = true;
       handRotateActive = false;
+      var bPos = getBoardPos(raw);
+      boardPressInGrid = !!(playBoardGeom &&
+        bPos.x >= playBoardGeom.grid.x && bPos.x <= playBoardGeom.grid.x + playBoardGeom.grid.w &&
+        bPos.y >= playBoardGeom.grid.y && bPos.y <= playBoardGeom.grid.y + playBoardGeom.grid.h);
       handRotateRefAngleDeg = Math.atan2(raw.y - 380, raw.x - 380) * 180 / Math.PI;
     }
   });
 
-  // Context menu prevention
-  playCanvas.addEventListener("contextmenu", function (e) {
-    e.preventDefault();
+  // Context menu prevention across all board and zoom overlays
+  ["web-play-canvas", "web-zoom-overlay", "web-zoom-canvas", "web-zoom-card", "web-play-board-wrap", "play-local-panel"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.addEventListener("contextmenu", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      });
+    }
   });
 
-  // Double-click handling: Reset zoom if zoomed, else open Zoom view
+  // Double-click handling: open zoom on valid board square even when boardZoomScale > 1.001
   playCanvas.addEventListener("dblclick", function (e) {
     e.preventDefault();
-    if (boardZoomScale > 1.001) {
-      boardZoomScale = 1.0;
-      boardZoomFocus = { x: 0.5, y: 0.5 };
-      renderPlayBoardCanvas();
-      return;
-    }
     var raw = getRawPos(e);
     if (playBoardGeom) {
       var bPos = getBoardPos(raw);
       var sq = playBoardGeom.screenToSquare(bPos.x, bPos.y);
       if (sq) {
         openZoomedSquare(sq.x, sq.y);
+        return;
       }
+    }
+    if (boardZoomScale > 1.001) {
+      boardZoomScale = 1.0;
+      boardZoomFocus = { x: 0.5, y: 0.5 };
+      renderPlayBoardCanvas();
     }
   });
 
-  // 3. Mouse Move: Drag-Pan when Zoomed, Continuous Rotation when Unzoomed
+  // 3. Mouse Move: Drag-Pan when Zoomed, Continuous Rotation when Unzoomed outside grid
   playCanvas.addEventListener("mousemove", function (e) {
     var raw = getRawPos(e);
 
@@ -5590,7 +5891,7 @@ if (playCanvas) {
 
     if (boardMouseHeld && boardZoomScale <= 1.001) {
       var mDist = Math.hypot(raw.x - boardPressRawPos.x, raw.y - boardPressRawPos.y);
-      if (mDist > 6 || handRotateActive) {
+      if (!boardPressInGrid && (mDist > 18 || handRotateActive)) {
         handRotateActive = true;
         var curAngle = Math.atan2(raw.y - 380, raw.x - 380) * 180 / Math.PI;
         var diff = curAngle - handRotateRefAngleDeg;
@@ -5603,7 +5904,7 @@ if (playCanvas) {
     }
   });
 
-  // 4. Mouse Up & Click: Snap 90deg, Off-Board Drag Capture, or Square Click
+  // 4. Mouse Up & Click: Snap 90deg, Off-Board Drag Capture, Drag-Move, or Square Click
   playCanvas.addEventListener("mouseup", function (e) {
     if (!boardMouseHeld) return;
     boardMouseHeld = false;
@@ -5631,6 +5932,37 @@ if (playCanvas) {
         var lastJ = moveComposer.jumpedSquaresChain[moveComposer.jumpedSquaresChain.length - 1];
         moveComposer.toggleCaptureAtSquare(lastJ.x, lastJ.y);
         return;
+      }
+    }
+
+    // Drag-to-move support: if user pressed down on square A and released on legal destination square B
+    var bPressPos = getBoardPos(boardPressRawPos);
+    var bReleasePos = getBoardPos(raw);
+    var pressSq = playBoardGeom ? playBoardGeom.screenToSquare(bPressPos.x, bPressPos.y) : null;
+    var releaseSq = playBoardGeom ? playBoardGeom.screenToSquare(bReleasePos.x, bReleasePos.y) : null;
+    var dragDist = Math.hypot(raw.x - boardPressRawPos.x, raw.y - boardPressRawPos.y);
+
+    if (dragDist > 14 && pressSq && releaseSq && (pressSq.x !== releaseSq.x || pressSq.y !== releaseSq.y)) {
+      if (moveComposer && moveComposer.isGuidedMoveActive) {
+        var matchD = moveComposer.guidedLegalDests.find(function (d) { return d.x === releaseSq.x && d.y === releaseSq.y; });
+        if (matchD) {
+          moveComposer.selectGuidedDestination(releaseSq.x, releaseSq.y);
+          return;
+        }
+      } else {
+        var stCur = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
+        if (stCur && stCur.status === "P") {
+          var kSt = pressSq.x + "," + pressSq.y;
+          var stackSt = stCur.map[kSt] || [];
+          if (stackSt.length && stackSt[stackSt.length - 1].owner === stCur.turn) {
+            moveComposer.beginGuidedPodMove(pressSq.x, pressSq.y, stackSt.length - 1);
+            var matchD = moveComposer.guidedLegalDests.find(function (d) { return d.x === releaseSq.x && d.y === releaseSq.y; });
+            if (matchD) {
+              moveComposer.selectGuidedDestination(releaseSq.x, releaseSq.y);
+              return;
+            }
+          }
+        }
       }
     }
 
@@ -5712,18 +6044,22 @@ function handlePlaySquareClick(x, y, ptX, ptY) {
   var turn = s.turn;
 
   // 1. If guided move active and clicked a destination
-  if (moveComposer.guidedMoveActive) {
+  if (moveComposer.isGuidedMoveActive) {
     var matchDest = moveComposer.guidedLegalDests.find(function (d) { return d.x === x && d.y === y; });
     if (matchDest) {
       moveComposer.selectGuidedDestination(x, y);
       return;
     }
-    // If clicked origin square while composite moves are possible
-    if (moveComposer.guidedOriginSquare && moveComposer.guidedOriginSquare.x === x && moveComposer.guidedOriginSquare.y === y) {
-      if (moveComposer.hasOtherMovablePodAtOrigin()) {
-        openZoomedSquare(x, y);
-        return;
-      }
+    // If clicked origin square while 0 hops have been made (2nd click on origin pod)
+    var isOrigin = moveComposer.guidedOriginSquare && moveComposer.guidedOriginSquare.x === x && moveComposer.guidedOriginSquare.y === y;
+    if (isOrigin && moveComposer.guidedHops.length === 0) {
+      moveComposer.cancel();
+      openZoomedSquare(x, y);
+      return;
+    }
+    if (isOrigin && moveComposer.hasOtherMovablePodAtOrigin()) {
+      openZoomedSquare(x, y);
+      return;
     }
   }
 
@@ -5751,6 +6087,12 @@ function handlePlaySquareClick(x, y, ptX, ptY) {
     // Begin guided move for top unclaimed pod
     var topIdx = stack.length - 1;
     moveComposer.beginGuidedPodMove(x, y, topIdx);
+    if (!moveComposer.guidedLegalDests || moveComposer.guidedLegalDests.length === 0) {
+      // Unarmed pod (e.g. 0 prongs in OFK) -> open zoom modal directly!
+      moveComposer.cancel();
+      openZoomedSquare(x, y);
+      return;
+    }
     return;
   }
 
@@ -5901,6 +6243,39 @@ function showMatchSetupModal() {
   if (document.getElementById("setup-superprongs")) document.getElementById("setup-superprongs").checked = localMatchConfig.superProngs;
   if (document.getElementById("setup-edgeless")) document.getElementById("setup-edgeless").checked = localMatchConfig.edgeless;
   if (document.getElementById("setup-time-control")) document.getElementById("setup-time-control").value = localMatchConfig.timeControl;
+
+  var isOfk = (localMatchConfig.gameMode === "OFK");
+  if (document.getElementById("setup-bases")) {
+    if (isOfk) document.getElementById("setup-bases").value = "1";
+    document.getElementById("setup-bases").disabled = isOfk;
+  }
+  if (document.getElementById("setup-superprongs")) {
+    if (isOfk) document.getElementById("setup-superprongs").checked = false;
+    document.getElementById("setup-superprongs").disabled = isOfk;
+  }
+  if (document.getElementById("setup-edgeless")) {
+    if (isOfk) document.getElementById("setup-edgeless").checked = false;
+    document.getElementById("setup-edgeless").disabled = isOfk;
+  }
+}
+
+var setupGameModeSelect = document.getElementById("setup-game-mode");
+if (setupGameModeSelect) {
+  setupGameModeSelect.addEventListener("change", function () {
+    var isOfk = (setupGameModeSelect.value === "OFK");
+    if (document.getElementById("setup-bases")) {
+      if (isOfk) document.getElementById("setup-bases").value = "1";
+      document.getElementById("setup-bases").disabled = isOfk;
+    }
+    if (document.getElementById("setup-superprongs")) {
+      if (isOfk) document.getElementById("setup-superprongs").checked = false;
+      document.getElementById("setup-superprongs").disabled = isOfk;
+    }
+    if (document.getElementById("setup-edgeless")) {
+      if (isOfk) document.getElementById("setup-edgeless").checked = false;
+      document.getElementById("setup-edgeless").disabled = isOfk;
+    }
+  });
 }
 
 var btnChangeType = document.getElementById("btn-web-change-type");
@@ -5931,9 +6306,14 @@ if (btnSetupApply) {
     localMatchConfig.humanSeat = document.getElementById("setup-human-seat").value;
     localMatchConfig.gameMode = document.getElementById("setup-game-mode").value;
     localMatchConfig.bases = parseInt(document.getElementById("setup-bases").value, 10);
-    if (localMatchConfig.gameMode === "OFK") localMatchConfig.bases = 4;
-    localMatchConfig.superProngs = !!document.getElementById("setup-superprongs").checked;
-    localMatchConfig.edgeless = !!document.getElementById("setup-edgeless").checked;
+    if (localMatchConfig.gameMode === "OFK") {
+      localMatchConfig.bases = 1;
+      localMatchConfig.superProngs = false;
+      localMatchConfig.edgeless = false;
+    } else {
+      localMatchConfig.superProngs = !!document.getElementById("setup-superprongs").checked;
+      localMatchConfig.edgeless = !!document.getElementById("setup-edgeless").checked;
+    }
     localMatchConfig.timeControl = document.getElementById("setup-time-control").value;
 
     updateStartMatchSummary();
@@ -5942,6 +6322,10 @@ if (btnSetupApply) {
 }
 
 function prepareLocalMatchInitialState() {
+  if (clockInterval) {
+    clearInterval(clockInterval);
+    clockInterval = null;
+  }
   matchStarted = false;
   activeOnlineGameId = "";
   var mode = localMatchConfig.gameMode;
@@ -5951,7 +6335,13 @@ function prepareLocalMatchInitialState() {
 
   var fen = "";
   if (mode === "OFK") {
-    fen = "OFK:4:" + sp + ":" + ed + ":P:A:-:0:0,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56";
+    bases = 1;
+    localMatchConfig.bases = 1;
+    localMatchConfig.superProngs = false;
+    localMatchConfig.edgeless = false;
+    sp = "0";
+    ed = "0";
+    fen = "OFK:1:0:0:P:A:-:0:0,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56";
   } else if (mode === "4P") {
     fen = "4P:1:" + sp + ":" + ed + ":P:A:-:0:3,0,15,0:3,0,15,0:3,0,15,0:3,0,15,0:A33,B37,C77,D73";
   } else if (bases === 1) {
@@ -5980,6 +6370,17 @@ function prepareLocalMatchInitialState() {
   renderAllWebReserves();
 }
 
+function updateClockDisplay() {
+  function fmtClock(sec) {
+    if (sec <= 0 && localMatchConfig.timeControl === "untimed") return "--:--";
+    var m = Math.floor(sec / 60);
+    var sc = sec % 60;
+    return (m < 10 ? "0" : "") + m + ":" + (sc < 10 ? "0" : "") + sc;
+  }
+  if (document.getElementById("web-clock-a")) document.getElementById("web-clock-a").textContent = "A: " + fmtClock(clockTimers.A);
+  if (document.getElementById("web-clock-b")) document.getElementById("web-clock-b").textContent = "B: " + fmtClock(clockTimers.B);
+}
+
 var btnStartMatch = document.getElementById("btn-web-start-match");
 if (btnStartMatch) {
   btnStartMatch.addEventListener("click", function () {
@@ -5996,6 +6397,41 @@ if (btnStartMatch) {
     clockTimers.B = initialSec;
     clockTimers.C = initialSec;
     clockTimers.D = initialSec;
+
+    if (clockInterval) {
+      clearInterval(clockInterval);
+      clockInterval = null;
+    }
+    if (localMatchConfig.timeControl !== "untimed") {
+      clockInterval = setInterval(function () {
+        if (!matchStarted || !activePlayState || activePlayState.status !== "P") {
+          return;
+        }
+        var curTurn = activePlayState.turn;
+        if (clockTimers[curTurn] !== undefined && clockTimers[curTurn] > 0) {
+          clockTimers[curTurn]--;
+          updateClockDisplay();
+          if (clockTimers[curTurn] <= 0) {
+            clearInterval(clockInterval);
+            clockInterval = null;
+            activePlayState.status = "O";
+            activePlayState.winner = (curTurn === "A") ? "B" : "A";
+            OctiWebSoundSynth.play("GAME_VICTORY");
+            var goOverlay = document.getElementById("web-gameover-overlay");
+            var goTitle = document.getElementById("web-gameover-title");
+            var goSub = document.getElementById("web-gameover-subtitle");
+            if (goOverlay && goTitle && goSub) {
+              goTitle.textContent = "PLAYER " + activePlayState.winner + " WINS";
+              goSub.textContent = "VICTORY ON TIME";
+              goOverlay.style.display = "flex";
+            }
+            updatePlaySidebar();
+            renderPlayBoardCanvas();
+            renderAllWebReserves();
+          }
+        }
+      }, 1000);
+    }
 
     updatePlaySidebar();
     renderPlayBoardCanvas();
@@ -6176,13 +6612,24 @@ function onLocalMoveCommitted(notation, newState) {
   var prevTurn = activePlayState.turn;
   activePlayState = newState;
 
+  // Add clock increment to prevTurn
+  var inc = 0;
+  if (localMatchConfig.timeControl === "300+3") inc = 3;
+  else if (localMatchConfig.timeControl === "600+5") inc = 5;
+  else if (localMatchConfig.timeControl === "900+10") inc = 10;
+  if (inc > 0 && clockTimers[prevTurn] !== undefined) {
+    clockTimers[prevTurn] += inc;
+    updateClockDisplay();
+  }
+
   // Check Victory
-  var oppBases = getOpponentBases(activePlayState.mode, prevTurn);
+  var oppBases = getOpponentBases(activePlayState.mode, prevTurn, activePlayState.bases);
   var wonByBase = false;
-  if (activePlayState.bases === 1) {
-    wonByBase = oppBases.some(function (b) { return isSquareOccupiedBy(activePlayState, b.x, b.y, prevTurn); });
-  } else {
+  var needAll = (activePlayState.mode !== "OFK" && activePlayState.bases === 3);
+  if (needAll) {
     wonByBase = oppBases.every(function (b) { return isSquareOccupiedBy(activePlayState, b.x, b.y, prevTurn); });
+  } else {
+    wonByBase = oppBases.some(function (b) { return isSquareOccupiedBy(activePlayState, b.x, b.y, prevTurn); });
   }
 
   if (wonByBase) {
@@ -6212,6 +6659,10 @@ function onLocalMoveCommitted(notation, newState) {
   renderAllWebReserves();
 
   if (activePlayState.status === "O") {
+    if (clockInterval) {
+      clearInterval(clockInterval);
+      clockInterval = null;
+    }
     OctiWebSoundSynth.play("GAME_VICTORY");
     var goOverlay = document.getElementById("web-gameover-overlay");
     var goTitle = document.getElementById("web-gameover-title");
@@ -6252,34 +6703,44 @@ function triggerAiBotTurn() {
   if (fillEl) fillEl.style.width = "10%";
   if (txtEl) txtEl.textContent = "Depth 1 • Searching root moves... • (10%)";
 
-  var tStart = Date.now();
-  var budgetMs = diff === 1 ? 2000 : (diff === 3 ? 20000 : 8000);
-
   function finishAiMove(res) {
     if (thinkOverlay) thinkOverlay.style.display = "none";
-    if (res && res.bestMove) {
-      applyMoveToState(activePlayState, res.bestMove, side);
-      onLocalMoveCommitted(res.bestMove, activePlayState);
+    if (res && res.bestMove && activePlayState && activePlayState.status === "P") {
+      var nextState = applyMoveToState(cloneState(activePlayState), res.bestMove, side);
+      onLocalMoveCommitted(res.bestMove, nextState);
     }
   }
 
   if (botWorker) {
+    botWorker.onerror = function (err) {
+      console.warn("botWorker error, falling back to main-thread botSearch:", err);
+      var r = botSearch(fen, diff, mode, side);
+      finishAiMove(r);
+    };
     botWorker.onmessage = function (e) {
-      if (e.data && e.data.type === "result") {
+      if (!e.data) return;
+      if (e.data.type === "progress") {
+        var d = e.data;
+        var maxD = d.maxDepth || diff;
+        var pct = Math.min(100, Math.max(10, Math.round((d.depth / maxD) * 100)));
+        if (fillEl) fillEl.style.width = pct + "%";
+        if (txtEl) txtEl.textContent = "Depth " + d.depth + "/" + maxD + " • " + (d.nodes || 0) + " nodes • (" + pct + "%)";
+      } else if (e.data.type === "done" || e.data.type === "result") {
         finishAiMove(e.data);
       }
     };
     botWorker.postMessage({ type: "search", fen: fen, depth: diff, mode: mode, side: side });
   } else {
-    // Fallback search with simulated progress tick
+    // Fallback search with live progress callback
     setTimeout(function () {
-      if (fillEl) fillEl.style.width = "65%";
-      if (txtEl) txtEl.textContent = "Depth " + diff + " • 4,820 nodes • (65%)";
-      setTimeout(function () {
-        var r = botSearch(fen, diff, mode, side);
-        finishAiMove(r);
-      }, 150);
-    }, 120);
+      var r = botSearch(fen, diff, mode, side, function (prog) {
+        var maxD = prog.maxDepth || diff;
+        var pct = Math.min(100, Math.max(10, Math.round((prog.depth / maxD) * 100)));
+        if (fillEl) fillEl.style.width = pct + "%";
+        if (txtEl) txtEl.textContent = "Depth " + prog.depth + "/" + maxD + " • " + (prog.nodes || 0) + " nodes • (" + pct + "%)";
+      });
+      finishAiMove(r);
+    }, 50);
   }
 }
 
@@ -6287,12 +6748,29 @@ function triggerAiBotTurn() {
 var btnUndo = document.getElementById("btn-web-undo");
 if (btnUndo) {
   btnUndo.addEventListener("click", function () {
+    if (moveComposer && (moveComposer.stagedNotation || moveComposer.isGuidedMoveActive)) {
+      moveComposer.cancel();
+      renderPlayBoardCanvas();
+      return;
+    }
+    if (localMatchConfig.playMode === "bot" && activePlayState.turn === localMatchConfig.humanSeat && playMatchPlies.length >= 3) {
+      playMatchPlies.pop();
+      playMatchPlies.pop();
+      var lastPl = playMatchPlies[playMatchPlies.length - 1];
+      activePlayState = parseOctiFen(lastPl.fenAfter);
+      playVcrIndex = playMatchPlies.length - 1;
+      if (moveComposer) moveComposer.cancel();
+      updatePlaySidebar();
+      renderPlayBoardCanvas();
+      renderAllWebReserves();
+      return;
+    }
     if (playMatchPlies.length <= 1) return;
     playMatchPlies.pop();
     var lastPl = playMatchPlies[playMatchPlies.length - 1];
     activePlayState = parseOctiFen(lastPl.fenAfter);
     playVcrIndex = playMatchPlies.length - 1;
-    if (moveComposer) moveComposer.reset();
+    if (moveComposer) moveComposer.cancel();
     updatePlaySidebar();
     renderPlayBoardCanvas();
     renderAllWebReserves();
@@ -6306,6 +6784,12 @@ if (btnResign) {
     if (!activePlayState || activePlayState.status === "O" || activePlayState.status === "R") return;
     if (!confirm("Are you sure you want to resign the game?")) return;
     var turn = activePlayState.turn;
+    if (clockInterval) {
+      clearInterval(clockInterval);
+      clockInterval = null;
+    }
+    activePlayState.status = "R";
+    activePlayState.winner = (turn === "A") ? "B" : "A";
     activePlayState.status = "R";
     activePlayState.winner = (turn === "A") ? "B" : "A";
     OctiWebSoundSynth.play("GAME_VICTORY");
@@ -6656,10 +7140,14 @@ function submitCreateOnlineTable() {
   if (!currentUser) return;
   var mode = $("web-create-mode") ? $("web-create-mode").value : "2P";
   var bases = $("web-create-bases") ? parseInt($("web-create-bases").value, 10) : 3;
-  if (mode === "OFK") bases = 4;
-  if (mode === "4P" && bases === 4) bases = 1;
   var superProngs = $("web-create-super-prongs") ? !!$("web-create-super-prongs").checked : false;
   var edgeless = $("web-create-edgeless") ? !!$("web-create-edgeless").checked : false;
+  if (mode === "OFK") {
+    bases = 1;
+    superProngs = false;
+    edgeless = false;
+  }
+  if (mode === "4P" && bases === 4) bases = 1;
   var rated = $("web-create-rated") ? !!$("web-create-rated").checked : true;
   var tcVal = $("web-create-tc") ? $("web-create-tc").value : "untimed";
   var passcode = $("web-create-passcode") ? $("web-create-passcode").value : "";
@@ -6682,6 +7170,24 @@ function submitCreateOnlineTable() {
     }
     refreshLobbyTables();
   }).catch(function (e) { alert("Failed to create table: " + e.message); });
+}
+
+if ($("web-create-mode")) {
+  $("web-create-mode").addEventListener("change", function () {
+    var isOfk = $("web-create-mode").value === "OFK";
+    if ($("web-create-bases")) {
+      if (isOfk) $("web-create-bases").value = "1";
+      $("web-create-bases").disabled = isOfk;
+    }
+    if ($("web-create-super-prongs")) {
+      if (isOfk) $("web-create-super-prongs").checked = false;
+      $("web-create-super-prongs").disabled = isOfk;
+    }
+    if ($("web-create-edgeless")) {
+      if (isOfk) $("web-create-edgeless").checked = false;
+      $("web-create-edgeless").disabled = isOfk;
+    }
+  });
 }
 
 $("btn-web-create-table").addEventListener("click", submitCreateOnlineTable);
@@ -6831,7 +7337,7 @@ function arSearch(offset) {
       [tdGame, tdMode, tdSrc, tdPl, tdWin, tdRes, tdPlies, tdDate].forEach(function (td) {
         tr.appendChild(td);
       });
-      tr.addEventListener("click", function () { arOpen(g.game_id); });
+      tr.addEventListener("click", function () { window.open(window.location.pathname + "#replay/" + encodeURIComponent(g.game_id), "_blank"); });
       body.appendChild(tr);
     });
     var last = Math.min(arOffset + j.games.length, arTotal);
@@ -6881,7 +7387,7 @@ function showReplayPly(idx) {
 
 function arOpen(id) {
   stopReplayPlayback();
-  location.hash = "#archive/" + encodeURIComponent(id);
+  location.hash = "#replay/" + encodeURIComponent(id);
   api("/api/v1/archive/games/" + encodeURIComponent(id)).then(function (g) {
     $("ar-detail").style.display = "block";
     $("ar-title").textContent = "Game " + g.game_id.slice(0, 16) + "... (" + g.mode + ")";
@@ -7095,8 +7601,19 @@ loadAuthProviders();
 setInterval(loadHealth, 15000);
 
 window.openZoomedSquare = openZoomedSquare;
+window.closeZoomedSquare = closeZoomedSquare;
+window.handlePlaySquareClick = handlePlaySquareClick;
+window.prepareLocalMatchInitialState = prepareLocalMatchInitialState;
 window.WebMoveComposer = WebMoveComposer;
 window.moveComposer = moveComposer;
+Object.defineProperty(window, "localMatchConfig", {
+  get: function () { return localMatchConfig; },
+  set: function (v) { localMatchConfig = v; }
+});
+Object.defineProperty(window, "playMatchPlies", {
+  get: function () { return playMatchPlies; },
+  set: function (v) { playMatchPlies = v; }
+});
 Object.defineProperty(window, "matchStarted", {
   get: function () { return matchStarted; },
   set: function (v) { matchStarted = v; }

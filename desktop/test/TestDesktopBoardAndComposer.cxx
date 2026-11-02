@@ -501,12 +501,14 @@ TEST(OctiMoveComposerTest, FaultInjectionIllegalMovesAndRollback)
     // 3. Moving an unpronged pod at (3,3) fails
     CHECK_FALSE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4, false));
 
-    // 4. Adding a backward prong in OFK fails
+    // 4. In OFK, all 8 compass prong directions are allowed (including backward)
     OctiBoard ofkBoard(GAME_MODE_OFK);
     ofkBoard.getGame()->start(PLAYER_A);
     OctiMoveComposer ofkComposer(&ofkBoard);
-    CHECK_FALSE(ofkComposer.stageOrCommitAddProng(2, 2, 0, DIR_S, false));
-    CHECK_TRUE(ofkComposer.stageOrCommitAddProng(2, 2, 0, DIR_N, false));
+    CHECK_TRUE(ofkComposer.stageOrCommitAddProng(2, 2, 0, DIR_S, false));
+    CHECK_TRUE(ofkComposer.commitStagedMove());
+    // But liberating a pod from reserve is disallowed in OFK
+    CHECK_FALSE(ofkComposer.stageOrCommitAddPod(2, 2, true));
 
     // 5. Mid-staging rollback leaves board untouched
     composer.setConfirmAllMoves(true);
@@ -825,11 +827,12 @@ TEST(OctiBoardCanvasRenderTest, CanvasSimulateDragAndEscapeRollback)
     sendClick(&mouseCanvas, pt33N);
     LONGS_EQUAL(0, mouseBoard.getGame()->getNumMoves());
 
-    // 2. ZPB-D01: Click "Prongs" well in OctiReservePanel does NOT start external reserve drag
+    // 2. Click "Prongs" well in OctiReservePanel arms reserve prong mode
     mouseReserve.renderToImage(340, 760);
     sendClick(&mouseReserve, mouseReserve.normalProngWellRect().center());
-    LONGS_EQUAL(static_cast<long>(DragKind::NONE),
+    LONGS_EQUAL(static_cast<long>(DragKind::ADD_PRONG_FROM_RESERVE),
                 static_cast<long>(mouseCanvas.activeDragKind()));
+    mouseCanvas.startExternalReserveDrag(DragKind::NONE);
 
     // Stage prong addition via composer (33+a for Player A)
     CHECK_TRUE(mouseComposer.stageOrCommitAddProng(3, 3, 0, DIR_N, false));
@@ -1280,21 +1283,42 @@ TEST(OctiDialogsRefinementTest, SingleClickMoveVsDoubleClickZoomDirectInteractio
     QApplication::sendEvent(&canvas, &escEv);
     DOUBLES_EQUAL(1.0, canvas.boardZoomScale(), 1e-6);
 
-    // Right-click while zoomed in snaps out of board zoom without opening dialog
-    canvas.setBoardZoom(2.0, pt33);
+    // Right-click or double-click on empty non-zoomable space snaps out of board zoom
+    canvas.setBoardZoom(2.0, pt11);
     DOUBLES_EQUAL(2.0, canvas.boardZoomScale(), 1e-6);
-    QMouseEvent rightPress(QEvent::MouseButtonPress, pt33, pt33, pt33,
+    QMouseEvent rightPress(QEvent::MouseButtonPress, pt11, pt11, pt11,
                            Qt::RightButton, Qt::RightButton, Qt::NoModifier);
     QApplication::sendEvent(&canvas, &rightPress);
     DOUBLES_EQUAL(1.0, canvas.boardZoomScale(), 1e-6);
 
-    // Double-click while zoomed in snaps out of board zoom without opening dialog
-    canvas.setBoardZoom(1.8, pt33);
+    canvas.setBoardZoom(1.8, pt11);
     DOUBLES_EQUAL(1.8, canvas.boardZoomScale(), 1e-6);
-    QMouseEvent dblClick(QEvent::MouseButtonDblClick, pt33, pt33, pt33,
+    QMouseEvent dblClick(QEvent::MouseButtonDblClick, pt11, pt11, pt11,
                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
     QApplication::sendEvent(&canvas, &dblClick);
     DOUBLES_EQUAL(1.0, canvas.boardZoomScale(), 1e-6);
+
+    // Right-click and double-click over valid occupied square opens ZoomedSquareDialog even when zoomed in
+    int zoomedOpens = 0;
+    canvas.setZoomedSquareOpenHook([&](int x, int y) {
+        if (x == 3 && y == 3) {
+            ++zoomedOpens;
+            return true;
+        }
+        return false;
+    });
+    canvas.setBoardZoom(2.0, pt33);
+    QMouseEvent rightPressPod(QEvent::MouseButtonPress, pt33, pt33, pt33,
+                              Qt::RightButton, Qt::RightButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &rightPressPod);
+    LONGS_EQUAL(1, zoomedOpens);
+
+    QMouseEvent dblClickPod(QEvent::MouseButtonDblClick, pt33, pt33, pt33,
+                            Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &dblClickPod);
+    LONGS_EQUAL(2, zoomedOpens);
+    canvas.setZoomedSquareOpenHook(nullptr);
+    canvas.resetBoardZoom();
 
     // 5. AZG-D02: Click-and-hold (~380ms) hand cursor 90-degree quadrant rotation
     LONGS_EQUAL(static_cast<int>(BoardRotation::ROT_0),
@@ -2472,6 +2496,173 @@ TEST(OctiBoardCanvasIndicatorTestSuite, DownloadStyleThinkingDialogTelemetryProg
     CHECK_TRUE_TEXT(text.contains("Depth 5"), text.toUtf8().constData());
     CHECK_TRUE_TEXT(text.contains("18,420 nodes"), text.toUtf8().constData());
     CHECK_TRUE_TEXT(text.contains("(40%)"), text.toUtf8().constData());
+}
+
+TEST_GROUP(OctiOfkUsabilityTestSuite)
+{
+};
+
+TEST(OctiOfkUsabilityTestSuite, All8ProngDirectionsAllowedInOfkComposer)
+{
+    OctiBoard board(GAME_MODE_OFK);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+
+    // Initial OFK starting pods for A are at 1-based (2,2), (3,2), (4,2), (5,2)
+    // Verify all 8 directions are returned as legal prong additions
+    auto legalA = composer.legalProngAdditionsAt(2, 2, 0, false);
+    LONGS_EQUAL(8, static_cast<long>(legalA.size()));
+
+    // Stage and commit a backward prong DIR_S ('e') for Player A
+    CHECK_TRUE(composer.stageOrCommitAddProng(2, 2, 0, DIR_S, false));
+    CHECK_TRUE(composer.commitStagedMove());
+    LONGS_EQUAL(static_cast<int>(PLAYER_B), static_cast<int>(board.getGame()->getTurn()));
+
+    // Player B's turn: pods at row 6 (1-based), e.g. (2, 6)
+    auto legalB = composer.legalProngAdditionsAt(2, 6, 0, false);
+    LONGS_EQUAL(8, static_cast<long>(legalB.size()));
+
+    // Stage and commit a backward prong DIR_N ('a') for Player B
+    CHECK_TRUE(composer.stageOrCommitAddProng(2, 6, 0, DIR_N, false));
+    CHECK_TRUE(composer.commitStagedMove());
+    LONGS_EQUAL(static_cast<int>(PLAYER_A), static_cast<int>(board.getGame()->getTurn()));
+}
+
+TEST(OctiOfkUsabilityTestSuite, FriendlyPodJumpInOfkSetsCaptureFalseAndCommits)
+{
+    OctiBoard board(GAME_MODE_OFK);
+    board.getGame()->start(PLAYER_A);
+
+    // Set up friendly pods: pod at 0-based (1, 1) [1-based (2, 2)] with DIR_N
+    // and friendly pod at 0-based (1, 2) [1-based (2, 3)]
+    board.squareAt(1, 1).podAt(0).addProng(DIR_N, false);
+    OctiPod friendlyPod(A_POD);
+    board.squareAt(1, 2).addPod(friendlyPod);
+
+    OctiMoveComposer composer(&board);
+    composer.setConfirmAllMoves(true);
+
+    // Begin guided move on (2, 2)
+    CHECK_TRUE(composer.beginGuidedPodMove(2, 2, 0, false));
+    // Select jump destination (2, 4) jumping over friendly pod at (2, 3)
+    CHECK_TRUE(composer.selectGuidedDestination(2, 4));
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+
+    const auto &ops = composer.stagedOps();
+    LONGS_EQUAL(1, static_cast<long>(ops.size()));
+    LONGS_EQUAL(1, static_cast<long>(ops.front().hops.size()));
+    CHECK_FALSE(ops.front().hops.front().capture);
+
+    // Committing must succeed without throwing "cannot capture non-enemy square"
+    CHECK_TRUE(composer.commitStagedMove());
+    LONGS_EQUAL(static_cast<int>(PLAYER_B), static_cast<int>(board.getGame()->getTurn()));
+    CHECK_TRUE(board.squareAt(1, 2).isOccupiedBy(PLAYER_A));
+    CHECK_TRUE(board.squareAt(1, 3).isOccupiedBy(PLAYER_A));
+}
+
+TEST(OctiOfkUsabilityTestSuite, EnemyPodJumpInOfkHasOptionalCapture)
+{
+    OctiBoard board(GAME_MODE_OFK);
+    board.getGame()->start(PLAYER_A);
+
+    // Friendly pod at (2, 2) with DIR_N; enemy pod at (2, 3)
+    board.squareAt(1, 1).podAt(0).addProng(DIR_N, false);
+    OctiPod enemyPod(B_POD);
+    board.squareAt(1, 2).addPod(enemyPod);
+
+    OctiMoveComposer composer(&board);
+    composer.setConfirmAllMoves(true);
+
+    CHECK_TRUE(composer.beginGuidedPodMove(2, 2, 0, false));
+    CHECK_TRUE(composer.selectGuidedDestination(2, 4));
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+
+    const auto &choices = composer.captureChoices();
+    LONGS_EQUAL(1, static_cast<long>(choices.size()));
+    CHECK_FALSE_TEXT(choices.front().mandatory, "In OFK, captures must be optional (mandatory == false)");
+    CHECK_TRUE(choices.front().capture);
+
+    // Toggle capture off
+    composer.toggleCaptureAtSquare(2, 3);
+    CHECK_FALSE(composer.captureChoices().front().capture);
+
+    // Toggle capture back on
+    composer.toggleCaptureAtSquare(2, 3);
+    CHECK_TRUE(composer.captureChoices().front().capture);
+
+    CHECK_TRUE(composer.commitStagedMove());
+    LONGS_EQUAL(static_cast<int>(PLAYER_B), static_cast<int>(board.getGame()->getTurn()));
+    CHECK_TRUE(board.squareAt(1, 2).isEmpty());
+}
+
+TEST(OctiOfkUsabilityTestSuite, SingleLeftClickUnarmedPodOpensZoomedSquareDialog)
+{
+    OctiBoard board(GAME_MODE_OFK);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+
+    OctiBoardCanvas canvas;
+    canvas.resize(600, 700);
+    canvas.attachBoard(&board, &composer);
+
+    // Unarmed pod at (2, 2) [0 prongs in OFK]
+    int zoomedX = -1;
+    int zoomedY = -1;
+    int callCount = 0;
+    canvas.setZoomedSquareOpenHook([&](int x, int y) {
+        zoomedX = x;
+        zoomedY = y;
+        ++callCount;
+        return true;
+    });
+
+    QPointF pt22 = canvas.geometry().squareCenter(2, 2);
+    QMouseEvent press(QEvent::MouseButtonPress, pt22, pt22, pt22,
+                      Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &press);
+    QMouseEvent release(QEvent::MouseButtonRelease, pt22, pt22, pt22,
+                        Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&canvas, &release);
+
+    LONGS_EQUAL(1, callCount);
+    LONGS_EQUAL(2, zoomedX);
+    LONGS_EQUAL(2, zoomedY);
+}
+
+TEST(OctiOfkUsabilityTestSuite, GameOverDialogDescribeTerminationReason6x7)
+{
+    // 1. Base occupation on 6x7 OFK board
+    {
+        OctiBoard board(GAME_MODE_OFK);
+        board.fromPositionString("OFK:1:0:0:P:A:-:0:0,0,11,0:0,0,12,0:A25a,A32,A42,A52,B36,B46,B56");
+        board.getGame()->move("25a-26");
+        CHECK_TRUE(board.getGame()->isGameOver());
+        LONGS_EQUAL(static_cast<int>(PLAYER_A), static_cast<int>(board.getGame()->getWinner()));
+
+        QString reason = GameOverDialog::describeTerminationReason(&board);
+        CHECK_TRUE_TEXT(reason.contains("Base"), reason.toUtf8().constData());
+    }
+
+    // 2. Total capture on 6x7 OFK board
+    {
+        OctiBoard board(GAME_MODE_OFK);
+        board.fromPositionString("OFK:1:0:0:P:A:-:0:0,3,11,0:0,0,12,0:A23a,A32,A42,A52,B24");
+        board.getGame()->move("23a-25x");
+        CHECK_TRUE(board.getGame()->isGameOver());
+        QString reason = GameOverDialog::describeTerminationReason(&board);
+        CHECK_TRUE_TEXT(reason.contains("Eliminated") || reason.contains("Capture"),
+                        reason.toUtf8().constData());
+    }
+
+    // 3. Stalemate on 6x7 OFK board
+    {
+        OctiBoard board(GAME_MODE_OFK);
+        board.fromPositionString("OFK:1:0:0:P:A:-:0:0,0,11,0:0,0,0,0:A22,A32,A42,A52,B34");
+        board.getGame()->move("22+a");
+        CHECK_TRUE(board.getGame()->isGameOver());
+        QString reason = GameOverDialog::describeTerminationReason(&board);
+        CHECK_TRUE_TEXT(reason.contains("Stalemate"), reason.toUtf8().constData());
+    }
 }
 
 extern "C" const char *__lsan_default_suppressions()

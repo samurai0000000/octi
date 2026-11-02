@@ -51,6 +51,7 @@ MatchRuleset MatchRuleset::normalized() const
     if (r.mode == GAME_MODE_OFK) {
         r.bases = GAME_BASES_1;
         r.useSuperProngs = false;
+        r.useEdgelessBoard = false;
     } else if (r.mode == GAME_MODE_4) {
         r.bases = GAME_BASES_3;
     }

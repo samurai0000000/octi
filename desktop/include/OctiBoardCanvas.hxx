@@ -79,7 +79,14 @@ public:
     void setLastMoveModifiedSquares(const std::vector<QPoint> &squares);
     void clearLastMoveModifiedSquares();
     const std::vector<QPoint> &lastMoveModifiedSquares() const { return _lastMoveModifiedSquares; }
-    static std::vector<QPoint> extractModifiedSquares(const OctiMove &move, bool edgeless = false);
+    static std::vector<QPoint> extractModifiedSquares(const OctiMove &move,
+                                                     bool edgeless = false,
+                                                     int boardWidth = 9,
+                                                     int boardHeight = 9);
+
+    bool openZoomedSquareAt(int sx, int sy);
+    bool openZoomedSquareDialog(int sx, int sy) { return openZoomedSquareAt(sx, sy); }
+    void setZoomedSquareOpenHook(std::function<bool(int, int)> hook) { _zoomedSquareOpenHook = std::move(hook); }
 
     static constexpr qint64 LAST_MOVE_INDICATOR_DURATION_MS = 5000;
     static constexpr qint64 INDICATOR_CYCLE_PERIOD_MS = 2000;
@@ -120,7 +127,6 @@ private:
     QPointF rawMousePosF(const QMouseEvent *event) const;
     QPointF rawMousePosF(const QWheelEvent *event) const;
     QPointF mousePosF(const QMouseEvent *event) const;
-    bool openZoomedSquareAt(int sx, int sy);
     void triggerMoveAnimation(const QPointF &fromPt, const QPointF &toPt,
                               OctiPodType podType, const OctiPod &pod);
     void paintEdgelessPortals(QPainter &p, const OctiBoardGeometry &geom,
@@ -157,6 +163,7 @@ private:
     OctiDir _dragHoverProngDir;
     QPointF _dragCursorPos;
     bool _dragShiftHeld;
+    bool _wasOriginSquareBeforePress;
 
     int _hoverSquareX;
     int _hoverSquareY;
@@ -196,6 +203,7 @@ private:
     qint64 _lastMoveAnimStartMs;
     bool _turnIndicatorVisible;
     qint64 _renderTimeOverrideMs = -1;
+    std::function<bool(int, int)> _zoomedSquareOpenHook;
 };
 
 } // namespace octi

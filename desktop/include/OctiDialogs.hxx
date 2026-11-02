@@ -344,6 +344,8 @@ private:
     QPushButton *_createBtn;
 
     CreateTableResponse _createdTable;
+
+    void updateOfkConstraints();
 };
 
 class PasscodeDialog : public QDialog {
@@ -404,6 +406,8 @@ private:
 
     MatchmakingStatusData _lastStatus;
     std::function<void(const std::string &roomId)> _onMatchedCallback;
+
+    void updateOfkConstraints();
 };
 
 /*
@@ -567,6 +571,8 @@ public:
     LocalGameConfig config() const;
 
 private:
+    void updateModeConstraints();
+
     ThemeId _theme;
 
     QComboBox *_playTypeCombo;

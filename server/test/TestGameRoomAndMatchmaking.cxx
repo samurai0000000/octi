@@ -467,6 +467,7 @@ TEST(MatchmakingQueueTest, OptionsTheEngineIgnoresShareABucket)
     MatchRuleset a = rules(GAME_MODE_OFK);
     a.bases = GAME_BASES_3;
     a.useSuperProngs = true;
+    a.useEdgelessBoard = true;
     MatchRuleset b = rules(GAME_MODE_OFK);
     b.bases = GAME_BASES_1;
     q->enqueue(1, 1200, a);
@@ -475,6 +476,7 @@ TEST(MatchmakingQueueTest, OptionsTheEngineIgnoresShareABucket)
     CHECK_EQUAL(1u, g.size());
     CHECK(g[0].ruleset.bases == GAME_BASES_1);
     CHECK_FALSE(g[0].ruleset.useSuperProngs);
+    CHECK_FALSE(g[0].ruleset.useEdgelessBoard);
 
     /* an untimed request drops a stray increment */
     MatchRuleset c = rules();
@@ -1218,12 +1220,14 @@ TEST(GameRoomManagerTest, OctiForKidsTableNormalizesIgnoredOptions)
     GameTableConfig c = cfg(GAME_MODE_OFK);
     c.bases = GAME_BASES_3;
     c.useSuperProngs = true;
+    c.useEdgelessBoard = true;
     RoomResult r = mgr->createTable(p[0], c);
     EXPECT_OK(r);
     EXPECT_OK(mgr->joinTable(r.roomId, p[1], 0, ""));
     RoomView v = view(r.roomId);
     CHECK_EQUAL(static_cast<int>(GAME_BASES_1), static_cast<int>(v.config.bases));
     CHECK_FALSE(v.config.useSuperProngs);
+    CHECK_FALSE(v.config.useEdgelessBoard);
     STRCMP_EQUAL("OFK:1:0:0:P:A:-:0:0,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56",
                  v.fen.c_str());
 }

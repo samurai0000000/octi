@@ -1253,7 +1253,8 @@ TEST(OctiHttpServerIntegrationTest, NominalFullScenario)
     CHECK_TRUE(ui.body.find("drawProngs") != std::string::npos);
     CHECK_TRUE(ui.body.find("LAST_MOVE_DISPLAY_DURATION_MS = 5000") != std::string::npos);
     CHECK_TRUE(ui.body.find("theme-select") != std::string::npos);
-    CHECK_TRUE(ui.body.find("btn-rotate") != std::string::npos);
+    CHECK_TRUE(ui.body.find("btn-web-rotate") != std::string::npos);
+    CHECK_TRUE(ui.body.find("btn-replay-rotate") != std::string::npos);
     CHECK_TRUE(ui.body.find("res-card-a") != std::string::npos);
     CHECK_TRUE(ui.body.find("res-card-b") != std::string::npos);
     CHECK_TRUE(ui.body.find("stack-inspector-body") != std::string::npos);
@@ -3746,8 +3747,11 @@ TEST(OctiHttpServerIntegrationTest, OAuthBrokerAndAccountLinking)
     CHECK_TRUE(rRoot.body.find("tab-home") != std::string::npos);
     CHECK_TRUE(rRoot.body.find("tab-play") != std::string::npos);
     CHECK_TRUE(rRoot.body.find("tab-users") != std::string::npos);
-    CHECK_TRUE(rRoot.body.find("tab-robots") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("tab-replay") != std::string::npos);
     CHECK_TRUE(rRoot.body.find("tab-account") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("btn-toggle-robots-section") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("account-robots-expand-body") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("nav-robots-btn") == std::string::npos);
 
     /* 3. Authorize endpoint: provider validation */
     Reply rBadProv = http().get("/api/v1/auth/authorize?provider=twitter");

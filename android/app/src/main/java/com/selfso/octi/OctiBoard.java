@@ -61,6 +61,8 @@ public class OctiBoard {
             this.width = 6;
             this.height = 7;
             bases = OctiGameBases.GAME_BASES_1;
+            useSuperProngs = false;
+            useEdgelessBoard = false;
         } else {
             this.width = 9;
             this.height = 9;
@@ -443,6 +445,13 @@ public class OctiBoard {
         // 4. Edgeless
         boolean useEdgeless = "1".equals(tokens[3]);
 
+        if (newMode == OctiGameMode.GAME_MODE_OFK) {
+            if (useSuper || useEdgeless || newBases != OctiGameBases.GAME_BASES_1) {
+                throw new IllegalMoveSyntaxException(
+                        "OFK mode does not support superprongs, edgeless, or 3-bases");
+            }
+        }
+
         setGameMode(newMode, useSuper, useEdgeless, newBases);
         clear();
 
@@ -519,6 +528,11 @@ public class OctiBoard {
             for (int vi = 0; vi < parts.length && vi < 4; vi++) {
                 vals[vi] = Integer.parseInt(parts[vi]);
             }
+            if (newMode == OctiGameMode.GAME_MODE_OFK) {
+                if (vals[0] > 0 || vals[3] > 0 || vals[1] < 0 || vals[1] > 4) {
+                    throw new IllegalMoveSyntaxException("invalid player resources for OFK");
+                }
+            }
             snap.players[p].freePods = vals[0];
             snap.players[p].capturedPods = vals[1];
             snap.players[p].freeProngs = vals[2];
@@ -572,12 +586,18 @@ public class OctiBoard {
                     }
                     boolean superProng = false;
                     if (idx < podToken.length() && podToken.charAt(idx) == '!') {
+                        if (newMode == OctiGameMode.GAME_MODE_OFK) {
+                            throw new IllegalMoveSyntaxException("superprongs not allowed in OFK");
+                        }
                         superProng = true;
                         idx++;
                     }
                     pod.addProng(dir, superProng);
                 }
 
+                if (newMode == OctiGameMode.GAME_MODE_OFK && squareAt(x, y).getNumPods() > 0) {
+                    throw new IllegalMoveSyntaxException("stacked pods not allowed in OFK");
+                }
                 squareAt(x, y).addPod(pod);
                 snap.squares[x][y].add(pod);
             }

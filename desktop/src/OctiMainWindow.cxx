@@ -1729,7 +1729,8 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
                     OctiMove parsedBotMove(lastBotMoveStr);
                     _boardCanvas->setLastMoveModifiedSquares(
                         OctiBoardCanvas::extractModifiedSquares(
-                            parsedBotMove, game->useEdgelessBoard()));
+                            parsedBotMove, game->useEdgelessBoard(),
+                            _board.getBoardWidth(), _board.getBoardHeight()));
                 } catch (...) {
                 }
             }
@@ -1742,6 +1743,74 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
         checkAndPresentGameOver();
     }
     return movedAny;
+}
+
+void OctiMainWindow::showHint()
+{
+    if (!_board.getGame() || _board.getGame()->isGameOver()) {
+        return;
+    }
+    BotSearchStats stats;
+    std::string bestMoveStr = _botEngine.chooseMove(_board, &stats);
+    if (bestMoveStr.empty()) {
+        return;
+    }
+    try {
+        OctiMove move(bestMoveStr);
+        if (move.getOps().empty()) {
+            return;
+        }
+        const OctiMoveOp &op = move.getOps().front();
+        if (op.addPod) {
+            _composer.stageOrCommitAddPod(op.x0 + 1, op.y0 + 1, op.liberate);
+        } else if (op.addProngDir != DIR_UNDEF && op.rmProngDir == DIR_UNDEF) {
+            int podIdx = -1;
+            const OctiSquare &sq = _board.squareAt(op.x0, op.y0);
+            for (int i = 0; i < sq.getNumPods(); ++i) {
+                if (sq.getPodAt(i) == op.pod) {
+                    podIdx = i;
+                    break;
+                }
+            }
+            if (podIdx < 0) {
+                podIdx = 0;
+            }
+            _composer.stageOrCommitAddProng(op.x0 + 1, op.y0 + 1, podIdx, op.addProngDir, op.superProng);
+        } else if (op.addProngDir != DIR_UNDEF && op.rmProngDir != DIR_UNDEF) {
+            int podIdx = -1;
+            const OctiSquare &sq = _board.squareAt(op.x0, op.y0);
+            for (int i = 0; i < sq.getNumPods(); ++i) {
+                if (sq.getPodAt(i) == op.pod) {
+                    podIdx = i;
+                    break;
+                }
+            }
+            if (podIdx < 0) {
+                podIdx = 0;
+            }
+            _composer.stageOrCommitRepositionProng(op.x0 + 1, op.y0 + 1, podIdx, op.rmProngDir, op.addProngDir);
+        } else if (!op.hops.empty()) {
+            int podIdx = -1;
+            const OctiSquare &sq = _board.squareAt(op.x0, op.y0);
+            for (int i = 0; i < sq.getNumPods(); ++i) {
+                if (sq.getPodAt(i) == op.pod) {
+                    podIdx = i;
+                    break;
+                }
+            }
+            if (podIdx < 0) {
+                podIdx = 0;
+            }
+            _composer.beginGuidedPodMove(op.x0 + 1, op.y0 + 1, podIdx, false);
+            for (const auto &hop : op.hops) {
+                _composer.selectGuidedDestination(hop.x + 1, hop.y + 1);
+            }
+        }
+        if (_boardCanvas) {
+            _boardCanvas->update();
+        }
+    } catch (...) {
+    }
 }
 
 /* ---- Online Multiplayer Room Lifecycle ---- */
@@ -2078,7 +2147,8 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
                 OctiMove parsedOnlineMove(latestOnlineMoveStr);
                 _boardCanvas->setLastMoveModifiedSquares(
                     OctiBoardCanvas::extractModifiedSquares(
-                        parsedOnlineMove, view.edgeless));
+                        parsedOnlineMove, view.edgeless,
+                        _board.getBoardWidth(), _board.getBoardHeight()));
             } catch (...) {
             }
         }
@@ -2184,7 +2254,9 @@ void OctiMainWindow::handleLocalOrOnlineMoveCommitted(
             OctiMove parsedMove(moveNotation);
             bool edgeless = _board.getGame() && _board.getGame()->useEdgelessBoard();
             _boardCanvas->setLastMoveModifiedSquares(
-                OctiBoardCanvas::extractModifiedSquares(parsedMove, edgeless));
+                OctiBoardCanvas::extractModifiedSquares(
+                    parsedMove, edgeless,
+                    _board.getBoardWidth(), _board.getBoardHeight()));
         } catch (...) {
         }
     }

@@ -250,10 +250,13 @@ void evaluateJumpCaptureRecursive(const OctiBoard &board,
                                   int h,
                                   int x,
                                   int y,
+                                  int startX,
+                                  int startY,
                                   int depth,
                                   OctiPlayer podOwner,
                                   const OctiPod &pod,
                                   std::uint64_t visitedDestMask[2],
+                                  std::uint64_t jumpedMask,
                                   JumpMobilityThreat &threat)
 {
     if (depth > 4) {
@@ -269,23 +272,29 @@ void evaluateJumpCaptureRecursive(const OctiBoard &board,
         int dx = dirDeltaX(dir);
         int dy = dirDeltaY(dir);
 
-        int nx = edgeless ? (((x + dx) % w + w) % w) : (x + dx);
-        int ny = edgeless ? (((y + dy) % h + h) % h) : (y + dy);
-        int jx = edgeless ? (((x + 2 * dx) % w + w) % w) : (x + 2 * dx);
-        int jy = edgeless ? (((y + 2 * dy) % h + h) % h) : (y + 2 * dy);
+        int jx = edgeless ? (((x + dx) % w + w) % w) : (x + dx);
+        int jy = edgeless ? (((y + dy) % h + h) % h) : (y + dy);
+        int destX = edgeless ? (((x + 2 * dx) % w + w) % w) : (x + 2 * dx);
+        int destY = edgeless ? (((y + 2 * dy) % h + h) % h) : (y + 2 * dy);
 
-        if (!board.isValidCoord(nx, ny) || !board.isValidCoord(jx, jy)) {
+        if (!board.isValidCoord(jx, jy) || !board.isValidCoord(destX, destY)) {
             continue;
         }
 
-        const OctiSquare &midSq = board.squareAt(nx, ny);
-        const OctiSquare &destSq = board.squareAt(jx, jy);
-
-        if (midSq.isEmpty() || destSq.hasEnemyOf(podOwner)) {
+        int jumpIdx = jy * 9 + jx;
+        if (jumpIdx < 64 && (jumpedMask & (1ULL << jumpIdx)) != 0ULL) {
             continue;
         }
 
-        int destIdx = jy * 9 + jx;
+        const OctiSquare &midSq = board.squareAt(jx, jy);
+        const OctiSquare &destSq = board.squareAt(destX, destY);
+
+        bool canLand = destSq.isEmpty() || (destX == startX && destY == startY);
+        if (midSq.isEmpty() || !canLand) {
+            continue;
+        }
+
+        int destIdx = destY * 9 + destX;
         int destWord = (destIdx >> 6) & 1;
         std::uint64_t destBit = 1ULL << (destIdx & 63);
         if ((visitedDestMask[destWord] & destBit) != 0ULL) {
@@ -295,7 +304,7 @@ void evaluateJumpCaptureRecursive(const OctiBoard &board,
         threat.reachableSquares++;
 
         if (midSq.hasEnemyOf(podOwner)) {
-            int midIdx = ny * 9 + nx;
+            int midIdx = jy * 9 + jx;
             int midWord = (midIdx >> 6) & 1;
             std::uint64_t midBit = 1ULL << (midIdx & 63);
             if ((threat.capturedSqMask[midWord] & midBit) == 0ULL) {
@@ -308,8 +317,13 @@ void evaluateJumpCaptureRecursive(const OctiBoard &board,
             }
         }
 
-        evaluateJumpCaptureRecursive(board, edgeless, w, h, jx, jy, depth + 1,
-                                     podOwner, pod, visitedDestMask, threat);
+        std::uint64_t nextJumpedMask = jumpedMask;
+        if (jumpIdx < 64) {
+            nextJumpedMask |= (1ULL << jumpIdx);
+        }
+
+        evaluateJumpCaptureRecursive(board, edgeless, w, h, destX, destY, startX, startY, depth + 1,
+                                     podOwner, pod, visitedDestMask, nextJumpedMask, threat);
     }
 }
 
@@ -329,9 +343,10 @@ JumpMobilityThreat evaluatePodJumpThreat(const OctiBoard &board,
     OctiPlayer owner = podTypeToPlayer(pod.getType());
 
     std::uint64_t visitedDestMask[2] = {0ULL, 0ULL};
+    std::uint64_t jumpedMask = 0ULL;
 
-    evaluateJumpCaptureRecursive(board, edgeless, w, h, x, y, 0,
-                                 owner, pod, visitedDestMask, threat);
+    evaluateJumpCaptureRecursive(board, edgeless, w, h, x, y, x, y, 0,
+                                 owner, pod, visitedDestMask, jumpedMask, threat);
     return threat;
 }
 
@@ -411,7 +426,7 @@ void appendCompositeMoves(OctiBoard &scratchBoard,
                           OctiPlayer turn)
 {
     OctiGame *game = scratchBoard.getGame();
-    if (!game || moves.empty()) {
+    if (!game || game->getMode() == GAME_MODE_OFK || moves.empty()) {
         return;
     }
 
@@ -702,7 +717,7 @@ std::vector<OctiMove> orderAndCapMoves(OctiBoard &board,
                                        std::size_t maxBranch,
                                        bool includeComposites = true)
 {
-    if (includeComposites) {
+    if (includeComposites && (!board.getGame() || board.getGame()->getMode() != GAME_MODE_OFK)) {
         appendCompositeMoves(board, rawMoves, turn);
     }
     std::vector<OctiMove> moves = filterDominatedMoves(rawMoves);
@@ -1097,7 +1112,9 @@ int OctiBotEngine::evaluatePosition(const OctiBoard &board,
                         if (ndist < dist) {
                             podVal += 140;
                         }
-                        if (ndist == 0 && !board.squareAt(nx, ny).hasEnemyOf(owner)) {
+                        const OctiSquare &nsq = board.squareAt(nx, ny);
+                        bool canStepBase = (mode == GAME_MODE_OFK) ? nsq.isEmpty() : !nsq.hasEnemyOf(owner);
+                        if (ndist == 0 && canStepBase) {
                             podVal += 8500;
                         }
                     }
@@ -1105,8 +1122,9 @@ int OctiBotEngine::evaluatePosition(const OctiBoard &board,
                     int jx = edgeless ? (((x + 2 * dirDeltaX(dir)) % w + w) % w) : (x + 2 * dirDeltaX(dir));
                     int jy = edgeless ? (((y + 2 * dirDeltaY(dir)) % h + h) % h) : (y + 2 * dirDeltaY(dir));
                     if (board.isValidCoord(nx, ny) && board.isValidCoord(jx, jy)) {
-                        if (!board.squareAt(nx, ny).isEmpty() &&
-                            !board.squareAt(jx, jy).hasEnemyOf(owner)) {
+                        const OctiSquare &midSq = board.squareAt(nx, ny);
+                        const OctiSquare &destSq = board.squareAt(jx, jy);
+                        if (!midSq.isEmpty() && destSq.isEmpty()) {
                             int jdist = minChebyshevToTargets(jx, jy, targets, w, h, edgeless);
                             if (jdist == 0) {
                                 podVal += 12000;
@@ -1222,7 +1240,8 @@ int OctiBotEngine::evaluatePosition(const OctiBoard &board,
                    - game->getCapturedPods(p) * 380
                    + game->getFreeProngs(p) * 50
                    + game->getFreeSuperProngs(p) * 150;
-        if (freePods < 4 && (isAlly ? allyHasUnarmedHomePod : enemyHasUnarmedHomePod) &&
+        if (mode != GAME_MODE_OFK && freePods < 4 &&
+            (isAlly ? allyHasUnarmedHomePod : enemyHasUnarmedHomePod) &&
             game->getFreeProngs(p) >= 6) {
             resVal -= (4 - freePods) * 1500;
         }

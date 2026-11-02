@@ -282,9 +282,11 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
         int capPodsHeld = game ? game->getCapturedPods(opp) : 0;
         int freeProngs = game ? game->getFreeProngs(player) : 25;
         int superProngs = game ? game->getFreeSuperProngs(player) : 0;
-        bool canLib = (_board && _board->canLiberate(opp) && capPodsHeld > 0 && opp == activeTurn);
-        bool hasSuper = (game && game->useSuperProngs());
-        bool showCaptured = (capPodsHeld > 0);
+        bool isOfk = (game && game->getMode() == GAME_MODE_OFK);
+        bool showFreePods = !isOfk;
+        bool canLib = (_board && _board->canLiberate(opp) && capPodsHeld > 0 && opp == activeTurn && !isOfk);
+        bool hasSuper = (game && game->useSuperProngs() && !isOfk);
+        bool showCaptured = (capPodsHeld > 0 && !isOfk);
 
         double wellY = cardRect.top() + 32.0;
         double wellH = cardH - 40.0;
@@ -294,19 +296,19 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
         QRectF rNormProng;
         QRectF rSupProng;
 
-        int numWells = 2 + (showCaptured ? 1 : 0) + (hasSuper ? 1 : 0);
+        int numWells = (showFreePods ? 1 : 0) + (showCaptured ? 1 : 0) + 1 /* NormProng */ + (hasSuper ? 1 : 0);
         double totalGap = 6.0 * static_cast<double>(numWells + 1);
         double wellW = (cardW - totalGap) / static_cast<double>(numWells);
         double curX = cardRect.left() + 6.0;
 
-        rFreePod = QRectF(curX, wellY, wellW, wellH);
-        curX = rFreePod.right() + 6.0;
+        if (showFreePods) {
+            rFreePod = QRectF(curX, wellY, wellW, wellH);
+            curX = rFreePod.right() + 6.0;
+        }
 
         if (showCaptured) {
             rLibPod = QRectF(curX, wellY, wellW, wellH);
             curX = rLibPod.right() + 6.0;
-        } else {
-            rLibPod = QRectF();
         }
 
         rNormProng = QRectF(curX, wellY, wellW, wellH);
@@ -314,8 +316,6 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
 
         if (hasSuper) {
             rSupProng = QRectF(curX, wellY, wellW, wellH);
-        } else {
-            rSupProng = QRectF();
         }
 
         _capturedPodWellRects[player] = rLibPod;
@@ -326,8 +326,10 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
             _superProngWellRect = rSupProng;
         }
 
-        if (opp == activeTurn) {
+        if (opp == activeTurn && !isOfk) {
             _liberatePodWellRect = rLibPod;
+        } else if (isOfk) {
+            _liberatePodWellRect = QRectF();
         }
 
         auto drawWell = [&](const QRectF &wr, const QString &title,
@@ -455,8 +457,10 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
 
         DragKind activeDrag = (_canvas && isTurn) ? _canvas->activeDragKind()
                                                   : DragKind::NONE;
-        drawWell(rFreePod, "Pods", freePods,
-                 activeDrag == DragKind::ADD_POD_FROM_RESERVE, WellIconKind::POD);
+        if (showFreePods) {
+            drawWell(rFreePod, "Pods", freePods,
+                     activeDrag == DragKind::ADD_POD_FROM_RESERVE, WellIconKind::POD);
+        }
         if (showCaptured) {
             drawWell(rLibPod, "Captured", capPodsHeld,
                      canLib || activeDrag == DragKind::LIBERATE_POD_FROM_RESERVE, WellIconKind::CAPTURED);
@@ -491,16 +495,15 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
             p.drawText(QRectF(guideRect.left() + 10.0, guideRect.top() + 6.0,
                               guideRect.width() - 20.0, 18.0),
                        Qt::AlignVCenter | Qt::AlignLeft,
-                       QString::fromUtf8("Quick Guide \xE2\x80\xA2 Zoomed Square Controls"));
+                       QString::fromUtf8("Quick Guide \xE2\x80\xA2 Pod & Prong Controls"));
 
             gf.setBold(false);
             gf.setPixelSize(10);
             p.setFont(gf);
             p.setPen(pal.textSecondary);
             QString guideText = QString::fromUtf8(
-                "\xE2\x80\xA2 Empty Home Square: Click square to Place Reserve Pod or Liberate (*).\n"
-                "\xE2\x80\xA2 Friendly Pod: Click pod to open Zoom View \xE2\x80\x94 click socket (a\xE2\x80\x93h) "
-                "to add/reposition prong, or click 'Move / Jump This Pod'.\n"
+                "\xE2\x80\xA2 Insert Prongs: Left-click unarmed pod, Right-click / Double-click any pod, or click Reserve Prong well.\n"
+                "\xE2\x80\xA2 Zoom View: Click socket (a\xE2\x80\x93h) to add prong, or click 'Move / Jump This Pod'.\n"
                 "\xE2\x80\xA2 Multi-Pod Stack: Scroll mouse wheel or click Pod tabs in Zoom View.\n"
                 "\xE2\x80\xA2 Guided Jump: Click green target dots, then Commit or Cancel.");
             p.drawText(QRectF(guideRect.left() + 10.0, guideRect.top() + 26.0,
@@ -576,12 +579,41 @@ void OctiReservePanel::mousePressEvent(QMouseEvent *event)
         OctiPlayer turn = game ? game->getTurn() : PLAYER_A;
         int freePods = game ? game->getFreePods(turn) : 0;
         int capPods = game ? game->getCapturedPods(turn) : 0;
-        if (_freePodWellRect.contains(pos) && (freePods > 0 || capPods > 0)) {
+        int freeProngs = game ? game->getFreeProngs(turn) : 0;
+        int superProngs = game ? game->getFreeSuperProngs(turn) : 0;
+        bool isOfk = (game && game->getMode() == GAME_MODE_OFK);
+
+        if (!isOfk && _freePodWellRect.contains(pos) && (freePods > 0 || capPods > 0)) {
             _canvas->clearLastMoveModifiedSquares();
             _canvas->startExternalReserveDrag(DragKind::ADD_POD_FROM_RESERVE);
-        } else if (!_liberatePodWellRect.isEmpty() && _liberatePodWellRect.contains(pos) && capPods > 0) {
+        } else if (!isOfk && !_liberatePodWellRect.isEmpty() && _liberatePodWellRect.contains(pos) && capPods > 0) {
             _canvas->clearLastMoveModifiedSquares();
             _canvas->startExternalReserveDrag(DragKind::LIBERATE_POD_FROM_RESERVE);
+        } else if (!_normalProngWellRect.isEmpty() && _normalProngWellRect.contains(pos) && freeProngs > 0) {
+            _canvas->clearLastMoveModifiedSquares();
+            _canvas->startExternalReserveDrag(DragKind::ADD_PRONG_FROM_RESERVE);
+            int targetX = -1, targetY = -1;
+            if (_board) {
+                int bw = _board->getBoardWidth();
+                int bh = _board->getBoardHeight();
+                for (int y = 0; y < bh; ++y) {
+                    for (int x = 0; x < bw; ++x) {
+                        const OctiSquare &sq = _board->squareAt(x, y);
+                        if (!sq.isEmpty() && !sq.hasEnemyOf(turn)) {
+                            targetX = x + 1;
+                            targetY = y + 1;
+                            break;
+                        }
+                    }
+                    if (targetX >= 1) break;
+                }
+            }
+            if (targetX >= 1) {
+                _canvas->openZoomedSquareAt(targetX, targetY);
+            }
+        } else if (!isOfk && !_superProngWellRect.isEmpty() && _superProngWellRect.contains(pos) && superProngs > 0) {
+            _canvas->clearLastMoveModifiedSquares();
+            _canvas->startExternalReserveDrag(DragKind::ADD_SUPERPRONG_FROM_RESERVE);
         }
         update();
     }

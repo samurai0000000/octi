@@ -2466,6 +2466,149 @@ TEST(OctiCryptoAndTranscriptV3Test, CanonicalGameIdIsDeterministicAndDifferentia
     CHECK_FALSE(id1 == id1After);
 }
 
+TEST_GROUP(OctiForKidsHardeningAndBotTest)
+{
+};
+
+TEST(OctiForKidsHardeningAndBotTest, NormalizesSuperProngsEdgelessAndBases)
+{
+    octi::OctiBoard board(octi::GAME_MODE_OFK, true, true, octi::GAME_BASES_3);
+    octi::OctiGame *game = board.getGame();
+    CHECK_TRUE(game != nullptr);
+    CHECK_EQUAL(octi::GAME_MODE_OFK, board.getGameMode());
+    CHECK_EQUAL(octi::GAME_MODE_OFK, game->getMode());
+    CHECK_FALSE(game->useSuperProngs());
+    CHECK_FALSE(game->useEdgelessBoard());
+    CHECK_EQUAL(octi::GAME_BASES_1, game->getBases());
+
+    game->reset();
+    CHECK_FALSE(game->useSuperProngs());
+    CHECK_FALSE(game->useEdgelessBoard());
+    CHECK_EQUAL(octi::GAME_BASES_1, game->getBases());
+}
+
+TEST(OctiForKidsHardeningAndBotTest, FromPositionStringInvariants)
+{
+    octi::OctiBoard board;
+
+    // Accepts valid OFK position with capPods in 0..4
+    board.fromPositionString("OFK:1:0:0:P:A:-:0:0,1,12,0:0,2,11,0:A22,A32,A42,A52,B26,B36");
+    CHECK_EQUAL(octi::GAME_MODE_OFK, board.getGameMode());
+    CHECK_EQUAL(1, board.getGame()->getCapturedPods(octi::PLAYER_A));
+    CHECK_EQUAL(2, board.getGame()->getCapturedPods(octi::PLAYER_B));
+
+    // Rejects freePods > 0
+    CHECK_THROWS(octi::IllegalMoveSyntaxException,
+                 board.fromPositionString("OFK:1:0:0:P:A:-:0:1,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56"));
+
+    // Rejects freeSuperProngs > 0
+    CHECK_THROWS(octi::IllegalMoveSyntaxException,
+                 board.fromPositionString("OFK:1:0:0:P:A:-:0:0,0,11,1:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56"));
+
+    // Rejects superProngs enabled in header
+    CHECK_THROWS(octi::IllegalMoveSyntaxException,
+                 board.fromPositionString("OFK:1:1:0:P:A:-:0:0,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56"));
+
+    // Rejects edgeless enabled in header
+    CHECK_THROWS(octi::IllegalMoveSyntaxException,
+                 board.fromPositionString("OFK:1:0:1:P:A:-:0:0,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56"));
+
+    // Rejects bases != 1
+    CHECK_THROWS(octi::IllegalMoveSyntaxException,
+                 board.fromPositionString("OFK:3:0:0:P:A:-:0:0,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56"));
+
+    // Rejects pod with superprong '!'
+    CHECK_THROWS(octi::IllegalMoveSyntaxException,
+                 board.fromPositionString("OFK:1:0:0:P:A:-:0:0,0,12,0:0,0,12,0:A22a!,A32,A42,A52,B26,B36,B46,B56"));
+
+    // Rejects stacked pods on same square
+    CHECK_THROWS(octi::IllegalMoveSyntaxException,
+                 board.fromPositionString("OFK:1:0:0:P:A:-:0:0,0,12,0:0,0,12,0:A22a,A22b,A32,A42,A52,B26,B36,B46,B56"));
+
+    // Rejects composite moves in OFK
+    octi::OctiBoard ofkBoard(octi::GAME_MODE_OFK);
+    ofkBoard.getGame()->start(octi::PLAYER_A);
+    ofkBoard.getGame()->move("22+a");
+    ofkBoard.getGame()->move("26+e");
+    CHECK_THROWS(octi::IllegalMoveException,
+                 ofkBoard.getGame()->move("22a-23,22a-24"));
+}
+
+TEST(OctiForKidsHardeningAndBotTest, SerializeJsonAccurateTerminationStrings)
+{
+    // 1. BASE_OCCUPATION in OFK
+    {
+        octi::OctiBoard board(octi::GAME_MODE_OFK);
+        // Pod A at 25 with prong 'a' (dir N). B base is at 26 (y=5).
+        // Moving from 25 to 26 captures base 26!
+        board.fromPositionString("OFK:1:0:0:P:A:-:0:0,0,11,0:0,0,12,0:A25a,A32,A42,A52,B36,B46,B56");
+        octi::OctiGame *game = board.getGame();
+        game->move("25a-26");
+        CHECK_TRUE(game->isGameOver());
+        CHECK_EQUAL(octi::PLAYER_A, game->getWinner());
+
+        std::string jsonStr = board.serializeJson();
+        auto root = nlohmann::json::parse(jsonStr);
+        STRCMP_EQUAL("BASE_OCCUPATION", root["termination"].get<std::string>().c_str());
+    }
+
+    // 2. TOTAL_CAPTURE in OFK
+    {
+        octi::OctiBoard board(octi::GAME_MODE_OFK);
+        // Player B has only 1 pod left at 24. A pod at 23 with prong 'a' (N) jumps over B at 24 to 25.
+        // Jump captures B's last pod! (x=1, y=3 is 24; jump lands at 25, x=1, y=4).
+        board.fromPositionString("OFK:1:0:0:P:A:-:0:0,3,11,0:0,0,12,0:A23a,A32,A42,A52,B24");
+        octi::OctiGame *game = board.getGame();
+        game->move("23a-25x");
+        CHECK_TRUE(game->isGameOver());
+        CHECK_EQUAL(octi::PLAYER_A, game->getWinner());
+
+        std::string jsonStr = board.serializeJson();
+        auto root = nlohmann::json::parse(jsonStr);
+        STRCMP_EQUAL("TOTAL_CAPTURE", root["termination"].get<std::string>().c_str());
+    }
+
+    // 3. STALEMATE in OFK
+    {
+        octi::OctiBoard board(octi::GAME_MODE_OFK);
+        // Player B has 1 pod at 34 with NO prongs and freeProngs == 0.
+        // Player A moves 22+a. Then it becomes B's turn, but B has no prongs, 0 free prongs, cannot place or reposition!
+        board.fromPositionString("OFK:1:0:0:P:A:-:0:0,0,11,0:0,0,0,0:A22,A32,A42,A52,B34");
+        octi::OctiGame *game = board.getGame();
+        game->move("22+a");
+        CHECK_TRUE(game->isGameOver());
+        CHECK_EQUAL(octi::PLAYER_A, game->getWinner());
+
+        std::string jsonStr = board.serializeJson();
+        auto root = nlohmann::json::parse(jsonStr);
+        STRCMP_EQUAL("STALEMATE", root["termination"].get<std::string>().c_str());
+    }
+}
+
+TEST(OctiForKidsHardeningAndBotTest, BotEngineNoPrematurePenaltyCliffAndFindsLegalMove)
+{
+    octi::OctiBoard board6(octi::GAME_MODE_OFK);
+    octi::OctiBoard board5(octi::GAME_MODE_OFK);
+    board6.fromPositionString("OFK:1:0:0:P:A:-:0:0,0,6,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56");
+    board5.fromPositionString("OFK:1:0:0:P:A:-:0:0,0,5,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56");
+
+    int score6 = octi::OctiBotEngine::evaluatePosition(board6, octi::PLAYER_A);
+    int score5 = octi::OctiBotEngine::evaluatePosition(board5, octi::PLAYER_A);
+
+    // Difference must be approximately 1 prong worth (50 points), NOT the old 6000-point cliff!
+    int diff = std::abs(score6 - score5);
+    CHECK_TRUE(diff < 200);
+
+    // Verify chooseMove finds a legal move without throwing
+    octi::OctiBotEngine bot(octi::BotDifficulty::CASUAL);
+    bot.setTimeBudgetMs(100);
+    std::string moveStr = bot.chooseMove(board6);
+    CHECK_FALSE(moveStr.empty());
+
+    // Applying the chosen move must succeed
+    board6.getGame()->move(moveStr);
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

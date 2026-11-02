@@ -77,9 +77,9 @@ OctiGame::OctiGame(OctiBoard *board,
                    OctiGameBases bases)
     : _board(board)
     , _mode(mode)
-    , _bases(bases)
+    , _bases(mode == GAME_MODE_OFK ? GAME_BASES_1 : bases)
     , _useSuperProngs(mode == GAME_MODE_OFK ? false : useSuperProngs)
-    , _useEdgelessBoard(useEdgelessBoard)
+    , _useEdgelessBoard(mode == GAME_MODE_OFK ? false : useEdgelessBoard)
     , _gameStarted(false)
     , _gameOver(false)
     , _gameResigned(false)
@@ -320,6 +320,10 @@ void OctiGame::reset()
                 _players[p].eliminated = false;
             }
         } else if (_mode == GAME_MODE_OFK) {
+            _useSuperProngs = false;
+            _useEdgelessBoard = false;
+            _bases = GAME_BASES_1;
+
             _board->squareAt(1, 1).addPod(OctiPod(A_POD));
             _board->squareAt(2, 1).addPod(OctiPod(A_POD));
             _board->squareAt(3, 1).addPod(OctiPod(A_POD));
@@ -519,6 +523,10 @@ void OctiGame::applyMoveOps(const std::vector<OctiMoveOp> &ops)
         } else {
             regularOps.push_back(op);
         }
+    }
+
+    if (_mode == GAME_MODE_OFK && regularOps.size() > 1) {
+        throw IllegalMoveException("composite moves not allowed in OCTI for Kids");
     }
 
     if (!bonusOps.empty()) {
@@ -1913,7 +1921,107 @@ std::string OctiGame::serializeJson(const OctiGameMetadata &meta) const
         if (_gameResigned) {
             term = "RESIGNATION";
         } else if (_gameOver && _winner != PLAYER_UNDEF) {
-            term = "BASE_OCCUPATION";
+            bool baseOccupation = false;
+            if (_board) {
+                if (_mode == GAME_MODE_2) {
+                    int neededBases = (_bases == GAME_BASES_1) ? 1 : 3;
+                    if (_winner == PLAYER_A) {
+                        int count = 0;
+                        if (_board->squareAt(2, 6).isCapturedBy(PLAYER_A)) count++;
+                        if (_board->squareAt(4, 6).isCapturedBy(PLAYER_A)) count++;
+                        if (_board->squareAt(6, 6).isCapturedBy(PLAYER_A)) count++;
+                        if (count >= neededBases) baseOccupation = true;
+                    } else if (_winner == PLAYER_B) {
+                        int count = 0;
+                        if (_board->squareAt(2, 2).isCapturedBy(PLAYER_B)) count++;
+                        if (_board->squareAt(4, 2).isCapturedBy(PLAYER_B)) count++;
+                        if (_board->squareAt(6, 2).isCapturedBy(PLAYER_B)) count++;
+                        if (count >= neededBases) baseOccupation = true;
+                    }
+                } else if (_mode == GAME_MODE_OFK) {
+                    if (_winner == PLAYER_A) {
+                        for (int x = 1; x <= 4; x++) {
+                            if (_board->squareAt(x, 5).isCapturedBy(PLAYER_A)) {
+                                baseOccupation = true;
+                                break;
+                            }
+                        }
+                    } else if (_winner == PLAYER_B) {
+                        for (int x = 1; x <= 4; x++) {
+                            if (_board->squareAt(x, 1).isCapturedBy(PLAYER_B)) {
+                                baseOccupation = true;
+                                break;
+                            }
+                        }
+                    }
+                } else if (_mode == GAME_MODE_4) {
+                    if (_winner == PLAYER_A || _winner == PLAYER_C) {
+                        if (_board->squareAt(2, 6).isCapturedByTeamOf(PLAYER_A) &&
+                            _board->squareAt(6, 2).isCapturedByTeamOf(PLAYER_A)) {
+                            baseOccupation = true;
+                        }
+                    } else if (_winner == PLAYER_B || _winner == PLAYER_D) {
+                        if (_board->squareAt(2, 2).isCapturedByTeamOf(PLAYER_B) &&
+                            _board->squareAt(6, 6).isCapturedByTeamOf(PLAYER_B)) {
+                            baseOccupation = true;
+                        }
+                    }
+                }
+            }
+
+            if (baseOccupation) {
+                term = "BASE_OCCUPATION";
+            } else {
+                bool totalCapture = false;
+                if (_board) {
+                    if (_mode == GAME_MODE_2 || _mode == GAME_MODE_OFK) {
+                        OctiPlayer loser = (_winner == PLAYER_A) ? PLAYER_B : PLAYER_A;
+                        int loserPods = 0;
+                        for (int x = 0; x < _board->getBoardWidth(); x++) {
+                            for (int y = 0; y < _board->getBoardHeight(); y++) {
+                                const OctiSquare &sq = _board->squareAt(x, y);
+                                for (int i = 0; i < sq.getNumPods(); i++) {
+                                    if (podTypeToPlayer(sq.getPodAt(i).getType()) == loser) {
+                                        loserPods++;
+                                    }
+                                }
+                            }
+                        }
+                        if (loserPods == 0 && _players[loser].freePods == 0 && !_board->canLiberate(loser)) {
+                            totalCapture = true;
+                        }
+                    } else if (_mode == GAME_MODE_4) {
+                        int bdPods = 0, acPods = 0;
+                        for (int x = 0; x < _board->getBoardWidth(); x++) {
+                            for (int y = 0; y < _board->getBoardHeight(); y++) {
+                                const OctiSquare &sq = _board->squareAt(x, y);
+                                for (int i = 0; i < sq.getNumPods(); i++) {
+                                    OctiPlayer p = podTypeToPlayer(sq.getPodAt(i).getType());
+                                    if (p == PLAYER_B || p == PLAYER_D) bdPods++;
+                                    if (p == PLAYER_A || p == PLAYER_C) acPods++;
+                                }
+                            }
+                        }
+                        if ((_winner == PLAYER_A || _winner == PLAYER_C) &&
+                            (_players[PLAYER_B].eliminated || bdPods == 0) &&
+                            (_players[PLAYER_D].eliminated || bdPods == 0)) {
+                            totalCapture = true;
+                        } else if ((_winner == PLAYER_B || _winner == PLAYER_D) &&
+                                   (_players[PLAYER_A].eliminated || acPods == 0) &&
+                                   (_players[PLAYER_C].eliminated || acPods == 0)) {
+                            totalCapture = true;
+                        }
+                    }
+                }
+
+                if (totalCapture) {
+                    term = "TOTAL_CAPTURE";
+                } else if (_mode == GAME_MODE_OFK) {
+                    term = "STALEMATE";
+                } else {
+                    term = "BASE_OCCUPATION";
+                }
+            }
         }
     }
     root["termination"] = term;

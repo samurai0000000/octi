@@ -159,7 +159,7 @@ object OctiDialogs {
         }
         return geo.hitTestCompassSector(
             cx.toDouble(), cy.toDouble(),
-            (podR * 0.35f).toDouble(), (podR * 1.65f).toDouble(),
+            (podR * 0.35f).toDouble(), (podR * 2.4f).toDouble(),
             touchX.toDouble(), touchY.toDouble()
         )
     }
@@ -1111,20 +1111,26 @@ fun CreateTableDialog(
                             selected = mode == m,
                             onClick = {
                                 mode = m
-                                bases = if (m == "4P") 1 else 3
+                                bases = if (m == "4P" || m == "OFK") 1 else 3
+                                if (m == "OFK") {
+                                    superProngs = false
+                                    edgeless = false
+                                }
                             },
                             label = { Text(m) }
                         )
                     }
                 }
-                Text("Bases", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(3 to "3-Base", 1 to "1-Base").forEach { (b, lbl) ->
-                        FilterChip(
-                            selected = bases == b,
-                            onClick = { bases = b },
-                            label = { Text(lbl) }
-                        )
+                if (mode != "OFK") {
+                    Text("Bases", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(3 to "3-Base", 1 to "1-Base").forEach { (b, lbl) ->
+                            FilterChip(
+                                selected = bases == b,
+                                onClick = { bases = b },
+                                label = { Text(lbl) }
+                            )
+                        }
                     }
                 }
                 Text("Time Control", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
@@ -1137,13 +1143,15 @@ fun CreateTableDialog(
                         )
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = superProngs, onCheckedChange = { superProngs = it })
-                    Text("Super-Prongs")
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = edgeless, onCheckedChange = { edgeless = it })
-                    Text("Edgeless Board")
+                if (mode != "OFK") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = superProngs, onCheckedChange = { superProngs = it })
+                        Text("Super-Prongs")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = edgeless, onCheckedChange = { edgeless = it })
+                        Text("Edgeless Board")
+                    }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = rated, onCheckedChange = { rated = it })
@@ -1167,9 +1175,9 @@ fun CreateTableDialog(
                 onClick = {
                     val req = OctiNetworkClient.CreateTableRequest().apply {
                         this.mode = mode
-                        this.bases = bases
-                        this.superProngs = superProngs
-                        this.edgeless = edgeless
+                        this.bases = if (mode == "OFK") 1 else bases
+                        this.superProngs = if (mode == "OFK") false else superProngs
+                        this.edgeless = if (mode == "OFK") false else edgeless
                         this.timeControl = timeControl
                         this.rated = rated
                         this.allowTakeback = allowTakeback
@@ -1213,8 +1221,10 @@ fun ZoomedSquareDialog(
     onRepositionProng: (podIndex: Int, srcDir: OctiDir, dstDir: OctiDir) -> Unit,
     onPlaceReservePod: (liberate: Boolean) -> Unit
 ) {
-    val sq = if (board.isValidCoord(squareX - 1, squareY - 1)) {
-        board.squareAt(squareX - 1, squareY - 1)
+    val displayBoard = if (composer.isAwaitingConfirmation) composer.buildPreviewBoard() ?: board else board
+    val displayGame = displayBoard.game
+    val sq = if (displayBoard.isValidCoord(squareX - 1, squareY - 1)) {
+        displayBoard.squareAt(squareX - 1, squareY - 1)
     } else {
         null
     }
@@ -1228,19 +1238,19 @@ fun ZoomedSquareDialog(
     }
     var selectedPodIndex by remember(squareX, squareY, defaultPodIdx) { mutableIntStateOf(defaultPodIdx) }
     val isEmptySquare = sq == null || sq.isEmpty
-    val turn = board.game?.turn ?: OctiPlayer.PLAYER_A
-    val isTurn = board.game != null && board.game.isGameStarted && !board.game.isGameOver
+    val turn = displayGame?.turn ?: OctiPlayer.PLAYER_A
+    val isTurn = displayGame != null && displayGame.isGameStarted && !displayGame.isGameOver
     val hasEnemy = sq?.hasEnemyOf(turn) == true
     val isFriendlyTurn = !hasEnemy && isTurn && !isEmptySquare
-    val freePods = board.game?.getFreePods(turn) ?: 0
-    val capPods = board.game?.getCapturedPods(turn) ?: 0
-    val isFriendlyHome = turn != null && ((board.numPlayers == 2 && ((turn == OctiPlayer.PLAYER_A && sq?.type == OctiSquareType.A_HOME_SQUARE) || (turn == OctiPlayer.PLAYER_B && sq?.type == OctiSquareType.B_HOME_SQUARE))) || (board.numPlayers == 4 && sq?.type?.value == turn.value))
-    val canShowPodPlacement = isTurn && !hasEnemy && board.gameMode != OctiGameMode.GAME_MODE_OFK && (isFriendlyHome || (!isEmptySquare && sq != null && sq.type != OctiSquareType.NEUTRAL_SQUARE))
+    val freePods = displayGame?.getFreePods(turn) ?: 0
+    val capPods = displayGame?.getCapturedPods(turn) ?: 0
+    val isFriendlyHome = turn != null && ((displayBoard.numPlayers == 2 && ((turn == OctiPlayer.PLAYER_A && sq?.type == OctiSquareType.A_HOME_SQUARE) || (turn == OctiPlayer.PLAYER_B && sq?.type == OctiSquareType.B_HOME_SQUARE))) || (displayBoard.numPlayers == 4 && sq?.type?.value == turn.value))
+    val canShowPodPlacement = isTurn && !hasEnemy && displayBoard.gameMode != OctiGameMode.GAME_MODE_OFK && (isFriendlyHome || (!isEmptySquare && sq != null && sq.type != OctiSquareType.NEUTRAL_SQUARE))
     var moveAllStack by remember(squareX, squareY) { mutableStateOf(false) }
 
-    val freeProngs = board.game?.getFreeProngs(turn) ?: 0
-    val freeSuper = board.game?.getFreeSuperProngs(turn) ?: 0
-    val useSuperProngs = board.game?.useSuperProngs() == true
+    val freeProngs = displayGame?.getFreeProngs(turn) ?: 0
+    val freeSuper = displayGame?.getFreeSuperProngs(turn) ?: 0
+    val useSuperProngs = displayGame?.useSuperProngs() == true
 
     var selectedProngTray by remember(squareX, squareY) {
         mutableStateOf<String?>(if (isFriendlyTurn && freeProngs > 0) "NORMAL" else null)
@@ -1251,7 +1261,6 @@ fun ZoomedSquareDialog(
 
     val zoomedBitmap = remember(squareX, squareY, selectedPodIndex, rotation, themeId, hoverSocketDir, composer.stagedMoveNotation()) {
         val sizePx = 480
-        val displayBoard = if (composer.isAwaitingConfirmation) composer.buildPreviewBoard() ?: board else board
         val pixels = OctiBoardRenderer.renderZoomedPodPixels(
             displayBoard,
             squareX,
@@ -1299,7 +1308,8 @@ fun ZoomedSquareDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
+                        .padding(14.dp)
+                        .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -1370,7 +1380,7 @@ fun ZoomedSquareDialog(
                             FilterChip(
                                 selected = selectedProngTray == "NORMAL",
                                 onClick = {
-                                    selectedProngTray = if (selectedProngTray == "NORMAL") null else "NORMAL"
+                                    selectedProngTray = "NORMAL"
                                     selectedRepositionSrcDir = null
                                 },
                                 enabled = freeProngs > 0,
@@ -1417,7 +1427,7 @@ fun ZoomedSquareDialog(
                                     podBoxPxSize = newSize
                                 }
                             }
-                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize) {
+                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize, squareX, squareY, freeProngs, freeSuper, board.gameMode) {
                                 detectTapGestures(
                                     onTap = { offset ->
                                         if (!isFriendlyTurn || sq == null) return@detectTapGestures
@@ -1438,8 +1448,10 @@ fun ZoomedSquareDialog(
                                                     hoverSocketDir = hitDir.index
                                                 }
                                             } else if (pt == OctiProngType.NORMAL_PRONG) {
-                                                selectedRepositionSrcDir = hitDir
-                                                hoverSocketDir = hitDir.index
+                                                if (board.gameMode != OctiGameMode.GAME_MODE_OFK) {
+                                                    selectedRepositionSrcDir = hitDir
+                                                    hoverSocketDir = hitDir.index
+                                                }
                                             } else if (pt == OctiProngType.NO_PRONG) {
                                                 if (selectedProngTray == "SUPER" && freeSuper > 0) {
                                                     onAddProng(selectedPodIndex, hitDir, true)
@@ -1451,7 +1463,7 @@ fun ZoomedSquareDialog(
                                     }
                                 )
                             }
-                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize, sortedPodIndices) {
+                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize, sortedPodIndices, squareX, squareY, freeProngs, freeSuper, board.gameMode) {
                                 var isRepositionDrag = false
                                 var verticalSlideAccumPx = 0f
                                 val density = this
@@ -1467,7 +1479,10 @@ fun ZoomedSquareDialog(
                                         val wPx = podBoxPxSize.width.toFloat()
                                         val hPx = podBoxPxSize.height.toFloat()
                                         val hitDir = hitTestZoomedSocket(wPx, hPx, startOffset.x, startOffset.y, rotation)
-                                        if (isFriendlyTurn && hitDir != OctiDir.DIR_UNDEF && pod.prongAt(hitDir) == OctiProngType.NORMAL_PRONG) {
+                                        if (hitDir != OctiDir.DIR_UNDEF) {
+                                            hoverSocketDir = hitDir.index
+                                        }
+                                        if (isFriendlyTurn && hitDir != OctiDir.DIR_UNDEF && pod.prongAt(hitDir) == OctiProngType.NORMAL_PRONG && board.gameMode != OctiGameMode.GAME_MODE_OFK) {
                                             selectedRepositionSrcDir = hitDir
                                             isRepositionDrag = true
                                         }
@@ -1488,7 +1503,7 @@ fun ZoomedSquareDialog(
                                                 val geo = OctiBoardGeometry(480, 480, 9, 9, rotation)
                                                 val sectorDir = geo.hitTestCompassSector(
                                                     cx.toDouble(), cy.toDouble(),
-                                                    (podR * 0.4).toDouble(), (podR * 1.6).toDouble(),
+                                                    (podR * 0.4).toDouble(), (podR * 2.4).toDouble(),
                                                     change.position.x.toDouble(), change.position.y.toDouble()
                                                 )
                                                 if (sectorDir != OctiDir.DIR_UNDEF) {
@@ -1525,7 +1540,7 @@ fun ZoomedSquareDialog(
                                                 val geo = OctiBoardGeometry(480, 480, 9, 9, rotation)
                                                 val sectorDir = geo.hitTestCompassSector(
                                                     cx.toDouble(), cy.toDouble(),
-                                                    (podR * 0.4).toDouble(), (podR * 1.6).toDouble(),
+                                                    (podR * 0.4).toDouble(), (podR * 2.4).toDouble(),
                                                     change.position.x.toDouble(), change.position.y.toDouble()
                                                 )
                                                 if (sectorDir != OctiDir.DIR_UNDEF) {

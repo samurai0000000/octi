@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.IntSize
 import com.selfso.octi.OctiBoardGeometry
 import com.selfso.octi.OctiBoardRenderer
 import com.selfso.octi.OctiDir
+import com.selfso.octi.OctiGameMode
 import com.selfso.octi.OctiMoveComposer
 import com.selfso.octi.OctiPlayer
 import com.selfso.octi.OctiProngType
@@ -166,7 +167,9 @@ fun OctiBoardCanvas(
         val sqY = xy[1]
         val sq = b.squareAt(sqX - 1, sqY - 1)
         val turn = b.game?.turn
-        val isHome = if (turn != null) b.isHomeSquareOf(sqX - 1, sqY - 1, turn) && !sq.hasEnemyOf(turn) else false
+        val isHome = if (turn != null && b.gameMode != OctiGameMode.GAME_MODE_OFK) {
+            b.isHomeSquareOf(sqX - 1, sqY - 1, turn) && !sq.hasEnemyOf(turn)
+        } else false
         if (!sq.isEmpty || isHome) {
             val composer = viewModel.composer
             val isOriginWithOther = composer.isAwaitingConfirmation &&
@@ -250,7 +253,6 @@ fun OctiBoardCanvas(
                         multiTouchActive = false
                         lastMultiTouchTimeMs = System.currentTimeMillis()
                     } else if (totalMoveDist > dragSlop && !viewModel.isViewingHistory() && viewModel.board.game?.isGameOver != true) {
-                        lastDragTimeMs = System.currentTimeMillis()
                         val scaleX = currentRenderedBitmap.width.toDouble() / Math.max(1, size.width).toDouble()
                         val scaleY = currentRenderedBitmap.height.toDouble() / Math.max(1, size.height).toDouble()
                         val geo = viewModel.geometry
@@ -275,6 +277,7 @@ fun OctiBoardCanvas(
                             val turn = b.game?.turn
 
                             if (endX != startX || endY != startY) {
+                                lastDragTimeMs = System.currentTimeMillis()
                                 val startSq = b.squareAt(startX - 1, startY - 1)
                                 val hasFriendlyPod = !startSq.isEmpty && turn != null && !startSq.hasEnemyOf(turn)
                                 if (composer.isGuidedMoveActive) {
@@ -402,8 +405,23 @@ fun OctiBoardCanvas(
                         val sqX = xy[0]
                         val sqY = xy[1]
 
+                        // 2a. Check optional capture toggle on jumped square FIRST if awaiting confirmation
+                        if (composer.isAwaitingConfirmation && composer.toggleCaptureAtSquare(sqX, sqY)) {
+                            viewModel.notifyComposerUpdated()
+                            return@detectTapGestures
+                        }
+
                         val orig = composer.guidedOriginSquare()
                         val isOriginSquare = (orig != null && orig.size >= 2 && orig[0] == sqX && orig[1] == sqY)
+
+                        // 2b. If tapping already-selected origin pod during 0-hop guided move, open zoomed square dialog
+                        if (isOriginSquare && composer.isGuidedMoveActive && !composer.isAwaitingConfirmation) {
+                            composer.cancelAndRollback()
+                            selectedOriginSquare = Pair(sqX, sqY)
+                            viewModel.openZoomedSquare(sqX, sqY)
+                            viewModel.notifyComposerUpdated()
+                            return@detectTapGestures
+                        }
 
                         if (composer.isAwaitingConfirmation) {
                             if (isOriginSquare && composer.hasOtherMovablePodAtOrigin()) {
@@ -476,13 +494,20 @@ fun OctiBoardCanvas(
                             return@detectTapGestures
                         }
 
-                        // 4. Check optional capture toggle on jumped square
-                        if (composer.toggleCaptureAtSquare(sqX, sqY)) {
-                            viewModel.notifyComposerUpdated()
-                            return@detectTapGestures
+                        val dragKind = composer.activeDragKind()
+                        if (dragKind == OctiMoveComposer.DragKind.ADD_PRONG_FROM_RESERVE ||
+                            dragKind == OctiMoveComposer.DragKind.ADD_SUPERPRONG_FROM_RESERVE
+                        ) {
+                            val sqProng = b.squareAt(sqX - 1, sqY - 1)
+                            val turnProng = b.game?.turn
+                            if (!sqProng.isEmpty && turnProng != null && !sqProng.hasEnemyOf(turnProng)) {
+                                selectedOriginSquare = Pair(sqX, sqY)
+                                viewModel.openZoomedSquare(sqX, sqY)
+                                viewModel.notifyComposerUpdated()
+                                return@detectTapGestures
+                            }
                         }
 
-                        val dragKind = composer.activeDragKind()
                         if (dragKind == OctiMoveComposer.DragKind.ADD_POD_FROM_RESERVE ||
                             dragKind == OctiMoveComposer.DragKind.LIBERATE_POD_FROM_RESERVE
                         ) {
@@ -503,7 +528,9 @@ fun OctiBoardCanvas(
                             val pIdx = composer.selectedStackPodIndex(sqX, sqY)
                             val resolvedIdx = if (pIdx >= 0 && pIdx < sq.numPods) pIdx else 0
                             selectedOriginSquare = Pair(sqX, sqY)
-                            composer.beginGuidedPodMove(sqX, sqY, resolvedIdx, viewModel.moveEntireMatchingStack.value)
+                            if (!composer.beginGuidedPodMove(sqX, sqY, resolvedIdx, viewModel.moveEntireMatchingStack.value)) {
+                                viewModel.openZoomedSquare(sqX, sqY)
+                            }
                             viewModel.bumpRevision()
                             return@detectTapGestures
                         }

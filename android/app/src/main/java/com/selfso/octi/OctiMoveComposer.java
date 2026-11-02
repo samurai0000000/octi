@@ -313,6 +313,9 @@ public class OctiMoveComposer {
             return false;
         }
         OctiGame game = board.getGame();
+        if (game.getMode() == OctiGameMode.GAME_MODE_OFK) {
+            return false;
+        }
         if (!game.isGameStarted() || game.isGameOver()) {
             return false;
         }
@@ -433,18 +436,6 @@ public class OctiMoveComposer {
         return stageOrCommitAddProng(x, y, podIndex, dir, false);
     }
 
-    private static boolean isOfkBackwardDirection(OctiPlayer turn, OctiDir dir) {
-        if (dir == null || dir == OctiDir.DIR_UNDEF) {
-            return false;
-        }
-        if (turn == OctiPlayer.PLAYER_A) {
-            return dir.deltaY() < 0;
-        }
-        if (turn == OctiPlayer.PLAYER_B) {
-            return dir.deltaY() > 0;
-        }
-        return false;
-    }
 
     private static boolean computeDisplacement(int cx, int cy, int tx, int ty,
                                                boolean edgeless, int width, int height,
@@ -898,7 +889,7 @@ public class OctiMoveComposer {
 
         OctiPlayer turn = game.getTurn();
         if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK) {
-            if (superProng || isOfkBackwardDirection(turn, dir)) {
+            if (superProng) {
                 return false;
             }
         }
@@ -1174,8 +1165,7 @@ public class OctiMoveComposer {
                             }
                         }
                         if (!alreadyListed) {
-                            captureChoices.add(new CaptureChoice(
-                                    jx1, jy1, true, board.getGameMode() == OctiGameMode.GAME_MODE_OFK));
+                            captureChoices.add(new CaptureChoice(jx1, jy1, true, false));
                         }
                     }
                 }
@@ -1335,8 +1325,7 @@ public class OctiMoveComposer {
                             }
                         }
                         if (!alreadyListed) {
-                            captureChoices.add(new CaptureChoice(
-                                    jx1, jy1, true, board.getGameMode() == OctiGameMode.GAME_MODE_OFK));
+                            captureChoices.add(new CaptureChoice(jx1, jy1, true, false));
                         }
                     }
                 }
@@ -1664,9 +1653,6 @@ public class OctiMoveComposer {
                 if (pod.prongAt(dir) == OctiProngType.NO_PRONG) {
                     continue;
                 }
-                if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK && isOfkBackwardDirection(turn, dir)) {
-                    continue;
-                }
                 int jdx = dir.deltaX();
                 int jdy = dir.deltaY();
                 int sx = edgeless ? (((guidedOriginBx + jdx) % w + w) % w) : (guidedOriginBx + jdx);
@@ -1712,9 +1698,6 @@ public class OctiMoveComposer {
                 if (pod.prongAt(dir) == OctiProngType.NO_PRONG) {
                     continue;
                 }
-                if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK && isOfkBackwardDirection(turn, dir)) {
-                    continue;
-                }
                 int jdx = dir.deltaX();
                 int jdy = dir.deltaY();
                 int dx = jdx * 2;
@@ -1740,7 +1723,7 @@ public class OctiMoveComposer {
                     continue;
                 }
 
-                OctiHop hop = new OctiHop(lx, ly, (board.getGameMode() == OctiGameMode.GAME_MODE_OFK) || jumpedSq.hasEnemyOf(turn));
+                OctiHop hop = new OctiHop(lx, ly, jumpedSq.hasEnemyOf(turn));
                 OctiMoveOp op = new OctiMoveOp();
                 op.x0 = guidedOriginBx;
                 op.y0 = guidedOriginBy;
@@ -1771,9 +1754,6 @@ public class OctiMoveComposer {
             for (int d = 0; d < OctiDir.DIR_MAX; d++) {
                 OctiDir dir = OctiDir.fromIndex(d);
                 if (pod.prongAt(dir) == OctiProngType.NO_PRONG) {
-                    continue;
-                }
-                if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK && isOfkBackwardDirection(turn, dir)) {
                     continue;
                 }
                 int jdx = dir.deltaX();
@@ -1808,7 +1788,7 @@ public class OctiMoveComposer {
                 for (OctiMoveOp sop : stagedOps) {
                     cand.add(new OctiMoveOp(sop));
                 }
-                OctiHop hop = new OctiHop(lx, ly, (board.getGameMode() == OctiGameMode.GAME_MODE_OFK) || jumpedSq.hasEnemyOf(turn));
+                OctiHop hop = new OctiHop(lx, ly, jumpedSq.hasEnemyOf(turn));
                 cand.get(cand.size() - 1).hops.add(hop);
                 if (validateOpsOnScratch(cand)) {
                     IntPair pair = new IntPair(lx + 1, ly + 1);
@@ -2148,10 +2128,6 @@ public class OctiMoveComposer {
         for (int d = 0; d < OctiDir.DIR_MAX; d++) {
             OctiDir dir = OctiDir.fromIndex(d);
             if (pod.prongAt(dir) != OctiProngType.NO_PRONG) {
-                continue;
-            }
-            if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK
-                    && isOfkBackwardDirection(turn, dir)) {
                 continue;
             }
             result.add(dir);

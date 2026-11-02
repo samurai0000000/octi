@@ -527,7 +527,10 @@ fun OctiMainAppContent(
                         }
                         val cols = viewModel.board.boardWidth
                         val rows = viewModel.board.boardHeight
-                        val aspectRatio = cols.toFloat() / rows.toFloat()
+                        val boardRot by viewModel.boardRotation.collectAsState()
+                        val isSideways = (boardRot == OctiBoardGeometry.BoardRotation.ROT_90 ||
+                                          boardRot == OctiBoardGeometry.BoardRotation.ROT_270)
+                        val aspectRatio = if (isSideways) rows.toFloat() / cols.toFloat() else cols.toFloat() / rows.toFloat()
                         val lastMoveModifiedSquares by viewModel.lastMoveModifiedSquares.collectAsState()
                         val awaitingMatchStart by viewModel.awaitingMatchStart.collectAsState()
                         val matchType by viewModel.matchType.collectAsState()
@@ -585,6 +588,7 @@ fun OctiMainAppContent(
 
                         Box(
                             modifier = Modifier
+                                .weight(1f, fill = false)
                                 .fillMaxWidth()
                                 .aspectRatio(aspectRatio),
                             contentAlignment = Alignment.Center

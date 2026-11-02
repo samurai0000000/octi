@@ -221,9 +221,9 @@ public class OctiGame {
                     OctiGameBases bases) {
         this.board = board;
         this.mode = mode;
-        this.bases = bases;
+        this.bases = (mode == OctiGameMode.GAME_MODE_OFK) ? OctiGameBases.GAME_BASES_1 : bases;
         this.useSuperProngs = (mode == OctiGameMode.GAME_MODE_OFK) ? false : useSuperProngs;
-        this.useEdgelessBoard = useEdgelessBoard;
+        this.useEdgelessBoard = (mode == OctiGameMode.GAME_MODE_OFK) ? false : useEdgelessBoard;
 
         for (int p = 0; p < 5; p++) {
             players[p] = new OctiPlayerState();
@@ -355,6 +355,10 @@ public class OctiGame {
 
     public List<MoveHistoryEntry> getMoves() {
         return Collections.unmodifiableList(history);
+    }
+
+    public List<MoveHistoryEntry> getMoveHistory() {
+        return getMoves();
     }
 
     public void getMoves(List<MoveHistoryEntry> outHistory) {
@@ -518,6 +522,7 @@ public class OctiGame {
 
         gameResigned = true;
         gameOver = true;
+        gameMetadata.termination = "RESIGNATION";
 
         if (mode == OctiGameMode.GAME_MODE_2 || mode == OctiGameMode.GAME_MODE_OFK) {
             winner = (player == OctiPlayer.PLAYER_A) ? OctiPlayer.PLAYER_B : OctiPlayer.PLAYER_A;
@@ -597,6 +602,7 @@ public class OctiGame {
         if (!isRedo) {
             snapBefore.lastMove = m;
             snapBefore.lastPlayer = snapBefore.turn;
+            snapBefore.lastElapsedMs = lastPlyMeta.elapsedMs;
             undoStack.add(snapBefore);
             redoStack.clear();
             history.add(new MoveHistoryEntry(snapBefore.turn, m));
@@ -1037,6 +1043,9 @@ public class OctiGame {
         }
 
         // Options III & IV: Movement and Jumps
+        if (mode == OctiGameMode.GAME_MODE_OFK && regularOps.size() > 1) {
+            throw new IllegalMoveException("composite moves not allowed in OCTI for Kids");
+        }
         int sx = regularOps.get(0).x0;
         int sy = regularOps.get(0).y0;
         if (!board.isValidCoord(sx, sy)) {
@@ -1281,11 +1290,13 @@ public class OctiGame {
             if (aOccupiesB >= neededBases) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_A;
+                gameMetadata.termination = "BASE_OCCUPATION";
                 return;
             }
             if (bOccupiesA >= neededBases) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_B;
+                gameMetadata.termination = "BASE_OCCUPATION";
                 return;
             }
 
@@ -1306,11 +1317,13 @@ public class OctiGame {
             if (podsB == 0) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_A;
+                gameMetadata.termination = "TOTAL_CAPTURE";
                 return;
             }
             if (podsA == 0) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_B;
+                gameMetadata.termination = "TOTAL_CAPTURE";
                 return;
             }
         } else if (mode == OctiGameMode.GAME_MODE_OFK) {
@@ -1318,11 +1331,13 @@ public class OctiGame {
                 if (board.squareAt(x, 5).isCapturedBy(OctiPlayer.PLAYER_A)) {
                     gameOver = true;
                     winner = OctiPlayer.PLAYER_A;
+                    gameMetadata.termination = "BASE_OCCUPATION";
                     return;
                 }
                 if (board.squareAt(x, 1).isCapturedBy(OctiPlayer.PLAYER_B)) {
                     gameOver = true;
                     winner = OctiPlayer.PLAYER_B;
+                    gameMetadata.termination = "BASE_OCCUPATION";
                     return;
                 }
             }
@@ -1342,11 +1357,13 @@ public class OctiGame {
             if (podsB == 0) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_A;
+                gameMetadata.termination = "TOTAL_CAPTURE";
                 return;
             }
             if (podsA == 0) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_B;
+                gameMetadata.termination = "TOTAL_CAPTURE";
                 return;
             }
 
@@ -1359,6 +1376,7 @@ public class OctiGame {
             if (moves.isEmpty()) {
                 gameOver = true;
                 winner = turn;
+                gameMetadata.termination = "STALEMATE";
                 return;
             }
         } else if (mode == OctiGameMode.GAME_MODE_4) {
@@ -1367,6 +1385,7 @@ public class OctiGame {
             if (acBases) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_A;
+                gameMetadata.termination = "BASE_OCCUPATION";
                 return;
             }
 
@@ -1375,6 +1394,7 @@ public class OctiGame {
             if (bdBases) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_B;
+                gameMetadata.termination = "BASE_OCCUPATION";
                 return;
             }
 
@@ -1398,6 +1418,7 @@ public class OctiGame {
             if (bdElim) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_A;
+                gameMetadata.termination = "TOTAL_CAPTURE";
                 return;
             }
 
@@ -1406,6 +1427,7 @@ public class OctiGame {
             if (acElim) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_B;
+                gameMetadata.termination = "TOTAL_CAPTURE";
                 return;
             }
         }
@@ -1433,6 +1455,12 @@ public class OctiGame {
 
         OctiGameSnapshot currentSnap = captureSnapshot();
         OctiGameSnapshot prevSnap = undoStack.remove(undoStack.size() - 1);
+        currentSnap.lastMove = prevSnap.lastMove;
+        currentSnap.lastPlayer = prevSnap.lastPlayer;
+        currentSnap.lastElapsedMs = prevSnap.lastElapsedMs;
+        if (prevSnap.lastPlyMeta != null) {
+            currentSnap.lastPlyMeta = new OctiPlyMetadata(prevSnap.lastPlyMeta);
+        }
         redoStack.add(currentSnap);
 
         if (!history.isEmpty()) {
@@ -1462,6 +1490,9 @@ public class OctiGame {
 
         if (targetSnap.lastPlayer != OctiPlayer.PLAYER_UNDEF && !targetSnap.lastMove.isEmpty()) {
             history.add(new MoveHistoryEntry(targetSnap.lastPlayer, targetSnap.lastMove));
+            if (targetSnap.lastPlyMeta != null) {
+                plyMetadata.add(new OctiPlyMetadata(targetSnap.lastPlyMeta));
+            }
         }
 
         restoreSnapshot(targetSnap);
@@ -2128,8 +2159,8 @@ public class OctiGame {
             if (term == null || term.isEmpty()) {
                 if (gameResigned) {
                     term = "RESIGNATION";
-                } else if (gameOver && winner != OctiPlayer.PLAYER_UNDEF) {
-                    term = "BASE_OCCUPATION";
+                } else if (gameOver) {
+                    term = deduceTermination();
                 } else {
                     term = "";
                 }
@@ -2205,6 +2236,87 @@ public class OctiGame {
 
     public String serialize() {
         return serializeJson(this.gameMetadata);
+    }
+
+    public String deduceTermination() {
+        if (gameResigned) {
+            return "RESIGNATION";
+        }
+        if (gameMetadata != null && gameMetadata.termination != null && !gameMetadata.termination.isEmpty()) {
+            return gameMetadata.termination;
+        }
+
+        if (mode == OctiGameMode.GAME_MODE_2) {
+            int aOccupiesB = 0;
+            int bOccupiesA = 0;
+            if (board != null) {
+                if (board.squareAt(2, 6).isCapturedBy(OctiPlayer.PLAYER_A)) aOccupiesB++;
+                if (board.squareAt(4, 6).isCapturedBy(OctiPlayer.PLAYER_A)) aOccupiesB++;
+                if (board.squareAt(6, 6).isCapturedBy(OctiPlayer.PLAYER_A)) aOccupiesB++;
+                if (board.squareAt(2, 2).isCapturedBy(OctiPlayer.PLAYER_B)) bOccupiesA++;
+                if (board.squareAt(4, 2).isCapturedBy(OctiPlayer.PLAYER_B)) bOccupiesA++;
+                if (board.squareAt(6, 2).isCapturedBy(OctiPlayer.PLAYER_B)) bOccupiesA++;
+            }
+            int neededBases = (bases == OctiGameBases.GAME_BASES_1) ? 1 : 3;
+            if (aOccupiesB >= neededBases || bOccupiesA >= neededBases) {
+                return "BASE_OCCUPATION";
+            }
+            int podsA = 0;
+            int podsB = 0;
+            if (board != null) {
+                for (int x = 0; x < board.getBoardWidth(); x++) {
+                    for (int y = 0; y < board.getBoardHeight(); y++) {
+                        OctiSquare sq = board.squareAt(x, y);
+                        for (int i = 0; i < sq.getNumPods(); i++) {
+                            if (sq.getPodAt(i).getType() == OctiPodType.A_POD) podsA++;
+                            else if (sq.getPodAt(i).getType() == OctiPodType.B_POD) podsB++;
+                        }
+                    }
+                }
+            }
+            if (gameStarted && (podsA == 0 || podsB == 0)) {
+                return "TOTAL_CAPTURE";
+            }
+            return gameOver ? "STALEMATE" : "";
+        } else if (mode == OctiGameMode.GAME_MODE_OFK) {
+            if (board != null) {
+                for (int x = 1; x <= 4; x++) {
+                    if (board.squareAt(x, 5).isCapturedBy(OctiPlayer.PLAYER_A)
+                            || board.squareAt(x, 1).isCapturedBy(OctiPlayer.PLAYER_B)) {
+                        return "BASE_OCCUPATION";
+                    }
+                }
+            }
+            int podsA = 0;
+            int podsB = 0;
+            if (board != null) {
+                for (int x = 0; x < board.getBoardWidth(); x++) {
+                    for (int y = 0; y < board.getBoardHeight(); y++) {
+                        OctiSquare sq = board.squareAt(x, y);
+                        for (int i = 0; i < sq.getNumPods(); i++) {
+                            if (sq.getPodAt(i).getType() == OctiPodType.A_POD) podsA++;
+                            else if (sq.getPodAt(i).getType() == OctiPodType.B_POD) podsB++;
+                        }
+                    }
+                }
+            }
+            if (gameStarted && (podsA == 0 || podsB == 0)) {
+                return "TOTAL_CAPTURE";
+            }
+            return gameOver ? "STALEMATE" : "";
+        } else if (mode == OctiGameMode.GAME_MODE_4) {
+            if (board != null) {
+                boolean acBases = board.squareAt(2, 6).isCapturedByTeamOf(OctiPlayer.PLAYER_A)
+                        && board.squareAt(6, 2).isCapturedByTeamOf(OctiPlayer.PLAYER_A);
+                boolean bdBases = board.squareAt(2, 2).isCapturedByTeamOf(OctiPlayer.PLAYER_B)
+                        && board.squareAt(6, 6).isCapturedByTeamOf(OctiPlayer.PLAYER_B);
+                if (acBases || bdBases) {
+                    return "BASE_OCCUPATION";
+                }
+            }
+            return "TOTAL_CAPTURE";
+        }
+        return gameOver ? "BASE_OCCUPATION" : "";
     }
 
     public void deserialize(String transcript) {

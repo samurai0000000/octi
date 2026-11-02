@@ -37,6 +37,7 @@ OctiBoardCanvas::OctiBoardCanvas(QWidget *parent)
     , _dragSrcProngDir(DIR_UNDEF)
     , _dragHoverProngDir(DIR_UNDEF)
     , _dragShiftHeld(false)
+    , _wasOriginSquareBeforePress(false)
     , _hoverSquareX(-1)
     , _hoverSquareY(-1)
     , _selectedSquareX(-1)
@@ -366,7 +367,10 @@ int OctiBoardCanvas::activeTurnScreenEdge(OctiGameMode mode,
     }
 }
 
-std::vector<QPoint> OctiBoardCanvas::extractModifiedSquares(const OctiMove &move, bool edgeless)
+std::vector<QPoint> OctiBoardCanvas::extractModifiedSquares(const OctiMove &move,
+                                                           bool edgeless,
+                                                           int boardWidth,
+                                                           int boardHeight)
 {
     std::vector<QPoint> result;
     auto addUnique = [&result](int x1, int y1) {
@@ -375,6 +379,9 @@ std::vector<QPoint> OctiBoardCanvas::extractModifiedSquares(const OctiMove &move
             result.push_back(pt);
         }
     };
+
+    int halfW = boardWidth / 2;
+    int halfH = boardHeight / 2;
 
     for (const auto &op : move.getOps()) {
         addUnique(op.x0 + 1, op.y0 + 1);
@@ -385,20 +392,20 @@ std::vector<QPoint> OctiBoardCanvas::extractModifiedSquares(const OctiMove &move
                 int dx = h.x - cx;
                 int dy = h.y - cy;
                 if (edgeless) {
-                    if (dx > 4) {
-                        dx -= 9;
-                    } else if (dx < -4) {
-                        dx += 9;
+                    if (dx > halfW) {
+                        dx -= boardWidth;
+                    } else if (dx < -halfW) {
+                        dx += boardWidth;
                     }
-                    if (dy > 4) {
-                        dy -= 9;
-                    } else if (dy < -4) {
-                        dy += 9;
+                    if (dy > halfH) {
+                        dy -= boardHeight;
+                    } else if (dy < -halfH) {
+                        dy += boardHeight;
                     }
                 }
                 if (std::max(std::abs(dx), std::abs(dy)) == 2) {
-                    int jx = edgeless ? ((cx + dx / 2 + 9) % 9) : (cx + dx / 2);
-                    int jy = edgeless ? ((cy + dy / 2 + 9) % 9) : (cy + dy / 2);
+                    int jx = edgeless ? (((cx + dx / 2) % boardWidth + boardWidth) % boardWidth) : (cx + dx / 2);
+                    int jy = edgeless ? (((cy + dy / 2) % boardHeight + boardHeight) % boardHeight) : (cy + dy / 2);
                     addUnique(jx + 1, jy + 1);
                 }
                 addUnique(h.x + 1, h.y + 1);
@@ -1360,6 +1367,14 @@ bool OctiBoardCanvas::openZoomedSquareAt(int sx, int sy)
         return false;
     }
 
+    if (_zoomedSquareOpenHook && _zoomedSquareOpenHook(sx, sy)) {
+        return true;
+    }
+
+    if (!isVisible()) {
+        return false;
+    }
+
     bool isOriginWithRemaining = (_composer && _composer->isAwaitingConfirmation() &&
                                   _composer->hasOtherMovablePodAtOrigin() &&
                                   std::make_pair(sx, sy) == _composer->guidedOriginSquare());
@@ -1389,10 +1404,21 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
     if (!_turnIndicatorVisible) {
         return;
     }
-    if (event->button() == Qt::RightButton && _boardZoomScale > 1.001) {
-        resetBoardZoom();
+    if (event->button() == Qt::RightButton) {
+        if (_board && _composer && !(_board->getGame() && _board->getGame()->isGameOver())) {
+            QPointF pos = mousePosF(event);
+            int rx = 0, ry = 0;
+            if (_geometry.screenToSquare(pos, rx, ry) && openZoomedSquareAt(rx, ry)) {
+                return;
+            }
+        }
+        if (_boardZoomScale > 1.001) {
+            resetBoardZoom();
+            return;
+        }
         return;
     }
+
     if (!_board || !_composer) {
         return;
     }
@@ -1407,14 +1433,6 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
     _lastPanRawPos = _pressRawPos;
     _boardPanActive = false;
 
-    if (event->button() == Qt::RightButton) {
-        int rx = 0, ry = 0;
-        if (_geometry.screenToSquare(pos, rx, ry)) {
-            openZoomedSquareAt(rx, ry);
-        }
-        return;
-    }
-
     // 1. Check Commit / Rollback buttons on bottom banner
     if (_composer->isAwaitingConfirmation()) {
         if (_commitBtnRect.contains(pos)) {
@@ -1423,7 +1441,9 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
             if (_composer->commitStagedMove() && _lastMoveModifiedSquares.empty() && !stagedNot.empty()) {
                 try {
                     bool edgeless = _board && _board->getGame() && _board->getGame()->useEdgelessBoard();
-                    setLastMoveModifiedSquares(extractModifiedSquares(OctiMove(stagedNot), edgeless));
+                    setLastMoveModifiedSquares(extractModifiedSquares(
+                        OctiMove(stagedNot), edgeless,
+                        _board->getBoardWidth(), _board->getBoardHeight()));
                 } catch (...) {
                 }
             }
@@ -1649,13 +1669,26 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
 
         if (!sq.isEmpty() && _board->getGame() && _board->getGame()->isGameStarted() &&
             !sq.hasEnemyOf(_board->getGame()->getTurn())) {
-            _composer->beginGuidedPodMove(
-                sx, sy, _composer->selectedStackPodIndex(sx, sy), _composer->moveEntireMatchingStack());
+
+            if (_dragKind == DragKind::ADD_PRONG_FROM_RESERVE ||
+                _dragKind == DragKind::ADD_SUPERPRONG_FROM_RESERVE) {
+                openZoomedSquareAt(sx, sy);
+                _dragKind = DragKind::NONE;
+                update();
+                return;
+            }
+
+            _wasOriginSquareBeforePress = (_composer && _composer->isGuidedMoveActive() &&
+                                           std::make_pair(sx, sy) == _composer->guidedOriginSquare());
+
+            int clickedPodIdx = _composer->selectedStackPodIndex(sx, sy);
             _dragStartX = sx;
             _dragStartY = sy;
-            _dragPodIndex = _composer->selectedStackPodIndex(sx, sy);
+            _dragPodIndex = clickedPodIdx;
             _dragKind = DragKind::MOVE_OR_JUMP_POD;
             _dragSrcProngDir = DIR_UNDEF;
+            _composer->beginGuidedPodMove(
+                sx, sy, clickedPodIdx, _composer->moveEntireMatchingStack());
         } else if (!isVisible() && !sq.isEmpty()) {
             _dragStartX = sx;
             _dragStartY = sy;
@@ -1824,6 +1857,30 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
         } else if (_dragKind == DragKind::MOVE_OR_JUMP_POD &&
                    tx == _dragStartX && ty == _dragStartY &&
                    tx >= 1 && ty >= 1) {
+            if (_dragKind == DragKind::ADD_PRONG_FROM_RESERVE ||
+                _dragKind == DragKind::ADD_SUPERPRONG_FROM_RESERVE) {
+                openZoomedSquareAt(tx, ty);
+                _dragKind = DragKind::NONE;
+                update();
+                return;
+            }
+
+            if (_wasOriginSquareBeforePress && _composer &&
+                !_composer->isAwaitingConfirmation()) {
+                _composer->cancelAndRollback();
+                openZoomedSquareAt(tx, ty);
+                _dragKind = DragKind::NONE;
+                update();
+                return;
+            }
+
+            if (_composer && !_composer->isGuidedMoveActive()) {
+                openZoomedSquareAt(tx, ty);
+                _dragKind = DragKind::NONE;
+                update();
+                return;
+            }
+
             bool acted = false;
             if (_selectedSquareX >= 1 && _selectedSquareY >= 1 &&
                 (tx != _selectedSquareX || ty != _selectedSquareY)) {
@@ -1883,10 +1940,6 @@ void OctiBoardCanvas::mouseDoubleClickEvent(QMouseEvent *event)
     if (!_turnIndicatorVisible) {
         return;
     }
-    if (_boardZoomScale > 1.001) {
-        resetBoardZoom();
-        return;
-    }
     if (!_board) {
         return;
     }
@@ -1898,7 +1951,9 @@ void OctiBoardCanvas::mouseDoubleClickEvent(QMouseEvent *event)
         if (_composer->commitStagedMove() && _lastMoveModifiedSquares.empty() && !stagedNot.empty()) {
             try {
                 bool edgeless = _board && _board->getGame() && _board->getGame()->useEdgelessBoard();
-                setLastMoveModifiedSquares(extractModifiedSquares(OctiMove(stagedNot), edgeless));
+                setLastMoveModifiedSquares(extractModifiedSquares(
+                    OctiMove(stagedNot), edgeless,
+                    _board->getBoardWidth(), _board->getBoardHeight()));
             } catch (...) {
             }
         }
@@ -1907,8 +1962,12 @@ void OctiBoardCanvas::mouseDoubleClickEvent(QMouseEvent *event)
     }
 
     int sx = 0, sy = 0;
-    if (_geometry.screenToSquare(mousePosF(event), sx, sy)) {
-        openZoomedSquareAt(sx, sy);
+    if (_geometry.screenToSquare(mousePosF(event), sx, sy) && openZoomedSquareAt(sx, sy)) {
+        return;
+    }
+    if (_boardZoomScale > 1.001) {
+        resetBoardZoom();
+        return;
     }
 }
 
@@ -1975,7 +2034,9 @@ void OctiBoardCanvas::keyPressEvent(QKeyEvent *event)
             if (_composer->commitStagedMove() && _lastMoveModifiedSquares.empty() && !stagedNot.empty()) {
                 try {
                     bool edgeless = _board && _board->getGame() && _board->getGame()->useEdgelessBoard();
-                    setLastMoveModifiedSquares(extractModifiedSquares(OctiMove(stagedNot), edgeless));
+                    setLastMoveModifiedSquares(extractModifiedSquares(
+                        OctiMove(stagedNot), edgeless,
+                        _board->getBoardWidth(), _board->getBoardHeight()));
                 } catch (...) {
                 }
             }

@@ -54,6 +54,8 @@ void OctiBoard::setGameMode(OctiGameMode mode,
         _width = 6;
         _height = 7;
         bases = GAME_BASES_1;
+        useSuperProngs = false;
+        useEdgelessBoard = false;
     } else {
         _width = 9;
         _height = 9;
@@ -442,6 +444,18 @@ void OctiBoard::fromPositionString(const std::string &pos)
     // 4. Edgeless
     bool useEdgeless = (tokens[3] == "1");
 
+    if (mode == GAME_MODE_OFK) {
+        if (tokens[1] != "1") {
+            throw IllegalMoveSyntaxException("OFK mode requires 1 base");
+        }
+        if (useSuper) {
+            throw IllegalMoveSyntaxException("superprongs not allowed in OCTI for Kids");
+        }
+        if (useEdgeless) {
+            throw IllegalMoveSyntaxException("edgeless board not allowed in OCTI for Kids");
+        }
+    }
+
     // Configure board grid and reinitialize game engine
     setGameMode(mode, useSuper, useEdgeless, bases);
     clear();
@@ -502,6 +516,17 @@ void OctiBoard::fromPositionString(const std::string &pos)
         while (std::getline(resStream, val, ',') && vi < 4) {
             vals[vi++] = std::stoi(val);
         }
+        if (mode == GAME_MODE_OFK) {
+            if (vals[0] > 0) {
+                throw IllegalMoveSyntaxException("freePods not allowed in OCTI for Kids");
+            }
+            if (vals[3] > 0) {
+                throw IllegalMoveSyntaxException("freeSuperProngs not allowed in OCTI for Kids");
+            }
+            if (vals[1] < 0 || vals[1] > 4) {
+                throw IllegalMoveSyntaxException("invalid capturedPods in OCTI for Kids");
+            }
+        }
         snap.players[p].freePods = vals[0];
         snap.players[p].capturedPods = vals[1];
         snap.players[p].freeProngs = vals[2];
@@ -546,10 +571,17 @@ void OctiBoard::fromPositionString(const std::string &pos)
                 }
                 bool super = false;
                 if (idx < podToken.size() && podToken[idx] == '!') {
+                    if (mode == GAME_MODE_OFK) {
+                        throw IllegalMoveSyntaxException("superprongs not allowed in OCTI for Kids");
+                    }
                     super = true;
                     idx++;
                 }
                 pod.addProng(dir, super);
+            }
+
+            if (mode == GAME_MODE_OFK && !squareAt(x, y).isEmpty()) {
+                throw IllegalMoveSyntaxException("pod stacking not allowed in OCTI for Kids");
             }
 
             squareAt(x, y).addPod(pod);

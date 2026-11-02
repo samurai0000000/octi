@@ -556,6 +556,9 @@ public class OctiBotEngine {
         if (board == null || board.getGame() == null || turn == null || turn == OctiPlayer.PLAYER_UNDEF) {
             return;
         }
+        if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK) {
+            return;
+        }
         OctiGame game = board.getGame();
         int w = board.getBoardWidth();
         int h = board.getBoardHeight();
@@ -886,11 +889,13 @@ public class OctiBotEngine {
      * Recursive 2001 Jump-Capture & Reachability evaluation (zero-allocation bitmask).
      */
     private static void evaluateJumpCaptureRecursive(OctiBoard board,
+                                                     int startX, int startY,
                                                      int x, int y,
                                                      OctiPod pod,
                                                      OctiPlayer p,
                                                      boolean edgeless,
                                                      int depth,
+                                                     long jumpedMask,
                                                      long[] visitedMask,
                                                      long[] capturedSqMask,
                                                      int[] outStats) {
@@ -912,9 +917,14 @@ public class OctiBotEngine {
             int ly = edgeless ? (((y + 2 * dir.deltaY()) % h + h) % h) : (y + 2 * dir.deltaY());
 
             if (board.isValidCoord(jx, jy) && board.isValidCoord(lx, ly)) {
+                long jMask = 1L << (jy * 9 + jx);
+                if ((jumpedMask & jMask) != 0L) {
+                    continue;
+                }
                 OctiSquare jumpedSq = board.squareAt(jx, jy);
                 OctiSquare landSq = board.squareAt(lx, ly);
-                if (!jumpedSq.isEmpty() && !landSq.hasEnemyOf(p)) {
+                boolean landEmpty = landSq.isEmpty() || (lx == startX && ly == startY);
+                if (!jumpedSq.isEmpty() && landEmpty) {
                     int sqBit = ly * 9 + lx;
                     int wordIdx = (sqBit >>> 6) & 1;
                     long bitMask = 1L << (sqBit & 63);
@@ -924,9 +934,9 @@ public class OctiBotEngine {
                         if (jumpedSq.hasEnemyOf(p)) {
                             int jBit = jy * 9 + jx;
                             int jWord = (jBit >>> 6) & 1;
-                            long jMask = 1L << (jBit & 63);
-                            if ((capturedSqMask[jWord] & jMask) == 0L) {
-                                capturedSqMask[jWord] |= jMask;
+                            long jCapMask = 1L << (jBit & 63);
+                            if ((capturedSqMask[jWord] & jCapMask) == 0L) {
+                                capturedSqMask[jWord] |= jCapMask;
                                 int enemyPods = jumpedSq.getNumPods();
                                 outStats[1] += enemyPods;
                                 for (int pi = 0; pi < enemyPods; pi++) {
@@ -937,8 +947,8 @@ public class OctiBotEngine {
                                 }
                             }
                         }
-                        evaluateJumpCaptureRecursive(board, lx, ly, pod, p, edgeless,
-                                depth + 1, visitedMask, capturedSqMask, outStats);
+                        evaluateJumpCaptureRecursive(board, startX, startY, lx, ly, pod, p, edgeless,
+                                depth + 1, jumpedMask | jMask, visitedMask, capturedSqMask, outStats);
                     }
                 }
             }
@@ -1185,7 +1195,10 @@ public class OctiBotEngine {
                             if (ndist < dist) {
                                 podVal += 140;
                             }
-                            if (ndist == 0 && !board.squareAt(nx, ny).hasEnemyOf(owner)) {
+                            boolean canStepBase = (mode == OctiGameMode.GAME_MODE_OFK)
+                                    ? board.squareAt(nx, ny).isEmpty()
+                                    : !board.squareAt(nx, ny).hasEnemyOf(owner);
+                            if (ndist == 0 && canStepBase) {
                                 podVal += 8500; // 1-step base entry threat!
                             }
                         }
@@ -1193,7 +1206,7 @@ public class OctiBotEngine {
                         int jx = edgeless ? (((x + 2 * dir.deltaX()) % w + w) % w) : (x + 2 * dir.deltaX());
                         int jy = edgeless ? (((y + 2 * dir.deltaY()) % h + h) % h) : (y + 2 * dir.deltaY());
                         if (board.isValidCoord(nx, ny) && board.isValidCoord(jx, jy)) {
-                            if (!board.squareAt(nx, ny).isEmpty() && !board.squareAt(jx, jy).hasEnemyOf(owner)) {
+                            if (!board.squareAt(nx, ny).isEmpty() && board.squareAt(jx, jy).isEmpty()) {
                                 int jdist = minChebyshevToTargets(jx, jy, targets, w, h, edgeless);
                                 if (jdist == 0) {
                                     podVal += 12000; // 1-jump base entry threat!
@@ -1217,8 +1230,8 @@ public class OctiBotEngine {
                         visitedMask[0] = 0L;
                         visitedMask[1] = 0L;
                         long[] capMask = isAlly ? allyJumpThreatMask : enemyJumpThreatMask;
-                        evaluateJumpCaptureRecursive(board, x, y, pod, owner, edgeless,
-                                0, visitedMask, capMask, mobStats);
+                        evaluateJumpCaptureRecursive(board, x, y, x, y, pod, owner, edgeless,
+                                0, 0L, visitedMask, capMask, mobStats);
                         podVal += mobStats[0] * 55;   // reachable squares
                         podVal += mobStats[1] * 1100; // capturable enemy pods
                         podVal += mobStats[2] * 180;  // capturable enemy prongs
@@ -1275,7 +1288,8 @@ public class OctiBotEngine {
                     + game.getFreeProngs(p) * 50
                     + game.getFreeSuperProngs(p) * 150;
             // Penalize pulling reserve pods onto the board while home pods are still unarmed
-            if (freePods < 4 && (isAlly ? allyHasUnarmedHomePod : enemyHasUnarmedHomePod)
+            if (mode != OctiGameMode.GAME_MODE_OFK && freePods < 4
+                    && (isAlly ? allyHasUnarmedHomePod : enemyHasUnarmedHomePod)
                     && game.getFreeProngs(p) >= 6) {
                 resVal -= (4 - freePods) * 1500;
             }

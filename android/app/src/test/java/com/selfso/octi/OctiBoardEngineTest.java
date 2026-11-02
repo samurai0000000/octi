@@ -1516,6 +1516,74 @@ public class OctiBoardEngineTest {
         assertThrowsIllegalMove(() -> game.move("44"));
     }
 
+    @Test
+    public void testUndoRedoPreservesMoveHistory() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+        game.start(OctiPlayer.PLAYER_A);
+
+        game.move("33+a");
+        game.move("77+f");
+        game.move("33a-34");
+
+        assertEquals(3, game.getMoveHistory().size());
+        assertEquals("33+a", game.getMoveHistory().get(0).getMove().asString());
+        assertEquals("77+f", game.getMoveHistory().get(1).getMove().asString());
+        assertEquals("33a-34", game.getMoveHistory().get(2).getMove().asString());
+
+        game.undo();
+        assertEquals(2, game.getMoveHistory().size());
+        assertEquals("33+a", game.getMoveHistory().get(0).getMove().asString());
+        assertEquals("77+f", game.getMoveHistory().get(1).getMove().asString());
+
+        game.redo();
+        assertEquals(3, game.getMoveHistory().size());
+        assertEquals("33a-34", game.getMoveHistory().get(2).getMove().asString());
+        assertEquals(OctiPlayer.PLAYER_A, game.getMoveHistory().get(2).getPlayer());
+    }
+
+    @Test
+    public void testOfkEngineAndPositionStringValidation() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_OFK, true, true, OctiGameBases.GAME_BASES_3);
+        OctiGame game = board.getGame();
+        assertFalse("OFK must not allow superprongs", game.useSuperProngs());
+        assertFalse("OFK must not allow edgeless board", game.useEdgelessBoard());
+        assertEquals(OctiGameBases.GAME_BASES_1, game.getBases());
+
+        // Valid OFK position string (capPods in 0..4)
+        String validOfk = "OFK:1:0:0:P:A:-:0:0,2,10,0:0,1,11,0:A22,A32,A42,A52,B26,B36,B46,B56";
+        board.fromPositionString(validOfk);
+        assertEquals(2, board.getGame().getCapturedPods(OctiPlayer.PLAYER_A));
+        assertEquals(1, board.getGame().getCapturedPods(OctiPlayer.PLAYER_B));
+
+        // Rejection tests:
+        // Superprongs in OFK position
+        assertThrowsIllegalMoveSyntax(() -> board.fromPositionString("OFK:1:1:0:P:A:-:0:0,0,12,0:0,0,12,0:A22"));
+        // Edgeless in OFK position
+        assertThrowsIllegalMoveSyntax(() -> board.fromPositionString("OFK:1:0:1:P:A:-:0:0,0,12,0:0,0,12,0:A22"));
+        // 3-bases in OFK position
+        assertThrowsIllegalMoveSyntax(() -> board.fromPositionString("OFK:3:0:0:P:A:-:0:0,0,12,0:0,0,12,0:A22"));
+        // freePods > 0 in OFK position
+        assertThrowsIllegalMoveSyntax(() -> board.fromPositionString("OFK:1:0:0:P:A:-:0:1,0,12,0:0,0,12,0:A22"));
+        // freeSuper > 0 in OFK position
+        assertThrowsIllegalMoveSyntax(() -> board.fromPositionString("OFK:1:0:0:P:A:-:0:0,0,12,1:0,0,12,0:A22"));
+        // Superprong ! on pod in OFK
+        assertThrowsIllegalMoveSyntax(() -> board.fromPositionString("OFK:1:0:0:P:A:-:0:0,0,12,0:0,0,12,0:A22a!"));
+        // Stacked pods on square in OFK
+        assertThrowsIllegalMoveSyntax(() -> board.fromPositionString("OFK:1:0:0:P:A:-:0:0,0,12,0:0,0,12,0:A22,A22"));
+
+        // Composite move rejection in OFK
+        OctiBoard ofkBoard = new OctiBoard(OctiGameMode.GAME_MODE_OFK);
+        OctiGame ofkGame = ofkBoard.getGame();
+        ofkGame.start(OctiPlayer.PLAYER_A);
+        OctiMove compositeMove = new OctiMove("22-23,22-23");
+        assertThrowsIllegalMove(() -> ofkGame.move(compositeMove));
+
+        // Termination deduction in OFK: base occupation vs total capture
+        ofkBoard.squareAt(1, 5).addPod(new OctiPod(OctiPodType.A_POD));
+        assertEquals("BASE_OCCUPATION", ofkGame.deduceTermination());
+    }
+
     // -------------------------------------------------------------------------
     // Exception Assert Helpers
     // -------------------------------------------------------------------------

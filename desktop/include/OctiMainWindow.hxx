@@ -118,6 +118,7 @@ public:
     bool isLocalBotGame() const;
     const LocalGameConfig &localGameConfig() const;
     bool executeBotTurnIfNeeded();
+    void showHint();
     bool isAwaitingMatchStart() const { return _awaitingMatchStart; }
     void beginAwaitingMatchStart();
     void confirmMatchStart();

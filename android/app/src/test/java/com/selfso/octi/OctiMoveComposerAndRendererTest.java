@@ -382,6 +382,88 @@ public class OctiMoveComposerAndRendererTest {
         assertTrue(composer.commitMove());
         assertEquals(1, board.squareAt(5, 5).getNumPods());
     }
+
+    @Test
+    public void testOfkEightDirectionProngsAndFriendlyJumpsAndOptionalCapture() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_OFK);
+        OctiGame game = board.getGame();
+        game.start(OctiPlayer.PLAYER_A);
+
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        composer.setConfirmAllMoves(true);
+
+        // 1. In OFK, Player A should be able to insert prongs in all 8 compass directions, including backward (DIR_S / e)
+        for (int d = 0; d < OctiDir.DIR_MAX; d++) {
+            OctiDir dir = OctiDir.fromIndex(d);
+            List<OctiDir> avail = composer.legalProngAdditionsAt(2, 2, 0, false);
+            assertTrue("OFK must allow prong in direction " + dir, avail.contains(dir));
+        }
+
+        // Test inserting backward prong (DIR_S / 'e')
+        assertTrue(composer.stageOrCommitAddProng(2, 2, 0, OctiDir.DIR_S, false));
+        assertEquals("22+e", composer.stagedMoveNotation());
+        assertTrue(composer.commitMove());
+
+        // Player B responds
+        assertTrue(composer.stageOrCommitAddProng(2, 6, 0, OctiDir.DIR_N, false));
+        assertEquals("26+a", composer.stagedMoveNotation());
+        assertTrue(composer.commitMove());
+
+        // 2. Clear board for controlled friendly and enemy jump test
+        for (int x = 0; x < board.getBoardWidth(); x++) {
+            for (int y = 0; y < board.getBoardHeight(); y++) {
+                board.squareAt(x, y).clear();
+            }
+        }
+
+        // Jumper pod A at (2, 2) with prongs North (DIR_N)
+        OctiPod jumperA = new OctiPod(OctiPodType.A_POD);
+        jumperA.addProng(OctiDir.DIR_N, false);
+        board.squareAt(1, 1).addPod(jumperA); // (2, 2)
+
+        // Friendly pod A at (2, 3) to be jumped over
+        OctiPod friendlyA = new OctiPod(OctiPodType.A_POD);
+        board.squareAt(1, 2).addPod(friendlyA); // (2, 3)
+
+        // Enemy pod B at (2, 5) to be jumped over
+        OctiPod enemyB = new OctiPod(OctiPodType.B_POD);
+        board.squareAt(1, 4).addPod(enemyB); // (2, 5)
+
+        // Start guided move at (2, 2)
+        assertTrue(composer.beginGuidedPodMove(2, 2, 0, false));
+        assertTrue("Friendly jump (2, 4) must be legal", composer.isGuidedLegalDestination(2, 4));
+
+        // Jump over friendly pod at (2, 3) -> land on (2, 4)
+        assertTrue(composer.selectGuidedDestination(2, 4));
+        // Friendly jump must NOT add a capture choice
+        assertEquals("No capture choices for friendly pod jump", 0, composer.captureChoices().size());
+
+        // Now jump over enemy pod at (2, 5) -> land on (2, 6)
+        assertTrue("Enemy jump (2, 6) must be legal", composer.isGuidedLegalDestination(2, 6));
+        assertTrue(composer.selectGuidedDestination(2, 6));
+
+        // Capture choice must be present and optional (mandatory == false in OFK)
+        List<OctiMoveComposer.CaptureChoice> choices = composer.captureChoices();
+        assertEquals(1, choices.size());
+        assertEquals(2, choices.get(0).jumpedX);
+        assertEquals(5, choices.get(0).jumpedY);
+        assertTrue("Default capture state is true", choices.get(0).capture);
+        assertFalse("Capture must be optional in OFK (mandatory == false)", choices.get(0).mandatory);
+
+        // Toggle capture off at (2, 5)
+        assertTrue(composer.toggleCaptureAtSquare(2, 5));
+        assertFalse("Capture should now be toggled off", composer.captureChoices().get(0).capture);
+
+        // Toggle capture back on at (2, 5)
+        assertTrue(composer.toggleCaptureAtSquare(2, 5));
+        assertTrue("Capture should now be toggled on", composer.captureChoices().get(0).capture);
+
+        // Commit move
+        assertTrue(composer.commitMove());
+        assertEquals("Enemy pod at (2, 5) must be captured", 0, board.squareAt(1, 4).getNumPods());
+        assertEquals(1, game.getCapturedPods(OctiPlayer.PLAYER_B));
+        assertEquals(0, game.getCapturedPods(OctiPlayer.PLAYER_A));
+    }
 }
 
 /*

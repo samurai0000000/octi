@@ -26,6 +26,7 @@
 #include <QPainterPath>
 #include <QPixmap>
 #include <QRadioButton>
+#include <QStandardItemModel>
 #include <QUrl>
 #include <QVBoxLayout>
 #include "OctiBoardCanvas.hxx"
@@ -1611,10 +1612,35 @@ CreateTableDialog::CreateTableDialog(OctiNetworkClient *netClient,
         reject();
     });
 
+    QObject::connect(_modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int) {
+        updateOfkConstraints();
+    });
+    updateOfkConstraints();
+
     setTheme(_theme);
 }
 
 CreateTableDialog::~CreateTableDialog() = default;
+
+void CreateTableDialog::updateOfkConstraints()
+{
+    bool isOFK = (_modeCombo->currentData().toString() == "OFK");
+    if (isOFK) {
+        int b1Idx = _basesCombo->findData(1);
+        if (b1Idx >= 0) {
+            _basesCombo->setCurrentIndex(b1Idx);
+        }
+        _basesCombo->setEnabled(false);
+        _superProngsCheck->setChecked(false);
+        _superProngsCheck->setEnabled(false);
+        _edgelessCheck->setChecked(false);
+        _edgelessCheck->setEnabled(false);
+    } else {
+        _basesCombo->setEnabled(true);
+        _superProngsCheck->setEnabled(true);
+        _edgelessCheck->setEnabled(true);
+    }
+}
 
 void CreateTableDialog::setTheme(ThemeId theme)
 {
@@ -1658,6 +1684,7 @@ void CreateTableDialog::setRequest(const CreateTableRequest &req)
         _voicePolicyCombo->setCurrentIndex(vIdx);
     }
     _passcodeEdit->setText(QString::fromStdString(req.passcode));
+    updateOfkConstraints();
 }
 
 CreateTableRequest CreateTableDialog::buildRequest() const
@@ -1847,12 +1874,37 @@ MatchmakingDialog::MatchmakingDialog(OctiNetworkClient *netClient,
         pollMatchmakingStatus();
     });
 
+    QObject::connect(_modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int) {
+        updateOfkConstraints();
+    });
+    updateOfkConstraints();
+
     setTheme(_theme);
 }
 
 MatchmakingDialog::~MatchmakingDialog()
 {
     _pollTimer.stop();
+}
+
+void MatchmakingDialog::updateOfkConstraints()
+{
+    bool isOFK = (_modeCombo->currentData().toString() == "OFK");
+    if (isOFK) {
+        int b1Idx = _basesCombo->findData(1);
+        if (b1Idx >= 0) {
+            _basesCombo->setCurrentIndex(b1Idx);
+        }
+        _basesCombo->setEnabled(false);
+        _superProngsCheck->setChecked(false);
+        _superProngsCheck->setEnabled(false);
+        _edgelessCheck->setChecked(false);
+        _edgelessCheck->setEnabled(false);
+    } else {
+        _basesCombo->setEnabled(true);
+        _superProngsCheck->setEnabled(true);
+        _edgelessCheck->setEnabled(true);
+    }
 }
 
 void MatchmakingDialog::setTheme(ThemeId theme)
@@ -1883,6 +1935,7 @@ void MatchmakingDialog::setRequest(const MatchmakingRequest &req)
         _initialSecSpin->setValue(static_cast<int>(req.initialMs / 1000));
     }
     _incrementSecSpin->setValue(static_cast<int>(req.incrementMs / 1000));
+    updateOfkConstraints();
 }
 
 MatchmakingRequest MatchmakingDialog::buildRequest() const
@@ -2729,7 +2782,44 @@ NewLocalGameDialog::NewLocalGameDialog(ThemeId theme, QWidget *parent)
         reject();
     });
 
+    QObject::connect(_modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int) {
+        updateModeConstraints();
+    });
+    updateModeConstraints();
+
     setTheme(_theme);
+}
+
+void NewLocalGameDialog::updateModeConstraints()
+{
+    int modeVal = _modeCombo->currentData().toInt();
+    bool is4P = (modeVal == static_cast<int>(GAME_MODE_4));
+    bool isOFK = (modeVal == static_cast<int>(GAME_MODE_OFK));
+
+    auto *seatModel = qobject_cast<QStandardItemModel *>(_humanSeatCombo->model());
+    if (seatModel) {
+        if (seatModel->item(2)) seatModel->item(2)->setEnabled(is4P);
+        if (seatModel->item(3)) seatModel->item(3)->setEnabled(is4P);
+    }
+    if (!is4P && (_humanSeatCombo->currentIndex() == 2 || _humanSeatCombo->currentIndex() == 3)) {
+        _humanSeatCombo->setCurrentIndex(0);
+    }
+
+    if (isOFK) {
+        int b1Idx = _basesCombo->findData(static_cast<int>(GAME_BASES_1));
+        if (b1Idx >= 0) {
+            _basesCombo->setCurrentIndex(b1Idx);
+        }
+        _basesCombo->setEnabled(false);
+        _superProngsCheck->setChecked(false);
+        _superProngsCheck->setEnabled(false);
+        _edgelessCheck->setChecked(false);
+        _edgelessCheck->setEnabled(false);
+    } else {
+        _basesCombo->setEnabled(true);
+        _superProngsCheck->setEnabled(true);
+        _edgelessCheck->setEnabled(true);
+    }
 }
 
 NewLocalGameDialog::~NewLocalGameDialog() = default;
@@ -2774,6 +2864,7 @@ void NewLocalGameDialog::setConfig(const LocalGameConfig &cfg)
         _initialSecSpin->setValue(static_cast<int>(cfg.initialTimeMs / 1000));
     }
     _incrementSecSpin->setValue(static_cast<int>(cfg.incrementMs / 1000));
+    updateModeConstraints();
 }
 
 LocalGameConfig NewLocalGameDialog::config() const
@@ -2883,21 +2974,30 @@ QString GameOverDialog::describeTerminationReason(const OctiBoard *board)
 
     OctiPlayer winner = board->getGame()->getWinner();
     if (winner != PLAYER_UNDEF) {
-        for (int x = 0; x < 9; ++x) {
-            for (int y = 0; y < 9; ++y) {
+        OctiPlayer opp = (winner == PLAYER_A) ? PLAYER_B : PLAYER_A;
+        OctiPodType wPod = (winner == PLAYER_A ? A_POD :
+                            winner == PLAYER_B ? B_POD :
+                            winner == PLAYER_C ? C_POD : D_POD);
+        OctiPodType oppPod = (opp == PLAYER_A ? A_POD :
+                              opp == PLAYER_B ? B_POD :
+                              opp == PLAYER_C ? C_POD : D_POD);
+        int oppPodsOnBoard = 0;
+        const int bw = static_cast<int>(board->getBoardWidth());
+        const int bh = static_cast<int>(board->getBoardHeight());
+        for (int x = 0; x < bw; ++x) {
+            for (int y = 0; y < bh; ++y) {
                 const OctiSquare &sq = board->squareAt(x, y);
                 if (sq.isEmpty()) {
                     continue;
                 }
                 OctiSquareType st = sq.getType();
-                OctiPodType wPod = (winner == PLAYER_A ? A_POD :
-                                    winner == PLAYER_B ? B_POD :
-                                    winner == PLAYER_C ? C_POD : D_POD);
                 bool hasWinnerPod = false;
                 for (int pi = 0; pi < sq.getNumPods(); ++pi) {
                     if (sq.getPodAt(pi).getType() == wPod) {
                         hasWinnerPod = true;
-                        break;
+                    }
+                    if (sq.getPodAt(pi).getType() == oppPod) {
+                        ++oppPodsOnBoard;
                     }
                 }
                 if (!hasWinnerPod) {
@@ -2911,9 +3011,11 @@ QString GameOverDialog::describeTerminationReason(const OctiBoard *board)
                 }
             }
         }
-        OctiPlayer opp = (winner == PLAYER_A) ? PLAYER_B : PLAYER_A;
-        if (board->getGame()->isPlayerEliminated(opp)) {
+        if (oppPodsOnBoard == 0 || board->getGame()->isPlayerEliminated(opp)) {
             return QStringLiteral("Eliminated All Opponent Pods");
+        }
+        if (board->getGame()->getMode() == GAME_MODE_OFK) {
+            return QStringLiteral("Victory by Stalemate (Opponent Has No Legal Moves)");
         }
     }
     return QStringLiteral("Captured Enemy Home Base");
@@ -4210,10 +4312,16 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         int freeSuper = prongBoard->getGame()->getFreeSuperProngs(turn);
 
         _normalProngTrayRect = QRectF(16, 140, 88, 80);
-        _superProngTrayRect = QRectF(16, 235, 88, 80);
+        bool hasSuperProngs = prongBoard->getGame()->useSuperProngs();
+        if (hasSuperProngs) {
+            _superProngTrayRect = QRectF(16, 235, 88, 80);
+        } else {
+            _superProngTrayRect = QRectF();
+            _selectedProngType = SelectedProngType::NORMAL;
+        }
 
         bool npSelected = (_selectedProngType == SelectedProngType::NORMAL);
-        bool spSelected = (_selectedProngType == SelectedProngType::SUPER);
+        bool spSelected = hasSuperProngs && (_selectedProngType == SelectedProngType::SUPER);
 
         // Normal Prong Tray Card
         p.setPen(QPen(npSelected ? pal.prongSuperGold : pal.accentBrass, npSelected ? 2.0 : 1.2));
@@ -4227,16 +4335,18 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         QRectF npTxtR(_normalProngTrayRect.left(), _normalProngTrayRect.top() + 40, _normalProngTrayRect.width(), 34);
         p.drawText(npTxtR, Qt::AlignCenter, QString("Normal\n(%1 avail)").arg(freeProngs));
 
-        // Superprong Tray Card
-        p.setPen(QPen(spSelected ? pal.prongSuperGold : pal.accentBrass.darker(130), spSelected ? 2.0 : 1.2));
-        p.setBrush(spSelected ? pal.panelCardBg : pal.panelCardBg.darker(110));
-        p.drawRoundedRect(_superProngTrayRect, 6.0, 6.0);
-        QRectF spIconR(_superProngTrayRect.center().x() - 14, _superProngTrayRect.top() + 8, 28, 28);
-        paintProngGlyph(p, spIconR, true, pal);
-        p.setFont(trayFont);
-        p.setPen(spSelected ? pal.prongSuperGold : pal.accentBrass);
-        QRectF spTxtR(_superProngTrayRect.left(), _superProngTrayRect.top() + 40, _superProngTrayRect.width(), 34);
-        p.drawText(spTxtR, Qt::AlignCenter, QString("Super (!)\n(%1 avail)").arg(freeSuper));
+        // Superprong Tray Card (only when game uses superprongs)
+        if (hasSuperProngs) {
+            p.setPen(QPen(spSelected ? pal.prongSuperGold : pal.accentBrass.darker(130), spSelected ? 2.0 : 1.2));
+            p.setBrush(spSelected ? pal.panelCardBg : pal.panelCardBg.darker(110));
+            p.drawRoundedRect(_superProngTrayRect, 6.0, 6.0);
+            QRectF spIconR(_superProngTrayRect.center().x() - 14, _superProngTrayRect.top() + 8, 28, 28);
+            paintProngGlyph(p, spIconR, true, pal);
+            p.setFont(trayFont);
+            p.setPen(spSelected ? pal.prongSuperGold : pal.accentBrass);
+            QRectF spTxtR(_superProngTrayRect.left(), _superProngTrayRect.top() + 40, _superProngTrayRect.width(), 34);
+            p.drawText(spTxtR, Qt::AlignCenter, QString("Super (!)\n(%1 avail)").arg(freeSuper));
+        }
     }
 
     // 6. Action Buttons at Bottom
@@ -4464,8 +4574,9 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
             double podR = 100.0;
             double socketDist = podR * 0.76;
             OctiDir hitDir = hitTestSocketOrBladeAt(pos, pod, pc, podR, socketDist);
+            bool isOfk = (_board && _board->getGame() && _board->getGame()->getMode() == GAME_MODE_OFK);
             if (hitDir != DIR_UNDEF) {
-                if (pod.prongAt(hitDir) == NORMAL_PRONG) {
+                if (!isOfk && pod.prongAt(hitDir) == NORMAL_PRONG) {
                     // Existing normal prong clicked: select for reposition / start drag
                     _selectedProngSocketForReposition = hitDir;
                     _dragKind = ZoomDragKind::REPOSITION_PRONG;
@@ -4475,7 +4586,7 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
                     return;
                 } else if (pod.prongAt(hitDir) == NO_PRONG) {
                     // Empty socket clicked
-                    if (_selectedProngSocketForReposition != DIR_UNDEF &&
+                    if (!isOfk && _selectedProngSocketForReposition != DIR_UNDEF &&
                         _selectedProngSocketForReposition != hitDir) {
                         // Reposition previously selected prong to this socket!
                         if (_composer && _composer->stageOrCommitRepositionProng(
@@ -4487,7 +4598,7 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
                         }
                     } else {
                         // Add new prong to this socket!
-                        bool isSuper = (_selectedProngType == SelectedProngType::SUPER);
+                        bool isSuper = !isOfk && (_selectedProngType == SelectedProngType::SUPER);
                         if (_composer && _composer->stageOrCommitAddProng(
                                 _squareX, _squareY, _selectedPodIndex, hitDir, isSuper)) {
                             _actionCompleted = true;
@@ -4523,7 +4634,8 @@ OctiDir ZoomedSquareDialog::hitTestSocketOrBladeAt(const QPointF &pos,
         QPointF v = pos - pc;
         double proj = v.x() * u.x() + v.y() * u.y();
         double perpDist = std::abs(-v.x() * u.y() + v.y() * u.x());
-        if (pod.prongAt(dir) != NO_PRONG) {
+        bool isOfk = (_board && _board->getGame() && _board->getGame()->getMode() == GAME_MODE_OFK);
+        if (!isOfk && pod.prongAt(dir) != NO_PRONG) {
             bool isSuper = (pod.prongAt(dir) == SUPER_PRONG);
             double maxProj = isSuper ? (podR * 1.55 + 8.0) : (podR * 1.48 + 8.0);
             double maxPerp = isSuper ? 18.0 : 14.0;
@@ -4568,6 +4680,7 @@ void ZoomedSquareDialog::mouseReleaseEvent(QMouseEvent *event)
     QPointF pos = mousePosF(event);
 
     if (_dragKind != ZoomDragKind::NONE && _composer) {
+        const bool isOfk = (_board && _board->getGame() && _board->getGame()->getMode() == GAME_MODE_OFK);
         OctiDir targetDir = DIR_UNDEF;
         if (_board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
             const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
@@ -4593,7 +4706,7 @@ void ZoomedSquareDialog::mouseReleaseEvent(QMouseEvent *event)
                     accept();
                     return;
                 }
-            } else if (_dragKind == ZoomDragKind::REPOSITION_PRONG && targetDir != _dragSrcProngDir) {
+            } else if (!isOfk && _dragKind == ZoomDragKind::REPOSITION_PRONG && targetDir != _dragSrcProngDir) {
                 if (_composer->stageOrCommitRepositionProng(_squareX, _squareY, _selectedPodIndex,
                                                             _dragSrcProngDir, targetDir)) {
                     _actionCompleted = true;

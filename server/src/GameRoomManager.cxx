@@ -502,6 +502,7 @@ bool validateConfig(const GameTableConfig &in, GameTableConfig &out,
     if (out.mode == GAME_MODE_OFK) {
         out.bases = GAME_BASES_1;
         out.useSuperProngs = false;
+        out.useEdgelessBoard = false;
     } else if (out.mode == GAME_MODE_4) {
         out.bases = GAME_BASES_3;
     }

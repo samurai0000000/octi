@@ -2792,6 +2792,76 @@ TEST(DesktopAppIntegrationTest, AccountLinkDialogProfileConfirmationGuards)
     CHECK_TRUE(dlg.tryCloseWithConfirmation(true));
 }
 
+TEST(DesktopAppIntegrationTest, OfkDialogModeAndSeatConstraintsIntegration)
+{
+    /* 1. NewLocalGameDialog constraints for OFK */
+    {
+        NewLocalGameDialog dlg;
+        LocalGameConfig cfg;
+        cfg.playType = LocalPlayType::VS_AI_BOT;
+        cfg.mode = GAME_MODE_OFK;
+        cfg.bases = GAME_BASES_3; // Attempt 3 bases
+        cfg.useSuperProngs = true;
+        cfg.useEdgelessBoard = true;
+        dlg.setConfig(cfg);
+
+        LocalGameConfig resCfg = dlg.config();
+        LONGS_EQUAL(static_cast<int>(GAME_MODE_OFK), static_cast<int>(resCfg.mode));
+        LONGS_EQUAL(static_cast<int>(GAME_BASES_1), static_cast<int>(resCfg.bases));
+        CHECK_FALSE(resCfg.useSuperProngs);
+        CHECK_FALSE(resCfg.useEdgelessBoard);
+    }
+
+    /* 2. CreateTableDialog constraints for OFK */
+    {
+        CreateTableDialog createDlg;
+        CreateTableRequest req;
+        req.mode = "OFK";
+        req.bases = 3;
+        req.superProngs = true;
+        req.edgeless = true;
+        createDlg.setRequest(req);
+
+        CreateTableRequest resReq = createDlg.buildRequest();
+        LONGS_EQUAL(1, resReq.bases);
+        CHECK_FALSE(resReq.superProngs);
+        CHECK_FALSE(resReq.edgeless);
+    }
+
+    /* 3. MatchmakingDialog constraints for OFK */
+    {
+        MatchmakingDialog matchDlg(nullptr);
+        MatchmakingRequest mreq;
+        mreq.mode = "OFK";
+        mreq.bases = 3;
+        mreq.superProngs = true;
+        mreq.edgeless = true;
+        matchDlg.setRequest(mreq);
+
+        MatchmakingRequest resMreq = matchDlg.buildRequest();
+        LONGS_EQUAL(1, resMreq.bases);
+        CHECK_FALSE(resMreq.superProngs);
+        CHECK_FALSE(resMreq.edgeless);
+    }
+}
+
+TEST(DesktopAppIntegrationTest, MainWindowShowHintResolvesAccuratePodIndex)
+{
+    std::string cfgPath = "/tmp/octi_hint_test.json";
+    OctiMainWindow win(nullptr, cfgPath, true);
+    LocalGameConfig cfg;
+    cfg.playType = LocalPlayType::PASS_AND_PLAY;
+    cfg.mode = GAME_MODE_OFK;
+    cfg.bases = GAME_BASES_1;
+    win.startNewLocalGame(cfg);
+
+    win.showHint();
+    CHECK_TRUE(win.moveComposer()->isAwaitingConfirmation());
+    CHECK_FALSE(win.moveComposer()->stagedMoveNotation().empty());
+    win.moveComposer()->cancelAndRollback();
+    CHECK_FALSE(win.moveComposer()->isAwaitingConfirmation());
+}
+
 extern "C" const char *__lsan_default_suppressions()
 {
     return "leak:libqoffscreen.so\n";

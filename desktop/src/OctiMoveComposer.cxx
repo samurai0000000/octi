@@ -34,17 +34,6 @@ std::vector<int> sortedPodIndicesMostProngsFirst(const OctiSquare &sq)
 
 namespace {
 
-bool isOfkBackwardDirection(OctiPlayer turn, OctiDir dir)
-{
-    if (turn == PLAYER_A) {
-        return dirDeltaY(dir) < 0;
-    }
-    if (turn == PLAYER_B) {
-        return dirDeltaY(dir) > 0;
-    }
-    return false;
-}
-
 bool computeDisplacement(int cx, int cy, int tx, int ty,
                          bool edgeless, int width, int height,
                          int &outDx, int &outDy)
@@ -499,7 +488,8 @@ bool OctiMoveComposer::stageOrCommitAddPod(int targetX, int targetY, bool libera
     }
 
     if (liberate) {
-        if (game->getCapturedPods(turn) <= 0 ||
+        if (game->getMode() == GAME_MODE_OFK ||
+            game->getCapturedPods(turn) <= 0 ||
             (!isEnemyOctiSquare && !_board->canLiberate(turn))) {
             return false;
         }
@@ -555,7 +545,7 @@ bool OctiMoveComposer::stageOrCommitAddProng(int x, int y,
 
     OctiPlayer turn = game->getTurn();
     if (_board->getGameMode() == GAME_MODE_OFK) {
-        if (superProng || isOfkBackwardDirection(turn, dir)) {
+        if (superProng) {
             return false;
         }
     }
@@ -819,7 +809,7 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
                     }
                     if (!alreadyListed) {
                         _captureChoices.push_back({
-                            jx1, jy1, true, _board->getGameMode() == GAME_MODE_OFK
+                            jx1, jy1, true, false
                         });
                     }
                 }
@@ -986,7 +976,7 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
                     }
                     if (!alreadyListed) {
                         _captureChoices.push_back({
-                            jx1, jy1, true, _board->getGameMode() == GAME_MODE_OFK
+                            jx1, jy1, true, false
                         });
                     }
                 }
@@ -1173,9 +1163,6 @@ std::vector<std::pair<int, int>> OctiMoveComposer::guidedNextSquares() const
             if (pod.prongAt(dir) == NO_PRONG) {
                 continue;
             }
-            if (_board->getGameMode() == GAME_MODE_OFK && isOfkBackwardDirection(turn, dir)) {
-                continue;
-            }
             int jdx = dirDeltaX(dir);
             int jdy = dirDeltaY(dir);
             int sx = edgeless ? (((_guidedOriginBx + jdx) % w + w) % w) : (_guidedOriginBx + jdx);
@@ -1208,9 +1195,6 @@ std::vector<std::pair<int, int>> OctiMoveComposer::guidedNextSquares() const
             if (pod.prongAt(dir) == NO_PRONG) {
                 continue;
             }
-            if (_board->getGameMode() == GAME_MODE_OFK && isOfkBackwardDirection(turn, dir)) {
-                continue;
-            }
             int jdx = dirDeltaX(dir);
             int jdy = dirDeltaY(dir);
             int dx = jdx * 2;
@@ -1233,7 +1217,7 @@ std::vector<std::pair<int, int>> OctiMoveComposer::guidedNextSquares() const
             if (!landEmpty) continue;
 
             OctiHop hop; hop.x = lx; hop.y = ly;
-            hop.capture = (_board->getGameMode() == GAME_MODE_OFK) || jumpedSq.hasEnemyOf(turn);
+            hop.capture = jumpedSq.hasEnemyOf(turn);
             OctiMoveOp op; op.x0 = _guidedOriginBx; op.y0 = _guidedOriginBy;
             op.pod = pod; op.hops.push_back(hop);
             std::vector<OctiMoveOp> cand = _stagedOps;
@@ -1263,9 +1247,6 @@ std::vector<std::pair<int, int>> OctiMoveComposer::guidedNextSquares() const
             if (pod.prongAt(dir) == NO_PRONG) {
                 continue;
             }
-            if (_board->getGameMode() == GAME_MODE_OFK && isOfkBackwardDirection(turn, dir)) {
-                continue;
-            }
             int jdx = dirDeltaX(dir);
             int jdy = dirDeltaY(dir);
             int dx = jdx * 2;
@@ -1293,7 +1274,7 @@ std::vector<std::pair<int, int>> OctiMoveComposer::guidedNextSquares() const
 
             std::vector<OctiMoveOp> cand = _stagedOps;
             OctiHop hop; hop.x = lx; hop.y = ly;
-            hop.capture = (_board->getGameMode() == GAME_MODE_OFK) || jumpedSq.hasEnemyOf(turn);
+            hop.capture = jumpedSq.hasEnemyOf(turn);
             cand.back().hops.push_back(hop);
             if (validateOpsOnScratch(cand)) {
                 if (seen.insert({lx + 1, ly + 1}).second) {
@@ -1790,10 +1771,6 @@ std::vector<OctiDir> OctiMoveComposer::legalProngAdditionsAt(
         if (pod.prongAt(dir) != NO_PRONG) {
             continue;
         }
-        if (_board->getGameMode() == GAME_MODE_OFK &&
-            isOfkBackwardDirection(turn, dir)) {
-            continue;
-        }
         result.push_back(dir);
     }
 
@@ -1808,6 +1785,9 @@ std::vector<std::pair<int, int>> OctiMoveComposer::legalPodDropSquares(bool libe
     }
     OctiGame *game = _board->getGame();
     if (!game->isGameStarted() || game->isGameOver()) {
+        return result;
+    }
+    if (game->getMode() == GAME_MODE_OFK && liberate) {
         return result;
     }
 

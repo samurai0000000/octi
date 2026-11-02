@@ -553,9 +553,11 @@ public class OctiAndroidBoardAndComposerTest {
         assertFalse(composer.dropOnSquare(2, 5));
         assertEquals(initialPos, board.toPositionString());
 
-        // 2. Attempt to add a backward prong in OFK (Player A cannot add South 'e' prong in OFK)
+        // 2. In OFK, superprongs are forbidden
+        assertFalse(composer.beginAddProngFromReserve(true));
+        // And adding a prong to an enemy pod is rejected
         assertTrue(composer.beginAddProngFromReserve(false));
-        assertFalse(composer.dropOnCompassSector(2, 2, 0, OctiDir.DIR_S));
+        assertFalse(composer.dropOnCompassSector(2, 6, 0, OctiDir.DIR_S));
         composer.rollbackMove();
         assertEquals(initialPos, board.toPositionString());
 
@@ -876,7 +878,7 @@ public class OctiAndroidBoardAndComposerTest {
     @Test
     public void testOctiAppVersionAndProtocolConstants() {
         assertEquals(BuildConfig.VERSION_NAME, OctiDefs.OCTI_APP_VERSION);
-        assertEquals("2.2.4", OctiDefs.OCTI_APP_VERSION);
+        assertEquals("2.2.5", OctiDefs.OCTI_APP_VERSION);
         assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
     }
 

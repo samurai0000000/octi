@@ -21,6 +21,7 @@ public class OctiGameSnapshot {
     public boolean gameResigned = false;
     public OctiMove lastMove = new OctiMove();
     public OctiPlayer lastPlayer = OctiPlayer.PLAYER_UNDEF;
+    public long lastElapsedMs = 0L;
     public int searchPlyOffset = 0;
     public List<OctiGame.OctiPlyMetadata> plyMetadata = new ArrayList<>();
     public OctiGame.OctiPlyMetadata lastPlyMeta = new OctiGame.OctiPlyMetadata();
@@ -60,6 +61,7 @@ public class OctiGameSnapshot {
             this.gameResigned = other.gameResigned;
             this.lastMove = (other.lastMove != null) ? new OctiMove(other.lastMove.asString()) : new OctiMove();
             this.lastPlayer = other.lastPlayer;
+            this.lastElapsedMs = other.lastElapsedMs;
             this.searchPlyOffset = other.searchPlyOffset;
             this.plyMetadata = new ArrayList<>();
             if (other.plyMetadata != null) {

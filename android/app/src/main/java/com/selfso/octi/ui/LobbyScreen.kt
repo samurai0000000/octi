@@ -725,20 +725,26 @@ fun LobbyScreen(
                                 selected = createMode == m,
                                 onClick = {
                                     createMode = m
-                                    createBases = if (m == "4P") 1 else 3
+                                    createBases = if (m == "4P" || m == "OFK") 1 else 3
+                                    if (m == "OFK") {
+                                        createSuperProngs = false
+                                        createEdgeless = false
+                                    }
                                 },
                                 label = { Text(m) }
                             )
                         }
                     }
-                    Text("Bases", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(3 to "3-Base", 1 to "1-Base").forEach { (b, lbl) ->
-                            FilterChip(
-                                selected = createBases == b,
-                                onClick = { createBases = b },
-                                label = { Text(lbl) }
-                            )
+                    if (createMode != "OFK") {
+                        Text("Bases", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(3 to "3-Base", 1 to "1-Base").forEach { (b, lbl) ->
+                                FilterChip(
+                                    selected = createBases == b,
+                                    onClick = { createBases = b },
+                                    label = { Text(lbl) }
+                                )
+                            }
                         }
                     }
                     Text("Time Control", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
@@ -751,13 +757,15 @@ fun LobbyScreen(
                             )
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = createSuperProngs, onCheckedChange = { createSuperProngs = it })
-                        Text("Super-Prongs")
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = createEdgeless, onCheckedChange = { createEdgeless = it })
-                        Text("Edgeless")
+                    if (createMode != "OFK") {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = createSuperProngs, onCheckedChange = { createSuperProngs = it })
+                            Text("Super-Prongs")
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = createEdgeless, onCheckedChange = { createEdgeless = it })
+                            Text("Edgeless")
+                        }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = createRated, onCheckedChange = { createRated = it })
@@ -781,9 +789,9 @@ fun LobbyScreen(
                     onClick = {
                         val req = OctiNetworkClient.CreateTableRequest().apply {
                             this.mode = createMode
-                            this.bases = createBases
-                            this.superProngs = createSuperProngs
-                            this.edgeless = createEdgeless
+                            this.bases = if (createMode == "OFK") 1 else createBases
+                            this.superProngs = if (createMode == "OFK") false else createSuperProngs
+                            this.edgeless = if (createMode == "OFK") false else createEdgeless
                             this.timeControl = createTimeControl
                             this.rated = createRated
                             this.allowTakeback = createAllowTakeback
