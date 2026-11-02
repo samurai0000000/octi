@@ -7,7 +7,7 @@
 package com.selfso.octi;
 
 public final class OctiDefs {
-    public static final String OCTI_APP_VERSION = "2.1.0";
+    public static final String OCTI_APP_VERSION = BuildConfig.VERSION_NAME;
     public static final String OCTI_VERSION_STRING = OCTI_APP_VERSION;
     public static final String OCTI_SERVER_HOST = "octi.selfso.com";
     public static final int OCTI_SERVER_PORT = 443;

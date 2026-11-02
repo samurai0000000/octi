@@ -451,7 +451,7 @@ TEST(DesktopAppIntegrationTest,
     std::string bobAppleToken = makeToken("apple", "sub-e2e-bob", "Bob");
     {
         SsoOnboardingDialog dlgB(winB.netClient(), winB.configStore());
-        auto loginB = dlgB.signInWithToken("apple", bobAppleToken, "Bob_Init");
+        auto loginB = dlgB.signInWithToken("apple", bobAppleToken, "");
         CHECK_TRUE_TEXT(loginB.ok, loginB.errorMessage.c_str());
         LONGS_EQUAL(201, loginB.httpStatus);
         CHECK_TRUE(dlgB.isOnboardingStep2Active());
@@ -1457,13 +1457,19 @@ TEST(DesktopAppIntegrationTest, DesktopSelfUpdateEndToEndAndFaultInjection)
     CHECK_FALSE(win.isUpdateBannerVisible());
     STRCMP_EQUAL("Check for Updates", win.checkUpdateButtonText().toUtf8().constData());
 
+    QRect boardGeomBefore = static_cast<QWidget *>(win.boardCanvas())->geometry();
+
     win.checkForAppUpdates(true);
     CHECK_TRUE(pumpUntil([&]() {
         return win.currentSelfUpdateState().phase == selfupdate::UpdatePhase::UpToDate &&
                win.currentSelfUpdateState().isManualCheck;
     }));
-    CHECK_TRUE(win.isUpdateBannerVisible());
+    CHECK_FALSE(win.isUpdateBannerVisible());
     CHECK_TRUE(win.updateBannerText().contains("up to date", Qt::CaseInsensitive));
+    CHECK_EQUAL(boardGeomBefore.x(), static_cast<QWidget *>(win.boardCanvas())->geometry().x());
+    CHECK_EQUAL(boardGeomBefore.y(), static_cast<QWidget *>(win.boardCanvas())->geometry().y());
+    CHECK_EQUAL(boardGeomBefore.width(), static_cast<QWidget *>(win.boardCanvas())->geometry().width());
+    CHECK_EQUAL(boardGeomBefore.height(), static_cast<QWidget *>(win.boardCanvas())->geometry().height());
     win.dismissAppUpdateBanner();
     win.pumpUiEvents();
     CHECK_FALSE(win.isUpdateBannerVisible());
@@ -1485,7 +1491,11 @@ TEST(DesktopAppIntegrationTest, DesktopSelfUpdateEndToEndAndFaultInjection)
         return win.currentSelfUpdateState().phase == selfupdate::UpdatePhase::Error &&
                win.currentSelfUpdateState().isManualCheck;
     }));
-    CHECK_TRUE(win.isUpdateBannerVisible());
+    CHECK_FALSE(win.isUpdateBannerVisible());
+    CHECK_EQUAL(boardGeomBefore.x(), static_cast<QWidget *>(win.boardCanvas())->geometry().x());
+    CHECK_EQUAL(boardGeomBefore.y(), static_cast<QWidget *>(win.boardCanvas())->geometry().y());
+    CHECK_EQUAL(boardGeomBefore.width(), static_cast<QWidget *>(win.boardCanvas())->geometry().width());
+    CHECK_EQUAL(boardGeomBefore.height(), static_cast<QWidget *>(win.boardCanvas())->geometry().height());
 
     /* 4. Nominal Update Available (2.0.4 -> 9.9.9), Banner, SelfUpdateDialog, Screenshots, Download & Install */
     std::string fakeInstaller(32768, 'M');
@@ -1516,9 +1526,13 @@ TEST(DesktopAppIntegrationTest, DesktopSelfUpdateEndToEndAndFaultInjection)
     CHECK_TRUE(pumpUntil([&]() {
         return win.currentSelfUpdateState().phase == selfupdate::UpdatePhase::Available;
     }));
-    CHECK_TRUE(win.isUpdateBannerVisible());
+    CHECK_FALSE(win.isUpdateBannerVisible());
     STRCMP_EQUAL("Update Available (v9.9.9)", win.checkUpdateButtonText().toUtf8().constData());
     CHECK_TRUE(win.updateBannerText().contains("9.9.9"));
+    CHECK_EQUAL(boardGeomBefore.x(), static_cast<QWidget *>(win.boardCanvas())->geometry().x());
+    CHECK_EQUAL(boardGeomBefore.y(), static_cast<QWidget *>(win.boardCanvas())->geometry().y());
+    CHECK_EQUAL(boardGeomBefore.width(), static_cast<QWidget *>(win.boardCanvas())->geometry().width());
+    CHECK_EQUAL(boardGeomBefore.height(), static_cast<QWidget *>(win.boardCanvas())->geometry().height());
 
     SelfUpdateDialog dlg(win.selfUpdateControllerShared(), ThemeId::OBSIDIAN_BRASS, &win);
     dlg.resize(640, 480);
@@ -1608,7 +1622,7 @@ TEST(DesktopAppIntegrationTest, DesktopSelfUpdateEndToEndAndFaultInjection)
 
     CHECK_TRUE(win.currentSelfUpdateState().errorMessage.find("SHA-256") != std::string::npos);
     CHECK_FALSE(win.wasQuitRequestedByUpdate());
-    CHECK_TRUE(win.isUpdateBannerVisible());
+    CHECK_FALSE(win.isUpdateBannerVisible());
     CHECK_FALSE(std::filesystem::exists(faultStagingDir + "/octi-setup.exe.part"));
     CHECK_FALSE(std::filesystem::exists(faultStagingDir + "/octi-setup.exe"));
 
@@ -2400,6 +2414,117 @@ TEST(DesktopAppIntegrationTest, NonModalBoardScopedStartMatchOverlayDoesNotBlock
     CHECK_TRUE(win.board()->getGame()->getNumMoves() >= 1);
 
     std::filesystem::remove_all(testDir);
+}
+
+TEST(DesktopAppIntegrationTest, ProfileAndAvatarEditorFullParityAndInstallIdAttribution)
+{
+    LiveServerEnv env;
+    std::string avatarDir = env.dir + "/avatars";
+    env.store.setAvatarDir(avatarDir);
+
+    std::string cfgPath = env.dir + "/desktop_client.json";
+    OctiMainWindow win(
+        OctiNetworkClient::createForLoopbackTest(env.port()), cfgPath);
+    win.resize(1440, 900);
+    win.show();
+    win.pumpUiEvents();
+
+    std::string installId = win.configStore()->preferences().installId;
+    CHECK_FALSE(installId.empty());
+    STRCMP_EQUAL(installId.c_str(), win.netClient()->installId().c_str());
+
+    /* 1. Sign in via SsoOnboardingDialog */
+    std::string tok = makeToken("google", "sub-desktop-prof-parity", "Alice");
+    {
+        SsoOnboardingDialog ssoDlg(win.netClient(), win.configStore(), ThemeId::OBSIDIAN_BRASS, &win);
+        auto ssoRes = ssoDlg.signInWithToken("google", tok, "");
+        CHECK_TRUE_TEXT(ssoRes.ok, ssoRes.errorMessage.c_str());
+        LONGS_EQUAL(201, ssoRes.httpStatus);
+        CHECK_TRUE(ssoDlg.isOnboardingStep2Active());
+
+        auto finRes = ssoDlg.finalizeOnboardingHandle("Alice_Profile");
+        CHECK_TRUE_TEXT(finRes.ok, finRes.errorMessage.c_str());
+        CHECK_FALSE(ssoDlg.isOnboardingStep2Active());
+        win.applyAuthenticatedProfile(ssoDlg.loggedInProfile());
+    }
+    CHECK_TRUE(win.isAuthenticated());
+    STRCMP_EQUAL("Alice_Profile", win.currentProfile().handle.c_str());
+
+    /* 2. Open AccountLinkDialog and verify initial profile fields */
+    AccountLinkDialog dlg(win.netClient(), win.configStore(), ThemeId::OBSIDIAN_BRASS, &win);
+    dlg.setOnAccountSwitchedCallback([&win](const PlayerProfileInfo &prof) {
+        win.applyAuthenticatedProfile(prof);
+    });
+    CHECK_TRUE(dlg.refreshProfile());
+    STRCMP_EQUAL("Alice_Profile", dlg.handleEdit()->text().toUtf8().constData());
+    CHECK_TRUE(dlg.saveProfileButton() != nullptr);
+    CHECK_TRUE(dlg.uploadAvatarButton() != nullptr);
+    CHECK_TRUE(dlg.clearAvatarButton() != nullptr);
+
+    /* 3. Automatic crop & compression of non-square QImage(400, 260) */
+    QImage rawImg(400, 260, QImage::Format_RGB32);
+    rawImg.fill(QColor(180, 50, 80));
+    CHECK_TRUE(dlg.selectAvatarFromImage(rawImg));
+    CHECK_TRUE(dlg.profileStatusText().contains("Avatar selected"));
+
+    dlg.handleEdit()->setText("Alice_Profile");
+    dlg.displayNameEdit()->setText("Alice the Grandmaster");
+    dlg.locationEdit()->setText("San Francisco, CA");
+    dlg.bioEdit()->setPlainText("OCTI desktop champion and theoretician.");
+
+    /* 4. Save profile via the single "Save Profile" button */
+    auto saveRes = dlg.saveProfile();
+    CHECK_TRUE_TEXT(saveRes.ok, saveRes.errorMessage.c_str());
+    STRCMP_EQUAL("Profile saved.", dlg.profileStatusText().toUtf8().constData());
+
+    /* 5. Verify octi-server stored avatar on disk (/api/v1/avatars/...) and avatar pixmap */
+    std::string diskAvatar = dlg.currentProfile().avatarUrl;
+    CHECK_TRUE(diskAvatar.rfind("/api/v1/avatars/", 0) == 0);
+    std::string fileName = diskAvatar.substr(std::string("/api/v1/avatars/").size());
+    auto qmark = fileName.find('?');
+    if (qmark != std::string::npos) {
+        fileName = fileName.substr(0, qmark);
+    }
+    CHECK_TRUE(std::filesystem::exists(avatarDir + "/" + fileName));
+
+    CHECK_TRUE(dlg.avatarPreviewLabel()->pixmap() != nullptr);
+    CHECK_FALSE(dlg.avatarPreviewLabel()->pixmap()->isNull());
+    win.pumpUiEvents();
+    CHECK_TRUE(win.profileAvatarLabel()->pixmap() != nullptr);
+    CHECK_FALSE(win.profileAvatarLabel()->pixmap()->isNull());
+
+    const ClientPreferences &savedPrefs = win.configStore()->preferences();
+    STRCMP_EQUAL("Alice_Profile", savedPrefs.handle.c_str());
+    STRCMP_EQUAL("Alice the Grandmaster", savedPrefs.displayName.c_str());
+    STRCMP_EQUAL(diskAvatar.c_str(), savedPrefs.avatarUrl.c_str());
+    STRCMP_EQUAL("San Francisco, CA", savedPrefs.location.c_str());
+    STRCMP_EQUAL("OCTI desktop champion and theoretician.", savedPrefs.bio.c_str());
+
+    /* 6. Verify saving profile again with the same handle succeeds (no 24h cooldown on unchanged handle) */
+    auto saveAgain = dlg.saveProfile();
+    CHECK_TRUE_TEXT(saveAgain.ok, saveAgain.errorMessage.c_str());
+    STRCMP_EQUAL("Profile saved.", dlg.profileStatusText().toUtf8().constData());
+
+    /* 7. Changing handle a second time within 24h returns 429 HANDLE_CHANGE_RATE_LIMITED */
+    dlg.handleEdit()->setText("Alice_SecondHandle");
+    auto saveRateLimited = dlg.saveProfile();
+    CHECK_FALSE(saveRateLimited.ok);
+    LONGS_EQUAL(429, saveRateLimited.httpStatus);
+    STRCMP_EQUAL("HANDLE_CHANGE_RATE_LIMITED", saveRateLimited.errorCode.c_str());
+    CHECK_TRUE(dlg.profileStatusText().contains("24 hours"));
+
+    /* 8. Clear pending avatar + saveProfile clears avatar on server and removes disk file */
+    dlg.handleEdit()->setText("Alice_Profile");
+    dlg.clearPendingAvatar();
+    auto saveClear = dlg.saveProfile();
+    CHECK_TRUE_TEXT(saveClear.ok, saveClear.errorMessage.c_str());
+    STRCMP_EQUAL("", dlg.currentProfile().avatarUrl.c_str());
+    CHECK_FALSE(std::filesystem::exists(avatarDir + "/" + fileName));
+
+    /* 9. Verify X-Octi-Install-Id header bound desktop installId to signed-in player in env.store */
+    PlayerProfile boundProfile;
+    CHECK_TRUE(env.store.getPlayerByInstallId(installId, boundProfile));
+    STRCMP_EQUAL(win.currentProfile().uuid.c_str(), boundProfile.uuid.c_str());
 }
 
 extern "C" const char *__lsan_default_suppressions()

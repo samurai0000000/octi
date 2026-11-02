@@ -123,6 +123,8 @@ struct PlayerProfileInfo {
     std::string handle;
     std::string displayName;
     std::string avatarUrl;
+    std::string bio;
+    std::string location;
     int elo2p = 1200;
     int elo4p = 1200;
     int eloOfk = 1200;
@@ -414,6 +416,9 @@ public:
     void clearSessionToken();
     bool isAuthenticated() const { return !sessionToken().empty(); }
 
+    void setInstallId(const std::string &installId);
+    std::string installId() const;
+
     /* ---- 1..10: Health, Auth, Profile & Leaderboard ---- */
     ApiResult<HealthInfo> fetchHealth();
     ApiResult<std::vector<AuthProviderInfo>> fetchAuthProviders();
@@ -441,8 +446,19 @@ public:
     ApiResult<PlayerProfileInfo> fetchMyProfile();
     ApiResult<PlayerProfileInfo> updateMyProfile(
         const std::string &handle,
+        const std::string &avatarUrl,
+        const std::string &displayName,
+        const std::string &bio,
+        const std::string &location,
+        bool clearAvatar = false);
+    ApiResult<PlayerProfileInfo> updateMyProfile(
+        const std::string &handle,
         const std::string &avatarUrl = "",
         const std::string &displayName = "");
+    bool fetchAvatarBytes(
+        const std::string &avatarUrl,
+        std::string &outBytes,
+        std::string &outContentType);
     ApiResult<PlayerProfileInfo> fetchPlayerProfile(
         const std::string &playerUuid);
     ApiResult<std::vector<LeaderboardRow>> fetchLeaderboard(

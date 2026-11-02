@@ -167,6 +167,8 @@ PlayerProfileInfo parsePlayerProfile(const Json &j)
     p.handle = j.value("handle", "");
     p.displayName = j.value("display_name", "");
     p.avatarUrl = j.value("avatar_url", "");
+    p.bio = j.value("bio", "");
+    p.location = j.value("location", "");
     p.elo2p = j.value("elo_2p", 1200);
     p.elo4p = j.value("elo_4p", 1200);
     p.eloOfk = j.value("elo_ofk", 1200);
@@ -687,6 +689,7 @@ struct OctiNetworkClient::Impl {
     int port;
     mutable std::mutex tokenMutex;
     std::string sessionToken;
+    std::string installId;
 
     SseRunner lobbyStream;
     SseRunner gameStream;
@@ -708,6 +711,18 @@ struct OctiNetworkClient::Impl {
         return sessionToken;
     }
 
+    std::string currentInstallId() const
+    {
+        std::lock_guard<std::mutex> lock(tokenMutex);
+        return installId;
+    }
+
+    void setInstallId(const std::string &id)
+    {
+        std::lock_guard<std::mutex> lock(tokenMutex);
+        installId = id;
+    }
+
     httplib::Headers authHeaders(
         const httplib::Headers &extra = httplib::Headers()) const
     {
@@ -717,6 +732,10 @@ struct OctiNetworkClient::Impl {
         std::string tok = currentToken();
         if (!tok.empty()) {
             h.emplace("Authorization", "Bearer " + tok);
+        }
+        std::string inst = currentInstallId();
+        if (!inst.empty()) {
+            h.emplace("X-Octi-Install-Id", inst);
         }
         return h;
     }
@@ -1124,7 +1143,14 @@ struct OctiNetworkClient::Impl {
         }
         if (raw.json.is_object()) {
             out.errorCode = raw.json.value("error", "HTTP_ERROR");
-            out.errorMessage = raw.json.value("message", "");
+            std::string msg = raw.json.value("message", "");
+            if (msg.empty()) {
+                msg = raw.json.value("error", "");
+            }
+            if (msg.empty()) {
+                msg = raw.body;
+            }
+            out.errorMessage = msg;
         } else {
             out.errorCode = "HTTP_" + std::to_string(raw.status);
             out.errorMessage = raw.body;
@@ -1561,6 +1587,16 @@ void OctiNetworkClient::clearSessionToken()
     _impl->sessionToken.clear();
 }
 
+void OctiNetworkClient::setInstallId(const std::string &installId)
+{
+    _impl->setInstallId(installId);
+}
+
+std::string OctiNetworkClient::installId() const
+{
+    return _impl->currentInstallId();
+}
+
 /* ---- 1..10: Health, Auth, Profile & Leaderboard ---- */
 
 ApiResult<HealthInfo> OctiNetworkClient::fetchHealth()
@@ -1791,18 +1827,25 @@ ApiResult<PlayerProfileInfo> OctiNetworkClient::fetchMyProfile()
 ApiResult<PlayerProfileInfo> OctiNetworkClient::updateMyProfile(
     const std::string &handle,
     const std::string &avatarUrl,
-    const std::string &displayName)
+    const std::string &displayName,
+    const std::string &bio,
+    const std::string &location,
+    bool clearAvatar)
 {
     ApiResult<PlayerProfileInfo> res;
     Json body = Json::object();
     if (!handle.empty()) {
         body["handle"] = handle;
     }
-    if (!avatarUrl.empty()) {
-        body["avatar_url"] = avatarUrl;
-    }
     if (!displayName.empty()) {
         body["display_name"] = displayName;
+    }
+    body["bio"] = bio;
+    body["location"] = location;
+    if (clearAvatar) {
+        body["avatar_url"] = "";
+    } else if (!avatarUrl.empty()) {
+        body["avatar_url"] = avatarUrl;
     }
     Impl::RawResponse raw = _impl->doPatch("/api/v1/profile/me", body);
     if (!raw.transportOk || raw.status != 200 || !raw.json.is_object()) {
@@ -1813,6 +1856,44 @@ ApiResult<PlayerProfileInfo> OctiNetworkClient::updateMyProfile(
     res.httpStatus = raw.status;
     res.data = parsePlayerProfile(raw.json);
     return res;
+}
+
+ApiResult<PlayerProfileInfo> OctiNetworkClient::updateMyProfile(
+    const std::string &handle,
+    const std::string &avatarUrl,
+    const std::string &displayName)
+{
+    return updateMyProfile(handle, avatarUrl, displayName, "", "", false);
+}
+
+bool OctiNetworkClient::fetchAvatarBytes(const std::string &avatarUrl,
+                                        std::string &outBytes,
+                                        std::string &outContentType)
+{
+    outBytes.clear();
+    outContentType.clear();
+    if (avatarUrl.empty() || avatarUrl.rfind("data:", 0) == 0) {
+        return false;
+    }
+    std::string path = avatarUrl;
+    if (path.rfind("http://", 0) == 0 || path.rfind("https://", 0) == 0) {
+        auto slash = path.find('/', 8);
+        if (slash != std::string::npos) {
+            path = path.substr(slash);
+        } else {
+            path = "/";
+        }
+    }
+    if (path.empty() || path[0] != '/') {
+        path = "/" + path;
+    }
+    Impl::RawResponse raw = _impl->doGet(path);
+    if (!raw.transportOk || raw.status != 200) {
+        return false;
+    }
+    outBytes = std::move(raw.body);
+    outContentType = std::move(raw.contentType);
+    return true;
 }
 
 ApiResult<PlayerProfileInfo> OctiNetworkClient::fetchPlayerProfile(

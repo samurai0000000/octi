@@ -84,6 +84,7 @@ public:
     QString serverStatusText() const;
     bool hasEditableServerOrPortField() const;
     QString profileBadgeText() const;
+    QLabel *profileAvatarLabel() const { return _profileAvatarLabel; }
     bool isAuthenticated() const;
     const PlayerProfileInfo &currentProfile() const;
     void applyAuthenticatedProfile(const PlayerProfileInfo &profile);
@@ -290,6 +291,7 @@ private:
     QLabel *_brandLabel;
     QLabel *_serverStatusLabel;
     QLabel *_profileBadgeLabel;
+    QLabel *_profileAvatarLabel;
     QPushButton *_signInBtn;
     QPushButton *_accountLinkBtn;
     QPushButton *_boardViewBtn;

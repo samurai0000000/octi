@@ -20,6 +20,8 @@ struct ClientPreferences {
     std::string handle;
     std::string displayName;
     std::string avatarUrl;
+    std::string bio;
+    std::string location;
     std::string preferredProvider;
     ThemeId theme = ThemeId::OBSIDIAN_BRASS;
     bool confirmAllMoves = true;
@@ -43,7 +45,7 @@ struct ClientPreferences {
  */
 class ClientConfigStore {
 public:
-    static constexpr std::size_t MAX_CONFIG_FILE_BYTES = 65536;
+    static constexpr std::size_t MAX_CONFIG_FILE_BYTES = 524288;
 
     explicit ClientConfigStore(
         const std::string &configFilePath = defaultConfigFilePath());

@@ -7,12 +7,15 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <regex>
 #include <QAbstractItemView>
+#include <QBuffer>
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QFile>
+#include <QFileDialog>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -508,6 +511,16 @@ AccountLinkDialog::AccountLinkDialog(OctiNetworkClient *netClient,
       _netClient(netClient),
       _configStore(configStore),
       _theme(theme),
+      _avatarPreviewLabel(nullptr),
+      _uploadAvatarBtn(nullptr),
+      _clearAvatarBtn(nullptr),
+      _handleEdit(nullptr),
+      _displayNameEdit(nullptr),
+      _locationEdit(nullptr),
+      _bioEdit(nullptr),
+      _profileStatusLabel(nullptr),
+      _saveProfileBtn(nullptr),
+      _avatarCleared(false),
       _identitiesTable(nullptr),
       _providerCombo(nullptr),
       _tokenEdit(nullptr),
@@ -522,11 +535,79 @@ AccountLinkDialog::AccountLinkDialog(OctiNetworkClient *netClient,
       _hasConflict(false),
       _conflictIsAccessToken(false)
 {
-    setWindowTitle("My Account");
-    setMinimumSize(520, 420);
+    setWindowTitle("My Account — Profile & Connected Identities");
+    setMinimumSize(560, 580);
 
     QVBoxLayout *root = new QVBoxLayout(this);
     root->setSpacing(10);
+
+    /* ---- Player Profile & Avatar Editor (Parity with Web & Android) ---- */
+    QGroupBox *profileGroup = new QGroupBox("Player Profile & Avatar", this);
+    QVBoxLayout *profileLayout = new QVBoxLayout(profileGroup);
+    profileLayout->setSpacing(8);
+
+    QHBoxLayout *profileTopRow = new QHBoxLayout();
+
+    QVBoxLayout *avatarCol = new QVBoxLayout();
+    _avatarPreviewLabel = new QLabel(profileGroup);
+    _avatarPreviewLabel->setFixedSize(72, 72);
+    _avatarPreviewLabel->setAlignment(Qt::AlignCenter);
+    _uploadAvatarBtn = new QPushButton("Upload Avatar...", profileGroup);
+    _clearAvatarBtn = new QPushButton("Clear Avatar", profileGroup);
+    avatarCol->addWidget(_avatarPreviewLabel, 0, Qt::AlignCenter);
+    avatarCol->addWidget(_uploadAvatarBtn);
+    avatarCol->addWidget(_clearAvatarBtn);
+    avatarCol->addStretch(1);
+    profileTopRow->addLayout(avatarCol);
+
+    QFormLayout *profileForm = new QFormLayout();
+    _handleEdit = new QLineEdit(profileGroup);
+    _handleEdit->setPlaceholderText("3-32 chars (A-Z, a-z, 0-9, _ . -) • 1 change / 24h");
+    _handleEdit->setMaxLength(32);
+    _displayNameEdit = new QLineEdit(profileGroup);
+    _displayNameEdit->setPlaceholderText("Display name (up to 64 chars)");
+    _displayNameEdit->setMaxLength(64);
+    _locationEdit = new QLineEdit(profileGroup);
+    _locationEdit->setPlaceholderText("Location (e.g. City, Country)");
+    _locationEdit->setMaxLength(64);
+    _bioEdit = new QPlainTextEdit(profileGroup);
+    _bioEdit->setPlaceholderText("Short bio (up to 280 chars)");
+    _bioEdit->setFixedHeight(64);
+
+    profileForm->addRow("Handle:", _handleEdit);
+    profileForm->addRow("Display Name:", _displayNameEdit);
+    profileForm->addRow("Location:", _locationEdit);
+    profileForm->addRow("Bio:", _bioEdit);
+    profileTopRow->addLayout(profileForm, 1);
+    profileLayout->addLayout(profileTopRow);
+
+    QHBoxLayout *saveRow = new QHBoxLayout();
+    _profileStatusLabel = new QLabel("", profileGroup);
+    _profileStatusLabel->setWordWrap(true);
+    _saveProfileBtn = new QPushButton("Save Profile", profileGroup);
+    saveRow->addWidget(_profileStatusLabel, 1);
+    saveRow->addWidget(_saveProfileBtn, 0);
+    profileLayout->addLayout(saveRow);
+
+    QObject::connect(_uploadAvatarBtn, &QPushButton::clicked, [this]() {
+        QString file = QFileDialog::getOpenFileName(
+            this,
+            "Select Avatar Image",
+            QString(),
+            "Images (*.png *.jpg *.jpeg *.webp *.bmp *.gif)");
+        if (!file.isEmpty()) {
+            QImage img(file);
+            selectAvatarFromImage(img);
+        }
+    });
+    QObject::connect(_clearAvatarBtn, &QPushButton::clicked, [this]() {
+        clearPendingAvatar();
+    });
+    QObject::connect(_saveProfileBtn, &QPushButton::clicked, [this]() {
+        saveProfile();
+    });
+
+    root->addWidget(profileGroup);
 
     QLabel *hdr = new QLabel("Connected Accounts", this);
     hdr->setStyleSheet("font-size: 16px; font-weight: bold;");
@@ -644,11 +725,279 @@ void AccountLinkDialog::setTheme(ThemeId theme)
 {
     _theme = theme;
     setStyleSheet(buildAppStyleSheet(_theme));
+    if (_avatarPreviewLabel) {
+        QString h = _handleEdit ? _handleEdit->text() : QString::fromStdString(_currentProfile.handle);
+        _avatarPreviewLabel->setPixmap(renderCircularAvatarPixmap(_currentAvatarImage, h, 72, _theme));
+    }
 }
 
 ThemeId AccountLinkDialog::theme() const
 {
     return _theme;
+}
+
+std::string AccountLinkDialog::encodeAvatarImageToDataUri(const QImage &srcImg)
+{
+    if (srcImg.isNull() || srcImg.width() <= 0 || srcImg.height() <= 0) {
+        return std::string();
+    }
+
+    int side = std::min(srcImg.width(), srcImg.height());
+    int x = (srcImg.width() - side) / 2;
+    int y = (srcImg.height() - side) / 2;
+    QImage square = srcImg.copy(x, y, side, side);
+
+    static const int candidateSizes[] = {192, 128, 96};
+    static const int candidateQualities[] = {85, 70, 55};
+    const std::size_t maxBytes = 200000;
+
+    bool hasAlpha = square.hasAlphaChannel();
+
+    if (hasAlpha) {
+        for (int sz : candidateSizes) {
+            QImage scaled = square.scaled(sz, sz, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            QByteArray ba;
+            QBuffer buffer(&ba);
+            buffer.open(QIODevice::WriteOnly);
+            if (scaled.save(&buffer, "PNG")) {
+                std::string dataUri = "data:image/png;base64," + ba.toBase64().toStdString();
+                if (dataUri.size() <= maxBytes) {
+                    return dataUri;
+                }
+            }
+        }
+    }
+
+    for (int sz : candidateSizes) {
+        QImage scaled = square.scaled(sz, sz, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        QImage rgbImg = scaled.convertToFormat(QImage::Format_RGB32);
+        for (int quality : candidateQualities) {
+            QByteArray ba;
+            QBuffer buffer(&ba);
+            buffer.open(QIODevice::WriteOnly);
+            if (rgbImg.save(&buffer, "JPEG", quality)) {
+                std::string dataUri = "data:image/jpeg;base64," + ba.toBase64().toStdString();
+                if (dataUri.size() <= maxBytes) {
+                    return dataUri;
+                }
+            }
+        }
+    }
+
+    return std::string();
+}
+
+QPixmap AccountLinkDialog::renderCircularAvatarPixmap(const QImage &srcImg,
+                                                     const QString &fallbackHandle,
+                                                     int sizePx,
+                                                     ThemeId theme)
+{
+    if (sizePx <= 0) {
+        sizePx = 32;
+    }
+    QPixmap pix(sizePx, sizePx);
+    pix.fill(Qt::transparent);
+
+    QPainter painter(&pix);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+    const OctiPalette &pal = paletteForTheme(theme);
+
+    QRectF rect(1.0, 1.0, static_cast<qreal>(sizePx - 2), static_cast<qreal>(sizePx - 2));
+    QPainterPath circlePath;
+    circlePath.addEllipse(rect);
+
+    if (!srcImg.isNull() && srcImg.width() > 0 && srcImg.height() > 0) {
+        painter.save();
+        painter.setClipPath(circlePath);
+        painter.drawImage(rect, srcImg);
+        painter.restore();
+    } else {
+        painter.save();
+        painter.fillPath(circlePath, QBrush(pal.podA.core));
+        painter.restore();
+
+        QString letter = "?";
+        QString trimmed = fallbackHandle.trimmed();
+        if (!trimmed.isEmpty()) {
+            letter = trimmed.left(1).toUpper();
+        }
+        QFont font = painter.font();
+        font.setBold(true);
+        font.setPixelSize(std::max(10, sizePx * 5 / 10));
+        painter.setFont(font);
+        painter.setPen(pal.prongSuperGold);
+        painter.drawText(rect, Qt::AlignCenter, letter);
+    }
+
+    painter.setPen(QPen(pal.accentBrass, 1.5));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawEllipse(rect);
+
+    painter.end();
+    return pix;
+}
+
+QString AccountLinkDialog::profileStatusText() const
+{
+    return _profileStatusLabel ? _profileStatusLabel->text() : QString();
+}
+
+bool AccountLinkDialog::selectAvatarFromImage(const QImage &img)
+{
+    if (img.isNull() || img.width() <= 0 || img.height() <= 0) {
+        if (_profileStatusLabel) {
+            _profileStatusLabel->setText("Failed to load image file.");
+            _profileStatusLabel->setStyleSheet("color: #ef4444;");
+        }
+        return false;
+    }
+    std::string dataUri = encodeAvatarImageToDataUri(img);
+    if (dataUri.empty()) {
+        if (_profileStatusLabel) {
+            _profileStatusLabel->setText("Failed to encode avatar image.");
+            _profileStatusLabel->setStyleSheet("color: #ef4444;");
+        }
+        return false;
+    }
+    _pendingAvatarDataUri = dataUri;
+    _avatarCleared = false;
+    _currentAvatarImage = img;
+    if (_avatarPreviewLabel) {
+        QString h = _handleEdit ? _handleEdit->text() : QString::fromStdString(_currentProfile.handle);
+        _avatarPreviewLabel->setPixmap(renderCircularAvatarPixmap(_currentAvatarImage, h, 72, _theme));
+    }
+    if (_profileStatusLabel) {
+        _profileStatusLabel->setText("Avatar selected. Click Save Profile to apply.");
+        _profileStatusLabel->setStyleSheet("");
+    }
+    return true;
+}
+
+void AccountLinkDialog::clearPendingAvatar()
+{
+    _avatarCleared = true;
+    _pendingAvatarDataUri.clear();
+    _currentAvatarImage = QImage();
+    if (_avatarPreviewLabel) {
+        QString h = _handleEdit ? _handleEdit->text() : QString::fromStdString(_currentProfile.handle);
+        _avatarPreviewLabel->setPixmap(renderCircularAvatarPixmap(QImage(), h, 72, _theme));
+    }
+    if (_profileStatusLabel) {
+        _profileStatusLabel->setText("Avatar cleared. Click Save Profile to apply.");
+        _profileStatusLabel->setStyleSheet("");
+    }
+}
+
+ApiResult<PlayerProfileInfo> AccountLinkDialog::saveProfile()
+{
+    ApiResult<PlayerProfileInfo> res;
+    if (!_netClient) {
+        res.errorCode = "NO_CLIENT";
+        res.errorMessage = "Network client unavailable.";
+        if (_profileStatusLabel) {
+            _profileStatusLabel->setText(QString::fromStdString(res.errorMessage));
+            _profileStatusLabel->setStyleSheet("color: #ef4444;");
+        }
+        return res;
+    }
+
+    std::string handle = _handleEdit ? _handleEdit->text().trimmed().toStdString() : _currentProfile.handle;
+    std::string displayName = _displayNameEdit ? _displayNameEdit->text().trimmed().toStdString() : _currentProfile.displayName;
+    std::string location = _locationEdit ? _locationEdit->text().trimmed().toStdString() : _currentProfile.location;
+    std::string bio = _bioEdit ? _bioEdit->toPlainText().trimmed().toStdString() : _currentProfile.bio;
+
+    if (!handle.empty()) {
+        static const std::regex handleRegex("^[A-Za-z0-9_.-]{3,32}$");
+        if (!std::regex_match(handle, handleRegex)) {
+            res.errorCode = "INVALID_HANDLE";
+            res.errorMessage = "Handle must be 3-32 characters (A-Z, a-z, 0-9, _, ., -).";
+            if (_profileStatusLabel) {
+                _profileStatusLabel->setText(QString::fromStdString(res.errorMessage));
+                _profileStatusLabel->setStyleSheet("color: #ef4444;");
+            }
+            if (_errorBannerLabel) {
+                _errorBannerLabel->setText(QString::fromStdString(res.errorMessage));
+                _errorBannerLabel->setStyleSheet("color: #ef4444;");
+                _errorBannerLabel->setVisible(true);
+            }
+            return res;
+        }
+    }
+
+    std::string avatarToSend;
+    if (!_avatarCleared && !_pendingAvatarDataUri.empty()) {
+        avatarToSend = _pendingAvatarDataUri;
+    }
+
+    if (_profileStatusLabel) {
+        _profileStatusLabel->setText("Saving profile...");
+        _profileStatusLabel->setStyleSheet("");
+    }
+
+    res = _netClient->updateMyProfile(handle, avatarToSend, displayName, bio, location, _avatarCleared);
+    if (res.ok) {
+        _currentProfile = res.data;
+        _pendingAvatarDataUri.clear();
+        _avatarCleared = false;
+
+        if (!_currentProfile.avatarUrl.empty()) {
+            if (_currentProfile.avatarUrl.rfind("data:image/", 0) == 0) {
+                auto comma = _currentProfile.avatarUrl.find(',');
+                if (comma != std::string::npos) {
+                    QByteArray b64 = QByteArray::fromStdString(_currentProfile.avatarUrl.substr(comma + 1));
+                    _currentAvatarImage.loadFromData(QByteArray::fromBase64(b64));
+                }
+            } else if (_currentProfile.avatarUrl[0] == '/') {
+                std::string bytes, ctype;
+                if (_netClient->fetchAvatarBytes(_currentProfile.avatarUrl, bytes, ctype)) {
+                    _currentAvatarImage.loadFromData(reinterpret_cast<const uchar *>(bytes.data()), static_cast<int>(bytes.size()));
+                }
+            }
+        } else {
+            _currentAvatarImage = QImage();
+        }
+        if (_avatarPreviewLabel) {
+            QString h = QString::fromStdString(_currentProfile.handle);
+            _avatarPreviewLabel->setPixmap(renderCircularAvatarPixmap(_currentAvatarImage, h, 72, _theme));
+        }
+
+        if (_configStore) {
+            ClientPreferences &prefs = _configStore->preferences();
+            prefs.handle = _currentProfile.handle;
+            prefs.displayName = _currentProfile.displayName;
+            prefs.avatarUrl = _currentProfile.avatarUrl;
+            prefs.bio = _currentProfile.bio;
+            prefs.location = _currentProfile.location;
+            std::string saveErr;
+            _configStore->save(saveErr);
+        }
+
+        if (_onAccountSwitchedCallback) {
+            _onAccountSwitchedCallback(_currentProfile);
+        }
+
+        if (_profileStatusLabel) {
+            _profileStatusLabel->setText("Profile saved.");
+            _profileStatusLabel->setStyleSheet("color: #10b981;");
+        }
+        if (_errorBannerLabel) {
+            _errorBannerLabel->setVisible(false);
+        }
+    } else {
+        QString errStr = QString::fromStdString(res.errorMessage.empty() ? res.errorCode : res.errorMessage);
+        if (_profileStatusLabel) {
+            _profileStatusLabel->setText(errStr);
+            _profileStatusLabel->setStyleSheet("color: #ef4444;");
+        }
+        if (_errorBannerLabel) {
+            _errorBannerLabel->setText(errStr);
+            _errorBannerLabel->setStyleSheet("color: #ef4444;");
+            _errorBannerLabel->setVisible(true);
+        }
+    }
+    return res;
 }
 
 bool AccountLinkDialog::refreshProfile()
@@ -662,6 +1011,54 @@ bool AccountLinkDialog::refreshProfile()
     }
     _currentProfile = res.data;
     _identities = res.data.identities;
+
+    if (_handleEdit) {
+        _handleEdit->setText(QString::fromStdString(_currentProfile.handle));
+    }
+    if (_displayNameEdit) {
+        _displayNameEdit->setText(QString::fromStdString(_currentProfile.displayName));
+    }
+    if (_locationEdit) {
+        _locationEdit->setText(QString::fromStdString(_currentProfile.location));
+    }
+    if (_bioEdit) {
+        _bioEdit->setPlainText(QString::fromStdString(_currentProfile.bio));
+    }
+
+    _pendingAvatarDataUri.clear();
+    _avatarCleared = false;
+    if (!_currentProfile.avatarUrl.empty()) {
+        if (_currentProfile.avatarUrl.rfind("data:image/", 0) == 0) {
+            auto comma = _currentProfile.avatarUrl.find(',');
+            if (comma != std::string::npos) {
+                QByteArray b64 = QByteArray::fromStdString(_currentProfile.avatarUrl.substr(comma + 1));
+                _currentAvatarImage.loadFromData(QByteArray::fromBase64(b64));
+            }
+        } else if (_currentProfile.avatarUrl[0] == '/') {
+            std::string bytes, ctype;
+            if (_netClient->fetchAvatarBytes(_currentProfile.avatarUrl, bytes, ctype)) {
+                _currentAvatarImage.loadFromData(reinterpret_cast<const uchar *>(bytes.data()), static_cast<int>(bytes.size()));
+            }
+        }
+    } else {
+        _currentAvatarImage = QImage();
+    }
+    if (_avatarPreviewLabel) {
+        QString h = QString::fromStdString(_currentProfile.handle);
+        _avatarPreviewLabel->setPixmap(renderCircularAvatarPixmap(_currentAvatarImage, h, 72, _theme));
+    }
+
+    if (_configStore) {
+        ClientPreferences &prefs = _configStore->preferences();
+        prefs.handle = _currentProfile.handle;
+        prefs.displayName = _currentProfile.displayName;
+        prefs.avatarUrl = _currentProfile.avatarUrl;
+        prefs.bio = _currentProfile.bio;
+        prefs.location = _currentProfile.location;
+        std::string saveErr;
+        _configStore->save(saveErr);
+    }
+
     rebuildIdentitiesTable();
     return true;
 }

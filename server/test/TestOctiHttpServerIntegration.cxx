@@ -3479,8 +3479,8 @@ TEST(OctiHttpServerIntegrationTest, PublicUserDirectoryAndProfileInspector)
     EXPECT_STATUS(200, rGetProfile);
     STRCMP_EQUAL("Oakland, CA", rGetProfile.json.value("location", "").c_str());
 
-    /* 2. Oversized avatar URI (>32768 bytes) is rejected with 400 */
-    std::string hugeAvatar = "data:image/png;base64," + repeat('A', 33000);
+    /* 2. Oversized avatar URI (>262144 bytes) is rejected with 400 */
+    std::string hugeAvatar = "data:image/png;base64," + repeat('A', 270000);
     Reply rHugeAvatar = http().patch("/api/v1/profile/me", a.token,
                                     Json{{"avatar_url", hugeAvatar}});
     EXPECT_ERROR(400, "INVALID_AVATAR_URL", rHugeAvatar);
@@ -4266,6 +4266,12 @@ TEST(OctiHttpServerIntegrationTest, WebAuthAndIdentitiesManagement)
     EXPECT_STATUS(200, rRoot);
     CHECK_TRUE(rRoot.body.find("async function loadHealth()") != std::string::npos);
     CHECK_TRUE(rRoot.body.find("handleAuthHash()") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("/api/v1/health") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("btn-web-save-profile") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("octi.transcript.v3") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("image/webp") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("btn-web-save-handle") == std::string::npos);
+    CHECK_TRUE(rRoot.body.find("Save Handle") == std::string::npos);
 
     /* 2. Unauthenticated GET /api/v1/auth/identities returns 401 */
     Reply rUnauth = http().get("/api/v1/auth/identities");
@@ -4314,6 +4320,146 @@ TEST(OctiHttpServerIntegrationTest, WebAuthAndIdentitiesManagement)
     EXPECT_STATUS(409, rUnlinkLast2);
     STRCMP_EQUAL("cannot_unlink_last_identity",
                  rUnlinkLast2.json.value("error", "").c_str());
+}
+
+TEST(OctiHttpServerIntegrationTest, HealthRouteCompatibilityAlias)
+{
+    Reply rApi = http().get("/api/v1/health");
+    EXPECT_STATUS(200, rApi);
+    Reply rAlias = http().get("/health");
+    EXPECT_STATUS(200, rAlias);
+    STRCMP_EQUAL("ok", rAlias.json.value("status", "").c_str());
+    STRCMP_EQUAL(rApi.json.value("version", "").c_str(),
+                 rAlias.json.value("version", "").c_str());
+    CHECK_EQUAL(rApi.json.value("protocol_version", -1),
+                rAlias.json.value("protocol_version", -2));
+}
+
+TEST(OctiHttpServerIntegrationTest, HandleCooldownAndActionableErrorMessages)
+{
+    User a = signIn("google", "sub-cd-http", "Cooldown Alice");
+
+    // 1. Initial handle customization succeeds
+    Reply r1 = http().patch("/api/v1/profile/me", a.token,
+                            Json{{"handle", "cool_alice"}});
+    EXPECT_STATUS(200, r1);
+    STRCMP_EQUAL("cool_alice", r1.json.value("handle", "").c_str());
+
+    // 2. Immediate second handle change returns 429
+    Reply r2 = http().patch("/api/v1/profile/me", a.token,
+                            Json{{"handle", "cool_alice2"}});
+    EXPECT_STATUS(429, r2);
+    STRCMP_EQUAL("HANDLE_CHANGE_RATE_LIMITED", r2.json.value("error", "").c_str());
+    CHECK_TRUE(r2.json.value("message", "").find("24 hours") != std::string::npos);
+
+    // 3. Saving profile with the SAME handle is a no-op on handle and not rate limited
+    Reply rSame = http().patch("/api/v1/profile/me", a.token,
+                               Json{{"handle", "cool_alice"},
+                                    {"display_name", "Cool Alice Updated"}});
+    EXPECT_STATUS(200, rSame);
+    STRCMP_EQUAL("Cool Alice Updated", rSame.json.value("display_name", "").c_str());
+
+    // 4. Actionable error messages
+    Reply rBadH = http().patch("/api/v1/profile/me", a.token,
+                               Json{{"handle", "ab"}});
+    EXPECT_STATUS(400, rBadH);
+    STRCMP_EQUAL("INVALID_HANDLE", rBadH.json.value("error", "").c_str());
+    CHECK_TRUE(rBadH.json.value("message", "").find("3 to 24 characters") != std::string::npos);
+
+    Reply rBadBio = http().patch("/api/v1/profile/me", a.token,
+                                 Json{{"bio", repeat('B', 501)}});
+    EXPECT_STATUS(400, rBadBio);
+    STRCMP_EQUAL("INVALID_BIO", rBadBio.json.value("error", "").c_str());
+    CHECK_TRUE(rBadBio.json.value("message", "").find("500 characters") != std::string::npos);
+
+    Reply rBadLoc = http().patch("/api/v1/profile/me", a.token,
+                                 Json{{"location", repeat('L', 65)}});
+    EXPECT_STATUS(400, rBadLoc);
+    STRCMP_EQUAL("INVALID_LOCATION", rBadLoc.json.value("error", "").c_str());
+    CHECK_TRUE(rBadLoc.json.value("message", "").find("64 printable characters") != std::string::npos);
+}
+
+TEST(OctiHttpServerIntegrationTest, ServerAvatarStorageAndEndpointServing)
+{
+    std::string avDir = env->dir + "/avatars";
+    env->store.setAvatarDir(avDir);
+
+    User a = signIn("google", "sub-av-http", "Avatar Alice");
+    std::string pngUri = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+    Reply rPatch = http().patch("/api/v1/profile/me", a.token,
+                                Json{{"avatar_url", pngUri}});
+    EXPECT_STATUS(200, rPatch);
+    std::string avUrl = rPatch.json.value("avatar_url", "");
+    CHECK_TRUE(avUrl.rfind("/api/v1/avatars/", 0) == 0);
+    size_t q = avUrl.find('?');
+    std::string avPath = (q != std::string::npos) ? avUrl.substr(0, q) : avUrl;
+    std::string avFile = avPath.substr(std::string("/api/v1/avatars/").size());
+
+    // Fetch avatar via GET /api/v1/avatars/:file
+    Reply rGetAv = http().get(avPath);
+    EXPECT_STATUS(200, rGetAv);
+    STRCMP_EQUAL("image/png", rGetAv.contentType.c_str());
+    CHECK_TRUE(rGetAv.body.size() > 0);
+
+    // Fetch avatar via GET /avatar/:file alias
+    Reply rGetAlias = http().get("/avatar/" + avFile);
+    EXPECT_STATUS(200, rGetAlias);
+    STRCMP_EQUAL("image/png", rGetAlias.contentType.c_str());
+
+    // Non-existent avatar returns 404
+    Reply rMissing = http().get("/api/v1/avatars/999999.png");
+    EXPECT_STATUS(404, rMissing);
+}
+
+TEST(OctiHttpServerIntegrationTest, AuthenticatedGameArchiveAndInstallAttribution)
+{
+    User a = signIn("google", "sub-attr-user", "Archiver Alice");
+    Reply rHandle = http().patch("/api/v1/profile/me", a.token,
+                                 Json{{"handle", "archiver_alice"}});
+    EXPECT_STATUS(200, rHandle);
+
+    // 1. Upload game with Authorization header and installId
+    std::string tr1 = makeResignedTranscript({"33+b", "37+f"}, "dev-bound-01", 1);
+    Reply rUp1 = http().post("/api/v1/archive/upload", a.token,
+                             Json{{"transcript", tr1}});
+    EXPECT_STATUS(200, rUp1);
+    std::string gid1 = rUp1.json.value("game_id", "");
+    CHECK_FALSE(gid1.empty());
+
+    Reply rGet1 = http().get("/api/v1/archive/games/" + gid1);
+    EXPECT_STATUS(200, rGet1);
+    CHECK_TRUE(rGet1.json["players"].is_array() && !rGet1.json["players"].empty());
+    STRCMP_EQUAL("archiver_alice", rGet1.json["players"][0].value("handle", "").c_str());
+    STRCMP_EQUAL(a.uuid.c_str(), rGet1.json["players"][0].value("player_uuid", "").c_str());
+
+    // 2. Upload game from same device WITHOUT Authorization header -> attributed via bound install_id!
+    std::string tr2 = makeResignedTranscript({"33+c", "37+g"}, "dev-bound-01", 2);
+    Reply rUp2 = http().post("/api/v1/archive/upload", "",
+                             Json{{"transcript", tr2}});
+    EXPECT_STATUS(200, rUp2);
+    std::string gid2 = rUp2.json.value("game_id", "");
+    CHECK_FALSE(gid2.empty());
+
+    Reply rGet2 = http().get("/api/v1/archive/games/" + gid2);
+    EXPECT_STATUS(200, rGet2);
+    CHECK_TRUE(rGet2.json["players"].is_array() && !rGet2.json["players"].empty());
+    STRCMP_EQUAL("archiver_alice", rGet2.json["players"][0].value("handle", "").c_str());
+    STRCMP_EQUAL(a.uuid.c_str(), rGet2.json["players"][0].value("player_uuid", "").c_str());
+
+    // 3. Upload from unknown device without auth -> remains anonymous Player
+    std::string tr3 = makeResignedTranscript({"33+d", "37+h"}, "dev-unknown-99", 1);
+    Reply rUp3 = http().post("/api/v1/archive/upload", "",
+                             Json{{"transcript", tr3}});
+    EXPECT_STATUS(200, rUp3);
+    std::string gid3 = rUp3.json.value("game_id", "");
+    CHECK_FALSE(gid3.empty());
+
+    Reply rGet3 = http().get("/api/v1/archive/games/" + gid3);
+    EXPECT_STATUS(200, rGet3);
+    CHECK_TRUE(rGet3.json["players"].is_array() && !rGet3.json["players"].empty());
+    STRCMP_EQUAL("Player", rGet3.json["players"][0].value("handle", "").c_str());
+    CHECK_TRUE(rGet3.json["players"][0].value("player_uuid", "").empty());
 }
 
 int main(int argc, char **argv)

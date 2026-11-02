@@ -46,6 +46,7 @@ struct PlayerProfile {
     int draws = 0;
     int64_t createdAt = 0;
     int64_t lastSeenAt = 0;
+    int64_t handleChangedAt = 0;
 };
 
 struct LinkedIdentity {
@@ -120,6 +121,7 @@ enum class UpdateStatus {
     NOT_FOUND,
     INVALID_HANDLE,
     HANDLE_TAKEN,
+    HANDLE_RATE_LIMITED,
     INVALID_DISPLAY_NAME,
     INVALID_AVATAR_URL,
     INVALID_BIO,
@@ -318,6 +320,8 @@ class AccountStore {
 public:
     static constexpr int kMinHandleLength = 3;
     static constexpr int kMaxHandleLength = 24;
+    static constexpr int64_t kHandleChangeCooldownSec = 24LL * 3600;
+    static constexpr size_t kMaxAvatarDataUriBytes = 262144;
     static constexpr int kMaxLeaderboardLimit = 100;
     static constexpr int kMaxArchiveLimit = 100;
     static constexpr int kMaxExportLimit = 5000;
@@ -341,6 +345,10 @@ public:
 
     void setClock(std::function<int64_t()> clock);
     void setSessionTtlSec(int64_t seconds);
+    void setAvatarDir(const std::string &dir);
+    std::string avatarDir() const;
+    bool readAvatarFile(const std::string &fileName, std::string &outBytes,
+                        std::string &outMimeType) const;
 
     static bool isValidHandle(const std::string &handle);
     static std::string sha256Hex(const std::string &data);
@@ -379,6 +387,10 @@ public:
     bool getProfileById(int64_t playerId, PlayerProfile &out);
     bool getProfileByUuid(const std::string &uuid, PlayerProfile &out);
     bool getProfileByHandle(const std::string &handle, PlayerProfile &out);
+    bool bindInstallToPlayer(const std::string &installId, int64_t playerId,
+                             int *reconciledCount = nullptr);
+    bool getPlayerByInstallId(const std::string &installId, PlayerProfile &out);
+    int reconcileAnonymousGames();
     UpdateStatus updateProfile(int64_t playerId, const ProfileUpdate &update,
                                PlayerProfile *updated = nullptr);
     bool setBanned(int64_t playerId, bool banned);
@@ -447,6 +459,7 @@ private:
     sqlite3 *_db;
     std::function<int64_t()> _clock;
     int64_t _sessionTtlSec;
+    std::string _avatarDir;
 };
 
 } // namespace octi

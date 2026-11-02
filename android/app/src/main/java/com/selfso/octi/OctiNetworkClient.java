@@ -161,6 +161,8 @@ public final class OctiNetworkClient implements AutoCloseable {
         public String handle = "";
         public String displayName = "";
         public String avatarUrl = "";
+        public String bio = "";
+        public String location = "";
         public int elo2p = 1200;
         public int elo4p = 1200;
         public int eloOfk = 1200;
@@ -875,6 +877,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         boolean transportOk = false;
         boolean isRuntimeException = false;
         int status = 0;
+        byte[] rawBytes = new byte[0];
         String body = "";
         String contentType = "";
         String transportError = "";
@@ -927,6 +930,15 @@ public final class OctiNetworkClient implements AutoCloseable {
     private final SseRunner _gameStream = new SseRunner();
     private volatile OctiCrashReporter _crashReporter;
     private volatile RuntimeException _injectedRuntimeException = null;
+    private volatile String _installId = "";
+
+    public void setInstallId(String installId) {
+        _installId = installId != null ? installId : "";
+    }
+
+    public String getInstallId() {
+        return _installId;
+    }
 
     public void setCrashReporter(OctiCrashReporter reporter) {
         _crashReporter = reporter;
@@ -1295,25 +1307,47 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     public ApiResult<PlayerProfileInfo> updateMyProfile(String handle) {
-        return updateMyProfile(handle, "", "");
+        return updateMyProfile(handle, null, null);
     }
 
     public ApiResult<PlayerProfileInfo> updateMyProfile(String handle, String avatarUrl) {
-        return updateMyProfile(handle, avatarUrl, "");
+        return updateMyProfile(handle, avatarUrl, null);
     }
 
     public ApiResult<PlayerProfileInfo> updateMyProfile(
             String handle, String avatarUrl, String displayName) {
+        return updateMyProfile(
+                handle,
+                avatarUrl,
+                displayName,
+                null,
+                null,
+                avatarUrl != null && !avatarUrl.isEmpty());
+    }
+
+    public ApiResult<PlayerProfileInfo> updateMyProfile(
+            String handle,
+            String avatarUrl,
+            String displayName,
+            String bio,
+            String location,
+            boolean setAvatarUrl) {
         ApiResult<PlayerProfileInfo> res = new ApiResult<>(new PlayerProfileInfo());
         Map<String, Object> body = new LinkedHashMap<>();
         if (handle != null && !handle.isEmpty()) {
             body.put("handle", handle);
         }
-        if (avatarUrl != null && !avatarUrl.isEmpty()) {
-            body.put("avatar_url", avatarUrl);
+        if (setAvatarUrl || (avatarUrl != null && !avatarUrl.isEmpty())) {
+            body.put("avatar_url", avatarUrl != null ? avatarUrl : "");
         }
-        if (displayName != null && !displayName.isEmpty()) {
-            body.put("display_name", displayName);
+        if (displayName != null && !displayName.trim().isEmpty()) {
+            body.put("display_name", displayName.trim());
+        }
+        if (bio != null) {
+            body.put("bio", bio);
+        }
+        if (location != null) {
+            body.put("location", location);
         }
         RawResponse raw = doPatch("/api/v1/profile/me", body);
         if (!raw.transportOk || raw.status != 200 || raw.json == null) {
@@ -1324,6 +1358,29 @@ public final class OctiNetworkClient implements AutoCloseable {
         res.httpStatus = raw.status;
         res.data = parsePlayerProfile(raw.json);
         return res;
+    }
+
+    public byte[] fetchAvatarBytes(String avatarUrl) {
+        if (avatarUrl == null || avatarUrl.isEmpty() || avatarUrl.startsWith("data:")) {
+            return null;
+        }
+        String path = avatarUrl;
+        if (path.startsWith("http://") || path.startsWith("https://")) {
+            int slash = path.indexOf('/', 8);
+            if (slash != -1) {
+                path = path.substring(slash);
+            } else {
+                path = "/";
+            }
+        }
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        RawResponse raw = doGet(path);
+        if (!raw.transportOk || raw.status != 200 || raw.rawBytes == null || raw.rawBytes.length == 0) {
+            return null;
+        }
+        return raw.rawBytes;
     }
 
     public ApiResult<PlayerProfileInfo> fetchPlayerProfile(String playerUuid) {
@@ -2474,6 +2531,9 @@ public final class OctiNetworkClient implements AutoCloseable {
                     if (!token.isEmpty()) {
                         req.append("Authorization: Bearer ").append(token).append("\r\n");
                     }
+                    if (_installId != null && !_installId.isEmpty()) {
+                        req.append("X-Octi-Install-Id: ").append(_installId).append("\r\n");
+                    }
                     if (bodyBytes != null) {
                         req.append("Content-Type: application/json\r\n");
                         req.append("Content-Length: ").append(bodyBytes.length).append("\r\n");
@@ -2554,7 +2614,8 @@ public final class OctiNetworkClient implements AutoCloseable {
                     } else {
                         respBytes = readUntilEof(in);
                     }
-                    r.body = new String(respBytes, StandardCharsets.UTF_8);
+                    r.rawBytes = respBytes != null ? respBytes : new byte[0];
+                    r.body = new String(r.rawBytes, StandardCharsets.UTF_8);
                     String trimmed = r.body.trim();
                     if (!trimmed.isEmpty() && (trimmed.charAt(0) == '{' || trimmed.charAt(0) == '[')) {
                         r.json = OctiMiniJson.parseObjectOrNull(trimmed);
@@ -2659,6 +2720,9 @@ public final class OctiNetworkClient implements AutoCloseable {
                     req.append("X-Octi-Protocol-Version: ").append(OctiDefs.OCTI_PROTOCOL_VERSION).append("\r\n");
                     if (!token.isEmpty()) {
                         req.append("Authorization: Bearer ").append(token).append("\r\n");
+                    }
+                    if (_installId != null && !_installId.isEmpty()) {
+                        req.append("X-Octi-Install-Id: ").append(_installId).append("\r\n");
                     }
                     if (curSeq > 0) {
                         req.append("Last-Event-ID: ").append(curSeq).append("\r\n");
@@ -2793,7 +2857,14 @@ public final class OctiNetworkClient implements AutoCloseable {
         }
         if (raw.json != null) {
             out.errorCode = OctiMiniJson.getString(raw.json, "error", "HTTP_ERROR");
-            out.errorMessage = OctiMiniJson.getString(raw.json, "message", "");
+            String msg = OctiMiniJson.getString(raw.json, "message", "");
+            if (msg.isEmpty()) {
+                msg = OctiMiniJson.getString(raw.json, "error", "");
+            }
+            if (msg.isEmpty()) {
+                msg = raw.body != null ? raw.body : "";
+            }
+            out.errorMessage = msg;
         } else {
             out.errorCode = "HTTP_" + raw.status;
             out.errorMessage = raw.body != null ? raw.body : "";
@@ -2954,6 +3025,8 @@ public final class OctiNetworkClient implements AutoCloseable {
         p.handle = OctiMiniJson.getString(j, "handle", "");
         p.displayName = OctiMiniJson.getString(j, "display_name", "");
         p.avatarUrl = OctiMiniJson.getString(j, "avatar_url", "");
+        p.bio = OctiMiniJson.getString(j, "bio", "");
+        p.location = OctiMiniJson.getString(j, "location", "");
         p.elo2p = OctiMiniJson.getInt(j, "elo_2p", 1200);
         p.elo4p = OctiMiniJson.getInt(j, "elo_4p", 1200);
         p.eloOfk = OctiMiniJson.getInt(j, "elo_ofk", 1200);

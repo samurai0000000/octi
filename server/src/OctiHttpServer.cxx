@@ -667,6 +667,8 @@ struct OctiHttpServer::Impl {
 
     /* auth + parsing */
     static bool extractBearer(const Request &req, std::string &token);
+    void maybeBindClientInstallId(const Request &req, int64_t playerId,
+                                  const std::string &bodyInstallId = "");
     bool requireAuth(const Request &req, Response &res, Auth &auth);
     bool optionalAuth(const Request &req, Response &res, Auth &auth);
     bool readJsonBody(const Request &req, Response &res, Json &out,
@@ -695,6 +697,7 @@ struct OctiHttpServer::Impl {
 
     /* handlers */
     void handleHealth(const Request &req, Response &res);
+    void handleAvatarGet(const Request &req, Response &res);
     void handlePrivacy(const Request &req, Response &res);
     void handleDataDeletion(const Request &req, Response &res);
     void handleAuthAuthorize(const Request &req, Response &res);
@@ -929,6 +932,7 @@ void OctiHttpServer::Impl::waitWake(int ms)
 void OctiHttpServer::Impl::tickLoop()
 {
     int64_t lastPurge = 0;
+    int64_t lastReconcile = 0;
     while (!stopping.load()) {
         waitWake(cfg.tickIntervalMs);
         if (stopping.load()) {
@@ -940,6 +944,10 @@ void OctiHttpServer::Impl::tickLoop()
             if (now - lastPurge >= cfg.sessionPurgeIntervalSec) {
                 store.purgeExpiredSessions(now);
                 lastPurge = now;
+            }
+            if (lastReconcile == 0 || (now - lastReconcile >= cfg.reconcileIntervalSec)) {
+                store.reconcileAnonymousGames();
+                lastReconcile = now;
             }
         } catch (const std::exception &ex) {
             std::cerr << "octi_server: maintenance tick failed: " << ex.what()
@@ -1061,6 +1069,28 @@ bool OctiHttpServer::Impl::extractBearer(const Request &req,
     return true;
 }
 
+void OctiHttpServer::Impl::maybeBindClientInstallId(const Request &req,
+                                                    int64_t playerId,
+                                                    const std::string &bodyInstallId)
+{
+    if (playerId <= 0) {
+        return;
+    }
+    std::string candidateId;
+    if (req.has_header("X-Octi-Install-Id")) {
+        std::string h = req.get_header_value("X-Octi-Install-Id");
+        if (isSafeId(h)) {
+            candidateId = h;
+        }
+    }
+    if (candidateId.empty() && !bodyInstallId.empty() && isSafeId(bodyInstallId)) {
+        candidateId = bodyInstallId;
+    }
+    if (!candidateId.empty()) {
+        store.bindInstallToPlayer(candidateId, playerId);
+    }
+}
+
 bool OctiHttpServer::Impl::requireAuth(const Request &req, Response &res,
                                        Auth &auth)
 {
@@ -1079,6 +1109,7 @@ bool OctiHttpServer::Impl::requireAuth(const Request &req, Response &res,
     }
     auth.playerId = sv.playerId;
     auth.token = token;
+    maybeBindClientInstallId(req, auth.playerId);
     return true;
 }
 
@@ -1620,6 +1651,24 @@ void OctiHttpServer::Impl::handleHealth(const Request &, Response &res)
     sendJson(res, 200, j);
 }
 
+void OctiHttpServer::Impl::handleAvatarGet(const Request &req, Response &res)
+{
+    auto it = req.path_params.find("file");
+    if (it == req.path_params.end() || it->second.empty()) {
+        sendError(res, 404, "NOT_FOUND", "Avatar not found");
+        return;
+    }
+    std::string bytes;
+    std::string mime;
+    if (!store.readAvatarFile(it->second, bytes, mime)) {
+        sendError(res, 404, "NOT_FOUND", "Avatar not found");
+        return;
+    }
+    res.status = 200;
+    res.set_header("Cache-Control", "public, max-age=86400");
+    res.set_content(bytes, mime.c_str());
+}
+
 void OctiHttpServer::Impl::handlePrivacy(const Request &, Response &res)
 {
     res.status = 200;
@@ -2131,6 +2180,11 @@ void OctiHttpServer::Impl::handleSso(const Request &req, Response &res)
         sendError(res, 500, "INTERNAL_ERROR", "sign-in failed");
         return;
     }
+    std::string bodyInstallId;
+    if (body.contains("install_id") && body["install_id"].is_string()) {
+        bodyInstallId = body["install_id"].get<std::string>();
+    }
+    maybeBindClientInstallId(req, lr.profile.playerId, bodyInstallId);
     rooms.enterLobby(lr.profile.playerId);
     Json j;
     j["session_token"] = lr.sessionToken;
@@ -2162,6 +2216,11 @@ void OctiHttpServer::Impl::handleLink(const Request &req, Response &res)
     switch (lr.status) {
     case LinkStatus::LINKED:
     case LinkStatus::ALREADY_LINKED_SELF: {
+        std::string bodyInstallId;
+        if (body.contains("install_id") && body["install_id"].is_string()) {
+            bodyInstallId = body["install_id"].get<std::string>();
+        }
+        maybeBindClientInstallId(req, auth.playerId, bodyInstallId);
         std::vector<LinkedIdentity> ids;
         store.listLinkedIdentities(auth.playerId, ids);
         Json j;
@@ -2398,22 +2457,31 @@ void OctiHttpServer::Impl::handleProfilePatch(const Request &req,
         return;
     case UpdateStatus::INVALID_HANDLE:
         sendError(res, 400, "INVALID_HANDLE",
-                  "handle must be 3 to 24 characters");
+                  "Handle must be 3 to 24 characters using only letters (A-Z, a-z), digits (0-9), underscores (_), or hyphens (-).");
         return;
     case UpdateStatus::HANDLE_TAKEN:
-        sendError(res, 409, "HANDLE_TAKEN", "handle is already taken");
+        sendError(res, 409, "HANDLE_TAKEN",
+                  "That handle is already taken by another player. Please choose a different handle.");
+        return;
+    case UpdateStatus::HANDLE_RATE_LIMITED:
+        sendError(res, 429, "HANDLE_CHANGE_RATE_LIMITED",
+                  "Handle can only be changed once every 24 hours after initial setup. Please try again later.");
         return;
     case UpdateStatus::INVALID_DISPLAY_NAME:
-        sendError(res, 400, "INVALID_DISPLAY_NAME", "invalid display_name");
+        sendError(res, 400, "INVALID_DISPLAY_NAME",
+                  "Display name must be 1 to 64 printable characters and cannot be blank.");
         return;
     case UpdateStatus::INVALID_AVATAR_URL:
-        sendError(res, 400, "INVALID_AVATAR_URL", "invalid avatar_url");
+        sendError(res, 400, "INVALID_AVATAR_URL",
+                  "Avatar must be an uploaded image file or a valid https:// URL (up to 512 characters, no spaces).");
         return;
     case UpdateStatus::INVALID_BIO:
-        sendError(res, 400, "INVALID_BIO", "invalid bio");
+        sendError(res, 400, "INVALID_BIO",
+                  "Bio must be 500 characters or fewer.");
         return;
     case UpdateStatus::INVALID_LOCATION:
-        sendError(res, 400, "INVALID_LOCATION", "invalid location");
+        sendError(res, 400, "INVALID_LOCATION",
+                  "Location must be 64 printable characters or fewer on a single line.");
         return;
     case UpdateStatus::ERROR:
         break;
@@ -3980,6 +4048,61 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
     rec.platform = platform;
     rec.installId = installId;
 
+    PlayerProfile authedPlayer;
+    bool hasAuthedPlayer = false;
+    if (req.has_header("Authorization")) {
+        std::string token;
+        if (extractBearer(req, token)) {
+            SessionValidation sv = store.validateSession(token);
+            if (sv.valid && sv.playerId > 0) {
+                if (store.getProfileById(sv.playerId, authedPlayer)) {
+                    hasAuthedPlayer = true;
+                }
+            }
+        }
+    }
+    if (!hasAuthedPlayer && !installId.empty() && isSafeId(installId)) {
+        if (store.getPlayerByInstallId(installId, authedPlayer)) {
+            hasAuthedPlayer = true;
+        }
+    }
+    if (hasAuthedPlayer && authedPlayer.playerId > 0) {
+        if (!installId.empty() && isSafeId(installId)) {
+            store.bindInstallToPlayer(installId, authedPlayer.playerId);
+        }
+        bool p1IsAi = (player1Handle.rfind("AI_", 0) == 0);
+        bool p2IsAi = (player2Handle.rfind("AI_", 0) == 0);
+        int humanSeat = 1;
+        if (!p1IsAi && p2IsAi) {
+            humanSeat = 1;
+        } else if (!p2IsAi && p1IsAi) {
+            humanSeat = 2;
+        } else {
+            humanSeat = 1;
+        }
+        if (humanSeat == 1) {
+            rec.p1PlayerId = authedPlayer.playerId;
+            rec.p1Handle = authedPlayer.handle;
+            player1Handle = authedPlayer.handle;
+        } else {
+            rec.p2PlayerId = authedPlayer.playerId;
+            rec.p2Handle = authedPlayer.handle;
+            player2Handle = authedPlayer.handle;
+        }
+        if (storedJson.contains("players") && storedJson["players"].is_array()) {
+            for (auto &pEntry : storedJson["players"]) {
+                if (!pEntry.is_object()) continue;
+                int s = pEntry.value("seat", 0);
+                std::string t = pEntry.value("type", "");
+                std::string h = pEntry.value("handle", "");
+                if (s == humanSeat || (s == 0 && (t == "HUMAN" || h.rfind("AI_", 0) != 0))) {
+                    pEntry["handle"] = authedPlayer.handle;
+                }
+            }
+            rec.octiTranscript = storedJson.dump();
+        }
+    }
+
     std::string archiveErr;
     ArchiveStatus st = store.archiveGame(rec, archiveErr);
     if (st == ArchiveStatus::DUPLICATE_ID) {
@@ -4811,9 +4934,12 @@ void OctiHttpServer::Impl::registerRoutes()
     };
     static const Route routes[] = {
         {"GET", "/", &Impl::handleIndex},
+        {"GET", "/health", &Impl::handleHealth},
         {"GET", "/privacy", &Impl::handlePrivacy},
         {"POST", "/privacy", &Impl::handleDataDeletion},
         {"GET", "/api/v1/health", &Impl::handleHealth},
+        {"GET", "/api/v1/avatars/:file", &Impl::handleAvatarGet},
+        {"GET", "/avatar/:file", &Impl::handleAvatarGet},
         {"GET", "/api/v1/auth/data-deletion", &Impl::handleDataDeletion},
         {"POST", "/api/v1/auth/data-deletion", &Impl::handleDataDeletion},
         {"GET", "/api/v1/auth/authorize", &Impl::handleAuthAuthorize},

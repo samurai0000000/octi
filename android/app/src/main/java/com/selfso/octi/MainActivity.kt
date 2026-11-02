@@ -18,6 +18,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,6 +70,7 @@ import com.selfso.octi.ui.LobbyScreen
 import com.selfso.octi.ui.NewGameSetupDialog
 import com.selfso.octi.ui.OctiAppViewModel
 import com.selfso.octi.ui.OctiBoardCanvas
+import com.selfso.octi.ui.OctiPlayerAvatar
 import com.selfso.octi.ui.OctiReserveHud
 import com.selfso.octi.ui.OctiSplashOverlay
 import com.selfso.octi.ui.OctiTelemetryConsentDialog
@@ -283,6 +285,8 @@ fun OctiMainAppContent(
     val showNewGameDialog by viewModel.showNewGameDialog.collectAsState()
     val showSsoDialog by viewModel.showSsoDialog.collectAsState()
     val showAccountDialog by viewModel.showAccountDialog.collectAsState()
+    val currentProfile by viewModel.currentProfile.collectAsState()
+    val isAuthenticated by viewModel.isAuthenticated.collectAsState()
     val showCreateTableDialog by viewModel.showCreateTableDialog.collectAsState()
     val showGameOverDialog by viewModel.showGameOverDialog.collectAsState()
     val showExportMovesDialog by viewModel.showExportMovesDialog.collectAsState()
@@ -334,6 +338,18 @@ fun OctiMainAppContent(
                         }
                     },
                     actions = {
+                        val prof = currentProfile
+                        if (isAuthenticated && prof != null) {
+                            OctiPlayerAvatar(
+                                avatarUrl = prof.avatarUrl,
+                                handle = prof.handle,
+                                size = 28.dp,
+                                viewModel = viewModel,
+                                modifier = Modifier
+                                    .padding(end = 6.dp)
+                                    .clickable { viewModel.setShowAccountDialog(true) }
+                            )
+                        }
                         OutlinedButton(
                             onClick = { viewModel.setShowNewGameDialog(true) },
                             modifier = Modifier.padding(end = 4.dp)

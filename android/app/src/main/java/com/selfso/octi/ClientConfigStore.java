@@ -37,7 +37,7 @@ import java.util.Set;
 public final class ClientConfigStore {
 
     public static final int CURRENT_TELEMETRY_CONSENT_VERSION = 1;
-    public static final int MAX_CONFIG_FILE_BYTES = 65536;
+    public static final int MAX_CONFIG_FILE_BYTES = 524288;
 
     public static final class ClientPreferences {
         public String sessionToken = "";
@@ -45,6 +45,8 @@ public final class ClientConfigStore {
         public String handle = "";
         public String displayName = "";
         public String avatarUrl = "";
+        public String bio = "";
+        public String location = "";
         public String preferredProvider = "";
         public OctiThemeId theme = OctiThemeId.OBSIDIAN_BRASS;
         public boolean confirmAllMoves = true;
@@ -98,6 +100,22 @@ public final class ClientConfigStore {
 
         public void setAvatarUrl(String avatarUrl) {
             this.avatarUrl = avatarUrl != null ? avatarUrl : "";
+        }
+
+        public String getBio() {
+            return bio;
+        }
+
+        public void setBio(String bio) {
+            this.bio = bio != null ? bio : "";
+        }
+
+        public String getLocation() {
+            return location;
+        }
+
+        public void setLocation(String location) {
+            this.location = location != null ? location : "";
         }
 
         public String getPreferredProvider() {
@@ -181,6 +199,8 @@ public final class ClientConfigStore {
             c.handle = this.handle;
             c.displayName = this.displayName;
             c.avatarUrl = this.avatarUrl;
+            c.bio = this.bio;
+            c.location = this.location;
             c.preferredProvider = this.preferredProvider;
             c.theme = this.theme;
             c.confirmAllMoves = this.confirmAllMoves;
@@ -297,6 +317,8 @@ public final class ClientConfigStore {
     public void clearSession() {
         _prefs.sessionToken = "";
         _prefs.playerUuid = "";
+        _prefs.bio = "";
+        _prefs.location = "";
     }
 
     public static String generateUuidV4() {
@@ -351,7 +373,7 @@ public final class ClientConfigStore {
             return false;
         }
         if (fileSize > MAX_CONFIG_FILE_BYTES) {
-            setError(errorOut, "config file exceeds maximum allowed size (64 KiB)");
+            setError(errorOut, "config file exceeds maximum allowed size (512 KiB)");
             return false;
         }
 
@@ -369,7 +391,7 @@ public final class ClientConfigStore {
             return false;
         }
         if (rawBytes.length > MAX_CONFIG_FILE_BYTES) {
-            setError(errorOut, "config file exceeds maximum allowed size (64 KiB)");
+            setError(errorOut, "config file exceeds maximum allowed size (512 KiB)");
             return false;
         }
 
@@ -412,6 +434,12 @@ public final class ClientConfigStore {
         }
         if (doc.get("avatar_url") instanceof String s) {
             parsed.avatarUrl = s;
+        }
+        if (doc.get("bio") instanceof String s) {
+            parsed.bio = s;
+        }
+        if (doc.get("location") instanceof String s) {
+            parsed.location = s;
         }
         if (doc.get("preferred_provider") instanceof String s) {
             parsed.preferredProvider = s;
@@ -486,6 +514,8 @@ public final class ClientConfigStore {
         doc.put("handle", _prefs.handle != null ? _prefs.handle : "");
         doc.put("display_name", _prefs.displayName != null ? _prefs.displayName : "");
         doc.put("avatar_url", _prefs.avatarUrl != null ? _prefs.avatarUrl : "");
+        doc.put("bio", _prefs.bio != null ? _prefs.bio : "");
+        doc.put("location", _prefs.location != null ? _prefs.location : "");
         doc.put("preferred_provider", _prefs.preferredProvider != null ? _prefs.preferredProvider : "");
         doc.put("theme", themeToString(_prefs.theme));
         doc.put("confirm_all_moves", _prefs.confirmAllMoves);

@@ -80,13 +80,15 @@ TEST(ServerFoundationTest, NominalNewOptionsAreParsed)
 {
     const char *argv[] = { "octi_server", "--port", "9100", "--bind", "0.0.0.0",
                            "--db", "/tmp/octi_foundation.db", "--oidc-config",
-                           "/tmp/octi_foundation_oidc.json" };
-    CHECK_TRUE(app.parseArgs(9, argv, errMsg));
+                           "/tmp/octi_foundation_oidc.json",
+                           "--avatar-dir", "/tmp/avatars" };
+    CHECK_TRUE(app.parseArgs(11, argv, errMsg));
     LONGS_EQUAL(9100, app.config().port);
     STRCMP_EQUAL("0.0.0.0", app.config().bindAddress.c_str());
     STRCMP_EQUAL("/tmp/octi_foundation.db", app.config().dbPath.c_str());
     STRCMP_EQUAL("/tmp/octi_foundation_oidc.json",
                  app.config().oidcConfigPath.c_str());
+    STRCMP_EQUAL("/tmp/avatars", app.config().avatarDir.c_str());
 
     /* Parsing again starts from the defaults. */
     const char *again[] = { "octi_server", "--db", "x.db" };
@@ -94,6 +96,7 @@ TEST(ServerFoundationTest, NominalNewOptionsAreParsed)
     LONGS_EQUAL(6874, app.config().port);
     STRCMP_EQUAL("127.0.0.1", app.config().bindAddress.c_str());
     STRCMP_EQUAL("", app.config().oidcConfigPath.c_str());
+    STRCMP_EQUAL("", app.config().avatarDir.c_str());
 }
 
 TEST(ServerFoundationTest, NominalVersionAndHelpFlags)
@@ -118,6 +121,7 @@ TEST(ServerFoundationTest, NominalVersionAndHelpFlags)
     CHECK_TRUE(outHelp.str().find("--bind") != std::string::npos);
     CHECK_TRUE(outHelp.str().find("--db") != std::string::npos);
     CHECK_TRUE(outHelp.str().find("--oidc-config") != std::string::npos);
+    CHECK_TRUE(outHelp.str().find("--avatar-dir") != std::string::npos);
 }
 
 TEST(ServerFoundationTest, BoundaryPortValues)
@@ -238,6 +242,8 @@ TEST(ServerFoundationTest, DebPackageMatchesReadmeVersionAndSystemdSpec)
 
     std::string svcContent = readFile(tmpDirStr + "/root/lib/systemd/system/octi-server.service");
     CHECK_TRUE(svcContent.find("ExecStart=/usr/sbin/octi-server") != std::string::npos);
+    CHECK_TRUE(svcContent.find("--avatar-dir ${OCTI_AVATAR_DIR}") != std::string::npos);
+    CHECK_TRUE(svcContent.find("ReadWritePaths=/var/lib/octi /var/octi/avatar") != std::string::npos);
     CHECK_TRUE(svcContent.find("User=octi") != std::string::npos);
     CHECK_TRUE(svcContent.find("Group=octi") != std::string::npos);
     CHECK_TRUE(svcContent.find("KillSignal=SIGTERM") != std::string::npos);
@@ -246,6 +252,10 @@ TEST(ServerFoundationTest, DebPackageMatchesReadmeVersionAndSystemdSpec)
     std::string defaultContent = readFile(tmpDirStr + "/root/etc/default/octi-server");
     CHECK_TRUE(defaultContent.find("OCTI_PORT=6874") != std::string::npos);
     CHECK_TRUE(defaultContent.find("OCTI_DB_PATH=/var/lib/octi/octi.db") != std::string::npos);
+    CHECK_TRUE(defaultContent.find("OCTI_AVATAR_DIR=/var/octi/avatar") != std::string::npos);
+
+    std::string postinstContent = readFile(tmpDirStr + "/DEBIAN/postinst");
+    CHECK_TRUE(postinstContent.find("/var/octi/avatar") != std::string::npos);
 
     std::string oidcPath = tmpDirStr + "/root/etc/octi/oidc.json";
     octi::OidcConfig parsedConfig;

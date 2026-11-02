@@ -357,6 +357,10 @@ TEST(ClientConfigStoreTest, SaveLoadAndPosix0600Permissions)
     prefs.sessionToken = "secret_session_tok_12345";
     prefs.playerUuid = "uuid-player-001";
     prefs.handle = "GrandmasterA";
+    prefs.displayName = "Grandmaster Alice";
+    prefs.avatarUrl = "https://example.com/avatar.png";
+    prefs.bio = "OCTI tactician and opening theoretician.";
+    prefs.location = "San Francisco, CA";
     prefs.theme = ThemeId::ROSEWOOD_IVORY;
     prefs.confirmAllMoves = true;
     prefs.sfxMuted = true;
@@ -379,6 +383,10 @@ TEST(ClientConfigStoreTest, SaveLoadAndPosix0600Permissions)
     STRCMP_EQUAL("secret_session_tok_12345", loaded.sessionToken.c_str());
     STRCMP_EQUAL("uuid-player-001", loaded.playerUuid.c_str());
     STRCMP_EQUAL("GrandmasterA", loaded.handle.c_str());
+    STRCMP_EQUAL("Grandmaster Alice", loaded.displayName.c_str());
+    STRCMP_EQUAL("https://example.com/avatar.png", loaded.avatarUrl.c_str());
+    STRCMP_EQUAL("OCTI tactician and opening theoretician.", loaded.bio.c_str());
+    STRCMP_EQUAL("San Francisco, CA", loaded.location.c_str());
     LONGS_EQUAL(static_cast<long>(ThemeId::ROSEWOOD_IVORY),
                 static_cast<long>(loaded.theme));
     CHECK_TRUE(loaded.confirmAllMoves);
@@ -391,6 +399,8 @@ TEST(ClientConfigStoreTest, SaveLoadAndPosix0600Permissions)
     CHECK_TRUE_TEXT(afterClearStore.load(err), err.c_str());
     STRCMP_EQUAL("", afterClearStore.preferences().sessionToken.c_str());
     STRCMP_EQUAL("", afterClearStore.preferences().playerUuid.c_str());
+    STRCMP_EQUAL("", afterClearStore.preferences().bio.c_str());
+    STRCMP_EQUAL("", afterClearStore.preferences().location.c_str());
     STRCMP_EQUAL("GrandmasterA", afterClearStore.preferences().handle.c_str());
 }
 
@@ -445,10 +455,10 @@ TEST(ClientConfigStoreTest, RejectsCorruptAndOversizedConfigFiles)
     std::string err;
     CHECK_FALSE(store.load(err));
 
-    /* Oversized (> 64 KiB) file must be rejected */
+    /* Oversized (> 512 KiB) file must be rejected */
     {
         std::ofstream ofs(cfgPath, std::ios::binary | std::ios::trunc);
-        std::string huge(70000, 'a');
+        std::string huge(600000, 'a');
         ofs << "{\"handle\":\"" << huge << "\"}";
     }
     CHECK_FALSE(store.load(err));
@@ -501,7 +511,7 @@ TEST(OctiNetworkClientTest,
 
     /* 1. First-time Google SSO sign-in -> 201 Created */
     auto loginA1 = clientA->loginWithSso(
-        "google", makeToken("google", "sub-google-a", "Alice"), "Alice_GM");
+        "google", makeToken("google", "sub-google-a", "Alice"));
     CHECK_TRUE_TEXT(loginA1.ok, loginA1.errorMessage.c_str());
     LONGS_EQUAL(201, loginA1.httpStatus);
     CHECK_TRUE(loginA1.data.isNewAccount);
@@ -516,10 +526,16 @@ TEST(OctiNetworkClientTest,
     CHECK_FALSE(loginA2.data.isNewAccount);
     STRCMP_EQUAL(uuidA.c_str(), loginA2.data.profile.uuid.c_str());
 
-    /* 3. Update handle via PATCH /me */
+    /* 3. Initial setup handle update via PATCH /me (handleChangedAt == 0 succeeds) */
     auto patchMe = clientA->updateMyProfile("Alice_Crown");
     CHECK_TRUE_TEXT(patchMe.ok, patchMe.errorMessage.c_str());
     STRCMP_EQUAL("Alice_Crown", patchMe.data.handle.c_str());
+
+    /* 3b. Immediate second handle change within 24h triggers 429 rate limit */
+    auto patchRateLimit = clientA->updateMyProfile("Alice_Second");
+    CHECK_FALSE(patchRateLimit.ok);
+    LONGS_EQUAL(429, patchRateLimit.httpStatus);
+    STRCMP_EQUAL("HANDLE_CHANGE_RATE_LIMITED", patchRateLimit.errorCode.c_str());
 
     /* 4. Link Apple, Microsoft, Facebook, and LINE (ES256) to Player A */
     static const char *otherProviders[] = {

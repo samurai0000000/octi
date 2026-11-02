@@ -174,6 +174,7 @@ OctiMainWindow::OctiMainWindow(
       _brandLabel(nullptr),
       _serverStatusLabel(nullptr),
       _profileBadgeLabel(nullptr),
+      _profileAvatarLabel(nullptr),
       _signInBtn(nullptr),
       _accountLinkBtn(nullptr),
       _boardViewBtn(nullptr),
@@ -252,8 +253,18 @@ OctiMainWindow::OctiMainWindow(
             _profile.handle = prefs.handle;
             _profile.displayName = prefs.displayName;
             _profile.avatarUrl = prefs.avatarUrl;
+            _profile.bio = prefs.bio;
+            _profile.location = prefs.location;
             _authenticated = !prefs.playerUuid.empty();
         }
+    }
+    if (_configStore.preferences().installId.empty()) {
+        _configStore.preferences().installId = ClientConfigStore::generateUuidV4();
+        std::string saveErr;
+        _configStore.save(saveErr);
+    }
+    if (_netClient) {
+        _netClient->setInstallId(_configStore.preferences().installId);
     }
     _composer.setConfirmAllMoves(true);
     _configStore.preferences().confirmAllMoves = true;
@@ -287,6 +298,13 @@ OctiMainWindow::OctiMainWindow(
     topBarLayout->addWidget(_brandLabel);
 
     topBarLayout->addStretch(1);
+
+    _profileAvatarLabel = new QLabel(topBar);
+    _profileAvatarLabel->setFixedSize(28, 28);
+    _profileAvatarLabel->setStyleSheet("border: none; background: transparent;");
+    _profileAvatarLabel->setCursor(Qt::PointingHandCursor);
+    topBarLayout->addWidget(_profileAvatarLabel);
+
     rootLayout->addWidget(topBar);
 
     /* Legacy button/status pointers (hidden for header decluttering, but kept valid) */
@@ -346,7 +364,8 @@ OctiMainWindow::OctiMainWindow(
     bannerLayout->addWidget(_updateDismissBtn);
 
     _updateBannerWidget->setVisible(false);
-    rootLayout->addWidget(_updateBannerWidget);
+    // Note: _updateBannerWidget is intentionally not added to rootLayout to keep
+    // the tabletop board layout completely undisturbed above the board.
 
     /* ---- Center View Stack (Board Page vs Lobby View) ---- */
     _viewStack = new QStackedWidget(central);
@@ -915,6 +934,16 @@ void OctiMainWindow::applyAuthenticatedProfile(const PlayerProfileInfo &profile)
     _authenticated = !profile.uuid.empty();
     _offlineMode = false;
     updateTopBarLabels();
+
+    ClientPreferences &prefs = _configStore.preferences();
+    prefs.playerUuid = profile.uuid;
+    prefs.handle = profile.handle;
+    prefs.displayName = profile.displayName;
+    prefs.avatarUrl = profile.avatarUrl;
+    prefs.bio = profile.bio;
+    prefs.location = profile.location;
+    std::string saveErr;
+    _configStore.save(saveErr);
 
     if (_authenticated && _netClient) {
         if (!_netClient->isLobbyEventStreamActive()) {
@@ -2728,6 +2757,28 @@ void OctiMainWindow::updateTopBarLabels()
                 QString("Not Signed In (Local Practice • %1)").arg(localMode));
         }
     }
+    if (_profileAvatarLabel) {
+        QImage avatarImg;
+        if (!_profile.avatarUrl.empty()) {
+            if (_profile.avatarUrl.rfind("data:image/", 0) == 0) {
+                auto comma = _profile.avatarUrl.find(',');
+                if (comma != std::string::npos) {
+                    QByteArray b64 = QByteArray::fromStdString(_profile.avatarUrl.substr(comma + 1));
+                    avatarImg.loadFromData(QByteArray::fromBase64(b64));
+                }
+            } else if (_profile.avatarUrl[0] == '/' && _netClient) {
+                std::string bytes, ctype;
+                if (_netClient->fetchAvatarBytes(_profile.avatarUrl, bytes, ctype)) {
+                    avatarImg.loadFromData(reinterpret_cast<const uchar *>(bytes.data()), static_cast<int>(bytes.size()));
+                }
+            }
+        }
+        QString hStr = _authenticated ? QString::fromStdString(_profile.handle) : QString("Guest");
+        QPixmap pm = AccountLinkDialog::renderCircularAvatarPixmap(avatarImg, hStr, 28, _theme);
+        _profileAvatarLabel->setPixmap(pm);
+        _profileAvatarLabel->setToolTip(_authenticated ? ("@" + hStr) : "Guest");
+        _profileAvatarLabel->setVisible(true);
+    }
 }
 
 void OctiMainWindow::refreshMoveHistoryAndFenUi()
@@ -2903,6 +2954,9 @@ void OctiMainWindow::checkPromptTelemetryConsentAtStartup()
         prefs.telemetryConsentVersion = ClientPreferences::CURRENT_TELEMETRY_CONSENT_VERSION;
         std::string err;
         _configStore.save(err);
+        if (_netClient) {
+            _netClient->setInstallId(prefs.installId);
+        }
 
         if (_heldTranscriptPendingConsent) {
             _heldTranscriptPendingConsent = false;
@@ -2921,6 +2975,9 @@ void OctiMainWindow::setTelemetryConsentForTesting(const std::string &choice)
     }
     std::string err;
     _configStore.save(err);
+    if (_netClient) {
+        _netClient->setInstallId(prefs.installId);
+    }
     if (choice != "unset") {
         _heldTranscriptPendingConsent = false;
     }
@@ -3061,6 +3118,9 @@ void OctiMainWindow::showTelemetrySettingsDialog()
 {
     OctiTelemetrySettingsDialog dlg(&_configStore, _netClient.get(), _theme, this);
     if (dlg.exec() == QDialog::Accepted) {
+        if (_netClient) {
+            _netClient->setInstallId(_configStore.preferences().installId);
+        }
         if (_heldTranscriptPendingConsent && _configStore.preferences().telemetryConsent != "unset") {
             _heldTranscriptPendingConsent = false;
             uploadCompletedBotGameIfEligible(false);
@@ -3322,15 +3382,13 @@ void OctiMainWindow::updateSelfUpdateBannerUi()
             break;
         }
     }
+    (void)shouldShowBanner;
 
     if (!_updateBannerWidget) {
         return;
     }
 
-    _updateBannerWidget->setVisible(shouldShowBanner);
-    if (!shouldShowBanner) {
-        return;
-    }
+    _updateBannerWidget->setVisible(false);
 
     int pct = 0;
     double frac = _currentUpdateState.progressFraction();
@@ -3429,7 +3487,7 @@ void OctiMainWindow::showProtocolUpgradeRequired(const std::string &message)
         : QString::fromStdString(message);
     if (_updateBannerWidget && _updateBannerLabel) {
         _updateBannerLabel->setText(msg);
-        _updateBannerWidget->setVisible(true);
+        _updateBannerWidget->setVisible(false);
         if (_updateBannerProgressBar) {
             _updateBannerProgressBar->setVisible(false);
         }

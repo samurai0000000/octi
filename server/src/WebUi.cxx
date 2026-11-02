@@ -923,9 +923,8 @@ tr.active-ply {
         <div style="flex:1;">
           <div class="row">
             <label style="flex:1;">Handle <input id="web-handle-input" style="width:100%;"></label>
-            <button type="button" class="btn" id="btn-web-save-handle" style="margin-top:20px;">Save Handle</button>
           </div>
-          <div id="web-handle-status" style="font-size:13px;margin-top:4px;"></div>
+          <div style="font-size:12px;color:var(--dim);margin-top:2px;margin-bottom:8px;">Handle changes are limited to once every 24 hours.</div>
           <div class="row">
             <label style="flex:1;">Display Name <input id="web-display-name-input" style="width:100%;"></label>
             <label style="flex:1;">Location <input id="web-location-input" style="width:100%;"></label>
@@ -936,6 +935,7 @@ tr.active-ply {
           <div class="row">
             <label style="width:100%;">Bio <textarea id="web-bio-input" maxlength="500" style="width:100%;height:80px;"></textarea></label>
           </div>
+          <div id="web-profile-status" style="font-size:13px;margin-top:8px;min-height:18px;"></div>
           <div class="row" style="margin-top:10px;">
             <button type="button" class="btn btn-primary" id="btn-web-save-profile">Save Profile</button>
             <button type="button" class="btn" id="btn-web-view-public-profile">View My Public Profile</button>
@@ -991,6 +991,28 @@ function escapeHtml(s) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function getWebInstallId() {
+  var id = null;
+  try { id = localStorage.getItem("octi_install_id"); } catch (e) {}
+  if (!id) {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      id = crypto.randomUUID();
+    } else {
+      id = "web-" + Math.random().toString(36).substring(2, 10) + "-" + Date.now().toString(36);
+    }
+    try { localStorage.setItem("octi_install_id", id); } catch (e) {}
+  }
+  return id;
+}
+
+function showToast(msg, type) {
+  var st = $("web-profile-status");
+  if (st) {
+    st.textContent = msg;
+    st.style.color = (type === "error") ? "#ef4444" : "#10b981";
+  }
+}
+
 function api(path, opts) {
   opts = opts || {};
   opts.headers = opts.headers || {};
@@ -1000,6 +1022,10 @@ function api(path, opts) {
   if (token && !opts.headers["Authorization"]) {
     opts.headers["Authorization"] = "Bearer " + token;
   }
+  var installId = getWebInstallId();
+  if (installId && !opts.headers["X-Octi-Install-Id"]) {
+    opts.headers["X-Octi-Install-Id"] = installId;
+  }
   if (opts.body && typeof opts.body === "object" && !(opts.body instanceof FormData)) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(opts.body);
@@ -1007,7 +1033,9 @@ function api(path, opts) {
   return fetch(path, opts).then(function (r) {
     return r.json().catch(function () { return {}; }).then(function (j) {
       if (!r.ok) {
-        var msg = (j && (j.error || j.message)) ? (j.error || j.message) : ("HTTP " + r.status);
+        var msg = (j && j.message)
+          ? (j.error ? (j.message + " (" + j.error + ")") : j.message)
+          : ((j && j.error) ? j.error : ("HTTP " + r.status));
         var err = new Error(msg);
         err.status = r.status;
         err.data = j;
@@ -1037,9 +1065,9 @@ function cellRow(tr, values) {
 
 function createAvatarEl(url, nameOrHandle, sizePx) {
   sizePx = sizePx || 32;
-  if (url && (url.indexOf("http") === 0 || url.indexOf("data:image/") === 0)) {
+  if (url && (url.indexOf("http") === 0 || url.indexOf("data:image/") === 0 || url.indexOf("/") === 0)) {
     var img = document.createElement("img");
-    img.src = url;
+    img.src = (url.indexOf("/") === 0 && API_BASE) ? (API_BASE + url) : url;
     img.width = sizePx;
     img.height = sizePx;
     img.style.width = sizePx + "px";
@@ -2506,9 +2534,9 @@ function handleAuthHash() {
           handleInput.focus();
         }
         loadIdentities();
-        var handleStatus = document.getElementById("web-handle-status");
+        var handleStatus = document.getElementById("web-profile-status") || document.getElementById("web-handle-status");
         if (handleStatus) {
-          handleStatus.textContent = "Welcome! Choose your OCTI player handle and click Save.";
+          handleStatus.textContent = "Welcome! Choose your OCTI player handle and click Save Profile.";
           handleStatus.style.color = "#10b981";
         }
       }
@@ -2694,25 +2722,80 @@ $("btn-web-logout").addEventListener("click", function () {
 $("web-avatar-file").addEventListener("change", function (ev) {
   var file = ev.target.files && ev.target.files[0];
   if (!file) return;
+  var statusEl = $("web-profile-status");
+  if (statusEl) {
+    statusEl.textContent = "Processing image...";
+    statusEl.style.color = "var(--dim)";
+  }
   var reader = new FileReader();
   reader.onload = function (re) {
     var img = new Image();
     img.onload = function () {
-      var canvas = document.createElement("canvas");
-      canvas.width = 96;
-      canvas.height = 96;
-      var ctx = canvas.getContext("2d");
       var minDim = Math.min(img.width, img.height);
       var sx = (img.width - minDim) / 2;
       var sy = (img.height - minDim) / 2;
-      ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, 96, 96);
-      var dataUri = canvas.toDataURL("image/png");
-      $("web-avatar-url").value = dataUri;
+      var sizes = [192, 128, 96];
+      var qualities = [0.85, 0.70, 0.55];
+      var bestDataUri = null;
+
+      // Test WebP format support
+      var testCanvas = document.createElement("canvas");
+      testCanvas.width = 1;
+      testCanvas.height = 1;
+      var mimeType = (testCanvas.toDataURL("image/webp").indexOf("data:image/webp") === 0) ? "image/webp" : "image/jpeg";
+
+      for (var s = 0; s < sizes.length && !bestDataUri; ++s) {
+        var targetSize = sizes[s];
+        var canvas = document.createElement("canvas");
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+        var ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
+
+        for (var q = 0; q < qualities.length; ++q) {
+          var uri = canvas.toDataURL(mimeType, qualities[q]);
+          if (uri && uri.length <= 200000) {
+            bestDataUri = uri;
+            break;
+          }
+        }
+      }
+
+      if (!bestDataUri) {
+        var canvas = document.createElement("canvas");
+        canvas.width = 96;
+        canvas.height = 96;
+        var ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, 96, 96);
+        bestDataUri = canvas.toDataURL("image/jpeg", 0.5);
+      }
+
+      $("web-avatar-url").value = bestDataUri;
       var prev = $("web-avatar-preview");
       clear(prev);
-      prev.appendChild(createAvatarEl(dataUri, $("web-handle-input").value || "U", 96));
+      prev.appendChild(createAvatarEl(bestDataUri, $("web-handle-input").value || "U", 96));
+      if (statusEl) {
+        statusEl.textContent = "Avatar processed and ready to save (" + Math.round(bestDataUri.length * 3 / 4 / 1024) + " KB). Click Save Profile to apply.";
+        statusEl.style.color = "#10b981";
+      }
+    };
+    img.onerror = function () {
+      if (statusEl) {
+        statusEl.textContent = "Failed to load selected image file.";
+        statusEl.style.color = "#ef4444";
+      }
     };
     img.src = re.target.result;
+  };
+  reader.onerror = function () {
+    if (statusEl) {
+      statusEl.textContent = "Failed to read image file.";
+      statusEl.style.color = "#ef4444";
+    }
   };
   reader.readAsDataURL(file);
 });
@@ -2723,37 +2806,71 @@ $("btn-web-clear-avatar").addEventListener("click", function () {
   var prev = $("web-avatar-preview");
   clear(prev);
   prev.appendChild(createAvatarEl("", $("web-handle-input").value || "U", 96));
-});
-
-$("btn-web-save-handle").addEventListener("click", function () {
-  var h = $("web-handle-input").value.trim();
-  if (!h) { alert("Handle cannot be empty."); return; }
-  api("/api/v1/profile/me", { method: "PATCH", body: { handle: h } }).then(function (res) {
-    currentUser = res.user || res;
-    updateAuthPill();
-    var hs = $("web-handle-status");
-    if (hs) { hs.textContent = "Handle saved successfully!"; hs.style.color = "#10b981"; }
-    alert("Handle updated successfully!");
-  }).catch(function (e) {
-    var hs = $("web-handle-status");
-    if (hs) { hs.textContent = e.message; hs.style.color = "#ef4444"; }
-    alert("Failed to update handle: " + e.message);
-  });
+  var statusEl = $("web-profile-status");
+  if (statusEl) {
+    statusEl.textContent = "Avatar cleared. Click Save Profile to apply.";
+    statusEl.style.color = "var(--dim)";
+  }
 });
 
 $("btn-web-save-profile").addEventListener("click", function () {
+  var statusEl = $("web-profile-status");
+  var handleVal = $("web-handle-input").value.trim();
+  if (handleVal && !/^[A-Za-z0-9_.-]{3,32}$/.test(handleVal)) {
+    var msg = "Invalid handle. Handle must be 3-32 characters and contain only letters, numbers, underscores, dots, or hyphens.";
+    if (statusEl) {
+      statusEl.textContent = msg;
+      statusEl.style.color = "#ef4444";
+    }
+    showToast(msg, "error");
+    return;
+  }
+
   var payload = {
+    handle: handleVal,
     display_name: $("web-display-name-input").value.trim(),
     location: $("web-location-input").value.trim(),
     avatar_url: $("web-avatar-url").value.trim(),
     bio: $("web-bio-input").value.trim()
   };
+
+  if (statusEl) {
+    statusEl.textContent = "Saving profile...";
+    statusEl.style.color = "var(--dim)";
+  }
+
   api("/api/v1/profile/me", { method: "PATCH", body: payload }).then(function (res) {
-    currentUser = res.user || res;
+    var updated = res.user || res;
+    if (currentUser) {
+      currentUser.handle = (updated.handle !== undefined) ? updated.handle : payload.handle;
+      currentUser.display_name = (updated.display_name !== undefined) ? updated.display_name : payload.display_name;
+      currentUser.location = (updated.location !== undefined) ? updated.location : payload.location;
+      currentUser.avatar_url = (updated.avatar_url !== undefined) ? updated.avatar_url : payload.avatar_url;
+      currentUser.bio = (updated.bio !== undefined) ? updated.bio : payload.bio;
+      try {
+        localStorage.setItem("octi_current_user", JSON.stringify(currentUser));
+      } catch (e) {}
+    } else {
+      currentUser = updated;
+    }
     updateAuthPill();
-    alert("Profile saved successfully!");
+    renderAuthState();
+    if (typeof loadLeaderboard === "function") { loadLeaderboard(); }
+    if (typeof loadGames === "function") { loadGames(); }
+    if (typeof lbLoad === "function") { lbLoad(); }
+    if (typeof arSearch === "function") { arSearch(0); }
+    if (statusEl) {
+      statusEl.textContent = "Profile saved.";
+      statusEl.style.color = "#10b981";
+    }
+    showToast("Profile saved.", "success");
   }).catch(function (e) {
-    alert("Failed to save profile: " + e.message);
+    var errMsg = e.message || "Failed to save profile.";
+    if (statusEl) {
+      statusEl.textContent = errMsg;
+      statusEl.style.color = "#ef4444";
+    }
+    showToast(errMsg, "error");
   });
 });
 
@@ -3429,23 +3546,110 @@ function uploadLocalGameArchive() {
   var nowSec = Math.floor(Date.now() / 1000);
   var gId = "web-" + Date.now().toString(36) + "-" + Math.random().toString(36).substr(2, 6);
 
+  var humanHandle = (currentUser && currentUser.handle) ? currentUser.handle : "Player";
+  var robotHandle = "Browser JS Robot (" + diffName + ")";
+  var p1Handle = (humanSide === "A") ? humanHandle : robotHandle;
+  var p2Handle = (humanSide === "B") ? humanHandle : robotHandle;
+  var p1Type = (humanSide === "A") ? "HUMAN" : "AI";
+  var p2Type = (humanSide === "B") ? "HUMAN" : "AI";
+  var winnerSeat = (localBotState.winner === "A") ? 1 : ((localBotState.winner === "B") ? 2 : 0);
+  var termStr = (localBotState.status === "R") ? "RESIGNATION" : "BASE_OCCUPATION";
+  var modeStr = (localBotState.mode === "2P_1BASE" ? "2P" : localBotState.mode) || "2P";
+  var basesVal = (localBotState.bases === 1 || localBotState.bases === 3) ? localBotState.bases : 1;
+  var finalFenStr = serializeOctiFen(localBotState);
+  var installId = getWebInstallId();
+
+  var movesList = [];
+  var pliesList = [];
+  for (var i = 1; i < localGamePlies.length; i++) {
+    var p = localGamePlies[i];
+    movesList.push(p.move);
+    var plyObj = {
+      ply: i,
+      player: p.player,
+      move: p.move
+    };
+    if (p.ai) {
+      plyObj.ai = {
+        difficulty: p.ai.depthReached || parseInt(diff, 10),
+        depthReached: p.ai.depthReached || 0,
+        nodesVisited: p.ai.nodesVisited || 0
+      };
+    }
+    pliesList.push(plyObj);
+  }
+
+  if (pliesList.length === 0) {
+    $("web-play-archive-status").textContent = "Game ended before any moves were recorded.";
+    return;
+  }
+
+  var playersList = [
+    {
+      seat: 1,
+      player: "A",
+      type: p1Type,
+      handle: p1Handle,
+      aiDifficulty: (humanSide === "A" ? 0 : parseInt(diff, 10))
+    },
+    {
+      seat: 2,
+      player: "B",
+      type: p2Type,
+      handle: p2Handle,
+      aiDifficulty: (humanSide === "B" ? 0 : parseInt(diff, 10))
+    }
+  ];
+
   var payload = {
     format: "octi.transcript.v3",
-    version: "3.0",
-    platform: "web",
+    schema: "octi.transcript.v3",
+    version: 3,
+    gameId: gId,
     game_id: gId,
-    mode: (localBotState.mode === "2P_1BASE" ? "2P" : localBotState.mode),
-    players: [
-      { seat: "A", handle: (humanSide === "A" ? (currentUser ? currentUser.handle : "Guest Player") : ("Browser JS Robot (" + diffName + ")")), is_ai: humanSide !== "A", ai_difficulty: humanSide === "A" ? undefined : parseInt(diff, 10) },
-      { seat: "B", handle: (humanSide === "B" ? (currentUser ? currentUser.handle : "Guest Player") : ("Browser JS Robot (" + diffName + ")")), is_ai: humanSide !== "B", ai_difficulty: humanSide === "B" ? undefined : parseInt(diff, 10) }
-    ],
-    result: (localBotState.status === "R" ? "RESIGNED" : ("WIN_" + (localBotState.winner || "NONE"))),
+    install_id: installId,
+    source: "LOCAL",
+    mode: modeStr,
+    bases: basesVal,
+    superProngs: false,
+    edgeless: false,
+    startPlayer: "A",
+    status: (localBotState.status === "R" ? "RESIGNED" : "GAME_OVER"),
     winner: localBotState.winner || "NONE",
-    termination: (localBotState.status === "R" ? "resignation" : "normal"),
+    termination: termStr,
+    finalFen: finalFenStr,
+    final_fen: finalFenStr,
     initial_fen: localGameInitialFen,
-    final_fen: serializeOctiFen(localBotState),
-    ply_count: localGamePlies.length - 1,
-    plies: localGamePlies,
+    client: {
+      platform: "web",
+      appVersion: "1.0.0",
+      extended: {
+        startedAt: localGameStartedAt,
+        endedAt: nowSec,
+        installId: installId
+      }
+    },
+    game: {
+      game_id: gId,
+      mode: modeStr,
+      board_size: (modeStr === "OFK" ? 6 : 9),
+      edgeless: false,
+      prong_cap: 4,
+      pod_cap: 7,
+      super_pods: false,
+      jump_capture: false,
+      started_at: localGameStartedAt,
+      ended_at: nowSec,
+      result: {
+        status: "FINISHED",
+        winner_seat: winnerSeat,
+        termination: termStr
+      },
+      players: playersList
+    },
+    players: playersList,
+    moves: movesList,
+    plies: pliesList,
     started_at: localGameStartedAt,
     ended_at: nowSec
   };
@@ -4307,7 +4511,7 @@ var API_BASE = "";
 async function loadHealth() {
   var pill = document.getElementById("server-health-pill") || document.getElementById("health");
   try {
-    var res = await fetch(`${API_BASE}/health`);
+    var res = await fetch(`${API_BASE}/api/v1/health`);
     if (!res.ok) throw new Error("Health HTTP " + res.status);
     var data = await res.json();
     if (pill) {

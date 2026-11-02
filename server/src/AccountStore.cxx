@@ -20,7 +20,9 @@
 #include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <set>
+#include <sstream>
 #include <system_error>
 
 namespace octi {
@@ -59,7 +61,8 @@ const char kSchemaSql[] =
     " losses INTEGER NOT NULL DEFAULT 0,"
     " draws INTEGER NOT NULL DEFAULT 0,"
     " created_at INTEGER NOT NULL,"
-    " last_seen_at INTEGER NOT NULL"
+    " last_seen_at INTEGER NOT NULL,"
+    " handle_changed_at INTEGER NOT NULL DEFAULT 0"
     ");"
     "CREATE TABLE IF NOT EXISTS linked_identities ("
     " identity_id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -167,11 +170,19 @@ const char kSchemaSql[] =
     "CREATE INDEX IF NOT EXISTS idx_crash_reports_app_version"
     " ON crash_reports(app_version);"
     "CREATE INDEX IF NOT EXISTS idx_crash_reports_install_id"
-    " ON crash_reports(install_id);";
+    " ON crash_reports(install_id);"
+    "CREATE TABLE IF NOT EXISTS player_installs ("
+    " install_id TEXT PRIMARY KEY,"
+    " player_id INTEGER NOT NULL REFERENCES players(player_id) ON DELETE CASCADE,"
+    " linked_at INTEGER NOT NULL,"
+    " last_seen_at INTEGER NOT NULL"
+    ");"
+    "CREATE INDEX IF NOT EXISTS idx_player_installs_player ON player_installs(player_id);";
 
 const char kProfileCols[] =
     "player_id, uuid, handle, display_name, avatar_url, bio, location, banned,"
-    " elo_2p, elo_4p, elo_ofk, games_played, wins, losses, draws, created_at, last_seen_at";
+    " elo_2p, elo_4p, elo_ofk, games_played, wins, losses, draws, created_at, last_seen_at,"
+    " handle_changed_at";
 
 #define OCTI_GAME_COLS_HEAD                                                    \
     "game_id, game_mode, game_bases, super_prongs, edgeless, time_control,"    \
@@ -416,6 +427,76 @@ std::string cleanText(const std::string &in, size_t maxBytes)
     return out.substr(b, e - b + 1);
 }
 
+bool base64Decode(const std::string &in, std::string &out)
+{
+    out.clear();
+    if (in.empty()) {
+        return true;
+    }
+    std::string s = in;
+    while (!s.empty() && (s.back() == '\r' || s.back() == '\n' || s.back() == ' ')) {
+        s.pop_back();
+    }
+    if (s.empty() || s.size() % 4 != 0) {
+        return false;
+    }
+    size_t pad = 0;
+    if (s.back() == '=') {
+        pad++;
+        if (s.size() > 1 && s[s.size() - 2] == '=') {
+            pad++;
+        }
+    }
+    auto b64val = [](unsigned char c) -> int {
+        if (c >= 'A' && c <= 'Z') return c - 'A';
+        if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+        if (c >= '0' && c <= '9') return c - '0' + 52;
+        if (c == '+' || c == '-') return 62;
+        if (c == '/' || c == '_') return 63;
+        return -1;
+    };
+    out.reserve((s.size() / 4) * 3);
+    for (size_t i = 0; i < s.size(); i += 4) {
+        bool last = (i + 4 >= s.size());
+        int v0 = b64val(static_cast<unsigned char>(s[i]));
+        int v1 = b64val(static_cast<unsigned char>(s[i + 1]));
+        if (v0 < 0 || v1 < 0) return false;
+        if (last && pad == 2) {
+            if (s[i + 2] != '=' || s[i + 3] != '=') return false;
+            out.push_back(static_cast<char>((v0 << 2) | (v1 >> 4)));
+            break;
+        }
+        int v2 = b64val(static_cast<unsigned char>(s[i + 2]));
+        if (v2 < 0) return false;
+        if (last && pad == 1) {
+            if (s[i + 3] != '=') return false;
+            out.push_back(static_cast<char>((v0 << 2) | (v1 >> 4)));
+            out.push_back(static_cast<char>(((v1 & 0x0F) << 4) | (v2 >> 2)));
+            break;
+        }
+        int v3 = b64val(static_cast<unsigned char>(s[i + 3]));
+        if (v3 < 0) return false;
+        out.push_back(static_cast<char>((v0 << 2) | (v1 >> 4)));
+        out.push_back(static_cast<char>(((v1 & 0x0F) << 4) | (v2 >> 2)));
+        out.push_back(static_cast<char>(((v2 & 0x03) << 6) | v3));
+    }
+    return true;
+}
+
+void cleanupPlayerAvatarFilesLocked(const std::string &avatarDir, int64_t playerId)
+{
+    if (avatarDir.empty() || playerId <= 0) {
+        return;
+    }
+    static const char *exts[] = { "png", "jpg", "jpeg", "webp", "gif", "svg" };
+    std::error_code ec;
+    for (size_t i = 0; i < sizeof(exts) / sizeof(exts[0]); ++i) {
+        std::filesystem::path p = std::filesystem::path(avatarDir) /
+            (std::to_string(playerId) + "." + exts[i]);
+        std::filesystem::remove(p, ec);
+    }
+}
+
 std::string handleBaseFromName(const std::string &name)
 {
     std::string out;
@@ -497,6 +578,7 @@ void readProfile(const Stmt &s, PlayerProfile &p)
     p.draws = static_cast<int>(s.colInt(14));
     p.createdAt = s.colInt(15);
     p.lastSeenAt = s.colInt(16);
+    p.handleChangedAt = s.colInt(17);
 }
 
 bool loadProfileById(sqlite3 *db, int64_t playerId, PlayerProfile &out)
@@ -967,7 +1049,7 @@ bool AccountStore::validAvatarUrl(const std::string &url)
     for (size_t i = 0; i < sizeof(dataPrefixes) / sizeof(dataPrefixes[0]); ++i) {
         const std::string &pfx = dataPrefixes[i];
         if (url.size() >= pfx.size() && url.compare(0, pfx.size(), pfx) == 0) {
-            if (url.size() > 32768) {
+            if (url.size() > kMaxAvatarDataUriBytes) {
                 return false;
             }
             std::string payload = url.substr(pfx.size());
@@ -986,6 +1068,19 @@ bool AccountStore::validAvatarUrl(const std::string &url)
             }
             return true;
         }
+    }
+    if ((url.rfind("/api/v1/avatars/", 0) == 0 || url.rfind("/avatar/", 0) == 0) &&
+        url.size() <= kMaxAvatarUrlBytes) {
+        if (url.find("..") != std::string::npos) {
+            return false;
+        }
+        for (size_t i = 0; i < url.size(); ++i) {
+            unsigned char c = static_cast<unsigned char>(url[i]);
+            if (c <= 0x20 || c >= 0x7F) {
+                return false;
+            }
+        }
+        return true;
     }
     if (url.size() > kMaxAvatarUrlBytes ||
         url.compare(0, 8, "https://") != 0 || url.size() == 8) {
@@ -1060,6 +1155,81 @@ void AccountStore::setSessionTtlSec(int64_t seconds)
     _sessionTtlSec = seconds < 1 ? 1 : seconds;
 }
 
+void AccountStore::setAvatarDir(const std::string &dir)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    _avatarDir = dir;
+    if (!_avatarDir.empty()) {
+        std::error_code ec;
+        std::filesystem::create_directories(_avatarDir, ec);
+        ::chmod(_avatarDir.c_str(), 0750);
+    }
+}
+
+std::string AccountStore::avatarDir() const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _avatarDir;
+}
+
+bool AccountStore::readAvatarFile(const std::string &fileName,
+                                  std::string &outBytes,
+                                  std::string &outMimeType) const
+{
+    outBytes.clear();
+    outMimeType.clear();
+    if (fileName.empty() || fileName.size() > 64) {
+        return false;
+    }
+    if (fileName.find('/') != std::string::npos ||
+        fileName.find('\\') != std::string::npos ||
+        fileName.find("..") != std::string::npos) {
+        return false;
+    }
+    size_t dot = fileName.rfind('.');
+    if (dot == std::string::npos || dot == 0 || dot == fileName.size() - 1) {
+        return false;
+    }
+    for (size_t i = 0; i < dot; ++i) {
+        if (fileName[i] < '0' || fileName[i] > '9') {
+            return false;
+        }
+    }
+    std::string ext = fileName.substr(dot + 1);
+    if (ext == "png") {
+        outMimeType = "image/png";
+    } else if (ext == "jpg" || ext == "jpeg") {
+        outMimeType = "image/jpeg";
+    } else if (ext == "webp") {
+        outMimeType = "image/webp";
+    } else if (ext == "gif") {
+        outMimeType = "image/gif";
+    } else if (ext == "svg") {
+        outMimeType = "image/svg+xml";
+    } else {
+        return false;
+    }
+
+    std::string dir;
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        dir = _avatarDir;
+    }
+    if (dir.empty()) {
+        return false;
+    }
+
+    std::filesystem::path filePath = std::filesystem::path(dir) / fileName;
+    std::ifstream in(filePath.c_str(), std::ios::binary);
+    if (!in) {
+        return false;
+    }
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    outBytes = ss.str();
+    return true;
+}
+
 bool AccountStore::isOpen() const
 {
     std::lock_guard<std::mutex> lock(_mutex);
@@ -1132,7 +1302,18 @@ bool AccountStore::openOrCreate(const std::string &path, std::string &error)
                 if (pcols.find("banned") == pcols.end()) {
                     execSql(db, "ALTER TABLE players ADD COLUMN banned INTEGER NOT NULL DEFAULT 0;");
                 }
+                if (pcols.find("handle_changed_at") == pcols.end()) {
+                    execSql(db, "ALTER TABLE players ADD COLUMN handle_changed_at INTEGER NOT NULL DEFAULT 0;");
+                }
             }
+
+            execSql(db, "CREATE TABLE IF NOT EXISTS player_installs ("
+                        " install_id TEXT PRIMARY KEY,"
+                        " player_id INTEGER NOT NULL REFERENCES players(player_id) ON DELETE CASCADE,"
+                        " linked_at INTEGER NOT NULL,"
+                        " last_seen_at INTEGER NOT NULL"
+                        ");");
+            execSql(db, "CREATE INDEX IF NOT EXISTS idx_player_installs_player ON player_installs(player_id);");
 
             std::set<std::string> cols;
             Stmt info(db, "PRAGMA table_info(games)");
@@ -1693,6 +1874,234 @@ bool AccountStore::getProfileByHandle(const std::string &handle, PlayerProfile &
     return true;
 }
 
+int reconcileAnonymousGamesLocked(sqlite3 *db, const std::string &filterInstallId,
+                                  int64_t filterPlayerId)
+{
+    struct ReconcileCandidate {
+        std::string gameId;
+        int64_t oldP1PlayerId = 0;
+        int64_t oldP2PlayerId = 0;
+        std::string oldP1Handle;
+        std::string oldP2Handle;
+        std::string rawTranscript;
+        int64_t targetPlayerId = 0;
+        std::string targetHandle;
+    };
+
+    std::map<std::string, ReconcileCandidate> candidates;
+
+    // 1. Games joined via player_installs
+    {
+        std::string sql =
+            "SELECT g.game_id, COALESCE(g.p1_player_id, 0), COALESCE(g.p2_player_id, 0),"
+            " g.p1_handle, g.p2_handle, COALESCE(NULLIF(g.transcript_json, ''), g.octi_transcript),"
+            " p.player_id, p.handle"
+            " FROM games g"
+            " JOIN player_installs pi ON pi.install_id = g.install_id"
+            " JOIN players p ON p.player_id = pi.player_id"
+            " WHERE g.source = 'client_upload'"
+            " AND ("
+            "   (COALESCE(g.p1_player_id, 0) = 0 AND COALESCE(g.p2_player_id, 0) = 0)"
+            "   OR (g.p1_player_id = p.player_id AND g.p1_handle != p.handle)"
+            "   OR (g.p2_player_id = p.player_id AND g.p2_handle != p.handle)"
+            " )";
+        if (!filterInstallId.empty()) {
+            sql += " AND g.install_id = ?1";
+        } else if (filterPlayerId > 0) {
+            sql += " AND p.player_id = ?1";
+        }
+        Stmt s(db, sql.c_str());
+        if (!filterInstallId.empty()) {
+            s.bindText(1, filterInstallId);
+        } else if (filterPlayerId > 0) {
+            s.bindInt(1, filterPlayerId);
+        }
+        while (s.step() == SQLITE_ROW) {
+            ReconcileCandidate c;
+            c.gameId = s.colText(0);
+            c.oldP1PlayerId = s.colInt(1);
+            c.oldP2PlayerId = s.colInt(2);
+            c.oldP1Handle = s.colText(3);
+            c.oldP2Handle = s.colText(4);
+            c.rawTranscript = s.colText(5);
+            c.targetPlayerId = s.colInt(6);
+            c.targetHandle = s.colText(7);
+            candidates[c.gameId] = c;
+        }
+    }
+
+    // 2. If filterPlayerId > 0, also check already-attributed client_upload games where handle changed
+    if (filterPlayerId > 0) {
+        std::string sql =
+            "SELECT g.game_id, COALESCE(g.p1_player_id, 0), COALESCE(g.p2_player_id, 0),"
+            " g.p1_handle, g.p2_handle, COALESCE(NULLIF(g.transcript_json, ''), g.octi_transcript),"
+            " p.player_id, p.handle"
+            " FROM games g"
+            " JOIN players p ON (p.player_id = g.p1_player_id OR p.player_id = g.p2_player_id)"
+            " WHERE g.source = 'client_upload' AND p.player_id = ?1"
+            " AND ("
+            "   (g.p1_player_id = p.player_id AND g.p1_handle != p.handle)"
+            "   OR (g.p2_player_id = p.player_id AND g.p2_handle != p.handle)"
+            " )";
+        Stmt s(db, sql.c_str());
+        s.bindInt(1, filterPlayerId);
+        while (s.step() == SQLITE_ROW) {
+            std::string gid = s.colText(0);
+            if (candidates.find(gid) == candidates.end()) {
+                ReconcileCandidate c;
+                c.gameId = gid;
+                c.oldP1PlayerId = s.colInt(1);
+                c.oldP2PlayerId = s.colInt(2);
+                c.oldP1Handle = s.colText(3);
+                c.oldP2Handle = s.colText(4);
+                c.rawTranscript = s.colText(5);
+                c.targetPlayerId = s.colInt(6);
+                c.targetHandle = s.colText(7);
+                candidates[gid] = c;
+            }
+        }
+    }
+
+    int reconciledCount = 0;
+    for (auto it = candidates.begin(); it != candidates.end(); ++it) {
+        const auto &c = it->second;
+        bool p1IsAi = (c.oldP1Handle.rfind("AI_", 0) == 0);
+        bool p2IsAi = (c.oldP2Handle.rfind("AI_", 0) == 0);
+        int humanSeat = 1;
+        if (!p1IsAi && p2IsAi) {
+            humanSeat = 1;
+        } else if (!p2IsAi && p1IsAi) {
+            humanSeat = 2;
+        } else {
+            humanSeat = 1;
+        }
+
+        int64_t newP1PlayerId = (humanSeat == 1) ? c.targetPlayerId : c.oldP1PlayerId;
+        int64_t newP2PlayerId = (humanSeat == 2) ? c.targetPlayerId : c.oldP2PlayerId;
+        std::string newP1Handle = (humanSeat == 1) ? c.targetHandle : c.oldP1Handle;
+        std::string newP2Handle = (humanSeat == 2) ? c.targetHandle : c.oldP2Handle;
+
+        std::string updatedTranscript = c.rawTranscript;
+        try {
+            auto j = nlohmann::json::parse(c.rawTranscript);
+            if (j.is_object() && j.contains("players") && j["players"].is_array()) {
+                for (auto &entry : j["players"]) {
+                    if (!entry.is_object()) continue;
+                    int seat = entry.value("seat", 0);
+                    std::string type = entry.value("type", "");
+                    std::string entryHandle = entry.value("handle", "");
+                    if (seat == humanSeat || (seat == 0 && (type == "HUMAN" || entryHandle.rfind("AI_", 0) != 0))) {
+                        entry["handle"] = c.targetHandle;
+                    }
+                }
+                updatedTranscript = j.dump();
+            }
+        } catch (...) {}
+
+        Stmt upd(db, "UPDATE games SET p1_player_id = ?1, p2_player_id = ?2,"
+                     " p1_handle = ?3, p2_handle = ?4, octi_transcript = ?5, transcript_json = ?5"
+                     " WHERE game_id = ?6");
+        bindOptionalPlayer(upd, 1, newP1PlayerId);
+        bindOptionalPlayer(upd, 2, newP2PlayerId);
+        upd.bindText(3, newP1Handle);
+        upd.bindText(4, newP2Handle);
+        upd.bindText(5, updatedTranscript);
+        upd.bindText(6, c.gameId);
+        if (upd.step() == SQLITE_DONE) {
+            reconciledCount++;
+        }
+    }
+
+    return reconciledCount;
+}
+
+bool AccountStore::bindInstallToPlayer(const std::string &installId,
+                                      int64_t playerId,
+                                      int *reconciledCount)
+{
+    if (reconciledCount) {
+        *reconciledCount = 0;
+    }
+    if (installId.empty() || installId.size() > 128 || playerId <= 0) {
+        return false;
+    }
+    for (size_t i = 0; i < installId.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(installId[i]);
+        if (!(std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '@')) {
+            return false;
+        }
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    PlayerProfile profile;
+    if (!loadProfileById(_db, playerId, profile)) {
+        return false;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        return false;
+    }
+    const int64_t now = nowSec();
+    Stmt ins(_db, "INSERT INTO player_installs(install_id, player_id, linked_at, last_seen_at)"
+                  " VALUES(?1, ?2, ?3, ?3)"
+                  " ON CONFLICT(install_id) DO UPDATE SET"
+                  " player_id = excluded.player_id, last_seen_at = excluded.last_seen_at");
+    ins.bindText(1, installId);
+    ins.bindInt(2, playerId);
+    ins.bindInt(3, now);
+    if (ins.step() != SQLITE_DONE) {
+        return false;
+    }
+    int count = reconcileAnonymousGamesLocked(_db, installId, playerId);
+    if (reconciledCount) {
+        *reconciledCount = count;
+    }
+    return tx.commit();
+}
+
+bool AccountStore::getPlayerByInstallId(const std::string &installId,
+                                        PlayerProfile &out)
+{
+    if (installId.empty() || installId.size() > 128) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    Stmt s(_db, "SELECT player_id FROM player_installs WHERE install_id = ?1");
+    s.bindText(1, installId);
+    if (s.step() != SQLITE_ROW) {
+        return false;
+    }
+    int64_t playerId = s.colInt(0);
+    const int64_t now = nowSec();
+    Stmt seen(_db, "UPDATE player_installs SET last_seen_at = ?1 WHERE install_id = ?2");
+    seen.bindInt(1, now);
+    seen.bindText(2, installId);
+    seen.step();
+    return loadProfileById(_db, playerId, out);
+}
+
+int AccountStore::reconcileAnonymousGames()
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return -1;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        return -1;
+    }
+    int count = reconcileAnonymousGamesLocked(_db, "", 0);
+    if (!tx.commit()) {
+        return -1;
+    }
+    return count;
+}
+
 UpdateStatus AccountStore::updateProfile(int64_t playerId,
                                          const ProfileUpdate &update,
                                          PlayerProfile *updated)
@@ -1731,22 +2140,107 @@ UpdateStatus AccountStore::updateProfile(int64_t playerId,
     if (!loadProfileById(_db, playerId, current)) {
         return UpdateStatus::NOT_FOUND;
     }
-    if (update.setHandle && handleTaken(_db, update.handle, playerId)) {
-        return UpdateStatus::HANDLE_TAKEN;
+
+    bool handleActuallyChanged = update.setHandle && (update.handle != current.handle);
+    int64_t newHandleChangedAt = current.handleChangedAt;
+    if (handleActuallyChanged) {
+        if (current.handleChangedAt > 0 &&
+            (nowSec() - current.handleChangedAt) < kHandleChangeCooldownSec) {
+            return UpdateStatus::HANDLE_RATE_LIMITED;
+        }
+        if (handleTaken(_db, update.handle, playerId)) {
+            return UpdateStatus::HANDLE_TAKEN;
+        }
+        newHandleChangedAt = nowSec();
     }
+
+    std::string finalAvatarUrl = current.avatarUrl;
+    if (update.setAvatarUrl) {
+        if (!_avatarDir.empty()) {
+            if (update.avatarUrl.rfind("data:image/", 0) == 0) {
+                std::string ext;
+                std::string prefix;
+                if (update.avatarUrl.rfind("data:image/png;base64,", 0) == 0) {
+                    ext = "png";
+                    prefix = "data:image/png;base64,";
+                } else if (update.avatarUrl.rfind("data:image/jpeg;base64,", 0) == 0) {
+                    ext = "jpg";
+                    prefix = "data:image/jpeg;base64,";
+                } else if (update.avatarUrl.rfind("data:image/webp;base64,", 0) == 0) {
+                    ext = "webp";
+                    prefix = "data:image/webp;base64,";
+                } else if (update.avatarUrl.rfind("data:image/gif;base64,", 0) == 0) {
+                    ext = "gif";
+                    prefix = "data:image/gif;base64,";
+                } else if (update.avatarUrl.rfind("data:image/svg+xml;base64,", 0) == 0) {
+                    ext = "svg";
+                    prefix = "data:image/svg+xml;base64,";
+                }
+                std::string decodedBytes;
+                if (ext.empty() ||
+                    !base64Decode(update.avatarUrl.substr(prefix.size()), decodedBytes)) {
+                    return UpdateStatus::INVALID_AVATAR_URL;
+                }
+                std::error_code ec;
+                std::filesystem::create_directories(_avatarDir, ec);
+                cleanupPlayerAvatarFilesLocked(_avatarDir, playerId);
+                std::string targetFile = std::to_string(playerId) + "." + ext;
+                std::string tmpFile = "tmp_" + std::to_string(playerId) + "_" +
+                                      std::to_string(nowSec()) + ".tmp";
+                std::filesystem::path targetPath =
+                    std::filesystem::path(_avatarDir) / targetFile;
+                std::filesystem::path tmpPath =
+                    std::filesystem::path(_avatarDir) / tmpFile;
+                {
+                    std::ofstream out(tmpPath.c_str(), std::ios::binary | std::ios::trunc);
+                    if (!out) {
+                        return UpdateStatus::ERROR;
+                    }
+                    out.write(decodedBytes.data(), decodedBytes.size());
+                    out.flush();
+                }
+                ::chmod(tmpPath.c_str(), 0640);
+                std::filesystem::rename(tmpPath, targetPath, ec);
+                if (ec) {
+                    return UpdateStatus::ERROR;
+                }
+                finalAvatarUrl = "/api/v1/avatars/" + targetFile + "?v=" +
+                                 std::to_string(nowSec());
+            } else if (update.avatarUrl.empty() ||
+                       update.avatarUrl.rfind("https://", 0) == 0) {
+                cleanupPlayerAvatarFilesLocked(_avatarDir, playerId);
+                finalAvatarUrl = update.avatarUrl;
+            } else if (update.avatarUrl.rfind("/api/v1/avatars/", 0) == 0 ||
+                       update.avatarUrl.rfind("/avatar/", 0) == 0) {
+                finalAvatarUrl = update.avatarUrl;
+            } else {
+                finalAvatarUrl = update.avatarUrl;
+            }
+        } else {
+            finalAvatarUrl = update.avatarUrl;
+        }
+    }
+
     Stmt s(_db, "UPDATE players SET handle = ?1, display_name = ?2,"
-                " avatar_url = ?3, bio = ?4, location = ?5 WHERE player_id = ?6");
+                " avatar_url = ?3, bio = ?4, location = ?5, handle_changed_at = ?6"
+                " WHERE player_id = ?7");
     s.bindText(1, update.setHandle ? update.handle : current.handle);
     s.bindText(2, update.setDisplayName ? displayName : current.displayName);
-    s.bindText(3, update.setAvatarUrl ? update.avatarUrl : current.avatarUrl);
+    s.bindText(3, finalAvatarUrl);
     s.bindText(4, update.setBio ? update.bio : current.bio);
     s.bindText(5, update.setLocation ? update.location : current.location);
-    s.bindInt(6, playerId);
+    s.bindInt(6, newHandleChangedAt);
+    s.bindInt(7, playerId);
     int rc = s.step();
     if (rc != SQLITE_DONE) {
         return (rc & 0xFF) == SQLITE_CONSTRAINT ? UpdateStatus::HANDLE_TAKEN
                                                 : UpdateStatus::ERROR;
     }
+
+    if (handleActuallyChanged) {
+        reconcileAnonymousGamesLocked(_db, "", playerId);
+    }
+
     if (!tx.commit()) {
         return UpdateStatus::ERROR;
     }
@@ -2553,6 +3047,13 @@ int AccountStore::deleteGamesByInstallId(const std::string &installId)
             return -1;
         }
         totalDeleted += static_cast<int>(sqlite3_changes(_db));
+    }
+    {
+        Stmt s(_db, "DELETE FROM player_installs WHERE install_id = ?1");
+        s.bindText(1, installId);
+        if (s.step() != SQLITE_DONE) {
+            return -1;
+        }
     }
     return totalDeleted;
 }

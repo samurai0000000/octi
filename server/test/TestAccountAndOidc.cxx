@@ -373,6 +373,8 @@ const char *updateName(UpdateStatus s)
         return "INVALID_HANDLE";
     case UpdateStatus::HANDLE_TAKEN:
         return "HANDLE_TAKEN";
+    case UpdateStatus::HANDLE_RATE_LIMITED:
+        return "HANDLE_RATE_LIMITED";
     case UpdateStatus::INVALID_DISPLAY_NAME:
         return "INVALID_DISPLAY_NAME";
     case UpdateStatus::INVALID_AVATAR_URL:
@@ -1533,7 +1535,8 @@ TEST(AccountStoreTest, SchemaMatchesPlanAndHasNoGuestSupport)
                              "'linked_identities','sessions','games')"));
     CHECK_EQUAL(0, countRows("SELECT COUNT(*) FROM pragma_table_info('players')"
                              " WHERE name LIKE '%guest%'"));
-    CHECK_EQUAL(17, countRows("SELECT COUNT(*) FROM pragma_table_info('players')"));
+    CHECK_EQUAL(18, countRows("SELECT COUNT(*) FROM pragma_table_info('players')"));
+    CHECK_EQUAL(4, countRows("SELECT COUNT(*) FROM pragma_table_info('player_installs')"));
     CHECK_EQUAL(8, countRows(
                        "SELECT COUNT(*) FROM pragma_table_info('linked_identities')"));
     CHECK_EQUAL(7, countRows("SELECT COUNT(*) FROM pragma_table_info('sessions')"));
@@ -1944,6 +1947,7 @@ TEST(AccountStoreTest, BoundaryHandleLengthThreeToTwentyFour)
         {"a-b_c", "OK"},
     };
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        clockNow += 86400;
         u.handle = cases[i].handle;
         STRCMP_EQUAL(cases[i].expected, updateName(store->updateProfile(pid, u)));
     }
@@ -1969,6 +1973,7 @@ TEST(AccountStoreTest, HandleUniquenessIsCaseInsensitive)
     u.handle = "CHAMPION";
     STRCMP_EQUAL("HANDLE_TAKEN", updateName(store->updateProfile(b, u)));
     /* the owner may change only the letter case of its own handle */
+    clockNow += 86400;
     u.handle = "CHAMPION";
     STRCMP_EQUAL("OK", updateName(store->updateProfile(a, u)));
     PlayerProfile p;
@@ -2945,7 +2950,12 @@ TEST(AccountStoreTest, BioLocationAndDataUriAvatar)
     CHECK_FALSE(AccountStore::validAvatarUrl("data:image/unknown;base64,abc"));
     CHECK_FALSE(AccountStore::validAvatarUrl("data:image/png;base64,"));
     CHECK_FALSE(AccountStore::validAvatarUrl("data:image/png;base64,bad!char@"));
-    CHECK_FALSE(AccountStore::validAvatarUrl("data:image/png;base64," + std::string(32769, 'A')));
+    CHECK_TRUE(AccountStore::validAvatarUrl("data:image/png;base64," + std::string(32769, 'A')));
+    CHECK_FALSE(AccountStore::validAvatarUrl("data:image/png;base64," + std::string(270000, 'A')));
+    CHECK_TRUE(AccountStore::validAvatarUrl("/api/v1/avatars/42.png"));
+    CHECK_TRUE(AccountStore::validAvatarUrl("/avatar/42.webp"));
+    CHECK_FALSE(AccountStore::validAvatarUrl("/api/v1/avatars/../hack.png"));
+    CHECK_FALSE(AccountStore::validAvatarUrl("/api/v1/avatars/bad file.png"));
 
     // Rejections via updateProfile
     ProfileUpdate badBio;
@@ -3228,6 +3238,162 @@ TEST(AccountStoreTest, LinkIdentityForceRelinkEmpty)
     LoginResult lRelinked = login("facebook", "sub-relink-empty-p3");
     CHECK_TRUE(lRelinked.ok);
     CHECK_EQUAL(p1, lRelinked.profile.playerId);
+}
+
+TEST(AccountStoreTest, HandleChangeCooldownEnforcedAfterInitialSetup)
+{
+    int64_t pid = newPlayer("g-cd", "Cooldown Tester");
+    PlayerProfile p;
+    CHECK_TRUE(store->getProfileById(pid, p));
+    CHECK_EQUAL(0, p.handleChangedAt);
+
+    // Initial handle customization is allowed immediately
+    ProfileUpdate u;
+    u.setHandle = true;
+    u.handle = "first_handle";
+    CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(pid, u));
+    CHECK_TRUE(store->getProfileById(pid, p));
+    CHECK_EQUAL(clockNow, p.handleChangedAt);
+    STRCMP_EQUAL("first_handle", p.handle.c_str());
+
+    // Subsequent change within 24 hours is rate limited
+    u.handle = "second_handle";
+    CHECK_EQUAL((int)UpdateStatus::HANDLE_RATE_LIMITED, (int)store->updateProfile(pid, u));
+
+    // Saving profile with same handle (or without setHandle) is not rate limited
+    u.handle = "first_handle";
+    u.setDisplayName = true;
+    u.displayName = "Cooldown Master";
+    CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(pid, u));
+    CHECK_TRUE(store->getProfileById(pid, p));
+    STRCMP_EQUAL("Cooldown Master", p.displayName.c_str());
+
+    // After 24 hours, handle change succeeds
+    clockNow += AccountStore::kHandleChangeCooldownSec;
+    u.handle = "second_handle";
+    CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(pid, u));
+    CHECK_TRUE(store->getProfileById(pid, p));
+    STRCMP_EQUAL("second_handle", p.handle.c_str());
+    CHECK_EQUAL(clockNow, p.handleChangedAt);
+}
+
+TEST(AccountStoreTest, AvatarMaterializationAndDiskCleanup)
+{
+    std::string avDir = dir->path() + "/test_avatars";
+    store->setAvatarDir(avDir);
+    STRCMP_EQUAL(avDir.c_str(), store->avatarDir().c_str());
+
+    int64_t pid = newPlayer("g-av", "Avatar Tester");
+    std::string pngData = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+    ProfileUpdate u;
+    u.setAvatarUrl = true;
+    u.avatarUrl = pngData;
+    CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(pid, u));
+
+    PlayerProfile p;
+    CHECK_TRUE(store->getProfileById(pid, p));
+    std::string expectedUrlPrefix = "/api/v1/avatars/" + std::to_string(pid) + ".png?v=";
+    CHECK_TRUE(p.avatarUrl.rfind(expectedUrlPrefix, 0) == 0);
+
+    std::string diskPng = avDir + "/" + std::to_string(pid) + ".png";
+    CHECK_EQUAL(0, ::access(diskPng.c_str(), F_OK));
+
+    std::string bytes, mime;
+    CHECK_TRUE(store->readAvatarFile(std::to_string(pid) + ".png", bytes, mime));
+    STRCMP_EQUAL("image/png", mime.c_str());
+    CHECK_TRUE(bytes.size() > 0);
+
+    // Replacing with webp removes the png file and creates webp
+    std::string webpData = "data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAD8D+JaQAA3AA/ua1AAA=";
+    u.avatarUrl = webpData;
+    CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(pid, u));
+
+    CHECK_TRUE(::access(diskPng.c_str(), F_OK) != 0);
+    std::string diskWebp = avDir + "/" + std::to_string(pid) + ".webp";
+    CHECK_EQUAL(0, ::access(diskWebp.c_str(), F_OK));
+    CHECK_TRUE(store->readAvatarFile(std::to_string(pid) + ".webp", bytes, mime));
+    STRCMP_EQUAL("image/webp", mime.c_str());
+
+    // Clearing avatar removes the disk file
+    u.avatarUrl = "";
+    CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(pid, u));
+    CHECK_TRUE(::access(diskWebp.c_str(), F_OK) != 0);
+
+    // Negative tests for readAvatarFile path safety
+    CHECK_FALSE(store->readAvatarFile("../secret.png", bytes, mime));
+    CHECK_FALSE(store->readAvatarFile("abc/xyz.png", bytes, mime));
+    CHECK_FALSE(store->readAvatarFile("notanumber.png", bytes, mime));
+}
+
+TEST(AccountStoreTest, RetroactiveInstallIdReconciliation)
+{
+    int64_t p1 = newPlayer("g-rec", "Samurai User");
+    ProfileUpdate u;
+    u.setHandle = true;
+    u.handle = "samurai";
+    CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(p1, u));
+
+    // Game 1: device_A (seat 1 human, seat 2 AI)
+    GameRecord g1 = record("rec-g1", clockNow, 0, 0);
+    g1.source = "client_upload";
+    g1.installId = "device_A";
+    g1.p1Handle = "Player";
+    g1.p2Handle = "AI_Easy";
+    std::string err;
+    CHECK_EQUAL((int)ArchiveStatus::OK, (int)store->archiveGame(g1, err));
+
+    // Game 2: device_B (unregistered device)
+    GameRecord g2 = record("rec-g2", clockNow, 0, 0);
+    g2.source = "client_upload";
+    g2.installId = "device_B";
+    g2.p1Handle = "Player";
+    g2.p2Handle = "AI_Easy";
+    CHECK_EQUAL((int)ArchiveStatus::OK, (int)store->archiveGame(g2, err));
+
+    // Game 3: device_A (seat 1 AI, seat 2 human)
+    GameRecord g3 = record("rec-g3", clockNow, 0, 0);
+    g3.source = "client_upload";
+    g3.installId = "device_A";
+    g3.p1Handle = "AI_Medium";
+    g3.p2Handle = "Player";
+    CHECK_EQUAL((int)ArchiveStatus::OK, (int)store->archiveGame(g3, err));
+
+    // Bind device_A to samurai
+    int reconciled = 0;
+    CHECK_TRUE(store->bindInstallToPlayer("device_A", p1, &reconciled));
+    CHECK_EQUAL(2, reconciled);
+
+    // Verify games 1 and 3 are attributed, game 2 remains anonymous
+    GameRecord out1;
+    CHECK_TRUE(store->getArchivedGame("rec-g1", out1));
+    CHECK_EQUAL(p1, out1.p1PlayerId);
+    STRCMP_EQUAL("samurai", out1.p1Handle.c_str());
+
+    GameRecord out3;
+    CHECK_TRUE(store->getArchivedGame("rec-g3", out3));
+    CHECK_EQUAL(p1, out3.p2PlayerId);
+    STRCMP_EQUAL("samurai", out3.p2Handle.c_str());
+
+    GameRecord out2;
+    CHECK_TRUE(store->getArchivedGame("rec-g2", out2));
+    CHECK_EQUAL(0, out2.p1PlayerId);
+    STRCMP_EQUAL("Player", out2.p1Handle.c_str());
+
+    // Handle change triggers reconciliation on attributed games
+    clockNow += AccountStore::kHandleChangeCooldownSec;
+    u.handle = "ninja";
+    CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(p1, u));
+
+    CHECK_TRUE(store->getArchivedGame("rec-g1", out1));
+    STRCMP_EQUAL("ninja", out1.p1Handle.c_str());
+    CHECK_TRUE(store->getArchivedGame("rec-g3", out3));
+    STRCMP_EQUAL("ninja", out3.p2Handle.c_str());
+
+    // Deleting install_id removes installs mapping as well
+    CHECK_EQUAL(2, store->deleteGamesByInstallId("device_A"));
+    PlayerProfile checkProf;
+    CHECK_FALSE(store->getPlayerByInstallId("device_A", checkProf));
 }
 
 int main(int argc, char **argv)

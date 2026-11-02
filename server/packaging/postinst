@@ -18,6 +18,7 @@ if [ "$1" = "configure" ]; then
     fi
 
     install -d -m 0700 -o octi -g octi /var/lib/octi
+    install -d -m 0750 -o octi -g octi /var/octi /var/octi/avatar
     install -d -m 0750 -o root -g octi /etc/octi
     if [ -f /etc/octi/oidc.json ]; then
         chown octi:octi /etc/octi/oidc.json

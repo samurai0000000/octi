@@ -27,12 +27,14 @@ struct HttpServerConfig {
     int port = OCTI_SERVER_DAEMON_PORT;        // 0 = pick an ephemeral port
 
     /* Requests with a larger body are rejected with 413. */
-    size_t maxBodyBytes = 65536;
+    size_t maxBodyBytes = 524288;
 
     /* Period of the maintenance tick (rooms, matchmaking, deadlines). */
     int tickIntervalMs = 1000;
     /* Period of the expired / revoked session purge. */
     int64_t sessionPurgeIntervalSec = 300;
+    /* Period of anonymous game reconciliation across player installs. */
+    int64_t reconcileIntervalSec = 6 * 3600;
 
     /*
      * Credential verification (POST /auth/sso and POST /auth/link) is

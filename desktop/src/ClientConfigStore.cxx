@@ -176,7 +176,7 @@ bool ClientConfigStore::load(std::string &errorOut)
         return false;
     }
     if (static_cast<std::size_t>(st.st_size) > MAX_CONFIG_FILE_BYTES) {
-        errorOut = "config file exceeds maximum allowed size (64 KiB)";
+        errorOut = "config file exceeds maximum allowed size (512 KiB)";
         return false;
     }
     if ((st.st_mode & 0177) != 0 && st.st_uid == ::geteuid()) {
@@ -194,7 +194,7 @@ bool ClientConfigStore::load(std::string &errorOut)
     }
     auto fileSize = std::filesystem::file_size(_configFilePath, ec);
     if (ec || fileSize > MAX_CONFIG_FILE_BYTES) {
-        errorOut = "config file exceeds maximum allowed size (64 KiB)";
+        errorOut = "config file exceeds maximum allowed size (512 KiB)";
         return false;
     }
 #endif
@@ -209,7 +209,7 @@ bool ClientConfigStore::load(std::string &errorOut)
     oss << ifs.rdbuf();
     std::string raw = oss.str();
     if (raw.size() > MAX_CONFIG_FILE_BYTES) {
-        errorOut = "config file exceeds maximum allowed size (64 KiB)";
+        errorOut = "config file exceeds maximum allowed size (512 KiB)";
         return false;
     }
     if (raw.empty()) {
@@ -242,6 +242,12 @@ bool ClientConfigStore::load(std::string &errorOut)
     }
     if (doc.contains("avatar_url") && doc["avatar_url"].is_string()) {
         parsed.avatarUrl = doc["avatar_url"].get<std::string>();
+    }
+    if (doc.contains("bio") && doc["bio"].is_string()) {
+        parsed.bio = doc["bio"].get<std::string>();
+    }
+    if (doc.contains("location") && doc["location"].is_string()) {
+        parsed.location = doc["location"].get<std::string>();
     }
     if (doc.contains("preferred_provider") &&
         doc["preferred_provider"].is_string()) {
@@ -318,6 +324,8 @@ bool ClientConfigStore::save(std::string &errorOut) const
     doc["handle"] = _prefs.handle;
     doc["display_name"] = _prefs.displayName;
     doc["avatar_url"] = _prefs.avatarUrl;
+    doc["bio"] = _prefs.bio;
+    doc["location"] = _prefs.location;
     doc["preferred_provider"] = _prefs.preferredProvider;
     doc["theme"] = themeToString(_prefs.theme);
     doc["confirm_all_moves"] = _prefs.confirmAllMoves;
@@ -406,6 +414,8 @@ void ClientConfigStore::clearSession()
 {
     _prefs.sessionToken.clear();
     _prefs.playerUuid.clear();
+    _prefs.bio.clear();
+    _prefs.location.clear();
 }
 
 const ClientPreferences &ClientConfigStore::preferences() const

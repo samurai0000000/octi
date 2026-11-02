@@ -171,6 +171,26 @@ public:
     void setTheme(ThemeId theme);
     ThemeId theme() const;
 
+    static std::string encodeAvatarImageToDataUri(const QImage &srcImg);
+    static QPixmap renderCircularAvatarPixmap(const QImage &srcImg,
+                                              const QString &fallbackHandle,
+                                              int sizePx,
+                                              ThemeId theme);
+
+    bool selectAvatarFromImage(const QImage &img);
+    void clearPendingAvatar();
+    ApiResult<PlayerProfileInfo> saveProfile();
+
+    QLineEdit *handleEdit() const { return _handleEdit; }
+    QLineEdit *displayNameEdit() const { return _displayNameEdit; }
+    QLineEdit *locationEdit() const { return _locationEdit; }
+    QPlainTextEdit *bioEdit() const { return _bioEdit; }
+    QPushButton *saveProfileButton() const { return _saveProfileBtn; }
+    QPushButton *uploadAvatarButton() const { return _uploadAvatarBtn; }
+    QPushButton *clearAvatarButton() const { return _clearAvatarBtn; }
+    QLabel *avatarPreviewLabel() const { return _avatarPreviewLabel; }
+    QString profileStatusText() const;
+
     bool refreshProfile();
     const PlayerProfileInfo &currentProfile() const;
     const std::vector<LinkedIdentityInfo> &linkedIdentities() const;
@@ -224,6 +244,20 @@ private:
     ThemeId _theme;
     UiDispatcher _dispatcher;
     OAuthLoopbackListener _loopbackListener;
+
+    QLabel *_avatarPreviewLabel;
+    QPushButton *_uploadAvatarBtn;
+    QPushButton *_clearAvatarBtn;
+    QLineEdit *_handleEdit;
+    QLineEdit *_displayNameEdit;
+    QLineEdit *_locationEdit;
+    QPlainTextEdit *_bioEdit;
+    QLabel *_profileStatusLabel;
+    QPushButton *_saveProfileBtn;
+
+    QImage _currentAvatarImage;
+    std::string _pendingAvatarDataUri;
+    bool _avatarCleared;
 
     QTableWidget *_identitiesTable;
     QComboBox *_providerCombo;

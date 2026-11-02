@@ -224,6 +224,11 @@ bool ServerApp::parseArgs(int argc, const char * const argv[], std::string &errM
                            _config.oidcConfigPath, errMsg)) {
                 return false;
             }
+        } else if (std::strcmp(arg, "--avatar-dir") == 0) {
+            if (!takeValue(argc, argv, i, "--avatar-dir",
+                           _config.avatarDir, errMsg)) {
+                return false;
+            }
         } else {
             errMsg = std::string("Unknown option: ") + arg;
             return false;
@@ -362,6 +367,24 @@ int ServerApp::run(std::ostream &out, std::ostream &err)
         return 2;
     }
 
+    if (!_config.avatarDir.empty()) {
+        store.setAvatarDir(_config.avatarDir);
+    } else {
+        std::filesystem::path defaultAvatarDir = "/var/octi/avatar";
+        std::error_code ec;
+        if (std::filesystem::exists(defaultAvatarDir, ec) &&
+            ::access(defaultAvatarDir.c_str(), W_OK) == 0) {
+            store.setAvatarDir(defaultAvatarDir.string());
+        } else {
+            std::filesystem::path parent =
+                std::filesystem::path(_config.dbPath).parent_path();
+            if (parent.empty()) {
+                parent = ".";
+            }
+            store.setAvatarDir((parent / "avatar").string());
+        }
+    }
+
     OidcVerifier verifier;
     HttpServerConfig http;
     http.bindAddress = _config.bindAddress;
@@ -489,6 +512,7 @@ std::string ServerApp::usageBanner(const char *progName)
         << "      --db <path>        SQLite database file (required; created 0600)\n"
         << "      --oidc-config <f>  JSON file with per-provider OIDC client ids\n"
         << "                         (0600 required when it holds an app_secret)\n"
+        << "      --avatar-dir <dir> Custom directory for uploaded avatar storage\n"
         << "  -v, --version          Print version information and exit\n"
         << "  -h, --help             Print this help message and exit\n"
         << "Environment:\n"

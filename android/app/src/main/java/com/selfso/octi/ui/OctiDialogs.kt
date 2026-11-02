@@ -8,8 +8,17 @@ package com.selfso.octi.ui
 
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -480,6 +489,75 @@ fun SsoSignInDialog(
     )
 }
 
+@Composable
+fun OctiPlayerAvatar(
+    avatarUrl: String,
+    handle: String,
+    size: androidx.compose.ui.unit.Dp,
+    viewModel: OctiAppViewModel,
+    modifier: Modifier = Modifier
+) {
+    var avatarBitmap by remember(avatarUrl) { mutableStateOf<ImageBitmap?>(null) }
+
+    LaunchedEffect(avatarUrl) {
+        if (avatarUrl.isEmpty()) {
+            avatarBitmap = null
+            return@LaunchedEffect
+        }
+        withContext(Dispatchers.IO) {
+            val bytes = OctiAppViewModel.decodeAvatarDataUriOrBytes(avatarUrl, viewModel.netClient)
+            if (bytes != null && bytes.isNotEmpty()) {
+                try {
+                    val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bmp != null) {
+                        avatarBitmap = bmp.asImageBitmap()
+                    } else {
+                        avatarBitmap = null
+                    }
+                } catch (_: Throwable) {
+                    avatarBitmap = null
+                }
+            } else {
+                avatarBitmap = null
+            }
+        }
+    }
+
+    val initialLetter = remember(handle) {
+        handle.trim().takeIf { it.isNotEmpty() }?.first()?.uppercaseChar()?.toString() ?: "?"
+    }
+
+    val shape = CircleShape
+    val bmp = avatarBitmap
+
+    Box(
+        modifier = modifier
+            .size(size)
+            .border(1.5.dp, OctiTheme.colors.accentBrass, shape)
+            .clip(shape)
+            .background(OctiTheme.colors.panelCardBg),
+        contentAlignment = Alignment.Center
+    ) {
+        if (bmp != null) {
+            Image(
+                bitmap = bmp,
+                contentDescription = "Avatar of $handle",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Text(
+                text = initialLetter,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontSize = (size.value * 0.45f).sp,
+                    fontWeight = FontWeight.Bold,
+                    color = OctiTheme.colors.accentBrass
+                )
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AccountIdentitiesDialog(
@@ -495,8 +573,41 @@ fun AccountIdentitiesDialog(
     val browserAuthStatusText by viewModel.browserAuthStatusText.collectAsState()
     val profileActionBusy by viewModel.profileActionBusy.collectAsState()
     val profileActionMessage by viewModel.profileActionMessage.collectAsState()
+
     var editableHandle by remember(profile?.handle) { mutableStateOf(profile?.handle ?: "") }
+    var editableDisplayName by remember(profile?.displayName) { mutableStateOf(profile?.displayName ?: "") }
+    var editableLocation by remember(profile?.location) { mutableStateOf(profile?.location ?: "") }
+    var editableBio by remember(profile?.bio) { mutableStateOf(profile?.bio ?: "") }
+    var pendingAvatarUrl by remember(profile?.avatarUrl) { mutableStateOf(profile?.avatarUrl ?: "") }
+    var avatarModified by remember(profile?.avatarUrl) { mutableStateOf(false) }
+    var avatarInlineFeedback by remember { mutableStateOf("") }
     var statusMessage by remember { mutableStateOf("") }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val bmp = BitmapFactory.decodeStream(stream)
+                    if (bmp != null) {
+                        val encoded = OctiAppViewModel.encodeAvatarBitmapToDataUri(bmp)
+                        if (encoded.isNotEmpty()) {
+                            pendingAvatarUrl = encoded
+                            avatarModified = true
+                            avatarInlineFeedback = "Avatar selected (auto-cropped square)."
+                        } else {
+                            avatarInlineFeedback = "Could not compress image under size limit."
+                        }
+                    } else {
+                        avatarInlineFeedback = "Could not decode selected image."
+                    }
+                }
+            } catch (e: Throwable) {
+                avatarInlineFeedback = "Failed to open image: ${e.message}"
+            }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = {
@@ -509,53 +620,144 @@ fun AccountIdentitiesDialog(
         textContentColor = OctiTheme.colors.textPrimary,
         title = { Text("My Account") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 val p = profile
                 if (p != null) {
-                    Text(
-                        text = "@${p.handle}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text("Profile & Avatar", fontWeight = FontWeight.Bold, color = OctiTheme.colors.accentBrass)
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        OutlinedTextField(
-                            value = editableHandle,
-                            onValueChange = { editableHandle = it },
-                            label = { Text("Player Handle") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
+                        OctiPlayerAvatar(
+                            avatarUrl = pendingAvatarUrl,
+                            handle = editableHandle.ifEmpty { p.handle },
+                            size = 72.dp,
+                            viewModel = viewModel
                         )
-                        Button(
-                            onClick = {
-                                viewModel.updateMyHandleAsync(editableHandle.trim()) { res ->
-                                    if (res.ok && res.profile != null) {
-                                        editableHandle = res.profile.handle
-                                    }
-                                }
-                            },
-                            enabled = !profileActionBusy &&
-                                    editableHandle.trim().length >= 3 &&
-                                    editableHandle.trim() != p.handle,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = OctiTheme.colors.accentBrass,
-                                contentColor = OctiTheme.colors.windowBg
-                            )
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Text(if (profileActionBusy) "Saving..." else "Save Handle")
+                            Button(
+                                onClick = { imagePickerLauncher.launch("image/*") },
+                                enabled = !profileActionBusy,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = OctiTheme.colors.accentBrass,
+                                    contentColor = OctiTheme.colors.windowBg
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Upload Avatar")
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    pendingAvatarUrl = ""
+                                    avatarModified = true
+                                    avatarInlineFeedback = "Avatar cleared (save to commit)."
+                                },
+                                enabled = !profileActionBusy && (pendingAvatarUrl.isNotEmpty() || p.avatarUrl.isNotEmpty()),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Clear Avatar")
+                            }
                         }
                     }
+
+                    if (avatarInlineFeedback.isNotEmpty()) {
+                        Text(
+                            text = avatarInlineFeedback,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OctiTheme.colors.accentBrass
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = editableHandle,
+                        onValueChange = { editableHandle = it },
+                        label = { Text("Player Handle") },
+                        supportingText = { Text("3-32 chars • 1 handle change per 24h") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = editableDisplayName,
+                        onValueChange = { editableDisplayName = it },
+                        label = { Text("Display Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = editableLocation,
+                        onValueChange = { editableLocation = it },
+                        label = { Text("Location") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = editableBio,
+                        onValueChange = { editableBio = it },
+                        label = { Text("Bio") },
+                        minLines = 2,
+                        maxLines = 3,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Button(
+                        onClick = {
+                            viewModel.updateMyProfileAsync(
+                                desiredHandle = editableHandle.trim(),
+                                displayName = editableDisplayName.trim(),
+                                location = editableLocation.trim(),
+                                bio = editableBio.trim(),
+                                avatarUrl = pendingAvatarUrl,
+                                setAvatarUrl = avatarModified
+                            ) { res ->
+                                if (res.ok && res.profile != null) {
+                                    avatarModified = false
+                                    avatarInlineFeedback = ""
+                                    editableHandle = res.profile.handle
+                                    editableDisplayName = res.profile.displayName
+                                    editableLocation = res.profile.location
+                                    editableBio = res.profile.bio
+                                    pendingAvatarUrl = res.profile.avatarUrl
+                                }
+                            }
+                        },
+                        enabled = !profileActionBusy && (
+                            avatarModified ||
+                            editableHandle.trim() != p.handle ||
+                            editableDisplayName.trim() != p.displayName ||
+                            editableLocation.trim() != p.location ||
+                            editableBio.trim() != p.bio
+                        ),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OctiTheme.colors.accentBrass,
+                            contentColor = OctiTheme.colors.windowBg
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (profileActionBusy) "Saving Profile..." else "Save Profile")
+                    }
+
                     if (profileActionMessage.isNotEmpty()) {
                         Text(
                             text = profileActionMessage,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (profileActionMessage.startsWith("Handle updated"))
+                            color = if (profileActionMessage.startsWith("Profile saved") || profileActionMessage.startsWith("Handle updated"))
                                 OctiTheme.colors.accentBrass else OctiTheme.colors.legalCapture
                         )
                     }
+
                     Text(
                         text = "Rating — 2P: ${p.elo2p}  •  4P: ${p.elo4p}  •  OFK: ${p.eloOfk}",
                         style = MaterialTheme.typography.bodyMedium,

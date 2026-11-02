@@ -912,6 +912,8 @@ public class OctiAndroidAppIntegrationTest {
         private final ServerSocket _serverSocket;
         private final AtomicBoolean _running = new AtomicBoolean(true);
         private final Thread _acceptThread;
+        final List<String> receivedInstallIds = new ArrayList<>();
+        final List<Map<String, Object>> receivedPatchBodies = new ArrayList<>();
 
         MockSsoHarnessServer() throws Exception {
             _serverSocket = new ServerSocket();
@@ -940,8 +942,16 @@ public class OctiAndroidAppIntegrationTest {
                     String h;
                     while ((h = r.readLine()) != null && !h.isEmpty()) {
                         int colon = h.indexOf(':');
-                        if (colon > 0 && h.substring(0, colon).trim().equalsIgnoreCase("Content-Length")) {
-                            contentLength = Integer.parseInt(h.substring(colon + 1).trim());
+                        if (colon > 0) {
+                            String name = h.substring(0, colon).trim();
+                            String val = h.substring(colon + 1).trim();
+                            if (name.equalsIgnoreCase("Content-Length")) {
+                                contentLength = Integer.parseInt(val);
+                            } else if (name.equalsIgnoreCase("X-Octi-Install-Id")) {
+                                synchronized (receivedInstallIds) {
+                                    receivedInstallIds.add(val);
+                                }
+                            }
                         }
                     }
                     char[] bodyChars = new char[Math.max(0, contentLength)];
@@ -967,6 +977,7 @@ public class OctiAndroidAppIntegrationTest {
                     if (reqLine.contains("/api/v1/auth/sso")) {
                         boolean isNew = token.startsWith("token-new-");
                         status = isNew ? 201 : 200;
+                        String ssoHandle = token.contains("samurai") ? "samurai" : ("User_" + provider);
                         respBody = "{\n"
                                 + "  \"session_token\": \"sess-" + provider + "\",\n"
                                 + "  \"expires_at\": 1999999999,\n"
@@ -974,7 +985,7 @@ public class OctiAndroidAppIntegrationTest {
                                 + "  \"onboarding_required\": " + isNew + ",\n"
                                 + "  \"profile\": {\n"
                                 + "    \"uuid\": \"p-" + provider + "\",\n"
-                                + "    \"handle\": \"User_" + provider + "\",\n"
+                                + "    \"handle\": \"" + ssoHandle + "\",\n"
                                 + "    \"elo_2p\": 1500\n"
                                 + "  },\n"
                                 + "  \"linked_identities\": [\n"
@@ -1014,19 +1025,29 @@ public class OctiAndroidAppIntegrationTest {
                                 + "}";
                     } else if (reqLine.contains("/api/v1/profile/me")) {
                         if (reqLine.startsWith("PATCH")) {
-                            String hVal = OctiMiniJson.getString(reqJson, "handle", "");
+                            synchronized (receivedPatchBodies) {
+                                receivedPatchBodies.add(new HashMap<>(reqJson));
+                            }
+                            String hVal = OctiMiniJson.getString(reqJson, "handle", "samurai");
                             if (hVal.contains("taken")) {
                                 status = 409;
                                 respBody = "{\"error\":\"handle_taken\",\"message\":\"Handle is already taken\"}";
-                            } else if (hVal.contains("invalid") || hVal.length() < 3) {
+                            } else if (hVal.contains("invalid") || (hVal.length() > 0 && hVal.length() < 3)) {
                                 status = 400;
                                 respBody = "{\"error\":\"invalid_handle\",\"message\":\"Invalid handle format\"}";
                             } else {
                                 status = 200;
+                                String dVal = OctiMiniJson.getString(reqJson, "display_name", "User");
+                                String bVal = OctiMiniJson.getString(reqJson, "bio", "");
+                                String lVal = OctiMiniJson.getString(reqJson, "location", "");
+                                String aVal = OctiMiniJson.getString(reqJson, "avatar_url", "");
                                 respBody = "{\n"
                                         + "  \"uuid\": \"p-me\",\n"
                                         + "  \"handle\": \"" + hVal + "\",\n"
-                                        + "  \"display_name\": \"User\",\n"
+                                        + "  \"display_name\": \"" + dVal + "\",\n"
+                                        + "  \"avatar_url\": \"" + aVal + "\",\n"
+                                        + "  \"bio\": \"" + bVal + "\",\n"
+                                        + "  \"location\": \"" + lVal + "\",\n"
                                         + "  \"elo_2p\": 1500\n"
                                         + "}";
                             }
@@ -1039,6 +1060,17 @@ public class OctiAndroidAppIntegrationTest {
                                     + "  \"elo_2p\": 1500\n"
                                     + "}";
                         }
+                    } else if (reqLine.contains("/api/v1/avatars/")) {
+                        byte[] avatarPayload = new byte[]{0x01, 0x02, 0x03, 0x04};
+                        String headers = "HTTP/1.1 200 OK\r\n"
+                                + "Content-Type: image/jpeg\r\n"
+                                + "Content-Length: " + avatarPayload.length + "\r\n"
+                                + "Connection: close\r\n\r\n";
+                        OutputStream os = s.getOutputStream();
+                        os.write(headers.getBytes(StandardCharsets.UTF_8));
+                        os.write(avatarPayload);
+                        os.flush();
+                        continue;
                     } else if (reqLine.contains("/observe")) {
                         status = 200;
                         respBody = "{\"ok\":true}";
@@ -1091,6 +1123,7 @@ public class OctiAndroidAppIntegrationTest {
         private volatile boolean _uploadEndpointOnline = true;
         private final List<String> _receivedCrashBodies = new ArrayList<>();
         private final List<String> _receivedUploadBodies = new ArrayList<>();
+        final List<String> receivedInstallIds = new ArrayList<>();
 
         MockTelemetryServer() throws Exception {
             _serverSocket = new ServerSocket();
@@ -1139,8 +1172,16 @@ public class OctiAndroidAppIntegrationTest {
                     String h;
                     while ((h = r.readLine()) != null && !h.isEmpty()) {
                         int colon = h.indexOf(':');
-                        if (colon > 0 && h.substring(0, colon).trim().equalsIgnoreCase("Content-Length")) {
-                            contentLength = Integer.parseInt(h.substring(colon + 1).trim());
+                        if (colon > 0) {
+                            String name = h.substring(0, colon).trim();
+                            String val = h.substring(colon + 1).trim();
+                            if (name.equalsIgnoreCase("Content-Length")) {
+                                contentLength = Integer.parseInt(val);
+                            } else if (name.equalsIgnoreCase("X-Octi-Install-Id")) {
+                                synchronized (receivedInstallIds) {
+                                    receivedInstallIds.add(val);
+                                }
+                            }
                         }
                     }
                     char[] bodyChars = new char[Math.max(0, contentLength)];
@@ -1441,6 +1482,178 @@ public class OctiAndroidAppIntegrationTest {
                     reporter.getPendingCount() >= initPending + 1);
 
             client.injectRuntimeExceptionForTest(null);
+        }
+    }
+
+    @Test
+    public void testTranscriptAttributionAndFullProfileEditingParity() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_profile.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port());
+            ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+
+            try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                vm.setStorageRootDir(_tempDir);
+                vm.setAsyncBotThinkingEnabled(false);
+
+                // 1. Check anonymous / unauthenticated transcript attribution
+                vm.startNewLocalGame(
+                        OctiGameMode.GAME_MODE_2,
+                        false,
+                        false,
+                        OctiGameBases.GAME_BASES_3,
+                        true,
+                        OctiBotEngine.BotDifficulty.CASUAL,
+                        OctiPlayer.PLAYER_A);
+
+                String anonTranscript = vm.buildCurrentGameTranscriptJson(false);
+                Map<String, Object> anonDoc = OctiMiniJson.parseObject(anonTranscript);
+                List<Object> anonPlayers = OctiMiniJson.getArray(anonDoc, "players");
+                assertNotNull(anonPlayers);
+                assertEquals(2, anonPlayers.size());
+                @SuppressWarnings("unchecked")
+                Map<String, Object> p1Anon = (Map<String, Object>) anonPlayers.get(0);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> p2Anon = (Map<String, Object>) anonPlayers.get(1);
+                assertEquals(1, OctiMiniJson.getInt(p1Anon, "seat", 0));
+                assertEquals("HUMAN", OctiMiniJson.getString(p1Anon, "type", ""));
+                assertEquals("Player", OctiMiniJson.getString(p1Anon, "handle", ""));
+                assertEquals(2, OctiMiniJson.getInt(p2Anon, "seat", 0));
+                assertEquals("AI", OctiMiniJson.getString(p2Anon, "type", ""));
+
+                // 2. Sign in with SSO
+                vm.loginWithSso("google", "token-samurai");
+                assertEquals("samurai", vm.getOnlineProfile().getValue().handle);
+                assertTrue(vm.isAuthenticated().getValue());
+
+                // 3. Test PLAYER_A as Human: seat 1 = HUMAN (samurai), seat 2 = AI
+                vm.startNewLocalGame(
+                        OctiGameMode.GAME_MODE_2,
+                        false,
+                        false,
+                        OctiGameBases.GAME_BASES_3,
+                        true,
+                        OctiBotEngine.BotDifficulty.CASUAL,
+                        OctiPlayer.PLAYER_A);
+
+                String pATranscript = vm.buildCurrentGameTranscriptJson(false);
+                Map<String, Object> pADoc = OctiMiniJson.parseObject(pATranscript);
+                List<Object> pAPlayers = OctiMiniJson.getArray(pADoc, "players");
+                assertNotNull(pAPlayers);
+                assertEquals(2, pAPlayers.size());
+                @SuppressWarnings("unchecked")
+                Map<String, Object> p1A = (Map<String, Object>) pAPlayers.get(0);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> p2A = (Map<String, Object>) pAPlayers.get(1);
+                assertEquals(1, OctiMiniJson.getInt(p1A, "seat", 0));
+                assertEquals("A", OctiMiniJson.getString(p1A, "player", ""));
+                assertEquals("HUMAN", OctiMiniJson.getString(p1A, "type", ""));
+                assertEquals("samurai", OctiMiniJson.getString(p1A, "handle", ""));
+                assertEquals(2, OctiMiniJson.getInt(p2A, "seat", 0));
+                assertEquals("B", OctiMiniJson.getString(p2A, "player", ""));
+                assertEquals("AI", OctiMiniJson.getString(p2A, "type", ""));
+                assertTrue(OctiMiniJson.getString(p2A, "handle", "").startsWith("AI_L"));
+
+                // 4. Test PLAYER_B as Human: seat 1 = AI, seat 2 = HUMAN (samurai)
+                vm.startNewLocalGame(
+                        OctiGameMode.GAME_MODE_2,
+                        false,
+                        false,
+                        OctiGameBases.GAME_BASES_3,
+                        true,
+                        OctiBotEngine.BotDifficulty.CASUAL,
+                        OctiPlayer.PLAYER_B);
+
+                String pBTranscript = vm.buildCurrentGameTranscriptJson(false);
+                Map<String, Object> pBDoc = OctiMiniJson.parseObject(pBTranscript);
+                List<Object> pBPlayers = OctiMiniJson.getArray(pBDoc, "players");
+                assertNotNull(pBPlayers);
+                assertEquals(2, pBPlayers.size());
+                @SuppressWarnings("unchecked")
+                Map<String, Object> p1B = (Map<String, Object>) pBPlayers.get(0);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> p2B = (Map<String, Object>) pBPlayers.get(1);
+                assertEquals(1, OctiMiniJson.getInt(p1B, "seat", 0));
+                assertEquals("A", OctiMiniJson.getString(p1B, "player", ""));
+                assertEquals("AI", OctiMiniJson.getString(p1B, "type", ""));
+                assertEquals(2, OctiMiniJson.getInt(p2B, "seat", 0));
+                assertEquals("B", OctiMiniJson.getString(p2B, "player", ""));
+                assertEquals("HUMAN", OctiMiniJson.getString(p2B, "type", ""));
+                assertEquals("samurai", OctiMiniJson.getString(p2B, "handle", ""));
+
+                // 5. Test full profile update: handle, display_name, location, bio, avatar_url
+                String initialInstallId = configStore.preferences().getInstallId();
+                assertFalse(initialInstallId.isEmpty());
+
+                CountDownLatch latch = new CountDownLatch(1);
+                vm.updateMyProfileAsync(
+                        "ronin",
+                        "Master Ronin",
+                        "Kyoto, Japan",
+                        "Octi enthusiast and strategist",
+                        "data:image/jpeg;base64,ZmFrZWF2YXRhcg==",
+                        true,
+                        res -> {
+                            assertTrue(res.ok);
+                            latch.countDown();
+                        });
+                assertTrue("updateMyProfileAsync timed out", latch.await(5, TimeUnit.SECONDS));
+
+                // Verify ClientConfigStore persistence
+                assertEquals("ronin", configStore.preferences().getHandle());
+                assertEquals("Master Ronin", configStore.preferences().getDisplayName());
+                assertEquals("Kyoto, Japan", configStore.preferences().getLocation());
+                assertEquals("Octi enthusiast and strategist", configStore.preferences().getBio());
+                assertEquals("data:image/jpeg;base64,ZmFrZWF2YXRhcg==", configStore.preferences().getAvatarUrl());
+
+                // Verify server received headers and payload
+                synchronized (server.receivedInstallIds) {
+                    assertFalse(server.receivedInstallIds.isEmpty());
+                    assertTrue(server.receivedInstallIds.contains(initialInstallId));
+                }
+
+                synchronized (server.receivedPatchBodies) {
+                    assertFalse(server.receivedPatchBodies.isEmpty());
+                    Map<String, Object> lastPatch = server.receivedPatchBodies.get(server.receivedPatchBodies.size() - 1);
+                    assertEquals("ronin", lastPatch.get("handle"));
+                    assertEquals("Master Ronin", lastPatch.get("display_name"));
+                    assertEquals("Kyoto, Japan", lastPatch.get("location"));
+                    assertEquals("Octi enthusiast and strategist", lastPatch.get("bio"));
+                    assertEquals("data:image/jpeg;base64,ZmFrZWF2YXRhcg==", lastPatch.get("avatar_url"));
+                }
+
+                // 6. Test clearing avatar sends avatar_url = ""
+                CountDownLatch latchClear = new CountDownLatch(1);
+                vm.updateMyProfileAsync(
+                        "ronin",
+                        "Master Ronin",
+                        "Kyoto, Japan",
+                        "Octi enthusiast and strategist",
+                        "",
+                        true,
+                        res -> {
+                            assertTrue(res.ok);
+                            latchClear.countDown();
+                        });
+                assertTrue("updateMyProfileAsync clear timed out", latchClear.await(5, TimeUnit.SECONDS));
+
+                synchronized (server.receivedPatchBodies) {
+                    Map<String, Object> lastPatch = server.receivedPatchBodies.get(server.receivedPatchBodies.size() - 1);
+                    assertTrue(lastPatch.containsKey("avatar_url"));
+                    assertEquals("", lastPatch.get("avatar_url"));
+                }
+
+                // 7. Test fetchAvatarBytes
+                byte[] avatarBytes = client.fetchAvatarBytes("/api/v1/avatars/ronin.jpg");
+                assertNotNull(avatarBytes);
+                assertEquals(4, avatarBytes.length);
+                assertEquals(0x01, avatarBytes[0]);
+                assertEquals(0x02, avatarBytes[1]);
+                assertEquals(0x03, avatarBytes[2]);
+                assertEquals(0x04, avatarBytes[3]);
+            }
         }
     }
 }

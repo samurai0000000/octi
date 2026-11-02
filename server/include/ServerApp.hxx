@@ -47,6 +47,7 @@ struct ServerConfig {
     std::string bindAddress = "127.0.0.1";
     std::string dbPath;                 // required to serve (--db)
     std::string oidcConfigPath;         // optional (--oidc-config)
+    std::string avatarDir;              // optional (--avatar-dir)
     bool showHelp = false;
     bool showVersion = false;
 };

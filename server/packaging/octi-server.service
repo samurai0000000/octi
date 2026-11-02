@@ -16,7 +16,7 @@ User=octi
 Group=octi
 WorkingDirectory=/var/lib/octi
 EnvironmentFile=-/etc/default/octi-server
-ExecStart=/usr/sbin/octi-server --bind ${OCTI_BIND_ADDRESS} --port ${OCTI_PORT} --db ${OCTI_DB_PATH} --oidc-config ${OCTI_OIDC_CONFIG}
+ExecStart=/usr/sbin/octi-server --bind ${OCTI_BIND_ADDRESS} --port ${OCTI_PORT} --db ${OCTI_DB_PATH} --oidc-config ${OCTI_OIDC_CONFIG} --avatar-dir ${OCTI_AVATAR_DIR}
 KillSignal=SIGTERM
 TimeoutStopSec=15
 Restart=on-failure
@@ -25,7 +25,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/octi
+ReadWritePaths=/var/lib/octi /var/octi/avatar
 ReadOnlyPaths=/etc/octi
 
 [Install]
