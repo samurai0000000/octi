@@ -122,6 +122,8 @@ public:
     void promptStartMatchIfVisible();
     void reconfigurePendingMatch(const LocalGameConfig &cfg);
     void syncSidePanelsToBoardEdges();
+    OctiStartMatchDialog *startMatchOverlay() const { return _startMatchOverlay; }
+    OctiStartMatchDialog *startMatchOverlayForTest() const { return _startMatchOverlay; }
     QRect rightPanelTopWidgetGeometry() const;
     QRect rightPanelBottomWidgetGeometry() const;
     std::int64_t matchStartedEpochSec() const { return _matchStartedEpochSec; }
@@ -250,6 +252,7 @@ private:
     void updateSelfUpdateBannerUi();
     void showProtocolUpgradeRequired(const std::string &message = "");
     void setupMenuBar();
+    void updateStartMatchOverlay();
 
     ClientConfigStore _configStore;
     std::unique_ptr<OctiNetworkClient> _netClient;
@@ -362,6 +365,7 @@ private:
     class QGroupBox *_statusBox = nullptr;
     class QGroupBox *_historyBox = nullptr;
     class QGroupBox *_actionsBox = nullptr;
+    OctiStartMatchDialog *_startMatchOverlay = nullptr;
 };
 
 } // namespace octi

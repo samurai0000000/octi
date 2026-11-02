@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
@@ -1011,6 +1012,33 @@ public class OctiAndroidAppIntegrationTest {
                                 + "  \"recent_chat\": [],\n"
                                 + "  \"latest_seq\": 0\n"
                                 + "}";
+                    } else if (reqLine.contains("/api/v1/profile/me")) {
+                        if (reqLine.startsWith("PATCH")) {
+                            String hVal = OctiMiniJson.getString(reqJson, "handle", "");
+                            if (hVal.contains("taken")) {
+                                status = 409;
+                                respBody = "{\"error\":\"handle_taken\",\"message\":\"Handle is already taken\"}";
+                            } else if (hVal.contains("invalid") || hVal.length() < 3) {
+                                status = 400;
+                                respBody = "{\"error\":\"invalid_handle\",\"message\":\"Invalid handle format\"}";
+                            } else {
+                                status = 200;
+                                respBody = "{\n"
+                                        + "  \"uuid\": \"p-me\",\n"
+                                        + "  \"handle\": \"" + hVal + "\",\n"
+                                        + "  \"display_name\": \"User\",\n"
+                                        + "  \"elo_2p\": 1500\n"
+                                        + "}";
+                            }
+                        } else {
+                            status = 200;
+                            respBody = "{\n"
+                                    + "  \"uuid\": \"p-me\",\n"
+                                    + "  \"handle\": \"samurai\",\n"
+                                    + "  \"display_name\": \"User\",\n"
+                                    + "  \"elo_2p\": 1500\n"
+                                    + "}";
+                        }
                     } else if (reqLine.contains("/observe")) {
                         status = 200;
                         respBody = "{\"ok\":true}";
@@ -1306,6 +1334,113 @@ public class OctiAndroidAppIntegrationTest {
             }
             List<File> spooled = OctiCrashReporter.listPendingTranscriptFiles(_tempDir);
             assertTrue("Pending transcripts count must not exceed 32", spooled.size() <= 32);
+        }
+    }
+
+    @Test
+    public void testHandleOnboardingAndEditorAsyncNominal() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_async.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port());
+            ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+
+            try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                vm.setStorageRootDir(_tempDir);
+
+                // Sign in with new account triggering onboarding
+                vm.loginWithSso("google", "token-new-handle-test");
+                assertTrue(vm.getOnboardingRequired().getValue());
+
+                CountDownLatch latch1 = new CountDownLatch(1);
+                vm.completeHandleOnboardingAsync("samurai", res -> {
+                    assertTrue(res.ok);
+                    latch1.countDown();
+                });
+                assertTrue("completeHandleOnboardingAsync timed out", latch1.await(5, TimeUnit.SECONDS));
+
+                assertNotNull(vm.getOnlineProfile().getValue());
+                assertEquals("samurai", vm.getOnlineProfile().getValue().handle);
+                assertFalse(vm.getOnboardingRequired().getValue());
+                assertEquals("", vm.getProfileActionMessage().getValue());
+
+                // Post-signup handle editing
+                CountDownLatch latch2 = new CountDownLatch(1);
+                vm.updateMyHandleAsync("ninja", res -> {
+                    assertTrue(res.ok);
+                    latch2.countDown();
+                });
+                assertTrue("updateMyHandleAsync timed out", latch2.await(5, TimeUnit.SECONDS));
+
+                assertEquals("ninja", vm.getOnlineProfile().getValue().handle);
+                assertTrue(vm.getProfileActionMessage().getValue().contains("Handle updated to @ninja"));
+            }
+        }
+    }
+
+    @Test
+    public void testHandleConflictDuringOnboardingAndEditing() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_conflict.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port());
+            ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+
+            try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                vm.setStorageRootDir(_tempDir);
+
+                vm.loginWithSso("google", "token-new-conflict-test");
+                assertTrue(vm.getOnboardingRequired().getValue());
+
+                CountDownLatch latch1 = new CountDownLatch(1);
+                vm.completeHandleOnboardingAsync("taken_user", res -> {
+                    assertFalse(res.ok);
+                    latch1.countDown();
+                });
+                assertTrue("completeHandleOnboardingAsync timed out", latch1.await(5, TimeUnit.SECONDS));
+
+                // Onboarding must remain true on conflict failure
+                assertTrue(vm.getOnboardingRequired().getValue());
+                assertTrue(vm.getProfileActionMessage().getValue().contains("already taken"));
+
+                // Conflict during profile editor
+                CountDownLatch latch2 = new CountDownLatch(1);
+                vm.updateMyHandleAsync("taken_user2", res -> {
+                    assertFalse(res.ok);
+                    latch2.countDown();
+                });
+                assertTrue("updateMyHandleAsync timed out", latch2.await(5, TimeUnit.SECONDS));
+
+                assertTrue(vm.getProfileActionMessage().getValue().contains("already taken"));
+            }
+        }
+    }
+
+    @Test
+    public void testNetworkClientRuntimeExceptionRecordsCrashAndDoesNotRetry() throws Exception {
+        OctiCrashReporter.setStorageRootDir(_tempDir);
+        try (MockTelemetryServer server = new MockTelemetryServer()) {
+            OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port());
+            OctiCrashReporter reporter = OctiCrashReporter.getInstance();
+            client.setCrashReporter(reporter);
+
+            int initPending = reporter.getPendingCount();
+
+            // Inject RuntimeException into request execution
+            client.injectRuntimeExceptionForTest(new RuntimeException("SimulatedNetworkOnMainThreadException"));
+
+            long start = System.currentTimeMillis();
+            OctiNetworkClient.ApiResult<OctiNetworkClient.PlayerProfileInfo> res = client.updateMyProfile("any");
+            long duration = System.currentTimeMillis() - start;
+
+            assertFalse("Request must fail when RuntimeException occurs", res.ok);
+            assertTrue("Client must abort retry loop immediately (< 1000ms), took " + duration + "ms", duration < 1000);
+            assertTrue("Pending crash count must increase, was " + initPending + " now " + reporter.getPendingCount(),
+                    reporter.getPendingCount() >= initPending + 1);
+
+            client.injectRuntimeExceptionForTest(null);
         }
     }
 }

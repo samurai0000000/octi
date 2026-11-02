@@ -482,7 +482,7 @@ void OctiBoardCanvas::triggerMoveAnimation(const QPointF &fromPt,
 bool OctiBoardCanvas::simulateDragFromReserveToSquare(DragKind kind,
                                                       int targetX, int targetY)
 {
-    if (!_composer) {
+    if (!_turnIndicatorVisible || !_composer) {
         return false;
     }
     bool liberate = (kind == DragKind::LIBERATE_POD_FROM_RESERVE);
@@ -499,7 +499,7 @@ bool OctiBoardCanvas::simulateDragProngToPod(int x, int y,
                                              OctiDir dir,
                                              bool superProng)
 {
-    if (!_composer) {
+    if (!_turnIndicatorVisible || !_composer) {
         return false;
     }
     bool ok = _composer->stageOrCommitAddProng(x, y, podIndex, dir, superProng);
@@ -515,7 +515,7 @@ bool OctiBoardCanvas::simulateDragPodToSquare(int fromX, int fromY,
                                               int toX, int toY,
                                               bool moveAllStack)
 {
-    if (!_composer || !_board) {
+    if (!_turnIndicatorVisible || !_composer || !_board) {
         return false;
     }
 
@@ -556,7 +556,7 @@ bool OctiBoardCanvas::simulateRepositionProngOnPod(int x, int y,
                                                    OctiDir srcDir,
                                                    OctiDir tgtDir)
 {
-    if (!_composer) {
+    if (!_turnIndicatorVisible || !_composer) {
         return false;
     }
     bool ok = _composer->stageOrCommitRepositionProng(x, y, podIndex, srcDir, tgtDir);
@@ -1785,7 +1785,7 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
         return;
     }
 
-    if (!event || !_composer || (_board && _board->getGame() && _board->getGame()->isGameOver())) {
+    if (!event || !_turnIndicatorVisible || !_composer || (_board && _board->getGame() && _board->getGame()->isGameOver())) {
         _dragKind = DragKind::NONE;
         return;
     }

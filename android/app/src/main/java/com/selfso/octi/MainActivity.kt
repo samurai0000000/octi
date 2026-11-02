@@ -230,6 +230,13 @@ class MainActivity : ComponentActivity() {
         return super.onKeyUp(keyCode, event)
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::appViewModel.isInitialized) {
+            appViewModel.flushPendingTelemetry(async = true)
+        }
+    }
+
     override fun onDestroy() {
         if (isFinishing && ::appViewModel.isInitialized) {
             appViewModel.close()
@@ -429,7 +436,7 @@ fun OctiMainAppContent(
                     selected = currentTab == OctiAppViewModel.AppTab.ONLINE_LOBBY,
                     onClick = {
                         viewModel.selectTab(OctiAppViewModel.AppTab.ONLINE_LOBBY)
-                        viewModel.refreshLobbyState()
+                        viewModel.refreshLobbyStateAsync()
                     },
                     icon = { Text("⚡", color = OctiTheme.colors.accentBrass) },
                     label = { Text("Online Lobby") }
@@ -438,8 +445,8 @@ fun OctiMainAppContent(
                     selected = currentTab == OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD,
                     onClick = {
                         viewModel.selectTab(OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD)
-                        viewModel.refreshLeaderboard("2P", 50)
-                        viewModel.refreshArchivedGames("", "", 20, 0)
+                        viewModel.refreshLeaderboardAsync("2P", 50)
+                        viewModel.refreshArchivedGamesAsync("", "", 20, 0)
                     },
                     icon = { Text("★", color = OctiTheme.colors.accentBrass) },
                     label = { Text("Archive & Elo") }

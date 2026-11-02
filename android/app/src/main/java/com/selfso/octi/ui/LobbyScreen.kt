@@ -101,7 +101,7 @@ fun LobbyScreen(
                                 Text(profile?.handle?.ifEmpty { "Account" } ?: "Account")
                             }
                         }
-                        OutlinedButton(onClick = { viewModel.refreshLobbyState() }) {
+                        OutlinedButton(onClick = { viewModel.refreshLobbyStateAsync() }) {
                             Text("Refresh")
                         }
                     }
@@ -154,7 +154,7 @@ fun LobbyScreen(
                                         mode = selectedQueueMode
                                         bases = if (selectedQueueMode == "4P") 1 else 3
                                     }
-                                    viewModel.enqueueMatchmaking(req)
+                                    viewModel.enqueueMatchmakingAsync(req)
                                 },
                                 enabled = isAuthenticated,
                                 colors = ButtonDefaults.buttonColors(
@@ -165,7 +165,7 @@ fun LobbyScreen(
                                 Text("Quick Match ($selectedQueueMode)")
                             }
                         } else {
-                            OutlinedButton(onClick = { viewModel.dequeueMatchmaking() }) {
+                            OutlinedButton(onClick = { viewModel.dequeueMatchmakingAsync() }) {
                                 Text("Cancel Queue (${mmStatus.waitedMs / 1000}s)")
                             }
                         }
@@ -252,7 +252,7 @@ fun LobbyScreen(
                                     if (table.seatsFilled < table.seatsTotal) {
                                         Button(
                                             onClick = {
-                                                viewModel.joinOnlineTable(
+                                                viewModel.joinOnlineTableAsync(
                                                     table.roomId,
                                                     0,
                                                     passcodeInput
@@ -269,7 +269,7 @@ fun LobbyScreen(
                                     }
                                     OutlinedButton(
                                         onClick = {
-                                            viewModel.observeOnlineTable(
+                                            viewModel.observeOnlineTableAsync(
                                                 table.roomId,
                                                 passcodeInput
                                             )
@@ -330,7 +330,7 @@ fun LobbyScreen(
                     Button(
                         onClick = {
                             if (chatDraft.isNotBlank()) {
-                                viewModel.sendLobbyChat(chatDraft.trim())
+                                viewModel.sendLobbyChatAsync(chatDraft.trim())
                                 chatDraft = ""
                             }
                         },

@@ -231,7 +231,8 @@ OctiMainWindow::OctiMainWindow(
       _updateBannerProgressBar(nullptr),
       _updateActionBtn(nullptr),
       _updateDetailsBtn(nullptr),
-      _updateDismissBtn(nullptr)
+      _updateDismissBtn(nullptr),
+      _startMatchOverlay(nullptr)
 {
     selfupdate::UpdateInstaller::cleanupStaleBackup();
     _updateController = std::make_shared<selfupdate::SelfUpdateController>(
@@ -361,6 +362,20 @@ OctiMainWindow::OctiMainWindow(
 
     _boardCanvas = new OctiBoardCanvas(_boardPage);
     _boardCanvas->setMinimumSize(620, 620);
+
+    _startMatchOverlay = new OctiStartMatchDialog(_localConfig, _theme, _boardCanvas, true);
+    _startMatchOverlay->setOnStartMatchCallback([this]() {
+        confirmMatchStart();
+    });
+    _startMatchOverlay->setOnChangeTypeCallback([this]() {
+        NewLocalGameDialog setupDlg(_theme, this);
+        setupDlg.setConfig(_localConfig);
+        if (setupDlg.exec() == QDialog::Accepted) {
+            reconfigurePendingMatch(setupDlg.config());
+        }
+        updateStartMatchOverlay();
+    });
+    _startMatchOverlay->hide();
 
     _board.getGame()->start(PLAYER_A);
     _boardCanvas->attachBoard(&_board, &_composer, &_soundSynth);
@@ -784,6 +799,7 @@ OctiMainWindow::OctiMainWindow(
     updateVoiceControlUi();
     updateMatchActionsVisibility();
     setupMenuBar();
+    updateStartMatchOverlay();
 }
 
 OctiMainWindow::~OctiMainWindow()
@@ -926,6 +942,7 @@ void OctiMainWindow::showBoardView()
     if (_viewStack && _boardPage) {
         _viewStack->setCurrentWidget(_boardPage);
     }
+    updateStartMatchOverlay();
 }
 
 void OctiMainWindow::showLobbyView()
@@ -934,6 +951,7 @@ void OctiMainWindow::showLobbyView()
         _viewStack->setCurrentWidget(_lobbyView);
         _lobbyView->refreshLobby();
     }
+    updateStartMatchOverlay();
 }
 
 bool OctiMainWindow::isBoardViewVisible() const
@@ -1027,6 +1045,7 @@ void OctiMainWindow::setTheme(ThemeId theme)
     _configStore.save(ignoredErr);
     refreshMoveHistoryAndFenUi();
     setupMenuBar();
+    updateStartMatchOverlay();
 }
 
 ThemeId OctiMainWindow::theme() const
@@ -1356,6 +1375,7 @@ void OctiMainWindow::beginAwaitingMatchStart()
         refreshMoveHistoryAndFenUi();
     }
     updateTopBarLabels();
+    updateStartMatchOverlay();
 }
 
 void OctiMainWindow::confirmMatchStart()
@@ -1371,6 +1391,7 @@ void OctiMainWindow::confirmMatchStart()
     }
     _soundSynth.triggerCue(SoundCue::POD_PLACE);
     updateTopBarLabels();
+    updateStartMatchOverlay();
     if (_isLocalBotGame) {
         executeBotTurnIfNeeded();
     }
@@ -1380,24 +1401,15 @@ void OctiMainWindow::reconfigurePendingMatch(const LocalGameConfig &cfg)
 {
     startNewLocalGame(cfg);
     beginAwaitingMatchStart();
+    updateStartMatchOverlay();
 }
 
 void OctiMainWindow::promptStartMatchIfVisible()
 {
-    while (isVisible() && _awaitingMatchStart) {
-        OctiStartMatchDialog dlg(_localConfig, _theme, this);
-        dlg.positionCenterOfBoard(this, _boardCanvas);
-        dlg.exec();
-        if (dlg.changeTypeRequested()) {
-            NewLocalGameDialog setupDlg(_theme, this);
-            setupDlg.setConfig(_localConfig);
-            if (setupDlg.exec() == QDialog::Accepted) {
-                reconfigurePendingMatch(setupDlg.config());
-            }
-            continue;
-        }
-        confirmMatchStart();
-        break;
+    if (!_awaitingMatchStart) {
+        beginAwaitingMatchStart();
+    } else {
+        updateStartMatchOverlay();
     }
 }
 
@@ -1420,6 +1432,24 @@ void OctiMainWindow::syncSidePanelsToBoardEdges()
     }
     if (_reservePanel) {
         _reservePanel->update();
+    }
+    updateStartMatchOverlay();
+}
+
+void OctiMainWindow::updateStartMatchOverlay()
+{
+    if (!_startMatchOverlay || !_boardCanvas) {
+        return;
+    }
+    _startMatchOverlay->updateConfigAndTheme(_localConfig, _theme);
+    _startMatchOverlay->positionCenterOfBoard(this, _boardCanvas);
+    const bool shouldShow = _awaitingMatchStart && !_inOnlineRoom &&
+                            isBoardViewVisible();
+    if (shouldShow) {
+        _startMatchOverlay->show();
+        _startMatchOverlay->raise();
+    } else {
+        _startMatchOverlay->hide();
     }
 }
 
@@ -1728,6 +1758,7 @@ void OctiMainWindow::leaveOnlineRoom()
     updateVoiceControlUi();
     updateMatchActionsVisibility();
     setupMenuBar();
+    updateStartMatchOverlay();
 }
 
 bool OctiMainWindow::isInOnlineGame() const
@@ -1941,6 +1972,10 @@ void OctiMainWindow::pumpUiEvents()
 void OctiMainWindow::handleLocalOrOnlineMoveCommitted(
     const std::string &moveNotation)
 {
+    if (_awaitingMatchStart && !_inOnlineRoom) {
+        return;
+    }
+
     if (_boardCanvas && !moveNotation.empty()) {
         try {
             OctiMove parsedMove(moveNotation);
@@ -2404,6 +2439,7 @@ bool OctiMainWindow::loadOctiTranscriptIntoReplay(
     leaveOnlineRoom();
     _gameOverDialogShownForCurrentMatch = false;
     _isLocalBotGame = false;
+    _awaitingMatchStart = false;
     try {
         _board.deserializeGame(octiTranscript);
     } catch (...) {
@@ -2421,6 +2457,7 @@ bool OctiMainWindow::loadOctiTranscriptIntoReplay(
         _reservePanel->refresh();
     }
     refreshMoveHistoryAndFenUi();
+    updateStartMatchOverlay();
     return true;
 }
 

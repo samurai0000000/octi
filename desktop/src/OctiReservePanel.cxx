@@ -544,6 +544,9 @@ void OctiReservePanel::mousePressEvent(QMouseEvent *event)
     }
 
     if (_canvas) {
+        if (!_canvas->isTurnIndicatorVisible()) {
+            return;
+        }
         OctiGame *game = _board ? _board->getGame() : nullptr;
         OctiPlayer turn = game ? game->getTurn() : PLAYER_A;
         int freePods = game ? game->getFreePods(turn) : 0;

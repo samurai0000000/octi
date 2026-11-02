@@ -11,6 +11,9 @@ namespace octi {
 namespace {
 
 const char kIndexHtml[] = R"OCTIUI(<!DOCTYPE html>
+<!--
+  Copyright (C) 2026, Charles Chiou
+-->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -922,6 +925,7 @@ tr.active-ply {
             <label style="flex:1;">Handle <input id="web-handle-input" style="width:100%;"></label>
             <button type="button" class="btn" id="btn-web-save-handle" style="margin-top:20px;">Save Handle</button>
           </div>
+          <div id="web-handle-status" style="font-size:13px;margin-top:4px;"></div>
           <div class="row">
             <label style="flex:1;">Display Name <input id="web-display-name-input" style="width:100%;"></label>
             <label style="flex:1;">Location <input id="web-location-input" style="width:100%;"></label>
@@ -2452,20 +2456,64 @@ $("nav-auth-pill").addEventListener("click", function () {
 });
 
 function handleAuthHash() {
-  if (location.hash && location.hash.indexOf("#auth_token=") === 0) {
-    var raw = location.hash.substring(1);
-    var params = new URLSearchParams(raw);
-    var token = params.get("auth_token");
-    if (token) {
-      try { localStorage.setItem("octi_jwt_token", token); } catch (e) {}
+  var params = null;
+  var token = null;
+
+  if (window.location.search) {
+    var searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get("auth_token")) {
+      params = searchParams;
+      token = searchParams.get("auth_token");
     }
+  }
+
+  if (!token && window.location.hash) {
+    var hashStr = window.location.hash.substring(1);
+    if (hashStr.indexOf("auth_token=") !== -1) {
+      var qIdx = hashStr.indexOf("?");
+      var rawHash = (qIdx !== -1) ? hashStr.substring(qIdx + 1) : hashStr;
+      var hashParams = new URLSearchParams(rawHash);
+      if (hashParams.get("auth_token")) {
+        params = hashParams;
+        token = hashParams.get("auth_token");
+      }
+    }
+  }
+
+  if (token) {
+    try {
+      localStorage.setItem("octi_jwt_token", token);
+    } catch (e) {}
+
     if (history.replaceState) {
-      history.replaceState(null, "", window.location.pathname + "#account");
+      history.replaceState(null, null, window.location.pathname);
     } else {
-      location.hash = "#account";
+      location.hash = "";
     }
+
     switchTab("account");
-    loadMyProfile();
+
+    var isNewAccount = params && (params.get("is_new_account") === "true");
+
+    loadMyProfile().then(function () {
+      if (isNewAccount) {
+        var modal = document.getElementById("web-account-modal");
+        if (modal) {
+          modal.style.display = "flex";
+        }
+        var handleInput = document.getElementById("web-handle-input");
+        if (handleInput) {
+          handleInput.focus();
+        }
+        loadIdentities();
+        var handleStatus = document.getElementById("web-handle-status");
+        if (handleStatus) {
+          handleStatus.textContent = "Welcome! Choose your OCTI player handle and click Save.";
+          handleStatus.style.color = "#10b981";
+        }
+      }
+    }).catch(function () {});
+
     return true;
   }
   return false;
@@ -2594,19 +2642,21 @@ function loadMyProfile() {
     currentUser = null;
     updateAuthPill();
     renderGuestState();
-    return;
+    return Promise.resolve(null);
   }
-  api("/api/v1/profile/me").then(function (res) {
+  return api("/api/v1/profile/me").then(function (res) {
     currentUser = res.user || res;
     updateAuthPill();
     renderAuthState();
     loadIdentities();
     loadMyRobots();
-  }).catch(function () {
+    return currentUser;
+  }).catch(function (err) {
     try { localStorage.removeItem("octi_jwt_token"); } catch (e) {}
     currentUser = null;
     updateAuthPill();
     renderGuestState();
+    throw err;
   });
 }
 
@@ -2622,7 +2672,19 @@ $("btn-robots-to-account").addEventListener("click", function () {
   switchTab("account");
 });
 
+function getAuthHeaders() {
+  var headers = { "Accept": "application/json" };
+  var token = null;
+  try { token = localStorage.getItem("octi_jwt_token"); } catch (e) {}
+  if (token) {
+    headers["Authorization"] = "Bearer " + token;
+  }
+  return headers;
+}
+
 $("btn-web-logout").addEventListener("click", function () {
+  fetch(`${API_BASE}/auth/logout`, { method: "POST", headers: getAuthHeaders() }).catch(function () {});
+  fetch(`${API_BASE}/api/v1/auth/logout`, { method: "POST", headers: getAuthHeaders() }).catch(function () {});
   try { localStorage.removeItem("octi_jwt_token"); } catch (e) {}
   currentUser = null;
   loadMyProfile();
@@ -2669,8 +2731,12 @@ $("btn-web-save-handle").addEventListener("click", function () {
   api("/api/v1/profile/me", { method: "PATCH", body: { handle: h } }).then(function (res) {
     currentUser = res.user || res;
     updateAuthPill();
+    var hs = $("web-handle-status");
+    if (hs) { hs.textContent = "Handle saved successfully!"; hs.style.color = "#10b981"; }
     alert("Handle updated successfully!");
   }).catch(function (e) {
+    var hs = $("web-handle-status");
+    if (hs) { hs.textContent = e.message; hs.style.color = "#ef4444"; }
     alert("Failed to update handle: " + e.message);
   });
 });
@@ -2712,7 +2778,7 @@ function loadAuthProviders() {
     }
     if (list.length > 0) {
       serverAuthProviders = list.map(function (x) {
-        return (typeof x === "string" ? x : (x.id || x.provider || x.key || "")).toLowerCase();
+        return (typeof x === "string" ? x : (x.name || x.id || x.provider || x.key || "")).toLowerCase();
       });
     }
     var fbBtn = $("btn-web-facebook");
@@ -2731,11 +2797,10 @@ function loadAuthProviders() {
 
 function loadIdentities() {
   loadAuthProviders().then(function (enabledProviders) {
-    api("/api/v1/auth/identities").then(function (res) {
+    function renderList(ids) {
       var tbody = $("web-identities-tbody");
       if (!tbody) return;
       clear(tbody);
-      var ids = res.identities || [];
       var allProviders = [
         { key: "google", name: "Google" },
         { key: "facebook", name: "Facebook" }
@@ -2751,7 +2816,8 @@ function loadIdentities() {
         var matched = ids.find(function (x) { return (x.provider || "").toLowerCase() === p.key; });
         tr.appendChild(el("td", p.name));
         if (matched) {
-          tr.appendChild(el("td", "Linked (" + (matched.email || matched.provider_id || "Active") + ")"));
+          var emailHint = matched.provider_email || matched.email || matched.display_hint || "Linked";
+          tr.appendChild(el("td", "Linked (" + emailHint + ")"));
           var actTd = el("td");
           var unlinkBtn = el("button", "Unlink", "btn");
           unlinkBtn.disabled = (ids.length <= 1);
@@ -2760,7 +2826,11 @@ function loadIdentities() {
             if (!confirm("Are you sure you want to unlink your " + p.name + " account?")) return;
             api("/api/v1/auth/identities/" + p.key, { method: "DELETE" }).then(function () {
               loadIdentities();
-            }).catch(function (e) { alert("Unlink failed: " + e.message); });
+            }).catch(function (e) {
+              var errData = e.data || {};
+              var msg = errData.message || errData.error || e.message || "Failed to unlink identity.";
+              alert("Unlink failed: " + msg);
+            });
           });
           actTd.appendChild(unlinkBtn);
           tr.appendChild(actTd);
@@ -2776,7 +2846,17 @@ function loadIdentities() {
         }
         tbody.appendChild(tr);
       });
-    }).catch(function () {});
+    }
+
+    api("/api/v1/auth/identities").then(function (res) {
+      var ids = (res && res.identities && res.identities.length > 0)
+        ? res.identities
+        : ((currentUser && currentUser.linked_identities) || []);
+      renderList(ids);
+    }).catch(function () {
+      var ids = (currentUser && currentUser.linked_identities) || [];
+      renderList(ids);
+    });
   });
 }
 
@@ -4222,6 +4302,26 @@ $("lb-mode").addEventListener("change", lbLoad);
 /* =========================================================================
  * Application Initialization
  * ========================================================================= */
+var API_BASE = "";
+
+async function loadHealth() {
+  var pill = document.getElementById("server-health-pill") || document.getElementById("health");
+  try {
+    var res = await fetch(`${API_BASE}/health`);
+    if (!res.ok) throw new Error("Health HTTP " + res.status);
+    var data = await res.json();
+    if (pill) {
+      pill.textContent = (data && data.status === "ok") ? "Server Online" : "Server Degraded";
+      pill.style.color = "#10b981";
+    }
+  } catch (e) {
+    if (pill) {
+      pill.textContent = "Server Offline";
+      pill.style.color = "#ef4444";
+    }
+  }
+}
+
 loadHealth();
 loadArchiveStats();
 checkHash();

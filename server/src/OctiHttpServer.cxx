@@ -431,6 +431,7 @@ Json identitiesJson(const std::vector<LinkedIdentity> &ids)
         Json j;
         j["provider"] = ids[i].provider;
         j["provider_email"] = ids[i].providerEmail;
+        j["email"] = ids[i].providerEmail;
         j["display_hint"] = ids[i].displayHint;
         j["linked_at"] = ids[i].linkedAt;
         j["last_login_at"] = ids[i].lastLoginAt;
@@ -702,6 +703,8 @@ struct OctiHttpServer::Impl {
     void handleSso(const Request &req, Response &res);
     void handleLink(const Request &req, Response &res);
     void handleUnlink(const Request &req, Response &res);
+    void handleAuthListIdentities(const Request &req, Response &res);
+    void handleAuthUnlinkProvider(const Request &req, Response &res);
     void handleLogout(const Request &req, Response &res);
     void handleProfileGet(const Request &req, Response &res);
     void handleProfilePatch(const Request &req, Response &res);
@@ -2220,6 +2223,62 @@ void OctiHttpServer::Impl::handleUnlink(const Request &req, Response &res)
     }
     case UnlinkStatus::LAST_IDENTITY_FORBIDDEN:
         sendError(res, 400, "LAST_IDENTITY_FORBIDDEN",
+                  "cannot unlink the only remaining sign-in identity");
+        return;
+    case UnlinkStatus::NOT_LINKED:
+        sendError(res, 404, "NOT_LINKED", "provider is not linked");
+        return;
+    case UnlinkStatus::ERROR:
+        break;
+    }
+    sendError(res, 500, "INTERNAL_ERROR", "unlink failed");
+}
+
+void OctiHttpServer::Impl::handleAuthListIdentities(const Request &req,
+                                                   Response &res)
+{
+    Auth auth;
+    if (!requireAuth(req, res, auth)) {
+        return;
+    }
+    std::vector<LinkedIdentity> ids;
+    if (!store.listLinkedIdentities(auth.playerId, ids)) {
+        sendError(res, 500, "INTERNAL_ERROR", "failed to list identities");
+        return;
+    }
+    Json j;
+    j["ok"] = true;
+    j["identities"] = identitiesJson(ids);
+    sendJson(res, 200, j);
+}
+
+void OctiHttpServer::Impl::handleAuthUnlinkProvider(const Request &req,
+                                                   Response &res)
+{
+    Auth auth;
+    if (!requireAuth(req, res, auth)) {
+        return;
+    }
+    std::unordered_map<std::string, std::string>::const_iterator it =
+        req.path_params.find("provider");
+    if (it == req.path_params.end() ||
+        !OidcVerifier::isSupportedProvider(it->second)) {
+        sendError(res, 400, "UNSUPPORTED_PROVIDER", "unsupported provider");
+        return;
+    }
+    switch (store.unlinkIdentity(auth.playerId, it->second)) {
+    case UnlinkStatus::UNLINKED: {
+        std::vector<LinkedIdentity> ids;
+        store.listLinkedIdentities(auth.playerId, ids);
+        Json j;
+        j["ok"] = true;
+        j["status"] = "unlinked";
+        j["linked_identities"] = identitiesJson(ids);
+        sendJson(res, 200, j);
+        return;
+    }
+    case UnlinkStatus::LAST_IDENTITY_FORBIDDEN:
+        sendError(res, 409, "cannot_unlink_last_identity",
                   "cannot unlink the only remaining sign-in identity");
         return;
     case UnlinkStatus::NOT_LINKED:
@@ -4763,6 +4822,11 @@ void OctiHttpServer::Impl::registerRoutes()
         {"POST", "/api/v1/auth/sso", &Impl::handleSso},
         {"POST", "/api/v1/auth/link", &Impl::handleLink},
         {"DELETE", "/api/v1/auth/link/:provider", &Impl::handleUnlink},
+        {"GET", "/auth/identities", &Impl::handleAuthListIdentities},
+        {"GET", "/api/v1/auth/identities", &Impl::handleAuthListIdentities},
+        {"DELETE", "/auth/identities/:provider", &Impl::handleAuthUnlinkProvider},
+        {"DELETE", "/api/v1/auth/identities/:provider", &Impl::handleAuthUnlinkProvider},
+        {"POST", "/auth/logout", &Impl::handleLogout},
         {"POST", "/api/v1/auth/logout", &Impl::handleLogout},
         {"GET", "/api/v1/profile/me", &Impl::handleProfileGet},
         {"GET", "/api/v1/profile", &Impl::handleProfileGet},

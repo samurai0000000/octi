@@ -75,7 +75,7 @@ fun ArchiveScreen(
                         selected = showLeaderboard,
                         onClick = {
                             showLeaderboard = true
-                            viewModel.refreshLeaderboard(selectedMode, 50)
+                            viewModel.refreshLeaderboardAsync(selectedMode, 50)
                         },
                         label = { Text("Elo Leaderboard") }
                     )
@@ -83,7 +83,7 @@ fun ArchiveScreen(
                         selected = !showLeaderboard,
                         onClick = {
                             showLeaderboard = false
-                            viewModel.refreshArchivedGames(selectedMode, "", 20, 0)
+                            viewModel.refreshArchivedGamesAsync(selectedMode, "", 20, 0)
                         },
                         label = { Text("Game Archive (${archivePage.total})") }
                     )
@@ -96,9 +96,9 @@ fun ArchiveScreen(
                             onClick = {
                                 selectedMode = mode
                                 if (showLeaderboard) {
-                                    viewModel.refreshLeaderboard(mode, 50)
+                                    viewModel.refreshLeaderboardAsync(mode, 50)
                                 } else {
-                                    viewModel.refreshArchivedGames(mode, "", 20, 0)
+                                    viewModel.refreshArchivedGamesAsync(mode, "", 20, 0)
                                 }
                             },
                             label = { Text(mode) }
@@ -107,9 +107,9 @@ fun ArchiveScreen(
                     OutlinedButton(
                         onClick = {
                             if (showLeaderboard) {
-                                viewModel.refreshLeaderboard(selectedMode, 50)
+                                viewModel.refreshLeaderboardAsync(selectedMode, 50)
                             } else {
-                                viewModel.refreshArchivedGames(selectedMode, "", 20, 0)
+                                viewModel.refreshArchivedGamesAsync(selectedMode, "", 20, 0)
                             }
                         }
                     ) {
@@ -210,7 +210,7 @@ fun ArchiveScreen(
                                     )
                                 }
                                 Button(
-                                    onClick = { viewModel.openArchivedGameForReplay(game.gameId) },
+                                    onClick = { viewModel.openArchivedGameForReplayAsync(game.gameId) },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = OctiTheme.colors.accentBrass,
                                         contentColor = OctiTheme.colors.windowBg

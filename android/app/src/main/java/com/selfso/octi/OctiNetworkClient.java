@@ -205,6 +205,119 @@ public final class OctiNetworkClient implements AutoCloseable {
         public List<LinkedIdentityInfo> identities = new ArrayList<>();
     }
 
+    public static class ProfileResult extends ApiResult<PlayerProfileInfo> {
+        public PlayerProfileInfo profile;
+        public String error = "";
+
+        public ProfileResult() {
+            super(new PlayerProfileInfo());
+            this.profile = this.data;
+        }
+
+        public ProfileResult(PlayerProfileInfo initialData) {
+            super(initialData);
+            this.profile = initialData;
+        }
+
+        public static ProfileResult fromApiResult(ApiResult<PlayerProfileInfo> api) {
+            ProfileResult pr = new ProfileResult(api != null ? api.data : null);
+            if (api != null) {
+                pr.ok = api.ok;
+                pr.httpStatus = api.httpStatus;
+                pr.errorCode = api.errorCode;
+                pr.errorMessage = api.errorMessage;
+                pr.retryAfterSec = api.retryAfterSec;
+                pr.profile = api.data;
+                pr.error = api.errorMessage != null && !api.errorMessage.isEmpty()
+                        ? api.errorMessage : (api.errorCode != null ? api.errorCode : "");
+            }
+            return pr;
+        }
+    }
+
+    public static class IdentityUnlinkResult extends ApiResult<UnlinkIdentityData> {
+        public String error = "";
+
+        public IdentityUnlinkResult() {
+            super(new UnlinkIdentityData());
+        }
+
+        public IdentityUnlinkResult(UnlinkIdentityData initialData) {
+            super(initialData);
+        }
+
+        public static IdentityUnlinkResult fromApiResult(ApiResult<UnlinkIdentityData> api) {
+            IdentityUnlinkResult ur = new IdentityUnlinkResult(api != null ? api.data : null);
+            if (api != null) {
+                ur.ok = api.ok;
+                ur.httpStatus = api.httpStatus;
+                ur.errorCode = api.errorCode;
+                ur.errorMessage = api.errorMessage;
+                ur.retryAfterSec = api.retryAfterSec;
+                ur.error = api.errorMessage != null && !api.errorMessage.isEmpty()
+                        ? api.errorMessage : (api.errorCode != null ? api.errorCode : "");
+            }
+            return ur;
+        }
+    }
+
+    public static class TableActionResult extends ApiResult<CreateTableResponse> {
+        public String tableId = "";
+        public String error = "";
+
+        public TableActionResult() {
+            super(new CreateTableResponse());
+        }
+
+        public TableActionResult(CreateTableResponse data) {
+            super(data);
+            if (data != null && data.roomId != null) {
+                this.tableId = data.roomId;
+            }
+        }
+
+        public static TableActionResult fromApiResult(ApiResult<?> api, String roomId) {
+            TableActionResult tr = new TableActionResult();
+            if (api != null) {
+                tr.ok = api.ok;
+                tr.httpStatus = api.httpStatus;
+                tr.errorCode = api.errorCode;
+                tr.errorMessage = api.errorMessage;
+                tr.retryAfterSec = api.retryAfterSec;
+                tr.tableId = roomId != null ? roomId : "";
+                tr.error = api.errorMessage != null && !api.errorMessage.isEmpty()
+                        ? api.errorMessage : (api.errorCode != null ? api.errorCode : "");
+            }
+            return tr;
+        }
+    }
+
+    public static class MatchmakingStatusResult extends ApiResult<MatchmakingStatusData> {
+        public String error = "";
+
+        public MatchmakingStatusResult() {
+            super(new MatchmakingStatusData());
+        }
+
+        public MatchmakingStatusResult(MatchmakingStatusData data) {
+            super(data);
+        }
+
+        public static MatchmakingStatusResult fromApiResult(ApiResult<MatchmakingStatusData> api) {
+            MatchmakingStatusResult mr = new MatchmakingStatusResult(api != null ? api.data : null);
+            if (api != null) {
+                mr.ok = api.ok;
+                mr.httpStatus = api.httpStatus;
+                mr.errorCode = api.errorCode;
+                mr.errorMessage = api.errorMessage;
+                mr.retryAfterSec = api.retryAfterSec;
+                mr.error = api.errorMessage != null && !api.errorMessage.isEmpty()
+                        ? api.errorMessage : (api.errorCode != null ? api.errorCode : "");
+            }
+            return mr;
+        }
+    }
+
     public static final class LeaderboardRow {
         public int rank = 0;
         public String uuid = "";
@@ -760,6 +873,7 @@ public final class OctiNetworkClient implements AutoCloseable {
 
     private static final class RawResponse {
         boolean transportOk = false;
+        boolean isRuntimeException = false;
         int status = 0;
         String body = "";
         String contentType = "";
@@ -811,6 +925,20 @@ public final class OctiNetworkClient implements AutoCloseable {
     private String _sessionToken = "";
     private final SseRunner _lobbyStream = new SseRunner();
     private final SseRunner _gameStream = new SseRunner();
+    private volatile OctiCrashReporter _crashReporter;
+    private volatile RuntimeException _injectedRuntimeException = null;
+
+    public void setCrashReporter(OctiCrashReporter reporter) {
+        _crashReporter = reporter;
+    }
+
+    public OctiCrashReporter getCrashReporter() {
+        return _crashReporter;
+    }
+
+    void injectRuntimeExceptionForTest(RuntimeException ex) {
+        _injectedRuntimeException = ex;
+    }
 
     public static String canonicalHost() {
         return OctiDefs.OCTI_SERVER_HOST;
@@ -2288,6 +2416,12 @@ public final class OctiNetworkClient implements AutoCloseable {
         String token = sessionToken();
 
         RawResponse r = executeSingleEndpointRequest(_host, _port, method, path, bodyBytes, token);
+        if (r.isRuntimeException || (r.transportError != null && (
+                r.transportError.startsWith("NetworkOnMainThreadException") ||
+                r.transportError.contains("NetworkOnMainThreadException") ||
+                r.transportError.startsWith("RuntimeException")))) {
+            return r;
+        }
         if (!r.transportOk && "octi.selfso.com".equals(_host) && _port == 443) {
             RawResponse fb = executeSingleEndpointRequest(
                 OctiDefs.OCTI_SERVER_FALLBACK_HOST, OctiDefs.OCTI_SERVER_FALLBACK_PORT,
@@ -2307,6 +2441,9 @@ public final class OctiNetworkClient implements AutoCloseable {
             r = new RawResponse();
             Socket rawSock = null;
             try {
+                if (_injectedRuntimeException != null) {
+                    throw _injectedRuntimeException;
+                }
                 if (targetPort == 443) {
                     rawSock = javax.net.ssl.SSLSocketFactory.getDefault().createSocket();
                 } else {
@@ -2429,6 +2566,17 @@ public final class OctiNetworkClient implements AutoCloseable {
                     } catch (IOException ignored) {
                     }
                 }
+            } catch (RuntimeException re) {
+                r.transportOk = false;
+                r.isRuntimeException = true;
+                r.transportError = re.getClass().getSimpleName() + ": " +
+                    (re.getMessage() != null ? re.getMessage() : "runtime error");
+                OctiCrashReporter reporter = _crashReporter;
+                if (reporter != null) {
+                    reporter.recordHandledException(
+                        "network_client_runtime:" + method + " " + path, re, true);
+                }
+                break;
             } catch (Exception e) {
                 r.transportOk = false;
                 r.transportError = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();

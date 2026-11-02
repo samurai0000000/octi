@@ -2313,6 +2313,95 @@ TEST(DesktopAppIntegrationTest, CenteredStartMatchPromptAndPreStartGatingForPlay
     std::filesystem::remove_all(testDir);
 }
 
+TEST(DesktopAppIntegrationTest, NonModalBoardScopedStartMatchOverlayDoesNotBlockMenuOrNavigation)
+{
+    std::string testDir = "/tmp/octi_overlay_test_" + std::to_string(QDateTime::currentMSecsSinceEpoch());
+    std::filesystem::create_directories(testDir);
+    std::string cfgFile = testDir + "/client.json";
+
+    OctiMainWindow win(nullptr, cfgFile, true);
+    win.resize(1440, 900);
+
+    // 1. Nominal: Shown window with promptStartMatchIfVisible creates a non-modal board-scoped overlay
+    win.show();
+    win.promptStartMatchIfVisible();
+    win.pumpUiEvents();
+
+    CHECK_TRUE(win.isAwaitingMatchStart());
+    CHECK_TRUE(win.startMatchOverlay() != nullptr);
+    POINTERS_EQUAL(win.boardCanvas(), win.startMatchOverlay()->parentWidget());
+    CHECK_TRUE(win.startMatchOverlay()->isEmbeddedOverlay());
+    CHECK_TRUE(win.startMatchOverlay()->isVisible());
+    CHECK_FALSE(win.startMatchOverlay()->isModal());
+    POINTERS_EQUAL(nullptr, QApplication::activeModalWidget());
+
+    // 2. Navigation & View Switch Non-Blockage
+    // Toggle theme while awaiting match start: overlay updates theme and remains visible
+    ThemeId initialTheme = win.theme();
+    win.toggleTheme();
+    win.pumpUiEvents();
+    CHECK_TRUE(win.theme() != initialTheme);
+    CHECK_TRUE(win.startMatchOverlay()->isVisible());
+    CHECK_TRUE(win.isAwaitingMatchStart());
+
+    // Rotate board clockwise: overlay re-centers over board canvas and remains visible
+    win.rotateBoardClockwise();
+    win.pumpUiEvents();
+    CHECK_TRUE(win.startMatchOverlay()->isVisible());
+    CHECK_TRUE(win.isAwaitingMatchStart());
+
+    // Switching to Online Lobby hides the overlay widget without dismissing pending match start
+    win.showLobbyView();
+    win.pumpUiEvents();
+    CHECK_FALSE(win.isBoardViewVisible());
+    CHECK_TRUE(win.isLobbyViewVisible());
+    CHECK_FALSE(win.startMatchOverlay()->isVisible());
+    CHECK_TRUE(win.isAwaitingMatchStart());
+
+    // Switching back to Tabletop Board re-shows overlay widget centered over canvas
+    win.showBoardView();
+    win.pumpUiEvents();
+    CHECK_TRUE(win.isBoardViewVisible());
+    CHECK_TRUE(win.startMatchOverlay()->isVisible());
+    CHECK_TRUE(win.isAwaitingMatchStart());
+
+    // 3. Fault Injection / Pre-Start Board Click Gating
+    // Clicks on board squares are strictly ignored while awaiting match start
+    LONGS_EQUAL(0, win.board()->getGame()->getNumMoves());
+    QPointF homeSqCenter = win.boardCanvas()->geometry().squareCenter(3, 3);
+    QPoint clickPt(static_cast<int>(homeSqCenter.x()), static_cast<int>(homeSqCenter.y()));
+    QMouseEvent pressEv(QEvent::MouseButtonPress, clickPt, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(win.boardCanvas(), &pressEv);
+    QMouseEvent releaseEv(QEvent::MouseButtonRelease, clickPt, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(win.boardCanvas(), &releaseEv);
+    win.pumpUiEvents();
+    LONGS_EQUAL(0, win.board()->getGame()->getNumMoves());
+
+    // Simulation helpers also reject prong additions while turn indicator is hidden
+    CHECK_FALSE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+    LONGS_EQUAL(0, win.board()->getGame()->getNumMoves());
+
+    // 4. Start Match Confirmation enables board play
+    CHECK_TRUE(win.startMatchOverlay()->startButton() != nullptr);
+    CHECK_TRUE(win.startMatchOverlay()->changeTypeButton() != nullptr);
+    win.startMatchOverlay()->startButton()->click();
+    win.pumpUiEvents();
+
+    CHECK_FALSE(win.isAwaitingMatchStart());
+    CHECK_FALSE(win.startMatchOverlay()->isVisible());
+    CHECK_TRUE(win.boardCanvas()->isTurnIndicatorVisible());
+
+    // Board play is now enabled
+    CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+    win.pumpUiEvents();
+    if (win.moveComposer()->isAwaitingConfirmation()) {
+        CHECK_TRUE(win.moveComposer()->commitStagedMove());
+    }
+    CHECK_TRUE(win.board()->getGame()->getNumMoves() >= 1);
+
+    std::filesystem::remove_all(testDir);
+}
+
 extern "C" const char *__lsan_default_suppressions()
 {
     return "leak:libqoffscreen.so\n";

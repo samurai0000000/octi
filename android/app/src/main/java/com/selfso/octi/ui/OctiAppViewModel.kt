@@ -262,8 +262,22 @@ class OctiAppViewModel @JvmOverloads constructor(
     private val _onboardingRequired = MutableStateFlow(false)
     val onboardingRequired: StateFlow<Boolean> = _onboardingRequired.asStateFlow()
 
+    private val _crashReporter: OctiCrashReporter = OctiCrashReporter.getInstance()
+    val crashReporter: OctiCrashReporter get() = _crashReporter
+
+    private val _profileActionBusy = MutableStateFlow(false)
+    val profileActionBusy: StateFlow<Boolean> = _profileActionBusy.asStateFlow()
+
+    private val _profileActionMessage = MutableStateFlow("")
+    val profileActionMessage: StateFlow<String> = _profileActionMessage.asStateFlow()
+
+    fun clearProfileActionMessage() {
+        _profileActionMessage.value = ""
+    }
+
     private val _currentProfile = MutableStateFlow<OctiNetworkClient.PlayerProfileInfo?>(null)
     val currentProfile: StateFlow<OctiNetworkClient.PlayerProfileInfo?> = _currentProfile.asStateFlow()
+    val onlineProfile: StateFlow<OctiNetworkClient.PlayerProfileInfo?> = _currentProfile.asStateFlow()
 
     private val _linkedIdentities =
         MutableStateFlow<List<OctiNetworkClient.LinkedIdentityInfo>>(emptyList())
@@ -313,6 +327,7 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     private val _activeRoomId = MutableStateFlow("")
     val activeRoomId: StateFlow<String> = _activeRoomId.asStateFlow()
+    val onlineGameId: StateFlow<String> = _activeRoomId.asStateFlow()
 
     private val _activeGameView = MutableStateFlow<OctiNetworkClient.GameViewData?>(null)
     val activeGameView: StateFlow<OctiNetworkClient.GameViewData?> = _activeGameView.asStateFlow()
@@ -604,6 +619,18 @@ class OctiAppViewModel @JvmOverloads constructor(
         }
     }
 
+    private fun isMainThread(): Boolean {
+        val vmName = (System.getProperty("java.vm.name") ?: "").lowercase()
+        val isAndroidVm = vmName.contains("dalvik") || vmName.contains("art")
+        if (!isAndroidVm) return false
+        return try {
+            val mainLooper = android.os.Looper.getMainLooper()
+            mainLooper != null && mainLooper.thread === Thread.currentThread()
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     fun setShowExportMovesDialog(show: Boolean) {
         _showExportMovesDialog.value = show
     }
@@ -675,6 +702,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             storageRootDir = it
         }
         OctiCrashReporter.setStorageRootDir(storageRootDir)
+        netClient.setCrashReporter(_crashReporter)
         OctiCrashReporter.updateGameContext(_matchType.value.name, livePlyCount(), board.toPositionString())
         val prefs = configStore.preferences()
         _theme.value = prefs.getTheme()
@@ -972,6 +1000,12 @@ class OctiAppViewModel @JvmOverloads constructor(
             return false
         }
         if (_matchType.value == MatchType.ONLINE_ROOM && _activeRoomId.value.isNotEmpty()) {
+            if (isMainThread()) {
+                _backgroundExecutor.submit {
+                    submitOnlineMove(notation)
+                }
+                return true
+            }
             val res = submitOnlineMove(notation)
             return res.ok
         }
@@ -1006,6 +1040,12 @@ class OctiAppViewModel @JvmOverloads constructor(
         val stagedNotation = composer.stagedMoveNotation()
         if (_matchType.value == MatchType.ONLINE_ROOM && _activeRoomId.value.isNotEmpty()) {
             composer.rollbackMove()
+            if (isMainThread()) {
+                _backgroundExecutor.submit {
+                    submitOnlineMove(stagedNotation)
+                }
+                return true
+            }
             val res = submitOnlineMove(stagedNotation)
             return res.ok
         }
@@ -1692,20 +1732,275 @@ class OctiAppViewModel @JvmOverloads constructor(
     fun completeHandleOnboarding(
         handle: String,
         displayName: String = ""
-    ): OctiNetworkClient.ApiResult<OctiNetworkClient.PlayerProfileInfo> {
-        val res = netClient.updateMyProfile(handle, "", displayName)
-        if (res.ok && res.data != null) {
-            _currentProfile.value = res.data
+    ): OctiNetworkClient.ProfileResult {
+        val trimmed = handle.trim()
+        val dName = if (displayName.isNotEmpty()) displayName else (_currentProfile.value?.displayName ?: "")
+        val apiRes = netClient.updateMyProfile(trimmed, "", dName)
+        val res = OctiNetworkClient.ProfileResult.fromApiResult(apiRes)
+        if (res.ok && res.profile != null) {
+            _currentProfile.value = res.profile
             _onboardingRequired.value = false
+            _profileActionMessage.value = ""
+            _browserAuthStatusText.value = ""
             val prefs = configStore.preferences()
-            prefs.setHandle(res.data.handle)
-            prefs.setDisplayName(res.data.displayName)
+            prefs.setHandle(res.profile.handle)
+            prefs.setDisplayName(res.profile.displayName)
             configStore.save()
-            _statusBanner.value = "Handle updated to ${res.data.handle}"
+            _statusBanner.value = "Handle updated to ${res.profile.handle}"
         } else {
+            val errRaw = res.error.lowercase()
+            val userMsg = when {
+                errRaw.contains("handle_taken") -> "Handle '@$trimmed' is already taken. Please choose another."
+                errRaw.contains("invalid_handle") -> "Handle must be 3–24 characters (letters, numbers, _ or -)."
+                else -> "Failed to save handle: ${res.error.ifEmpty { "network error" }}"
+            }
+            _profileActionMessage.value = userMsg
+            _browserAuthStatusText.value = userMsg
             _statusBanner.value = "Handle update failed: ${res.errorMessage}"
         }
         return res
+    }
+
+    fun updateMyHandle(desiredHandle: String): OctiNetworkClient.ProfileResult {
+        val handle = desiredHandle.trim()
+        if (handle.isEmpty()) {
+            val res = OctiNetworkClient.ProfileResult()
+            res.ok = false
+            res.error = "invalid_handle"
+            res.errorMessage = "Handle must be 3–24 characters (letters, numbers, _ or -)."
+            _profileActionMessage.value = res.errorMessage
+            return res
+        }
+        val currentDisplay = _currentProfile.value?.displayName ?: ""
+        val apiRes = netClient.updateMyProfile(handle, "", currentDisplay)
+        val res = OctiNetworkClient.ProfileResult.fromApiResult(apiRes)
+        if (res.ok && res.profile != null) {
+            _currentProfile.value = res.profile
+            _onboardingRequired.value = false
+            _profileActionMessage.value = "Handle updated to @${res.profile.handle}"
+            _browserAuthStatusText.value = ""
+            val prefs = configStore.preferences()
+            prefs.setHandle(res.profile.handle)
+            prefs.setDisplayName(res.profile.displayName)
+            configStore.save()
+            _statusBanner.value = "Handle updated to @${res.profile.handle}"
+        } else {
+            val errRaw = res.error.lowercase()
+            val userMsg = when {
+                errRaw.contains("handle_taken") -> "Handle '@$handle' is already taken. Please choose another."
+                errRaw.contains("invalid_handle") -> "Handle must be 3–24 characters (letters, numbers, _ or -)."
+                else -> "Failed to update handle: ${res.error.ifEmpty { "network error" }}"
+            }
+            _profileActionMessage.value = userMsg
+            _statusBanner.value = "Handle update failed: ${res.errorMessage}"
+        }
+        return res
+    }
+
+    fun interface ActionCallback<in T> {
+        fun onDone(result: T)
+    }
+
+    fun completeHandleOnboardingAsync(
+        desiredHandle: String,
+        onDone: ActionCallback<OctiNetworkClient.ProfileResult>? = null
+    ) {
+        _profileActionBusy.value = true
+        _backgroundExecutor.submit {
+            val res = completeHandleOnboarding(desiredHandle)
+            runOnUiThreadOrSync {
+                _profileActionBusy.value = false
+                onDone?.onDone(res)
+            }
+        }
+    }
+
+    fun updateMyHandleAsync(
+        desiredHandle: String,
+        onDone: ActionCallback<OctiNetworkClient.ProfileResult>? = null
+    ) {
+        _profileActionBusy.value = true
+        _backgroundExecutor.submit {
+            val res = updateMyHandle(desiredHandle)
+            runOnUiThreadOrSync {
+                _profileActionBusy.value = false
+                onDone?.onDone(res)
+            }
+        }
+    }
+
+    fun unlinkIdentityAsync(
+        provider: String,
+        onDone: ActionCallback<OctiNetworkClient.IdentityUnlinkResult>? = null
+    ) {
+        _profileActionBusy.value = true
+        _backgroundExecutor.submit {
+            val apiRes = unlinkIdentity(provider)
+            val res = OctiNetworkClient.IdentityUnlinkResult.fromApiResult(apiRes)
+            runOnUiThreadOrSync {
+                _profileActionBusy.value = false
+                onDone?.onDone(res)
+            }
+        }
+    }
+
+    fun confirmSwitchToConflictAccountAsync(onDone: ActionCallback<Boolean>? = null) {
+        _profileActionBusy.value = true
+        _backgroundExecutor.submit {
+            val res = confirmSwitchToConflictAccount()
+            runOnUiThreadOrSync {
+                _profileActionBusy.value = false
+                onDone?.onDone(res.ok)
+            }
+        }
+    }
+
+    fun logoutOnlineAsync(onDone: ActionCallback<Boolean>? = null) {
+        _profileActionBusy.value = true
+        _backgroundExecutor.submit {
+            val res = logoutOnline()
+            runOnUiThreadOrSync {
+                _profileActionBusy.value = false
+                onDone?.onDone(res.ok)
+            }
+        }
+    }
+
+    fun refreshLobbyStateAsync() {
+        _backgroundExecutor.submit {
+            refreshLobbyState()
+        }
+    }
+
+    fun sendLobbyChatAsync(text: String, onDone: ActionCallback<Boolean>? = null) {
+        _backgroundExecutor.submit {
+            val res = sendLobbyChat(text)
+            runOnUiThreadOrSync {
+                onDone?.onDone(res.ok)
+            }
+        }
+    }
+
+    fun createOnlineTableAsync(
+        req: OctiNetworkClient.CreateTableRequest,
+        onDone: ActionCallback<OctiNetworkClient.TableActionResult>? = null
+    ) {
+        _backgroundExecutor.submit {
+            val apiRes = createOnlineTable(req)
+            val res = OctiNetworkClient.TableActionResult.fromApiResult(apiRes, apiRes.data?.roomId ?: "")
+            runOnUiThreadOrSync {
+                onDone?.onDone(res)
+            }
+        }
+    }
+
+    @JvmOverloads
+    fun createOnlineTableAsync(
+        modeStr: String,
+        timeControl: String = "15+10",
+        rated: Boolean = true,
+        allowSpectators: Boolean = true,
+        botDifficulty: String = "",
+        onDone: ActionCallback<OctiNetworkClient.TableActionResult>? = null
+    ) {
+        val req = OctiNetworkClient.CreateTableRequest().apply {
+            this.mode = modeStr
+            this.rated = rated
+            this.observerPolicy = if (allowSpectators) "OPEN" else "NONE"
+        }
+        createOnlineTableAsync(req, onDone)
+    }
+
+    @JvmOverloads
+    fun joinOnlineTableAsync(
+        tableId: String,
+        preferredSeat: Int = -1,
+        passcode: String = "",
+        onDone: ActionCallback<OctiNetworkClient.TableActionResult>? = null
+    ) {
+        _backgroundExecutor.submit {
+            val apiRes = joinOnlineTable(tableId, preferredSeat, passcode)
+            val res = OctiNetworkClient.TableActionResult.fromApiResult(apiRes, tableId)
+            runOnUiThreadOrSync {
+                onDone?.onDone(res)
+            }
+        }
+    }
+
+    @JvmOverloads
+    fun observeOnlineTableAsync(
+        tableId: String,
+        passcode: String = "",
+        onDone: ActionCallback<OctiNetworkClient.TableActionResult>? = null
+    ) {
+        _backgroundExecutor.submit {
+            val apiRes = observeOnlineTable(tableId, passcode)
+            val res = OctiNetworkClient.TableActionResult.fromApiResult(apiRes, tableId)
+            runOnUiThreadOrSync {
+                onDone?.onDone(res)
+            }
+        }
+    }
+
+    fun enqueueMatchmakingAsync(
+        req: OctiNetworkClient.MatchmakingRequest,
+        onDone: ActionCallback<OctiNetworkClient.MatchmakingStatusResult>? = null
+    ) {
+        _backgroundExecutor.submit {
+            val apiRes = enqueueMatchmaking(req)
+            val statusRes = pollMatchmakingStatus()
+            val res = OctiNetworkClient.MatchmakingStatusResult.fromApiResult(statusRes)
+            if (!apiRes.ok) {
+                res.ok = false
+                res.error = apiRes.errorMessage
+            }
+            runOnUiThreadOrSync {
+                onDone?.onDone(res)
+            }
+        }
+    }
+
+    fun dequeueMatchmakingAsync(onDone: ActionCallback<Boolean>? = null) {
+        _backgroundExecutor.submit {
+            val res = dequeueMatchmaking()
+            runOnUiThreadOrSync {
+                onDone?.onDone(res.ok)
+            }
+        }
+    }
+
+    @JvmOverloads
+    fun refreshLeaderboardAsync(
+        mode: String = "2P",
+        limit: Int = 50
+    ) {
+        _backgroundExecutor.submit {
+            refreshLeaderboard(mode, limit)
+        }
+    }
+
+    @JvmOverloads
+    fun refreshArchivedGamesAsync(
+        mode: String = "",
+        playerId: String = "",
+        limit: Int = 20,
+        offset: Int = 0
+    ) {
+        _backgroundExecutor.submit {
+            refreshArchivedGames(mode, playerId, limit, offset)
+        }
+    }
+
+    fun openArchivedGameForReplayAsync(
+        gameId: String,
+        onDone: ActionCallback<Boolean>? = null
+    ) {
+        _backgroundExecutor.submit {
+            val ok = openArchivedGameForReplay(gameId)
+            runOnUiThreadOrSync {
+                onDone?.onDone(ok)
+            }
+        }
     }
 
     fun linkIdentity(

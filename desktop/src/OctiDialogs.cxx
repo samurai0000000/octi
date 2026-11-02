@@ -5310,11 +5310,15 @@ OctiTelemetrySettingsDialog::~OctiTelemetrySettingsDialog() = default;
 
 OctiStartMatchDialog::OctiStartMatchDialog(const LocalGameConfig &cfg,
                                            ThemeId theme,
-                                           QWidget *parent)
+                                           QWidget *parent,
+                                           bool embeddedOverlay)
     : QDialog(parent)
     , _config(cfg)
     , _theme(theme)
     , _changeTypeRequested(false)
+    , _embeddedOverlay(embeddedOverlay)
+    , _onStartMatchCallback(nullptr)
+    , _onChangeTypeCallback(nullptr)
     , _configLabel(nullptr)
     , _changeTypeBtn(nullptr)
     , _startBtn(nullptr)
@@ -5325,10 +5329,14 @@ OctiStartMatchDialog::OctiStartMatchDialog(const LocalGameConfig &cfg,
 OctiStartMatchDialog::OctiStartMatchDialog(OctiPlayer humanSeat,
                                            bool vsBot,
                                            ThemeId theme,
-                                           QWidget *parent)
+                                           QWidget *parent,
+                                           bool embeddedOverlay)
     : QDialog(parent)
     , _theme(theme)
     , _changeTypeRequested(false)
+    , _embeddedOverlay(embeddedOverlay)
+    , _onStartMatchCallback(nullptr)
+    , _onChangeTypeCallback(nullptr)
     , _configLabel(nullptr)
     , _changeTypeBtn(nullptr)
     , _startBtn(nullptr)
@@ -5402,13 +5410,27 @@ QString OctiStartMatchDialog::configSummaryText() const
 void OctiStartMatchDialog::triggerChangeType()
 {
     _changeTypeRequested = true;
-    accept();
+    if (_embeddedOverlay) {
+        if (_onChangeTypeCallback) {
+            _onChangeTypeCallback();
+        }
+    } else {
+        accept();
+        if (_onChangeTypeCallback) {
+            _onChangeTypeCallback();
+        }
+    }
 }
 
 void OctiStartMatchDialog::initUi()
 {
-    setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    setModal(true);
+    if (_embeddedOverlay) {
+        setWindowFlags(Qt::Widget);
+        setModal(false);
+    } else {
+        setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+        setModal(true);
+    }
     setAttribute(Qt::WA_TranslucentBackground, false);
     setAutoFillBackground(true);
 
@@ -5475,7 +5497,17 @@ void OctiStartMatchDialog::initUi()
                        "}"));
     connect(_startBtn, &QPushButton::clicked, this, [this]() {
         _changeTypeRequested = false;
-        accept();
+        if (_embeddedOverlay) {
+            hide();
+            if (_onStartMatchCallback) {
+                _onStartMatchCallback();
+            }
+        } else {
+            accept();
+            if (_onStartMatchCallback) {
+                _onStartMatchCallback();
+            }
+        }
     });
     btnRow->addWidget(_startBtn);
 
@@ -5522,6 +5554,15 @@ QImage OctiStartMatchDialog::renderToImage(int width, int height)
 
 void OctiStartMatchDialog::positionCenterOfBoard(QWidget *mainWin, QWidget *boardCanvas)
 {
+    if (_embeddedOverlay) {
+        QWidget *p = boardCanvas ? boardCanvas : parentWidget();
+        if (p) {
+            int cx = std::max(0, (p->width() - width()) / 2);
+            int cy = std::max(0, (p->height() - height()) / 2);
+            move(cx, cy);
+            return;
+        }
+    }
     if (boardCanvas && boardCanvas->isVisible()) {
         QPoint cPos = boardCanvas->mapToGlobal(QPoint(0, 0));
         int cx = cPos.x() + boardCanvas->width() / 2;
@@ -5535,6 +5576,25 @@ void OctiStartMatchDialog::positionCenterOfBoard(QWidget *mainWin, QWidget *boar
     }
 }
 
+void OctiStartMatchDialog::updateConfigAndTheme(const LocalGameConfig &cfg, ThemeId theme)
+{
+    _config = cfg;
+    _theme = theme;
+    if (_configLabel) {
+        _configLabel->setText(formatConfigSummary(_config));
+    }
+    const OctiPalette &pal = paletteForTheme(_theme);
+    setStyleSheet(
+        QString("QDialog {"
+                "  background-color: %1;"
+                "  border: 2px solid %2;"
+                "  border-radius: 12px;"
+                "}")
+            .arg(pal.panelCardBg.name())
+            .arg(pal.accentBrass.name()));
+    update();
+}
+
 void OctiStartMatchDialog::keyPressEvent(QKeyEvent *event)
 {
     if (event && (event->key() == Qt::Key_Escape ||
@@ -5542,7 +5602,17 @@ void OctiStartMatchDialog::keyPressEvent(QKeyEvent *event)
                   event->key() == Qt::Key_Enter ||
                   event->key() == Qt::Key_Space)) {
         _changeTypeRequested = false;
-        accept();
+        if (_embeddedOverlay) {
+            hide();
+            if (_onStartMatchCallback) {
+                _onStartMatchCallback();
+            }
+        } else {
+            accept();
+            if (_onStartMatchCallback) {
+                _onStartMatchCallback();
+            }
+        }
         return;
     }
     QDialog::keyPressEvent(event);
@@ -5551,7 +5621,17 @@ void OctiStartMatchDialog::keyPressEvent(QKeyEvent *event)
 void OctiStartMatchDialog::reject()
 {
     _changeTypeRequested = false;
-    accept();
+    if (_embeddedOverlay) {
+        hide();
+        if (_onStartMatchCallback) {
+            _onStartMatchCallback();
+        }
+    } else {
+        accept();
+        if (_onStartMatchCallback) {
+            _onStartMatchCallback();
+        }
+    }
 }
 
 } // namespace octi

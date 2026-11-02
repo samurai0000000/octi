@@ -36,7 +36,13 @@ public final class OctiCrashReporter {
     private static int s_gamePlyCount = 0;
     private static String s_gameFen = "";
 
-    private OctiCrashReporter() {
+    private static final OctiCrashReporter s_instance = new OctiCrashReporter();
+
+    public OctiCrashReporter() {
+    }
+
+    public static OctiCrashReporter getInstance() {
+        return s_instance;
     }
 
     public static void setStorageRootDir(File dir) {
@@ -201,6 +207,22 @@ public final class OctiCrashReporter {
 
     public static File recordHandledException(String threadName, Throwable throwable, String installId) {
         return recordHandledException(getStorageRootDir(), threadName, throwable, s_appVersion, installId);
+    }
+
+    public static File recordHandledException(String threadName, Throwable throwable) {
+        return recordHandledException(getStorageRootDir(), threadName, throwable, s_appVersion, s_installId);
+    }
+
+    public File recordHandledException(String threadName, Throwable throwable, boolean upload) {
+        return recordHandledException(getStorageRootDir(), threadName, throwable, s_appVersion, s_installId);
+    }
+
+    public int getPendingCount() {
+        return listPendingCrashFiles(getStorageRootDir()).size();
+    }
+
+    public static int getPendingCrashCount() {
+        return listPendingCrashFiles(getStorageRootDir()).size();
     }
 
     public static File recordHandledException(

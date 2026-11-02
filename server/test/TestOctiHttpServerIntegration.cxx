@@ -4259,6 +4259,63 @@ TEST(ServerFoundationHttpTest, SubprocessRestartPreservesOngoingGameAndSseStream
     std::filesystem::remove_all(dir, ec);
 }
 
+TEST(OctiHttpServerIntegrationTest, WebAuthAndIdentitiesManagement)
+{
+    /* 1. GET / serves Web UI with async function loadHealth() and handleAuthHash() */
+    Reply rRoot = http().get("/");
+    EXPECT_STATUS(200, rRoot);
+    CHECK_TRUE(rRoot.body.find("async function loadHealth()") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("handleAuthHash()") != std::string::npos);
+
+    /* 2. Unauthenticated GET /api/v1/auth/identities returns 401 */
+    Reply rUnauth = http().get("/api/v1/auth/identities");
+    EXPECT_ERROR(401, "UNAUTHORIZED", rUnauth);
+
+    /* 3. Authenticated GET /api/v1/auth/identities returns 200 with identities array */
+    User a = signIn("google", "sub-webauth-a", "Alice WebAuth");
+    Reply rAuth = http().get("/api/v1/auth/identities", a.token);
+    EXPECT_STATUS(200, rAuth);
+    CHECK_TRUE(rAuth.json.value("ok", false));
+    CHECK_TRUE(rAuth.json.contains("identities"));
+    CHECK_TRUE(rAuth.json["identities"].is_array());
+    CHECK_EQUAL(1, static_cast<int>(rAuth.json["identities"].size()));
+    STRCMP_EQUAL("google", rAuth.json["identities"][0].value("provider", "").c_str());
+    CHECK_TRUE(rAuth.json["identities"][0].contains("provider_email"));
+    CHECK_TRUE(rAuth.json["identities"][0].contains("email"));
+
+    /* 4. DELETE /api/v1/auth/identities/google blocks unlinking sole remaining identity (409) */
+    Reply rUnlinkLast = http().del("/api/v1/auth/identities/google", a.token);
+    EXPECT_STATUS(409, rUnlinkLast);
+    STRCMP_EQUAL("cannot_unlink_last_identity",
+                 rUnlinkLast.json.value("error", "").c_str());
+
+    /* 5. Link a second identity */
+    Reply rLink = http().post("/api/v1/auth/link", a.token,
+                             Json{{"provider", "line"},
+                                  {"id_token", makeToken("line", "sub-line-webauth",
+                                                         "Alice Line")}});
+    EXPECT_STATUS(200, rLink);
+
+    Reply rAuth2 = http().get("/api/v1/auth/identities", a.token);
+    EXPECT_STATUS(200, rAuth2);
+    CHECK_EQUAL(2, static_cast<int>(rAuth2.json["identities"].size()));
+
+    /* 6. Unlinking succeeds when second identity exists (200) */
+    Reply rUnlink = http().del("/api/v1/auth/identities/google", a.token);
+    EXPECT_STATUS(200, rUnlink);
+    CHECK_TRUE(rUnlink.json.value("ok", false));
+    STRCMP_EQUAL("unlinked", rUnlink.json.value("status", "").c_str());
+    CHECK_EQUAL(1, static_cast<int>(rUnlink.json["linked_identities"].size()));
+    STRCMP_EQUAL("line",
+                 rUnlink.json["linked_identities"][0].value("provider", "").c_str());
+
+    /* 7. Unlinking remaining identity fails again with 409 */
+    Reply rUnlinkLast2 = http().del("/api/v1/auth/identities/line", a.token);
+    EXPECT_STATUS(409, rUnlinkLast2);
+    STRCMP_EQUAL("cannot_unlink_last_identity",
+                 rUnlinkLast2.json.value("error", "").c_str());
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

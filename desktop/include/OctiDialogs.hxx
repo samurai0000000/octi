@@ -967,11 +967,13 @@ class OctiStartMatchDialog : public QDialog {
 public:
     explicit OctiStartMatchDialog(const LocalGameConfig &cfg,
                                   ThemeId theme = ThemeId::OBSIDIAN_BRASS,
-                                  QWidget *parent = nullptr);
+                                  QWidget *parent = nullptr,
+                                  bool embeddedOverlay = false);
     explicit OctiStartMatchDialog(OctiPlayer humanSeat = PLAYER_A,
                                   bool vsBot = true,
                                   ThemeId theme = ThemeId::OBSIDIAN_BRASS,
-                                  QWidget *parent = nullptr);
+                                  QWidget *parent = nullptr,
+                                  bool embeddedOverlay = false);
     ~OctiStartMatchDialog() override;
 
     static QString formatConfigSummary(const LocalGameConfig &cfg);
@@ -979,6 +981,13 @@ public:
     bool changeTypeRequested() const { return _changeTypeRequested; }
     void triggerChangeType();
     QImage renderToImage(int width = 320, int height = 195);
+
+    bool isEmbeddedOverlay() const { return _embeddedOverlay; }
+    void updateConfigAndTheme(const LocalGameConfig &cfg, ThemeId theme);
+    void setOnStartMatchCallback(std::function<void()> cb) { _onStartMatchCallback = std::move(cb); }
+    void setOnChangeTypeCallback(std::function<void()> cb) { _onChangeTypeCallback = std::move(cb); }
+    QPushButton *startButton() const { return _startBtn; }
+    QPushButton *changeTypeButton() const { return _changeTypeBtn; }
 
     void positionCenterOfBoard(QWidget *mainWin, QWidget *boardCanvas = nullptr);
     void reject() override;
@@ -992,6 +1001,9 @@ private:
     LocalGameConfig _config;
     ThemeId _theme;
     bool _changeTypeRequested;
+    bool _embeddedOverlay = false;
+    std::function<void()> _onStartMatchCallback;
+    std::function<void()> _onChangeTypeCallback;
     QLabel *_configLabel;
     QPushButton *_changeTypeBtn;
     QPushButton *_startBtn;

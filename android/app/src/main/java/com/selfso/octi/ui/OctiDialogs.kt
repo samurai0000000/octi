@@ -353,6 +353,8 @@ fun SsoSignInDialog(
     val currentProfile by viewModel.currentProfile.collectAsState()
     val isBrowserAuthInProgress by viewModel.isBrowserAuthInProgress.collectAsState()
     val browserAuthStatusText by viewModel.browserAuthStatusText.collectAsState()
+    val profileActionBusy by viewModel.profileActionBusy.collectAsState()
+    val profileActionMessage by viewModel.profileActionMessage.collectAsState()
     var desiredHandle by remember(currentProfile?.handle) {
         mutableStateOf(currentProfile?.handle ?: "")
     }
@@ -360,6 +362,7 @@ fun SsoSignInDialog(
     AlertDialog(
         onDismissRequest = {
             viewModel.cancelBrowserAuth()
+            viewModel.clearProfileActionMessage()
             onDismiss()
         },
         containerColor = OctiTheme.colors.panelCardBg,
@@ -389,6 +392,17 @@ fun SsoSignInDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    val statusText = profileActionMessage.ifEmpty { browserAuthStatusText }
+                    if (statusText.isNotEmpty()) {
+                        Text(
+                            text = statusText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (statusText.contains("already taken") ||
+                                statusText.contains("must be") ||
+                                statusText.contains("Failed")
+                            ) OctiTheme.colors.legalCapture else OctiTheme.colors.textSecondary
+                        )
+                    }
                 } else {
                     Text(
                         text = "Sign in to play online, chat with players, and track your rating.",
@@ -435,17 +449,20 @@ fun SsoSignInDialog(
             if (onboardingRequired) {
                 Button(
                     onClick = {
-                        val res = viewModel.completeHandleOnboarding(desiredHandle.trim())
-                        if (res.ok) {
-                            onDismiss()
+                        viewModel.completeHandleOnboardingAsync(desiredHandle.trim()) { res ->
+                            if (res.ok) {
+                                viewModel.clearProfileActionMessage()
+                                onDismiss()
+                            }
                         }
                     },
+                    enabled = !profileActionBusy && desiredHandle.trim().length >= 3,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = OctiTheme.colors.accentBrass,
                         contentColor = OctiTheme.colors.windowBg
                     )
                 ) {
-                    Text("Continue")
+                    Text(if (profileActionBusy) "Saving..." else "Continue")
                 }
             }
         },
@@ -453,6 +470,7 @@ fun SsoSignInDialog(
             OutlinedButton(
                 onClick = {
                     viewModel.cancelBrowserAuth()
+                    viewModel.clearProfileActionMessage()
                     onDismiss()
                 }
             ) {
@@ -475,10 +493,15 @@ fun AccountIdentitiesDialog(
     val conflictProfile by viewModel.linkConflictProfile.collectAsState()
     val isBrowserAuthInProgress by viewModel.isBrowserAuthInProgress.collectAsState()
     val browserAuthStatusText by viewModel.browserAuthStatusText.collectAsState()
+    val profileActionBusy by viewModel.profileActionBusy.collectAsState()
+    val profileActionMessage by viewModel.profileActionMessage.collectAsState()
+    var editableHandle by remember(profile?.handle) { mutableStateOf(profile?.handle ?: "") }
+    var statusMessage by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = {
             viewModel.cancelBrowserAuth()
+            viewModel.clearProfileActionMessage()
             onDismiss()
         },
         containerColor = OctiTheme.colors.panelCardBg,
@@ -494,6 +517,45 @@ fun AccountIdentitiesDialog(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = editableHandle,
+                            onValueChange = { editableHandle = it },
+                            label = { Text("Player Handle") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Button(
+                            onClick = {
+                                viewModel.updateMyHandleAsync(editableHandle.trim()) { res ->
+                                    if (res.ok && res.profile != null) {
+                                        editableHandle = res.profile.handle
+                                    }
+                                }
+                            },
+                            enabled = !profileActionBusy &&
+                                    editableHandle.trim().length >= 3 &&
+                                    editableHandle.trim() != p.handle,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = OctiTheme.colors.accentBrass,
+                                contentColor = OctiTheme.colors.windowBg
+                            )
+                        ) {
+                            Text(if (profileActionBusy) "Saving..." else "Save Handle")
+                        }
+                    }
+                    if (profileActionMessage.isNotEmpty()) {
+                        Text(
+                            text = profileActionMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (profileActionMessage.startsWith("Handle updated"))
+                                OctiTheme.colors.accentBrass else OctiTheme.colors.legalCapture
+                        )
+                    }
                     Text(
                         text = "Rating — 2P: ${p.elo2p}  •  4P: ${p.elo4p}  •  OFK: ${p.eloOfk}",
                         style = MaterialTheme.typography.bodyMedium,
@@ -519,8 +581,12 @@ fun AccountIdentitiesDialog(
                                 modifier = Modifier.weight(1f)
                             )
                             OutlinedButton(
-                                onClick = { viewModel.unlinkIdentity(linked.provider) },
-                                enabled = identities.size > 1
+                                onClick = {
+                                    viewModel.unlinkIdentityAsync(linked.provider) { res ->
+                                        statusMessage = if (res.ok) "Unlinked $provLabel." else "Cannot unlink: ${res.error}"
+                                    }
+                                },
+                                enabled = !profileActionBusy && identities.size > 1
                             ) {
                                 Text("Disconnect")
                             }
@@ -560,6 +626,14 @@ fun AccountIdentitiesDialog(
                     )
                 }
 
+                if (statusMessage.isNotEmpty()) {
+                    Text(
+                        text = statusMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = OctiTheme.colors.textSecondary
+                    )
+                }
+
                 if (conflictProfile != null) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
@@ -573,7 +647,12 @@ fun AccountIdentitiesDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
-                            onClick = { viewModel.confirmSwitchToConflictAccount() },
+                            onClick = {
+                                viewModel.confirmSwitchToConflictAccountAsync { ok ->
+                                    statusMessage = if (ok) "Switched to existing account." else "Account switch failed."
+                                }
+                            },
+                            enabled = !profileActionBusy,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = OctiTheme.colors.accentBrass,
                                 contentColor = OctiTheme.colors.windowBg
@@ -600,9 +679,11 @@ fun AccountIdentitiesDialog(
         confirmButton = {
             OutlinedButton(
                 onClick = {
-                    viewModel.logoutOnline()
-                    onDismiss()
-                }
+                    viewModel.logoutOnlineAsync {
+                        onDismiss()
+                    }
+                },
+                enabled = !profileActionBusy
             ) {
                 Text("Sign Out")
             }
@@ -611,6 +692,7 @@ fun AccountIdentitiesDialog(
             OutlinedButton(
                 onClick = {
                     viewModel.cancelBrowserAuth()
+                    viewModel.clearProfileActionMessage()
                     onDismiss()
                 }
             ) {
@@ -633,6 +715,7 @@ fun CreateTableDialog(
     var rated by remember { mutableStateOf(true) }
     var allowTakeback by remember { mutableStateOf(false) }
     var passcode by remember { mutableStateOf("") }
+    val profileActionBusy by viewModel.profileActionBusy.collectAsState()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -691,17 +774,19 @@ fun CreateTableDialog(
                         this.allowTakeback = allowTakeback
                         this.passcode = passcode.trim()
                     }
-                    val res = viewModel.createOnlineTable(req)
-                    if (res.ok) {
-                        onDismiss()
+                    viewModel.createOnlineTableAsync(req) { res ->
+                        if (res.ok) {
+                            onDismiss()
+                        }
                     }
                 },
+                enabled = !profileActionBusy,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = OctiTheme.colors.accentBrass,
                     contentColor = OctiTheme.colors.windowBg
                 )
             ) {
-                Text("Create Table")
+                Text(if (profileActionBusy) "Creating..." else "Create Table")
             }
         },
         dismissButton = {
