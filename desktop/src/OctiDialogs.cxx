@@ -601,10 +601,10 @@ AccountLinkDialog::AccountLinkDialog(OctiNetworkClient *netClient,
         }
     });
     QObject::connect(_clearAvatarBtn, &QPushButton::clicked, [this]() {
-        clearPendingAvatar();
+        clearPendingAvatar(true);
     });
     QObject::connect(_saveProfileBtn, &QPushButton::clicked, [this]() {
-        saveProfile();
+        saveProfile(true);
     });
 
     root->addWidget(profileGroup);
@@ -711,7 +711,7 @@ AccountLinkDialog::AccountLinkDialog(OctiNetworkClient *netClient,
 
     QPushButton *closeBtn = new QPushButton("Done", this);
     QObject::connect(closeBtn, &QPushButton::clicked, [this]() {
-        accept();
+        tryCloseWithConfirmation(true);
     });
     root->addWidget(closeBtn);
 
@@ -913,8 +913,88 @@ bool AccountLinkDialog::selectAvatarFromImage(const QImage &img)
     return true;
 }
 
-void AccountLinkDialog::clearPendingAvatar()
+void AccountLinkDialog::setConfirmPromptHandler(
+    std::function<bool(const QString &title, const QString &message)> handler)
 {
+    _confirmPromptHandler = std::move(handler);
+}
+
+bool AccountLinkDialog::requestConfirmation(const QString &title,
+                                            const QString &message,
+                                            bool defaultAccept)
+{
+    ++_confirmationPromptCount;
+    _lastConfirmationTitle = title;
+    _lastConfirmationMessage = message;
+    if (_confirmPromptHandler) {
+        return _confirmPromptHandler(title, message);
+    }
+    if (isVisible()) {
+        QMessageBox::StandardButton defBtn =
+            defaultAccept ? QMessageBox::Yes : QMessageBox::No;
+        return QMessageBox::question(
+                   this,
+                   title,
+                   message,
+                   QMessageBox::Yes | QMessageBox::No,
+                   defBtn) == QMessageBox::Yes;
+    }
+    return true;
+}
+
+bool AccountLinkDialog::hasUnsavedProfileChanges() const
+{
+    if (_avatarCleared || !_pendingAvatarDataUri.empty()) {
+        return true;
+    }
+    if (_handleEdit &&
+        _handleEdit->text().trimmed().toStdString() != _currentProfile.handle) {
+        return true;
+    }
+    if (_displayNameEdit &&
+        _displayNameEdit->text().trimmed().toStdString() != _currentProfile.displayName) {
+        return true;
+    }
+    if (_locationEdit &&
+        _locationEdit->text().trimmed().toStdString() != _currentProfile.location) {
+        return true;
+    }
+    if (_bioEdit &&
+        _bioEdit->toPlainText().trimmed().toStdString() != _currentProfile.bio) {
+        return true;
+    }
+    return false;
+}
+
+bool AccountLinkDialog::tryCloseWithConfirmation(bool confirmInteractive)
+{
+    if ((confirmInteractive || isVisible()) && hasUnsavedProfileChanges()) {
+        if (!requestConfirmation(
+                QStringLiteral("Unsaved Profile Changes"),
+                QStringLiteral("You have unsaved profile changes. Discard changes and close?"),
+                false)) {
+            return false;
+        }
+    }
+    accept();
+    return true;
+}
+
+bool AccountLinkDialog::clearPendingAvatar(bool confirmInteractive)
+{
+    if (confirmInteractive || isVisible()) {
+        if (!requestConfirmation(
+                QStringLiteral("Clear Avatar?"),
+                QStringLiteral("Are you sure you want to clear your profile avatar?\n"
+                               "(You will still need to save your profile to apply.)"),
+                false)) {
+            if (_profileStatusLabel) {
+                _profileStatusLabel->setText("Clear avatar cancelled.");
+                _profileStatusLabel->setStyleSheet("");
+            }
+            return false;
+        }
+    }
     _avatarCleared = true;
     _pendingAvatarDataUri.clear();
     _currentAvatarImage = QImage();
@@ -923,9 +1003,10 @@ void AccountLinkDialog::clearPendingAvatar()
         _profileStatusLabel->setText("Avatar cleared. Click Save Profile to apply.");
         _profileStatusLabel->setStyleSheet("");
     }
+    return true;
 }
 
-ApiResult<PlayerProfileInfo> AccountLinkDialog::saveProfile()
+ApiResult<PlayerProfileInfo> AccountLinkDialog::saveProfile(bool confirmInteractive)
 {
     ApiResult<PlayerProfileInfo> res;
     if (!_netClient) {
@@ -956,6 +1037,22 @@ ApiResult<PlayerProfileInfo> AccountLinkDialog::saveProfile()
                 _errorBannerLabel->setText(QString::fromStdString(res.errorMessage));
                 _errorBannerLabel->setStyleSheet("color: #ef4444;");
                 _errorBannerLabel->setVisible(true);
+            }
+            return res;
+        }
+    }
+
+    if (confirmInteractive || isVisible()) {
+        if (!requestConfirmation(
+                QStringLiteral("Apply Profile Settings?"),
+                QStringLiteral("Are you sure you want to apply and save these changes to your profile?"),
+                true)) {
+            res.ok = false;
+            res.errorCode = "CANCELLED";
+            res.errorMessage = "Profile update cancelled by user.";
+            if (_profileStatusLabel) {
+                _profileStatusLabel->setText("Profile save cancelled.");
+                _profileStatusLabel->setStyleSheet("");
             }
             return res;
         }

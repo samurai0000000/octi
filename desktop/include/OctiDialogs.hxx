@@ -181,8 +181,16 @@ public:
 
     void updateCurrentAvatarPreview();
     bool selectAvatarFromImage(const QImage &img);
-    void clearPendingAvatar();
-    ApiResult<PlayerProfileInfo> saveProfile();
+    bool clearPendingAvatar(bool confirmInteractive = false);
+    ApiResult<PlayerProfileInfo> saveProfile(bool confirmInteractive = false);
+    bool hasUnsavedProfileChanges() const;
+    bool tryCloseWithConfirmation(bool confirmInteractive = false);
+
+    void setConfirmPromptHandler(
+        std::function<bool(const QString &title, const QString &message)> handler);
+    int confirmationPromptCount() const { return _confirmationPromptCount; }
+    QString lastConfirmationTitle() const { return _lastConfirmationTitle; }
+    QString lastConfirmationMessage() const { return _lastConfirmationMessage; }
 
     QLineEdit *handleEdit() const { return _handleEdit; }
     QLineEdit *displayNameEdit() const { return _displayNameEdit; }
@@ -241,6 +249,9 @@ public:
 
 private:
     void rebuildIdentitiesTable();
+    bool requestConfirmation(const QString &title,
+                             const QString &message,
+                             bool defaultAccept);
 
     OctiNetworkClient *_netClient;
     ClientConfigStore *_configStore;
@@ -282,7 +293,13 @@ private:
     bool _conflictIsAccessToken;
     PlayerProfileInfo _conflictProfile;
     std::function<void(const PlayerProfileInfo &)> _onAccountSwitchedCallback;
+    std::function<bool(const QString &title, const QString &message)>
+        _confirmPromptHandler;
+    int _confirmationPromptCount = 0;
+    QString _lastConfirmationTitle;
+    QString _lastConfirmationMessage;
 };
+using AccountDialog = AccountLinkDialog;
 
 /*
  * 3. CreateTableDialog & PasscodeDialog

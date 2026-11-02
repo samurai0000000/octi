@@ -6,9 +6,13 @@
 
 #include <nlohmann/json.hpp>
 #include <QAbstractItemView>
+#include <QDate>
+#include <QDateTime>
+#include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QTimeZone>
 #include <QVBoxLayout>
 #include "LobbyView.hxx"
 
@@ -16,27 +20,109 @@ namespace octi {
 
 using Json = nlohmann::json;
 
+namespace {
+
+QString seatLetterForIndex(int seat)
+{
+    switch (seat) {
+    case 1:
+        return "A";
+    case 2:
+        return "B";
+    case 3:
+        return "C";
+    case 4:
+        return "D";
+    default:
+        return QString::number(seat);
+    }
+}
+
+QString formatHandleWithAt(const std::string &rawHandle)
+{
+    if (rawHandle.empty()) {
+        return "@Player";
+    }
+    QString h = QString::fromStdString(rawHandle);
+    if (!h.startsWith("@")) {
+        h.prepend("@");
+    }
+    return h;
+}
+
+const TableSeatInfo *findSeatInfo(const TableSummaryInfo &table, int seatNum)
+{
+    for (std::size_t i = 0; i < table.seats.size(); ++i) {
+        if (table.seats[i].seat == seatNum) {
+            return &table.seats[i];
+        }
+    }
+    return nullptr;
+}
+
+} // namespace
+
 LobbyView::LobbyView(OctiNetworkClient *netClient,
                      ThemeId theme,
                      QWidget *parent)
     : QWidget(parent),
       _netClient(netClient),
       _theme(theme),
+      _myTableBanner(nullptr),
+      _myTableBannerLabel(nullptr),
+      _myTableSeatsLabel(nullptr),
+      _openActiveBoardBtn(nullptr),
+      _leaveActiveTableBtn(nullptr),
       _playersTable(nullptr),
       _tablesTable(nullptr),
+      _inspectorBox(nullptr),
+      _inspectorTitleLabel(nullptr),
+      _inspectorSeatsLabel(nullptr),
       _chatTranscript(nullptr),
       _chatInput(nullptr),
       _sendChatBtn(nullptr),
       _createTableBtn(nullptr),
       _joinSelectedBtn(nullptr),
+      _leaveTableBtn(nullptr),
       _observeSelectedBtn(nullptr),
       _matchmakingBtn(nullptr),
       _refreshBtn(nullptr),
       _statusLabel(nullptr)
 {
-    QHBoxLayout *root = new QHBoxLayout(this);
+    QVBoxLayout *outerLayout = new QVBoxLayout(this);
+    outerLayout->setSpacing(10);
+    outerLayout->setContentsMargins(14, 14, 14, 14);
+
+    /* Top Banner: My Active Table */
+    _myTableBanner = new QFrame(this);
+    _myTableBanner->setFrameShape(QFrame::StyledPanel);
+    _myTableBanner->setStyleSheet(
+        "QFrame { background: rgba(212, 168, 83, 0.14); "
+        "border: 1px solid rgba(212, 168, 83, 0.55); border-radius: 6px; }");
+    QHBoxLayout *bannerLayout = new QHBoxLayout(_myTableBanner);
+    bannerLayout->setContentsMargins(12, 8, 12, 8);
+    bannerLayout->setSpacing(12);
+
+    QVBoxLayout *bannerTextCol = new QVBoxLayout();
+    bannerTextCol->setSpacing(2);
+    _myTableBannerLabel = new QLabel("My Active Table", _myTableBanner);
+    _myTableBannerLabel->setStyleSheet("font-weight: 700; border: none; background: transparent;");
+    _myTableSeatsLabel = new QLabel("", _myTableBanner);
+    _myTableSeatsLabel->setStyleSheet("border: none; background: transparent;");
+    bannerTextCol->addWidget(_myTableBannerLabel);
+    bannerTextCol->addWidget(_myTableSeatsLabel);
+    bannerLayout->addLayout(bannerTextCol, 1);
+
+    _openActiveBoardBtn = new QPushButton("Open Board", _myTableBanner);
+    _leaveActiveTableBtn = new QPushButton("Leave Table", _myTableBanner);
+    bannerLayout->addWidget(_openActiveBoardBtn);
+    bannerLayout->addWidget(_leaveActiveTableBtn);
+    _myTableBanner->setVisible(false);
+    outerLayout->addWidget(_myTableBanner);
+
+    QHBoxLayout *root = new QHBoxLayout();
     root->setSpacing(14);
-    root->setContentsMargins(14, 14, 14, 14);
+    outerLayout->addLayout(root, 1);
 
     /* Left Column: Online Players Roster */
     QGroupBox *playersBox = new QGroupBox("Online Players Roster", this);
@@ -52,20 +138,20 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     playersBox->setMaximumWidth(340);
     root->addWidget(playersBox, 1);
 
-    /* Center Column: Active Game Tables */
+    /* Center Column: Active Game Tables + Table Seats & Details Inspector */
     QGroupBox *tablesBox = new QGroupBox("Active Game Tables", this);
     QVBoxLayout *tLayout = new QVBoxLayout(tablesBox);
 
     QHBoxLayout *toolbar = new QHBoxLayout();
-    _createTableBtn = new QPushButton("Create Table", tablesBox);
-    _joinSelectedBtn = new QPushButton("Join Selected", tablesBox);
-    _observeSelectedBtn = new QPushButton("Observe Selected", tablesBox);
-    _matchmakingBtn = new QPushButton("Quick Matchmaking", tablesBox);
+    _createTableBtn = new QPushButton("+ Create Table", tablesBox);
+    _joinSelectedBtn = new QPushButton("Join Selected Table", tablesBox);
+    _leaveTableBtn = new QPushButton("Leave Table", tablesBox);
+    _observeSelectedBtn = new QPushButton("Observe Selected Table", tablesBox);
     _refreshBtn = new QPushButton("Refresh", tablesBox);
     toolbar->addWidget(_createTableBtn);
     toolbar->addWidget(_joinSelectedBtn);
+    toolbar->addWidget(_leaveTableBtn);
     toolbar->addWidget(_observeSelectedBtn);
-    toolbar->addWidget(_matchmakingBtn);
     toolbar->addWidget(_refreshBtn);
     tLayout->addLayout(toolbar);
 
@@ -76,7 +162,24 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     _tablesTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     _tablesTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     _tablesTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    tLayout->addWidget(_tablesTable);
+    tLayout->addWidget(_tablesTable, 1);
+
+    _inspectorBox = new QGroupBox("Table Seats & Details Inspector", tablesBox);
+    QVBoxLayout *inspLayout = new QVBoxLayout(_inspectorBox);
+    inspLayout->setContentsMargins(10, 8, 10, 8);
+    inspLayout->setSpacing(4);
+    _inspectorTitleLabel = new QLabel(
+        "Select a table above or click '+ Create Table' to host a new match.",
+        _inspectorBox);
+    _inspectorTitleLabel->setWordWrap(true);
+    _inspectorTitleLabel->setStyleSheet("font-weight: 600;");
+    _inspectorSeatsLabel = new QLabel(
+        "Seat roster and ruleset details will appear here.",
+        _inspectorBox);
+    _inspectorSeatsLabel->setWordWrap(true);
+    inspLayout->addWidget(_inspectorTitleLabel);
+    inspLayout->addWidget(_inspectorSeatsLabel);
+    tLayout->addWidget(_inspectorBox);
 
     _statusLabel = new QLabel("Connected to OCTI Lobby.", tablesBox);
     tLayout->addWidget(_statusLabel);
@@ -104,14 +207,34 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
                      [this](int row, int /*col*/) {
         if (row >= 0 && row < static_cast<int>(_tables.size())) {
             _selectedRoomId = _tables[static_cast<std::size_t>(row)].roomId;
+            updateInspectorAndSelectionControls();
+        }
+    });
+    QObject::connect(_tablesTable, &QTableWidget::itemSelectionChanged,
+                     [this]() {
+        int row = _tablesTable->currentRow();
+        if (row >= 0 && row < static_cast<int>(_tables.size())) {
+            _selectedRoomId = _tables[static_cast<std::size_t>(row)].roomId;
+            updateInspectorAndSelectionControls();
         }
     });
     QObject::connect(_tablesTable, &QTableWidget::cellDoubleClicked,
                      [this](int row, int /*col*/) {
         if (row >= 0 && row < static_cast<int>(_tables.size())) {
-            _selectedRoomId = _tables[static_cast<std::size_t>(row)].roomId;
-            if (_onJoinTableRequested) {
-                _onJoinTableRequested(_tables[static_cast<std::size_t>(row)]);
+            const TableSummaryInfo &t = _tables[static_cast<std::size_t>(row)];
+            _selectedRoomId = t.roomId;
+            updateInspectorAndSelectionControls();
+            if (isViewerSeatedAtTable(t)) {
+                if (_onOpenActiveBoardRequested) {
+                    _onOpenActiveBoardRequested();
+                }
+            } else if (t.phase == "WAITING_FOR_PLAYERS" &&
+                       t.seatsFilled < t.seatsTotal) {
+                if (_onJoinTableRequested) {
+                    _onJoinTableRequested(t);
+                }
+            } else if (_onObserveTableRequested) {
+                _onObserveTableRequested(t);
             }
         }
     });
@@ -126,15 +249,31 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
             _onJoinTableRequested(*t);
         }
     });
+    QObject::connect(_leaveTableBtn, &QPushButton::clicked, [this]() {
+        std::string targetRoomId = selectedRoomId();
+        const TableSummaryInfo *t = findTable(targetRoomId);
+        if ((!t || !isViewerSeatedAtTable(*t)) && !_bannerRoomId.empty()) {
+            targetRoomId = _bannerRoomId;
+        }
+        if (!targetRoomId.empty() && _onLeaveTableRequested) {
+            _onLeaveTableRequested(targetRoomId);
+        }
+    });
     QObject::connect(_observeSelectedBtn, &QPushButton::clicked, [this]() {
         const TableSummaryInfo *t = findTable(selectedRoomId());
         if (t && _onObserveTableRequested) {
             _onObserveTableRequested(*t);
         }
     });
-    QObject::connect(_matchmakingBtn, &QPushButton::clicked, [this]() {
-        if (_onMatchmakingRequested) {
-            _onMatchmakingRequested();
+    QObject::connect(_openActiveBoardBtn, &QPushButton::clicked, [this]() {
+        if (_onOpenActiveBoardRequested) {
+            _onOpenActiveBoardRequested();
+        }
+    });
+    QObject::connect(_leaveActiveTableBtn, &QPushButton::clicked, [this]() {
+        std::string roomId = activeBannerRoomId();
+        if (!roomId.empty() && _onLeaveTableRequested) {
+            _onLeaveTableRequested(roomId);
         }
     });
     QObject::connect(_refreshBtn, &QPushButton::clicked, [this]() {
@@ -181,6 +320,309 @@ ThemeId LobbyView::theme() const
     return _theme;
 }
 
+void LobbyView::setViewerIdentity(const std::string &playerUuid,
+                                  const std::string &handle)
+{
+    _viewerUuid = playerUuid;
+    _viewerHandle = handle;
+    updateMyTableBanner();
+    updateInspectorAndSelectionControls();
+}
+
+void LobbyView::setActiveRoomState(bool inRoom,
+                                   const std::string &roomId,
+                                   int viewerSeat,
+                                   const GameViewData &gameView)
+{
+    _inActiveRoom = inRoom && !roomId.empty();
+    _activeRoomId = _inActiveRoom ? roomId : std::string();
+    _activeViewerSeat = _inActiveRoom ? viewerSeat : 0;
+    _activeGameView = _inActiveRoom ? gameView : GameViewData();
+    updateMyTableBanner();
+    updateInspectorAndSelectionControls();
+}
+
+QString LobbyView::formatChatTimestamp(std::int64_t atMs)
+{
+    QDateTime localDt = (atMs > 0)
+        ? QDateTime::fromMSecsSinceEpoch(
+              static_cast<qint64>(atMs), QTimeZone::utc()).toLocalTime()
+        : QDateTime::currentDateTime();
+    if (localDt.date() == QDate::currentDate()) {
+        return QString("[%1] ").arg(localDt.toString("HH:mm"));
+    }
+    return QString("[%1] ").arg(localDt.toString("MM-dd HH:mm"));
+}
+
+QString LobbyView::formatChatMessageLine(const LobbyChatEntry &entry)
+{
+    std::int64_t ts = (entry.createdAtMs > 0) ? entry.createdAtMs : entry.atMs;
+    QString prefix = formatChatTimestamp(ts);
+    QString handle = formatHandleWithAt(entry.handle);
+    return QString("%1%2: %3")
+        .arg(prefix, handle, QString::fromStdString(entry.text));
+}
+
+QString LobbyView::formatPhaseDisplay(const std::string &phase)
+{
+    if (phase == "WAITING_FOR_PLAYERS") {
+        return "Waiting for Players";
+    }
+    if (phase == "IN_PROGRESS") {
+        return "In Progress";
+    }
+    if (phase == "FINISHED" || phase == "COMPLETED" || phase == "GAME_OVER") {
+        return "Completed";
+    }
+    return QString::fromStdString(phase);
+}
+
+QString LobbyView::formatSeatOccupancySummary(const TableSummaryInfo &table)
+{
+    int totalSeats = (table.seatsTotal > 0)
+        ? table.seatsTotal
+        : ((table.mode == "4P" || table.mode == "4P_FFA") ? 4 : 2);
+    QStringList parts;
+    for (int s = 1; s <= totalSeats; ++s) {
+        QString letter = seatLetterForIndex(s);
+        const TableSeatInfo *seat = findSeatInfo(table, s);
+        if (seat && (!seat->handle.empty() || !seat->playerUuid.empty())) {
+            parts << QString("%1: %2").arg(
+                letter, formatHandleWithAt(seat->handle));
+        } else if (table.seats.empty() && s == 1 &&
+                   table.seatsFilled >= 1 && !table.hostHandle.empty()) {
+            parts << QString("%1: %2").arg(
+                letter, formatHandleWithAt(table.hostHandle));
+        } else {
+            parts << QString("%1: [Open]").arg(letter);
+        }
+    }
+    return QString("%1/%2 — %3")
+        .arg(table.seatsFilled)
+        .arg(totalSeats)
+        .arg(parts.join(", "));
+}
+
+QString LobbyView::formatSeatBreakdownText(const TableSummaryInfo &table)
+{
+    int totalSeats = (table.seatsTotal > 0)
+        ? table.seatsTotal
+        : ((table.mode == "4P" || table.mode == "4P_FFA") ? 4 : 2);
+    QStringList lines;
+    for (int s = 1; s <= totalSeats; ++s) {
+        QString letter = seatLetterForIndex(s);
+        const TableSeatInfo *seat = findSeatInfo(table, s);
+        if (seat && (!seat->handle.empty() || !seat->playerUuid.empty())) {
+            QString connTag = seat->connected ? "" : " [away]";
+            lines << QString("Seat %1 (%2): %3 (%4)%5")
+                         .arg(s)
+                         .arg(letter)
+                         .arg(formatHandleWithAt(seat->handle))
+                         .arg(seat->rating > 0 ? seat->rating : 1500)
+                         .arg(connTag);
+        } else if (table.seats.empty() && s == 1 &&
+                   table.seatsFilled >= 1 && !table.hostHandle.empty()) {
+            lines << QString("Seat %1 (%2): %3")
+                         .arg(s)
+                         .arg(letter)
+                         .arg(formatHandleWithAt(table.hostHandle));
+        } else {
+            lines << QString("Seat %1 (%2): [Open]").arg(s).arg(letter);
+        }
+    }
+    return lines.join("  •  ");
+}
+
+bool LobbyView::isViewerSeatedAtTable(const TableSummaryInfo &table) const
+{
+    if (_inActiveRoom && !_activeRoomId.empty() &&
+        table.roomId == _activeRoomId && _activeViewerSeat > 0) {
+        return true;
+    }
+    for (std::size_t i = 0; i < table.seats.size(); ++i) {
+        const TableSeatInfo &s = table.seats[i];
+        if (!_viewerUuid.empty() && !s.playerUuid.empty() &&
+            s.playerUuid == _viewerUuid) {
+            return true;
+        }
+        if (!_viewerHandle.empty() && !s.handle.empty() &&
+            s.handle == _viewerHandle) {
+            return true;
+        }
+    }
+    if (!_viewerUuid.empty() && !table.hostUuid.empty() &&
+        table.hostUuid == _viewerUuid) {
+        return true;
+    }
+    if (!_viewerHandle.empty() && !table.hostHandle.empty() &&
+        table.hostHandle == _viewerHandle) {
+        return true;
+    }
+    return false;
+}
+
+bool LobbyView::isMyTableBannerVisible() const
+{
+    return _myTableBanner != nullptr && !_myTableBanner->isHidden();
+}
+
+std::string LobbyView::activeBannerRoomId() const
+{
+    return _bannerRoomId;
+}
+
+void LobbyView::updateMyTableBanner()
+{
+    if (!_myTableBanner || !_myTableBannerLabel || !_myTableSeatsLabel) {
+        return;
+    }
+    const TableSummaryInfo *matchedTable = nullptr;
+    if (_inActiveRoom && !_activeRoomId.empty()) {
+        matchedTable = findTable(_activeRoomId);
+    }
+    if (!matchedTable) {
+        for (std::size_t i = 0; i < _tables.size(); ++i) {
+            if (isViewerSeatedAtTable(_tables[i]) &&
+                (_tables[i].phase == "WAITING_FOR_PLAYERS" ||
+                 _tables[i].phase == "IN_PROGRESS")) {
+                matchedTable = &_tables[i];
+                break;
+            }
+        }
+    }
+
+    if (matchedTable) {
+        _bannerRoomId = matchedTable->roomId;
+        QString phaseText =
+            (matchedTable->phase == "WAITING_FOR_PLAYERS")
+                ? "WAITING FOR PLAYERS"
+                : ((matchedTable->phase == "IN_PROGRESS")
+                       ? "IN PROGRESS"
+                       : QString::fromStdString(matchedTable->phase));
+        QString variant = QString("%1 • %2B%3%4")
+            .arg(QString::fromStdString(matchedTable->mode))
+            .arg(matchedTable->bases)
+            .arg(matchedTable->superProngs ? " +!" : "")
+            .arg(matchedTable->edgeless ? " +Wrap" : "");
+        _myTableBannerLabel->setText(
+            QString("My Active Table: Room #%1  |  %2  |  Phase: %3")
+                .arg(QString::fromStdString(matchedTable->roomId),
+                     variant,
+                     phaseText));
+        _myTableSeatsLabel->setText(formatSeatBreakdownText(*matchedTable));
+        _myTableBanner->setVisible(true);
+        return;
+    }
+
+    if (_inActiveRoom && !_activeRoomId.empty()) {
+        _bannerRoomId = _activeRoomId;
+        std::string phase = _activeGameView.phase.empty()
+            ? "WAITING_FOR_PLAYERS"
+            : _activeGameView.phase;
+        QString phaseText =
+            (phase == "WAITING_FOR_PLAYERS")
+                ? "WAITING FOR PLAYERS"
+                : ((phase == "IN_PROGRESS")
+                       ? "IN PROGRESS"
+                       : QString::fromStdString(phase));
+        std::string mode = _activeGameView.mode.empty()
+            ? "2P"
+            : _activeGameView.mode;
+        int bases = _activeGameView.bases > 0 ? _activeGameView.bases : 3;
+        TableSummaryInfo synth;
+        synth.roomId = _activeRoomId;
+        synth.mode = mode;
+        synth.bases = bases;
+        synth.superProngs = _activeGameView.superProngs;
+        synth.edgeless = _activeGameView.edgeless;
+        synth.phase = phase;
+        synth.seatsTotal = (mode == "4P" || mode == "4P_FFA") ? 4 : 2;
+        synth.seatsFilled = static_cast<int>(_activeGameView.seats.size());
+        for (std::size_t i = 0; i < _activeGameView.seats.size(); ++i) {
+            TableSeatInfo s;
+            s.seat = _activeGameView.seats[i].seat;
+            s.playerUuid = _activeGameView.seats[i].playerUuid;
+            s.handle = _activeGameView.seats[i].handle;
+            s.connected = _activeGameView.seats[i].connected;
+            synth.seats.push_back(s);
+        }
+        QString variant = QString("%1 • %2B%3%4")
+            .arg(QString::fromStdString(synth.mode))
+            .arg(synth.bases)
+            .arg(synth.superProngs ? " +!" : "")
+            .arg(synth.edgeless ? " +Wrap" : "");
+        _myTableBannerLabel->setText(
+            QString("My Active Table: Room #%1  |  %2  |  Phase: %3")
+                .arg(QString::fromStdString(_activeRoomId),
+                     variant,
+                     phaseText));
+        _myTableSeatsLabel->setText(formatSeatBreakdownText(synth));
+        _myTableBanner->setVisible(true);
+        return;
+    }
+
+    _bannerRoomId.clear();
+    _myTableBanner->setVisible(false);
+}
+
+void LobbyView::updateInspectorAndSelectionControls()
+{
+    bool authed = (_netClient && _netClient->isAuthenticated());
+    const TableSummaryInfo *selected = findTable(selectedRoomId());
+
+    if (_inspectorTitleLabel && _inspectorSeatsLabel) {
+        if (selected) {
+            QString variant = QString("%1 • %2 Bases%3%4")
+                .arg(QString::fromStdString(selected->mode))
+                .arg(selected->bases)
+                .arg(selected->superProngs ? " • SuperProngs" : "")
+                .arg(selected->edgeless ? " • Edgeless" : "");
+            QString access = selected->hasPasscode
+                ? "Locked [Passcode Required]"
+                : "Open Table";
+            _inspectorTitleLabel->setText(
+                QString("Room #%1  •  Host: %2  •  %3  •  Phase: %4  •  %5  •  Observers: %6")
+                    .arg(QString::fromStdString(selected->roomId),
+                         formatHandleWithAt(selected->hostHandle),
+                         variant,
+                         formatPhaseDisplay(selected->phase),
+                         access,
+                         QString::number(selected->observerCount)));
+            _inspectorSeatsLabel->setText(formatSeatBreakdownText(*selected));
+        } else {
+            _inspectorTitleLabel->setText(
+                "No table selected — select a table above or click '+ Create Table' to host a match.");
+            _inspectorSeatsLabel->setText(
+                "Seat 1 (A): [Open]  •  Seat 2 (B): [Open]");
+        }
+    }
+
+    if (_joinSelectedBtn) {
+        if (!authed) {
+            _joinSelectedBtn->setEnabled(false);
+        } else if (selected) {
+            bool canJoin =
+                (selected->phase == "WAITING_FOR_PLAYERS" &&
+                 selected->seatsFilled < selected->seatsTotal &&
+                 !isViewerSeatedAtTable(*selected));
+            _joinSelectedBtn->setEnabled(canJoin);
+        } else {
+            _joinSelectedBtn->setEnabled(true);
+        }
+    }
+
+    if (_leaveTableBtn) {
+        bool canLeaveSelected =
+            authed && selected && isViewerSeatedAtTable(*selected);
+        bool canLeaveBanner = authed && !_bannerRoomId.empty();
+        _leaveTableBtn->setEnabled(canLeaveSelected || canLeaveBanner);
+    }
+
+    if (_observeSelectedBtn) {
+        _observeSelectedBtn->setEnabled(true);
+    }
+}
+
 void LobbyView::updateAuthUiState()
 {
     bool authed = (_netClient && _netClient->isAuthenticated());
@@ -192,12 +634,6 @@ void LobbyView::updateAuthUiState()
     }
     if (_createTableBtn) {
         _createTableBtn->setEnabled(authed);
-    }
-    if (_joinSelectedBtn) {
-        _joinSelectedBtn->setEnabled(authed);
-    }
-    if (_matchmakingBtn) {
-        _matchmakingBtn->setEnabled(authed);
     }
     if (_chatInput) {
         _chatInput->setEnabled(authed);
@@ -223,6 +659,8 @@ void LobbyView::updateAuthUiState()
                     .arg(static_cast<int>(_tables.size())));
         }
     }
+    updateMyTableBanner();
+    updateInspectorAndSelectionControls();
 }
 
 bool LobbyView::refreshLobby()
@@ -243,6 +681,9 @@ void LobbyView::refreshFromLobbyState(const LobbyStateData &state)
     _players = state.players;
     _tables = state.tables;
     _chatMessages = state.recentChat;
+    if (!_selectedRoomId.empty() && !findTable(_selectedRoomId)) {
+        _selectedRoomId.clear();
+    }
     if (_selectedRoomId.empty() && !_tables.empty()) {
         _selectedRoomId = _tables.front().roomId;
     }
@@ -258,7 +699,11 @@ void LobbyView::handleLobbySseEvent(const SseEvent &ev)
     if (ev.event == "LOBBY_CHAT" && j.is_object()) {
         LobbyChatEntry entry;
         entry.seq = j.value("seq", static_cast<std::int64_t>(ev.id));
-        entry.atMs = j.value("at_ms", static_cast<std::int64_t>(0));
+        std::int64_t ts = j.value(
+            "created_at_ms",
+            j.value("at_ms", static_cast<std::int64_t>(0)));
+        entry.createdAtMs = ts;
+        entry.atMs = ts;
         entry.playerUuid = j.value("player_uuid", "");
         entry.handle = j.value("handle", "");
         entry.text = j.value("text", "");
@@ -299,13 +744,15 @@ void LobbyView::appendLobbyChatEntry(const LobbyChatEntry &entry)
             return;
         }
     }
-    _chatMessages.push_back(entry);
+    LobbyChatEntry normalized = entry;
+    if (normalized.createdAtMs <= 0 && normalized.atMs > 0) {
+        normalized.createdAtMs = normalized.atMs;
+    } else if (normalized.atMs <= 0 && normalized.createdAtMs > 0) {
+        normalized.atMs = normalized.createdAtMs;
+    }
+    _chatMessages.push_back(normalized);
     if (_chatTranscript) {
-        _chatTranscript->appendPlainText(
-            QString("[%1]: %2")
-                .arg(QString::fromStdString(
-                    entry.handle.empty() ? "Player" : entry.handle))
-                .arg(QString::fromStdString(entry.text)));
+        _chatTranscript->appendPlainText(formatChatMessageLine(normalized));
     }
 }
 
@@ -322,6 +769,14 @@ const std::vector<LobbyPlayerInfo> &LobbyView::players() const
 const std::vector<LobbyChatEntry> &LobbyView::chatMessages() const
 {
     return _chatMessages;
+}
+
+std::string LobbyView::chatTranscriptText() const
+{
+    if (!_chatTranscript) {
+        return std::string();
+    }
+    return _chatTranscript->toPlainText().toStdString();
 }
 
 std::string LobbyView::selectedRoomId() const
@@ -346,6 +801,7 @@ void LobbyView::selectRoomId(const std::string &roomId)
             break;
         }
     }
+    updateInspectorAndSelectionControls();
 }
 
 const TableSummaryInfo *LobbyView::findTable(const std::string &roomId) const
@@ -369,10 +825,21 @@ void LobbyView::setOnJoinTableRequested(
     _onJoinTableRequested = std::move(cb);
 }
 
+void LobbyView::setOnLeaveTableRequested(
+    std::function<void(const std::string &roomId)> cb)
+{
+    _onLeaveTableRequested = std::move(cb);
+}
+
 void LobbyView::setOnObserveTableRequested(
     std::function<void(const TableSummaryInfo &)> cb)
 {
     _onObserveTableRequested = std::move(cb);
+}
+
+void LobbyView::setOnOpenActiveBoardRequested(std::function<void()> cb)
+{
+    _onOpenActiveBoardRequested = std::move(cb);
 }
 
 void LobbyView::setOnMatchmakingRequested(std::function<void()> cb)
@@ -395,7 +862,7 @@ void LobbyView::rebuildPlayersTable()
     for (int i = 0; i < static_cast<int>(_players.size()); ++i) {
         const LobbyPlayerInfo &p = _players[static_cast<std::size_t>(i)];
         _playersTable->setItem(
-            i, 0, new QTableWidgetItem(QString::fromStdString(p.handle)));
+            i, 0, new QTableWidgetItem(formatHandleWithAt(p.handle)));
         _playersTable->setItem(
             i, 1, new QTableWidgetItem(QString::fromStdString(p.status)));
         _playersTable->setItem(
@@ -410,14 +877,18 @@ void LobbyView::rebuildTablesWidget()
         return;
     }
     _tablesTable->setRowCount(static_cast<int>(_tables.size()));
+    int selectedRow = -1;
     for (int i = 0; i < static_cast<int>(_tables.size()); ++i) {
         const TableSummaryInfo &t = _tables[static_cast<std::size_t>(i)];
+        if (t.roomId == _selectedRoomId) {
+            selectedRow = i;
+        }
         QString variant = QString("%1 • %2B%3%4")
             .arg(QString::fromStdString(t.mode))
             .arg(t.bases)
             .arg(t.superProngs ? " +!" : "")
             .arg(t.edgeless ? " +Wrap" : "");
-        QString seats = QString("%1/%2").arg(t.seatsFilled).arg(t.seatsTotal);
+        QString seats = formatSeatOccupancySummary(t);
         QString access = t.hasPasscode ? QString("Locked [Passcode]")
                                        : QString("Open");
         _tablesTable->setItem(
@@ -425,7 +896,7 @@ void LobbyView::rebuildTablesWidget()
         _tablesTable->setItem(
             i, 1, new QTableWidgetItem(variant));
         _tablesTable->setItem(
-            i, 2, new QTableWidgetItem(QString::fromStdString(t.phase)));
+            i, 2, new QTableWidgetItem(formatPhaseDisplay(t.phase)));
         _tablesTable->setItem(
             i, 3, new QTableWidgetItem(seats));
         _tablesTable->setItem(
@@ -433,8 +904,13 @@ void LobbyView::rebuildTablesWidget()
         _tablesTable->setItem(
             i, 5, new QTableWidgetItem(access));
         _tablesTable->setItem(
-            i, 6, new QTableWidgetItem(QString::fromStdString(t.hostHandle)));
+            i, 6, new QTableWidgetItem(formatHandleWithAt(t.hostHandle)));
     }
+    if (selectedRow >= 0) {
+        _tablesTable->selectRow(selectedRow);
+    }
+    updateMyTableBanner();
+    updateInspectorAndSelectionControls();
 }
 
 void LobbyView::rebuildChatTranscript()
@@ -445,11 +921,7 @@ void LobbyView::rebuildChatTranscript()
     _chatTranscript->clear();
     for (std::size_t i = 0; i < _chatMessages.size(); ++i) {
         const LobbyChatEntry &c = _chatMessages[i];
-        _chatTranscript->appendPlainText(
-            QString("[%1]: %2")
-                .arg(QString::fromStdString(
-                    c.handle.empty() ? "Player" : c.handle))
-                .arg(QString::fromStdString(c.text)));
+        _chatTranscript->appendPlainText(formatChatMessageLine(c));
     }
 }
 

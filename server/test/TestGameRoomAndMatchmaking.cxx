@@ -4224,6 +4224,89 @@ TEST(GameRoomManagerTest, VisibleAnonymousObservers)
     CHECK_FALSE(mgr->createTable(a1, cfg()).ok());
 }
 
+TEST(GameRoomManagerTest, LobbyChatTimestampAuditLogAndSixHourPurge)
+{
+    EXPECT_OK(mgr->enterLobby(p[0]));
+    EXPECT_OK(mgr->enterLobby(p[1]));
+
+    RoomResult r1 = mgr->postLobbyChat(p[0], "early message");
+    CHECK_TRUE(r1.ok());
+
+    LobbySnapshot s1 = mgr->lobbyState();
+    CHECK_EQUAL(1, static_cast<int>(s1.recentChat.size()));
+    CHECK_EQUAL(wall * 1000LL, s1.recentChat[0].createdAtMs);
+    STRCMP_EQUAL("early message", s1.recentChat[0].text.c_str());
+
+    std::vector<LobbyChatLogRow> auditRows;
+    CHECK_TRUE(store->listLobbyChatLogs(auditRows));
+    CHECK_EQUAL(1, static_cast<int>(auditRows.size()));
+    STRCMP_EQUAL("early message", auditRows[0].text.c_str());
+    CHECK_EQUAL(wall * 1000LL, auditRows[0].createdAtMs);
+
+    // Advance 3 hours (< 6h): message still visible to clients
+    now += 3LL * 3600 * 1000;
+    wall += 3LL * 3600;
+    LobbySnapshot sMid = mgr->lobbyState();
+    CHECK_EQUAL(1, static_cast<int>(sMid.recentChat.size()));
+
+    // Advance past 6 hours total: early message is purged from client delivery
+    now += 3LL * 3600 * 1000 + 5000;
+    wall += 3LL * 3600 + 5;
+    LobbySnapshot sAfter = mgr->lobbyState();
+    CHECK_EQUAL(0, static_cast<int>(sAfter.recentChat.size()));
+
+    RoomResult r2 = mgr->postLobbyChat(p[1], "fresh message");
+    CHECK_TRUE(r2.ok());
+
+    LobbySnapshot s2 = mgr->lobbyState();
+    CHECK_EQUAL(1, static_cast<int>(s2.recentChat.size()));
+    STRCMP_EQUAL("fresh message", s2.recentChat[0].text.c_str());
+    CHECK_EQUAL(wall * 1000LL, s2.recentChat[0].createdAtMs);
+
+    LobbyPoll poll = mgr->pollLobbyEvents(p[0], 0, 100);
+    int chatEvents = 0;
+    for (size_t i = 0; i < poll.events.size(); ++i) {
+        if (poll.events[i].type == LobbyEventType::LOBBY_CHAT) {
+            ++chatEvents;
+            STRCMP_EQUAL("fresh message", poll.events[i].text.c_str());
+        }
+    }
+    CHECK_EQUAL(1, chatEvents);
+
+    // Server-side audit log retains both messages permanently
+    auditRows.clear();
+    CHECK_TRUE(store->listLobbyChatLogs(auditRows));
+    CHECK_EQUAL(2, static_cast<int>(auditRows.size()));
+    STRCMP_EQUAL("early message", auditRows[0].text.c_str());
+    STRCMP_EQUAL("fresh message", auditRows[1].text.c_str());
+}
+
+TEST(GameRoomManagerTest, TableSummaryIncludesDetailedSeatRoster)
+{
+    RoomResult created = mgr->createTable(p[0], cfg());
+    CHECK_TRUE(created.ok());
+
+    std::vector<TableSummary> tables = mgr->listTables();
+    CHECK_EQUAL(1, static_cast<int>(tables.size()));
+    const TableSummary &t = tables[0];
+    CHECK_EQUAL(p[0], t.hostPlayerId);
+    STRCMP_EQUAL(handle[0].c_str(), t.hostHandle.c_str());
+    CHECK_EQUAL(now, t.createdAtMs);
+    CHECK_EQUAL(2, t.seatsTotal);
+    CHECK_EQUAL(1, t.seatsFilled);
+    CHECK_EQUAL(2, static_cast<int>(t.seats.size()));
+
+    CHECK_EQUAL(1, t.seats[0].seat);
+    CHECK_EQUAL(p[0], t.seats[0].playerId);
+    STRCMP_EQUAL(handle[0].c_str(), t.seats[0].handle.c_str());
+    CHECK_TRUE(t.seats[0].connected);
+
+    CHECK_EQUAL(2, t.seats[1].seat);
+    CHECK_EQUAL(0, t.seats[1].playerId);
+    STRCMP_EQUAL("", t.seats[1].handle.c_str());
+    CHECK_FALSE(t.seats[1].connected);
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

@@ -529,10 +529,57 @@ fun OctiMainAppContent(
                         val lastMoveModifiedSquares by viewModel.lastMoveModifiedSquares.collectAsState()
                         val awaitingMatchStart by viewModel.awaitingMatchStart.collectAsState()
                         val matchType by viewModel.matchType.collectAsState()
+                        val activeRoomId by viewModel.activeRoomId.collectAsState()
+                        val activeGameView by viewModel.activeGameView.collectAsState()
                         val gameOver = viewModel.board.game?.isGameOver == true
                         val humanSeat by viewModel.humanSeat.collectAsState()
                         val vsBot = matchType != OctiAppViewModel.MatchType.LOCAL_PASS_AND_PLAY
                         val botDifficulty by viewModel.botDifficulty.collectAsState()
+
+                        if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM &&
+                            activeGameView?.phase == "WAITING_FOR_PLAYERS"
+                        ) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+                                border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Waiting for Players at Table #${activeRoomId.ifEmpty { activeGameView?.roomId ?: "" }}",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = OctiTheme.colors.accentBrass,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(
+                                            onClick = { viewModel.leaveOnlineTableAsync() }
+                                        ) {
+                                            Text("Leave Table")
+                                        }
+                                        Button(
+                                            onClick = { viewModel.selectTab(OctiAppViewModel.AppTab.ONLINE_LOBBY) },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = OctiTheme.colors.accentBrass,
+                                                contentColor = OctiTheme.colors.windowBg
+                                            )
+                                        ) {
+                                            Text("Back to Lobby")
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         Box(
                             modifier = Modifier

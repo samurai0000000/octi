@@ -460,21 +460,6 @@ Json configJson(const GameTableConfig &c)
     return j;
 }
 
-Json tableJson(const TableSummary &t)
-{
-    Json j = configJson(t.config);
-    j["room_id"] = t.roomId;
-    j["phase"] = toString(t.phase);
-    j["has_passcode"] = t.hasPasscode;
-    j["host_handle"] = t.hostHandle;
-    j["seats_total"] = t.seatsTotal;
-    j["seats_filled"] = t.seatsFilled;
-    j["players"] = t.playerHandles;
-    j["observer_count"] = t.observerCount;
-    j["observer_handles"] = t.observerHandles;
-    return j;
-}
-
 /* ------------------------------------------------------------------ */
 /* Request parsing                                                     */
 /* ------------------------------------------------------------------ */
@@ -682,6 +667,7 @@ struct OctiHttpServer::Impl {
     bool allowExportAttempt(const Request &req, Response &res);
 
     /* json views needing the cache */
+    Json tableJson(const TableSummary &t);
     Json seatJson(const SeatView &s);
     Json roomViewJson(const RoomView &v);
     Json roomEventJson(const RoomEvent &e);
@@ -1391,12 +1377,43 @@ Json OctiHttpServer::Impl::roomEventJson(const RoomEvent &e)
     return j;
 }
 
+Json OctiHttpServer::Impl::tableJson(const TableSummary &t)
+{
+    Json j = configJson(t.config);
+    j["room_id"] = t.roomId;
+    j["phase"] = toString(t.phase);
+    j["has_passcode"] = t.hasPasscode;
+    j["host_uuid"] = t.hostPlayerId != 0 ? uuidOf(t.hostPlayerId) : "";
+    j["host_handle"] = t.hostHandle;
+    j["created_at_ms"] = t.createdAtMs;
+    j["seats_total"] = t.seatsTotal;
+    j["seats_filled"] = t.seatsFilled;
+    Json seatsArr = Json::array();
+    for (size_t i = 0; i < t.seats.size(); ++i) {
+        const TableSeatSummary &s = t.seats[i];
+        Json sj;
+        sj["seat"] = s.seat;
+        sj["player_uuid"] = s.playerId != 0 ? uuidOf(s.playerId) : "";
+        sj["handle"] = s.handle;
+        sj["rating"] = s.rating;
+        sj["connected"] = s.connected;
+        seatsArr.push_back(sj);
+    }
+    j["seats"] = seatsArr;
+    j["players"] = t.playerHandles;
+    j["observer_count"] = t.observerCount;
+    j["observer_handles"] = t.observerHandles;
+    return j;
+}
+
 Json OctiHttpServer::Impl::lobbyEventJson(const LobbyEvent &e)
 {
     Json j;
     j["seq"] = e.seq;
     j["type"] = toString(e.type);
-    j["at_ms"] = e.atMs;
+    int64_t tsMs = (e.createdAtMs > 0) ? e.createdAtMs : e.atMs;
+    j["at_ms"] = tsMs;
+    j["created_at_ms"] = tsMs;
     if (e.playerId != 0) {
         j["player_uuid"] = uuidOf(e.playerId);
         j["handle"] = e.handle;
@@ -3847,14 +3864,50 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
     int detectedAiDifficulty = 0;
     std::string player1Handle = "Player";
     std::string player2Handle = "Player";
+    std::string player3Handle;
+    std::string player4Handle;
+    bool seat1IsAi = false;
+    bool seat2IsAi = false;
+    auto canonicalSeatOf = [](const Json &p) -> int {
+        if (!p.is_object()) {
+            return 0;
+        }
+        std::string pStr = p.value("player", "");
+        if (pStr == "A") return 1;
+        if (pStr == "B") return 2;
+        if (pStr == "C") return 3;
+        if (pStr == "D") return 4;
+        int seat = p.value("seat", 0);
+        return (seat >= 1 && seat <= 4) ? seat : 0;
+    };
+    auto canonicalSideOf = [](int seat) -> const char * {
+        switch (seat) {
+        case 1: return "A";
+        case 2: return "B";
+        case 3: return "C";
+        case 4: return "D";
+        default: return "";
+        }
+    };
     if (transcriptObj.contains("players") && transcriptObj["players"].is_array()) {
         for (const auto &p : transcriptObj["players"]) {
             if (p.is_object()) {
-                int seat = p.value("seat", 0);
+                int seat = canonicalSeatOf(p);
                 std::string h = p.value("handle", "");
-                if (seat == 1 && !h.empty()) player1Handle = h;
-                if (seat == 2 && !h.empty()) player2Handle = h;
-                if (p.value("type", "") == "AI" || p.value("aiDifficulty", 0) > 0) {
+                std::string t = p.value("type", "");
+                bool isAi = (t == "AI" || h.rfind("AI_", 0) == 0);
+                if (seat == 1) {
+                    if (!h.empty()) player1Handle = h;
+                    seat1IsAi = isAi;
+                } else if (seat == 2) {
+                    if (!h.empty()) player2Handle = h;
+                    seat2IsAi = isAi;
+                } else if (seat == 3 && !h.empty()) {
+                    player3Handle = h;
+                } else if (seat == 4 && !h.empty()) {
+                    player4Handle = h;
+                }
+                if (t == "AI" || p.value("aiDifficulty", 0) > 0) {
                     int d = p.value("aiDifficulty", 0);
                     if (d >= 1 && d <= 5) detectedAiDifficulty = d;
                 }
@@ -3998,6 +4051,42 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
     if (storedJson.contains("client") && storedJson["client"].is_object()) {
         storedJson["client"].erase("extended");
     }
+    auto normalizePlayersArr = [&](Json &arr) {
+        if (!arr.is_array()) {
+            return;
+        }
+        for (auto &pEntry : arr) {
+            if (!pEntry.is_object()) {
+                continue;
+            }
+            int s = canonicalSeatOf(pEntry);
+            if (s >= 1 && s <= 4) {
+                pEntry["seat"] = s;
+                const char *side = canonicalSideOf(s);
+                if (side[0] != '\0') {
+                    pEntry["player"] = side;
+                }
+            }
+        }
+        std::vector<Json> sorted(arr.begin(), arr.end());
+        std::stable_sort(sorted.begin(), sorted.end(),
+                         [](const Json &a, const Json &b) {
+                             int sa = a.is_object() ? a.value("seat", 99) : 99;
+                             int sb = b.is_object() ? b.value("seat", 99) : 99;
+                             return sa < sb;
+                         });
+        arr = Json::array();
+        for (auto &item : sorted) {
+            arr.push_back(std::move(item));
+        }
+    };
+    if (storedJson.contains("players")) {
+        normalizePlayersArr(storedJson["players"]);
+    }
+    if (storedJson.contains("game") && storedJson["game"].is_object() &&
+        storedJson["game"].contains("players")) {
+        normalizePlayersArr(storedJson["game"]["players"]);
+    }
     storedJson["gameId"] = serverGameId;
     storedJson["finalFen"] = replayedFinalFen;
     storedJson["license"] = "CC-BY-4.0";
@@ -4031,6 +4120,8 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
     rec.timeControl = transcriptObj.value("timeControl", "untimed");
     rec.p1Handle = player1Handle;
     rec.p2Handle = player2Handle;
+    rec.p3Handle = player3Handle;
+    rec.p4Handle = player4Handle;
     rec.result = (replayedWinner == "A") ? "P1_WIN" : (replayedWinner == "B" ? "P2_WIN" : "DRAW");
     if (replayedWinner == "A") rec.winnerSeat = 1;
     else if (replayedWinner == "B") rec.winnerSeat = 2;
@@ -4074,8 +4165,8 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
         if (!installId.empty() && isSafeId(installId)) {
             store.bindInstallToPlayer(installId, authedPlayer.playerId);
         }
-        bool p1IsAi = (player1Handle.rfind("AI_", 0) == 0);
-        bool p2IsAi = (player2Handle.rfind("AI_", 0) == 0);
+        bool p1IsAi = seat1IsAi || (player1Handle.rfind("AI_", 0) == 0);
+        bool p2IsAi = seat2IsAi || (player2Handle.rfind("AI_", 0) == 0);
         int humanSeat = 1;
         if (!p1IsAi && p2IsAi) {
             humanSeat = 1;
@@ -4093,8 +4184,11 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
             rec.p2Handle = authedPlayer.handle;
             player2Handle = authedPlayer.handle;
         }
-        if (storedJson.contains("players") && storedJson["players"].is_array()) {
-            for (auto &pEntry : storedJson["players"]) {
+        auto updateHumanEntry = [&](Json &arr) {
+            if (!arr.is_array()) {
+                return;
+            }
+            for (auto &pEntry : arr) {
                 if (!pEntry.is_object()) continue;
                 int s = pEntry.value("seat", 0);
                 std::string t = pEntry.value("type", "");
@@ -4103,8 +4197,15 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
                     pEntry["handle"] = authedPlayer.handle;
                 }
             }
-            rec.octiTranscript = storedJson.dump();
+        };
+        if (storedJson.contains("players")) {
+            updateHumanEntry(storedJson["players"]);
         }
+        if (storedJson.contains("game") && storedJson["game"].is_object() &&
+            storedJson["game"].contains("players")) {
+            updateHumanEntry(storedJson["game"]["players"]);
+        }
+        rec.octiTranscript = storedJson.dump();
     }
 
     std::string archiveErr;

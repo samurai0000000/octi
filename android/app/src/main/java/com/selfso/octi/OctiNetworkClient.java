@@ -346,12 +346,22 @@ public final class OctiNetworkClient implements AutoCloseable {
     public static final class LobbyChatEntry {
         public long seq = 0;
         public long atMs = 0;
+        public long createdAtMs = 0;
+        public String type = "LOBBY_CHAT";
         public String playerUuid = "";
         public String handle = "";
         public String text = "";
     }
 
-    public static final class TableSummaryInfo {
+    public static final class TableSeatInfo {
+        public int seat = 0;
+        public String playerUuid = "";
+        public String handle = "";
+        public int rating = 1500;
+        public boolean connected = false;
+    }
+
+    public static class TableSummaryInfo {
         public String roomId = "";
         public String mode = "2P";
         public int bases = 3;
@@ -361,17 +371,24 @@ public final class OctiNetworkClient implements AutoCloseable {
         public long initialMs = 0;
         public long incrementMs = 0;
         public long disconnectGraceMs = 90000;
+        public String timeControl = "Untimed";
         public boolean rated = true;
         public boolean allowTakeback = false;
         public String observerPolicy = "OPEN";
         public String voicePolicy = "PLAYERS_ONLY";
         public String phase = "WAITING_FOR_PLAYERS";
         public boolean hasPasscode = false;
+        public String hostUuid = "";
         public String hostHandle = "";
+        public long createdAtMs = 0L;
         public int seatsTotal = 2;
         public int seatsFilled = 0;
         public List<String> players = new ArrayList<>();
+        public List<TableSeatInfo> seats = new ArrayList<>();
         public int observerCount = 0;
+    }
+
+    public static final class TableSummary extends TableSummaryInfo {
     }
 
     public static final class LobbyStateData {
@@ -386,6 +403,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         public int bases = 3;
         public boolean superProngs = false;
         public boolean edgeless = false;
+        public String timeControl = "";
         public boolean timeControlEnabled = false;
         public long initialMs = 600000;
         public long incrementMs = 5000;
@@ -462,6 +480,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         public long initialMs = 0;
         public long incrementMs = 0;
         public long disconnectGraceMs = 90000;
+        public String timeControl = "Untimed";
         public boolean rated = true;
         public boolean allowTakeback = false;
         public String observerPolicy = "OPEN";
@@ -472,6 +491,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         public String hostUuid = "";
         public int viewerSeat = 0;
         public List<GameSeatInfo> seats = new ArrayList<>();
+        public List<String> players = new ArrayList<>();
         public List<String> observers = new ArrayList<>();
         public int observerCount = 0;
         public String fen = "";
@@ -1500,13 +1520,7 @@ public final class OctiNetworkClient implements AutoCloseable {
                 }
                 @SuppressWarnings("unchecked")
                 Map<String, Object> m = (Map<String, Object>) item;
-                LobbyChatEntry c = new LobbyChatEntry();
-                c.seq = OctiMiniJson.getLong(m, "seq", 0);
-                c.atMs = OctiMiniJson.getLong(m, "at_ms", 0);
-                c.playerUuid = OctiMiniJson.getString(m, "player_uuid", "");
-                c.handle = OctiMiniJson.getString(m, "handle", "");
-                c.text = OctiMiniJson.getString(m, "text", "");
-                res.data.recentChat.add(c);
+                res.data.recentChat.add(parseLobbyEvent(m));
             }
         }
         res.data.latestSeq = OctiMiniJson.getLong(raw.json, "latest_seq", 0);
@@ -1610,10 +1624,31 @@ public final class OctiNetworkClient implements AutoCloseable {
         if (r.passcode != null && !r.passcode.isEmpty()) {
             body.put("passcode", r.passcode);
         }
-        if (r.timeControlEnabled && r.initialMs > 0) {
+        boolean tcEnabled = r.timeControlEnabled;
+        long tcInitialMs = r.initialMs;
+        long tcIncrementMs = r.incrementMs;
+        if (r.timeControl != null && !r.timeControl.trim().isEmpty()) {
+            String tcStr = r.timeControl.trim();
+            if ("untimed".equalsIgnoreCase(tcStr)) {
+                tcEnabled = false;
+            } else {
+                int plusIdx = tcStr.indexOf('+');
+                if (plusIdx > 0) {
+                    try {
+                        long mins = Long.parseLong(tcStr.substring(0, plusIdx).trim());
+                        long incSec = Long.parseLong(tcStr.substring(plusIdx + 1).trim());
+                        tcInitialMs = mins * 60000L;
+                        tcIncrementMs = incSec * 1000L;
+                        tcEnabled = tcInitialMs > 0;
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        if (tcEnabled && tcInitialMs > 0) {
             Map<String, Object> tc = new LinkedHashMap<>();
-            tc.put("initial_ms", r.initialMs);
-            tc.put("increment_ms", r.incrementMs);
+            tc.put("initial_ms", tcInitialMs);
+            tc.put("increment_ms", tcIncrementMs);
             tc.put("disconnect_grace_ms", r.disconnectGraceMs);
             body.put("time_control", tc);
         } else {
@@ -3098,7 +3133,25 @@ public final class OctiNetworkClient implements AutoCloseable {
         return p;
     }
 
-    private static TableSummaryInfo parseTableSummary(Map<String, Object> j) {
+    public static LobbyChatEntry parseLobbyEvent(Map<String, Object> j) {
+        LobbyChatEntry e = new LobbyChatEntry();
+        if (j == null) {
+            return e;
+        }
+        e.seq = OctiMiniJson.getLong(j, "seq", 0L);
+        e.type = OctiMiniJson.getString(j, "type", "LOBBY_CHAT");
+        long createdAt = OctiMiniJson.getLong(j, "created_at_ms", 0L);
+        long at = OctiMiniJson.getLong(j, "at_ms", 0L);
+        long resolvedMs = createdAt > 0L ? createdAt : at;
+        e.createdAtMs = resolvedMs;
+        e.atMs = resolvedMs;
+        e.playerUuid = OctiMiniJson.getString(j, "player_uuid", "");
+        e.handle = OctiMiniJson.getString(j, "handle", "");
+        e.text = OctiMiniJson.getString(j, "text", "");
+        return e;
+    }
+
+    public static TableSummaryInfo parseTableSummary(Map<String, Object> j) {
         TableSummaryInfo t = new TableSummaryInfo();
         if (j == null) {
             return t;
@@ -3114,6 +3167,19 @@ public final class OctiNetworkClient implements AutoCloseable {
             t.initialMs = OctiMiniJson.getLong(tc, "initial_ms", 0);
             t.incrementMs = OctiMiniJson.getLong(tc, "increment_ms", 0);
             t.disconnectGraceMs = OctiMiniJson.getLong(tc, "disconnect_grace_ms", 90000);
+            if (t.timeControlEnabled && t.initialMs > 0) {
+                t.timeControl = (t.initialMs / 60000L) + "+" + (t.incrementMs / 1000L);
+            } else {
+                t.timeControl = "Untimed";
+            }
+        } else {
+            String tcStr = OctiMiniJson.getString(j, "time_control", "");
+            if (!tcStr.isEmpty() && !"untimed".equalsIgnoreCase(tcStr)) {
+                t.timeControl = tcStr;
+                t.timeControlEnabled = true;
+            } else {
+                t.timeControl = "Untimed";
+            }
         }
         t.rated = OctiMiniJson.getBoolean(j, "rated", true);
         t.allowTakeback = OctiMiniJson.getBoolean(j, "allow_takeback", false);
@@ -3121,9 +3187,29 @@ public final class OctiNetworkClient implements AutoCloseable {
         t.voicePolicy = OctiMiniJson.getString(j, "voice_policy", "PLAYERS_ONLY");
         t.phase = OctiMiniJson.getString(j, "phase", "WAITING_FOR_PLAYERS");
         t.hasPasscode = OctiMiniJson.getBoolean(j, "has_passcode", false);
+        t.hostUuid = OctiMiniJson.getString(j, "host_uuid", "");
         t.hostHandle = OctiMiniJson.getString(j, "host_handle", "");
+        t.createdAtMs = OctiMiniJson.getLong(j, "created_at_ms", 0L);
         t.seatsTotal = OctiMiniJson.getInt(j, "seats_total", 2);
         t.seatsFilled = OctiMiniJson.getInt(j, "seats_filled", 0);
+        List<Object> seatsArr = OctiMiniJson.getArray(j, "seats");
+        if (seatsArr != null) {
+            for (int i = 0; i < seatsArr.size(); ++i) {
+                Object item = seatsArr.get(i);
+                if (!(item instanceof Map<?, ?>)) {
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
+                Map<String, Object> sm = (Map<String, Object>) item;
+                TableSeatInfo s = new TableSeatInfo();
+                s.seat = OctiMiniJson.getInt(sm, "seat", i + 1);
+                s.playerUuid = OctiMiniJson.getString(sm, "player_uuid", "");
+                s.handle = OctiMiniJson.getString(sm, "handle", "");
+                s.rating = OctiMiniJson.getInt(sm, "rating", 1500);
+                s.connected = OctiMiniJson.getBoolean(sm, "connected", false);
+                t.seats.add(s);
+            }
+        }
         List<Object> pl = OctiMiniJson.getArray(j, "players");
         if (pl != null) {
             for (Object item : pl) {
@@ -3154,6 +3240,21 @@ public final class OctiNetworkClient implements AutoCloseable {
             v.initialMs = OctiMiniJson.getLong(tc, "initial_ms", 0);
             v.incrementMs = OctiMiniJson.getLong(tc, "increment_ms", 0);
             v.disconnectGraceMs = OctiMiniJson.getLong(tc, "disconnect_grace_ms", 90000);
+            if (v.timeControlEnabled && v.initialMs > 0) {
+                long mins = v.initialMs / 60000L;
+                long incSec = v.incrementMs / 1000L;
+                v.timeControl = mins + "+" + incSec;
+            } else {
+                v.timeControl = "Untimed";
+            }
+        } else {
+            String tcStr = OctiMiniJson.getString(j, "time_control", "");
+            if (!tcStr.isEmpty() && !"untimed".equalsIgnoreCase(tcStr)) {
+                v.timeControl = tcStr;
+                v.timeControlEnabled = true;
+            } else {
+                v.timeControl = "Untimed";
+            }
         }
         v.rated = OctiMiniJson.getBoolean(j, "rated", true);
         v.allowTakeback = OctiMiniJson.getBoolean(j, "allow_takeback", false);
@@ -3184,6 +3285,9 @@ public final class OctiNetworkClient implements AutoCloseable {
                 s.clockMs = OctiMiniJson.getLong(sm, "clock_ms", -1);
                 s.eliminated = OctiMiniJson.getBoolean(sm, "eliminated", false);
                 v.seats.add(s);
+                if (!s.handle.isEmpty()) {
+                    v.players.add(s.handle);
+                }
             }
         }
         List<Object> obsArr = OctiMiniJson.getArray(j, "observers");

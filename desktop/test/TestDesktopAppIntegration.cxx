@@ -668,12 +668,13 @@ TEST(DesktopAppIntegrationTest,
         guestWin.showLobbyView();
         CHECK_TRUE(guestWin.isLobbyViewVisible());
 
-        /* Verify Unauthenticated LobbyView controls: Refresh & Observe enabled, others disabled */
+        /* Verify Unauthenticated LobbyView controls: Refresh & Observe enabled, others disabled, Quick Match removed */
         CHECK_TRUE(guestWin.lobbyView()->refreshButton()->isEnabled());
         CHECK_TRUE(guestWin.lobbyView()->observeButton()->isEnabled());
         CHECK_FALSE(guestWin.lobbyView()->createTableButton()->isEnabled());
         CHECK_FALSE(guestWin.lobbyView()->joinButton()->isEnabled());
-        CHECK_FALSE(guestWin.lobbyView()->quickMatchButton()->isEnabled());
+        CHECK_FALSE(guestWin.lobbyView()->leaveTableButton()->isEnabled());
+        CHECK_TRUE(guestWin.lobbyView()->quickMatchButton() == nullptr);
         CHECK_FALSE(guestWin.lobbyView()->chatInput()->isEnabled());
         CHECK_FALSE(guestWin.lobbyView()->chatSendButton()->isEnabled());
         STRCMP_EQUAL("Sign in to chat",
@@ -693,7 +694,7 @@ TEST(DesktopAppIntegrationTest,
         guestWin.showLobbyView();
         CHECK_TRUE(guestWin.lobbyView()->createTableButton()->isEnabled());
         CHECK_TRUE(guestWin.lobbyView()->joinButton()->isEnabled());
-        CHECK_TRUE(guestWin.lobbyView()->quickMatchButton()->isEnabled());
+        CHECK_TRUE(guestWin.lobbyView()->quickMatchButton() == nullptr);
         CHECK_TRUE(guestWin.lobbyView()->chatInput()->isEnabled());
         CHECK_TRUE(guestWin.lobbyView()->chatSendButton()->isEnabled());
         STRCMP_EQUAL("Message the global lobby...",
@@ -2603,6 +2604,192 @@ TEST(DesktopAppIntegrationTest, StartupProfileAndAvatarSyncWithAuthenticatedSess
     STRCMP_EQUAL("A bio written on another client or web UI.", diskPrefs.bio.c_str());
     STRCMP_EQUAL("Kyoto, Japan", diskPrefs.location.c_str());
     STRCMP_EQUAL(serverAvatarUrl.c_str(), diskPrefs.avatarUrl.c_str());
+}
+
+TEST(DesktopAppIntegrationTest, LobbyTablesRedesignTimestampsSeatsAndLeaveTable)
+{
+    LiveServerEnv env;
+
+    auto clientA = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginA = clientA->loginWithSso(
+        "google", makeToken("google", "sub-lobby-redesign-a", "TableHostA"), "TableHostA");
+    CHECK_TRUE_TEXT(loginA.ok, loginA.errorMessage.c_str());
+
+    std::string cfgPathA = env.dir + "/lobby_redesign_a.json";
+    OctiMainWindow winA(std::move(clientA), cfgPathA);
+    winA.applyAuthenticatedProfile(loginA.data.profile);
+
+    /* 1. Verify local-timezone chat timestamp formatting for same-day and prior-day */
+    QDateTime localNow = QDateTime::currentDateTime();
+    std::int64_t nowMs = localNow.toUTC().toMSecsSinceEpoch();
+    QString expectedSameDay = QString("[%1] ").arg(localNow.toString("HH:mm"));
+    STRCMP_EQUAL(expectedSameDay.toUtf8().constData(),
+                 LobbyView::formatChatTimestamp(nowMs).toUtf8().constData());
+
+    QDateTime twoDaysAgo = localNow.addDays(-2);
+    std::int64_t twoDaysAgoMs = twoDaysAgo.toUTC().toMSecsSinceEpoch();
+    QString expectedOldDay = QString("[%1] ").arg(twoDaysAgo.toString("MM-dd HH:mm"));
+    STRCMP_EQUAL(expectedOldDay.toUtf8().constData(),
+                 LobbyView::formatChatTimestamp(twoDaysAgoMs).toUtf8().constData());
+
+    LobbyChatEntry chatEntry;
+    chatEntry.seq = 501;
+    chatEntry.createdAtMs = nowMs;
+    chatEntry.atMs = nowMs;
+    chatEntry.handle = "TableHostA";
+    chatEntry.text = "Ready for a 2P 3-base match!";
+    QString formattedLine = LobbyView::formatChatMessageLine(chatEntry);
+    CHECK_TRUE(formattedLine.startsWith(expectedSameDay));
+    CHECK_TRUE(formattedLine.contains("@TableHostA: Ready for a 2P 3-base match!"));
+
+    SseEvent sseChatEv;
+    sseChatEv.id = 502;
+    sseChatEv.event = "LOBBY_CHAT";
+    sseChatEv.dataJson = Json({
+        {"seq", 502},
+        {"created_at_ms", nowMs},
+        {"player_uuid", loginA.data.profile.uuid},
+        {"handle", "TableHostA"},
+        {"text", "Live SSE timestamped chat"}
+    }).dump();
+    winA.lobbyView()->handleLobbySseEvent(sseChatEv);
+    CHECK_TRUE(winA.lobbyView()->chatTranscriptText().find(
+                   expectedSameDay.toStdString() + "@TableHostA: Live SSE timestamped chat") !=
+               std::string::npos);
+
+    /* 2. Host creates a waiting table -> verify Board waiting-room banner and Lobby My Active Table banner */
+    CreateTableRequest req;
+    req.mode = "2P";
+    req.bases = 3;
+    auto created = winA.createAndEnterOnlineTable(req);
+    CHECK_TRUE_TEXT(created.ok, created.errorMessage.c_str());
+    std::string roomId = created.data.roomId;
+    CHECK_TRUE(winA.isInOnlineGame());
+    STRCMP_EQUAL("WAITING_FOR_PLAYERS", winA.onlineRoomPhase().c_str());
+    CHECK_TRUE(winA.isWaitingRoomBannerVisible());
+    CHECK_TRUE(winA.waitingRoomBannerText().contains(QString::fromStdString(roomId)));
+    CHECK_TRUE(winA.leaveWaitingTableButton()->isEnabled());
+    CHECK_TRUE(winA.leaveTableButton()->isEnabled());
+
+    /* Switch to Lobby view while seated at the waiting table */
+    winA.showLobbyView();
+    CHECK_TRUE(winA.isLobbyViewVisible());
+    CHECK_TRUE(winA.lobbyView()->isMyTableBannerVisible());
+    STRCMP_EQUAL(roomId.c_str(), winA.lobbyView()->activeBannerRoomId().c_str());
+    CHECK_TRUE(winA.lobbyView()->myTableBannerLabel()->text().contains(
+        QString::fromStdString(roomId)));
+    CHECK_TRUE(winA.lobbyView()->myTableBannerLabel()->text().contains(
+        "WAITING FOR PLAYERS"));
+    CHECK_TRUE(winA.lobbyView()->myTableSeatsLabel()->text().contains(
+        "Seat 1 (A): @TableHostA"));
+    CHECK_TRUE(winA.lobbyView()->myTableSeatsLabel()->text().contains(
+        "Seat 2 (B): [Open]"));
+
+    /* Verify Tables list & Table Seats & Details Inspector */
+    winA.lobbyView()->selectRoomId(roomId);
+    const TableSummaryInfo *tbl = winA.lobbyView()->findTable(roomId);
+    CHECK_TRUE(tbl != nullptr);
+    QString seatSummary = LobbyView::formatSeatOccupancySummary(*tbl);
+    CHECK_TRUE(seatSummary.contains("1/2"));
+    CHECK_TRUE(seatSummary.contains("A: @TableHostA"));
+    CHECK_TRUE(seatSummary.contains("B: [Open]"));
+    CHECK_TRUE(winA.lobbyView()->inspectorTitleLabel()->text().contains(
+        QString::fromStdString(roomId)));
+    CHECK_TRUE(winA.lobbyView()->inspectorSeatsLabel()->text().contains(
+        "Seat 1 (A): @TableHostA"));
+    CHECK_TRUE(winA.lobbyView()->inspectorSeatsLabel()->text().contains(
+        "Seat 2 (B): [Open]"));
+    CHECK_TRUE(winA.lobbyView()->leaveTableButton()->isEnabled());
+
+    /* 3. Leave the waiting table via leaveActiveOnlineTable() */
+    auto leaveRes = winA.leaveActiveOnlineTable(roomId);
+    CHECK_TRUE_TEXT(leaveRes.ok, leaveRes.errorMessage.c_str());
+    CHECK_FALSE(winA.isInOnlineGame());
+    STRCMP_EQUAL("", winA.onlineRoomId().c_str());
+    CHECK_TRUE(winA.isLobbyViewVisible());
+    CHECK_FALSE(winA.lobbyView()->isMyTableBannerVisible());
+    CHECK_TRUE(winA.lobbyView()->findTable(roomId) == nullptr);
+}
+
+TEST(DesktopAppIntegrationTest, AccountLinkDialogProfileConfirmationGuards)
+{
+    LiveServerEnv env;
+    std::string avatarDir = env.dir + "/avatars_confirm";
+    env.store.setAvatarDir(avatarDir);
+
+    auto client = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginRes = client->loginWithSso(
+        "google", makeToken("google", "sub-confirm-guard", "ConfirmUser"), "ConfirmUser");
+    CHECK_TRUE_TEXT(loginRes.ok, loginRes.errorMessage.c_str());
+
+    std::string cfgPath = env.dir + "/confirm_guard.json";
+    OctiMainWindow win(std::move(client), cfgPath);
+    win.applyAuthenticatedProfile(loginRes.data.profile);
+
+    AccountLinkDialog dlg(win.netClient(), win.configStore(), ThemeId::OBSIDIAN_BRASS, &win);
+    CHECK_TRUE(dlg.refreshProfile());
+    CHECK_FALSE(dlg.hasUnsavedProfileChanges());
+
+    QImage img(64, 64, QImage::Format_RGB32);
+    img.fill(QColor(120, 200, 90));
+    CHECK_TRUE(dlg.selectAvatarFromImage(img));
+    CHECK_TRUE(dlg.hasUnsavedProfileChanges());
+
+    /* 1. Rejecting Clear Avatar confirmation keeps pending avatar intact */
+    dlg.setConfirmPromptHandler([](const QString &title, const QString &) {
+        CHECK_TRUE(title.contains("Clear Avatar"));
+        return false;
+    });
+    CHECK_FALSE(dlg.clearPendingAvatar(true));
+    LONGS_EQUAL(1, dlg.confirmationPromptCount());
+    CHECK_TRUE(dlg.profileStatusText().contains("Clear avatar cancelled"));
+    CHECK_TRUE(dlg.hasUnsavedProfileChanges());
+
+    /* Accepting Clear Avatar confirmation clears pending avatar */
+    dlg.setConfirmPromptHandler([](const QString &title, const QString &) {
+        CHECK_TRUE(title.contains("Clear Avatar"));
+        return true;
+    });
+    CHECK_TRUE(dlg.clearPendingAvatar(true));
+    LONGS_EQUAL(2, dlg.confirmationPromptCount());
+    CHECK_TRUE(dlg.profileStatusText().contains("Avatar cleared"));
+
+    /* 2. Rejecting Save Profile confirmation prevents PATCH /api/v1/profile/me */
+    dlg.displayNameEdit()->setText("Guarded Display Name");
+    dlg.bioEdit()->setPlainText("Guarded bio text.");
+    dlg.setConfirmPromptHandler([](const QString &title, const QString &) {
+        CHECK_TRUE(title.contains("Apply Profile Settings"));
+        return false;
+    });
+    auto cancelledSave = dlg.saveProfile(true);
+    CHECK_FALSE(cancelledSave.ok);
+    STRCMP_EQUAL("CANCELLED", cancelledSave.errorCode.c_str());
+    STRCMP_EQUAL("", dlg.currentProfile().bio.c_str());
+
+    /* Accepting Save Profile confirmation applies changes to server */
+    dlg.setConfirmPromptHandler([](const QString &title, const QString &) {
+        CHECK_TRUE(title.contains("Apply Profile Settings"));
+        return true;
+    });
+    auto confirmedSave = dlg.saveProfile(true);
+    CHECK_TRUE_TEXT(confirmedSave.ok, confirmedSave.errorMessage.c_str());
+    STRCMP_EQUAL("Guarded Display Name", dlg.currentProfile().displayName.c_str());
+    STRCMP_EQUAL("Guarded bio text.", dlg.currentProfile().bio.c_str());
+    CHECK_FALSE(dlg.hasUnsavedProfileChanges());
+
+    /* 3. Unsaved edits trigger discard confirmation on Done/Close */
+    dlg.locationEdit()->setText("Unsaved City");
+    CHECK_TRUE(dlg.hasUnsavedProfileChanges());
+    dlg.setConfirmPromptHandler([](const QString &title, const QString &) {
+        CHECK_TRUE(title.contains("Unsaved Profile Changes"));
+        return false;
+    });
+    CHECK_FALSE(dlg.tryCloseWithConfirmation(true));
+    dlg.setConfirmPromptHandler([](const QString &title, const QString &) {
+        CHECK_TRUE(title.contains("Unsaved Profile Changes"));
+        return true;
+    });
+    CHECK_TRUE(dlg.tryCloseWithConfirmation(true));
 }
 
 extern "C" const char *__lsan_default_suppressions()

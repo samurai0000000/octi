@@ -318,6 +318,14 @@ struct RobotTokenValidation {
     PlayerProfile owner;
 };
 
+struct LobbyChatLogRow {
+    uint64_t seq = 0;
+    std::string senderUuid;
+    std::string senderHandle;
+    std::string text;
+    int64_t createdAtMs = 0;
+};
+
 class AccountStore {
 public:
     static constexpr int kMinHandleLength = 3;
@@ -456,6 +464,14 @@ public:
                      std::string &error);
     bool getLiveMeta(const std::string &metaKey, std::string &metaJson,
                      std::string &error);
+
+    /* Persistent server-side lobby chat audit log. */
+    bool appendLobbyChatLog(uint64_t seq, const std::string &senderUuid,
+                            const std::string &senderHandle,
+                            const std::string &text, int64_t createdAtMs);
+    bool purgeLobbyChatLogsBefore(int64_t cutoffEpochMs);
+    bool listLobbyChatLogs(std::vector<LobbyChatLogRow> &out,
+                           int limit = 100);
 
 private:
     int64_t nowSec() const;

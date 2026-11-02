@@ -141,12 +141,19 @@ public:
     ApiResult<bool> observeOnlineTable(
         const std::string &roomId,
         const std::string &passcode = "");
+    ApiResult<bool> leaveActiveOnlineTable(
+        const std::string &roomId = "");
     void leaveOnlineRoom();
 
     bool isInOnlineGame() const;
     const std::string &onlineRoomId() const;
     int onlineViewerSeat() const;
+    std::string onlineRoomPhase() const { return _onlineGameView.phase; }
     const GameViewData &currentOnlineGameView() const;
+    bool isWaitingRoomBannerVisible() const;
+    QString waitingRoomBannerText() const;
+    QPushButton *leaveTableButton() const { return _leaveTableBtn; }
+    QPushButton *leaveWaitingTableButton() const { return _leaveWaitingTableBtn; }
 
     bool refreshOnlineGameView();
     void applyGameViewData(const GameViewData &view);
@@ -326,6 +333,11 @@ private:
     QPushButton *_exportNotationBtn;
     QLabel *_fenStatusLabel;
 
+    QWidget *_waitingRoomBannerWidget = nullptr;
+    QLabel *_waitingRoomBannerLabel = nullptr;
+    QPushButton *_leaveWaitingTableBtn = nullptr;
+    QPushButton *_backToLobbyBtn = nullptr;
+
     QWidget *_proposalBannerWidget;
     QLabel *_proposalBannerLabel;
     QPushButton *_acceptProposalBtn;
@@ -336,6 +348,7 @@ private:
     QPushButton *_undoRequestBtn;
     QPushButton *_claimForfeitBtn;
     QPushButton *_resignBtn;
+    QPushButton *_leaveTableBtn = nullptr;
     QPushButton *_moderationBtn;
 
     QWidget *_chatBox;

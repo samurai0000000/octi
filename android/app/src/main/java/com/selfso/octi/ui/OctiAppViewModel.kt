@@ -233,6 +233,21 @@ class OctiAppViewModel @JvmOverloads constructor(
         }
 
         @JvmStatic
+        fun formatLobbyChatTimestamp(epochMs: Long): String {
+            val ts = if (epochMs > 0L) epochMs else System.currentTimeMillis()
+            val sdf = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
+            sdf.timeZone = TimeZone.getDefault()
+            return sdf.format(java.util.Date(ts))
+        }
+
+        @JvmStatic
+        fun formatLobbyChatEntry(entry: OctiNetworkClient.LobbyChatEntry): String {
+            val tsStr = formatLobbyChatTimestamp(entry.atMs)
+            val handleStr = entry.handle.ifEmpty { "anon" }
+            return "[$tsStr] $handleStr: ${entry.text}"
+        }
+
+        @JvmStatic
         fun downloadAndVerifyUpdateBlocking(
             cacheRootDir: File,
             manifest: UpdateManifest
@@ -433,6 +448,9 @@ class OctiAppViewModel @JvmOverloads constructor(
     // Online Lobby, Matchmaking, Live Room & Archive State
     private val _lobbyState = MutableStateFlow(OctiNetworkClient.LobbyStateData())
     val lobbyState: StateFlow<OctiNetworkClient.LobbyStateData> = _lobbyState.asStateFlow()
+
+    private val _lobbyChatMessages = MutableStateFlow<List<String>>(emptyList())
+    val lobbyChatMessages: StateFlow<List<String>> = _lobbyChatMessages.asStateFlow()
 
     private val _matchmakingStatus = MutableStateFlow(OctiNetworkClient.MatchmakingStatusData())
     val matchmakingStatus: StateFlow<OctiNetworkClient.MatchmakingStatusData> =
@@ -1124,7 +1142,11 @@ class OctiAppViewModel @JvmOverloads constructor(
         return clamped
     }
 
-    fun applyMoveNotation(notation: String): Boolean {
+    @JvmOverloads
+    fun applyMoveNotation(
+        notation: String,
+        aiPlyMeta: OctiGame.OctiPlyMetadata? = null
+    ): Boolean {
         if (notation.isBlank()) {
             return false
         }
@@ -1145,7 +1167,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             composer.rollbackMove()
             try {
                 board.game.move(notation)
-                recordAppliedBoardPly(notation)
+                recordAppliedBoardPly(notation, aiPlyMeta)
                 composer.attachBoard(board)
                 composer.setConfirmAllMoves(_confirmAllMoves.value)
                 syncRotationToActiveSeat()
@@ -1297,9 +1319,6 @@ class OctiAppViewModel @JvmOverloads constructor(
                 botEngine.restoreDefaultBudget()
             }
         }
-        if (chosen.isEmpty() || !applyMoveNotation(chosen)) {
-            return ""
-        }
         val plyMeta = OctiGame.OctiPlyMetadata().apply {
             this.elapsedMs = stats.elapsedMs
             this.isAiMove = true
@@ -1309,7 +1328,9 @@ class OctiAppViewModel @JvmOverloads constructor(
             this.aiNodesVisited = stats.nodesVisited
             this.aiBestScore = stats.bestScore
         }
-        board.game?.setLastPlyMetadata(plyMeta)
+        if (chosen.isEmpty() || !applyMoveNotation(chosen, plyMeta)) {
+            return ""
+        }
         return chosen
     }
 
@@ -1371,24 +1392,21 @@ class OctiAppViewModel @JvmOverloads constructor(
                                 candidate = board.game?.generateLegalMoves()?.firstOrNull()?.asString() ?: ""
                             }
                             if (candidate.isNotEmpty()) {
-                                moveApplied = applyMoveNotation(candidate)
+                                val plyMeta = OctiGame.OctiPlyMetadata().apply {
+                                    this.elapsedMs = stats.elapsedMs
+                                    this.isAiMove = true
+                                    this.aiDifficulty = _botDifficulty.value.level
+                                    this.aiBudgetMs = botEngine.timeBudgetMs
+                                    this.aiDepthReached = stats.depthReached
+                                    this.aiNodesVisited = stats.nodesVisited
+                                    this.aiBestScore = stats.bestScore
+                                }
+                                moveApplied = applyMoveNotation(candidate, plyMeta)
                                 if (!moveApplied) {
                                     val fallback = board.game?.generateLegalMoves()?.firstOrNull()?.asString() ?: ""
                                     if (fallback.isNotEmpty() && fallback != candidate) {
-                                        moveApplied = applyMoveNotation(fallback)
+                                        moveApplied = applyMoveNotation(fallback, plyMeta)
                                     }
-                                }
-                                if (moveApplied) {
-                                    val plyMeta = OctiGame.OctiPlyMetadata().apply {
-                                        this.elapsedMs = stats.elapsedMs
-                                        this.isAiMove = true
-                                        this.aiDifficulty = _botDifficulty.value.level
-                                        this.aiBudgetMs = botEngine.timeBudgetMs
-                                        this.aiDepthReached = stats.depthReached
-                                        this.aiNodesVisited = stats.nodesVisited
-                                        this.aiBestScore = stats.bestScore
-                                    }
-                                    board.game?.setLastPlyMetadata(plyMeta)
                                 }
                             }
                         }
@@ -1665,7 +1683,10 @@ class OctiAppViewModel @JvmOverloads constructor(
         }
     }
 
-    private fun recordAppliedBoardPly(notation: String) {
+    private fun recordAppliedBoardPly(
+        notation: String,
+        aiPlyMeta: OctiGame.OctiPlyMetadata? = null
+    ) {
         val snap = board.toPositionString()
         _moveHistory.add(notation)
         _fenHistory.add(snap)
@@ -1688,13 +1709,18 @@ class OctiAppViewModel @JvmOverloads constructor(
 
         val g = board.game
         if (g != null && g.numMoves > 0) {
-            val lastMeta = g.getPlyMetadata(g.numMoves - 1)
-            if (!lastMeta.isAiMove && lastMeta.elapsedMs == 0L) {
-                val nowMs = System.currentTimeMillis()
-                val thinkMs = Math.max(0L, nowMs - _currentTurnStartEpochMs)
-                lastMeta.elapsedMs = thinkMs
-                g.setLastPlyMetadata(lastMeta)
-                _currentTurnStartEpochMs = nowMs
+            if (aiPlyMeta != null) {
+                g.setLastPlyMetadata(aiPlyMeta)
+                _currentTurnStartEpochMs = System.currentTimeMillis()
+            } else {
+                val lastMeta = g.getPlyMetadata(g.numMoves - 1)
+                if (!lastMeta.isAiMove && lastMeta.elapsedMs == 0L) {
+                    val nowMs = System.currentTimeMillis()
+                    val thinkMs = Math.max(0L, nowMs - _currentTurnStartEpochMs)
+                    lastMeta.elapsedMs = thinkMs
+                    g.setLastPlyMetadata(lastMeta)
+                    _currentTurnStartEpochMs = nowMs
+                }
             }
         }
 
@@ -2159,6 +2185,28 @@ class OctiAppViewModel @JvmOverloads constructor(
             val res = OctiNetworkClient.TableActionResult.fromApiResult(apiRes, tableId)
             runOnUiThreadOrSync {
                 onDone?.onDone(res)
+            }
+        }
+    }
+
+    fun joinOnlineTableAsync(
+        tableId: String,
+        passcode: String,
+        onDone: ActionCallback<OctiNetworkClient.TableActionResult>? = null
+    ) {
+        joinOnlineTableAsync(tableId, -1, passcode, onDone)
+    }
+
+    @JvmOverloads
+    fun leaveOnlineTableAsync(
+        roomId: String = _activeRoomId.value,
+        onDone: ActionCallback<Boolean>? = null
+    ) {
+        val targetRoomId = roomId.trim()
+        _backgroundExecutor.submit {
+            val res = leaveOnlineTable(targetRoomId)
+            runOnUiThreadOrSync {
+                onDone?.onDone(res.ok)
             }
         }
     }
@@ -2699,6 +2747,7 @@ class OctiAppViewModel @JvmOverloads constructor(
         val res = netClient.fetchLobbyState()
         if (res.ok && res.data != null) {
             _lobbyState.value = res.data
+            _lobbyChatMessages.value = res.data.recentChat.map { formatLobbyChatEntry(it) }
         }
         return res
     }
@@ -2724,7 +2773,12 @@ class OctiAppViewModel @JvmOverloads constructor(
     ): OctiNetworkClient.ApiResult<OctiNetworkClient.CreateTableResponse> {
         val res = netClient.createTable(req)
         if (res.ok && res.data != null && res.data.roomId.isNotEmpty()) {
-            enterOnlineRoom(res.data.roomId)
+            val roomId = res.data.roomId
+            val gvRes = enterOnlineRoom(roomId)
+            refreshLobbyState()
+            if (gvRes.data?.phase == "WAITING_FOR_PLAYERS") {
+                _statusBanner.value = "Table #$roomId created — Waiting for players"
+            }
         }
         return res
     }
@@ -2732,12 +2786,13 @@ class OctiAppViewModel @JvmOverloads constructor(
     @JvmOverloads
     fun joinOnlineTable(
         roomId: String,
-        seat: Int,
+        seat: Int = -1,
         passcode: String = ""
     ): OctiNetworkClient.ApiResult<OctiNetworkClient.JoinTableResponse> {
         val res = netClient.joinTable(roomId, seat, passcode)
         if (res.ok && res.data != null) {
             enterOnlineRoom(roomId)
+            refreshLobbyState()
         }
         return res
     }
@@ -2765,18 +2820,33 @@ class OctiAppViewModel @JvmOverloads constructor(
         return res
     }
 
-    fun leaveOnlineTable(): OctiNetworkClient.ApiResult<Boolean> {
-        val roomId = _activeRoomId.value
-        if (roomId.isEmpty()) {
+    @JvmOverloads
+    fun leaveOnlineTable(roomId: String = _activeRoomId.value): OctiNetworkClient.ApiResult<Boolean> {
+        val targetRoomId = roomId.trim()
+        if (targetRoomId.isEmpty()) {
             return OctiNetworkClient.ApiResult(false)
         }
-        leaveVoiceChannel()
-        netClient.stopGameEventStream()
-        val res = netClient.leaveTable(roomId)
-        _activeRoomId.value = ""
-        _activeGameView.value = null
-        _gameChatLog.value = emptyList()
-        _matchType.value = MatchType.LOCAL_PASS_AND_PLAY
+        val isActiveRoom = (targetRoomId == _activeRoomId.value)
+        if (isActiveRoom) {
+            leaveVoiceChannel()
+            netClient.stopGameEventStream()
+        }
+        val res = netClient.leaveTable(targetRoomId)
+        if (isActiveRoom) {
+            runOnUiThreadOrSync {
+                val prevPhase = _activeGameView.value?.phase ?: "WAITING_FOR_PLAYERS"
+                _activeRoomId.value = ""
+                _activeGameView.value = null
+                _gameChatLog.value = emptyList()
+                if (_matchType.value == MatchType.ONLINE_ROOM &&
+                    (prevPhase == "WAITING_FOR_PLAYERS" || !board.game.isGameStarted || board.game.isGameOver)
+                ) {
+                    _matchType.value = MatchType.LOCAL_PASS_AND_PLAY
+                }
+                _statusBanner.value = "Left table #$targetRoomId"
+            }
+        }
+        refreshLobbyState()
         return res
     }
 
@@ -2846,7 +2916,16 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     private fun applyGameViewToBoard(gv: OctiNetworkClient.GameViewData) {
+        val prevPhase = _activeGameView.value?.phase
         _activeGameView.value = gv
+        if (gv.phase == "IN_PROGRESS" && prevPhase == "WAITING_FOR_PLAYERS") {
+            _currentTab.value = AppTab.BOARD
+            _statusBanner.value = "Match #${gv.roomId} started!"
+        } else if (gv.phase == "WAITING_FOR_PLAYERS") {
+            val filled = gv.seats.count { it.playerUuid.isNotEmpty() || it.handle.isNotEmpty() }
+            val total = gv.seats.size.coerceAtLeast(2)
+            _statusBanner.value = "Table #${gv.roomId} — Waiting for players ($filled/$total)"
+        }
         if (gv.fen.isNotEmpty()) {
             try {
                 board.fromPositionString(gv.fen)

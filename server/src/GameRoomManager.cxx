@@ -688,6 +688,16 @@ int64_t GameRoomManager::wallSec() const
     return _wallClock();
 }
 
+int64_t GameRoomManager::currentWallEpochMs() const
+{
+    if (_customWallClock) {
+        return wallSec() * 1000LL;
+    }
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::system_clock::now().time_since_epoch())
+        .count();
+}
+
 int64_t GameRoomManager::ensureAnonymousObserver(const std::string &ipAddress)
 {
     std::string sanitized;
@@ -830,6 +840,9 @@ void GameRoomManager::pushLobbyEventLocked(LobbyEvent e)
 {
     e.seq = ++_lobbySeq;
     e.atMs = nowMs();
+    if (e.createdAtMs <= 0) {
+        e.createdAtMs = currentWallEpochMs();
+    }
     bool isChat = e.type == LobbyEventType::LOBBY_CHAT;
     _lobbyEvents.push_back(std::move(e));
     if (isChat) {
@@ -856,6 +869,36 @@ void GameRoomManager::pushLobbyEventLocked(LobbyEvent e)
         _lobbyEvents.pop_front();
     }
     saveLobbyMetaLocked();
+}
+
+void GameRoomManager::purgeExpiredLobbyChatLocked()
+{
+    int64_t now = nowMs();
+    int64_t wallMs = currentWallEpochMs();
+    bool purgedAny = false;
+    for (std::deque<LobbyEvent>::iterator it = _lobbyEvents.begin();
+         it != _lobbyEvents.end(); ) {
+        if (it->type == LobbyEventType::LOBBY_CHAT) {
+            bool expiredByMono = (now >= it->atMs) &&
+                                 ((now - it->atMs) > kMaxLobbyChatAgeMs);
+            bool expiredByWall = (it->createdAtMs > 0) &&
+                                 (wallMs >= it->createdAtMs) &&
+                                 ((wallMs - it->createdAtMs) > kMaxLobbyChatAgeMs);
+            if (expiredByMono || expiredByWall) {
+                _lobbyEvictedUpToSeq = std::max(_lobbyEvictedUpToSeq, it->seq);
+                it = _lobbyEvents.erase(it);
+                if (_lobbyChatCount > 0) {
+                    --_lobbyChatCount;
+                }
+                purgedAny = true;
+                continue;
+            }
+        }
+        ++it;
+    }
+    if (purgedAny && !_restoring) {
+        saveLobbyMetaLocked();
+    }
 }
 
 void GameRoomManager::announceTableLocked(const Room &r, bool closed)
@@ -970,18 +1013,37 @@ RoomResult GameRoomManager::postLobbyChat(int64_t playerId,
     if (!cleanText(text, kMaxChatBytes, clean, err)) {
         return fail(RoomCode::INVALID_ARGUMENT, err);
     }
+    purgeExpiredLobbyChatLocked();
     int64_t now = nowMs();
     touchOnlineLocked(playerId);
     if (!rateAllow(_lobbyChatTimes[playerId], now, _limits.lobbyChatBurst,
                    _limits.lobbyChatWindowMs)) {
         return fail(RoomCode::RATE_LIMITED, "lobby chat rate limit exceeded");
     }
+    int64_t createdAtMs = currentWallEpochMs();
+    std::string senderHandle = handleOf(playerId);
     LobbyEvent e;
     e.type = LobbyEventType::LOBBY_CHAT;
+    e.createdAtMs = createdAtMs;
     e.playerId = playerId;
-    e.handle = handleOf(playerId);
+    e.handle = senderHandle;
     e.text = clean;
     pushLobbyEventLocked(e);
+
+    PlayerProfile senderProfile;
+    std::string senderUuid;
+    if (_store.getProfileById(playerId, senderProfile)) {
+        senderUuid = senderProfile.uuid;
+    }
+    std::fprintf(stderr, "[LOBBY_CHAT] seq=%lld ts_ms=%lld user=@%s (%lld): %s\n",
+                 static_cast<long long>(_lobbySeq),
+                 static_cast<long long>(createdAtMs),
+                 senderHandle.c_str(),
+                 static_cast<long long>(playerId),
+                 clean.c_str());
+    _store.appendLobbyChatLog(static_cast<uint64_t>(_lobbySeq),
+                              senderUuid, senderHandle, clean, createdAtMs);
+
     RoomResult r = success();
     r.seq = _lobbySeq;
     return r;
@@ -992,6 +1054,7 @@ LobbyPoll GameRoomManager::pollLobbyEvents(int64_t viewerPlayerId,
                                            size_t limit) const
 {
     std::lock_guard<std::mutex> lock(_mutex);
+    const_cast<GameRoomManager *>(this)->purgeExpiredLobbyChatLocked();
     LobbyPoll out;
     limit = std::max<size_t>(1, std::min<size_t>(limit, 500));
     out.latestSeq = _lobbySeq;
@@ -1021,13 +1084,25 @@ TableSummary GameRoomManager::summarize(const Room &r) const
     t.config.passcode.clear();
     t.hasPasscode = !r.config.passcode.empty();
     t.phase = r.phase;
+    t.hostPlayerId = r.hostId;
     t.hostHandle = handleOf(r.hostId);
+    t.createdAtMs = r.createdAtMs;
     t.seatsTotal = r.seatCount;
     for (int s = 1; s <= r.seatCount; ++s) {
+        TableSeatSummary ss;
+        ss.seat = s;
+        ss.playerId = r.seatPlayer[s];
         if (r.seatPlayer[s] != 0) {
+            ss.handle = r.seatHandle[s];
+            ss.rating = r.seatRating[s] > 0 ? r.seatRating[s] : 1500;
+            ss.connected = r.seatConnected[s];
             ++t.seatsFilled;
             t.playerHandles.push_back(r.seatHandle[s]);
+        } else {
+            ss.rating = 1500;
+            ss.connected = false;
         }
+        t.seats.push_back(std::move(ss));
     }
     t.observerCount = static_cast<int>(r.observers.size());
     for (std::set<int64_t>::const_iterator oit = r.observers.begin();
@@ -1055,6 +1130,7 @@ std::vector<TableSummary> GameRoomManager::listTables(bool includeFinished) cons
 LobbySnapshot GameRoomManager::lobbyState() const
 {
     std::lock_guard<std::mutex> lock(_mutex);
+    const_cast<GameRoomManager *>(this)->purgeExpiredLobbyChatLocked();
     LobbySnapshot snap;
     snap.latestSeq = _lobbySeq;
     for (std::map<int64_t, PlayerInfo>::const_iterator it = _players.begin();
@@ -1843,6 +1919,7 @@ TickReport GameRoomManager::tick()
     std::lock_guard<std::mutex> lock(_mutex);
     TickReport rep;
     int64_t now = nowMs();
+    purgeExpiredLobbyChatLocked();
 
     if (_rooms.size() < _limits.maxRooms) {
         std::vector<MatchGroup> groups = _queue.findMatches();
@@ -3706,6 +3783,7 @@ void GameRoomManager::saveLobbyMetaLocked()
         ej["seq"] = ev.seq;
         ej["type"] = toString(ev.type);
         ej["ageMs"] = std::max<int64_t>(0, now - ev.atMs);
+        ej["created_at_ms"] = ev.createdAtMs;
         ej["playerId"] = ev.playerId;
         ej["handle"] = ev.handle;
         ej["targetPlayerId"] = ev.targetPlayerId;
@@ -4090,6 +4168,8 @@ bool GameRoomManager::restoreFromStoreLocked()
 
                         int64_t ageMs = ej.value("ageMs", 0LL);
                         ev.atMs = restoreNow - std::max<int64_t>(0, ageMs);
+                        ev.createdAtMs = ej.value("created_at_ms",
+                                                  ej.value("createdAtMs", 0LL));
                         ev.playerId = ej.value("playerId", 0LL);
                         ev.handle = ej.value("handle", "");
                         ev.targetPlayerId = ej.value("targetPlayerId", 0LL);
@@ -4108,6 +4188,7 @@ bool GameRoomManager::restoreFromStoreLocked()
                         _lobbyEvents.push_back(ev);
                     }
                 }
+                purgeExpiredLobbyChatLocked();
 
                 _matchAssignments.clear();
                 if (mj.contains("matchAssignments") && mj["matchAssignments"].is_object()) {

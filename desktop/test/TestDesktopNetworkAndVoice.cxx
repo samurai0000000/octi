@@ -1543,6 +1543,118 @@ TEST(P2pVoiceEngineTest, RapidCheckUlawMonotonicityAndPacketFramingFuzz)
     CHECK_TRUE(prop3);
 }
 
+TEST(OctiNetworkClientTest, TableSummarySeatsAndLobbyChatCreatedAtMsParsing)
+{
+    httplib::Server mockSrv;
+    mockSrv.Get("/api/v1/lobby/state", [](const httplib::Request &, httplib::Response &res) {
+        Json table;
+        table["room_id"] = "room-seats-01";
+        table["mode"] = "2P";
+        table["bases"] = 3;
+        table["super_prongs"] = true;
+        table["edgeless"] = false;
+        table["phase"] = "WAITING_FOR_PLAYERS";
+        table["seats_filled"] = 1;
+        table["seats_total"] = 2;
+        table["observer_count"] = 2;
+        table["observer_policy"] = "OPEN";
+        table["voice_policy"] = "PLAYERS_ONLY";
+        table["has_passcode"] = false;
+        table["host_uuid"] = "uuid-host-alice";
+        table["host_handle"] = "AliceHost";
+        table["created_at_ms"] = static_cast<std::int64_t>(1730000123456LL);
+        table["seats"] = Json::array({
+            Json{
+                {"seat", 1},
+                {"player_uuid", "uuid-host-alice"},
+                {"handle", "AliceHost"},
+                {"rating", 1642},
+                {"connected", true}
+            },
+            Json{
+                {"seat", 2},
+                {"player_uuid", ""},
+                {"handle", ""},
+                {"rating", 1500},
+                {"connected", false}
+            }
+        });
+
+        Json chat1;
+        chat1["seq"] = 101;
+        chat1["created_at_ms"] = static_cast<std::int64_t>(1730000555789LL);
+        chat1["player_uuid"] = "uuid-host-alice";
+        chat1["handle"] = "AliceHost";
+        chat1["text"] = "Table #room-seats-01 is open!";
+
+        Json chat2;
+        chat2["seq"] = 102;
+        chat2["at_ms"] = static_cast<std::int64_t>(1730000556000LL);
+        chat2["player_uuid"] = "uuid-bob";
+        chat2["handle"] = "BobChallenger";
+        chat2["text"] = "Joining Seat 2 now!";
+
+        Json body;
+        body["players"] = Json::array();
+        body["tables"] = Json::array({table});
+        body["recent_chat"] = Json::array({chat1, chat2});
+        res.status = 200;
+        res.set_content(body.dump(), "application/json");
+    });
+
+    int port = mockSrv.bind_to_any_port("127.0.0.1");
+    CHECK_TRUE(port > 0);
+
+    struct ScopedMockServer {
+        httplib::Server &srv;
+        std::thread thr;
+        explicit ScopedMockServer(httplib::Server &s)
+            : srv(s),
+              thr([&s]() { s.listen_after_bind(); })
+        {
+            for (int i = 0; i < 50 && !srv.is_running(); ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            }
+        }
+        ~ScopedMockServer()
+        {
+            srv.stop();
+            if (thr.joinable()) {
+                thr.join();
+            }
+        }
+    } guard(mockSrv);
+
+    auto client = OctiNetworkClient::forHermeticTest(port);
+    auto lobbyRes = client->fetchLobbyState();
+    CHECK_TRUE_TEXT(lobbyRes.ok, lobbyRes.errorMessage.c_str());
+
+    LONGS_EQUAL(1, static_cast<long>(lobbyRes.data.tables.size()));
+    const TableSummaryInfo &ts = lobbyRes.data.tables[0];
+    STRCMP_EQUAL("room-seats-01", ts.roomId.c_str());
+    STRCMP_EQUAL("uuid-host-alice", ts.hostUuid.c_str());
+    STRCMP_EQUAL("AliceHost", ts.hostHandle.c_str());
+    LONGS_EQUAL(1730000123456LL, ts.createdAtMs);
+    LONGS_EQUAL(2, static_cast<long>(ts.seats.size()));
+    LONGS_EQUAL(1, ts.seats[0].seat);
+    STRCMP_EQUAL("uuid-host-alice", ts.seats[0].playerUuid.c_str());
+    STRCMP_EQUAL("AliceHost", ts.seats[0].handle.c_str());
+    LONGS_EQUAL(1642, ts.seats[0].rating);
+    CHECK_TRUE(ts.seats[0].connected);
+    LONGS_EQUAL(2, ts.seats[1].seat);
+    STRCMP_EQUAL("", ts.seats[1].playerUuid.c_str());
+    CHECK_FALSE(ts.seats[1].connected);
+
+    LONGS_EQUAL(2, static_cast<long>(lobbyRes.data.recentChat.size()));
+    LONGS_EQUAL(101, lobbyRes.data.recentChat[0].seq);
+    LONGS_EQUAL(1730000555789LL, lobbyRes.data.recentChat[0].atMs);
+    LONGS_EQUAL(1730000555789LL, lobbyRes.data.recentChat[0].createdAtMs);
+    STRCMP_EQUAL("AliceHost", lobbyRes.data.recentChat[0].handle.c_str());
+    LONGS_EQUAL(102, lobbyRes.data.recentChat[1].seq);
+    LONGS_EQUAL(1730000556000LL, lobbyRes.data.recentChat[1].atMs);
+    LONGS_EQUAL(1730000556000LL, lobbyRes.data.recentChat[1].createdAtMs);
+}
+
 int main(int argc, char **argv)
 {
     ::signal(SIGPIPE, SIG_IGN);

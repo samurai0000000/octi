@@ -183,6 +183,16 @@ struct LobbyChatEntry {
     std::string playerUuid;
     std::string handle;
     std::string text;
+    std::int64_t createdAtMs = 0;
+};
+using LobbyChatMessage = LobbyChatEntry;
+
+struct TableSeatInfo {
+    int seat = 0;
+    std::string playerUuid;
+    std::string handle;
+    int rating = 1500;
+    bool connected = false;
 };
 
 struct TableSummaryInfo {
@@ -201,9 +211,12 @@ struct TableSummaryInfo {
     std::string voicePolicy = "PLAYERS_ONLY";
     std::string phase = "WAITING_FOR_PLAYERS";
     bool hasPasscode = false;
+    std::string hostUuid;
     std::string hostHandle;
+    std::int64_t createdAtMs = 0;
     int seatsTotal = 2;
     int seatsFilled = 0;
+    std::vector<TableSeatInfo> seats;
     std::vector<std::string> players;
     int observerCount = 0;
 };

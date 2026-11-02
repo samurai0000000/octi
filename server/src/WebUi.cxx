@@ -621,36 +621,93 @@ tr.active-ply {
 
     <!-- Sub-Panel: Online Lobby, Live Tables & Observation -->
     <div id="play-online-panel" style="display:none;">
-      <div class="row">
-        <button type="button" class="btn" id="btn-web-refresh-tables">Refresh Tables</button>
-        <button type="button" class="btn btn-primary" id="btn-web-create-table" title="Sign in to play online">Create Online Table</button>
-        <button type="button" class="btn" id="btn-web-quick-match" title="Sign in to play online">Quick Match</button>
-        <span id="web-online-notice" class="dim" style="margin-left:auto;"></span>
-      </div>
+      <div id="play-online-lobby-container">
+        <div class="row">
+          <button type="button" class="btn" id="btn-web-refresh-tables">Refresh Tables</button>
+          <button type="button" class="btn btn-primary" id="btn-web-create-table" title="Sign in to play online">Create Online Table</button>
+          <span id="web-online-notice" class="dim" style="margin-left:auto;"></span>
+        </div>
 
-      <div style="background:#f4f4f5;border:1px solid var(--line);border-radius:6px;padding:8px 12px;margin:10px 0;font-size:13px;">
-        <strong>Active Room Observers:</strong> <span id="web-room-observers">anonymous-127.0.0.1</span>
-      </div>
+        <div id="web-my-table-banner" style="display:none;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px 14px;margin:10px 0;align-items:center;justify-content:space-between;gap:12px;">
+          <strong id="web-my-table-banner-text" style="color:#1e3a8a;font-size:14px;">Seated at Table</strong>
+          <button type="button" class="btn btn-primary" id="btn-web-leave-my-table" style="background:#dc2626;border-color:#dc2626;">Leave Table</button>
+        </div>
 
-      <div id="web-online-tables" style="margin-top:12px;">Loading live tables...</div>
-
-      <div class="cols" style="margin-top:18px;">
-        <div class="col-side" style="flex:1;">
-          <h4>Lobby Chat</h4>
-          <div id="web-lobby-chat-log" style="height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:8px;background:#fff;margin-bottom:8px;font-size:13px;">
-            <div class="dim">Connected to lobby chat.</div>
+        <div id="web-create-table-panel" class="panel" style="margin:10px 0;background:#f9fafb;">
+          <h4 style="margin:0 0 8px 0;">Create New Table</h4>
+          <div class="row">
+            <label>Mode:
+              <select id="web-create-mode">
+                <option value="2P" selected>2P (2-Player)</option>
+                <option value="4P">4P (4-Player)</option>
+                <option value="OFK">OFK (OCTI for Kids)</option>
+              </select>
+            </label>
+            <label>Bases:
+              <select id="web-create-bases">
+                <option value="1">1-Base (Fast)</option>
+                <option value="3" selected>3-Base (Standard)</option>
+                <option value="4">4-Base (OFK)</option>
+              </select>
+            </label>
+            <label>Time Control:
+              <select id="web-create-tc">
+                <option value="untimed" selected>Untimed</option>
+                <option value="300000+0">5m + 0s</option>
+                <option value="600000+5000">10m + 5s</option>
+                <option value="900000+10000">15m + 10s</option>
+              </select>
+            </label>
+            <label><input type="checkbox" id="web-create-super-prongs"> Superprongs</label>
+            <label><input type="checkbox" id="web-create-edgeless"> Edgeless</label>
+            <label><input type="checkbox" id="web-create-rated" checked> Rated</label>
+            <label>Passcode:
+              <input id="web-create-passcode" type="password" placeholder="Optional" maxlength="32" style="width:110px;">
+            </label>
+            <button type="button" class="btn btn-primary" id="btn-web-create-table-submit">Host Table</button>
           </div>
         </div>
-        <div class="col-side" style="flex:1;">
-          <h4>Game Room Chat</h4>
-          <div id="web-room-chat-log" style="height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:8px;background:#fff;margin-bottom:8px;font-size:13px;">
-            <div class="dim">No active table selected.</div>
+
+        <div style="background:#f4f4f5;border:1px solid var(--line);border-radius:6px;padding:8px 12px;margin:10px 0;font-size:13px;">
+          <strong>Active Room Observers:</strong> <span id="web-room-observers">anonymous-127.0.0.1</span>
+        </div>
+
+        <div id="web-online-tables" style="margin-top:12px;">
+          <table id="web-lobby-tables">
+            <thead>
+              <tr>
+                <th>Table / Host</th>
+                <th>Mode &amp; Rules</th>
+                <th>Phase</th>
+                <th>Seat Roster</th>
+                <th>Observers</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="web-lobby-tables-body">
+              <tr><td colspan="6" class="dim" style="text-align:center;padding:12px;">Loading live tables...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="cols" style="margin-top:18px;">
+          <div class="col-side" style="flex:1;" id="web-lobby-chat-box">
+            <h4>Lobby Chat</h4>
+            <div id="web-lobby-chat-log" style="height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:8px;background:#fff;margin-bottom:8px;font-size:13px;">
+              <div class="dim">Connected to lobby chat.</div>
+            </div>
+          </div>
+          <div class="col-side" style="flex:1;">
+            <h4>Game Room Chat</h4>
+            <div id="web-room-chat-log" style="height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:8px;background:#fff;margin-bottom:8px;font-size:13px;">
+              <div class="dim">No active table selected.</div>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="row">
-        <input id="web-chat-input" placeholder="Sign in to chat (observing as anonymous-127.0.0.1)" style="flex:1;" disabled>
-        <button type="button" class="btn" id="btn-web-chat-send" disabled>Send</button>
+        <div class="row">
+          <input id="web-chat-input" placeholder="Sign in to chat (observing as anonymous-127.0.0.1)" style="flex:1;" disabled>
+          <button type="button" class="btn" id="btn-web-chat-send" disabled>Send</button>
+        </div>
       </div>
     </div>
   </div>
@@ -967,6 +1024,17 @@ tr.active-ply {
     </div>
   </div>
 </section>
+
+<div id="web-confirm-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#ffffff;border:1px solid var(--line);border-radius:12px;max-width:440px;width:100%;padding:20px;box-shadow:0 20px 35px rgba(0,0,0,0.22);">
+    <h3 id="web-confirm-title" style="margin:0 0 8px 0;font-size:18px;color:var(--fg);">Confirm Action</h3>
+    <p id="web-confirm-message" style="margin:0 0 18px 0;font-size:14px;color:var(--dim);line-height:1.5;"></p>
+    <div class="row" style="justify-content:flex-end;gap:10px;margin:0;">
+      <button type="button" class="btn" id="btn-web-confirm-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="btn-web-confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
 
 </main>
 
@@ -2617,9 +2685,9 @@ function renderGuestState() {
     $("btn-web-create-table").disabled = true;
     $("btn-web-create-table").title = "Sign in to play online";
   }
-  if ($("btn-web-quick-match")) {
-    $("btn-web-quick-match").disabled = true;
-    $("btn-web-quick-match").title = "Sign in to play online";
+  if ($("btn-web-create-table-submit")) {
+    $("btn-web-create-table-submit").disabled = true;
+    $("btn-web-create-table-submit").title = "Sign in to play online";
   }
   if ($("web-chat-input")) {
     $("web-chat-input").disabled = true;
@@ -2651,9 +2719,9 @@ function renderAuthState() {
     $("btn-web-create-table").disabled = false;
     $("btn-web-create-table").title = "";
   }
-  if ($("btn-web-quick-match")) {
-    $("btn-web-quick-match").disabled = false;
-    $("btn-web-quick-match").title = "";
+  if ($("btn-web-create-table-submit")) {
+    $("btn-web-create-table-submit").disabled = false;
+    $("btn-web-create-table-submit").title = "";
   }
   if ($("web-chat-input")) {
     $("web-chat-input").disabled = false;
@@ -2803,17 +2871,56 @@ $("web-avatar-file").addEventListener("change", function (ev) {
   reader.readAsDataURL(file);
 });
 
-$("btn-web-clear-avatar").addEventListener("click", function () {
-  $("web-avatar-url").value = "";
-  $("web-avatar-file").value = "";
-  var prev = $("web-avatar-preview");
-  clear(prev);
-  prev.appendChild(createAvatarEl("", $("web-handle-input").value || "U", 96));
-  var statusEl = $("web-profile-status");
-  if (statusEl) {
-    statusEl.textContent = "Avatar cleared. Click Save Profile to apply.";
-    statusEl.style.color = "var(--dim)";
+var pendingConfirmFn = null;
+
+function closeConfirmModal() {
+  var modal = $("web-confirm-modal");
+  if (modal) modal.style.display = "none";
+  pendingConfirmFn = null;
+}
+
+function showConfirmModal(title, message, confirmText, onConfirm) {
+  var modal = $("web-confirm-modal");
+  if (!modal) {
+    if (typeof onConfirm === "function") onConfirm();
+    return;
   }
+  if ($("web-confirm-title")) $("web-confirm-title").textContent = title || "Confirm Action";
+  if ($("web-confirm-message")) $("web-confirm-message").textContent = message || "Are you sure?";
+  if ($("btn-web-confirm-ok")) $("btn-web-confirm-ok").textContent = confirmText || "Confirm";
+  pendingConfirmFn = onConfirm || null;
+  modal.style.display = "flex";
+}
+
+if ($("btn-web-confirm-cancel")) {
+  $("btn-web-confirm-cancel").addEventListener("click", closeConfirmModal);
+}
+if ($("btn-web-confirm-ok")) {
+  $("btn-web-confirm-ok").addEventListener("click", function () {
+    var fn = pendingConfirmFn;
+    closeConfirmModal();
+    if (typeof fn === "function") fn();
+  });
+}
+
+$("btn-web-clear-avatar").addEventListener("click", function () {
+  showConfirmModal(
+    "Clear Avatar?",
+    "Are you sure you want to clear your avatar? You will still need to click Save Profile to apply.",
+    "Clear Avatar",
+    function () {
+      $("web-avatar-url").value = "";
+      $("web-avatar-file").value = "";
+      var prev = $("web-avatar-preview");
+      clear(prev);
+      prev.appendChild(createAvatarEl("", $("web-handle-input").value || "U", 96));
+      var statusEl = $("web-profile-status");
+      if (statusEl) {
+        statusEl.textContent = "Avatar cleared. Click Save Profile to apply.";
+        statusEl.style.color = "var(--dim)";
+      }
+    }
+  );
 });
 
 $("btn-web-save-profile").addEventListener("click", function () {
@@ -2837,45 +2944,52 @@ $("btn-web-save-profile").addEventListener("click", function () {
     bio: $("web-bio-input").value.trim()
   };
 
-  if (statusEl) {
-    statusEl.textContent = "Saving profile...";
-    statusEl.style.color = "var(--dim)";
-  }
+  showConfirmModal(
+    "Apply Profile Settings?",
+    "Are you sure you want to save and apply these changes to your profile?",
+    "Save Changes",
+    function () {
+      if (statusEl) {
+        statusEl.textContent = "Saving profile...";
+        statusEl.style.color = "var(--dim)";
+      }
 
-  api("/api/v1/profile/me", { method: "PATCH", body: payload }).then(function (res) {
-    var updated = res.user || res;
-    if (currentUser) {
-      currentUser.handle = (updated.handle !== undefined) ? updated.handle : payload.handle;
-      currentUser.display_name = (updated.display_name !== undefined) ? updated.display_name : payload.display_name;
-      currentUser.location = (updated.location !== undefined) ? updated.location : payload.location;
-      currentUser.avatar_url = (updated.avatar_url !== undefined) ? updated.avatar_url : payload.avatar_url;
-      currentUser.bio = (updated.bio !== undefined) ? updated.bio : payload.bio;
-      try {
-        localStorage.setItem("octi_current_user", JSON.stringify(currentUser));
-      } catch (e) {}
-    } else {
-      currentUser = updated;
+      api("/api/v1/profile/me", { method: "PATCH", body: payload }).then(function (res) {
+        var updated = res.user || res;
+        if (currentUser) {
+          currentUser.handle = (updated.handle !== undefined) ? updated.handle : payload.handle;
+          currentUser.display_name = (updated.display_name !== undefined) ? updated.display_name : payload.display_name;
+          currentUser.location = (updated.location !== undefined) ? updated.location : payload.location;
+          currentUser.avatar_url = (updated.avatar_url !== undefined) ? updated.avatar_url : payload.avatar_url;
+          currentUser.bio = (updated.bio !== undefined) ? updated.bio : payload.bio;
+          try {
+            localStorage.setItem("octi_current_user", JSON.stringify(currentUser));
+          } catch (e) {}
+        } else {
+          currentUser = updated;
+        }
+        updateAuthPill();
+        renderAuthState();
+        if (typeof loadLeaderboard === "function") { loadLeaderboard(); }
+        if (typeof loadGames === "function") { loadGames(); }
+        if (typeof lbLoad === "function") { lbLoad(); }
+        if (typeof arSearch === "function") { arSearch(0); }
+        if (typeof usersSearch === "function" && usersLoaded) { usersSearch(usersOffset || 0); }
+        if (statusEl) {
+          statusEl.textContent = "Profile saved.";
+          statusEl.style.color = "#10b981";
+        }
+        showToast("Profile saved.", "success");
+      }).catch(function (e) {
+        var errMsg = e.message || "Failed to save profile.";
+        if (statusEl) {
+          statusEl.textContent = errMsg;
+          statusEl.style.color = "#ef4444";
+        }
+        showToast(errMsg, "error");
+      });
     }
-    updateAuthPill();
-    renderAuthState();
-    if (typeof loadLeaderboard === "function") { loadLeaderboard(); }
-    if (typeof loadGames === "function") { loadGames(); }
-    if (typeof lbLoad === "function") { lbLoad(); }
-    if (typeof arSearch === "function") { arSearch(0); }
-    if (typeof usersSearch === "function" && usersLoaded) { usersSearch(usersOffset || 0); }
-    if (statusEl) {
-      statusEl.textContent = "Profile saved.";
-      statusEl.style.color = "#10b981";
-    }
-    showToast("Profile saved.", "success");
-  }).catch(function (e) {
-    var errMsg = e.message || "Failed to save profile.";
-    if (statusEl) {
-      statusEl.textContent = errMsg;
-      statusEl.style.color = "#ef4444";
-    }
-    showToast(errMsg, "error");
-  });
+  );
 });
 
 $("btn-web-view-public-profile").addEventListener("click", function () {
@@ -4117,87 +4231,309 @@ function renderSvgBoard() {
 }
 
 /* Online Lobby & Tables */
-function loadOnlineTables() {
-  api("/api/v1/tables").then(function (res) {
-    var container = $("web-online-tables");
-    if (!container) return;
-    clear(container);
-    var tables = res.tables || [];
+var currentMyTableRoomId = "";
+
+function seatLetterOf(seat) {
+  return seat === 1 ? "A" : (seat === 2 ? "B" : (seat === 3 ? "C" : (seat === 4 ? "D" : String(seat))));
+}
+
+function formatLobbyChatTime(ms) {
+  var num = Number(ms || 0);
+  if (!num || num < 100000000000) {
+    return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  return new Date(num).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function renderLobbyChatMessages(chatList) {
+  var log = $("web-lobby-chat-log");
+  if (!log) return;
+  clear(log);
+  var arr = Array.isArray(chatList) ? chatList : [];
+  if (!arr.length) {
+    log.appendChild(el("div", "Connected to lobby chat. (Messages older than 6 hours are automatically purged.)", "dim"));
+    return;
+  }
+  arr.forEach(function (m) {
+    var ts = formatLobbyChatTime(m.created_at_ms || m.at_ms);
+    var h = m.handle ? ("@" + m.handle) : "player";
+    var line = el("div", "[" + ts + "] " + h + ": " + (m.text || ""));
+    line.style.marginBottom = "4px";
+    log.appendChild(line);
+  });
+  log.scrollTop = log.scrollHeight;
+}
+
+function formatTableRulesetSummary(t) {
+  var parts = [t.mode || "2P"];
+  if (t.bases) parts.push(t.bases + "-Base");
+  if (t.super_prongs) parts.push("Superprongs");
+  if (t.edgeless) parts.push("Edgeless");
+  parts.push(t.rated ? "Rated" : "Casual");
+  if (t.time_control && typeof t.time_control === "object") {
+    if (t.time_control.enabled && t.time_control.initial_ms > 0) {
+      var mins = Math.round(t.time_control.initial_ms / 60000);
+      var inc = Math.round((t.time_control.increment_ms || 0) / 1000);
+      parts.push(mins + "m+" + inc + "s");
+    } else {
+      parts.push("Untimed");
+    }
+  }
+  return parts.join(" \u2022 ");
+}
+
+function isUserSeatedAtTable(t) {
+  if (!currentUser) return false;
+  var myUuid = currentUser.uuid || currentUser.user_id || "";
+  var myHandle = currentUser.handle || "";
+  if (Array.isArray(t.seats)) {
+    for (var i = 0; i < t.seats.length; i++) {
+      var s = t.seats[i];
+      if ((myUuid && s.player_uuid === myUuid) || (myHandle && s.handle === myHandle)) {
+        return true;
+      }
+    }
+  }
+  if (Array.isArray(t.players)) {
+    for (var j = 0; j < t.players.length; j++) {
+      var p = t.players[j];
+      var ph = (typeof p === "string") ? p : (p && p.handle ? p.handle : "");
+      if (myHandle && ph === myHandle) return true;
+    }
+  }
+  return false;
+}
+
+function leaveTableById(roomId) {
+  if (!roomId) return;
+  api("/api/v1/tables/" + encodeURIComponent(roomId) + "/leave", { method: "POST" }).then(function () {
+    if ($("web-online-notice")) {
+      $("web-online-notice").textContent = "Left table " + roomId + ".";
+    }
+    refreshLobbyTables();
+  }).catch(function (e) {
+    alert("Failed to leave table: " + e.message);
+  });
+}
+
+function refreshLobbyTables() {
+  api("/api/v1/lobby/state").then(function (res) {
+    if (res && Array.isArray(res.recent_chat)) {
+      renderLobbyChatMessages(res.recent_chat);
+    }
+    var tables = (res && Array.isArray(res.tables)) ? res.tables : [];
+    var tbody = $("web-lobby-tables-body");
+    if (!tbody) return;
+    clear(tbody);
+
+    currentMyTableRoomId = "";
+    var myTableObj = null;
+    for (var ti = 0; ti < tables.length; ti++) {
+      var tblItem = tables[ti];
+      if (isUserSeatedAtTable(tblItem)) {
+        currentMyTableRoomId = tblItem.room_id || tblItem.table_id || "";
+        myTableObj = tblItem;
+        break;
+      }
+    }
+
+    var banner = $("web-my-table-banner");
+    var bannerText = $("web-my-table-banner-text");
+    if (banner && bannerText) {
+      if (currentMyTableRoomId && myTableObj) {
+        bannerText.textContent = "Seated at Table #" + currentMyTableRoomId + " (" + (myTableObj.phase || "WAITING_FOR_PLAYERS") + ")";
+        banner.style.display = "flex";
+      } else {
+        banner.style.display = "none";
+      }
+    }
+
     if (!tables.length) {
-      container.innerHTML = "<div class='dim' style='padding:12px;text-align:center;'>No active online tables found. Click Create Online Table to host one.</div>";
+      var emptyTr = el("tr");
+      var emptyTd = el("td", "No active online tables found. Use Create New Table above to host one.", "dim");
+      emptyTd.colSpan = 6;
+      emptyTd.style.textAlign = "center";
+      emptyTd.style.padding = "12px";
+      emptyTr.appendChild(emptyTd);
+      tbody.appendChild(emptyTr);
       return;
     }
-    var tbl = el("table");
-    tbl.innerHTML = "<thead><tr><th>Table ID</th><th>Mode</th><th>State</th><th>Players</th><th>Observers</th><th>Action</th></tr></thead>";
-    var tbody = el("tbody");
+
     tables.forEach(function (t) {
+      var roomId = t.room_id || t.table_id || "";
+      var phase = t.phase || t.state || "WAITING_FOR_PLAYERS";
       var tr = el("tr");
-      tr.appendChild(el("td", t.table_id));
-      tr.appendChild(el("td", t.mode || "2P"));
-      tr.appendChild(el("td", t.state || "WAITING"));
-      var plStr = (t.players || []).map(function (p) { return p.handle; }).join(" vs ") || "-";
-      tr.appendChild(el("td", plStr));
-      tr.appendChild(el("td", String(t.observers_count || 0)));
+
+      var tdHost = el("td");
+      var idLine = el("div");
+      var idStrong = el("strong", roomId);
+      idLine.appendChild(idStrong);
+      if (t.has_passcode) {
+        var lockSpan = el("span", " \uD83D\uDD12 Passcode", "badge");
+        lockSpan.style.marginLeft = "6px";
+        idLine.appendChild(lockSpan);
+      }
+      tdHost.appendChild(idLine);
+      var hostSub = el("div", "Host: @" + (t.host_handle || "unknown"), "dim");
+      hostSub.style.fontSize = "12px";
+      tdHost.appendChild(hostSub);
+      tr.appendChild(tdHost);
+
+      tr.appendChild(el("td", formatTableRulesetSummary(t)));
+
+      var tdPhase = el("td");
+      var phaseBadge = el("span", phase, phase === "IN_PROGRESS" ? "badge badge-online" : "badge badge-upload");
+      tdPhase.appendChild(phaseBadge);
+      tr.appendChild(tdPhase);
+
+      var tdSeats = el("td");
+      var seatsTotal = t.seats_total || (t.mode === "4P" ? 4 : 2);
+      var seatsArr = Array.isArray(t.seats) && t.seats.length ? t.seats : [];
+      var rosterWrap = el("div");
+      rosterWrap.style.display = "flex";
+      rosterWrap.style.flexWrap = "wrap";
+      rosterWrap.style.gap = "6px";
+      if (seatsArr.length) {
+        seatsArr.forEach(function (s) {
+          var sNum = s.seat || 1;
+          var side = seatLetterOf(sNum);
+          var occupied = !!(s.handle || s.player_uuid);
+          var txt = "Seat " + sNum + " (" + side + "): " +
+            (occupied ? ("@" + s.handle + (s.rating ? " (" + s.rating + ")" : "")) : "Open");
+          var pill = el("span", txt, "badge");
+          pill.style.background = occupied ? "#dbeafe" : "#f4f4f5";
+          pill.style.color = occupied ? "#1e40af" : "#71717a";
+          rosterWrap.appendChild(pill);
+        });
+      } else {
+        var pls = Array.isArray(t.players) ? t.players : [];
+        for (var si = 1; si <= seatsTotal; si++) {
+          var sideL = seatLetterOf(si);
+          var pItem = pls[si - 1];
+          var pHandle = typeof pItem === "string" ? pItem : (pItem && pItem.handle ? pItem.handle : "");
+          var pillTxt = "Seat " + si + " (" + sideL + "): " + (pHandle ? ("@" + pHandle) : "Open");
+          var pillEl = el("span", pillTxt, "badge");
+          rosterWrap.appendChild(pillEl);
+        }
+      }
+      tdSeats.appendChild(rosterWrap);
+      tr.appendChild(tdSeats);
+
+      var obsCount = (t.observer_count !== undefined) ? t.observer_count : (t.observers_count || 0);
+      tr.appendChild(el("td", String(obsCount)));
 
       var tdAct = el("td");
-      var obsBtn = el("button", "Observe", "btn");
-      obsBtn.addEventListener("click", function () {
-        api("/api/v1/tables/" + encodeURIComponent(t.table_id) + "/observe", { method: "POST" }).then(function (oRes) {
-          $("web-room-observers").textContent = (oRes.observer_handles || ["anonymous-127.0.0.1"]).join(", ");
-          var roomLog = $("web-room-chat-log");
-          clear(roomLog);
-          roomLog.appendChild(el("div", "Observing table " + t.table_id));
-        }).catch(function (e) { alert("Failed to observe: " + e.message); });
-      });
-      tdAct.appendChild(obsBtn);
+      var amSeatedHere = isUserSeatedAtTable(t);
+      var seatsFilled = (t.seats_filled !== undefined) ? t.seats_filled : 0;
 
-      if (currentUser) {
-        var joinBtn = el("button", "Join Seat", "btn btn-primary");
-        joinBtn.style.marginLeft = "6px";
+      if (currentUser && !amSeatedHere && phase === "WAITING_FOR_PLAYERS" && seatsFilled < seatsTotal) {
+        var joinBtn = el("button", "Join Table", "btn btn-primary");
+        joinBtn.style.marginRight = "6px";
         joinBtn.addEventListener("click", function () {
-          api("/api/v1/tables/" + encodeURIComponent(t.table_id) + "/join", { method: "POST" }).then(function () {
-            alert("Joined table " + t.table_id);
-            loadOnlineTables();
+          var pass = "";
+          if (t.has_passcode) {
+            var prompted = window.prompt("Enter table passcode for " + roomId + ":", "");
+            if (prompted === null) return;
+            pass = prompted;
+          }
+          api("/api/v1/tables/" + encodeURIComponent(roomId) + "/join", {
+            method: "POST",
+            body: { seat: 0, passcode: pass }
+          }).then(function () {
+            if ($("web-online-notice")) {
+              $("web-online-notice").textContent = "Joined table " + roomId + ".";
+            }
+            refreshLobbyTables();
           }).catch(function (e) { alert("Failed to join: " + e.message); });
         });
         tdAct.appendChild(joinBtn);
       }
 
+      if (currentUser && amSeatedHere) {
+        var leaveBtn = el("button", "Leave Table", "btn");
+        leaveBtn.style.marginRight = "6px";
+        leaveBtn.style.borderColor = "#dc2626";
+        leaveBtn.style.color = "#dc2626";
+        leaveBtn.addEventListener("click", function () {
+          leaveTableById(roomId);
+        });
+        tdAct.appendChild(leaveBtn);
+      }
+
+      var obsBtn = el("button", "Observe", "btn");
+      obsBtn.addEventListener("click", function () {
+        api("/api/v1/tables/" + encodeURIComponent(roomId) + "/observe", { method: "POST" }).then(function (oRes) {
+          $("web-room-observers").textContent = (oRes.observer_handles || t.observer_handles || ["anonymous-127.0.0.1"]).join(", ");
+          var roomLog = $("web-room-chat-log");
+          clear(roomLog);
+          roomLog.appendChild(el("div", "Observing table " + roomId));
+          refreshLobbyTables();
+        }).catch(function (e) { alert("Failed to observe: " + e.message); });
+      });
+      tdAct.appendChild(obsBtn);
+
       tr.appendChild(tdAct);
       tbody.appendChild(tr);
     });
-    tbl.appendChild(tbody);
-    container.appendChild(tbl);
   }).catch(function () {});
 }
 
-$("btn-web-refresh-tables").addEventListener("click", loadOnlineTables);
+var loadOnlineTables = refreshLobbyTables;
 
-$("btn-web-create-table").addEventListener("click", function () {
+$("btn-web-refresh-tables").addEventListener("click", refreshLobbyTables);
+
+if ($("btn-web-leave-my-table")) {
+  $("btn-web-leave-my-table").addEventListener("click", function () {
+    if (currentMyTableRoomId) {
+      leaveTableById(currentMyTableRoomId);
+    }
+  });
+}
+
+function submitCreateOnlineTable() {
   if (!currentUser) return;
-  api("/api/v1/tables", { method: "POST", body: { mode: "2P" } }).then(function () {
-    loadOnlineTables();
+  var mode = $("web-create-mode") ? $("web-create-mode").value : "2P";
+  var bases = $("web-create-bases") ? parseInt($("web-create-bases").value, 10) : 3;
+  if (mode === "OFK") bases = 4;
+  if (mode === "4P" && bases === 4) bases = 1;
+  var superProngs = $("web-create-super-prongs") ? !!$("web-create-super-prongs").checked : false;
+  var edgeless = $("web-create-edgeless") ? !!$("web-create-edgeless").checked : false;
+  var rated = $("web-create-rated") ? !!$("web-create-rated").checked : true;
+  var tcVal = $("web-create-tc") ? $("web-create-tc").value : "untimed";
+  var passcode = $("web-create-passcode") ? $("web-create-passcode").value : "";
+
+  var body = {
+    mode: mode,
+    bases: bases,
+    super_prongs: superProngs,
+    edgeless: edgeless,
+    rated: rated,
+    time_control: tcVal
+  };
+  if (passcode) {
+    body.passcode = passcode;
+  }
+  api("/api/v1/tables", { method: "POST", body: body }).then(function (res) {
+    if ($("web-create-passcode")) $("web-create-passcode").value = "";
+    if ($("web-online-notice") && res && res.room_id) {
+      $("web-online-notice").textContent = "Created table " + res.room_id + ".";
+    }
+    refreshLobbyTables();
   }).catch(function (e) { alert("Failed to create table: " + e.message); });
-});
+}
 
-$("btn-web-quick-match").addEventListener("click", function () {
-  if (!currentUser) return;
-  api("/api/v1/lobby/quickmatch", { method: "POST" }).then(function (res) {
-    alert("Quick match matched table: " + res.table_id);
-    loadOnlineTables();
-  }).catch(function (e) { alert("Quick match: " + e.message); });
-});
+$("btn-web-create-table").addEventListener("click", submitCreateOnlineTable);
+if ($("btn-web-create-table-submit")) {
+  $("btn-web-create-table-submit").addEventListener("click", submitCreateOnlineTable);
+}
 
 $("btn-web-chat-send").addEventListener("click", function () {
   var input = $("web-chat-input");
   var msg = input.value.trim();
   if (!msg || !currentUser) return;
   input.value = "";
-  api("/api/v1/lobby/chat", { method: "POST", body: { message: msg } }).then(function () {
-    var log = $("web-lobby-chat-log");
-    var div = el("div", "[" + currentUser.handle + "]: " + msg);
-    log.appendChild(div);
-    log.scrollTop = log.scrollHeight;
+  api("/api/v1/lobby/chat", { method: "POST", body: { text: msg } }).then(function () {
+    refreshLobbyTables();
   }).catch(function (e) { alert("Chat failed: " + e.message); });
 });
 
@@ -4210,9 +4546,27 @@ $("web-chat-input").addEventListener("keydown", function (ev) {
 var arOffset = 0, arLimit = 20, arTotal = 0, arLoaded = false;
 var rpPlies = [], rpIdx = 0, rpTimer = null, rpHandles = [];
 
+function winnerHandleOf(g) {
+  if (!g || !g.winner || g.winner === "NONE") return "";
+  var targetSeat = g.winner === "A" ? 1 : (g.winner === "B" ? 2 : (g.winner === "C" ? 3 : (g.winner === "D" ? 4 : 0)));
+  var pls = g.players || [];
+  for (var i = 0; i < pls.length; i++) {
+    if ((pls[i].player && pls[i].player === g.winner) || (targetSeat > 0 && pls[i].seat === targetSeat)) {
+      return pls[i].handle || "";
+    }
+  }
+  if (targetSeat > 0 && pls.length >= targetSeat && pls[targetSeat - 1]) {
+    return pls[targetSeat - 1].handle || "";
+  }
+  return "";
+}
+
 function resultText(g) {
   var s = "";
-  if (g.winner && g.winner !== "NONE") { s += "Winner: " + g.winner + "  "; }
+  if (g.winner && g.winner !== "NONE") {
+    var winHandle = winnerHandleOf(g);
+    s += "Winner: " + g.winner + (winHandle ? " (" + winHandle + ")  " : "  ");
+  }
   s += (g.status || g.result) + " (" + (g.termination || "") + ")";
   return s;
 }
@@ -4290,10 +4644,18 @@ function arSearch(offset) {
       var srcBadge = g.source === "client_upload"
         ? el("span", "upload", "badge badge-upload")
         : el("span", "online", "badge badge-online");
-      var winBadge = el("span", g.winner || "NONE",
+      var winHandle = winnerHandleOf(g);
+      var winText = (g.winner && g.winner !== "NONE")
+        ? (g.winner + (winHandle ? " (" + winHandle + ")" : ""))
+        : (g.winner || "NONE");
+      var winBadge = el("span", winText,
         (g.winner === "A" || g.winner === "B" || g.winner === "C" || g.winner === "D")
           ? "badge badge-winner" : "badge");
-      var playersStr = (g.players || []).map(function (p) { return p.handle; }).join(" vs ");
+      var playersStr = (g.players || []).map(function (p, idx) {
+        var sNum = p.seat || (idx + 1);
+        var side = p.player || seatLetterOf(sNum);
+        return side + ": " + p.handle;
+      }).join(" vs ");
       var shortId = g.game_id.length > 16 ? (g.game_id.slice(0, 12) + "...") : g.game_id;
       var tdGame = el("td", shortId);
       tdGame.title = g.game_id;
@@ -4375,8 +4737,10 @@ function arOpen(id) {
       }
     }
     rpHandles = (g.players || []).map(function (p) { return p.handle; });
-    $("ar-info").textContent = (g.players || []).map(function (p) {
-      return "Seat " + p.seat + ": " + p.handle;
+    $("ar-info").textContent = (g.players || []).map(function (p, idx) {
+      var sNum = p.seat || (idx + 1);
+      var side = p.player || seatLetterOf(sNum);
+      return "Seat " + sNum + " (" + side + "): " + p.handle;
     }).join("  |  ") + "  |  " + resultText(g);
 
     api("/api/v1/archive/games/" + encodeURIComponent(id) + "/plies").then(function (pRes) {

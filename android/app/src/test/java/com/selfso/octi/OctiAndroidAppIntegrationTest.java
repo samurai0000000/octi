@@ -43,6 +43,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -1100,9 +1101,29 @@ public class OctiAndroidAppIntegrationTest {
                         os.write(avatarPayload);
                         os.flush();
                         continue;
+                    } else if (reqLine.contains("/api/v1/tables") && reqLine.startsWith("POST") && !reqLine.contains("/leave") && !reqLine.contains("/observe")) {
+                        status = 201;
+                        respBody = "{\n"
+                                + "  \"room_id\": \"room-leave-test-456\",\n"
+                                + "  \"seat\": 1,\n"
+                                + "  \"phase\": \"WAITING_FOR_PLAYERS\"\n"
+                                + "}";
+                    } else if (reqLine.contains("/leave")) {
+                        status = 200;
+                        respBody = "{\"ok\":true}";
                     } else if (reqLine.contains("/observe")) {
                         status = 200;
                         respBody = "{\"ok\":true}";
+                    } else if (reqLine.contains("/api/v1/games/room-leave-test-456")) {
+                        status = 200;
+                        respBody = "{\n"
+                                + "  \"room_id\": \"room-leave-test-456\",\n"
+                                + "  \"mode\": \"2P\",\n"
+                                + "  \"phase\": \"WAITING_FOR_PLAYERS\",\n"
+                                + "  \"fen\": \"\",\n"
+                                + "  \"seats\": [],\n"
+                                + "  \"observers\": []\n"
+                                + "}";
                     } else if (reqLine.contains("/view")) {
                         status = 200;
                         respBody = "{\n"
@@ -1856,6 +1877,167 @@ public class OctiAndroidAppIntegrationTest {
                     assertEquals("Updated Server Bio After Dialog Opened", vm.getOnlineProfile().getValue().bio);
                     assertEquals("/api/v1/avatars/synced_avatar_v2.png", vm.getOnlineProfile().getValue().avatarUrl);
                     assertEquals("Updated Server Bio After Dialog Opened", configStore.preferences().getBio());
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testLobbyChatLocalTimestampFormattingAndLeaveOnlineTableAsync() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_lobby_leave.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        // 1. Verify local-timezone [HH:mm] chat formatting
+        long sampleEpochMs = 1775005200000L;
+        String expectedHhMm = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(
+                new java.util.Date(sampleEpochMs));
+        OctiNetworkClient.LobbyChatEntry entry = new OctiNetworkClient.LobbyChatEntry();
+        entry.seq = 10L;
+        entry.handle = "Alice";
+        entry.text = "Ready for 2P table!";
+        entry.atMs = sampleEpochMs;
+        entry.createdAtMs = sampleEpochMs;
+
+        String formatted = OctiAppViewModel.formatLobbyChatEntry(entry);
+        assertEquals("[" + expectedHhMm + "] Alice: Ready for 2P table!", formatted);
+        assertTrue(formatted.matches("^\\[\\d{2}:\\d{2}\\] Alice: Ready for 2P table!$"));
+
+        // 2. Verify createOnlineTableAsync in WAITING_FOR_PLAYERS and leaveOnlineTableAsync clearing room state
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+                configStore.preferences().setSessionToken("sess-valid-token");
+                configStore.save();
+
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+
+                    CountDownLatch createLatch = new CountDownLatch(1);
+                    OctiNetworkClient.CreateTableRequest req = new OctiNetworkClient.CreateTableRequest();
+                    req.mode = "2P";
+                    req.bases = 3;
+                    req.timeControl = "10+5";
+                    vm.createOnlineTableAsync(req, res -> {
+                        assertTrue(res.ok);
+                        createLatch.countDown();
+                    });
+                    assertTrue("createOnlineTableAsync timed out", createLatch.await(5, TimeUnit.SECONDS));
+                    assertEquals("room-leave-test-456", vm.getActiveRoomId().getValue());
+                    assertEquals(OctiAppViewModel.MatchType.ONLINE_ROOM, vm.getMatchType().getValue());
+                    assertNotNull(vm.getActiveGameView().getValue());
+                    assertEquals("WAITING_FOR_PLAYERS", vm.getActiveGameView().getValue().phase);
+
+                    CountDownLatch leaveLatch = new CountDownLatch(1);
+                    vm.leaveOnlineTableAsync("room-leave-test-456", ok -> {
+                        assertTrue(ok);
+                        leaveLatch.countDown();
+                    });
+                    assertTrue("leaveOnlineTableAsync timed out", leaveLatch.await(5, TimeUnit.SECONDS));
+                    assertEquals("", vm.getActiveRoomId().getValue());
+                    assertNull(vm.getActiveGameView().getValue());
+                    assertNotEquals(OctiAppViewModel.MatchType.ONLINE_ROOM, vm.getMatchType().getValue());
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testFinalWinningBotMovePreservesAiPlyMetadataInTranscriptAndUpload() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_bot_win_meta.json");
+        String json = "{\n"
+                + "  \"telemetry_consent\": \"share\",\n"
+                + "  \"telemetry_consent_version\": 1,\n"
+                + "  \"install_id\": \"inst-bot-win-meta-999\"\n"
+                + "}\n";
+        Files.write(cfgFile.toPath(), json.getBytes(StandardCharsets.UTF_8));
+
+        try (MockTelemetryServer telemetryServer = new MockTelemetryServer()) {
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(telemetryServer.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+
+                    // Start a 2P 1-Base game where Human is Player A and Bot is Player B
+                    vm.startNewLocalGame(
+                            OctiGameMode.GAME_MODE_2,
+                            false,
+                            false,
+                            OctiGameBases.GAME_BASES_1,
+                            true,
+                            OctiBotEngine.BotDifficulty.CASUAL,
+                            OctiPlayer.PLAYER_A);
+                    vm.confirmStartMatch();
+
+                    // Advance board to a position where Player B (Bot) at (5,5) has S prong 'e'
+                    // and Player A (Human) is at (5,4), leaving A's home base (5,3) empty.
+                    OctiGame g = vm.getBoard().getGame();
+                    g.move("53+a");
+                    g.move("57+e");
+                    g.move("53a-54");
+                    g.move("57e-56");
+                    g.move("33+a");
+                    g.move("56e-55");
+
+                    // Human (Player A) adds a prong at (7,3), allowing Bot (Player B) at (5,5)
+                    // to jump over (5,4) onto A's base (5,3) for an immediate base-capture victory!
+                    assertTrue(vm.applyMoveNotation("73+a"));
+                    String botWinMove = vm.playBotTurnSynchronously();
+                    assertFalse("Bot must execute a move", botWinMove.isEmpty());
+                    assertTrue("Game must be over after bot's winning jump (" + botWinMove + ")", g.isGameOver());
+                    assertEquals(OctiPlayer.PLAYER_B, g.getWinner());
+
+                    // Inspect the final ply metadata in OctiGame
+                    List<OctiGame.OctiPlyMetadata> allMetas = g.getAllPlyMetadata();
+                    assertFalse(allMetas.isEmpty());
+                    OctiGame.OctiPlyMetadata finalPlyMeta = allMetas.get(allMetas.size() - 1);
+                    assertNotNull("Final bot ply must have OctiPlyMetadata attached", finalPlyMeta);
+                    assertTrue("Final bot ply must have isAiMove = true", finalPlyMeta.isAiMove);
+                    assertTrue("Final bot ply must record aiDifficulty > 0", finalPlyMeta.aiDifficulty > 0);
+                    assertTrue("Final bot ply must record aiDepthReached >= 1", finalPlyMeta.aiDepthReached >= 1);
+                    assertTrue("Final bot ply must record aiNodesVisited >= 1", finalPlyMeta.aiNodesVisited >= 1);
+
+                    // Inspect buildCurrentGameTranscriptJson(true)
+                    String transcriptJson = vm.buildCurrentGameTranscriptJson(true);
+                    Map<String, Object> doc = OctiMiniJson.parseObject(transcriptJson);
+                    List<Object> plies = OctiMiniJson.getArray(doc, "plies");
+                    assertNotNull(plies);
+                    assertFalse(plies.isEmpty());
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> lastPlyObj = (Map<String, Object>) plies.get(plies.size() - 1);
+                    Map<String, Object> aiObj = OctiMiniJson.getObject(lastPlyObj, "ai");
+                    assertNotNull("Final winning bot move in transcript must include 'ai' metadata object", aiObj);
+                    assertTrue(OctiMiniJson.getInt(aiObj, "difficulty", 0) > 0);
+                    assertTrue(OctiMiniJson.getInt(aiObj, "depthReached", 0) >= 1);
+                    assertTrue(OctiMiniJson.getLong(aiObj, "nodesVisited", 0L) >= 1L);
+
+                    // Also verify the uploaded payload received by MockTelemetryServer has 'ai' on the final ply
+                    long deadline = System.currentTimeMillis() + 3000L;
+                    while (telemetryServer.receivedUploadBodies().isEmpty() && System.currentTimeMillis() < deadline) {
+                        Thread.sleep(50L);
+                    }
+                    List<String> uploads = telemetryServer.receivedUploadBodies();
+                    assertFalse("Completed bot game must be uploaded", uploads.isEmpty());
+                    Map<String, Object> uploadEnvelope = OctiMiniJson.parseObject(uploads.get(uploads.size() - 1));
+                    Map<String, Object> uploadedDoc = OctiMiniJson.getObject(uploadEnvelope, "transcript");
+                    if (uploadedDoc == null) {
+                        String innerTranscriptStr = OctiMiniJson.getString(uploadEnvelope, "transcript", "");
+                        uploadedDoc = innerTranscriptStr.isEmpty()
+                                ? uploadEnvelope
+                                : OctiMiniJson.parseObject(innerTranscriptStr);
+                    }
+                    List<Object> uploadedPlies = OctiMiniJson.getArray(uploadedDoc, "plies");
+                    assertNotNull(uploadedPlies);
+                    assertFalse(uploadedPlies.isEmpty());
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> uploadedLastPly = (Map<String, Object>) uploadedPlies.get(uploadedPlies.size() - 1);
+                    Map<String, Object> uploadedAiObj = OctiMiniJson.getObject(uploadedLastPly, "ai");
+                    assertNotNull("Uploaded transcript final winning bot move must include 'ai' metadata", uploadedAiObj);
+                    assertTrue(OctiMiniJson.getInt(uploadedAiObj, "difficulty", 0) > 0);
+                    assertTrue(OctiMiniJson.getInt(uploadedAiObj, "depthReached", 0) >= 1);
+                    assertTrue(OctiMiniJson.getLong(uploadedAiObj, "nodesVisited", 0L) >= 1L);
                 }
             }
         }

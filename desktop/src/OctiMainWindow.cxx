@@ -20,6 +20,7 @@
 #include <QGroupBox>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QKeySequence>
 #include <QListWidgetItem>
 #include <QMenu>
@@ -432,6 +433,23 @@ OctiMainWindow::OctiMainWindow(
     statusLayout->addWidget(_matchTurnStatusLabel);
     rightLayout->addWidget(statusBox);
 
+    /* 0b. Online Waiting-Room Banner (shown when phase == WAITING_FOR_PLAYERS) */
+    _waitingRoomBannerWidget = new QGroupBox("Waiting for Players", rightSide);
+    QVBoxLayout *waitLayout = new QVBoxLayout(_waitingRoomBannerWidget);
+    _waitingRoomBannerLabel = new QLabel(
+        "Waiting for opponents to join this table...",
+        _waitingRoomBannerWidget);
+    _waitingRoomBannerLabel->setWordWrap(true);
+    waitLayout->addWidget(_waitingRoomBannerLabel);
+    QHBoxLayout *waitBtnRow = new QHBoxLayout();
+    _backToLobbyBtn = new QPushButton("Back to Lobby", _waitingRoomBannerWidget);
+    _leaveWaitingTableBtn = new QPushButton("Leave Table", _waitingRoomBannerWidget);
+    waitBtnRow->addWidget(_backToLobbyBtn);
+    waitBtnRow->addWidget(_leaveWaitingTableBtn);
+    waitLayout->addLayout(waitBtnRow);
+    _waitingRoomBannerWidget->setVisible(false);
+    rightLayout->addWidget(_waitingRoomBannerWidget);
+
     /* 1. Move History & VCR Replay */
     QGroupBox *historyBox = new QGroupBox("Move History • VCR Replay", rightSide);
     _historyBox = historyBox;
@@ -517,9 +535,11 @@ OctiMainWindow::OctiMainWindow(
     QHBoxLayout *actRow2 = new QHBoxLayout();
     _claimForfeitBtn = new QPushButton("Forfeit", actionsBox);
     _resignBtn = new QPushButton("Resign", actionsBox);
+    _leaveTableBtn = new QPushButton("Leave Table", actionsBox);
     _moderationBtn = new QPushButton("Moderation", actionsBox);
     actRow2->addWidget(_claimForfeitBtn);
     actRow2->addWidget(_resignBtn);
+    actRow2->addWidget(_leaveTableBtn);
     actRow2->addWidget(_moderationBtn);
     actLayout->addLayout(actRow2);
     rightLayout->addWidget(actionsBox);
@@ -692,6 +712,15 @@ OctiMainWindow::OctiMainWindow(
     QObject::connect(_resignBtn, &QPushButton::clicked, [this]() {
         resignCurrentGame();
     });
+    QObject::connect(_leaveTableBtn, &QPushButton::clicked, [this]() {
+        leaveActiveOnlineTable(_onlineRoomId);
+    });
+    QObject::connect(_leaveWaitingTableBtn, &QPushButton::clicked, [this]() {
+        leaveActiveOnlineTable(_onlineRoomId);
+    });
+    QObject::connect(_backToLobbyBtn, &QPushButton::clicked, [this]() {
+        showLobbyView();
+    });
     QObject::connect(_moderationBtn, &QPushButton::clicked, [this]() {
         if (!_onlineRoomId.empty()) {
             RoomModerationDialog dlg(
@@ -732,6 +761,7 @@ OctiMainWindow::OctiMainWindow(
         setPushToTalkActive(false);
     });
 
+    _lobbyView->setViewerIdentity(_profile.uuid, _profile.handle);
     _lobbyView->setOnCreateTableRequested([this]() {
         CreateTableDialog dlg(_netClient.get(), _theme, this);
         if (dlg.exec() == QDialog::Accepted &&
@@ -749,6 +779,11 @@ OctiMainWindow::OctiMainWindow(
                     });
                 });
             refreshOnlineGameView();
+            if (_lobbyView) {
+                _lobbyView->setActiveRoomState(
+                    _inOnlineRoom, _onlineRoomId, _onlineViewerSeat, _onlineGameView);
+                _lobbyView->refreshLobby();
+            }
             showBoardView();
         }
     });
@@ -756,23 +791,62 @@ OctiMainWindow::OctiMainWindow(
         [this](const TableSummaryInfo &table) {
             std::string code;
             if (table.hasPasscode) {
-                PasscodeDialog pd(table.roomId, _theme, this);
-                if (pd.exec() != QDialog::Accepted) {
-                    return;
+                if (isVisible()) {
+                    bool ok = false;
+                    QString entered = QInputDialog::getText(
+                        this,
+                        "Enter Table Passcode",
+                        QString("Room #%1 is passcode-protected.\nEnter table passcode:")
+                            .arg(QString::fromStdString(table.roomId)),
+                        QLineEdit::Password,
+                        QString(),
+                        &ok);
+                    if (!ok) {
+                        return;
+                    }
+                    code = entered.trimmed().toStdString();
+                } else {
+                    PasscodeDialog pd(table.roomId, _theme, this);
+                    if (pd.exec() != QDialog::Accepted) {
+                        return;
+                    }
+                    code = pd.passcode();
                 }
-                code = pd.passcode();
             }
             joinAndEnterOnlineTable(table.roomId, 0, code);
         });
+    _lobbyView->setOnLeaveTableRequested(
+        [this](const std::string &roomId) {
+            leaveActiveOnlineTable(roomId);
+        });
+    _lobbyView->setOnOpenActiveBoardRequested([this]() {
+        showBoardView();
+    });
     _lobbyView->setOnObserveTableRequested(
         [this](const TableSummaryInfo &table) {
             std::string code;
             if (table.hasPasscode) {
-                PasscodeDialog pd(table.roomId, _theme, this);
-                if (pd.exec() != QDialog::Accepted) {
-                    return;
+                if (isVisible()) {
+                    bool ok = false;
+                    QString entered = QInputDialog::getText(
+                        this,
+                        "Enter Table Passcode",
+                        QString("Room #%1 is passcode-protected.\nEnter table passcode to observe:")
+                            .arg(QString::fromStdString(table.roomId)),
+                        QLineEdit::Password,
+                        QString(),
+                        &ok);
+                    if (!ok) {
+                        return;
+                    }
+                    code = entered.trimmed().toStdString();
+                } else {
+                    PasscodeDialog pd(table.roomId, _theme, this);
+                    if (pd.exec() != QDialog::Accepted) {
+                        return;
+                    }
+                    code = pd.passcode();
                 }
-                code = pd.passcode();
             }
             observeOnlineTable(table.roomId, code);
         });
@@ -972,6 +1046,9 @@ void OctiMainWindow::applyAuthenticatedProfile(const PlayerProfileInfo &profile)
         }
     }
     if (_lobbyView) {
+        _lobbyView->setViewerIdentity(_profile.uuid, _profile.handle);
+        _lobbyView->setActiveRoomState(
+            _inOnlineRoom, _onlineRoomId, _onlineViewerSeat, _onlineGameView);
         _lobbyView->updateAuthUiState();
     }
     updateMatchActionsVisibility();
@@ -999,6 +1076,9 @@ void OctiMainWindow::showBoardView()
 void OctiMainWindow::showLobbyView()
 {
     if (_viewStack && _lobbyView) {
+        _lobbyView->setViewerIdentity(_profile.uuid, _profile.handle);
+        _lobbyView->setActiveRoomState(
+            _inOnlineRoom, _onlineRoomId, _onlineViewerSeat, _onlineGameView);
         _viewStack->setCurrentWidget(_lobbyView);
         _lobbyView->refreshLobby();
         if (_authenticated) {
@@ -1797,6 +1877,43 @@ ApiResult<bool> OctiMainWindow::observeOnlineTable(
     return res;
 }
 
+ApiResult<bool> OctiMainWindow::leaveActiveOnlineTable(
+    const std::string &roomId)
+{
+    ApiResult<bool> res;
+    if (!_netClient) {
+        res.errorMessage = "Network client is null";
+        return res;
+    }
+    std::string targetRoomId = !roomId.empty() ? roomId : _onlineRoomId;
+    if (targetRoomId.empty() && _lobbyView) {
+        targetRoomId = _lobbyView->activeBannerRoomId();
+        if (targetRoomId.empty()) {
+            targetRoomId = _lobbyView->selectedRoomId();
+        }
+    }
+    if (targetRoomId.empty()) {
+        res.errorMessage = "No active table to leave";
+        return res;
+    }
+
+    res = _netClient->leaveTable(targetRoomId);
+    if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
+        showProtocolUpgradeRequired(res.errorMessage);
+    }
+
+    if (targetRoomId == _onlineRoomId || _inOnlineRoom) {
+        leaveOnlineRoom();
+    }
+    if (_lobbyView) {
+        _lobbyView->setActiveRoomState(
+            _inOnlineRoom, _onlineRoomId, _onlineViewerSeat, _onlineGameView);
+        _lobbyView->refreshLobby();
+    }
+    showLobbyView();
+    return res;
+}
+
 void OctiMainWindow::leaveOnlineRoom()
 {
     if (_voiceEngine && _voiceEngine->isInVoiceRoom()) {
@@ -1811,6 +1928,10 @@ void OctiMainWindow::leaveOnlineRoom()
     _onlineAutoOriented = false;
     _onlineGameView = GameViewData();
     _appliedOnlineMoves.clear();
+    if (_lobbyView) {
+        _lobbyView->setActiveRoomState(
+            _inOnlineRoom, _onlineRoomId, _onlineViewerSeat, _onlineGameView);
+    }
     updateProposalBannerUi();
     updateVoiceControlUi();
     updateMatchActionsVisibility();
@@ -1836,6 +1957,17 @@ int OctiMainWindow::onlineViewerSeat() const
 const GameViewData &OctiMainWindow::currentOnlineGameView() const
 {
     return _onlineGameView;
+}
+
+bool OctiMainWindow::isWaitingRoomBannerVisible() const
+{
+    return _waitingRoomBannerWidget != nullptr &&
+           !_waitingRoomBannerWidget->isHidden();
+}
+
+QString OctiMainWindow::waitingRoomBannerText() const
+{
+    return _waitingRoomBannerLabel ? _waitingRoomBannerLabel->text() : QString();
 }
 
 bool OctiMainWindow::refreshOnlineGameView()
@@ -1957,6 +2089,11 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
         _reservePanel->refresh();
     }
 
+    if (_lobbyView) {
+        _lobbyView->setActiveRoomState(
+            _inOnlineRoom, _onlineRoomId, _onlineViewerSeat, _onlineGameView);
+    }
+
     refreshMoveHistoryAndFenUi();
     updateProposalBannerUi();
     updateVoiceControlUi();
@@ -1999,6 +2136,15 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
         if (!newRoomId.empty()) {
             _onlineGameView.rematchRoomId = newRoomId;
         }
+    }
+
+    if (ev.event == "TABLE_CLOSED") {
+        leaveOnlineRoom();
+        if (_lobbyView) {
+            _lobbyView->refreshLobby();
+        }
+        showLobbyView();
+        return;
     }
 
     std::string type = j.is_object() ? j.value("type", "") : "";
@@ -2870,14 +3016,44 @@ void OctiMainWindow::refreshMoveHistoryAndFenUi()
 void OctiMainWindow::updateMatchActionsVisibility()
 {
     bool online = (_inOnlineRoom && !_onlineRoomId.empty());
+    bool waitingForPlayers =
+        online && (_onlineGameView.phase == "WAITING_FOR_PLAYERS" ||
+                   (!_onlineGameView.live && _onlineGameView.phase.empty()));
+
+    if (_waitingRoomBannerWidget) {
+        _waitingRoomBannerWidget->setVisible(waitingForPlayers);
+        if (waitingForPlayers && _waitingRoomBannerLabel) {
+            int totalSeats = (_onlineGameView.mode == "4P" ||
+                              _onlineGameView.mode == "4P_FFA") ? 4 : 2;
+            int filledSeats = static_cast<int>(_onlineGameView.seats.size());
+            _waitingRoomBannerLabel->setText(
+                QString("Room #%1 • Seats %2/%3 — Waiting for opponents to join...")
+                    .arg(QString::fromStdString(_onlineRoomId))
+                    .arg(filledSeats)
+                    .arg(totalSeats));
+        }
+    }
+    if (_leaveWaitingTableBtn) {
+        _leaveWaitingTableBtn->setEnabled(waitingForPlayers);
+    }
+    if (_leaveTableBtn) {
+        _leaveTableBtn->setVisible(online);
+        _leaveTableBtn->setEnabled(online);
+    }
     if (_offerDrawBtn) {
         _offerDrawBtn->setVisible(online);
+        _offerDrawBtn->setEnabled(online && !waitingForPlayers);
     }
     if (_pauseResumeBtn) {
         _pauseResumeBtn->setVisible(online);
+        _pauseResumeBtn->setEnabled(online && !waitingForPlayers);
     }
     if (_claimForfeitBtn) {
         _claimForfeitBtn->setVisible(online);
+        _claimForfeitBtn->setEnabled(online && !waitingForPlayers);
+    }
+    if (_resignBtn) {
+        _resignBtn->setEnabled(!waitingForPlayers);
     }
     if (_moderationBtn) {
         _moderationBtn->setVisible(online);
@@ -2918,7 +3094,9 @@ void OctiMainWindow::updateMatchActionsVisibility()
     }
 
     if (_matchTurnStatusLabel) {
-        if (_awaitingMatchStart) {
+        if (waitingForPlayers) {
+            _matchTurnStatusLabel->setText("Waiting for Players...");
+        } else if (_awaitingMatchStart) {
             _matchTurnStatusLabel->setText("Awaiting Match Start");
         } else {
             const OctiGame *g = _board.getGame();

@@ -215,9 +215,35 @@ TableSummaryInfo parseTableSummary(const Json &j)
     t.voicePolicy = j.value("voice_policy", "PLAYERS_ONLY");
     t.phase = j.value("phase", "WAITING_FOR_PLAYERS");
     t.hasPasscode = j.value("has_passcode", false);
+    if (j.contains("host_uuid") && j["host_uuid"].is_string()) {
+        t.hostUuid = j["host_uuid"].get<std::string>();
+    }
     t.hostHandle = j.value("host_handle", "");
+    t.createdAtMs =
+        j.value("created_at_ms", static_cast<std::int64_t>(0));
     t.seatsTotal = j.value("seats_total", 2);
     t.seatsFilled = j.value("seats_filled", 0);
+    if (j.contains("seats") && j["seats"].is_array()) {
+        const Json &seatsArr = j["seats"];
+        for (std::size_t i = 0; i < seatsArr.size(); ++i) {
+            if (!seatsArr[i].is_object()) {
+                continue;
+            }
+            TableSeatInfo si;
+            si.seat = seatsArr[i].value("seat", static_cast<int>(i) + 1);
+            if (seatsArr[i].contains("player_uuid") &&
+                seatsArr[i]["player_uuid"].is_string()) {
+                si.playerUuid = seatsArr[i]["player_uuid"].get<std::string>();
+            }
+            if (seatsArr[i].contains("handle") &&
+                seatsArr[i]["handle"].is_string()) {
+                si.handle = seatsArr[i]["handle"].get<std::string>();
+            }
+            si.rating = seatsArr[i].value("rating", 1500);
+            si.connected = seatsArr[i].value("connected", false);
+            t.seats.push_back(si);
+        }
+    }
     if (j.contains("players") && j["players"].is_array()) {
         for (std::size_t i = 0; i < j["players"].size(); ++i) {
             if (j["players"][i].is_string()) {
@@ -2007,7 +2033,12 @@ ApiResult<LobbyStateData> OctiNetworkClient::fetchLobbyState()
             }
             LobbyChatEntry c;
             c.seq = ch[i].value("seq", static_cast<std::int64_t>(0));
-            c.atMs = ch[i].value("at_ms", static_cast<std::int64_t>(0));
+            std::int64_t createdMs =
+                ch[i].value("created_at_ms", static_cast<std::int64_t>(0));
+            std::int64_t rawAtMs =
+                ch[i].value("at_ms", static_cast<std::int64_t>(0));
+            c.createdAtMs = createdMs > 0 ? createdMs : rawAtMs;
+            c.atMs = c.createdAtMs;
             c.playerUuid = ch[i].value("player_uuid", "");
             c.handle = ch[i].value("handle", "");
             c.text = ch[i].value("text", "");

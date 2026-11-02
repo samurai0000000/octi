@@ -306,14 +306,25 @@ struct RoomView {
     int64_t createdAtMs = 0;
 };
 
+struct TableSeatSummary {
+    int seat = 0;
+    int64_t playerId = 0;
+    std::string handle;
+    int rating = 1500;
+    bool connected = false;
+};
+
 struct TableSummary {
     std::string roomId;
     GameTableConfig config;         // passcode cleared
     bool hasPasscode = false;
     RoomPhase phase = RoomPhase::WAITING_FOR_PLAYERS;
+    int64_t hostPlayerId = 0;
     std::string hostHandle;
+    int64_t createdAtMs = 0;
     int seatsTotal = 2;
     int seatsFilled = 0;
+    std::vector<TableSeatSummary> seats;
     std::vector<std::string> playerHandles;
     int observerCount = 0;
     std::vector<std::string> observerHandles;
@@ -337,6 +348,7 @@ struct LobbyEvent {
     int64_t seq = 0;
     LobbyEventType type = LobbyEventType::LOBBY_CHAT;
     int64_t atMs = 0;
+    int64_t createdAtMs = 0;
     int64_t playerId = 0;
     std::string handle;
     int64_t targetPlayerId = 0;     // non-zero: private to that player
@@ -419,6 +431,7 @@ public:
     static constexpr int64_t kMaxClockSettingMs = 4LL * 3600 * 1000;
     static constexpr int64_t kMaxGraceMs = 10LL * 60 * 1000;
     static constexpr int64_t kMaxLiveRoomOfflineSec = 24LL * 3600;
+    static constexpr int64_t kMaxLobbyChatAgeMs = 6LL * 3600 * 1000;
 
     explicit GameRoomManager(AccountStore &store);
     ~GameRoomManager();
@@ -536,6 +549,7 @@ private:
 
     int64_t nowMs() const;
     int64_t wallSec() const;
+    int64_t currentWallEpochMs() const;
 
     /* player / presence */
     bool ensurePlayerLocked(int64_t playerId, bool refresh = false);
@@ -546,6 +560,7 @@ private:
 
     /* lobby */
     void pushLobbyEventLocked(LobbyEvent e);
+    void purgeExpiredLobbyChatLocked();
     TableSummary summarize(const Room &r) const;
     void announceTableLocked(const Room &r, bool closed);
 

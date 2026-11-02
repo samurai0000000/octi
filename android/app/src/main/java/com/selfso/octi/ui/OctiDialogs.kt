@@ -587,6 +587,9 @@ fun AccountIdentitiesDialog(
     var pendingAvatarUrl by remember { mutableStateOf(profile?.avatarUrl ?: "") }
     var avatarInlineFeedback by remember { mutableStateOf("") }
     var statusMessage by remember { mutableStateOf("") }
+    var showClearAvatarConfirm by remember { mutableStateOf(false) }
+    var showSaveProfileConfirm by remember { mutableStateOf(false) }
+    var showDiscardChangesConfirm by remember { mutableStateOf(false) }
 
     val prof = profile
     LaunchedEffect(prof?.handle, prof?.displayName, prof?.location, prof?.bio, prof?.avatarUrl) {
@@ -688,11 +691,7 @@ fun AccountIdentitiesDialog(
                             }
                             OutlinedButton(
                                 onClick = {
-                                    pendingAvatarUrl = ""
-                                    avatarChanged = true
-                                    fieldsDirty = true
-                                    viewModel.clearProfileActionMessage()
-                                    avatarInlineFeedback = "Avatar cleared (save to commit)."
+                                    showClearAvatarConfirm = true
                                 },
                                 enabled = !profileActionBusy && !savingProfile && (pendingAvatarUrl.isNotEmpty() || p.avatarUrl.isNotEmpty()),
                                 modifier = Modifier.fillMaxWidth()
@@ -762,23 +761,7 @@ fun AccountIdentitiesDialog(
 
                     Button(
                         onClick = {
-                            savingProfile = true
-                            viewModel.clearProfileActionMessage()
-                            viewModel.updateMyProfileAsync(
-                                editableHandle.trim(),
-                                if (avatarChanged) pendingAvatarUrl else "",
-                                editableDisplayName.trim(),
-                                editableBio.trim(),
-                                editableLocation.trim(),
-                                avatarChanged
-                            ) { ok: Boolean ->
-                                savingProfile = false
-                                if (ok) {
-                                    avatarChanged = false
-                                    fieldsDirty = false
-                                    avatarInlineFeedback = ""
-                                }
-                            }
+                            showSaveProfileConfirm = true
                         },
                         enabled = !profileActionBusy && !savingProfile && hasUnsavedChanges && editableHandle.trim().isNotEmpty(),
                         colors = ButtonDefaults.buttonColors(
@@ -934,7 +917,71 @@ fun AccountIdentitiesDialog(
         dismissButton = {
             OutlinedButton(
                 onClick = {
-                    if (hasUnsavedChanges && editableHandle.trim().isNotEmpty()) {
+                    if (hasUnsavedChanges) {
+                        showDiscardChangesConfirm = true
+                    } else {
+                        viewModel.cancelBrowserAuth()
+                        viewModel.clearProfileActionMessage()
+                        onDismiss()
+                    }
+                },
+                enabled = !savingProfile && !profileActionBusy
+            ) {
+                Text(if (savingProfile) "Saving..." else "Done")
+            }
+        }
+    )
+
+    if (showClearAvatarConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearAvatarConfirm = false },
+            containerColor = OctiTheme.colors.panelCardBg,
+            titleContentColor = OctiTheme.colors.accentBrass,
+            textContentColor = OctiTheme.colors.textPrimary,
+            title = { Text("Clear Avatar?") },
+            text = {
+                Text("Are you sure you want to remove your profile avatar? You will still need to save your profile to apply.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showClearAvatarConfirm = false
+                        pendingAvatarUrl = ""
+                        avatarChanged = true
+                        fieldsDirty = true
+                        viewModel.clearProfileActionMessage()
+                        avatarInlineFeedback = "Avatar cleared (save to commit)."
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OctiTheme.colors.accentBrass,
+                        contentColor = OctiTheme.colors.windowBg
+                    )
+                ) {
+                    Text("Clear Avatar")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showClearAvatarConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showSaveProfileConfirm) {
+        AlertDialog(
+            onDismissRequest = { showSaveProfileConfirm = false },
+            containerColor = OctiTheme.colors.panelCardBg,
+            titleContentColor = OctiTheme.colors.accentBrass,
+            textContentColor = OctiTheme.colors.textPrimary,
+            title = { Text("Apply Profile Settings?") },
+            text = {
+                Text("Are you sure you want to save and apply these changes to your profile?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSaveProfileConfirm = false
                         savingProfile = true
                         viewModel.clearProfileActionMessage()
                         viewModel.updateMyProfileAsync(
@@ -949,21 +996,88 @@ fun AccountIdentitiesDialog(
                             if (ok) {
                                 avatarChanged = false
                                 fieldsDirty = false
-                                onDismiss()
+                                avatarInlineFeedback = ""
                             }
                         }
-                    } else {
-                        viewModel.cancelBrowserAuth()
-                        viewModel.clearProfileActionMessage()
-                        onDismiss()
-                    }
-                },
-                enabled = !savingProfile && !profileActionBusy
-            ) {
-                Text(if (savingProfile) "Saving..." else "Done")
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OctiTheme.colors.accentBrass,
+                        contentColor = OctiTheme.colors.windowBg
+                    )
+                ) {
+                    Text("Apply Changes")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showSaveProfileConfirm = false }) {
+                    Text("Cancel")
+                }
             }
-        }
-    )
+        )
+    }
+
+    if (showDiscardChangesConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDiscardChangesConfirm = false },
+            containerColor = OctiTheme.colors.panelCardBg,
+            titleContentColor = OctiTheme.colors.accentBrass,
+            textContentColor = OctiTheme.colors.textPrimary,
+            title = { Text("Unsaved Profile Changes") },
+            text = {
+                Text("You have unsaved changes to your profile. Do you want to apply them or discard them?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDiscardChangesConfirm = false
+                        if (editableHandle.trim().isNotEmpty()) {
+                            savingProfile = true
+                            viewModel.clearProfileActionMessage()
+                            viewModel.updateMyProfileAsync(
+                                editableHandle.trim(),
+                                if (avatarChanged) pendingAvatarUrl else "",
+                                editableDisplayName.trim(),
+                                editableBio.trim(),
+                                editableLocation.trim(),
+                                avatarChanged
+                            ) { ok: Boolean ->
+                                savingProfile = false
+                                if (ok) {
+                                    avatarChanged = false
+                                    fieldsDirty = false
+                                    onDismiss()
+                                }
+                            }
+                        }
+                    },
+                    enabled = editableHandle.trim().isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OctiTheme.colors.accentBrass,
+                        contentColor = OctiTheme.colors.windowBg
+                    )
+                ) {
+                    Text("Apply & Close")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            showDiscardChangesConfirm = false
+                            viewModel.cancelBrowserAuth()
+                            viewModel.clearProfileActionMessage()
+                            onDismiss()
+                        }
+                    ) {
+                        Text("Discard")
+                    }
+                    OutlinedButton(onClick = { showDiscardChangesConfirm = false }) {
+                        Text("Keep Editing")
+                    }
+                }
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -976,6 +1090,7 @@ fun CreateTableDialog(
     var bases by remember { mutableStateOf(3) }
     var superProngs by remember { mutableStateOf(false) }
     var edgeless by remember { mutableStateOf(false) }
+    var timeControl by remember { mutableStateOf("10+5") }
     var rated by remember { mutableStateOf(true) }
     var allowTakeback by remember { mutableStateOf(false) }
     var passcode by remember { mutableStateOf("") }
@@ -989,6 +1104,7 @@ fun CreateTableDialog(
         title = { Text("Create Online Table") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Game Mode", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("2P", "4P", "OFK").forEach { m ->
                         FilterChip(
@@ -998,6 +1114,26 @@ fun CreateTableDialog(
                                 bases = if (m == "4P") 1 else 3
                             },
                             label = { Text(m) }
+                        )
+                    }
+                }
+                Text("Bases", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(3 to "3-Base", 1 to "1-Base").forEach { (b, lbl) ->
+                        FilterChip(
+                            selected = bases == b,
+                            onClick = { bases = b },
+                            label = { Text(lbl) }
+                        )
+                    }
+                }
+                Text("Time Control", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("Untimed", "5+0", "10+5", "15+10").forEach { tc ->
+                        FilterChip(
+                            selected = timeControl == tc,
+                            onClick = { timeControl = tc },
+                            label = { Text(tc) }
                         )
                     }
                 }
@@ -1034,6 +1170,7 @@ fun CreateTableDialog(
                         this.bases = bases
                         this.superProngs = superProngs
                         this.edgeless = edgeless
+                        this.timeControl = timeControl
                         this.rated = rated
                         this.allowTakeback = allowTakeback
                         this.passcode = passcode.trim()

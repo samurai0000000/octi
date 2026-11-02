@@ -4547,6 +4547,197 @@ TEST(OctiHttpServerIntegrationTest, AuthenticatedGameArchiveAndInstallAttributio
     CHECK_TRUE(rGet3.json["players"][0].value("player_uuid", "").empty());
 }
 
+TEST(OctiHttpServerIntegrationTest, CanonicalArchivePlayerSeatNormalizationAndDatabaseRepair)
+{
+    User u = signIn("google", "sub-canon-samurai", "Samurai");
+    Reply rPatch = http().patch("/api/v1/profile/me", u.token,
+                                Json{{"handle", "samurai"}});
+    EXPECT_STATUS(200, rPatch);
+
+    // 1. Construct a transcript where Human played side "B" (and won as "B")
+    //    but the client uploaded "players" with inverted seat numbers:
+    //    [{handle: "samurai", player: "B", seat: 1, type: "HUMAN"},
+    //     {handle: "AI_L3", player: "A", seat: 2, type: "AI", aiDifficulty: 3}]
+    Json jTr = Json::parse(makeResignedTranscript({"33+a", "37+e"}, "dev-canon-01", 3));
+    jTr["winner"] = "B";
+    OctiBoard bReplay(GAME_MODE_2, false, false, GAME_BASES_3);
+    bReplay.getGame()->start(PLAYER_A);
+    bReplay.getGame()->move(PLAYER_A, "33+a");
+    bReplay.getGame()->move(PLAYER_B, "37+e");
+    bReplay.getGame()->setResignedWinner(PLAYER_B);
+    jTr["finalFen"] = bReplay.toPositionString();
+    jTr["players"] = Json::array({
+        Json{{"handle", "Player"}, {"player", "B"}, {"seat", 1}, {"type", "HUMAN"}},
+        Json{{"handle", "AI_L3"}, {"player", "A"}, {"seat", 2}, {"type", "AI"}, {"aiDifficulty", 3}}
+    });
+
+    Reply rUp = http().post("/api/v1/archive/upload", u.token,
+                            Json{{"transcript", jTr.dump()}});
+    EXPECT_STATUS(200, rUp);
+    std::string gid = rUp.json.value("game_id", "");
+    CHECK_FALSE(gid.empty());
+
+    // Verify GET /api/v1/archive/games/:id maps Seat 1 (A) -> AI_L3 and Seat 2 (B) -> samurai
+    Reply rGet = http().get("/api/v1/archive/games/" + gid);
+    EXPECT_STATUS(200, rGet);
+    STRCMP_EQUAL("B", rGet.json.value("winner", "").c_str());
+    CHECK_EQUAL(2, rGet.json.value("winner_seat", 0));
+    STRCMP_EQUAL("P2_WIN", rGet.json.value("result", "").c_str());
+    CHECK_TRUE(rGet.json["players"].is_array());
+    CHECK_EQUAL(2, static_cast<int>(rGet.json["players"].size()));
+
+    // Seat 1 is Player A = AI_L3
+    CHECK_EQUAL(1, rGet.json["players"][0].value("seat", 0));
+    STRCMP_EQUAL("AI_L3", rGet.json["players"][0].value("handle", "").c_str());
+    CHECK_TRUE(rGet.json["players"][0].value("player_uuid", "").empty());
+
+    // Seat 2 is Player B = samurai (authenticated user)
+    CHECK_EQUAL(2, rGet.json["players"][1].value("seat", 0));
+    STRCMP_EQUAL("samurai", rGet.json["players"][1].value("handle", "").c_str());
+    STRCMP_EQUAL(u.uuid.c_str(), rGet.json["players"][1].value("player_uuid", "").c_str());
+
+    // Also verify the stored transcript JSON itself has normalized seats sorted [1, 2]
+    Reply rTr = http().get("/api/v1/archive/games/" + gid + "/transcript");
+    EXPECT_STATUS(200, rTr);
+    Json storedTr = Json::parse(rTr.body);
+    CHECK_TRUE(storedTr["players"].is_array());
+    CHECK_EQUAL(2, static_cast<int>(storedTr["players"].size()));
+    CHECK_EQUAL(1, storedTr["players"][0].value("seat", 0));
+    STRCMP_EQUAL("A", storedTr["players"][0].value("player", "").c_str());
+    STRCMP_EQUAL("AI_L3", storedTr["players"][0].value("handle", "").c_str());
+    CHECK_EQUAL(2, storedTr["players"][1].value("seat", 0));
+    STRCMP_EQUAL("B", storedTr["players"][1].value("player", "").c_str());
+    STRCMP_EQUAL("samurai", storedTr["players"][1].value("handle", "").c_str());
+
+    // 2. Test automatic database repair on openOrCreate() for a legacy inverted record
+    std::string repairDbPath = env->dir + "/repair_test.db";
+    {
+        AccountStore s1;
+        std::string err;
+        CHECK_TRUE(s1.openOrCreate(repairDbPath, err));
+        VerifiedClaims vc;
+        vc.provider = "google";
+        vc.sub = "sub-repair-1";
+        vc.name = "Samurai";
+        vc.email = "samurai@example.com";
+        vc.issuer = "https://accounts.google.com";
+        vc.exp = 4000000000LL;
+        LoginResult lr = s1.loginWithSso(vc, "test");
+        CHECK_TRUE(lr.ok);
+        ProfileUpdate pu;
+        pu.setHandle = true;
+        pu.handle = "samurai";
+        PlayerProfile prof;
+        CHECK_TRUE(s1.updateProfile(lr.profile.playerId, pu, &prof) == UpdateStatus::OK);
+
+        // Insert a legacy inverted record directly via archiveGame
+        GameRecord badRec;
+        badRec.gameId = "g-legacy-inverted-record";
+        badRec.gameMode = "2P";
+        badRec.gameBases = 3;
+        badRec.timeControl = "untimed";
+        badRec.p1PlayerId = prof.playerId;
+        badRec.p2PlayerId = 0;
+        badRec.p1Handle = "samurai";
+        badRec.p2Handle = "AI_L3";
+        badRec.result = "P2_WIN";
+        badRec.winnerSeat = 2;
+        badRec.winner = "B";
+        badRec.status = "GAME_OVER";
+        badRec.termination = "BASE_OCCUPATION";
+        badRec.plyCount = 42;
+        badRec.source = "client_upload";
+        badRec.startedAt = 1700000000;
+        badRec.endedAt = 1700000100;
+        badRec.uploadedAt = 1700000100;
+        badRec.finalFen = bReplay.toPositionString();
+        Json badJson = jTr;
+        badJson["players"] = Json::array({
+            Json{{"handle", "samurai"}, {"player", "B"}, {"seat", 1}, {"type", "HUMAN"}},
+            Json{{"handle", "AI_L3"}, {"player", "A"}, {"seat", 2}, {"type", "AI"}, {"aiDifficulty", 3}}
+        });
+        badRec.octiTranscript = badJson.dump();
+        CHECK_TRUE(s1.archiveGame(badRec, err) == ArchiveStatus::OK);
+        s1.close();
+    }
+    {
+        // Re-opening runs repairInvertedArchiveRecordsLocked()
+        AccountStore s2;
+        std::string err;
+        CHECK_TRUE(s2.openOrCreate(repairDbPath, err));
+        GameRecord fixed;
+        CHECK_TRUE(s2.getArchivedGame("g-legacy-inverted-record", fixed));
+        CHECK_EQUAL(0, fixed.p1PlayerId);
+        CHECK_TRUE(fixed.p2PlayerId > 0);
+        STRCMP_EQUAL("AI_L3", fixed.p1Handle.c_str());
+        STRCMP_EQUAL("samurai", fixed.p2Handle.c_str());
+        Json fixedTr = Json::parse(fixed.octiTranscript);
+        CHECK_EQUAL(1, fixedTr["players"][0].value("seat", 0));
+        STRCMP_EQUAL("A", fixedTr["players"][0].value("player", "").c_str());
+        STRCMP_EQUAL("AI_L3", fixedTr["players"][0].value("handle", "").c_str());
+        CHECK_EQUAL(2, fixedTr["players"][1].value("seat", 0));
+        STRCMP_EQUAL("B", fixedTr["players"][1].value("player", "").c_str());
+        STRCMP_EQUAL("samurai", fixedTr["players"][1].value("handle", "").c_str());
+        s2.close();
+    }
+}
+
+TEST(OctiHttpServerIntegrationTest, LobbyTablesSeatRosterChatTimestampAndWebUiRedesign)
+{
+    User host = signIn("google", "sub-host-table", "Table Host");
+    EXPECT_STATUS(200, http().patch("/api/v1/profile/me", host.token,
+                                    Json{{"handle", "table_host"}}));
+
+    Reply rCreate = http().post("/api/v1/tables", host.token,
+                                Json{{"mode", "2P"}, {"bases", 3}, {"rated", true}});
+    EXPECT_STATUS(201, rCreate);
+    std::string roomId = rCreate.json.value("room_id", "");
+    CHECK_FALSE(roomId.empty());
+
+    // Post lobby chat and verify created_at_ms & at_ms are epoch milliseconds
+    Reply rChat = http().post("/api/v1/lobby/chat", host.token,
+                              Json{{"text", "Join my 2P table!"}});
+    EXPECT_STATUS(200, rChat);
+
+    Reply rLobby = http().get("/api/v1/lobby/state", host.token);
+    EXPECT_STATUS(200, rLobby);
+    CHECK_TRUE(rLobby.json["tables"].is_array());
+    CHECK_EQUAL(1, static_cast<int>(rLobby.json["tables"].size()));
+    const Json &tJson = rLobby.json["tables"][0];
+    STRCMP_EQUAL(roomId.c_str(), tJson.value("room_id", "").c_str());
+    STRCMP_EQUAL(host.uuid.c_str(), tJson.value("host_uuid", "").c_str());
+    STRCMP_EQUAL("table_host", tJson.value("host_handle", "").c_str());
+    CHECK_TRUE(tJson.contains("created_at_ms"));
+    CHECK_TRUE(tJson.contains("seats") && tJson["seats"].is_array());
+    CHECK_EQUAL(2, static_cast<int>(tJson["seats"].size()));
+    CHECK_EQUAL(1, tJson["seats"][0].value("seat", 0));
+    STRCMP_EQUAL(host.uuid.c_str(), tJson["seats"][0].value("player_uuid", "").c_str());
+    STRCMP_EQUAL("table_host", tJson["seats"][0].value("handle", "").c_str());
+    CHECK_TRUE(tJson["seats"][0].value("connected", false));
+    CHECK_EQUAL(2, tJson["seats"][1].value("seat", 0));
+    STRCMP_EQUAL("", tJson["seats"][1].value("player_uuid", "").c_str());
+    STRCMP_EQUAL("", tJson["seats"][1].value("handle", "").c_str());
+    CHECK_FALSE(tJson["seats"][1].value("connected", true));
+
+    // Verify recent_chat has epoch millisecond created_at_ms
+    CHECK_TRUE(rLobby.json["recent_chat"].is_array());
+    CHECK_EQUAL(1, static_cast<int>(rLobby.json["recent_chat"].size()));
+    int64_t chatTs = rLobby.json["recent_chat"][0].value("created_at_ms", 0LL);
+    CHECK_TRUE(chatTs > 1000000000000LL);
+    CHECK_EQUAL(chatTs, rLobby.json["recent_chat"][0].value("at_ms", 0LL));
+
+    // Verify WebUI HTML includes confirmation modal, table-centric lobby elements, and omits quick match
+    Reply rUi = http().get("/");
+    EXPECT_STATUS(200, rUi);
+    CHECK_TRUE(rUi.body.find("web-confirm-modal") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("showConfirmModal") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-my-table-banner") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-create-table-panel") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-lobby-tables-body") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("winnerHandleOf") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-web-quick-match") == std::string::npos);
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

@@ -1216,6 +1216,108 @@ public class OctiAndroidNetworkAndVoiceTest {
             acceptThread.join(1000);
         }
     }
+
+    @Test
+    public void testParseTableSummarySeatsHostUuidAndLobbyEventTimestamps() throws Exception {
+        String tableJson = "{\n"
+                + "  \"room_id\": \"tbl-9001\",\n"
+                + "  \"mode\": \"2P\",\n"
+                + "  \"bases\": 3,\n"
+                + "  \"super_prongs\": true,\n"
+                + "  \"edgeless\": false,\n"
+                + "  \"rated\": true,\n"
+                + "  \"time_control\": \"15+10\",\n"
+                + "  \"host_uuid\": \"uuid-host-alice\",\n"
+                + "  \"host_handle\": \"Alice\",\n"
+                + "  \"created_at_ms\": 1775001234567,\n"
+                + "  \"seats_filled\": 1,\n"
+                + "  \"seats_total\": 2,\n"
+                + "  \"phase\": \"WAITING_FOR_PLAYERS\",\n"
+                + "  \"has_passcode\": true,\n"
+                + "  \"players\": [\"Alice\"],\n"
+                + "  \"seats\": [\n"
+                + "    {\n"
+                + "      \"seat\": 1,\n"
+                + "      \"player_uuid\": \"uuid-host-alice\",\n"
+                + "      \"handle\": \"Alice\",\n"
+                + "      \"rating\": 1642,\n"
+                + "      \"connected\": true\n"
+                + "    },\n"
+                + "    {\n"
+                + "      \"seat\": 2,\n"
+                + "      \"player_uuid\": \"\",\n"
+                + "      \"handle\": \"\",\n"
+                + "      \"rating\": 1500,\n"
+                + "      \"connected\": false\n"
+                + "    }\n"
+                + "  ]\n"
+                + "}";
+        Map<String, Object> parsedTableMap = OctiMiniJson.parseObject(tableJson);
+        OctiNetworkClient.TableSummaryInfo ts = OctiNetworkClient.parseTableSummary(parsedTableMap);
+        assertEquals("tbl-9001", ts.roomId);
+        assertEquals("2P", ts.mode);
+        assertEquals(3, ts.bases);
+        assertTrue(ts.superProngs);
+        assertFalse(ts.edgeless);
+        assertTrue(ts.rated);
+        assertEquals("15+10", ts.timeControl);
+        assertEquals("uuid-host-alice", ts.hostUuid);
+        assertEquals("Alice", ts.hostHandle);
+        assertEquals(1775001234567L, ts.createdAtMs);
+        assertEquals(1, ts.seatsFilled);
+        assertEquals(2, ts.seatsTotal);
+        assertEquals("WAITING_FOR_PLAYERS", ts.phase);
+        assertTrue(ts.hasPasscode);
+        assertEquals(2, ts.seats.size());
+
+        OctiNetworkClient.TableSeatInfo s1 = ts.seats.get(0);
+        assertEquals(1, s1.seat);
+        assertEquals("uuid-host-alice", s1.playerUuid);
+        assertEquals("Alice", s1.handle);
+        assertEquals(1642, s1.rating);
+        assertTrue(s1.connected);
+
+        OctiNetworkClient.TableSeatInfo s2 = ts.seats.get(1);
+        assertEquals(2, s2.seat);
+        assertEquals("", s2.playerUuid);
+        assertEquals("", s2.handle);
+        assertEquals(1500, s2.rating);
+        assertFalse(s2.connected);
+
+        // Lobby event with created_at_ms
+        String eventJson1 = "{\n"
+                + "  \"seq\": 42,\n"
+                + "  \"type\": \"CHAT\",\n"
+                + "  \"player_uuid\": \"uuid-host-alice\",\n"
+                + "  \"handle\": \"Alice\",\n"
+                + "  \"text\": \"Anyone up for 3-base?\",\n"
+                + "  \"created_at_ms\": 1775009999123\n"
+                + "}";
+        OctiNetworkClient.LobbyChatEntry ev1 =
+                OctiNetworkClient.parseLobbyEvent(OctiMiniJson.parseObject(eventJson1));
+        assertEquals(42L, ev1.seq);
+        assertEquals("CHAT", ev1.type);
+        assertEquals("uuid-host-alice", ev1.playerUuid);
+        assertEquals("Alice", ev1.handle);
+        assertEquals("Anyone up for 3-base?", ev1.text);
+        assertEquals(1775009999123L, ev1.atMs);
+        assertEquals(1775009999123L, ev1.createdAtMs);
+
+        // Lobby event falling back to at_ms
+        String eventJson2 = "{\n"
+                + "  \"seq\": 43,\n"
+                + "  \"handle\": \"Bob\",\n"
+                + "  \"text\": \"Joining now!\",\n"
+                + "  \"at_ms\": 1775010005000\n"
+                + "}";
+        OctiNetworkClient.LobbyChatEntry ev2 =
+                OctiNetworkClient.parseLobbyEvent(OctiMiniJson.parseObject(eventJson2));
+        assertEquals(43L, ev2.seq);
+        assertEquals("Bob", ev2.handle);
+        assertEquals("Joining now!", ev2.text);
+        assertEquals(1775010005000L, ev2.atMs);
+        assertEquals(1775010005000L, ev2.createdAtMs);
+    }
 }
 
 /*

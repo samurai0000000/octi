@@ -181,7 +181,15 @@ const char kSchemaSql[] =
     " linked_at INTEGER NOT NULL,"
     " last_seen_at INTEGER NOT NULL"
     ");"
-    "CREATE INDEX IF NOT EXISTS idx_player_installs_player ON player_installs(player_id);";
+    "CREATE INDEX IF NOT EXISTS idx_player_installs_player ON player_installs(player_id);"
+    "CREATE TABLE IF NOT EXISTS lobby_chat_logs ("
+    " seq INTEGER PRIMARY KEY,"
+    " sender_uuid TEXT NOT NULL,"
+    " sender_handle TEXT NOT NULL,"
+    " text TEXT NOT NULL,"
+    " created_at_ms INTEGER NOT NULL"
+    ");"
+    "CREATE INDEX IF NOT EXISTS idx_lobby_chat_logs_created_at ON lobby_chat_logs(created_at_ms);";
 
 const char kProfileCols[] =
     "player_id, uuid, handle, display_name, avatar_url, bio, location, banned,"
@@ -1042,6 +1050,266 @@ bool tightenPermissions(const std::string &path, std::string &error)
     return true;
 }
 
+int canonicalSeatFromPlayerObj(const nlohmann::json &entry)
+{
+    if (!entry.is_object()) {
+        return 0;
+    }
+    std::string pStr = entry.value("player", "");
+    if (pStr == "A") {
+        return 1;
+    }
+    if (pStr == "B") {
+        return 2;
+    }
+    if (pStr == "C") {
+        return 3;
+    }
+    if (pStr == "D") {
+        return 4;
+    }
+    int seat = entry.value("seat", 0);
+    if (seat >= 1 && seat <= 4) {
+        return seat;
+    }
+    return 0;
+}
+
+const char *canonicalPlayerSideFromSeat(int seat)
+{
+    switch (seat) {
+    case 1: return "A";
+    case 2: return "B";
+    case 3: return "C";
+    case 4: return "D";
+    default: return "";
+    }
+}
+
+bool normalizeTranscriptPlayersArray(nlohmann::json &playersArr)
+{
+    if (!playersArr.is_array()) {
+        return false;
+    }
+    bool modified = false;
+    for (auto &entry : playersArr) {
+        if (!entry.is_object()) {
+            continue;
+        }
+        int canonSeat = canonicalSeatFromPlayerObj(entry);
+        if (canonSeat >= 1 && canonSeat <= 4) {
+            if (entry.value("seat", 0) != canonSeat) {
+                entry["seat"] = canonSeat;
+                modified = true;
+            }
+            std::string canonSide = canonicalPlayerSideFromSeat(canonSeat);
+            if (!canonSide.empty() && entry.value("player", "") != canonSide) {
+                entry["player"] = canonSide;
+                modified = true;
+            }
+        }
+    }
+    bool needSort = false;
+    int prevSeat = -1;
+    for (const auto &entry : playersArr) {
+        int s = entry.is_object() ? entry.value("seat", 99) : 99;
+        if (s < prevSeat) {
+            needSort = true;
+            break;
+        }
+        prevSeat = s;
+    }
+    if (needSort) {
+        std::vector<nlohmann::json> items(playersArr.begin(), playersArr.end());
+        std::stable_sort(items.begin(), items.end(),
+                         [](const nlohmann::json &a, const nlohmann::json &b) {
+                             int sa = a.is_object() ? a.value("seat", 99) : 99;
+                             int sb = b.is_object() ? b.value("seat", 99) : 99;
+                             return sa < sb;
+                         });
+        playersArr = nlohmann::json::array();
+        for (auto &item : items) {
+            playersArr.push_back(std::move(item));
+        }
+        modified = true;
+    }
+    return modified;
+}
+
+bool normalizeTranscriptJsonPlayers(nlohmann::json &j)
+{
+    if (!j.is_object()) {
+        return false;
+    }
+    bool modified = false;
+    if (j.contains("players") && j["players"].is_array()) {
+        if (normalizeTranscriptPlayersArray(j["players"])) {
+            modified = true;
+        }
+    }
+    if (j.contains("game") && j["game"].is_object() &&
+        j["game"].contains("players") && j["game"]["players"].is_array()) {
+        if (normalizeTranscriptPlayersArray(j["game"]["players"])) {
+            modified = true;
+        }
+    }
+    return modified;
+}
+
+void repairInvertedArchiveRecordsLocked(sqlite3 *db)
+{
+    if (!db) {
+        return;
+    }
+    struct RepairRow {
+        std::string gameId;
+        int64_t p1PlayerId = 0;
+        int64_t p2PlayerId = 0;
+        std::string p1Handle;
+        std::string p2Handle;
+        std::string rawTranscript;
+    };
+    std::vector<RepairRow> rows;
+    {
+        Stmt s(db, "SELECT game_id, COALESCE(p1_player_id, 0), COALESCE(p2_player_id, 0),"
+                   " p1_handle, p2_handle,"
+                   " COALESCE(NULLIF(octi_transcript, ''), transcript_json)"
+                   " FROM games WHERE source = 'client_upload'");
+        while (s.step() == SQLITE_ROW) {
+            RepairRow r;
+            r.gameId = s.colText(0);
+            r.p1PlayerId = s.colInt(1);
+            r.p2PlayerId = s.colInt(2);
+            r.p1Handle = s.colText(3);
+            r.p2Handle = s.colText(4);
+            r.rawTranscript = s.colText(5);
+            if (!r.rawTranscript.empty()) {
+                rows.push_back(std::move(r));
+            }
+        }
+    }
+    for (const auto &r : rows) {
+        try {
+            auto j = nlohmann::json::parse(r.rawTranscript);
+            if (!j.is_object()) {
+                continue;
+            }
+            bool transcriptModified = normalizeTranscriptJsonPlayers(j);
+            const nlohmann::json *playersPtr = nullptr;
+            if (j.contains("players") && j["players"].is_array()) {
+                playersPtr = &j["players"];
+            } else if (j.contains("game") && j["game"].is_object() &&
+                       j["game"].contains("players") && j["game"]["players"].is_array()) {
+                playersPtr = &j["game"]["players"];
+            }
+            if (!playersPtr) {
+                continue;
+            }
+            std::string canonP1Handle;
+            std::string canonP2Handle;
+            bool hasA = false;
+            bool hasB = false;
+            bool aIsAi = false;
+            bool bIsAi = false;
+            for (const auto &entry : *playersPtr) {
+                if (!entry.is_object()) {
+                    continue;
+                }
+                int seat = entry.value("seat", 0);
+                std::string h = entry.value("handle", "");
+                std::string t = entry.value("type", "");
+                bool isAi = (t == "AI" || h.rfind("AI_", 0) == 0);
+                if (seat == 1) {
+                    hasA = true;
+                    canonP1Handle = h;
+                    aIsAi = isAi;
+                } else if (seat == 2) {
+                    hasB = true;
+                    canonP2Handle = h;
+                    bIsAi = isAi;
+                }
+            }
+            if (!hasA || !hasB) {
+                if (transcriptModified) {
+                    std::string dumped = j.dump();
+                    Stmt upd(db, "UPDATE games SET octi_transcript = ?1, transcript_json = ?1"
+                                 " WHERE game_id = ?2");
+                    upd.bindText(1, dumped);
+                    upd.bindText(2, r.gameId);
+                    upd.step();
+                }
+                continue;
+            }
+
+            bool inverted = false;
+            if (!canonP1Handle.empty() && !canonP2Handle.empty() &&
+                canonP1Handle != canonP2Handle) {
+                if (r.p1Handle == canonP2Handle && r.p2Handle == canonP1Handle) {
+                    inverted = true;
+                } else if (aIsAi && !bIsAi && r.p2Handle == canonP1Handle &&
+                           r.p1Handle.rfind("AI_", 0) != 0) {
+                    inverted = true;
+                } else if (!aIsAi && bIsAi && r.p1Handle == canonP2Handle &&
+                           r.p2Handle.rfind("AI_", 0) != 0) {
+                    inverted = true;
+                }
+            }
+
+            if (inverted) {
+                int64_t newP1PlayerId = r.p2PlayerId;
+                int64_t newP2PlayerId = r.p1PlayerId;
+                std::string newP1Handle = canonP1Handle;
+                std::string newP2Handle = canonP2Handle;
+                if (!aIsAi && r.p2Handle.rfind("AI_", 0) != 0 && !r.p2Handle.empty()) {
+                    newP1Handle = r.p2Handle;
+                }
+                if (!bIsAi && r.p1Handle.rfind("AI_", 0) != 0 && !r.p1Handle.empty()) {
+                    newP2Handle = r.p1Handle;
+                }
+                auto updateHandles = [&](nlohmann::json &arr) {
+                    if (!arr.is_array()) return;
+                    for (auto &entry : arr) {
+                        if (!entry.is_object()) continue;
+                        int s = entry.value("seat", 0);
+                        if (s == 1 && !newP1Handle.empty()) {
+                            entry["handle"] = newP1Handle;
+                        } else if (s == 2 && !newP2Handle.empty()) {
+                            entry["handle"] = newP2Handle;
+                        }
+                    }
+                };
+                if (j.contains("players")) {
+                    updateHandles(j["players"]);
+                }
+                if (j.contains("game") && j["game"].is_object() &&
+                    j["game"].contains("players")) {
+                    updateHandles(j["game"]["players"]);
+                }
+                std::string dumped = j.dump();
+                Stmt upd(db, "UPDATE games SET p1_player_id = ?1, p2_player_id = ?2,"
+                             " p1_handle = ?3, p2_handle = ?4,"
+                             " octi_transcript = ?5, transcript_json = ?5"
+                             " WHERE game_id = ?6");
+                bindOptionalPlayer(upd, 1, newP1PlayerId);
+                bindOptionalPlayer(upd, 2, newP2PlayerId);
+                upd.bindText(3, newP1Handle);
+                upd.bindText(4, newP2Handle);
+                upd.bindText(5, dumped);
+                upd.bindText(6, r.gameId);
+                upd.step();
+            } else if (transcriptModified) {
+                std::string dumped = j.dump();
+                Stmt upd(db, "UPDATE games SET octi_transcript = ?1, transcript_json = ?1"
+                             " WHERE game_id = ?2");
+                upd.bindText(1, dumped);
+                upd.bindText(2, r.gameId);
+                upd.step();
+            }
+        } catch (...) {
+        }
+    }
+}
+
 } // namespace
 
 /* ------------------------------------------------------------------ */
@@ -1481,6 +1749,15 @@ bool AccountStore::openOrCreate(const std::string &path, std::string &error)
                 execSql(db, "CREATE INDEX IF NOT EXISTS idx_games_source ON games(source);");
                 execSql(db, "CREATE INDEX IF NOT EXISTS idx_games_install_id ON games(install_id);");
             }
+            execSql(db, "CREATE TABLE IF NOT EXISTS lobby_chat_logs ("
+                        " seq INTEGER PRIMARY KEY,"
+                        " sender_uuid TEXT NOT NULL,"
+                        " sender_handle TEXT NOT NULL,"
+                        " text TEXT NOT NULL,"
+                        " created_at_ms INTEGER NOT NULL"
+                        ");");
+            execSql(db, "CREATE INDEX IF NOT EXISTS idx_lobby_chat_logs_created_at ON lobby_chat_logs(created_at_ms);");
+            repairInvertedArchiveRecordsLocked(db);
         }
     }
     if (!ok) {
@@ -2096,7 +2373,11 @@ int reconcileAnonymousGamesLocked(sqlite3 *db, const std::string &filterInstallI
         bool p1IsAi = (c.oldP1Handle.rfind("AI_", 0) == 0);
         bool p2IsAi = (c.oldP2Handle.rfind("AI_", 0) == 0);
         int humanSeat = 1;
-        if (!p1IsAi && p2IsAi) {
+        if (c.oldP1PlayerId == c.targetPlayerId && c.oldP2PlayerId != c.targetPlayerId) {
+            humanSeat = 1;
+        } else if (c.oldP2PlayerId == c.targetPlayerId && c.oldP1PlayerId != c.targetPlayerId) {
+            humanSeat = 2;
+        } else if (!p1IsAi && p2IsAi) {
             humanSeat = 1;
         } else if (!p2IsAi && p1IsAi) {
             humanSeat = 2;
@@ -2104,27 +2385,83 @@ int reconcileAnonymousGamesLocked(sqlite3 *db, const std::string &filterInstallI
             humanSeat = 1;
         }
 
-        int64_t newP1PlayerId = (humanSeat == 1) ? c.targetPlayerId : c.oldP1PlayerId;
-        int64_t newP2PlayerId = (humanSeat == 2) ? c.targetPlayerId : c.oldP2PlayerId;
-        std::string newP1Handle = (humanSeat == 1) ? c.targetHandle : c.oldP1Handle;
-        std::string newP2Handle = (humanSeat == 2) ? c.targetHandle : c.oldP2Handle;
-
+        std::string canonP1Handle;
+        std::string canonP2Handle;
+        bool canonAIsAi = false;
+        bool canonBIsAi = false;
+        bool hasCanonSeats = false;
         std::string updatedTranscript = c.rawTranscript;
         try {
             auto j = nlohmann::json::parse(c.rawTranscript);
-            if (j.is_object() && j.contains("players") && j["players"].is_array()) {
-                for (auto &entry : j["players"]) {
-                    if (!entry.is_object()) continue;
-                    int seat = entry.value("seat", 0);
-                    std::string type = entry.value("type", "");
-                    std::string entryHandle = entry.value("handle", "");
-                    if (seat == humanSeat || (seat == 0 && (type == "HUMAN" || entryHandle.rfind("AI_", 0) != 0))) {
-                        entry["handle"] = c.targetHandle;
+            if (j.is_object()) {
+                normalizeTranscriptJsonPlayers(j);
+                const nlohmann::json *playersPtr = nullptr;
+                if (j.contains("players") && j["players"].is_array()) {
+                    playersPtr = &j["players"];
+                } else if (j.contains("game") && j["game"].is_object() &&
+                           j["game"].contains("players") && j["game"]["players"].is_array()) {
+                    playersPtr = &j["game"]["players"];
+                }
+                if (playersPtr) {
+                    bool seen1 = false;
+                    bool seen2 = false;
+                    for (const auto &entry : *playersPtr) {
+                        if (!entry.is_object()) continue;
+                        int seat = entry.value("seat", 0);
+                        std::string type = entry.value("type", "");
+                        std::string entryHandle = entry.value("handle", "");
+                        bool isAi = (type == "AI" || entryHandle.rfind("AI_", 0) == 0);
+                        if (seat == 1) {
+                            seen1 = true;
+                            canonP1Handle = entryHandle;
+                            canonAIsAi = isAi;
+                        } else if (seat == 2) {
+                            seen2 = true;
+                            canonP2Handle = entryHandle;
+                            canonBIsAi = isAi;
+                        }
                     }
+                    if (seen1 && seen2 && canonAIsAi != canonBIsAi) {
+                        hasCanonSeats = true;
+                        if (!canonAIsAi && canonBIsAi) {
+                            humanSeat = 1;
+                        } else if (!canonBIsAi && canonAIsAi) {
+                            humanSeat = 2;
+                        }
+                    }
+                }
+                auto updateHumanHandle = [&](nlohmann::json &arr) {
+                    if (!arr.is_array()) return;
+                    for (auto &entry : arr) {
+                        if (!entry.is_object()) continue;
+                        int seat = entry.value("seat", 0);
+                        std::string type = entry.value("type", "");
+                        std::string entryHandle = entry.value("handle", "");
+                        if (seat == humanSeat ||
+                            (seat == 0 && (type == "HUMAN" || entryHandle.rfind("AI_", 0) != 0))) {
+                            entry["handle"] = c.targetHandle;
+                        }
+                    }
+                };
+                if (j.contains("players")) {
+                    updateHumanHandle(j["players"]);
+                }
+                if (j.contains("game") && j["game"].is_object() &&
+                    j["game"].contains("players")) {
+                    updateHumanHandle(j["game"]["players"]);
                 }
                 updatedTranscript = j.dump();
             }
         } catch (...) {}
+
+        int64_t newP1PlayerId = (humanSeat == 1) ? c.targetPlayerId
+                                : (hasCanonSeats && canonAIsAi ? 0 : c.oldP1PlayerId);
+        int64_t newP2PlayerId = (humanSeat == 2) ? c.targetPlayerId
+                                : (hasCanonSeats && canonBIsAi ? 0 : c.oldP2PlayerId);
+        std::string newP1Handle = (humanSeat == 1) ? c.targetHandle
+                                  : (hasCanonSeats && !canonP1Handle.empty() ? canonP1Handle : c.oldP1Handle);
+        std::string newP2Handle = (humanSeat == 2) ? c.targetHandle
+                                  : (hasCanonSeats && !canonP2Handle.empty() ? canonP2Handle : c.oldP2Handle);
 
         Stmt upd(db, "UPDATE games SET p1_player_id = ?1, p2_player_id = ?2,"
                      " p1_handle = ?3, p2_handle = ?4, octi_transcript = ?5, transcript_json = ?5"
@@ -3588,6 +3925,68 @@ bool AccountStore::listCrashReports(const CrashReportFilter &filter,
         r.contextJson = s.colText(10);
         r.installId = s.colText(11);
         out.push_back(r);
+    }
+    return rc == SQLITE_DONE;
+}
+
+bool AccountStore::appendLobbyChatLog(uint64_t seq,
+                                      const std::string &senderUuid,
+                                      const std::string &senderHandle,
+                                      const std::string &text,
+                                      int64_t createdAtMs)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    Stmt s(_db, "INSERT OR REPLACE INTO lobby_chat_logs("
+                "seq, sender_uuid, sender_handle, text, created_at_ms)"
+                " VALUES(?1, ?2, ?3, ?4, ?5)");
+    s.bindInt(1, static_cast<int64_t>(seq));
+    s.bindText(2, senderUuid);
+    s.bindText(3, senderHandle);
+    s.bindText(4, text);
+    s.bindInt(5, createdAtMs);
+    return s.step() == SQLITE_DONE;
+}
+
+bool AccountStore::purgeLobbyChatLogsBefore(int64_t cutoffEpochMs)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    Stmt s(_db, "DELETE FROM lobby_chat_logs WHERE created_at_ms < ?1");
+    s.bindInt(1, cutoffEpochMs);
+    return s.step() == SQLITE_DONE;
+}
+
+bool AccountStore::listLobbyChatLogs(std::vector<LobbyChatLogRow> &out,
+                                     int limit)
+{
+    out.clear();
+    if (limit <= 0) {
+        return true;
+    }
+    if (limit > 1000) {
+        limit = 1000;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    Stmt s(_db, "SELECT seq, sender_uuid, sender_handle, text, created_at_ms"
+                " FROM lobby_chat_logs ORDER BY seq ASC LIMIT ?1");
+    s.bindInt(1, limit);
+    int rc;
+    while ((rc = s.step()) == SQLITE_ROW) {
+        LobbyChatLogRow row;
+        row.seq = static_cast<uint64_t>(s.colInt(0));
+        row.senderUuid = s.colText(1);
+        row.senderHandle = s.colText(2);
+        row.text = s.colText(3);
+        row.createdAtMs = s.colInt(4);
+        out.push_back(std::move(row));
     }
     return rc == SQLITE_DONE;
 }
