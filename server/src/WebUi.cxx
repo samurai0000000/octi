@@ -3188,7 +3188,7 @@ function applySingleHopChain(s, move, player, deferCapturesList) {
   for (var pi = 0; pi < s.map[fromK].length; pi++) {
     if (s.map[fromK][pi].owner === player) {
       var pText = formatProngConfig(s.map[fromK][pi].cfg.prongs);
-      if (!rawCfgMatch || pText === normCfgMatch || s.map[fromK][pi].cfg.text === rawCfgMatch) {
+      if (pText === normCfgMatch || s.map[fromK][pi].cfg.text === rawCfgMatch) {
         podIdx = pi;
         break;
       }
@@ -3573,7 +3573,7 @@ function applyMoveToState(s, move, player) {
           var cand = s.map[mk][p];
           if (cand.owner === player && cand.cfg.prongs[remIdx] && !cand.cfg.prongs[addIdx]) {
             var candText = formatProngConfig(cand.cfg.prongs);
-            if (!rawRepoCfg || candText === normRepoCfg || cand.cfg.text === rawRepoCfg) {
+            if (candText === normRepoCfg || cand.cfg.text === rawRepoCfg) {
               foundPod = cand;
               break;
             }
@@ -3619,7 +3619,7 @@ function applyMoveToState(s, move, player) {
         var cand = s.map[mk][p];
         if (cand.owner === player && !cand.cfg.prongs[dIdx]) {
           var candText = formatProngConfig(cand.cfg.prongs);
-          if (!rawAddCfg || candText === normAddCfg || cand.cfg.text === rawAddCfg) {
+          if (candText === normAddCfg || cand.cfg.text === rawAddCfg) {
             foundPod = cand;
             break;
           }

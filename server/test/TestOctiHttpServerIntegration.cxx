@@ -16,6 +16,7 @@
  */
 
 #include "AccountStore.hxx"
+#include "DatabaseArchiveCorpus.hxx"
 #include "EloCalculator.hxx"
 #include "GameRoomManager.hxx"
 #include "OctiBoard.hxx"
@@ -5141,6 +5142,188 @@ fs.writeFileSync(process.argv[3], JSON.stringify(tr4p));
         Reply rUp4 = http().post("/api/v1/archive/upload", uWeb.token, Json{{"transcript", tr4Str}});
         EXPECT_STATUS(200, rUp4);
     }
+}
+
+TEST(OctiHttpServerIntegrationTest, DatabaseArchiveCorpusReplayAndInvalidGameRejection)
+{
+    User uCorpus = signIn("google", "sub-corpus-replay", "CorpusValidator");
+
+    // 1. Validate all 19 real valid database games through C++ OctiBoard::deserializeGame
+    //    and POST /api/v1/archive/upload
+    const size_t numValid = sizeof(octi::test::kValidArchiveCorpusGames) /
+                            sizeof(octi::test::kValidArchiveCorpusGames[0]);
+    CHECK_EQUAL(19, static_cast<int>(numValid));
+
+    for (size_t i = 0; i < numValid; ++i) {
+        const auto &entry = octi::test::kValidArchiveCorpusGames[i];
+
+        octi::OctiBoard replayBoard;
+        replayBoard.deserializeGame(entry.transcriptJson);
+        CHECK_TRUE(replayBoard.getGame() != nullptr);
+        CHECK_TRUE(replayBoard.getGame()->isGameOver());
+        STRCMP_EQUAL(entry.finalFen, replayBoard.toPositionString().c_str());
+        STRCMP_EQUAL(entry.gameId, replayBoard.computeCanonicalGameId().c_str());
+
+        Reply rUp = http().post("/api/v1/archive/upload", uCorpus.token,
+                                Json{{"transcript", std::string(entry.transcriptJson)}});
+        EXPECT_STATUS(200, rUp);
+        STRCMP_EQUAL(entry.gameId, rUp.json.value("game_id", "").c_str());
+
+        Reply rGet = http().get(std::string("/api/v1/archive/games/") + entry.gameId);
+        EXPECT_STATUS(200, rGet);
+        STRCMP_EQUAL(entry.expectedWinner, rGet.json.value("winner", "").c_str());
+        STRCMP_EQUAL(entry.finalFen, rGet.json.value("final_fen", "").c_str());
+        if (std::string(entry.expectedRuleTermination) == "TOTAL_CAPTURE") {
+            STRCMP_EQUAL("TOTAL_CAPTURE", rGet.json.value("termination", "").c_str());
+        }
+    }
+
+    // 2. Verify all 8 invalid database games (7 premature TOTAL_CAPTURE while freePods > 0
+    //    and 1 corrupted reserve/captured pod liberation game) are rejected by the server
+    const size_t numInvalid = sizeof(octi::test::kInvalidArchiveCorpusGames) /
+                              sizeof(octi::test::kInvalidArchiveCorpusGames[0]);
+    CHECK_EQUAL(8, static_cast<int>(numInvalid));
+
+    for (size_t i = 0; i < numInvalid; ++i) {
+        const auto &entry = octi::test::kInvalidArchiveCorpusGames[i];
+        Reply rBad = http().post("/api/v1/archive/upload", uCorpus.token,
+                                 Json{{"transcript", std::string(entry.transcriptJson)}});
+        EXPECT_STATUS(400, rBad);
+        STRCMP_EQUAL(entry.expectedErrorCode, rBad.json.value("error", "").c_str());
+    }
+
+    // 3. Replay all 19 valid games and all 8 invalid games through the Web JS engine
+    //    (WebUi.cxx) in Node.js to verify 100% host-side C++/JS parity
+    Reply rUi = http().get("/");
+    EXPECT_STATUS(200, rUi);
+    size_t scStart = rUi.body.find("<script>");
+    CHECK_TRUE(scStart != std::string::npos);
+    size_t scEnd = rUi.body.find("</script>", scStart);
+    CHECK_TRUE(scEnd != std::string::npos);
+    std::string jsCode = rUi.body.substr(scStart + 8, scEnd - (scStart + 8));
+    size_t engStart = jsCode.find("var DIR_DELTAS = [");
+    CHECK_TRUE(engStart != std::string::npos);
+    size_t engEnd = jsCode.find("/* Inline Web Worker Initialization */", engStart);
+    CHECK_TRUE(engEnd != std::string::npos);
+
+    Json corpusPayload;
+    corpusPayload["valid"] = Json::array();
+    for (size_t i = 0; i < numValid; ++i) {
+        const auto &entry = octi::test::kValidArchiveCorpusGames[i];
+        corpusPayload["valid"].push_back(Json{
+            {"gameId", entry.gameId},
+            {"expectedWinner", entry.expectedWinner},
+            {"expectedRuleTermination", entry.expectedRuleTermination},
+            {"finalFen", entry.finalFen},
+            {"transcript", Json::parse(entry.transcriptJson)}
+        });
+    }
+    corpusPayload["invalid"] = Json::array();
+    for (size_t i = 0; i < numInvalid; ++i) {
+        const auto &entry = octi::test::kInvalidArchiveCorpusGames[i];
+        corpusPayload["invalid"].push_back(Json{
+            {"gameId", entry.gameId},
+            {"expectedErrorCode", entry.expectedErrorCode},
+            {"finalFen", entry.finalFen},
+            {"transcript", Json::parse(entry.transcriptJson)}
+        });
+    }
+
+    std::string corpusJsonPath = "/tmp/octi_corpus_payload_" + std::to_string(getpid()) + ".json";
+    std::string corpusHarnessPath = "/tmp/octi_corpus_harness_" + std::to_string(getpid()) + ".js";
+    {
+        std::ofstream cfs(corpusJsonPath);
+        cfs << corpusPayload.dump();
+    }
+    {
+        std::ofstream hfs(corpusHarnessPath);
+        hfs << "var document = { getElementById: function() { return { style: {}, textContent: '', addEventListener: function(){}, classList: { add: function(){}, remove: function(){}, contains: function(){ return false; } } }; } };\n";
+        hfs << "var window = { addEventListener: function(){} };\n";
+        hfs << "function $(id) { return null; }\n";
+        hfs << "function requestAnimationFrame() {}\n";
+        hfs << jsCode.substr(engStart, engEnd - engStart) << "\n";
+        hfs << R"NODEJS(
+var assert = require("assert");
+var fs = require("fs");
+
+function makeInitialFen(mode, bases, sp, ed, startP) {
+  var spBit = sp ? "1" : "0";
+  var edBit = ed ? "1" : "0";
+  var p = startP || "A";
+  if (mode === "OFK") {
+    return "OFK:1:0:0:P:" + p + ":-:0:0,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56";
+  }
+  if (mode === "4" || mode === "4P") {
+    var r4p = "3,0," + (sp ? "11,1" : "12,0");
+    return "4:3:" + spBit + ":" + edBit + ":P:" + p + ":-:0:" + r4p + ":" + r4p + ":" + r4p + ":" + r4p + ":A33,D73,B37,C77";
+  }
+  var r2p = "4,0," + (sp ? "24,1" : "25,0");
+  return "2:" + bases + ":" + spBit + ":" + edBit + ":P:" + p + ":-:0:" + r2p + ":" + r2p + ":A33,A53,A73,B37,B57,B77";
+}
+
+var payload = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+assert.strictEqual(payload.valid.length, 19);
+assert.strictEqual(payload.invalid.length, 8);
+
+for (var i = 0; i < payload.valid.length; i++) {
+  var item = payload.valid[i];
+  var t = item.transcript;
+  var st = parseOctiFen(makeInitialFen(t.mode, t.bases, !!t.superProngs, !!t.edgeless, t.startPlayer || "A"));
+  for (var pIdx = 0; pIdx < t.plies.length; pIdx++) {
+    assert.strictEqual(st.status, "P", "Game " + item.gameId + " prematurely ended before ply " + (pIdx + 1));
+    var ply = t.plies[pIdx];
+    assert.strictEqual(st.turn, ply.player, "Turn mismatch in " + item.gameId + " at ply " + (pIdx + 1));
+    if (ply.move.indexOf(",") === -1) {
+      var legal = generateMoves(st, st.turn, false);
+      assert.ok(legal.indexOf(ply.move) >= 0, "Move " + ply.move + " not in generateMoves for " + item.gameId + " at ply " + (pIdx + 1));
+    }
+    st = applyMoveToState(st, ply.move, st.turn);
+  }
+  assert.strictEqual(st.status, "O", "Valid game " + item.gameId + " did not reach game over");
+  assert.strictEqual(st.winner, item.expectedWinner, "Winner mismatch for " + item.gameId);
+  assert.strictEqual(st.termination, item.expectedRuleTermination, "Termination mismatch for " + item.gameId);
+  assert.strictEqual(serializeOctiFen(st), item.finalFen, "Final FEN mismatch for " + item.gameId);
+}
+
+for (var j = 0; j < payload.invalid.length; j++) {
+  var bad = payload.invalid[j];
+  var bt = bad.transcript;
+  var bst = parseOctiFen(makeInitialFen(bt.mode, bt.bases, !!bt.superProngs, !!bt.edgeless, bt.startPlayer || "A"));
+  for (var bpIdx = 0; bpIdx < bt.plies.length; bpIdx++) {
+    var bply = bt.plies[bpIdx];
+    bst = applyMoveToState(bst, bply.move, bst.turn);
+  }
+  if (bad.expectedErrorCode === "GAME_NOT_COMPLETED") {
+    assert.strictEqual(bst.status, "P", "Prematurely terminated game " + bad.gameId + " must still be in progress (freePods > 0)");
+    var remLegal = generateMoves(bst, bst.turn, false);
+    assert.ok(remLegal.length > 0, "Side with reserve pods in " + bad.gameId + " must have legal reserve placement moves");
+  } else {
+    assert.notStrictEqual(serializeOctiFen(bst), bad.finalFen, "Corrupted FEN game " + bad.gameId + " must not match claimed finalFen");
+  }
+}
+
+// Specific regression check on game 130ab4abef6c9a83... ply 34 & 35
+var g27 = payload.invalid.find(function(x) { return x.gameId.indexOf("130ab4ab") === 0; });
+assert.ok(g27, "Must find game 130ab4ab in invalid corpus");
+var st33 = parseOctiFen(makeInitialFen("2P", 3, false, false, "A"));
+for (var k = 0; k < 33; k++) {
+  st33 = applyMoveToState(st33, g27.transcript.plies[k].move, st33.turn);
+}
+// After ply 34 blunder (55adefg-54), 53a-55x must rank #1 in orderMoves and not end the game
+var st34 = applyMoveToState(cloneState(st33), "55adefg-54", "B");
+var prof2 = BOT_PROFILES[2];
+var ordA = orderMoves(generateMoves(st34, "A", false), st34, "A", prof2, null);
+assert.strictEqual(ordA[0], "53a-55x", "Capturing jump 53a-55x must be ranked #1 in orderMoves");
+var st35 = applyMoveToState(cloneState(st34), "53a-55x", "A");
+assert.strictEqual(st35.status, "P", "After 53a-55x, game must continue since B has 4 freePods");
+assert.strictEqual(st35.turn, "B");
+assert.strictEqual(st35.reserves[1].freePods, 4);
+)NODEJS";
+    }
+    int rcCorpus = std::system(("node " + corpusHarnessPath + " " + corpusJsonPath).c_str());
+    std::remove(corpusHarnessPath.c_str());
+    std::remove(corpusJsonPath.c_str());
+    CHECK_EQUAL(0, rcCorpus);
 }
 
 int main(int argc, char **argv)

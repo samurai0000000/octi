@@ -3656,7 +3656,7 @@ static std::string classifyRuleTermination(const OctiBoard &b, const OctiGame &g
             return "BASE_CAPTURE";
         }
         OctiPlayer opp = (w == PLAYER_A) ? PLAYER_B : PLAYER_A;
-        return countPods(b, opp) == 0 ? "TOTAL_CAPTURE" : "STALEMATE";
+        return (countPods(b, opp) == 0 && g.getFreePods(opp) == 0) ? "TOTAL_CAPTURE" : "STALEMATE";
     }
     if (g.getMode() == GAME_MODE_OFK) {
         int y = (w == PLAYER_A) ? 5 : 1;
@@ -3681,10 +3681,14 @@ static std::string classifyRuleTermination(const OctiBoard &b, const OctiGame &g
     }
     int bdPods = countPods(b, PLAYER_B) + countPods(b, PLAYER_D);
     int acPods = countPods(b, PLAYER_A) + countPods(b, PLAYER_C);
-    if ((w == PLAYER_A || w == PLAYER_C) && bdPods == 0) {
+    int bdFree = (g.isPlayerEliminated(PLAYER_B) ? 0 : g.getFreePods(PLAYER_B)) +
+                 (g.isPlayerEliminated(PLAYER_D) ? 0 : g.getFreePods(PLAYER_D));
+    int acFree = (g.isPlayerEliminated(PLAYER_A) ? 0 : g.getFreePods(PLAYER_A)) +
+                 (g.isPlayerEliminated(PLAYER_C) ? 0 : g.getFreePods(PLAYER_C));
+    if ((w == PLAYER_A || w == PLAYER_C) && bdPods == 0 && bdFree == 0) {
         return "TOTAL_CAPTURE";
     }
-    if ((w == PLAYER_B || w == PLAYER_D) && acPods == 0) {
+    if ((w == PLAYER_B || w == PLAYER_D) && acPods == 0 && acFree == 0) {
         return "TOTAL_CAPTURE";
     }
     return "STALEMATE";
@@ -4265,11 +4269,24 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
     std::string term = transcriptObj.value("termination", "");
     if (term == "FORFEIT") term = "RESIGNATION";
 
-    if (term.empty()) {
-        if (statusStr == "RESIGNED") {
+    if (statusStr == "RESIGNED") {
+        if (term.empty()) {
             term = "RESIGNATION";
-        } else {
-            term = classifyRuleTermination(board, *game);
+        }
+    } else {
+        std::string ruleTerm = classifyRuleTermination(board, *game);
+        if (term.empty()) {
+            term = ruleTerm;
+        } else if (term == "BASE_CAPTURE" || term == "BASE_OCCUPATION" ||
+                   term == "TOTAL_CAPTURE" || term == "ELIMINATION" ||
+                   term == "STALEMATE") {
+            if (ruleTerm == "BASE_CAPTURE" && (term == "BASE_CAPTURE" || term == "BASE_OCCUPATION")) {
+                // Keep client's preferred BASE_CAPTURE / BASE_OCCUPATION synonym
+            } else if (ruleTerm == "TOTAL_CAPTURE" && (term == "TOTAL_CAPTURE" || term == "ELIMINATION")) {
+                // Keep client's preferred TOTAL_CAPTURE / ELIMINATION synonym
+            } else {
+                term = ruleTerm;
+            }
         }
     }
     if (term != "BASE_CAPTURE" && term != "BASE_OCCUPATION" &&
@@ -4277,7 +4294,7 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
         term != "STALEMATE" && term != "RESIGNATION" &&
         term != "TIMEOUT" && term != "DISCONNECT_FORFEIT" &&
         term != "AGREED_DRAW") {
-        term = (statusStr == "RESIGNED" ? "RESIGNATION" : "BASE_CAPTURE");
+        term = (statusStr == "RESIGNED" ? "RESIGNATION" : classifyRuleTermination(board, *game));
     }
     rec.termination = term;
     storedJson["termination"] = term;
