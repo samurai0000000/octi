@@ -4936,6 +4936,21 @@ TEST(OctiHttpServerIntegrationTest, WebPlayerBotProfilesQuiescenceAndRulesValida
     CHECK_TRUE(rUi.body.find("toggleCaptureAtSquare") != std::string::npos);
     CHECK_TRUE(rUi.body.find("web-thinking-overlay") != std::string::npos);
     CHECK_TRUE(rUi.body.find("web-thinking-progress-fill") != std::string::npos);
+
+    // 5. Validate embedded JavaScript syntax via node --check
+    size_t scStart = rUi.body.find("<script>");
+    CHECK_TRUE(scStart != std::string::npos);
+    size_t scEnd = rUi.body.find("</script>", scStart);
+    CHECK_TRUE(scEnd != std::string::npos);
+    std::string jsCode = rUi.body.substr(scStart + 8, scEnd - (scStart + 8));
+    std::string jsTmpPath = "/tmp/octi_test_webui_" + std::to_string(getpid()) + ".js";
+    {
+        std::ofstream ofs(jsTmpPath);
+        ofs << jsCode;
+    }
+    int rc = std::system(("node --check " + jsTmpPath + " >/dev/null 2>&1").c_str());
+    std::remove(jsTmpPath.c_str());
+    CHECK_EQUAL(0, rc);
 }
 
 int main(int argc, char **argv)

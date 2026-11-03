@@ -7811,11 +7811,6 @@ if (btnUndo) {
     renderAllWebReserves();
   });
 }
-    updatePlaySidebar();
-    renderPlayBoardCanvas();
-    renderAllWebReserves();
-  });
-}
 
 // Resign
 var btnResign = document.getElementById("btn-web-resign");
@@ -7828,8 +7823,6 @@ if (btnResign) {
       clearInterval(clockInterval);
       clockInterval = null;
     }
-    activePlayState.status = "R";
-    activePlayState.winner = (turn === "A") ? "B" : "A";
     activePlayState.status = "R";
     activePlayState.winner = (turn === "A") ? "B" : "A";
     OctiWebSoundSynth.play("GAME_VICTORY");
