@@ -719,10 +719,20 @@ int64_t GameRoomManager::ensureAnonymousObserver(const std::string &ipAddress)
     }
 
     std::lock_guard<std::mutex> lock(_mutex);
+    int64_t now = nowMs();
     std::map<std::string, int64_t>::iterator it = _anonIpToId.find(sanitized);
     if (it != _anonIpToId.end()) {
         int64_t anonId = it->second;
-        _players[anonId].online = true;
+        PlayerInfo &pi = _players[anonId];
+        if (!pi.online) {
+            pi.online = true;
+            pi.onlineSinceMs = now;
+        } else if (pi.onlineSinceMs <= 0) {
+            pi.onlineSinceMs = now;
+        }
+        if (pi.lastActiveMs <= 0) {
+            pi.lastActiveMs = now;
+        }
         return anonId;
     }
 
@@ -731,6 +741,8 @@ int64_t GameRoomManager::ensureAnonymousObserver(const std::string &ipAddress)
     PlayerInfo pi;
     pi.handle = "anonymous-" + sanitized;
     pi.online = true;
+    pi.onlineSinceMs = now;
+    pi.lastActiveMs = now;
     pi.lastPresence = PresenceStatus::OFFLINE;
     _players[anonId] = pi;
     return anonId;
@@ -1023,7 +1035,7 @@ void GameRoomManager::recordClientHeartbeat(int64_t playerId,
                                             const std::string &clientType,
                                             bool interactiveAction)
 {
-    if (playerId <= 0) {
+    if (playerId == 0) {
         return;
     }
     std::lock_guard<std::mutex> lock(_mutex);
@@ -1250,6 +1262,14 @@ LobbySnapshot GameRoomManager::lobbyState() const
         if (!it->second.online) {
             continue;
         }
+        if (it->first < 0 &&
+            (it->second.handle == "anonymous-127.0.0.1" ||
+             it->second.handle == "anonymous-::1" ||
+             it->second.handle == "anonymous-::ffff:127.0.0.1" ||
+             it->second.handle == "anonymous-localhost" ||
+             it->second.handle == "anonymous-unknown")) {
+            continue;
+        }
         PresenceEntry pe;
         pe.playerId = it->first;
         pe.handle = it->second.handle;
@@ -1314,9 +1334,18 @@ size_t GameRoomManager::onlinePlayerCount() const
     size_t n = 0;
     for (std::map<int64_t, PlayerInfo>::const_iterator it = _players.begin();
          it != _players.end(); ++it) {
-        if (it->second.online) {
-            ++n;
+        if (!it->second.online) {
+            continue;
         }
+        if (it->first < 0 &&
+            (it->second.handle == "anonymous-127.0.0.1" ||
+             it->second.handle == "anonymous-::1" ||
+             it->second.handle == "anonymous-::ffff:127.0.0.1" ||
+             it->second.handle == "anonymous-localhost" ||
+             it->second.handle == "anonymous-unknown")) {
+            continue;
+        }
+        ++n;
     }
     return n;
 }

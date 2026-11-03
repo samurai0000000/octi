@@ -3672,15 +3672,30 @@ TEST(OctiHttpServerIntegrationTest, VisibleAnonymousObservation)
     User a = signIn("google", "sub-host", "Host Alice");
     User b = signIn("apple", "sub-guest", "Guest Bob");
 
-    /* 1. Unauthenticated lobby state registers anonymous-<ip> in presence */
-    Reply rLobby = http().get("/api/v1/lobby/state");
-    EXPECT_STATUS(200, rLobby);
-    Json players = rLobby.json["players"];
+    /* 1. Loopback 127.0.0.1 is filtered out of lobby presence, while real anonymous IPs show */
+    Reply rLobbyLoopback = http().get("/api/v1/lobby/state");
+    EXPECT_STATUS(200, rLobbyLoopback);
+    Json lbPlayers = rLobbyLoopback.json["players"];
+    CHECK_TRUE(lbPlayers.is_array());
+    for (size_t i = 0; i < lbPlayers.size(); ++i) {
+        CHECK_TRUE(lbPlayers[i].value("handle", "") != "anonymous-127.0.0.1");
+    }
+
+    httplib::Headers xffHeaders = {
+        {"X-Forwarded-For", "203.0.113.42"},
+        {"X-Octi-Client-Type", "web"}
+    };
+    Reply rLobbyReal = http().get("/api/v1/lobby/state", "", xffHeaders);
+    EXPECT_STATUS(200, rLobbyReal);
+    Json players = rLobbyReal.json["players"];
     CHECK_TRUE(players.is_array());
     bool foundAnon = false;
     for (size_t i = 0; i < players.size(); ++i) {
-        if (players[i].value("handle", "") == "anonymous-127.0.0.1") {
+        if (players[i].value("handle", "") == "anonymous-203.0.113.42") {
             foundAnon = true;
+            CHECK_TRUE(players[i].contains("clients"));
+            CHECK_EQUAL(1, static_cast<int>(players[i]["clients"].size()));
+            STRCMP_EQUAL("web", players[i]["clients"][0].get<std::string>().c_str());
             break;
         }
     }

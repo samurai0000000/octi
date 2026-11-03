@@ -247,6 +247,47 @@ std::string detectClientType(const Request &req)
     return "";
 }
 
+std::string clientRemoteIp(const Request &req)
+{
+    if (req.has_header("X-Forwarded-For")) {
+        std::string xff = req.get_header_value("X-Forwarded-For");
+        size_t comma = xff.find(',');
+        if (comma != std::string::npos) {
+            xff = xff.substr(0, comma);
+        }
+        size_t first = xff.find_first_not_of(" \t\r\n");
+        if (first != std::string::npos) {
+            size_t last = xff.find_last_not_of(" \t\r\n");
+            std::string ip = xff.substr(first, (last - first + 1));
+            if (!ip.empty()) {
+                return ip;
+            }
+        }
+    }
+    if (req.has_header("X-Real-IP")) {
+        std::string xri = req.get_header_value("X-Real-IP");
+        size_t first = xri.find_first_not_of(" \t\r\n");
+        if (first != std::string::npos) {
+            size_t last = xri.find_last_not_of(" \t\r\n");
+            std::string ip = xri.substr(first, (last - first + 1));
+            if (!ip.empty()) {
+                return ip;
+            }
+        }
+    }
+    return req.remote_addr;
+}
+
+bool isLoopbackIp(const std::string &ip)
+{
+    return ip.empty() ||
+           ip == "127.0.0.1" ||
+           ip == "::1" ||
+           ip == "::ffff:127.0.0.1" ||
+           ip == "localhost" ||
+           ip == "unknown";
+}
+
 const char *modeName(OctiGameMode m)
 {
     switch (m) {
@@ -3000,8 +3041,12 @@ void OctiHttpServer::Impl::handleLobbyState(const Request &req, Response &res)
         return;
     }
     if (auth.playerId == 0) {
-        int64_t viewerId = rooms.ensureAnonymousObserver(req.remote_addr);
-        rooms.enterLobby(viewerId);
+        std::string remoteIp = clientRemoteIp(req);
+        if (!isLoopbackIp(remoteIp)) {
+            int64_t viewerId = rooms.ensureAnonymousObserver(remoteIp);
+            rooms.enterLobby(viewerId);
+            rooms.recordClientHeartbeat(viewerId, auth.clientType, false);
+        }
     } else {
         rooms.enterLobby(auth.playerId);
         rooms.recordClientHeartbeat(auth.playerId, auth.clientType, false);
@@ -3071,9 +3116,13 @@ void OctiHttpServer::Impl::handleLobbyEvents(const Request &req,
     if (!optionalAuth(req, res, auth)) {
         return;
     }
+    std::string remoteIp = clientRemoteIp(req);
     const int64_t viewer = (auth.playerId > 0)
                                ? auth.playerId
-                               : rooms.ensureAnonymousObserver(req.remote_addr);
+                               : rooms.ensureAnonymousObserver(remoteIp);
+    if (auth.playerId == 0 && !isLoopbackIp(remoteIp)) {
+        rooms.recordClientHeartbeat(viewer, auth.clientType, false);
+    }
     PollFn fetch = [this, viewer](int64_t since, size_t limit,
                                   PollBatch &out) -> int {
         LobbyPoll poll = rooms.pollLobbyEvents(viewer, since, limit);
@@ -3209,7 +3258,7 @@ void OctiHttpServer::Impl::handleTableObserve(const Request &req,
     }
     int64_t viewerId = (auth.playerId > 0)
                            ? auth.playerId
-                           : rooms.ensureAnonymousObserver(req.remote_addr);
+                           : rooms.ensureAnonymousObserver(clientRemoteIp(req));
     RoomResult r = rooms.observeRoom(id, viewerId);
     if (!r.ok()) {
         sendRoomError(res, r);
@@ -3230,7 +3279,7 @@ void OctiHttpServer::Impl::handleTableUnobserve(const Request &req,
     }
     int64_t viewerId = (auth.playerId > 0)
                            ? auth.playerId
-                           : rooms.ensureAnonymousObserver(req.remote_addr);
+                           : rooms.ensureAnonymousObserver(clientRemoteIp(req));
     finishRoom(res, rooms.stopObserving(id, viewerId), Json::object());
 }
 
@@ -3303,7 +3352,7 @@ void OctiHttpServer::Impl::handleGameGet(const Request &req, Response &res)
     }
     const int64_t viewerId = (auth.playerId > 0)
                                  ? auth.playerId
-                                 : rooms.ensureAnonymousObserver(req.remote_addr);
+                                 : rooms.ensureAnonymousObserver(clientRemoteIp(req));
     RoomView view;
     RoomResult r = rooms.getRoomView(id, viewerId, view);
     if (r.code == RoomCode::NOT_FOUND) {
@@ -3657,7 +3706,7 @@ void OctiHttpServer::Impl::handleGameEvents(const Request &req, Response &res)
     }
     const int64_t viewer = (auth.playerId > 0)
                                ? auth.playerId
-                               : rooms.ensureAnonymousObserver(req.remote_addr);
+                               : rooms.ensureAnonymousObserver(clientRemoteIp(req));
     PollFn fetch = [this, id, viewer](int64_t since, size_t limit,
                                       PollBatch &out) -> int {
         RoomPoll poll;
