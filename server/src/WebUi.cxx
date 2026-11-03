@@ -3324,10 +3324,12 @@ function checkWinner(s) {
       });
     });
 
-    var bdElim = (((s.elimMask & 2) !== 0 || podCounts.B === 0) &&
-                  ((s.elimMask & 8) !== 0 || podCounts.D === 0));
-    var acElim = (((s.elimMask & 1) !== 0 || podCounts.A === 0) &&
-                  ((s.elimMask & 4) !== 0 || podCounts.C === 0));
+    var bOut = (s.elimMask & 2) !== 0 || (podCounts.B === 0 && (!s.reserves[1] || s.reserves[1].freePods === 0));
+    var dOut = (s.elimMask & 8) !== 0 || (podCounts.D === 0 && (!s.reserves[3] || s.reserves[3].freePods === 0));
+    var aOut = (s.elimMask & 1) !== 0 || (podCounts.A === 0 && (!s.reserves[0] || s.reserves[0].freePods === 0));
+    var cOut = (s.elimMask & 4) !== 0 || (podCounts.C === 0 && (!s.reserves[2] || s.reserves[2].freePods === 0));
+    var bdElim = bOut && dOut;
+    var acElim = aOut && cOut;
 
     if (bdElim) {
       s.status = "O";
@@ -3380,14 +3382,16 @@ function checkWinner(s) {
     });
   });
 
-  if (podsA === 0) {
+  var freeA = (s.mode === "OFK" || !s.reserves[0]) ? 0 : s.reserves[0].freePods;
+  var freeB = (s.mode === "OFK" || !s.reserves[1]) ? 0 : s.reserves[1].freePods;
+  if (podsA === 0 && freeA === 0) {
     s.status = "O";
     s.turn = "-";
     s.winner = "B";
     s.termination = "TOTAL_CAPTURE";
     return s;
   }
-  if (podsB === 0) {
+  if (podsB === 0 && freeB === 0) {
     s.status = "O";
     s.turn = "-";
     s.winner = "A";
@@ -4179,6 +4183,13 @@ function evaluateState(s, botSide, prof) {
     }
   }
 
+  if (totalAllyPodsOnBoard === 0) {
+    score -= (prof.wipeoutDangerPenalty || 16000) + prof.soleArmedPodDangerPenalty;
+  }
+  if (totalEnemyPodsOnBoard === 0) {
+    score += (prof.wipeoutDangerPenalty || 16000) + prof.soleArmedPodDangerPenalty;
+  }
+
   // Multi-Base Minimum Chebyshev Distance (d_min1 and d_min2 per uncaptured target base)
   for (var ati = 0; ati < allyTargets.length; ati++) {
     var tb = allyTargets[ati];
@@ -4222,7 +4233,8 @@ function evaluateState(s, botSide, prof) {
                  + r.freeProngs * 50
                  + r.freeSuper * 150;
       var unarmedHome = isAlliedSeat ? allyUnarmedHomePods : enemyUnarmedHomePods;
-      if (s.mode !== "OFK" && r.freePods < 4 && unarmedHome > 0 && r.freeProngs >= 6) {
+      var podsOnBoardSeat = isAlliedSeat ? totalAllyPodsOnBoard : totalEnemyPodsOnBoard;
+      if (s.mode !== "OFK" && r.freePods < 4 && unarmedHome >= 2 && podsOnBoardSeat >= 2 && r.freeProngs >= 6) {
         resVal -= (4 - r.freePods) * (1500 + unarmedHome * 1500);
       }
       if (is4p && (s.elimMask & (1 << p)) !== 0) {
@@ -4389,11 +4401,17 @@ function orderMoves(rawMoves, s, curPlayer, prof, ttBestMove) {
 
         var prevX = sx, prevY = sy;
         var foundLeapfrog = false;
+        var anyCapture = false;
+        var isJump = (hops.length > 2);
         for (var hi2 = 1; hi2 < hops.length; hi2++) {
           var hm = /^([1-9])([1-9])(x?)/.exec(hops[hi2]);
           if (!hm) continue;
           var hx = parseInt(hm[1], 10), hy = parseInt(hm[2], 10);
+          if (Math.abs(hx - prevX) > 1 || Math.abs(hy - prevY) > 1) {
+            isJump = true;
+          }
           if (hm[3] === "x") {
+            anyCapture = true;
             sc += (prof.moveOrderCaptureBonus || 8500);
           } else {
             sc += 250;
@@ -4409,7 +4427,7 @@ function orderMoves(rawMoves, s, curPlayer, prof, ttBestMove) {
           prevX = hx; prevY = hy;
         }
 
-        if (enemyThreatMap[ex2 + "," + ey2]) {
+        if (!anyCapture && enemyThreatMap[ex2 + "," + ey2]) {
           sc -= prof.moveOrderBlunderPenalty;
         }
 
@@ -4426,7 +4444,7 @@ function orderMoves(rawMoves, s, curPlayer, prof, ttBestMove) {
           sc -= 1200 * destStack.length;
         }
 
-        if (earlyDevelopment && podCfg.count <= 1 && endDist <= 3) {
+        if (!anyCapture && !isJump && earlyDevelopment && podCfg.count <= 1 && endDist <= 3) {
           sc -= 3200;
         }
       }

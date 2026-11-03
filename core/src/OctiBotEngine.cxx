@@ -633,12 +633,22 @@ int scoreMoveHeuristic(const OctiBoard &board,
                 score += 3000;
             }
 
+            bool anyCapture = false;
+            bool isJump = (op.hops.size() > 1);
+            int prevX = op.x0;
+            int prevY = op.y0;
             for (const auto &hop : op.hops) {
+                if (std::abs(hop.x - prevX) > 1 || std::abs(hop.y - prevY) > 1) {
+                    isJump = true;
+                }
                 if (hop.capture) {
+                    anyCapture = true;
                     score += profile.moveOrderCaptureBonus;
                 } else {
                     score += 250;
                 }
+                prevX = hop.x;
+                prevY = hop.y;
             }
 
             // Leapfrog / launchpad battery move detection
@@ -658,7 +668,7 @@ int scoreMoveHeuristic(const OctiBoard &board,
             int destBitIdx = lastHop.y * 9 + lastHop.x;
             int destWord = (destBitIdx >> 6) & 1;
             std::uint64_t destBit = 1ULL << (destBitIdx & 63);
-            if (enemyThreatMask && (enemyThreatMask[destWord] & destBit) != 0ULL) {
+            if (!anyCapture && enemyThreatMask && (enemyThreatMask[destWord] & destBit) != 0ULL) {
                 score -= profile.moveOrderBlunderPenalty;
             }
 
@@ -677,7 +687,7 @@ int scoreMoveHeuristic(const OctiBoard &board,
             }
 
             // Penalize premature 1-prong lone-pod rushes during development
-            if (earlyDevelopment && op.pod.getNumProngs() <= 1 && endDist <= 3) {
+            if (!anyCapture && !isJump && earlyDevelopment && op.pod.getNumProngs() <= 1 && endDist <= 3) {
                 score -= 3200;
             }
         } else if (op.addProngDir != DIR_UNDEF && op.rmProngDir == DIR_UNDEF) {
@@ -1454,6 +1464,13 @@ int OctiBotEngine::evaluatePosition(const OctiBoard &board,
         }
     }
 
+    if (totalAllyPodsOnBoard == 0) {
+        totalScore -= (profile.wipeoutDangerPenalty + profile.soleArmedPodDangerPenalty);
+    }
+    if (totalEnemyPodsOnBoard == 0) {
+        totalScore += (profile.wipeoutDangerPenalty + profile.soleArmedPodDangerPenalty);
+    }
+
     // 2001 Multi-Base Minimum Chebyshev Distance: closest (d_min1) and second-closest (d_min2)
     if (!allyTargets.empty()) {
         for (const auto &tb : allyTargets) {
@@ -1516,7 +1533,8 @@ int OctiBotEngine::evaluatePosition(const OctiBoard &board,
                    + game->getFreeProngs(p) * 50
                    + game->getFreeSuperProngs(p) * 150;
         if (mode != GAME_MODE_OFK && freePods < 4 &&
-            (isAlly ? (allyUnarmedHomePods > 0) : (enemyUnarmedHomePods > 0)) &&
+            (isAlly ? (allyUnarmedHomePods >= 2 && totalAllyPodsOnBoard >= 2)
+                    : (enemyUnarmedHomePods >= 2 && totalEnemyPodsOnBoard >= 2)) &&
             game->getFreeProngs(p) >= 6) {
             resVal -= (4 - freePods) * 1500;
         }

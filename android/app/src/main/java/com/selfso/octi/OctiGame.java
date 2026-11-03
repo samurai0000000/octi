@@ -1368,13 +1368,13 @@ public class OctiGame {
                 }
             }
 
-            if (podsB == 0) {
+            if (podsB == 0 && players[OctiPlayer.PLAYER_B.getValue()].freePods == 0) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_A;
                 gameMetadata.termination = "TOTAL_CAPTURE";
                 return;
             }
-            if (podsA == 0) {
+            if (podsA == 0 && players[OctiPlayer.PLAYER_A.getValue()].freePods == 0) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_B;
                 gameMetadata.termination = "TOTAL_CAPTURE";
@@ -1408,13 +1408,13 @@ public class OctiGame {
                 }
             }
 
-            if (podsB == 0) {
+            if (podsB == 0 && players[OctiPlayer.PLAYER_B.getValue()].freePods == 0) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_A;
                 gameMetadata.termination = "TOTAL_CAPTURE";
                 return;
             }
-            if (podsA == 0) {
+            if (podsA == 0 && players[OctiPlayer.PLAYER_A.getValue()].freePods == 0) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_B;
                 gameMetadata.termination = "TOTAL_CAPTURE";
@@ -1467,8 +1467,10 @@ public class OctiGame {
                 }
             }
 
-            boolean bdElim = (players[OctiPlayer.PLAYER_B.getValue()].eliminated || pods[OctiPlayer.PLAYER_B.getValue()] == 0)
-                    && (players[OctiPlayer.PLAYER_D.getValue()].eliminated || pods[OctiPlayer.PLAYER_D.getValue()] == 0);
+            boolean bdElim = (players[OctiPlayer.PLAYER_B.getValue()].eliminated
+                    || (pods[OctiPlayer.PLAYER_B.getValue()] == 0 && players[OctiPlayer.PLAYER_B.getValue()].freePods == 0))
+                    && (players[OctiPlayer.PLAYER_D.getValue()].eliminated
+                    || (pods[OctiPlayer.PLAYER_D.getValue()] == 0 && players[OctiPlayer.PLAYER_D.getValue()].freePods == 0));
             if (bdElim) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_A;
@@ -1476,8 +1478,10 @@ public class OctiGame {
                 return;
             }
 
-            boolean acElim = (players[OctiPlayer.PLAYER_A.getValue()].eliminated || pods[OctiPlayer.PLAYER_A.getValue()] == 0)
-                    && (players[OctiPlayer.PLAYER_C.getValue()].eliminated || pods[OctiPlayer.PLAYER_C.getValue()] == 0);
+            boolean acElim = (players[OctiPlayer.PLAYER_A.getValue()].eliminated
+                    || (pods[OctiPlayer.PLAYER_A.getValue()] == 0 && players[OctiPlayer.PLAYER_A.getValue()].freePods == 0))
+                    && (players[OctiPlayer.PLAYER_C.getValue()].eliminated
+                    || (pods[OctiPlayer.PLAYER_C.getValue()] == 0 && players[OctiPlayer.PLAYER_C.getValue()].freePods == 0));
             if (acElim) {
                 gameOver = true;
                 winner = OctiPlayer.PLAYER_B;
@@ -2347,7 +2351,8 @@ public class OctiGame {
                     }
                 }
             }
-            if (gameStarted && (podsA == 0 || podsB == 0)) {
+            if (gameStarted && ((podsA == 0 && players[OctiPlayer.PLAYER_A.getValue()].freePods == 0)
+                    || (podsB == 0 && players[OctiPlayer.PLAYER_B.getValue()].freePods == 0))) {
                 return "TOTAL_CAPTURE";
             }
             return gameOver ? "STALEMATE" : "";
@@ -2373,7 +2378,8 @@ public class OctiGame {
                     }
                 }
             }
-            if (gameStarted && (podsA == 0 || podsB == 0)) {
+            if (gameStarted && ((podsA == 0 && players[OctiPlayer.PLAYER_A.getValue()].freePods == 0)
+                    || (podsB == 0 && players[OctiPlayer.PLAYER_B.getValue()].freePods == 0))) {
                 return "TOTAL_CAPTURE";
             }
             return gameOver ? "STALEMATE" : "";
@@ -2401,7 +2407,11 @@ public class OctiGame {
                     }
                 }
             }
-            if (gameStarted && (teamACount == 0 || teamBCount == 0)) {
+            int teamAFree = (players[OctiPlayer.PLAYER_A.getValue()].eliminated ? 0 : players[OctiPlayer.PLAYER_A.getValue()].freePods)
+                    + (players[OctiPlayer.PLAYER_C.getValue()].eliminated ? 0 : players[OctiPlayer.PLAYER_C.getValue()].freePods);
+            int teamBFree = (players[OctiPlayer.PLAYER_B.getValue()].eliminated ? 0 : players[OctiPlayer.PLAYER_B.getValue()].freePods)
+                    + (players[OctiPlayer.PLAYER_D.getValue()].eliminated ? 0 : players[OctiPlayer.PLAYER_D.getValue()].freePods);
+            if (gameStarted && ((teamACount == 0 && teamAFree == 0) || (teamBCount == 0 && teamBFree == 0))) {
                 return "TOTAL_CAPTURE";
             }
             return gameOver ? "STALEMATE" : "";

@@ -1053,12 +1053,22 @@ public class OctiBotEngine {
                     score += 3000;
                 }
 
+                boolean anyCapture = false;
+                boolean isJump = (op.hops.size() > 1);
+                int prevX = op.x0;
+                int prevY = op.y0;
                 for (OctiHop hop : op.hops) {
+                    if (Math.abs(hop.x - prevX) > 1 || Math.abs(hop.y - prevY) > 1) {
+                        isJump = true;
+                    }
                     if (hop.capture) {
+                        anyCapture = true;
                         score += profile.moveOrderCaptureBonus;
                     } else {
                         score += 250;
                     }
+                    prevX = hop.x;
+                    prevY = hop.y;
                 }
 
                 // Leapfrog / launchpad battery move detection
@@ -1078,7 +1088,7 @@ public class OctiBotEngine {
                 int destBitIdx = lastHop.y * 9 + lastHop.x;
                 int destWord = (destBitIdx >>> 6) & 1;
                 long destBit = 1L << (destBitIdx & 63);
-                if (enemyThreatMask != null && (enemyThreatMask[destWord] & destBit) != 0L) {
+                if (!anyCapture && enemyThreatMask != null && (enemyThreatMask[destWord] & destBit) != 0L) {
                     score -= profile.moveOrderBlunderPenalty;
                 }
 
@@ -1097,7 +1107,7 @@ public class OctiBotEngine {
                 }
 
                 // Penalize premature 1-prong lone-pod rushes during development
-                if (earlyDevelopment && op.pod.getNumProngs() <= 1 && endDist <= 3) {
+                if (!anyCapture && !isJump && earlyDevelopment && op.pod.getNumProngs() <= 1 && endDist <= 3) {
                     score -= 3200;
                 }
             } else if (op.addProngDir != OctiDir.DIR_UNDEF && op.rmProngDir == OctiDir.DIR_UNDEF) {
@@ -1615,6 +1625,13 @@ public class OctiBotEngine {
             }
         }
 
+        if (totalAllyPodsOnBoard == 0) {
+            totalScore -= (profile.wipeoutDangerPenalty + profile.soleArmedPodDangerPenalty);
+        }
+        if (totalEnemyPodsOnBoard == 0) {
+            totalScore += (profile.wipeoutDangerPenalty + profile.soleArmedPodDangerPenalty);
+        }
+
         // 2001 Multi-Base Minimum Chebyshev Distance: closest (d_min1) and second-closest (d_min2)
         if (!allyTargets.isEmpty()) {
             for (int[] tb : allyTargets) {
@@ -1678,7 +1695,8 @@ public class OctiBotEngine {
                     + game.getFreeSuperProngs(p) * 150;
             // Penalize pulling reserve pods onto the board while home pods are still unarmed
             if (mode != OctiGameMode.GAME_MODE_OFK && freePods < 4
-                    && (isAlly ? (allyUnarmedHomePods > 0) : (enemyUnarmedHomePods > 0))
+                    && (isAlly ? (allyUnarmedHomePods >= 2 && totalAllyPodsOnBoard >= 2)
+                               : (enemyUnarmedHomePods >= 2 && totalEnemyPodsOnBoard >= 2))
                     && game.getFreeProngs(p) >= 6) {
                 resVal -= (4 - freePods) * 1500;
             }

@@ -1181,12 +1181,12 @@ void OctiGame::updateGameOverAndWinner()
             }
         }
 
-        if (podsB == 0) {
+        if (podsB == 0 && _players[PLAYER_B].freePods == 0) {
             _gameOver = true;
             _winner = PLAYER_A;
             return;
         }
-        if (podsA == 0) {
+        if (podsA == 0 && _players[PLAYER_A].freePods == 0) {
             _gameOver = true;
             _winner = PLAYER_B;
             return;
@@ -1218,12 +1218,12 @@ void OctiGame::updateGameOverAndWinner()
             }
         }
 
-        if (podsB == 0) {
+        if (podsB == 0 && _players[PLAYER_B].freePods == 0) {
             _gameOver = true;
             _winner = PLAYER_A;
             return;
         }
-        if (podsA == 0) {
+        if (podsA == 0 && _players[PLAYER_A].freePods == 0) {
             _gameOver = true;
             _winner = PLAYER_B;
             return;
@@ -1261,16 +1261,16 @@ void OctiGame::updateGameOverAndWinner()
             }
         }
 
-        bool bdElim = (_players[PLAYER_B].eliminated || pods[PLAYER_B] == 0) &&
-                      (_players[PLAYER_D].eliminated || pods[PLAYER_D] == 0);
+        bool bdElim = (_players[PLAYER_B].eliminated || (pods[PLAYER_B] == 0 && _players[PLAYER_B].freePods == 0)) &&
+                      (_players[PLAYER_D].eliminated || (pods[PLAYER_D] == 0 && _players[PLAYER_D].freePods == 0));
         if (bdElim) {
             _gameOver = true;
             _winner = PLAYER_A;
             return;
         }
 
-        bool acElim = (_players[PLAYER_A].eliminated || pods[PLAYER_A] == 0) &&
-                      (_players[PLAYER_C].eliminated || pods[PLAYER_C] == 0);
+        bool acElim = (_players[PLAYER_A].eliminated || (pods[PLAYER_A] == 0 && _players[PLAYER_A].freePods == 0)) &&
+                      (_players[PLAYER_C].eliminated || (pods[PLAYER_C] == 0 && _players[PLAYER_C].freePods == 0));
         if (acElim) {
             _gameOver = true;
             _winner = PLAYER_B;
@@ -2038,7 +2038,8 @@ std::string OctiGame::serializeJson(const OctiGameMetadata &meta) const
                                 }
                             }
                         }
-                        if (loserPods == 0) {
+                        int loserFree = (_mode == GAME_MODE_OFK) ? 0 : _players[loser].freePods;
+                        if (loserPods == 0 && loserFree == 0) {
                             totalCapture = true;
                         }
                     } else if (_mode == GAME_MODE_4) {
@@ -2053,9 +2054,13 @@ std::string OctiGame::serializeJson(const OctiGameMetadata &meta) const
                                 }
                             }
                         }
-                        if ((_winner == PLAYER_A || _winner == PLAYER_C) && bdPods == 0) {
+                        int bdFree = (_players[PLAYER_B].eliminated ? 0 : _players[PLAYER_B].freePods) +
+                                     (_players[PLAYER_D].eliminated ? 0 : _players[PLAYER_D].freePods);
+                        int acFree = (_players[PLAYER_A].eliminated ? 0 : _players[PLAYER_A].freePods) +
+                                     (_players[PLAYER_C].eliminated ? 0 : _players[PLAYER_C].freePods);
+                        if ((_winner == PLAYER_A || _winner == PLAYER_C) && bdPods == 0 && bdFree == 0) {
                             totalCapture = true;
-                        } else if ((_winner == PLAYER_B || _winner == PLAYER_D) && acPods == 0) {
+                        } else if ((_winner == PLAYER_B || _winner == PLAYER_D) && acPods == 0 && acFree == 0) {
                             totalCapture = true;
                         }
                     }

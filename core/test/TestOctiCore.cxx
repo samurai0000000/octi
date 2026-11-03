@@ -2862,6 +2862,32 @@ TEST(OctiBotTacticalUpgradeTest, RefuteBlunderGameC205F2c1Ply14)
     CHECK_FALSE(chosen == "34bdef-43");
 }
 
+TEST(OctiBotTacticalUpgradeTest, ReservePodsPreventPrematureTotalCaptureAndRefutePly34Blunder)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    board.fromPositionString("2:3:0:0:P:B:-:0:2,0,21,0:4,2,14,0:A33,A53a,A73h,A44ah,B55adefg,A78abcfgh");
+    octi::OctiGame *game = board.getGame();
+
+    octi::OctiBotEngine bot(octi::BotDifficulty::TACTICAL);
+    bot.setTimeBudgetMs(2500);
+    std::string chosen = bot.chooseMove(board);
+    CHECK_FALSE(chosen == "55adefg-54");
+
+    // If Player B plays the blunder 55adefg-54 and Player A captures B's last board pod via 53a-55x,
+    // the game must NOT end because Player B still has 4 reserve pods and empty home squares 37, 57, 77.
+    game->move("55adefg-54");
+    game->move("53a-55x");
+    CHECK_FALSE(game->isGameOver());
+    CHECK_EQUAL(octi::PLAYER_B, game->getTurn());
+    CHECK_EQUAL(4, game->getFreePods(octi::PLAYER_B));
+
+    // Player B can legally place a reserve pod on 57
+    game->move("57");
+    CHECK_FALSE(game->isGameOver());
+    CHECK_EQUAL(octi::PLAYER_A, game->getTurn());
+    CHECK_EQUAL(3, game->getFreePods(octi::PLAYER_B));
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

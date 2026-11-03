@@ -1814,6 +1814,29 @@ public class OctiBoardEngineTest {
         assertFalse("34bdef-43".equals(chosen));
     }
 
+    @Test
+    public void testReservePodsPreventPrematureTotalCaptureAndRefutePly34Blunder() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+        board.fromPositionString("2:3:0:0:P:B:-:0:2,0,21,0:4,2,14,0:A33,A53a,A73h,A44ah,B55adefg,A78abcfgh");
+        OctiGame game = board.getGame();
+
+        OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
+        bot.setTimeBudgetMs(2500);
+        String chosen = bot.chooseMove(board);
+        assertFalse("55adefg-54".equals(chosen));
+
+        game.move("55adefg-54");
+        game.move("53a-55x");
+        assertFalse(game.isGameOver());
+        assertEquals(OctiPlayer.PLAYER_B, game.getTurn());
+        assertEquals(4, game.getFreePods(OctiPlayer.PLAYER_B));
+
+        game.move("57");
+        assertFalse(game.isGameOver());
+        assertEquals(OctiPlayer.PLAYER_A, game.getTurn());
+        assertEquals(3, game.getFreePods(OctiPlayer.PLAYER_B));
+    }
+
     // -------------------------------------------------------------------------
     // Exception Assert Helpers
     // -------------------------------------------------------------------------
