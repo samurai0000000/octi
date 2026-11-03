@@ -4951,6 +4951,187 @@ TEST(OctiHttpServerIntegrationTest, WebPlayerBotProfilesQuiescenceAndRulesValida
     int rc = std::system(("node --check " + jsTmpPath + " >/dev/null 2>&1").c_str());
     std::remove(jsTmpPath.c_str());
     CHECK_EQUAL(0, rc);
+
+    // 6. Execute WebPlayer JS Engine + WebMoveComposer + botSearch + generateOctiTranscriptV3
+    //    via Node.js and verify the generated 2P & 4P transcripts pass server archive upload!
+    size_t engStart = jsCode.find("var DIR_DELTAS = [");
+    CHECK_TRUE(engStart != std::string::npos);
+    size_t engEnd = jsCode.find("/* Inline Web Worker Initialization */", engStart);
+    CHECK_TRUE(engEnd != std::string::npos);
+    size_t compStart = jsCode.find("function sortedPodIndicesMostProngsFirst(stack)");
+    CHECK_TRUE(compStart != std::string::npos);
+    size_t compEnd = jsCode.find("/* --- Vector Reserve HUD Rendering --- */", compStart);
+    CHECK_TRUE(compEnd != std::string::npos);
+
+    std::string nodeHarnessPath = "/tmp/octi_test_harness_" + std::to_string(getpid()) + ".js";
+    std::string out2pPath = "/tmp/octi_test_2p_" + std::to_string(getpid()) + ".json";
+    std::string out4pPath = "/tmp/octi_test_4p_" + std::to_string(getpid()) + ".json";
+    {
+        std::ofstream hfs(nodeHarnessPath);
+        hfs << "var document = { getElementById: function() { return { style: {}, textContent: '', addEventListener: function(){}, classList: { add: function(){}, remove: function(){}, contains: function(){ return false; } } }; } };\n";
+        hfs << "var window = { addEventListener: function(){} };\n";
+        hfs << "function $(id) { return null; }\n";
+        hfs << "function requestAnimationFrame() {}\n";
+        hfs << "var OctiWebSoundSynth = { play: function(){}, setEnabled: function(){}, isEnabled: function(){ return true; } };\n";
+        hfs << "function renderPlayBoardCanvas() {}\n";
+        hfs << "function renderAllWebReserves() {}\n";
+        hfs << "var moveComposer = null;\n";
+        hfs << jsCode.substr(engStart, engEnd - engStart) << "\n";
+        hfs << jsCode.substr(compStart, compEnd - compStart) << "\n";
+        hfs << R"NODEJS(
+var assert = require("assert");
+var fs = require("fs");
+
+// Test 1: WebMoveComposer human moves advance turn, support reposition, jump capture toggle, and botSearch reply
+var activeState = parseOctiFen("2:1:0:0:P:A:-:0:4,0,25,0:4,0,25,0:A33,A53,A73,B37,B57,B77");
+var committedMoves = [];
+moveComposer = new WebMoveComposer(function() { return activeState; }, function(not, newSt) {
+  committedMoves.push(not);
+  activeState = newSt;
+});
+
+// Stage & commit prong addition 33+a
+assert.strictEqual(moveComposer.stageAddProng(3, 3, 0, 0, false), true);
+assert.strictEqual(moveComposer.stagedNotation, "33+a");
+assert.strictEqual(moveComposer.commitStagedMove(), true);
+assert.strictEqual(activeState.turn, "B", "Turn must advance from A to B after human move commit");
+
+// Bot search on B's turn
+var botRes = botSearch(serializeOctiFen(activeState), 1, "2P", "B");
+assert.ok(botRes && botRes.bestMove, "botSearch must return a valid move for B");
+activeState = applyMoveToState(cloneState(activeState), botRes.bestMove, "B");
+assert.strictEqual(activeState.turn, "A", "Turn must advance back to A after bot move");
+
+// Test prong repositioning on A's pod at (3,3): 33a+b-a
+var podIdxA = 0;
+assert.strictEqual(moveComposer.stageRepositionProng(3, 3, podIdxA, 0, 1), true);
+assert.strictEqual(moveComposer.stagedNotation, "33a+b-a");
+assert.strictEqual(moveComposer.commitStagedMove(), true);
+assert.strictEqual(activeState.turn, "B");
+
+// Test guidedHops initialized and 2nd click does not throw
+moveComposer.beginGuidedPodMove(3, 3, 0);
+assert.strictEqual(Array.isArray(moveComposer.guidedHops), true);
+assert.strictEqual(moveComposer.guidedHops.length, 0);
+moveComposer.cancel();
+
+// Test jump capture prompt & toggleCaptureAtSquare
+var jumpSt = parseOctiFen("2:1:0:0:P:A:-:0:4,0,24,0:4,0,25,0:A55a,B56");
+var jumpComp = new WebMoveComposer(function() { return jumpSt; }, function(not, ns) { jumpSt = ns; });
+assert.strictEqual(jumpComp.beginGuidedPodMove(5, 5, 0), true);
+assert.strictEqual(jumpComp.selectGuidedDestination(5, 7), true);
+assert.strictEqual(jumpComp.stagedNotation, "55a-57x");
+assert.strictEqual(jumpComp.toggleCaptureAtSquare(5, 6), true);
+assert.strictEqual(jumpComp.stagedNotation, "55a-57");
+assert.strictEqual(jumpComp.toggleCaptureAtSquare(5, 6), true);
+assert.strictEqual(jumpComp.stagedNotation, "55a-57x");
+assert.strictEqual(jumpComp.commitStagedMove(), true);
+assert.strictEqual(jumpSt.status, "O");
+assert.strictEqual(jumpSt.winner, "A");
+
+// Build a full 2P 1-base victory transcript using JS engine and write to disk for C++ server validation
+var s2p = parseOctiFen("2:1:0:0:P:A:-:0:4,0,25,0:4,0,25,0:A33,A53,A73,B37,B57,B77");
+var moves2p = ["53+a", "57+g", "53a-54", "57g-47", "54a-55", "47g-37", "55a-56", "37+e", "56a-57"];
+var plies2p = [];
+for (var i = 0; i < moves2p.length; i++) {
+  var p = s2p.turn;
+  var leg2 = generateMoves(s2p, p, false);
+  assert.ok(leg2.indexOf(moves2p[i]) >= 0, "Expected 2P move " + moves2p[i] + " to be in generateMoves");
+  s2p = applyMoveToState(cloneState(s2p), moves2p[i], p);
+  plies2p.push({ ply: i + 1, player: p, move: moves2p[i], elapsedMs: 120 });
+}
+assert.strictEqual(s2p.status, "O");
+assert.strictEqual(s2p.winner, "A");
+var tr2p = {
+  format: "octi.transcript.v3",
+  schema: "octi.transcript.v3",
+  version: 3,
+  game_id: "web-js-e2e-2p",
+  mode: "2",
+  bases: 1,
+  superProngs: false,
+  edgeless: false,
+  startPlayer: "A",
+  status: "GAME_OVER",
+  termination: "BASE_CAPTURE",
+  winner: s2p.winner,
+  finalFen: serializeOctiFen(s2p),
+  final_fen: serializeOctiFen(s2p),
+  players: [
+    { seat: 1, player: "A", handle: "Player_A", type: "HUMAN" },
+    { seat: 2, player: "B", handle: "AI_Tactical", type: "AI", aiDifficulty: 2, aiTimeBudgetMs: 3000 }
+  ],
+  moves: moves2p,
+  plies: plies2p,
+  timestamp: Math.floor(Date.now() / 1000)
+};
+fs.writeFileSync(process.argv[2], JSON.stringify(tr2p));
+
+// Build a full 4P victory transcript using JS engine and write to disk for C++ server validation
+var s4p = parseOctiFen("4:3:0:0:P:A:-:0:3,0,12,0:3,0,12,0:3,0,12,0:3,0,12,0:A33,D73,B37,C77");
+var moves4p = [
+  "33+a", "37+h", "77+e", "73+b", "33a-34", "37h+f-h",
+  "77e-76", "73b-84", "34a-35", "37f-26", "76e-75", "84b+g",
+  "35a-36", "26f+a", "75e-74", "84bg+h", "36a-37", "74e-73"
+];
+var plies4p = [];
+for (var j = 0; j < moves4p.length; j++) {
+  var p4 = s4p.turn;
+  var leg4 = generateMoves(s4p, p4, false);
+  assert.ok(leg4.indexOf(moves4p[j]) >= 0, "Expected 4P move " + moves4p[j] + " to be in generateMoves");
+  s4p = applyMoveToState(cloneState(s4p), moves4p[j], p4);
+  plies4p.push({ ply: j + 1, player: p4, move: moves4p[j], elapsedMs: 150 });
+}
+assert.strictEqual(s4p.status, "O");
+assert.strictEqual(s4p.winner, "A");
+var tr4p = {
+  format: "octi.transcript.v3",
+  schema: "octi.transcript.v3",
+  version: 3,
+  game_id: "web-js-e2e-4p",
+  mode: "4",
+  bases: 3,
+  superProngs: false,
+  edgeless: false,
+  startPlayer: "A",
+  status: "GAME_OVER",
+  termination: "BASE_CAPTURE",
+  winner: s4p.winner,
+  finalFen: serializeOctiFen(s4p),
+  final_fen: serializeOctiFen(s4p),
+  players: [
+    { seat: 1, player: "A", handle: "Player_A", type: "HUMAN" },
+    { seat: 2, player: "B", handle: "AI_Tactical", type: "AI", aiDifficulty: 2, aiTimeBudgetMs: 3000 },
+    { seat: 3, player: "C", handle: "AI_Master", type: "AI", aiDifficulty: 2, aiTimeBudgetMs: 3000 },
+    { seat: 4, player: "D", handle: "AI_Tactical", type: "AI", aiDifficulty: 2, aiTimeBudgetMs: 3000 }
+  ],
+  moves: moves4p,
+  plies: plies4p,
+  timestamp: Math.floor(Date.now() / 1000)
+};
+fs.writeFileSync(process.argv[3], JSON.stringify(tr4p));
+)NODEJS";
+    }
+    int rcRun = std::system(("node " + nodeHarnessPath + " " + out2pPath + " " + out4pPath).c_str());
+    std::remove(nodeHarnessPath.c_str());
+    CHECK_EQUAL(0, rcRun);
+
+    // Upload both JS-generated transcripts to the C++ HTTP server to verify 100% FEN & move replay parity
+    User uWeb = signIn("google", "sub-web-js-e2e", "WebPlayerTester");
+    {
+        std::ifstream ifs2(out2pPath);
+        std::string tr2Str((std::istreambuf_iterator<char>(ifs2)), std::istreambuf_iterator<char>());
+        std::remove(out2pPath.c_str());
+        Reply rUp2 = http().post("/api/v1/archive/upload", uWeb.token, Json{{"transcript", tr2Str}});
+        EXPECT_STATUS(200, rUp2);
+    }
+    {
+        std::ifstream ifs4(out4pPath);
+        std::string tr4Str((std::istreambuf_iterator<char>(ifs4)), std::istreambuf_iterator<char>());
+        std::remove(out4pPath.c_str());
+        Reply rUp4 = http().post("/api/v1/archive/upload", uWeb.token, Json{{"transcript", tr4Str}});
+        EXPECT_STATUS(200, rUp4);
+    }
 }
 
 int main(int argc, char **argv)

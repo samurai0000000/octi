@@ -1479,6 +1479,8 @@ tr.active-ply {
         <select id="setup-human-seat" style="background:#161D26;color:#fff;border-color:#2D3A54;">
           <option value="A" selected>Seat A (Bottom &bull; Emerald)</option>
           <option value="B">Seat B (Top &bull; Ruby)</option>
+          <option value="C" id="setup-seat-opt-c" style="display:none;">Seat C (Top-Right &bull; Sapphire)</option>
+          <option value="D" id="setup-seat-opt-d" style="display:none;">Seat D (Bottom-Left &bull; Amber)</option>
         </select>
       </label>
       <label style="display:flex;justify-content:space-between;align-items:center;">Game Mode:
@@ -2599,9 +2601,17 @@ function animationTick() {
       drawBoardState(st);
     }
   });
+    /*WebPlayBoard*/
+    if ($("tab-play") && $("tab-play").classList.contains("on") && activePlayState) {
+      var hasPlayMoveInd = lastMoveHighlightSquares && lastMoveHighlightSquares.length > 0 && (now - lastMoveSetAtMs) <= 5200;
+      var hasPlayTurnInd = activePlayState.status === "P";
+      if (hasPlayMoveInd || hasPlayTurnInd) {
+        renderPlayBoardCanvas();
+      }
+    }
+    requestAnimationFrame(animationTick);
+  }
   requestAnimationFrame(animationTick);
-}
-requestAnimationFrame(animationTick);
 
 window.addEventListener("resize", function () {
   Object.keys(boardStates).forEach(function (k) {
@@ -2736,8 +2746,10 @@ function isPartnerHome(mode, partnerIdx, x, y) {
 function areAllied(mode, p1, p2) {
   if (p1 === p2) return true;
   if (mode === "4" || mode === "4P") {
-    if ((p1 === "A" && p2 === "C") || (p1 === "C" && p2 === "A")) return true;
-    if ((p1 === "B" && p2 === "D") || (p1 === "D" && p2 === "B")) return true;
+    if ((p1 === "A" || p1 === "C" || p1 === "TEAM_13_WIN") &&
+        (p2 === "A" || p2 === "C" || p2 === "TEAM_13_WIN")) return true;
+    if ((p1 === "B" || p1 === "D" || p1 === "TEAM_24_WIN") &&
+        (p2 === "B" || p2 === "D" || p2 === "TEAM_24_WIN")) return true;
   }
   return false;
 }
@@ -2900,9 +2912,13 @@ function serializeOctiFen(s) {
   parts.push(String(s.bases));
   parts.push(s.superProngs ? "1" : "0");
   parts.push(s.edgeless ? "1" : "0");
-  parts.push(s.status || "P");
-  parts.push(s.turn || "-");
-  parts.push(s.winner || "-");
+  var st = s.status || "P";
+  parts.push(st);
+  parts.push((st === "O" || st === "R") ? "-" : (s.turn || "-"));
+  var winTok = s.winner || "-";
+  if (winTok === "TEAM_13_WIN") winTok = "A";
+  else if (winTok === "TEAM_24_WIN") winTok = "B";
+  parts.push(winTok);
   parts.push(String(s.elimMask || 0));
   s.reserves.forEach(function (r) {
     parts.push(r.freePods + "," + r.capturedPods + "," + r.freeProngs + "," + r.freeSuper);
@@ -2910,15 +2926,16 @@ function serializeOctiFen(s) {
   var sqTokens = [];
   var sortedKeys = Object.keys(s.map).sort(function (a, b) {
     var pA = a.split(","), pB = b.split(",");
-    var xA = parseInt(pA[0], 10), xB = parseInt(pB[0], 10);
-    if (xA !== xB) return xA - xB;
-    return parseInt(pA[1], 10) - parseInt(pB[1], 10);
+    var xA = parseInt(pA[0], 10), yA = parseInt(pA[1], 10);
+    var xB = parseInt(pB[0], 10), yB = parseInt(pB[1], 10);
+    if (yA !== yB) return yA - yB;
+    return xA - xB;
   });
   sortedKeys.forEach(function (k) {
     var p = k.split(",");
     var px = p[0], py = p[1];
     s.map[k].forEach(function (pod) {
-      var cfgStr = (pod.cfg && pod.cfg.text) ? pod.cfg.text : (pod.cfg && pod.cfg.prongs ? formatProngConfig(pod.cfg.prongs) : "");
+      var cfgStr = (pod.cfg && pod.cfg.prongs) ? formatProngConfig(pod.cfg.prongs) : ((pod.cfg && pod.cfg.text) ? pod.cfg.text : "");
       sqTokens.push(pod.owner + px + py + cfgStr);
     });
   });
@@ -2971,7 +2988,7 @@ function getOpponentBases(mode, player, bases) {
 }
 
 function dfsJumpChains(s, startX, startY, curX, curY, pod, jumpedSquares, currentMoveStr, results, seenMap, onlyTactical, isFirstHop) {
-  if (jumpedSquares.length >= 4) return;
+  if (jumpedSquares.length >= 16) return;
   var oppBases = getOpponentBases(s.mode, pod.owner, s.bases);
 
   for (var d = 0; d < 8; d++) {
@@ -2992,7 +3009,8 @@ function dfsJumpChains(s, startX, startY, curX, curY, pod, jumpedSquares, curren
     if (alreadyJumped) continue;
 
     var jStack = s.map[jx + "," + jy];
-    if (!jStack || !jStack.length) continue;
+    var jCount = jStack ? ((jx === startX && jy === startY) ? (jStack.length - 1) : jStack.length) : 0;
+    if (jCount <= 0) continue;
 
     var landK = landX + "," + landY;
     var landStack = s.map[landK];
@@ -3001,8 +3019,9 @@ function dfsJumpChains(s, startX, startY, curX, curY, pod, jumpedSquares, curren
     if (!canLand) continue;
 
     var hasEnemy = squareHasEnemyOf(s, jx, jy, pod.owner);
+    var cfgStr = (pod.cfg && pod.cfg.prongs) ? formatProngConfig(pod.cfg.prongs) : (pod.cfg.text || "");
     var hopPrefix = isFirstHop
-      ? (startX + "" + startY + (pod.cfg.text || "") + "-" + landX + "" + landY)
+      ? (startX + "" + startY + cfgStr + "-" + landX + "" + landY)
       : (currentMoveStr + "-" + landX + "" + landY);
 
     var options = [];
@@ -3151,7 +3170,7 @@ function generateMoves(s, player, onlyTactical) {
   return moves;
 }
 
-function applySingleHopChain(s, move, player) {
+function applySingleHopChain(s, move, player, deferCapturesList) {
   var pIdx = playerIndex(player);
   var res = s.reserves[pIdx];
   var hops = move.split("-");
@@ -3160,21 +3179,23 @@ function applySingleHopChain(s, move, player) {
   var curX = parseInt(origM[1], 10);
   var curY = parseInt(origM[2], 10);
   var fromK = curX + "," + curY;
-  var podCfgMatch = origM[3] || "";
+  var rawCfgMatch = origM[3] || "";
+  var normCfgMatch = rawCfgMatch ? formatProngConfig(parseProngConfig(rawCfgMatch).prongs) : "";
 
   if (!s.map[fromK] || !s.map[fromK].length) return;
 
   var podIdx = -1;
-  for (var pi = s.map[fromK].length - 1; pi >= 0; pi--) {
+  for (var pi = 0; pi < s.map[fromK].length; pi++) {
     if (s.map[fromK][pi].owner === player) {
-      if (!podCfgMatch || s.map[fromK][pi].cfg.text === podCfgMatch) {
+      var pText = formatProngConfig(s.map[fromK][pi].cfg.prongs);
+      if (!rawCfgMatch || pText === normCfgMatch || s.map[fromK][pi].cfg.text === rawCfgMatch) {
         podIdx = pi;
         break;
       }
     }
   }
   if (podIdx === -1) {
-    for (var pi2 = s.map[fromK].length - 1; pi2 >= 0; pi2--) {
+    for (var pi2 = 0; pi2 < s.map[fromK].length; pi2++) {
       if (s.map[fromK][pi2].owner === player) { podIdx = pi2; break; }
     }
   }
@@ -3206,27 +3227,31 @@ function applySingleHopChain(s, move, player) {
       }
       var midK = midX + "," + midY;
 
-      if (isCap && s.map[midK] && s.map[midK].length) {
-        var remaining = [];
-        for (var v = 0; v < s.map[midK].length; v++) {
-          var vPod = s.map[midK][v];
-          if (!areAllied(s.mode, vPod.owner, player)) {
-            var vIdx = playerIndex(vPod.owner);
-            s.reserves[vIdx].capturedPods++;
-            for (var d = 0; d < 8; d++) {
-              if (vPod.cfg.prongs[d] === 1) {
-                res.freeProngs++;
-              } else if (vPod.cfg.prongs[d] === 2) {
-                if (s.superProngs) res.freeSuper++;
-                else res.freeProngs++;
+      if (isCap) {
+        if (deferCapturesList) {
+          if (deferCapturesList.indexOf(midK) === -1) deferCapturesList.push(midK);
+        } else if (s.map[midK] && s.map[midK].length) {
+          var remaining = [];
+          for (var v = 0; v < s.map[midK].length; v++) {
+            var vPod = s.map[midK][v];
+            if (!areAllied(s.mode, vPod.owner, player)) {
+              var vIdx = playerIndex(vPod.owner);
+              s.reserves[vIdx].capturedPods++;
+              for (var d = 0; d < 8; d++) {
+                if (vPod.cfg.prongs[d] === 1) {
+                  res.freeProngs++;
+                } else if (vPod.cfg.prongs[d] === 2) {
+                  if (s.superProngs) res.freeSuper++;
+                  else res.freeProngs++;
+                }
               }
+            } else {
+              remaining.push(vPod);
             }
-          } else {
-            remaining.push(vPod);
           }
+          if (remaining.length) s.map[midK] = remaining;
+          else delete s.map[midK];
         }
-        if (remaining.length) s.map[midK] = remaining;
-        else delete s.map[midK];
       }
     }
     curX = toX; curY = toY;
@@ -3246,31 +3271,28 @@ function check4PlayerElimination(s, player) {
   for (var pl = 0; pl < 4; pl++) {
     if ((s.elimMask & (1 << pl)) === 0) {
       var hCoord = homeCoords[pl];
-      var hStk = s.map[hCoord.x + "," + hCoord.y];
-      if (hStk && hStk.length) {
-        var topOwner = hStk[hStk.length - 1].owner;
-        if (!areAllied("4P", topOwner, ["A", "B", "C", "D"][pl])) {
-          s.elimMask |= (1 << pl);
-          Object.keys(s.map).forEach(function (mk) {
-            var keep = [];
-            (s.map[mk] || []).forEach(function (sqPod) {
-              if (sqPod.owner === ["A", "B", "C", "D"][pl]) {
-                s.reserves[pl].capturedPods++;
-                for (var di = 0; di < 8; di++) {
-                  if (sqPod.cfg.prongs[di] === 1) res.freeProngs++;
-                  else if (sqPod.cfg.prongs[di] === 2) {
-                    if (s.superProngs) res.freeSuper++;
-                    else res.freeProngs++;
-                  }
+      var seatOwner = ["A", "B", "C", "D"][pl];
+      if (squareHasEnemyOf(s, hCoord.x, hCoord.y, seatOwner)) {
+        s.elimMask |= (1 << pl);
+        Object.keys(s.map).forEach(function (mk) {
+          var keep = [];
+          (s.map[mk] || []).forEach(function (sqPod) {
+            if (sqPod.owner === seatOwner) {
+              s.reserves[pl].capturedPods++;
+              for (var di = 0; di < 8; di++) {
+                if (sqPod.cfg.prongs[di] === 1) res.freeProngs++;
+                else if (sqPod.cfg.prongs[di] === 2) {
+                  if (s.superProngs) res.freeSuper++;
+                  else res.freeProngs++;
                 }
-              } else {
-                keep.push(sqPod);
               }
-            });
-            if (keep.length) s.map[mk] = keep;
-            else delete s.map[mk];
+            } else {
+              keep.push(sqPod);
+            }
           });
-        }
+          if (keep.length) s.map[mk] = keep;
+          else delete s.map[mk];
+        });
       }
     }
   }
@@ -3278,21 +3300,19 @@ function check4PlayerElimination(s, player) {
 
 function checkWinner(s) {
   if (s.mode === "4" || s.mode === "4P") {
-    var bd1 = s.map["3,7"], bd2 = s.map["7,3"];
-    var acWinsBases = (bd1 && bd1.length && (bd1[bd1.length - 1].owner === "A" || bd1[bd1.length - 1].owner === "C")) &&
-                      (bd2 && bd2.length && (bd2[bd2.length - 1].owner === "A" || bd2[bd2.length - 1].owner === "C"));
+    var acWinsBases = squareHasEnemyOf(s, 3, 7, "B") && squareHasEnemyOf(s, 7, 3, "D");
     if (acWinsBases) {
       s.status = "O";
-      s.winner = "TEAM_13_WIN";
+      s.turn = "-";
+      s.winner = "A";
       s.termination = "BASE_CAPTURE";
       return s;
     }
-    var ac1 = s.map["3,3"], ac2 = s.map["7,7"];
-    var bdWinsBases = (ac1 && ac1.length && (ac1[ac1.length - 1].owner === "B" || ac1[ac1.length - 1].owner === "D")) &&
-                      (ac2 && ac2.length && (ac2[ac2.length - 1].owner === "B" || ac2[ac2.length - 1].owner === "D"));
+    var bdWinsBases = squareHasEnemyOf(s, 3, 3, "A") && squareHasEnemyOf(s, 7, 7, "C");
     if (bdWinsBases) {
       s.status = "O";
-      s.winner = "TEAM_24_WIN";
+      s.turn = "-";
+      s.winner = "B";
       s.termination = "BASE_CAPTURE";
       return s;
     }
@@ -3304,18 +3324,22 @@ function checkWinner(s) {
       });
     });
 
-    var acTotal = podCounts.A + podCounts.C + (s.reserves[0] ? s.reserves[0].freePods : 0) + (s.reserves[2] ? s.reserves[2].freePods : 0);
-    var bdTotal = podCounts.B + podCounts.D + (s.reserves[1] ? s.reserves[1].freePods : 0) + (s.reserves[3] ? s.reserves[3].freePods : 0);
+    var bdElim = (((s.elimMask & 2) !== 0 || podCounts.B === 0) &&
+                  ((s.elimMask & 8) !== 0 || podCounts.D === 0));
+    var acElim = (((s.elimMask & 1) !== 0 || podCounts.A === 0) &&
+                  ((s.elimMask & 4) !== 0 || podCounts.C === 0));
 
-    if (bdTotal === 0) {
+    if (bdElim) {
       s.status = "O";
-      s.winner = "TEAM_13_WIN";
+      s.turn = "-";
+      s.winner = "A";
       s.termination = "TOTAL_CAPTURE";
       return s;
     }
-    if (acTotal === 0) {
+    if (acElim) {
       s.status = "O";
-      s.winner = "TEAM_24_WIN";
+      s.turn = "-";
+      s.winner = "B";
       s.termination = "TOTAL_CAPTURE";
       return s;
     }
@@ -3331,6 +3355,7 @@ function checkWinner(s) {
     : oppBasesA.some(function (b) { return isSquareOccupiedBy(s, b.x, b.y, "A"); });
   if (aWon) {
     s.status = "O";
+    s.turn = "-";
     s.winner = "A";
     s.termination = "BASE_CAPTURE";
     return s;
@@ -3341,6 +3366,7 @@ function checkWinner(s) {
     : oppBasesB.some(function (b) { return isSquareOccupiedBy(s, b.x, b.y, "B"); });
   if (bWon) {
     s.status = "O";
+    s.turn = "-";
     s.winner = "B";
     s.termination = "BASE_CAPTURE";
     return s;
@@ -3353,17 +3379,17 @@ function checkWinner(s) {
       else if (p.owner === "B") podsB++;
     });
   });
-  var freeA = (s.reserves[0] ? s.reserves[0].freePods : 0);
-  var freeB = (s.reserves[1] ? s.reserves[1].freePods : 0);
 
-  if (podsA === 0 && freeA === 0) {
+  if (podsA === 0) {
     s.status = "O";
+    s.turn = "-";
     s.winner = "B";
     s.termination = "TOTAL_CAPTURE";
     return s;
   }
-  if (podsB === 0 && freeB === 0) {
+  if (podsB === 0) {
     s.status = "O";
+    s.turn = "-";
     s.winner = "A";
     s.termination = "TOTAL_CAPTURE";
     return s;
@@ -3395,7 +3421,8 @@ function advanceTurn(s, player) {
     }
     if (!foundNext) {
       s.status = "O";
-      s.winner = (player === "A" || player === "C") ? "TEAM_13_WIN" : "TEAM_24_WIN";
+      s.turn = "-";
+      s.winner = (player === "A" || player === "C") ? "A" : "B";
       s.termination = "STALEMATE";
     }
   } else {
@@ -3403,6 +3430,7 @@ function advanceTurn(s, player) {
     var pMoves2 = generateMoves(s, nextPlayer);
     if (!pMoves2.length) {
       s.status = "O";
+      s.turn = "-";
       s.winner = player;
       s.termination = "STALEMATE";
     } else {
@@ -3428,9 +3456,34 @@ function applyMoveToState(s, move, player) {
   // Composite move: e.g. "37df-46,37e-36"
   if (move.indexOf(",") !== -1 && move.indexOf("-") !== -1) {
     var subMoves = move.split(",");
+    var deferredCaps = [];
     for (var sm = 0; sm < subMoves.length; sm++) {
       var singleMove = subMoves[sm].trim();
-      if (singleMove) applySingleHopChain(s, singleMove, player);
+      if (singleMove) applySingleHopChain(s, singleMove, player, deferredCaps);
+    }
+    for (var dc = 0; dc < deferredCaps.length; dc++) {
+      var midK = deferredCaps[dc];
+      if (s.map[midK] && s.map[midK].length) {
+        var remaining = [];
+        for (var v = 0; v < s.map[midK].length; v++) {
+          var vPod = s.map[midK][v];
+          if (!areAllied(s.mode, vPod.owner, player)) {
+            var vIdx = playerIndex(vPod.owner);
+            s.reserves[vIdx].capturedPods++;
+            for (var d = 0; d < 8; d++) {
+              if (vPod.cfg.prongs[d] === 1) res.freeProngs++;
+              else if (vPod.cfg.prongs[d] === 2) {
+                if (s.superProngs) res.freeSuper++;
+                else res.freeProngs++;
+              }
+            }
+          } else {
+            remaining.push(vPod);
+          }
+        }
+        if (remaining.length) s.map[midK] = remaining;
+        else delete s.map[midK];
+      }
     }
     if (s.mode === "4" || s.mode === "4P") {
       check4PlayerElimination(s, player);
@@ -3482,17 +3535,34 @@ function applyMoveToState(s, move, player) {
   // 2. Prong repositioning
   else if (/^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])-([a-hA-H])(!?)$/.test(move) ||
            /^([1-9])([1-9])([a-hA-H!]*)-([a-hA-H])\+([a-hA-H])(!?)$/.test(move)) {
-    var mx = RegExp.$1, my = RegExp.$2;
+    var mx = RegExp.$1, my = RegExp.$2, rawRepoCfg = RegExp.$3 || "";
+    var normRepoCfg = rawRepoCfg ? formatProngConfig(parseProngConfig(rawRepoCfg).prongs) : "";
     var addCh = (move.indexOf("+") < move.indexOf("-")) ? RegExp.$4.toLowerCase() : RegExp.$5.toLowerCase();
     var remCh = (move.indexOf("+") < move.indexOf("-")) ? RegExp.$5.toLowerCase() : RegExp.$4.toLowerCase();
     var addIdx = DIR_CHARS.indexOf(addCh), remIdx = DIR_CHARS.indexOf(remCh);
     var mk = mx + "," + my;
-    if (s.map[mk] && s.map[mk].length) {
+    if (s.map[mk] && s.map[mk].length && remIdx >= 0 && addIdx >= 0) {
       var foundPod = null;
-      for (var p = s.map[mk].length - 1; p >= 0; p--) {
-        if (s.map[mk][p].owner === player) { foundPod = s.map[mk][p]; break; }
+      for (var p = 0; p < s.map[mk].length; p++) {
+        var cand = s.map[mk][p];
+        if (cand.owner === player && cand.cfg.prongs[remIdx] && !cand.cfg.prongs[addIdx]) {
+          var candText = formatProngConfig(cand.cfg.prongs);
+          if (!rawRepoCfg || candText === normRepoCfg || cand.cfg.text === rawRepoCfg) {
+            foundPod = cand;
+            break;
+          }
+        }
       }
-      if (foundPod && remIdx >= 0 && foundPod.cfg.prongs[remIdx] && addIdx >= 0 && !foundPod.cfg.prongs[addIdx]) {
+      if (!foundPod) {
+        for (var p2 = 0; p2 < s.map[mk].length; p2++) {
+          var cand2 = s.map[mk][p2];
+          if (cand2.owner === player && cand2.cfg.prongs[remIdx] && !cand2.cfg.prongs[addIdx]) {
+            foundPod = cand2;
+            break;
+          }
+        }
+      }
+      if (foundPod) {
         var pt = foundPod.cfg.prongs[remIdx];
         foundPod.cfg.prongs[remIdx] = 0;
         foundPod.cfg.prongs[addIdx] = pt;
@@ -3502,23 +3572,40 @@ function applyMoveToState(s, move, player) {
   }
   // 3. Prong addition
   else if (/^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])(!?)$/.test(move) || /^([1-9])([1-9])([a-hA-H])$/.test(move)) {
-    var mx, my, addCh, isSuper = false;
+    var mx, my, rawAddCfg = "", addCh, isSuper = false;
     if (move.indexOf("+") !== -1) {
       /^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])(!?)$/.test(move);
-      mx = RegExp.$1; my = RegExp.$2; addCh = RegExp.$4.toLowerCase();
+      mx = RegExp.$1; my = RegExp.$2; rawAddCfg = RegExp.$3 || ""; addCh = RegExp.$4.toLowerCase();
       isSuper = (RegExp.$5 === "!" || RegExp.$4 === RegExp.$4.toUpperCase());
     } else {
       /^([1-9])([1-9])([a-hA-H])$/.test(move);
       mx = RegExp.$1; my = RegExp.$2; addCh = RegExp.$3.toLowerCase();
     }
+    var normAddCfg = rawAddCfg ? formatProngConfig(parseProngConfig(rawAddCfg).prongs) : "";
     var dIdx = DIR_CHARS.indexOf(addCh);
     var mk = mx + "," + my;
-    if (s.map[mk] && s.map[mk].length) {
+    if (s.map[mk] && s.map[mk].length && dIdx >= 0) {
       var foundPod = null;
-      for (var p = s.map[mk].length - 1; p >= 0; p--) {
-        if (s.map[mk][p].owner === player) { foundPod = s.map[mk][p]; break; }
+      for (var p = 0; p < s.map[mk].length; p++) {
+        var cand = s.map[mk][p];
+        if (cand.owner === player && !cand.cfg.prongs[dIdx]) {
+          var candText = formatProngConfig(cand.cfg.prongs);
+          if (!rawAddCfg || candText === normAddCfg || cand.cfg.text === rawAddCfg) {
+            foundPod = cand;
+            break;
+          }
+        }
       }
-      if (foundPod && dIdx >= 0 && !foundPod.cfg.prongs[dIdx]) {
+      if (!foundPod) {
+        for (var p2 = 0; p2 < s.map[mk].length; p2++) {
+          var cand2 = s.map[mk][p2];
+          if (cand2.owner === player && !cand2.cfg.prongs[dIdx]) {
+            foundPod = cand2;
+            break;
+          }
+        }
+      }
+      if (foundPod) {
         foundPod.cfg.prongs[dIdx] = isSuper ? 2 : 1;
         foundPod.cfg.count++;
         foundPod.cfg.text = formatProngConfig(foundPod.cfg.prongs);
@@ -5341,6 +5428,8 @@ function WebMoveComposer(stateGetter, onCommitCb) {
   this.onCommit = onCommitCb;
   this.stagedOps = [];
   this.stagedNotation = "";
+  this.completedSubMoves = [];
+  this.currentChainNotation = "";
   this.previewState = null;
   this.isAwaitingConfirmation = false;
   this.awaitingSuperProngBonusMove = false;
@@ -5353,6 +5442,7 @@ function WebMoveComposer(stateGetter, onCommitCb) {
   this.guidedPodIndex = -1;
   this.guidedPodConfig = "";
   this.guidedLegalDests = [];
+  this.guidedHops = [];
   this.claimedPodsAtOrigin = {}; // map of podIdx -> true
   this.jumpedSquaresChain = [];
   this.captureChoices = []; // { jumpedX, jumpedY, capture, mandatory }
@@ -5371,6 +5461,8 @@ WebMoveComposer.prototype.cancel = function () {
 WebMoveComposer.prototype.reset = function () {
   this.stagedOps = [];
   this.stagedNotation = "";
+  this.completedSubMoves = [];
+  this.currentChainNotation = "";
   this.previewState = null;
   this.isAwaitingConfirmation = false;
   this.awaitingSuperProngBonusMove = false;
@@ -5382,6 +5474,7 @@ WebMoveComposer.prototype.reset = function () {
   this.guidedPodIndex = -1;
   this.guidedPodConfig = "";
   this.guidedLegalDests = [];
+  this.guidedHops = [];
   this.claimedPodsAtOrigin = {};
   this.jumpedSquaresChain = [];
   this.captureChoices = [];
@@ -5411,14 +5504,16 @@ WebMoveComposer.prototype.getWorkingState = function () {
 
 WebMoveComposer.prototype.hasOtherMovablePodAtOrigin = function () {
   if (!this.guidedOriginSquare) return false;
-  var s = this.getState();
+  var s = this.previewState || this.getState();
   if (!s || !s.map) return false;
-  var k = this.guidedOriginSquare.x + "," + this.guidedOriginSquare.y;
+  var ox = this.guidedOriginSquare.x, oy = this.guidedOriginSquare.y;
+  var k = ox + "," + oy;
   var stack = s.map[k] || [];
   var turn = s.turn;
   for (var i = 0; i < stack.length; i++) {
     if (stack[i].owner === turn && !this.claimedPodsAtOrigin[i]) {
-      return true;
+      var dests = this.computeLegalDestsForPod(s, ox, oy, stack[i], []);
+      if (dests.length > 0) return true;
     }
   }
   return false;
@@ -5426,15 +5521,17 @@ WebMoveComposer.prototype.hasOtherMovablePodAtOrigin = function () {
 
 WebMoveComposer.prototype.unclaimedMovablePodIndicesAtOrigin = function () {
   if (!this.guidedOriginSquare) return [];
-  var s = this.getState();
+  var s = this.previewState || this.getState();
   if (!s || !s.map) return [];
-  var k = this.guidedOriginSquare.x + "," + this.guidedOriginSquare.y;
+  var ox = this.guidedOriginSquare.x, oy = this.guidedOriginSquare.y;
+  var k = ox + "," + oy;
   var stack = s.map[k] || [];
   var turn = s.turn;
   var out = [];
   for (var i = 0; i < stack.length; i++) {
     if (stack[i].owner === turn && !this.claimedPodsAtOrigin[i]) {
-      out.push(i);
+      var dests = this.computeLegalDestsForPod(s, ox, oy, stack[i], []);
+      if (dests.length > 0) out.push(i);
     }
   }
   return out;
@@ -5443,16 +5540,19 @@ WebMoveComposer.prototype.unclaimedMovablePodIndicesAtOrigin = function () {
 WebMoveComposer.prototype.hasDistinctUnclaimedPodsAtOrigin = function () {
   var unclaimed = this.unclaimedMovablePodIndicesAtOrigin();
   if (unclaimed.length <= 1) return false;
-  var s = this.getState();
+  var s = this.previewState || this.getState();
   var stack = s.map[this.guidedOriginSquare.x + "," + this.guidedOriginSquare.y] || [];
-  var firstCfg = stack[unclaimed[0]].cfg.text || "";
+  var firstCfg = formatProngConfig(stack[unclaimed[0]].cfg.prongs);
   for (var i = 1; i < unclaimed.length; i++) {
-    if ((stack[unclaimed[i]].cfg.text || "") !== firstCfg) return true;
+    if (formatProngConfig(stack[unclaimed[i]].cfg.prongs) !== firstCfg) return true;
   }
   return false;
 };
 
 WebMoveComposer.prototype.stageAddPod = function (x, y, forceLiberate) {
+  if (!this.awaitingSuperProngBonusMove) {
+    this.reset();
+  }
   var s = this.getWorkingState();
   var turn = s.turn;
   var pIdx = playerIndex(turn);
@@ -5517,6 +5617,9 @@ WebMoveComposer.prototype.stageAddPod = function (x, y, forceLiberate) {
 };
 
 WebMoveComposer.prototype.stageAddProng = function (x, y, podIdx, dirIdx, isSuper) {
+  if (!this.awaitingSuperProngBonusMove) {
+    this.reset();
+  }
   var s = this.getWorkingState();
   var turn = s.turn;
   var pIdx = (turn === "A") ? 0 : ((turn === "B") ? 1 : ((turn === "C") ? 2 : 3));
@@ -5527,7 +5630,7 @@ WebMoveComposer.prototype.stageAddProng = function (x, y, podIdx, dirIdx, isSupe
   var pod = stack[podIdx];
   if (pod.owner !== turn || pod.cfg.prongs[dirIdx]) return false;
 
-  var prevCfg = pod.cfg.text || "";
+  var prevCfg = formatProngConfig(pod.cfg.prongs);
 
   if (isSuper) {
     if (!s.superProngs || !res || res.freeSuper <= 0) return false;
@@ -5540,20 +5643,13 @@ WebMoveComposer.prototype.stageAddProng = function (x, y, podIdx, dirIdx, isSupe
   }
   pod.cfg.count++;
   var dirChar = DIR_CHARS[dirIdx];
-  pod.cfg.text = prevCfg + (isSuper ? (dirChar.toUpperCase() + "!") : dirChar);
+  pod.cfg.text = formatProngConfig(pod.cfg.prongs);
 
   var not = x + "" + y + prevCfg + "+" + dirChar + (isSuper ? "!" : "");
   this.stagedNotation = not;
 
   OctiWebSoundSynth.play("PRONG_SNAP");
   this.isAwaitingConfirmation = true;
-
-  if (isSuper && pod.cfg.count === 8) {
-    this.awaitingSuperProngBonusMove = true;
-    this.bonusPodCoord = { x: x, y: y };
-    this.bonusPodIdx = podIdx;
-    this.beginGuidedPodMove(x, y, podIdx);
-  }
 
   this.updateUi();
   renderPlayBoardCanvas();
@@ -5573,6 +5669,9 @@ WebMoveComposer.addProng = function (x, y, dir, isSuper, podIdx) {
 };
 
 WebMoveComposer.prototype.stageRepositionProng = function (x, y, podIdx, srcDirIdx, dstDirIdx) {
+  if (!this.awaitingSuperProngBonusMove) {
+    this.reset();
+  }
   var s = this.getWorkingState();
   if (s.mode === "OFK") return false;
   var turn = s.turn;
@@ -5580,18 +5679,16 @@ WebMoveComposer.prototype.stageRepositionProng = function (x, y, podIdx, srcDirI
   var stack = s.map[k];
   if (!stack || podIdx < 0 || podIdx >= stack.length) return false;
   var pod = stack[podIdx];
-  if (pod.owner !== turn || !pod.cfg.prongs[srcDirIdx] || pod.cfg.prongs[dstDirIdx]) return false;
+  if (pod.owner !== turn || pod.cfg.prongs[srcDirIdx] !== 1 || pod.cfg.prongs[dstDirIdx]) return false;
 
-  var prevCfg = pod.cfg.text || "";
-  var pt = pod.cfg.prongs[srcDirIdx];
+  var prevCfg = formatProngConfig(pod.cfg.prongs);
   pod.cfg.prongs[srcDirIdx] = 0;
-  pod.cfg.prongs[dstDirIdx] = pt;
+  pod.cfg.prongs[dstDirIdx] = 1;
+  pod.cfg.text = formatProngConfig(pod.cfg.prongs);
 
-  var isSuper = (pt === 2);
   var srcCh = DIR_CHARS[srcDirIdx];
   var dstCh = DIR_CHARS[dstDirIdx];
-  pod.cfg.text = prevCfg.replace(srcCh, "") + (isSuper ? (dstCh.toUpperCase() + "!") : dstCh);
-  this.stagedNotation = x + "" + y + prevCfg + "+" + dstCh + "-" + srcCh + (isSuper ? "!" : "");
+  this.stagedNotation = x + "" + y + prevCfg + "+" + dstCh + "-" + srcCh;
 
   OctiWebSoundSynth.play("PRONG_SNAP");
   this.isAwaitingConfirmation = true;
@@ -5605,7 +5702,6 @@ WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, 
   var dests = [];
   if (!pod || !pod.cfg) return dests;
   var gw = state.gw, gh = state.gh;
-  var isSuper = !!state.superProngs;
   var edgeless = !!state.edgeless;
 
   for (var d = 0; d < 8; d++) {
@@ -5627,25 +5723,6 @@ WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, 
         var canLandStep = (!stepStack || !stepStack.length) || (state.mode !== "OFK" && !squareHasEnemyOf(state, sx, sy, pod.owner));
         if (canLandStep) {
           dests.push({ x: sx, y: sy, dist: 1, isJump: false });
-        }
-      }
-
-      // Superprong multi-step slide
-      if (ptype === 2) {
-        for (var step = 2; step <= Math.max(gw, gh); step++) {
-          var slx = x + dx * step, sly = y + dy * step;
-          if (edgeless) { slx = wrapCoord(slx, gw); sly = wrapCoord(sly, gh); }
-          if (slx < 1 || slx > gw || sly < 1 || sly > gh) break;
-          var slK = slx + "," + sly;
-          var slStack = state.map[slK];
-          if (!slStack || !slStack.length) {
-            dests.push({ x: slx, y: sly, dist: step, isJump: false });
-          } else {
-            if (state.mode !== "OFK" && !squareHasEnemyOf(state, slx, sly, pod.owner)) {
-              dests.push({ x: slx, y: sly, dist: step, isJump: false });
-            }
-            break;
-          }
         }
       }
     }
@@ -5682,10 +5759,31 @@ WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, 
 };
 
 WebMoveComposer.prototype.beginGuidedPodMove = function (x, y, podIdx) {
+  var isContinuingComposite = this.guidedOriginSquare &&
+    this.guidedOriginSquare.x === x && this.guidedOriginSquare.y === y &&
+    this.completedSubMoves && this.completedSubMoves.length > 0;
+
+  if (!isContinuingComposite && !this.awaitingSuperProngBonusMove) {
+    this.reset();
+  } else if (isContinuingComposite && this.currentChainNotation) {
+    // Save previous chain if it wasn't pushed yet
+    if (this.completedSubMoves.indexOf(this.currentChainNotation) === -1) {
+      this.completedSubMoves.push(this.currentChainNotation);
+    }
+    this.currentChainNotation = "";
+  }
+
   var s = this.getWorkingState();
   var k = x + "," + y;
   var stack = s.map[k] || [];
-  if (podIdx < 0 || podIdx >= stack.length) podIdx = stack.length - 1;
+  if (podIdx < 0 || podIdx >= stack.length) {
+    var sorted = sortedPodIndicesMostProngsFirst(stack);
+    podIdx = -1;
+    for (var si = 0; si < sorted.length; si++) {
+      if (stack[sorted[si]].owner === s.turn) { podIdx = sorted[si]; break; }
+    }
+    if (podIdx === -1) podIdx = stack.length - 1;
+  }
   var pod = stack[podIdx];
   if (!pod || pod.owner !== s.turn) return false;
 
@@ -5693,8 +5791,10 @@ WebMoveComposer.prototype.beginGuidedPodMove = function (x, y, podIdx) {
   this.guidedOriginSquare = { x: x, y: y };
   this.guidedCurrentSquare = { x: x, y: y };
   this.guidedPodIndex = podIdx;
-  this.guidedPodConfig = pod.cfg.text || "";
+  this.guidedPodConfig = formatProngConfig(pod.cfg.prongs);
   this.jumpedSquaresChain = [];
+  this.guidedHops = [];
+  this.currentChainNotation = "";
   this.guidedLegalDests = this.computeLegalDestsForPod(s, x, y, pod, this.jumpedSquaresChain);
 
   renderPlayBoardCanvas();
@@ -5767,10 +5867,10 @@ WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
       capture: (capSnapshot.length > 0)
     });
 
-    if (!this.stagedNotation) {
-      this.stagedNotation = this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + this.guidedPodConfig + "-" + toX + "" + toY + (doCap ? "x" : "");
+    if (!this.currentChainNotation) {
+      this.currentChainNotation = this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + this.guidedPodConfig + "-" + toX + "" + toY + (doCap ? "x" : "");
     } else {
-      this.stagedNotation += "-" + toX + "" + toY + (doCap ? "x" : "");
+      this.currentChainNotation += "-" + toX + "" + toY + (doCap ? "x" : "");
     }
 
     if (doCap && capSnapshot.length > 0) {
@@ -5784,12 +5884,15 @@ WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
   } else {
     // Step
     OctiWebSoundSynth.play("POD_STEP");
-    if (!this.stagedNotation) {
-      this.stagedNotation = this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + this.guidedPodConfig + "-" + toX + "" + toY;
+    if (!this.currentChainNotation) {
+      this.currentChainNotation = this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + this.guidedPodConfig + "-" + toX + "" + toY;
     } else {
-      this.stagedNotation += "-" + toX + "" + toY;
+      this.currentChainNotation += "-" + toX + "" + toY;
     }
   }
+
+  this.guidedHops.push({ toX: toX, toY: toY, isJump: !!matchDest.isJump });
+  this.stagedNotation = this.completedSubMoves.concat([this.currentChainNotation]).join(",");
 
   if (!s.map[toK]) s.map[toK] = [];
   s.map[toK].push(pod);
@@ -5808,7 +5911,8 @@ WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
     }
   }
 
-  this.claimedPodsAtOrigin[this.guidedPodIndex] = true;
+  this.completedSubMoves.push(this.currentChainNotation);
+  this.currentChainNotation = "";
   this.isAwaitingConfirmation = true;
 
   if (this.hasOtherMovablePodAtOrigin()) {
@@ -5863,7 +5967,25 @@ WebMoveComposer.prototype.toggleCaptureAtSquare = function (jx, jy) {
     var item = this.jumpedSquaresChain[h];
     not += "-" + item.toX + "" + item.toY + (item.capture ? "x" : "");
   }
-  this.stagedNotation = not;
+  if (this.currentChainNotation) {
+    this.currentChainNotation = not;
+    this.stagedNotation = this.completedSubMoves.concat([this.currentChainNotation]).join(",");
+  } else if (this.completedSubMoves.length > 0) {
+    this.completedSubMoves[this.completedSubMoves.length - 1] = not;
+    this.stagedNotation = this.completedSubMoves.join(",");
+  } else {
+    this.stagedNotation = not;
+  }
+
+  if (this.guidedMoveActive && this.guidedCurrentSquare) {
+    var curK2 = this.guidedCurrentSquare.x + "," + this.guidedCurrentSquare.y;
+    var curStk = s.map[curK2] || [];
+    var activePod = (this.guidedPodIndex >= 0 && this.guidedPodIndex < curStk.length) ? curStk[this.guidedPodIndex] : curStk[curStk.length - 1];
+    if (activePod) {
+      var nextJumps = this.computeLegalDestsForPod(s, this.guidedCurrentSquare.x, this.guidedCurrentSquare.y, activePod, this.jumpedSquaresChain).filter(function (d) { return d.isJump; });
+      this.guidedLegalDests = nextJumps;
+    }
+  }
 
   this.updateUi();
   renderPlayBoardCanvas();
@@ -5874,7 +5996,9 @@ WebMoveComposer.prototype.toggleCaptureAtSquare = function (jx, jy) {
 WebMoveComposer.prototype.commitStagedMove = function () {
   if (!this.isAwaitingConfirmation || !this.stagedNotation) return false;
   var not = this.stagedNotation;
-  var finalState = this.previewState || this.getState();
+  var baseState = this.getState();
+  var prevTurn = baseState.turn;
+  var finalState = applyMoveToState(cloneState(baseState), not, prevTurn);
   this.reset();
   if (this.onCommit) {
     this.onCommit(not, finalState);
@@ -6049,10 +6173,11 @@ function renderWebReserveCard(player, cardEl, state, isTurn) {
   var oppIdx = (oppPlayer === "A") ? 0 : 1;
   var oppRes = state.reserves ? state.reserves[oppIdx] : null;
   var enemyPodsCapturedByPlayer = oppRes ? oppRes.capturedPods : 0;
+  var ownCapturedPods = res ? res.capturedPods : 0;
 
   if (enemyPodsCapturedByPlayer > 0) {
     var capWell = document.createElement("div");
-    capWell.className = "web-res-well interactive";
+    capWell.className = "web-res-well";
     capWell.title = "Captured Pods (Enemy pods captured by Player " + player + ")";
     var capSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     capSvg.setAttribute("width", "18");
@@ -6090,18 +6215,30 @@ function renderWebReserveCard(player, cardEl, state, isTurn) {
     capCount.textContent = "Captured: " + enemyPodsCapturedByPlayer;
     capCount.style.color = "#F43F5E";
     capWell.appendChild(capCount);
+    wells.appendChild(capWell);
+  }
 
-    if (isTurn && res && res.capturedPods > 0) {
-      capWell.addEventListener("click", function () {
-        var occHomes = getHomeSquares(state.mode, player).filter(function (h) {
-          return isSquareOccupiedBy(state, h.x, h.y, player);
-        });
-        if (occHomes.length) {
-          openZoomedSquare(occHomes[0].x, occHomes[0].y);
+  if (ownCapturedPods > 0) {
+    var canLibAny = isTurn && canLiberate(state, player);
+    var libWell = document.createElement("div");
+    libWell.className = "web-res-well" + (canLibAny ? " interactive" : "");
+    libWell.title = canLibAny ? "Click to liberate your captured pod (*)" : "Your pods held captive by opponent";
+    var libSpan = document.createElement("span");
+    libSpan.textContent = "Captive: " + ownCapturedPods + (canLibAny ? " (*)" : "");
+    libSpan.style.color = canLibAny ? "#10B981" : "#94A3B8";
+    libWell.appendChild(libSpan);
+    if (canLibAny) {
+      libWell.addEventListener("click", function () {
+        var cands = [{x:3,y:3},{x:5,y:3},{x:7,y:3},{x:3,y:7},{x:5,y:7},{x:7,y:7}];
+        for (var ci = 0; ci < cands.length; ci++) {
+          if (canLiberateOnSquare(state, cands[ci].x, cands[ci].y, player)) {
+            openZoomedSquare(cands[ci].x, cands[ci].y);
+            break;
+          }
         }
       });
     }
-    wells.appendChild(capWell);
+    wells.appendChild(libWell);
   }
 
   cardEl.appendChild(wells);
@@ -6117,7 +6254,7 @@ function renderAllWebReserves() {
 
   var cardC = document.getElementById("web-res-card-c");
   var cardD = document.getElementById("web-res-card-d");
-  if (s.mode === "4P") {
+  if (s.mode === "4P" || s.mode === "4") {
     if (cardC) { cardC.style.display = "block"; renderWebReserveCard("C", cardC, s, s.turn === "C"); }
     if (cardD) { cardD.style.display = "block"; renderWebReserveCard("D", cardD, s, s.turn === "D"); }
   } else {
@@ -6282,21 +6419,20 @@ function renderPlayBoardCanvas() {
     }
   }
 
-  // 5. Board Pods: Sorted Most-Prongs-at-Bottom (layer 0 has most prongs, top has fewest)
+  // 5. Board Pods: Sorted Fewest-Prongs-at-Bottom, Most-Prongs-on-Top
   for (var py = 1; py <= s.gh; py++) {
     for (var px = 1; px <= s.gw; px++) {
       var podStack = s.map[px + "," + py];
       if (!podStack || !podStack.length) continue;
       var baseR = geom.squareRect(px, py);
 
-      // Sort: layer 0 has most prongs, top layer has fewest
+      // Sort ascending by prong count so top layer (maxL - 1) has the most prongs
       var sortedAsc = podStack.slice().sort(function (a, b) {
-        return (b.cfg ? b.cfg.count : 0) - (a.cfg ? a.cfg.count : 0);
+        return (a.cfg ? a.cfg.count : 0) - (b.cfg ? b.cfg.count : 0);
       });
-      // In ascending draw order: draw layer 0 first, top layer last
       var maxL = Math.min(sortedAsc.length, 4);
       for (var l = 0; l < maxL; l++) {
-        var pItem = sortedAsc[l];
+        var pItem = (l === maxL - 1) ? sortedAsc[sortedAsc.length - 1] : sortedAsc[l];
         var off = (maxL - 1 - l) * 2.4;
         var layerR = {
           x: baseR.x - off,
@@ -6422,7 +6558,13 @@ function renderPlayBoardCanvas() {
     ctx.fillStyle = "#FDE047";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    var winMsg = "PLAYER " + (s.winner || "A") + " WINS — VICTORY BY " + (s.status === "R" ? "RESIGNATION" : "BASE OCCUPATION");
+    var wLabel = "PLAYER " + (s.winner || "A") + " WINS";
+    if (s.mode === "4" || s.mode === "4P") {
+      wLabel = (s.winner === "A" || s.winner === "C" || s.winner === "TEAM_13_WIN")
+        ? "TEAM A & C WINS" : "TEAM B & D WINS";
+    }
+    var reasonStr = (s.status === "R") ? "RESIGNATION" : (s.termination ? s.termination.replace("_", " ") : "BASE OCCUPATION");
+    var winMsg = wLabel + " — VICTORY BY " + reasonStr;
     ctx.fillText(winMsg, geom.grid.x + geom.grid.w / 2, geom.grid.y + 31);
     ctx.restore();
   }
@@ -6434,6 +6576,7 @@ function renderPlayBoardCanvas() {
 var zoomSq = null;
 var zoomSelectedPodIdx = 0;
 var zoomHoverDir = null;
+var zoomSelectedRepositionDir = null;
 
 function openZoomedSquare(x, y) {
   if (typeof x === "object" && x !== null) {
@@ -6447,7 +6590,14 @@ function openZoomedSquare(x, y) {
   var stack = s.map[k] || [];
   var sortedIndices = sortedPodIndicesMostProngsFirst(stack);
   zoomSelectedPodIdx = sortedIndices.length ? sortedIndices[0] : 0;
+  for (var si = 0; si < sortedIndices.length; si++) {
+    if (stack[sortedIndices[si]].owner === s.turn) {
+      zoomSelectedPodIdx = sortedIndices[si];
+      break;
+    }
+  }
   zoomHoverDir = null;
+  zoomSelectedRepositionDir = null;
 
   var overlay = document.getElementById("web-zoom-overlay");
   var titleEl = document.getElementById("web-zoom-sq-title");
@@ -6462,6 +6612,7 @@ function closeZoomedSquare() {
   var overlay = document.getElementById("web-zoom-overlay");
   if (overlay) overlay.style.display = "none";
   zoomSq = null;
+  zoomSelectedRepositionDir = null;
 }
 
 function updateZoomOverlayControls() {
@@ -6470,7 +6621,8 @@ function updateZoomOverlayControls() {
   var k = zoomSq.x + "," + zoomSq.y;
   var stack = s.map[k] || [];
   var turn = s.turn;
-  var isTurn = (matchStarted && s.status === "P" && (localMatchConfig.playMode === "pass" || s.turn === localMatchConfig.humanSeat));
+  var isTurn = ((matchStarted || activeOnlineGameId) && s.status === "P" &&
+    (localMatchConfig.playMode === "pass" || s.turn === localMatchConfig.humanSeat || (activeOnlineGameId && isMyOnlineTurn(s))));
 
   var tabsContainer = document.getElementById("web-zoom-pod-tabs");
   if (tabsContainer) {
@@ -6481,9 +6633,10 @@ function updateZoomOverlayControls() {
       btn.type = "button";
       var isMoved = moveComposer && moveComposer.claimedPodsAtOrigin[pIdx];
       btn.className = "zoom-pod-tab-btn" + (pIdx === zoomSelectedPodIdx ? " active" : "");
-      btn.textContent = "Pod " + (rank + 1) + (isMoved ? " (Moved)" : "");
+      btn.textContent = "Pod " + (rank + 1) + " (" + stack[pIdx].owner + ")" + (isMoved ? " (Moved)" : "");
       btn.addEventListener("click", function () {
         zoomSelectedPodIdx = pIdx;
+        zoomSelectedRepositionDir = null;
         updateZoomOverlayControls();
         renderZoomCanvas();
       });
@@ -6498,8 +6651,15 @@ function updateZoomOverlayControls() {
   if (prongCountEl) prongCountEl.textContent = res ? res.freeProngs : 0;
   var superCountEl = document.getElementById("zoom-super-count");
   if (superCountEl) superCountEl.textContent = res ? res.freeSuper : 0;
+  var normWell = document.getElementById("zoom-well-normal");
   var superWell = document.getElementById("zoom-well-super");
-  if (superWell) superWell.style.display = s.superProngs ? "flex" : "none";
+  if (superWell) {
+    superWell.style.display = s.superProngs ? "flex" : "none";
+    if (!s.superProngs && superWell.classList.contains("active")) {
+      superWell.classList.remove("active");
+      if (normWell) normWell.classList.add("active");
+    }
+  }
 
   // Action Buttons
   var movePodBtn = document.getElementById("btn-zoom-move-pod");
@@ -6542,6 +6702,8 @@ function renderZoomCanvas() {
   var podR = 68;
   var cx = 160, cy = 160;
   var rotDeg = ((boardRotationDeg + liveRotationOffsetDeg) % 360 + 360) % 360;
+  var isTurn = ((matchStarted || activeOnlineGameId) && s.status === "P" &&
+    (localMatchConfig.playMode === "pass" || s.turn === localMatchConfig.humanSeat || (activeOnlineGameId && isMyOnlineTurn(s))));
 
   // 1. Draw non-selected pods underneath with stepped offsets at 0.28 alpha
   var stepCount = 0;
@@ -6568,16 +6730,37 @@ function renderZoomCanvas() {
     drawOctagonalPod(ctx, aRect, activePod.owner, activePod.cfg, pal, rotDeg, true, activePod.owner);
     ctx.restore();
 
-    // 3. Draw hover preview blade if hovering empty socket
-    if (zoomHoverDir !== null && !activePod.cfg.prongs[zoomHoverDir]) {
-      var isSuperSelected = document.getElementById("zoom-well-super") &&
-        document.getElementById("zoom-well-super").classList.contains("active");
-      var mockCfg = { prongs: [0, 0, 0, 0, 0, 0, 0, 0] };
-      mockCfg.prongs[zoomHoverDir] = isSuperSelected ? 2 : 1;
+    // Highlight selected reposition source prong if active
+    if (zoomSelectedRepositionDir !== null && activePod.cfg.prongs[zoomSelectedRepositionDir] === 1) {
+      var angRad = ((zoomSelectedRepositionDir * 45 + rotDeg - 90) * Math.PI) / 180;
+      var hx = cx + Math.cos(angRad) * (podR * 1.18);
+      var hy = cy + Math.sin(angRad) * (podR * 1.18);
       ctx.save();
-      ctx.globalAlpha = 0.72;
-      drawProngs(ctx, cx, cy, podR, mockCfg, pal, rotDeg);
+      ctx.strokeStyle = "#38BDF8";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.arc(hx, hy, 14, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.restore();
+    }
+
+    // 3. Draw hover preview blade if hovering empty socket on own pod during turn
+    if (isTurn && activePod.owner === s.turn && zoomHoverDir !== null && !activePod.cfg.prongs[zoomHoverDir]) {
+      var pIdxTurn = playerIndex(s.turn);
+      var resTurn = s.reserves[pIdxTurn];
+      var isSuperSelected = s.superProngs && document.getElementById("zoom-well-super") &&
+        document.getElementById("zoom-well-super").classList.contains("active");
+      var canPreview = (zoomSelectedRepositionDir !== null) ||
+        (isSuperSelected ? (resTurn && resTurn.freeSuper > 0) : (resTurn && resTurn.freeProngs > 0));
+      if (canPreview) {
+        var mockCfg = { prongs: [0, 0, 0, 0, 0, 0, 0, 0] };
+        mockCfg.prongs[zoomHoverDir] = (zoomSelectedRepositionDir !== null) ? 1 : (isSuperSelected ? 2 : 1);
+        ctx.save();
+        ctx.globalAlpha = 0.72;
+        drawProngs(ctx, cx, cy, podR, mockCfg, pal, rotDeg);
+        ctx.restore();
+      }
     }
   } else {
     // Empty square view
@@ -6623,11 +6806,13 @@ var zoomWellNormal = document.getElementById("zoom-well-normal");
 var zoomWellSuper = document.getElementById("zoom-well-super");
 if (zoomWellNormal && zoomWellSuper) {
   zoomWellNormal.addEventListener("click", function () {
+    zoomSelectedRepositionDir = null;
     zoomWellNormal.classList.add("active");
     zoomWellSuper.classList.remove("active");
     renderZoomCanvas();
   });
   zoomWellSuper.addEventListener("click", function () {
+    zoomSelectedRepositionDir = null;
     zoomWellSuper.classList.add("active");
     zoomWellNormal.classList.remove("active");
     renderZoomCanvas();
@@ -6668,13 +6853,48 @@ if (zoomCanvas) {
   });
 
   zoomCanvas.addEventListener("click", function (e) {
+    var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
+    if (!s || !zoomSq || !moveComposer) return;
+    var isTurn = ((matchStarted || activeOnlineGameId) && s.status === "P" &&
+      (localMatchConfig.playMode === "pass" || s.turn === localMatchConfig.humanSeat || (activeOnlineGameId && isMyOnlineTurn(s))));
+    if (!isTurn) return;
+
     var rect = zoomCanvas.getBoundingClientRect();
     var x = (e.clientX - rect.left) * (320 / rect.width);
     var y = (e.clientY - rect.top) * (320 / rect.height);
     var dir = getZoomDirFromPoint(x, y);
-    if (dir !== null && zoomSq && moveComposer) {
-      var isSuper = zoomWellSuper && zoomWellSuper.classList.contains("active");
-      var sqX = zoomSq.x, sqY = zoomSq.y, pIdx = zoomSelectedPodIdx;
+    if (dir === null) return;
+
+    var sqX = zoomSq.x, sqY = zoomSq.y, pIdx = zoomSelectedPodIdx;
+    var stack = s.map[sqX + "," + sqY] || [];
+    var pod = stack[pIdx];
+    if (!pod || pod.owner !== s.turn) return;
+
+    // 1. Clicking an existing normal prong in 2P/4P selects/deselects it for repositioning
+    if (pod.cfg.prongs[dir] === 1 && s.mode !== "OFK") {
+      if (zoomSelectedRepositionDir === dir) {
+        zoomSelectedRepositionDir = null;
+      } else {
+        zoomSelectedRepositionDir = dir;
+      }
+      renderZoomCanvas();
+      return;
+    }
+
+    // 2. Clicking an empty socket while a reposition source prong is selected repositions it
+    if (!pod.cfg.prongs[dir] && zoomSelectedRepositionDir !== null) {
+      var srcDir = zoomSelectedRepositionDir;
+      zoomSelectedRepositionDir = null;
+      var okRepo = moveComposer.stageRepositionProng(sqX, sqY, pIdx, srcDir, dir);
+      if (okRepo) {
+        closeZoomedSquare();
+      }
+      return;
+    }
+
+    // 3. Otherwise add a reserve prong to the empty socket
+    if (!pod.cfg.prongs[dir]) {
+      var isSuper = s.superProngs && zoomWellSuper && zoomWellSuper.classList.contains("active");
       var ok = moveComposer.stageAddProng(sqX, sqY, pIdx, dir, isSuper);
       if (ok) {
         closeZoomedSquare();
@@ -6924,8 +7144,13 @@ if (playCanvas) {
         if (stCur && stCur.status === "P") {
           var kSt = pressSq.x + "," + pressSq.y;
           var stackSt = stCur.map[kSt] || [];
-          if (stackSt.length && stackSt[stackSt.length - 1].owner === stCur.turn) {
-            moveComposer.beginGuidedPodMove(pressSq.x, pressSq.y, stackSt.length - 1);
+          var sortedSt = sortedPodIndicesMostProngsFirst(stackSt);
+          var bestIdxSt = -1;
+          for (var si = 0; si < sortedSt.length; si++) {
+            if (stackSt[sortedSt[si]].owner === stCur.turn) { bestIdxSt = sortedSt[si]; break; }
+          }
+          if (bestIdxSt !== -1) {
+            moveComposer.beginGuidedPodMove(pressSq.x, pressSq.y, bestIdxSt);
             var matchD = moveComposer.guidedLegalDests.find(function (d) { return d.x === releaseSq.x && d.y === releaseSq.y; });
             if (matchD) {
               moveComposer.selectGuidedDestination(releaseSq.x, releaseSq.y);
@@ -7012,6 +7237,8 @@ function handlePlaySquareClick(x, y, ptX, ptY) {
   var k = x + "," + y;
   var stack = s.map[k] || [];
   var turn = s.turn;
+  var pIdx = (turn === "A") ? 0 : ((turn === "B") ? 1 : ((turn === "C") ? 2 : 3));
+  var res = s.reserves[pIdx];
 
   // 1. If guided move active and clicked a destination
   if (moveComposer.isGuidedMoveActive) {
@@ -7022,7 +7249,7 @@ function handlePlaySquareClick(x, y, ptX, ptY) {
     }
     // If clicked origin square while 0 hops have been made (2nd click on origin pod)
     var isOrigin = moveComposer.guidedOriginSquare && moveComposer.guidedOriginSquare.x === x && moveComposer.guidedOriginSquare.y === y;
-    if (isOrigin && moveComposer.guidedHops.length === 0) {
+    if (isOrigin && (!moveComposer.guidedHops || moveComposer.guidedHops.length === 0)) {
       moveComposer.cancel();
       openZoomedSquare(x, y);
       return;
@@ -7033,32 +7260,49 @@ function handlePlaySquareClick(x, y, ptX, ptY) {
     }
   }
 
-  // 2. If friendly pod on square
-  if (stack.length && stack[stack.length - 1].owner === turn) {
-    // Check if outer socket was clicked directly on board
-    if (playBoardGeom) {
+  // If clicked origin square after finishing first pod move in a multi-pod stack, allow composite move
+  if (!moveComposer.isGuidedMoveActive && moveComposer.guidedOriginSquare &&
+      moveComposer.guidedOriginSquare.x === x && moveComposer.guidedOriginSquare.y === y &&
+      moveComposer.hasOtherMovablePodAtOrigin()) {
+    openZoomedSquare(x, y);
+    return;
+  }
+
+  // 2. Find friendly pod on square with the most prongs (top of visual stack)
+  var sortedIndices = sortedPodIndicesMostProngsFirst(stack);
+  var bestFriendlyIdx = -1;
+  for (var si = 0; si < sortedIndices.length; si++) {
+    if (stack[sortedIndices[si]].owner === turn) {
+      bestFriendlyIdx = sortedIndices[si];
+      break;
+    }
+  }
+
+  if (bestFriendlyIdx !== -1) {
+    var topPod = stack[bestFriendlyIdx];
+    // Check if outer socket ring was clicked directly on board (only when no move is currently staged)
+    if (playBoardGeom && !moveComposer.isAwaitingConfirmation && res && res.freeProngs > 0) {
       var sqR = playBoardGeom.squareRect(x, y);
       var dx = ptX - sqR.cx, dy = ptY - sqR.ry;
       var dist = Math.hypot(dx, dy);
       var cellR = sqR.w * 0.36;
-      if (dist >= cellR * 0.70 && dist <= cellR * 1.35) {
+      if (dist >= cellR * 0.92 && dist <= cellR * 1.32) {
         var effRot = ((boardRotationDeg + liveRotationOffsetDeg) % 360 + 360) % 360;
         var angle = Math.atan2(dy, dx) * 180 / Math.PI;
         var dNorm = ((angle - effRot + 90) % 360 + 360) % 360;
         var sector = Math.round(dNorm / 45) % 8;
-        var topPod = stack[stack.length - 1];
         if (!topPod.cfg.prongs[sector]) {
-          moveComposer.stageAddProng(x, y, stack.length - 1, sector, false);
-          return;
+          if (moveComposer.stageAddProng(x, y, bestFriendlyIdx, sector, false)) {
+            return;
+          }
         }
       }
     }
 
-    // Begin guided move for top unclaimed pod
-    var topIdx = stack.length - 1;
-    moveComposer.beginGuidedPodMove(x, y, topIdx);
+    // Begin guided move for top friendly pod
+    moveComposer.beginGuidedPodMove(x, y, bestFriendlyIdx);
     if (!moveComposer.guidedLegalDests || moveComposer.guidedLegalDests.length === 0) {
-      // Unarmed pod (e.g. 0 prongs in OFK) -> open zoom modal directly!
+      // Unarmed pod -> open zoom modal directly!
       moveComposer.cancel();
       openZoomedSquare(x, y);
       return;
@@ -7069,11 +7313,14 @@ function handlePlaySquareClick(x, y, ptX, ptY) {
   // 3. If friendly home square and freePods > 0, stage placement
   var homes = getHomeSquares(s.mode, turn);
   var isHome = homes.some(function (h) { return h.x === x && h.y === y; });
-  var pIdx = (turn === "A") ? 0 : ((turn === "B") ? 1 : ((turn === "C") ? 2 : 3));
-  var res = s.reserves[pIdx];
   if (isHome && res && res.freePods > 0 && !squareHasEnemyOf(s, x, y, turn)) {
     moveComposer.stageAddPod(x, y, false);
     return;
+  }
+
+  // 4. Otherwise if square has any pods (e.g. enemy pod inspection), open zoom view
+  if (stack.length > 0) {
+    openZoomedSquare(x, y);
   }
 }
 
@@ -7197,17 +7444,50 @@ if (btnSfx) {
 }
 
 /* --- Match Setup Modal & Non-Modal Start Match Overlay --- */
+function syncSetupModalControls(gMode) {
+  var isOfk = (gMode === "OFK");
+  var is4p = (gMode === "4P" || gMode === "4");
+  var optC = document.getElementById("setup-seat-opt-c");
+  var optD = document.getElementById("setup-seat-opt-d");
+  if (optC) optC.style.display = is4p ? "block" : "none";
+  if (optD) optD.style.display = is4p ? "block" : "none";
+  var seatSel = document.getElementById("setup-human-seat");
+  if (seatSel && !is4p && (seatSel.value === "C" || seatSel.value === "D")) {
+    seatSel.value = "A";
+  }
+  var basesSel = document.getElementById("setup-bases");
+  if (basesSel) {
+    if (isOfk) basesSel.value = "1";
+    else if (is4p) basesSel.value = "3";
+    basesSel.disabled = (isOfk || is4p);
+  }
+  var spCb = document.getElementById("setup-superprongs");
+  if (spCb) {
+    if (isOfk) spCb.checked = false;
+    spCb.disabled = isOfk;
+  }
+  var edCb = document.getElementById("setup-edgeless");
+  if (edCb) {
+    if (isOfk) edCb.checked = false;
+    edCb.disabled = isOfk;
+  }
+}
+
 function updateStartMatchSummary() {
   var line1 = document.getElementById("web-start-summary-line1");
   var line2 = document.getElementById("web-start-summary-line2");
   if (!line1 || !line2) return;
 
-  var playModeStr = localMatchConfig.playMode === "bot" ? ("vs AI Bot (Lv" + localMatchConfig.botDifficulty + ")") : "Pass-and-Play (Local 2P)";
-  var seatStr = "Seat " + localMatchConfig.humanSeat + " (" + (localMatchConfig.humanSeat === "A" ? "Emerald" : "Ruby") + ")";
+  var is4p = (localMatchConfig.gameMode === "4P" || localMatchConfig.gameMode === "4");
+  var playModeStr = localMatchConfig.playMode === "bot"
+    ? ("vs AI Bot (Lv" + localMatchConfig.botDifficulty + ")")
+    : ("Pass-and-Play (Local " + (is4p ? "4P" : "2P") + ")");
+  var seatColors = { A: "Emerald", B: "Ruby", C: "Sapphire", D: "Amber" };
+  var seatStr = "Seat " + localMatchConfig.humanSeat + " (" + (seatColors[localMatchConfig.humanSeat] || "Emerald") + ")";
   line1.textContent = playModeStr + " • " + seatStr;
 
   var modeStr = localMatchConfig.gameMode + " (" + (localMatchConfig.gameMode === "OFK" ? "6x7" : "9x9") + ")";
-  var basesStr = localMatchConfig.bases + " " + (localMatchConfig.bases === 1 ? "Base" : "Bases");
+  var basesStr = is4p ? "2 Enemy Bases" : (localMatchConfig.bases + " " + (localMatchConfig.bases === 1 ? "Base" : "Bases"));
   var extras = [];
   if (localMatchConfig.superProngs) extras.push("Superprongs");
   if (localMatchConfig.edgeless) extras.push("Edgeless");
@@ -7222,44 +7502,19 @@ function showMatchSetupModal() {
   modal.style.display = "flex";
   if (document.getElementById("setup-play-mode")) document.getElementById("setup-play-mode").value = localMatchConfig.playMode;
   if (document.getElementById("setup-bot-difficulty")) document.getElementById("setup-bot-difficulty").value = String(localMatchConfig.botDifficulty);
-  if (document.getElementById("setup-human-seat")) document.getElementById("setup-human-seat").value = localMatchConfig.humanSeat;
   if (document.getElementById("setup-game-mode")) document.getElementById("setup-game-mode").value = localMatchConfig.gameMode;
-  if (document.getElementById("setup-bases")) document.getElementById("setup-bases").value = String(localMatchConfig.bases);
+  if (document.getElementById("setup-bases")) document.getElementById("setup-bases").value = String(localMatchConfig.bases === 1 ? 1 : 3);
   if (document.getElementById("setup-superprongs")) document.getElementById("setup-superprongs").checked = localMatchConfig.superProngs;
   if (document.getElementById("setup-edgeless")) document.getElementById("setup-edgeless").checked = localMatchConfig.edgeless;
   if (document.getElementById("setup-time-control")) document.getElementById("setup-time-control").value = localMatchConfig.timeControl;
-
-  var isOfk = (localMatchConfig.gameMode === "OFK");
-  if (document.getElementById("setup-bases")) {
-    if (isOfk) document.getElementById("setup-bases").value = "1";
-    document.getElementById("setup-bases").disabled = isOfk;
-  }
-  if (document.getElementById("setup-superprongs")) {
-    if (isOfk) document.getElementById("setup-superprongs").checked = false;
-    document.getElementById("setup-superprongs").disabled = isOfk;
-  }
-  if (document.getElementById("setup-edgeless")) {
-    if (isOfk) document.getElementById("setup-edgeless").checked = false;
-    document.getElementById("setup-edgeless").disabled = isOfk;
-  }
+  syncSetupModalControls(localMatchConfig.gameMode);
+  if (document.getElementById("setup-human-seat")) document.getElementById("setup-human-seat").value = localMatchConfig.humanSeat;
 }
 
 var setupGameModeSelect = document.getElementById("setup-game-mode");
 if (setupGameModeSelect) {
   setupGameModeSelect.addEventListener("change", function () {
-    var isOfk = (setupGameModeSelect.value === "OFK");
-    if (document.getElementById("setup-bases")) {
-      if (isOfk) document.getElementById("setup-bases").value = "1";
-      document.getElementById("setup-bases").disabled = isOfk;
-    }
-    if (document.getElementById("setup-superprongs")) {
-      if (isOfk) document.getElementById("setup-superprongs").checked = false;
-      document.getElementById("setup-superprongs").disabled = isOfk;
-    }
-    if (document.getElementById("setup-edgeless")) {
-      if (isOfk) document.getElementById("setup-edgeless").checked = false;
-      document.getElementById("setup-edgeless").disabled = isOfk;
-    }
+    syncSetupModalControls(setupGameModeSelect.value);
   });
 }
 
@@ -7287,15 +7542,23 @@ if (btnSetupApply) {
     if (modal) modal.style.display = "none";
 
     localMatchConfig.playMode = document.getElementById("setup-play-mode").value;
-    localMatchConfig.botDifficulty = parseInt(document.getElementById("setup-bot-difficulty").value, 10);
-    localMatchConfig.humanSeat = document.getElementById("setup-human-seat").value;
+    localMatchConfig.botDifficulty = parseInt(document.getElementById("setup-bot-difficulty").value, 10) || 2;
     localMatchConfig.gameMode = document.getElementById("setup-game-mode").value;
-    localMatchConfig.bases = parseInt(document.getElementById("setup-bases").value, 10);
+    localMatchConfig.humanSeat = document.getElementById("setup-human-seat").value || "A";
+    if (localMatchConfig.gameMode !== "4P" && localMatchConfig.gameMode !== "4" &&
+        (localMatchConfig.humanSeat === "C" || localMatchConfig.humanSeat === "D")) {
+      localMatchConfig.humanSeat = "A";
+    }
+    var parsedBases = parseInt(document.getElementById("setup-bases").value, 10);
+    localMatchConfig.bases = (parsedBases === 1) ? 1 : 3;
     if (localMatchConfig.gameMode === "OFK") {
       localMatchConfig.bases = 1;
       localMatchConfig.superProngs = false;
       localMatchConfig.edgeless = false;
     } else {
+      if (localMatchConfig.gameMode === "4P" || localMatchConfig.gameMode === "4") {
+        localMatchConfig.bases = 3;
+      }
       localMatchConfig.superProngs = !!document.getElementById("setup-superprongs").checked;
       localMatchConfig.edgeless = !!document.getElementById("setup-edgeless").checked;
     }
@@ -7311,10 +7574,20 @@ function prepareLocalMatchInitialState() {
     clearInterval(clockInterval);
     clockInterval = null;
   }
+  if (moveComposer) {
+    moveComposer.reset();
+  }
+  var goOverlay = document.getElementById("web-gameover-overlay");
+  if (goOverlay) goOverlay.style.display = "none";
+  var thinkOverlay = document.getElementById("web-thinking-overlay");
+  if (thinkOverlay) thinkOverlay.style.display = "none";
+  var archSt = document.getElementById("web-play-archive-status");
+  if (archSt) archSt.textContent = "";
+
   matchStarted = false;
   activeOnlineGameId = "";
   var mode = localMatchConfig.gameMode;
-  var bases = localMatchConfig.bases;
+  var bases = (localMatchConfig.bases === 1) ? 1 : 3;
   var sp = localMatchConfig.superProngs ? "1" : "0";
   var ed = localMatchConfig.edgeless ? "1" : "0";
 
@@ -7328,10 +7601,10 @@ function prepareLocalMatchInitialState() {
     ed = "0";
     fen = "OFK:1:0:0:P:A:-:0:0,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56";
   } else if (mode === "4" || mode === "4P") {
-    bases = 2;
-    localMatchConfig.bases = 2;
+    bases = 3;
+    localMatchConfig.bases = 3;
     var r4p = "3,0," + (localMatchConfig.superProngs ? "11,1" : "12,0");
-    fen = "4:2:" + sp + ":" + ed + ":P:A:-:0:" + r4p + ":" + r4p + ":" + r4p + ":" + r4p + ":A33,B37,C77,D73";
+    fen = "4:3:" + sp + ":" + ed + ":P:A:-:0:" + r4p + ":" + r4p + ":" + r4p + ":" + r4p + ":A33,D73,B37,C77";
   } else {
     var r2p = "4,0," + (localMatchConfig.superProngs ? "24,1" : "25,0");
     fen = "2:" + bases + ":" + sp + ":" + ed + ":P:A:-:0:" + r2p + ":" + r2p + ":A33,A53,A73,B37,B57,B77";
@@ -7364,8 +7637,17 @@ function updateClockDisplay() {
     var sc = sec % 60;
     return (m < 10 ? "0" : "") + m + ":" + (sc < 10 ? "0" : "") + sc;
   }
+  var is4p = activePlayState && (activePlayState.mode === "4P" || activePlayState.mode === "4");
   if (document.getElementById("web-clock-a")) document.getElementById("web-clock-a").textContent = "A: " + fmtClock(clockTimers.A);
   if (document.getElementById("web-clock-b")) document.getElementById("web-clock-b").textContent = "B: " + fmtClock(clockTimers.B);
+  if (document.getElementById("web-clock-c")) {
+    document.getElementById("web-clock-c").style.display = is4p ? "block" : "none";
+    document.getElementById("web-clock-c").textContent = "C: " + fmtClock(clockTimers.C);
+  }
+  if (document.getElementById("web-clock-d")) {
+    document.getElementById("web-clock-d").style.display = is4p ? "block" : "none";
+    document.getElementById("web-clock-d").textContent = "D: " + fmtClock(clockTimers.D);
+  }
 }
 
 var btnStartMatch = document.getElementById("btn-web-start-match");
@@ -7402,19 +7684,30 @@ if (btnStartMatch) {
             clearInterval(clockInterval);
             clockInterval = null;
             activePlayState.status = "O";
-            activePlayState.winner = (curTurn === "A") ? "B" : "A";
+            activePlayState.turn = "-";
+            if (activePlayState.mode === "4" || activePlayState.mode === "4P") {
+              activePlayState.winner = (curTurn === "A" || curTurn === "C") ? "B" : "A";
+            } else {
+              activePlayState.winner = (curTurn === "A") ? "B" : "A";
+            }
+            activePlayState.termination = "TIMEOUT";
             OctiWebSoundSynth.play("GAME_VICTORY");
             var goOverlay = document.getElementById("web-gameover-overlay");
             var goTitle = document.getElementById("web-gameover-title");
             var goSub = document.getElementById("web-gameover-subtitle");
             if (goOverlay && goTitle && goSub) {
-              goTitle.textContent = "PLAYER " + activePlayState.winner + " WINS";
+              if (activePlayState.mode === "4" || activePlayState.mode === "4P") {
+                goTitle.textContent = (activePlayState.winner === "A" ? "TEAM A & C" : "TEAM B & D") + " VICTORIOUS!";
+              } else {
+                goTitle.textContent = "PLAYER " + activePlayState.winner + " WINS";
+              }
               goSub.textContent = "VICTORY ON TIME";
               goOverlay.style.display = "flex";
             }
             updatePlaySidebar();
             renderPlayBoardCanvas();
             renderAllWebReserves();
+            autoUploadCompletedLocalMatch();
           }
         }
       }, 1000);
@@ -7431,31 +7724,40 @@ if (btnStartMatch) {
 function updatePlaySidebar() {
   if (!activePlayState) return;
   var s = activePlayState;
+  var is4p = (s.mode === "4" || s.mode === "4P");
   var modeBadge = document.getElementById("web-play-mode-badge");
-  if (modeBadge) modeBadge.textContent = s.mode + " • " + s.bases + (s.bases === 1 ? " Base" : " Bases");
+  if (modeBadge) {
+    var baseDesc = is4p ? "2 Enemy Bases" : (s.bases + (s.bases === 1 ? " Base" : " Bases"));
+    modeBadge.textContent = s.mode + " • " + baseDesc;
+  }
 
   var turnBadge = document.getElementById("web-play-turn-badge");
   if (turnBadge) {
+    var turnStyles = {
+      A: { bg: "#064E3B", fg: "#6EE7B7" },
+      B: { bg: "#881337", fg: "#FDA4AF" },
+      C: { bg: "#1E3A8A", fg: "#93C5FD" },
+      D: { bg: "#78350F", fg: "#FDE047" }
+    };
     if (s.status === "O" || s.status === "R") {
-      turnBadge.textContent = "Winner: Player " + s.winner;
-      turnBadge.style.background = "#881337";
-      turnBadge.style.color = "#FFF1F2";
+      var winLabel = "Player " + s.winner;
+      if (is4p) {
+        winLabel = (s.winner === "A" || s.winner === "C" || s.winner === "TEAM_13_WIN")
+          ? "Team A & C" : "Team B & D";
+      }
+      turnBadge.textContent = "Winner: " + winLabel;
+      var wSt = turnStyles[s.winner === "A" || s.winner === "TEAM_13_WIN" ? "A" : "B"];
+      turnBadge.style.background = wSt.bg;
+      turnBadge.style.color = wSt.fg;
     } else {
       turnBadge.textContent = "Player " + s.turn + " Turn";
-      turnBadge.style.background = (s.turn === "A") ? "#064E3B" : "#881337";
-      turnBadge.style.color = (s.turn === "A") ? "#6EE7B7" : "#FDA4AF";
+      var tSt = turnStyles[s.turn] || turnStyles.A;
+      turnBadge.style.background = tSt.bg;
+      turnBadge.style.color = tSt.fg;
     }
   }
 
-  // Update Clock Bar
-  function fmtClock(sec) {
-    if (sec <= 0 && localMatchConfig.timeControl === "untimed") return "--:--";
-    var m = Math.floor(sec / 60);
-    var sc = sec % 60;
-    return (m < 10 ? "0" : "") + m + ":" + (sc < 10 ? "0" : "") + sc;
-  }
-  if (document.getElementById("web-clock-a")) document.getElementById("web-clock-a").textContent = "A: " + fmtClock(clockTimers.A);
-  if (document.getElementById("web-clock-b")) document.getElementById("web-clock-b").textContent = "B: " + fmtClock(clockTimers.B);
+  updateClockDisplay();
 
   // Update Move History List
   var movesBox = document.getElementById("web-play-moves");
@@ -7502,6 +7804,7 @@ function updatePlaySidebar() {
 
 function showPlayVcrPly(idx) {
   if (idx < 0 || idx >= playMatchPlies.length) return;
+  if (moveComposer) moveComposer.reset();
   playVcrIndex = idx;
   var pl = playMatchPlies[idx];
   activePlayState = parseOctiFen(pl.fenAfter);
@@ -7573,7 +7876,7 @@ function generateOctiTranscriptV3() {
     if (pl.ai) {
       pObj.ai = pl.ai;
     }
-    if (pl.elapsedMs) {
+    if (pl.elapsedMs !== undefined) {
       pObj.elapsedMs = pl.elapsedMs;
     }
     pliesList.push(pObj);
@@ -7583,24 +7886,51 @@ function generateOctiTranscriptV3() {
   if (s.winner && s.winner !== "-") {
     if (s.mode === "4" || s.mode === "4P") {
       winnerStr = (s.winner === "A" || s.winner === "C" || s.winner === "TEAM_13_WIN")
-        ? "TEAM_13_WIN" : "TEAM_24_WIN";
+        ? "A" : "B";
     } else {
       winnerStr = s.winner;
     }
   }
 
+  var isPass = (localMatchConfig.playMode === "pass");
+  var diff = localMatchConfig.botDifficulty || 2;
+  var prof = BOT_PROFILES[diff] || BOT_PROFILES[2];
+  var budgetMs = prof.timeBudgetMs || 3000;
+  var humanHandle = (currentUser && currentUser.handle) ? currentUser.handle : null;
+
+  function makeSeatMeta(seatNum, seatLetter, defaultBotName) {
+    var isHumanSeat = isPass || (localMatchConfig.humanSeat === seatLetter);
+    if (isHumanSeat) {
+      return {
+        seat: seatNum,
+        player: seatLetter,
+        handle: (localMatchConfig.humanSeat === seatLetter && humanHandle) ? humanHandle : ("Player_" + seatLetter),
+        type: "HUMAN"
+      };
+    }
+    return {
+      seat: seatNum,
+      player: seatLetter,
+      handle: defaultBotName,
+      type: "AI",
+      aiDifficulty: diff,
+      aiTimeBudgetMs: budgetMs
+    };
+  }
+
   var playersArr = [];
   if (s.mode === "4" || s.mode === "4P") {
     playersArr = [
-      { seat: 1, player: "A", handle: (localMatchConfig.humanSeat === "A" ? "Player A" : "AI_Casual"), type: (localMatchConfig.humanSeat === "A" ? "HUMAN" : "AI"), aiDifficulty: localMatchConfig.botDifficulty },
-      { seat: 2, player: "B", handle: (localMatchConfig.humanSeat === "B" ? "Player B" : "AI_Tactical"), type: (localMatchConfig.humanSeat === "B" ? "HUMAN" : "AI"), aiDifficulty: localMatchConfig.botDifficulty },
-      { seat: 3, player: "C", handle: (localMatchConfig.humanSeat === "C" ? "Player C" : "AI_Master"), type: (localMatchConfig.humanSeat === "C" ? "HUMAN" : "AI"), aiDifficulty: localMatchConfig.botDifficulty },
-      { seat: 4, player: "D", handle: (localMatchConfig.humanSeat === "D" ? "Player D" : "AI_Tactical"), type: (localMatchConfig.humanSeat === "D" ? "HUMAN" : "AI"), aiDifficulty: localMatchConfig.botDifficulty }
+      makeSeatMeta(1, "A", "AI_Casual"),
+      makeSeatMeta(2, "B", "AI_Tactical"),
+      makeSeatMeta(3, "C", "AI_Master"),
+      makeSeatMeta(4, "D", "AI_Tactical")
     ];
   } else {
+    var botName2P = (diff === 1) ? "AI_Casual" : ((diff === 3) ? "AI_Master" : "AI_Tactical");
     playersArr = [
-      { seat: 1, player: "A", handle: (localMatchConfig.humanSeat === "A" ? "Player A" : "AI_Bot"), type: (localMatchConfig.humanSeat === "A" ? "HUMAN" : "AI"), aiDifficulty: localMatchConfig.botDifficulty },
-      { seat: 2, player: "B", handle: (localMatchConfig.humanSeat === "B" ? "Player B" : "AI_Bot"), type: (localMatchConfig.humanSeat === "B" ? "HUMAN" : "AI"), aiDifficulty: localMatchConfig.botDifficulty }
+      makeSeatMeta(1, "A", botName2P),
+      makeSeatMeta(2, "B", botName2P)
     ];
   }
 
@@ -7621,6 +7951,7 @@ function generateOctiTranscriptV3() {
     edgeless: !!s.edgeless,
     startPlayer: "A",
     status: (s.status === "R" ? "RESIGNED" : (s.status === "O" ? "GAME_OVER" : "IN_PROGRESS")),
+    termination: s.termination || (s.status === "R" ? "RESIGN" : (s.status === "O" ? "BASE_CAPTURE" : "NONE")),
     winner: winnerStr,
     finalFen: fenStr,
     final_fen: fenStr,
@@ -7631,12 +7962,38 @@ function generateOctiTranscriptV3() {
   };
 }
 
+function autoUploadCompletedLocalMatch() {
+  if (activeOnlineGameId || !activePlayState || playMatchPlies.length <= 1) return;
+  if (activePlayState.status !== "O" && activePlayState.status !== "R") return;
+  var trObj = generateOctiTranscriptV3();
+  var archSt = document.getElementById("web-play-archive-status");
+  if (archSt) archSt.textContent = "Uploading transcript to archive...";
+  api("/api/v1/archive/upload", {
+    method: "POST",
+    body: { transcript: JSON.stringify(trObj) }
+  }).then(function (res) {
+    if (archSt && res && res.game_id) {
+      archSt.textContent = "Archived (#" + res.game_id.slice(0, 8) + ")";
+    }
+    loadArchiveStats();
+  }).catch(function () {
+    if (archSt) archSt.textContent = "";
+  });
+}
+
 // Move Commit Callback: updates active state, history, checks victory, triggers bot
 function onLocalMoveCommitted(notation, newState, aiMeta) {
+  if (playVcrIndex < playMatchPlies.length - 1) {
+    playMatchPlies.length = playVcrIndex + 1;
+  }
+
   lastMoveHighlightSquares = extractModifiedSquaresFromMove(notation);
   lastMoveSetAtMs = Date.now();
 
   var prevTurn = activePlayState.turn;
+  if (newState.turn === prevTurn && newState.status === "P") {
+    newState = applyMoveToState(cloneState(activePlayState), notation, prevTurn);
+  }
   activePlayState = newState;
 
   // Add clock increment to prevTurn
@@ -7657,7 +8014,14 @@ function onLocalMoveCommitted(notation, newState, aiMeta) {
     fenAfter: serializeOctiFen(activePlayState)
   };
   if (aiMeta) {
+    var diff = localMatchConfig.botDifficulty || 2;
+    var prof = BOT_PROFILES[diff] || BOT_PROFILES[2];
     plyObj.ai = {
+      difficulty: diff,
+      budgetMs: prof.timeBudgetMs || 3000,
+      depthReached: aiMeta.depth,
+      nodesVisited: aiMeta.nodes,
+      bestScore: aiMeta.score,
       score: aiMeta.score,
       depth: aiMeta.depth,
       nodes: aiMeta.nodes,
@@ -7692,6 +8056,7 @@ function onLocalMoveCommitted(notation, newState, aiMeta) {
       goSub.textContent = (activePlayState.termination || "VICTORY BY BASE OCCUPATION");
       goOverlay.style.display = "flex";
     }
+    autoUploadCompletedLocalMatch();
     return;
   }
 
@@ -7725,7 +8090,10 @@ function triggerAiBotTurn() {
 
   function finishAiMove(res) {
     if (thinkOverlay) thinkOverlay.style.display = "none";
-    if (res && res.bestMove && activePlayState && activePlayState.status === "P") {
+    if (!matchStarted || !activePlayState || activePlayState.status !== "P" || activePlayState.turn !== side) {
+      return;
+    }
+    if (res && res.bestMove) {
       var nextState = applyMoveToState(cloneState(activePlayState), res.bestMove, side);
       var aiMeta = {
         score: res.score,
@@ -7779,6 +8147,11 @@ if (btnUndo) {
       renderPlayBoardCanvas();
       return;
     }
+    var goOverlay = document.getElementById("web-gameover-overlay");
+    if (goOverlay) goOverlay.style.display = "none";
+    var thinkOverlay = document.getElementById("web-thinking-overlay");
+    if (thinkOverlay) thinkOverlay.style.display = "none";
+
     if (localMatchConfig.playMode === "bot") {
       while (playMatchPlies.length > 1) {
         playMatchPlies.pop();
@@ -7794,10 +8167,14 @@ if (btnUndo) {
         activePlayState = parseOctiFen(firstPl.fenAfter);
       }
       playVcrIndex = playMatchPlies.length - 1;
+      var curPl = playMatchPlies[playVcrIndex];
+      lastMoveHighlightSquares = curPl && playVcrIndex > 0 ? extractModifiedSquaresFromMove(curPl.move) : [];
+      lastMoveSetAtMs = Date.now();
       if (moveComposer) moveComposer.cancel();
       updatePlaySidebar();
       renderPlayBoardCanvas();
       renderAllWebReserves();
+      checkMatchTurn();
       return;
     }
     if (playMatchPlies.length <= 1) return;
@@ -7805,6 +8182,8 @@ if (btnUndo) {
     var lastPl = playMatchPlies[playMatchPlies.length - 1];
     activePlayState = parseOctiFen(lastPl.fenAfter);
     playVcrIndex = playMatchPlies.length - 1;
+    lastMoveHighlightSquares = lastPl && playVcrIndex > 0 ? extractModifiedSquaresFromMove(lastPl.move) : [];
+    lastMoveSetAtMs = Date.now();
     if (moveComposer) moveComposer.cancel();
     updatePlaySidebar();
     renderPlayBoardCanvas();
@@ -7824,14 +8203,24 @@ if (btnResign) {
       clockInterval = null;
     }
     activePlayState.status = "R";
-    activePlayState.winner = (turn === "A") ? "B" : "A";
+    activePlayState.turn = "-";
+    if (activePlayState.mode === "4" || activePlayState.mode === "4P") {
+      activePlayState.winner = (turn === "A" || turn === "C") ? "B" : "A";
+    } else {
+      activePlayState.winner = (turn === "A") ? "B" : "A";
+    }
+    activePlayState.termination = "RESIGN";
     OctiWebSoundSynth.play("GAME_VICTORY");
 
     var goOverlay = document.getElementById("web-gameover-overlay");
     var goTitle = document.getElementById("web-gameover-title");
     var goSub = document.getElementById("web-gameover-subtitle");
     if (goOverlay && goTitle && goSub) {
-      goTitle.textContent = "PLAYER " + activePlayState.winner + " WINS";
+      if (activePlayState.mode === "4" || activePlayState.mode === "4P") {
+        goTitle.textContent = (activePlayState.winner === "A" ? "TEAM A & C" : "TEAM B & D") + " VICTORIOUS!";
+      } else {
+        goTitle.textContent = "PLAYER " + activePlayState.winner + " WINS";
+      }
       goSub.textContent = "VICTORY BY RESIGNATION";
       goOverlay.style.display = "flex";
     }
@@ -7839,6 +8228,7 @@ if (btnResign) {
     updatePlaySidebar();
     renderPlayBoardCanvas();
     renderAllWebReserves();
+    autoUploadCompletedLocalMatch();
   });
 }
 
@@ -8478,8 +8868,8 @@ function arOpen(id) {
         var aiInfo = "";
         if (ply.ai) {
           var d = ply.ai.depthReached !== undefined ? ply.ai.depthReached : (ply.ai.depth || 0);
-          var sc = ply.ai.bestScore !== undefined ? ply.ai.bestScore : (ply.ai.evalScore || 0);
-          var nd = ply.ai.nodesVisited !== undefined ? ply.ai.nodesVisited : (ply.ai.nodesEvaluated || 0);
+          var sc = ply.ai.bestScore !== undefined ? ply.ai.bestScore : (ply.ai.score !== undefined ? ply.ai.score : (ply.ai.evalScore || 0));
+          var nd = ply.ai.nodesVisited !== undefined ? ply.ai.nodesVisited : (ply.ai.nodes !== undefined ? ply.ai.nodes : (ply.ai.nodesEvaluated || 0));
           aiInfo = "D" + d + " • " + Number(nd).toLocaleString() + "n • score " + sc;
         }
         var elapsed = (ply.elapsedMs !== undefined && ply.elapsedMs >= 0)
@@ -8513,6 +8903,9 @@ $("ar-next").addEventListener("click", function () { arSearch(arOffset + arLimit
 $("ar-close").addEventListener("click", function () {
   stopReplayPlayback();
   $("ar-detail").style.display = "none";
+  if (location.hash.indexOf("#replay/") === 0) {
+    switchTab("archive");
+  }
 });
 
 $("ar-copy-json").addEventListener("click", function () {
