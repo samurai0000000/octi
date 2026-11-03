@@ -3398,6 +3398,29 @@ function checkWinner(s) {
   return s;
 }
 
+function hasAnyLegalMove(s, player) {
+  var pIdx = playerIndex(player);
+  var res = s.reserves[pIdx];
+  var keys = Object.keys(s.map);
+  for (var i = 0; i < keys.length; i++) {
+    var stack = s.map[keys[i]] || [];
+    for (var p = 0; p < stack.length; p++) {
+      var pod = stack[p];
+      if (pod.owner !== player) continue;
+      var cnt = pod.cfg ? pod.cfg.count : 0;
+      if (cnt < 8 && res && (res.freeProngs > 0 || (s.superProngs && res.freeSuper > 0))) {
+        return true;
+      }
+      if (s.mode !== "OFK" && cnt > 0 && cnt < 8 && pod.cfg && pod.cfg.prongs) {
+        for (var d = 0; d < 8; d++) {
+          if (pod.cfg.prongs[d] === 1) return true;
+        }
+      }
+    }
+  }
+  return generateMoves(s, player).length > 0;
+}
+
 function advanceTurn(s, player) {
   if (s.mode === "4" || s.mode === "4P") {
     var seats = ["A", "B", "C", "D"];
@@ -3407,16 +3430,14 @@ function advanceTurn(s, player) {
       var nextIdx = (curIdx + step) % 4;
       if ((s.elimMask & (1 << nextIdx)) !== 0) continue;
       var nextP = seats[nextIdx];
-      var pMoves = generateMoves(s, nextP);
-      if (pMoves.length > 0) {
+      if (hasAnyLegalMove(s, nextP)) {
         s.turn = nextP;
         foundNext = true;
         break;
       }
       var partIdx = partnerIndex("4P", nextIdx);
       if ((s.elimMask & (1 << partIdx)) === 0) {
-        var partMoves = generateMoves(s, seats[partIdx]);
-        if (partMoves.length > 0) continue;
+        if (hasAnyLegalMove(s, seats[partIdx])) continue;
       }
     }
     if (!foundNext) {
@@ -3427,8 +3448,7 @@ function advanceTurn(s, player) {
     }
   } else {
     var nextPlayer = (player === "A") ? "B" : "A";
-    var pMoves2 = generateMoves(s, nextPlayer);
-    if (!pMoves2.length) {
+    if (!hasAnyLegalMove(s, nextPlayer)) {
       s.status = "O";
       s.turn = "-";
       s.winner = player;
@@ -3533,58 +3553,63 @@ function applyMoveToState(s, move, player) {
     }
   }
   // 2. Prong repositioning
-  else if (/^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])-([a-hA-H])(!?)$/.test(move) ||
-           /^([1-9])([1-9])([a-hA-H!]*)-([a-hA-H])\+([a-hA-H])(!?)$/.test(move)) {
-    var mx = RegExp.$1, my = RegExp.$2, rawRepoCfg = RegExp.$3 || "";
-    var normRepoCfg = rawRepoCfg ? formatProngConfig(parseProngConfig(rawRepoCfg).prongs) : "";
-    var addCh = (move.indexOf("+") < move.indexOf("-")) ? RegExp.$4.toLowerCase() : RegExp.$5.toLowerCase();
-    var remCh = (move.indexOf("+") < move.indexOf("-")) ? RegExp.$5.toLowerCase() : RegExp.$4.toLowerCase();
-    var addIdx = DIR_CHARS.indexOf(addCh), remIdx = DIR_CHARS.indexOf(remCh);
-    var mk = mx + "," + my;
-    if (s.map[mk] && s.map[mk].length && remIdx >= 0 && addIdx >= 0) {
-      var foundPod = null;
-      for (var p = 0; p < s.map[mk].length; p++) {
-        var cand = s.map[mk][p];
-        if (cand.owner === player && cand.cfg.prongs[remIdx] && !cand.cfg.prongs[addIdx]) {
-          var candText = formatProngConfig(cand.cfg.prongs);
-          if (!rawRepoCfg || candText === normRepoCfg || cand.cfg.text === rawRepoCfg) {
-            foundPod = cand;
-            break;
+  else if (move.indexOf("+") !== -1 && move.indexOf("-") !== -1) {
+    var mRepo = /^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])-([a-hA-H])(!?)$/.exec(move) ||
+                /^([1-9])([1-9])([a-hA-H!]*)-([a-hA-H])\+([a-hA-H])(!?)$/.exec(move);
+    if (mRepo) {
+      var mx = mRepo[1], my = mRepo[2], rawRepoCfg = mRepo[3] || "";
+      var normRepoCfg = rawRepoCfg ? formatProngConfig(parseProngConfig(rawRepoCfg).prongs) : "";
+      var addCh = (move.indexOf("+") < move.indexOf("-")) ? mRepo[4].toLowerCase() : mRepo[5].toLowerCase();
+      var remCh = (move.indexOf("+") < move.indexOf("-")) ? mRepo[5].toLowerCase() : mRepo[4].toLowerCase();
+      var addIdx = DIR_CHARS.indexOf(addCh), remIdx = DIR_CHARS.indexOf(remCh);
+      var mk = mx + "," + my;
+      if (s.map[mk] && s.map[mk].length && remIdx >= 0 && addIdx >= 0) {
+        var foundPod = null;
+        for (var p = 0; p < s.map[mk].length; p++) {
+          var cand = s.map[mk][p];
+          if (cand.owner === player && cand.cfg.prongs[remIdx] && !cand.cfg.prongs[addIdx]) {
+            var candText = formatProngConfig(cand.cfg.prongs);
+            if (!rawRepoCfg || candText === normRepoCfg || cand.cfg.text === rawRepoCfg) {
+              foundPod = cand;
+              break;
+            }
           }
         }
-      }
-      if (!foundPod) {
-        for (var p2 = 0; p2 < s.map[mk].length; p2++) {
-          var cand2 = s.map[mk][p2];
-          if (cand2.owner === player && cand2.cfg.prongs[remIdx] && !cand2.cfg.prongs[addIdx]) {
-            foundPod = cand2;
-            break;
+        if (!foundPod) {
+          for (var p2 = 0; p2 < s.map[mk].length; p2++) {
+            var cand2 = s.map[mk][p2];
+            if (cand2.owner === player && cand2.cfg.prongs[remIdx] && !cand2.cfg.prongs[addIdx]) {
+              foundPod = cand2;
+              break;
+            }
           }
         }
-      }
-      if (foundPod) {
-        var pt = foundPod.cfg.prongs[remIdx];
-        foundPod.cfg.prongs[remIdx] = 0;
-        foundPod.cfg.prongs[addIdx] = pt;
-        foundPod.cfg.text = formatProngConfig(foundPod.cfg.prongs);
+        if (foundPod) {
+          var pt = foundPod.cfg.prongs[remIdx];
+          foundPod.cfg.prongs[remIdx] = 0;
+          foundPod.cfg.prongs[addIdx] = pt;
+          foundPod.cfg.text = formatProngConfig(foundPod.cfg.prongs);
+        }
       }
     }
   }
   // 3. Prong addition
-  else if (/^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])(!?)$/.test(move) || /^([1-9])([1-9])([a-hA-H])$/.test(move)) {
-    var mx, my, rawAddCfg = "", addCh, isSuper = false;
-    if (move.indexOf("+") !== -1) {
-      /^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])(!?)$/.test(move);
-      mx = RegExp.$1; my = RegExp.$2; rawAddCfg = RegExp.$3 || ""; addCh = RegExp.$4.toLowerCase();
-      isSuper = (RegExp.$5 === "!" || RegExp.$4 === RegExp.$4.toUpperCase());
+  else if (move.indexOf("+") !== -1 || /^([1-9])([1-9])([a-hA-H])$/.test(move)) {
+    var mx, my, rawAddCfg = "", addCh = "", isSuper = false;
+    var mAdd = /^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])(!?)$/.exec(move);
+    if (mAdd) {
+      mx = mAdd[1]; my = mAdd[2]; rawAddCfg = mAdd[3] || ""; addCh = mAdd[4].toLowerCase();
+      isSuper = (mAdd[5] === "!" || mAdd[4] === mAdd[4].toUpperCase());
     } else {
-      /^([1-9])([1-9])([a-hA-H])$/.test(move);
-      mx = RegExp.$1; my = RegExp.$2; addCh = RegExp.$3.toLowerCase();
+      var mAddShort = /^([1-9])([1-9])([a-hA-H])$/.exec(move);
+      if (mAddShort) {
+        mx = mAddShort[1]; my = mAddShort[2]; addCh = mAddShort[3].toLowerCase();
+      }
     }
     var normAddCfg = rawAddCfg ? formatProngConfig(parseProngConfig(rawAddCfg).prongs) : "";
     var dIdx = DIR_CHARS.indexOf(addCh);
     var mk = mx + "," + my;
-    if (s.map[mk] && s.map[mk].length && dIdx >= 0) {
+    if (mx && s.map[mk] && s.map[mk].length && dIdx >= 0) {
       var foundPod = null;
       for (var p = 0; p < s.map[mk].length; p++) {
         var cand = s.map[mk][p];
@@ -3631,8 +3656,8 @@ function applyMoveToState(s, move, player) {
 }
 
 var DEFAULT_BOT_TUNING = {
-  timeBudgetMs: 3000,
-  maxSearchDepth: 4,
+  timeBudgetMs: 8000,
+  maxSearchDepth: 8,
   maxQuiesceDepth: 2,
   quiesceBranchCap: 6,
   rootBranchCap: 40,
@@ -3672,13 +3697,17 @@ var DEFAULT_BOT_TUNING = {
   ofkProngSeizureWeight: 600,
   opponentTurnHangingPct: 140,
   soleArmedPodDangerPenalty: 3500,
+  wipeoutDangerPenalty: 16000,
+  moveOrderBaseEntryBonus: 16000,
+  moveOrderCaptureBonus: 8500,
+  moveOrderLeapfrogBonus: 1400,
   moveOrderBlunderPenalty: 7000
 };
 
 var BOT_PROFILES = {
   1: Object.assign({}, DEFAULT_BOT_TUNING, {
-    timeBudgetMs: 1200,
-    maxSearchDepth: 2,
+    timeBudgetMs: 2000,
+    maxSearchDepth: 3,
     maxQuiesceDepth: 0,
     quiesceBranchCap: 0,
     rootBranchCap: 24,
@@ -3705,19 +3734,19 @@ var BOT_PROFILES = {
     moveOrderBlunderPenalty: 2000
   }),
   2: Object.assign({}, DEFAULT_BOT_TUNING, {
-    timeBudgetMs: 3000,
-    maxSearchDepth: 4,
+    timeBudgetMs: 8000,
+    maxSearchDepth: 8,
     maxQuiesceDepth: 2,
     quiesceBranchCap: 6,
     rootBranchCap: 40,
     treeBranchCap: 24,
-    rootScoreJitter: 20
+    rootScoreJitter: 0
   }),
   3: Object.assign({}, DEFAULT_BOT_TUNING, {
-    timeBudgetMs: 5000,
-    maxSearchDepth: 6,
-    maxQuiesceDepth: 3,
-    quiesceBranchCap: 8,
+    timeBudgetMs: 15000,
+    maxSearchDepth: 10,
+    maxQuiesceDepth: 4,
+    quiesceBranchCap: 10,
     rootBranchCap: 56,
     treeBranchCap: 32,
     rootScoreJitter: 0,
@@ -3743,193 +3772,681 @@ var BOT_PROFILES = {
   })
 };
 
+function torusDist(a, b, dim, edgeless) {
+  var d = Math.abs(a - b);
+  if (edgeless && dim > 0) d = Math.min(d, dim - d);
+  return d;
+}
+
+function chebyshevDist(x1, y1, x2, y2, gw, gh, edgeless) {
+  return Math.max(torusDist(x1, x2, gw, edgeless), torusDist(y1, y2, gh, edgeless));
+}
+
+function minChebyshevToTargets(x, y, targets, gw, gh, edgeless) {
+  if (!targets || !targets.length) return 0;
+  var best = 999;
+  for (var i = 0; i < targets.length; i++) {
+    var d = chebyshevDist(x, y, targets[i].x, targets[i].y, gw, gh, edgeless);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+function getUncapturedOpponentBases(s, player) {
+  var allOpp = getOpponentBases(s.mode, player, s.bases);
+  if (!allOpp || !allOpp.length) return [];
+  var partner = (s.mode === "4" || s.mode === "4P") ? partnerOf(s.mode, player) : null;
+  var uncap = [];
+  for (var i = 0; i < allOpp.length; i++) {
+    var b = allOpp[i];
+    var occ = isSquareOccupiedBy(s, b.x, b.y, player) ||
+              (partner && isSquareOccupiedBy(s, b.x, b.y, partner));
+    if (!occ) uncap.push(b);
+  }
+  return uncap.length ? uncap : allOpp;
+}
+
+function evaluateJumpThreatDfs(s, curX, curY, startX, startY, depth, podOwner, pod, targets, visitedDest, jumpedMap, threat) {
+  if (depth > 4) return;
+  var prongs = (pod.cfg && pod.cfg.prongs) ? pod.cfg.prongs : null;
+  if (!prongs) return;
+  var startStackLen = (s.map[startX + "," + startY] || []).length;
+
+  for (var d = 0; d < 8; d++) {
+    if (!prongs[d]) continue;
+    var dx = DIR_DELTAS[d][0], dy = DIR_DELTAS[d][1];
+    var jx = curX + dx, jy = curY + dy;
+    var destX = curX + 2 * dx, destY = curY + 2 * dy;
+    if (s.edgeless) {
+      jx = wrapCoord(jx, s.gw); jy = wrapCoord(jy, s.gh);
+      destX = wrapCoord(destX, s.gw); destY = wrapCoord(destY, s.gh);
+    } else {
+      if (jx < 1 || jx > s.gw || jy < 1 || jy > s.gh) continue;
+      if (destX < 1 || destX > s.gw || destY < 1 || destY > s.gh) continue;
+    }
+
+    var jKey = jx + "," + jy;
+    if (jumpedMap[jKey]) continue;
+
+    var midStack = s.map[jKey];
+    var midCount = midStack ? ((jx === startX && jy === startY) ? (midStack.length - 1) : midStack.length) : 0;
+    if (midCount <= 0) continue;
+
+    var destKey = destX + "," + destY;
+    var destStack = s.map[destKey];
+    var canLand = (!destStack || !destStack.length) ||
+                  (destX === startX && destY === startY && startStackLen === 1);
+    if (!canLand) continue;
+
+    if (visitedDest[destKey]) continue;
+    visitedDest[destKey] = true;
+    threat.reachableSquares++;
+    var tDist = minChebyshevToTargets(destX, destY, targets, s.gw, s.gh, s.edgeless);
+    if (tDist < threat.minJumpDistToTargets) threat.minJumpDistToTargets = tDist;
+
+    if (squareHasEnemyOf(s, jx, jy, podOwner)) {
+      if (!threat.capturedSqMap[jKey]) {
+        threat.capturedSqMap[jKey] = true;
+        for (var pi = 0; pi < midStack.length; pi++) {
+          var mp = midStack[pi];
+          if (!areAllied(s.mode, mp.owner, podOwner)) {
+            threat.capturablePods++;
+            threat.capturableProngs += (mp.cfg ? mp.cfg.count : 0);
+          }
+        }
+      }
+    }
+
+    jumpedMap[jKey] = true;
+    evaluateJumpThreatDfs(s, destX, destY, startX, startY, depth + 1, podOwner, pod, targets, visitedDest, jumpedMap, threat);
+    jumpedMap[jKey] = false;
+  }
+}
+
+function evaluatePodJumpThreat(s, x, y, pod, targets) {
+  var threat = {
+    reachableSquares: 0,
+    capturablePods: 0,
+    capturableProngs: 0,
+    minJumpDistToTargets: 999,
+    capturedSqMap: {}
+  };
+  evaluateJumpThreatDfs(s, x, y, x, y, 0, pod.owner, pod, targets, {}, {}, threat);
+  return threat;
+}
+
+function filterDominatedMoves(moves) {
+  if (!moves || moves.length <= 1) return moves || [];
+  var hasCapVariant = {};
+  var anyCapFound = false;
+  for (var i = 0; i < moves.length; i++) {
+    var m = moves[i];
+    if (m.indexOf("-") !== -1 && m.indexOf("+") === -1 && m.indexOf("x") !== -1) {
+      hasCapVariant[m.replace(/x/g, "")] = true;
+      anyCapFound = true;
+    }
+  }
+  if (!anyCapFound) return moves;
+  var filtered = [];
+  for (var j = 0; j < moves.length; j++) {
+    var mv = moves[j];
+    if (mv.indexOf("-") !== -1 && mv.indexOf("+") === -1 && mv.indexOf("x") === -1) {
+      if (hasCapVariant[mv]) continue;
+    }
+    filtered.push(mv);
+  }
+  return filtered.length ? filtered : moves;
+}
+
 function evaluateState(s, botSide, prof) {
   if (!prof) prof = BOT_PROFILES[2];
   if (s.status === "O") {
-    if (s.winner === botSide || areAllied(s.mode, s.winner, botSide)) return 100000;
-    if (s.winner && s.winner !== "-") return -100000;
+    if (s.winner === botSide || areAllied(s.mode, s.winner, botSide)) return 1000000;
+    if (s.winner && s.winner !== "-") return -1000000;
     return 0;
   }
 
   var score = 0;
-  var oppBases = getOpponentBases(s.mode, botSide, s.bases);
-  var allyHomeSquares = getHomeSquares(s.mode, botSide, s.bases);
+  var is4p = (s.mode === "4" || s.mode === "4P");
+  var sampleEnemy = (botSide === "A" || botSide === "C") ? "B" : "A";
+  var allOppBases = getOpponentBases(s.mode, botSide, s.bases);
+  var allAllyHomeSquares = getHomeSquares(s.mode, botSide, s.bases);
+  if (is4p) {
+    var partSide = partnerOf(s.mode, botSide);
+    allAllyHomeSquares = allAllyHomeSquares.concat(getHomeSquares(s.mode, partSide, s.bases));
+  }
+  var allyTargets = getUncapturedOpponentBases(s, botSide);
+  var enemyTargets = getUncapturedOpponentBases(s, sampleEnemy);
 
   // 1. Captured Enemy Bases & Lost Allied Bases
-  oppBases.forEach(function (b) {
+  for (var bi = 0; bi < allOppBases.length; bi++) {
+    var b = allOppBases[bi];
     if (isSquareOccupiedBy(s, b.x, b.y, botSide) ||
-        ((s.mode === "4" || s.mode === "4P") && isSquareOccupiedBy(s, b.x, b.y, partnerOf(s.mode, botSide)))) {
+        (is4p && isSquareOccupiedBy(s, b.x, b.y, partnerOf(s.mode, botSide)))) {
       score += prof.capturedEnemyBaseBonus;
     }
-  });
-  allyHomeSquares.forEach(function (b) {
-    if (squareHasEnemyOf(s, b.x, b.y, botSide)) {
+  }
+  for (var hi = 0; hi < allAllyHomeSquares.length; hi++) {
+    var ah = allAllyHomeSquares[hi];
+    if (squareHasEnemyOf(s, ah.x, ah.y, botSide)) {
       score -= prof.lostAlliedBasePenalty;
     }
-  });
+  }
 
-  // Neutral OCTI squares
-  if (s.mode === "4" || s.mode === "4P") {
-    [{x:5,y:3}, {x:5,y:7}].forEach(function (no) {
-      if (isSquareOccupiedBy(s, no.x, no.y, botSide) || isSquareOccupiedBy(s, no.x, no.y, partnerOf(s.mode, botSide))) {
+  // Neutral OCTI squares in 4P
+  if (is4p) {
+    var neutrals = [{x:5, y:3}, {x:5, y:7}];
+    for (var ni = 0; ni < neutrals.length; ni++) {
+      var no = neutrals[ni];
+      if (isSquareOccupiedBy(s, no.x, no.y, botSide) ||
+          isSquareOccupiedBy(s, no.x, no.y, partnerOf(s.mode, botSide))) {
         score += prof.neutralOctiSquareBonus;
       } else if (squareHasEnemyOf(s, no.x, no.y, botSide)) {
         score -= prof.neutralOctiSquareBonus;
       }
-    });
+    }
   }
 
-  // 2. Pod evaluation & Armed Pod Distances
-  var allyArmedDists = [];
-  var enemyArmedDists = [];
-  var allyArmedCount = 0;
-  var enemyArmedCount = 0;
-  var allyHomeUnarmed = 0;
-  var enemyHomeUnarmed = 0;
+  var totalAllyPodsOnBoard = 0;
+  var totalEnemyPodsOnBoard = 0;
+  var allyArmedPods = 0;
+  var enemyArmedPods = 0;
+  var allyUnarmedHomePods = 0;
+  var enemyUnarmedHomePods = 0;
+  var allyPodCoords = [];
+  var enemyPodCoords = [];
+  var allyJumpThreatMap = {};
+  var enemyJumpThreatMap = {};
 
-  Object.keys(s.map).forEach(function (k) {
+  var mapKeys = Object.keys(s.map);
+  for (var ki = 0; ki < mapKeys.length; ki++) {
+    var k = mapKeys[ki];
     var stack = s.map[k] || [];
+    var numPods = stack.length;
+    if (!numPods) continue;
+
     var coords = k.split(",");
     var px = parseInt(coords[0], 10);
     var py = parseInt(coords[1], 10);
+    var sqOwner = stack[0].owner;
+    var sqAlly = areAllied(s.mode, sqOwner, botSide);
 
-    stack.forEach(function (pod) {
-      var isAlly = areAllied(s.mode, pod.owner, botSide);
-      var prCount = pod.cfg ? pod.cfg.count : 0;
-      var normCount = 0, supCount = 0;
-      var hasOrth = false, hasDiag = false;
+    if (sqAlly) totalAllyPodsOnBoard += numPods;
+    else totalEnemyPodsOnBoard += numPods;
 
-      if (pod.cfg && pod.cfg.prongs) {
-        for (var di = 0; di < 8; di++) {
-          if (pod.cfg.prongs[di] === 1) {
-            normCount++;
-            if (di % 2 === 0) hasOrth = true; else hasDiag = true;
-          } else if (pod.cfg.prongs[di] === 2) {
-            supCount++;
-            if (di % 2 === 0) hasOrth = true; else hasDiag = true;
-          }
+    var sqOppBases = sqAlly ? allOppBases : allAllyHomeSquares;
+    var sqHomeBases = sqAlly ? allAllyHomeSquares : allOppBases;
+    var onCapturedEnemyBase = sqOppBases.some(function (eb) { return eb.x === px && eb.y === py; });
+    var onAlliedHome = sqHomeBases.some(function (hb) { return hb.x === px && hb.y === py; });
+    var isNeutralOcti = is4p && ((px === 5 && py === 3) || (px === 5 && py === 7));
+
+    var unarmedCount = 0;
+    for (var ui = 0; ui < numPods; ui++) {
+      var uProngs = stack[ui].cfg ? stack[ui].cfg.count : 0;
+      if (uProngs === 0) {
+        unarmedCount++;
+        if (onAlliedHome) {
+          if (sqAlly) allyUnarmedHomePods++;
+          else enemyUnarmedHomePods++;
+        }
+      }
+    }
+
+    if (numPods > 1 && !onCapturedEnemyBase) {
+      var stackPen = (numPods - 1) * 450 + unarmedCount * 950;
+      score += sqAlly ? -stackPen : stackPen;
+    }
+
+    for (var pi = 0; pi < numPods; pi++) {
+      var pod = stack[pi];
+      var owner = pod.owner;
+      var isAlly = areAllied(s.mode, owner, botSide);
+      var targets = isAlly ? allyTargets : enemyTargets;
+      var numProngs = pod.cfg ? pod.cfg.count : 0;
+
+      if (numProngs > 0) {
+        if (isAlly) {
+          allyPodCoords.push({ x: px, y: py });
+          allyArmedPods++;
+        } else {
+          enemyPodCoords.push({ x: px, y: py });
+          enemyArmedPods++;
         }
       }
 
-      var podVal = (prCount === 0) ? prof.podZeroProngVal
-        : (prCount === 1 ? prof.podOneProngVal
-        : (prCount === 2 ? prof.podTwoProngVal : prof.podThreePlusProngVal));
-      podVal += normCount * prof.normalProngVal + supCount * prof.superProngVal;
-      if (hasOrth && hasDiag) podVal += prof.orthDiagVersatilityBonus;
-      if (hasDiag && !hasOrth && prCount >= 2) podVal -= prof.diagOnlyParityPenalty;
-
-      // Base threats
-      if (prCount > 0) {
-        var targets = isAlly ? oppBases : allyHomeSquares;
-        var minD = 999;
-        targets.forEach(function (t) {
-          var d = Math.max(Math.abs(px - t.x), Math.abs(py - t.y));
-          if (d < minD) minD = d;
-        });
-
-        if (isAlly) {
-          allyArmedCount++;
-          allyArmedDists.push(minD);
-        } else {
-          enemyArmedCount++;
-          enemyArmedDists.push(minD);
+      var dist = minChebyshevToTargets(px, py, targets, s.gw, s.gh, s.edgeless);
+      var podVal = 0;
+      if (numProngs === 0 && !onCapturedEnemyBase && !isNeutralOcti) {
+        podVal = prof.podZeroProngVal;
+      } else if (numProngs === 1) {
+        podVal = prof.podOneProngVal + Math.max(0, 10 - dist) * 110;
+        if (!onAlliedHome && dist <= 4 && dist >= 2) {
+          podVal -= prof.loneOneProngRushPenalty;
         }
+      } else if (numProngs === 2) {
+        podVal = prof.podTwoProngVal + Math.max(0, 10 - dist) * 180;
+      } else if (numProngs >= 3) {
+        podVal = prof.podThreePlusProngVal + Math.max(0, 10 - dist) * 210;
+      }
 
-        // 1-step / 1-jump base threat bonus
-        if (pod.cfg && pod.cfg.prongs) {
-          for (var td = 0; td < 8; td++) {
-            if (pod.cfg.prongs[td]) {
-              var dx = DIR_DELTAS[td][0], dy = DIR_DELTAS[td][1];
-              var sx = px + dx, sy = py + dy;
-              var jx = px + dx * 2, jy = py + dy * 2;
-              targets.forEach(function (t) {
-                if (sx === t.x && sy === t.y) podVal += prof.oneStepBaseThreatBonus;
-                if (jx === t.x && jy === t.y && s.map[sx + "," + sy] && s.map[sx + "," + sy].length) {
-                  podVal += prof.oneJumpBaseThreatBonus;
+      var hasOrth = false, hasDiag = false;
+      if (pod.cfg && pod.cfg.prongs) {
+        for (var d = 0; d < 8; d++) {
+          var pt = pod.cfg.prongs[d];
+          if (!pt) continue;
+          podVal += (pt === 2) ? prof.superProngVal : prof.normalProngVal;
+          if (d % 2 === 0) hasOrth = true; else hasDiag = true;
+
+          // Forward prong orientation bonus
+          if (owner === "A" || owner === "C") {
+            if (d === 0) podVal += 380;
+            else if (d === 1 || d === 7) podVal += 260;
+            else if (d === 2 || d === 6) podVal += 120;
+          } else {
+            if (d === 4) podVal += 380;
+            else if (d === 3 || d === 5) podVal += 260;
+            else if (d === 2 || d === 6) podVal += 120;
+          }
+
+          var dx = DIR_DELTAS[d][0], dy = DIR_DELTAS[d][1];
+          var nx = px + dx, ny = py + dy;
+          if (s.edgeless) {
+            nx = wrapCoord(nx, s.gw); ny = wrapCoord(ny, s.gh);
+          }
+          if (nx >= 1 && nx <= s.gw && ny >= 1 && ny <= s.gh) {
+            var ndist = minChebyshevToTargets(nx, ny, targets, s.gw, s.gh, s.edgeless);
+            if (ndist < dist) podVal += 140;
+
+            var nKey = nx + "," + ny;
+            var nStack = s.map[nKey];
+            var canStepBase = (s.mode === "OFK")
+              ? (!nStack || !nStack.length)
+              : !squareHasEnemyOf(s, nx, ny, owner);
+            if (ndist === 0 && canStepBase) {
+              podVal += prof.oneStepBaseThreatBonus;
+            }
+
+            // Leapfrog battery detection
+            if (nStack && nStack.length && areAllied(s.mode, nStack[0].owner, owner)) {
+              var jx = px + 2 * dx, jy = py + 2 * dy;
+              if (s.edgeless) {
+                jx = wrapCoord(jx, s.gw); jy = wrapCoord(jy, s.gh);
+              }
+              if (jx >= 1 && jx <= s.gw && jy >= 1 && jy <= s.gh) {
+                var jStack = s.map[jx + "," + jy];
+                var canJumpBase = (s.mode === "OFK")
+                  ? (!jStack || !jStack.length)
+                  : !squareHasEnemyOf(s, jx, jy, owner);
+                if (!jStack || !jStack.length || canJumpBase) {
+                  podVal += prof.leapfrogBatteryWeight;
+                  var jdist = minChebyshevToTargets(jx, jy, targets, s.gw, s.gh, s.edgeless);
+                  if (jdist < dist) podVal += prof.leapfrogForwardBonus;
                 }
-              });
+              }
+            }
+
+            // 1-jump base threat
+            var jx2 = px + 2 * dx, jy2 = py + 2 * dy;
+            if (s.edgeless) {
+              jx2 = wrapCoord(jx2, s.gw); jy2 = wrapCoord(jy2, s.gh);
+            }
+            if (jx2 >= 1 && jx2 <= s.gw && jy2 >= 1 && jy2 <= s.gh) {
+              var destStack2 = s.map[jx2 + "," + jy2];
+              if (nStack && nStack.length && (!destStack2 || !destStack2.length)) {
+                var jdist2 = minChebyshevToTargets(jx2, jy2, targets, s.gw, s.gh, s.edgeless);
+                if (jdist2 === 0) podVal += prof.oneJumpBaseThreatBonus;
+              }
             }
           }
         }
-      } else {
-        var isAtHome = isAlly
-          ? allyHomeSquares.some(function (h) { return h.x === px && h.y === py; })
-          : oppBases.some(function (h) { return h.x === px && h.y === py; });
-        if (isAtHome) {
-          if (isAlly) allyHomeUnarmed++; else enemyHomeUnarmed++;
+      }
+
+      if (dist === 1 && prof.twoPlyBaseThreatWeight > 0) {
+        podVal += prof.twoPlyBaseThreatWeight;
+      }
+      if (hasOrth && hasDiag) podVal += prof.orthDiagVersatilityBonus;
+      else if (numProngs >= 2 && hasDiag && !hasOrth) podVal -= prof.diagOnlyParityPenalty;
+
+      if (numProngs > 0) {
+        var threat = evaluatePodJumpThreat(s, px, py, pod, targets);
+        podVal += threat.reachableSquares * prof.jumpReachableSquareWeight;
+        podVal += threat.capturablePods * prof.jumpCapturablePodWeight;
+        podVal += threat.capturableProngs * prof.jumpCapturableProngWeight;
+        if (threat.minJumpDistToTargets < dist) {
+          podVal += (dist - threat.minJumpDistToTargets) * prof.jumpReachStepWeight;
+        }
+        var capKeys = Object.keys(threat.capturedSqMap);
+        for (var cki = 0; cki < capKeys.length; cki++) {
+          if (isAlly) allyJumpThreatMap[capKeys[cki]] = true;
+          else enemyJumpThreatMap[capKeys[cki]] = true;
         }
       }
 
-      if (isAlly) score += podVal; else score -= podVal;
-    });
-  });
-
-  // Distances to bases
-  allyArmedDists.sort(function (a, b) { return a - b; });
-  enemyArmedDists.sort(function (a, b) { return a - b; });
-  if (allyArmedDists.length > 0) {
-    score += (30 - allyArmedDists[0]) * prof.closestPodDistWeight;
-    if (allyArmedDists.length > 1 && prof.secondClosestPodDistWeight > 0) {
-      score += (15 - allyArmedDists[1]) * prof.secondClosestPodDistWeight;
-    }
-  }
-  if (enemyArmedDists.length > 0) {
-    score -= (30 - enemyArmedDists[0]) * prof.closestPodDistWeight;
-    if (enemyArmedDists.length > 1 && prof.secondClosestPodDistWeight > 0) {
-      score -= (15 - enemyArmedDists[1]) * prof.secondClosestPodDistWeight;
+      score += isAlly ? podVal : -podVal;
     }
   }
 
-  // Development bonuses
-  if (allyArmedCount >= 1) score += prof.firstArmedPodBonus;
-  if (allyArmedCount >= 2) score += prof.secondArmedPodBonus;
-  if (allyArmedCount >= 3) score += prof.thirdArmedPodBonus;
-  if (enemyArmedCount >= 1) score -= prof.firstArmedPodBonus;
-  if (enemyArmedCount >= 2) score -= prof.secondArmedPodBonus;
-  if (enemyArmedCount >= 3) score -= prof.thirdArmedPodBonus;
+  // Single-pod monopoly penalty (after counting all unarmed home pods across board)
+  for (var mki = 0; mki < mapKeys.length; mki++) {
+    var mStack = s.map[mapKeys[mki]] || [];
+    for (var mpi = 0; mpi < mStack.length; mpi++) {
+      var mPod = mStack[mpi];
+      var mProngs = mPod.cfg ? mPod.cfg.count : 0;
+      if (mProngs > 2) {
+        var mAlly = areAllied(s.mode, mPod.owner, botSide);
+        if (mAlly && allyUnarmedHomePods >= 2) {
+          score -= (mProngs - 2) * prof.singlePodMonopolyPenalty;
+        } else if (!mAlly && enemyUnarmedHomePods >= 2) {
+          score += (mProngs - 2) * prof.singlePodMonopolyPenalty;
+        }
+      }
+    }
+  }
 
-  // Anti-monopoly penalties
-  if (allyArmedCount === 1 && allyHomeUnarmed >= 2) score -= prof.singlePodMonopolyPenalty;
-  if (enemyArmedCount === 1 && enemyHomeUnarmed >= 2) score += prof.singlePodMonopolyPenalty;
+  // Army Development Bonuses
+  if (allyArmedPods >= 1) score += prof.firstArmedPodBonus;
+  if (allyArmedPods >= 2) score += prof.secondArmedPodBonus;
+  if (allyArmedPods >= 3) score += prof.thirdArmedPodBonus;
+  if (enemyArmedPods >= 1) score -= prof.firstArmedPodBonus;
+  if (enemyArmedPods >= 2) score -= prof.secondArmedPodBonus;
+  if (enemyArmedPods >= 3) score -= prof.thirdArmedPodBonus;
 
-  // Reserves
-  var numP = (s.mode === "4" || s.mode === "4P") ? 4 : 2;
+  // Hanging-Pod Vulnerability Penalty
+  var opponentTurnNext = !areAllied(s.mode, s.turn, botSide);
+  var prongWeight = (s.mode === "OFK") ? prof.ofkProngSeizureWeight : prof.hangingProngWeight;
+  for (var hki = 0; hki < mapKeys.length; hki++) {
+    var hk = mapKeys[hki];
+    var hStack = s.map[hk] || [];
+    if (!hStack.length) continue;
+    var hAlly = areAllied(s.mode, hStack[0].owner, botSide);
+    var prongsOnSq = 0;
+    for (var hpi = 0; hpi < hStack.length; hpi++) {
+      prongsOnSq += (hStack[hpi].cfg ? hStack[hpi].cfg.count : 0);
+    }
+
+    if (hAlly && enemyJumpThreatMap[hk]) {
+      var vulnPen = hStack.length * prof.hangingPodBasePenalty + prongsOnSq * prongWeight;
+      if (opponentTurnNext) vulnPen = Math.floor((vulnPen * prof.opponentTurnHangingPct) / 100);
+      if (prongsOnSq > 0 && allyArmedPods === 1) vulnPen += prof.soleArmedPodDangerPenalty;
+      if (hStack.length >= totalAllyPodsOnBoard) vulnPen += (prof.wipeoutDangerPenalty || 16000);
+      score -= vulnPen;
+    } else if (!hAlly && allyJumpThreatMap[hk]) {
+      var vulnPen2 = hStack.length * prof.hangingPodBasePenalty + prongsOnSq * prongWeight;
+      if (!opponentTurnNext) vulnPen2 = Math.floor((vulnPen2 * prof.opponentTurnHangingPct) / 100);
+      if (prongsOnSq > 0 && enemyArmedPods === 1) vulnPen2 += prof.soleArmedPodDangerPenalty;
+      if (hStack.length >= totalEnemyPodsOnBoard) vulnPen2 += (prof.wipeoutDangerPenalty || 16000);
+      score += vulnPen2;
+    }
+  }
+
+  // Multi-Base Minimum Chebyshev Distance (d_min1 and d_min2 per uncaptured target base)
+  for (var ati = 0; ati < allyTargets.length; ati++) {
+    var tb = allyTargets[ati];
+    var dMin1 = 999, dMin2 = 999;
+    for (var api = 0; api < allyPodCoords.length; api++) {
+      var ap = allyPodCoords[api];
+      var dA = chebyshevDist(ap.x, ap.y, tb.x, tb.y, s.gw, s.gh, s.edgeless);
+      if (dA < dMin1) { dMin2 = dMin1; dMin1 = dA; }
+      else if (dA < dMin2) { dMin2 = dA; }
+    }
+    if (dMin1 < 999) score += Math.max(0, 10 - dMin1) * prof.closestPodDistWeight;
+    if (dMin2 < 999 && prof.secondClosestPodDistWeight > 0) {
+      score += Math.max(0, 10 - dMin2) * prof.secondClosestPodDistWeight;
+    }
+  }
+
+  for (var eti = 0; eti < enemyTargets.length; eti++) {
+    var etb = enemyTargets[eti];
+    var eMin1 = 999, eMin2 = 999;
+    for (var epi = 0; epi < enemyPodCoords.length; epi++) {
+      var ep = enemyPodCoords[epi];
+      var dE = chebyshevDist(ep.x, ep.y, etb.x, etb.y, s.gw, s.gh, s.edgeless);
+      if (dE < eMin1) { eMin2 = eMin1; eMin1 = dE; }
+      else if (dE < eMin2) { eMin2 = dE; }
+    }
+    if (eMin1 < 999) score -= Math.max(0, 10 - eMin1) * prof.closestPodDistWeight;
+    if (eMin2 < 999 && prof.secondClosestPodDistWeight > 0) {
+      score -= Math.max(0, 10 - eMin2) * prof.secondClosestPodDistWeight;
+    }
+  }
+
+  // Reserves and material bonuses (capturedPods is a penalty for that player!)
+  var numP = is4p ? 4 : 2;
   for (var p = 0; p < numP; p++) {
     var pLetter = ["A", "B", "C", "D"][p];
     var isAlliedSeat = areAllied(s.mode, pLetter, botSide);
     var r = s.reserves[p];
     if (r) {
-      var rVal = r.capturedPods * 1500 + r.freePods * 200 + r.freeProngs * 100 + r.freeSuper * 250;
-      if (isAlliedSeat) score += rVal; else score -= rVal;
+      var resVal = r.freePods * 450
+                 - r.capturedPods * 380
+                 + r.freeProngs * 50
+                 + r.freeSuper * 150;
+      var unarmedHome = isAlliedSeat ? allyUnarmedHomePods : enemyUnarmedHomePods;
+      if (s.mode !== "OFK" && r.freePods < 4 && unarmedHome > 0 && r.freeProngs >= 6) {
+        resVal -= (4 - r.freePods) * (1500 + unarmedHome * 1500);
+      }
+      if (is4p && (s.elimMask & (1 << p)) !== 0) {
+        resVal -= 20000;
+      }
+      if (r.capturedPods > 0 && canLiberate(s, pLetter)) {
+        resVal += 2500;
+      }
+      score += isAlliedSeat ? resVal : -resVal;
     }
   }
 
   return score;
 }
 
-function orderMoves(moves, s, curPlayer, prof) {
+function orderMoves(rawMoves, s, curPlayer, prof, ttBestMove) {
   if (!prof) prof = BOT_PROFILES[2];
-  var oppBases = getOpponentBases(s.mode, curPlayer, s.bases);
+  var moves = filterDominatedMoves(rawMoves);
+  if (moves.length <= 1) return moves;
+
+  var targets = getUncapturedOpponentBases(s, curPlayer);
+  var homeSquares = getHomeSquares(s.mode, curPlayer, s.bases);
+  var pIdx = playerIndex(curPlayer);
+  var res = s.reserves[pIdx];
+  var earlyDevelopment = !!(res && res.freeProngs >= 8);
+
+  var hasUnarmedHomePod = false;
+  for (var hi = 0; hi < homeSquares.length; hi++) {
+    var hs = s.map[homeSquares[hi].x + "," + homeSquares[hi].y] || [];
+    for (var hpi = 0; hpi < hs.length; hpi++) {
+      if (hs[hpi].owner === curPlayer && (!hs[hpi].cfg || hs[hpi].cfg.count < 2)) {
+        hasUnarmedHomePod = true;
+        break;
+      }
+    }
+    if (hasUnarmedHomePod) break;
+  }
+
+  // Compute enemy jump threat map + 1-hop empty-landing jump-capture lanes
+  var enemyThreatMap = {};
+  var mapKeys = Object.keys(s.map);
+  for (var ki = 0; ki < mapKeys.length; ki++) {
+    var k = mapKeys[ki];
+    var stack = s.map[k] || [];
+    if (!stack.length || !squareHasEnemyOf(s, parseInt(k.split(",")[0], 10), parseInt(k.split(",")[1], 10), curPlayer)) {
+      continue;
+    }
+    var coords = k.split(",");
+    var ex = parseInt(coords[0], 10), ey = parseInt(coords[1], 10);
+    for (var pi = 0; pi < stack.length; pi++) {
+      var ep = stack[pi];
+      if (!areAllied(s.mode, ep.owner, curPlayer) && ep.cfg && ep.cfg.count > 0) {
+        for (var d = 0; d < 8; d++) {
+          if (ep.cfg.prongs[d]) {
+            var dx = DIR_DELTAS[d][0], dy = DIR_DELTAS[d][1];
+            var mx = ex + dx, my = ey + dy;
+            var lx = ex + 2 * dx, ly = ey + 2 * dy;
+            if (s.edgeless) {
+              mx = wrapCoord(mx, s.gw); my = wrapCoord(my, s.gh);
+              lx = wrapCoord(lx, s.gw); ly = wrapCoord(ly, s.gh);
+            }
+            if (mx >= 1 && mx <= s.gw && my >= 1 && my <= s.gh &&
+                lx >= 1 && lx <= s.gw && ly >= 1 && ly <= s.gh) {
+              var landStack = s.map[lx + "," + ly];
+              if (!landStack || !landStack.length) {
+                enemyThreatMap[mx + "," + my] = true;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 
   var scored = moves.map(function (m) {
+    if (ttBestMove && m === ttBestMove) {
+      return { move: m, score: 200000 };
+    }
     var sc = 0;
-    oppBases.forEach(function (b) {
-      var bStr = b.x + "" + b.y;
-      if (m.indexOf("-" + bStr) !== -1 || m === bStr) sc += 100000;
-    });
-    if (m.indexOf("x") !== -1) {
-      sc += 50000;
-      var caps = (m.match(/x/g) || []).length;
-      sc += caps * 10000;
-    } else if (m.indexOf("-") !== -1) {
-      var hops = m.split("-").length - 1;
-      sc += 10000 + hops * 2000;
-    } else if (m.indexOf("+") !== -1) {
-      sc += 5000;
-    } else if (m.indexOf("*") !== -1) {
-      sc += 4000;
+    var hasPlus = (m.indexOf("+") !== -1);
+    var hasDash = (m.indexOf("-") !== -1);
+
+    // 1. Prong reposition: e.g. 53a+b-a
+    if (hasPlus && hasDash) {
+      sc += 60;
+      var repoM = /^([1-9])([1-9])[a-hA-H!]*\+([a-hA-H])-([a-hA-H])/.exec(m);
+      if (repoM) {
+        var rx = parseInt(repoM[1], 10), ry = parseInt(repoM[2], 10);
+        var addD = DIR_CHARS.indexOf(repoM[3].toLowerCase());
+        var rmD = DIR_CHARS.indexOf(repoM[4].toLowerCase());
+        if (addD >= 0 && rmD >= 0) {
+          var addDist = minChebyshevToTargets(rx + DIR_DELTAS[addD][0], ry + DIR_DELTAS[addD][1], targets, s.gw, s.gh, s.edgeless);
+          var rmDist = minChebyshevToTargets(rx + DIR_DELTAS[rmD][0], ry + DIR_DELTAS[rmD][1], targets, s.gw, s.gh, s.edgeless);
+          if (addDist < rmDist) sc += 200;
+        }
+      }
+      return { move: m, score: sc };
+    }
+
+    // 2. Prong addition: e.g. 53+a or 53a+b!
+    if (hasPlus && !hasDash) {
+      sc += 650;
+      if (m.indexOf("!") !== -1) sc += 200;
+      var addM = /^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])/.exec(m);
+      if (addM) {
+        var ax = parseInt(addM[1], 10), ay = parseInt(addM[2], 10);
+        var cfgStr = addM[3] || "";
+        var dirCh = addM[4].toLowerCase();
+        var dirIdx = DIR_CHARS.indexOf(dirCh);
+        if (dirIdx >= 0) {
+          var curDist = minChebyshevToTargets(ax, ay, targets, s.gw, s.gh, s.edgeless);
+          var nextDist = minChebyshevToTargets(ax + DIR_DELTAS[dirIdx][0], ay + DIR_DELTAS[dirIdx][1], targets, s.gw, s.gh, s.edgeless);
+          if (nextDist < curDist) sc += 600;
+
+          var parsedCfg = parseProngConfig(cfgStr);
+          if (parsedCfg.count === 0) sc += 900;
+          else if (parsedCfg.count < 3) sc += 450;
+
+          var hasOrth = (dirIdx % 2 === 0);
+          var hasDiag = (dirIdx % 2 === 1);
+          for (var pd = 0; pd < 8; pd++) {
+            if (parsedCfg.prongs[pd]) {
+              if (pd % 2 === 0) hasOrth = true; else hasDiag = true;
+            }
+          }
+          if (hasOrth && hasDiag) sc += 650;
+
+          if (curPlayer === "A" || curPlayer === "C") {
+            if (dirIdx === 0) sc += 1100;
+            else if (dirIdx === 1 || dirIdx === 7) sc += 750;
+            else if (dirIdx === 2 || dirIdx === 6) sc += 400;
+          } else {
+            if (dirIdx === 4) sc += 1100;
+            else if (dirIdx === 3 || dirIdx === 5) sc += 750;
+            else if (dirIdx === 2 || dirIdx === 6) sc += 400;
+          }
+        }
+      }
+      return { move: m, score: sc };
+    }
+
+    // 3. Pod move / jump: e.g. 53a-54 or 53a-55x-57
+    if (hasDash && !hasPlus) {
+      var hops = m.split("-");
+      var origM = /^([1-9])([1-9])([a-hA-H!]*)/.exec(hops[0]);
+      var lastHopM = /^([1-9])([1-9])/.exec(hops[hops.length - 1]);
+      if (origM && lastHopM) {
+        var sx = parseInt(origM[1], 10), sy = parseInt(origM[2], 10);
+        var ex2 = parseInt(lastHopM[1], 10), ey2 = parseInt(lastHopM[2], 10);
+        var podCfg = parseProngConfig(origM[3] || "");
+
+        var startDist = minChebyshevToTargets(sx, sy, targets, s.gw, s.gh, s.edgeless);
+        var endDist = minChebyshevToTargets(ex2, ey2, targets, s.gw, s.gh, s.edgeless);
+        sc += (startDist - endDist) * 550;
+
+        var entersTargetBase = targets.some(function (tb) { return tb.x === ex2 && tb.y === ey2; });
+        if (entersTargetBase) {
+          sc += (prof.moveOrderBaseEntryBonus || 16000);
+        }
+        if ((s.mode === "4" || s.mode === "4P") && ((ex2 === 5 && ey2 === 3) || (ex2 === 5 && ey2 === 7))) {
+          var nSq = s.map[ex2 + "," + ey2];
+          if (!nSq || !nSq.length) sc += 3000;
+        }
+
+        var prevX = sx, prevY = sy;
+        var foundLeapfrog = false;
+        for (var hi2 = 1; hi2 < hops.length; hi2++) {
+          var hm = /^([1-9])([1-9])(x?)/.exec(hops[hi2]);
+          if (!hm) continue;
+          var hx = parseInt(hm[1], 10), hy = parseInt(hm[2], 10);
+          if (hm[3] === "x") {
+            sc += (prof.moveOrderCaptureBonus || 8500);
+          } else {
+            sc += 250;
+          }
+          if (!foundLeapfrog && (Math.abs(hx - prevX) === 2 || Math.abs(hy - prevY) === 2)) {
+            var midX = (prevX + hx) / 2, midY = (prevY + hy) / 2;
+            var midSq = s.map[midX + "," + midY];
+            if (midSq && midSq.length && areAllied(s.mode, midSq[0].owner, curPlayer)) {
+              sc += (prof.moveOrderLeapfrogBonus || 1400);
+              foundLeapfrog = true;
+            }
+          }
+          prevX = hx; prevY = hy;
+        }
+
+        if (enemyThreatMap[ex2 + "," + ey2]) {
+          sc -= prof.moveOrderBlunderPenalty;
+        }
+
+        var allOpp = getOpponentBases(s.mode, curPlayer, s.bases);
+        var startOnOppBase = allOpp.some(function (ob) { return ob.x === sx && ob.y === sy; });
+        var endOnOppBase = allOpp.some(function (ob) { return ob.x === ex2 && ob.y === ey2; });
+        if (startOnOppBase && !endOnOppBase) {
+          var startStack = s.map[sx + "," + sy] || [];
+          if (startStack.length <= 1) sc -= 22000;
+        }
+
+        var destStack = s.map[ex2 + "," + ey2] || [];
+        if (!endOnOppBase && destStack.length >= 1) {
+          sc -= 1200 * destStack.length;
+        }
+
+        if (earlyDevelopment && podCfg.count <= 1 && endDist <= 3) {
+          sc -= 3200;
+        }
+      }
+      return { move: m, score: sc };
+    }
+
+    // 4. Liberation or reserve pod placement
+    if (m.indexOf("*") !== -1) {
+      sc += 6500;
     } else {
-      sc += 2000;
+      var placeM = /^([1-9])([1-9])$/.exec(m);
+      if (placeM) {
+        var px2 = parseInt(placeM[1], 10), py2 = parseInt(placeM[2], 10);
+        var pStack = s.map[px2 + "," + py2] || [];
+        if (pStack.length > 0 || hasUnarmedHomePod) {
+          sc -= 6000;
+        } else {
+          sc += 150;
+        }
+      }
     }
     return { move: m, score: sc };
   });
@@ -3938,14 +4455,15 @@ function orderMoves(moves, s, curPlayer, prof) {
   return scored.map(function (item) { return item.move; });
 }
 
-function quiesce(s, qDepth, alpha, beta, botSide, curPlayer, nodes, deadlineMs, prof) {
-  nodes.count++;
-  if (deadlineMs && Date.now() >= deadlineMs) {
+function quiesce(s, qDepth, ply, alpha, beta, botSide, curPlayer, ctx, prof) {
+  ctx.nodes++;
+  if ((ctx.nodes & 63) === 0 && ctx.deadlineMs && Date.now() >= ctx.deadlineMs) {
+    ctx.timedOut = true;
     return evaluateState(s, botSide, prof);
   }
   if (s.status === "O") {
-    if (s.winner === botSide || areAllied(s.mode, s.winner, botSide)) return 100000;
-    if (s.winner && s.winner !== "-") return -100000;
+    if (s.winner === botSide || areAllied(s.mode, s.winner, botSide)) return 1000000 - ply;
+    if (s.winner && s.winner !== "-") return -1000000 + ply;
     return 0;
   }
   var standPat = evaluateState(s, botSide, prof);
@@ -3953,31 +4471,32 @@ function quiesce(s, qDepth, alpha, beta, botSide, curPlayer, nodes, deadlineMs, 
   if (qDepth <= 0) return standPat;
 
   if (isMax) {
-    if (standPat >= beta) return beta;
+    if (standPat >= beta) return standPat;
     if (standPat > alpha) alpha = standPat;
   } else {
-    if (standPat <= alpha) return alpha;
+    if (standPat <= alpha) return standPat;
     if (standPat < beta) beta = standPat;
   }
 
   var tacticalMoves = generateMoves(s, curPlayer, true);
   if (!tacticalMoves.length) return standPat;
 
-  var capLimit = Math.min(tacticalMoves.length, prof.quiesceBranchCap || 6);
+  var orderedTactical = orderMoves(tacticalMoves, s, curPlayer, prof, null);
+  var capLimit = Math.min(orderedTactical.length, prof.quiesceBranchCap || 6);
   if (isMax) {
     for (var i = 0; i < capLimit; i++) {
-      if (deadlineMs && Date.now() >= deadlineMs) break;
-      var nextS = applyMoveToState(cloneState(s), tacticalMoves[i], curPlayer);
-      var score = quiesce(nextS, qDepth - 1, alpha, beta, botSide, nextS.turn, nodes, deadlineMs, prof);
+      var nextS = applyMoveToState(cloneState(s), orderedTactical[i], curPlayer);
+      var score = quiesce(nextS, qDepth - 1, ply + 1, alpha, beta, botSide, nextS.turn, ctx, prof);
+      if (ctx.timedOut) break;
       if (score > alpha) alpha = score;
       if (alpha >= beta) break;
     }
     return alpha;
   } else {
     for (var j = 0; j < capLimit; j++) {
-      if (deadlineMs && Date.now() >= deadlineMs) break;
-      var nextS2 = applyMoveToState(cloneState(s), tacticalMoves[j], curPlayer);
-      var score2 = quiesce(nextS2, qDepth - 1, alpha, beta, botSide, nextS2.turn, nodes, deadlineMs, prof);
+      var nextS2 = applyMoveToState(cloneState(s), orderedTactical[j], curPlayer);
+      var score2 = quiesce(nextS2, qDepth - 1, ply + 1, alpha, beta, botSide, nextS2.turn, ctx, prof);
+      if (ctx.timedOut) break;
       if (score2 < beta) beta = score2;
       if (beta <= alpha) break;
     }
@@ -3985,95 +4504,155 @@ function quiesce(s, qDepth, alpha, beta, botSide, curPlayer, nodes, deadlineMs, 
   }
 }
 
-function alphaBeta(s, depth, alpha, beta, botSide, curPlayer, nodes, deadlineMs, prof, ttMap) {
-  nodes.count++;
-  if (deadlineMs && Date.now() >= deadlineMs) {
-    return evaluateState(s, botSide, prof);
+function alphaBeta(s, depth, ply, alpha, beta, botSide, curPlayer, ctx, prof, ttMap) {
+  ctx.nodes++;
+  if ((ctx.nodes & 63) === 0 && ctx.deadlineMs) {
+    var nowMs = Date.now();
+    if (nowMs >= ctx.deadlineMs) {
+      ctx.timedOut = true;
+      return evaluateState(s, botSide, prof);
+    }
+    if (ctx.progressCb && (ctx.nodes & 2047) === 0) {
+      ctx.progressCb({
+        depth: ctx.curDepth || 1,
+        maxDepth: ctx.maxDepth || prof.maxSearchDepth,
+        nodes: ctx.nodes,
+        score: ctx.bestScore || 0,
+        bestMove: ctx.bestMove || "",
+        elapsedMs: nowMs - ctx.t0,
+        budgetMs: ctx.budgetMs || prof.timeBudgetMs
+      });
+    }
   }
   if (s.status === "O") {
-    if (s.winner === botSide || areAllied(s.mode, s.winner, botSide)) return 100000;
-    if (s.winner && s.winner !== "-") return -100000;
+    if (s.winner === botSide || areAllied(s.mode, s.winner, botSide)) return 1000000 - ply;
+    if (s.winner && s.winner !== "-") return -1000000 + ply;
     return 0;
   }
   if (depth <= 0) {
     if (prof.maxQuiesceDepth > 0) {
-      return quiesce(s, prof.maxQuiesceDepth, alpha, beta, botSide, curPlayer, nodes, deadlineMs, prof);
+      return quiesce(s, prof.maxQuiesceDepth, ply, alpha, beta, botSide, curPlayer, ctx, prof);
     }
     return evaluateState(s, botSide, prof);
   }
 
   var fenKey = null;
+  var ttBestMove = null;
   if (ttMap) {
     fenKey = serializeOctiFen(s);
     var entry = ttMap[fenKey];
-    if (entry && entry.depth >= depth) {
-      if (entry.flag === "EXACT") return entry.score;
-      if (entry.flag === "LOWER" && entry.score > alpha) alpha = entry.score;
-      if (entry.flag === "UPPER" && entry.score < beta) beta = entry.score;
-      if (alpha >= beta) return entry.score;
+    if (entry) {
+      ttBestMove = entry.bestMove || null;
+      if (entry.depth >= depth) {
+        var ttScore = entry.score;
+        if (ttScore >= 999000) ttScore -= ply;
+        else if (ttScore <= -999000) ttScore += ply;
+        if (entry.flag === "EXACT") return ttScore;
+        if (entry.flag === "LOWER" && ttScore > alpha) alpha = ttScore;
+        if (entry.flag === "UPPER" && ttScore < beta) beta = ttScore;
+        if (alpha >= beta) return ttScore;
+      }
     }
   }
 
   var isMax = areAllied(s.mode, curPlayer, botSide);
   var rawMoves = generateMoves(s, curPlayer);
   if (!rawMoves.length) {
-    return isMax ? -50000 : 50000;
+    return isMax ? (-1000000 + ply) : (1000000 - ply);
   }
-  var orderedMoves = orderMoves(rawMoves, s, curPlayer, prof);
+  var orderedMoves = orderMoves(rawMoves, s, curPlayer, prof, ttBestMove);
   var branchLimit = Math.min(orderedMoves.length, prof.treeBranchCap || 24);
 
   var bestScore = isMax ? -Infinity : Infinity;
+  var bestMoveStr = orderedMoves[0];
   var origAlpha = alpha;
+  var origBeta = beta;
 
   if (isMax) {
     for (var i = 0; i < branchLimit; i++) {
-      if (deadlineMs && Date.now() >= deadlineMs) break;
       var nextS = applyMoveToState(cloneState(s), orderedMoves[i], curPlayer);
-      var val = alphaBeta(nextS, depth - 1, alpha, beta, botSide, nextS.turn, nodes, deadlineMs, prof, ttMap);
-      if (val > bestScore) bestScore = val;
+      var val = alphaBeta(nextS, depth - 1, ply + 1, alpha, beta, botSide, nextS.turn, ctx, prof, ttMap);
+      if (ctx.timedOut) break;
+      if (val > bestScore) {
+        bestScore = val;
+        bestMoveStr = orderedMoves[i];
+      }
       if (val > alpha) alpha = val;
       if (beta <= alpha) break;
     }
   } else {
     for (var j = 0; j < branchLimit; j++) {
-      if (deadlineMs && Date.now() >= deadlineMs) break;
       var nextS2 = applyMoveToState(cloneState(s), orderedMoves[j], curPlayer);
-      var val2 = alphaBeta(nextS2, depth - 1, alpha, beta, botSide, nextS2.turn, nodes, deadlineMs, prof, ttMap);
-      if (val2 < bestScore) bestScore = val2;
+      var val2 = alphaBeta(nextS2, depth - 1, ply + 1, alpha, beta, botSide, nextS2.turn, ctx, prof, ttMap);
+      if (ctx.timedOut) break;
+      if (val2 < bestScore) {
+        bestScore = val2;
+        bestMoveStr = orderedMoves[j];
+      }
       if (val2 < beta) beta = val2;
       if (beta <= alpha) break;
     }
   }
 
-  if (ttMap && fenKey && Object.keys(ttMap).length < 65536) {
+  if (!ctx.timedOut && bestScore !== -Infinity && bestScore !== Infinity &&
+      ttMap && fenKey && Object.keys(ttMap).length < 65536) {
     var flag = "EXACT";
     if (bestScore <= origAlpha) flag = "UPPER";
-    else if (bestScore >= beta) flag = "LOWER";
-    ttMap[fenKey] = { depth: depth, score: bestScore, flag: flag };
+    else if (bestScore >= origBeta) flag = "LOWER";
+    var storeScore = bestScore;
+    if (storeScore >= 999000) storeScore += ply;
+    else if (storeScore <= -999000) storeScore -= ply;
+    ttMap[fenKey] = { depth: depth, score: storeScore, flag: flag, bestMove: bestMoveStr };
   }
 
   return bestScore;
 }
 
-function botSearch(fen, difficulty, mode, botSide, progressCb) {
+function botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs) {
   var s = parseOctiFen(fen);
   if (!s) return { bestMove: null, score: 0, nodes: 0, depth: 0 };
   var diff = parseInt(difficulty, 10) || 2;
   var prof = BOT_PROFILES[diff] || BOT_PROFILES[2];
 
   var moves = generateMoves(s, botSide);
-  if (!moves.length) return { bestMove: null, score: -100000, nodes: 1, depth: 0 };
+  if (!moves.length) return { bestMove: null, score: -1000000, nodes: 1, depth: 0 };
 
-  var orderedMoves = orderMoves(moves, s, botSide, prof);
-  var rootCap = Math.min(orderedMoves.length, prof.rootBranchCap || 36);
+  var t0 = Date.now();
+  var budgetMs = (customBudgetMs && customBudgetMs > 0) ? customBudgetMs : prof.timeBudgetMs;
+  var deadlineMs = t0 + budgetMs;
+  var maxDepth = prof.maxSearchDepth;
+  var ctx = {
+    nodes: 0,
+    t0: t0,
+    budgetMs: budgetMs,
+    deadlineMs: deadlineMs,
+    timedOut: false,
+    progressCb: progressCb || null,
+    curDepth: 1,
+    maxDepth: maxDepth,
+    bestScore: 0,
+    bestMove: ""
+  };
+
+  // 1. Immediate 1-ply victory check across ALL legal moves before branch capping
+  for (var wi = 0; wi < moves.length; wi++) {
+    ctx.nodes++;
+    var winS = applyMoveToState(cloneState(s), moves[wi], botSide);
+    if (winS.status === "O" && (winS.winner === botSide || areAllied(s.mode, winS.winner, botSide))) {
+      return {
+        bestMove: moves[wi],
+        score: 999999,
+        nodes: ctx.nodes,
+        depth: 1,
+        elapsedMs: Date.now() - t0
+      };
+    }
+  }
+
+  var orderedMoves = orderMoves(moves, s, botSide, prof, null);
+  var rootCap = Math.min(orderedMoves.length, prof.rootBranchCap || 40);
   var candidates = orderedMoves.slice(0, rootCap);
 
-  var maxDepth = prof.maxSearchDepth;
-  var budgetMs = prof.timeBudgetMs;
-  var t0 = Date.now();
-  var deadlineMs = t0 + budgetMs;
-
-  var nodes = { count: 0 };
   var ttMap = {};
   var bestOverallMove = candidates[0];
   var bestOverallScore = -Infinity;
@@ -4081,6 +4660,10 @@ function botSearch(fen, difficulty, mode, botSide, progressCb) {
 
   for (var d = 1; d <= maxDepth; d++) {
     if (Date.now() >= deadlineMs && d > 1) break;
+    ctx.timedOut = false;
+    ctx.curDepth = d;
+    ctx.bestMove = bestOverallMove;
+    ctx.bestScore = bestOverallScore;
 
     if (bestOverallMove) {
       var idx = candidates.indexOf(bestOverallMove);
@@ -4093,6 +4676,9 @@ function botSearch(fen, difficulty, mode, botSide, progressCb) {
     var depthBestMove = candidates[0];
     var depthBestScore = -Infinity;
     var depthTimedOut = false;
+    var alpha = -2000000;
+    var beta = 2000000;
+    var completedRootMoves = 0;
 
     for (var i = 0; i < candidates.length; i++) {
       if (Date.now() >= deadlineMs && d > 1) {
@@ -4101,31 +4687,46 @@ function botSearch(fen, difficulty, mode, botSide, progressCb) {
       }
       var mv = candidates[i];
       var nextS = applyMoveToState(cloneState(s), mv, botSide);
-      nodes.count++;
+      ctx.nodes++;
 
       var sc;
-      if (nextS.status === "O" && (nextS.winner === botSide || areAllied(s.mode, nextS.winner, botSide))) {
-        sc = 100000;
+      if (nextS.status === "O") {
+        if (nextS.winner === botSide || areAllied(s.mode, nextS.winner, botSide)) {
+          sc = 1000000 - 1;
+        } else if (nextS.winner && nextS.winner !== "-") {
+          sc = -1000000 + 1;
+        } else {
+          sc = 0;
+        }
       } else if (d <= 1 && prof.maxQuiesceDepth === 0) {
         sc = evaluateState(nextS, botSide, prof);
       } else {
-        sc = alphaBeta(nextS, d - 1, -100000, 100000, botSide, nextS.turn, nodes, deadlineMs, prof, ttMap);
+        sc = alphaBeta(nextS, d - 1, 1, alpha, beta, botSide, nextS.turn, ctx, prof, ttMap);
       }
 
-      if (prof.rootScoreJitter && d === 1) {
-        sc += Math.floor((Math.random() * 2 - 1) * prof.rootScoreJitter);
+      if (ctx.timedOut && d > 1) {
+        depthTimedOut = true;
+        break;
       }
 
-      if (sc > depthBestScore) {
+      completedRootMoves++;
+
+      if (sc > alpha) {
+        if (prof.rootScoreJitter && d === 1 && Math.abs(sc) < 500000) {
+          sc += Math.floor((Math.random() * 2 - 1) * prof.rootScoreJitter);
+        }
         depthBestScore = sc;
         depthBestMove = mv;
+        alpha = sc;
+        ctx.bestMove = depthBestMove;
+        ctx.bestScore = depthBestScore;
       }
 
-      if (progressCb && (nodes.count % 64 === 0)) {
+      if (progressCb) {
         progressCb({
           depth: d,
           maxDepth: maxDepth,
-          nodes: nodes.count,
+          nodes: ctx.nodes,
           score: depthBestScore,
           bestMove: depthBestMove,
           elapsedMs: Date.now() - t0,
@@ -4134,15 +4735,17 @@ function botSearch(fen, difficulty, mode, botSide, progressCb) {
       }
     }
 
-    if (!depthTimedOut || d === 1) {
+    if (!depthTimedOut || d === 1 || completedRootMoves >= 1) {
       bestOverallMove = depthBestMove;
       bestOverallScore = depthBestScore;
-      completedDepth = d;
+      if (!depthTimedOut || d === 1) {
+        completedDepth = d;
+      }
       if (progressCb) {
         progressCb({
-          depth: d,
+          depth: completedDepth,
           maxDepth: maxDepth,
-          nodes: nodes.count,
+          nodes: ctx.nodes,
           score: bestOverallScore,
           bestMove: bestOverallMove,
           elapsedMs: Date.now() - t0,
@@ -4150,13 +4753,15 @@ function botSearch(fen, difficulty, mode, botSide, progressCb) {
         });
       }
     }
-    if (Math.abs(bestOverallScore) >= 90000) break;
+    if (depthTimedOut || Date.now() >= deadlineMs || Math.abs(bestOverallScore) >= 999000) {
+      break;
+    }
   }
 
   return {
     bestMove: bestOverallMove,
     score: bestOverallScore,
-    nodes: nodes.count,
+    nodes: ctx.nodes,
     depth: completedDepth,
     elapsedMs: Date.now() - t0
   };
@@ -4186,6 +4791,7 @@ try {
     "};",
     "var DIR_DELTAS = " + JSON.stringify(DIR_DELTAS) + ";",
     "var DIR_CHARS = " + JSON.stringify(DIR_CHARS) + ";",
+    "var DEFAULT_BOT_TUNING = " + JSON.stringify(DEFAULT_BOT_TUNING) + ";",
     "var BOT_PROFILES = " + JSON.stringify(BOT_PROFILES) + ";",
     wrapCoord.toString(),
     playerIndex.toString(),
@@ -4210,8 +4816,16 @@ try {
     applySingleHopChain.toString(),
     check4PlayerElimination.toString(),
     checkWinner.toString(),
+    hasAnyLegalMove.toString(),
     advanceTurn.toString(),
     applyMoveToState.toString(),
+    torusDist.toString(),
+    chebyshevDist.toString(),
+    minChebyshevToTargets.toString(),
+    getUncapturedOpponentBases.toString(),
+    evaluateJumpThreatDfs.toString(),
+    evaluatePodJumpThreat.toString(),
+    filterDominatedMoves.toString(),
     evaluateState.toString(),
     orderMoves.toString(),
     quiesce.toString(),
@@ -8115,10 +8729,15 @@ function triggerAiBotTurn() {
       if (!e.data) return;
       if (e.data.type === "progress") {
         var d = e.data;
-        var maxD = d.maxDepth || diff;
-        var pct = Math.min(100, Math.max(10, Math.round((d.depth / maxD) * 100)));
+        var maxD = d.maxDepth || 8;
+        var depthPct = Math.round((d.depth / maxD) * 100);
+        var timePct = (d.budgetMs > 0 && d.elapsedMs !== undefined)
+          ? Math.round((d.elapsedMs / d.budgetMs) * 100)
+          : 0;
+        var pct = Math.min(99, Math.max(10, Math.max(depthPct, timePct)));
+        var secStr = (d.elapsedMs !== undefined) ? (" • " + (d.elapsedMs / 1000).toFixed(1) + "s") : "";
         if (fillEl) fillEl.style.width = pct + "%";
-        if (txtEl) txtEl.textContent = "Depth " + d.depth + "/" + maxD + " • " + (d.nodes || 0) + " nodes • (" + pct + "%)";
+        if (txtEl) txtEl.textContent = "Depth " + d.depth + "/" + maxD + " • " + (d.nodes || 0) + " nodes" + secStr + " • (" + pct + "%)";
       } else if (e.data.type === "done" || e.data.type === "result") {
         finishAiMove(e.data);
       }
@@ -8128,10 +8747,15 @@ function triggerAiBotTurn() {
     // Fallback search with live progress callback
     setTimeout(function () {
       var r = botSearch(fen, diff, mode, side, function (prog) {
-        var maxD = prog.maxDepth || diff;
-        var pct = Math.min(100, Math.max(10, Math.round((prog.depth / maxD) * 100)));
+        var maxD = prog.maxDepth || 8;
+        var depthPct = Math.round((prog.depth / maxD) * 100);
+        var timePct = (prog.budgetMs > 0 && prog.elapsedMs !== undefined)
+          ? Math.round((prog.elapsedMs / prog.budgetMs) * 100)
+          : 0;
+        var pct = Math.min(99, Math.max(10, Math.max(depthPct, timePct)));
+        var secStr = (prog.elapsedMs !== undefined) ? (" • " + (prog.elapsedMs / 1000).toFixed(1) + "s") : "";
         if (fillEl) fillEl.style.width = pct + "%";
-        if (txtEl) txtEl.textContent = "Depth " + prog.depth + "/" + maxD + " • " + (prog.nodes || 0) + " nodes • (" + pct + "%)";
+        if (txtEl) txtEl.textContent = "Depth " + prog.depth + "/" + maxD + " • " + (prog.nodes || 0) + " nodes" + secStr + " • (" + pct + "%)";
       });
       finishAiMove(r);
     }, 50);

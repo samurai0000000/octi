@@ -4996,11 +4996,20 @@ assert.strictEqual(moveComposer.stagedNotation, "33+a");
 assert.strictEqual(moveComposer.commitStagedMove(), true);
 assert.strictEqual(activeState.turn, "B", "Turn must advance from A to B after human move commit");
 
-// Bot search on B's turn
+// Bot search on B's turn & Level 2 tactical quality checks
+assert.strictEqual(BOT_PROFILES[2].timeBudgetMs, 8000, "Level 2 time budget must be 8000ms");
+assert.ok(BOT_PROFILES[2].maxSearchDepth >= 6, "Level 2 maxSearchDepth must be >= 6");
 var botRes = botSearch(serializeOctiFen(activeState), 1, "2P", "B");
 assert.ok(botRes && botRes.bestMove, "botSearch must return a valid move for B");
+assert.ok(/^[357]7\+[edf]$/.test(botRes.bestMove), "Bot B opening move must add a forward prong, got " + botRes.bestMove);
 activeState = applyMoveToState(cloneState(activeState), botRes.bestMove, "B");
 assert.strictEqual(activeState.turn, "A", "Turn must advance back to A after bot move");
+
+// Tactical capture & hanging-pod avoidance at Level 2
+var capRes = botSearch("2:3:0:0:P:A:-:0:4,0,22,0:4,0,22,0:A33a,A54a,A73a,B37e,B55ef,B77e", 2, "2P", "A", null, 800);
+assert.strictEqual(capRes.bestMove, "54a-56x", "Level 2 bot must jump-capture hanging enemy pod at (5,5)");
+var hangRes = botSearch("2:3:0:0:P:A:-:0:4,0,23,0:3,0,23,0:A33,A54a,A73,B37,B56e,B57,B77", 2, "2P", "A", null, 800);
+assert.notStrictEqual(hangRes.bestMove, "54a-55", "Level 2 bot must not blunder sole armed pod into (5,5)");
 
 // Test prong repositioning on A's pod at (3,3): 33a+b-a
 var podIdxA = 0;
