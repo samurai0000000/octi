@@ -1118,6 +1118,13 @@ void GameRoomManager::pruneClientPresenceLocked(int64_t now)
                 pi.onlineSinceMs = 0;
                 refreshPresenceLocked(pit->first);
             }
+        } else if (pit->first < 0 && pi.online && pi.lastActiveMs > 0 &&
+                   now > pi.lastActiveMs &&
+                   (now - pi.lastActiveMs) > kClientPresenceTtlMs &&
+                   _observing.find(pit->first) == _observing.end()) {
+            pi.online = false;
+            pi.onlineSinceMs = 0;
+            refreshPresenceLocked(pit->first);
         }
     }
 }

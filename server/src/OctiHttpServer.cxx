@@ -3042,7 +3042,7 @@ void OctiHttpServer::Impl::handleLobbyState(const Request &req, Response &res)
     }
     if (auth.playerId == 0) {
         std::string remoteIp = clientRemoteIp(req);
-        if (!isLoopbackIp(remoteIp)) {
+        if (!isLoopbackIp(remoteIp) && !auth.clientType.empty()) {
             int64_t viewerId = rooms.ensureAnonymousObserver(remoteIp);
             rooms.enterLobby(viewerId);
             rooms.recordClientHeartbeat(viewerId, auth.clientType, false);

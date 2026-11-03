@@ -182,7 +182,10 @@ fun LobbyScreen(
     var expandedPlayerUuid by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        viewModel.refreshLobbyStateAsync()
+        while (true) {
+            viewModel.refreshLobbyStateAsync()
+            kotlinx.coroutines.delay(5000L)
+        }
     }
 
     val myUuid = profile?.uuid ?: ""
@@ -717,11 +720,15 @@ fun LobbyScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         for (p in lobbyState.players) {
-                            val isExpanded = expandedPlayerUuid == p.playerUuid
+                            if (p.handle == "anonymous-127.0.0.1" || p.handle == "anonymous-::1") {
+                                continue
+                            }
+                            val playerKey = p.playerUuid.ifEmpty { p.handle }
+                            val isExpanded = expandedPlayerUuid == playerKey
                             val cleanHandle = p.handle.removePrefix("@")
                             Surface(
                                 onClick = {
-                                    expandedPlayerUuid = if (isExpanded) null else p.playerUuid
+                                    expandedPlayerUuid = if (isExpanded) null else playerKey
                                 },
                                 shape = RoundedCornerShape(16.dp),
                                 color = OctiTheme.colors.windowBg,

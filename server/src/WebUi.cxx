@@ -9379,7 +9379,9 @@ function renderOnlineUsersRoster(players) {
   var countEl = $("web-online-users-count");
   var listEl = $("web-online-users-list");
   if (!listEl) return;
-  var pl = Array.isArray(players) ? players : [];
+  var pl = (Array.isArray(players) ? players : []).filter(function (p) {
+    return p && p.handle !== "anonymous-127.0.0.1" && p.handle !== "anonymous-::1";
+  });
   if (countEl) countEl.textContent = String(pl.length);
   clear(listEl);
   if (!pl.length) {
@@ -9389,8 +9391,9 @@ function renderOnlineUsersRoster(players) {
     return;
   }
   pl.forEach(function (p) {
-    var chip = el("div", null, "web-user-chip" + (expandedOnlineUserUuid === p.player_uuid ? " expanded" : ""));
-    chip.setAttribute("data-player-uuid", p.player_uuid || "");
+    var playerKey = p.player_uuid || p.handle || "";
+    var chip = el("div", null, "web-user-chip" + (expandedOnlineUserUuid === playerKey ? " expanded" : ""));
+    chip.setAttribute("data-player-uuid", playerKey);
 
     if (p.avatar_url) {
       var img = document.createElement("img");
@@ -9430,7 +9433,7 @@ function renderOnlineUsersRoster(players) {
     }
 
     chip.addEventListener("click", function () {
-      expandedOnlineUserUuid = (expandedOnlineUserUuid === p.player_uuid) ? "" : p.player_uuid;
+      expandedOnlineUserUuid = (expandedOnlineUserUuid === playerKey) ? "" : playerKey;
       renderOnlineUsersRoster(pl);
     });
 
