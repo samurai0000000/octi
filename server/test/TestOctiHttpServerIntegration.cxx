@@ -4813,6 +4813,131 @@ TEST(OctiHttpServerIntegrationTest, WebPlayerDesktopAndroidParityElements)
     CHECK_TRUE(strippedUi.find("<iframe") == std::string::npos);
 }
 
+TEST(OctiHttpServerIntegrationTest, ArchiveUploadFourPlayerAttributionAndValidation)
+{
+    User u1 = signIn("google", "sub-4p-u1", "Alice");
+    User u2 = signIn("apple", "sub-4p-u2", "Bob");
+    User u3 = signIn("facebook", "sub-4p-u3", "Carol");
+    User u4 = signIn("microsoft", "sub-4p-u4", "Dave");
+
+    EXPECT_STATUS(200, http().patch("/api/v1/profile/me", u1.token, Json{{"handle", "alice_4p"}}));
+    EXPECT_STATUS(200, http().patch("/api/v1/profile/me", u2.token, Json{{"handle", "bob_4p"}}));
+    EXPECT_STATUS(200, http().patch("/api/v1/profile/me", u3.token, Json{{"handle", "carol_4p"}}));
+    EXPECT_STATUS(200, http().patch("/api/v1/profile/me", u4.token, Json{{"handle", "dave_4p"}}));
+
+    const std::vector<std::string> kMoves = {
+        "33+a",   "37+h",    "77+e",    "73+b",    "33a-34",  "37h+f-h",
+        "77e-76", "73b-84",  "34a-35",  "37f-26",  "76e-75",  "84b+g",
+        "35a-36", "26f+a",   "75e-74",  "84bg+h",  "36a-37",  "74e-73"
+    };
+
+    octi::OctiBoard b(octi::GAME_MODE_4, false, false, octi::GAME_BASES_3);
+    octi::OctiGame *g = b.getGame();
+    g->start(octi::PLAYER_A);
+    for (const auto &mv : kMoves) {
+        g->move(mv);
+    }
+    CHECK_TRUE(g->isGameOver());
+    CHECK_EQUAL(static_cast<int>(octi::PLAYER_A), static_cast<int>(g->getWinner()));
+
+    octi::OctiGameMetadata meta;
+    meta.status = "GAME_OVER";
+    meta.termination = "BASE_CAPTURE";
+    meta.appVersion = "2.2.5";
+    meta.platform = "linux-x86_64";
+    meta.buildType = "release";
+    meta.extended.present = true;
+    meta.extended.installId = "dev-canon-4p";
+    meta.players.push_back({1, octi::PLAYER_A, "HUMAN", "alice_4p", 0, 0});
+    meta.players.push_back({2, octi::PLAYER_B, "HUMAN", "bob_4p", 0, 0});
+    meta.players.push_back({3, octi::PLAYER_C, "HUMAN", "carol_4p", 0, 0});
+    meta.players.push_back({4, octi::PLAYER_D, "HUMAN", "dave_4p", 0, 0});
+
+    std::string trStr = b.serializeJson(meta);
+    Json jTr = Json::parse(trStr);
+
+    // 1. Upload valid 4P transcript
+    Reply rUp = http().post("/api/v1/archive/upload", u1.token,
+                            Json{{"transcript", jTr.dump()}});
+    EXPECT_STATUS(200, rUp);
+    std::string gid = rUp.json.value("game_id", "");
+    CHECK_FALSE(gid.empty());
+
+    // 2. Verify archive record retrieval
+    Reply rGet = http().get("/api/v1/archive/games/" + gid);
+    EXPECT_STATUS(200, rGet);
+    STRCMP_EQUAL("4P", rGet.json.value("mode", "").c_str());
+    CHECK_EQUAL(3, rGet.json.value("bases", 0));
+    STRCMP_EQUAL("TEAM_13_WIN", rGet.json.value("result", "").c_str());
+    CHECK_EQUAL(1, rGet.json.value("winner_seat", 0));
+    STRCMP_EQUAL("A", rGet.json.value("winner", "").c_str());
+    STRCMP_EQUAL("BASE_CAPTURE", rGet.json.value("termination", "").c_str());
+
+    CHECK_TRUE(rGet.json["players"].is_array());
+    CHECK_EQUAL(4, static_cast<int>(rGet.json["players"].size()));
+    CHECK_EQUAL(1, rGet.json["players"][0].value("seat", 0));
+    STRCMP_EQUAL("alice_4p", rGet.json["players"][0].value("handle", "").c_str());
+    STRCMP_EQUAL(u1.uuid.c_str(), rGet.json["players"][0].value("player_uuid", "").c_str());
+
+    CHECK_EQUAL(2, rGet.json["players"][1].value("seat", 0));
+    STRCMP_EQUAL("bob_4p", rGet.json["players"][1].value("handle", "").c_str());
+
+    CHECK_EQUAL(3, rGet.json["players"][2].value("seat", 0));
+    STRCMP_EQUAL("carol_4p", rGet.json["players"][2].value("handle", "").c_str());
+
+    CHECK_EQUAL(4, rGet.json["players"][3].value("seat", 0));
+    STRCMP_EQUAL("dave_4p", rGet.json["players"][3].value("handle", "").c_str());
+
+    // 3. Corrupted 4P transcripts rejected
+    Json badWinner = jTr;
+    badWinner["winner"] = "INVALID";
+    EXPECT_STATUS(400, http().post("/api/v1/archive/upload", u1.token,
+                                   Json{{"transcript", badWinner.dump()}}));
+
+    Json badTurn = jTr;
+    badTurn["plies"][0]["player"] = "B";
+    EXPECT_STATUS(400, http().post("/api/v1/archive/upload", u1.token,
+                                   Json{{"transcript", badTurn.dump()}}));
+}
+
+TEST(OctiHttpServerIntegrationTest, WebPlayerBotProfilesQuiescenceAndRulesValidation)
+{
+    Reply rUi = http().get("/");
+    EXPECT_STATUS(200, rUi);
+
+    // 1. Bot tuning & profiles
+    CHECK_TRUE(rUi.body.find("DEFAULT_BOT_TUNING") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("BOT_PROFILES") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("AI_Casual") != std::string::npos);
+
+    // 2. AI search engine functions
+    CHECK_TRUE(rUi.body.find("dfsJumpChains") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("quiesce") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("alphaBeta") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("orderMoves") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("evaluateState") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("botSearch") != std::string::npos);
+
+    // 3. Canonical 2P / 4P / OFK rulebook functions & helpers
+    CHECK_TRUE(rUi.body.find("canLiberate") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("canPlaceReservePodOnSquare") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("canLiberateOnSquare") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("isSquareOccupiedBy") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("squareHasEnemyOf") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("elimMask") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("NEUTRAL_OCTI") != std::string::npos);
+
+    // 4. Capture dialog & thinking overlays
+    CHECK_TRUE(rUi.body.find("web-capture-overlay") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-capture-prompt-text") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-capture-yes") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-capture-no") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("selectGuidedDestination") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("toggleCaptureAtSquare") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-thinking-overlay") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-thinking-progress-fill") != std::string::npos);
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

@@ -472,17 +472,15 @@ TEST(OctiMoveComposerTest, SuperprongEighthProngBonusMoveAndEdgelessWrap)
         }
     }
 
-    // Adding the 8th prong on (3,3) as a superprong in DIR_NW ('h') must pause for bonus move
+    // Adding the 8th prong on (3,3) as a superprong in DIR_NW ('h') ends turn normally (no fabricated bonus hop)
     CHECK_TRUE(spComposer.stageOrCommitAddProng(3, 3, 0, DIR_NW, true));
-    CHECK_TRUE(spComposer.isAwaitingConfirmation());
-    CHECK_TRUE(spComposer.isAwaitingSuperProngBonusMove());
+    CHECK_FALSE(spComposer.isAwaitingSuperProngBonusMove());
+    CHECK_FALSE(spComposer.hasEighthProngBonusHop());
     STRCMP_EQUAL("33abcdefg+h!", spComposer.stagedMoveNotation().c_str());
-
-    // Stage the bonus step from (3,3) to (3,4) and commit
-    CHECK_TRUE(spComposer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4, false));
-    STRCMP_EQUAL("33abcdefg+h!,33-34", spComposer.stagedMoveNotation().c_str());
-    CHECK_TRUE(spComposer.commitStagedMove());
-    STRCMP_EQUAL("33abcdefg+h!,33-34", spCommitted.c_str());
+    if (spComposer.isAwaitingConfirmation()) {
+        CHECK_TRUE(spComposer.commitStagedMove());
+    }
+    STRCMP_EQUAL("33abcdefg+h!", spCommitted.c_str());
 }
 
 TEST(OctiMoveComposerTest, FaultInjectionIllegalMovesAndRollback)
@@ -1485,14 +1483,9 @@ TEST(OctiDialogsRefinementTest, PlyConfirmMultiMoveAndGameOverEndgameV3)
     composer.refreshLegalMoves();
 
     CHECK_TRUE(composer.stageOrCommitAddProng(3, 3, 0, DIR_NW, true));
-    CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+    CHECK_FALSE(composer.isAwaitingSuperProngBonusMove());
     CHECK_FALSE(composer.hasEighthProngBonusHop());
-    CHECK_TRUE(composer.canAddMoreMoves());
-    CHECK_TRUE(composer.beginGuidedPodMove(3, 3, 0, false));
-    CHECK_FALSE(composer.guidedNextSquares().empty());
-    CHECK_TRUE(composer.selectGuidedDestination(3, 4));
-    CHECK_TRUE(composer.hasEighthProngBonusHop());
-    CHECK_TRUE(composer.stagedMoveNotation().find("+h!,33-34") != std::string::npos);
+    STRCMP_EQUAL("33abcdefg+h!", composer.stagedMoveNotation().c_str());
     CHECK_TRUE(composer.commitStagedMove());
 
     // 4. PCE-D05: Multi-hop jump allows early commit via PlyConfirmDialog after first hop
@@ -2328,13 +2321,13 @@ TEST(OctiZoomProngAndPodStackOrderTest, ZPB_D08_LiberationPriorityZeroCapturedWe
     panel.renderToImage(340, 720);
     CHECK_FALSE(panel.liberatePodWellRect().isEmpty());
 
-    // 2. Staging a non-liberate pod placement on an enemy square when capturedPods > 0
-    // auto-promotes to liberation ("57*") and consumes capturedPods first
+    // 2. Staging a non-liberate pod placement on an enemy square when freePods > 0
+    // commits as bare "57" and consumes freePods first
     CHECK_TRUE(composer.stageOrCommitAddPod(5, 7, false));
-    STRCMP_EQUAL("57*", composer.stagedMoveNotation().c_str());
+    STRCMP_EQUAL("57", composer.stagedMoveNotation().c_str());
     CHECK_TRUE(composer.commitStagedMove());
-    LONGS_EQUAL(3, board.getGame()->getFreePods(PLAYER_A));
-    LONGS_EQUAL(1, board.getGame()->getCapturedPods(PLAYER_A));
+    LONGS_EQUAL(2, board.getGame()->getFreePods(PLAYER_A));
+    LONGS_EQUAL(2, board.getGame()->getCapturedPods(PLAYER_A));
 
     // Pass B's turn
     board.getGame()->move("37+d");
@@ -2663,6 +2656,50 @@ TEST(OctiOfkUsabilityTestSuite, GameOverDialogDescribeTerminationReason6x7)
         QString reason = GameOverDialog::describeTerminationReason(&board);
         CHECK_TRUE_TEXT(reason.contains("Stalemate"), reason.toUtf8().constData());
     }
+}
+
+TEST(OctiMoveComposerTest, FourPlayerPodPlacementAndEliminatedPartnerRevival)
+{
+    OctiBoard board(GAME_MODE_4, false, false, GAME_BASES_1);
+    board.getGame()->start(PLAYER_A);
+    OctiMoveComposer composer(&board);
+
+    // 1. In 4P mode, A cannot place reserve pods on partner C's base (7, 7) or neutral OCTI squares (5, 3) / (5, 7)
+    CHECK_FALSE(composer.canPlaceReservePodAt(7, 7));
+    CHECK_FALSE(composer.stageOrCommitAddPod(7, 7, false));
+    CHECK_FALSE(composer.canPlaceReservePodAt(5, 3));
+    CHECK_FALSE(composer.stageOrCommitAddPod(5, 3, false));
+    CHECK_FALSE(composer.canPlaceReservePodAt(5, 7));
+    CHECK_FALSE(composer.stageOrCommitAddPod(5, 7, false));
+
+    // A can place reserve pod on A's own base (3, 3)
+    CHECK_TRUE(composer.canPlaceReservePodAt(3, 3));
+
+    // 2. Clear partner C's home base (6, 6) (1-based 7, 7), occupy it with an A pod,
+    // and set partner C as eliminated with 1 captured pod.
+    board.squareAt(6, 6).clear();
+    board.squareAt(6, 6).addPod(OctiPod(A_POD));
+
+    OctiGameSnapshot snap = board.getGame()->captureSnapshot();
+    snap.turn = PLAYER_A;
+    snap.players[PLAYER_A].capturedPods = 0;
+    snap.players[PLAYER_C].eliminated = true;
+    snap.players[PLAYER_C].capturedPods = 1;
+    board.getGame()->restoreSnapshot(snap);
+
+    CHECK_TRUE(composer.canRevivePartnerPodAt(7, 7));
+    CHECK_TRUE(composer.canLiberateCapturedPodAt(7, 7));
+    // Placing reserve pod is still strictly forbidden on partner's home base
+    CHECK_FALSE(composer.canPlaceReservePodAt(7, 7));
+
+    // Staging liberation on (7, 7) stages partner revival "77*"
+    CHECK_TRUE(composer.stageOrCommitAddPod(7, 7, true));
+    STRCMP_EQUAL("77*", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.commitStagedMove());
+
+    // Partner C is revived!
+    CHECK_FALSE(board.getGame()->isPlayerEliminated(PLAYER_C));
+    LONGS_EQUAL(0, board.getGame()->getCapturedPods(PLAYER_C));
 }
 
 extern "C" const char *__lsan_default_suppressions()

@@ -119,6 +119,24 @@ object OctiDialogs {
     const val START_MATCH_CARD_MAX_WIDTH_DP = 360
     const val START_MATCH_BUTTON_HORIZONTAL_PADDING_DP = 10
 
+    fun describeTerminationReason(board: OctiBoard?): String {
+        if (board == null || board.game == null) {
+            return "Match Concluded"
+        }
+        val game = board.game
+        if (game.isGameResigned) {
+            return "Victory by Resignation"
+        }
+        val term = game.deduceTermination()
+        return when (term) {
+            "RESIGNATION" -> "Victory by Resignation"
+            "BASE_OCCUPATION" -> "Captured Enemy Home Base"
+            "TOTAL_CAPTURE" -> "Eliminated All Opponent Pods"
+            "STALEMATE" -> "Victory by Stalemate (Opponent Has No Legal Moves)"
+            else -> "Match Concluded"
+        }
+    }
+
     @JvmField
     val CANONICAL_SSO_PROVIDERS: List<Pair<String, String>> = listOf(
         "google" to "Google"
@@ -1241,11 +1259,37 @@ fun ZoomedSquareDialog(
     val turn = displayGame?.turn ?: OctiPlayer.PLAYER_A
     val isTurn = displayGame != null && displayGame.isGameStarted && !displayGame.isGameOver
     val hasEnemy = sq?.hasEnemyOf(turn) == true
-    val isFriendlyTurn = !hasEnemy && isTurn && !isEmptySquare
+    val isOwnOccupied = sq?.isOccupiedBy(turn) == true
+    val isFriendlyTurn = isTurn && !isEmptySquare && isOwnOccupied
     val freePods = displayGame?.getFreePods(turn) ?: 0
     val capPods = displayGame?.getCapturedPods(turn) ?: 0
-    val isFriendlyHome = turn != null && ((displayBoard.numPlayers == 2 && ((turn == OctiPlayer.PLAYER_A && sq?.type == OctiSquareType.A_HOME_SQUARE) || (turn == OctiPlayer.PLAYER_B && sq?.type == OctiSquareType.B_HOME_SQUARE))) || (displayBoard.numPlayers == 4 && sq?.type?.value == turn.value))
-    val canShowPodPlacement = isTurn && !hasEnemy && displayBoard.gameMode != OctiGameMode.GAME_MODE_OFK && (isFriendlyHome || (!isEmptySquare && sq != null && sq.type != OctiSquareType.NEUTRAL_SQUARE))
+
+    val is4P = displayBoard.gameMode == OctiGameMode.GAME_MODE_4
+    val partner = if (is4P) {
+        when (turn) {
+            OctiPlayer.PLAYER_A -> OctiPlayer.PLAYER_C
+            OctiPlayer.PLAYER_C -> OctiPlayer.PLAYER_A
+            OctiPlayer.PLAYER_B -> OctiPlayer.PLAYER_D
+            OctiPlayer.PLAYER_D -> OctiPlayer.PLAYER_B
+            else -> null
+        }
+    } else null
+    val partnerHome = if (is4P && partner != null) {
+        when (partner) {
+            OctiPlayer.PLAYER_A -> OctiSquareType.A_HOME_SQUARE
+            OctiPlayer.PLAYER_B -> OctiSquareType.B_HOME_SQUARE
+            OctiPlayer.PLAYER_C -> OctiSquareType.C_HOME_SQUARE
+            OctiPlayer.PLAYER_D -> OctiSquareType.D_HOME_SQUARE
+            else -> null
+        }
+    } else null
+    val isRevivingPartner = is4P && partner != null && (sq?.type == partnerHome) &&
+        (displayGame?.isPlayerEliminated(partner) == true) && isOwnOccupied &&
+        ((displayGame?.getCapturedPods(partner) ?: 0) > 0)
+
+    val canPlaceReserve = composer.canPlaceReservePodAt(squareX, squareY)
+    val canLiberateHere = composer.canLiberateCapturedPodAt(squareX, squareY)
+    val canShowPodPlacement = isTurn && displayBoard.gameMode != OctiGameMode.GAME_MODE_OFK && (canPlaceReserve || canLiberateHere)
     var moveAllStack by remember(squareX, squareY) { mutableStateOf(false) }
 
     val freeProngs = displayGame?.getFreeProngs(turn) ?: 0
@@ -1325,7 +1369,7 @@ fun ZoomedSquareDialog(
                             color = OctiTheme.colors.accentBrass
                         )
                         Text(
-                            text = if (hasEnemy) "Opponent Inspect" else if (isEmptySquare) "Home Square" else "Friendly Pod",
+                            text = if (hasEnemy) "Opponent Inspect" else if (isEmptySquare) "Home Square" else if (isOwnOccupied) "Friendly Pod" else "Partner Pod",
                             style = MaterialTheme.typography.labelMedium,
                             color = if (hasEnemy) OctiTheme.colors.legalCapture else OctiTheme.colors.textSecondary
                         )
@@ -1613,19 +1657,12 @@ fun ZoomedSquareDialog(
                     }
 
                     if (canShowPodPlacement) {
-                        val canLiberateHere = (capPods > 0) && sq.isOccupiedBy(turn) &&
-                            (if (isFriendlyHome) board.canLiberate(turn) else true)
-                        if (!isFriendlyHome && canLiberateHere) {
-                            Button(
-                                onClick = {
-                                    onPlaceReservePod(true)
-                                },
-                                enabled = true,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Liberate (*)")
-                            }
-                        } else if (canLiberateHere) {
+                        val libButtonLabel = if (isRevivingPartner) {
+                            "Liberate Partner's Captured Pod (${squareX}${squareY}*)"
+                        } else {
+                            "Liberate Captured Pod (*)"
+                        }
+                        if (canPlaceReserve && canLiberateHere) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1634,7 +1671,7 @@ fun ZoomedSquareDialog(
                                     onClick = {
                                         onPlaceReservePod(false)
                                     },
-                                    enabled = freePods > 0,
+                                    enabled = true,
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Text(OctiDialogs.PLACE_RESERVE_POD_LABEL)
@@ -1646,15 +1683,25 @@ fun ZoomedSquareDialog(
                                     enabled = true,
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Text("Liberate (*)")
+                                    Text(libButtonLabel)
                                 }
                             }
-                        } else {
+                        } else if (canLiberateHere) {
+                            Button(
+                                onClick = {
+                                    onPlaceReservePod(true)
+                                },
+                                enabled = true,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(libButtonLabel)
+                            }
+                        } else if (canPlaceReserve) {
                             Button(
                                 onClick = {
                                     onPlaceReservePod(false)
                                 },
-                                enabled = freePods > 0,
+                                enabled = true,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(OctiDialogs.PLACE_RESERVE_POD_LABEL)
@@ -1875,6 +1922,8 @@ fun GameOverDialog(
     matchLabel: String,
     totalPlies: Int,
     resigned: Boolean,
+    gameMode: OctiGameMode = OctiGameMode.GAME_MODE_2,
+    terminationReason: String = "",
     onNewGame: () -> Unit,
     onReviewBoard: () -> Unit
 ) {
@@ -1901,19 +1950,30 @@ fun GameOverDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                val titleText = when {
+                    gameMode == OctiGameMode.GAME_MODE_4 -> {
+                        if (winner == OctiPlayer.PLAYER_A || winner == OctiPlayer.PLAYER_C) {
+                            "Team A & C Wins!"
+                        } else {
+                            "Team B & D Wins!"
+                        }
+                    }
+                    else -> "VICTORY — ${winner.name} WINS!"
+                }
                 Text(
-                    text = "VICTORY — ${winner.name} WINS!",
+                    text = titleText,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold,
                     color = OctiTheme.colors.accentBrass,
                     textAlign = TextAlign.Center
                 )
+                val concludedText = when {
+                    resigned -> "Match concluded by resignation after $totalPlies plies"
+                    terminationReason.isNotEmpty() -> "$terminationReason after $totalPlies plies"
+                    else -> "Match concluded after $totalPlies plies"
+                }
                 Text(
-                    text = if (resigned) {
-                        "Match concluded by resignation after $totalPlies plies"
-                    } else {
-                        "Match concluded after $totalPlies plies"
-                    },
+                    text = concludedText,
                     style = MaterialTheme.typography.bodyMedium,
                     color = OctiTheme.colors.textPrimary,
                     textAlign = TextAlign.Center

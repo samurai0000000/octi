@@ -802,11 +802,15 @@ fun OctiMainAppContent(
         }
 
         if (showGameOverDialog && viewModel.board.game?.isGameOver == true) {
+            val game = viewModel.board.game
+            val termReason = com.selfso.octi.ui.OctiDialogs.describeTerminationReason(viewModel.board)
             GameOverDialog(
-                winner = viewModel.board.game?.winner ?: OctiPlayer.PLAYER_A,
+                winner = game?.winner ?: OctiPlayer.PLAYER_A,
                 matchLabel = statusBanner,
                 totalPlies = viewModel.livePlyCount(),
-                resigned = viewModel.board.game?.isGameResigned == true,
+                resigned = game?.isGameResigned == true,
+                gameMode = viewModel.board.gameMode,
+                terminationReason = termReason,
                 onNewGame = {
                     viewModel.dismissGameOverDialog()
                     viewModel.setShowNewGameDialog(true)

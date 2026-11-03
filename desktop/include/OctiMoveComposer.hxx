@@ -63,6 +63,10 @@ public:
 
     // Interactive Drag / Staging operations (1-based coordinates 1..W, 1..H)
     bool stageOrCommitAddPod(int targetX, int targetY, bool liberate);
+    bool placePod(int targetX, int targetY, bool liberate) { return stageOrCommitAddPod(targetX, targetY, liberate); }
+    bool canPlaceReservePodAt(int x, int y) const;
+    bool canLiberateCapturedPodAt(int x, int y) const;
+    bool canRevivePartnerPodAt(int x, int y) const;
     bool stageOrCommitAddProng(int x, int y, int podIndex, OctiDir dir, bool superProng);
     bool stageOrCommitRepositionProng(int x, int y, int podIndex, OctiDir srcDir, OctiDir tgtDir);
     bool stageOrCommitPodMoveOrJump(int fromX, int fromY, int podIndex,

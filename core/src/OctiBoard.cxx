@@ -189,51 +189,26 @@ bool OctiBoard::canLiberate(OctiPlayer player) const
     }
 
     if (_mode == GAME_MODE_4) {
-        // Neutral OCTI squares
+        // Neutral OCTI squares: player must personally occupy
         if (_boardSquares[4][2].isOccupiedBy(player) ||
-            _boardSquares[4][2].isCapturedByTeamOf(player) ||
-            _boardSquares[4][6].isOccupiedBy(player) ||
-            _boardSquares[4][6].isCapturedByTeamOf(player)) {
+            _boardSquares[4][6].isOccupiedBy(player)) {
             return true;
         }
 
-        // Enemy home squares
+        // Enemy home squares: player must personally occupy
         if (player == PLAYER_A || player == PLAYER_C) {
             if (_boardSquares[2][6].isOccupiedBy(player) ||
-                _boardSquares[2][6].isCapturedByTeamOf(player) ||
-                _boardSquares[6][2].isOccupiedBy(player) ||
-                _boardSquares[6][2].isCapturedByTeamOf(player)) {
+                _boardSquares[6][2].isOccupiedBy(player)) {
                 return true;
             }
         } else if (player == PLAYER_B || player == PLAYER_D) {
             if (_boardSquares[2][2].isOccupiedBy(player) ||
-                _boardSquares[2][2].isCapturedByTeamOf(player) ||
-                _boardSquares[6][6].isOccupiedBy(player) ||
-                _boardSquares[6][6].isCapturedByTeamOf(player)) {
+                _boardSquares[6][6].isOccupiedBy(player)) {
                 return true;
             }
         }
 
-        // Eliminated teammate's home square
-        if (_game) {
-            if (player == PLAYER_A && _game->isPlayerEliminated(PLAYER_C)) {
-                if (_boardSquares[6][6].isOccupiedBy(PLAYER_A)) {
-                    return true;
-                }
-            } else if (player == PLAYER_C && _game->isPlayerEliminated(PLAYER_A)) {
-                if (_boardSquares[2][2].isOccupiedBy(PLAYER_C)) {
-                    return true;
-                }
-            } else if (player == PLAYER_B && _game->isPlayerEliminated(PLAYER_D)) {
-                if (_boardSquares[6][2].isOccupiedBy(PLAYER_B)) {
-                    return true;
-                }
-            } else if (player == PLAYER_D && _game->isPlayerEliminated(PLAYER_B)) {
-                if (_boardSquares[2][6].isOccupiedBy(PLAYER_D)) {
-                    return true;
-                }
-            }
-        }
+        return false;
     }
 
     return false;

@@ -3623,6 +3623,73 @@ static std::string sanitizeTranscriptJson(const std::string &rawJsonStr, bool pr
     return rawJsonStr;
 }
 
+static int countPods(const OctiBoard &b, OctiPlayer player)
+{
+    int count = 0;
+    for (int x = 0; x < b.getBoardWidth(); ++x) {
+        for (int y = 0; y < b.getBoardHeight(); ++y) {
+            const OctiSquare &sq = b.squareAt(x, y);
+            for (int i = 0; i < sq.getNumPods(); ++i) {
+                if (podTypeToPlayer(sq.getPodAt(i).getType()) == player) {
+                    ++count;
+                }
+            }
+        }
+    }
+    return count;
+}
+
+static std::string classifyRuleTermination(const OctiBoard &b, const OctiGame &g)
+{
+    OctiPlayer w = g.getWinner();
+    if (g.getMode() == GAME_MODE_2) {
+        const int xs[3] = {2, 4, 6};
+        int y = (w == PLAYER_A) ? 6 : 2;
+        int captured = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (b.squareAt(xs[i], y).isCapturedBy(w)) {
+                ++captured;
+            }
+        }
+        int needed = (g.getBases() == GAME_BASES_1) ? 1 : 3;
+        if (captured >= needed) {
+            return "BASE_CAPTURE";
+        }
+        OctiPlayer opp = (w == PLAYER_A) ? PLAYER_B : PLAYER_A;
+        return countPods(b, opp) == 0 ? "TOTAL_CAPTURE" : "STALEMATE";
+    }
+    if (g.getMode() == GAME_MODE_OFK) {
+        int y = (w == PLAYER_A) ? 5 : 1;
+        for (int x = 1; x <= 4; ++x) {
+            if (b.squareAt(x, y).isCapturedBy(w)) {
+                return "BASE_CAPTURE";
+            }
+        }
+        OctiPlayer opp = (w == PLAYER_A) ? PLAYER_B : PLAYER_A;
+        return countPods(b, opp) == 0 ? "TOTAL_CAPTURE" : "STALEMATE";
+    }
+    bool bases;
+    if (w == PLAYER_A || w == PLAYER_C) {
+        bases = b.squareAt(2, 6).isCapturedByTeamOf(PLAYER_A) &&
+                b.squareAt(6, 2).isCapturedByTeamOf(PLAYER_A);
+    } else {
+        bases = b.squareAt(2, 2).isCapturedByTeamOf(PLAYER_B) &&
+                b.squareAt(6, 6).isCapturedByTeamOf(PLAYER_B);
+    }
+    if (bases) {
+        return "BASE_CAPTURE";
+    }
+    int bdPods = countPods(b, PLAYER_B) + countPods(b, PLAYER_D);
+    int acPods = countPods(b, PLAYER_A) + countPods(b, PLAYER_C);
+    if ((w == PLAYER_A || w == PLAYER_C) && bdPods == 0) {
+        return "TOTAL_CAPTURE";
+    }
+    if ((w == PLAYER_B || w == PLAYER_D) && acPods == 0) {
+        return "TOTAL_CAPTURE";
+    }
+    return "STALEMATE";
+}
+
 void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res)
 {
     if (!allowUploadAttempt(req, res)) {
@@ -3692,10 +3759,12 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
     }
     std::string modeStr = transcriptObj["mode"].get<std::string>();
     OctiGameMode mode;
-    if (modeStr == "2P") {
+    if (modeStr == "2P" || modeStr == "2") {
         mode = GAME_MODE_2;
-    } else if (modeStr == "4P") {
+        modeStr = "2P";
+    } else if (modeStr == "4P" || modeStr == "4") {
         mode = GAME_MODE_4;
+        modeStr = "4P";
     } else if (modeStr == "OFK") {
         mode = GAME_MODE_OFK;
     } else {
@@ -3703,24 +3772,46 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
         return;
     }
 
-    if (!transcriptObj.contains("bases") || !transcriptObj["bases"].is_number_integer()) {
-        sendError(res, 400, "MALFORMED_UPLOAD", "missing bases");
-        return;
-    }
-    int basesVal = transcriptObj["bases"].get<int>();
-    if (basesVal != 1 && basesVal != 3) {
-        sendError(res, 400, "MALFORMED_UPLOAD", "bases must be 1 or 3");
-        return;
-    }
-    OctiGameBases bases = (basesVal == 3) ? GAME_BASES_3 : GAME_BASES_1;
+    int basesVal = 1;
+    OctiGameBases bases = GAME_BASES_1;
+    bool superProngs = false;
+    bool edgeless = false;
 
-    if (!transcriptObj.contains("superProngs") || !transcriptObj["superProngs"].is_boolean() ||
-        !transcriptObj.contains("edgeless") || !transcriptObj["edgeless"].is_boolean()) {
-        sendError(res, 400, "MALFORMED_UPLOAD", "missing superProngs or edgeless");
-        return;
+    if (mode == GAME_MODE_OFK) {
+        basesVal = 1;
+        bases = GAME_BASES_1;
+        superProngs = false;
+        edgeless = false;
+    } else if (mode == GAME_MODE_4) {
+        basesVal = 3;
+        int claimedBases = transcriptObj.value("bases", 3);
+        bases = (claimedBases == 1) ? GAME_BASES_1 : GAME_BASES_3;
+        if (transcriptObj.contains("superProngs") && transcriptObj["superProngs"].is_boolean()) {
+            superProngs = transcriptObj["superProngs"].get<bool>();
+        }
+        if (transcriptObj.contains("edgeless") && transcriptObj["edgeless"].is_boolean()) {
+            edgeless = transcriptObj["edgeless"].get<bool>();
+        }
+    } else {
+        if (!transcriptObj.contains("bases") || !transcriptObj["bases"].is_number_integer()) {
+            sendError(res, 400, "MALFORMED_UPLOAD", "missing bases");
+            return;
+        }
+        basesVal = transcriptObj["bases"].get<int>();
+        if (basesVal != 1 && basesVal != 3) {
+            sendError(res, 400, "MALFORMED_UPLOAD", "bases must be 1 or 3");
+            return;
+        }
+        bases = (basesVal == 3) ? GAME_BASES_3 : GAME_BASES_1;
+
+        if (!transcriptObj.contains("superProngs") || !transcriptObj["superProngs"].is_boolean() ||
+            !transcriptObj.contains("edgeless") || !transcriptObj["edgeless"].is_boolean()) {
+            sendError(res, 400, "MALFORMED_UPLOAD", "missing superProngs or edgeless");
+            return;
+        }
+        superProngs = transcriptObj["superProngs"].get<bool>();
+        edgeless = transcriptObj["edgeless"].get<bool>();
     }
-    bool superProngs = transcriptObj["superProngs"].get<bool>();
-    bool edgeless = transcriptObj["edgeless"].get<bool>();
 
     std::string startPlayerStr = transcriptObj.value("startPlayer", "A");
     OctiPlayer startPlayer = PLAYER_A;
@@ -3752,16 +3843,29 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
         return;
     }
     std::string claimedWinner = transcriptObj["winner"].get<std::string>();
-    if (claimedWinner != "A" && claimedWinner != "B" && claimedWinner != "C" &&
-        claimedWinner != "D" && claimedWinner != "NONE") {
+    std::string normalizedClaimedWinner = claimedWinner;
+    if (mode == GAME_MODE_4) {
+        if (claimedWinner == "TEAM_13_WIN" || claimedWinner == "A_WIN" || claimedWinner == "C_WIN") {
+            normalizedClaimedWinner = "A";
+        } else if (claimedWinner == "TEAM_24_WIN" || claimedWinner == "B_WIN" || claimedWinner == "D_WIN") {
+            normalizedClaimedWinner = "B";
+        }
+    }
+    if (normalizedClaimedWinner != "A" && normalizedClaimedWinner != "B" &&
+        normalizedClaimedWinner != "C" && normalizedClaimedWinner != "D" &&
+        normalizedClaimedWinner != "NONE") {
         sendError(res, 400, "MALFORMED_UPLOAD", "invalid winner value");
         return;
     }
-    if (!transcriptObj.contains("finalFen") || !transcriptObj["finalFen"].is_string()) {
+    std::string claimedFinalFen;
+    if (transcriptObj.contains("finalFen") && transcriptObj["finalFen"].is_string()) {
+        claimedFinalFen = transcriptObj["finalFen"].get<std::string>();
+    } else if (transcriptObj.contains("final_fen") && transcriptObj["final_fen"].is_string()) {
+        claimedFinalFen = transcriptObj["final_fen"].get<std::string>();
+    } else {
         sendError(res, 400, "MALFORMED_UPLOAD", "missing finalFen");
         return;
     }
-    std::string claimedFinalFen = transcriptObj["finalFen"].get<std::string>();
 
     std::string appVersion;
     std::string platform;
@@ -3863,12 +3967,9 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
     }
 
     int detectedAiDifficulty = 0;
-    std::string player1Handle = "Player";
-    std::string player2Handle = "Player";
-    std::string player3Handle;
-    std::string player4Handle;
-    bool seat1IsAi = false;
-    bool seat2IsAi = false;
+    std::string seatHandle[5] = {"", "Player", "Player", "", ""};
+    int64_t seatPlayerId[5] = {0, 0, 0, 0, 0};
+    bool seatIsAi[5] = {false, false, false, false, false};
     auto canonicalSeatOf = [](const Json &p) -> int {
         if (!p.is_object()) {
             return 0;
@@ -3896,17 +3997,12 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
                 int seat = canonicalSeatOf(p);
                 std::string h = p.value("handle", "");
                 std::string t = p.value("type", "");
+                int64_t pid = p.value("playerId", p.value("id", static_cast<int64_t>(0)));
                 bool isAi = (t == "AI" || h.rfind("AI_", 0) == 0);
-                if (seat == 1) {
-                    if (!h.empty()) player1Handle = h;
-                    seat1IsAi = isAi;
-                } else if (seat == 2) {
-                    if (!h.empty()) player2Handle = h;
-                    seat2IsAi = isAi;
-                } else if (seat == 3 && !h.empty()) {
-                    player3Handle = h;
-                } else if (seat == 4 && !h.empty()) {
-                    player4Handle = h;
+                if (seat >= 1 && seat <= 4) {
+                    if (!h.empty()) seatHandle[seat] = h;
+                    if (pid > 0) seatPlayerId[seat] = pid;
+                    seatIsAi[seat] = isAi;
                 }
                 if (t == "AI" || p.value("aiDifficulty", 0) > 0) {
                     int d = p.value("aiDifficulty", 0);
@@ -4035,7 +4131,21 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
     case PLAYER_D: replayedWinner = "D"; break;
     default: replayedWinner = "NONE"; break;
     }
-    if (claimedWinner != replayedWinner) {
+    bool winnerMatches = false;
+    if (mode == GAME_MODE_4) {
+        if ((replayedWinner == "A" || replayedWinner == "C") &&
+            (normalizedClaimedWinner == "A" || normalizedClaimedWinner == "C")) {
+            winnerMatches = true;
+        } else if ((replayedWinner == "B" || replayedWinner == "D") &&
+                   (normalizedClaimedWinner == "B" || normalizedClaimedWinner == "D")) {
+            winnerMatches = true;
+        } else if (replayedWinner == "NONE" && normalizedClaimedWinner == "NONE") {
+            winnerMatches = true;
+        }
+    } else {
+        winnerMatches = (claimedWinner == replayedWinner);
+    }
+    if (!winnerMatches) {
         sendError(res, 400, "INVALID_GAME", "claimed winner does not match replay");
         return;
     }
@@ -4119,17 +4229,59 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
     rec.superProngs = superProngs;
     rec.edgeless = edgeless;
     rec.timeControl = transcriptObj.value("timeControl", "untimed");
-    rec.p1Handle = player1Handle;
-    rec.p2Handle = player2Handle;
-    rec.p3Handle = player3Handle;
-    rec.p4Handle = player4Handle;
-    rec.result = (replayedWinner == "A") ? "P1_WIN" : (replayedWinner == "B" ? "P2_WIN" : "DRAW");
-    if (replayedWinner == "A") rec.winnerSeat = 1;
-    else if (replayedWinner == "B") rec.winnerSeat = 2;
-    else if (replayedWinner == "C") rec.winnerSeat = 3;
-    else if (replayedWinner == "D") rec.winnerSeat = 4;
-    else rec.winnerSeat = 0;
-    rec.termination = transcriptObj.value("termination", statusStr == "RESIGNED" ? "RESIGNATION" : "BASE_OCCUPATION");
+    rec.p1PlayerId = seatPlayerId[1];
+    rec.p2PlayerId = seatPlayerId[2];
+    rec.p1Handle = seatHandle[1];
+    rec.p2Handle = seatHandle[2];
+    if (mode == GAME_MODE_4) {
+        rec.p3PlayerId = seatPlayerId[3];
+        rec.p3Handle = seatHandle[3].empty() ? "Player" : seatHandle[3];
+        rec.p4PlayerId = seatPlayerId[4];
+        rec.p4Handle = seatHandle[4].empty() ? "Player" : seatHandle[4];
+    } else {
+        rec.p3PlayerId = 0;
+        rec.p4PlayerId = 0;
+        rec.p3Handle = "";
+        rec.p4Handle = "";
+    }
+    if (mode == GAME_MODE_4) {
+        if (replayedWinner == "A" || replayedWinner == "C") {
+            rec.result = "TEAM_13_WIN";
+            rec.winnerSeat = (replayedWinner == "C") ? 3 : 1;
+        } else if (replayedWinner == "B" || replayedWinner == "D") {
+            rec.result = "TEAM_24_WIN";
+            rec.winnerSeat = (replayedWinner == "D") ? 4 : 2;
+        } else {
+            rec.result = "DRAW";
+            rec.winnerSeat = 0;
+        }
+    } else {
+        rec.result = (replayedWinner == "A") ? "P1_WIN" : (replayedWinner == "B" ? "P2_WIN" : "DRAW");
+        if (replayedWinner == "A") rec.winnerSeat = 1;
+        else if (replayedWinner == "B") rec.winnerSeat = 2;
+        else rec.winnerSeat = 0;
+    }
+
+    std::string term = transcriptObj.value("termination", "");
+    if (term == "FORFEIT") term = "RESIGNATION";
+
+    if (term.empty()) {
+        if (statusStr == "RESIGNED") {
+            term = "RESIGNATION";
+        } else {
+            term = classifyRuleTermination(board, *game);
+        }
+    }
+    if (term != "BASE_CAPTURE" && term != "BASE_OCCUPATION" &&
+        term != "TOTAL_CAPTURE" && term != "ELIMINATION" &&
+        term != "STALEMATE" && term != "RESIGNATION" &&
+        term != "TIMEOUT" && term != "DISCONNECT_FORFEIT" &&
+        term != "AGREED_DRAW") {
+        term = (statusStr == "RESIGNED" ? "RESIGNATION" : "BASE_CAPTURE");
+    }
+    rec.termination = term;
+    storedJson["termination"] = term;
+
     rec.plyCount = static_cast<int>(plies.size());
     rec.octiTranscript = storedJson.dump();
     rec.finalFen = replayedFinalFen;
@@ -4166,36 +4318,51 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
         if (!installId.empty() && isSafeId(installId)) {
             store.bindInstallToPlayer(installId, authedPlayer.playerId);
         }
-        bool p1IsAi = seat1IsAi || (player1Handle.rfind("AI_", 0) == 0);
-        bool p2IsAi = seat2IsAi || (player2Handle.rfind("AI_", 0) == 0);
-        int humanSeat = 1;
-        if (!p1IsAi && p2IsAi) {
-            humanSeat = 1;
-        } else if (!p2IsAi && p1IsAi) {
-            humanSeat = 2;
-        } else {
-            humanSeat = 1;
+        int maxSeats = (mode == GAME_MODE_4) ? 4 : 2;
+        int humanSeat = 0;
+        for (int s = 1; s <= maxSeats; ++s) {
+            if (seatPlayerId[s] == authedPlayer.playerId ||
+                (seatHandle[s] == authedPlayer.handle && authedPlayer.handle != "Player")) {
+                humanSeat = s;
+                break;
+            }
         }
-        if (humanSeat == 1) {
-            rec.p1PlayerId = authedPlayer.playerId;
-            rec.p1Handle = authedPlayer.handle;
-            player1Handle = authedPlayer.handle;
-        } else {
-            rec.p2PlayerId = authedPlayer.playerId;
-            rec.p2Handle = authedPlayer.handle;
-            player2Handle = authedPlayer.handle;
+        if (humanSeat == 0) {
+            for (int s = 1; s <= maxSeats; ++s) {
+                if (!seatIsAi[s] && seatHandle[s].rfind("AI_", 0) != 0) {
+                    humanSeat = s;
+                    break;
+                }
+            }
         }
+        if (humanSeat == 0) humanSeat = 1;
+
+        seatPlayerId[humanSeat] = authedPlayer.playerId;
+        seatHandle[humanSeat] = authedPlayer.handle;
+
+        rec.p1PlayerId = seatPlayerId[1];
+        rec.p1Handle = seatHandle[1];
+        rec.p2PlayerId = seatPlayerId[2];
+        rec.p2Handle = seatHandle[2];
+        if (mode == GAME_MODE_4) {
+            rec.p3PlayerId = seatPlayerId[3];
+            rec.p3Handle = seatHandle[3];
+            rec.p4PlayerId = seatPlayerId[4];
+            rec.p4Handle = seatHandle[4];
+        }
+
         auto updateHumanEntry = [&](Json &arr) {
             if (!arr.is_array()) {
                 return;
             }
             for (auto &pEntry : arr) {
                 if (!pEntry.is_object()) continue;
-                int s = pEntry.value("seat", 0);
+                int s = canonicalSeatOf(pEntry);
                 std::string t = pEntry.value("type", "");
                 std::string h = pEntry.value("handle", "");
                 if (s == humanSeat || (s == 0 && (t == "HUMAN" || h.rfind("AI_", 0) != 0))) {
                     pEntry["handle"] = authedPlayer.handle;
+                    pEntry["player_uuid"] = authedPlayer.uuid;
                 }
             }
         };

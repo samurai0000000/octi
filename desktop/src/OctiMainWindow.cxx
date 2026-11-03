@@ -2751,7 +2751,8 @@ std::string OctiMainWindow::buildCurrentGameTranscriptJson(
         meta.termination = "RESIGNATION";
     } else if (game->isGameOver()) {
         meta.status = "GAME_OVER";
-        meta.termination = "BASE_OCCUPATION";
+        // Do not force BASE_OCCUPATION; let OctiGame::serializeJson derive
+        // BASE_OCCUPATION vs TOTAL_CAPTURE vs STALEMATE.
     } else if (game->isGameStarted()) {
         meta.status = "IN_PROGRESS";
     } else {

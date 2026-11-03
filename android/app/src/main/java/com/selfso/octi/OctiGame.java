@@ -81,6 +81,7 @@ public class OctiGame {
         public OctiPlayer player = OctiPlayer.PLAYER_A;
         public String type = "HUMAN";
         public String handle = "Player";
+        public String engine = "";
         public int aiDifficulty = 0;
         public int aiBudgetMs = 0;
 
@@ -92,6 +93,7 @@ public class OctiGame {
                 this.player = other.player;
                 this.type = other.type;
                 this.handle = other.handle;
+                this.engine = other.engine;
                 this.aiDifficulty = other.aiDifficulty;
                 this.aiBudgetMs = other.aiBudgetMs;
             }
@@ -576,12 +578,31 @@ public class OctiGame {
         }
 
         if (searchMode) {
+            OctiPlayer mover = turn;
             applyMoveOps(m.getOps());
             check4PlayerElimination();
             searchPlyOffset++;
             updateGameOverAndWinner();
             if (!gameOver) {
                 advanceTurn();
+                if (mode == OctiGameMode.GAME_MODE_2) {
+                    if (generateLegalMoves().isEmpty()) {
+                        gameOver = true;
+                        winner = (turn == OctiPlayer.PLAYER_A) ? OctiPlayer.PLAYER_B : OctiPlayer.PLAYER_A;
+                        gameMetadata.termination = "STALEMATE";
+                    }
+                } else if (mode == OctiGameMode.GAME_MODE_4) {
+                    int seatsChecked = 0;
+                    while (seatsChecked < 4 && !players[turn.getValue()].eliminated && generateLegalMoves().isEmpty()) {
+                        advanceTurn();
+                        seatsChecked++;
+                    }
+                    if (seatsChecked == 4) {
+                        gameOver = true;
+                        winner = mover;
+                        gameMetadata.termination = "STALEMATE";
+                    }
+                }
             }
             return;
         }
@@ -612,7 +633,26 @@ public class OctiGame {
 
         updateGameOverAndWinner();
         if (!gameOver) {
+            OctiPlayer mover = snapBefore.turn;
             advanceTurn();
+            if (mode == OctiGameMode.GAME_MODE_2) {
+                if (generateLegalMoves().isEmpty()) {
+                    gameOver = true;
+                    winner = (turn == OctiPlayer.PLAYER_A) ? OctiPlayer.PLAYER_B : OctiPlayer.PLAYER_A;
+                    gameMetadata.termination = "STALEMATE";
+                }
+            } else if (mode == OctiGameMode.GAME_MODE_4) {
+                int seatsChecked = 0;
+                while (seatsChecked < 4 && !players[turn.getValue()].eliminated && generateLegalMoves().isEmpty()) {
+                    advanceTurn();
+                    seatsChecked++;
+                }
+                if (seatsChecked == 4) {
+                    gameOver = true;
+                    winner = mover;
+                    gameMetadata.termination = "STALEMATE";
+                }
+            }
         }
 
         if (board != null) {
@@ -847,8 +887,8 @@ public class OctiGame {
                     throw new IllegalMoveException("pod placement square has enemy pod");
                 }
             } else {
-                if (sq.isEmpty() || sq.hasEnemyOf(turn)) {
-                    throw new IllegalMoveException("pod placement square must be occupied by friendly pod");
+                if (!sq.isOccupiedBy(turn)) {
+                    throw new IllegalMoveException("Cannot place pod on unoccupied or partner-only non-home square");
                 }
             }
 
@@ -885,11 +925,11 @@ public class OctiGame {
                         players[turnVal].capturedPods--;
                         sq.addPod(new OctiPod(turn.toPodType()));
                     } else {
-                        if (players[turnVal].capturedPods > 0) {
-                            players[turnVal].capturedPods--;
-                            sq.addPod(new OctiPod(turn.toPodType()));
-                        } else if (players[turnVal].freePods > 0) {
+                        if (players[turnVal].freePods > 0) {
                             players[turnVal].freePods--;
+                            sq.addPod(new OctiPod(turn.toPodType()));
+                        } else if (players[turnVal].capturedPods > 0) {
+                            players[turnVal].capturedPods--;
                             sq.addPod(new OctiPod(turn.toPodType()));
                         } else {
                             throw new IllegalMoveException("no free or capturable pods available to place");
@@ -912,32 +952,46 @@ public class OctiGame {
 
                 int partnerVal = partner.getValue();
                 if (sq.getType() == homeType) {
-                    if (op.liberate || players[turnVal].freePods <= 0) {
-                        throw new IllegalMoveException("cannot place reserve pod on own base");
+                    if (op.liberate) {
+                        if (!sq.isOccupiedBy(turn) || !board.canLiberate(turn) || players[turnVal].capturedPods <= 0) {
+                            throw new IllegalMoveException("cannot liberate on own base without occupancy and liberation condition");
+                        }
+                        players[turnVal].capturedPods--;
+                        sq.addPod(new OctiPod(turn.toPodType()));
+                    } else {
+                        if (players[turnVal].freePods > 0) {
+                            players[turnVal].freePods--;
+                            sq.addPod(new OctiPod(turn.toPodType()));
+                        } else if (sq.isOccupiedBy(turn) && board.canLiberate(turn) && players[turnVal].capturedPods > 0) {
+                            players[turnVal].capturedPods--;
+                            sq.addPod(new OctiPod(turn.toPodType()));
+                        } else {
+                            throw new IllegalMoveException("no free or capturable pods available to place on home base");
+                        }
                     }
-                    players[turnVal].freePods--;
-                    sq.addPod(new OctiPod(turn.toPodType()));
                 } else if (sq.getType() == partnerHome) {
                     if (players[partnerVal].eliminated) {
-                        if (players[partnerVal].capturedPods > 0) {
-                            players[partnerVal].eliminated = false;
-                            players[partnerVal].capturedPods--;
-                            sq.addPod(new OctiPod(partner.toPodType()));
-                        } else if (!op.liberate && players[turnVal].freePods > 0) {
-                            players[turnVal].freePods--;
-                            sq.addPod(new OctiPod(turn.toPodType()));
-                        } else {
-                            throw new IllegalMoveException("cannot liberate partner: no captured pods");
+                        if (players[partnerVal].capturedPods <= 0) {
+                            throw new IllegalMoveException("cannot revive partner: no captured pods");
                         }
+                        players[partnerVal].capturedPods--;
+                        players[partnerVal].eliminated = false;
+                        sq.addPod(new OctiPod(partner.toPodType()));
                     } else {
-                        if (!op.liberate && players[turnVal].freePods > 0) {
-                            players[turnVal].freePods--;
-                            sq.addPod(new OctiPod(turn.toPodType()));
-                        } else {
-                            throw new IllegalMoveException("cannot place pod on partner base");
+                        if (!op.liberate || !board.canLiberate(turn) || players[turnVal].capturedPods <= 0) {
+                            throw new IllegalMoveException("cannot place pod on partner base without liberation condition");
                         }
+                        players[turnVal].capturedPods--;
+                        sq.addPod(new OctiPod(turn.toPodType()));
                     }
+                } else if (sq.getType() == OctiSquareType.NEUTRAL_OCTI_SQUARE) {
+                    if (!op.liberate || players[turnVal].capturedPods <= 0) {
+                        throw new IllegalMoveException("cannot place reserve pod on neutral OCTI square; liberation only");
+                    }
+                    players[turnVal].capturedPods--;
+                    sq.addPod(new OctiPod(turn.toPodType()));
                 } else {
+                    // Enemy home square
                     if (op.liberate) {
                         if (players[turnVal].capturedPods <= 0) {
                             throw new IllegalMoveException("no captured pods to liberate");
@@ -945,11 +999,11 @@ public class OctiGame {
                         players[turnVal].capturedPods--;
                         sq.addPod(new OctiPod(turn.toPodType()));
                     } else {
-                        if (players[turnVal].capturedPods > 0) {
-                            players[turnVal].capturedPods--;
-                            sq.addPod(new OctiPod(turn.toPodType()));
-                        } else if (players[turnVal].freePods > 0) {
+                        if (players[turnVal].freePods > 0) {
                             players[turnVal].freePods--;
+                            sq.addPod(new OctiPod(turn.toPodType()));
+                        } else if (players[turnVal].capturedPods > 0) {
+                            players[turnVal].capturedPods--;
                             sq.addPod(new OctiPod(turn.toPodType()));
                         } else {
                             throw new IllegalMoveException("no free or capturable pods available");
@@ -1756,7 +1810,7 @@ public class OctiGame {
                             continue;
                         }
                     } else {
-                        if (sq.isEmpty() || sq.hasEnemyOf(turn)) {
+                        if (!sq.isOccupiedBy(turn)) {
                             continue;
                         }
                     }
@@ -1780,7 +1834,7 @@ public class OctiGame {
                                 outMoves.add(new OctiMove(opList));
                             }
                         } else {
-                            // Enemy base
+                            // Enemy base (personally occupied by turn)
                             if (players[turnVal].freePods > 0) {
                                 OctiMoveOp op = new OctiMoveOp();
                                 op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = false;
@@ -1819,26 +1873,42 @@ public class OctiGame {
                                 opList.add(op);
                                 outMoves.add(new OctiMove(opList));
                             }
+                            if (board.canLiberate(turn) && players[turnVal].capturedPods > 0 && sq.isOccupiedBy(turn)) {
+                                OctiMoveOp op = new OctiMoveOp();
+                                op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = true;
+                                List<OctiMoveOp> opList = new ArrayList<>();
+                                opList.add(op);
+                                outMoves.add(new OctiMove(opList));
+                            }
                         } else if (sq.getType() == partnerHome) {
                             if (players[partnerVal].eliminated) {
-                                if (players[partnerVal].capturedPods > 0 || players[turnVal].freePods > 0) {
+                                if (players[partnerVal].capturedPods > 0) {
                                     OctiMoveOp op = new OctiMoveOp();
-                                    op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = false;
+                                    op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = true;
                                     List<OctiMoveOp> opList = new ArrayList<>();
                                     opList.add(op);
                                     outMoves.add(new OctiMove(opList));
                                 }
                             } else {
-                                if (players[turnVal].freePods > 0) {
+                                if (board.canLiberate(turn) && players[turnVal].capturedPods > 0) {
                                     OctiMoveOp op = new OctiMoveOp();
-                                    op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = false;
+                                    op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = true;
                                     List<OctiMoveOp> opList = new ArrayList<>();
                                     opList.add(op);
                                     outMoves.add(new OctiMove(opList));
                                 }
                             }
+                        } else if (sq.getType() == OctiSquareType.NEUTRAL_OCTI_SQUARE) {
+                            // Neutral OCTI square: liberation ONLY, never freePods
+                            if (players[turnVal].capturedPods > 0) {
+                                OctiMoveOp op = new OctiMoveOp();
+                                op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = true;
+                                List<OctiMoveOp> opList = new ArrayList<>();
+                                opList.add(op);
+                                outMoves.add(new OctiMove(opList));
+                            }
                         } else {
-                            // Enemy base or neutral OCTI square
+                            // Enemy home square (personally occupied by turn)
                             if (players[turnVal].freePods > 0) {
                                 OctiMoveOp op = new OctiMoveOp();
                                 op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = false;
@@ -2190,6 +2260,9 @@ public class OctiGame {
                 pObj.put("player", playerToString(pm.player));
                 pObj.put("type", pm.type != null ? pm.type : "HUMAN");
                 pObj.put("handle", pm.handle != null ? pm.handle : "Player");
+                if (pm.engine != null && !pm.engine.isEmpty()) {
+                    pObj.put("engine", pm.engine);
+                }
                 if ("AI".equals(pm.type) || pm.aiDifficulty > 0) {
                     pObj.put("aiDifficulty", pm.aiDifficulty);
                     pObj.put("aiBudgetMs", pm.aiBudgetMs);
@@ -2314,7 +2387,24 @@ public class OctiGame {
                     return "BASE_OCCUPATION";
                 }
             }
-            return "TOTAL_CAPTURE";
+            int teamACount = 0;
+            int teamBCount = 0;
+            if (board != null) {
+                for (int x = 0; x < board.getBoardWidth(); x++) {
+                    for (int y = 0; y < board.getBoardHeight(); y++) {
+                        OctiSquare sq = board.squareAt(x, y);
+                        for (int i = 0; i < sq.getNumPods(); i++) {
+                            OctiPlayer p = sq.getPodAt(i).getType().toPlayer();
+                            if (p == OctiPlayer.PLAYER_A || p == OctiPlayer.PLAYER_C) teamACount++;
+                            else if (p == OctiPlayer.PLAYER_B || p == OctiPlayer.PLAYER_D) teamBCount++;
+                        }
+                    }
+                }
+            }
+            if (gameStarted && (teamACount == 0 || teamBCount == 0)) {
+                return "TOTAL_CAPTURE";
+            }
+            return gameOver ? "STALEMATE" : "";
         }
         return gameOver ? "BASE_OCCUPATION" : "";
     }
@@ -2428,3 +2518,13 @@ public class OctiGame {
         }
     }
 }
+
+/*
+ * Local variables:
+ * mode: Java
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

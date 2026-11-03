@@ -115,25 +115,11 @@ public class OctiAndroidGuiTest {
         OctiMoveComposer composer = new OctiMoveComposer(board);
         assertTrue(composer.stageOrCommitAddProng(3, 3, 0, OctiDir.DIR_NW, true));
         assertTrue(composer.isAwaitingConfirmation());
-        assertTrue(composer.hasUnlockedSuperProngBonus());
-        assertTrue(composer.canAddMoreMoves());
-
-        int[] orig = composer.eighthProngOriginSquare();
-        assertEquals(3, orig[0]);
-        assertEquals(3, orig[1]);
-
-        // Starting guided bonus move on the 8-prong pod MUST succeed!
-        assertTrue(composer.beginGuidedPodMove(orig[0], orig[1], -1, false));
-        assertTrue(composer.isGuidedMoveActive());
-        List<int[]> nextSqs = composer.guidedNextSquares();
-        assertFalse("8th-prong bonus move must expose legal destinations", nextSqs.isEmpty());
-
-        // Select destination (3, 4) (North)
-        assertTrue(composer.selectGuidedDestination(3, 4));
-        assertFalse(composer.isGuidedMoveActive());
-        assertTrue(composer.isAwaitingConfirmation());
         assertFalse(composer.hasUnlockedSuperProngBonus());
-        assertEquals("33abcdefg+h!,33-34", composer.stagedMoveNotation());
+        assertEquals("33abcdefg+h!", composer.stagedMoveNotation());
+        assertTrue(composer.commitStagedMove());
+        assertEquals(OctiPlayer.PLAYER_B, board.getGame().getTurn());
+        assertEquals(8, sq.getPodAt(0).getNumProngs());
     }
 
     @Test

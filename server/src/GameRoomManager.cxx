@@ -2074,7 +2074,11 @@ std::string classifyRuleTermination(const OctiBoard &b, const OctiGame &g)
             }
         }
         int needed = (g.getBases() == GAME_BASES_1) ? 1 : 3;
-        return captured >= needed ? "BASE_CAPTURE" : "ELIMINATION";
+        if (captured >= needed) {
+            return "BASE_CAPTURE";
+        }
+        OctiPlayer opp = (w == PLAYER_A) ? PLAYER_B : PLAYER_A;
+        return countPods(b, opp) == 0 ? "TOTAL_CAPTURE" : "STALEMATE";
     }
     if (g.getMode() == GAME_MODE_OFK) {
         int y = (w == PLAYER_A) ? 5 : 1;
@@ -2084,17 +2088,28 @@ std::string classifyRuleTermination(const OctiBoard &b, const OctiGame &g)
             }
         }
         OctiPlayer opp = (w == PLAYER_A) ? PLAYER_B : PLAYER_A;
-        return countPods(b, opp) == 0 ? "ELIMINATION" : "STALEMATE";
+        return countPods(b, opp) == 0 ? "TOTAL_CAPTURE" : "STALEMATE";
     }
     bool bases;
-    if (w == PLAYER_A) {
+    if (w == PLAYER_A || w == PLAYER_C) {
         bases = b.squareAt(2, 6).isCapturedByTeamOf(PLAYER_A) &&
                 b.squareAt(6, 2).isCapturedByTeamOf(PLAYER_A);
     } else {
         bases = b.squareAt(2, 2).isCapturedByTeamOf(PLAYER_B) &&
                 b.squareAt(6, 6).isCapturedByTeamOf(PLAYER_B);
     }
-    return bases ? "BASE_CAPTURE" : "ELIMINATION";
+    if (bases) {
+        return "BASE_CAPTURE";
+    }
+    int bdPods = countPods(b, PLAYER_B) + countPods(b, PLAYER_D);
+    int acPods = countPods(b, PLAYER_A) + countPods(b, PLAYER_C);
+    if ((w == PLAYER_A || w == PLAYER_C) && bdPods == 0) {
+        return "TOTAL_CAPTURE";
+    }
+    if ((w == PLAYER_B || w == PLAYER_D) && acPods == 0) {
+        return "TOTAL_CAPTURE";
+    }
+    return "STALEMATE";
 }
 
 } // namespace
@@ -2764,7 +2779,7 @@ void GameRoomManager::finishGameLocked(Room &r, int64_t now,
     if (winnerSeat == 0) {
         r.result = "DRAW";
     } else if (r.config.mode == GAME_MODE_4) {
-        r.result = (winnerSeat == 1) ? "TEAM_13_WIN" : "TEAM_24_WIN";
+        r.result = (winnerSeat == 1 || winnerSeat == 3) ? "TEAM_13_WIN" : "TEAM_24_WIN";
     } else {
         r.result = (winnerSeat == 1) ? "P1_WIN" : "P2_WIN";
     }
@@ -3990,7 +4005,12 @@ bool GameRoomManager::restoreFromStoreLocked()
                 if (r->phase == RoomPhase::FINISHED && !g->isGameOver()) {
                     int wSeat = j.value("winnerSeat", 0);
                     if (wSeat > 0) {
-                        OctiPlayer loser = (wSeat == 1) ? PLAYER_B : PLAYER_A;
+                        OctiPlayer loser;
+                        if (r->config.mode == GAME_MODE_4) {
+                            loser = (wSeat == 1 || wSeat == 3) ? PLAYER_B : PLAYER_A;
+                        } else {
+                            loser = (wSeat == 1) ? PLAYER_B : PLAYER_A;
+                        }
                         try {
                             g->resign(loser);
                         } catch (...) {}

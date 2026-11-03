@@ -467,12 +467,29 @@ void OctiGame::executeMoveInternal(const OctiMove &m, bool isRedo)
     }
 
     if (_searchMode) {
+        OctiPlayer mover = _turn;
         applyMoveOps(m.getOps());
         check4PlayerElimination();
         ++_searchPlyOffset;
         updateGameOverAndWinner();
         if (!_gameOver) {
             advanceTurn();
+            if (_mode == GAME_MODE_2 || _mode == GAME_MODE_OFK) {
+                if (generateLegalMoves().empty()) {
+                    _gameOver = true;
+                    _winner = (_turn == PLAYER_A) ? PLAYER_B : PLAYER_A;
+                }
+            } else if (_mode == GAME_MODE_4) {
+                int seatsChecked = 0;
+                while (seatsChecked < 4 && !_players[_turn].eliminated && generateLegalMoves().empty()) {
+                    advanceTurn();
+                    seatsChecked++;
+                }
+                if (seatsChecked >= 4) {
+                    _gameOver = true;
+                    _winner = (mover == PLAYER_A || mover == PLAYER_C) ? PLAYER_A : PLAYER_B;
+                }
+            }
         }
         return;
     }
@@ -496,9 +513,26 @@ void OctiGame::executeMoveInternal(const OctiMove &m, bool isRedo)
         _plyMetadata.push_back(OctiPlyMetadata{});
     }
 
+    OctiPlayer mover = snapBefore.turn;
     updateGameOverAndWinner();
     if (!_gameOver) {
         advanceTurn();
+        if (_mode == GAME_MODE_2 || _mode == GAME_MODE_OFK) {
+            if (generateLegalMoves().empty()) {
+                _gameOver = true;
+                _winner = (_turn == PLAYER_A) ? PLAYER_B : PLAYER_A;
+            }
+        } else if (_mode == GAME_MODE_4) {
+            int seatsChecked = 0;
+            while (seatsChecked < 4 && !_players[_turn].eliminated && generateLegalMoves().empty()) {
+                advanceTurn();
+                seatsChecked++;
+            }
+            if (seatsChecked >= 4) {
+                _gameOver = true;
+                _winner = (mover == PLAYER_A || mover == PLAYER_C) ? PLAYER_A : PLAYER_B;
+            }
+        }
     }
 
     if (_board) {
@@ -685,8 +719,8 @@ void OctiGame::applyMoveOps(const std::vector<OctiMoveOp> &ops)
                 throw IllegalMoveException("pod placement square occupied by enemy pod");
             }
         } else {
-            if (sq.isEmpty() || sq.hasEnemyOf(_turn)) {
-                throw IllegalMoveException("pod placement square must be occupied by friendly pod");
+            if (!sq.isOccupiedBy(_turn)) {
+                throw IllegalMoveException("Cannot place pod on unoccupied or partner-only non-home square");
             }
         }
 
@@ -722,11 +756,11 @@ void OctiGame::applyMoveOps(const std::vector<OctiMoveOp> &ops)
                     _players[_turn].capturedPods--;
                     sq.addPod(OctiPod(playerToPodType(_turn)));
                 } else {
-                    if (_players[_turn].capturedPods > 0) {
-                        _players[_turn].capturedPods--;
-                        sq.addPod(OctiPod(playerToPodType(_turn)));
-                    } else if (_players[_turn].freePods > 0) {
+                    if (_players[_turn].freePods > 0) {
                         _players[_turn].freePods--;
+                        sq.addPod(OctiPod(playerToPodType(_turn)));
+                    } else if (_players[_turn].capturedPods > 0) {
+                        _players[_turn].capturedPods--;
                         sq.addPod(OctiPod(playerToPodType(_turn)));
                     } else {
                         throw IllegalMoveException("no free or capturable pods available to place");
@@ -745,33 +779,49 @@ void OctiGame::applyMoveOps(const std::vector<OctiMoveOp> &ops)
                                           partner == PLAYER_C ? C_HOME_SQUARE : D_HOME_SQUARE);
 
             if (sq.getType() == homeType) {
-                if (op.liberate || _players[_turn].freePods <= 0) {
-                    throw IllegalMoveException("cannot place reserve pod on own base");
+                if (op.liberate) {
+                    if (!sq.isOccupiedBy(_turn) || !_board->canLiberate(_turn) || _players[_turn].capturedPods <= 0) {
+                        throw IllegalMoveException("cannot liberate pod on own base without clearance and captured pods");
+                    }
+                    _players[_turn].capturedPods--;
+                    sq.addPod(OctiPod(playerToPodType(_turn)));
+                } else {
+                    if (_players[_turn].freePods > 0) {
+                        _players[_turn].freePods--;
+                        sq.addPod(OctiPod(playerToPodType(_turn)));
+                    } else if (sq.isOccupiedBy(_turn) && _board->canLiberate(_turn) && _players[_turn].capturedPods > 0) {
+                        _players[_turn].capturedPods--;
+                        sq.addPod(OctiPod(playerToPodType(_turn)));
+                    } else {
+                        throw IllegalMoveException("cannot place reserve pod on own base: no pods available");
+                    }
                 }
-                _players[_turn].freePods--;
-                sq.addPod(OctiPod(playerToPodType(_turn)));
             } else if (sq.getType() == partnerHome) {
                 if (_players[partner].eliminated) {
-                    if (_players[partner].capturedPods > 0) {
-                        _players[partner].eliminated = false;
-                        _players[partner].capturedPods--;
-                        sq.addPod(OctiPod(playerToPodType(partner)));
-                    } else if (!op.liberate && _players[_turn].freePods > 0) {
-                        _players[_turn].freePods--;
-                        sq.addPod(OctiPod(playerToPodType(_turn)));
-                    } else {
-                        throw IllegalMoveException("cannot liberate partner: no captured pods");
+                    if (_players[partner].capturedPods <= 0) {
+                        throw IllegalMoveException("cannot revive partner: partner has no captured pods");
                     }
+                    _players[partner].eliminated = false;
+                    _players[partner].capturedPods--;
+                    sq.addPod(OctiPod(playerToPodType(partner)));
                 } else {
-                    if (!op.liberate && _players[_turn].freePods > 0) {
-                        _players[_turn].freePods--;
-                        sq.addPod(OctiPod(playerToPodType(_turn)));
-                    } else {
-                        throw IllegalMoveException("cannot place pod on partner base");
+                    if (!op.liberate || !_board->canLiberate(_turn) || _players[_turn].capturedPods <= 0) {
+                        throw IllegalMoveException("cannot place pod on partner base unless liberating own captured pod with liberation clearance");
                     }
+                    _players[_turn].capturedPods--;
+                    sq.addPod(OctiPod(playerToPodType(_turn)));
                 }
+            } else if (sq.getType() == NEUTRAL_OCTI_SQUARE) {
+                if (!op.liberate) {
+                    throw IllegalMoveException("cannot place reserve pod on neutral OCTI square");
+                }
+                if (_players[_turn].capturedPods <= 0) {
+                    throw IllegalMoveException("no captured pods to liberate on neutral OCTI square");
+                }
+                _players[_turn].capturedPods--;
+                sq.addPod(OctiPod(playerToPodType(_turn)));
             } else {
-                // Enemy base or neutral OCTI square
+                // Enemy base
                 if (op.liberate) {
                     if (_players[_turn].capturedPods <= 0) {
                         throw IllegalMoveException("no captured pods to liberate");
@@ -779,14 +829,14 @@ void OctiGame::applyMoveOps(const std::vector<OctiMoveOp> &ops)
                     _players[_turn].capturedPods--;
                     sq.addPod(OctiPod(playerToPodType(_turn)));
                 } else {
-                    if (_players[_turn].capturedPods > 0) {
-                        _players[_turn].capturedPods--;
-                        sq.addPod(OctiPod(playerToPodType(_turn)));
-                    } else if (_players[_turn].freePods > 0) {
+                    if (_players[_turn].freePods > 0) {
                         _players[_turn].freePods--;
                         sq.addPod(OctiPod(playerToPodType(_turn)));
+                    } else if (_players[_turn].capturedPods > 0) {
+                        _players[_turn].capturedPods--;
+                        sq.addPod(OctiPod(playerToPodType(_turn)));
                     } else {
-                        throw IllegalMoveException("no free or capturable pods available");
+                        throw IllegalMoveException("no free or capturable pods available to place");
                     }
                 }
             }
@@ -1178,18 +1228,6 @@ void OctiGame::updateGameOverAndWinner()
             _winner = PLAYER_B;
             return;
         }
-
-        // No legal moves check for next player
-        OctiPlayer nextP = (_turn == PLAYER_A) ? PLAYER_B : PLAYER_A;
-        OctiPlayer savedTurn = _turn;
-        _turn = nextP;
-        std::vector<OctiMove> moves = generateLegalMoves();
-        _turn = savedTurn;
-        if (moves.empty()) {
-            _gameOver = true;
-            _winner = _turn; // Current player wins because opponent has no moves
-            return;
-        }
     } else if (_mode == GAME_MODE_4) {
         // Team A/C wins if B's home (2,6) and D's home (6,2) captured by Team A/C
         bool acBases = _board->squareAt(2, 6).isCapturedByTeamOf(PLAYER_A) &&
@@ -1559,7 +1597,7 @@ void OctiGame::generateLegalMoves(std::vector<OctiMove> &outMoves) const
                         continue;
                     }
                 } else {
-                    if (sq.isEmpty() || sq.hasEnemyOf(_turn)) {
+                    if (!sq.isOccupiedBy(_turn)) {
                         continue;
                     }
                 }
@@ -1607,22 +1645,35 @@ void OctiGame::generateLegalMoves(std::vector<OctiMove> &outMoves) const
                             op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = false;
                             outMoves.emplace_back(std::vector<OctiMoveOp>{op});
                         }
+                        if (sq.isOccupiedBy(_turn) && _board->canLiberate(_turn) && _players[_turn].capturedPods > 0) {
+                            OctiMoveOp op;
+                            op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = true;
+                            outMoves.emplace_back(std::vector<OctiMoveOp>{op});
+                        }
                     } else if (sq.getType() == partnerHome) {
+                        // Never allow placing freePods on partnerHome
                         if (_players[partner].eliminated) {
-                            if (_players[partner].capturedPods > 0 || _players[_turn].freePods > 0) {
+                            if (_players[partner].capturedPods > 0) {
                                 OctiMoveOp op;
-                                op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = false;
+                                op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = true;
                                 outMoves.emplace_back(std::vector<OctiMoveOp>{op});
                             }
                         } else {
-                            if (_players[_turn].freePods > 0) {
+                            if (_board->canLiberate(_turn) && _players[_turn].capturedPods > 0) {
                                 OctiMoveOp op;
-                                op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = false;
+                                op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = true;
                                 outMoves.emplace_back(std::vector<OctiMoveOp>{op});
                             }
                         }
+                    } else if (sq.getType() == NEUTRAL_OCTI_SQUARE) {
+                        // Never allow placing freePods on NEUTRAL_OCTI_SQUARE
+                        if (_players[_turn].capturedPods > 0) {
+                            OctiMoveOp op;
+                            op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = true;
+                            outMoves.emplace_back(std::vector<OctiMoveOp>{op});
+                        }
                     } else {
-                        // Enemy base or neutral OCTI square
+                        // Enemy base
                         if (_players[_turn].freePods > 0) {
                             OctiMoveOp op;
                             op.x0 = x; op.y0 = y; op.addPod = true; op.liberate = false;
@@ -1987,7 +2038,7 @@ std::string OctiGame::serializeJson(const OctiGameMetadata &meta) const
                                 }
                             }
                         }
-                        if (loserPods == 0 && _players[loser].freePods == 0 && !_board->canLiberate(loser)) {
+                        if (loserPods == 0) {
                             totalCapture = true;
                         }
                     } else if (_mode == GAME_MODE_4) {
@@ -2002,13 +2053,9 @@ std::string OctiGame::serializeJson(const OctiGameMetadata &meta) const
                                 }
                             }
                         }
-                        if ((_winner == PLAYER_A || _winner == PLAYER_C) &&
-                            (_players[PLAYER_B].eliminated || bdPods == 0) &&
-                            (_players[PLAYER_D].eliminated || bdPods == 0)) {
+                        if ((_winner == PLAYER_A || _winner == PLAYER_C) && bdPods == 0) {
                             totalCapture = true;
-                        } else if ((_winner == PLAYER_B || _winner == PLAYER_D) &&
-                                   (_players[PLAYER_A].eliminated || acPods == 0) &&
-                                   (_players[PLAYER_C].eliminated || acPods == 0)) {
+                        } else if ((_winner == PLAYER_B || _winner == PLAYER_D) && acPods == 0) {
                             totalCapture = true;
                         }
                     }
@@ -2016,10 +2063,8 @@ std::string OctiGame::serializeJson(const OctiGameMetadata &meta) const
 
                 if (totalCapture) {
                     term = "TOTAL_CAPTURE";
-                } else if (_mode == GAME_MODE_OFK) {
-                    term = "STALEMATE";
                 } else {
-                    term = "BASE_OCCUPATION";
+                    term = "STALEMATE";
                 }
             }
         }

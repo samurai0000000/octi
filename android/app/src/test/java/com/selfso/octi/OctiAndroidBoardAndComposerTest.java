@@ -500,22 +500,17 @@ public class OctiAndroidBoardAndComposerTest {
 
         committed.set(null);
 
-        // Adding the 8th prong as a superprong ('h!') triggers the bonus move state
+        // Adding the 8th prong as a superprong ('h!') commits cleanly without fabricated bonus move
         assertTrue(composer.beginAddProngFromReserve(true));
         assertTrue(composer.dropOnCompassSector(3, 3, 0, OctiDir.DIR_NW));
-        assertTrue("8th prong as superprong must pause for bonus move", composer.isAwaitingSuperProngBonusMove());
-        assertTrue(composer.shouldPauseForConfirmation());
-        assertNull(committed.get());
-
-        // Perform the bonus move step (3,3) -> (3,4) and commit
-        assertTrue(composer.beginMoveOrJumpPod(3, 3, 0, false));
-        assertTrue(composer.dropOnSquare(3, 4));
+        assertFalse(composer.isAwaitingSuperProngBonusMove());
         if (composer.shouldPauseForConfirmation()) {
             assertTrue(composer.commitMove());
         }
         assertNotNull(committed.get());
+        assertEquals("33abcdefg+h!", committed.get());
         assertEquals(OctiPlayer.PLAYER_B, game.getTurn());
-        assertEquals(1, board.squareAt(2, 3).getNumPods());
+        assertEquals(8, board.squareAt(2, 2).getPodAt(0).getNumProngs());
     }
 
     @Test

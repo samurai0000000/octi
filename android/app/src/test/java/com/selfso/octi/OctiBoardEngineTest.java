@@ -1585,6 +1585,236 @@ public class OctiBoardEngineTest {
     }
 
     // -------------------------------------------------------------------------
+    // 4P Rulebook Compliance & Transcript 84628218 Rejections
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testRejectFourIllegalPliesFromTranscript84628218() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_4);
+        OctiGame game = board.getGame();
+        game.start(OctiPlayer.PLAYER_A);
+
+        // 1. Ply 26: Player B cannot place reserve pod on neutral square (5, 3) / (4, 2)
+        game.move("33+b"); // A
+        board.squareAt(4, 2).clear();
+        board.squareAt(4, 2).addPod(new OctiPod(OctiPodType.B_POD));
+        for (OctiMove m : game.generateLegalMoves()) {
+            assertFalse("53".equals(m.asString()));
+        }
+        assertThrowsIllegalMove(() -> game.move("53"));
+
+        // 2. Ply 52: Player D cannot place reserve pod on partner B's home square (3, 7) / (2, 6)
+        board.squareAt(2, 6).clear();
+        board.squareAt(2, 6).addPod(new OctiPod(OctiPodType.D_POD));
+        OctiGameSnapshot snapD = game.captureSnapshot();
+        snapD.turn = OctiPlayer.PLAYER_D;
+        snapD.players[OctiPlayer.PLAYER_D.getValue()].freePods = 2;
+        game.restoreSnapshot(snapD);
+
+        for (OctiMove m : game.generateLegalMoves()) {
+            assertFalse("37".equals(m.asString()));
+        }
+        assertThrowsIllegalMove(() -> game.move("37"));
+
+        // 3. Ply 82: Player C cannot liberate on enemy base 37 occupied ONLY by partner A
+        board.squareAt(2, 6).clear();
+        board.squareAt(2, 6).addPod(new OctiPod(OctiPodType.A_POD));
+        OctiGameSnapshot snapC = game.captureSnapshot();
+        snapC.turn = OctiPlayer.PLAYER_C;
+        snapC.players[OctiPlayer.PLAYER_C.getValue()].capturedPods = 1;
+        game.restoreSnapshot(snapC);
+
+        for (OctiMove m : game.generateLegalMoves()) {
+            assertFalse("37*".equals(m.asString()));
+        }
+        assertThrowsIllegalMove(() -> game.move("37*"));
+
+        // 4. Ply 100: Player C cannot place reserve pod on neutral square 53 occupied only by partner A
+        board.squareAt(4, 2).clear();
+        board.squareAt(4, 2).addPod(new OctiPod(OctiPodType.A_POD));
+        snapC = game.captureSnapshot();
+        snapC.turn = OctiPlayer.PLAYER_C;
+        snapC.players[OctiPlayer.PLAYER_C.getValue()].freePods = 2;
+        game.restoreSnapshot(snapC);
+
+        for (OctiMove m : game.generateLegalMoves()) {
+            assertFalse("53".equals(m.asString()));
+        }
+        assertThrowsIllegalMove(() -> game.move("53"));
+    }
+
+    @Test
+    public void testPartnerRevivalOnPartnerHome() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_4);
+        OctiGame game = board.getGame();
+        game.start(OctiPlayer.PLAYER_A);
+
+        board.squareAt(2, 6).clear();
+        board.squareAt(2, 6).addPod(new OctiPod(OctiPodType.D_POD));
+
+        OctiGameSnapshot snap = game.captureSnapshot();
+        snap.turn = OctiPlayer.PLAYER_D;
+        snap.players[OctiPlayer.PLAYER_B.getValue()].eliminated = true;
+        snap.players[OctiPlayer.PLAYER_B.getValue()].capturedPods = 2;
+        snap.players[OctiPlayer.PLAYER_D.getValue()].capturedPods = 0;
+        game.restoreSnapshot(snap);
+
+        boolean has37Star = false;
+        for (OctiMove m : game.generateLegalMoves()) {
+            if ("37*".equals(m.asString())) {
+                has37Star = true;
+                break;
+            }
+        }
+        assertTrue("Partner revival must generate 37*", has37Star);
+
+        game.move("37*");
+        assertFalse(game.isPlayerEliminated(OctiPlayer.PLAYER_B));
+        assertEquals(1, game.getCapturedPods(OctiPlayer.PLAYER_B));
+        assertEquals(2, board.squareAt(2, 6).getNumPods());
+        assertEquals(OctiPodType.B_POD, board.squareAt(2, 6).getPodAt(1).getType());
+    }
+
+    @Test
+    public void testCanLiberatePersonalOccupancyOnly() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_4);
+        OctiGame game = board.getGame();
+        game.start(OctiPlayer.PLAYER_A);
+
+        // Enemy base for A/C is (2, 6) or (6, 2)
+        board.squareAt(2, 6).clear();
+        board.squareAt(2, 6).addPod(new OctiPod(OctiPodType.A_POD));
+
+        assertTrue(board.canLiberate(OctiPlayer.PLAYER_A));
+        assertFalse(board.canLiberate(OctiPlayer.PLAYER_C));
+
+        board.squareAt(4, 2).clear();
+        board.squareAt(4, 2).addPod(new OctiPod(OctiPodType.C_POD));
+        assertTrue(board.canLiberate(OctiPlayer.PLAYER_C));
+    }
+
+    @Test
+    public void testStalemateAndTerminationSerialization() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+        game.start(OctiPlayer.PLAYER_A);
+
+        for (int y = 0; y < board.getBoardHeight(); ++y) {
+            for (int x = 0; x < board.getBoardWidth(); ++x) {
+                if (board.squareAt(x, y).isOccupiedBy(OctiPlayer.PLAYER_B)) {
+                    board.squareAt(x, y).clear();
+                }
+            }
+        }
+        OctiGameSnapshot snap = game.captureSnapshot();
+        snap.players[OctiPlayer.PLAYER_B.getValue()].freePods = 0;
+        game.restoreSnapshot(snap);
+
+        game.move("33+b");
+        assertTrue(game.isGameOver());
+        assertEquals(OctiPlayer.PLAYER_A, game.getWinner());
+        assertEquals("TOTAL_CAPTURE", game.deduceTermination());
+    }
+
+    // -------------------------------------------------------------------------
+    // Tactical Upgrade & Blunder Refutation Tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testTuningProfilesDefaultAndCustom() {
+        OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
+        OctiBotEngine.BotTuningProfile prof = bot.tuningProfile();
+        assertEquals(8000, prof.timeBudgetMs);
+        assertEquals(6, prof.maxSearchDepth);
+        assertEquals(2, prof.maxQuiesceDepth);
+        assertEquals(6, prof.quiesceBranchCap);
+        assertEquals(40, prof.rootBranchCap);
+        assertEquals(24, prof.treeBranchCap);
+        assertEquals(2, prof.lazySmpThreads);
+
+        OctiBotEngine.BotTuningProfile custom = prof.copy();
+        custom.maxSearchDepth = 12;
+        custom.maxQuiesceDepth = 5;
+        bot.setTuningProfile(custom);
+        assertEquals(12, bot.tuningProfile().maxSearchDepth);
+        assertEquals(5, bot.tuningProfile().maxQuiesceDepth);
+    }
+
+    @Test
+    public void testMultiPodDevelopmentBonusAndMonopolyPenalty() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+        game.start(OctiPlayer.PLAYER_A);
+
+        int score0 = OctiBotEngine.evaluatePosition(board, OctiPlayer.PLAYER_A);
+
+        board.squareAt(2, 2).getPodAt(0).addProng(OctiDir.DIR_N, false);
+        int score1 = OctiBotEngine.evaluatePosition(board, OctiPlayer.PLAYER_A);
+        assertTrue(score1 > score0);
+
+        board.squareAt(4, 2).getPodAt(0).addProng(OctiDir.DIR_N, false);
+        int score2 = OctiBotEngine.evaluatePosition(board, OctiPlayer.PLAYER_A);
+        assertTrue(score2 > score1);
+
+        board.squareAt(4, 2).getPodAt(0).removeProng(OctiDir.DIR_N);
+        board.squareAt(2, 2).getPodAt(0).addProng(OctiDir.DIR_E, false);
+        board.squareAt(2, 2).getPodAt(0).addProng(OctiDir.DIR_NE, false);
+        board.squareAt(2, 2).getPodAt(0).addProng(OctiDir.DIR_NW, false);
+        OctiBotEngine.BotTuningProfile prof = OctiBotEngine.defaultProfileForDifficulty(OctiBotEngine.BotDifficulty.TACTICAL);
+        int scoreMonopoly = OctiBotEngine.evaluatePosition(board, OctiPlayer.PLAYER_A, prof);
+        assertTrue(scoreMonopoly < score2 + 200);
+    }
+
+    @Test
+    public void testLeapfrogBatteryEvaluation() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+        game.start(OctiPlayer.PLAYER_A);
+
+        board.squareAt(2, 2).clear();
+        board.squareAt(4, 2).clear();
+        board.squareAt(6, 2).clear();
+
+        board.squareAt(3, 3).addPod(new OctiPod(OctiPodType.A_POD));
+        board.squareAt(3, 3).getPodAt(0).addProng(OctiDir.DIR_N, false);
+
+        OctiBotEngine.BotTuningProfile prof = OctiBotEngine.defaultProfileForDifficulty(OctiBotEngine.BotDifficulty.TACTICAL);
+        int scoreNoPivot = OctiBotEngine.evaluatePosition(board, OctiPlayer.PLAYER_A, prof);
+
+        board.squareAt(3, 4).addPod(new OctiPod(OctiPodType.A_POD));
+        int scoreWithPivot = OctiBotEngine.evaluatePosition(board, OctiPlayer.PLAYER_A, prof);
+        assertTrue(scoreWithPivot > scoreNoPivot);
+    }
+
+    @Test
+    public void testRefuteBlunderGameC205F2c1Ply14() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_OFK);
+        OctiGame game = board.getGame();
+        game.start(OctiPlayer.PLAYER_A);
+
+        game.move("22+b");
+        game.move("26+e");
+        game.move("22b-33");
+        game.move("26e-25");
+        game.move("33b+h");
+        game.move("25e+d");
+        game.move("32+a");
+        game.move("25de+b");
+        game.move("32a+h");
+        game.move("25bde-34");
+        game.move("32ah+b");
+        game.move("34bde+f");
+        game.move("33bh+a");
+
+        assertEquals(OctiPlayer.PLAYER_B, game.getTurn());
+
+        OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
+        bot.setTimeBudgetMs(2500);
+        String chosen = bot.chooseMove(board);
+        assertFalse("34bdef-43".equals(chosen));
+    }
+
+    // -------------------------------------------------------------------------
     // Exception Assert Helpers
     // -------------------------------------------------------------------------
 
@@ -1611,3 +1841,13 @@ public class OctiBoardEngineTest {
         }
     }
 }
+
+/*
+ * Local variables:
+ * mode: Java
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

@@ -241,6 +241,23 @@ public final class OctiBoardRenderer {
                 : COMMIT_FLASH_GREEN_TEXT_COLOR;
     }
 
+    public static String seatColorLabel(OctiPlayer seat) {
+        if (seat == null) {
+            return "A (Green)";
+        }
+        switch (seat) {
+            case PLAYER_B:
+                return "B (Red)";
+            case PLAYER_C:
+                return "C (Blue)";
+            case PLAYER_D:
+                return "D (Amber)";
+            case PLAYER_A:
+            default:
+                return "A (Green)";
+        }
+    }
+
     public static String formatStartMatchConfigSummary(
             OctiGameMode mode,
             OctiGameBases bases,
@@ -270,15 +287,9 @@ public final class OctiBoardRenderer {
 
         String seatLabel;
         if (mode == OctiGameMode.GAME_MODE_4) {
-            seatLabel = seatShort;
+            seatLabel = seatColorLabel(humanSeat);
         } else {
-            switch (humanSeat) {
-                case PLAYER_B: seatLabel = "B (Green)"; break;
-                case PLAYER_C: seatLabel = "C"; break;
-                case PLAYER_D: seatLabel = "D"; break;
-                case PLAYER_A:
-                default:       seatLabel = "A (Red)"; break;
-            }
+            seatLabel = seatColorLabel(humanSeat);
         }
 
         String line1;

@@ -1013,10 +1013,10 @@ TEST(Octi2PlayerGameTest, UserReported72MoveTranscriptRejectsEmptyBaseLiberation
     CHECK_THROWS(octi::IllegalMoveException, game->move("77*"));
 }
 
-TEST(Octi2PlayerGameTest, EnemySquarePodPlacementPrioritizesLiberationOverReserve)
+TEST(Octi2PlayerGameTest, EnemySquarePodPlacementPrioritizesReserveOverLiberationWhenUnadorned)
 {
     // 1. 2P mode: placing an unadorned pod ("57") on an occupied enemy OCTI square
-    // while holding both capturedPods > 0 and freePods > 0 must consume capturedPods first.
+    // while holding both freePods > 0 and capturedPods > 0 must consume freePods first.
     octi::OctiBoard board2p(octi::GAME_MODE_2);
     octi::OctiGame *game2p = board2p.getGame();
     game2p->start(octi::PLAYER_A);
@@ -1024,46 +1024,51 @@ TEST(Octi2PlayerGameTest, EnemySquarePodPlacementPrioritizesLiberationOverReserv
     board2p.squareAt(4, 6).clear(); // (5, 7) is a B_OCTI_SQUARE (enemy base for Player A)
     board2p.squareAt(4, 6).addPod(octi::OctiPod(octi::A_POD));
     octi::OctiGameSnapshot snap2p = game2p->captureSnapshot();
-    snap2p.players[octi::PLAYER_A].freePods = 3;
+    snap2p.players[octi::PLAYER_A].freePods = 1;
     snap2p.players[octi::PLAYER_A].capturedPods = 2;
     game2p->restoreSnapshot(snap2p);
 
+    // Unadorned "57" consumes freePods first (1 -> 0), capturedPods stays 2
     game2p->move("57");
-    LONGS_EQUAL(3, game2p->getFreePods(octi::PLAYER_A));
-    LONGS_EQUAL(1, game2p->getCapturedPods(octi::PLAYER_A));
+    LONGS_EQUAL(0, game2p->getFreePods(octi::PLAYER_A));
+    LONGS_EQUAL(2, game2p->getCapturedPods(octi::PLAYER_A));
     LONGS_EQUAL(2, board2p.squareAt(4, 6).getNumPods());
 
     // Pass B's turn
     game2p->move("37+d");
 
-    // Next placement on enemy base "57" consumes the last captured pod (1 -> 0), freePods stays 3
+    // With freePods == 0, unadorned "57" falls back to consuming capturedPods (2 -> 1)
     game2p->move("57");
-    LONGS_EQUAL(3, game2p->getFreePods(octi::PLAYER_A));
-    LONGS_EQUAL(0, game2p->getCapturedPods(octi::PLAYER_A));
+    LONGS_EQUAL(0, game2p->getFreePods(octi::PLAYER_A));
+    LONGS_EQUAL(1, game2p->getCapturedPods(octi::PLAYER_A));
     LONGS_EQUAL(3, board2p.squareAt(4, 6).getNumPods());
 
     // Pass B's turn
     game2p->move("77+d");
 
-    // With capturedPods == 0, unadorned "57" falls back to consuming freePods (3 -> 2)
-    game2p->move("57");
-    LONGS_EQUAL(2, game2p->getFreePods(octi::PLAYER_A));
+    // Explicit liberation "57*" consumes the last captured pod (1 -> 0)
+    game2p->move("57*");
+    LONGS_EQUAL(0, game2p->getFreePods(octi::PLAYER_A));
     LONGS_EQUAL(0, game2p->getCapturedPods(octi::PLAYER_A));
     LONGS_EQUAL(4, board2p.squareAt(4, 6).getNumPods());
 
-    // 2. 4P mode: placing an unadorned pod on a non-home OCTI square consumes capturedPods before freePods
+    // 2. 4P mode: (5, 7) is NEUTRAL_OCTI_SQUARE; reserve pods cannot be placed on neutral squares
     octi::OctiBoard board4p(octi::GAME_MODE_4);
     octi::OctiGame *game4p = board4p.getGame();
     game4p->start(octi::PLAYER_A);
 
-    board4p.squareAt(4, 6).clear(); // (5, 7) is a NEUTRAL_OCTI_SQUARE in 4P mode
+    board4p.squareAt(4, 6).clear();
     board4p.squareAt(4, 6).addPod(octi::OctiPod(octi::A_POD));
     octi::OctiGameSnapshot snap4p = game4p->captureSnapshot();
     snap4p.players[octi::PLAYER_A].freePods = 2;
     snap4p.players[octi::PLAYER_A].capturedPods = 1;
     game4p->restoreSnapshot(snap4p);
 
-    game4p->move("57");
+    // Unadorned "57" is rejected because freePods cannot be placed on neutral squares
+    CHECK_THROWS(octi::IllegalMoveException, game4p->move("57"));
+
+    // "57*" liberates captured pod onto neutral square
+    game4p->move("57*");
     LONGS_EQUAL(2, game4p->getFreePods(octi::PLAYER_A));
     LONGS_EQUAL(0, game4p->getCapturedPods(octi::PLAYER_A));
     LONGS_EQUAL(2, board4p.squareAt(4, 6).getNumPods());
@@ -1966,15 +1971,15 @@ TEST(OctiBotEngineCoreTest, DefaultBudgetAndDepthPerDifficultyLevel)
     CHECK_EQUAL(8000, octi::OctiBotEngine::defaultBudgetForDifficulty(octi::BotDifficulty::TACTICAL));
     CHECK_EQUAL(15000, octi::OctiBotEngine::defaultBudgetForDifficulty(octi::BotDifficulty::MASTER));
 
-    CHECK_EQUAL(5, octi::OctiBotEngine::maxDepthForDifficulty(octi::BotDifficulty::CASUAL));
-    CHECK_EQUAL(7, octi::OctiBotEngine::maxDepthForDifficulty(octi::BotDifficulty::TACTICAL));
+    CHECK_EQUAL(3, octi::OctiBotEngine::maxDepthForDifficulty(octi::BotDifficulty::CASUAL));
+    CHECK_EQUAL(6, octi::OctiBotEngine::maxDepthForDifficulty(octi::BotDifficulty::TACTICAL));
     CHECK_EQUAL(9, octi::OctiBotEngine::maxDepthForDifficulty(octi::BotDifficulty::MASTER));
 
-    CHECK_EQUAL(28, octi::OctiBotEngine::rootCapForDifficulty(octi::BotDifficulty::CASUAL));
+    CHECK_EQUAL(24, octi::OctiBotEngine::rootCapForDifficulty(octi::BotDifficulty::CASUAL));
     CHECK_EQUAL(40, octi::OctiBotEngine::rootCapForDifficulty(octi::BotDifficulty::TACTICAL));
     CHECK_EQUAL(56, octi::OctiBotEngine::rootCapForDifficulty(octi::BotDifficulty::MASTER));
 
-    CHECK_EQUAL(18, octi::OctiBotEngine::branchCapForDifficulty(octi::BotDifficulty::CASUAL));
+    CHECK_EQUAL(16, octi::OctiBotEngine::branchCapForDifficulty(octi::BotDifficulty::CASUAL));
     CHECK_EQUAL(24, octi::OctiBotEngine::branchCapForDifficulty(octi::BotDifficulty::TACTICAL));
     CHECK_EQUAL(32, octi::OctiBotEngine::branchCapForDifficulty(octi::BotDifficulty::MASTER));
 }
@@ -2607,6 +2612,254 @@ TEST(OctiForKidsHardeningAndBotTest, BotEngineNoPrematurePenaltyCliffAndFindsLeg
 
     // Applying the chosen move must succeed
     board6.getGame()->move(moveStr);
+}
+
+// ---------------------------------------------------------------------------
+// 4-Player Rulebook Compliance Tests
+// ---------------------------------------------------------------------------
+
+TEST_GROUP(Octi4PlayerRulebookComplianceTest) {
+    void setup() {}
+    void teardown() {}
+};
+
+TEST(Octi4PlayerRulebookComplianceTest, RejectFourIllegalPliesFromTranscript84628218)
+{
+    octi::OctiBoard board(octi::GAME_MODE_4);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    // 1. Ply 26: Player B cannot place reserve pod on neutral square (5, 3) / (4, 2)
+    game->move("33+b"); // A
+    board.squareAt(4, 2).clear();
+    board.squareAt(4, 2).addPod(octi::OctiPod(octi::B_POD));
+    std::vector<octi::OctiMove> bMoves = game->generateLegalMoves();
+    for (const auto &m : bMoves) {
+        CHECK_FALSE(m.asString() == "53");
+    }
+    CHECK_THROWS(octi::IllegalMoveException, game->move("53"));
+
+    // 2. Ply 52: Player D cannot place reserve pod on partner B's home square (3, 7) / (2, 6)
+    board.squareAt(2, 6).clear();
+    board.squareAt(2, 6).addPod(octi::OctiPod(octi::D_POD));
+    octi::OctiGameSnapshot snapD = game->captureSnapshot();
+    snapD.turn = octi::PLAYER_D;
+    snapD.players[octi::PLAYER_D].freePods = 2;
+    game->restoreSnapshot(snapD);
+
+    std::vector<octi::OctiMove> dMoves = game->generateLegalMoves();
+    for (const auto &m : dMoves) {
+        CHECK_FALSE(m.asString() == "37");
+    }
+    CHECK_THROWS(octi::IllegalMoveException, game->move("37"));
+
+    // 3. Ply 82: Player C cannot liberate on enemy base 37 occupied ONLY by partner A
+    board.squareAt(2, 6).clear();
+    board.squareAt(2, 6).addPod(octi::OctiPod(octi::A_POD));
+    octi::OctiGameSnapshot snapC = game->captureSnapshot();
+    snapC.turn = octi::PLAYER_C;
+    snapC.players[octi::PLAYER_C].capturedPods = 1;
+    game->restoreSnapshot(snapC);
+
+    std::vector<octi::OctiMove> cMoves = game->generateLegalMoves();
+    for (const auto &m : cMoves) {
+        CHECK_FALSE(m.asString() == "37*");
+    }
+    CHECK_THROWS(octi::IllegalMoveException, game->move("37*"));
+
+    // 4. Ply 100: Player C cannot place reserve pod on neutral square 53 occupied only by partner A
+    board.squareAt(4, 2).clear();
+    board.squareAt(4, 2).addPod(octi::OctiPod(octi::A_POD));
+    snapC = game->captureSnapshot();
+    snapC.turn = octi::PLAYER_C;
+    snapC.players[octi::PLAYER_C].freePods = 2;
+    game->restoreSnapshot(snapC);
+
+    cMoves = game->generateLegalMoves();
+    for (const auto &m : cMoves) {
+        CHECK_FALSE(m.asString() == "53");
+    }
+    CHECK_THROWS(octi::IllegalMoveException, game->move("53"));
+}
+
+TEST(Octi4PlayerRulebookComplianceTest, PartnerRevivalOnPartnerHome)
+{
+    octi::OctiBoard board(octi::GAME_MODE_4);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    board.squareAt(2, 6).clear();
+    board.squareAt(2, 6).addPod(octi::OctiPod(octi::D_POD));
+
+    octi::OctiGameSnapshot snap = game->captureSnapshot();
+    snap.turn = octi::PLAYER_D;
+    snap.players[octi::PLAYER_B].eliminated = true;
+    snap.players[octi::PLAYER_B].capturedPods = 2;
+    snap.players[octi::PLAYER_D].capturedPods = 0;
+    game->restoreSnapshot(snap);
+
+    std::vector<octi::OctiMove> dMoves = game->generateLegalMoves();
+    bool has37Star = false;
+    for (const auto &m : dMoves) {
+        if (m.asString() == "37*") {
+            has37Star = true;
+            break;
+        }
+    }
+    CHECK_TRUE(has37Star);
+
+    game->move("37*");
+    CHECK_FALSE(game->isPlayerEliminated(octi::PLAYER_B));
+    LONGS_EQUAL(1, game->getCapturedPods(octi::PLAYER_B));
+    LONGS_EQUAL(2, board.squareAt(2, 6).getNumPods());
+    CHECK_EQUAL(octi::B_POD, board.squareAt(2, 6).getPodAt(1).getType());
+}
+
+TEST(Octi4PlayerRulebookComplianceTest, CanLiberatePersonalOccupancyOnly)
+{
+    octi::OctiBoard board(octi::GAME_MODE_4);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    // Enemy base for A/C is (2, 6) or (6, 2)
+    board.squareAt(2, 6).clear();
+    board.squareAt(2, 6).addPod(octi::OctiPod(octi::A_POD));
+
+    CHECK_TRUE(board.canLiberate(octi::PLAYER_A));
+    CHECK_FALSE(board.canLiberate(octi::PLAYER_C));
+
+    board.squareAt(4, 2).clear();
+    board.squareAt(4, 2).addPod(octi::OctiPod(octi::C_POD));
+    CHECK_TRUE(board.canLiberate(octi::PLAYER_C));
+}
+
+TEST(Octi4PlayerRulebookComplianceTest, StalemateAndTerminationSerialization)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    for (int y = 0; y < board.getBoardHeight(); ++y) {
+        for (int x = 0; x < board.getBoardWidth(); ++x) {
+            if (board.squareAt(x, y).isOccupiedBy(octi::PLAYER_B)) {
+                board.squareAt(x, y).clear();
+            }
+        }
+    }
+    octi::OctiGameSnapshot snap = game->captureSnapshot();
+    snap.players[octi::PLAYER_B].freePods = 0;
+    game->restoreSnapshot(snap);
+
+    game->move("33+b");
+    CHECK_TRUE(game->isGameOver());
+    CHECK_EQUAL(octi::PLAYER_A, game->getWinner());
+
+    std::string jsonStr = game->serializeJson();
+    nlohmann::json j = nlohmann::json::parse(jsonStr);
+    CHECK_EQUAL("TOTAL_CAPTURE", j["termination"].get<std::string>());
+}
+
+// ---------------------------------------------------------------------------
+// Tactical Upgrade & Blunder Refutation Tests
+// ---------------------------------------------------------------------------
+
+TEST_GROUP(OctiBotTacticalUpgradeTest) {
+    void setup() {}
+    void teardown() {}
+};
+
+TEST(OctiBotTacticalUpgradeTest, TuningProfilesDefaultAndCustom)
+{
+    octi::OctiBotEngine bot(octi::BotDifficulty::TACTICAL);
+    const octi::BotTuningProfile &prof = bot.tuningProfile();
+    LONGS_EQUAL(8000, prof.timeBudgetMs);
+    LONGS_EQUAL(6, prof.maxSearchDepth);
+    LONGS_EQUAL(2, prof.maxQuiesceDepth);
+    LONGS_EQUAL(6, prof.quiesceBranchCap);
+    LONGS_EQUAL(40, prof.rootBranchCap);
+    LONGS_EQUAL(24, prof.treeBranchCap);
+    LONGS_EQUAL(2, prof.lazySmpThreads);
+
+    octi::BotTuningProfile custom = prof;
+    custom.maxSearchDepth = 12;
+    custom.maxQuiesceDepth = 5;
+    bot.setTuningProfile(custom);
+    CHECK_EQUAL(12, bot.tuningProfile().maxSearchDepth);
+    CHECK_EQUAL(5, bot.tuningProfile().maxQuiesceDepth);
+}
+
+TEST(OctiBotTacticalUpgradeTest, MultiPodDevelopmentBonusAndMonopolyPenalty)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    int score0 = octi::OctiBotEngine::evaluatePosition(board, octi::PLAYER_A);
+
+    board.squareAt(2, 2).podAt(0).addProng(octi::DIR_N);
+    int score1 = octi::OctiBotEngine::evaluatePosition(board, octi::PLAYER_A);
+    CHECK_TRUE(score1 > score0);
+
+    board.squareAt(4, 2).podAt(0).addProng(octi::DIR_N);
+    int score2 = octi::OctiBotEngine::evaluatePosition(board, octi::PLAYER_A);
+    CHECK_TRUE(score2 > score1);
+
+    board.squareAt(4, 2).podAt(0).removeProng(octi::DIR_N);
+    board.squareAt(2, 2).podAt(0).addProng(octi::DIR_E);
+    board.squareAt(2, 2).podAt(0).addProng(octi::DIR_NE);
+    board.squareAt(2, 2).podAt(0).addProng(octi::DIR_NW);
+    octi::BotTuningProfile prof = octi::OctiBotEngine::defaultProfileForDifficulty(octi::BotDifficulty::TACTICAL);
+    int scoreMonopoly = octi::OctiBotEngine::evaluatePosition(board, octi::PLAYER_A, prof);
+    CHECK_TRUE(scoreMonopoly < score2 + 200);
+}
+
+TEST(OctiBotTacticalUpgradeTest, LeapfrogBatteryEvaluation)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    board.squareAt(2, 2).clear();
+    board.squareAt(4, 2).clear();
+    board.squareAt(6, 2).clear();
+
+    board.squareAt(3, 3).addPod(octi::OctiPod(octi::A_POD));
+    board.squareAt(3, 3).podAt(0).addProng(octi::DIR_N);
+
+    octi::BotTuningProfile prof = octi::OctiBotEngine::defaultProfileForDifficulty(octi::BotDifficulty::TACTICAL);
+    int scoreNoPivot = octi::OctiBotEngine::evaluatePosition(board, octi::PLAYER_A, prof);
+
+    board.squareAt(3, 4).addPod(octi::OctiPod(octi::A_POD));
+    int scoreWithPivot = octi::OctiBotEngine::evaluatePosition(board, octi::PLAYER_A, prof);
+    CHECK_TRUE(scoreWithPivot > scoreNoPivot);
+}
+
+TEST(OctiBotTacticalUpgradeTest, RefuteBlunderGameC205F2c1Ply14)
+{
+    octi::OctiBoard board(octi::GAME_MODE_OFK);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+
+    game->move("22+b");
+    game->move("26+e");
+    game->move("22b-33");
+    game->move("26e-25");
+    game->move("33b+h");
+    game->move("25e+d");
+    game->move("32+a");
+    game->move("25de+b");
+    game->move("32a+h");
+    game->move("25bde-34");
+    game->move("32ah+b");
+    game->move("34bde+f");
+    game->move("33bh+a");
+
+    CHECK_EQUAL(octi::PLAYER_B, game->getTurn());
+
+    octi::OctiBotEngine bot(octi::BotDifficulty::TACTICAL);
+    bot.setTimeBudgetMs(2500);
+    std::string chosen = bot.chooseMove(board);
+    CHECK_FALSE(chosen == "34bdef-43");
 }
 
 int main(int argc, char **argv)

@@ -179,48 +179,16 @@ public class OctiBoard {
         }
 
         if (mode == OctiGameMode.GAME_MODE_4) {
-            if (boardSquares[4][2].isOccupiedBy(player)
-                    || boardSquares[4][2].isCapturedByTeamOf(player)
-                    || boardSquares[4][6].isOccupiedBy(player)
-                    || boardSquares[4][6].isCapturedByTeamOf(player)) {
+            if (boardSquares[4][2].isOccupiedBy(player) || boardSquares[4][6].isOccupiedBy(player)) {
                 return true;
             }
 
             if (player == OctiPlayer.PLAYER_A || player == OctiPlayer.PLAYER_C) {
-                if (boardSquares[2][6].isOccupiedBy(player)
-                        || boardSquares[2][6].isCapturedByTeamOf(player)
-                        || boardSquares[6][2].isOccupiedBy(player)
-                        || boardSquares[6][2].isCapturedByTeamOf(player)) {
-                    return true;
-                }
+                return boardSquares[2][6].isOccupiedBy(player) || boardSquares[6][2].isOccupiedBy(player);
             } else if (player == OctiPlayer.PLAYER_B || player == OctiPlayer.PLAYER_D) {
-                if (boardSquares[2][2].isOccupiedBy(player)
-                        || boardSquares[2][2].isCapturedByTeamOf(player)
-                        || boardSquares[6][6].isOccupiedBy(player)
-                        || boardSquares[6][6].isCapturedByTeamOf(player)) {
-                    return true;
-                }
+                return boardSquares[2][2].isOccupiedBy(player) || boardSquares[6][6].isOccupiedBy(player);
             }
-
-            if (game != null) {
-                if (player == OctiPlayer.PLAYER_A && game.isPlayerEliminated(OctiPlayer.PLAYER_C)) {
-                    if (boardSquares[6][6].isOccupiedBy(OctiPlayer.PLAYER_A)) {
-                        return true;
-                    }
-                } else if (player == OctiPlayer.PLAYER_C && game.isPlayerEliminated(OctiPlayer.PLAYER_A)) {
-                    if (boardSquares[2][2].isOccupiedBy(OctiPlayer.PLAYER_C)) {
-                        return true;
-                    }
-                } else if (player == OctiPlayer.PLAYER_B && game.isPlayerEliminated(OctiPlayer.PLAYER_D)) {
-                    if (boardSquares[6][2].isOccupiedBy(OctiPlayer.PLAYER_B)) {
-                        return true;
-                    }
-                } else if (player == OctiPlayer.PLAYER_D && game.isPlayerEliminated(OctiPlayer.PLAYER_B)) {
-                    if (boardSquares[2][6].isOccupiedBy(OctiPlayer.PLAYER_D)) {
-                        return true;
-                    }
-                }
-            }
+            return false;
         }
 
         return false;

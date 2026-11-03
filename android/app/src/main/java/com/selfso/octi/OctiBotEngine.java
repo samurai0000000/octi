@@ -41,6 +41,125 @@ public class OctiBotEngine {
         public long elapsedMs = 0;
     }
 
+    public static final class BotTuningProfile {
+        // --- 1. Search Horizon, Quiescence & Concurrency ---
+        public int timeBudgetMs = 8000;
+        public int maxSearchDepth = 6;
+        public int maxQuiesceDepth = 2;
+        public int quiesceBranchCap = 6;
+        public int rootBranchCap = 36;
+        public int treeBranchCap = 24;
+        public int lazySmpThreads = 2;
+        public int compositeMoveMaxPly = 1;
+        public int rootScoreJitter = 25;
+
+        // --- 2. Base Occupation & Distance Weights ---
+        public int capturedEnemyBaseBonus = 28000;
+        public int lostAlliedBasePenalty = 32000;
+        public int neutralOctiSquareBonus = 4000;
+        public int closestPodDistWeight = 320;
+        public int secondClosestPodDistWeight = 140;
+        public int oneStepBaseThreatBonus = 8500;
+        public int oneJumpBaseThreatBonus = 12000;
+        public int twoPlyBaseThreatWeight = 2400;
+
+        // --- 3. Multi-Pod Development & Anti-Monopoly Weights ---
+        public int podZeroProngVal = 320;
+        public int podOneProngVal = 950;
+        public int podTwoProngVal = 1450;
+        public int podThreePlusProngVal = 1750;
+        public int normalProngVal = 220;
+        public int superProngVal = 350;
+        public int orthDiagVersatilityBonus = 550;
+        public int diagOnlyParityPenalty = 350;
+        public int firstArmedPodBonus = 600;
+        public int secondArmedPodBonus = 1100;
+        public int thirdArmedPodBonus = 700;
+        public int singlePodMonopolyPenalty = 1000;
+        public int loneOneProngRushPenalty = 550;
+
+        // --- 4. Leapfrog / Launchpad Battery & Jump Reachability Weights ---
+        public int leapfrogBatteryWeight = 550;
+        public int leapfrogForwardBonus = 400;
+        public int jumpReachableSquareWeight = 130;
+        public int jumpReachStepWeight = 450;
+        public int jumpCapturablePodWeight = 1200;
+        public int jumpCapturableProngWeight = 200;
+
+        // --- 5. Hanging-Pod Safety, OFK Prong-Seizure & Move Ordering ---
+        public int hangingPodBasePenalty = 2200;
+        public int hangingProngWeight = 320;
+        public int ofkProngSeizureWeight = 600;
+        public int opponentTurnHangingPct = 140;
+        public int soleArmedPodDangerPenalty = 3500;
+        public int wipeoutDangerPenalty = 15000;
+        public int moveOrderCaptureBonus = 16000;
+        public int moveOrderBaseEntryBonus = 60000;
+        public int moveOrderLeapfrogBonus = 1200;
+        public int moveOrderBlunderPenalty = 7000;
+
+        public BotTuningProfile() {}
+
+        public BotTuningProfile(BotTuningProfile other) {
+            if (other != null) {
+                this.timeBudgetMs = other.timeBudgetMs;
+                this.maxSearchDepth = other.maxSearchDepth;
+                this.maxQuiesceDepth = other.maxQuiesceDepth;
+                this.quiesceBranchCap = other.quiesceBranchCap;
+                this.rootBranchCap = other.rootBranchCap;
+                this.treeBranchCap = other.treeBranchCap;
+                this.lazySmpThreads = other.lazySmpThreads;
+                this.compositeMoveMaxPly = other.compositeMoveMaxPly;
+                this.rootScoreJitter = other.rootScoreJitter;
+
+                this.capturedEnemyBaseBonus = other.capturedEnemyBaseBonus;
+                this.lostAlliedBasePenalty = other.lostAlliedBasePenalty;
+                this.neutralOctiSquareBonus = other.neutralOctiSquareBonus;
+                this.closestPodDistWeight = other.closestPodDistWeight;
+                this.secondClosestPodDistWeight = other.secondClosestPodDistWeight;
+                this.oneStepBaseThreatBonus = other.oneStepBaseThreatBonus;
+                this.oneJumpBaseThreatBonus = other.oneJumpBaseThreatBonus;
+                this.twoPlyBaseThreatWeight = other.twoPlyBaseThreatWeight;
+
+                this.podZeroProngVal = other.podZeroProngVal;
+                this.podOneProngVal = other.podOneProngVal;
+                this.podTwoProngVal = other.podTwoProngVal;
+                this.podThreePlusProngVal = other.podThreePlusProngVal;
+                this.normalProngVal = other.normalProngVal;
+                this.superProngVal = other.superProngVal;
+                this.orthDiagVersatilityBonus = other.orthDiagVersatilityBonus;
+                this.diagOnlyParityPenalty = other.diagOnlyParityPenalty;
+                this.firstArmedPodBonus = other.firstArmedPodBonus;
+                this.secondArmedPodBonus = other.secondArmedPodBonus;
+                this.thirdArmedPodBonus = other.thirdArmedPodBonus;
+                this.singlePodMonopolyPenalty = other.singlePodMonopolyPenalty;
+                this.loneOneProngRushPenalty = other.loneOneProngRushPenalty;
+
+                this.leapfrogBatteryWeight = other.leapfrogBatteryWeight;
+                this.leapfrogForwardBonus = other.leapfrogForwardBonus;
+                this.jumpReachableSquareWeight = other.jumpReachableSquareWeight;
+                this.jumpReachStepWeight = other.jumpReachStepWeight;
+                this.jumpCapturablePodWeight = other.jumpCapturablePodWeight;
+                this.jumpCapturableProngWeight = other.jumpCapturableProngWeight;
+
+                this.hangingPodBasePenalty = other.hangingPodBasePenalty;
+                this.hangingProngWeight = other.hangingProngWeight;
+                this.ofkProngSeizureWeight = other.ofkProngSeizureWeight;
+                this.opponentTurnHangingPct = other.opponentTurnHangingPct;
+                this.soleArmedPodDangerPenalty = other.soleArmedPodDangerPenalty;
+                this.wipeoutDangerPenalty = other.wipeoutDangerPenalty;
+                this.moveOrderCaptureBonus = other.moveOrderCaptureBonus;
+                this.moveOrderBaseEntryBonus = other.moveOrderBaseEntryBonus;
+                this.moveOrderLeapfrogBonus = other.moveOrderLeapfrogBonus;
+                this.moveOrderBlunderPenalty = other.moveOrderBlunderPenalty;
+            }
+        }
+
+        public BotTuningProfile copy() {
+            return new BotTuningProfile(this);
+        }
+    }
+
     private static final int WIN_SCORE = 1_000_000;
     private static final int INF_SCORE = 2_000_000;
     public static final int TT_SIZE = 262144; // 1 << 18 (256K entries)
@@ -159,6 +278,7 @@ public class OctiBotEngine {
     }
 
     private BotDifficulty difficulty;
+    private BotTuningProfile profile;
     private int timeBudgetMs;
     private boolean customTimeBudget;
     private long rngState;
@@ -198,7 +318,8 @@ public class OctiBotEngine {
 
     public OctiBotEngine(BotDifficulty difficulty, long rngSeed) {
         this.difficulty = (difficulty != null) ? difficulty : BotDifficulty.TACTICAL;
-        this.timeBudgetMs = defaultBudgetForDifficulty(this.difficulty);
+        this.profile = defaultProfileForDifficulty(this.difficulty);
+        this.timeBudgetMs = this.profile.timeBudgetMs;
         this.customTimeBudget = false;
         this.rngState = (rngSeed != 0L) ? rngSeed : 0x5EED2026L;
         java.util.Arrays.fill(ttDepths, -1);
@@ -209,13 +330,126 @@ public class OctiBotEngine {
 
     public void setDifficulty(BotDifficulty d) {
         this.difficulty = (d != null) ? d : BotDifficulty.TACTICAL;
-        if (!customTimeBudget) {
-            this.timeBudgetMs = defaultBudgetForDifficulty(this.difficulty);
+        int oldBudget = this.timeBudgetMs;
+        boolean wasCustom = this.customTimeBudget;
+        this.profile = defaultProfileForDifficulty(this.difficulty);
+        if (wasCustom) {
+            this.timeBudgetMs = oldBudget;
+            this.profile.timeBudgetMs = oldBudget;
+            this.customTimeBudget = true;
+        } else {
+            this.timeBudgetMs = this.profile.timeBudgetMs;
         }
     }
 
     public BotDifficulty difficulty() {
         return difficulty;
+    }
+
+    public void setTuningProfile(BotTuningProfile p) {
+        this.profile = (p != null) ? new BotTuningProfile(p) : defaultProfileForDifficulty(this.difficulty);
+        this.timeBudgetMs = this.profile.timeBudgetMs;
+    }
+
+    public BotTuningProfile tuningProfile() {
+        return this.profile;
+    }
+
+    public static BotTuningProfile defaultProfileForDifficulty(BotDifficulty d) {
+        return defaultProfileForDifficulty(d != null ? d.getLevel() : 2);
+    }
+
+    public static BotTuningProfile defaultProfileForDifficulty(int diffLevel) {
+        BotTuningProfile p = new BotTuningProfile();
+        if (diffLevel <= 1) { // CASUAL (Level 1)
+            p.timeBudgetMs = 3000;
+            p.maxSearchDepth = 3;
+            p.maxQuiesceDepth = 0;
+            p.quiesceBranchCap = 0;
+            p.rootBranchCap = 24;
+            p.treeBranchCap = 16;
+            p.lazySmpThreads = 1;
+            p.compositeMoveMaxPly = -1;
+            p.rootScoreJitter = 160;
+            p.closestPodDistWeight = 280;
+            p.secondClosestPodDistWeight = 0;
+            p.oneStepBaseThreatBonus = 7500;
+            p.oneJumpBaseThreatBonus = 10000;
+            p.twoPlyBaseThreatWeight = 0;
+            p.firstArmedPodBonus = 500;
+            p.secondArmedPodBonus = 400;
+            p.thirdArmedPodBonus = 200;
+            p.singlePodMonopolyPenalty = 300;
+            p.leapfrogBatteryWeight = 200;
+            p.leapfrogForwardBonus = 150;
+            p.jumpReachableSquareWeight = 60;
+            p.jumpReachStepWeight = 150;
+            p.hangingPodBasePenalty = 1800;
+            p.hangingProngWeight = 250;
+            p.ofkProngSeizureWeight = 350;
+            p.opponentTurnHangingPct = 100;
+            p.soleArmedPodDangerPenalty = 1000;
+            p.moveOrderBlunderPenalty = 2000;
+        } else if (diffLevel == 2) { // TACTICAL (Level 2)
+            p.timeBudgetMs = 8000;
+            p.maxSearchDepth = 6;
+            p.maxQuiesceDepth = 2;
+            p.quiesceBranchCap = 6;
+            p.rootBranchCap = 40;
+            p.treeBranchCap = 24;
+            p.lazySmpThreads = 2;
+            p.compositeMoveMaxPly = 1;
+            p.rootScoreJitter = 20;
+            p.closestPodDistWeight = 320;
+            p.secondClosestPodDistWeight = 150;
+            p.oneStepBaseThreatBonus = 8500;
+            p.oneJumpBaseThreatBonus = 12000;
+            p.twoPlyBaseThreatWeight = 2400;
+            p.firstArmedPodBonus = 600;
+            p.secondArmedPodBonus = 1100;
+            p.thirdArmedPodBonus = 600;
+            p.singlePodMonopolyPenalty = 1000;
+            p.leapfrogBatteryWeight = 550;
+            p.leapfrogForwardBonus = 400;
+            p.jumpReachableSquareWeight = 130;
+            p.jumpReachStepWeight = 450;
+            p.hangingPodBasePenalty = 2200;
+            p.hangingProngWeight = 320;
+            p.ofkProngSeizureWeight = 600;
+            p.opponentTurnHangingPct = 140;
+            p.soleArmedPodDangerPenalty = 3500;
+            p.moveOrderBlunderPenalty = 7000;
+        } else { // MASTER (Level 3)
+            p.timeBudgetMs = 15000;
+            p.maxSearchDepth = 9;
+            p.maxQuiesceDepth = 4;
+            p.quiesceBranchCap = 10;
+            p.rootBranchCap = 56;
+            p.treeBranchCap = 32;
+            p.lazySmpThreads = 4;
+            p.compositeMoveMaxPly = 2;
+            p.rootScoreJitter = 0;
+            p.closestPodDistWeight = 350;
+            p.secondClosestPodDistWeight = 220;
+            p.oneStepBaseThreatBonus = 9500;
+            p.oneJumpBaseThreatBonus = 14000;
+            p.twoPlyBaseThreatWeight = 4200;
+            p.firstArmedPodBonus = 700;
+            p.secondArmedPodBonus = 1500;
+            p.thirdArmedPodBonus = 900;
+            p.singlePodMonopolyPenalty = 1400;
+            p.leapfrogBatteryWeight = 800;
+            p.leapfrogForwardBonus = 600;
+            p.jumpReachableSquareWeight = 180;
+            p.jumpReachStepWeight = 650;
+            p.hangingPodBasePenalty = 2600;
+            p.hangingProngWeight = 380;
+            p.ofkProngSeizureWeight = 750;
+            p.opponentTurnHangingPct = 180;
+            p.soleArmedPodDangerPenalty = 6000;
+            p.moveOrderBlunderPenalty = 11000;
+        }
+        return p;
     }
 
     public BotDifficulty getDifficulty() {
@@ -724,10 +958,69 @@ public class OctiBotEngine {
         return false;
     }
 
+    private static boolean squareHasAllyOf(OctiSquare sq, OctiGameMode mode, OctiPlayer player) {
+        if (sq == null || sq.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < sq.getNumPods(); i++) {
+            OctiPod p = sq.getPodAt(i);
+            if (p != null && OctiPlayer.areAllied(mode, p.getType().toPlayer(), player)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static long[] computeEnemyThreatMask(OctiBoard board, OctiPlayer turn) {
+        long[] mask = new long[2];
+        if (board == null || board.getGame() == null) {
+            return mask;
+        }
+        OctiGameMode mode = board.getGameMode();
+        int w = board.getBoardWidth();
+        int h = board.getBoardHeight();
+        boolean edgeless = board.getGame().useEdgelessBoard();
+
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                OctiSquare sq = board.squareAt(x, y);
+                if (sq.hasEnemyOf(turn)) {
+                    for (int pi = 0; pi < sq.getNumPods(); pi++) {
+                        OctiPod p = sq.getPodAt(pi);
+                        if (p != null && p.getNumProngs() > 0 && !OctiPlayer.areAllied(mode, p.getType().toPlayer(), turn)) {
+                            for (int d = 0; d < OctiDir.DIR_MAX; d++) {
+                                OctiDir dir = OctiDir.fromIndex(d);
+                                if (p.prongAt(dir) != OctiProngType.NO_PRONG) {
+                                    int dx = dir.deltaX();
+                                    int dy = dir.deltaY();
+                                    int mx = edgeless ? (((x + dx) % w + w) % w) : (x + dx);
+                                    int my = edgeless ? (((y + dy) % h + h) % h) : (y + dy);
+                                    int lx = edgeless ? (((x + 2 * dx) % w + w) % w) : (x + 2 * dx);
+                                    int ly = edgeless ? (((y + 2 * dy) % h + h) % h) : (y + 2 * dy);
+                                    if (board.isValidCoord(mx, my) && board.isValidCoord(lx, ly)) {
+                                        OctiSquare landSq = board.squareAt(lx, ly);
+                                        if (landSq.isEmpty()) {
+                                            int midIdx = my * 9 + mx;
+                                            int midWord = (midIdx >>> 6) & 1;
+                                            mask[midWord] |= (1L << (midIdx & 63));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return mask;
+    }
+
     private static int scoreMoveHeuristic(OctiBoard board,
                                           OctiMove move,
                                           OctiPlayer turn,
-                                          List<int[]> enemyTargets) {
+                                          List<int[]> enemyTargets,
+                                          BotTuningProfile profile,
+                                          long[] enemyThreatMask) {
         OctiGame game = board.getGame();
         OctiGameMode mode = board.getGameMode();
         int w = board.getBoardWidth();
@@ -754,7 +1047,7 @@ public class OctiBotEngine {
                 OctiSquare destSq = board.squareAt(lastHop.x, lastHop.y);
                 if (isEnemyHomeSquareFor(destSq.getType(), mode, turn)
                         && !destSq.isCapturedByTeamOf(turn)) {
-                    score += 55000;
+                    score += profile.moveOrderBaseEntryBonus;
                 }
                 if (destSq.getType() == OctiSquareType.NEUTRAL_OCTI_SQUARE && destSq.isEmpty()) {
                     score += 3000;
@@ -762,10 +1055,31 @@ public class OctiBotEngine {
 
                 for (OctiHop hop : op.hops) {
                     if (hop.capture) {
-                        score += 14000;
+                        score += profile.moveOrderCaptureBonus;
                     } else {
                         score += 250;
                     }
+                }
+
+                // Leapfrog / launchpad battery move detection
+                for (OctiHop hop : op.hops) {
+                    int mx = (op.x0 + hop.x) / 2;
+                    int my = (op.y0 + hop.y) / 2;
+                    if (board.isValidCoord(mx, my)) {
+                        OctiSquare midSq = board.squareAt(mx, my);
+                        if (squareHasAllyOf(midSq, mode, turn)) {
+                            score += profile.moveOrderLeapfrogBonus;
+                            break;
+                        }
+                    }
+                }
+
+                // Blunder penalty if ending square sits in enemy jump threat mask
+                int destBitIdx = lastHop.y * 9 + lastHop.x;
+                int destWord = (destBitIdx >>> 6) & 1;
+                long destBit = 1L << (destBitIdx & 63);
+                if (enemyThreatMask != null && (enemyThreatMask[destWord] & destBit) != 0L) {
+                    score -= profile.moveOrderBlunderPenalty;
                 }
 
                 OctiSquare startSq = board.squareAt(op.x0, op.y0);
@@ -860,16 +1174,28 @@ public class OctiBotEngine {
                                                    OctiPlayer turn,
                                                    String ttBestMove,
                                                    int maxBranch) {
-        List<OctiMove> moves = filterDominatedMoves(rawMoves);
+        return orderAndCapMoves(board, rawMoves, turn, ttBestMove, maxBranch,
+                defaultProfileForDifficulty(BotDifficulty.TACTICAL), true);
+    }
+
+    private static List<OctiMove> orderAndCapMoves(OctiBoard board,
+                                                   List<OctiMove> rawMoves,
+                                                   OctiPlayer turn,
+                                                   String ttBestMove,
+                                                   int maxBranch,
+                                                   BotTuningProfile profile,
+                                                   boolean filterDominated) {
+        List<OctiMove> moves = filterDominated ? filterDominatedMoves(rawMoves) : rawMoves;
         List<int[]> targets = targetEnemyBases(board, turn);
+        long[] enemyThreatMask = computeEnemyThreatMask(board, turn);
 
         int n = moves.size();
         int[][] scored = new int[n][2];
         for (int i = 0; i < n; i++) {
-            int s = scoreMoveHeuristic(board, moves.get(i), turn, targets);
+            int s = scoreMoveHeuristic(board, moves.get(i), turn, targets, profile, enemyThreatMask);
             if (ttBestMove != null && !ttBestMove.isEmpty()
                     && moves.get(i).asString().equals(ttBestMove)) {
-                s += 250000;
+                s += 200000;
             }
             scored[i][0] = s;
             scored[i][1] = i;
@@ -898,8 +1224,9 @@ public class OctiBotEngine {
                                                      long jumpedMask,
                                                      long[] visitedMask,
                                                      long[] capturedSqMask,
+                                                     List<int[]> targets,
                                                      int[] outStats) {
-        // outStats[0] = reachableSquares, outStats[1] = capturableEnemyPods, outStats[2] = capturableEnemyProngs
+        // outStats[0] = reachableSquares, outStats[1] = capturableEnemyPods, outStats[2] = capturableEnemyProngs, outStats[3] = minJumpDistToTargets
         if (depth > 4) {
             return;
         }
@@ -931,6 +1258,12 @@ public class OctiBotEngine {
                     if ((visitedMask[wordIdx] & bitMask) == 0L) {
                         visitedMask[wordIdx] |= bitMask;
                         outStats[0]++;
+                        if (targets != null && !targets.isEmpty()) {
+                            int jd = minChebyshevToTargets(lx, ly, targets, w, h, edgeless);
+                            if (jd < outStats[3]) {
+                                outStats[3] = jd;
+                            }
+                        }
                         if (jumpedSq.hasEnemyOf(p)) {
                             int jBit = jy * 9 + jx;
                             int jWord = (jBit >>> 6) & 1;
@@ -948,26 +1281,24 @@ public class OctiBotEngine {
                             }
                         }
                         evaluateJumpCaptureRecursive(board, startX, startY, lx, ly, pod, p, edgeless,
-                                depth + 1, jumpedMask | jMask, visitedMask, capturedSqMask, outStats);
+                                depth + 1, jumpedMask | jMask, visitedMask, capturedSqMask, targets, outStats);
                     }
                 }
             }
         }
     }
 
-    /**
-     * Hybrid 2001+2026 Evaluation Function:
-     * - Armed pod scaling (unarmed home-square pods worth less than reserve pods to prevent 0-prong dumping)
-     * - Stack vulnerability & hanging-pod jump-capture threat penalties
-     * - Orthogonal + diagonal color-parity versatility & straight-forward prong priority
-     * - 2001 recursive evaluateJumpCapture threat & mobility pass
-     * - 2001 multi-base minimum Chebyshev distance sum across all uncaptured enemy bases (d1 + d2 + d3)
-     * - Allied home base defense against nearby enemy pods
-     */
     public static int evaluatePosition(OctiBoard board, OctiPlayer perspective) {
+        return evaluatePosition(board, perspective, defaultProfileForDifficulty(BotDifficulty.MASTER));
+    }
+
+    public static int evaluatePosition(OctiBoard board, OctiPlayer perspective, BotTuningProfile profile) {
         if (board == null || board.getGame() == null
                 || perspective == null || perspective == OctiPlayer.PLAYER_UNDEF) {
             return 0;
+        }
+        if (profile == null) {
+            profile = defaultProfileForDifficulty(BotDifficulty.MASTER);
         }
         OctiGame game = board.getGame();
         OctiGameMode mode = board.getGameMode();
@@ -992,8 +1323,15 @@ public class OctiBotEngine {
         int totalScore = 0;
         int totalAllyPodsOnBoard = 0;
         int totalEnemyPodsOnBoard = 0;
-        boolean allyHasUnarmedHomePod = false;
-        boolean enemyHasUnarmedHomePod = false;
+        int allyArmedPods = 0;
+        int enemyArmedPods = 0;
+        int allyUnarmedHomePods = 0;
+        int enemyUnarmedHomePods = 0;
+
+        List<int[]> allyPodCoords = new ArrayList<>();
+        List<int[]> enemyPodCoords = new ArrayList<>();
+        long[] allyJumpThreatMask = new long[2];
+        long[] enemyJumpThreatMask = new long[2];
 
         // 1. Base Occupation & Square Stacking Assessment
         for (int y = 0; y < h; y++) {
@@ -1003,17 +1341,17 @@ public class OctiBotEngine {
 
                 if (isEnemyHomeSquareFor(sqType, mode, perspective)) {
                     if (sq.isCapturedByTeamOf(perspective)) {
-                        totalScore += 28000;
+                        totalScore += profile.capturedEnemyBaseBonus;
                     }
                 } else if (isAlliedHomeSquareFor(sqType, mode, perspective)) {
                     if (sq.isCaptured() && !sq.isCapturedByTeamOf(perspective)) {
-                        totalScore -= 32000;
+                        totalScore -= profile.lostAlliedBasePenalty;
                     }
                 } else if (sqType == OctiSquareType.NEUTRAL_OCTI_SQUARE) {
                     if (sq.isCapturedByTeamOf(perspective)) {
-                        totalScore += 4000;
+                        totalScore += profile.neutralOctiSquareBonus;
                     } else if (sq.isCaptured()) {
-                        totalScore -= 4000;
+                        totalScore -= profile.neutralOctiSquareBonus;
                     }
                 }
 
@@ -1036,104 +1374,39 @@ public class OctiBotEngine {
                         if (p.getNumProngs() == 0) {
                             unarmedCount++;
                         }
-                        if (onAlliedHome && p.getNumProngs() < 2) {
+                        if (onAlliedHome && p.getNumProngs() == 0) {
                             if (sqAlly) {
-                                allyHasUnarmedHomePod = true;
+                                allyUnarmedHomePods++;
                             } else {
-                                enemyHasUnarmedHomePod = true;
+                                enemyUnarmedHomePods++;
                             }
                         }
                     }
 
-                    // Penalize stacking multiple pods on a non-enemy-base square (single-jump multi-capture bait!)
+                    // Penalize stacking multiple pods on a non-enemy-base square
                     if (numPods > 1 && !onCapturedEnemyBase) {
                         int stackPen = (numPods - 1) * 450 + unarmedCount * 950;
                         totalScore += sqAlly ? -stackPen : stackPen;
                     }
                 }
-            }
-        }
 
-        // 2. 2001 Multi-Base Chebyshev Distance Sum across all uncaptured enemy bases (d1 + d2 + d3)
-        if (!allyTargets.isEmpty()) {
-            int allyBaseDistSum = 0;
-            for (int[] target : allyTargets) {
-                OctiSquare tSq = board.squareAt(target[0], target[1]);
-                if (tSq.isCapturedByTeamOf(perspective)) {
-                    continue;
-                }
-                int bestDist = 999;
-                for (int y = 0; y < h; y++) {
-                    for (int x = 0; x < w; x++) {
-                        OctiSquare sq = board.squareAt(x, y);
-                        for (int i = 0; i < sq.getNumPods(); i++) {
-                            OctiPod pod = sq.getPodAt(i);
-                            if (OctiPlayer.areAllied(mode, pod.getType().toPlayer(), perspective)
-                                    && pod.getNumProngs() > 0) {
-                                int dx = torusDist(x, target[0], w, edgeless);
-                                int dy = torusDist(y, target[1], h, edgeless);
-                                bestDist = Math.min(bestDist, Math.max(dx, dy));
-                            }
-                        }
-                    }
-                }
-                if (bestDist < 999) {
-                    allyBaseDistSum += bestDist;
-                } else {
-                    allyBaseDistSum += 8;
-                }
-            }
-            totalScore += Math.max(0, 30 - allyBaseDistSum) * 320;
-        }
-
-        if (!enemyTargets.isEmpty()) {
-            int enemyBaseDistSum = 0;
-            for (int[] target : enemyTargets) {
-                OctiSquare tSq = board.squareAt(target[0], target[1]);
-                if (tSq.isCapturedByTeamOf(sampleEnemy)) {
-                    continue;
-                }
-                int bestDist = 999;
-                for (int y = 0; y < h; y++) {
-                    for (int x = 0; x < w; x++) {
-                        OctiSquare sq = board.squareAt(x, y);
-                        for (int i = 0; i < sq.getNumPods(); i++) {
-                            OctiPod pod = sq.getPodAt(i);
-                            if (OctiPlayer.areAllied(mode, pod.getType().toPlayer(), sampleEnemy)
-                                    && pod.getNumProngs() > 0) {
-                                int dx = torusDist(x, target[0], w, edgeless);
-                                int dy = torusDist(y, target[1], h, edgeless);
-                                bestDist = Math.min(bestDist, Math.max(dx, dy));
-                            }
-                        }
-                    }
-                }
-                if (bestDist < 999) {
-                    enemyBaseDistSum += bestDist;
-                } else {
-                    enemyBaseDistSum += 8;
-                }
-            }
-            totalScore -= Math.max(0, 30 - enemyBaseDistSum) * 320;
-        }
-
-        // 3. Pod Material, Prongs, Versatility, Jump-Capture Reachability & Threats
-        long[] allyJumpThreatMask = new long[2];
-        long[] enemyJumpThreatMask = new long[2];
-        int[] mobStats = new int[3];
-        long[] visitedMask = new long[2];
-
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                OctiSquare sq = board.squareAt(x, y);
-                OctiSquareType sqType = sq.getType();
-                for (int i = 0; i < sq.getNumPods(); i++) {
+                for (int i = 0; i < numPods; i++) {
                     OctiPod pod = sq.getPodAt(i);
                     OctiPlayer owner = pod.getType().toPlayer();
                     boolean isAlly = OctiPlayer.areAllied(mode, owner, perspective);
                     List<int[]> targets = isAlly ? allyTargets : enemyTargets;
-
                     int numProngs = pod.getNumProngs();
+
+                    if (numProngs > 0) {
+                        if (isAlly) {
+                            allyPodCoords.add(new int[]{x, y});
+                            allyArmedPods++;
+                        } else {
+                            enemyPodCoords.add(new int[]{x, y});
+                            enemyArmedPods++;
+                        }
+                    }
+
                     int dist = minChebyshevToTargets(x, y, targets, w, h, edgeless);
                     boolean onCapturedEnemyBase = isEnemyHomeSquareFor(sqType, mode, owner)
                             && sq.isCapturedByTeamOf(owner);
@@ -1141,35 +1414,31 @@ public class OctiBotEngine {
                     int podVal;
                     if (numProngs == 0 && !onCapturedEnemyBase
                             && sqType != OctiSquareType.NEUTRAL_OCTI_SQUARE) {
-                        // Unarmed pod on non-target square has zero mobility: worth less than a reserve pod (450)!
-                        podVal = 320;
+                        podVal = profile.podZeroProngVal;
                     } else if (numProngs == 1) {
-                        podVal = 950 + Math.max(0, (10 - dist)) * 110;
-                        // Penalize premature lone 1-prong pod rushing far from home without backup
+                        podVal = profile.podOneProngVal + Math.max(0, (10 - dist)) * 110;
                         if (!isAlliedHomeSquareFor(sqType, mode, owner) && dist <= 4 && dist >= 2) {
-                            podVal -= 550;
+                            podVal -= profile.loneOneProngRushPenalty;
                         }
                     } else if (numProngs == 2) {
-                        podVal = 1450 + Math.max(0, (10 - dist)) * 180;
+                        podVal = profile.podTwoProngVal + Math.max(0, (10 - dist)) * 180;
                     } else {
-                        podVal = 1750 + Math.max(0, (10 - dist)) * 210;
+                        podVal = profile.podThreePlusProngVal + Math.max(0, (10 - dist)) * 210;
                     }
 
                     boolean hasOrth = false;
                     boolean hasDiag = false;
 
-                    // Direct Step & Jump Threat Evaluation + Prong Direction Quality
                     for (int d = 0; d < OctiDir.DIR_MAX; d++) {
                         OctiDir dir = OctiDir.fromIndex(d);
                         OctiProngType pt = pod.prongAt(dir);
                         if (pt == OctiProngType.NO_PRONG) {
                             continue;
                         }
-                        podVal += (pt == OctiProngType.SUPER_PRONG) ? 350 : 220;
+                        podVal += (pt == OctiProngType.SUPER_PRONG) ? profile.superProngVal : profile.normalProngVal;
                         if (isOrthogonalDir(dir)) hasOrth = true;
                         if (isDiagonalDir(dir)) hasDiag = true;
 
-                        // Forward prong alignment bonus
                         if (owner == OctiPlayer.PLAYER_A || owner == OctiPlayer.PLAYER_C) {
                             if (dir == OctiDir.DIR_N) {
                                 podVal += 380;
@@ -1195,46 +1464,70 @@ public class OctiBotEngine {
                             if (ndist < dist) {
                                 podVal += 140;
                             }
+                            OctiSquare nsq = board.squareAt(nx, ny);
                             boolean canStepBase = (mode == OctiGameMode.GAME_MODE_OFK)
-                                    ? board.squareAt(nx, ny).isEmpty()
-                                    : !board.squareAt(nx, ny).hasEnemyOf(owner);
+                                    ? nsq.isEmpty()
+                                    : !nsq.hasEnemyOf(owner);
                             if (ndist == 0 && canStepBase) {
-                                podVal += 8500; // 1-step base entry threat!
+                                podVal += profile.oneStepBaseThreatBonus;
+                            }
+                            // Leapfrog battery detection
+                            if (squareHasAllyOf(nsq, mode, owner)) {
+                                int jx = edgeless ? (((x + 2 * dir.deltaX()) % w + w) % w) : (x + 2 * dir.deltaX());
+                                int jy = edgeless ? (((y + 2 * dir.deltaY()) % h + h) % h) : (y + 2 * dir.deltaY());
+                                if (board.isValidCoord(jx, jy)) {
+                                    OctiSquare destSq = board.squareAt(jx, jy);
+                                    boolean canJumpBase = (mode == OctiGameMode.GAME_MODE_OFK) ? destSq.isEmpty() : !destSq.hasEnemyOf(owner);
+                                    if (destSq.isEmpty() || canJumpBase) {
+                                        podVal += profile.leapfrogBatteryWeight;
+                                        int jdist = minChebyshevToTargets(jx, jy, targets, w, h, edgeless);
+                                        if (jdist < dist) {
+                                            podVal += profile.leapfrogForwardBonus;
+                                        }
+                                    }
+                                }
                             }
                         }
 
                         int jx = edgeless ? (((x + 2 * dir.deltaX()) % w + w) % w) : (x + 2 * dir.deltaX());
                         int jy = edgeless ? (((y + 2 * dir.deltaY()) % h + h) % h) : (y + 2 * dir.deltaY());
                         if (board.isValidCoord(nx, ny) && board.isValidCoord(jx, jy)) {
-                            if (!board.squareAt(nx, ny).isEmpty() && board.squareAt(jx, jy).isEmpty()) {
+                            OctiSquare midSq = board.squareAt(nx, ny);
+                            OctiSquare destSq = board.squareAt(jx, jy);
+                            if (!midSq.isEmpty() && destSq.isEmpty()) {
                                 int jdist = minChebyshevToTargets(jx, jy, targets, w, h, edgeless);
                                 if (jdist == 0) {
-                                    podVal += 12000; // 1-jump base entry threat!
+                                    podVal += profile.oneJumpBaseThreatBonus;
                                 }
                             }
                         }
                     }
 
-                    // Color-parity versatility: orthogonal + diagonal prongs can reach all squares
-                    if (hasOrth && hasDiag) {
-                        podVal += 550;
-                    } else if (numProngs >= 2 && hasDiag && !hasOrth) {
-                        podVal -= 350; // Diagonal-only pod is trapped on one checkerboard parity!
+                    // 2-ply base threat check
+                    if (dist == 1 && profile.twoPlyBaseThreatWeight > 0) {
+                        podVal += profile.twoPlyBaseThreatWeight;
                     }
 
-                    // 2001 Recursive Jump-Capture Reachability pass (zero-allocation bitmask)
+                    if (hasOrth && hasDiag) {
+                        podVal += profile.orthDiagVersatilityBonus;
+                    } else if (numProngs >= 2 && hasDiag && !hasOrth) {
+                        podVal -= profile.diagOnlyParityPenalty;
+                    }
+
+                    // Jump mobility and threats
                     if (numProngs > 0) {
-                        mobStats[0] = 0;
-                        mobStats[1] = 0;
-                        mobStats[2] = 0;
-                        visitedMask[0] = 0L;
-                        visitedMask[1] = 0L;
+                        int[] mobStats = new int[4];
+                        mobStats[3] = dist;
+                        long[] visitedMask = new long[2];
                         long[] capMask = isAlly ? allyJumpThreatMask : enemyJumpThreatMask;
                         evaluateJumpCaptureRecursive(board, x, y, x, y, pod, owner, edgeless,
-                                0, 0L, visitedMask, capMask, mobStats);
-                        podVal += mobStats[0] * 55;   // reachable squares
-                        podVal += mobStats[1] * 1100; // capturable enemy pods
-                        podVal += mobStats[2] * 180;  // capturable enemy prongs
+                                0, 0L, visitedMask, capMask, targets, mobStats);
+                        podVal += mobStats[0] * profile.jumpReachableSquareWeight;
+                        podVal += mobStats[1] * profile.jumpCapturablePodWeight;
+                        podVal += mobStats[2] * profile.jumpCapturableProngWeight;
+                        if (mobStats[3] < dist) {
+                            podVal += (dist - mobStats[3]) * profile.jumpReachStepWeight;
+                        }
                     }
 
                     totalScore += isAlly ? podVal : -podVal;
@@ -1242,7 +1535,36 @@ public class OctiBotEngine {
             }
         }
 
-        // 4. Hanging-Pod Vulnerability Penalty (squares that the opponent can jump over and capture)
+        // Army Development Bonuses (Armed Pods)
+        if (allyArmedPods >= 1) totalScore += profile.firstArmedPodBonus;
+        if (allyArmedPods >= 2) totalScore += profile.secondArmedPodBonus;
+        if (allyArmedPods >= 3) totalScore += profile.thirdArmedPodBonus;
+
+        if (enemyArmedPods >= 1) totalScore -= profile.firstArmedPodBonus;
+        if (enemyArmedPods >= 2) totalScore -= profile.secondArmedPodBonus;
+        if (enemyArmedPods >= 3) totalScore -= profile.thirdArmedPodBonus;
+
+        // Single-Pod Monopoly Penalty
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                OctiSquare sq = board.squareAt(x, y);
+                for (int i = 0; i < sq.getNumPods(); i++) {
+                    OctiPod pod = sq.getPodAt(i);
+                    int prongs = pod.getNumProngs();
+                    if (prongs > 2) {
+                        boolean isAlly = OctiPlayer.areAllied(mode, pod.getType().toPlayer(), perspective);
+                        if (isAlly && allyUnarmedHomePods >= 2) {
+                            totalScore -= (prongs - 2) * profile.singlePodMonopolyPenalty;
+                        } else if (!isAlly && enemyUnarmedHomePods >= 2) {
+                            totalScore += (prongs - 2) * profile.singlePodMonopolyPenalty;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Hanging-Pod Vulnerability Penalty
+        boolean opponentTurnNext = (game.getTurn() != perspective);
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
                 OctiSquare sq = board.squareAt(x, y);
@@ -1261,23 +1583,90 @@ public class OctiBotEngine {
                     prongsOnSq += sq.getPodAt(i).getNumProngs();
                 }
 
+                int prongWeight = (mode == OctiGameMode.GAME_MODE_OFK)
+                        ? profile.ofkProngSeizureWeight
+                        : profile.hangingProngWeight;
+
                 if (sqAlly && (enemyJumpThreatMask[wordIdx] & bitMask) != 0L) {
-                    int vulnPen = numPods * 1800 + prongsOnSq * 250;
+                    int vulnPen = numPods * profile.hangingPodBasePenalty + prongsOnSq * prongWeight;
+                    if (opponentTurnNext) {
+                        vulnPen = (vulnPen * profile.opponentTurnHangingPct) / 100;
+                    }
+                    if (prongsOnSq > 0 && allyArmedPods == 1) {
+                        vulnPen += profile.soleArmedPodDangerPenalty;
+                    }
                     if (numPods >= totalAllyPodsOnBoard) {
-                        vulnPen += 15000; // Wipeout danger: losing all remaining pods on the board!
+                        vulnPen += profile.wipeoutDangerPenalty;
                     }
                     totalScore -= vulnPen;
                 } else if (!sqAlly && (allyJumpThreatMask[wordIdx] & bitMask) != 0L) {
-                    int vulnPen = numPods * 1800 + prongsOnSq * 250;
+                    int vulnPen = numPods * profile.hangingPodBasePenalty + prongsOnSq * prongWeight;
+                    if (!opponentTurnNext) {
+                        vulnPen = (vulnPen * profile.opponentTurnHangingPct) / 100;
+                    }
+                    if (prongsOnSq > 0 && enemyArmedPods == 1) {
+                        vulnPen += profile.soleArmedPodDangerPenalty;
+                    }
                     if (numPods >= totalEnemyPodsOnBoard) {
-                        vulnPen += 15000;
+                        vulnPen += profile.wipeoutDangerPenalty;
                     }
                     totalScore += vulnPen;
                 }
             }
         }
 
-        // 5. Reserve Material, Premature Reserve Placement Penalty & Liberation Bonuses
+        // 2001 Multi-Base Minimum Chebyshev Distance: closest (d_min1) and second-closest (d_min2)
+        if (!allyTargets.isEmpty()) {
+            for (int[] tb : allyTargets) {
+                OctiSquare tsq = board.squareAt(tb[0], tb[1]);
+                if (!tsq.isCapturedByTeamOf(perspective)) {
+                    int d_min1 = 999;
+                    int d_min2 = 999;
+                    for (int[] ap : allyPodCoords) {
+                        int d = Math.max(torusDist(ap[0], tb[0], w, edgeless), torusDist(ap[1], tb[1], h, edgeless));
+                        if (d < d_min1) {
+                            d_min2 = d_min1;
+                            d_min1 = d;
+                        } else if (d < d_min2) {
+                            d_min2 = d;
+                        }
+                    }
+                    if (d_min1 < 999) {
+                        totalScore += Math.max(0, 10 - d_min1) * profile.closestPodDistWeight;
+                    }
+                    if (d_min2 < 999 && profile.secondClosestPodDistWeight > 0) {
+                        totalScore += Math.max(0, 10 - d_min2) * profile.secondClosestPodDistWeight;
+                    }
+                }
+            }
+        }
+
+        if (!enemyTargets.isEmpty()) {
+            for (int[] tb : enemyTargets) {
+                OctiSquare tsq = board.squareAt(tb[0], tb[1]);
+                if (!tsq.isCapturedByTeamOf(sampleEnemy)) {
+                    int d_min1 = 999;
+                    int d_min2 = 999;
+                    for (int[] ep : enemyPodCoords) {
+                        int d = Math.max(torusDist(ep[0], tb[0], w, edgeless), torusDist(ep[1], tb[1], h, edgeless));
+                        if (d < d_min1) {
+                            d_min2 = d_min1;
+                            d_min1 = d;
+                        } else if (d < d_min2) {
+                            d_min2 = d;
+                        }
+                    }
+                    if (d_min1 < 999) {
+                        totalScore -= Math.max(0, 10 - d_min1) * profile.closestPodDistWeight;
+                    }
+                    if (d_min2 < 999 && profile.secondClosestPodDistWeight > 0) {
+                        totalScore -= Math.max(0, 10 - d_min2) * profile.secondClosestPodDistWeight;
+                    }
+                }
+            }
+        }
+
+        // Reserves and material bonuses
         int numPlayers = (mode == OctiGameMode.GAME_MODE_4) ? 4 : 2;
         for (int pIdx = 1; pIdx <= numPlayers; pIdx++) {
             OctiPlayer p = OctiPlayer.fromValue(pIdx);
@@ -1289,7 +1678,7 @@ public class OctiBotEngine {
                     + game.getFreeSuperProngs(p) * 150;
             // Penalize pulling reserve pods onto the board while home pods are still unarmed
             if (mode != OctiGameMode.GAME_MODE_OFK && freePods < 4
-                    && (isAlly ? allyHasUnarmedHomePod : enemyHasUnarmedHomePod)
+                    && (isAlly ? (allyUnarmedHomePods > 0) : (enemyUnarmedHomePods > 0))
                     && game.getFreeProngs(p) >= 6) {
                 resVal -= (4 - freePods) * 1500;
             }
@@ -1310,7 +1699,7 @@ public class OctiBotEngine {
         long deadlineMs = 0;
         volatile boolean timedOut = false;
         java.util.concurrent.atomic.AtomicBoolean stopSignal = null;
-        final OctiGameSnapshot[] plySnapshots = new OctiGameSnapshot[32];
+        final OctiGameSnapshot[] plySnapshots = new OctiGameSnapshot[48];
 
         OctiGameSnapshot snapshotForPly(int ply) {
             int idx = Math.max(0, Math.min(plySnapshots.length - 1, ply));
@@ -1321,6 +1710,139 @@ public class OctiBotEngine {
             }
             return s;
         }
+    }
+
+    private int quiesce(OctiBoard scratchBoard,
+                        int qDepth,
+                        int ply,
+                        int alpha,
+                        int beta,
+                        OctiPlayer currentPerspective,
+                        SearchContext ctx) {
+        ctx.nodesVisited++;
+        if ((ctx.nodesVisited & 63L) == 0L) {
+            liveNodes.set(ctx.nodesVisited);
+            if ((ctx.stopSignal != null && ctx.stopSignal.get())
+                    || steadyClockMs() >= ctx.deadlineMs
+                    || Thread.currentThread().isInterrupted()) {
+                ctx.timedOut = true;
+                return evaluatePosition(scratchBoard, currentPerspective, profile);
+            }
+        }
+
+        OctiGame game = scratchBoard.getGame();
+        OctiGameMode mode = scratchBoard.getGameMode();
+        if (game.isGameOver()) {
+            OctiPlayer w = game.getWinner();
+            if (w == OctiPlayer.PLAYER_UNDEF) {
+                return 0;
+            }
+            return OctiPlayer.areAllied(mode, w, currentPerspective)
+                    ? (WIN_SCORE - ply)
+                    : (-WIN_SCORE + ply);
+        }
+
+        int standPat = evaluatePosition(scratchBoard, currentPerspective, profile);
+        if (standPat >= beta) {
+            return beta;
+        }
+        if (standPat > alpha) {
+            alpha = standPat;
+        }
+
+        if (qDepth >= profile.maxQuiesceDepth) {
+            return standPat;
+        }
+
+        List<OctiMove> rawMoves = game.generateLegalMoves();
+        if (rawMoves.isEmpty()) {
+            return standPat;
+        }
+
+        // Filter to tactical moves only: captures and uncaptured enemy base entries
+        OctiPlayer turn = game.getTurn();
+        List<OctiMove> tacticalMoves = new ArrayList<>();
+        for (OctiMove m : rawMoves) {
+            boolean isTactical = false;
+            for (OctiMoveOp op : m.getOps()) {
+                for (OctiHop hop : op.hops) {
+                    if (hop.capture) {
+                        isTactical = true;
+                        break;
+                    }
+                }
+                if (!op.hops.isEmpty()) {
+                    OctiHop lastHop = op.hops.get(op.hops.size() - 1);
+                    OctiSquare destSq = scratchBoard.squareAt(lastHop.x, lastHop.y);
+                    if (isEnemyHomeSquareFor(destSq.getType(), mode, turn)
+                            && !destSq.isCapturedByTeamOf(turn)) {
+                        isTactical = true;
+                    }
+                }
+                if (isTactical) break;
+            }
+            if (isTactical) {
+                tacticalMoves.add(m);
+            }
+        }
+
+        if (tacticalMoves.isEmpty()) {
+            return standPat;
+        }
+
+        int qCap = (profile.quiesceBranchCap > 0)
+                ? profile.quiesceBranchCap
+                : tacticalMoves.size();
+        List<OctiMove> ordered = orderAndCapMoves(
+                scratchBoard, tacticalMoves, turn, "", qCap, profile, false);
+
+        OctiGameSnapshot snap = ctx.snapshotForPly(ply);
+        game.captureSnapshotInto(snap);
+
+        for (OctiMove mv : ordered) {
+            try {
+                game.move(mv);
+            } catch (Throwable t) {
+                game.restoreSnapshot(snap);
+                continue;
+            }
+
+            int val;
+            if (game.isGameOver()) {
+                OctiPlayer w = game.getWinner();
+                val = OctiPlayer.areAllied(mode, w, turn)
+                        ? (WIN_SCORE - (ply + 1))
+                        : (-WIN_SCORE + (ply + 1));
+            } else {
+                OctiPlayer nextTurn = game.getTurn();
+                boolean sameTeamNext = OctiPlayer.areAllied(mode, turn, nextTurn);
+                if (sameTeamNext) {
+                    val = quiesce(scratchBoard, qDepth + 1, ply + 1,
+                            alpha, beta, turn, ctx);
+                } else {
+                    OctiPlayer oppPerspective = (nextTurn != OctiPlayer.PLAYER_UNDEF) ? nextTurn :
+                            ((turn == OctiPlayer.PLAYER_A || turn == OctiPlayer.PLAYER_C)
+                                    ? OctiPlayer.PLAYER_B : OctiPlayer.PLAYER_A);
+                    val = -quiesce(scratchBoard, qDepth + 1, ply + 1,
+                            -beta, -alpha, oppPerspective, ctx);
+                }
+            }
+
+            game.restoreSnapshot(snap);
+
+            if (ctx.timedOut) {
+                break;
+            }
+
+            if (val >= beta) {
+                return beta;
+            }
+            if (val > alpha) {
+                alpha = val;
+            }
+        }
+
+        return alpha;
     }
 
     private int negamax(OctiBoard scratchBoard,
@@ -1339,7 +1861,7 @@ public class OctiBotEngine {
                     || steadyClockMs() >= ctx.deadlineMs
                     || Thread.currentThread().isInterrupted()) {
                 ctx.timedOut = true;
-                return evaluatePosition(scratchBoard, currentPerspective);
+                return evaluatePosition(scratchBoard, currentPerspective, profile);
             }
         }
 
@@ -1356,7 +1878,10 @@ public class OctiBotEngine {
         }
 
         if (depth <= 0) {
-            return evaluatePosition(scratchBoard, currentPerspective);
+            if (profile.maxQuiesceDepth > 0) {
+                return quiesce(scratchBoard, 0, ply, alpha, beta, currentPerspective, ctx);
+            }
+            return evaluatePosition(scratchBoard, currentPerspective, profile);
         }
 
         long hashKey = computePositionHash(scratchBoard);
@@ -1370,6 +1895,12 @@ public class OctiBotEngine {
                 if (ttDepths[ttIdx] >= depth) {
                     int entryFlag = ttFlags[ttIdx];
                     int entryScore = ttScores[ttIdx];
+                    if (entryScore >= WIN_SCORE - 1000) {
+                        entryScore -= ply;
+                    } else if (entryScore <= -WIN_SCORE + 1000) {
+                        entryScore += ply;
+                    }
+
                     if (entryFlag == 0) {
                         return entryScore;
                     }
@@ -1386,20 +1917,20 @@ public class OctiBotEngine {
         }
 
         List<OctiMove> rawMoves = game.generateLegalMoves();
+        if (rawMoves.isEmpty()) {
+            return evaluatePosition(scratchBoard, currentPerspective, profile);
+        }
+
         OctiPlayer turn = game.getTurn();
 
         // Enumerate composite moves at root/shallow ply only to keep interior search fast
-        if (ply <= 1 && depth >= 2) {
+        if (ply <= profile.compositeMoveMaxPly && depth >= 2) {
             appendCompositeMoves(scratchBoard, turn, rawMoves);
         }
 
-        if (rawMoves.isEmpty()) {
-            return evaluatePosition(scratchBoard, currentPerspective);
-        }
-
-        int maxBranch = branchCapForDifficulty(difficulty);
+        int maxBranch = (profile.treeBranchCap > 0) ? profile.treeBranchCap : 24;
         List<OctiMove> ordered = orderAndCapMoves(
-                scratchBoard, rawMoves, turn, ttMove, maxBranch);
+                scratchBoard, rawMoves, turn, ttMove, maxBranch, profile, true);
 
         int origAlpha = alpha;
         int bestVal = -INF_SCORE;
@@ -1464,10 +1995,16 @@ public class OctiBotEngine {
                 storeFlag = 0;
             }
             synchronized (ttLock) {
-                if (ttKeys[ttIdx] != hashKey || depth >= ttDepths[ttIdx]) {
+                if (ttKeys[ttIdx] == 0L || depth >= ttDepths[ttIdx] - 1) {
                     ttKeys[ttIdx] = hashKey;
                     ttDepths[ttIdx] = depth;
-                    ttScores[ttIdx] = bestVal;
+                    int storeScore = bestVal;
+                    if (storeScore >= WIN_SCORE - 1000) {
+                        storeScore += ply;
+                    } else if (storeScore <= -WIN_SCORE + 1000) {
+                        storeScore -= ply;
+                    }
+                    ttScores[ttIdx] = storeScore;
                     ttBestMoves[ttIdx] = bestMoveStr;
                     ttFlags[ttIdx] = storeFlag;
                 }
@@ -1522,7 +2059,9 @@ public class OctiBotEngine {
         OctiPlayer rootTurn = game.getTurn();
 
         // Enumerate composite multi-pod moves
-        appendCompositeMoves(scratchBoard, rootTurn, legalMoves);
+        if (profile.compositeMoveMaxPly >= 0) {
+            appendCompositeMoves(scratchBoard, rootTurn, legalMoves);
+        }
 
         if (legalMoves.isEmpty()) {
             return "";
@@ -1563,22 +2102,22 @@ public class OctiBotEngine {
             game.restoreSnapshot(rootSnap);
         }
 
-        int rootCap = rootCapForDifficulty(difficulty);
+        int rootCap = (profile.rootBranchCap > 0) ? profile.rootBranchCap : 40;
         List<OctiMove> rootCandidates = orderAndCapMoves(
-                scratchBoard, legalMoves, rootTurn, "", rootCap);
+                scratchBoard, legalMoves, rootTurn, "", rootCap, profile, true);
 
         String bestMoveStr = rootCandidates.get(0).asString();
         int bestScore = -INF_SCORE;
-        int maxTargetDepth = maxDepthForDifficulty(difficulty);
+        int maxTargetDepth = profile.maxSearchDepth;
         int completedDepth = 0;
 
-        // Multi-Core Lazy SMP helper threads (Level 2 or Level 3 when budget >= 500ms)
+        // Multi-Core Lazy SMP helper threads (if budget >= 500ms and lazySmpThreads > 1)
         ExecutorService smpExecutor = null;
-        if (timeBudgetMs >= 500 && difficulty.getLevel() >= 2) {
-            int numHelpers = Math.min(2, Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
+        if (timeBudgetMs >= 500 && profile.lazySmpThreads > 1) {
+            int numHelpers = Math.min(profile.lazySmpThreads - 1, Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
             smpExecutor = Executors.newFixedThreadPool(numHelpers);
             for (int h = 0; h < numHelpers; h++) {
-                final int helperDepthOffset = (h % 2);
+                final int helperDepthOffset = (h % 2 == 1) ? 1 : 2;
                 smpExecutor.submit(() -> {
                     try {
                         OctiBoard helperBoard = new OctiBoard();
@@ -1648,17 +2187,14 @@ public class OctiBotEngine {
                         break;
                     }
 
-                    if (difficulty == BotDifficulty.CASUAL
-                            && Math.abs(score) < WIN_SCORE / 2) {
-                        int jitter = (int) (Math.abs(nextRandom()) % 31L) - 15;
-                        score += jitter;
-                    }
-
-                    if (score > iterBestScore) {
+                    if (score > alpha) {
+                        if (profile.rootScoreJitter > 0 && Math.abs(score) < WIN_SCORE / 2) {
+                            int half = profile.rootScoreJitter;
+                            int jitter = (int) (Math.abs(nextRandom()) % (2L * half + 1L)) - half;
+                            score += jitter;
+                        }
                         iterBestScore = score;
                         iterBestMove = mv.asString();
-                    }
-                    if (score > alpha) {
                         alpha = score;
                     }
                 }
@@ -1711,3 +2247,13 @@ public class OctiBotEngine {
         return bestMoveStr;
     }
 }
+
+/*
+ * Local variables:
+ * mode: Java
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */

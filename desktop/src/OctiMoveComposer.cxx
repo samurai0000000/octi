@@ -443,13 +443,109 @@ void OctiMoveComposer::syncPreparedStateToGame()
     }
 }
 
+bool OctiMoveComposer::canPlaceReservePodAt(int x, int y) const
+{
+    if (!_board || !_board->getGame()) {
+        return false;
+    }
+    OctiGame *game = _board->getGame();
+    if (!game->isGameStarted() || game->isGameOver() || game->getMode() == GAME_MODE_OFK) {
+        return false;
+    }
+    int bx = x - 1;
+    int by = y - 1;
+    if (!_board->isValidCoord(bx, by)) {
+        return false;
+    }
+    OctiPlayer turn = game->getTurn();
+    if (game->getFreePods(turn) <= 0) {
+        return false;
+    }
+    const OctiSquare &sq = _board->squareAt(bx, by);
+    if (sq.getType() == NEUTRAL_SQUARE || sq.getType() == NEUTRAL_OCTI_SQUARE) {
+        return false;
+    }
+    if (_board->getGameMode() == GAME_MODE_4) {
+        OctiPlayer partner = (turn == PLAYER_A ? PLAYER_C :
+                              turn == PLAYER_C ? PLAYER_A :
+                              turn == PLAYER_B ? PLAYER_D : PLAYER_B);
+        OctiSquareType partnerHome = (partner == PLAYER_A ? A_HOME_SQUARE :
+                                      partner == PLAYER_B ? B_HOME_SQUARE :
+                                      partner == PLAYER_C ? C_HOME_SQUARE : D_HOME_SQUARE);
+        if (sq.getType() == partnerHome) {
+            return false;
+        }
+    }
+    OctiMoveOp op;
+    op.x0 = bx;
+    op.y0 = by;
+    op.addPod = true;
+    op.liberate = false;
+    return validateOpsOnScratch({op});
+}
+
+bool OctiMoveComposer::canRevivePartnerPodAt(int x, int y) const
+{
+    if (!_board || !_board->getGame() || _board->getGameMode() != GAME_MODE_4) {
+        return false;
+    }
+    OctiGame *game = _board->getGame();
+    if (!game->isGameStarted() || game->isGameOver()) {
+        return false;
+    }
+    int bx = x - 1;
+    int by = y - 1;
+    if (!_board->isValidCoord(bx, by)) {
+        return false;
+    }
+    OctiPlayer turn = game->getTurn();
+    OctiPlayer partner = (turn == PLAYER_A ? PLAYER_C :
+                          turn == PLAYER_C ? PLAYER_A :
+                          turn == PLAYER_B ? PLAYER_D : PLAYER_B);
+    OctiSquareType partnerHome = (partner == PLAYER_A ? A_HOME_SQUARE :
+                                  partner == PLAYER_B ? B_HOME_SQUARE :
+                                  partner == PLAYER_C ? C_HOME_SQUARE : D_HOME_SQUARE);
+    const OctiSquare &sq = _board->squareAt(bx, by);
+    if (sq.getType() != partnerHome) {
+        return false;
+    }
+    return game->isPlayerEliminated(partner) &&
+           game->getCapturedPods(partner) > 0 &&
+           sq.isOccupiedBy(turn);
+}
+
+bool OctiMoveComposer::canLiberateCapturedPodAt(int x, int y) const
+{
+    if (!_board || !_board->getGame()) {
+        return false;
+    }
+    OctiGame *game = _board->getGame();
+    if (!game->isGameStarted() || game->isGameOver() || game->getMode() == GAME_MODE_OFK) {
+        return false;
+    }
+    int bx = x - 1;
+    int by = y - 1;
+    if (!_board->isValidCoord(bx, by)) {
+        return false;
+    }
+    if (canRevivePartnerPodAt(x, y)) {
+        return true;
+    }
+    OctiMoveOp op;
+    op.x0 = bx;
+    op.y0 = by;
+    op.addPod = true;
+    op.liberate = true;
+    return validateOpsOnScratch({op});
+}
+
 bool OctiMoveComposer::stageOrCommitAddPod(int targetX, int targetY, bool liberate)
 {
     if (!_board || !_board->getGame()) {
         return false;
     }
     OctiGame *game = _board->getGame();
-    if (!game->isGameStarted() || game->isGameOver()) {
+    if (!game->isGameStarted() || game->isGameOver() || game->getMode() == GAME_MODE_OFK) {
         return false;
     }
 
@@ -462,41 +558,6 @@ bool OctiMoveComposer::stageOrCommitAddPod(int targetX, int targetY, bool libera
     // Cannot combine pod placement with other staged actions
     if (!_stagedOps.empty()) {
         return false;
-    }
-
-    OctiPlayer turn = game->getTurn();
-    const OctiSquare &sq = _board->squareAt(bx, by);
-    bool isFriendlyOrPartnerBase = false;
-    if (_board->getGameMode() == GAME_MODE_2 || _board->getGameMode() == GAME_MODE_OFK) {
-        isFriendlyOrPartnerBase =
-            (sq.getType() == (turn == PLAYER_A ? A_HOME_SQUARE : B_HOME_SQUARE));
-    } else if (_board->getGameMode() == GAME_MODE_4) {
-        OctiSquareType homeType = (turn == PLAYER_A ? A_HOME_SQUARE :
-                                   turn == PLAYER_B ? B_HOME_SQUARE :
-                                   turn == PLAYER_C ? C_HOME_SQUARE : D_HOME_SQUARE);
-        OctiPlayer partner = (turn == PLAYER_A ? PLAYER_C :
-                              turn == PLAYER_C ? PLAYER_A :
-                              turn == PLAYER_B ? PLAYER_D : PLAYER_B);
-        OctiSquareType partnerHome = (partner == PLAYER_A ? A_HOME_SQUARE :
-                                      partner == PLAYER_B ? B_HOME_SQUARE :
-                                      partner == PLAYER_C ? C_HOME_SQUARE : D_HOME_SQUARE);
-        isFriendlyOrPartnerBase = (sq.getType() == homeType || sq.getType() == partnerHome);
-    }
-    bool isEnemyOctiSquare = (sq.getType() != NEUTRAL_SQUARE && !isFriendlyOrPartnerBase);
-    if (isEnemyOctiSquare && game->getCapturedPods(turn) > 0) {
-        liberate = true;
-    }
-
-    if (liberate) {
-        if (game->getMode() == GAME_MODE_OFK ||
-            game->getCapturedPods(turn) <= 0 ||
-            (!isEnemyOctiSquare && !_board->canLiberate(turn))) {
-            return false;
-        }
-    } else {
-        if (game->getFreePods(turn) <= 0) {
-            return false;
-        }
     }
 
     OctiMoveOp op;
@@ -582,18 +643,11 @@ bool OctiMoveComposer::stageOrCommitAddProng(int x, int y,
     _guidedPodIndex = resolvedIdx;
     _guidedMoveActive = false;
     _guidedMidHop = false;
-    _awaitingSuperProngBonusMove = (superProng && pod.getNumProngs() == 7);
+    _awaitingSuperProngBonusMove = false;
     _awaitingConfirmation = true;
-    if (_awaitingSuperProngBonusMove) {
-        _guidedCurBx = bx;
-        _guidedCurBy = by;
-        _guidedMoveAllStack = false;
-        _guidedMidHop = false;
-        _guidedMoveActive = true;
-    }
     syncPreparedStateToGame();
 
-    if (!_confirmAllMoves && !_awaitingSuperProngBonusMove) {
+    if (!_confirmAllMoves) {
         return commitStagedMove();
     }
     return true;
@@ -693,41 +747,6 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
     int w = _board->getBoardWidth();
     int h = _board->getBoardHeight();
     bool edgeless = game->useEdgelessBoard();
-
-    // Case A: 8th-prong superprong bonus move follow-up
-    if (_awaitingSuperProngBonusMove && _stagedOps.size() == 1 &&
-        _stagedOps[0].addProngDir != DIR_UNDEF &&
-        fbx == _stagedOps[0].x0 && fby == _stagedOps[0].y0) {
-        OctiPod fullPod = _stagedOps[0].pod;
-        fullPod.addProng(_stagedOps[0].addProngDir, true);
-
-        int dx = 0, dy = 0;
-        if (computeDisplacement(fbx, fby, tbx, tby, edgeless, w, h, dx, dy)) {
-            bool isDist1 = (std::max(std::abs(dx), std::abs(dy)) == 1 &&
-                            (std::abs(dx) == 1 || std::abs(dy) == 1));
-            bool isDist2 = ((std::abs(dx) == 0 || std::abs(dx) == 2) &&
-                            (std::abs(dy) == 0 || std::abs(dy) == 2) &&
-                            (std::abs(dx) == 2 || std::abs(dy) == 2) &&
-                            (std::abs(dx) == 0 || std::abs(dy) == 0 || std::abs(dx) == std::abs(dy)));
-            OctiDir moveDir = isDist1 ? deltaToDir(dx, dy) :
-                              isDist2 ? deltaToDir(dx / 2, dy / 2) : DIR_UNDEF;
-            if (moveDir != DIR_UNDEF && fullPod.prongAt(moveDir) != NO_PRONG &&
-                !_board->squareAt(tbx, tby).hasEnemyOf(turn)) {
-                _hasEighthProngBonusHop = true;
-                _eighthProngTargetBx = tbx;
-                _eighthProngTargetBy = tby;
-                _eighthProngBonusNotation =
-                    OctiMove::formatOps(_stagedOps) + "," +
-                    std::string(1, static_cast<char>('1' + fbx)) +
-                    std::string(1, static_cast<char>('1' + fby)) + "-" +
-                    std::string(1, static_cast<char>('1' + tbx)) +
-                    std::string(1, static_cast<char>('1' + tby));
-                _awaitingConfirmation = true;
-                return true;
-            }
-        }
-        return false;
-    }
 
     // Case B: Appending a continuation hop to an active staged jump chain
     if (_activeJumpHasChain && !_stagedOps.empty() &&
@@ -1057,15 +1076,8 @@ bool OctiMoveComposer::beginGuidedPodMove(int x, int y, int podIndex, bool moveA
         return false;
     }
 
-    bool isSuperBonus = (_awaitingSuperProngBonusMove &&
-                         !_hasEighthProngBonusHop &&
-                         _stagedOps.size() == 1 &&
-                         _stagedOps[0].addProngDir != DIR_UNDEF &&
-                         bx == _stagedOps[0].x0 &&
-                         by == _stagedOps[0].y0);
-
     // If there are existing staged ops, ensure they all originate from this same square
-    if (!_stagedOps.empty() && !isSuperBonus) {
+    if (!_stagedOps.empty()) {
         for (const auto &op : _stagedOps) {
             if (op.hops.empty() || op.x0 != bx || op.y0 != by) {
                 return false;
@@ -1075,7 +1087,7 @@ bool OctiMoveComposer::beginGuidedPodMove(int x, int y, int podIndex, bool moveA
 
     OctiPlayer turn = game->getTurn();
     const OctiSquare &sq = _board->squareAt(bx, by);
-    int resolvedIdx = resolvePodIndex(sq, x, y, podIndex, turn, !isSuperBonus);
+    int resolvedIdx = resolvePodIndex(sq, x, y, podIndex, turn, true);
     if (resolvedIdx < 0 || resolvedIdx >= sq.getNumPods()) {
         return false;
     }
@@ -1142,10 +1154,6 @@ std::vector<std::pair<int, int>> OctiMoveComposer::guidedNextSquares() const
     if (!_guidedMidHop) {
         if (!_board->isValidCoord(_guidedOriginBx, _guidedOriginBy)) {
             return result;
-        }
-        if (_awaitingSuperProngBonusMove && !_hasEighthProngBonusHop &&
-            _stagedOps.size() == 1 && _stagedOps[0].addProngDir != DIR_UNDEF) {
-            return legalDestinationsFrom(_guidedOriginBx + 1, _guidedOriginBy + 1, _guidedPodIndex);
         }
         const OctiSquare &startSq = _board->squareAt(_guidedOriginBx, _guidedOriginBy);
         if (_guidedPodIndex < 0 || _guidedPodIndex >= startSq.getNumPods()) {
@@ -1309,18 +1317,6 @@ bool OctiMoveComposer::selectGuidedDestination(int toX, int toY)
     int fromBx = _guidedMidHop ? _guidedCurBx : _guidedOriginBx;
     int fromBy = _guidedMidHop ? _guidedCurBy : _guidedOriginBy;
 
-    if (_awaitingSuperProngBonusMove && !_hasEighthProngBonusHop) {
-        if (!stageOrCommitPodMoveOrJump(fromBx + 1, fromBy + 1, _guidedPodIndex,
-                                        toX, toY, false)) {
-            return false;
-        }
-        _guidedCurBx = tbx;
-        _guidedCurBy = tby;
-        _guidedMoveActive = false;
-        _awaitingConfirmation = true;
-        return true;
-    }
-
     int w = _board->getBoardWidth();
     int h = _board->getBoardHeight();
     bool edgeless = _board->getGame()->useEdgelessBoard();
@@ -1478,14 +1474,13 @@ int OctiMoveComposer::firstUnclaimedFriendlyPodIndex(int x, int y) const
 
 bool OctiMoveComposer::canAddMoreMoves() const
 {
-    return (_awaitingSuperProngBonusMove && !_hasEighthProngBonusHop) ||
-           hasOtherMovablePodAtOrigin() ||
+    return hasOtherMovablePodAtOrigin() ||
            (_guidedMoveActive && _guidedMidHop && !guidedNextSquares().empty());
 }
 
 bool OctiMoveComposer::hasEighthProngBonusHop() const
 {
-    return _hasEighthProngBonusHop;
+    return false;
 }
 
 bool OctiMoveComposer::setCaptureAtSquare(int jumpedX, int jumpedY, bool capture)
@@ -1580,16 +1575,13 @@ bool OctiMoveComposer::isAwaitingConfirmation() const
 
 bool OctiMoveComposer::isAwaitingSuperProngBonusMove() const
 {
-    return _awaitingSuperProngBonusMove;
+    return false;
 }
 
 std::string OctiMoveComposer::stagedMoveNotation() const
 {
     if (_stagedOps.empty()) {
         return "";
-    }
-    if (_hasEighthProngBonusHop && !_eighthProngBonusNotation.empty()) {
-        return _eighthProngBonusNotation;
     }
     return OctiMove::formatOps(_stagedOps);
 }
@@ -1612,19 +1604,6 @@ bool OctiMoveComposer::populatePreviewBoard(OctiBoard &outBoard) const
     try {
         OctiMove mv(_stagedOps);
         outBoard.getGame()->move(mv);
-        if (_hasEighthProngBonusHop &&
-            outBoard.isValidCoord(_eighthProngTargetBx, _eighthProngTargetBy) &&
-            _stagedOps.size() == 1) {
-            int sx = _stagedOps[0].x0;
-            int sy = _stagedOps[0].y0;
-            OctiSquare &srcSq = outBoard.squareAt(sx, sy);
-            OctiSquare &dstSq = outBoard.squareAt(_eighthProngTargetBx, _eighthProngTargetBy);
-            if (!srcSq.isEmpty()) {
-                OctiPod movedPod = srcSq.getPodAt(srcSq.getNumPods() - 1);
-                srcSq.removePod(movedPod);
-                dstSq.addPod(movedPod);
-            }
-        }
         return true;
     } catch (...) {
         return false;
@@ -1672,29 +1651,6 @@ std::vector<std::pair<int, int>> OctiMoveComposer::legalDestinationsFrom(
                                     _activeJumpedCoords, extraHops, nextJumped)) {
                     result.push_back({tx + 1, ty + 1});
                 }
-            }
-        }
-        return result;
-    }
-
-    // If awaiting 8th-prong superprong bonus move on (x, y)
-    if (_awaitingSuperProngBonusMove && _stagedOps.size() == 1 &&
-        _stagedOps[0].x0 == bx && _stagedOps[0].y0 == by) {
-        OctiPod fullPod = _stagedOps[0].pod;
-        fullPod.addProng(_stagedOps[0].addProngDir, true);
-        for (int d = DIR_N; d <= DIR_NW; ++d) {
-            OctiDir dir = static_cast<OctiDir>(d);
-            if (fullPod.prongAt(dir) == NO_PRONG) continue;
-            int sx = edgeless ? (((bx + dirDeltaX(dir)) % w + w) % w) : (bx + dirDeltaX(dir));
-            int sy = edgeless ? (((by + dirDeltaY(dir)) % h + h) % h) : (by + dirDeltaY(dir));
-            if (_board->isValidCoord(sx, sy) && !_board->squareAt(sx, sy).hasEnemyOf(turn)) {
-                result.push_back({sx + 1, sy + 1});
-            }
-            int jx = edgeless ? (((bx + 2 * dirDeltaX(dir)) % w + w) % w) : (bx + 2 * dirDeltaX(dir));
-            int jy = edgeless ? (((by + 2 * dirDeltaY(dir)) % h + h) % h) : (by + 2 * dirDeltaY(dir));
-            if (_board->isValidCoord(sx, sy) && _board->isValidCoord(jx, jy) &&
-                !_board->squareAt(sx, sy).isEmpty() && _board->squareAt(jx, jy).isEmpty()) {
-                result.push_back({jx + 1, jy + 1});
             }
         }
         return result;
@@ -1793,7 +1749,17 @@ std::vector<std::pair<int, int>> OctiMoveComposer::legalPodDropSquares(bool libe
 
     OctiPlayer turn = game->getTurn();
     if (liberate) {
-        if (game->getCapturedPods(turn) <= 0 || !_board->canLiberate(turn)) {
+        bool canLibOwn = (game->getCapturedPods(turn) > 0 && _board->canLiberate(turn));
+        bool canRevive = false;
+        if (_board->getGameMode() == GAME_MODE_4) {
+            OctiPlayer partner = (turn == PLAYER_A ? PLAYER_C :
+                                  turn == PLAYER_C ? PLAYER_A :
+                                  turn == PLAYER_B ? PLAYER_D : PLAYER_B);
+            if (game->isPlayerEliminated(partner) && game->getCapturedPods(partner) > 0) {
+                canRevive = true;
+            }
+        }
+        if (!canLibOwn && !canRevive) {
             return result;
         }
     } else {
@@ -1826,9 +1792,6 @@ bool OctiMoveComposer::commitStagedMove()
     }
     OctiGame *game = _board->getGame();
     std::vector<OctiMoveOp> opsToCommit = _stagedOps;
-    bool hadBonusHop = _hasEighthProngBonusHop;
-    int bonusTx = _eighthProngTargetBx;
-    int bonusTy = _eighthProngTargetBy;
     std::string committedNotation = stagedMoveNotation();
 
     game->rollbackPreparedMove();
@@ -1836,21 +1799,7 @@ bool OctiMoveComposer::commitStagedMove()
     try {
         OctiMove mv(opsToCommit);
         game->move(mv);
-        if (hadBonusHop && _board->isValidCoord(bonusTx, bonusTy) &&
-            opsToCommit.size() == 1) {
-            int sx = opsToCommit[0].x0;
-            int sy = opsToCommit[0].y0;
-            OctiSquare &srcSq = _board->squareAt(sx, sy);
-            OctiSquare &dstSq = _board->squareAt(bonusTx, bonusTy);
-            if (!srcSq.isEmpty()) {
-                OctiPod movedPod = srcSq.getPodAt(srcSq.getNumPods() - 1);
-                srcSq.removePod(movedPod);
-                dstSq.addPod(movedPod);
-            }
-        }
-        if (!hadBonusHop) {
-            committedNotation = mv.asString();
-        }
+        committedNotation = mv.asString();
     } catch (...) {
         cancelAndRollback();
         return false;

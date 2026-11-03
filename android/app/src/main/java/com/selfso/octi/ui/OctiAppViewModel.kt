@@ -1289,7 +1289,7 @@ class OctiAppViewModel @JvmOverloads constructor(
                 val snap = board.toPositionString()
                 displayBoard.fromPositionString(snap)
                 soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
-                _statusBanner.value = "Game Over — Winner: ${g.winner}"
+                _statusBanner.value = formatGameOverBanner(g.winner)
                 _showGameOverDialog.value = true
                 bumpBoardRevision()
                 true
@@ -1529,28 +1529,67 @@ class OctiAppViewModel @JvmOverloads constructor(
                 ?: configStore.preferences().handle?.trim()?.takeIf { it.isNotEmpty() && _isAuthenticated.value }
             val humanHandle = signedInHandle ?: "Player"
 
+            val is4P = (g.mode == OctiGameMode.GAME_MODE_4)
+            val vsAi = (_matchType.value == MatchType.LOCAL_VS_BOT)
             val humanSeat = _humanSeat.value
-            val humanMeta = OctiGame.OctiPlayerMetadata().apply {
-                this.seat = if (humanSeat == OctiPlayer.PLAYER_A) 1 else 2
-                this.player = humanSeat
-                this.type = "HUMAN"
-                this.handle = humanHandle
-            }
-            val botSeat = if (humanSeat == OctiPlayer.PLAYER_A) OctiPlayer.PLAYER_B else OctiPlayer.PLAYER_A
-            val botMeta = OctiGame.OctiPlayerMetadata().apply {
-                this.seat = if (botSeat == OctiPlayer.PLAYER_A) 1 else 2
-                this.player = botSeat
-                this.type = "AI"
-                this.handle = "AI_L" + _botDifficulty.value.level
-                this.aiDifficulty = _botDifficulty.value.level
-                this.aiBudgetMs = botEngine.timeBudgetMs
-            }
-            if (humanMeta.seat == 1) {
-                this.players.add(humanMeta)
-                this.players.add(botMeta)
+
+            if (is4P) {
+                val seatPlayers = listOf(
+                    OctiPlayer.PLAYER_A,
+                    OctiPlayer.PLAYER_B,
+                    OctiPlayer.PLAYER_C,
+                    OctiPlayer.PLAYER_D
+                )
+                for (seatP in seatPlayers) {
+                    val pMeta = OctiGame.OctiPlayerMetadata().apply {
+                        this.seat = seatP.value
+                        this.player = seatP
+                        if (seatP == humanSeat) {
+                            this.type = "HUMAN"
+                            this.handle = humanHandle
+                        } else if (vsAi) {
+                            this.type = "AI"
+                            this.handle = "AI_L" + _botDifficulty.value.level
+                            this.aiDifficulty = _botDifficulty.value.level
+                            this.aiBudgetMs = botEngine.timeBudgetMs
+                        } else {
+                            this.type = "HUMAN"
+                            this.engine = "ANDROID_LOCAL"
+                            this.handle = "Player " + seatP.name.removePrefix("PLAYER_")
+                        }
+                    }
+                    this.players.add(pMeta)
+                }
             } else {
-                this.players.add(botMeta)
-                this.players.add(humanMeta)
+                val otherSeat = if (humanSeat == OctiPlayer.PLAYER_A) OctiPlayer.PLAYER_B else OctiPlayer.PLAYER_A
+                val p1 = if (humanSeat == OctiPlayer.PLAYER_A) humanSeat else otherSeat
+                val p2 = if (humanSeat == OctiPlayer.PLAYER_A) otherSeat else humanSeat
+
+                val makeMeta = { seatP: OctiPlayer, seatNum: Int ->
+                    OctiGame.OctiPlayerMetadata().apply {
+                        this.seat = seatNum
+                        this.player = seatP
+                        if (seatP == humanSeat) {
+                            this.type = "HUMAN"
+                            this.handle = humanHandle
+                        } else if (vsAi) {
+                            this.type = "AI"
+                            this.handle = "AI_L" + _botDifficulty.value.level
+                            this.aiDifficulty = _botDifficulty.value.level
+                            this.aiBudgetMs = botEngine.timeBudgetMs
+                        } else {
+                            this.type = "HUMAN"
+                            this.engine = "ANDROID_LOCAL"
+                            this.handle = if (humanSeat == OctiPlayer.PLAYER_A) "Player B" else "Player A"
+                        }
+                    }
+                }
+                this.players.add(makeMeta(p1, 1))
+                this.players.add(makeMeta(p2, 2))
+            }
+
+            if (g.isGameOver && !g.isGameResigned) {
+                this.termination = g.deduceTermination()
             }
 
             if (includeExtendedTelemetry) {
@@ -1726,7 +1765,7 @@ class OctiAppViewModel @JvmOverloads constructor(
 
         if (board.game.isGameOver) {
             soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
-            _statusBanner.value = "Game Over — Winner: ${board.game.winner}"
+            _statusBanner.value = formatGameOverBanner(board.game.winner)
             _showGameOverDialog.value = true
             uploadCompletedBotGameIfEligible()
         } else {
@@ -1806,7 +1845,7 @@ class OctiAppViewModel @JvmOverloads constructor(
 
             if (board.game.isGameOver) {
                 soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
-                _statusBanner.value = "Game Over — Winner: ${board.game.winner}"
+                _statusBanner.value = formatGameOverBanner(board.game.winner)
                 _showGameOverDialog.value = true
                 uploadCompletedBotGameIfEligible()
             } else {
@@ -3006,6 +3045,21 @@ class OctiAppViewModel @JvmOverloads constructor(
         return sendGameChat("ALL", text)
     }
 
+    fun formatGameOverBanner(winner: OctiPlayer?): String {
+        if (winner == null || winner == OctiPlayer.PLAYER_UNDEF) {
+            return "Game Over — Stalemate"
+        }
+        return if (board.gameMode == OctiGameMode.GAME_MODE_4) {
+            if (winner == OctiPlayer.PLAYER_A || winner == OctiPlayer.PLAYER_C) {
+                "Team A & C Wins!"
+            } else {
+                "Team B & D Wins!"
+            }
+        } else {
+            "Game Over — Winner: $winner"
+        }
+    }
+
     fun submitGameAction(
         action: String
     ): OctiNetworkClient.ApiResult<OctiNetworkClient.GameActionData> {
@@ -3015,6 +3069,32 @@ class OctiAppViewModel @JvmOverloads constructor(
             refreshActiveGameView()
         }
         return res
+    }
+
+    fun claimOpponentForfeit(): OctiNetworkClient.ApiResult<OctiNetworkClient.GameActionData> {
+        return submitGameAction("claim_forfeit")
+    }
+
+    fun forfeitOnlineMatchAsync(): java.util.concurrent.Future<*>? {
+        return _backgroundExecutor.submit {
+            val roomId = _activeRoomId.value
+            val res = netClient.submitGameAction(roomId, "claim_forfeit")
+            if (res.ok) {
+                refreshActiveGameView()
+                runOnUiThreadOrSync {
+                    val gv = _activeGameView.value
+                    if (gv != null && gv.winnerSeat > 0) {
+                        val wSeat = gv.winnerSeat
+                        _statusBanner.value = if (board.gameMode == OctiGameMode.GAME_MODE_4) {
+                            if (wSeat == 1 || wSeat == 3) "Team A & C Wins!" else "Team B & D Wins!"
+                        } else {
+                            val wPlayer = OctiPlayer.fromValue(wSeat)
+                            "Game Over — Winner: $wPlayer"
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fun resignOnlineGame(): OctiNetworkClient.ApiResult<Boolean> {

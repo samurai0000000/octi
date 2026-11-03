@@ -2974,51 +2974,99 @@ QString GameOverDialog::describeTerminationReason(const OctiBoard *board)
 
     OctiPlayer winner = board->getGame()->getWinner();
     if (winner != PLAYER_UNDEF) {
-        OctiPlayer opp = (winner == PLAYER_A) ? PLAYER_B : PLAYER_A;
-        OctiPodType wPod = (winner == PLAYER_A ? A_POD :
-                            winner == PLAYER_B ? B_POD :
-                            winner == PLAYER_C ? C_POD : D_POD);
-        OctiPodType oppPod = (opp == PLAYER_A ? A_POD :
-                              opp == PLAYER_B ? B_POD :
-                              opp == PLAYER_C ? C_POD : D_POD);
-        int oppPodsOnBoard = 0;
-        const int bw = static_cast<int>(board->getBoardWidth());
-        const int bh = static_cast<int>(board->getBoardHeight());
-        for (int x = 0; x < bw; ++x) {
-            for (int y = 0; y < bh; ++y) {
-                const OctiSquare &sq = board->squareAt(x, y);
-                if (sq.isEmpty()) {
-                    continue;
-                }
-                OctiSquareType st = sq.getType();
-                bool hasWinnerPod = false;
-                for (int pi = 0; pi < sq.getNumPods(); ++pi) {
-                    if (sq.getPodAt(pi).getType() == wPod) {
-                        hasWinnerPod = true;
-                    }
-                    if (sq.getPodAt(pi).getType() == oppPod) {
-                        ++oppPodsOnBoard;
+        bool baseOccupation = false;
+        if (board->getGameMode() == GAME_MODE_2) {
+            int neededBases = (board->getGame()->getBases() == GAME_BASES_1) ? 1 : 3;
+            if (winner == PLAYER_A) {
+                int count = 0;
+                if (board->squareAt(2, 6).isCapturedBy(PLAYER_A)) count++;
+                if (board->squareAt(4, 6).isCapturedBy(PLAYER_A)) count++;
+                if (board->squareAt(6, 6).isCapturedBy(PLAYER_A)) count++;
+                if (count >= neededBases) baseOccupation = true;
+            } else if (winner == PLAYER_B) {
+                int count = 0;
+                if (board->squareAt(2, 2).isCapturedBy(PLAYER_B)) count++;
+                if (board->squareAt(4, 2).isCapturedBy(PLAYER_B)) count++;
+                if (board->squareAt(6, 2).isCapturedBy(PLAYER_B)) count++;
+                if (count >= neededBases) baseOccupation = true;
+            }
+        } else if (board->getGameMode() == GAME_MODE_OFK) {
+            if (winner == PLAYER_A) {
+                for (int x = 1; x <= 4; x++) {
+                    if (board->squareAt(x, 5).isCapturedBy(PLAYER_A)) {
+                        baseOccupation = true;
+                        break;
                     }
                 }
-                if (!hasWinnerPod) {
-                    continue;
+            } else if (winner == PLAYER_B) {
+                for (int x = 1; x <= 4; x++) {
+                    if (board->squareAt(x, 1).isCapturedBy(PLAYER_B)) {
+                        baseOccupation = true;
+                        break;
+                    }
                 }
-                if ((st == A_HOME_SQUARE && winner != PLAYER_A) ||
-                    (st == B_HOME_SQUARE && winner != PLAYER_B) ||
-                    (st == C_HOME_SQUARE && winner != PLAYER_C) ||
-                    (st == D_HOME_SQUARE && winner != PLAYER_D)) {
-                    return QStringLiteral("Captured Enemy Home Base");
+            }
+        } else if (board->getGameMode() == GAME_MODE_4) {
+            if (winner == PLAYER_A || winner == PLAYER_C) {
+                if (board->squareAt(2, 6).isCapturedByTeamOf(PLAYER_A) &&
+                    board->squareAt(6, 2).isCapturedByTeamOf(PLAYER_A)) {
+                    baseOccupation = true;
+                }
+            } else if (winner == PLAYER_B || winner == PLAYER_D) {
+                if (board->squareAt(2, 2).isCapturedByTeamOf(PLAYER_B) &&
+                    board->squareAt(6, 6).isCapturedByTeamOf(PLAYER_B)) {
+                    baseOccupation = true;
                 }
             }
         }
-        if (oppPodsOnBoard == 0 || board->getGame()->isPlayerEliminated(opp)) {
+
+        if (baseOccupation) {
+            return QStringLiteral("Captured Enemy Home Base");
+        }
+
+        bool totalCapture = false;
+        if (board->getGameMode() == GAME_MODE_2 || board->getGameMode() == GAME_MODE_OFK) {
+            OctiPlayer loser = (winner == PLAYER_A) ? PLAYER_B : PLAYER_A;
+            int loserPods = 0;
+            for (int x = 0; x < board->getBoardWidth(); ++x) {
+                for (int y = 0; y < board->getBoardHeight(); ++y) {
+                    const OctiSquare &sq = board->squareAt(x, y);
+                    for (int i = 0; i < sq.getNumPods(); ++i) {
+                        if (podTypeToPlayer(sq.getPodAt(i).getType()) == loser) {
+                            loserPods++;
+                        }
+                    }
+                }
+            }
+            if (loserPods == 0) {
+                totalCapture = true;
+            }
+        } else if (board->getGameMode() == GAME_MODE_4) {
+            int bdPods = 0, acPods = 0;
+            for (int x = 0; x < board->getBoardWidth(); ++x) {
+                for (int y = 0; y < board->getBoardHeight(); ++y) {
+                    const OctiSquare &sq = board->squareAt(x, y);
+                    for (int i = 0; i < sq.getNumPods(); ++i) {
+                        OctiPlayer p = podTypeToPlayer(sq.getPodAt(i).getType());
+                        if (p == PLAYER_B || p == PLAYER_D) bdPods++;
+                        if (p == PLAYER_A || p == PLAYER_C) acPods++;
+                    }
+                }
+            }
+            if ((winner == PLAYER_A || winner == PLAYER_C) && bdPods == 0) {
+                totalCapture = true;
+            } else if ((winner == PLAYER_B || winner == PLAYER_D) && acPods == 0) {
+                totalCapture = true;
+            }
+        }
+
+        if (totalCapture) {
             return QStringLiteral("Eliminated All Opponent Pods");
         }
-        if (board->getGame()->getMode() == GAME_MODE_OFK) {
-            return QStringLiteral("Victory by Stalemate (Opponent Has No Legal Moves)");
-        }
+
+        return QStringLiteral("Victory by Stalemate (Opponent Has No Legal Moves)");
     }
-    return QStringLiteral("Captured Enemy Home Base");
+    return QStringLiteral("Match Concluded");
 }
 
 void GameOverDialog::setTheme(ThemeId theme)
@@ -4354,61 +4402,48 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
     _placeReserveBtnRect = QRectF();
     _liberateBtnRect = QRectF();
 
-    const OctiSquare &sq = (activeBoard && activeBoard->isValidCoord(_squareX - 1, _squareY - 1))
-        ? activeBoard->squareAt(_squareX - 1, _squareY - 1)
-        : activeBoard->squareAt(0, 0);
-
-    bool isFriendlyBase = false;
-    if (_board) {
-        if (_board->getNumPlayers() == 2) {
-            isFriendlyBase = ((turn == PLAYER_A && sq.getType() == A_HOME_SQUARE) ||
-                              (turn == PLAYER_B && sq.getType() == B_HOME_SQUARE));
-        } else if (_board->getNumPlayers() == 4) {
-            isFriendlyBase = (sq.getType() == static_cast<OctiSquareType>(turn));
-        }
-    }
+    bool canPlaceReserve = _composer && _composer->canPlaceReservePodAt(_squareX, _squareY);
+    bool canLiberatePod = _composer && _composer->canLiberateCapturedPodAt(_squareX, _squareY);
+    bool isPartnerRevival = _composer && _composer->canRevivePartnerPodAt(_squareX, _squareY);
 
     bool canShowPodPlacement = isTurn && !hasEnemy && _board &&
                                _board->getGameMode() != GAME_MODE_OFK &&
-                               (isFriendlyBase || (!isEmptySquare && sq.getType() != NEUTRAL_SQUARE));
-
-    const OctiBoard *resourceBoard = (activeBoard && activeBoard->getGame()) ? activeBoard : _board;
-    int freePods = (resourceBoard && resourceBoard->getGame()) ? resourceBoard->getGame()->getFreePods(turn) : 0;
-    int capPods = (resourceBoard && resourceBoard->getGame()) ? resourceBoard->getGame()->getCapturedPods(turn) : 0;
-    bool canLiberate = (capPods > 0 && resourceBoard && resourceBoard->canLiberate(turn));
-    bool canLiberateHere = (capPods > 0) && sq.isOccupiedBy(turn) &&
-        (isFriendlyBase ? (_board && _board->canLiberate(turn)) : true);
+                               (canPlaceReserve || canLiberatePod);
 
     auto drawPlaceAndLiberate = [&](const QRectF &placeRect, const QRectF &libRect, int fontSize) {
         _placeReserveBtnRect = placeRect;
         _liberateBtnRect = libRect;
 
-        bool canPlace = (freePods > 0) || (!isFriendlyBase && canLiberateHere);
-        p.setPen(QPen(canPlace ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
-        p.setBrush(canPlace ? pal.podA.core : pal.panelCardBg.darker(130));
-        p.drawRoundedRect(_placeReserveBtnRect, 6.0, 6.0);
-        p.setPen(canPlace ? Qt::white : pal.textSecondary);
-        p.setFont(QFont("SansSerif", fontSize, QFont::Bold));
-        p.drawText(_placeReserveBtnRect, Qt::AlignCenter, "Place Reserve Pod");
+        if (!_placeReserveBtnRect.isEmpty()) {
+            p.setPen(QPen(canPlaceReserve ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
+            p.setBrush(canPlaceReserve ? pal.podA.core : pal.panelCardBg.darker(130));
+            p.drawRoundedRect(_placeReserveBtnRect, 6.0, 6.0);
+            p.setPen(canPlaceReserve ? Qt::white : pal.textSecondary);
+            p.setFont(QFont("SansSerif", fontSize, QFont::Bold));
+            p.drawText(_placeReserveBtnRect, Qt::AlignCenter, "Add Reserve Pod");
+        }
 
         if (!_liberateBtnRect.isEmpty()) {
-            bool canLibBtn = isFriendlyBase ? canLiberate : canLiberateHere;
-            p.setPen(QPen(canLibBtn ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
-            p.setBrush(canLibBtn ? pal.accentBrass.darker(140) : pal.panelCardBg.darker(130));
+            p.setPen(QPen(canLiberatePod ? pal.prongSuperGold : pal.accentBrass.darker(160), 1.4));
+            p.setBrush(canLiberatePod ? pal.accentBrass.darker(140) : pal.panelCardBg.darker(130));
             p.drawRoundedRect(_liberateBtnRect, 6.0, 6.0);
-            p.setPen(canLibBtn ? pal.prongSuperGold : pal.textSecondary);
-            p.setFont(QFont("SansSerif", fontSize, QFont::Bold));
-            p.drawText(_liberateBtnRect, Qt::AlignCenter, "Liberate (*)");
+            p.setPen(canLiberatePod ? pal.prongSuperGold : pal.textSecondary);
+            QString libText = isPartnerRevival ? "Liberate Partner's Captured Pod" : "Liberate Captured Pod";
+            int libFontSz = isPartnerRevival ? std::max(7, fontSize - 2) : fontSize;
+            p.setFont(QFont("SansSerif", libFontSz, QFont::Bold));
+            p.drawText(_liberateBtnRect, Qt::AlignCenter, libText);
         }
     };
 
     if (!isEmptySquare && !hasEnemy && isTurn && !currentPodClaimed) {
         if (canShowPodPlacement) {
             _movePodBtnRect = QRectF(120, 444, 320, 32);
-            if (canLiberateHere) {
-                drawPlaceAndLiberate(QRectF(120, 482, 155, 32), QRectF(285, 482, 155, 32), 9);
-            } else {
+            if (canPlaceReserve && canLiberatePod) {
+                drawPlaceAndLiberate(QRectF(120, 482, 155, 32), QRectF(285, 482, 155, 32), 8);
+            } else if (canPlaceReserve) {
                 drawPlaceAndLiberate(QRectF(120, 482, 320, 32), QRectF(), 10);
+            } else {
+                drawPlaceAndLiberate(QRectF(), QRectF(120, 482, 320, 32), isPartnerRevival ? 8 : 9);
             }
         } else {
             _movePodBtnRect = QRectF(120, 460, 320, 38);
@@ -4426,10 +4461,12 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         p.setFont(btnFont);
         p.drawText(_movePodBtnRect, Qt::AlignCenter, "Move / Jump This Pod");
     } else if (isEmptySquare && canShowPodPlacement && _composer) {
-        if (canLiberateHere) {
-            drawPlaceAndLiberate(QRectF(120, 460, 155, 38), QRectF(285, 460, 155, 38), 9);
-        } else {
+        if (canPlaceReserve && canLiberatePod) {
+            drawPlaceAndLiberate(QRectF(120, 460, 155, 38), QRectF(285, 460, 155, 38), 8);
+        } else if (canPlaceReserve) {
             drawPlaceAndLiberate(QRectF(120, 460, 320, 38), QRectF(), 10);
+        } else {
+            drawPlaceAndLiberate(QRectF(), QRectF(120, 460, 320, 38), isPartnerRevival ? 8 : 9);
         }
     } else if (hasEnemy) {
         QFont roFont("SansSerif", 10, QFont::Medium);

@@ -11,7 +11,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -148,9 +150,24 @@ fun OctiReserveHud(
                         }
                         val capPodsHeld = game?.getCapturedPods(oppForCap) ?: 0
                         val ownCapPods = game?.getCapturedPods(p) ?: 0
+                        val is4P = game?.mode == OctiGameMode.GAME_MODE_4
+                        val partner = if (is4P) {
+                            when (turn) {
+                                OctiPlayer.PLAYER_A -> OctiPlayer.PLAYER_C
+                                OctiPlayer.PLAYER_C -> OctiPlayer.PLAYER_A
+                                OctiPlayer.PLAYER_B -> OctiPlayer.PLAYER_D
+                                OctiPlayer.PLAYER_D -> OctiPlayer.PLAYER_B
+                                else -> null
+                            }
+                        } else null
+                        val partnerRevivable = is4P && partner != null && (p == partner) &&
+                            (game?.isPlayerEliminated(partner) == true) &&
+                            ((game?.getCapturedPods(partner) ?: 0) > 0)
                         val activePlayerTurn = !isGameOver && (p == turn) && !viewModel.isViewingHistory()
                         val canActiveLiberateFromThisCard = !isGameOver && !viewModel.isViewingHistory() &&
-                            (oppForCap == turn) && (capPodsHeld > 0)
+                            (((oppForCap == turn) && (capPodsHeld > 0)) ||
+                             ((p == turn) && ((game?.getCapturedPods(turn) ?: 0) > 0)) ||
+                             partnerRevivable)
                         PlayerReserveCard(
                             player = p,
                             isTurn = !isGameOver && (p == turn),
@@ -202,9 +219,24 @@ fun OctiReserveHud(
                                 }
                                 val capPodsHeld = game?.getCapturedPods(oppForCap) ?: 0
                                 val ownCapPods = game?.getCapturedPods(p) ?: 0
+                                val is4P = game?.mode == OctiGameMode.GAME_MODE_4
+                                val partner = if (is4P) {
+                                    when (turn) {
+                                        OctiPlayer.PLAYER_A -> OctiPlayer.PLAYER_C
+                                        OctiPlayer.PLAYER_C -> OctiPlayer.PLAYER_A
+                                        OctiPlayer.PLAYER_B -> OctiPlayer.PLAYER_D
+                                        OctiPlayer.PLAYER_D -> OctiPlayer.PLAYER_B
+                                        else -> null
+                                    }
+                                } else null
+                                val partnerRevivable = is4P && partner != null && (p == partner) &&
+                                    (game?.isPlayerEliminated(partner) == true) &&
+                                    ((game?.getCapturedPods(partner) ?: 0) > 0)
                                 val activePlayerTurn = !isGameOver && (p == turn) && !viewModel.isViewingHistory()
                                 val canActiveLiberateFromThisCard = !isGameOver && !viewModel.isViewingHistory() &&
-                                    (oppForCap == turn) && (capPodsHeld > 0)
+                                    (((oppForCap == turn) && (capPodsHeld > 0)) ||
+                                     ((p == turn) && ((game?.getCapturedPods(turn) ?: 0) > 0)) ||
+                                     partnerRevivable)
                                 PlayerReserveCard(
                                     player = p,
                                     isTurn = !isGameOver && (p == turn),
@@ -536,7 +568,10 @@ fun PlayerReserveCard(
                     val canStartLiberate = onStartLiberatePlacement != null && gameMode != OctiGameMode.GAME_MODE_OFK
                     Row(
                         modifier = if (canStartLiberate) {
-                            Modifier.clickable { onStartLiberatePlacement?.invoke() }
+                            Modifier
+                                .border(1.dp, Color(pal.legalCaptureGlow.toLong() and 0xFFFFFFFFL), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 3.dp, vertical = 1.dp)
+                                .clickable { onStartLiberatePlacement?.invoke() }
                         } else {
                             Modifier
                         },

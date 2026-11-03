@@ -12,6 +12,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import org.junit.Test;
 
@@ -259,7 +260,7 @@ public class OctiGuiRefinementV2Test {
     @Test
     public void testEnemySquarePodPlacementPrioritizesLiberationOverReserve() {
         // 1. 2P mode: placing an unadorned pod ("57") on an occupied enemy OCTI square
-        // while holding both capturedPods > 0 and freePods > 0 must consume capturedPods first.
+        // while holding both freePods > 0 and capturedPods > 0 must consume freePods first.
         OctiBoard board2p = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false,
                 OctiGameBases.GAME_BASES_3);
         OctiGame game2p = board2p.getGame();
@@ -268,32 +269,33 @@ public class OctiGuiRefinementV2Test {
         board2p.squareAt(4, 6).clear(); // (5, 7) is a B_HOME_SQUARE (enemy base for Player A)
         board2p.squareAt(4, 6).addPod(new OctiPod(OctiPodType.A_POD));
         OctiGameSnapshot snap2p = game2p.captureSnapshot();
-        snap2p.players[OctiPlayer.PLAYER_A.getValue()].freePods = 3;
+        snap2p.players[OctiPlayer.PLAYER_A.getValue()].freePods = 1;
         snap2p.players[OctiPlayer.PLAYER_A.getValue()].capturedPods = 2;
         game2p.restoreSnapshot(snap2p);
 
+        // Unadorned "57" consumes freePods first (1 -> 0), capturedPods stays 2
         game2p.move("57");
-        assertEquals(3, game2p.getFreePods(OctiPlayer.PLAYER_A));
-        assertEquals(1, game2p.getCapturedPods(OctiPlayer.PLAYER_A));
+        assertEquals(0, game2p.getFreePods(OctiPlayer.PLAYER_A));
+        assertEquals(2, game2p.getCapturedPods(OctiPlayer.PLAYER_A));
         assertEquals(2, board2p.squareAt(4, 6).getNumPods());
 
         game2p.move("37+d"); // Pass B's turn
 
-        // Next placement on enemy base "57" consumes the last captured pod (1 -> 0), freePods stays 3
+        // With freePods == 0, unadorned "57" falls back to consuming capturedPods (2 -> 1)
         game2p.move("57");
-        assertEquals(3, game2p.getFreePods(OctiPlayer.PLAYER_A));
-        assertEquals(0, game2p.getCapturedPods(OctiPlayer.PLAYER_A));
+        assertEquals(0, game2p.getFreePods(OctiPlayer.PLAYER_A));
+        assertEquals(1, game2p.getCapturedPods(OctiPlayer.PLAYER_A));
         assertEquals(3, board2p.squareAt(4, 6).getNumPods());
 
         game2p.move("77+d"); // Pass B's turn
 
-        // With capturedPods == 0, unadorned "57" falls back to consuming freePods (3 -> 2)
-        game2p.move("57");
-        assertEquals(2, game2p.getFreePods(OctiPlayer.PLAYER_A));
+        // Explicit liberation "57*" consumes the last captured pod (1 -> 0)
+        game2p.move("57*");
+        assertEquals(0, game2p.getFreePods(OctiPlayer.PLAYER_A));
         assertEquals(0, game2p.getCapturedPods(OctiPlayer.PLAYER_A));
         assertEquals(4, board2p.squareAt(4, 6).getNumPods());
 
-        // 2. 4P mode: placing an unadorned pod on a non-home OCTI square consumes capturedPods before freePods
+        // 2. 4P mode: (5, 7) is NEUTRAL_OCTI_SQUARE; reserve pods cannot be placed on neutral squares
         OctiBoard board4p = new OctiBoard(OctiGameMode.GAME_MODE_4, false, false,
                 OctiGameBases.GAME_BASES_3);
         OctiGame game4p = board4p.getGame();
@@ -306,12 +308,20 @@ public class OctiGuiRefinementV2Test {
         snap4p.players[OctiPlayer.PLAYER_A.getValue()].capturedPods = 1;
         game4p.restoreSnapshot(snap4p);
 
-        game4p.move("57");
+        // Unadorned "57" is rejected on neutral OCTI square
+        try {
+            game4p.move("57");
+            fail("Expected exception for reserve pod on neutral OCTI square");
+        } catch (IllegalMoveException | IllegalArgumentException expected) {
+        }
+
+        // "57*" liberates captured pod onto neutral square
+        game4p.move("57*");
         assertEquals(2, game4p.getFreePods(OctiPlayer.PLAYER_A));
         assertEquals(0, game4p.getCapturedPods(OctiPlayer.PLAYER_A));
         assertEquals(2, board4p.squareAt(4, 6).getNumPods());
 
-        // 3. MoveComposer auto-promotes non-liberate addPod on enemy square to "57*" when capturedPods > 0
+        // 3. MoveComposer places reserve pod "57" without hijacking into "57*"
         OctiBoard compBoard = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false,
                 OctiGameBases.GAME_BASES_3);
         compBoard.getGame().start(OctiPlayer.PLAYER_A);
@@ -325,10 +335,10 @@ public class OctiGuiRefinementV2Test {
         OctiMoveComposer composer = new OctiMoveComposer(compBoard);
         composer.setConfirmAllMoves(true);
         assertTrue(composer.stageOrCommitAddPod(5, 7, false));
-        assertEquals("57*", composer.stagedMoveNotation());
+        assertEquals("57", composer.stagedMoveNotation());
         assertTrue(composer.commitStagedMove());
-        assertEquals(3, compBoard.getGame().getFreePods(OctiPlayer.PLAYER_A));
-        assertEquals(1, compBoard.getGame().getCapturedPods(OctiPlayer.PLAYER_A));
+        assertEquals(2, compBoard.getGame().getFreePods(OctiPlayer.PLAYER_A));
+        assertEquals(2, compBoard.getGame().getCapturedPods(OctiPlayer.PLAYER_A));
 
         compBoard.getGame().move("37+d");
 
@@ -377,9 +387,9 @@ public class OctiGuiRefinementV2Test {
         assertEquals(72, moves72.length);
         for (int i = 0; i < moves72.length; i++) {
             replayGame.move(moves72[i]);
-            if (i == 56) { // After move 57 ("57") by Player A
-                assertEquals(2, replayGame.getFreePods(OctiPlayer.PLAYER_A));
-                assertEquals(0, replayGame.getCapturedPods(OctiPlayer.PLAYER_A));
+            if (i == 56) { // After move 57 ("57") by Player A: consumes freePods first (2 -> 1), capturedPods stays 1
+                assertEquals(1, replayGame.getFreePods(OctiPlayer.PLAYER_A));
+                assertEquals(1, replayGame.getCapturedPods(OctiPlayer.PLAYER_A));
             }
             if (i == 57) { // After move 58 ("73") by Player B
                 assertEquals(0, replayGame.getFreePods(OctiPlayer.PLAYER_B));
@@ -866,7 +876,7 @@ public class OctiGuiRefinementV2Test {
                 OctiBotEngine.BotDifficulty.TACTICAL,
                 OctiPlayer.PLAYER_A
         );
-        assertEquals("vs AI Bot (Lv2 • 8s) • Seat A (Red)\n2P (9x9) • 3 Bases • Standard", sA);
+        assertEquals("vs AI Bot (Lv2 • 8s) • Seat A (Green)\n2P (9x9) • 3 Bases • Standard", sA);
 
         // 2. 2P vs Bot (TACTICAL, Seat B)
         String sB = OctiBoardRenderer.formatStartMatchConfigSummary(
@@ -878,7 +888,7 @@ public class OctiGuiRefinementV2Test {
                 OctiBotEngine.BotDifficulty.TACTICAL,
                 OctiPlayer.PLAYER_B
         );
-        assertEquals("vs AI Bot (Lv2 • 8s) • Seat B (Green)\n2P (9x9) • 3 Bases • Standard", sB);
+        assertEquals("vs AI Bot (Lv2 • 8s) • Seat B (Red)\n2P (9x9) • 3 Bases • Standard", sB);
 
         // 3. 2P Pass-and-Play with Super-Prongs + Edgeless
         String sPass = OctiBoardRenderer.formatStartMatchConfigSummary(
@@ -902,7 +912,7 @@ public class OctiGuiRefinementV2Test {
                 OctiBotEngine.BotDifficulty.TACTICAL,
                 OctiPlayer.PLAYER_A
         );
-        assertEquals("vs AI Bot (Lv2 • 8s) • Seat A (Red)\nOFK (6x7) • 1 Base", sOfk);
+        assertEquals("vs AI Bot (Lv2 • 8s) • Seat A (Green)\nOFK (6x7) • 1 Base", sOfk);
     }
 
     @Test
