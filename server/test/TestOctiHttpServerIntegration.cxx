@@ -5326,6 +5326,80 @@ assert.strictEqual(st35.reserves[1].freePods, 4);
     CHECK_EQUAL(0, rcCorpus);
 }
 
+TEST(OctiHttpServerIntegrationTest, WebBotEngineThreeVariantsAndRealGameTactics)
+{
+    Reply rUi = http().get("/");
+    EXPECT_STATUS(200, rUi);
+    size_t scStart = rUi.body.find("<script>");
+    CHECK_TRUE(scStart != std::string::npos);
+    size_t scEnd = rUi.body.find("</script>", scStart);
+    CHECK_TRUE(scEnd != std::string::npos);
+    std::string jsCode = rUi.body.substr(scStart + 8, scEnd - (scStart + 8));
+    size_t engStart = jsCode.find("var DIR_DELTAS = [");
+    CHECK_TRUE(engStart != std::string::npos);
+    size_t engEnd = jsCode.find("/* Inline Web Worker Initialization */", engStart);
+    CHECK_TRUE(engEnd != std::string::npos);
+
+    std::string testHarnessPath = "/tmp/octi_bot_harness_" + std::to_string(getpid()) + ".js";
+    {
+        std::ofstream hfs(testHarnessPath);
+        hfs << "var document = { getElementById: function() { return { style: {}, textContent: '', addEventListener: function(){}, classList: { add: function(){}, remove: function(){}, contains: function(){ return false; } } }; } };\n";
+        hfs << "var window = { addEventListener: function(){} };\n";
+        hfs << "function $(id) { return null; }\n";
+        hfs << "function requestAnimationFrame() {}\n";
+        hfs << "var URL = { createObjectURL: function() { return ''; } };\n";
+        hfs << "function Worker() {}\n";
+        hfs << jsCode.substr(engStart, engEnd - engStart) << "\n";
+        hfs << R"NODEJS(
+var assert = require("assert");
+
+// 1. Ply 74 of game 3c8ded8792...:
+// Jump capture 77defh-55-33x (capturing A44b and landing on A's base 33) exceeds passive 66abcdefg-65
+var fenPly74 = "2:3:0:0:P:B:-:0:2,3,23,0:0,5,19,0:A44b,A64bh,A35abefgh,B66abcdefg,B77defh";
+var stCap = applyMoveToState(parseOctiFen(fenPly74), "77defh-55-33x", "B");
+var stPass = applyMoveToState(parseOctiFen(fenPly74), "66abcdefg-65", "B");
+var evalCap = evaluateState(stCap, "B");
+var evalPass = evaluateState(stPass, "B");
+assert.ok(evalCap > evalPass, "Ply 74 evalCap must exceed evalPass");
+
+// 2. Ply 92: B must capture via jump-capture rather than stepping away
+var fenPly92 = "2:3:0:0:P:B:-:0:1,5,21,0:0,5,19,0:A35abefgh,A76h,B66abcdefg,B77cdef";
+var res92 = botSearch(fenPly92, 2, "2P", "B", null, 1500);
+assert.ok(res92.bestMove && res92.bestMove.indexOf("x") !== -1, "Ply 92 must choose capturing move");
+assert.notStrictEqual(res92.bestMove, "66abcdefg-65", "Ply 92 must not step away to 66abcdefg-65");
+
+// 3. Ply 98: B has 1 pod on board, 0 freePods, 3-base game (base win mathematically impossible).
+// B must capture A55h via 65acdefg-45x rather than chasing empty base distance via 65acdefg-54
+var fenPly98 = "2:3:0:0:P:B:-:0:0,5,21,0:0,6,24,0:B65acdefg,A55h,A35abefgh";
+var res98 = botSearch(fenPly98, 2, "2P", "B", null, 1500);
+assert.ok(res98.bestMove && res98.bestMove.startsWith("65acdefg-45x"), "Ply 98 must start with 65acdefg-45x");
+assert.notStrictEqual(res98.bestMove, "65acdefg-54", "Ply 98 must not chase base distance");
+
+// 4. Per-pod base-threat deduplication & 3-base vs 1-base scaling
+var fen1 = "2:1:0:0:P:A:-:0:3,0,20,0:3,0,20,0:A66bh,B37";
+var fen3 = "2:3:0:0:P:A:-:0:3,0,20,0:3,0,20,0:A66bh,B37";
+var e1 = evaluateState(parseOctiFen(fen1), "A");
+var e3 = evaluateState(parseOctiFen(fen3), "A");
+assert.ok(e1 > e3 + 4000, "1-base eval must exceed 3-base eval by > 4000");
+
+// 5. 4P (2v2 coalition) single-seat elimination defense penalty
+var fenThreatened = "4:2:0:0:P:B:-:0:3,0,10,0:3,0,10,0:0,3,10,0:3,0,10,0:A22,C44,B43a,D68";
+var fenSafe = "4:2:0:0:P:B:-:0:3,0,10,0:3,0,10,0:1,2,10,0:3,0,10,0:A22,C44,B43a,D68";
+var scoreThreatened = evaluateState(parseOctiFen(fenThreatened), "A");
+var scoreWithReserve = evaluateState(parseOctiFen(fenSafe), "A");
+assert.ok(scoreWithReserve > scoreThreatened + 5000, "Safe score must exceed threatened score by > 5000");
+
+// 6. OFK (7x7 OCTI for Kids) capture prioritization with zero reserves
+var fenOfk = "OFK:1:0:0:P:A:-:0:0,0,8,0:0,0,8,0:A33a,A22,B34e,B56";
+var resOfk = botSearch(fenOfk, 2, "OFK", "A", null, 1000);
+assert.strictEqual(resOfk.bestMove, "33a-35x", "OFK must choose winning capture 33a-35x");
+)NODEJS";
+    }
+    int rcBot = std::system(("node " + testHarnessPath).c_str());
+    std::remove(testHarnessPath.c_str());
+    CHECK_EQUAL(0, rcBot);
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

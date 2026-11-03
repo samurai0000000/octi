@@ -8,6 +8,7 @@ package com.selfso.octi;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -1835,6 +1836,103 @@ public class OctiBoardEngineTest {
         assertFalse(game.isGameOver());
         assertEquals(OctiPlayer.PLAYER_A, game.getTurn());
         assertEquals(3, game.getFreePods(OctiPlayer.PLAYER_B));
+    }
+
+    @Test
+    public void testBotEngineRealGame3BaseTacticalDecisions() {
+        // 1. Ply 74 of game 3c8ded87926d3900684b14c5a9a31c993c466e9c0f0d85dd43a2bf83a561302b:
+        // Jump capture 77defh-55-33x (capturing A44b and landing on A's base 33) exceeds passive 66abcdefg-65
+        {
+            OctiBoard bCap = new OctiBoard(OctiGameMode.GAME_MODE_2);
+            bCap.fromPositionString("2:3:0:0:P:B:-:0:2,3,23,0:0,5,19,0:A44b,A64bh,A35abefgh,B66abcdefg,B77defh");
+            bCap.getGame().move("77defh-55-33x");
+
+            OctiBoard bPass = new OctiBoard(OctiGameMode.GAME_MODE_2);
+            bPass.fromPositionString("2:3:0:0:P:B:-:0:2,3,23,0:0,5,19,0:A44b,A64bh,A35abefgh,B66abcdefg,B77defh");
+            bPass.getGame().move("66abcdefg-65");
+
+            int evalCap = OctiBotEngine.evaluatePosition(bCap, OctiPlayer.PLAYER_B);
+            int evalPass = OctiBotEngine.evaluatePosition(bPass, OctiPlayer.PLAYER_B);
+            assertTrue(evalCap > evalPass);
+        }
+
+        // 2. Ply 92: B must capture A76h via 66abcdefg-86x rather than stepping away to 66abcdefg-65
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+            board.fromPositionString("2:3:0:0:P:B:-:0:1,5,21,0:0,5,19,0:A35abefgh,A76h,B66abcdefg,B77cdef");
+            OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
+            bot.setTimeBudgetMs(1500);
+            String chosen = bot.chooseMove(board);
+            assertNotNull(chosen);
+            assertTrue(chosen.contains("x"));
+            assertFalse("66abcdefg-65".equals(chosen));
+        }
+
+        // 3. Ply 98: B has 1 pod on board, 0 freePods, 3-base game (base win mathematically impossible).
+        // B must capture A55h via 65acdefg-45x rather than chasing empty base distance via 65acdefg-54.
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+            board.fromPositionString("2:3:0:0:P:B:-:0:0,5,21,0:0,6,24,0:B65acdefg,A55h,A35abefgh");
+            OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
+            bot.setTimeBudgetMs(1500);
+            String chosen = bot.chooseMove(board);
+            assertNotNull(chosen);
+            assertTrue(chosen.startsWith("65acdefg-45x"));
+            assertNotEquals("65acdefg-54", chosen);
+        }
+    }
+
+    @Test
+    public void testBotEngineThreeVariants2P4POfkEvaluationAndTactics() {
+        // 1. 128-bit jump mask on row 9 (y=8, sqBit >= 72): pod at (6, 6) jumping over enemy at (7, 7) to (8, 8)
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+            board.fromPositionString("2:3:0:0:P:A:-:0:3,0,20,0:3,0,20,0:A67b,B78a");
+            int scoreWithTarget = OctiBotEngine.evaluatePosition(board, OctiPlayer.PLAYER_A);
+
+            OctiBoard boardNoProng = new OctiBoard(OctiGameMode.GAME_MODE_2);
+            boardNoProng.fromPositionString("2:3:0:0:P:A:-:0:3,0,21,0:3,0,20,0:A67,B78a");
+            int scoreWithoutProng = OctiBotEngine.evaluatePosition(boardNoProng, OctiPlayer.PLAYER_A);
+            assertTrue(scoreWithTarget > scoreWithoutProng + 3000);
+        }
+
+        // 2. Per-pod base-threat deduplication & 3-base vs 1-base scaling
+        {
+            OctiBoard board1Base = new OctiBoard(OctiGameMode.GAME_MODE_2);
+            board1Base.fromPositionString("2:1:0:0:P:A:-:0:3,0,20,0:3,0,20,0:A66bh,B37");
+            OctiBoard board3Base = new OctiBoard(OctiGameMode.GAME_MODE_2);
+            board3Base.fromPositionString("2:3:0:0:P:A:-:0:3,0,20,0:3,0,20,0:A66bh,B37");
+
+            int eval1 = OctiBotEngine.evaluatePosition(board1Base, OctiPlayer.PLAYER_A);
+            int eval3 = OctiBotEngine.evaluatePosition(board3Base, OctiPlayer.PLAYER_A);
+            // In 1-base mode, threatening a base at (6,6)->(5,7)/(7,7) is an immediate game-winning threat (100% scale),
+            // whereas in 3-base mode with 0 bases captured it is scaled down to 20%.
+            assertTrue(eval1 > eval3 + 4000);
+        }
+
+        // 3. 4P (2v2 coalition) single-seat elimination defense penalty
+        {
+            OctiBoard board4P = new OctiBoard(OctiGameMode.GAME_MODE_4);
+            // Player C has 1 pod on board at (4,4), 0 freePods, threatened by B at (4,3) with North prong 'a'
+            board4P.fromPositionString("4:2:0:0:P:B:-:0:3,0,10,0:3,0,10,0:0,3,10,0:3,0,10,0:A22,C44,B43a,D68");
+            int scoreThreatened = OctiBotEngine.evaluatePosition(board4P, OctiPlayer.PLAYER_A);
+
+            OctiBoard board4PSafe = new OctiBoard(OctiGameMode.GAME_MODE_4);
+            board4PSafe.fromPositionString("4:2:0:0:P:B:-:0:3,0,10,0:3,0,10,0:1,2,10,0:3,0,10,0:A22,C44,B43a,D68");
+            int scoreWithReserve = OctiBotEngine.evaluatePosition(board4PSafe, OctiPlayer.PLAYER_A);
+            // Having 0 freePods when C's sole board pod is hanging incurs single-seat elimination danger penalty
+            assertTrue(scoreWithReserve > scoreThreatened + 5000);
+        }
+
+        // 4. OFK (7x7 OCTI for Kids) capture prioritization with zero reserves
+        {
+            OctiBoard boardOfk = new OctiBoard(OctiGameMode.GAME_MODE_OFK);
+            boardOfk.fromPositionString("OFK:1:0:0:P:A:-:0:0,0,8,0:0,0,8,0:A33a,A22,B34e,B56");
+            OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
+            bot.setTimeBudgetMs(1000);
+            String chosen = bot.chooseMove(boardOfk);
+            assertEquals("33a-35x", chosen);
+        }
     }
 
     // -------------------------------------------------------------------------

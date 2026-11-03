@@ -119,6 +119,7 @@ public:
 
     OctiGameMode getMode() const;
     OctiGameBases getBases() const;
+    int getBasesToWin() const { return static_cast<int>(_bases); }
     bool useSuperProngs() const;
     bool useEdgelessBoard() const;
 

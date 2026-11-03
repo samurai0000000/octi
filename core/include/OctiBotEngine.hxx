@@ -55,11 +55,11 @@ struct BotTuningProfile {
 
     // --- 3. Multi-Pod Development & Anti-Monopoly Weights ---
     int podZeroProngVal              = 320;   // Base value of an unarmed pod on the board
-    int podOneProngVal               = 950;   // Base value of a 1-prong pod
-    int podTwoProngVal               = 1450;  // Base value of a 2-prong pod
-    int podThreePlusProngVal         = 1750;  // Base value of a 3+ prong pod
-    int normalProngVal               = 220;   // Value per attached normal prong
-    int superProngVal                = 350;   // Value per attached superprong
+    int podOneProngVal               = 1350;  // Base value of a 1-prong pod
+    int podTwoProngVal               = 2100;  // Base value of a 2-prong pod
+    int podThreePlusProngVal         = 2800;  // Base value of a 3+ prong pod
+    int normalProngVal               = 380;   // Value per attached normal prong
+    int superProngVal                = 550;   // Value per attached superprong
     int orthDiagVersatilityBonus     = 550;   // Bonus when pod has both orthogonal and diagonal prongs
     int diagOnlyParityPenalty        = 350;   // Penalty when pod has >= 2 diagonal prongs and 0 orthogonal
     int firstArmedPodBonus           = 600;   // Army development bonus for having >= 1 armed pod
@@ -73,14 +73,14 @@ struct BotTuningProfile {
     int leapfrogForwardBonus         = 400;   // Extra bonus when the leapfrog jump advances closer to enemy bases
     int jumpReachableSquareWeight    = 130;   // Bonus per unique empty square reachable via jump chain
     int jumpReachStepWeight          = 450;   // Bonus per Chebyshev step closer to enemy base achieved via jump
-    int jumpCapturablePodWeight      = 1200;  // Bonus per enemy pod currently in jump-capture reach
-    int jumpCapturableProngWeight    = 200;   // Bonus per enemy prong currently in jump-capture reach
+    int jumpCapturablePodWeight      = 600;   // Bonus per enemy pod currently in jump-capture reach
+    int jumpCapturableProngWeight    = 120;   // Bonus per enemy prong currently in jump-capture reach
 
     // --- 5. Hanging-Pod Safety, OFK Prong-Seizure & Move Ordering ---
-    int hangingPodBasePenalty        = 2200;  // Base penalty per pod sitting in enemy jump-capture mask
-    int hangingProngWeight           = 320;   // Per-prong hanging penalty in standard 2P/4P
-    int ofkProngSeizureWeight        = 600;   // Per-prong hanging penalty in OFK (accounts for 2x seizure swing)
-    int opponentTurnHangingPct       = 140;   // Multiplier (%) on hanging penalty when opponent moves next (100 = flat)
+    int hangingPodBasePenalty        = 1400;  // Base penalty per pod sitting in enemy jump-capture mask
+    int hangingProngWeight           = 220;   // Per-prong hanging penalty in standard 2P/4P
+    int ofkProngSeizureWeight        = 450;   // Per-prong hanging penalty in OFK (accounts for 2x seizure swing)
+    int opponentTurnHangingPct       = 125;   // Multiplier (%) on hanging penalty when opponent moves next (100 = flat)
     int soleArmedPodDangerPenalty    = 3500;  // Extra penalty when your ONLY armed pod sits in enemy jump mask
     int wipeoutDangerPenalty         = 15000; // Extra penalty when all remaining board pods can be captured
     int moveOrderCaptureBonus        = 16000; // Move-ordering priority for jump-captures

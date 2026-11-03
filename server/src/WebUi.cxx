@@ -3673,38 +3673,38 @@ var DEFAULT_BOT_TUNING = {
   lostAlliedBasePenalty: 32000,
   neutralOctiSquareBonus: 4000,
   closestPodDistWeight: 320,
-  secondClosestPodDistWeight: 150,
+  secondClosestPodDistWeight: 140,
   oneStepBaseThreatBonus: 8500,
   oneJumpBaseThreatBonus: 12000,
   twoPlyBaseThreatWeight: 2400,
   podZeroProngVal: 320,
-  podOneProngVal: 950,
-  podTwoProngVal: 1450,
-  podThreePlusProngVal: 1750,
-  normalProngVal: 220,
-  superProngVal: 350,
+  podOneProngVal: 1350,
+  podTwoProngVal: 2100,
+  podThreePlusProngVal: 2800,
+  normalProngVal: 380,
+  superProngVal: 550,
   orthDiagVersatilityBonus: 550,
   diagOnlyParityPenalty: 350,
   firstArmedPodBonus: 600,
   secondArmedPodBonus: 1100,
-  thirdArmedPodBonus: 600,
+  thirdArmedPodBonus: 700,
   singlePodMonopolyPenalty: 1000,
   loneOneProngRushPenalty: 550,
   leapfrogBatteryWeight: 550,
   leapfrogForwardBonus: 400,
   jumpReachableSquareWeight: 130,
   jumpReachStepWeight: 450,
-  jumpCapturablePodWeight: 1200,
-  jumpCapturableProngWeight: 200,
-  hangingPodBasePenalty: 2200,
-  hangingProngWeight: 320,
-  ofkProngSeizureWeight: 600,
-  opponentTurnHangingPct: 140,
+  jumpCapturablePodWeight: 600,
+  jumpCapturableProngWeight: 120,
+  hangingPodBasePenalty: 1400,
+  hangingProngWeight: 220,
+  ofkProngSeizureWeight: 450,
+  opponentTurnHangingPct: 125,
   soleArmedPodDangerPenalty: 3500,
-  wipeoutDangerPenalty: 16000,
-  moveOrderBaseEntryBonus: 16000,
-  moveOrderCaptureBonus: 8500,
-  moveOrderLeapfrogBonus: 1400,
+  wipeoutDangerPenalty: 15000,
+  moveOrderBaseEntryBonus: 60000,
+  moveOrderCaptureBonus: 16000,
+  moveOrderLeapfrogBonus: 1200,
   moveOrderBlunderPenalty: 7000
 };
 
@@ -3730,9 +3730,9 @@ var BOT_PROFILES = {
     leapfrogForwardBonus: 150,
     jumpReachableSquareWeight: 60,
     jumpReachStepWeight: 150,
-    hangingPodBasePenalty: 1800,
-    hangingProngWeight: 250,
-    ofkProngSeizureWeight: 350,
+    hangingPodBasePenalty: 1200,
+    hangingProngWeight: 180,
+    ofkProngSeizureWeight: 320,
     opponentTurnHangingPct: 100,
     soleArmedPodDangerPenalty: 1000,
     moveOrderBlunderPenalty: 2000
@@ -3767,10 +3767,10 @@ var BOT_PROFILES = {
     leapfrogForwardBonus: 600,
     jumpReachableSquareWeight: 180,
     jumpReachStepWeight: 650,
-    hangingPodBasePenalty: 2600,
-    hangingProngWeight: 380,
-    ofkProngSeizureWeight: 750,
-    opponentTurnHangingPct: 180,
+    hangingPodBasePenalty: 1600,
+    hangingProngWeight: 260,
+    ofkProngSeizureWeight: 550,
+    opponentTurnHangingPct: 140,
     soleArmedPodDangerPenalty: 6000,
     moveOrderBlunderPenalty: 11000
   })
@@ -3808,6 +3808,79 @@ function getUncapturedOpponentBases(s, player) {
     if (!occ) uncap.push(b);
   }
   return uncap.length ? uncap : allOpp;
+}
+
+function analyzeCoalitionPhase(s, side) {
+  var ctx = {
+    basesNeeded: 1,
+    availPods: 0,
+    capturedPods: 0,
+    feasible: true,
+    baseThreatScalePct: 100
+  };
+  if (!s || !side || side === "-") return ctx;
+
+  var isOfk = (s.mode === "OFK");
+  var basesToWin = s.bases || 1;
+  var is4p = (s.mode === "4" || s.mode === "4P");
+
+  if (isOfk || basesToWin <= 1) {
+    ctx.basesNeeded = 1;
+  } else {
+    var capturedEnemyBases = 0;
+    var allOpp = getOpponentBases(s.mode, side, s.bases);
+    for (var bi = 0; bi < allOpp.length; bi++) {
+      var ob = allOpp[bi];
+      if (isSquareOccupiedBy(s, ob.x, ob.y, side) ||
+          (is4p && isSquareOccupiedBy(s, ob.x, ob.y, partnerOf(s.mode, side)))) {
+        capturedEnemyBases++;
+      }
+    }
+    ctx.basesNeeded = Math.max(1, basesToWin - capturedEnemyBases);
+  }
+
+  var totalBoardPods = 0;
+  var mapKeys = Object.keys(s.map);
+  for (var ki = 0; ki < mapKeys.length; ki++) {
+    var stack = s.map[mapKeys[ki]] || [];
+    if (stack.length && areAllied(s.mode, stack[0].owner, side)) {
+      totalBoardPods += stack.length;
+    }
+  }
+
+  var allyFreePods = 0;
+  var allyCapturedPods = 0;
+  var allyCanLiberate = false;
+  var numP = is4p ? 4 : 2;
+  for (var p = 0; p < numP; p++) {
+    var pLetter = ["A", "B", "C", "D"][p];
+    if (areAllied(s.mode, pLetter, side)) {
+      var r = s.reserves[p];
+      if (r) {
+        allyFreePods += (r.freePods || 0);
+        allyCapturedPods += (r.capturedPods || 0);
+      }
+      if (canLiberate(s, pLetter)) {
+        allyCanLiberate = true;
+      }
+    }
+  }
+
+  ctx.capturedPods = allyCapturedPods;
+  ctx.availPods = totalBoardPods + allyFreePods + (allyCanLiberate ? allyCapturedPods : 0);
+  ctx.feasible = (ctx.availPods >= ctx.basesNeeded);
+
+  if (!ctx.feasible) {
+    ctx.baseThreatScalePct = (ctx.capturedPods > 0) ? 20 : 5;
+  } else if (ctx.basesNeeded <= 1) {
+    ctx.baseThreatScalePct = 100;
+  } else if (ctx.basesNeeded === 2) {
+    ctx.baseThreatScalePct = 35;
+  } else {
+    ctx.baseThreatScalePct = 20;
+  }
+
+  return ctx;
 }
 
 function evaluateJumpThreatDfs(s, curX, curY, startX, startY, depth, podOwner, pod, targets, visitedDest, jumpedMap, threat) {
@@ -3922,18 +3995,36 @@ function evaluateState(s, botSide, prof) {
   var allyTargets = getUncapturedOpponentBases(s, botSide);
   var enemyTargets = getUncapturedOpponentBases(s, sampleEnemy);
 
-  // 1. Captured Enemy Bases & Lost Allied Bases
+  var allyPhase = analyzeCoalitionPhase(s, botSide);
+  var enemyPhase = analyzeCoalitionPhase(s, sampleEnemy);
+
+  var allyBaseThreatScalePct = allyPhase.baseThreatScalePct;
+  var enemyBaseThreatScalePct = enemyPhase.baseThreatScalePct;
+  var allyBaseWinFeasible = allyPhase.feasible;
+  var enemyBaseWinFeasible = enemyPhase.feasible;
+  var allyCapturedPods = allyPhase.capturedPods;
+  var enemyCapturedPods = enemyPhase.capturedPods;
+
+  var isOfk = (s.mode === "OFK");
+  var podZeroVal = prof.podZeroProngVal;
+  var podOneVal = isOfk ? Math.trunc((prof.podOneProngVal * 135) / 100) : prof.podOneProngVal;
+  var podTwoVal = isOfk ? Math.trunc((prof.podTwoProngVal * 135) / 100) : prof.podTwoProngVal;
+  var podThreePlusVal = isOfk ? Math.trunc((prof.podThreePlusProngVal * 135) / 100) : prof.podThreePlusProngVal;
+
+  var numBases = Math.max(1, s.bases || 1);
   for (var bi = 0; bi < allOppBases.length; bi++) {
     var b = allOppBases[bi];
     if (isSquareOccupiedBy(s, b.x, b.y, botSide) ||
         (is4p && isSquareOccupiedBy(s, b.x, b.y, partnerOf(s.mode, botSide)))) {
-      score += prof.capturedEnemyBaseBonus;
+      var baseBonus = Math.trunc((Math.trunc(prof.capturedEnemyBaseBonus / numBases) * allyBaseThreatScalePct) / 100);
+      score += baseBonus;
     }
   }
   for (var hi = 0; hi < allAllyHomeSquares.length; hi++) {
     var ah = allAllyHomeSquares[hi];
     if (squareHasEnemyOf(s, ah.x, ah.y, botSide)) {
-      score -= prof.lostAlliedBasePenalty;
+      var basePen = Math.trunc((Math.trunc(prof.lostAlliedBasePenalty / numBases) * enemyBaseThreatScalePct) / 100);
+      score -= basePen;
     }
   }
 
@@ -3951,6 +4042,7 @@ function evaluateState(s, botSide, prof) {
     }
   }
 
+  var playerBoardPods = { "A": 0, "B": 0, "C": 0, "D": 0 };
   var totalAllyPodsOnBoard = 0;
   var totalEnemyPodsOnBoard = 0;
   var allyArmedPods = 0;
@@ -3963,6 +4055,14 @@ function evaluateState(s, botSide, prof) {
   var enemyJumpThreatMap = {};
 
   var mapKeys = Object.keys(s.map);
+  for (var ki0 = 0; ki0 < mapKeys.length; ki0++) {
+    var st0 = s.map[mapKeys[ki0]] || [];
+    if (st0.length) {
+      var owner0 = st0[0].owner;
+      playerBoardPods[owner0] = (playerBoardPods[owner0] || 0) + st0.length;
+    }
+  }
+
   for (var ki = 0; ki < mapKeys.length; ki++) {
     var k = mapKeys[ki];
     var stack = s.map[k] || [];
@@ -4019,21 +4119,28 @@ function evaluateState(s, botSide, prof) {
       }
 
       var dist = minChebyshevToTargets(px, py, targets, s.gw, s.gh, s.edgeless);
+      var scalePct = isAlly ? allyBaseThreatScalePct : enemyBaseThreatScalePct;
       var podVal = 0;
       if (numProngs === 0 && !onCapturedEnemyBase && !isNeutralOcti) {
-        podVal = prof.podZeroProngVal;
+        podVal = podZeroVal;
       } else if (numProngs === 1) {
-        podVal = prof.podOneProngVal + Math.max(0, 10 - dist) * 110;
+        var distBonus = Math.trunc((Math.max(0, 10 - dist) * 110 * scalePct) / 100);
+        podVal = podOneVal + distBonus;
         if (!onAlliedHome && dist <= 4 && dist >= 2) {
           podVal -= prof.loneOneProngRushPenalty;
         }
       } else if (numProngs === 2) {
-        podVal = prof.podTwoProngVal + Math.max(0, 10 - dist) * 180;
+        var distBonus = Math.trunc((Math.max(0, 10 - dist) * 180 * scalePct) / 100);
+        podVal = podTwoVal + distBonus;
       } else if (numProngs >= 3) {
-        podVal = prof.podThreePlusProngVal + Math.max(0, 10 - dist) * 210;
+        var distBonus = Math.trunc((Math.max(0, 10 - dist) * 210 * scalePct) / 100);
+        podVal = podThreePlusVal + distBonus;
       }
 
       var hasOrth = false, hasDiag = false;
+      var hasOneStepBaseThreat = false;
+      var hasOneJumpBaseThreat = false;
+
       if (pod.cfg && pod.cfg.prongs) {
         for (var d = 0; d < 8; d++) {
           var pt = pod.cfg.prongs[d];
@@ -4067,7 +4174,7 @@ function evaluateState(s, botSide, prof) {
               ? (!nStack || !nStack.length)
               : !squareHasEnemyOf(s, nx, ny, owner);
             if (ndist === 0 && canStepBase) {
-              podVal += prof.oneStepBaseThreatBonus;
+              hasOneStepBaseThreat = true;
             }
 
             // Leapfrog battery detection
@@ -4098,15 +4205,23 @@ function evaluateState(s, botSide, prof) {
               var destStack2 = s.map[jx2 + "," + jy2];
               if (nStack && nStack.length && (!destStack2 || !destStack2.length)) {
                 var jdist2 = minChebyshevToTargets(jx2, jy2, targets, s.gw, s.gh, s.edgeless);
-                if (jdist2 === 0) podVal += prof.oneJumpBaseThreatBonus;
+                if (jdist2 === 0) {
+                  hasOneJumpBaseThreat = true;
+                }
               }
             }
           }
         }
       }
 
+      if (hasOneStepBaseThreat) {
+        podVal += Math.trunc((prof.oneStepBaseThreatBonus * scalePct) / 100);
+      }
+      if (hasOneJumpBaseThreat) {
+        podVal += Math.trunc((prof.oneJumpBaseThreatBonus * scalePct) / 100);
+      }
       if (dist === 1 && prof.twoPlyBaseThreatWeight > 0) {
-        podVal += prof.twoPlyBaseThreatWeight;
+        podVal += Math.trunc((prof.twoPlyBaseThreatWeight * scalePct) / 100);
       }
       if (hasOrth && hasDiag) podVal += prof.orthDiagVersatilityBonus;
       else if (numProngs >= 2 && hasDiag && !hasOrth) podVal -= prof.diagOnlyParityPenalty;
@@ -4117,7 +4232,7 @@ function evaluateState(s, botSide, prof) {
         podVal += threat.capturablePods * prof.jumpCapturablePodWeight;
         podVal += threat.capturableProngs * prof.jumpCapturableProngWeight;
         if (threat.minJumpDistToTargets < dist) {
-          podVal += (dist - threat.minJumpDistToTargets) * prof.jumpReachStepWeight;
+          podVal += Math.trunc(((dist - threat.minJumpDistToTargets) * prof.jumpReachStepWeight * scalePct) / 100);
         }
         var capKeys = Object.keys(threat.capturedSqMap);
         for (var cki = 0; cki < capKeys.length; cki++) {
@@ -4162,35 +4277,61 @@ function evaluateState(s, botSide, prof) {
     var hk = mapKeys[hki];
     var hStack = s.map[hk] || [];
     if (!hStack.length) continue;
-    var hAlly = areAllied(s.mode, hStack[0].owner, botSide);
+    var hOwner = hStack[0].owner;
+    var hAlly = areAllied(s.mode, hOwner, botSide);
     var prongsOnSq = 0;
     for (var hpi = 0; hpi < hStack.length; hpi++) {
       prongsOnSq += (hStack[hpi].cfg ? hStack[hpi].cfg.count : 0);
     }
 
+    var hOwnerFreePods = 0;
+    var hOwnerIdx = playerIndex(hOwner);
+    if (s.reserves && s.reserves[hOwnerIdx]) {
+      hOwnerFreePods = s.reserves[hOwnerIdx].freePods || 0;
+    }
+
     if (hAlly && enemyJumpThreatMap[hk]) {
       var vulnPen = hStack.length * prof.hangingPodBasePenalty + prongsOnSq * prongWeight;
-      if (opponentTurnNext) vulnPen = Math.floor((vulnPen * prof.opponentTurnHangingPct) / 100);
+      if (opponentTurnNext) vulnPen = Math.trunc((vulnPen * prof.opponentTurnHangingPct) / 100);
       if (prongsOnSq > 0 && allyArmedPods === 1) vulnPen += prof.soleArmedPodDangerPenalty;
-      if (hStack.length >= totalAllyPodsOnBoard) vulnPen += (prof.wipeoutDangerPenalty || 16000);
+      if (hStack.length >= totalAllyPodsOnBoard) {
+        vulnPen += (prof.wipeoutDangerPenalty || 15000);
+      } else if (is4p && hStack.length >= (playerBoardPods[hOwner] || 0) && hOwnerFreePods === 0) {
+        vulnPen += Math.trunc((prof.wipeoutDangerPenalty || 15000) / 2);
+      }
       score -= vulnPen;
     } else if (!hAlly && allyJumpThreatMap[hk]) {
       var vulnPen2 = hStack.length * prof.hangingPodBasePenalty + prongsOnSq * prongWeight;
-      if (!opponentTurnNext) vulnPen2 = Math.floor((vulnPen2 * prof.opponentTurnHangingPct) / 100);
+      if (!opponentTurnNext) vulnPen2 = Math.trunc((vulnPen2 * prof.opponentTurnHangingPct) / 100);
       if (prongsOnSq > 0 && enemyArmedPods === 1) vulnPen2 += prof.soleArmedPodDangerPenalty;
-      if (hStack.length >= totalEnemyPodsOnBoard) vulnPen2 += (prof.wipeoutDangerPenalty || 16000);
+      if (hStack.length >= totalEnemyPodsOnBoard) {
+        vulnPen2 += (prof.wipeoutDangerPenalty || 15000);
+      } else if (is4p && hStack.length >= (playerBoardPods[hOwner] || 0) && hOwnerFreePods === 0) {
+        vulnPen2 += Math.trunc((prof.wipeoutDangerPenalty || 15000) / 2);
+      }
       score += vulnPen2;
     }
   }
 
   if (totalAllyPodsOnBoard === 0) {
-    score -= (prof.wipeoutDangerPenalty || 16000) + prof.soleArmedPodDangerPenalty;
+    score -= ((prof.wipeoutDangerPenalty || 15000) + prof.soleArmedPodDangerPenalty);
   }
   if (totalEnemyPodsOnBoard === 0) {
-    score += (prof.wipeoutDangerPenalty || 16000) + prof.soleArmedPodDangerPenalty;
+    score += ((prof.wipeoutDangerPenalty || 15000) + prof.soleArmedPodDangerPenalty);
   }
 
   // Multi-Base Minimum Chebyshev Distance (d_min1 and d_min2 per uncaptured target base)
+  var allyDistScalePct = (allyBaseWinFeasible ? 100 : (allyCapturedPods > 0 ? 40 : 15));
+  var enemyDistScalePct = (enemyBaseWinFeasible ? 100 : (enemyCapturedPods > 0 ? 40 : 15));
+
+  allyDistScalePct = Math.trunc((allyDistScalePct * allyBaseThreatScalePct) / 100);
+  enemyDistScalePct = Math.trunc((enemyDistScalePct * enemyBaseThreatScalePct) / 100);
+
+  var allyClosestPodDistWeight = Math.trunc((prof.closestPodDistWeight * allyDistScalePct) / 100);
+  var allySecondClosestPodDistWeight = Math.trunc((prof.secondClosestPodDistWeight * allyDistScalePct) / 100);
+  var enemyClosestPodDistWeight = Math.trunc((prof.closestPodDistWeight * enemyDistScalePct) / 100);
+  var enemySecondClosestPodDistWeight = Math.trunc((prof.secondClosestPodDistWeight * enemyDistScalePct) / 100);
+
   for (var ati = 0; ati < allyTargets.length; ati++) {
     var tb = allyTargets[ati];
     var dMin1 = 999, dMin2 = 999;
@@ -4200,9 +4341,9 @@ function evaluateState(s, botSide, prof) {
       if (dA < dMin1) { dMin2 = dMin1; dMin1 = dA; }
       else if (dA < dMin2) { dMin2 = dA; }
     }
-    if (dMin1 < 999) score += Math.max(0, 10 - dMin1) * prof.closestPodDistWeight;
-    if (dMin2 < 999 && prof.secondClosestPodDistWeight > 0) {
-      score += Math.max(0, 10 - dMin2) * prof.secondClosestPodDistWeight;
+    if (dMin1 < 999) score += Math.max(0, 10 - dMin1) * allyClosestPodDistWeight;
+    if (dMin2 < 999 && allySecondClosestPodDistWeight > 0) {
+      score += Math.max(0, 10 - dMin2) * allySecondClosestPodDistWeight;
     }
   }
 
@@ -4215,32 +4356,34 @@ function evaluateState(s, botSide, prof) {
       if (dE < eMin1) { eMin2 = eMin1; eMin1 = dE; }
       else if (dE < eMin2) { eMin2 = dE; }
     }
-    if (eMin1 < 999) score -= Math.max(0, 10 - eMin1) * prof.closestPodDistWeight;
-    if (eMin2 < 999 && prof.secondClosestPodDistWeight > 0) {
-      score -= Math.max(0, 10 - eMin2) * prof.secondClosestPodDistWeight;
+    if (eMin1 < 999) score -= Math.max(0, 10 - eMin1) * enemyClosestPodDistWeight;
+    if (eMin2 < 999 && enemySecondClosestPodDistWeight > 0) {
+      score -= Math.max(0, 10 - eMin2) * enemySecondClosestPodDistWeight;
     }
   }
 
-  // Reserves and material bonuses (capturedPods is a penalty for that player!)
+  // Reserves and material bonuses
   var numP = is4p ? 4 : 2;
   for (var p = 0; p < numP; p++) {
     var pLetter = ["A", "B", "C", "D"][p];
     var isAlliedSeat = areAllied(s.mode, pLetter, botSide);
     var r = s.reserves[p];
     if (r) {
-      var resVal = r.freePods * 450
-                 - r.capturedPods * 380
-                 + r.freeProngs * 50
-                 + r.freeSuper * 150;
+      var capturedPodPen = isOfk ? 4800 : 3800;
+      var freeProngVal = isOfk ? 180 : 140;
+      var resVal = (r.freePods || 0) * 450
+                 - (r.capturedPods || 0) * capturedPodPen
+                 + (r.freeProngs || 0) * freeProngVal
+                 + (r.freeSuper || 0) * 150;
       var unarmedHome = isAlliedSeat ? allyUnarmedHomePods : enemyUnarmedHomePods;
       var podsOnBoardSeat = isAlliedSeat ? totalAllyPodsOnBoard : totalEnemyPodsOnBoard;
-      if (s.mode !== "OFK" && r.freePods < 4 && unarmedHome >= 2 && podsOnBoardSeat >= 2 && r.freeProngs >= 6) {
-        resVal -= (4 - r.freePods) * (1500 + unarmedHome * 1500);
+      if (!isOfk && (r.freePods || 0) < 4 && unarmedHome >= 2 && podsOnBoardSeat >= 2 && (r.freeProngs || 0) >= 6) {
+        resVal -= (4 - (r.freePods || 0)) * 1500;
       }
       if (is4p && (s.elimMask & (1 << p)) !== 0) {
         resVal -= 20000;
       }
-      if (r.capturedPods > 0 && canLiberate(s, pLetter)) {
+      if ((r.capturedPods || 0) > 0 && canLiberate(s, pLetter)) {
         resVal += 2500;
       }
       score += isAlliedSeat ? resVal : -resVal;
@@ -4260,6 +4403,9 @@ function orderMoves(rawMoves, s, curPlayer, prof, ttBestMove) {
   var pIdx = playerIndex(curPlayer);
   var res = s.reserves[pIdx];
   var earlyDevelopment = !!(res && res.freeProngs >= 8);
+
+  var turnPhase = analyzeCoalitionPhase(s, curPlayer);
+  var baseThreatScalePct = turnPhase.baseThreatScalePct;
 
   var hasUnarmedHomePod = false;
   for (var hi = 0; hi < homeSquares.length; hi++) {
@@ -4390,15 +4536,6 @@ function orderMoves(rawMoves, s, curPlayer, prof, ttBestMove) {
         var endDist = minChebyshevToTargets(ex2, ey2, targets, s.gw, s.gh, s.edgeless);
         sc += (startDist - endDist) * 550;
 
-        var entersTargetBase = targets.some(function (tb) { return tb.x === ex2 && tb.y === ey2; });
-        if (entersTargetBase) {
-          sc += (prof.moveOrderBaseEntryBonus || 16000);
-        }
-        if ((s.mode === "4" || s.mode === "4P") && ((ex2 === 5 && ey2 === 3) || (ex2 === 5 && ey2 === 7))) {
-          var nSq = s.map[ex2 + "," + ey2];
-          if (!nSq || !nSq.length) sc += 3000;
-        }
-
         var prevX = sx, prevY = sy;
         var foundLeapfrog = false;
         var anyCapture = false;
@@ -4407,24 +4544,57 @@ function orderMoves(rawMoves, s, curPlayer, prof, ttBestMove) {
           var hm = /^([1-9])([1-9])(x?)/.exec(hops[hi2]);
           if (!hm) continue;
           var hx = parseInt(hm[1], 10), hy = parseInt(hm[2], 10);
-          if (Math.abs(hx - prevX) > 1 || Math.abs(hy - prevY) > 1) {
-            isJump = true;
-          }
-          if (hm[3] === "x") {
-            anyCapture = true;
-            sc += (prof.moveOrderCaptureBonus || 8500);
-          } else {
-            sc += 250;
-          }
-          if (!foundLeapfrog && (Math.abs(hx - prevX) === 2 || Math.abs(hy - prevY) === 2)) {
-            var midX = (prevX + hx) / 2, midY = (prevY + hy) / 2;
-            var midSq = s.map[midX + "," + midY];
-            if (midSq && midSq.length && areAllied(s.mode, midSq[0].owner, curPlayer)) {
-              sc += (prof.moveOrderLeapfrogBonus || 1400);
-              foundLeapfrog = true;
+          var hdx = hx - prevX;
+          var hdy = hy - prevY;
+          if (s.edgeless) {
+            for (var ed = -2; ed <= 2; ed++) {
+              if (wrapCoord(prevX + ed, s.gw) === hx) { hdx = ed; break; }
+            }
+            for (var ed2 = -2; ed2 <= 2; ed2++) {
+              if (wrapCoord(prevY + ed2, s.gh) === hy) { hdy = ed2; break; }
             }
           }
+          if (Math.abs(hdx) === 2 || Math.abs(hdy) === 2) {
+            isJump = true;
+            var midX = s.edgeless ? wrapCoord(prevX + Math.trunc(hdx / 2), s.gw) : (prevX + Math.trunc(hdx / 2));
+            var midY = s.edgeless ? wrapCoord(prevY + Math.trunc(hdy / 2), s.gh) : (prevY + Math.trunc(hdy / 2));
+            var midSq = s.map[midX + "," + midY];
+            if (!foundLeapfrog && midSq && midSq.length && areAllied(s.mode, midSq[0].owner, curPlayer)) {
+              sc += (prof.moveOrderLeapfrogBonus || 1200);
+              foundLeapfrog = true;
+            }
+            if (hm[3] === "x") {
+              anyCapture = true;
+              var capturedPodsOnMid = midSq ? midSq.length : 1;
+              var capturedProngsOnMid = 0;
+              if (midSq) {
+                for (var pi2 = 0; pi2 < midSq.length; pi2++) {
+                  capturedProngsOnMid += (midSq[pi2].cfg ? midSq[pi2].cfg.count : 0);
+                }
+              }
+              sc += (prof.moveOrderCaptureBonus || 16000) * capturedPodsOnMid + 600 * capturedProngsOnMid;
+            }
+          } else if (hm[3] === "x") {
+            anyCapture = true;
+            sc += (prof.moveOrderCaptureBonus || 16000);
+          }
+          if (hm[3] !== "x") {
+            sc += 250;
+          }
           prevX = hx; prevY = hy;
+        }
+
+        var entersTargetBase = targets.some(function (tb) { return tb.x === ex2 && tb.y === ey2; });
+        if (entersTargetBase) {
+          if (anyCapture) {
+            sc += (prof.moveOrderBaseEntryBonus || 60000);
+          } else {
+            sc += Math.trunc(((prof.moveOrderBaseEntryBonus || 60000) * baseThreatScalePct) / 100);
+          }
+        }
+        if ((s.mode === "4" || s.mode === "4P") && ((ex2 === 5 && ey2 === 3) || (ex2 === 5 && ey2 === 7))) {
+          var nSq = s.map[ex2 + "," + ey2];
+          if (!nSq || !nSq.length) sc += 3000;
         }
 
         if (!anyCapture && enemyThreatMap[ex2 + "," + ey2]) {
@@ -4753,12 +4923,10 @@ function botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs) {
       }
     }
 
-    if (!depthTimedOut || d === 1 || completedRootMoves >= 1) {
+    if (!depthTimedOut || d === 1) {
       bestOverallMove = depthBestMove;
       bestOverallScore = depthBestScore;
-      if (!depthTimedOut || d === 1) {
-        completedDepth = d;
-      }
+      completedDepth = d;
       if (progressCb) {
         progressCb({
           depth: completedDepth,
@@ -4841,6 +5009,7 @@ try {
     chebyshevDist.toString(),
     minChebyshevToTargets.toString(),
     getUncapturedOpponentBases.toString(),
+    analyzeCoalitionPhase.toString(),
     evaluateJumpThreatDfs.toString(),
     evaluatePodJumpThreat.toString(),
     filterDominatedMoves.toString(),
