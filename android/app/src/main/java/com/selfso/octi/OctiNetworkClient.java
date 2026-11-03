@@ -339,8 +339,12 @@ public final class OctiNetworkClient implements AutoCloseable {
     public static final class LobbyPlayerInfo {
         public String playerUuid = "";
         public String handle = "";
+        public String avatarUrl = "";
         public String status = "IN_LOBBY";
         public String roomId = "";
+        public final List<String> clients = new ArrayList<>();
+        public long onlineSec = 0;
+        public long idleSec = 0;
     }
 
     public static final class LobbyChatEntry {
@@ -1497,8 +1501,19 @@ public final class OctiNetworkClient implements AutoCloseable {
                 LobbyPlayerInfo p = new LobbyPlayerInfo();
                 p.playerUuid = OctiMiniJson.getString(m, "player_uuid", "");
                 p.handle = OctiMiniJson.getString(m, "handle", "");
+                p.avatarUrl = OctiMiniJson.getString(m, "avatar_url", "");
                 p.status = OctiMiniJson.getString(m, "status", "IN_LOBBY");
                 p.roomId = OctiMiniJson.getString(m, "room_id", "");
+                p.onlineSec = OctiMiniJson.getLong(m, "online_sec", 0L);
+                p.idleSec = OctiMiniJson.getLong(m, "idle_sec", 0L);
+                List<Object> cl = OctiMiniJson.getArray(m, "clients");
+                if (cl != null) {
+                    for (Object c : cl) {
+                        if (c instanceof String s) {
+                            p.clients.add(s);
+                        }
+                    }
+                }
                 res.data.players.add(p);
             }
         }
@@ -2612,7 +2627,8 @@ public final class OctiNetworkClient implements AutoCloseable {
                     } else {
                         req.append("Host: ").append(targetHost).append(':').append(targetPort).append("\r\n");
                     }
-                    req.append("User-Agent: octi-android/1.0\r\n");
+                    req.append("User-Agent: octi-android/").append(OctiDefs.OCTI_APP_VERSION).append("\r\n");
+                    req.append("X-Octi-Client-Type: android\r\n");
                     req.append("Accept: application/json, text/plain, */*\r\n");
                     req.append("Connection: close\r\n");
                     req.append("X-Octi-Protocol-Version: ").append(OctiDefs.OCTI_PROTOCOL_VERSION).append("\r\n");
@@ -2795,6 +2811,8 @@ public final class OctiNetworkClient implements AutoCloseable {
                         req.append("Host: ").append(_host).append(':').append(_port).append("\r\n");
                     }
                     req.append("Accept: text/event-stream\r\n");
+                    req.append("User-Agent: octi-android/").append(OctiDefs.OCTI_APP_VERSION).append("\r\n");
+                    req.append("X-Octi-Client-Type: android\r\n");
                     req.append("Cache-Control: no-cache\r\n");
                     req.append("Connection: close\r\n");
                     req.append("X-Octi-Protocol-Version: ").append(OctiDefs.OCTI_PROTOCOL_VERSION).append("\r\n");

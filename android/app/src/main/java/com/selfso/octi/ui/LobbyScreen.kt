@@ -7,7 +7,9 @@
 package com.selfso.octi.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,8 +22,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -33,6 +37,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,13 +48,111 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.selfso.octi.OctiNetworkClient
 import com.selfso.octi.ui.theme.OctiTheme
+
+private fun formatCompactDurationSec(sec: Long): String {
+    val s = if (sec < 0L) 0L else sec
+    return when {
+        s < 60L -> "${s}s"
+        s < 3600L -> "${s / 60L}m"
+        else -> "${s / 3600L}h ${(s % 3600L) / 60L}m"
+    }
+}
+
+@Composable
+fun ClientTypeSmallIcons(
+    clients: List<String>,
+    accentColor: Color,
+    textSec: Color,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        for (c in clients) {
+            when (c) {
+                "web" -> {
+                    Canvas(modifier = Modifier.size(12.dp)) {
+                        val stroke = Stroke(width = 1.2f)
+                        val radius = size.minDimension / 2f - 1f
+                        val center = Offset(size.width / 2f, size.height / 2f)
+                        drawCircle(color = Color(0xFF38BDF8), radius = radius, center = center, style = stroke)
+                        drawLine(
+                            color = Color(0xFF38BDF8),
+                            start = Offset(center.x - radius, center.y),
+                            end = Offset(center.x + radius, center.y),
+                            strokeWidth = 1f
+                        )
+                        drawLine(
+                            color = Color(0xFF38BDF8),
+                            start = Offset(center.x, center.y - radius),
+                            end = Offset(center.x, center.y + radius),
+                            strokeWidth = 1f
+                        )
+                    }
+                }
+                "android" -> {
+                    Canvas(modifier = Modifier.size(12.dp)) {
+                        val stroke = Stroke(width = 1.2f)
+                        val w = size.width - 2f
+                        val h = size.height - 2f
+                        drawRoundRect(
+                            color = Color(0xFF4ADE80),
+                            topLeft = Offset(1f, 1f),
+                            size = Size(w, h),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.5f, 2.5f),
+                            style = stroke
+                        )
+                        drawCircle(
+                            color = Color(0xFF4ADE80),
+                            radius = 1.2f,
+                            center = Offset(size.width / 2f, size.height - 3.5f)
+                        )
+                    }
+                }
+                "desktop" -> {
+                    Canvas(modifier = Modifier.size(12.dp)) {
+                        val stroke = Stroke(width = 1.2f)
+                        val screenW = size.width - 2f
+                        val screenH = size.height * 0.65f
+                        drawRoundRect(
+                            color = Color(0xFFC8A253),
+                            topLeft = Offset(1f, 1f),
+                            size = Size(screenW, screenH),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5f, 1.5f),
+                            style = stroke
+                        )
+                        val centerX = size.width / 2f
+                        drawLine(
+                            color = Color(0xFFC8A253),
+                            start = Offset(centerX, screenH + 1f),
+                            end = Offset(centerX, size.height - 1f),
+                            strokeWidth = 1.2f
+                        )
+                        drawLine(
+                            color = Color(0xFFC8A253),
+                            start = Offset(centerX - 3f, size.height - 1f),
+                            end = Offset(centerX + 3f, size.height - 1f),
+                            strokeWidth = 1.2f
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 /**
  * Online Lobby, Custom Table Browser, My Active Table status card,
@@ -76,6 +179,7 @@ fun LobbyScreen(
     var showInlineCreateTableDialog by remember { mutableStateOf(false) }
     var joinPasscodeTargetTable by remember { mutableStateOf<OctiNetworkClient.TableSummaryInfo?>(null) }
     var joinPasscodeInput by remember { mutableStateOf("") }
+    var expandedPlayerUuid by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshLobbyStateAsync()
@@ -559,6 +663,125 @@ fun LobbyScreen(
                                             Text("Observe")
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2b. Connected Users Card (directly below Open & Live Tables Card)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+            border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Connected Users (${lobbyState.players.size})",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = OctiTheme.colors.accentBrass
+                    )
+                    Text(
+                        text = "Tap user to show @handle",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = OctiTheme.colors.textSecondary
+                    )
+                }
+
+                if (lobbyState.players.isEmpty()) {
+                    Text(
+                        text = "No users connected right now.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = OctiTheme.colors.textSecondary,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        for (p in lobbyState.players) {
+                            val isExpanded = expandedPlayerUuid == p.playerUuid
+                            val cleanHandle = p.handle.removePrefix("@")
+                            Surface(
+                                onClick = {
+                                    expandedPlayerUuid = if (isExpanded) null else p.playerUuid
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                color = OctiTheme.colors.windowBg,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isExpanded) OctiTheme.colors.accentBrass else OctiTheme.colors.panelCardBorder
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OctiPlayerAvatar(
+                                        avatarUrl = p.avatarUrl,
+                                        handle = p.handle,
+                                        size = 22.dp,
+                                        netClient = viewModel.networkClient()
+                                    )
+
+                                    if (isExpanded) {
+                                        Text(
+                                            text = "@$cleanHandle",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp,
+                                            color = OctiTheme.colors.accentBrass
+                                        )
+                                        if (p.roomId.isNotBlank()) {
+                                            Text(
+                                                text = "#${p.roomId}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontSize = 10.sp,
+                                                color = OctiTheme.colors.accentBrass,
+                                                modifier = Modifier
+                                                    .background(
+                                                        color = OctiTheme.colors.accentBrass.copy(alpha = 0.2f),
+                                                        shape = RoundedCornerShape(8.dp)
+                                                    )
+                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                    }
+
+                                    if (p.clients.isNotEmpty()) {
+                                        ClientTypeSmallIcons(
+                                            clients = p.clients,
+                                            accentColor = OctiTheme.colors.accentBrass,
+                                            textSec = OctiTheme.colors.textSecondary
+                                        )
+                                    }
+
+                                    val onlineText = "On ${formatCompactDurationSec(p.onlineSec)}"
+                                    val idleText = if (p.idleSec < 10L) "Active" else "Idle ${formatCompactDurationSec(p.idleSec)}"
+                                    Text(
+                                        text = "$onlineText • $idleText",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontSize = 10.sp,
+                                        color = OctiTheme.colors.textSecondary
+                                    )
                                 }
                             }
                         }

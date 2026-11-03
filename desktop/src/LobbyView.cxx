@@ -12,6 +12,8 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QPainter>
+#include <QPixmap>
 #include <QTimeZone>
 #include <QVBoxLayout>
 #include "LobbyView.hxx"
@@ -48,6 +50,70 @@ QString formatHandleWithAt(const std::string &rawHandle)
         h.prepend("@");
     }
     return h;
+}
+
+QIcon makeAvatarIcon(const std::string &handle, ThemeId theme)
+{
+    const OctiPalette &pal = paletteForTheme(theme);
+    QPixmap pix(24, 24);
+    pix.fill(Qt::transparent);
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing, true);
+
+    QRectF rect(1.0, 1.0, 22.0, 22.0);
+    p.setBrush(QBrush(pal.panelCardBg));
+    p.setPen(QPen(pal.accentBrass, 1.5));
+    p.drawEllipse(rect);
+
+    QString initial = "?";
+    std::string clean = handle;
+    if (!clean.empty() && clean[0] == '@') {
+        clean = clean.substr(1);
+    }
+    if (!clean.empty()) {
+        initial = QString(QChar(clean[0])).toUpper();
+    }
+    QFont font = p.font();
+    font.setPixelSize(11);
+    font.setBold(true);
+    p.setFont(font);
+    p.setPen(pal.accentBrass);
+    p.drawText(rect, Qt::AlignCenter, initial);
+    p.end();
+
+    return QIcon(pix);
+}
+
+QString formatCompactDurationSec(std::int64_t sec)
+{
+    std::int64_t s = sec < 0 ? 0 : sec;
+    if (s < 60) {
+        return QString("%1s").arg(s);
+    }
+    if (s < 3600) {
+        return QString("%1m").arg(s / 60);
+    }
+    return QString("%1h %2m").arg(s / 3600).arg((s % 3600) / 60);
+}
+
+QString formatClientsSummary(const std::vector<std::string> &clients)
+{
+    if (clients.empty()) {
+        return QString("—");
+    }
+    QStringList formatted;
+    for (const auto &c : clients) {
+        if (c == "web") {
+            formatted << "Web";
+        } else if (c == "android") {
+            formatted << "Android";
+        } else if (c == "desktop") {
+            formatted << "Desktop";
+        } else if (!c.empty()) {
+            formatted << QString::fromStdString(c);
+        }
+    }
+    return formatted.isEmpty() ? QString("—") : formatted.join(" • ");
 }
 
 const TableSeatInfo *findSeatInfo(const TableSummaryInfo &table, int seatNum)
@@ -124,21 +190,7 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     root->setSpacing(14);
     outerLayout->addLayout(root, 1);
 
-    /* Left Column: Online Players Roster */
-    QGroupBox *playersBox = new QGroupBox("Online Players Roster", this);
-    QVBoxLayout *pLayout = new QVBoxLayout(playersBox);
-    _playersTable = new QTableWidget(0, 3, playersBox);
-    _playersTable->setHorizontalHeaderLabels(
-        QStringList() << "Handle" << "Status" << "Room");
-    _playersTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    _playersTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    _playersTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    pLayout->addWidget(_playersTable);
-    playersBox->setMinimumWidth(260);
-    playersBox->setMaximumWidth(340);
-    root->addWidget(playersBox, 1);
-
-    /* Center Column: Active Game Tables + Table Seats & Details Inspector */
+    /* Center / Main Column: Active Game Tables + Table Inspector + Connected Users */
     QGroupBox *tablesBox = new QGroupBox("Active Game Tables", this);
     QVBoxLayout *tLayout = new QVBoxLayout(tablesBox);
 
@@ -162,7 +214,7 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     _tablesTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     _tablesTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     _tablesTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    tLayout->addWidget(_tablesTable, 1);
+    tLayout->addWidget(_tablesTable, 2);
 
     _inspectorBox = new QGroupBox("Table Seats & Details Inspector", tablesBox);
     QVBoxLayout *inspLayout = new QVBoxLayout(_inspectorBox);
@@ -180,6 +232,20 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     inspLayout->addWidget(_inspectorTitleLabel);
     inspLayout->addWidget(_inspectorSeatsLabel);
     tLayout->addWidget(_inspectorBox);
+
+    /* Connected Users Roster directly below _tablesTable and _inspectorBox */
+    QGroupBox *playersBox = new QGroupBox("Connected Users", tablesBox);
+    QVBoxLayout *pLayout = new QVBoxLayout(playersBox);
+    pLayout->setContentsMargins(8, 6, 8, 6);
+    _playersTable = new QTableWidget(0, 5, playersBox);
+    _playersTable->setHorizontalHeaderLabels(
+        QStringList() << "User" << "Clients" << "Online" << "Idle" << "Status / Room");
+    _playersTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    _playersTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    _playersTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    _playersTable->setMinimumHeight(130);
+    pLayout->addWidget(_playersTable);
+    tLayout->addWidget(playersBox, 2);
 
     _statusLabel = new QLabel("Connected to OCTI Lobby.", tablesBox);
     tLayout->addWidget(_statusLabel);
@@ -861,13 +927,27 @@ void LobbyView::rebuildPlayersTable()
     _playersTable->setRowCount(static_cast<int>(_players.size()));
     for (int i = 0; i < static_cast<int>(_players.size()); ++i) {
         const LobbyPlayerInfo &p = _players[static_cast<std::size_t>(i)];
+
+        QTableWidgetItem *userItem =
+            new QTableWidgetItem(formatHandleWithAt(p.handle));
+        userItem->setIcon(makeAvatarIcon(p.handle, _theme));
+        _playersTable->setItem(i, 0, userItem);
+
         _playersTable->setItem(
-            i, 0, new QTableWidgetItem(formatHandleWithAt(p.handle)));
+            i, 1, new QTableWidgetItem(formatClientsSummary(p.clients)));
+
         _playersTable->setItem(
-            i, 1, new QTableWidgetItem(QString::fromStdString(p.status)));
-        _playersTable->setItem(
-            i, 2, new QTableWidgetItem(
-                p.roomId.empty() ? QString("—") : QString::fromStdString(p.roomId)));
+            i, 2, new QTableWidgetItem(formatCompactDurationSec(p.onlineSec)));
+
+        QString idleStr = (p.idleSec < 10) ? QString("Active")
+                                           : formatCompactDurationSec(p.idleSec);
+        _playersTable->setItem(i, 3, new QTableWidgetItem(idleStr));
+
+        QString statusRoom = QString::fromStdString(p.status);
+        if (!p.roomId.empty()) {
+            statusRoom += " #" + QString::fromStdString(p.roomId);
+        }
+        _playersTable->setItem(i, 4, new QTableWidgetItem(statusRoom));
     }
 }
 

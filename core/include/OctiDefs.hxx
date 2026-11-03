@@ -7,6 +7,12 @@
 #ifndef OCTI_DEFS_HXX
 #define OCTI_DEFS_HXX
 
+#include "Version.hxx"
+
+#ifndef OCTI_APP_VERSION
+#define OCTI_APP_VERSION OCTI_VERSION_STRING
+#endif
+
 namespace octi {
 
 constexpr const char *OCTI_SERVER_HOST = "octi.selfso.com";

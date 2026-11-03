@@ -761,9 +761,14 @@ const std::string &GameRoomManager::handleOf(int64_t playerId) const
 
 void GameRoomManager::touchOnlineLocked(int64_t playerId)
 {
+    int64_t now = nowMs();
     PlayerInfo &pi = _players[playerId];
     if (!pi.online) {
         pi.online = true;
+        pi.onlineSinceMs = now;
+        if (pi.lastActiveMs <= 0) {
+            pi.lastActiveMs = now;
+        }
         refreshPresenceLocked(playerId);
     }
 }
@@ -921,7 +926,15 @@ RoomResult GameRoomManager::enterLobby(int64_t playerId)
     }
     int64_t now = nowMs();
     PlayerInfo &pi = _players[playerId];
-    pi.online = true;
+    if (!pi.online) {
+        pi.online = true;
+        pi.onlineSinceMs = now;
+        if (pi.lastActiveMs <= 0) {
+            pi.lastActiveMs = now;
+        }
+    } else if (pi.onlineSinceMs <= 0) {
+        pi.onlineSinceMs = now;
+    }
     std::map<int64_t, std::string>::iterator sr = _seatRoom.find(playerId);
     if (sr != _seatRoom.end()) {
         Room *r = findRoomLocked(sr->second);
@@ -981,6 +994,8 @@ RoomResult GameRoomManager::leaveLobby(int64_t playerId)
             if (seat != 0 && r->phase == RoomPhase::WAITING_FOR_PLAYERS) {
                 if (leaveWaitingSeatLocked(*r, seat, now)) {
                     _players[playerId].online = false;
+                    _players[playerId].clientLastSeenMs.clear();
+                    _players[playerId].onlineSinceMs = 0;
                     refreshPresenceLocked(playerId);
                     return success();
                 }
@@ -998,8 +1013,101 @@ RoomResult GameRoomManager::leaveLobby(int64_t playerId)
     }
 
     _players[playerId].online = false;
+    _players[playerId].clientLastSeenMs.clear();
+    _players[playerId].onlineSinceMs = 0;
     refreshPresenceLocked(playerId);
     return success();
+}
+
+void GameRoomManager::recordClientHeartbeat(int64_t playerId,
+                                            const std::string &clientType,
+                                            bool interactiveAction)
+{
+    if (playerId <= 0) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!ensurePlayerLocked(playerId, true)) {
+        return;
+    }
+    int64_t now = nowMs();
+    PlayerInfo &pi = _players[playerId];
+    if (!pi.online) {
+        pi.online = true;
+        pi.onlineSinceMs = now;
+        if (pi.lastActiveMs <= 0) {
+            pi.lastActiveMs = now;
+        }
+    } else if (pi.onlineSinceMs <= 0) {
+        pi.onlineSinceMs = now;
+    }
+    if (interactiveAction || pi.lastActiveMs <= 0) {
+        pi.lastActiveMs = now;
+    }
+    if (clientType == "web" || clientType == "android" ||
+        clientType == "desktop") {
+        pi.clientLastSeenMs[clientType] = now;
+    }
+    refreshPresenceLocked(playerId);
+}
+
+void GameRoomManager::clearClientPresence(int64_t playerId,
+                                          const std::string &clientType)
+{
+    if (playerId <= 0) {
+        return;
+    }
+    bool shouldLeave = false;
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        std::map<int64_t, PlayerInfo>::iterator pit = _players.find(playerId);
+        if (pit != _players.end()) {
+            if (!clientType.empty()) {
+                pit->second.clientLastSeenMs.erase(clientType);
+            }
+            int64_t now = nowMs();
+            for (std::map<std::string, int64_t>::iterator it =
+                     pit->second.clientLastSeenMs.begin();
+                 it != pit->second.clientLastSeenMs.end(); ) {
+                if (now > it->second && (now - it->second) > kClientPresenceTtlMs) {
+                    it = pit->second.clientLastSeenMs.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+            if (pit->second.clientLastSeenMs.empty()) {
+                shouldLeave = true;
+            }
+        }
+    }
+    if (shouldLeave) {
+        leaveLobby(playerId);
+    }
+}
+
+void GameRoomManager::pruneClientPresenceLocked(int64_t now)
+{
+    for (std::map<int64_t, PlayerInfo>::iterator pit = _players.begin();
+         pit != _players.end(); ++pit) {
+        PlayerInfo &pi = pit->second;
+        if (!pi.clientLastSeenMs.empty()) {
+            for (std::map<std::string, int64_t>::iterator cit =
+                     pi.clientLastSeenMs.begin();
+                 cit != pi.clientLastSeenMs.end(); ) {
+                if (now > cit->second && (now - cit->second) > kClientPresenceTtlMs) {
+                    cit = pi.clientLastSeenMs.erase(cit);
+                } else {
+                    ++cit;
+                }
+            }
+            if (pi.clientLastSeenMs.empty() &&
+                _seatRoom.find(pit->first) == _seatRoom.end()) {
+                pi.online = false;
+                pi.onlineSinceMs = 0;
+                refreshPresenceLocked(pit->first);
+            }
+        }
+    }
 }
 
 RoomResult GameRoomManager::postLobbyChat(int64_t playerId,
@@ -1017,6 +1125,7 @@ RoomResult GameRoomManager::postLobbyChat(int64_t playerId,
     purgeExpiredLobbyChatLocked();
     int64_t now = nowMs();
     touchOnlineLocked(playerId);
+    _players[playerId].lastActiveMs = now;
     if (!rateAllow(_lobbyChatTimes[playerId], now, _limits.lobbyChatBurst,
                    _limits.lobbyChatWindowMs)) {
         return fail(RoomCode::RATE_LIMITED, "lobby chat rate limit exceeded");
@@ -1132,6 +1241,8 @@ LobbySnapshot GameRoomManager::lobbyState() const
 {
     std::lock_guard<std::mutex> lock(_mutex);
     const_cast<GameRoomManager *>(this)->purgeExpiredLobbyChatLocked();
+    int64_t now = nowMs();
+    const_cast<GameRoomManager *>(this)->pruneClientPresenceLocked(now);
     LobbySnapshot snap;
     snap.latestSeq = _lobbySeq;
     for (std::map<int64_t, PlayerInfo>::const_iterator it = _players.begin();
@@ -1143,6 +1254,17 @@ LobbySnapshot GameRoomManager::lobbyState() const
         pe.playerId = it->first;
         pe.handle = it->second.handle;
         pe.status = presenceLocked(it->first, &pe.roomId);
+        for (std::map<std::string, int64_t>::const_iterator cit =
+                 it->second.clientLastSeenMs.begin();
+             cit != it->second.clientLastSeenMs.end(); ++cit) {
+            pe.clients.push_back(cit->first);
+        }
+        pe.onlineSec = (it->second.onlineSinceMs > 0 && now >= it->second.onlineSinceMs)
+                           ? (now - it->second.onlineSinceMs) / 1000
+                           : 0;
+        pe.idleSec = (it->second.lastActiveMs > 0 && now >= it->second.lastActiveMs)
+                         ? (now - it->second.lastActiveMs) / 1000
+                         : 0;
         snap.players.push_back(pe);
     }
     for (std::map<std::string, std::unique_ptr<Room>>::const_iterator it =
@@ -1588,6 +1710,7 @@ RoomResult GameRoomManager::createTable(int64_t hostPlayerId,
     }
     int64_t now = nowMs();
     touchOnlineLocked(hostPlayerId);
+    _players[hostPlayerId].lastActiveMs = now;
     Room *r = createRoomLocked(cfg, hostPlayerId, now);
     seatPlayerLocked(*r, 1, hostPlayerId, now);
     announceTableLocked(*r, false);
@@ -1643,6 +1766,7 @@ RoomResult GameRoomManager::joinTable(const std::string &roomId,
         return fail(RoomCode::SEAT_TAKEN, "seat is taken");
     }
     touchOnlineLocked(playerId);
+    _players[playerId].lastActiveMs = now;
     seatPlayerLocked(*r, seat, playerId, now);
     bool full = true;
     for (int s = 1; s <= r->seatCount; ++s) {
@@ -1684,6 +1808,7 @@ RoomResult GameRoomManager::leaveTable(const std::string &roomId,
         return fail(RoomCode::INVALID_STATE,
                     "game already started; resign instead");
     }
+    _players[playerId].lastActiveMs = now;
     leaveWaitingSeatLocked(*r, seat, now);
     if (findRoomLocked(roomId) != nullptr) {
         saveRoomLocked(*r);
@@ -1768,6 +1893,7 @@ RoomResult GameRoomManager::observeRoom(const std::string &roomId,
         return res;
     }
     touchOnlineLocked(playerId);
+    _players[playerId].lastActiveMs = now;
     addObserverLocked(*r, playerId);
     RoomEvent e;
     e.type = RoomEventType::OBSERVER_JOINED;
@@ -1832,6 +1958,7 @@ RoomResult GameRoomManager::enqueueMatchmaking(int64_t playerId,
                  : rs.mode == GAME_MODE_OFK ? p.eloOfk
                                             : p.elo2p;
     touchOnlineLocked(playerId);
+    _players[playerId].lastActiveMs = nowMs();
     switch (_queue.enqueue(playerId, rating, rs)) {
     case EnqueueStatus::OK:
         _matchAssignments.erase(playerId);
@@ -2158,6 +2285,7 @@ RoomResult GameRoomManager::submitMove(const std::string &roomId,
     }
 
     touchOnlineLocked(playerId);
+    _players[playerId].lastActiveMs = now;
     const int64_t elapsed =
         r->turnCarryMs + std::max<int64_t>(0, now - r->turnStartedMs);
     const int64_t before = r->clockMs[seat];
@@ -2498,6 +2626,7 @@ RoomResult GameRoomManager::submitProposal(const std::string &roomId,
         }
     }
     touchOnlineLocked(playerId);
+    _players[playerId].lastActiveMs = now;
 
     Room::Proposal p;
     p.type = type;
@@ -2574,6 +2703,7 @@ RoomResult GameRoomManager::respondProposal(const std::string &roomId,
                     "not an active seat that can answer this proposal");
     }
     touchOnlineLocked(playerId);
+    _players[playerId].lastActiveMs = now;
 
     if (!accept) {
         r->proposals.erase(r->proposals.begin() + static_cast<long>(idx));
@@ -3038,6 +3168,7 @@ RoomResult GameRoomManager::postBoardChat(const std::string &roomId,
         return fail(RoomCode::INVALID_ARGUMENT, err);
     }
     touchOnlineLocked(senderPlayerId);
+    _players[senderPlayerId].lastActiveMs = now;
     if (!rateAllow(r->chatTimes[senderPlayerId], now, _limits.boardChatBurst,
                    _limits.boardChatWindowMs)) {
         return fail(RoomCode::RATE_LIMITED, "board chat rate limit exceeded");

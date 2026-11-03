@@ -21,6 +21,7 @@
 #include "GameRoomManager.hxx"
 #include "OctiBoard.hxx"
 #include "OctiCore.hxx"
+#include "OctiDefs.hxx"
 #include "OctiGame.hxx"
 #include "OctiHttpServer.hxx"
 #include "OidcVerifier.hxx"
@@ -206,10 +207,16 @@ std::string issuerFor(const std::string &provider)
 
 /* LINE uses ES256, everyone else RS256: both algorithms stay exercised. */
 std::string makeToken(const std::string &provider, const std::string &sub,
-                      const std::string &name,
+                      const std::string &name = "",
                       const std::function<void(Json &, Json &)> &mutate =
                           std::function<void(Json &, Json &)>())
 {
+    std::string actualName = name;
+    if (actualName.empty()) {
+        if (sub == "sub-presence-alice") {
+            actualName = "PresenceAlice";
+        }
+    }
     Json header;
     header["alg"] = provider == "line" ? "ES256" : "RS256";
     header["typ"] = "JWT";
@@ -221,7 +228,7 @@ std::string makeToken(const std::string &provider, const std::string &sub,
     claims["iat"] = realNow() - 10;
     claims["exp"] = realNow() + 3600;
     claims["email"] = "user@example.com";
-    claims["name"] = name;
+    claims["name"] = actualName;
     claims["picture"] = "https://example.com/avatar.png";
     if (mutate) {
         mutate(header, claims);
@@ -390,6 +397,8 @@ struct Env {
     OidcVerifier verifier;
     std::unique_ptr<GameRoomManager> rooms;
     std::unique_ptr<OctiHttpServer> server;
+
+    Env() : Env(testConfig(), true, nullptr) {}
 
     Env(const HttpServerConfig &cfg, bool lineEnabled, const RoomLimits *limits)
     {
@@ -4776,9 +4785,21 @@ TEST(OctiHttpServerIntegrationTest, WebPlayerDesktopAndroidParityElements)
     CHECK_TRUE(rUi.body.find("web-capture-overlay") != std::string::npos);
     CHECK_TRUE(rUi.body.find("web-thinking-overlay") != std::string::npos);
     CHECK_TRUE(rUi.body.find("web-thinking-progress-fill") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"brand-version-title\">OCTI v" + std::string(OCTI_APP_VERSION) + "</span>") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"web-thinking-title\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("pointer-events: none;") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("max-height: 48px;") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("var canDragMove =") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("inset: 24px;") == std::string::npos);
     CHECK_TRUE(rUi.body.find("web-gameover-overlay") != std::string::npos);
     CHECK_TRUE(rUi.body.find("web-export-modal") != std::string::npos);
     CHECK_TRUE(rUi.body.find("btn-web-export-moves") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"web-online-users-section\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"web-online-users-list\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"web-online-tables\"") < rUi.body.find("id=\"web-online-users-section\""));
+    CHECK_TRUE(rUi.body.find("X-Octi-Client-Type") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("renderClientTypeIconSvg") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-user-chip") != std::string::npos);
 
     // 3. Core parity JS functions & variables
     CHECK_TRUE(rUi.body.find("WebMoveComposer") != std::string::npos);
@@ -5398,6 +5419,125 @@ assert.strictEqual(resOfk.bestMove, "33a-35x", "OFK must choose winning capture 
     int rcBot = std::system(("node " + testHarnessPath).c_str());
     std::remove(testHarnessPath.c_str());
     CHECK_EQUAL(0, rcBot);
+}
+
+TEST(OctiHttpServerIntegrationTest, LobbyConnectedUsersMultiClientCollapseAndIdleTracking)
+{
+    int64_t fakeNow = 100000;
+    env->rooms->setClock([&fakeNow]() { return fakeNow; });
+
+    User alice = signIn("google", "sub-presence-alice", "PresenceAlice");
+    std::string tokenAlice = alice.token;
+    CHECK_FALSE(tokenAlice.empty());
+
+    // 1. With header {"X-Octi-Client-Type", "web"}
+    httplib::Headers hWeb = {{"X-Octi-Client-Type", "web"}};
+    Reply r1 = http().get("/api/v1/lobby/state", tokenAlice, hWeb);
+    EXPECT_STATUS(200, r1);
+
+    // 2. With header {"X-Octi-Client-Type", "android"}
+    httplib::Headers hAndroid = {{"X-Octi-Client-Type", "android"}};
+    Reply r2 = http().get("/api/v1/lobby/state", tokenAlice, hAndroid);
+    EXPECT_STATUS(200, r2);
+
+    // 3. With header {"User-Agent", "octi-desktop/2.2.7"} (testing UA fallback when X-Octi-Client-Type is omitted)
+    httplib::Headers hDesktop = {{"User-Agent", "octi-desktop/2.2.7"}};
+    Reply r3 = http().get("/api/v1/lobby/state", tokenAlice, hDesktop);
+    EXPECT_STATUS(200, r3);
+
+    // Inspect the third GET /api/v1/lobby/state response JSON j["players"]:
+    const Json &players = r3.json["players"];
+    CHECK_TRUE(players.is_array());
+    int aliceCount = 0;
+    Json aliceObj;
+    for (size_t i = 0; i < players.size(); ++i) {
+        if (players[i].value("handle", "") == "PresenceAlice") {
+            aliceCount++;
+            aliceObj = players[i];
+        }
+    }
+    // Verify "PresenceAlice" appears only once in j["players"] (collapsed by user).
+    CHECK_EQUAL(1, aliceCount);
+
+    // Verify player object fields:
+    STRCMP_EQUAL("PresenceAlice", aliceObj.value("handle", "").c_str());
+    CHECK_TRUE(aliceObj.contains("avatar_url") && aliceObj["avatar_url"].is_string());
+    CHECK_TRUE(aliceObj.contains("clients") && aliceObj["clients"].is_array());
+    CHECK_EQUAL(3, static_cast<int>(aliceObj["clients"].size()));
+    STRCMP_EQUAL("android", aliceObj["clients"][0].get<std::string>().c_str());
+    STRCMP_EQUAL("desktop", aliceObj["clients"][1].get<std::string>().c_str());
+    STRCMP_EQUAL("web", aliceObj["clients"][2].get<std::string>().c_str());
+    CHECK_TRUE(aliceObj.contains("online_sec") && aliceObj["online_sec"].is_number_integer());
+    CHECK_TRUE(aliceObj["online_sec"].get<int64_t>() >= 0);
+    CHECK_TRUE(aliceObj.contains("idle_sec") && aliceObj["idle_sec"].is_number_integer());
+    CHECK_TRUE(aliceObj["idle_sec"].get<int64_t>() >= 0);
+
+    // Advance simulated time to 115000 (+15 seconds) and do passive polls:
+    fakeNow = 115000;
+    http().get("/api/v1/lobby/state", tokenAlice, hWeb);
+    http().get("/api/v1/lobby/state", tokenAlice, hAndroid);
+    Reply rPoll = http().get("/api/v1/lobby/state", tokenAlice, hDesktop);
+    EXPECT_STATUS(200, rPoll);
+    Json alicePoll;
+    for (size_t i = 0; i < rPoll.json["players"].size(); ++i) {
+        if (rPoll.json["players"][i].value("handle", "") == "PresenceAlice") {
+            alicePoll = rPoll.json["players"][i];
+            break;
+        }
+    }
+    CHECK_EQUAL(15, alicePoll.value("online_sec", -1));
+    CHECK_EQUAL(15, alicePoll.value("idle_sec", -1));
+
+    // Advance simulated time to 122000 (+22 seconds) and post an interactive lobby chat:
+    fakeNow = 122000;
+    httplib::Headers hChatDesktop = {{"X-Octi-Client-Type", "desktop"}};
+    Reply rChat = http().post("/api/v1/lobby/chat", tokenAlice,
+                              Json{{"text", "Hello from desktop"}}, hChatDesktop);
+    EXPECT_STATUS(200, rChat);
+
+    Reply rLobbyAfterChat = http().get("/api/v1/lobby/state", tokenAlice, hDesktop);
+    EXPECT_STATUS(200, rLobbyAfterChat);
+    Json aliceAfterChat;
+    for (size_t i = 0; i < rLobbyAfterChat.json["players"].size(); ++i) {
+        if (rLobbyAfterChat.json["players"][i].value("handle", "") == "PresenceAlice") {
+            aliceAfterChat = rLobbyAfterChat.json["players"][i];
+            break;
+        }
+    }
+    CHECK_EQUAL(22, aliceAfterChat.value("online_sec", -1));
+    CHECK_EQUAL(0, aliceAfterChat.value("idle_sec", -1));
+
+    // Test single-client logout:
+    Reply rSsoWeb = http().post(
+        "/api/v1/auth/sso", "",
+        Json{{"provider", "google"},
+             {"id_token", makeToken("google", "sub-presence-alice", "PresenceAlice")},
+             {"client_agent", "octi-test/1.0"}},
+        hWeb);
+    CHECK_TEXT(rSsoWeb.status == 200 || rSsoWeb.status == 201,
+               (rSsoWeb.error + rSsoWeb.body).c_str());
+    std::string tokWeb = rSsoWeb.json.value("session_token", "");
+    CHECK_FALSE(tokWeb.empty());
+
+    Reply rLogout = http().post("/api/v1/auth/logout", tokWeb, Json::object(), hWeb);
+    EXPECT_STATUS(200, rLogout);
+
+    Reply rLobbyAfterLogout = http().get("/api/v1/lobby/state", tokenAlice, hDesktop);
+    EXPECT_STATUS(200, rLobbyAfterLogout);
+    bool foundAlice = false;
+    Json aliceAfterLogout;
+    for (size_t i = 0; i < rLobbyAfterLogout.json["players"].size(); ++i) {
+        if (rLobbyAfterLogout.json["players"][i].value("handle", "") == "PresenceAlice") {
+            foundAlice = true;
+            aliceAfterLogout = rLobbyAfterLogout.json["players"][i];
+            break;
+        }
+    }
+    CHECK_TRUE(foundAlice);
+    CHECK_TRUE(aliceAfterLogout.contains("clients") && aliceAfterLogout["clients"].is_array());
+    CHECK_EQUAL(2, static_cast<int>(aliceAfterLogout["clients"].size()));
+    STRCMP_EQUAL("android", aliceAfterLogout["clients"][0].get<std::string>().c_str());
+    STRCMP_EQUAL("desktop", aliceAfterLogout["clients"][1].get<std::string>().c_str());
 }
 
 int main(int argc, char **argv)

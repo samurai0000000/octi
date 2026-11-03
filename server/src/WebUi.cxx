@@ -5,6 +5,7 @@
  */
 
 #include "WebUi.hxx"
+#include "OctiDefs.hxx"
 
 namespace octi {
 
@@ -598,7 +599,12 @@ tr.active-ply {
 }
 #web-start-match-overlay {
   position: absolute;
-  inset: 24px;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  width: min(380px, calc(100% - 40px));
   background: #161D26;
   border: 2px solid #C8A253;
   border-radius: 14px;
@@ -607,7 +613,7 @@ tr.active-ply {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 24px;
+  padding: 22px 24px;
   z-index: 50;
   opacity: 1.0;
   box-shadow: 0 10px 40px rgba(0,0,0,0.6);
@@ -625,36 +631,51 @@ tr.active-ply {
 }
 #web-thinking-overlay {
   position: absolute;
-  inset: 24px;
+  top: auto;
+  right: auto;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - 28px));
+  max-height: 48px;
   background: #161D26;
-  border: 2px solid #C8A253;
-  border-radius: 14px;
+  border: 1.5px solid #C8A253;
+  border-radius: 10px;
   display: none;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 24px;
+  padding: 5px 14px;
+  gap: 2px;
   z-index: 55;
   opacity: 1.0;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.55);
+  pointer-events: none;
+}
+#web-thinking-title {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.15;
+  font-weight: 700;
+  color: #FDE047;
 }
 .web-thinking-progress-track {
-  width: 80%;
-  max-width: 440px;
-  height: 26px;
+  width: 100%;
+  max-width: 100%;
+  height: 20px;
   background: #0B0F17;
   border: 1px solid #C8A253;
-  border-radius: 13px;
+  border-radius: 10px;
   position: relative;
   overflow: hidden;
-  margin: 16px 0 10px 0;
+  margin: 2px 0 0 0;
 }
 #web-thinking-progress-fill {
   height: 100%;
   width: 0%;
   background: linear-gradient(90deg, #A67C2E 0%, #E5C158 100%);
-  border-radius: 13px;
+  border-radius: 10px;
   transition: width 0.15s ease;
 }
 #web-thinking-progress-text {
@@ -663,7 +684,7 @@ tr.active-ply {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #F8FAFC;
   text-shadow: 0 1px 2px rgba(0,0,0,0.8);
@@ -799,6 +820,108 @@ tr.active-ply {
 #web-zoom-actions button {
   flex: 1;
 }
+
+/* Connected Users Roster */
+#web-online-users-section {
+  margin-top: 12px;
+  padding: 12px;
+}
+.web-online-users-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.web-online-users-mobile-hint {
+  display: none;
+}
+#web-online-users-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.web-user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #161D26;
+  border: 1px solid #2D3A54;
+  border-radius: 20px;
+  font-size: 12px;
+  color: #E2E8F0;
+  user-select: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.web-user-chip:hover {
+  border-color: #C8A253;
+  background: #1B2433;
+}
+.web-user-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid #C8A253;
+  flex-shrink: 0;
+}
+.web-user-avatar-initial {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #0B0F17;
+  border: 1.5px solid #C8A253;
+  color: #FDE047;
+  font-weight: 700;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.web-user-handle {
+  font-weight: 600;
+  color: #F8FAFC;
+  white-space: nowrap;
+}
+.web-user-clients {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.web-user-times {
+  color: #94A3B8;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.web-user-room {
+  background: rgba(200, 162, 83, 0.2);
+  border: 1px solid #C8A253;
+  color: #FDE047;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+}
+@media (max-width: 768px) {
+  .web-online-users-mobile-hint {
+    display: inline;
+    font-size: 11px;
+  }
+  .web-user-chip {
+    padding: 4px 8px;
+    gap: 5px;
+  }
+  .web-user-chip .web-user-handle {
+    display: none;
+  }
+  .web-user-chip.expanded .web-user-handle {
+    display: inline-block;
+    font-weight: 700;
+  }
+}
 </style>
 </head>
 <body>
@@ -806,7 +929,7 @@ tr.active-ply {
   <div class="brand">
     <span class="brand-badge">OCTI</span>
     <div class="brand-text">
-      <span class="brand-name">OCTI</span>
+      <span class="brand-name" id="brand-version-title">OCTI v)OCTIUI" OCTI_APP_VERSION R"OCTIUI(</span>
       <span class="brand-sub">octi.selfso.com &mdash; Official Platform</span>
     </div>
   </div>
@@ -949,9 +1072,9 @@ tr.active-ply {
             </div>
           </div>
 
-          <!-- 100% Opaque AI Thinking Overlay -->
+          <!-- 100% Opaque Non-Blocking Bottom-Docked AI Thinking Bar -->
           <div id="web-thinking-overlay">
-            <h3 style="margin:0;font-size:18px;color:#FDE047;">Browser JS Robot Thinking...</h3>
+            <div id="web-thinking-title">AI Thinking (Level 2)...</div>
             <div class="web-thinking-progress-track">
               <div id="web-thinking-progress-fill"></div>
               <div id="web-thinking-progress-text">Depth 1 &bull; 0 nodes &bull; 0.0s / 8.0s (0%)</div>
@@ -1123,6 +1246,16 @@ tr.active-ply {
               <tr><td colspan="6" class="dim" style="text-align:center;padding:12px;">Loading live tables...</td></tr>
             </tbody>
           </table>
+        </div>
+
+        <div id="web-online-users-section" class="panel" style="margin-top:12px;padding:12px;">
+          <div class="web-online-users-header">
+            <h4 style="margin:0;font-size:14px;">Connected Users (<span id="web-online-users-count">0</span>)</h4>
+            <span class="web-online-users-mobile-hint dim">Tap avatar to show @handle</span>
+          </div>
+          <div id="web-online-users-list">
+            <div class="dim" style="font-size:12.5px;">No connected users right now.</div>
+          </div>
         </div>
 
         <div class="cols" style="margin-top:18px;">
@@ -1612,6 +1745,7 @@ function api(path, opts) {
   opts = opts || {};
   opts.headers = opts.headers || {};
   if (!opts.headers["Accept"]) { opts.headers["Accept"] = "application/json"; }
+  if (!opts.headers["X-Octi-Client-Type"]) { opts.headers["X-Octi-Client-Type"] = "web"; }
   var token = null;
   try { token = localStorage.getItem("octi_jwt_token"); } catch (e) {}
   if (token && !opts.headers["Authorization"]) {
@@ -5335,7 +5469,7 @@ if ($("btn-robots-to-account")) {
 }
 
 function getAuthHeaders() {
-  var headers = { "Accept": "application/json" };
+  var headers = { "Accept": "application/json", "X-Octi-Client-Type": "web" };
   var token = null;
   try { token = localStorage.getItem("octi_jwt_token"); } catch (e) {}
   if (token) {
@@ -7942,7 +8076,9 @@ if (playCanvas) {
         }
       } else {
         var stCur = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
-        if (stCur && stCur.status === "P") {
+        var canDragMove = (matchStarted || activeOnlineGameId) && stCur && stCur.status === "P" &&
+          (localMatchConfig.playMode === "pass" || stCur.turn === localMatchConfig.humanSeat || (activeOnlineGameId && isMyOnlineTurn(stCur)));
+        if (canDragMove) {
           var kSt = pressSq.x + "," + pressSq.y;
           var stackSt = stCur.map[kSt] || [];
           var sortedSt = sortedPodIndicesMostProngsFirst(stackSt);
@@ -8883,11 +9019,17 @@ function triggerAiBotTurn() {
   var mode = s.mode;
 
   var thinkOverlay = document.getElementById("web-thinking-overlay");
+  var titleEl = document.getElementById("web-thinking-title");
   var fillEl = document.getElementById("web-thinking-progress-fill");
   var txtEl = document.getElementById("web-thinking-progress-text");
+  var defaultBudgetMs = (diff === 1) ? 3000 : ((diff === 3) ? 15000 : 8000);
+
   if (thinkOverlay) thinkOverlay.style.display = "flex";
-  if (fillEl) fillEl.style.width = "10%";
-  if (txtEl) txtEl.textContent = "Depth 1 • Searching root moves... • (10%)";
+  if (titleEl) {
+    titleEl.textContent = "AI Thinking (Level " + diff + ") \u2014 " + (defaultBudgetMs / 1000).toFixed(1) + "s remaining";
+  }
+  if (fillEl) fillEl.style.width = "0%";
+  if (txtEl) txtEl.textContent = "Depth 1 \u2022 0 nodes \u2022 0.0s / " + (defaultBudgetMs / 1000).toFixed(1) + "s (0%)";
 
   function finishAiMove(res) {
     if (thinkOverlay) thinkOverlay.style.display = "none";
@@ -8918,13 +9060,19 @@ function triggerAiBotTurn() {
         var d = e.data;
         var maxD = d.maxDepth || 8;
         var depthPct = Math.round((d.depth / maxD) * 100);
-        var timePct = (d.budgetMs > 0 && d.elapsedMs !== undefined)
-          ? Math.round((d.elapsedMs / d.budgetMs) * 100)
+        var effBudget = d.budgetMs || defaultBudgetMs;
+        var timePct = (effBudget > 0 && d.elapsedMs !== undefined)
+          ? Math.round((d.elapsedMs / effBudget) * 100)
           : 0;
-        var pct = Math.min(99, Math.max(10, Math.max(depthPct, timePct)));
-        var secStr = (d.elapsedMs !== undefined) ? (" • " + (d.elapsedMs / 1000).toFixed(1) + "s") : "";
+        var pct = Math.min(99, Math.max(0, Math.max(depthPct, timePct)));
+        var remSec = Math.max(0, (effBudget - (d.elapsedMs || 0)) / 1000).toFixed(1);
+        if (titleEl) {
+          titleEl.textContent = "AI Thinking (Level " + diff + ") \u2014 " + remSec + "s remaining";
+        }
+        var elapsedSec = ((d.elapsedMs || 0) / 1000).toFixed(1);
+        var budgetSec = (effBudget / 1000).toFixed(1);
         if (fillEl) fillEl.style.width = pct + "%";
-        if (txtEl) txtEl.textContent = "Depth " + d.depth + "/" + maxD + " • " + (d.nodes || 0) + " nodes" + secStr + " • (" + pct + "%)";
+        if (txtEl) txtEl.textContent = "Depth " + d.depth + " \u2022 " + (d.nodes || 0) + " nodes \u2022 " + elapsedSec + "s / " + budgetSec + "s (" + pct + "%)";
       } else if (e.data.type === "done" || e.data.type === "result") {
         finishAiMove(e.data);
       }
@@ -8936,13 +9084,19 @@ function triggerAiBotTurn() {
       var r = botSearch(fen, diff, mode, side, function (prog) {
         var maxD = prog.maxDepth || 8;
         var depthPct = Math.round((prog.depth / maxD) * 100);
-        var timePct = (prog.budgetMs > 0 && prog.elapsedMs !== undefined)
-          ? Math.round((prog.elapsedMs / prog.budgetMs) * 100)
+        var effBudget = prog.budgetMs || defaultBudgetMs;
+        var timePct = (effBudget > 0 && prog.elapsedMs !== undefined)
+          ? Math.round((prog.elapsedMs / effBudget) * 100)
           : 0;
-        var pct = Math.min(99, Math.max(10, Math.max(depthPct, timePct)));
-        var secStr = (prog.elapsedMs !== undefined) ? (" • " + (prog.elapsedMs / 1000).toFixed(1) + "s") : "";
+        var pct = Math.min(99, Math.max(0, Math.max(depthPct, timePct)));
+        var remSec = Math.max(0, (effBudget - (prog.elapsedMs || 0)) / 1000).toFixed(1);
+        if (titleEl) {
+          titleEl.textContent = "AI Thinking (Level " + diff + ") \u2014 " + remSec + "s remaining";
+        }
+        var elapsedSec = ((prog.elapsedMs || 0) / 1000).toFixed(1);
+        var budgetSec = (effBudget / 1000).toFixed(1);
         if (fillEl) fillEl.style.width = pct + "%";
-        if (txtEl) txtEl.textContent = "Depth " + prog.depth + "/" + maxD + " • " + (prog.nodes || 0) + " nodes" + secStr + " • (" + pct + "%)";
+        if (txtEl) txtEl.textContent = "Depth " + prog.depth + " \u2022 " + (prog.nodes || 0) + " nodes \u2022 " + elapsedSec + "s / " + budgetSec + "s (" + pct + "%)";
       });
       finishAiMove(r);
     }, 50);
@@ -9187,11 +9341,109 @@ function leaveTableById(roomId) {
   });
 }
 
+var expandedOnlineUserUuid = "";
+
+function renderClientTypeIconSvg(type) {
+  if (type === "web") {
+    return '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;" title="Web Browser">' +
+      '<circle cx="8" cy="8" r="7" stroke="#38BDF8" stroke-width="1.5"/>' +
+      '<ellipse cx="8" cy="8" rx="3.5" ry="7" stroke="#38BDF8" stroke-width="1.2"/>' +
+      '<line x1="1" y1="8" x2="15" y2="8" stroke="#38BDF8" stroke-width="1.2"/>' +
+      '</svg>';
+  } else if (type === "android") {
+    return '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;" title="Android App">' +
+      '<rect x="3" y="1" width="10" height="14" rx="2" stroke="#4ADE80" stroke-width="1.4"/>' +
+      '<circle cx="8" cy="12" r="1" fill="#4ADE80"/>' +
+      '<line x1="6" y1="3" x2="10" y2="3" stroke="#4ADE80" stroke-width="1.2"/>' +
+      '</svg>';
+  } else if (type === "desktop") {
+    return '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;" title="Desktop App">' +
+      '<rect x="1.5" y="2" width="13" height="9" rx="1.5" stroke="#C8A253" stroke-width="1.4"/>' +
+      '<line x1="8" y1="11" x2="8" y2="14" stroke="#C8A253" stroke-width="1.4"/>' +
+      '<line x1="5" y1="14" x2="11" y2="14" stroke="#C8A253" stroke-width="1.4"/>' +
+      '</svg>';
+  }
+  return "";
+}
+
+function formatCompactDuration(sec) {
+  var s = Math.max(0, Math.floor(sec || 0));
+  if (s < 60) return s + "s";
+  if (s < 3600) return Math.floor(s / 60) + "m";
+  var h = Math.floor(s / 3600);
+  var m = Math.floor((s % 3600) / 60);
+  return h + "h " + m + "m";
+}
+
+function renderOnlineUsersRoster(players) {
+  var countEl = $("web-online-users-count");
+  var listEl = $("web-online-users-list");
+  if (!listEl) return;
+  var pl = Array.isArray(players) ? players : [];
+  if (countEl) countEl.textContent = String(pl.length);
+  clear(listEl);
+  if (!pl.length) {
+    var emptyDiv = el("div", "No connected users right now.", "dim");
+    emptyDiv.style.fontSize = "12.5px";
+    listEl.appendChild(emptyDiv);
+    return;
+  }
+  pl.forEach(function (p) {
+    var chip = el("div", null, "web-user-chip" + (expandedOnlineUserUuid === p.player_uuid ? " expanded" : ""));
+    chip.setAttribute("data-player-uuid", p.player_uuid || "");
+
+    if (p.avatar_url) {
+      var img = document.createElement("img");
+      img.className = "web-user-avatar";
+      img.src = p.avatar_url;
+      img.alt = p.handle || "user";
+      chip.appendChild(img);
+    } else {
+      var initial = (p.handle ? p.handle.charAt(0).toUpperCase() : "?");
+      var badge = el("span", initial, "web-user-avatar-initial");
+      chip.appendChild(badge);
+    }
+
+    var handleText = "@" + (p.handle || "anonymous").replace(/^@/, "");
+    var handleSpan = el("span", handleText, "web-user-handle");
+    chip.appendChild(handleSpan);
+
+    var clients = Array.isArray(p.clients) ? p.clients : [];
+    if (clients.length) {
+      var clientsSpan = el("span", null, "web-user-clients");
+      var iconsHtml = "";
+      clients.forEach(function (c) {
+        iconsHtml += renderClientTypeIconSvg(c);
+      });
+      clientsSpan.innerHTML = iconsHtml;
+      chip.appendChild(clientsSpan);
+    }
+
+    var onStr = "On " + formatCompactDuration(p.online_sec);
+    var idleStr = (p.idle_sec < 10) ? "Active" : ("Idle " + formatCompactDuration(p.idle_sec));
+    var timeSpan = el("span", onStr + " \u2022 " + idleStr, "web-user-times");
+    chip.appendChild(timeSpan);
+
+    if (p.room_id) {
+      var roomSpan = el("span", "#" + p.room_id, "web-user-room");
+      chip.appendChild(roomSpan);
+    }
+
+    chip.addEventListener("click", function () {
+      expandedOnlineUserUuid = (expandedOnlineUserUuid === p.player_uuid) ? "" : p.player_uuid;
+      renderOnlineUsersRoster(pl);
+    });
+
+    listEl.appendChild(chip);
+  });
+}
+
 function refreshLobbyTables() {
   api("/api/v1/lobby/state").then(function (res) {
     if (res && Array.isArray(res.recent_chat)) {
       renderLobbyChatMessages(res.recent_chat);
     }
+    renderOnlineUsersRoster(res && Array.isArray(res.players) ? res.players : []);
     var tables = (res && Array.isArray(res.tables)) ? res.tables : [];
     var tbody = $("web-lobby-tables-body");
     if (!tbody) return;
@@ -9818,6 +10070,10 @@ async function loadHealth() {
     var res = await fetch(`${API_BASE}/api/v1/health`);
     if (!res.ok) throw new Error("Health HTTP " + res.status);
     var data = await res.json();
+    var brandVerEl = document.getElementById("brand-version-title");
+    if (brandVerEl && data && data.version) {
+      brandVerEl.textContent = "OCTI v" + data.version;
+    }
     if (pill) {
       pill.textContent = (data && data.status === "ok") ? "Server Online" : "Server Degraded";
       pill.style.color = "#10b981";
@@ -9863,6 +10119,9 @@ Object.defineProperty(window, "activePlayState", {
   get: function () { return activePlayState; },
   set: function (v) { activePlayState = v; }
 });
+window.switchTab = switchTab;
+window.triggerAiBotTurn = triggerAiBotTurn;
+window.renderOnlineUsersRoster = renderOnlineUsersRoster;
 })();
 </script>
 </body>

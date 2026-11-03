@@ -873,7 +873,7 @@ public class OctiAndroidBoardAndComposerTest {
     @Test
     public void testOctiAppVersionAndProtocolConstants() {
         assertEquals(BuildConfig.VERSION_NAME, OctiDefs.OCTI_APP_VERSION);
-        assertEquals("2.2.6", OctiDefs.OCTI_APP_VERSION);
+        assertEquals("2.2.7", OctiDefs.OCTI_APP_VERSION);
         assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
     }
 
@@ -1221,6 +1221,26 @@ public class OctiAndroidBoardAndComposerTest {
         // Commit move
         assertTrue(composer.commitStagedMove());
         assertEquals(OctiPlayer.PLAYER_B, board.getGame().getTurn());
+    }
+
+    @Test
+    public void testLobbyPlayerInfoDefaultFieldsAndClientsRoster() {
+        OctiNetworkClient.LobbyPlayerInfo p = new OctiNetworkClient.LobbyPlayerInfo();
+        assertEquals("", p.playerUuid);
+        assertEquals("", p.handle);
+        assertEquals("", p.avatarUrl);
+        assertEquals("IN_LOBBY", p.status);
+        assertEquals("", p.roomId);
+        assertNotNull(p.clients);
+        assertTrue(p.clients.isEmpty());
+        assertEquals(0L, p.onlineSec);
+        assertEquals(0L, p.idleSec);
+
+        p.clients.add("android");
+        p.clients.add("web");
+        assertEquals(2, p.clients.size());
+        assertEquals("android", p.clients.get(0));
+        assertEquals("web", p.clients.get(1));
     }
 }
 

@@ -755,6 +755,8 @@ struct OctiNetworkClient::Impl {
         httplib::Headers h = extra;
         h.emplace("X-Octi-Protocol-Version",
                   std::to_string(OCTI_PROTOCOL_VERSION));
+        h.emplace("X-Octi-Client-Type", "desktop");
+        h.emplace("User-Agent", std::string("octi-desktop/") + OCTI_APP_VERSION);
         std::string tok = currentToken();
         if (!tok.empty()) {
             h.emplace("Authorization", "Bearer " + tok);
@@ -2014,8 +2016,18 @@ ApiResult<LobbyStateData> OctiNetworkClient::fetchLobbyState()
             LobbyPlayerInfo p;
             p.playerUuid = pl[i].value("player_uuid", "");
             p.handle = pl[i].value("handle", "");
+            p.avatarUrl = pl[i].value("avatar_url", "");
             p.status = pl[i].value("status", "IN_LOBBY");
             p.roomId = pl[i].value("room_id", "");
+            p.onlineSec = pl[i].value("online_sec", static_cast<std::int64_t>(0));
+            p.idleSec = pl[i].value("idle_sec", static_cast<std::int64_t>(0));
+            if (pl[i].contains("clients") && pl[i]["clients"].is_array()) {
+                for (std::size_t ci = 0; ci < pl[i]["clients"].size(); ++ci) {
+                    if (pl[i]["clients"][ci].is_string()) {
+                        p.clients.push_back(pl[i]["clients"][ci].get<std::string>());
+                    }
+                }
+            }
             res.data.players.push_back(p);
         }
     }

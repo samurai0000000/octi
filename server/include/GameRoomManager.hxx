@@ -367,8 +367,11 @@ struct LobbyPoll {
 struct PresenceEntry {
     int64_t playerId = 0;
     std::string handle;
-    PresenceStatus status = PresenceStatus::IN_LOBBY;
+    PresenceStatus status = PresenceStatus::OFFLINE;
     std::string roomId;             // table the player is at / watching
+    std::vector<std::string> clients;
+    int64_t onlineSec = 0;
+    int64_t idleSec = 0;
 };
 
 struct LobbySnapshot {
@@ -432,6 +435,9 @@ public:
     static constexpr int64_t kMaxGraceMs = 10LL * 60 * 1000;
     static constexpr int64_t kMaxLiveRoomOfflineSec = 24LL * 3600;
     static constexpr int64_t kMaxLobbyChatAgeMs = 6LL * 3600 * 1000;
+    static constexpr int64_t kClientPresenceTtlMs = 60000;
+
+    static const char *presenceStatusName(PresenceStatus s) { return toString(s); }
 
     explicit GameRoomManager(AccountStore &store);
     ~GameRoomManager();
@@ -455,6 +461,11 @@ public:
     /* ---- lobby presence & chat ---- */
     RoomResult enterLobby(int64_t playerId);
     RoomResult leaveLobby(int64_t playerId);
+    void recordClientHeartbeat(int64_t playerId,
+                               const std::string &clientType,
+                               bool interactiveAction = false);
+    void clearClientPresence(int64_t playerId,
+                             const std::string &clientType);
     PresenceStatus presenceOf(int64_t playerId) const;
     LobbySnapshot lobbyState() const;
     RoomResult postLobbyChat(int64_t playerId, const std::string &text);
@@ -545,6 +556,9 @@ private:
         std::string handle;
         bool online = false;
         PresenceStatus lastPresence = PresenceStatus::OFFLINE;
+        int64_t onlineSinceMs = 0;
+        int64_t lastActiveMs = 0;
+        std::map<std::string, int64_t> clientLastSeenMs;
     };
 
     int64_t nowMs() const;
@@ -554,6 +568,7 @@ private:
     /* player / presence */
     bool ensurePlayerLocked(int64_t playerId, bool refresh = false);
     void touchOnlineLocked(int64_t playerId);
+    void pruneClientPresenceLocked(int64_t now);
     PresenceStatus presenceLocked(int64_t playerId, std::string *roomId) const;
     void refreshPresenceLocked(int64_t playerId);
     const std::string &handleOf(int64_t playerId) const;

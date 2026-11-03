@@ -200,6 +200,53 @@ std::string cleanAgent(const std::string &in)
     return out;
 }
 
+std::string detectClientType(const Request &req)
+{
+    if (req.has_header("X-Octi-Client-Type")) {
+        std::string h = lower(req.get_header_value("X-Octi-Client-Type"));
+        size_t first = h.find_first_not_of(" \t\r\n");
+        if (first != std::string::npos) {
+            size_t last = h.find_last_not_of(" \t\r\n");
+            h = h.substr(first, (last - first + 1));
+        } else {
+            h.clear();
+        }
+        if (h == "web" || h == "android" || h == "desktop") {
+            return h;
+        }
+    }
+    if (req.has_param("client_type")) {
+        std::string p = lower(req.get_param_value("client_type"));
+        size_t first = p.find_first_not_of(" \t\r\n");
+        if (first != std::string::npos) {
+            size_t last = p.find_last_not_of(" \t\r\n");
+            p = p.substr(first, (last - first + 1));
+        } else {
+            p.clear();
+        }
+        if (p == "web" || p == "android" || p == "desktop") {
+            return p;
+        }
+    }
+    if (req.has_header("User-Agent")) {
+        std::string ua = lower(req.get_header_value("User-Agent"));
+        if (ua.find("octi-android") != std::string::npos ||
+            ua.find("okhttp") != std::string::npos) {
+            return "android";
+        }
+        if (ua.find("octi-desktop") != std::string::npos) {
+            return "desktop";
+        }
+        if (ua.find("mozilla") != std::string::npos ||
+            ua.find("chrome") != std::string::npos ||
+            ua.find("safari") != std::string::npos ||
+            ua.find("firefox") != std::string::npos) {
+            return "web";
+        }
+    }
+    return "";
+}
+
 const char *modeName(OctiGameMode m)
 {
     switch (m) {
@@ -605,6 +652,7 @@ struct StreamState {
     int64_t cursor = 0;
     std::string token;          // empty for anonymous streams
     int64_t playerId = 0;
+    std::string clientType;
     int64_t startedMs = 0;
     int64_t lastWriteMs = 0;
     int64_t lastAuthMs = 0;
@@ -633,6 +681,7 @@ struct OctiHttpServer::Impl {
     struct Auth {
         int64_t playerId = 0;
         std::string token;
+        std::string clientType;
     };
 
     Impl(AccountStore &s, OidcVerifier &v, GameRoomManager &r,
@@ -1096,6 +1145,7 @@ bool OctiHttpServer::Impl::requireAuth(const Request &req, Response &res,
     }
     auth.playerId = sv.playerId;
     auth.token = token;
+    auth.clientType = detectClientType(req);
     maybeBindClientInstallId(req, auth.playerId);
     return true;
 }
@@ -1106,6 +1156,7 @@ bool OctiHttpServer::Impl::optionalAuth(const Request &req, Response &res,
 {
     if (!req.has_header("Authorization")) {
         auth = Auth();
+        auth.clientType = detectClientType(req);
         return true;
     }
     return requireAuth(req, res, auth);
@@ -1524,6 +1575,7 @@ bool OctiHttpServer::Impl::streamStep(StreamState &st,
             sink.done();
             return true;
         }
+        rooms.recordClientHeartbeat(st.playerId, st.clientType, false);
     }
 
     PollBatch batch;
@@ -1642,6 +1694,10 @@ void OctiHttpServer::Impl::respondEvents(const Request &req, Response &res,
     st->cursor = since;
     st->token = auth.token;
     st->playerId = auth.playerId;
+    st->clientType = auth.clientType;
+    if (auth.playerId > 0) {
+        rooms.recordClientHeartbeat(auth.playerId, auth.clientType, false);
+    }
 
     res.status = 200;
     res.set_header("Cache-Control", "no-store");
@@ -1968,6 +2024,7 @@ void OctiHttpServer::Impl::handleAuthCallback(const Request &req, Response &res)
         return;
     }
     rooms.enterLobby(lr.profile.playerId);
+    rooms.recordClientHeartbeat(lr.profile.playerId, "web", true);
 
     std::string targetLoc;
     std::string isNewStr = lr.created ? "true" : "false";
@@ -2204,6 +2261,19 @@ void OctiHttpServer::Impl::handleSso(const Request &req, Response &res)
     }
     maybeBindClientInstallId(req, lr.profile.playerId, bodyInstallId);
     rooms.enterLobby(lr.profile.playerId);
+    std::string cType = detectClientType(req);
+    if (cType.empty()) {
+        std::string lAgent = lower(agent);
+        if (lAgent.find("android") != std::string::npos) {
+            cType = "android";
+        } else if (lAgent.find("desktop") != std::string::npos) {
+            cType = "desktop";
+        } else if (lAgent.find("web") != std::string::npos ||
+                   lAgent.find("mozilla") != std::string::npos) {
+            cType = "web";
+        }
+    }
+    rooms.recordClientHeartbeat(lr.profile.playerId, cType, true);
     Json j;
     j["session_token"] = lr.sessionToken;
     j["expires_at"] = lr.sessionExpiresAt;
@@ -2374,11 +2444,9 @@ void OctiHttpServer::Impl::handleLogout(const Request &req, Response &res)
         return;
     }
     store.revokeSession(auth.token);
-    /*
-     * Only the last signed-in device takes the player out of the lobby. A
-     * failed count (-1) keeps the player online rather than dropping a
-     * player who may still be playing from another device.
-     */
+    if (!auth.clientType.empty()) {
+        rooms.clearClientPresence(auth.playerId, auth.clientType);
+    }
     if (store.countActiveSessions(auth.playerId) == 0) {
         rooms.leaveLobby(auth.playerId);
     }
@@ -2936,17 +3004,31 @@ void OctiHttpServer::Impl::handleLobbyState(const Request &req, Response &res)
         rooms.enterLobby(viewerId);
     } else {
         rooms.enterLobby(auth.playerId);
+        rooms.recordClientHeartbeat(auth.playerId, auth.clientType, false);
     }
     LobbySnapshot snap = rooms.lobbyState();
     Json j;
     Json players = Json::array();
     for (size_t i = 0; i < snap.players.size(); ++i) {
-        Json p;
-        p["player_uuid"] = uuidOf(snap.players[i].playerId);
-        p["handle"] = snap.players[i].handle;
-        p["status"] = toString(snap.players[i].status);
-        p["room_id"] = snap.players[i].roomId;
-        players.push_back(p);
+        PlayerProfile pProf;
+        std::string avatarUrl;
+        if (snap.players[i].playerId > 0 && store.getProfileById(snap.players[i].playerId, pProf)) {
+            avatarUrl = pProf.avatarUrl;
+        }
+        Json clientsArr = Json::array();
+        for (size_t ci = 0; ci < snap.players[i].clients.size(); ++ci) {
+            clientsArr.push_back(snap.players[i].clients[ci]);
+        }
+        players.push_back({
+            {"player_uuid", uuidOf(snap.players[i].playerId)},
+            {"handle", snap.players[i].handle},
+            {"avatar_url", avatarUrl},
+            {"status", toString(snap.players[i].status)},
+            {"room_id", snap.players[i].roomId},
+            {"clients", clientsArr},
+            {"online_sec", snap.players[i].onlineSec},
+            {"idle_sec", snap.players[i].idleSec}
+        });
     }
     j["players"] = players;
     Json tables = Json::array();

@@ -173,8 +173,12 @@ struct LeaderboardRow {
 struct LobbyPlayerInfo {
     std::string playerUuid;
     std::string handle;
+    std::string avatarUrl;
     std::string status;
     std::string roomId;
+    std::vector<std::string> clients;
+    std::int64_t onlineSec = 0;
+    std::int64_t idleSec = 0;
 };
 
 struct LobbyChatEntry {

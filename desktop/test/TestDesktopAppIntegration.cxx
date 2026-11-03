@@ -2673,6 +2673,13 @@ TEST(DesktopAppIntegrationTest, LobbyTablesRedesignTimestampsSeatsAndLeaveTable)
 
     /* Switch to Lobby view while seated at the waiting table */
     winA.showLobbyView();
+    winA.lobbyView()->refreshLobby();
+    CHECK_TRUE(winA.lobbyView()->players().size() >= 1);
+    STRCMP_EQUAL("TableHostA", winA.lobbyView()->players()[0].handle.c_str());
+    CHECK_TRUE(!winA.lobbyView()->players()[0].clients.empty());
+    STRCMP_EQUAL("desktop", winA.lobbyView()->players()[0].clients[0].c_str());
+    CHECK_TRUE(winA.lobbyView()->players()[0].onlineSec >= 0);
+    CHECK_TRUE(winA.lobbyView()->players()[0].idleSec >= 0);
     CHECK_TRUE(winA.isLobbyViewVisible());
     CHECK_TRUE(winA.lobbyView()->isMyTableBannerVisible());
     STRCMP_EQUAL(roomId.c_str(), winA.lobbyView()->activeBannerRoomId().c_str());
