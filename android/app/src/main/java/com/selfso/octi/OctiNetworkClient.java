@@ -363,6 +363,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         public String handle = "";
         public int rating = 1500;
         public boolean connected = false;
+        public boolean isRobot = false;
     }
 
     public static class TableSummaryInfo {
@@ -458,6 +459,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         public boolean forfeitClaimable = false;
         public long clockMs = -1;
         public boolean eliminated = false;
+        public boolean isRobot = false;
     }
 
     public static final class GameProposalInfo {
@@ -3225,6 +3227,7 @@ public final class OctiNetworkClient implements AutoCloseable {
                 s.handle = OctiMiniJson.getString(sm, "handle", "");
                 s.rating = OctiMiniJson.getInt(sm, "rating", 1500);
                 s.connected = OctiMiniJson.getBoolean(sm, "connected", false);
+                s.isRobot = OctiMiniJson.getBoolean(sm, "is_robot", false) || OctiMiniJson.getBoolean(sm, "isRobot", false);
                 t.seats.add(s);
             }
         }
@@ -3302,6 +3305,7 @@ public final class OctiNetworkClient implements AutoCloseable {
                 s.forfeitClaimable = OctiMiniJson.getBoolean(sm, "forfeit_claimable", false);
                 s.clockMs = OctiMiniJson.getLong(sm, "clock_ms", -1);
                 s.eliminated = OctiMiniJson.getBoolean(sm, "eliminated", false);
+                s.isRobot = OctiMiniJson.getBoolean(sm, "is_robot", false) || OctiMiniJson.getBoolean(sm, "isRobot", false);
                 v.seats.add(s);
                 if (!s.handle.isEmpty()) {
                     v.players.add(s.handle);

@@ -62,6 +62,7 @@ import com.selfso.octi.BuildConfig
 import com.selfso.selfupdate.UpdateState
 import com.selfso.octi.ui.AccountIdentitiesDialog
 import com.selfso.octi.ui.ArchiveScreen
+import com.selfso.octi.ui.BoardChatZoomDialog
 import com.selfso.octi.ui.CapturePromptDialog
 import com.selfso.octi.ui.CompositePodMoveDialog
 import com.selfso.octi.ui.CreateTableDialog
@@ -298,6 +299,7 @@ fun OctiMainAppContent(
     val showCreateTableDialog by viewModel.showCreateTableDialog.collectAsState()
     val showGameOverDialog by viewModel.showGameOverDialog.collectAsState()
     val showExportMovesDialog by viewModel.showExportMovesDialog.collectAsState()
+    val showBoardChatZoomDialog by viewModel.showBoardChatZoomDialog.collectAsState()
     val isBotThinking by viewModel.isBotThinking.collectAsState()
     val botDifficulty by viewModel.botDifficulty.collectAsState()
     val boardRev by viewModel.boardRevision.collectAsState()
@@ -711,6 +713,12 @@ fun OctiMainAppContent(
             CreateTableDialog(
                 viewModel = viewModel,
                 onDismiss = { viewModel.setShowCreateTableDialog(false) }
+            )
+        }
+        if (showBoardChatZoomDialog) {
+            BoardChatZoomDialog(
+                viewModel = viewModel,
+                onDismiss = { viewModel.setShowBoardChatZoomDialog(false) }
             )
         }
 

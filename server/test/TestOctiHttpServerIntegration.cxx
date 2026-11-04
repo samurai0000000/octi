@@ -4827,7 +4827,28 @@ TEST(OctiHttpServerIntegrationTest, WebPlayerDesktopAndroidParityElements)
     CHECK_TRUE(rUi.body.find("enemyPodsCapturedByPlayer = oppRes ? oppRes.capturedPods : 0") != std::string::npos);
     CHECK_TRUE(rUi.body.find("enemyPodsCaptured = (parsed.mode === \"4P\") ? r.capturedPods : (oppRes ? oppRes.capturedPods : 0)") != std::string::npos);
 
-    // 5. Strict absence of banned strings
+    // 5. Desktop 50/50 sidebar, chat zoom modal, online room chat & mobile responsive rules
+    CHECK_TRUE(rUi.body.find("web-side-top-half") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-board-chat-panel") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("flex: 1 1 50%") != std::string::npos || rUi.body.find("flex:1 1 50%") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-board-chat-zoom-overlay") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-board-chat-zoom-card") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-board-chat-zoom-log") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-board-chat-zoom-scope") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("web-board-chat-zoom-input") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-web-board-chat-zoom-send") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-web-board-chat-zoom-close") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("btn-web-board-chat-zoom") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("openBoardChatZoomModal") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("isInteractiveBoardTurn") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("syncOnlineGameRoom") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("pollOnlineGameEvents") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("sendOnlineRoomChatMessage") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("#web-play-board-wrap") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("order: 1") != std::string::npos || rUi.body.find("order:1") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("repeat(2") != std::string::npos);
+
+    // 6. Strict absence of banned strings
     CHECK_TRUE(rUi.body.find("Close Inspector") == std::string::npos);
     CHECK_TRUE(rUi.body.find("Live Arena") == std::string::npos);
     CHECK_TRUE(rUi.body.find("tab-live") == std::string::npos);

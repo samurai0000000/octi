@@ -144,7 +144,7 @@ fun OctiBoardCanvas(
     val currentRenderedBitmap by rememberUpdatedState(renderedBitmap)
 
     fun openZoomForOffset(offset: Offset, viewportSize: IntSize) {
-        if (awaitingMatchStart || multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L) {
+        if (awaitingMatchStart || !viewModel.isInteractiveOnlineTurn() || multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L) {
             return
         }
         if (viewModel.isViewingHistory()) {
@@ -252,7 +252,7 @@ fun OctiBoardCanvas(
                         panOffset = Offset.Zero
                         multiTouchActive = false
                         lastMultiTouchTimeMs = System.currentTimeMillis()
-                    } else if (totalMoveDist > dragSlop && !viewModel.isViewingHistory() && viewModel.board.game?.isGameOver != true) {
+                    } else if (totalMoveDist > dragSlop && !viewModel.isViewingHistory() && viewModel.board.game?.isGameOver != true && viewModel.isInteractiveOnlineTurn()) {
                         val scaleX = currentRenderedBitmap.width.toDouble() / Math.max(1, size.width).toDouble()
                         val scaleY = currentRenderedBitmap.height.toDouble() / Math.max(1, size.height).toDouble()
                         val geo = viewModel.geometry
@@ -342,14 +342,17 @@ fun OctiBoardCanvas(
                 detectTapGestures(
                     onDoubleTap = { offset ->
                         currentOnUserInteraction()
+                        if (!viewModel.isInteractiveOnlineTurn()) return@detectTapGestures
                         openZoomForOffset(offset, size)
                     },
                     onLongPress = { offset ->
                         currentOnUserInteraction()
+                        if (!viewModel.isInteractiveOnlineTurn()) return@detectTapGestures
                         openZoomForOffset(offset, size)
                     },
                     onTap = { offset ->
                         currentOnUserInteraction()
+                        if (!viewModel.isInteractiveOnlineTurn()) return@detectTapGestures
                         if (multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L || System.currentTimeMillis() - lastDragTimeMs < 250L) {
                             return@detectTapGestures
                         }

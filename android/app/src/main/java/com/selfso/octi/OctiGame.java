@@ -32,6 +32,10 @@ public class OctiGame {
             return move;
         }
 
+        public String asString() {
+            return move != null ? move.asString() : "";
+        }
+
         @Override
         public boolean equals(Object obj) {
             if (this == obj) {

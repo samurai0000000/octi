@@ -13,6 +13,7 @@
 #include <vector>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDialog>
 #include <QImage>
 #include <QKeyEvent>
 #include <QLabel>
@@ -20,6 +21,7 @@
 #include <QListWidget>
 #include <QMainWindow>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QResizeEvent>
@@ -149,6 +151,7 @@ public:
     bool isInOnlineGame() const;
     const std::string &onlineRoomId() const;
     int onlineViewerSeat() const;
+    bool isInteractiveOnlineTurn() const;
     std::string onlineRoomPhase() const { return _onlineGameView.phase; }
     const GameViewData &currentOnlineGameView() const;
     bool isWaitingRoomBannerVisible() const;
@@ -162,6 +165,7 @@ public:
     void pumpUiEvents();
 
     /* ---- Board Chat & Mutual Proposals ---- */
+    void openBoardChatZoomDialog();
     bool sendGameChatMessage(const std::string &scope,
                              const std::string &text);
     const std::vector<std::string> &gameChatLines() const;
@@ -352,7 +356,10 @@ private:
     QPushButton *_leaveTableBtn = nullptr;
     QPushButton *_moderationBtn;
 
+    QWidget *_rightTopHalfWidget = nullptr;
     QWidget *_chatBox;
+    QPushButton *_zoomChatBtn = nullptr;
+    QPointer<QDialog> _boardChatZoomDialog;
     QComboBox *_chatScopeCombo;
     QPlainTextEdit *_gameChatTranscript;
     QLineEdit *_gameChatInput;

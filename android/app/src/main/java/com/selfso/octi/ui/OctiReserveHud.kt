@@ -34,6 +34,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -49,6 +50,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.selfso.octi.OctiGameMode
@@ -82,8 +84,11 @@ fun OctiReserveHud(
     val inVoiceRoom by viewModel.isInVoiceRoom.collectAsState()
     val isPttActive by viewModel.isPttActive.collectAsState()
     val activeRoomId by viewModel.activeRoomId.collectAsState()
+    val activeGameView by viewModel.activeGameView.collectAsState()
+    val gameChatLog by viewModel.gameChatLog.collectAsState()
     val themeId by viewModel.theme.collectAsState()
     val pal = OctiPalette.forTheme(themeId)
+    val isInteractiveTurn = viewModel.isInteractiveOnlineTurn()
 
     val activeBoard = if (viewModel.isViewingHistory()) {
         viewModel.displayBoard
@@ -163,13 +168,24 @@ fun OctiReserveHud(
                         val partnerRevivable = is4P && partner != null && (p == partner) &&
                             (game?.isPlayerEliminated(partner) == true) &&
                             ((game?.getCapturedPods(partner) ?: 0) > 0)
-                        val activePlayerTurn = !isGameOver && (p == turn) && !viewModel.isViewingHistory()
-                        val canActiveLiberateFromThisCard = !isGameOver && !viewModel.isViewingHistory() &&
+                        val activePlayerTurn = !isGameOver && (p == turn) && !viewModel.isViewingHistory() && isInteractiveTurn
+                        val canActiveLiberateFromThisCard = !isGameOver && !viewModel.isViewingHistory() && isInteractiveTurn &&
                             (((oppForCap == turn) && (capPodsHeld > 0)) ||
                              ((p == turn) && ((game?.getCapturedPods(turn) ?: 0) > 0)) ||
                              partnerRevivable)
+                        val resolvedSeat = activeGameView?.seats?.firstOrNull { it.seat == p.value }
+                        val seatLetter = p.name.removePrefix("PLAYER_")
+                        val seatLabel = if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && resolvedSeat != null && resolvedSeat.handle.isNotEmpty()) {
+                            val cleanHandle = resolvedSeat.handle.removePrefix("@")
+                            val isBot = resolvedSeat.isRobot || cleanHandle.equals("stock", ignoreCase = true) || resolvedSeat.playerUuid.startsWith("bot")
+                            val tag = if (isBot) "@$cleanHandle [BOT]" else "@$cleanHandle"
+                            "$tag ($seatLetter)"
+                        } else {
+                            "PLAYER $seatLetter"
+                        }
                         PlayerReserveCard(
                             player = p,
+                            displayName = seatLabel,
                             isTurn = !isGameOver && (p == turn),
                             freePods = game?.getFreePods(p) ?: 0,
                             freeProngs = game?.getFreeProngs(p) ?: 0,
@@ -232,13 +248,24 @@ fun OctiReserveHud(
                                 val partnerRevivable = is4P && partner != null && (p == partner) &&
                                     (game?.isPlayerEliminated(partner) == true) &&
                                     ((game?.getCapturedPods(partner) ?: 0) > 0)
-                                val activePlayerTurn = !isGameOver && (p == turn) && !viewModel.isViewingHistory()
-                                val canActiveLiberateFromThisCard = !isGameOver && !viewModel.isViewingHistory() &&
+                                val activePlayerTurn = !isGameOver && (p == turn) && !viewModel.isViewingHistory() && isInteractiveTurn
+                                val canActiveLiberateFromThisCard = !isGameOver && !viewModel.isViewingHistory() && isInteractiveTurn &&
                                     (((oppForCap == turn) && (capPodsHeld > 0)) ||
                                      ((p == turn) && ((game?.getCapturedPods(turn) ?: 0) > 0)) ||
                                      partnerRevivable)
+                                val resolvedSeat = activeGameView?.seats?.firstOrNull { it.seat == p.value }
+                                val seatLetter = p.name.removePrefix("PLAYER_")
+                                val seatLabel = if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && resolvedSeat != null && resolvedSeat.handle.isNotEmpty()) {
+                                    val cleanHandle = resolvedSeat.handle.removePrefix("@")
+                                    val isBot = resolvedSeat.isRobot || cleanHandle.equals("stock", ignoreCase = true) || resolvedSeat.playerUuid.startsWith("bot")
+                                    val tag = if (isBot) "@$cleanHandle [BOT]" else "@$cleanHandle"
+                                    "$tag ($seatLetter)"
+                                } else {
+                                    "PLAYER $seatLetter"
+                                }
                                 PlayerReserveCard(
                                     player = p,
+                                    displayName = seatLabel,
                                     isTurn = !isGameOver && (p == turn),
                                     freePods = game?.getFreePods(p) ?: 0,
                                     freeProngs = game?.getFreeProngs(p) ?: 0,
@@ -441,6 +468,76 @@ fun OctiReserveHud(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { viewModel.setShowBoardChatZoomDialog(true) },
+                color = OctiTheme.colors.windowBg,
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 6.dp)
+                    ) {
+                        if (gameChatLog.isEmpty()) {
+                            Text(
+                                text = "Table Chat • Tap to open & chat (@bot help, @bot eval)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OctiTheme.colors.textSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        } else {
+                            val recent = gameChatLog.takeLast(2)
+                            for (msg in recent) {
+                                val sender = if (msg.senderHandle.isNotEmpty()) {
+                                    val clean = msg.senderHandle.removePrefix("@")
+                                    if (clean.equals("bot", ignoreCase = true) || clean.equals("stock", ignoreCase = true)) {
+                                        "@$clean [BOT]"
+                                    } else {
+                                        "@$clean"
+                                    }
+                                } else {
+                                    "You"
+                                }
+                                val scopePrefix = if (msg.scope.equals("TEAM", ignoreCase = true)) "[TEAM] " else ""
+                                Text(
+                                    text = "$scopePrefix$sender: ${msg.text}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = OctiTheme.colors.textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                    Surface(
+                        color = OctiTheme.colors.panelCardBg,
+                        shape = RoundedCornerShape(4.dp),
+                        border = BorderStroke(1.dp, OctiTheme.colors.accentBrass)
+                    ) {
+                        Text(
+                            text = "Zoom ⤢",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = OctiTheme.colors.accentBrass,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -459,6 +556,7 @@ fun PlayerReserveCard(
     modifier: Modifier = Modifier,
     ownCapPods: Int = 0,
     gameMode: OctiGameMode = OctiGameMode.GAME_MODE_2,
+    displayName: String? = null,
     onStartPodPlacement: (() -> Unit)? = null,
     onStartLiberatePlacement: (() -> Unit)? = null,
     onStartProngPlacement: (() -> Unit)? = null,
@@ -488,7 +586,7 @@ fun PlayerReserveCard(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
             Text(
-                text = "PLAYER $letter",
+                text = displayName ?: "PLAYER $letter",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = if (isTurn) OctiTheme.colors.accentBrass else OctiTheme.colors.textSecondary

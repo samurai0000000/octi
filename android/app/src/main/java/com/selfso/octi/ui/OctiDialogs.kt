@@ -45,6 +45,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -53,6 +60,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -2951,6 +2960,220 @@ fun StartMatchOverlayDialog(
         onChangeType = {},
         onStartMatch = onStartMatch
     )
+}
+
+@Composable
+fun BoardChatZoomDialog(
+    viewModel: OctiAppViewModel,
+    onDismiss: () -> Unit
+) {
+    val chatLog by viewModel.gameChatLog.collectAsState()
+    var inputText by remember { mutableStateOf("") }
+    var currentScope by remember { mutableStateOf("ALL") }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(chatLog.size) {
+        if (chatLog.isNotEmpty()) {
+            listState.animateScrollToItem(chatLog.size - 1)
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .background(OctiTheme.colors.panelCardBg, RoundedCornerShape(12.dp))
+                .border(1.5.dp, OctiTheme.colors.accentBrass, RoundedCornerShape(12.dp))
+                .padding(14.dp),
+            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Header row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "TABLE CHAT",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = OctiTheme.colors.accentBrass
+                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Text(
+                            text = "✕",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = OctiTheme.colors.textSecondary
+                        )
+                    }
+                }
+
+                // Quick command chips row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val quickCommands = listOf("@bot help", "@bot eval", "@bot stats")
+                    for (cmd in quickCommands) {
+                        Surface(
+                            modifier = Modifier.clickable {
+                                viewModel.sendGameChat(currentScope, cmd)
+                            },
+                            color = OctiTheme.colors.windowBg,
+                            shape = RoundedCornerShape(6.dp),
+                            border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+                        ) {
+                            Text(
+                                text = cmd,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = OctiTheme.colors.accentBrass,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Scrollable LazyColumn displaying gameChatLog entries
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 160.dp, max = 260.dp),
+                    color = OctiTheme.colors.windowBg,
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+                ) {
+                    if (chatLog.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No messages yet. Chat with players or try @bot help.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OctiTheme.colors.textSecondary
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(chatLog) { msg ->
+                                val sender = if (msg.senderHandle.isNotEmpty()) {
+                                    val clean = msg.senderHandle.removePrefix("@")
+                                    if (clean.equals("bot", ignoreCase = true) || clean.equals("stock", ignoreCase = true)) {
+                                        "@$clean [BOT]"
+                                    } else {
+                                        "@$clean"
+                                    }
+                                } else {
+                                    "You"
+                                }
+                                val scopePrefix = if (msg.scope.equals("TEAM", ignoreCase = true)) "[TEAM] " else ""
+                                val sdf = remember { java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()) }
+                                val timeStr = sdf.format(java.util.Date(msg.atMs))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Text(
+                                        text = "[$timeStr] ",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = OctiTheme.colors.textSecondary
+                                    )
+                                    Text(
+                                        text = "$scopePrefix$sender: ",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (sender.contains("[BOT]")) OctiTheme.colors.accentBrass else OctiTheme.colors.textPrimary
+                                    )
+                                    Text(
+                                        text = msg.text,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = OctiTheme.colors.textPrimary,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Input row with ALL/TEAM scope toggle button, OutlinedTextField, and Send button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            currentScope = if (currentScope == "ALL") "TEAM" else "ALL"
+                        },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        modifier = Modifier.height(48.dp)
+                    ) {
+                        Text(
+                            text = currentScope,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = inputText,
+                        onValueChange = { inputText = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = {
+                            Text("Type a message or @bot ...", style = MaterialTheme.typography.bodySmall)
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(
+                            onSend = {
+                                val t = inputText.trim()
+                                if (t.isNotEmpty()) {
+                                    viewModel.sendGameChat(currentScope, t)
+                                    inputText = ""
+                                }
+                            }
+                        )
+                    )
+
+                    Button(
+                        onClick = {
+                            val t = inputText.trim()
+                            if (t.isNotEmpty()) {
+                                viewModel.sendGameChat(currentScope, t)
+                                inputText = ""
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = OctiTheme.colors.accentBrass),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        modifier = Modifier.height(48.dp)
+                    ) {
+                        Text("Send", color = OctiTheme.colors.windowBg, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
 }
 
 /*

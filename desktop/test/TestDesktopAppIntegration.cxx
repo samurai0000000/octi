@@ -2869,6 +2869,52 @@ TEST(DesktopAppIntegrationTest, MainWindowShowHintResolvesAccuratePodIndex)
     CHECK_FALSE(win.moveComposer()->isAwaitingConfirmation());
 }
 
+TEST(DesktopAppIntegrationTest, RightSidebarFiftyFiftyLayoutAndZoomChatDialog)
+{
+    std::string cfgPath = "/tmp/octi_chat_test.json";
+    OctiMainWindow win(nullptr, cfgPath, true);
+    win.resize(1200, 800);
+    win.show();
+
+    QWidget *topHalf = win.findChild<QWidget *>("rightTopHalfWidget");
+    CHECK_TRUE(topHalf != nullptr);
+
+    QWidget *chatBox = win.findChild<QWidget *>("chatBox");
+    CHECK_TRUE(chatBox != nullptr);
+    CHECK_TRUE(chatBox->isVisible());
+
+    QPushButton *zoomBtn = win.findChild<QPushButton *>("zoomChatBtn");
+    CHECK_TRUE(zoomBtn != nullptr);
+
+    win.openBoardChatZoomDialog();
+    QDialog *zoomDlg = win.findChild<QDialog *>("boardChatZoomDialog");
+    CHECK_TRUE(zoomDlg != nullptr);
+    CHECK_TRUE(zoomDlg->windowFlags() & Qt::FramelessWindowHint);
+
+    QPlainTextEdit *transcript = zoomDlg->findChild<QPlainTextEdit *>("boardChatZoomTranscript");
+    CHECK_TRUE(transcript != nullptr);
+
+    QLineEdit *input = zoomDlg->findChild<QLineEdit *>("boardChatZoomInput");
+    CHECK_TRUE(input != nullptr);
+
+    QPushButton *sendBtn = zoomDlg->findChild<QPushButton *>("boardChatZoomSendBtn");
+    CHECK_TRUE(sendBtn != nullptr);
+
+    input->setText("@bot help");
+    sendBtn->click();
+    CHECK_TRUE(transcript->toPlainText().contains("@bot help"));
+
+    zoomDlg->close();
+}
+
+TEST(DesktopAppIntegrationTest, OnlineMoveTurnGuardAndRollback)
+{
+    std::string cfgPath = "/tmp/octi_turn_guard_test.json";
+    OctiMainWindow win(nullptr, cfgPath, true);
+    // In local game, isInteractiveOnlineTurn() should return true
+    CHECK_TRUE(win.isInteractiveOnlineTurn());
+}
+
 extern "C" const char *__lsan_default_suppressions()
 {
     return "leak:libqoffscreen.so\n";

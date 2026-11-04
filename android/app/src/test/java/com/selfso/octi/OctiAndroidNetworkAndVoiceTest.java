@@ -41,6 +41,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.selfso.octi.ui.OctiAppViewModel;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -1317,6 +1319,122 @@ public class OctiAndroidNetworkAndVoiceTest {
         assertEquals("Joining now!", ev2.text);
         assertEquals(1775010005000L, ev2.atMs);
         assertEquals(1775010005000L, ev2.createdAtMs);
+    }
+
+    @Test
+    public void testShowBoardChatZoomDialogDefaultsToFalseAndToggles() {
+        try (OctiAppViewModel vm = new OctiAppViewModel()) {
+            assertFalse(vm.getShowBoardChatZoomDialog().getValue());
+            vm.setShowBoardChatZoomDialog(true);
+            assertTrue(vm.getShowBoardChatZoomDialog().getValue());
+            vm.setShowBoardChatZoomDialog(false);
+            assertFalse(vm.getShowBoardChatZoomDialog().getValue());
+        }
+    }
+
+    @Test
+    public void testIsInteractiveOnlineTurnGuardsOnlineRoomMatches() {
+        try (OctiAppViewModel vm = new OctiAppViewModel()) {
+            // Local match -> true
+            vm.startNewLocalGame(
+                    OctiGameMode.GAME_MODE_2,
+                    false,
+                    false,
+                    OctiGameBases.GAME_BASES_3,
+                    false,
+                    OctiBotEngine.BotDifficulty.TACTICAL,
+                    OctiPlayer.PLAYER_A);
+            assertTrue(vm.isInteractiveOnlineTurn());
+
+            // Online match with WAITING_FOR_PLAYERS phase -> false
+            OctiNetworkClient.GameViewData gv = new OctiNetworkClient.GameViewData();
+            gv.roomId = "room-test-777";
+            gv.phase = "WAITING_FOR_PLAYERS";
+            gv.viewerSeat = 1;
+            vm.setOnlineMatchForTest("room-test-777", gv);
+            assertFalse(vm.isInteractiveOnlineTurn());
+
+            // Online match with IN_PROGRESS, but it is PLAYER_A's turn and viewerSeat is 2 -> false
+            gv.phase = "IN_PROGRESS";
+            gv.viewerSeat = 2;
+            gv.fen = vm.getBoard().toPositionString();
+            vm.setOnlineMatchForTest("room-test-777", gv);
+            assertFalse(vm.isInteractiveOnlineTurn());
+
+            // Online match with IN_PROGRESS, PLAYER_A's turn and viewerSeat is 1 -> true
+            gv.viewerSeat = 1;
+            vm.setOnlineMatchForTest("room-test-777", gv);
+            assertTrue(vm.isInteractiveOnlineTurn());
+        }
+    }
+
+    @Test
+    public void testLocalBotChatCommandsHelpEvalStats() {
+        try (OctiAppViewModel vm = new OctiAppViewModel()) {
+            vm.startNewLocalGame(
+                    OctiGameMode.GAME_MODE_2,
+                    false,
+                    false,
+                    OctiGameBases.GAME_BASES_3,
+                    true,
+                    OctiBotEngine.BotDifficulty.TACTICAL,
+                    OctiPlayer.PLAYER_A);
+            assertEquals(0, vm.getGameChatLog().getValue().size());
+
+            // 1. Send @bot help
+            vm.sendGameChat("ALL", "@bot help");
+            List<OctiAppViewModel.GameChatMessage> log = vm.getGameChatLog().getValue();
+            assertEquals(2, log.size());
+            assertEquals("@bot help", log.get(0).getText());
+            assertTrue(log.get(1).getText().contains("Bot commands: @bot help, @bot eval, @bot stats"));
+
+            // 2. Send @bot eval
+            vm.sendGameChat("ALL", "@bot eval");
+            log = vm.getGameChatLog().getValue();
+            assertEquals(4, log.size());
+            assertEquals("@bot eval", log.get(2).getText());
+            assertTrue(log.get(3).getText().contains("Position eval score"));
+
+            // 3. Send @bot stats
+            vm.sendGameChat("ALL", "@bot stats");
+            log = vm.getGameChatLog().getValue();
+            assertEquals(6, log.size());
+            assertEquals("@bot stats", log.get(4).getText());
+            assertTrue(log.get(5).getText().contains("Local AI Bot"));
+        }
+    }
+
+    @Test
+    public void testOnlineMoveAutoCommitWhenConfirmAllDisabled() {
+        try (OctiAppViewModel vm = new OctiAppViewModel()) {
+            vm.startNewLocalGame(
+                    OctiGameMode.GAME_MODE_2,
+                    false,
+                    false,
+                    OctiGameBases.GAME_BASES_3,
+                    false,
+                    OctiBotEngine.BotDifficulty.TACTICAL,
+                    OctiPlayer.PLAYER_A);
+            vm.setConfirmAllMoves(false);
+
+            OctiNetworkClient.GameViewData gv = new OctiNetworkClient.GameViewData();
+            gv.roomId = "room-auto-commit";
+            gv.phase = "IN_PROGRESS";
+            gv.viewerSeat = 1;
+            gv.fen = vm.getBoard().toPositionString();
+            vm.setOnlineMatchForTest("room-auto-commit", gv);
+
+            assertEquals(0, vm.lastSubmittedOnlinePly());
+
+            // Adding a prong when confirmAllMoves is false -> commits directly
+            boolean prongAdded = vm.getComposer().stageOrCommitAddProng(3, 3, 0, OctiDir.DIR_N, false);
+            assertTrue(prongAdded);
+            assertFalse(vm.getComposer().hasActiveTurn());
+            vm.notifyComposerUpdated();
+
+            // Verify lastSubmittedOnlinePly was updated to 1
+            assertEquals(1, vm.lastSubmittedOnlinePly());
+        }
     }
 }
 

@@ -46,6 +46,7 @@ body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 header {
   position: sticky;
@@ -432,7 +433,14 @@ tr.active-ply {
   color: var(--dim);
 }
 @media (max-width: 640px) {
-  main { padding: 10px 8px; }
+  main {
+    padding: 8px 6px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .features-grid, .rules-grid {
+    grid-template-columns: 1fr !important;
+  }
   header { padding: 10px 14px; }
   th, td { padding: 6px 8px; font-size: 12px; }
 }
@@ -496,18 +504,102 @@ tr.active-ply {
 #web-play-side-col {
   width: 320px;
   flex: 0 0 320px;
+  height: 760px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
-@media (max-width: 1180px) {
+#web-side-top-half {
+  flex: 1 1 50%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#web-board-chat-panel {
+  flex: 1 1 50%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+@media (max-width: 980px) {
   .web-tabletop-wrap {
-    flex-direction: column;
-    align-items: center;
+    flex-direction: column !important;
+    gap: 8px !important;
+    margin: 4px auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    align-items: center !important;
   }
-  #web-play-reserves-col, #web-play-side-col {
-    width: 100%;
-    max-width: 680px;
+  #web-play-board-wrap {
+    order: 1 !important;
+    width: 100% !important;
+    max-width: min(100vw - 16px, 560px) !important;
+    aspect-ratio: 1 / 1 !important;
+    height: auto !important;
+    margin: 0 auto !important;
+  }
+  #web-play-reserves-col {
+    order: 2 !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    width: 100% !important;
+    max-width: min(100vw - 16px, 560px) !important;
+    flex: none !important;
+    margin: 0 auto !important;
+  }
+  .web-quick-guide-card {
+    display: none !important;
+  }
+  .web-res-card {
+    padding: 6px 8px !important;
+  }
+  .web-res-header {
+    font-size: 11.5px !important;
+    margin-bottom: 4px !important;
+  }
+  .web-res-well {
+    padding: 2px 6px !important;
+    font-size: 11.5px !important;
+  }
+  #web-play-side-col {
+    order: 3 !important;
+    height: auto !important;
+    width: 100% !important;
+    max-width: min(100vw - 16px, 560px) !important;
+    flex: none !important;
+    margin: 0 auto !important;
+    gap: 8px !important;
+  }
+  #web-board-chat-panel {
+    order: -1 !important;
+    flex: none !important;
+    height: 68px !important;
+    max-height: 68px !important;
+    padding: 6px 10px !important;
+    cursor: pointer !important;
+  }
+  #web-board-chat-panel #web-board-chat-log {
+    flex: 1 !important;
+    min-height: 0 !important;
+    max-height: 40px !important;
+    font-size: 11px !important;
+    padding: 2px 4px !important;
+    margin: 0 !important;
+    cursor: pointer !important;
+    overflow-y: auto !important;
+  }
+  #web-board-chat-input-row {
+    display: none !important;
+  }
+  #web-side-top-half {
+    flex: none !important;
+    height: auto !important;
+  }
+  #web-play-moves {
+    max-height: 90px !important;
+    min-height: 60px !important;
   }
 }
 .web-res-card {
@@ -906,6 +998,76 @@ tr.active-ply {
   font-weight: 600;
 }
 @media (max-width: 768px) {
+  header {
+    flex-wrap: wrap !important;
+    white-space: normal !important;
+    padding: 6px 10px !important;
+    gap: 6px !important;
+  }
+  .brand {
+    order: 1 !important;
+  }
+  .brand-sub, #health {
+    display: none !important;
+  }
+  .header-right {
+    order: 2 !important;
+    margin-left: auto !important;
+  }
+  nav#nav {
+    order: 3 !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    gap: 4px !important;
+    padding-bottom: 2px !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+  }
+  nav#nav .btn {
+    padding: 5px 8px !important;
+    font-size: 12px !important;
+    flex: 1 0 auto !important;
+  }
+  #tab-play > .panel {
+    padding: 8px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  #web-play-toolbar-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+  #web-play-toolbar-row > div {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+  #subtab-play-local, #subtab-play-online {
+    flex: 1 1 auto !important;
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+  }
+  #web-online-tables, .panel {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    box-sizing: border-box !important;
+  }
+  .col-board, .col-side, #users-search-input {
+    min-width: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  #web-zoom-canvas {
+    width: min(280px, 78vw) !important;
+    height: min(280px, 78vw) !important;
+  }
+  #web-zoom-card {
+    max-width: min(340px, calc(100vw - 20px)) !important;
+    box-sizing: border-box !important;
+    padding: 12px 14px !important;
+  }
   .web-online-users-mobile-hint {
     display: inline;
     font-size: 11px;
@@ -1021,7 +1183,7 @@ tr.active-ply {
 <!-- Tab 2: Web Player (Local vs. JS Robot & Online Play/Observe) -->
 <section id="tab-play" class="tab">
   <div class="panel">
-    <div class="row" style="align-items:center;justify-content:space-between;margin-bottom:12px;">
+    <div id="web-play-toolbar-row" class="row" style="align-items:center;justify-content:space-between;margin-bottom:12px;">
       <div style="display:flex;gap:8px;">
         <button type="button" class="btn btn-primary" id="subtab-play-local">Play vs. Browser JS Robot</button>
         <button type="button" class="btn" id="subtab-play-online">Online Lobby &amp; Observation</button>
@@ -1047,7 +1209,7 @@ tr.active-ply {
           <div id="web-res-card-b" class="web-res-card"></div>
           <div id="web-res-card-c" class="web-res-card" style="display:none;"></div>
           <div id="web-res-card-d" class="web-res-card" style="display:none;"></div>
-          <div class="web-quick-guide-card">
+          <div class="web-quick-guide-card panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;color:#94A3B8;font-size:11px;line-height:1.4;">
             <strong style="color:#C8A253;font-size:12px;margin-bottom:4px;display:block;">Quick Guide</strong>
             <div>&bull; <strong>Right-click / Double-click:</strong> Zoom Square</div>
             <div>&bull; <strong>Click Pod:</strong> Guided Move / Jump</div>
@@ -1118,57 +1280,87 @@ tr.active-ply {
           </div>
         </div>
 
-        <!-- Right Column: Sidebar (Status & Clocks, Move History + VCR, Match Actions) -->
+        <!-- Right Column: Sidebar (50/50 Desktop Split: Top Half Status/History/Actions, Bottom Half Table Chat) -->
         <div id="web-play-side-col">
-          <!-- Top Card: Match Status & Clocks -->
-          <div class="panel" style="margin:0;padding:12px;background:#101622;border:1px solid #1E293B;color:#F8FAFC;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <span id="web-play-mode-badge" class="badge" style="background:#1E293B;color:#94A3B8;">2P (9x9)</span>
-              <span id="web-play-turn-badge" class="badge" style="background:#064E3B;color:#6EE7B7;">Player A Turn</span>
+          <!-- Top Half (50%): Status & Clocks, Move History + VCR, Match Actions -->
+          <div id="web-side-top-half" style="flex:1 1 50%;min-height:0;display:flex;flex-direction:column;gap:8px;">
+            <!-- Top Card: Match Status & Clocks -->
+            <div class="panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;color:#F8FAFC;">
+              <div id="web-play-online-status-bar" style="display:none;align-items:center;justify-content:space-between;background:#1E293B;border:1px solid #334155;border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:12px;">
+                <strong id="web-play-online-table-title" style="color:#38BDF8;">Online Table</strong>
+                <span id="web-play-online-role-badge" class="badge" style="background:#0F172A;color:#E2E8F0;font-size:11px;">Observer</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <span id="web-play-mode-badge" class="badge" style="background:#1E293B;color:#94A3B8;">2P (9x9)</span>
+                <span id="web-play-turn-badge" class="badge" style="background:#064E3B;color:#6EE7B7;">Player A Turn</span>
+              </div>
+              <div id="web-play-clock-bar" style="display:flex;gap:6px;margin-top:4px;">
+                <div id="web-clock-a" style="flex:1;background:#064E3B;color:#ECFDF5;padding:4px 6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;">A: --:--</div>
+                <div id="web-clock-b" style="flex:1;background:#881337;color:#FFF1F2;padding:4px 6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;">B: --:--</div>
+                <div id="web-clock-c" style="display:none;flex:1;background:#1E3A8A;color:#EFF6FF;padding:4px 6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;">C: --:--</div>
+                <div id="web-clock-d" style="display:none;flex:1;background:#78350F;color:#FFFBEB;padding:4px 6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;">D: --:--</div>
+              </div>
+              <div id="web-play-archive-status" class="dim" style="margin-top:4px;font-size:11px;"></div>
             </div>
-            <div id="web-play-clock-bar" style="display:flex;gap:6px;margin-top:6px;">
-              <div id="web-clock-a" style="flex:1;background:#064E3B;color:#ECFDF5;padding:6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:14px;font-weight:700;">A: --:--</div>
-              <div id="web-clock-b" style="flex:1;background:#881337;color:#FFF1F2;padding:6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:14px;font-weight:700;">B: --:--</div>
-              <div id="web-clock-c" style="display:none;flex:1;background:#1E3A8A;color:#EFF6FF;padding:6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:14px;font-weight:700;">C: --:--</div>
-              <div id="web-clock-d" style="display:none;flex:1;background:#78350F;color:#FFFBEB;padding:6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:14px;font-weight:700;">D: --:--</div>
+
+            <!-- Middle Card: Color-Coded Move History & VCR Replay -->
+            <div class="panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;flex:1;min-height:0;display:flex;flex-direction:column;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <strong style="color:#C8A253;font-size:13px;">Move History</strong>
+                <button type="button" class="btn" id="btn-web-export-moves" title="Export Move History (JSON v3.0)" style="width:32px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;background:#161D26;border:1px solid #C8A253;border-radius:6px;cursor:pointer;">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M2.5 9.5V13.5H13.5V9.5" stroke="#C8A253" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M8 10.5V2.5M8 2.5L4.5 6M8 2.5L11.5 6" stroke="#C8A253" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+              <div id="web-play-moves" style="flex:1;min-height:60px;overflow-y:auto;background:#0B0F17;border:1px solid #1E293B;border-radius:6px;padding:6px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px;">
+                <div class="dim" style="padding:4px;">No moves recorded yet.</div>
+              </div>
+              <!-- VCR Replay Bar -->
+              <div id="web-vcr-bar" style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;gap:4px;">
+                <button type="button" class="btn" id="web-vcr-first" style="padding:3px 6px;font-size:11px;" title="First Move">|&lt;&lt;</button>
+                <button type="button" class="btn" id="web-vcr-prev" style="padding:3px 6px;font-size:11px;" title="Previous Move">&lt;</button>
+                <span id="web-vcr-label" style="font-size:11px;color:#94A3B8;font-family:ui-monospace,SFMono-Regular,monospace;flex:1;text-align:center;">Ply 0/0</span>
+                <button type="button" class="btn" id="web-vcr-next" style="padding:3px 6px;font-size:11px;" title="Next Move">&gt;</button>
+                <button type="button" class="btn" id="web-vcr-last" style="padding:3px 6px;font-size:11px;" title="Latest Move">&gt;&gt;|</button>
+              </div>
             </div>
-            <div id="web-play-archive-status" class="dim" style="margin-top:6px;font-size:12px;"></div>
+
+            <!-- Compact Match Actions -->
+            <div class="panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;">
+              <div class="row" style="gap:6px;margin:0;">
+                <button type="button" class="btn btn-primary" id="btn-web-new-game-setup" style="flex:1;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;padding:6px 8px;font-size:12px;">New Game...</button>
+                <button type="button" class="btn" id="btn-web-draw" style="padding:6px 8px;font-size:12px;">Draw</button>
+                <button type="button" class="btn" id="btn-web-undo" style="padding:6px 8px;font-size:12px;">Undo</button>
+                <button type="button" class="btn" id="btn-web-resign" style="border-color:#dc2626;color:#dc2626;padding:6px 8px;font-size:12px;">Resign</button>
+              </div>
+              <div id="web-online-table-actions" style="display:none;margin-top:6px;" class="row">
+                <button type="button" class="btn" id="btn-web-leave-table" style="flex:1;border-color:#dc2626;color:#dc2626;padding:6px 8px;font-size:12px;">Leave Table</button>
+                <button type="button" class="btn" id="btn-web-back-lobby" style="flex:1;padding:6px 8px;font-size:12px;">Back to Lobby</button>
+              </div>
+            </div>
           </div>
 
-          <!-- Middle Card: Color-Coded Move History & VCR Replay -->
-          <div class="panel" style="margin:0;padding:12px;background:#101622;border:1px solid #1E293B;flex:1;display:flex;flex-direction:column;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <strong style="color:#C8A253;font-size:13px;">Move History</strong>
-              <button type="button" class="btn" id="btn-web-export-moves" title="Export Move History (JSON v3.0)" style="width:36px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;background:#161D26;border:1px solid #C8A253;border-radius:6px;cursor:pointer;">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M2.5 9.5V13.5H13.5V9.5" stroke="#C8A253" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M8 10.5V2.5M8 2.5L4.5 6M8 2.5L11.5 6" stroke="#C8A253" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
+          <!-- Bottom Half (50%): Table Chat Panel (Always visible, 50% flex share on desktop) -->
+          <div id="web-board-chat-panel" class="panel" style="flex:1 1 50%;min-height:0;margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <strong style="color:#C8A253;font-size:13px;">Table Chat</strong>
+                <span class="dim" style="font-size:11px;">@bot help &bull; @bot eval</span>
+              </div>
+              <button type="button" class="btn" id="btn-web-board-chat-zoom" title="Zoom Table Chat" style="padding:2px 7px;font-size:11px;background:#161D26;border:1px solid #C8A253;color:#C8A253;cursor:pointer;">Zoom &#x2922;</button>
             </div>
-            <div id="web-play-moves" style="flex:1;min-height:180px;max-height:300px;overflow-y:auto;background:#0B0F17;border:1px solid #1E293B;border-radius:6px;padding:6px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:12.5px;">
-              <div class="dim" style="padding:4px;">No moves recorded yet.</div>
+            <div id="web-board-chat-log" style="flex:1;min-height:0;overflow-y:auto;cursor:pointer;background:#0B0F17;border:1px solid #1E293B;border-radius:6px;padding:6px;font-size:12.5px;color:#E2E8F0;margin-bottom:6px;">
+              <div class="dim">Connected to room chat.</div>
             </div>
-            <!-- VCR Replay Bar -->
-            <div id="web-vcr-bar" style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;gap:4px;">
-              <button type="button" class="btn" id="web-vcr-first" style="padding:4px 8px;font-size:12px;" title="First Move">|&lt;&lt;</button>
-              <button type="button" class="btn" id="web-vcr-prev" style="padding:4px 8px;font-size:12px;" title="Previous Move">&lt;</button>
-              <span id="web-vcr-label" style="font-size:12px;color:#94A3B8;font-family:ui-monospace,SFMono-Regular,monospace;flex:1;text-align:center;">Ply 0/0</span>
-              <button type="button" class="btn" id="web-vcr-next" style="padding:4px 8px;font-size:12px;" title="Next Move">&gt;</button>
-              <button type="button" class="btn" id="web-vcr-last" style="padding:4px 8px;font-size:12px;" title="Latest Move">&gt;&gt;|</button>
-            </div>
-          </div>
-
-          <!-- Bottom Card: Match Actions -->
-          <div class="panel" style="margin:0;padding:12px;background:#101622;border:1px solid #1E293B;">
-            <div class="row" style="gap:8px;margin:0;">
-              <button type="button" class="btn btn-primary" id="btn-web-new-game-setup" style="flex:1;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">New Game...</button>
-              <button type="button" class="btn" id="btn-web-undo">Undo</button>
-              <button type="button" class="btn" id="btn-web-resign" style="border-color:#dc2626;color:#dc2626;">Resign</button>
-            </div>
-            <div id="web-online-table-actions" style="display:none;margin-top:8px;" class="row">
-              <button type="button" class="btn" id="btn-web-leave-table" style="flex:1;border-color:#dc2626;color:#dc2626;">Leave Table</button>
-              <button type="button" class="btn" id="btn-web-back-lobby" style="flex:1;">Back to Lobby</button>
+            <div id="web-board-chat-input-row" class="row" style="gap:6px;margin:0;">
+              <select id="web-board-chat-scope" style="background:#0B0F17;color:#F8FAFC;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:12px;">
+                <option value="ALL">ALL</option>
+                <option value="TEAM">TEAM</option>
+              </select>
+              <input id="web-board-chat-input" placeholder="Chat in table (e.g. @bot help)..." style="flex:1;background:#0B0F17;color:#F8FAFC;border:1px solid #334155;border-radius:4px;padding:6px 8px;font-size:12px;">
+              <button type="button" class="btn btn-primary" id="btn-web-board-chat-send" style="padding:6px 12px;font-size:12px;">Send</button>
             </div>
           </div>
         </div>
@@ -1648,6 +1840,34 @@ tr.active-ply {
     <div class="row" style="margin-top:20px;justify-content:flex-end;gap:10px;">
       <button type="button" class="btn" id="btn-setup-cancel">Cancel</button>
       <button type="button" class="btn btn-primary" id="btn-setup-apply" style="background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Save Type</button>
+    </div>
+  </div>
+</div>
+
+<!-- Borderless Table Chat Zoom Overlay -->
+<div id="web-board-chat-zoom-overlay" style="display:none;position:fixed;inset:0;background:rgba(7,10,15,0.82);z-index:2300;align-items:center;justify-content:center;padding:12px;">
+  <div id="web-board-chat-zoom-card" style="background:#161D26;border:2px solid #C8A253;border-radius:12px;padding:14px 16px;width:min(520px, calc(100vw - 20px));max-height:calc(100vh - 24px);display:flex;flex-direction:column;gap:10px;box-shadow:0 20px 60px rgba(0,0,0,0.85);box-sizing:border-box;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <strong style="color:#C8A253;font-size:14px;letter-spacing:0.5px;">TABLE CHAT</strong>
+        <div style="display:flex;gap:4px;">
+          <button type="button" class="btn" id="btn-web-board-chat-zoom-help" style="padding:2px 7px;font-size:11px;background:#101622;border:1px solid #334155;color:#94A3B8;">@bot help</button>
+          <button type="button" class="btn" id="btn-web-board-chat-zoom-eval" style="padding:2px 7px;font-size:11px;background:#101622;border:1px solid #334155;color:#94A3B8;">@bot eval</button>
+          <button type="button" class="btn" id="btn-web-board-chat-zoom-stats" style="padding:2px 7px;font-size:11px;background:#101622;border:1px solid #334155;color:#94A3B8;">@bot stats</button>
+        </div>
+      </div>
+      <button type="button" class="btn" id="btn-web-board-chat-zoom-close" title="Close [Esc]" style="padding:3px 8px;font-size:14px;line-height:1;background:transparent;border:none;color:#94A3B8;cursor:pointer;">&#x2715;</button>
+    </div>
+    <div id="web-board-chat-zoom-log" style="height:min(280px, 45vh);overflow-y:auto;background:#0B0F17;border:1px solid #1E293B;border-radius:6px;padding:8px;font-size:12.5px;color:#E2E8F0;word-break:break-word;">
+      <div class="dim">Connected to room chat.</div>
+    </div>
+    <div class="row" style="gap:6px;margin:0;">
+      <select id="web-board-chat-zoom-scope" style="background:#0B0F17;color:#F8FAFC;border:1px solid #334155;border-radius:4px;padding:6px 8px;font-size:12px;">
+        <option value="ALL">ALL</option>
+        <option value="TEAM">TEAM</option>
+      </select>
+      <input id="web-board-chat-zoom-input" placeholder="Type message in table... (Enter to send)" style="flex:1;background:#0B0F17;color:#F8FAFC;border:1px solid #334155;border-radius:4px;padding:6px 8px;font-size:12.5px;">
+      <button type="button" class="btn btn-primary" id="btn-web-board-chat-zoom-send" style="padding:6px 14px;font-size:12.5px;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Send</button>
     </div>
   </div>
 </div>
@@ -5396,6 +5616,28 @@ function renderGuestState() {
   if ($("btn-web-chat-send")) {
     $("btn-web-chat-send").disabled = true;
   }
+  if ($("web-board-chat-input")) {
+    if (activeOnlineGameId) {
+      $("web-board-chat-input").disabled = true;
+      $("web-board-chat-input").placeholder = "Sign in to chat in room...";
+      if ($("btn-web-board-chat-send")) $("btn-web-board-chat-send").disabled = true;
+    } else {
+      $("web-board-chat-input").disabled = false;
+      $("web-board-chat-input").placeholder = "Chat in table (e.g. @bot help)...";
+      if ($("btn-web-board-chat-send")) $("btn-web-board-chat-send").disabled = false;
+    }
+  }
+  if ($("web-board-chat-zoom-input")) {
+    if (activeOnlineGameId) {
+      $("web-board-chat-zoom-input").disabled = true;
+      $("web-board-chat-zoom-input").placeholder = "Sign in to chat in room...";
+      if ($("btn-web-board-chat-zoom-send")) $("btn-web-board-chat-zoom-send").disabled = true;
+    } else {
+      $("web-board-chat-zoom-input").disabled = false;
+      $("web-board-chat-zoom-input").placeholder = "Type message in table... (Enter to send)";
+      if ($("btn-web-board-chat-zoom-send")) $("btn-web-board-chat-zoom-send").disabled = false;
+    }
+  }
 }
 
 function renderAuthState() {
@@ -5429,6 +5671,20 @@ function renderAuthState() {
   }
   if ($("btn-web-chat-send")) {
     $("btn-web-chat-send").disabled = false;
+  }
+  if ($("web-board-chat-input")) {
+    $("web-board-chat-input").disabled = false;
+    $("web-board-chat-input").placeholder = activeOnlineGameId ? "Chat in room (e.g. @stock help)..." : "Chat in table (e.g. @bot help)...";
+  }
+  if ($("btn-web-board-chat-send")) {
+    $("btn-web-board-chat-send").disabled = false;
+  }
+  if ($("web-board-chat-zoom-input")) {
+    $("web-board-chat-zoom-input").disabled = false;
+    $("web-board-chat-zoom-input").placeholder = activeOnlineGameId ? "Type message in room... (Enter to send)" : "Type message in table... (Enter to send)";
+  }
+  if ($("btn-web-board-chat-zoom-send")) {
+    $("btn-web-board-chat-zoom-send").disabled = false;
   }
 }
 
@@ -6379,6 +6635,21 @@ var localMatchConfig = {
 var matchStarted = false;
 var activeOnlineGameId = "";
 var activeOnlineTableRoomId = "";
+var activeOnlineRoomView = null;
+var activeOnlineViewerSeat = 0;
+var activeOnlinePollTimer = null;
+var activeOnlineEventSeq = 0;
+var activeOnlineChatMessages = [];
+var activeOnlineLastSyncedPlyCount = -1;
+var activeOnlineLastSyncedFen = "";
+
+function isInteractiveBoardTurn(s) {
+  if (!s || s.status !== "P") return false;
+  if (activeOnlineGameId) {
+    return isMyOnlineTurn(s);
+  }
+  return matchStarted && (localMatchConfig.playMode === "pass" || s.turn === localMatchConfig.humanSeat);
+}
 
 var moveComposer = null;
 var lastMoveHighlightSquares = [];
@@ -7010,7 +7281,21 @@ function renderWebReserveCard(player, cardEl, state, isTurn) {
   titleSpan.appendChild(dotSpan);
 
   var nameText = "PLAYER " + player;
-  if (localMatchConfig.playMode === "bot") {
+  if (activeOnlineGameId && activeOnlineRoomView && Array.isArray(activeOnlineRoomView.seats)) {
+    var seatNum = (player === "A") ? 1 : ((player === "B") ? 2 : ((player === "C") ? 3 : 4));
+    var foundSeat = null;
+    for (var si = 0; si < activeOnlineRoomView.seats.length; si++) {
+      if ((activeOnlineRoomView.seats[si].seat || (si + 1)) === seatNum) {
+        foundSeat = activeOnlineRoomView.seats[si];
+        break;
+      }
+    }
+    if (foundSeat && foundSeat.handle) {
+      nameText = "@" + foundSeat.handle + (foundSeat.is_robot ? " [BOT]" : "") + " (" + player + ")";
+    } else {
+      nameText = "Open Seat (" + player + ")";
+    }
+  } else if (localMatchConfig.playMode === "bot") {
     if (player === localMatchConfig.humanSeat) {
       nameText = (currentUser && currentUser.handle) ? ("@" + currentUser.handle + " (" + player + ")") : ("Human (" + player + ")");
     } else {
@@ -7591,8 +7876,7 @@ function updateZoomOverlayControls() {
   var k = zoomSq.x + "," + zoomSq.y;
   var stack = s.map[k] || [];
   var turn = s.turn;
-  var isTurn = ((matchStarted || activeOnlineGameId) && s.status === "P" &&
-    (localMatchConfig.playMode === "pass" || s.turn === localMatchConfig.humanSeat || (activeOnlineGameId && isMyOnlineTurn(s))));
+  var isTurn = isInteractiveBoardTurn(s);
 
   var tabsContainer = document.getElementById("web-zoom-pod-tabs");
   if (tabsContainer) {
@@ -7672,8 +7956,7 @@ function renderZoomCanvas() {
   var podR = 68;
   var cx = 160, cy = 160;
   var rotDeg = ((boardRotationDeg + liveRotationOffsetDeg) % 360 + 360) % 360;
-  var isTurn = ((matchStarted || activeOnlineGameId) && s.status === "P" &&
-    (localMatchConfig.playMode === "pass" || s.turn === localMatchConfig.humanSeat || (activeOnlineGameId && isMyOnlineTurn(s))));
+  var isTurn = isInteractiveBoardTurn(s);
 
   // 1. Draw non-selected pods underneath with stepped offsets at 0.28 alpha
   var stepCount = 0;
@@ -7825,8 +8108,7 @@ if (zoomCanvas) {
   zoomCanvas.addEventListener("click", function (e) {
     var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
     if (!s || !zoomSq || !moveComposer) return;
-    var isTurn = ((matchStarted || activeOnlineGameId) && s.status === "P" &&
-      (localMatchConfig.playMode === "pass" || s.turn === localMatchConfig.humanSeat || (activeOnlineGameId && isMyOnlineTurn(s))));
+    var isTurn = isInteractiveBoardTurn(s);
     if (!isTurn) return;
 
     var rect = zoomCanvas.getBoundingClientRect();
@@ -8111,8 +8393,7 @@ if (playCanvas) {
         }
       } else {
         var stCur = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
-        var canDragMove = (matchStarted || activeOnlineGameId) && stCur && stCur.status === "P" &&
-          (localMatchConfig.playMode === "pass" || stCur.turn === localMatchConfig.humanSeat || (activeOnlineGameId && isMyOnlineTurn(stCur)));
+        var canDragMove = isInteractiveBoardTurn(stCur);
         if (canDragMove) {
           var kSt = pressSq.x + "," + pressSq.y;
           var stackSt = stCur.map[kSt] || [];
@@ -8138,7 +8419,7 @@ if (playCanvas) {
     var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
     if (!s || s.status === "O" || s.status === "R") return;
 
-    var isMyTurn = (localMatchConfig.playMode === "pass" || s.turn === localMatchConfig.humanSeat || (activeOnlineGameId && isMyOnlineTurn(s)));
+    var isMyTurn = isInteractiveBoardTurn(s);
     if (!isMyTurn) return;
 
     if (playBoardGeom) {
@@ -8326,6 +8607,10 @@ window.addEventListener("keydown", function (e) {
   }
 
   if (e.key === "Enter") {
+    var tgtTag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : "";
+    if (tgtTag === "INPUT" || tgtTag === "TEXTAREA" || tgtTag === "SELECT") {
+      return;
+    }
     if (capOpen) {
       var btnYes = document.getElementById("btn-capture-yes");
       if (btnYes) { btnYes.click(); return; }
@@ -8542,6 +8827,7 @@ if (btnSetupApply) {
 }
 
 function prepareLocalMatchInitialState() {
+  stopOnlineGameSync();
   if (clockInterval) {
     clearInterval(clockInterval);
     clockInterval = null;
@@ -9008,6 +9294,21 @@ function onLocalMoveCommitted(notation, newState, aiMeta) {
   renderPlayBoardCanvas();
   renderAllWebReserves();
 
+  if (activeOnlineGameId) {
+    var targetRoom = activeOnlineGameId;
+    api("/api/v1/games/" + encodeURIComponent(targetRoom) + "/move", {
+      method: "POST",
+      body: { move: notation }
+    }).then(function () {
+      syncOnlineGameRoom(targetRoom, false);
+      pollOnlineGameEvents(targetRoom);
+    }).catch(function (e) {
+      alert("Move rejected by server: " + e.message);
+      syncOnlineGameRoom(targetRoom, true);
+    });
+    return;
+  }
+
   if (activePlayState.status === "O") {
     if (clockInterval) {
       clearInterval(clockInterval);
@@ -9036,6 +9337,7 @@ function onLocalMoveCommitted(notation, newState, aiMeta) {
 }
 
 function checkMatchTurn() {
+  if (activeOnlineGameId) return;
   if (!matchStarted || !activePlayState) return;
   var s = activePlayState;
   if (s.status === "O" || s.status === "R") return;
@@ -9147,6 +9449,17 @@ if (btnUndo) {
       renderPlayBoardCanvas();
       return;
     }
+    if (activeOnlineGameId) {
+      api("/api/v1/games/" + encodeURIComponent(activeOnlineGameId) + "/action", {
+        method: "POST",
+        body: { action: "request_undo" }
+      }).then(function () {
+        pollOnlineGameEvents(activeOnlineGameId);
+      }).catch(function (e) {
+        alert("Undo request failed: " + e.message);
+      });
+      return;
+    }
     var goOverlay = document.getElementById("web-gameover-overlay");
     if (goOverlay) goOverlay.style.display = "none";
     var thinkOverlay = document.getElementById("web-thinking-overlay");
@@ -9191,12 +9504,63 @@ if (btnUndo) {
   });
 }
 
+// Draw
+var btnDraw = document.getElementById("btn-web-draw");
+if (btnDraw) {
+  btnDraw.addEventListener("click", function () {
+    if (!activePlayState || activePlayState.status === "O" || activePlayState.status === "R") return;
+    if (activeOnlineGameId) {
+      var targetRoom = activeOnlineGameId;
+      api("/api/v1/games/" + encodeURIComponent(targetRoom) + "/proposals", {
+        method: "POST",
+        body: { type: "DRAW_OFFER" }
+      }).then(function () {
+        pollOnlineGameEvents(targetRoom);
+      }).catch(function (e) {
+        alert("Draw offer failed: " + e.message);
+      });
+      return;
+    }
+    if (!confirm("Declare game as draw?")) return;
+    if (clockInterval) {
+      clearInterval(clockInterval);
+      clockInterval = null;
+    }
+    activePlayState.status = "R";
+    activePlayState.turn = "-";
+    activePlayState.winner = "-";
+    activePlayState.termination = "DRAW";
+    OctiWebSoundSynth.play("GAME_VICTORY");
+    var goOverlay = document.getElementById("web-gameover-overlay");
+    var goTitle = document.getElementById("web-gameover-title");
+    var goSub = document.getElementById("web-gameover-subtitle");
+    if (goOverlay && goTitle && goSub) {
+      goTitle.textContent = "GAME DRAW";
+      goSub.textContent = "MUTUAL AGREEMENT";
+      goOverlay.style.display = "flex";
+    }
+    updatePlaySidebar();
+  });
+}
+
 // Resign
 var btnResign = document.getElementById("btn-web-resign");
 if (btnResign) {
   btnResign.addEventListener("click", function () {
     if (!activePlayState || activePlayState.status === "O" || activePlayState.status === "R") return;
     if (!confirm("Are you sure you want to resign the game?")) return;
+    if (activeOnlineGameId) {
+      var targetRoom = activeOnlineGameId;
+      api("/api/v1/games/" + encodeURIComponent(targetRoom) + "/resign", {
+        method: "POST"
+      }).then(function () {
+        syncOnlineGameRoom(targetRoom, true);
+        pollOnlineGameEvents(targetRoom);
+      }).catch(function (e) {
+        alert("Resign failed: " + e.message);
+      });
+      return;
+    }
     var turn = activePlayState.turn;
     if (clockInterval) {
       clearInterval(clockInterval);
@@ -9237,17 +9601,39 @@ moveComposer = new WebMoveComposer(function () {
   return activePlayState;
 }, onLocalMoveCommitted);
 
+function stopOnlineGameSync() {
+  if (activeOnlinePollTimer) {
+    clearInterval(activeOnlinePollTimer);
+    activeOnlinePollTimer = null;
+  }
+  activeOnlineGameId = "";
+  activeOnlineRoomView = null;
+  activeOnlineViewerSeat = 0;
+  activeOnlineLastSyncedPlyCount = -1;
+  activeOnlineLastSyncedFen = "";
+  var bar = document.getElementById("web-play-online-status-bar");
+  if (bar) bar.style.display = "none";
+  var actRow = document.getElementById("web-online-table-actions");
+  if (actRow) actRow.style.display = "none";
+}
+
 // Subtab Toggles
 var subtabLocal = document.getElementById("subtab-play-local");
 var subtabOnline = document.getElementById("subtab-play-online");
 if (subtabLocal && subtabOnline) {
   subtabLocal.addEventListener("click", function () {
+    var wasOnline = !!activeOnlineGameId;
+    stopOnlineGameSync();
     subtabLocal.className = "btn btn-primary";
     subtabOnline.className = "btn";
     document.getElementById("play-local-panel").style.display = "block";
     document.getElementById("play-online-panel").style.display = "none";
+    if (wasOnline) {
+      prepareLocalMatchInitialState();
+    }
   });
   subtabOnline.addEventListener("click", function () {
+    stopOnlineGameSync();
     subtabOnline.className = "btn btn-primary";
     subtabLocal.className = "btn";
     document.getElementById("play-online-panel").style.display = "block";
@@ -9258,32 +9644,478 @@ if (subtabLocal && subtabOnline) {
 
 // Online Table Board Play
 function isMyOnlineTurn(state) {
-  return true; // checked against table seats if authenticated
+  if (!activeOnlineGameId || !activeOnlineRoomView || !state) return false;
+  if (activeOnlineRoomView.phase !== "IN_PROGRESS" || activeOnlineRoomView.paused) return false;
+  var mySeat = activeOnlineViewerSeat;
+  if (!mySeat && currentUser && Array.isArray(activeOnlineRoomView.seats)) {
+    var myUuid = currentUser.uuid || currentUser.user_id || "";
+    var myHandle = currentUser.handle || "";
+    for (var i = 0; i < activeOnlineRoomView.seats.length; i++) {
+      var s = activeOnlineRoomView.seats[i];
+      if ((myUuid && s.player_uuid === myUuid) || (myHandle && s.handle === myHandle)) {
+        mySeat = s.seat || (i + 1);
+        break;
+      }
+    }
+  }
+  if (!mySeat) return false;
+  return seatLetterOf(mySeat) === state.turn;
+}
+
+function buildInitialFenForRules(modeStr, basesNum, superProngsBool, edgelessBool) {
+  var sp = superProngsBool ? "1" : "0";
+  var ed = edgelessBool ? "1" : "0";
+  if (modeStr === "OFK") {
+    return "OFK:1:0:0:P:A:-:0:0,0,12,0:0,0,12,0:A22,A32,A42,A52,B26,B36,B46,B56";
+  }
+  if (modeStr === "4" || modeStr === "4P") {
+    var r4p = "3,0," + (superProngsBool ? "11,1" : "12,0");
+    return "4:3:" + sp + ":" + ed + ":P:A:-:0:" + r4p + ":" + r4p + ":" + r4p + ":" + r4p + ":A33,D73,B37,C77";
+  }
+  var b = (basesNum === 1) ? 1 : 3;
+  var r2p = "4,0," + (superProngsBool ? "24,1" : "25,0");
+  return "2:" + b + ":" + sp + ":" + ed + ":P:A:-:0:" + r2p + ":" + r2p + ":A33,A53,A73,B37,B57,B77";
+}
+
+function renderRoomChatLogs() {
+  var targets = [
+    document.getElementById("web-board-chat-log"),
+    document.getElementById("web-board-chat-zoom-log"),
+    document.getElementById("web-room-chat-log")
+  ];
+  targets.forEach(function (logEl) {
+    if (!logEl) return;
+    clear(logEl);
+    if (!activeOnlineChatMessages.length) {
+      var emptyMsg = activeOnlineTableRoomId
+        ? ("Connected to room #" + activeOnlineTableRoomId + " chat. Try @bot help or @bot eval.")
+        : "Table Chat ready. Type @bot help for commands.";
+      logEl.appendChild(el("div", emptyMsg, "dim"));
+      return;
+    }
+    activeOnlineChatMessages.forEach(function (m) {
+      var ts = formatLobbyChatTime(m.at_ms || m.created_at_ms || Date.now());
+      var sender = m.handle ? ("@" + m.handle + (m.is_robot ? " [BOT]" : "")) : "system";
+      var scopePrefix = (m.scope && m.scope.toUpperCase() === "TEAM") ? "[TEAM] " : "";
+      var row = el("div", "[" + ts + "] " + scopePrefix + sender + ": " + (m.text || ""));
+      row.style.marginBottom = "4px";
+      row.style.wordBreak = "break-word";
+      logEl.appendChild(row);
+    });
+    logEl.scrollTop = logEl.scrollHeight;
+  });
+}
+
+function renderWebBoardChatLog() {
+  renderRoomChatLogs();
+}
+
+function pollOnlineGameEvents(roomId) {
+  if (!roomId || roomId !== activeOnlineTableRoomId) return;
+  api("/api/v1/games/" + encodeURIComponent(roomId) + "/events?since_seq=" + activeOnlineEventSeq).then(function (evRes) {
+    if (!evRes || roomId !== activeOnlineTableRoomId) return;
+    var evs = Array.isArray(evRes.events) ? evRes.events : [];
+    var changedChat = false;
+    var needsRoomRefresh = false;
+    for (var i = 0; i < evs.length; i++) {
+      var ev = evs[i];
+      if (ev.seq && ev.seq > activeOnlineEventSeq) {
+        activeOnlineEventSeq = ev.seq;
+      }
+      if (ev.type === "CHAT" || ev.type === "BOARD_CHAT") {
+        activeOnlineChatMessages.push(ev);
+        changedChat = true;
+      } else if (ev.type === "PROPOSAL_OFFERED" || ev.type === "PROPOSAL_ACCEPTED" ||
+                 ev.type === "PROPOSAL_DECLINED" || ev.type === "UNDO_APPLIED") {
+        activeOnlineChatMessages.push({
+          seq: ev.seq,
+          at_ms: ev.at_ms,
+          handle: ev.handle || "table",
+          is_robot: !!ev.is_robot,
+          text: "[" + ev.type + "] " + (ev.proposal || ev.move || "")
+        });
+        changedChat = true;
+        needsRoomRefresh = true;
+      } else if (ev.type === "MOVE" || ev.type === "GAME_STARTED" || ev.type === "GAME_OVER" ||
+                 ev.type === "SEAT_JOINED" || ev.type === "SEAT_LEFT") {
+        needsRoomRefresh = true;
+      }
+    }
+    if (evRes.next_seq && evRes.next_seq > activeOnlineEventSeq) {
+      activeOnlineEventSeq = evRes.next_seq;
+    }
+    if (changedChat) {
+      renderRoomChatLogs();
+    }
+    if (needsRoomRefresh && activeOnlineGameId === roomId) {
+      syncOnlineGameRoom(roomId, false);
+    }
+  }).catch(function () {});
+}
+
+function syncOnlineGameRoom(roomId, forceRebuild) {
+  if (!roomId) return;
+  api("/api/v1/games/" + encodeURIComponent(roomId)).then(function (res) {
+    if (!res || roomId !== activeOnlineGameId) return;
+    activeOnlineRoomView = res;
+    var vSeat = res.viewer_seat || 0;
+    if (!vSeat && currentUser && Array.isArray(res.seats)) {
+      var myUuid = currentUser.uuid || currentUser.user_id || "";
+      var myHandle = currentUser.handle || "";
+      for (var i = 0; i < res.seats.length; i++) {
+        var sObj = res.seats[i];
+        if ((myUuid && sObj.player_uuid === myUuid) || (myHandle && sObj.handle === myHandle)) {
+          vSeat = sObj.seat || (i + 1);
+          break;
+        }
+      }
+    }
+    var prevSeat = activeOnlineViewerSeat;
+    activeOnlineViewerSeat = vSeat;
+    if (prevSeat === 0 && vSeat > 0) {
+      boardRotationDeg = (vSeat === 2) ? 180 : 0;
+    }
+
+    var bar = document.getElementById("web-play-online-status-bar");
+    var titleEl = document.getElementById("web-play-online-table-title");
+    var roleEl = document.getElementById("web-play-online-role-badge");
+    if (bar && titleEl) {
+      titleEl.textContent = "Table #" + roomId + " \u2022 " + (res.phase || "IN_PROGRESS");
+      bar.style.display = "flex";
+    }
+    if (roleEl) {
+      if (vSeat > 0) {
+        roleEl.textContent = "Seated: Seat " + vSeat + " (" + seatLetterOf(vSeat) + ")";
+        roleEl.style.background = "#064E3B";
+        roleEl.style.color = "#6EE7B7";
+      } else {
+        roleEl.textContent = "Observing";
+        roleEl.style.background = "#1E293B";
+        roleEl.style.color = "#94A3B8";
+      }
+    }
+
+    if (Array.isArray(res.seats)) {
+      res.seats.forEach(function (stItem) {
+        var sL = seatLetterOf(stItem.seat || 1);
+        if (clockTimers[sL] !== undefined && stItem.clock_ms !== undefined) {
+          clockTimers[sL] = Math.max(0, Math.ceil(stItem.clock_ms / 1000));
+        }
+      });
+    }
+
+    var isStaging = moveComposer && (moveComposer.stagedNotation || moveComposer.isGuidedMoveActive || moveComposer.isAwaitingConfirmation);
+    var srvMoves = Array.isArray(res.moves) ? res.moves : [];
+    var srvFen = res.fen || "";
+
+    if (!isStaging && (forceRebuild || srvFen !== activeOnlineLastSyncedFen || srvMoves.length !== activeOnlineLastSyncedPlyCount)) {
+      activeOnlineLastSyncedFen = srvFen;
+      activeOnlineLastSyncedPlyCount = srvMoves.length;
+
+      var initFen = buildInitialFenForRules(res.mode || "2P", res.bases || 3, !!res.super_prongs, !!res.edgeless);
+      var replayState = parseOctiFen(initFen);
+      var builtPlies = [{
+        plyIndex: 0,
+        player: "-",
+        move: "(Initial Setup)",
+        fenAfter: initFen
+      }];
+      for (var mi = 0; mi < srvMoves.length; mi++) {
+        var mvStr = srvMoves[mi];
+        var mover = replayState ? replayState.turn : ((mi % 2 === 0) ? "A" : "B");
+        if (replayState) {
+          replayState = applyMoveToState(cloneState(replayState), mvStr, mover);
+        }
+        builtPlies.push({
+          plyIndex: mi + 1,
+          player: mover,
+          move: mvStr,
+          fenAfter: (mi === srvMoves.length - 1 && srvFen) ? srvFen : (replayState ? serializeOctiFen(replayState) : srvFen)
+        });
+      }
+      playMatchPlies = builtPlies;
+      playVcrIndex = playMatchPlies.length - 1;
+      activePlayState = srvFen ? parseOctiFen(srvFen) : replayState;
+      matchStarted = (res.phase === "IN_PROGRESS");
+
+      if (srvMoves.length > 0) {
+        lastMoveHighlightSquares = extractModifiedSquaresFromMove(srvMoves[srvMoves.length - 1]);
+        lastMoveSetAtMs = Date.now();
+      } else {
+        lastMoveHighlightSquares = [];
+      }
+
+      var goOverlay = document.getElementById("web-gameover-overlay");
+      var goTitle = document.getElementById("web-gameover-title");
+      var goSub = document.getElementById("web-gameover-subtitle");
+      if (res.phase === "FINISHED" || (activePlayState && (activePlayState.status === "O" || activePlayState.status === "R"))) {
+        if (goOverlay && goTitle && goSub) {
+          var winSeat = res.winner_seat || 0;
+          var winLetter = winSeat > 0 ? seatLetterOf(winSeat) : (activePlayState ? activePlayState.winner : "");
+          if (winLetter && winLetter !== "-") {
+            goTitle.textContent = "PLAYER " + winLetter + " WINS!";
+          } else {
+            goTitle.textContent = res.result || "GAME OVER";
+          }
+          goSub.textContent = res.termination || (activePlayState && activePlayState.termination) || "MATCH FINISHED";
+          goOverlay.style.display = "flex";
+        }
+      } else if (goOverlay) {
+        goOverlay.style.display = "none";
+      }
+    }
+
+    updatePlaySidebar();
+    renderPlayBoardCanvas();
+    renderAllWebReserves();
+  }).catch(function () {});
 }
 
 function openOnlineTableBoard(roomId) {
   if (!roomId) return;
+  if (clockInterval) {
+    clearInterval(clockInterval);
+    clockInterval = null;
+  }
+  if (activeOnlinePollTimer) {
+    clearInterval(activeOnlinePollTimer);
+    activeOnlinePollTimer = null;
+  }
+  if (moveComposer) {
+    moveComposer.reset();
+  }
+
+  var switchedRoom = (activeOnlineTableRoomId !== roomId);
   activeOnlineGameId = roomId;
   activeOnlineTableRoomId = roomId;
-  subtabLocal.click();
+  activeOnlineLastSyncedPlyCount = -1;
+  activeOnlineLastSyncedFen = "";
+  if (switchedRoom) {
+    activeOnlineEventSeq = 0;
+    activeOnlineChatMessages = [];
+  }
+
+  if (subtabLocal && subtabOnline) {
+    subtabLocal.className = "btn";
+    subtabOnline.className = "btn btn-primary";
+  }
+  document.getElementById("play-local-panel").style.display = "block";
+  document.getElementById("play-online-panel").style.display = "none";
+
+  var startOverlay = document.getElementById("web-start-match-overlay");
+  if (startOverlay) startOverlay.style.display = "none";
+  var thinkOverlay = document.getElementById("web-thinking-overlay");
+  if (thinkOverlay) thinkOverlay.style.display = "none";
+  var goOverlay = document.getElementById("web-gameover-overlay");
+  if (goOverlay) goOverlay.style.display = "none";
 
   var bar = document.getElementById("web-play-online-status-bar");
   var titleEl = document.getElementById("web-play-online-table-title");
   if (bar && titleEl) {
-    titleEl.textContent = "Online Table #" + roomId;
+    titleEl.textContent = "Table #" + roomId;
     bar.style.display = "flex";
   }
+  var actRow = document.getElementById("web-online-table-actions");
+  if (actRow) actRow.style.display = "flex";
+  var chatPanel = document.getElementById("web-board-chat-panel");
+  if (chatPanel) chatPanel.style.display = "flex";
 
-  // Fetch table state
-  api("/api/v1/tables/" + encodeURIComponent(roomId)).then(function (res) {
-    if (res && res.game) {
-      activePlayState = parseOctiFen(res.game.current_fen || res.game.final_fen);
-      matchStarted = (res.game.status === "IN_PROGRESS");
-      updatePlaySidebar();
-      renderPlayBoardCanvas();
-      renderAllWebReserves();
+  renderRoomChatLogs();
+  syncOnlineGameRoom(roomId, true);
+  pollOnlineGameEvents(roomId);
+
+  activeOnlinePollTimer = setInterval(function () {
+    if (!activeOnlineGameId) return;
+    syncOnlineGameRoom(activeOnlineGameId, false);
+    pollOnlineGameEvents(activeOnlineGameId);
+  }, 1000);
+}
+
+function sendOnlineRoomChatMessage(rawText, scope) {
+  var msg = (rawText || "").trim();
+  if (!msg) return;
+  var targetScope = (scope || "ALL").toUpperCase();
+  var targetRoom = activeOnlineGameId || activeOnlineTableRoomId || currentMyTableRoomId;
+  if (!targetRoom) {
+    var senderHandle = (currentUser && currentUser.handle) ? currentUser.handle : "You";
+    var userEntry = {
+      handle: senderHandle,
+      text: msg,
+      at_ms: Date.now(),
+      scope: targetScope
+    };
+    activeOnlineChatMessages.push(userEntry);
+    renderRoomChatLogs();
+
+    var lower = msg.toLowerCase();
+    if (lower.indexOf("@bot") !== -1 || lower.indexOf("@stock") !== -1) {
+      setTimeout(function () {
+        var replyText = "";
+        if (lower.indexOf("help") !== -1) {
+          replyText = "Commands: @bot help, @bot eval (board score & best move), @bot stats (engine search stats).";
+        } else if (lower.indexOf("eval") !== -1) {
+          replyText = "Position eval: " + (activePlayState ? ("Turn " + activePlayState.turn + ", status " + activePlayState.status) : "Ready") + ". Good luck!";
+        } else if (lower.indexOf("stats") !== -1) {
+          replyText = "Engine: Browser JS Robot | Difficulty: Level " + localMatchConfig.botDifficulty + " | Search time: " + (localMatchConfig.botDifficulty * 4) + "s.";
+        } else {
+          replyText = "Hello! I am the OCTI bot. Type @bot help for commands.";
+        }
+        activeOnlineChatMessages.push({
+          handle: "bot",
+          is_robot: true,
+          text: replyText,
+          at_ms: Date.now(),
+          scope: targetScope
+        });
+        renderRoomChatLogs();
+      }, 200);
     }
-  }).catch(function () {});
+    return;
+  }
+  if (!currentUser) {
+    alert("Please sign in to chat in online room.");
+    return;
+  }
+  api("/api/v1/games/" + encodeURIComponent(targetRoom) + "/chat", {
+    method: "POST",
+    body: { text: msg, scope: targetScope.toLowerCase() }
+  }).then(function () {
+    pollOnlineGameEvents(targetRoom);
+    setTimeout(function () { pollOnlineGameEvents(targetRoom); }, 600);
+  }).catch(function (e) {
+    alert("Room chat failed: " + e.message);
+  });
+}
+
+function openBoardChatZoomModal() {
+  var overlay = document.getElementById("web-board-chat-zoom-overlay");
+  if (overlay) {
+    overlay.style.display = "flex";
+    renderRoomChatLogs();
+    var inp = document.getElementById("web-board-chat-zoom-input");
+    if (inp) {
+      setTimeout(function () { inp.focus(); }, 50);
+    }
+  }
+}
+
+function closeBoardChatZoomModal() {
+  var overlay = document.getElementById("web-board-chat-zoom-overlay");
+  if (overlay) {
+    overlay.style.display = "none";
+  }
+}
+
+if ($("btn-web-board-chat-zoom")) {
+  $("btn-web-board-chat-zoom").addEventListener("click", function (ev) {
+    ev.stopPropagation();
+    openBoardChatZoomModal();
+  });
+}
+if ($("web-board-chat-log")) {
+  $("web-board-chat-log").addEventListener("click", function () {
+    openBoardChatZoomModal();
+  });
+}
+if ($("web-board-chat-panel")) {
+  $("web-board-chat-panel").addEventListener("click", function (ev) {
+    var inputRow = document.getElementById("web-board-chat-input-row");
+    if (inputRow && inputRow.contains(ev.target)) return;
+    openBoardChatZoomModal();
+  });
+}
+if ($("btn-web-board-chat-zoom-close")) {
+  $("btn-web-board-chat-zoom-close").addEventListener("click", function () {
+    closeBoardChatZoomModal();
+  });
+}
+var zoomOverlayEl = document.getElementById("web-board-chat-zoom-overlay");
+if (zoomOverlayEl) {
+  zoomOverlayEl.addEventListener("click", function (ev) {
+    if (ev.target === zoomOverlayEl) {
+      closeBoardChatZoomModal();
+    }
+  });
+}
+window.addEventListener("keydown", function (ev) {
+  if (ev.key === "Escape") {
+    var overlay = document.getElementById("web-board-chat-zoom-overlay");
+    if (overlay && overlay.style.display !== "none") {
+      closeBoardChatZoomModal();
+    }
+  }
+});
+if ($("btn-web-board-chat-zoom-help")) {
+  $("btn-web-board-chat-zoom-help").addEventListener("click", function () {
+    sendOnlineRoomChatMessage("@bot help", "ALL");
+  });
+}
+if ($("btn-web-board-chat-zoom-eval")) {
+  $("btn-web-board-chat-zoom-eval").addEventListener("click", function () {
+    sendOnlineRoomChatMessage("@bot eval", "ALL");
+  });
+}
+if ($("btn-web-board-chat-zoom-stats")) {
+  $("btn-web-board-chat-zoom-stats").addEventListener("click", function () {
+    sendOnlineRoomChatMessage("@bot stats", "ALL");
+  });
+}
+if ($("btn-web-board-chat-zoom-send")) {
+  $("btn-web-board-chat-zoom-send").addEventListener("click", function () {
+    var inp = $("web-board-chat-zoom-input");
+    var scopeSel = $("web-board-chat-zoom-scope");
+    if (!inp) return;
+    var txt = inp.value;
+    var sc = scopeSel ? scopeSel.value : "ALL";
+    inp.value = "";
+    sendOnlineRoomChatMessage(txt, sc);
+  });
+}
+if ($("web-board-chat-zoom-input")) {
+  $("web-board-chat-zoom-input").addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if ($("btn-web-board-chat-zoom-send")) $("btn-web-board-chat-zoom-send").click();
+    }
+  });
+}
+
+if ($("btn-web-board-chat-send")) {
+  $("btn-web-board-chat-send").addEventListener("click", function () {
+    var inp = $("web-board-chat-input");
+    var scopeSel = $("web-board-chat-scope");
+    if (!inp) return;
+    var txt = inp.value;
+    var sc = scopeSel ? scopeSel.value : "ALL";
+    inp.value = "";
+    sendOnlineRoomChatMessage(txt, sc);
+  });
+}
+if ($("web-board-chat-input")) {
+  $("web-board-chat-input").addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if ($("btn-web-board-chat-send")) $("btn-web-board-chat-send").click();
+    }
+  });
+}
+if ($("btn-web-leave-table")) {
+  $("btn-web-leave-table").addEventListener("click", function () {
+    var rid = activeOnlineGameId || currentMyTableRoomId;
+    stopOnlineGameSync();
+    if (rid) {
+      leaveTableById(rid);
+    }
+    if (subtabOnline) subtabOnline.click();
+  });
+}
+if ($("btn-web-back-lobby")) {
+  $("btn-web-back-lobby").addEventListener("click", function () {
+    stopOnlineGameSync();
+    if (subtabOnline) subtabOnline.click();
+  });
 }
 
 // Wire initial start match summary on page load
@@ -9616,12 +10448,20 @@ function refreshLobbyTables() {
               $("web-online-notice").textContent = "Joined table " + roomId + ".";
             }
             refreshLobbyTables();
+            openOnlineTableBoard(roomId);
           }).catch(function (e) { alert("Failed to join: " + e.message); });
         });
         tdAct.appendChild(joinBtn);
       }
 
       if (currentUser && amSeatedHere) {
+        var openBtn = el("button", "Open Board", "btn btn-primary");
+        openBtn.style.marginRight = "6px";
+        openBtn.addEventListener("click", function () {
+          openOnlineTableBoard(roomId);
+        });
+        tdAct.appendChild(openBtn);
+
         var leaveBtn = el("button", "Leave Table", "btn");
         leaveBtn.style.marginRight = "6px";
         leaveBtn.style.borderColor = "#dc2626";
@@ -9640,6 +10480,7 @@ function refreshLobbyTables() {
           clear(roomLog);
           roomLog.appendChild(el("div", "Observing table " + roomId));
           refreshLobbyTables();
+          openOnlineTableBoard(roomId);
         }).catch(function (e) { alert("Failed to observe: " + e.message); });
       });
       tdAct.appendChild(obsBtn);

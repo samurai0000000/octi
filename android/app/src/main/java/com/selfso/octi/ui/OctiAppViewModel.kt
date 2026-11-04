@@ -328,6 +328,12 @@ class OctiAppViewModel @JvmOverloads constructor(
     private val _botDifficulty = MutableStateFlow(OctiBotEngine.BotDifficulty.TACTICAL)
     val botDifficulty: StateFlow<OctiBotEngine.BotDifficulty> = _botDifficulty.asStateFlow()
 
+    private val _botPlayStyle = MutableStateFlow("Tactical")
+    val botPlayStyle: StateFlow<String> = _botPlayStyle.asStateFlow()
+
+    private val _botTimeBudgetMs = MutableStateFlow(1500L)
+    val botTimeBudgetMs: StateFlow<Long> = _botTimeBudgetMs.asStateFlow()
+
     private val _humanSeat = MutableStateFlow(OctiPlayer.PLAYER_A)
     val humanSeat: StateFlow<OctiPlayer> = _humanSeat.asStateFlow()
 
@@ -493,6 +499,12 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     private val _showCreateTableDialog = MutableStateFlow(false)
     val showCreateTableDialog: StateFlow<Boolean> = _showCreateTableDialog.asStateFlow()
+
+    private val _showBoardChatZoomDialog = MutableStateFlow(false)
+    val showBoardChatZoomDialog: StateFlow<Boolean> = _showBoardChatZoomDialog.asStateFlow()
+
+    private var _lastSubmittedOnlinePly: Int = 0
+    fun lastSubmittedOnlinePly(): Int = _lastSubmittedOnlinePly
 
     data class CapturePromptData(val jumpedX: Int, val jumpedY: Int, val player: OctiPlayer)
 
@@ -927,6 +939,10 @@ class OctiAppViewModel @JvmOverloads constructor(
         _showCreateTableDialog.value = visible
     }
 
+    fun setShowBoardChatZoomDialog(show: Boolean) {
+        _showBoardChatZoomDialog.value = show
+    }
+
     fun setTheme(newTheme: OctiThemeId) {
         _theme.value = newTheme
         configStore.preferences().setTheme(newTheme)
@@ -1019,7 +1035,29 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     fun setBotDifficulty(difficulty: OctiBotEngine.BotDifficulty) {
         _botDifficulty.value = difficulty
+        _botPlayStyle.value = difficulty.name.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase() }
         botEngine.setDifficulty(difficulty)
+        _botTimeBudgetMs.value = botEngine.timeBudgetMs.toLong()
+    }
+
+    fun isInteractiveOnlineTurn(): Boolean {
+        if (_matchType.value != MatchType.ONLINE_ROOM) {
+            return true
+        }
+        val gv = _activeGameView.value ?: return false
+        if (gv.phase != "IN_PROGRESS") {
+            return false
+        }
+        val currentTurn = board.game?.turn ?: return false
+        return currentTurn.value == gv.viewerSeat
+    }
+
+    fun setOnlineMatchForTest(roomId: String, gv: OctiNetworkClient.GameViewData?) {
+        _matchType.value = MatchType.ONLINE_ROOM
+        _activeRoomId.value = roomId
+        if (gv != null) {
+            applyGameViewToBoard(gv)
+        }
     }
 
     /* ================================================================== */
@@ -1053,12 +1091,15 @@ class OctiAppViewModel @JvmOverloads constructor(
             composer.setMoveEntireMatchingStack(_moveEntireMatchingStack.value)
             _matchType.value = if (vsBot) MatchType.LOCAL_VS_BOT else MatchType.LOCAL_PASS_AND_PLAY
             _botDifficulty.value = difficulty
+            _botPlayStyle.value = difficulty.name.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase() }
             botEngine.setDifficulty(difficulty)
+            _botTimeBudgetMs.value = botEngine.timeBudgetMs.toLong()
             _humanSeat.value = humanPlayer
 
             _fenHistory.clear()
             _moveHistory.clear()
             _fenHistory.add(initialFen)
+            _lastSubmittedOnlinePly = 0
         }
         _viewingPly.value = 0
         clearLastMoveIndicators()
@@ -1852,6 +1893,26 @@ class OctiAppViewModel @JvmOverloads constructor(
                 soundSynth.triggerCue(OctiSoundSynth.SoundCue.POD_STEP)
             }
             syncRotationToActiveSeat()
+            if (_matchType.value == MatchType.ONLINE_ROOM && _activeRoomId.value.isNotEmpty() && !composer.hasActiveTurn && livePlyCount() > _lastSubmittedOnlinePly) {
+                val moveList = board.game?.moveHistory ?: emptyList()
+                val lastMoveStr = moveList.lastOrNull()?.asString() ?: ""
+                _lastSubmittedOnlinePly = livePlyCount()
+                if (lastMoveStr.isNotEmpty()) {
+                    if (isMainThread()) {
+                        _backgroundExecutor.submit {
+                            val res = submitOnlineMove(lastMoveStr)
+                            if (!res.ok) {
+                                refreshActiveGameView()
+                            }
+                        }
+                    } else {
+                        val res = submitOnlineMove(lastMoveStr)
+                        if (!res.ok) {
+                            refreshActiveGameView()
+                        }
+                    }
+                }
+            }
             if (!composer.isAwaitingConfirmation()) {
                 executeBotTurnIfNeeded()
             }
@@ -2877,6 +2938,7 @@ class OctiAppViewModel @JvmOverloads constructor(
                 _activeRoomId.value = ""
                 _activeGameView.value = null
                 _gameChatLog.value = emptyList()
+                _lastSubmittedOnlinePly = 0
                 if (_matchType.value == MatchType.ONLINE_ROOM &&
                     (prevPhase == "WAITING_FOR_PLAYERS" || !board.game.isGameStarted || board.game.isGameOver)
                 ) {
@@ -2954,9 +3016,14 @@ class OctiAppViewModel @JvmOverloads constructor(
         return res
     }
 
+    fun applyGameView(gv: OctiNetworkClient.GameViewData) {
+        applyGameViewToBoard(gv)
+    }
+
     private fun applyGameViewToBoard(gv: OctiNetworkClient.GameViewData) {
         val prevPhase = _activeGameView.value?.phase
         _activeGameView.value = gv
+        _lastSubmittedOnlinePly = gv.moves.size
         if (gv.phase == "IN_PROGRESS" && prevPhase == "WAITING_FOR_PLAYERS") {
             _currentTab.value = AppTab.BOARD
             _statusBanner.value = "Match #${gv.roomId} started!"
@@ -3021,14 +3088,79 @@ class OctiAppViewModel @JvmOverloads constructor(
             refreshActiveGameView()
         } else {
             _statusBanner.value = "Move rejected: ${res.errorMessage}"
+            refreshActiveGameView()
         }
         return res
+    }
+
+    fun sendBoardChatMessage(
+        scope: String,
+        text: String
+    ): OctiNetworkClient.ApiResult<Long> {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) {
+            val res = OctiNetworkClient.ApiResult<Long>(0L)
+            res.ok = false
+            return res
+        }
+        if (_matchType.value == MatchType.LOCAL_VS_BOT || _matchType.value == MatchType.LOCAL_PASS_AND_PLAY) {
+            val handle = _currentProfile.value?.handle?.ifEmpty { "You" } ?: "You"
+            val myUuid = _currentProfile.value?.uuid ?: ""
+            val userMsg = GameChatMessage(
+                seq = System.currentTimeMillis(),
+                scope = scope,
+                senderUuid = myUuid,
+                senderHandle = handle,
+                seat = 1,
+                text = text,
+                atMs = System.currentTimeMillis()
+            )
+            val updated = ArrayList(_gameChatLog.value)
+            updated.add(userMsg)
+            val lower = trimmed.lowercase(Locale.ROOT)
+            if (lower.startsWith("@bot") || lower.startsWith("@stock")) {
+                val botReplyText = when {
+                    lower.contains("help") -> "Bot commands: @bot help, @bot eval, @bot stats"
+                    lower.contains("eval") -> {
+                        val evalScore = OctiBotEngine.evaluatePosition(board, board.game?.turn ?: OctiPlayer.PLAYER_A)
+                        "Position eval score: $evalScore"
+                    }
+                    lower.contains("stats") -> "Local AI Bot (mode=${_botPlayStyle.value}, timeBudget=${_botTimeBudgetMs.value}ms)"
+                    else -> "Bot commands: @bot help, @bot eval, @bot stats"
+                }
+                val botMsg = GameChatMessage(
+                    seq = System.currentTimeMillis() + 1,
+                    scope = scope,
+                    senderUuid = "bot",
+                    senderHandle = "bot",
+                    seat = 2,
+                    text = botReplyText,
+                    atMs = System.currentTimeMillis()
+                )
+                updated.add(botMsg)
+            }
+            _gameChatLog.value = updated
+            val res = OctiNetworkClient.ApiResult(1L)
+            res.ok = true
+            return res
+        }
+        return sendGameChat(scope, text)
     }
 
     fun sendGameChat(
         scope: String,
         text: String
     ): OctiNetworkClient.ApiResult<Long> {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) {
+            val res = OctiNetworkClient.ApiResult<Long>(0L)
+            res.ok = false
+            return res
+        }
+        val lower = trimmed.lowercase(Locale.ROOT)
+        if (_matchType.value == MatchType.LOCAL_VS_BOT && (lower.startsWith("@bot") || lower.startsWith("@stock"))) {
+            return sendBoardChatMessage(scope, text)
+        }
         if (!netClient.isAuthenticated) {
             val res = OctiNetworkClient.ApiResult<Long>(0L)
             res.ok = false
@@ -3038,7 +3170,26 @@ class OctiAppViewModel @JvmOverloads constructor(
             return res
         }
         val roomId = _activeRoomId.value
-        return netClient.postGameChat(roomId, scope, text)
+        val res = netClient.postGameChat(roomId, scope, text)
+        if (res.ok) {
+            val handle = _currentProfile.value?.handle?.ifEmpty { "You" } ?: "You"
+            val myUuid = _currentProfile.value?.uuid ?: ""
+            val userMsg = GameChatMessage(
+                seq = res.data ?: System.currentTimeMillis(),
+                scope = scope,
+                senderUuid = myUuid,
+                senderHandle = handle,
+                seat = _activeGameView.value?.viewerSeat ?: 1,
+                text = text,
+                atMs = System.currentTimeMillis()
+            )
+            val updated = ArrayList(_gameChatLog.value)
+            if (updated.none { it.seq == userMsg.seq && it.text == userMsg.text }) {
+                updated.add(userMsg)
+                _gameChatLog.value = updated
+            }
+        }
+        return res
     }
 
     fun sendGameChat(text: String): OctiNetworkClient.ApiResult<Long> {

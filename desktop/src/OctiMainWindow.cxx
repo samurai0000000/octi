@@ -27,6 +27,7 @@
 #include <QMenuBar>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QScrollBar>
 #include <QShortcut>
 #include <QSysInfo>
 #include <QVBoxLayout>
@@ -414,28 +415,39 @@ OctiMainWindow::OctiMainWindow(
     /* ---- Right Side Panel (Move History / VCR, Proposals, Chat, PTT Voice) ---- */
     QWidget *rightSide = new QWidget(_boardPage);
     _rightSide = rightSide;
-    rightSide->setMinimumWidth(330);
-    rightSide->setMaximumWidth(390);
+    rightSide->setMinimumWidth(340);
+    rightSide->setMaximumWidth(400);
     QVBoxLayout *rightLayout = new QVBoxLayout(rightSide);
     _rightLayout = rightLayout;
     rightLayout->setContentsMargins(0, 0, 0, 0);
-    rightLayout->setSpacing(8);
+    rightLayout->setSpacing(6);
+
+    /* ---- Top Half: Status, Proposals, Move History, Actions ---- */
+    _rightTopHalfWidget = new QWidget(rightSide);
+    _rightTopHalfWidget->setObjectName("rightTopHalfWidget");
+    QVBoxLayout *topHalfLayout = new QVBoxLayout(_rightTopHalfWidget);
+    topHalfLayout->setContentsMargins(0, 0, 0, 0);
+    topHalfLayout->setSpacing(6);
 
     /* 0. Match Status Card (PCE-D06 / PCE-D09) */
-    QGroupBox *statusBox = new QGroupBox("Match Status", rightSide);
+    QGroupBox *statusBox = new QGroupBox("Match Status", _rightTopHalfWidget);
     _statusBox = statusBox;
     QVBoxLayout *statusLayout = new QVBoxLayout(statusBox);
+    statusLayout->setContentsMargins(8, 8, 8, 8);
+    statusLayout->setSpacing(4);
     _matchModeLabel = new QLabel("Local vs AI Bot", statusBox);
     _matchTurnStatusLabel = new QLabel("Active Turn: Player A", statusBox);
     _matchTurnStatusLabel->setStyleSheet("font-size: 13px; font-weight: bold;");
     _matchTurnStatusLabel->setWordWrap(true);
     statusLayout->addWidget(_matchModeLabel);
     statusLayout->addWidget(_matchTurnStatusLabel);
-    rightLayout->addWidget(statusBox);
+    topHalfLayout->addWidget(statusBox);
 
     /* 0b. Online Waiting-Room Banner (shown when phase == WAITING_FOR_PLAYERS) */
-    _waitingRoomBannerWidget = new QGroupBox("Waiting for Players", rightSide);
+    _waitingRoomBannerWidget = new QGroupBox("Waiting for Players", _rightTopHalfWidget);
     QVBoxLayout *waitLayout = new QVBoxLayout(_waitingRoomBannerWidget);
+    waitLayout->setContentsMargins(8, 8, 8, 8);
+    waitLayout->setSpacing(4);
     _waitingRoomBannerLabel = new QLabel(
         "Waiting for opponents to join this table...",
         _waitingRoomBannerWidget);
@@ -448,12 +460,14 @@ OctiMainWindow::OctiMainWindow(
     waitBtnRow->addWidget(_leaveWaitingTableBtn);
     waitLayout->addLayout(waitBtnRow);
     _waitingRoomBannerWidget->setVisible(false);
-    rightLayout->addWidget(_waitingRoomBannerWidget);
+    topHalfLayout->addWidget(_waitingRoomBannerWidget);
 
     /* 1. Move History & VCR Replay */
-    QGroupBox *historyBox = new QGroupBox("Move History • VCR Replay", rightSide);
+    QGroupBox *historyBox = new QGroupBox("Move History • VCR Replay", _rightTopHalfWidget);
     _historyBox = historyBox;
     QVBoxLayout *histLayout = new QVBoxLayout(historyBox);
+    histLayout->setContentsMargins(8, 8, 8, 8);
+    histLayout->setSpacing(4);
     _moveHistoryList = new QListWidget(historyBox);
     _moveHistoryList->setSelectionMode(QAbstractItemView::ExtendedSelection);
     histLayout->addWidget(_moveHistoryList, 1);
@@ -501,11 +515,13 @@ OctiMainWindow::OctiMainWindow(
     _fenStatusLabel->setTextInteractionFlags(
         Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
     _fenStatusLabel->setVisible(false);
-    rightLayout->addWidget(historyBox, 2);
+    topHalfLayout->addWidget(historyBox, 1);
 
     /* 2. Active Proposal Banner & Game Action Buttons */
-    _proposalBannerWidget = new QGroupBox("Pending Proposal", rightSide);
+    _proposalBannerWidget = new QGroupBox("Pending Proposal", _rightTopHalfWidget);
     QVBoxLayout *propLayout = new QVBoxLayout(_proposalBannerWidget);
+    propLayout->setContentsMargins(8, 8, 8, 8);
+    propLayout->setSpacing(4);
     _proposalBannerLabel = new QLabel("No active proposal.", _proposalBannerWidget);
     _proposalBannerLabel->setWordWrap(true);
     propLayout->addWidget(_proposalBannerLabel);
@@ -516,11 +532,13 @@ OctiMainWindow::OctiMainWindow(
     propRespRow->addWidget(_declineProposalBtn);
     propLayout->addLayout(propRespRow);
     _proposalBannerWidget->setVisible(false);
-    rightLayout->addWidget(_proposalBannerWidget);
+    topHalfLayout->addWidget(_proposalBannerWidget);
 
-    QGroupBox *actionsBox = new QGroupBox("Match Actions", rightSide);
+    QGroupBox *actionsBox = new QGroupBox("Match Actions", _rightTopHalfWidget);
     _actionsBox = actionsBox;
     QVBoxLayout *actLayout = new QVBoxLayout(actionsBox);
+    actLayout->setContentsMargins(8, 8, 8, 8);
+    actLayout->setSpacing(4);
     QHBoxLayout *actRow1 = new QHBoxLayout();
     _sidebarNewGameBtn = new QPushButton("New Game...", actionsBox);
     _offerDrawBtn = new QPushButton("Offer Draw", actionsBox);
@@ -542,14 +560,46 @@ OctiMainWindow::OctiMainWindow(
     actRow2->addWidget(_leaveTableBtn);
     actRow2->addWidget(_moderationBtn);
     actLayout->addLayout(actRow2);
-    rightLayout->addWidget(actionsBox);
+    topHalfLayout->addWidget(actionsBox);
 
-    /* 3. Board Chat Widget */
+    rightLayout->addWidget(_rightTopHalfWidget, 1);
+
+    /* ---- Bottom Half: Table Chat (Always Visible) & Integrated Voice Strip ---- */
     QGroupBox *chatBox = new QGroupBox("Table Chat", rightSide);
+    chatBox->setObjectName("chatBox");
     _chatBox = chatBox;
     QVBoxLayout *chatLayout = new QVBoxLayout(chatBox);
+    chatLayout->setContentsMargins(8, 8, 8, 8);
+    chatLayout->setSpacing(6);
+
+    // Header row inside chatBox: P2P Voice controls + Zoom button
+    QHBoxLayout *chatHeaderRow = new QHBoxLayout();
+    _voiceBox = new QWidget(chatBox);
+    QHBoxLayout *vLayout = new QHBoxLayout(_voiceBox);
+    vLayout->setContentsMargins(0, 0, 0, 0);
+    vLayout->setSpacing(4);
+    _voiceStatusLabel = new QLabel("Voice: Disconnected", _voiceBox);
+    _joinLeaveVoiceBtn = new QPushButton("Join Voice", _voiceBox);
+    _holdToTalkBtn = new QPushButton("Hold to Talk [V]", _voiceBox);
+    vLayout->addWidget(_voiceStatusLabel);
+    vLayout->addWidget(_joinLeaveVoiceBtn);
+    vLayout->addWidget(_holdToTalkBtn);
+    _voiceBox->setVisible(false); // Only visible when online
+    chatHeaderRow->addWidget(_voiceBox, 1);
+
+    _zoomChatBtn = new QPushButton("Zoom ⤢", chatBox);
+    _zoomChatBtn->setObjectName("zoomChatBtn");
+    _zoomChatBtn->setStyleSheet(
+        "QPushButton { background: #21262D; color: #C8A253; border: 1px solid #30363D; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: bold; }"
+        "QPushButton:hover { background: #30363D; color: #F0F6FC; }"
+    );
+    chatHeaderRow->addWidget(_zoomChatBtn, 0, Qt::AlignRight);
+    chatLayout->addLayout(chatHeaderRow);
+
     _gameChatTranscript = new QPlainTextEdit(chatBox);
     _gameChatTranscript->setReadOnly(true);
+    _gameChatTranscript->setMaximumBlockCount(200);
+    _gameChatTranscript->viewport()->installEventFilter(this);
     chatLayout->addWidget(_gameChatTranscript, 1);
 
     QHBoxLayout *chatInputRow = new QHBoxLayout();
@@ -557,27 +607,14 @@ OctiMainWindow::OctiMainWindow(
     _chatScopeCombo->addItem("ALL", "ALL");
     _chatScopeCombo->addItem("TEAM", "TEAM");
     _gameChatInput = new QLineEdit(chatBox);
-    _gameChatInput->setPlaceholderText("Send board message...");
+    _gameChatInput->setPlaceholderText("Send board message (@bot help)...");
     _sendGameChatBtn = new QPushButton("Send", chatBox);
     chatInputRow->addWidget(_chatScopeCombo);
     chatInputRow->addWidget(_gameChatInput, 1);
     chatInputRow->addWidget(_sendGameChatBtn);
     chatLayout->addLayout(chatInputRow);
-    rightLayout->addWidget(chatBox, 2);
 
-    /* 4. Push-to-Talk Voice Control Bar */
-    QGroupBox *voiceBox = new QGroupBox("Push-to-Talk P2P Voice", rightSide);
-    _voiceBox = voiceBox;
-    QVBoxLayout *vLayout = new QVBoxLayout(voiceBox);
-    _voiceStatusLabel = new QLabel("Voice: Disconnected (Strict PTT)", voiceBox);
-    vLayout->addWidget(_voiceStatusLabel);
-    QHBoxLayout *vBtnRow = new QHBoxLayout();
-    _joinLeaveVoiceBtn = new QPushButton("Join Voice", voiceBox);
-    _holdToTalkBtn = new QPushButton("Hold to Talk [V]", voiceBox);
-    vBtnRow->addWidget(_joinLeaveVoiceBtn);
-    vBtnRow->addWidget(_holdToTalkBtn);
-    vLayout->addLayout(vBtnRow);
-    rightLayout->addWidget(voiceBox);
+    rightLayout->addWidget(chatBox, 1);
 
     boardLayout->addWidget(_reservePanel);
     boardLayout->addWidget(_boardCanvas, 1);
@@ -728,6 +765,10 @@ OctiMainWindow::OctiMainWindow(
             dlg.exec();
             refreshOnlineGameView();
         }
+    });
+
+    QObject::connect(_zoomChatBtn, &QPushButton::clicked, [this]() {
+        openBoardChatZoomDialog();
     });
 
     QObject::connect(_sendGameChatBtn, &QPushButton::clicked, [this]() {
@@ -1592,14 +1633,15 @@ void OctiMainWindow::updateStartMatchOverlay()
 
 QRect OctiMainWindow::rightPanelTopWidgetGeometry() const
 {
+    if (_rightSide && _statusBox) {
+        QPoint pt = _statusBox->mapTo(_rightSide, QPoint(0, 0));
+        return QRect(pt, _statusBox->size());
+    }
     return _statusBox ? _statusBox->geometry() : QRect();
 }
 
 QRect OctiMainWindow::rightPanelBottomWidgetGeometry() const
 {
-    if (_voiceBox && !_voiceBox->isHidden()) {
-        return _voiceBox->geometry();
-    }
     if (_chatBox && !_chatBox->isHidden()) {
         return _chatBox->geometry();
     }
@@ -2023,6 +2065,25 @@ int OctiMainWindow::onlineViewerSeat() const
     return _onlineViewerSeat;
 }
 
+bool OctiMainWindow::isInteractiveOnlineTurn() const
+{
+    if (!_inOnlineRoom) {
+        return true;
+    }
+    if (_onlineGameView.phase != "IN_PROGRESS") {
+        return false;
+    }
+    if (_onlineViewerSeat >= 1 && _onlineViewerSeat <= 4 &&
+        _onlineGameView.turnSeat == _onlineViewerSeat) {
+        return true;
+    }
+    if (_board.getGame() &&
+        static_cast<int>(_board.getGame()->getTurn()) == _onlineViewerSeat) {
+        return true;
+    }
+    return false;
+}
+
 const GameViewData &OctiMainWindow::currentOnlineGameView() const
 {
     return _onlineGameView;
@@ -2091,6 +2152,7 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
         g->getBases() != targetBases ||
         g->useSuperProngs() != view.superProngs ||
         g->useEdgelessBoard() != view.edgeless ||
+        g->getNumMoves() != static_cast<int>(_appliedOnlineMoves.size()) ||
         view.moves.size() < _appliedOnlineMoves.size();
 
     if (!needFullRebuild) {
@@ -2262,10 +2324,15 @@ void OctiMainWindow::handleLocalOrOnlineMoveCommitted(
     }
 
     if (_inOnlineRoom && !_onlineRoomId.empty() && _netClient) {
+        if (!isInteractiveOnlineTurn()) {
+            _appliedOnlineMoves.clear();
+            refreshOnlineGameView();
+            return;
+        }
         _appliedOnlineMoves.push_back(moveNotation);
         auto res = _netClient->submitMove(_onlineRoomId, moveNotation);
         if (!res.ok) {
-            _appliedOnlineMoves.pop_back();
+            _appliedOnlineMoves.clear();
             if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
                 showProtocolUpgradeRequired(res.errorMessage);
             }
@@ -2301,6 +2368,128 @@ void OctiMainWindow::handleLocalOrOnlineMoveCommitted(
 
 /* ---- Board Chat & Mutual Proposals ---- */
 
+void OctiMainWindow::openBoardChatZoomDialog()
+{
+    if (_boardChatZoomDialog) {
+        _boardChatZoomDialog->show();
+        _boardChatZoomDialog->raise();
+        _boardChatZoomDialog->activateWindow();
+        return;
+    }
+
+    QDialog *dlg = new QDialog(this, Qt::Dialog | Qt::FramelessWindowHint);
+    dlg->setObjectName("boardChatZoomDialog");
+    dlg->setMinimumSize(540, 420);
+    dlg->resize(560, 440);
+    dlg->setStyleSheet(
+        "QDialog#boardChatZoomDialog {"
+        "  background-color: #161D26;"
+        "  border: 2px solid #C8A253;"
+        "  border-radius: 8px;"
+        "}"
+    );
+
+    QVBoxLayout *layout = new QVBoxLayout(dlg);
+    layout->setContentsMargins(12, 12, 12, 12);
+    layout->setSpacing(8);
+
+    // Header bar
+    QHBoxLayout *headerRow = new QHBoxLayout();
+    QLabel *titleLabel = new QLabel("Table Chat", dlg);
+    titleLabel->setStyleSheet("color: #E6EDF3; font-size: 14px; font-weight: bold;");
+    headerRow->addWidget(titleLabel);
+
+    headerRow->addStretch();
+
+    // Quick bot command buttons
+    QPushButton *btnBotHelp = new QPushButton("@bot help", dlg);
+    QPushButton *btnBotEval = new QPushButton("@bot eval", dlg);
+    QPushButton *btnBotStats = new QPushButton("@bot stats", dlg);
+    QPushButton *btnClose = new QPushButton("Close [Esc]", dlg);
+
+    QString pillStyle = "QPushButton { background: #21262D; color: #C8A253; border: 1px solid #30363D; border-radius: 4px; padding: 2px 8px; font-size: 11px; }"
+                        "QPushButton:hover { background: #30363D; color: #F0F6FC; }";
+    btnBotHelp->setStyleSheet(pillStyle);
+    btnBotEval->setStyleSheet(pillStyle);
+    btnBotStats->setStyleSheet(pillStyle);
+    btnClose->setStyleSheet("QPushButton { background: #30363D; color: #F0F6FC; border-radius: 4px; padding: 2px 8px; font-size: 11px; }"
+                            "QPushButton:hover { background: #8B0000; }");
+
+    headerRow->addWidget(btnBotHelp);
+    headerRow->addWidget(btnBotEval);
+    headerRow->addWidget(btnBotStats);
+    headerRow->addWidget(btnClose);
+    layout->addLayout(headerRow);
+
+    // Transcript
+    QPlainTextEdit *zoomTranscript = new QPlainTextEdit(dlg);
+    zoomTranscript->setObjectName("boardChatZoomTranscript");
+    zoomTranscript->setReadOnly(true);
+    zoomTranscript->setMaximumBlockCount(500);
+    for (const auto &line : _gameChatLines) {
+        zoomTranscript->appendPlainText(QString::fromStdString(line));
+    }
+    zoomTranscript->verticalScrollBar()->setValue(zoomTranscript->verticalScrollBar()->maximum());
+    layout->addWidget(zoomTranscript, 1);
+
+    // Input row
+    QHBoxLayout *inputRow = new QHBoxLayout();
+    QComboBox *scopeCombo = new QComboBox(dlg);
+    scopeCombo->setObjectName("boardChatZoomScopeCombo");
+    scopeCombo->addItem("ALL", "ALL");
+    scopeCombo->addItem("TEAM", "TEAM");
+
+    QLineEdit *inputEdit = new QLineEdit(dlg);
+    inputEdit->setObjectName("boardChatZoomInput");
+    inputEdit->setPlaceholderText("Type a message or command (@bot help, @bot eval)...");
+
+    QPushButton *sendBtn = new QPushButton("Send", dlg);
+    sendBtn->setObjectName("boardChatZoomSendBtn");
+
+    inputRow->addWidget(scopeCombo);
+    inputRow->addWidget(inputEdit, 1);
+    inputRow->addWidget(sendBtn);
+    layout->addLayout(inputRow);
+
+    auto doSend = [this, scopeCombo, inputEdit, zoomTranscript]() {
+        QString text = inputEdit->text().trimmed();
+        if (text.isEmpty()) {
+            return;
+        }
+        std::string scope = scopeCombo->currentText().toStdString();
+        sendGameChatMessage(scope, text.toStdString());
+        inputEdit->clear();
+        zoomTranscript->clear();
+        for (const auto &line : _gameChatLines) {
+            zoomTranscript->appendPlainText(QString::fromStdString(line));
+        }
+        zoomTranscript->verticalScrollBar()->setValue(zoomTranscript->verticalScrollBar()->maximum());
+    };
+
+    QObject::connect(sendBtn, &QPushButton::clicked, dlg, doSend);
+    QObject::connect(inputEdit, &QLineEdit::returnPressed, dlg, doSend);
+
+    QObject::connect(btnBotHelp, &QPushButton::clicked, dlg, [inputEdit, doSend]() {
+        inputEdit->setText("@bot help");
+        doSend();
+    });
+    QObject::connect(btnBotEval, &QPushButton::clicked, dlg, [inputEdit, doSend]() {
+        inputEdit->setText("@bot eval");
+        doSend();
+    });
+    QObject::connect(btnBotStats, &QPushButton::clicked, dlg, [inputEdit, doSend]() {
+        inputEdit->setText("@bot stats");
+        doSend();
+    });
+    QObject::connect(btnClose, &QPushButton::clicked, dlg, &QDialog::close);
+
+    _boardChatZoomDialog = dlg;
+    dlg->show();
+    dlg->raise();
+    dlg->activateWindow();
+    inputEdit->setFocus();
+}
+
 bool OctiMainWindow::sendGameChatMessage(const std::string &scope,
                                          const std::string &text)
 {
@@ -2323,6 +2512,15 @@ bool OctiMainWindow::sendGameChatMessage(const std::string &scope,
             if (_gameChatTranscript) {
                 _gameChatTranscript->appendPlainText(
                     QString::fromStdString(line));
+                _gameChatTranscript->verticalScrollBar()->setValue(
+                    _gameChatTranscript->verticalScrollBar()->maximum());
+            }
+            if (_boardChatZoomDialog) {
+                QPlainTextEdit *zt = _boardChatZoomDialog->findChild<QPlainTextEdit *>("boardChatZoomTranscript");
+                if (zt) {
+                    zt->appendPlainText(QString::fromStdString(line));
+                    zt->verticalScrollBar()->setValue(zt->verticalScrollBar()->maximum());
+                }
             }
         }
         return true;
@@ -2332,7 +2530,47 @@ bool OctiMainWindow::sendGameChatMessage(const std::string &scope,
     _gameChatLines.push_back(line);
     if (_gameChatTranscript) {
         _gameChatTranscript->appendPlainText(QString::fromStdString(line));
+        _gameChatTranscript->verticalScrollBar()->setValue(
+            _gameChatTranscript->verticalScrollBar()->maximum());
     }
+
+    // Local bot replies for @bot commands in local mode
+    std::string lowerText = text;
+    for (char &c : lowerText) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    if (lowerText.rfind("@bot", 0) == 0 || lowerText.rfind("@stock", 0) == 0) {
+        std::string botReply;
+        if (lowerText.find("help") != std::string::npos) {
+            botReply = "[BOT] @stock: Available commands: @bot eval (evaluate position), @bot stats (robot record & tuning), @bot help";
+        } else if (lowerText.find("eval") != std::string::npos) {
+            OctiPlayer turn = _board.getGame() ? _board.getGame()->getTurn() : PLAYER_A;
+            int score = OctiBotEngine::evaluatePosition(_board, turn);
+            botReply = "[BOT] @stock: Position eval score = " + std::to_string(score) + " cp";
+        } else if (lowerText.find("stats") != std::string::npos) {
+            botReply = "[BOT] @stock: Record: 0W / 0L / 0D (Local AI Bot). Tuning: alpha-beta search, depth=6, time=1500ms.";
+        } else {
+            botReply = "[BOT] @stock: Unknown command. Type @bot help for list of commands.";
+        }
+        _gameChatLines.push_back(botReply);
+        if (_gameChatTranscript) {
+            _gameChatTranscript->appendPlainText(QString::fromStdString(botReply));
+            _gameChatTranscript->verticalScrollBar()->setValue(
+                _gameChatTranscript->verticalScrollBar()->maximum());
+        }
+    }
+
+    if (_boardChatZoomDialog) {
+        QPlainTextEdit *zt = _boardChatZoomDialog->findChild<QPlainTextEdit *>("boardChatZoomTranscript");
+        if (zt) {
+            zt->clear();
+            for (const auto &l : _gameChatLines) {
+                zt->appendPlainText(QString::fromStdString(l));
+            }
+            zt->verticalScrollBar()->setValue(zt->verticalScrollBar()->maximum());
+        }
+    }
+
     return true;
 }
 
@@ -2966,6 +3204,16 @@ void OctiMainWindow::keyReleaseEvent(QKeyEvent *event)
 
 bool OctiMainWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    if (_gameChatTranscript && watched == _gameChatTranscript->viewport() && event && event->type() == QEvent::MouseButtonRelease) {
+        QMouseEvent *me = static_cast<QMouseEvent *>(event);
+        if (me && me->button() == Qt::LeftButton) {
+            if (!_gameChatTranscript->textCursor().hasSelection()) {
+                openBoardChatZoomDialog();
+                return true;
+            }
+        }
+    }
+
     if (watched == _profileAvatarLabel && event && event->type() == QEvent::MouseButtonRelease) {
         QMouseEvent *me = static_cast<QMouseEvent *>(event);
         if (me && me->button() == Qt::LeftButton) {
@@ -3132,7 +3380,7 @@ void OctiMainWindow::updateMatchActionsVisibility()
         _moderationBtn->setVisible(online);
     }
     if (_chatBox) {
-        _chatBox->setVisible(online);
+        _chatBox->setVisible(true);
     }
     if (_voiceBox) {
         _voiceBox->setVisible(online);
