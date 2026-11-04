@@ -180,6 +180,7 @@ fun LobbyScreen(
     var joinPasscodeTargetTable by remember { mutableStateOf<OctiNetworkClient.TableSummaryInfo?>(null) }
     var joinPasscodeInput by remember { mutableStateOf("") }
     var expandedPlayerUuid by remember { mutableStateOf<String?>(null) }
+    var purgeConfirmTableId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -237,6 +238,32 @@ fun LobbyScreen(
         } else {
             lobbyState.tables.filter { it.mode.equals(selectedFilterMode, ignoreCase = true) }
         }
+    }
+
+    purgeConfirmTableId?.let { roomId ->
+        AlertDialog(
+            onDismissRequest = { purgeConfirmTableId = null },
+            containerColor = OctiTheme.colors.panelCardBg,
+            titleContentColor = OctiTheme.colors.accentBrass,
+            title = { Text("Purge Table") },
+            text = { Text("Are you sure you want to permanently purge table #$roomId? All players will be disconnected and the table removed immediately.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.purgeTable(roomId)
+                        purgeConfirmTableId = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Purge")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { purgeConfirmTableId = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     Column(
@@ -526,7 +553,13 @@ fun LobbyScreen(
                             val isSeatedHere = isUserSeatedInTable(t) ||
                                 (activeRoomId.isNotEmpty() && t.roomId == activeRoomId)
                             val isOpenPhase = t.phase == "WAITING_FOR_PLAYERS"
-                            val badgeText = if (isOpenPhase) "OPEN" else "IN PROGRESS"
+                            val ttlStr = if (t.ttlRemainingMs >= 0) {
+                                val totalSec = t.ttlRemainingMs / 1000
+                                val mm = totalSec / 60
+                                val ss = totalSec % 60
+                                " [TTL %02d:%02d]".format(mm, ss)
+                            } else ""
+                            val badgeText = (if (isOpenPhase) "OPEN" else "IN PROGRESS") + ttlStr
                             val badgeColor = if (isOpenPhase) Color(0xFF2E7D32) else Color(0xFFF57C00)
                             val tcText = t.timeControl.ifEmpty { "10+5" }
 
@@ -664,6 +697,17 @@ fun LobbyScreen(
                                             enabled = isAuthenticated || !t.hasPasscode
                                         ) {
                                             Text("Observe")
+                                        }
+                                        if (profile?.isAdmin == true) {
+                                            Button(
+                                                onClick = { purgeConfirmTableId = t.roomId },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = MaterialTheme.colorScheme.error,
+                                                    contentColor = Color.White
+                                                )
+                                            ) {
+                                                Text("Purge")
+                                            }
                                         }
                                     }
                                 }

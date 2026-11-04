@@ -162,7 +162,7 @@ nav button.on:hover, .btn.btn-primary:hover {
 #nav-auth-pill:hover {
   background: #dbeafe;
 }
-main { max-width: 1260px; margin: 0 auto; padding: 20px 16px 40px 16px; }
+main { max-width: 1420px; margin: 0 auto; padding: 20px 16px 40px 16px; }
 section.tab { display: none; }
 section.tab.on { display: block; }
 .panel {
@@ -466,26 +466,29 @@ tr.active-ply {
 .web-tabletop-wrap {
   display: flex;
   flex-direction: row;
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 20px;
   margin: 12px auto;
   width: 100%;
   max-width: 1380px;
 }
 #web-play-reserves-col {
-  width: 250px;
-  flex: 0 0 250px;
+  width: 300px;
+  flex: 0 0 300px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 12px;
 }
 #web-play-board-wrap {
-  flex: 0 1 760px;
-  width: 100%;
-  max-width: 760px;
+  flex: 0 0 auto;
+  width: min(680px, calc(100% - 640px));
+  min-width: 320px;
   aspect-ratio: 1 / 1;
+  height: auto;
+  align-self: center;
+  margin: 0;
   position: relative;
   background: #0B0F17;
   border-radius: 14px;
@@ -502,9 +505,9 @@ tr.active-ply {
   border-radius: 14px;
 }
 #web-play-side-col {
-  width: 320px;
-  flex: 0 0 320px;
-  height: 760px;
+  width: 300px;
+  flex: 0 0 300px;
+  height: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1288,6 +1291,7 @@ tr.active-ply {
             <div class="panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;color:#F8FAFC;">
               <div id="web-play-online-status-bar" style="display:none;align-items:center;justify-content:space-between;background:#1E293B;border:1px solid #334155;border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:12px;">
                 <strong id="web-play-online-table-title" style="color:#38BDF8;">Online Table</strong>
+                <span id="web-play-online-ttl-badge" class="badge" style="background:#0F172A;color:#FDE047;border:1px solid #C8A253;font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px;" title="60-minute move-inactivity table countdown">Idle TTL: 60:00</span>
                 <span id="web-play-online-role-badge" class="badge" style="background:#0F172A;color:#E2E8F0;font-size:11px;">Observer</span>
               </div>
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
@@ -1338,6 +1342,7 @@ tr.active-ply {
               <div id="web-online-table-actions" style="display:none;margin-top:6px;" class="row">
                 <button type="button" class="btn" id="btn-web-leave-table" style="flex:1;border-color:#dc2626;color:#dc2626;padding:6px 8px;font-size:12px;">Leave Table</button>
                 <button type="button" class="btn" id="btn-web-back-lobby" style="flex:1;padding:6px 8px;font-size:12px;">Back to Lobby</button>
+                <button type="button" class="btn" id="btn-web-purge-table" style="display:none;flex:1;background:#dc2626;border-color:#b91c1c;color:#ffffff;padding:6px 8px;font-size:12px;">Purge Table</button>
               </div>
             </div>
           </div>
@@ -1594,7 +1599,7 @@ tr.active-ply {
     </div>
     <div id="ar-msg" class="dim"></div>
     <table id="ar-table"><thead><tr><th>Game ID</th><th>Mode</th><th>Source</th>
-      <th>Players</th><th>Winner</th><th>Outcome</th><th>Plies</th><th>Date (UTC)</th></tr></thead>
+      <th>Players</th><th>Winner</th><th>Outcome</th><th>Plies</th><th>Date (UTC)</th><th class="web-ar-admin-col" style="display:none;">Actions</th></tr></thead>
       <tbody></tbody></table>
     <div class="row" style="margin-top:10px">
       <button type="button" class="btn" id="ar-prev">Previous</button>
@@ -1914,6 +1919,19 @@ tr.active-ply {
     <div class="row" style="justify-content:flex-end;gap:10px;margin:0;">
       <button type="button" class="btn" id="btn-web-confirm-cancel">Cancel</button>
       <button type="button" class="btn btn-primary" id="btn-web-confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+<div id="web-purge-confirm-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.65);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#ffffff;border:2px solid #dc2626;border-radius:12px;max-width:460px;width:100%;padding:22px;box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+    <h3 style="margin:0 0 10px 0;font-size:18px;color:#dc2626;display:flex;align-items:center;gap:8px;">
+      <span>&#x26A0;&#xFE0F;</span> Confirm Permanent Purge
+    </h3>
+    <p id="web-purge-confirm-text" style="margin:0 0 12px 0;font-size:14px;color:var(--fg);line-height:1.5;"></p>
+    <p style="margin:0 0 18px 0;font-size:13px;color:#dc2626;font-weight:600;">This action cannot be undone.</p>
+    <div class="row" style="justify-content:flex-end;gap:10px;margin:0;">
+      <button type="button" class="btn" id="btn-web-purge-cancel">Cancel</button>
+      <button type="button" class="btn" id="btn-web-purge-confirm" style="background:#dc2626;border-color:#b91c1c;color:#ffffff;font-weight:600;">Confirm Purge</button>
     </div>
   </div>
 </div>
@@ -2970,7 +2988,43 @@ function animationTick() {
   }
   requestAnimationFrame(animationTick);
 
+function syncWebPlayBoardSquareSize() {
+  var wrap = document.getElementById("web-play-board-wrap");
+  if (!wrap) return;
+  var resCol = document.getElementById("web-play-reserves-col");
+  var sideCol = document.getElementById("web-play-side-col");
+  if (window.innerWidth > 980) {
+    var tabletop = wrap.parentElement;
+    var availWidth = tabletop ? tabletop.clientWidth : window.innerWidth;
+    var sidePx = Math.floor(Math.max(320, Math.min(680, availWidth - 640)));
+    var pxStr = sidePx + "px";
+    if (wrap.style.width !== pxStr) wrap.style.width = pxStr;
+    if (wrap.style.height !== pxStr) wrap.style.height = pxStr;
+    if (resCol && resCol.style.height !== pxStr) resCol.style.height = pxStr;
+    if (sideCol && sideCol.style.height !== pxStr) sideCol.style.height = pxStr;
+  } else {
+    if (wrap.style.width !== "") wrap.style.width = "";
+    if (resCol && resCol.style.height !== "") resCol.style.height = "";
+    if (sideCol && sideCol.style.height !== "") sideCol.style.height = "";
+    var w = wrap.clientWidth;
+    if (w > 0) {
+      var wStr = w + "px";
+      if (wrap.style.height !== wStr) wrap.style.height = wStr;
+    } else if (wrap.style.height !== "") {
+      wrap.style.height = "";
+    }
+  }
+}
+
+function fmtTtlCountdown(ms) {
+  var totalSec = Math.max(0, Math.floor(ms / 1000));
+  var m = Math.floor(totalSec / 60);
+  var s = totalSec % 60;
+  return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+}
+
 window.addEventListener("resize", function () {
+  syncWebPlayBoardSquareSize();
   Object.keys(boardStates).forEach(function (k) {
     drawBoardState(boardStates[k]);
   });
@@ -5875,6 +5929,7 @@ function switchTab(name) {
       loadMyRobots();
     }
   } else if (name === "play") {
+    syncWebPlayBoardSquareSize();
     if (activePlayState) {
       renderPlayBoardCanvas();
       renderAllWebReserves();
@@ -6291,6 +6346,48 @@ if ($("btn-web-confirm-ok")) {
   });
 }
 
+var pendingPurgeConfirmFn = null;
+
+function closePurgeConfirmModal() {
+  var modal = $("web-purge-confirm-modal");
+  if (modal) modal.style.display = "none";
+  pendingPurgeConfirmFn = null;
+}
+
+function openPurgeConfirmModal(descriptionText, onConfirmCallback) {
+  var modal = $("web-purge-confirm-modal");
+  var textEl = $("web-purge-confirm-text");
+  if (!modal || !textEl) {
+    if (typeof onConfirmCallback === "function") onConfirmCallback();
+    return;
+  }
+  textEl.textContent = descriptionText;
+  pendingPurgeConfirmFn = onConfirmCallback || null;
+  modal.style.display = "flex";
+}
+
+if ($("btn-web-purge-cancel")) {
+  $("btn-web-purge-cancel").addEventListener("click", closePurgeConfirmModal);
+}
+if ($("web-purge-confirm-modal")) {
+  $("web-purge-confirm-modal").addEventListener("click", function (ev) {
+    if (ev.target === $("web-purge-confirm-modal")) {
+      closePurgeConfirmModal();
+    }
+  });
+}
+if ($("btn-web-purge-confirm")) {
+  $("btn-web-purge-confirm").addEventListener("click", function () {
+    var fn = pendingPurgeConfirmFn;
+    closePurgeConfirmModal();
+    if (typeof fn === "function") fn();
+  });
+}
+window.fmtTtlCountdown = fmtTtlCountdown;
+window.openPurgeConfirmModal = openPurgeConfirmModal;
+window.closePurgeConfirmModal = closePurgeConfirmModal;
+window.syncWebPlayBoardSquareSize = syncWebPlayBoardSquareSize;
+
 $("btn-web-clear-avatar").addEventListener("click", function () {
   showConfirmModal(
     "Clear Avatar?",
@@ -6665,23 +6762,37 @@ function loadMyRobots() {
       /* Created */
       var tdCreated = el("td", fmtTime(r.created_at));
 
-      /* Revoke Action */
+      /* Revoke / Delete Action */
       var tdAct = el("td");
+      var rid = r.robot_uuid || r.robot_id || r.robot_name;
       if (isAct) {
         var revokeBtn = el("button", "Revoke", "btn");
         revokeBtn.style.padding = "4px 10px";
         revokeBtn.style.fontSize = "12px";
+        revokeBtn.style.marginRight = "6px";
         revokeBtn.addEventListener("click", function () {
-          if (!confirm("Are you sure you want to revoke robot " + r.robot_name + "? This cannot be undone.")) return;
-          var rid = r.robot_uuid || r.robot_id || r.robot_name;
-          api("/api/v1/robots/" + encodeURIComponent(rid), { method: "DELETE" }).then(function () {
-            loadMyRobots();
-          }).catch(function (e) { alert("Revocation failed: " + e.message); });
+          openPurgeConfirmModal("Are you sure you want to revoke robot " + r.robot_name + "? It will no longer be able to connect.", function () {
+            api("/api/v1/robots/" + encodeURIComponent(rid), { method: "DELETE" }).then(function () {
+              loadMyRobots();
+            }).catch(function (e) { alert("Revocation failed: " + e.message); });
+          });
         });
         tdAct.appendChild(revokeBtn);
-      } else {
-        tdAct.textContent = "-";
       }
+      var delBtn = el("button", "Delete", "btn");
+      delBtn.style.padding = "4px 10px";
+      delBtn.style.fontSize = "12px";
+      delBtn.style.background = "#dc2626";
+      delBtn.style.borderColor = "#b91c1c";
+      delBtn.style.color = "#ffffff";
+      delBtn.addEventListener("click", function () {
+        openPurgeConfirmModal("Are you sure you want to permanently delete robot " + r.robot_name + "? This cannot be undone.", function () {
+          api("/api/v1/robots/" + encodeURIComponent(rid) + "?permanent=1", { method: "DELETE" }).then(function () {
+            loadMyRobots();
+          }).catch(function (e) { alert("Delete failed: " + e.message); });
+        });
+      });
+      tdAct.appendChild(delBtn);
 
       [tdName, tdDesc, tdRecord, tdTok, tdStat, tdCreated, tdAct].forEach(function (td) { tr.appendChild(td); });
       tbody.appendChild(tr);
@@ -7064,6 +7175,32 @@ var localMatchConfig = {
 };
 var matchStarted = false;
 var activeOnlineGameId = "";
+var onlineRoomTtlRemainingMs = -1;
+var onlineRoomTtlFetchedAtMs = 0;
+
+if (typeof window !== "undefined") {
+  setInterval(function () {
+    if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return;
+    var now = Date.now();
+    var badges = document.querySelectorAll(".web-table-ttl-badge");
+    for (var i = 0; i < badges.length; i++) {
+      var b = badges[i];
+      var baseMs = parseInt(b.getAttribute("data-ttl-ms"), 10);
+      var fetchedMs = parseInt(b.getAttribute("data-fetched-ms"), 10);
+      if (!isNaN(baseMs) && !isNaN(fetchedMs)) {
+        var rem = Math.max(0, baseMs - (now - fetchedMs));
+        b.textContent = "TTL " + fmtTtlCountdown(rem);
+      }
+    }
+    if (activeOnlineGameId && onlineRoomTtlRemainingMs >= 0) {
+      var boardTtlBadge = document.getElementById("web-play-online-ttl-badge");
+      if (boardTtlBadge) {
+        var rRem = Math.max(0, onlineRoomTtlRemainingMs - (now - onlineRoomTtlFetchedAtMs));
+        boardTtlBadge.textContent = "Idle TTL: " + fmtTtlCountdown(rRem);
+      }
+    }
+  }, 1000);
+}
 var activeOnlineTableRoomId = "";
 var activeOnlineRoomView = null;
 var activeOnlineViewerSeat = 0;
@@ -7952,6 +8089,7 @@ function renderAllWebReserves() {
 var playBoardGeom = null;
 
 function renderPlayBoardCanvas() {
+  syncWebPlayBoardSquareSize();
   var canvas = document.getElementById("web-play-canvas");
   if (!canvas) return;
   var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
@@ -10058,6 +10196,7 @@ if (subtabLocal && subtabOnline) {
     subtabOnline.className = "btn";
     document.getElementById("play-local-panel").style.display = "block";
     document.getElementById("play-online-panel").style.display = "none";
+    syncWebPlayBoardSquareSize();
     if (wasOnline) {
       prepareLocalMatchInitialState();
     }
@@ -10170,6 +10309,12 @@ function pollOnlineGameEvents(roomId) {
                  ev.type === "SEAT_JOINED" || ev.type === "SEAT_LEFT") {
         needsRoomRefresh = true;
       }
+      if (ev.type === "MOVE" || ev.type === "UNDO_APPLIED") {
+        onlineRoomTtlRemainingMs = 3600000;
+        onlineRoomTtlFetchedAtMs = Date.now();
+        var bTtl = document.getElementById("web-play-online-ttl-badge");
+        if (bTtl) bTtl.textContent = "Idle TTL: " + fmtTtlCountdown(onlineRoomTtlRemainingMs);
+      }
     }
     if (evRes.next_seq && evRes.next_seq > activeOnlineEventSeq) {
       activeOnlineEventSeq = evRes.next_seq;
@@ -10213,6 +10358,14 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
       titleEl.textContent = "Table #" + roomId + " \u2022 " + (res.phase || "IN_PROGRESS");
       bar.style.display = "flex";
     }
+    if (res.ttl_remaining_ms !== undefined && res.ttl_remaining_ms >= 0) {
+      onlineRoomTtlRemainingMs = res.ttl_remaining_ms;
+      onlineRoomTtlFetchedAtMs = Date.now();
+      var boardTtlBadge = document.getElementById("web-play-online-ttl-badge");
+      if (boardTtlBadge) {
+        boardTtlBadge.textContent = "Idle TTL: " + fmtTtlCountdown(onlineRoomTtlRemainingMs);
+      }
+    }
     if (roleEl) {
       if (vSeat > 0) {
         roleEl.textContent = "Seated: Seat " + vSeat + " (" + seatLetterOf(vSeat) + ")";
@@ -10239,6 +10392,12 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
     var srvFen = res.fen || "";
 
     if (!isStaging && (forceRebuild || srvFen !== activeOnlineLastSyncedFen || srvMoves.length !== activeOnlineLastSyncedPlyCount)) {
+      if (activeOnlineLastSyncedPlyCount >= 0 && srvMoves.length !== activeOnlineLastSyncedPlyCount) {
+        onlineRoomTtlRemainingMs = 3600000;
+        onlineRoomTtlFetchedAtMs = Date.now();
+        var bTtl = document.getElementById("web-play-online-ttl-badge");
+        if (bTtl) bTtl.textContent = "Idle TTL: " + fmtTtlCountdown(onlineRoomTtlRemainingMs);
+      }
       activeOnlineLastSyncedFen = srvFen;
       activeOnlineLastSyncedPlyCount = srvMoves.length;
 
@@ -10347,6 +10506,10 @@ function openOnlineTableBoard(roomId) {
   }
   var actRow = document.getElementById("web-online-table-actions");
   if (actRow) actRow.style.display = "flex";
+  var purgeBtn = document.getElementById("btn-web-purge-table");
+  if (purgeBtn) {
+    purgeBtn.style.display = (currentUser && currentUser.is_admin) ? "block" : "none";
+  }
   var chatPanel = document.getElementById("web-board-chat-panel");
   if (chatPanel) chatPanel.style.display = "flex";
 
@@ -10545,6 +10708,19 @@ if ($("btn-web-back-lobby")) {
   $("btn-web-back-lobby").addEventListener("click", function () {
     stopOnlineGameSync();
     if (subtabOnline) subtabOnline.click();
+  });
+}
+if ($("btn-web-purge-table")) {
+  $("btn-web-purge-table").addEventListener("click", function () {
+    var rid = activeOnlineGameId || currentMyTableRoomId;
+    if (!rid) return;
+    openPurgeConfirmModal("Are you sure you want to immediately destroy table #" + rid + " without archiving?", function () {
+      api("/api/v1/tables/" + encodeURIComponent(rid), { method: "DELETE" }).then(function () {
+        stopOnlineGameSync();
+        if (subtabOnline) subtabOnline.click();
+        else refreshLobbyTables();
+      }).catch(function (e) { alert("Purge failed: " + e.message); });
+    });
   });
 }
 
@@ -10793,6 +10969,7 @@ function refreshLobbyTables() {
     }
 
     tables.forEach(function (t) {
+      t._fetchedAtMs = Date.now();
       var roomId = t.room_id || t.table_id || "";
       var phase = t.phase || t.state || "WAITING_FOR_PLAYERS";
       var tr = el("tr");
@@ -10817,6 +10994,18 @@ function refreshLobbyTables() {
       var tdPhase = el("td");
       var phaseBadge = el("span", phase, phase === "IN_PROGRESS" ? "badge badge-online" : "badge badge-upload");
       tdPhase.appendChild(phaseBadge);
+      if (t.ttl_remaining_ms !== undefined && t.ttl_remaining_ms >= 0) {
+        var ttlSpan = el("span", "TTL " + fmtTtlCountdown(t.ttl_remaining_ms), "badge web-table-ttl-badge");
+        ttlSpan.setAttribute("data-ttl-ms", t.ttl_remaining_ms);
+        ttlSpan.setAttribute("data-fetched-ms", t._fetchedAtMs);
+        ttlSpan.style.marginLeft = "6px";
+        ttlSpan.style.fontFamily = "ui-monospace,SFMono-Regular,monospace";
+        ttlSpan.style.background = "#0F172A";
+        ttlSpan.style.color = "#FDE047";
+        ttlSpan.style.border = "1px solid #C8A253";
+        ttlSpan.style.fontSize = "11px";
+        tdPhase.appendChild(ttlSpan);
+      }
       tr.appendChild(tdPhase);
 
       var tdSeats = el("td");
@@ -10914,6 +11103,22 @@ function refreshLobbyTables() {
         }).catch(function (e) { alert("Failed to observe: " + e.message); });
       });
       tdAct.appendChild(obsBtn);
+
+      if (currentUser && currentUser.is_admin) {
+        var purgeBtn = el("button", "Purge", "btn");
+        purgeBtn.style.marginLeft = "6px";
+        purgeBtn.style.background = "#dc2626";
+        purgeBtn.style.borderColor = "#b91c1c";
+        purgeBtn.style.color = "#ffffff";
+        purgeBtn.addEventListener("click", function () {
+          openPurgeConfirmModal("Are you sure you want to immediately destroy table #" + roomId + " without archiving?", function () {
+            api("/api/v1/tables/" + encodeURIComponent(roomId), { method: "DELETE" }).then(function () {
+              refreshLobbyTables();
+            }).catch(function (e) { alert("Failed to purge table: " + e.message); });
+          });
+        });
+        tdAct.appendChild(purgeBtn);
+      }
 
       tr.appendChild(tdAct);
       tbody.appendChild(tr);
@@ -11114,6 +11319,10 @@ function arSearch(offset) {
     arTotal = j.total;
     var body = $("ar-table").querySelector("tbody");
     clear(body);
+    var adminCols = $("ar-table").querySelectorAll(".web-ar-admin-col");
+    for (var aci = 0; aci < adminCols.length; aci++) {
+      adminCols[aci].style.display = (currentUser && currentUser.is_admin) ? "" : "none";
+    }
     $("ar-msg").textContent = j.games.length ? "" : "No archived games.";
     j.games.forEach(function (g) {
       var tr = el("tr", null, "click");
@@ -11145,6 +11354,26 @@ function arSearch(offset) {
       [tdGame, tdMode, tdSrc, tdPl, tdWin, tdRes, tdPlies, tdDate].forEach(function (td) {
         tr.appendChild(td);
       });
+      if (currentUser && currentUser.is_admin) {
+        var tdAct = el("td", null, "web-ar-admin-col");
+        var purgeBtn = el("button", "Purge", "btn");
+        purgeBtn.style.background = "#dc2626";
+        purgeBtn.style.borderColor = "#b91c1c";
+        purgeBtn.style.color = "#ffffff";
+        purgeBtn.style.fontSize = "11px";
+        purgeBtn.style.padding = "2px 8px";
+        purgeBtn.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          openPurgeConfirmModal("Are you sure you want to permanently purge archived game #" + g.game_id + " (" + playersStr + ")?", function () {
+            api("/api/v1/archive/games/" + encodeURIComponent(g.game_id), { method: "DELETE" }).then(function () {
+              arSearch(arOffset);
+              loadArchiveStats();
+            }).catch(function (err) { alert("Purge failed: " + err.message); });
+          });
+        });
+        tdAct.appendChild(purgeBtn);
+        tr.appendChild(tdAct);
+      }
       tr.addEventListener("click", function () { window.open(window.location.pathname + "#replay/" + encodeURIComponent(g.game_id), "_blank"); });
       body.appendChild(tr);
     });

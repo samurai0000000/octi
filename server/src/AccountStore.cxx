@@ -1542,6 +1542,77 @@ std::string AccountStore::avatarDir() const
     return _avatarDir;
 }
 
+namespace {
+
+std::string trimAdminString(const std::string &s)
+{
+    size_t start = 0;
+    while (start < s.size() &&
+           std::isspace(static_cast<unsigned char>(s[start]))) {
+        start++;
+    }
+    size_t end = s.size();
+    while (end > start &&
+           std::isspace(static_cast<unsigned char>(s[end - 1]))) {
+        end--;
+    }
+    return s.substr(start, end - start);
+}
+
+} // namespace
+
+void AccountStore::setAdminGoogleIdentities(
+    const std::vector<std::string> &googleIdsOrEmails)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    _adminGoogleIds.clear();
+    for (const auto &entry : googleIdsOrEmails) {
+        std::string trimmed = trimAdminString(entry);
+        if (!trimmed.empty()) {
+            _adminGoogleIds.push_back(trimmed);
+        }
+    }
+}
+
+bool AccountStore::isPlayerAdmin(int64_t playerId) const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    return isPlayerAdminLocked(playerId);
+}
+
+bool AccountStore::isPlayerAdminLocked(int64_t playerId) const
+{
+    if (_adminGoogleIds.empty() || playerId <= 0 || !_db) {
+        return false;
+    }
+    Stmt s(_db, "SELECT provider_sub, provider_email FROM linked_identities "
+                "WHERE player_id = ?1 AND provider = 'google'");
+    s.bindInt(1, playerId);
+    while (s.step() == SQLITE_ROW) {
+        std::string sub = s.colText(0);
+        std::string email = s.colText(1);
+        std::string lowerEmail = email;
+        std::transform(lowerEmail.begin(), lowerEmail.end(), lowerEmail.begin(),
+                       [](unsigned char c) {
+                           return static_cast<char>(std::tolower(c));
+                       });
+        for (const auto &adminId : _adminGoogleIds) {
+            if (!sub.empty() && sub == adminId) {
+                return true;
+            }
+            std::string lowerAdminId = adminId;
+            std::transform(lowerAdminId.begin(), lowerAdminId.end(),
+                           lowerAdminId.begin(), [](unsigned char c) {
+                               return static_cast<char>(std::tolower(c));
+                           });
+            if (!lowerEmail.empty() && lowerEmail == lowerAdminId) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool AccountStore::readAvatarFile(const std::string &fileName,
                                   std::string &outBytes,
                                   std::string &outMimeType) const
@@ -1920,6 +1991,7 @@ LoginResult AccountStore::loginWithSso(const VerifiedClaims &claims,
         res.error = sqlite3_errmsg(_db);
         return res;
     }
+    res.profile.isAdmin = isPlayerAdminLocked(res.profile.playerId);
     res.ok = true;
     return res;
 }
@@ -2266,7 +2338,11 @@ bool AccountStore::getProfile(int64_t playerId, PlayerProfile &out)
 bool AccountStore::getProfileById(int64_t playerId, PlayerProfile &out)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    return _db && loadProfileById(_db, playerId, out);
+    if (!_db || !loadProfileById(_db, playerId, out)) {
+        return false;
+    }
+    out.isAdmin = isPlayerAdminLocked(out.playerId);
+    return true;
 }
 
 bool AccountStore::getProfileByUuid(const std::string &uuid, PlayerProfile &out)
@@ -2283,6 +2359,7 @@ bool AccountStore::getProfileByUuid(const std::string &uuid, PlayerProfile &out)
         return false;
     }
     readProfile(s, out);
+    out.isAdmin = isPlayerAdminLocked(out.playerId);
     return true;
 }
 
@@ -2300,6 +2377,7 @@ bool AccountStore::getProfileByHandle(const std::string &handle, PlayerProfile &
         return false;
     }
     readProfile(s, out);
+    out.isAdmin = isPlayerAdminLocked(out.playerId);
     return true;
 }
 
@@ -2571,7 +2649,11 @@ bool AccountStore::getPlayerByInstallId(const std::string &installId,
     seen.bindInt(1, now);
     seen.bindText(2, installId);
     seen.step();
-    return loadProfileById(_db, playerId, out);
+    if (!loadProfileById(_db, playerId, out)) {
+        return false;
+    }
+    out.isAdmin = isPlayerAdminLocked(out.playerId);
+    return true;
 }
 
 int AccountStore::reconcileAnonymousGames()
@@ -2743,6 +2825,7 @@ UpdateStatus AccountStore::updateProfile(int64_t playerId,
     }
     if (updated != nullptr) {
         loadProfileById(_db, playerId, *updated);
+        updated->isAdmin = isPlayerAdminLocked(updated->playerId);
     }
     return UpdateStatus::OK;
 }
@@ -2847,6 +2930,7 @@ bool AccountStore::listUsers(const UserDirectoryFilter &filter,
     while ((rc = s.step()) == SQLITE_ROW) {
         UserDirectoryEntry entry;
         readProfile(s, entry.profile);
+        entry.profile.isAdmin = isPlayerAdminLocked(entry.profile.playerId);
         entry.activeRobotsCount = static_cast<int>(s.colInt(17));
         out.push_back(entry);
     }
@@ -3137,6 +3221,38 @@ RobotStatus AccountStore::revokeRobot(int64_t ownerPlayerId,
     return RobotStatus::OK;
 }
 
+RobotStatus AccountStore::deleteRobot(int64_t ownerPlayerId,
+                                      const std::string &robotUuidOrName)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return RobotStatus::DB_ERROR;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        return RobotStatus::DB_ERROR;
+    }
+
+    int64_t robotId = 0;
+    {
+        Stmt find(_db, "SELECT robot_id FROM robots WHERE owner_player_id = ?1"
+                       " AND (robot_uuid = ?2 OR robot_name = ?2 COLLATE NOCASE)");
+        find.bindInt(1, ownerPlayerId);
+        find.bindText(2, robotUuidOrName);
+        if (find.step() != SQLITE_ROW) {
+            return RobotStatus::NOT_FOUND;
+        }
+        robotId = find.colInt(0);
+    }
+
+    Stmt del(_db, "DELETE FROM robots WHERE robot_id = ?1");
+    del.bindInt(1, robotId);
+    if (del.step() != SQLITE_DONE || !tx.commit()) {
+        return RobotStatus::DB_ERROR;
+    }
+    return RobotStatus::OK;
+}
+
 RobotTokenValidation AccountStore::validateRobotToken(const std::string &rawToken)
 {
     RobotTokenValidation res;
@@ -3182,6 +3298,7 @@ RobotTokenValidation AccountStore::validateRobotToken(const std::string &rawToke
     if (!loadProfileById(_db, res.robot.ownerPlayerId, res.owner)) {
         return res;
     }
+    res.owner.isAdmin = isPlayerAdminLocked(res.owner.playerId);
     if (res.owner.banned) {
         return res;
     }
@@ -3412,6 +3529,43 @@ AccountStore::archiveGameWithRatings(const GameRecord &record,
         return ArchiveStatus::ERROR;
     }
     return ArchiveStatus::OK;
+}
+
+bool AccountStore::purgeArchivedGame(const std::string &gameId,
+                                     std::string &errorOut)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    errorOut.clear();
+    if (!_db) {
+        errorOut = "db_closed";
+        return false;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        errorOut = "tx_begin_failed";
+        return false;
+    }
+    {
+        Stmt checkStmt(_db, "SELECT game_id FROM games WHERE game_id = ?1");
+        checkStmt.bindText(1, gameId);
+        if (checkStmt.step() != SQLITE_ROW) {
+            errorOut = "game_not_found";
+            return false;
+        }
+    }
+    {
+        Stmt delStmt(_db, "DELETE FROM games WHERE game_id = ?1");
+        delStmt.bindText(1, gameId);
+        if (delStmt.step() != SQLITE_DONE) {
+            errorOut = "delete_failed";
+            return false;
+        }
+    }
+    if (!tx.commit()) {
+        errorOut = "tx_commit_failed";
+        return false;
+    }
+    return true;
 }
 
 bool AccountStore::getArchivedGame(const std::string &gameId, GameRecord &out)

@@ -3663,6 +3663,26 @@ TEST(OctiHttpServerIntegrationTest, RobotRegistration)
                                   Json{{"robot_name", "octi_engine_01"}});
     EXPECT_STATUS(201, rReuseName);
     STRCMP_EQUAL("octi_engine_01", rReuseName.json.value("robot_name", "").c_str());
+
+    /* 10. Permanent robot deletion via DELETE /api/v1/robots/:id?permanent=1 */
+    /* Delete already revoked robot */
+    Reply rDelRevoked = http().del("/api/v1/robots/" + bot1Uuid + "?permanent=1", a.token);
+    EXPECT_STATUS(200, rDelRevoked);
+    CHECK_TRUE(rDelRevoked.json.value("deleted", false));
+
+    /* Deleting again returns 404 NOT_FOUND */
+    Reply rDelAgain = http().del("/api/v1/robots/" + bot1Uuid + "?permanent=1", a.token);
+    EXPECT_ERROR(404, "NOT_FOUND", rDelAgain);
+
+    /* Permanent delete directly on an active robot (octi_engine_02) */
+    Reply rDelActive = http().del("/api/v1/robots/octi_engine_02?permanent=1", a.token);
+    EXPECT_STATUS(200, rDelActive);
+    CHECK_TRUE(rDelActive.json.value("deleted", false));
+
+    /* Active count decreased from 31 to 30 */
+    Reply rListAfterDel = http().get("/api/v1/robots", a.token);
+    EXPECT_STATUS(200, rListAfterDel);
+    CHECK_EQUAL(30, rListAfterDel.json.value("active_count", 0));
 }
 
 TEST(OctiHttpServerIntegrationTest, VisibleAnonymousObservation)
@@ -4300,6 +4320,9 @@ TEST(OctiHttpServerIntegrationTest, WebAuthAndIdentitiesManagement)
     CHECK_TRUE(rRoot.body.find("<th>Bio</th>") != std::string::npos);
     CHECK_TRUE(rRoot.body.find("btn-web-save-handle") == std::string::npos);
     CHECK_TRUE(rRoot.body.find("Save Handle") == std::string::npos);
+    CHECK_TRUE(rRoot.body.find("web-purge-confirm-modal") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("syncWebPlayBoardSquareSize") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("fmtTtlCountdown") != std::string::npos);
 
     /* 2. Unauthenticated GET /api/v1/auth/identities returns 401 */
     Reply rUnauth = http().get("/api/v1/auth/identities");
@@ -5024,7 +5047,7 @@ TEST(OctiHttpServerIntegrationTest, WebPlayerBotProfilesQuiescenceAndRulesValida
     std::string out4pPath = "/tmp/octi_test_4p_" + std::to_string(getpid()) + ".json";
     {
         std::ofstream hfs(nodeHarnessPath);
-        hfs << "var document = { getElementById: function() { return { style: {}, textContent: '', addEventListener: function(){}, classList: { add: function(){}, remove: function(){}, contains: function(){ return false; } } }; } };\n";
+        hfs << "var document = { getElementById: function() { return { style: {}, textContent: '', addEventListener: function(){}, classList: { add: function(){}, remove: function(){}, contains: function(){ return false; } } }; }, querySelectorAll: function() { return []; } };\n";
         hfs << "var window = { addEventListener: function(){} };\n";
         hfs << "function $(id) { return null; }\n";
         hfs << "function requestAnimationFrame() {}\n";
@@ -5298,7 +5321,7 @@ TEST(OctiHttpServerIntegrationTest, DatabaseArchiveCorpusReplayAndInvalidGameRej
     }
     {
         std::ofstream hfs(corpusHarnessPath);
-        hfs << "var document = { getElementById: function() { return { style: {}, textContent: '', addEventListener: function(){}, classList: { add: function(){}, remove: function(){}, contains: function(){ return false; } } }; } };\n";
+        hfs << "var document = { getElementById: function() { return { style: {}, textContent: '', addEventListener: function(){}, classList: { add: function(){}, remove: function(){}, contains: function(){ return false; } } }; }, querySelectorAll: function() { return []; } };\n";
         hfs << "var window = { addEventListener: function(){} };\n";
         hfs << "function $(id) { return null; }\n";
         hfs << "function requestAnimationFrame() {}\n";
@@ -5404,7 +5427,7 @@ TEST(OctiHttpServerIntegrationTest, WebBotEngineThreeVariantsAndRealGameTactics)
     std::string testHarnessPath = "/tmp/octi_bot_harness_" + std::to_string(getpid()) + ".js";
     {
         std::ofstream hfs(testHarnessPath);
-        hfs << "var document = { getElementById: function() { return { style: {}, textContent: '', addEventListener: function(){}, classList: { add: function(){}, remove: function(){}, contains: function(){ return false; } } }; } };\n";
+        hfs << "var document = { getElementById: function() { return { style: {}, textContent: '', addEventListener: function(){}, classList: { add: function(){}, remove: function(){}, contains: function(){ return false; } } }; }, querySelectorAll: function() { return []; } };\n";
         hfs << "var window = { addEventListener: function(){} };\n";
         hfs << "function $(id) { return null; }\n";
         hfs << "function requestAnimationFrame() {}\n";
@@ -5744,6 +5767,83 @@ TEST(OctiHttpServerIntegrationTest, RobotGamePlayAndMoveAiTelemetry)
     CHECK_EQUAL(2, rView.json.value("ply_count", 0));
     CHECK_TRUE(rView.json["seats"][1].value("is_robot", false));
     STRCMP_EQUAL("ai-search-bot", rView.json["seats"][1].value("handle", "").c_str());
+}
+
+TEST(OctiHttpServerIntegrationTest, AdminIdentityAndPurgeEndpoints)
+{
+    // Configure admin Google ID
+    env->store.setAdminGoogleIdentities({"sub-admin-google", "admin@selfso.com"});
+
+    User normalUser = signIn("google", "sub-normal-user", "Normal User");
+    User adminUser = signIn("google", "sub-admin-google", "Admin User");
+
+    // GET /api/v1/profile/me for normal user has is_admin == false
+    Reply rNormalMe = http().get("/api/v1/profile/me", normalUser.token);
+    EXPECT_STATUS(200, rNormalMe);
+    CHECK_FALSE(rNormalMe.json.value("is_admin", false));
+
+    // GET /api/v1/profile/me for admin user has is_admin == true
+    Reply rAdminMe = http().get("/api/v1/profile/me", adminUser.token);
+    EXPECT_STATUS(200, rAdminMe);
+    CHECK_TRUE(rAdminMe.json.value("is_admin", false));
+
+    // Create a table and play game to completion so it's archived
+    std::vector<User> pair = {normalUser, adminUser};
+    std::string room = startGame(pair);
+
+    // Move-inactivity countdown in GET /api/v1/tables and GET /api/v1/games/:id
+    Reply rTables = http().get("/api/v1/tables", normalUser.token);
+    EXPECT_STATUS(200, rTables);
+    CHECK_TRUE(rTables.json.contains("tables"));
+    CHECK_TRUE(rTables.json["tables"].size() >= 1);
+    CHECK_TRUE(rTables.json["tables"][0].contains("last_move_at_ms"));
+    CHECK_TRUE(rTables.json["tables"][0].contains("idle_ms"));
+    CHECK_TRUE(rTables.json["tables"][0].contains("ttl_remaining_ms"));
+
+    Reply rGame = http().get("/api/v1/games/" + room, normalUser.token);
+    EXPECT_STATUS(200, rGame);
+    CHECK_TRUE(rGame.json.contains("last_move_at_ms"));
+    CHECK_TRUE(rGame.json.contains("idle_ms"));
+    CHECK_TRUE(rGame.json.contains("ttl_remaining_ms"));
+
+    // Non-admin trying to purge active table gets 403 Forbidden
+    Reply rFailTablePurge = http().del("/api/v1/tables/" + room, normalUser.token);
+    EXPECT_STATUS(403, rFailTablePurge);
+
+    // Admin purging active table gets 200 OK
+    Reply rOkTablePurge = http().del("/api/v1/tables/" + room, adminUser.token);
+    EXPECT_STATUS(200, rOkTablePurge);
+    STRCMP_EQUAL("purged", rOkTablePurge.json.value("status", "").c_str());
+
+    // Purging again gets 404 NOT_FOUND
+    Reply rNotFoundTable = http().del("/api/v1/tables/" + room, adminUser.token);
+    EXPECT_STATUS(404, rNotFoundTable);
+
+    // Now test archive purge:
+    // Play a game to completion so an archived game exists
+    std::string archivedGameId = playDrawGame(normalUser, adminUser);
+    Reply rArchivedBefore = http().get("/api/v1/archive/games/" + archivedGameId);
+    EXPECT_STATUS(200, rArchivedBefore);
+
+    // Non-admin trying to purge archived game gets 403 Forbidden
+    Reply rFailArchivePurge =
+        http().del("/api/v1/archive/games/" + archivedGameId, normalUser.token);
+    EXPECT_STATUS(403, rFailArchivePurge);
+
+    // Admin purging archived game gets 200 OK
+    Reply rOkArchivePurge =
+        http().del("/api/v1/archive/games/" + archivedGameId, adminUser.token);
+    EXPECT_STATUS(200, rOkArchivePurge);
+    STRCMP_EQUAL("purged", rOkArchivePurge.json.value("status", "").c_str());
+
+    // Purged game is gone (404)
+    Reply rArchivedAfter = http().get("/api/v1/archive/games/" + archivedGameId);
+    EXPECT_STATUS(404, rArchivedAfter);
+
+    // Purging again gets 404
+    Reply rArchivePurgeAgain =
+        http().del("/api/v1/archive/games/" + archivedGameId, adminUser.token);
+    EXPECT_STATUS(404, rArchivePurgeAgain);
 }
 
 int main(int argc, char **argv)

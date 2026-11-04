@@ -15,8 +15,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -33,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.selfso.octi.ui.theme.OctiTheme
@@ -48,9 +51,35 @@ fun ArchiveScreen(
 ) {
     val leaderboard by viewModel.leaderboardRows.collectAsState()
     val archivePage by viewModel.archivedGamesPage.collectAsState()
+    val currentProfile by viewModel.currentProfile.collectAsState()
 
     var selectedMode by remember { mutableStateOf("2P") }
     var showLeaderboard by remember { mutableStateOf(true) }
+    var purgeConfirmGameId by remember { mutableStateOf<String?>(null) }
+
+    purgeConfirmGameId?.let { gameId ->
+        AlertDialog(
+            onDismissRequest = { purgeConfirmGameId = null },
+            title = { Text("Purge Archived Game") },
+            text = { Text("Are you sure you want to permanently purge archived game $gameId? This cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.purgeArchivedGame(gameId)
+                        purgeConfirmGameId = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Purge")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { purgeConfirmGameId = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -209,14 +238,30 @@ fun ArchiveScreen(
                                         color = OctiTheme.colors.textSecondary
                                     )
                                 }
-                                Button(
-                                    onClick = { viewModel.openArchivedGameForReplayAsync(game.gameId) },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = OctiTheme.colors.accentBrass,
-                                        contentColor = OctiTheme.colors.windowBg
-                                    )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("Replay in VCR")
+                                    Button(
+                                        onClick = { viewModel.openArchivedGameForReplayAsync(game.gameId) },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = OctiTheme.colors.accentBrass,
+                                            contentColor = OctiTheme.colors.windowBg
+                                        )
+                                    ) {
+                                        Text("Replay in VCR")
+                                    }
+                                    if (currentProfile?.isAdmin == true) {
+                                        Button(
+                                            onClick = { purgeConfirmGameId = game.gameId },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.error,
+                                                contentColor = Color.White
+                                            )
+                                        ) {
+                                            Text("Purge")
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -239,10 +239,14 @@ bool ServerApp::parseArgs(int argc, const char * const argv[], std::string &errM
 }
 
 bool ServerApp::loadOidcConfig(const std::string &path, OidcConfig &out,
-                               std::string &error)
+                               std::string &error,
+                               std::vector<std::string> *adminGoogleIds)
 {
     out.clear();
     error.clear();
+    if (adminGoogleIds != nullptr) {
+        adminGoogleIds->clear();
+    }
     bool hasSecret = false;
 
     if (!path.empty()) {
@@ -270,6 +274,47 @@ bool ServerApp::loadOidcConfig(const std::string &path, OidcConfig &out,
             error = "OIDC config " + path + " is not a valid JSON object";
             return false;
         }
+
+        if (adminGoogleIds != nullptr) {
+            if (doc.contains("admins") && doc["admins"].is_object()) {
+                const auto &admins = doc["admins"];
+                if (admins.contains("google")) {
+                    if (admins["google"].is_array()) {
+                        for (const auto &item : admins["google"]) {
+                            if (item.is_string()) {
+                                std::string s = item.get<std::string>();
+                                if (!s.empty()) {
+                                    adminGoogleIds->push_back(s);
+                                }
+                            }
+                        }
+                    } else if (admins["google"].is_string()) {
+                        std::string s = admins["google"].get<std::string>();
+                        if (!s.empty()) {
+                            adminGoogleIds->push_back(s);
+                        }
+                    }
+                }
+            }
+            if (doc.contains("admin_google_ids")) {
+                if (doc["admin_google_ids"].is_array()) {
+                    for (const auto &item : doc["admin_google_ids"]) {
+                        if (item.is_string()) {
+                            std::string s = item.get<std::string>();
+                            if (!s.empty()) {
+                                adminGoogleIds->push_back(s);
+                            }
+                        }
+                    }
+                } else if (doc["admin_google_ids"].is_string()) {
+                    std::string s = doc["admin_google_ids"].get<std::string>();
+                    if (!s.empty()) {
+                        adminGoogleIds->push_back(s);
+                    }
+                }
+            }
+        }
+
         Json::const_iterator provs = doc.find("providers");
         if (provs == doc.end() || !provs->is_object()) {
             error = "OIDC config needs a \"providers\" object";
@@ -334,6 +379,13 @@ bool ServerApp::loadOidcConfig(const std::string &path, OidcConfig &out,
     return true;
 }
 
+bool ServerApp::loadOidcConfig(const std::string &path, OidcConfig &out,
+                               std::vector<std::string> &adminGoogleIds,
+                               std::string &error)
+{
+    return loadOidcConfig(path, out, error, &adminGoogleIds);
+}
+
 void ServerApp::requestStop()
 {
     _stopRequested = true;
@@ -356,7 +408,8 @@ int ServerApp::run(std::ostream &out, std::ostream &err)
 
     std::string error;
     OidcConfig oidc;
-    if (!loadOidcConfig(_config.oidcConfigPath, oidc, error)) {
+    std::vector<std::string> adminGoogleIds;
+    if (!loadOidcConfig(_config.oidcConfigPath, oidc, adminGoogleIds, error)) {
         err << "Error: " << error << "\n";
         return 2;
     }
@@ -365,6 +418,9 @@ int ServerApp::run(std::ostream &out, std::ostream &err)
     if (!store.openOrCreate(_config.dbPath, error)) {
         err << "Error: cannot open database: " << error << "\n";
         return 2;
+    }
+    if (!adminGoogleIds.empty()) {
+        store.setAdminGoogleIdentities(adminGoogleIds);
     }
 
     if (!_config.avatarDir.empty()) {

@@ -12,9 +12,11 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QMessageBox>
 #include <QPainter>
 #include <QPixmap>
 #include <QTimeZone>
+#include <QTimer>
 #include <QVBoxLayout>
 #include "LobbyView.hxx"
 
@@ -200,11 +202,15 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     _leaveTableBtn = new QPushButton("Leave Table", tablesBox);
     _observeSelectedBtn = new QPushButton("Observe Selected Table", tablesBox);
     _refreshBtn = new QPushButton("Refresh", tablesBox);
+    _purgeTableBtn = new QPushButton("Purge Table...", tablesBox);
+    _purgeTableBtn->setStyleSheet("QPushButton { background-color: #dc2626; color: white; font-weight: bold; }");
+    _purgeTableBtn->setVisible(false);
     toolbar->addWidget(_createTableBtn);
     toolbar->addWidget(_joinSelectedBtn);
     toolbar->addWidget(_leaveTableBtn);
     toolbar->addWidget(_observeSelectedBtn);
     toolbar->addWidget(_refreshBtn);
+    toolbar->addWidget(_purgeTableBtn);
     tLayout->addLayout(toolbar);
 
     _tablesTable = new QTableWidget(0, 7, tablesBox);
@@ -345,6 +351,49 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     QObject::connect(_refreshBtn, &QPushButton::clicked, [this]() {
         refreshLobby();
     });
+    QObject::connect(_purgeTableBtn, &QPushButton::clicked, [this]() {
+        if (_selectedRoomId.empty() || !_netClient) {
+            return;
+        }
+        auto reply = QMessageBox::warning(
+            this,
+            "Confirm Permanent Purge",
+            QString("Are you sure you want to immediately destroy table #%1 without archiving?\n\nThis action cannot be undone.")
+                .arg(QString::fromStdString(_selectedRoomId)),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+        if (reply == QMessageBox::Yes) {
+            auto res = _netClient->purgeTable(_selectedRoomId);
+            if (!res.ok) {
+                QMessageBox::critical(this, "Purge Failed", QString::fromStdString(res.errorMessage));
+            } else {
+                refreshLobby();
+            }
+        }
+    });
+
+    _secondTimer = new QTimer(this);
+    QObject::connect(_secondTimer, &QTimer::timeout, this, [this]() {
+        for (std::size_t i = 0; i < _tables.size(); ++i) {
+            if (_tables[i].ttlRemainingMs > 0) {
+                _tables[i].ttlRemainingMs = std::max<std::int64_t>(0, _tables[i].ttlRemainingMs - 1000);
+                if (_tablesTable && i < static_cast<std::size_t>(_tablesTable->rowCount())) {
+                    QString phaseStr = formatPhaseDisplay(_tables[i].phase);
+                    std::int64_t totalSec = _tables[i].ttlRemainingMs / 1000;
+                    std::int64_t m = totalSec / 60;
+                    std::int64_t s = totalSec % 60;
+                    phaseStr += QString(" [TTL %1:%2]")
+                        .arg(m, 2, 10, QChar('0'))
+                        .arg(s, 2, 10, QChar('0'));
+                    QTableWidgetItem *item = _tablesTable->item(static_cast<int>(i), 2);
+                    if (item) {
+                        item->setText(phaseStr);
+                    }
+                }
+            }
+        }
+    });
+    _secondTimer->start(1000);
     QObject::connect(_sendChatBtn, &QPushButton::clicked, [this]() {
         std::string txt = _chatInput->text().trimmed().toStdString();
         if (!txt.empty() && sendLobbyChatMessage(txt)) {
@@ -690,11 +739,21 @@ void LobbyView::updateInspectorAndSelectionControls()
     if (_observeSelectedBtn) {
         _observeSelectedBtn->setEnabled(true);
     }
+
+    if (_purgeTableBtn && _netClient) {
+        _purgeTableBtn->setEnabled(
+            _netClient->currentProfile().isAdmin && !_selectedRoomId.empty());
+    }
 }
 
 void LobbyView::updateAuthUiState()
 {
     bool authed = (_netClient && _netClient->isAuthenticated());
+    bool isAdmin = (_netClient && _netClient->currentProfile().isAdmin);
+    if (_purgeTableBtn) {
+        _purgeTableBtn->setVisible(isAdmin);
+        _purgeTableBtn->setEnabled(isAdmin && !_selectedRoomId.empty());
+    }
     if (_refreshBtn) {
         _refreshBtn->setEnabled(true);
     }
@@ -981,8 +1040,17 @@ void LobbyView::rebuildTablesWidget()
             i, 0, new QTableWidgetItem(QString::fromStdString(t.roomId)));
         _tablesTable->setItem(
             i, 1, new QTableWidgetItem(variant));
+        QString phaseStr = formatPhaseDisplay(t.phase);
+        if (t.ttlRemainingMs >= 0) {
+            std::int64_t totalSec = std::max<std::int64_t>(0, t.ttlRemainingMs / 1000);
+            std::int64_t m = totalSec / 60;
+            std::int64_t s = totalSec % 60;
+            phaseStr += QString(" [TTL %1:%2]")
+                .arg(m, 2, 10, QChar('0'))
+                .arg(s, 2, 10, QChar('0'));
+        }
         _tablesTable->setItem(
-            i, 2, new QTableWidgetItem(formatPhaseDisplay(t.phase)));
+            i, 2, new QTableWidgetItem(phaseStr));
         _tablesTable->setItem(
             i, 3, new QTableWidgetItem(seats));
         _tablesTable->setItem(

@@ -543,9 +543,21 @@ fun OctiMainAppContent(
                         val vsBot = matchType != OctiAppViewModel.MatchType.LOCAL_PASS_AND_PLAY
                         val botDifficulty by viewModel.botDifficulty.collectAsState()
 
-                        if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM &&
-                            activeGameView?.phase == "WAITING_FOR_PLAYERS"
-                        ) {
+                        if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeGameView != null) {
+                            val phase = activeGameView?.phase ?: "WAITING_FOR_PLAYERS"
+                            val isWaiting = phase == "WAITING_FOR_PLAYERS"
+                            val ttlMs = activeGameView?.ttlRemainingMs ?: -1L
+                            val ttlStr = if (ttlMs >= 0) {
+                                val totalSec = ttlMs / 1000
+                                val mm = totalSec / 60
+                                val ss = totalSec % 60
+                                " • Idle TTL %02d:%02d".format(mm, ss)
+                            } else ""
+                            val statusText = if (isWaiting) {
+                                "Waiting for Players at Table #${activeRoomId.ifEmpty { activeGameView?.roomId ?: "" }}$ttlStr"
+                            } else {
+                                "Online Room: #${activeRoomId.ifEmpty { activeGameView?.roomId ?: "" }}$ttlStr"
+                            }
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -562,7 +574,7 @@ fun OctiMainAppContent(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "Waiting for Players at Table #${activeRoomId.ifEmpty { activeGameView?.roomId ?: "" }}",
+                                        text = statusText,
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = OctiTheme.colors.accentBrass,
@@ -574,14 +586,16 @@ fun OctiMainAppContent(
                                         ) {
                                             Text("Leave Table")
                                         }
-                                        Button(
-                                            onClick = { viewModel.selectTab(OctiAppViewModel.AppTab.ONLINE_LOBBY) },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = OctiTheme.colors.accentBrass,
-                                                contentColor = OctiTheme.colors.windowBg
-                                            )
-                                        ) {
-                                            Text("Back to Lobby")
+                                        if (isWaiting) {
+                                            Button(
+                                                onClick = { viewModel.selectTab(OctiAppViewModel.AppTab.ONLINE_LOBBY) },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = OctiTheme.colors.accentBrass,
+                                                    contentColor = OctiTheme.colors.windowBg
+                                                )
+                                            ) {
+                                                Text("Back to Lobby")
+                                            }
                                         }
                                     }
                                 }

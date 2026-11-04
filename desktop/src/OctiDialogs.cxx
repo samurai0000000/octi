@@ -2357,6 +2357,7 @@ ArchiveBrowserDialog::ArchiveBrowserDialog(OctiNetworkClient *netClient,
       _transcriptPreview(nullptr),
       _downloadBtn(nullptr),
       _loadReplayBtn(nullptr),
+      _purgeBtn(nullptr),
       _statusLabel(nullptr)
 {
     setWindowTitle("OCTI Game Archive & Replay Browser");
@@ -2397,9 +2398,14 @@ ArchiveBrowserDialog::ArchiveBrowserDialog(OctiNetworkClient *netClient,
     QHBoxLayout *actBar = new QHBoxLayout();
     _downloadBtn = new QPushButton("Fetch .octi Transcript", this);
     _loadReplayBtn = new QPushButton("Load into Replay Board", this);
+    _purgeBtn = new QPushButton("Purge Game...", this);
+    _purgeBtn->setStyleSheet("QPushButton { background-color: #dc2626; color: white; font-weight: bold; }");
+    bool isAdmin = _netClient && _netClient->currentProfile().isAdmin;
+    _purgeBtn->setVisible(isAdmin);
     QPushButton *closeBtn = new QPushButton("Close", this);
     actBar->addWidget(_downloadBtn);
     actBar->addWidget(_loadReplayBtn);
+    actBar->addWidget(_purgeBtn);
     actBar->addWidget(closeBtn);
     root->addLayout(actBar);
 
@@ -2432,6 +2438,31 @@ ArchiveBrowserDialog::ArchiveBrowserDialog(OctiNetworkClient *netClient,
             if (loadGameIntoReplay(
                     _games[static_cast<std::size_t>(row)].gameId)) {
                 accept();
+            }
+        }
+    });
+    QObject::connect(_purgeBtn, &QPushButton::clicked, [this]() {
+        int row = _gamesTable->currentRow();
+        if (row < 0 || row >= static_cast<int>(_games.size()) || !_netClient) {
+            return;
+        }
+        std::string gid = _games[static_cast<std::size_t>(row)].gameId;
+        auto reply = QMessageBox::warning(
+            this,
+            "Confirm Permanent Purge",
+            QString("Are you sure you want to permanently purge archived game #%1?\n\nThis action cannot be undone.")
+                .arg(QString::fromStdString(gid)),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+        if (reply == QMessageBox::Yes) {
+            auto res = _netClient->purgeArchivedGame(gid);
+            if (!res.ok) {
+                QMessageBox::critical(this, "Purge Failed", QString::fromStdString(res.errorMessage));
+            } else {
+                refreshArchiveList(
+                    _modeFilterCombo->currentData().toString().toStdString(),
+                    _playerFilterEdit->text().trimmed().toStdString());
+                if (_transcriptPreview) _transcriptPreview->clear();
             }
         }
     });

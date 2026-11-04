@@ -518,6 +518,7 @@ private:
     QPlainTextEdit *_transcriptPreview;
     QPushButton *_downloadBtn;
     QPushButton *_loadReplayBtn;
+    QPushButton *_purgeBtn;
     QLabel *_statusLabel;
 
     std::vector<ArchivedGameSummary> _games;

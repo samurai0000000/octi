@@ -236,7 +236,8 @@ OctiMainWindow::OctiMainWindow(
       _updateActionBtn(nullptr),
       _updateDetailsBtn(nullptr),
       _updateDismissBtn(nullptr),
-      _startMatchOverlay(nullptr)
+      _startMatchOverlay(nullptr),
+      _onlineTtlTimer(nullptr)
 {
     selfupdate::UpdateInstaller::cleanupStaleBackup();
     _updateController = std::make_shared<selfupdate::SelfUpdateController>(
@@ -936,6 +937,17 @@ OctiMainWindow::OctiMainWindow(
     updateMatchActionsVisibility();
     setupMenuBar();
     updateStartMatchOverlay();
+
+    _onlineTtlTimer = new QTimer(this);
+    _onlineTtlTimer->setInterval(1000);
+    QObject::connect(_onlineTtlTimer, &QTimer::timeout, this, [this]() {
+        if (_inOnlineRoom && !_onlineRoomId.empty() && _onlineGameView.ttlRemainingMs > 0) {
+            _onlineGameView.ttlRemainingMs = std::max<int64_t>(0, _onlineGameView.ttlRemainingMs - 1000);
+            updateMatchActionsVisibility();
+        }
+    });
+    _onlineTtlTimer->start();
+
     if (_authenticated) {
         QTimer::singleShot(0, this, [this]() {
             refreshAuthenticatedProfileFromServer();
@@ -1059,6 +1071,9 @@ void OctiMainWindow::applyAuthenticatedProfile(const PlayerProfileInfo &profile)
     _profile = profile;
     _authenticated = !profile.uuid.empty();
     _offlineMode = false;
+    if (_netClient) {
+        _netClient->setCurrentProfile(profile);
+    }
     updateTopBarLabels();
 
     ClientPreferences &prefs = _configStore.preferences();
@@ -2279,6 +2294,10 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
         return;
     }
 
+    if (ev.event == "MOVE" || ev.event == "UNDO_APPLIED") {
+        _onlineGameView.ttlRemainingMs = 3600000;
+    }
+
     std::string type = j.is_object() ? j.value("type", "") : "";
     if (ev.event == "MOVE" || ev.event == "GAME_STARTED" ||
         ev.event == "PROPOSAL_OFFERED" || ev.event == "PROPOSAL_ACCEPTED" ||
@@ -3402,9 +3421,17 @@ void OctiMainWindow::updateMatchActionsVisibility()
 
     if (_matchModeLabel) {
         if (online) {
-            _matchModeLabel->setText(
-                QString("Online Room: %1")
-                    .arg(QString::fromStdString(_onlineRoomId)));
+            QString modeStr = QString("Online Room: %1")
+                .arg(QString::fromStdString(_onlineRoomId));
+            if (_onlineGameView.ttlRemainingMs >= 0) {
+                int64_t totalSec = _onlineGameView.ttlRemainingMs / 1000;
+                int mm = static_cast<int>(totalSec / 60);
+                int ss = static_cast<int>(totalSec % 60);
+                modeStr += QString::fromUtf8(" \xE2\x80\xA2 Idle TTL %1:%2")
+                    .arg(mm, 2, 10, QChar('0'))
+                    .arg(ss, 2, 10, QChar('0'));
+            }
+            _matchModeLabel->setText(modeStr);
         } else if (_isLocalBotGame) {
             _matchModeLabel->setText(
                 QString::fromUtf8("Local vs AI Bot \xE2\x80\xA2 Offline Tabletop"));

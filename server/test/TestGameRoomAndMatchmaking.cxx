@@ -1339,9 +1339,12 @@ TEST(GameRoomManagerTest, LeavingAWaitingTableTransfersOrClosesIt)
     RoomView gone;
     EXPECT_CODE(NOT_FOUND, mgr->getRoomView(r.roomId, 0, gone));
 
-    /* a started game cannot be left, only resigned */
+    /* a started game can now be left (marks seat disconnected without closing room) */
     std::string room = startTable(cfg(), 2);
-    EXPECT_CODE(INVALID_STATE, mgr->leaveTable(room, p[1]));
+    EXPECT_OK(mgr->leaveTable(room, p[1]));
+    STRCMP_EQUAL("IN_LOBBY", toString(mgr->presenceOf(p[1])));
+    RoomView rv = view(room);
+    CHECK_FALSE(rv.seats[1].connected);
 }
 
 TEST(GameRoomManagerTest, OnlyTheHostMayKickAWaitingSeat)
@@ -1709,7 +1712,7 @@ TEST(GameRoomManagerTest, OneMillisecondBeforeTheFlagTheMoveStillCounts)
 TEST(GameRoomManagerTest, UntimedGamesNeverFlagAndHaveNoClockAnnotations)
 {
     std::string room = start2P();
-    now += 100LL * 24 * 3600 * 1000;
+    now += 10LL * 60 * 1000;
     mgr->tick();
     RoomView v = view(room);
     STRCMP_EQUAL("IN_PROGRESS", toString(v.phase));
@@ -1746,7 +1749,7 @@ TEST(GameRoomManagerTest, MutualPauseFreezesTheClocksUntilResume)
     LONGS_EQUAL(57000, v.seats[1].clockMs);
     CHECK_EQUAL(1u, countType(events(room, 0), RoomEventType::GAME_PAUSED));
 
-    now += 10LL * 3600 * 1000;                           /* hours pass */
+    now += 10LL * 60 * 1000;                            /* 10 minutes pass */
     TickReport rep = mgr->tick();
     CHECK_EQUAL(0, rep.gamesTimedOut);
     v = view(room);
@@ -4459,6 +4462,142 @@ TEST(GameRoomManagerTest, MatchmakingRobotCompatibility)
     MatchmakingStatus sHuman2After = mgr->matchmakingStatus(p[2]);
     CHECK_FALSE(sHuman2After.queued);
     STRCMP_EQUAL(sBotAfter.matchedRoomId.c_str(), sHuman2After.matchedRoomId.c_str());
+}
+
+TEST(GameRoomManagerTest, InProgressMoveInactivityCountdownAndReapWithoutArchival)
+{
+    EXPECT_OK(mgr->enterLobby(p[0]));
+    EXPECT_OK(mgr->enterLobby(p[1]));
+
+    std::string room = start2P();
+    CHECK_EQUAL(1u, mgr->roomCount());
+
+    // Initial countdown: 3,600,000 ms (60 minutes)
+    std::vector<TableSummary> tables = mgr->listTables();
+    CHECK_EQUAL(1u, tables.size());
+    CHECK_EQUAL(now, tables[0].lastMoveAtMs);
+    CHECK_EQUAL(0, tables[0].idleMs);
+    CHECK_EQUAL(60LL * 60 * 1000, tables[0].ttlRemainingMs);
+
+    RoomView v;
+    EXPECT_OK(mgr->getRoomView(room, p[0], v));
+    CHECK_EQUAL(now, v.lastMoveAtMs);
+    CHECK_EQUAL(0, v.idleMs);
+    CHECK_EQUAL(60LL * 60 * 1000, v.ttlRemainingMs);
+
+    // Advance 30 minutes
+    now += 30LL * 60 * 1000;
+    tables = mgr->listTables();
+    CHECK_EQUAL(30LL * 60 * 1000, tables[0].idleMs);
+    CHECK_EQUAL(30LL * 60 * 1000, tables[0].ttlRemainingMs);
+
+    // Chat does NOT reset move inactivity timer
+    EXPECT_OK(mgr->postBoardChat(room, p[0], ChatScope::ALL, "midgame chat"));
+    EXPECT_OK(mgr->getRoomView(room, p[0], v));
+    CHECK_EQUAL(30LL * 60 * 1000, v.idleMs);
+    CHECK_EQUAL(30LL * 60 * 1000, v.ttlRemainingMs);
+
+    // Advance 10 more minutes (total 40 min idle)
+    now += 10LL * 60 * 1000;
+    tables = mgr->listTables();
+    CHECK_EQUAL(40LL * 60 * 1000, tables[0].idleMs);
+    CHECK_EQUAL(20LL * 60 * 1000, tables[0].ttlRemainingMs);
+
+    // A valid move resets the countdown back to 60:00
+    EXPECT_OK(mgr->submitMove(room, p[0], "33+a"));
+    tables = mgr->listTables();
+    CHECK_EQUAL(now, tables[0].lastMoveAtMs);
+    CHECK_EQUAL(0, tables[0].idleMs);
+    CHECK_EQUAL(60LL * 60 * 1000, tables[0].ttlRemainingMs);
+
+    EXPECT_OK(mgr->getRoomView(room, p[0], v));
+    CHECK_EQUAL(now, v.lastMoveAtMs);
+    CHECK_EQUAL(0, v.idleMs);
+    CHECK_EQUAL(60LL * 60 * 1000, v.ttlRemainingMs);
+
+    // Advance 20 minutes (game is 60 min old, but last move was only 20 min ago)
+    now += 20LL * 60 * 1000;
+    TickReport rep1 = mgr->tick();
+    CHECK_EQUAL(0, rep1.roomsReaped);
+    CHECK_EQUAL(1u, mgr->roomCount());
+
+    // Advance 40 more minutes (exactly 60 minutes since last move)
+    now += 40LL * 60 * 1000;
+    TickReport rep2 = mgr->tick();
+    CHECK_EQUAL(1, rep2.roomsReaped);
+    CHECK_EQUAL(0u, mgr->roomCount());
+
+    // Crucial: room is destroyed WITHOUT archival!
+    GameRecord rec;
+    CHECK_FALSE(store->getArchivedGame(room, rec));
+}
+
+TEST(GameRoomManagerTest, LeaveTableDuringInProgressDetachesSeatWithoutArchival)
+{
+    EXPECT_OK(mgr->enterLobby(p[0]));
+    EXPECT_OK(mgr->enterLobby(p[1]));
+
+    std::string room = start2P();
+    CHECK_EQUAL(1u, mgr->roomCount());
+
+    // While seated in progress, p[0] cannot create another table
+    CHECK_FALSE(mgr->createTable(p[0], cfg()).ok());
+
+    // p[0] leaves the in-progress table
+    RoomResult leaveP0 = mgr->leaveTable(room, p[0]);
+    EXPECT_OK(leaveP0);
+
+    // p[0] is unseated and can immediately host a new table
+    RoomResult newTable = mgr->createTable(p[0], cfg());
+    EXPECT_OK(newTable);
+    CHECK_FALSE(newTable.roomId.empty());
+
+    // Abandoned room is still alive in-progress for remaining seat
+    RoomView v;
+    EXPECT_OK(mgr->getRoomView(room, p[1], v));
+    CHECK_EQUAL(static_cast<int>(RoomPhase::IN_PROGRESS), static_cast<int>(v.phase));
+    CHECK_FALSE(v.seats[0].connected);
+    CHECK_TRUE(v.seats[1].connected);
+
+    // p[1] also leaves
+    RoomResult leaveP1 = mgr->leaveTable(room, p[1]);
+    EXPECT_OK(leaveP1);
+
+    // Both players detached; neither table nor game is archived
+    GameRecord rec;
+    CHECK_FALSE(store->getArchivedGame(room, rec));
+
+    // After 60 minutes of move inactivity, abandoned room is reaped
+    now += 60LL * 60 * 1000;
+    TickReport rep = mgr->tick();
+    CHECK_TRUE(rep.roomsReaped >= 1);
+    CHECK_FALSE(store->getArchivedGame(room, rec));
+}
+
+TEST(GameRoomManagerTest, PurgeRoomDestroysActiveOrWaitingTableWithoutArchival)
+{
+    EXPECT_OK(mgr->enterLobby(p[0]));
+    EXPECT_OK(mgr->enterLobby(p[1]));
+
+    std::string room = start2P();
+    CHECK_EQUAL(1u, mgr->roomCount());
+
+    RoomResult rPurge = mgr->purgeRoom(room);
+    EXPECT_OK(rPurge);
+    CHECK_EQUAL(0u, mgr->roomCount());
+
+    // Both players can immediately create new tables
+    EXPECT_OK(mgr->createTable(p[0], cfg()));
+    EXPECT_OK(mgr->createTable(p[1], cfg()));
+
+    // Zero archive row
+    GameRecord rec;
+    CHECK_FALSE(store->getArchivedGame(room, rec));
+
+    // Non-existent room returns NOT_FOUND
+    RoomResult rMissing = mgr->purgeRoom("g-missing-room");
+    CHECK_FALSE(rMissing.ok());
+    CHECK_EQUAL(static_cast<int>(RoomCode::NOT_FOUND), static_cast<int>(rMissing.code));
 }
 
 int main(int argc, char **argv)

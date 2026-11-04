@@ -507,6 +507,7 @@ Json profileJson(const PlayerProfile &p, bool includeSeen)
     j["wins"] = p.wins;
     j["losses"] = p.losses;
     j["draws"] = p.draws;
+    j["is_admin"] = p.isAdmin;
     j["created_at"] = p.createdAt;
     if (includeSeen) {
         j["last_seen_at"] = p.lastSeenAt;
@@ -863,6 +864,7 @@ struct OctiHttpServer::Impl {
     void handleTableCreate(const Request &req, Response &res);
     void handleTableJoin(const Request &req, Response &res);
     void handleTableLeave(const Request &req, Response &res);
+    void handleTablePurge(const Request &req, Response &res);
     void handleTableKick(const Request &req, Response &res);
     void handleTableObserve(const Request &req, Response &res);
     void handleTableUnobserve(const Request &req, Response &res);
@@ -882,6 +884,7 @@ struct OctiHttpServer::Impl {
     void handleGameEvents(const Request &req, Response &res);
     void handleArchiveUpload(const Request &req, Response &res);
     void handleArchiveDeleteInstall(const Request &req, Response &res);
+    void handleArchivePurgeGame(const Request &req, Response &res);
     void handleArchiveList(const Request &req, Response &res);
     void handleArchiveGet(const Request &req, Response &res);
     void handleArchiveTranscript(const Request &req, Response &res);
@@ -1559,6 +1562,9 @@ Json OctiHttpServer::Impl::roomViewJson(const RoomView &v)
     j["archived"] = v.archived;
     j["rematch_room_id"] = v.rematchRoomId;
     j["created_at_ms"] = v.createdAtMs;
+    j["last_move_at_ms"] = v.lastMoveAtMs;
+    j["idle_ms"] = v.idleMs;
+    j["ttl_remaining_ms"] = v.ttlRemainingMs;
     return j;
 }
 
@@ -1697,6 +1703,9 @@ Json OctiHttpServer::Impl::tableJson(const TableSummary &t)
     j["players"] = t.playerHandles;
     j["observer_count"] = t.observerCount;
     j["observer_handles"] = t.observerHandles;
+    j["last_move_at_ms"] = t.lastMoveAtMs;
+    j["idle_ms"] = t.idleMs;
+    j["ttl_remaining_ms"] = t.ttlRemainingMs;
     return j;
 }
 
@@ -3254,6 +3263,37 @@ void OctiHttpServer::Impl::handleRobotDelete(const Request &req, Response &res)
     if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
         return;
     }
+    bool permanent = req.has_param("permanent") &&
+                     (req.get_param_value("permanent") == "1" ||
+                      req.get_param_value("permanent") == "true");
+    if (!permanent && req.has_param("delete") &&
+        (req.get_param_value("delete") == "1" ||
+         req.get_param_value("delete") == "true")) {
+        permanent = true;
+    }
+
+    if (permanent) {
+        RobotStatus st = store.deleteRobot(auth.playerId, id);
+        switch (st) {
+        case RobotStatus::OK: {
+            Json j;
+            j["ok"] = true;
+            j["deleted"] = true;
+            j["id"] = id;
+            j["robot_uuid"] = id;
+            sendJson(res, 200, j);
+            return;
+        }
+        case RobotStatus::NOT_FOUND:
+            sendError(res, 404, "NOT_FOUND", "robot not found");
+            return;
+        default:
+            break;
+        }
+        sendError(res, 500, "INTERNAL_ERROR", "failed to delete robot");
+        return;
+    }
+
     RobotStatus st = store.revokeRobot(auth.playerId, id);
     switch (st) {
     case RobotStatus::OK: {
@@ -3721,6 +3761,33 @@ void OctiHttpServer::Impl::handleTableLeave(const Request &req, Response &res)
         return;
     }
     finishRoom(res, rooms.leaveTable(id, auth.playerId), Json::object());
+}
+
+void OctiHttpServer::Impl::handleTablePurge(const Request &req, Response &res)
+{
+    Auth auth;
+    std::string id;
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+        return;
+    }
+    if (auth.isRobot || !store.isPlayerAdmin(auth.playerId)) {
+        sendError(res, 403, "FORBIDDEN", "admin privileges required");
+        return;
+    }
+    RoomResult r = rooms.purgeRoom(id);
+    if (!r.ok()) {
+        if (r.code == RoomCode::NOT_FOUND) {
+            sendError(res, 404, "NOT_FOUND", "room not found");
+        } else {
+            sendError(res, 400, "BAD_REQUEST", r.message);
+        }
+        return;
+    }
+    Json j;
+    j["ok"] = true;
+    j["status"] = "purged";
+    j["room_id"] = id;
+    sendJson(res, 200, j);
 }
 
 void OctiHttpServer::Impl::handleTableKick(const Request &req, Response &res)
@@ -5072,6 +5139,33 @@ void OctiHttpServer::Impl::handleArchiveDeleteInstall(const Request &req, Respon
     sendJson(res, 200, j);
 }
 
+void OctiHttpServer::Impl::handleArchivePurgeGame(const Request &req, Response &res)
+{
+    Auth auth;
+    std::string id;
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+        return;
+    }
+    if (auth.isRobot || !store.isPlayerAdmin(auth.playerId)) {
+        sendError(res, 403, "FORBIDDEN", "admin privileges required");
+        return;
+    }
+    std::string err;
+    if (!store.purgeArchivedGame(id, err)) {
+        if (err == "game_not_found") {
+            sendError(res, 404, "NOT_FOUND", "archived game not found");
+        } else {
+            sendError(res, 500, "INTERNAL_ERROR", "failed to purge archived game: " + err);
+        }
+        return;
+    }
+    Json j;
+    j["ok"] = true;
+    j["status"] = "purged";
+    j["game_id"] = id;
+    sendJson(res, 200, j);
+}
+
 void OctiHttpServer::Impl::handleArchiveList(const Request &req,
                                              Response &res)
 {
@@ -5916,6 +6010,7 @@ void OctiHttpServer::Impl::registerRoutes()
         {"POST", "/api/v1/tables", &Impl::handleTableCreate},
         {"POST", "/api/v1/tables/:id/join", &Impl::handleTableJoin},
         {"POST", "/api/v1/tables/:id/leave", &Impl::handleTableLeave},
+        {"DELETE", "/api/v1/tables/:id", &Impl::handleTablePurge},
         {"POST", "/api/v1/tables/:id/kick", &Impl::handleTableKick},
         {"POST", "/api/v1/tables/:id/observe", &Impl::handleTableObserve},
         {"POST", "/api/v1/tables/:id/unobserve", &Impl::handleTableUnobserve},
@@ -5935,6 +6030,7 @@ void OctiHttpServer::Impl::registerRoutes()
         {"GET", "/api/v1/games/:id/events", &Impl::handleGameEvents},
         {"POST", "/api/v1/archive/upload", &Impl::handleArchiveUpload},
         {"DELETE", "/api/v1/archive/install/:installId", &Impl::handleArchiveDeleteInstall},
+        {"DELETE", "/api/v1/archive/games/:id", &Impl::handleArchivePurgeGame},
         {"GET", "/api/v1/archive/games", &Impl::handleArchiveList},
         {"GET", "/api/v1/archive/games/:id", &Impl::handleArchiveGet},
         {"GET", "/api/v1/archive/games/:id/transcript", &Impl::handleArchiveTranscript},

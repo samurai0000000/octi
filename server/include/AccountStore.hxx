@@ -39,6 +39,7 @@ struct PlayerProfile {
     std::string bio;
     std::string location;
     bool banned = false;
+    bool isAdmin = false;
     int elo2p = 1200;
     int elo4p = 1200;
     int eloOfk = 1200;
@@ -362,6 +363,8 @@ public:
     void setSessionTtlSec(int64_t seconds);
     void setAvatarDir(const std::string &dir);
     std::string avatarDir() const;
+    void setAdminGoogleIdentities(const std::vector<std::string> &googleIdsOrEmails);
+    bool isPlayerAdmin(int64_t playerId) const;
     bool readAvatarFile(const std::string &fileName, std::string &outBytes,
                         std::string &outMimeType) const;
 
@@ -428,6 +431,8 @@ public:
                                  std::vector<RobotRecord> &out);
     RobotStatus revokeRobot(int64_t ownerPlayerId,
                             const std::string &robotUuidOrName);
+    RobotStatus deleteRobot(int64_t ownerPlayerId,
+                            const std::string &robotUuidOrName);
     RobotTokenValidation validateRobotToken(const std::string &rawToken);
     bool getRobotById(int64_t robotId, RobotRecord &out);
     bool getRobotByUuid(const std::string &robotUuid, RobotRecord &out);
@@ -447,6 +452,7 @@ public:
     ArchiveStatus archiveGameWithRatings(const GameRecord &record,
                                          const std::vector<RatingUpdate> &updates,
                                          std::string &error);
+    bool purgeArchivedGame(const std::string &gameId, std::string &errorOut);
     bool getArchivedGame(const std::string &gameId, GameRecord &out);
     bool getArchivedTranscript(const std::string &gameId,
                                std::string &transcript);
@@ -483,12 +489,14 @@ public:
 
 private:
     int64_t nowSec() const;
+    bool isPlayerAdminLocked(int64_t playerId) const;
 
     mutable std::mutex _mutex;
     sqlite3 *_db;
     std::function<int64_t()> _clock;
     int64_t _sessionTtlSec;
     std::string _avatarDir;
+    std::vector<std::string> _adminGoogleIds;
 };
 
 } // namespace octi

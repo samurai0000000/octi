@@ -146,6 +146,7 @@ struct RoomLimits {
     size_t maxPendingSignals = 256;
     int64_t finishedRetentionMs = 30LL * 60 * 1000;
     int64_t waitingTtlMs = 60LL * 60 * 1000;
+    int64_t inProgressInactivityTtlMs = 60LL * 60 * 1000;
     int64_t proposalTtlMs = 60LL * 1000;
     int64_t signalTtlMs = 60LL * 1000;
     int lobbyChatBurst = 5;
@@ -328,6 +329,9 @@ struct RoomView {
     std::string archiveError;
     std::string rematchRoomId;
     int64_t createdAtMs = 0;
+    int64_t lastMoveAtMs = 0;
+    int64_t idleMs = 0;
+    int64_t ttlRemainingMs = -1;
 };
 
 struct TableSeatSummary {
@@ -363,6 +367,9 @@ struct TableSummary {
     std::vector<std::string> playerHandles;
     int observerCount = 0;
     std::vector<std::string> observerHandles;
+    int64_t lastMoveAtMs = 0;
+    int64_t idleMs = 0;
+    int64_t ttlRemainingMs = -1;
 };
 
 /* ------------------------------------------------------------------ */
@@ -548,6 +555,7 @@ public:
     RoomResult joinTable(const std::string &roomId, int64_t playerId, int seat,
                          const std::string &passcode);
     RoomResult leaveTable(const std::string &roomId, int64_t playerId);
+    RoomResult purgeRoom(const std::string &roomId);
     RoomResult kickSeat(const std::string &roomId, int64_t hostPlayerId,
                         int64_t targetPlayerId);
     RoomResult observeRoom(const std::string &roomId, int64_t playerId);

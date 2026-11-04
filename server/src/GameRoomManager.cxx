@@ -582,6 +582,7 @@ struct GameRoomManager::Room {
 
     int64_t createdAtMs = 0;
     int64_t lastActivityMs = 0;
+    int64_t lastMoveMs = 0;
     int64_t endedAtMs = 0;
     int64_t startedAtSec = 0;
     int64_t endedAtSec = 0;
@@ -1299,6 +1300,24 @@ TableSummary GameRoomManager::summarize(const Room &r) const
          oit != r.observers.end(); ++oit) {
         t.observerHandles.push_back(handleOf(*oit));
     }
+    int64_t now = nowMs();
+    if (r.phase == RoomPhase::IN_PROGRESS) {
+        int64_t baseMs = (r.lastMoveMs > 0 ? r.lastMoveMs : r.createdAtMs);
+        t.lastMoveAtMs = baseMs;
+        t.idleMs = std::max<int64_t>(0, now - baseMs);
+        t.ttlRemainingMs =
+            std::max<int64_t>(0, _limits.inProgressInactivityTtlMs - t.idleMs);
+    } else if (r.phase == RoomPhase::WAITING_FOR_PLAYERS) {
+        t.lastMoveAtMs = r.createdAtMs;
+        t.idleMs = std::max<int64_t>(0, now - r.lastActivityMs);
+        t.ttlRemainingMs =
+            std::max<int64_t>(0, _limits.waitingTtlMs - t.idleMs);
+    } else {
+        t.lastMoveAtMs = (r.lastMoveMs > 0 ? r.lastMoveMs : r.endedAtMs);
+        t.idleMs = std::max<int64_t>(0, now - r.endedAtMs);
+        t.ttlRemainingMs =
+            std::max<int64_t>(0, _limits.finishedRetentionMs - t.idleMs);
+    }
     return t;
 }
 
@@ -1479,6 +1498,7 @@ GameRoomManager::Room *GameRoomManager::createRoomLocked(const GameTableConfig &
     }
     room->createdAtMs = now;
     room->lastActivityMs = now;
+    room->lastMoveMs = now;
     Room *raw = room.get();
     _rooms[raw->id] = std::move(room);
 
@@ -1824,6 +1844,7 @@ void GameRoomManager::startGameLocked(Room &r, int64_t now)
     r.turnCarryMs = 0;
     r.startedAtSec = wallSec();
     r.lastActivityMs = now;
+    r.lastMoveMs = now;
 
     RoomEvent e;
     e.type = RoomEventType::GAME_STARTED;
@@ -1955,15 +1976,43 @@ RoomResult GameRoomManager::leaveTable(const std::string &roomId,
     if (seat == 0) {
         return fail(RoomCode::FORBIDDEN_NOT_SEATED, "not seated at this table");
     }
-    if (r->phase != RoomPhase::WAITING_FOR_PLAYERS) {
-        return fail(RoomCode::INVALID_STATE,
-                    "game already started; resign instead");
+    if (r->phase == RoomPhase::WAITING_FOR_PLAYERS) {
+        _players[playerId].lastActiveMs = now;
+        leaveWaitingSeatLocked(*r, seat, now);
+        if (findRoomLocked(roomId) != nullptr) {
+            saveRoomLocked(*r);
+        }
+        return success();
     }
     _players[playerId].lastActiveMs = now;
-    leaveWaitingSeatLocked(*r, seat, now);
-    if (findRoomLocked(roomId) != nullptr) {
-        saveRoomLocked(*r);
+    r->seatConnected[seat] = false;
+    r->seatDisconnectedAt[seat] = now;
+    std::map<int64_t, std::string>::iterator sr = _seatRoom.find(playerId);
+    if (sr != _seatRoom.end() && sr->second == r->id) {
+        _seatRoom.erase(sr);
     }
+    RoomEvent e;
+    e.type = RoomEventType::SEAT_LEFT;
+    e.playerId = playerId;
+    e.handle = r->seatHandle[seat];
+    e.seat = seat;
+    e.detail = (r->phase == RoomPhase::IN_PROGRESS) ? "in_progress" : "finished";
+    RoomResult res = success();
+    res.seq = emitLocked(*r, e, now);
+    announceTableLocked(*r, false);
+    saveRoomLocked(*r);
+    refreshPresenceLocked(playerId);
+    return res;
+}
+
+RoomResult GameRoomManager::purgeRoom(const std::string &roomId)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    Room *r = findRoomLocked(roomId);
+    if (r == nullptr) {
+        return fail(RoomCode::NOT_FOUND, "no such room");
+    }
+    deleteRoomLocked(roomId);
     return success();
 }
 
@@ -2239,6 +2288,10 @@ TickReport GameRoomManager::tick()
         } else if (r.phase == RoomPhase::WAITING_FOR_PLAYERS &&
                    now - r.lastActivityMs >= _limits.waitingTtlMs) {
             reap.push_back(r.id);
+        } else if (r.phase == RoomPhase::IN_PROGRESS &&
+                   now - (r.lastMoveMs > 0 ? r.lastMoveMs : r.createdAtMs) >=
+                       _limits.inProgressInactivityTtlMs) {
+            reap.push_back(r.id);
         }
     }
     for (size_t i = 0; i < reap.size(); ++i) {
@@ -2507,6 +2560,7 @@ RoomResult GameRoomManager::submitMove(const std::string &roomId,
     }
     g->setLastPlyMetadata(pmeta);
     r->lastActivityMs = now;
+    r->lastMoveMs = now;
 
     for (size_t i = 0; i < r->proposals.size();) {
         ProposalType t = r->proposals[i].type;
@@ -2977,6 +3031,7 @@ RoomResult GameRoomManager::completeProposalLocked(Room &r, ProposalType type,
         if (g->getNumMoves() != static_cast<int>(r.plies.size())) {
             return fail(RoomCode::INTERNAL_ERROR, "engine history out of sync");
         }
+        r.lastMoveMs = now;
         RoomEvent e;
         e.type = RoomEventType::UNDO_APPLIED;
         e.playerId = proposerId;
@@ -3877,6 +3932,23 @@ void GameRoomManager::fillView(const Room &r, int64_t viewerId, int64_t now,
     out.archiveError = r.archiveError;
     out.rematchRoomId = r.rematchRoomId;
     out.createdAtMs = r.createdAtMs;
+    if (r.phase == RoomPhase::IN_PROGRESS) {
+        int64_t baseMs = (r.lastMoveMs > 0 ? r.lastMoveMs : r.createdAtMs);
+        out.lastMoveAtMs = baseMs;
+        out.idleMs = std::max<int64_t>(0, now - baseMs);
+        out.ttlRemainingMs =
+            std::max<int64_t>(0, _limits.inProgressInactivityTtlMs - out.idleMs);
+    } else if (r.phase == RoomPhase::WAITING_FOR_PLAYERS) {
+        out.lastMoveAtMs = r.createdAtMs;
+        out.idleMs = std::max<int64_t>(0, now - r.lastActivityMs);
+        out.ttlRemainingMs =
+            std::max<int64_t>(0, _limits.waitingTtlMs - out.idleMs);
+    } else {
+        out.lastMoveAtMs = (r.lastMoveMs > 0 ? r.lastMoveMs : r.endedAtMs);
+        out.idleMs = std::max<int64_t>(0, now - r.endedAtMs);
+        out.ttlRemainingMs =
+            std::max<int64_t>(0, _limits.finishedRetentionMs - out.idleMs);
+    }
 }
 
 RoomResult GameRoomManager::getRoomView(const std::string &roomId,
@@ -4188,6 +4260,8 @@ void GameRoomManager::saveRoomLocked(const Room &r)
     j["idleElapsedMs"] = std::max<int64_t>(0, now - r.lastActivityMs);
     j["createdElapsedMs"] = std::max<int64_t>(0, now - r.createdAtMs);
     j["endedElapsedMs"] = (r.endedAtMs > 0) ? std::max<int64_t>(0, now - r.endedAtMs) : -1;
+    j["last_move_ms"] = r.lastMoveMs;
+    j["lastMoveElapsedMs"] = (r.lastMoveMs > 0) ? std::max<int64_t>(0, now - r.lastMoveMs) : -1;
     j["startedAtSec"] = r.startedAtSec;
     j["endedAtSec"] = r.endedAtSec;
 
@@ -4551,6 +4625,15 @@ bool GameRoomManager::restoreFromStoreLocked()
             r->lastActivityMs = restoreNow - std::max<int64_t>(0, idleElapsedMs);
             r->createdAtMs = restoreNow - std::max<int64_t>(0, createdElapsedMs);
             r->endedAtMs = (endedElapsedMs >= 0) ? (restoreNow - endedElapsedMs) : 0;
+            if (j.contains("last_move_ms") && j["last_move_ms"].is_number()) {
+                r->lastMoveMs = j["last_move_ms"].get<int64_t>();
+            } else if (j.contains("lastMoveElapsedMs") &&
+                       j["lastMoveElapsedMs"].is_number() &&
+                       j["lastMoveElapsedMs"].get<int64_t>() >= 0) {
+                r->lastMoveMs = restoreNow - j["lastMoveElapsedMs"].get<int64_t>();
+            } else {
+                r->lastMoveMs = (r->lastActivityMs > 0) ? r->lastActivityMs : r->createdAtMs;
+            }
             r->startedAtSec = j.value("startedAtSec", 0LL);
             r->endedAtSec = j.value("endedAtSec", 0LL);
 

@@ -392,6 +392,7 @@ private:
     class QGroupBox *_historyBox = nullptr;
     class QGroupBox *_actionsBox = nullptr;
     OctiStartMatchDialog *_startMatchOverlay = nullptr;
+    QTimer *_onlineTtlTimer = nullptr;
 };
 
 } // namespace octi

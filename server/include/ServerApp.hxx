@@ -81,6 +81,10 @@ public:
      * rejected. path may be empty to apply only the environment override.
      */
     static bool loadOidcConfig(const std::string &path, OidcConfig &out,
+                               std::string &error,
+                               std::vector<std::string> *adminGoogleIds = nullptr);
+    static bool loadOidcConfig(const std::string &path, OidcConfig &out,
+                               std::vector<std::string> &adminGoogleIds,
                                std::string &error);
 
 private:

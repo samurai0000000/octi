@@ -625,6 +625,19 @@ class OctiAppViewModel @JvmOverloads constructor(
         if (_currentTurnStartEpochMs > 0L) {
             _turnElapsedSec.value = ((now - _currentTurnStartEpochMs) / 1000L).toInt().coerceAtLeast(0)
         }
+        val gv = _activeGameView.value
+        if (gv != null && gv.ttlRemainingMs > 0L) {
+            gv.ttlRemainingMs = (gv.ttlRemainingMs - 1000L).coerceAtLeast(0L)
+            _activeGameView.value = gv
+        }
+        val lobby = _lobbyState.value
+        if (lobby != null && lobby.tables.isNotEmpty()) {
+            for (t in lobby.tables) {
+                if (t.ttlRemainingMs > 0L) {
+                    t.ttlRemainingMs = (t.ttlRemainingMs - 1000L).coerceAtLeast(0L)
+                }
+            }
+        }
     }
 
     class BoardSnapshot(
@@ -2383,6 +2396,24 @@ class OctiAppViewModel @JvmOverloads constructor(
             val ok = openArchivedGameForReplay(gameId)
             runOnUiThreadOrSync {
                 onDone?.onDone(ok)
+            }
+        }
+    }
+
+    fun purgeArchivedGame(gameId: String) {
+        _backgroundExecutor.submit {
+            val res = netClient.purgeArchivedGame(gameId)
+            if (res.ok) {
+                refreshArchivedGamesAsync()
+            }
+        }
+    }
+
+    fun purgeTable(roomId: String) {
+        _backgroundExecutor.submit {
+            val res = netClient.purgeTable(roomId)
+            if (res.ok) {
+                refreshLobbyState()
             }
         }
     }

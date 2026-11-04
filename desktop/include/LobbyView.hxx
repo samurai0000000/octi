@@ -99,6 +99,7 @@ public:
     QPushButton *matchmakingButton() const { return _matchmakingBtn; }
     QPushButton *quickMatchButton() const { return _matchmakingBtn; }
     QPushButton *refreshButton() const { return _refreshBtn; }
+    QPushButton *purgeTableButton() const { return _purgeTableBtn; }
     QTableWidget *playersTable() const { return _playersTable; }
     QTableWidget *tablesTable() const { return _tablesTable; }
     QGroupBox *inspectorBox() const { return _inspectorBox; }
@@ -147,7 +148,9 @@ private:
     QPushButton *_observeSelectedBtn;
     QPushButton *_matchmakingBtn;
     QPushButton *_refreshBtn;
+    QPushButton *_purgeTableBtn;
     QLabel *_statusLabel;
+    QTimer *_secondTimer;
 
     std::vector<LobbyPlayerInfo> _players;
     std::vector<TableSummaryInfo> _tables;

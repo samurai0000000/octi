@@ -176,6 +176,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         public int draws = 0;
         public long createdAt = 0;
         public long lastSeenAt = 0;
+        public boolean isAdmin = false;
         public List<LinkedIdentityInfo> identities = new ArrayList<>();
         public List<ArchivedGameSummary> recentGames = new ArrayList<>();
     }
@@ -391,6 +392,9 @@ public final class OctiNetworkClient implements AutoCloseable {
         public List<String> players = new ArrayList<>();
         public List<TableSeatInfo> seats = new ArrayList<>();
         public int observerCount = 0;
+        public long lastMoveAtMs = 0L;
+        public long idleMs = 0L;
+        public long ttlRemainingMs = -1L;
     }
 
     public static final class TableSummary extends TableSummaryInfo {
@@ -513,6 +517,9 @@ public final class OctiNetworkClient implements AutoCloseable {
         public boolean archived = false;
         public String rematchRoomId = "";
         public long createdAtMs = 0;
+        public long lastMoveAtMs = 0L;
+        public long idleMs = 0L;
+        public long ttlRemainingMs = -1L;
     }
 
     public static final class MoveSubmitData {
@@ -1788,6 +1795,23 @@ public final class OctiNetworkClient implements AutoCloseable {
         return res;
     }
 
+    public ApiResult<Boolean> purgeTable(String roomId) {
+        ApiResult<Boolean> res = new ApiResult<>(Boolean.FALSE);
+        if (roomId == null || roomId.trim().isEmpty()) {
+            res.errorMessage = "Missing room ID";
+            return res;
+        }
+        RawResponse raw = doDelete("/api/v1/tables/" + urlEncode(roomId.trim()) + "/purge");
+        if (!raw.transportOk || raw.status != 200) {
+            populateError(raw, res);
+            return res;
+        }
+        res.ok = true;
+        res.httpStatus = raw.status;
+        res.data = Boolean.TRUE;
+        return res;
+    }
+
     public ApiResult<Boolean> enqueueMatchmaking() {
         return enqueueMatchmaking(new MatchmakingRequest());
     }
@@ -2175,6 +2199,23 @@ public final class OctiNetworkClient implements AutoCloseable {
         res.ok = true;
         res.httpStatus = raw.status;
         res.data = raw.body != null ? raw.body : "";
+        return res;
+    }
+
+    public ApiResult<Boolean> purgeArchivedGame(String gameId) {
+        ApiResult<Boolean> res = new ApiResult<>(Boolean.FALSE);
+        if (gameId == null || gameId.trim().isEmpty()) {
+            res.errorMessage = "Missing game ID";
+            return res;
+        }
+        RawResponse raw = doDelete("/api/v1/archive/games/" + urlEncode(gameId.trim()) + "/purge");
+        if (!raw.transportOk || raw.status != 200) {
+            populateError(raw, res);
+            return res;
+        }
+        res.ok = true;
+        res.httpStatus = raw.status;
+        res.data = Boolean.TRUE;
         return res;
     }
 
@@ -3136,6 +3177,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         p.draws = OctiMiniJson.getInt(j, "draws", 0);
         p.createdAt = OctiMiniJson.getLong(j, "created_at", 0);
         p.lastSeenAt = OctiMiniJson.getLong(j, "last_seen_at", 0);
+        p.isAdmin = OctiMiniJson.getBoolean(j, "is_admin", false);
         List<Object> ids = OctiMiniJson.getArray(j, "linked_identities");
         if (ids != null) {
             p.identities = parseLinkedIdentities(ids);
@@ -3240,6 +3282,9 @@ public final class OctiNetworkClient implements AutoCloseable {
             }
         }
         t.observerCount = OctiMiniJson.getInt(j, "observer_count", 0);
+        t.lastMoveAtMs = OctiMiniJson.getLong(j, "last_move_at_ms", 0L);
+        t.idleMs = OctiMiniJson.getLong(j, "idle_ms", 0L);
+        t.ttlRemainingMs = OctiMiniJson.getLong(j, "ttl_remaining_ms", -1L);
         return t;
     }
 
@@ -3384,6 +3429,9 @@ public final class OctiNetworkClient implements AutoCloseable {
         v.archived = OctiMiniJson.getBoolean(j, "archived", false);
         v.rematchRoomId = OctiMiniJson.getString(j, "rematch_room_id", "");
         v.createdAtMs = OctiMiniJson.getLong(j, "created_at_ms", 0);
+        v.lastMoveAtMs = OctiMiniJson.getLong(j, "last_move_at_ms", 0L);
+        v.idleMs = OctiMiniJson.getLong(j, "idle_ms", 0L);
+        v.ttlRemainingMs = OctiMiniJson.getLong(j, "ttl_remaining_ms", -1L);
         return v;
     }
 }
