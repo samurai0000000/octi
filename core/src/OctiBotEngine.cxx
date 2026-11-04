@@ -2569,7 +2569,7 @@ std::vector<BookMoveScore> OctiBotEngine::searchTopMovesForBook(
     } restorer{this, savedProfile, savedBudget, savedCustom};
 
     int maxTargetDepth = std::max(1, searchDepth);
-    int effBudgetMs = std::max(10, timeBudgetMs);
+    int effBudgetMs = (timeBudgetMs > 0) ? std::max(10, timeBudgetMs) : 0;
     _profile.useOpeningBook = false;
     _profile.rootScoreJitter = 0;
     _profile.maxSearchDepth = maxTargetDepth;
@@ -2577,7 +2577,9 @@ std::vector<BookMoveScore> OctiBotEngine::searchTopMovesForBook(
     _timeBudgetMs = effBudgetMs;
 
     long startMs = steadyClockMs();
-    long deadlineMs = startMs + effBudgetMs;
+    long deadlineMs = (timeBudgetMs > 0)
+        ? (startMs + effBudgetMs)
+        : std::numeric_limits<long>::max();
 
     const std::string rootFen = board.toPositionString();
     OctiBoard scratchBoard;
@@ -2630,7 +2632,7 @@ std::vector<BookMoveScore> OctiBotEngine::searchTopMovesForBook(
     std::atomic<bool> stopFlag{false};
     std::vector<std::thread> helpers;
 
-    if (effBudgetMs >= 200 && _profile.lazySmpThreads > 1) {
+    if ((timeBudgetMs <= 0 || effBudgetMs >= 200) && _profile.lazySmpThreads > 1) {
         unsigned int hw = std::thread::hardware_concurrency();
         int numThreads = std::min(_profile.lazySmpThreads,
                                   static_cast<int>(hw > 0 ? hw : 2));

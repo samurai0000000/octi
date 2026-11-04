@@ -31,18 +31,82 @@
 
 namespace {
 
+int parseMakeflagsThreads(const std::string &mf, int hwThreads)
+{
+    int fallbackHw = std::max(1, hwThreads);
+    std::istringstream iss(mf);
+    std::vector<std::string> tokens;
+    std::string tok;
+    while (iss >> tok) {
+        tokens.push_back(tok);
+    }
+    if (tokens.empty()) {
+        return fallbackHw;
+    }
+
+    auto isAllDigits = [](const std::string &s) -> bool {
+        if (s.empty()) {
+            return false;
+        }
+        for (char c : s) {
+            if (c < '0' || c > '9') {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    for (std::size_t i = 0; i < tokens.size(); ++i) {
+        const std::string &t = tokens[i];
+        if (t == "-j" || t == "j") {
+            if (i + 1 < tokens.size() && isAllDigits(tokens[i + 1])) {
+                int val = std::atoi(tokens[i + 1].c_str());
+                if (val >= 1) {
+                    return val;
+                }
+            }
+            return fallbackHw;
+        }
+        if (t.size() > 2 && t.compare(0, 2, "-j") == 0) {
+            std::string numPart = t.substr(2);
+            if (isAllDigits(numPart)) {
+                int val = std::atoi(numPart.c_str());
+                if (val >= 1) {
+                    return val;
+                }
+            }
+        }
+    }
+
+    return 1;
+}
+
+int detectDefaultThreads()
+{
+    int hw = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
+    const char *mf = std::getenv("MAKEFLAGS");
+    if (!mf) {
+        return hw;
+    }
+    return parseMakeflagsThreads(mf, hw);
+}
+
 struct BookGenConfig {
     std::string mode = "all";
     int maxPly = 6;
-    int searchDepth = 8;
-    int timeBudgetMs = 30000;
+    int searchDepth = 9;
+    int timeBudgetMs = 0;
     int botBranch = 3;
-    int oppBranch = 8;
-    int threads = static_cast<int>(
-        std::max(1u, std::thread::hardware_concurrency()));
-    std::string outHeader = "core/include/OctiOpeningBookData.hxx";
-    std::string outJson = "plan/plan_ai_opening_playbook.artifacts/opening_book.json";
-    std::string outJava;
+    int oppBranch = 6;
+    int threads = detectDefaultThreads();
+    std::string outHeader = ".book/OctiOpeningBookData.hxx";
+    std::string outJson = ".book/opening_book.json";
+    std::string outJava = ".book/OctiOpeningBookData.java";
+    std::vector<std::string> outJs;
+    std::string fromJson;
+    bool explicitOutHeader = false;
+    bool explicitOutJson = false;
+    bool explicitOutJava = false;
 };
 
 struct FrontierNode {
@@ -107,26 +171,26 @@ void printUsage(const char *progName)
         << "                               OFK     = OCTI for Kids (6x7)\n"
         << "                               4P      = 4-Player 2v2 Coalitions\n"
         << "  --max-ply <int>            Number of opening plies to expand (default: 6)\n"
-        << "  --search-depth <int>       Alpha-beta search depth per position (default: 8)\n"
-        << "  --time-budget-ms <int>     Max wall-clock budget per position in ms (default: 30000)\n"
+        << "  --search-depth <int>       Alpha-beta search depth per position (default: 9)\n"
+        << "  --time-budget-ms <int>     Max wall-clock budget per position in ms, 0=unlimited (default: 0)\n"
         << "  --bot-branch <int>         Top candidate moves stored per book entry (default: 3)\n"
-        << "  --opp-branch <int>         Top replies expanded into next ply frontier (default: 8)\n"
-        << "  --threads <int>            Total CPU worker threads (default: hardware concurrency)\n"
-        << "  --out-header <path>        Output C++ header path\n"
-        << "                             (default: core/include/OctiOpeningBookData.hxx)\n"
-        << "  --out-json <path>          Output JSON playbook path\n"
-        << "                             (default: plan/plan_ai_opening_playbook.artifacts/opening_book.json)\n"
-        << "  --out-java <path>          Optional Java snippet output path for Android\n\n"
-        << "Recommended 72-Thread Builder Profiles:\n"
-        << "  1. Standard Book (~5-15 min on 72 threads, 6 plies, depth 8):\n"
-        << "     ./core/build/octi_book_gen --mode all --max-ply 6 --search-depth 8 \\\n"
-        << "         --bot-branch 3 --opp-branch 8 --threads 72\n\n"
-        << "  2. Deep Tournament Book (~45-90 min on 72 threads, 8 plies, depth 10):\n"
+        << "  --opp-branch <int>         Top replies expanded into next ply frontier (default: 6)\n"
+        << "  --threads <int>            Total CPU worker threads (default: from MAKEFLAGS -jN or nproc)\n"
+        << "  --out-header <path>        Output C++ header path (default: .book/OctiOpeningBookData.hxx)\n"
+        << "  --out-json <path>          Output JSON playbook path (default: .book/opening_book.json)\n"
+        << "  --out-java <path>          Output Java class path (default: .book/OctiOpeningBookData.java)\n"
+        << "  --out-js <path>            Repeatable JS/HTML/C++ file path with BEGIN/END_OPENING_BOOK_DATA markers\n"
+        << "  --from-json <path>         Load existing JSON playbook and write requested outputs without searching\n\n"
+        << "Recommended High-Core Profiles:\n"
+        << "  1. Standard Book (6 plies, depth 9, pure depth-bound):\n"
+        << "     ./core/build/octi_book_gen --mode all --max-ply 6 --search-depth 9 \\\n"
+        << "         --bot-branch 3 --opp-branch 6\n\n"
+        << "  2. Deep Tournament Book (8 plies, depth 10):\n"
         << "     ./core/build/octi_book_gen --mode all --max-ply 8 --search-depth 10 \\\n"
-        << "         --time-budget-ms 60000 --bot-branch 3 --opp-branch 10 --threads 72\n\n"
-        << "  3. Ultra-Deep Overnight Book (8 plies, depth 12, 120s per node):\n"
+        << "         --bot-branch 3 --opp-branch 8\n\n"
+        << "  3. Ultra-Deep Book (8 plies, depth 12):\n"
         << "     ./core/build/octi_book_gen --mode all --max-ply 8 --search-depth 12 \\\n"
-        << "         --time-budget-ms 120000 --bot-branch 3 --opp-branch 12 --threads 72\n";
+        << "         --bot-branch 3 --opp-branch 10\n";
 }
 
 bool parseArgs(int argc, char **argv, BookGenConfig &cfg, bool &helpRequested)
@@ -153,10 +217,17 @@ bool parseArgs(int argc, char **argv, BookGenConfig &cfg, bool &helpRequested)
             cfg.threads = std::atoi(argv[++i]);
         } else if (arg == "--out-header" && i + 1 < argc) {
             cfg.outHeader = argv[++i];
+            cfg.explicitOutHeader = true;
         } else if (arg == "--out-json" && i + 1 < argc) {
             cfg.outJson = argv[++i];
+            cfg.explicitOutJson = true;
         } else if (arg == "--out-java" && i + 1 < argc) {
             cfg.outJava = argv[++i];
+            cfg.explicitOutJava = true;
+        } else if (arg == "--out-js" && i + 1 < argc) {
+            cfg.outJs.push_back(argv[++i]);
+        } else if (arg == "--from-json" && i + 1 < argc) {
+            cfg.fromJson = argv[++i];
         } else {
             std::cerr << "Error: Unknown or incomplete option '" << arg << "'\n\n";
             return false;
@@ -171,8 +242,8 @@ bool parseArgs(int argc, char **argv, BookGenConfig &cfg, bool &helpRequested)
         std::cerr << "Error: --search-depth must be between 1 and 30\n";
         return false;
     }
-    if (cfg.timeBudgetMs < 10) {
-        std::cerr << "Error: --time-budget-ms must be >= 10\n";
+    if (cfg.timeBudgetMs < 0) {
+        std::cerr << "Error: --time-budget-ms must be >= 0 (0 = unlimited)\n";
         return false;
     }
     if (cfg.botBranch < 1 || cfg.botBranch > 16) {
@@ -243,6 +314,10 @@ std::vector<FrontierNode> buildInitialSeeds(const std::string &modeFilter)
 bool writeHeaderFile(const std::string &path,
                      const std::map<std::uint64_t, GeneratedBookEntry> &bookMap)
 {
+    if (path.empty()) {
+        return true;
+    }
+
     std::filesystem::path fsPath(path);
     if (fsPath.has_parent_path()) {
         std::error_code ec;
@@ -391,34 +466,174 @@ bool writeJavaFile(const std::string &path,
         return false;
     }
 
-    out << "// Auto-generated by octi_book_gen\n"
-        << "// Copyright (C) 2026, Charles Chiou\n\n"
-        << "private static final OpeningBookEntry[] OPENING_BOOK = new OpeningBookEntry[] {\n";
+    out << "/*\n"
+        << " * OctiOpeningBookData.java\n"
+        << " *\n"
+        << " * Copyright (C) 2026, Charles Chiou\n"
+        << " */\n\n"
+        << "package com.selfso.octi;\n\n"
+        << "public final class OctiOpeningBookData {\n\n"
+        << "    private OctiOpeningBookData() {\n"
+        << "    }\n\n"
+        << "    public static final OctiBotEngine.OpeningBookEntry[] ENTRIES =\n"
+        << "            new OctiBotEngine.OpeningBookEntry[] {\n";
 
     std::size_t idx = 0;
     const std::size_t total = bookMap.size();
     for (const auto &kv : bookMap) {
         const GeneratedBookEntry &e = kv.second;
         std::size_t numCands = std::min<std::size_t>(3, e.candidates.size());
-        out << "    // " << e.variantLabel << " ply " << e.ply
+        out << "        // " << e.variantLabel << " ply " << e.ply
             << " (" << e.moveHistoryDesc << ")\n";
-        out << "    new OpeningBookEntry(" << formatHexKey(e.canonicalKey) << "L, "
-            << e.depth << ", new String[]{";
+        out << "        new OctiBotEngine.OpeningBookEntry("
+            << formatHexKey(e.canonicalKey) << "L, " << e.depth;
         for (std::size_t c = 0; c < numCands; ++c) {
-            if (c > 0) out << ", ";
-            out << "\"" << e.candidates[c].move << "\"";
+            out << ",\n            new OctiBotEngine.OpeningBookCandidate(\""
+                << e.candidates[c].move << "\", "
+                << e.candidates[c].score << ")";
         }
-        out << "}, new int[]{";
-        for (std::size_t c = 0; c < numCands; ++c) {
-            if (c > 0) out << ", ";
-            out << e.candidates[c].score;
-        }
-        out << "})" << (idx + 1 < total ? "," : "") << "\n";
+        out << ")" << (idx + 1 < total ? "," : "") << "\n";
         ++idx;
     }
-    out << "};\n";
+    out << "    };\n"
+        << "}\n";
     out.flush();
     return out.good();
+}
+
+bool updateJsFileWithMarkers(
+    const std::string &path,
+    const std::map<std::uint64_t, GeneratedBookEntry> &bookMap)
+{
+    if (path.empty()) {
+        return true;
+    }
+    if (!std::filesystem::exists(path)) {
+        if (path.find("www/") != std::string::npos) {
+            std::cout << "Note: Skipping non-existent optional web path: "
+                      << path << "\n";
+            return true;
+        }
+        std::cerr << "Error: Target JS file does not exist: " << path << "\n";
+        return false;
+    }
+
+    std::ifstream in(path, std::ios::in | std::ios::binary);
+    if (!in.is_open()) {
+        std::cerr << "Error: Failed to open JS file for reading: " << path << "\n";
+        return false;
+    }
+    std::ostringstream contentsOss;
+    contentsOss << in.rdbuf();
+    std::string content = contentsOss.str();
+    in.close();
+
+    const std::string beginMarker = "// BEGIN_OPENING_BOOK_DATA";
+    const std::string endMarker = "// END_OPENING_BOOK_DATA";
+    std::size_t beginPos = content.find(beginMarker);
+    std::size_t endPos = content.find(endMarker);
+    if (beginPos == std::string::npos || endPos == std::string::npos ||
+        beginPos >= endPos) {
+        std::cerr << "Error: Missing or invalid OPENING_BOOK_DATA markers in: "
+                  << path << "\n";
+        return false;
+    }
+
+    std::ostringstream jsBlock;
+    jsBlock << beginMarker << "\n"
+            << "var OPENING_BOOK = {\n";
+    std::size_t idx = 0;
+    const std::size_t total = bookMap.size();
+    for (const auto &kv : bookMap) {
+        const GeneratedBookEntry &e = kv.second;
+        std::size_t numCands = std::min<std::size_t>(3, e.candidates.size());
+        if (!e.variantLabel.empty()) {
+            jsBlock << "  // " << e.variantLabel << " ply " << e.ply
+                    << " (" << e.moveHistoryDesc << ")\n";
+        }
+        jsBlock << "  \"" << formatHexKey(e.canonicalKey) << "\": {\n"
+                << "    depth: " << e.depth << ",\n"
+                << "    candidates: [\n";
+        for (std::size_t c = 0; c < numCands; ++c) {
+            jsBlock << "      { move: \"" << e.candidates[c].move
+                    << "\", score: " << e.candidates[c].score << " }"
+                    << (c + 1 < numCands ? "," : "") << "\n";
+        }
+        jsBlock << "    ]\n"
+                << "  }" << (idx + 1 < total ? "," : "") << "\n";
+        ++idx;
+    }
+    jsBlock << "};\n" << endMarker;
+
+    std::string updated = content.substr(0, beginPos) +
+                          jsBlock.str() +
+                          content.substr(endPos + endMarker.size());
+
+    std::ofstream out(path, std::ios::out | std::ios::trunc | std::ios::binary);
+    if (!out.is_open()) {
+        std::cerr << "Error: Failed to open JS file for writing: " << path << "\n";
+        return false;
+    }
+    out << updated;
+    out.flush();
+    return out.good();
+}
+
+bool loadJsonFile(const std::string &path,
+                  std::map<std::uint64_t, GeneratedBookEntry> &bookMap)
+{
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        std::cerr << "Error: Failed to open input JSON playbook: " << path << "\n";
+        return false;
+    }
+    nlohmann::json root;
+    try {
+        in >> root;
+    } catch (const std::exception &ex) {
+        std::cerr << "Error: Failed to parse JSON playbook '" << path
+                  << "': " << ex.what() << "\n";
+        return false;
+    }
+    if (!root.is_object() || !root.contains("entries") ||
+        !root["entries"].is_array()) {
+        std::cerr << "Error: Invalid JSON playbook structure in: " << path << "\n";
+        return false;
+    }
+
+    bookMap.clear();
+    for (const auto &item : root["entries"]) {
+        if (!item.is_object() || !item.contains("canonicalKey")) {
+            continue;
+        }
+        GeneratedBookEntry e;
+        std::string keyStr = item["canonicalKey"].get<std::string>();
+        try {
+            e.canonicalKey = std::stoull(keyStr, nullptr, 16);
+        } catch (...) {
+            continue;
+        }
+        e.depth = item.value("depth", 1);
+        e.ply = item.value("ply", 0);
+        e.variantLabel = item.value("variant", std::string(""));
+        e.moveHistoryDesc = item.value("history", std::string(""));
+        e.positionStr = item.value("position", std::string(""));
+        if (item.contains("candidates") && item["candidates"].is_array()) {
+            for (const auto &cj : item["candidates"]) {
+                if (!cj.is_object() || !cj.contains("move")) {
+                    continue;
+                }
+                octi::BookMoveScore bms;
+                bms.move = cj["move"].get<std::string>();
+                bms.score = static_cast<std::int16_t>(cj.value("score", 0));
+                e.candidates.push_back(bms);
+            }
+        }
+        if (!e.candidates.empty()) {
+            bookMap[e.canonicalKey] = e;
+        }
+    }
+    return true;
 }
 
 } // namespace
@@ -436,18 +651,47 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    if (!cfg.fromJson.empty()) {
+        std::map<std::uint64_t, GeneratedBookEntry> bookMap;
+        if (!loadJsonFile(cfg.fromJson, bookMap)) {
+            return 1;
+        }
+        if (cfg.explicitOutHeader && !writeHeaderFile(cfg.outHeader, bookMap)) {
+            return 1;
+        }
+        if (cfg.explicitOutJson &&
+            !writeJsonFile(cfg.outJson, cfg, bookMap, 0)) {
+            return 1;
+        }
+        if (cfg.explicitOutJava && !writeJavaFile(cfg.outJava, bookMap)) {
+            return 1;
+        }
+        for (const auto &jsPath : cfg.outJs) {
+            if (!updateJsFileWithMarkers(jsPath, bookMap)) {
+                return 1;
+            }
+        }
+        std::cout << "Synced " << bookMap.size()
+                  << " opening book entries from " << cfg.fromJson << "\n";
+        return 0;
+    }
+
     long totalStartMs = steadyClockMs();
     std::cout << "====================================================================\n"
               << "OCTI Offline Opening Playbook Generator (octi_book_gen)\n"
               << "  Mode           : " << cfg.mode << "\n"
               << "  Max Ply        : " << cfg.maxPly << "\n"
               << "  Search Depth   : " << cfg.searchDepth << "\n"
-              << "  Time Budget    : " << cfg.timeBudgetMs << " ms/node\n"
+              << "  Time Budget    : "
+              << (cfg.timeBudgetMs > 0
+                      ? (std::to_string(cfg.timeBudgetMs) + " ms/node")
+                      : std::string("unlimited (depth-bound)")) << "\n"
               << "  Bot Branch     : " << cfg.botBranch << "\n"
               << "  Opp Branch     : " << cfg.oppBranch << "\n"
               << "  CPU Threads    : " << cfg.threads << "\n"
               << "  Out Header     : " << cfg.outHeader << "\n"
               << "  Out JSON       : " << cfg.outJson << "\n"
+              << "  Out Java       : " << cfg.outJava << "\n"
               << "====================================================================\n"
               << std::flush;
 
@@ -647,9 +891,16 @@ int main(int argc, char **argv)
         }
 
         long plyElapsedMs = steadyClockMs() - plyStartMs;
+        long checkpointElapsedMs = steadyClockMs() - totalStartMs;
+        if (!writeJsonFile(cfg.outJson, cfg, bookMap, checkpointElapsedMs) ||
+            !writeHeaderFile(cfg.outHeader, bookMap) ||
+            !writeJavaFile(cfg.outJava, bookMap)) {
+            return 1;
+        }
+
         std::cout << "[Ply " << ply << "/" << cfg.maxPly << "] Completed in "
                   << plyElapsedMs << " ms (cumulative book entries: "
-                  << bookMap.size() << ")\n" << std::flush;
+                  << bookMap.size() << ", checkpointed)\n" << std::flush;
 
         frontier.swap(nextFrontierRaw);
     }
@@ -665,6 +916,11 @@ int main(int argc, char **argv)
     if (!writeJavaFile(cfg.outJava, bookMap)) {
         return 1;
     }
+    for (const auto &jsPath : cfg.outJs) {
+        if (!updateJsFileWithMarkers(jsPath, bookMap)) {
+            return 1;
+        }
+    }
 
     std::cout << "====================================================================\n"
               << "Playbook Generation Complete!\n"
@@ -673,7 +929,10 @@ int main(int argc, char **argv)
               << "  C++ Header Written             : " << cfg.outHeader << "\n"
               << "  JSON Artifact Written          : " << cfg.outJson << "\n";
     if (!cfg.outJava.empty()) {
-        std::cout << "  Java Snippet Written           : " << cfg.outJava << "\n";
+        std::cout << "  Java Class Written             : " << cfg.outJava << "\n";
+    }
+    for (const auto &jsPath : cfg.outJs) {
+        std::cout << "  JS/Web File Updated            : " << jsPath << "\n";
     }
     std::cout << "====================================================================\n"
               << std::flush;

@@ -5454,7 +5454,9 @@ function computeCanonicalOpeningHash(s) {
   return { hash: hDirect, key: toHex(hDirect), mirrored: false };
 }
 
+// BEGIN_OPENING_BOOK_DATA
 var OPENING_BOOK = {
+  // 2P 1-Base ply 1 (after 33+b / 73+h)
   "0x0B45FE3410182A4D": {
     depth: 8,
     candidates: [
@@ -5463,6 +5465,7 @@ var OPENING_BOOK = {
       { move: "37+d", score: 8 }
     ]
   },
+  // 2P 3-Base ply 1 (after 33+b / 73+h)
   "0x1636F05EC19C04C8": {
     depth: 8,
     candidates: [
@@ -5471,6 +5474,7 @@ var OPENING_BOOK = {
       { move: "37+d", score: 8 }
     ]
   },
+  // 2P 1-Base ply 0 (A to move)
   "0x26BE80163B6578BB": {
     depth: 8,
     candidates: [
@@ -5479,6 +5483,7 @@ var OPENING_BOOK = {
       { move: "73+h", score: 48 }
     ]
   },
+  // 2P 3-Base ply 0 (A to move)
   "0x3BCD8E7CEAE1563E": {
     depth: 8,
     candidates: [
@@ -5487,6 +5492,7 @@ var OPENING_BOOK = {
       { move: "73+h", score: 40 }
     ]
   },
+  // OFK ply 1 (after 22+b / 52+h)
   "0x3E7C56E08875ECA9": {
     depth: 8,
     candidates: [
@@ -5495,6 +5501,7 @@ var OPENING_BOOK = {
       { move: "56+f", score: 8 }
     ]
   },
+  // 2P 3-Base ply 1 (after 53+b / 53+h)
   "0x42F7FBED36E9148F": {
     depth: 8,
     candidates: [
@@ -5503,6 +5510,7 @@ var OPENING_BOOK = {
       { move: "77+f", score: 8 }
     ]
   },
+  // 4P ply 0 (A to move)
   "0x5C3D5244B85BC3A6": {
     depth: 8,
     candidates: [
@@ -5511,6 +5519,7 @@ var OPENING_BOOK = {
       { move: "33+c", score: 25 }
     ]
   },
+  // 2P 3-Base ply 1 (after 33+a / 73+a)
   "0x62F499414419B482": {
     depth: 8,
     candidates: [
@@ -5519,6 +5528,7 @@ var OPENING_BOOK = {
       { move: "37+d", score: 8 }
     ]
   },
+  // OFK ply 1 (after 32+a / 42+a)
   "0x97220033605ECA2D": {
     depth: 8,
     candidates: [
@@ -5527,6 +5537,7 @@ var OPENING_BOOK = {
       { move: "56+f", score: 5 }
     ]
   },
+  // OFK ply 0 (A to move)
   "0xBF20205531084330": {
     depth: 8,
     candidates: [
@@ -5535,6 +5546,7 @@ var OPENING_BOOK = {
       { move: "22+b", score: 42 }
     ]
   },
+  // 2P 3-Base ply 1 (after 53+a)
   "0xE61535559B2C9569": {
     depth: 8,
     candidates: [
@@ -5543,6 +5555,7 @@ var OPENING_BOOK = {
       { move: "77+f", score: 5 }
     ]
   },
+  // 2P 1-Base ply 1 (after 53+a)
   "0xFB663B3F4AA8BBEC": {
     depth: 8,
     candidates: [
@@ -5552,6 +5565,7 @@ var OPENING_BOOK = {
     ]
   }
 };
+// END_OPENING_BOOK_DATA
 
 function probeOpeningBook(s, moves, prof) {
   if (!prof || prof.useOpeningBook === false || !s || !moves || !moves.length) {

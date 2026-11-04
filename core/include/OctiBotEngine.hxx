@@ -136,7 +136,7 @@ public:
     std::vector<BookMoveScore> searchTopMovesForBook(
         const OctiBoard &board,
         int searchDepth,
-        int timeBudgetMs,
+        int timeBudgetMs = 0,
         std::size_t topK = 3,
         BotSearchStats *outStats = nullptr);
 
