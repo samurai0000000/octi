@@ -241,21 +241,31 @@ fun LobbyScreen(
     }
 
     purgeConfirmTableId?.let { roomId ->
+        val targetT = lobbyState.tables.firstOrNull { it.roomId == roomId }
+        val isHost = (!profile?.uuid.isNullOrBlank() && profile?.uuid == targetT?.hostUuid)
+        val isAdmin = profile?.isAdmin == true
+        val titleText = if (isAdmin && !isHost) "Purge Table" else "Delete Table"
+        val bodyText = if (isAdmin && !isHost) {
+            "Are you sure you want to permanently purge table #$roomId? All players will be disconnected and the table removed immediately."
+        } else {
+            "Are you sure you want to delete table #$roomId? All players will be disconnected and the table removed."
+        }
+        val btnText = if (isAdmin && !isHost) "Purge" else "Delete"
         AlertDialog(
             onDismissRequest = { purgeConfirmTableId = null },
             containerColor = OctiTheme.colors.panelCardBg,
             titleContentColor = OctiTheme.colors.accentBrass,
-            title = { Text("Purge Table") },
-            text = { Text("Are you sure you want to permanently purge table #$roomId? All players will be disconnected and the table removed immediately.") },
+            title = { Text(titleText) },
+            text = { Text(bodyText) },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.purgeTable(roomId)
+                        viewModel.purgeOnlineTableAsync(roomId)
                         purgeConfirmTableId = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Purge")
+                    Text(btnText)
                 }
             },
             dismissButton = {
@@ -658,47 +668,25 @@ fun LobbyScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        if (isSeatedHere && t.phase == "WAITING_FOR_PLAYERS") {
-                                            OutlinedButton(
-                                                onClick = { viewModel.leaveOnlineTableAsync(t.roomId) }
-                                            ) {
-                                                Text("Leave Table")
-                                            }
-                                            Button(
-                                                onClick = { viewModel.selectTab(OctiAppViewModel.AppTab.BOARD) },
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = OctiTheme.colors.accentBrass,
-                                                    contentColor = OctiTheme.colors.windowBg
-                                                )
-                                            ) {
-                                                Text("Board")
-                                            }
-                                        } else if (t.phase == "WAITING_FOR_PLAYERS" && t.seatsFilled < t.seatsTotal && !isSeatedHere) {
-                                            Button(
-                                                onClick = {
-                                                    if (t.hasPasscode) {
-                                                        joinPasscodeTargetTable = t
-                                                        joinPasscodeInput = ""
-                                                    } else {
-                                                        viewModel.joinOnlineTableAsync(t.roomId, "")
-                                                    }
-                                                },
-                                                enabled = isAuthenticated,
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = OctiTheme.colors.accentBrass,
-                                                    contentColor = OctiTheme.colors.windowBg
-                                                )
-                                            ) {
-                                                Text("Join Seat")
-                                            }
-                                        }
-                                        OutlinedButton(
-                                            onClick = { viewModel.observeOnlineTableAsync(t.roomId) },
-                                            enabled = isAuthenticated || !t.hasPasscode
+                                        Button(
+                                            onClick = {
+                                                if (t.hasPasscode) {
+                                                    joinPasscodeTargetTable = t
+                                                    joinPasscodeInput = ""
+                                                } else {
+                                                    viewModel.observeOnlineTableAsync(t.roomId)
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = OctiTheme.colors.accentBrass,
+                                                contentColor = OctiTheme.colors.windowBg
+                                            )
                                         ) {
-                                            Text("Observe")
+                                            Text("Join")
                                         }
-                                        if (profile?.isAdmin == true) {
+                                        val isHost = !profile?.uuid.isNullOrBlank() && profile?.uuid == t.hostUuid
+                                        val isAdmin = profile?.isAdmin == true
+                                        if (isAdmin || isHost) {
                                             Button(
                                                 onClick = { purgeConfirmTableId = t.roomId },
                                                 colors = ButtonDefaults.buttonColors(
@@ -706,7 +694,7 @@ fun LobbyScreen(
                                                     contentColor = Color.White
                                                 )
                                             ) {
-                                                Text("Purge")
+                                                Text(if (isAdmin && !isHost) "Purge" else "Delete")
                                             }
                                         }
                                     }
@@ -954,14 +942,14 @@ fun LobbyScreen(
                         val roomId = targetTable.roomId
                         val code = joinPasscodeInput.trim()
                         joinPasscodeTargetTable = null
-                        viewModel.joinOnlineTableAsync(roomId, code)
+                        viewModel.observeOnlineTableAsync(roomId, code)
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = OctiTheme.colors.accentBrass,
                         contentColor = OctiTheme.colors.windowBg
                     )
                 ) {
-                    Text("Join Seat")
+                    Text("Join")
                 }
             },
             dismissButton = {

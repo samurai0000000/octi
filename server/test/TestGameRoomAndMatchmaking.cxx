@@ -4600,6 +4600,115 @@ TEST(GameRoomManagerTest, PurgeRoomDestroysActiveOrWaitingTableWithoutArchival)
     CHECK_EQUAL(static_cast<int>(RoomCode::NOT_FOUND), static_cast<int>(rMissing.code));
 }
 
+TEST(GameRoomManagerTest, RobotGameSeatAttributionInArchiveAndIsTableHost)
+{
+    CreateRobotResult cr = store->createRobot(p[0], "bot-attrib-test", "Archive attribution test bot");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)cr.status);
+    int64_t robotId = cr.robot.robotId;
+    int64_t robotActorId = makeRobotActorId(robotId);
+
+    GameTableConfig c = cfg();
+    c.mode = GAME_MODE_2;
+    c.bases = GAME_BASES_1;
+    c.rated = false;
+    c.allowRobots = true;
+    c.timeControl.enabled = false;
+
+    RoomResult crTable = mgr->createTable(p[0], c);
+    EXPECT_OK(crTable);
+    std::string roomId = crTable.roomId;
+
+    // isTableHost checks
+    CHECK_TRUE(mgr->isTableHost(roomId, p[0]));
+    CHECK_FALSE(mgr->isTableHost(roomId, p[1]));
+    CHECK_FALSE(mgr->isTableHost(roomId, 0));
+    CHECK_FALSE(mgr->isTableHost("g-nonexistent", p[0]));
+
+    RoomResult jBot = mgr->joinTable(roomId, robotActorId, 2, "");
+    EXPECT_OK(jBot);
+    CHECK_TRUE(jBot.gameStarted);
+
+    // Play two player winning sequence to completion
+    std::vector<int> mover = moverSeats(GAME_MODE_2, false, kTwoPlayerWin);
+    for (size_t i = 0; i < kTwoPlayerWin.size(); ++i) {
+        int64_t actor = (mover[i] == 1) ? p[0] : robotActorId;
+        RoomResult mr = mgr->submitMove(roomId, actor, kTwoPlayerWin[i]);
+        EXPECT_OK(mr);
+    }
+
+    RoomView finishedView;
+    EXPECT_OK(mgr->getRoomView(roomId, p[0], finishedView));
+    STRCMP_EQUAL("FINISHED", toString(finishedView.phase));
+
+    // Verify game in AccountStore
+    GameRecord rec;
+    CHECK_TRUE(store->getArchivedGame(roomId, rec));
+    CHECK_EQUAL(p[0], rec.p1PlayerId);
+    CHECK_EQUAL(0, rec.p1RobotId);
+    STRCMP_EQUAL("alice", rec.p1Handle.c_str());
+
+    // Robot seat has p2PlayerId == 0 and p2RobotId == robotId
+    CHECK_EQUAL(0, rec.p2PlayerId);
+    CHECK_EQUAL(robotId, rec.p2RobotId);
+    STRCMP_EQUAL("bot-attrib-test", rec.p2Handle.c_str());
+
+    // Query listArchivedGames by robotId
+    std::vector<GameRecord> botGames;
+    int64_t total = 0;
+    ArchiveFilter af;
+    af.robotId = robotId;
+    CHECK_TRUE(store->listArchivedGames(af, botGames, &total));
+    CHECK_EQUAL(1, (int)total);
+    CHECK_EQUAL(1, (int)botGames.size());
+    STRCMP_EQUAL(roomId.c_str(), botGames[0].gameId.c_str());
+}
+
+TEST(GameRoomManagerTest, SeatedPlayerLeavesAndResumesViaObserveOrJoin)
+{
+    EXPECT_OK(mgr->enterLobby(p[0]));
+    EXPECT_OK(mgr->enterLobby(p[1]));
+
+    std::string room = start2P();
+    CHECK_TRUE(mgr->isTableHost(room, p[0]));
+    CHECK_FALSE(mgr->isTableHost(room, p[1]));
+
+    // p[0] leaves table mid-game
+    RoomResult leaveP0 = mgr->leaveTable(room, p[0]);
+    EXPECT_OK(leaveP0);
+
+    RoomView v;
+    EXPECT_OK(mgr->getRoomView(room, p[1], v));
+    CHECK_EQUAL(static_cast<int>(RoomPhase::IN_PROGRESS), static_cast<int>(v.phase));
+    CHECK_FALSE(v.seats[0].connected);
+    CHECK_TRUE(v.seats[1].connected);
+
+    // p[0] returns to room via observeRoom -> reconnects seat 1!
+    RoomResult obsResume = mgr->observeRoom(room, p[0]);
+    EXPECT_OK(obsResume);
+    CHECK_EQUAL(1, obsResume.seat);
+    CHECK_TRUE(obsResume.gameStarted);
+
+    EXPECT_OK(mgr->getRoomView(room, p[0], v));
+    CHECK_TRUE(v.seats[0].connected);
+
+    // p[0] leaves table again
+    EXPECT_OK(mgr->leaveTable(room, p[0]));
+    EXPECT_OK(mgr->getRoomView(room, p[1], v));
+    CHECK_FALSE(v.seats[0].connected);
+
+    // p[0] returns to room via joinTable -> reconnects seat 1!
+    RoomResult joinResume = mgr->joinTable(room, p[0], 0, "");
+    EXPECT_OK(joinResume);
+    CHECK_EQUAL(1, joinResume.seat);
+    CHECK_TRUE(joinResume.gameStarted);
+
+    EXPECT_OK(mgr->getRoomView(room, p[0], v));
+    CHECK_TRUE(v.seats[0].connected);
+
+    // p[0] can submit their move normally
+    EXPECT_OK(mgr->submitMove(room, p[0], "33+a"));
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

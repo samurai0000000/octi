@@ -46,6 +46,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -2970,6 +2972,7 @@ fun BoardChatZoomDialog(
     val chatLog by viewModel.gameChatLog.collectAsState()
     var inputText by remember { mutableStateOf("") }
     var currentScope by remember { mutableStateOf("ALL") }
+    var chatErrorText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
     LaunchedEffect(chatLog.size) {
@@ -2985,6 +2988,8 @@ fun BoardChatZoomDialog(
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
+                .imePadding()
+                .navigationBarsPadding()
                 .background(OctiTheme.colors.panelCardBg, RoundedCornerShape(12.dp))
                 .border(1.5.dp, OctiTheme.colors.accentBrass, RoundedCornerShape(12.dp))
                 .padding(14.dp),
@@ -3029,7 +3034,13 @@ fun BoardChatZoomDialog(
                     for (cmd in quickCommands) {
                         Surface(
                             modifier = Modifier.clickable {
-                                viewModel.sendGameChat(currentScope, cmd)
+                                viewModel.sendGameChatAsync(currentScope, cmd) { res ->
+                                    if (!res.ok) {
+                                        chatErrorText = res.errorMessage.ifEmpty { "Failed to send chat" }
+                                    } else {
+                                        chatErrorText = ""
+                                    }
+                                }
                             },
                             color = OctiTheme.colors.windowBg,
                             shape = RoundedCornerShape(6.dp),
@@ -3116,6 +3127,15 @@ fun BoardChatZoomDialog(
                     }
                 }
 
+                if (chatErrorText.isNotEmpty()) {
+                    Text(
+                        text = chatErrorText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                }
+
                 // Input row with ALL/TEAM scope toggle button, OutlinedTextField, and Send button
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -3138,7 +3158,10 @@ fun BoardChatZoomDialog(
 
                     OutlinedTextField(
                         value = inputText,
-                        onValueChange = { inputText = it },
+                        onValueChange = {
+                            inputText = it
+                            if (chatErrorText.isNotEmpty()) chatErrorText = ""
+                        },
                         modifier = Modifier.weight(1f),
                         placeholder = {
                             Text("Type a message or @bot ...", style = MaterialTheme.typography.bodySmall)
@@ -3149,8 +3172,14 @@ fun BoardChatZoomDialog(
                             onSend = {
                                 val t = inputText.trim()
                                 if (t.isNotEmpty()) {
-                                    viewModel.sendGameChat(currentScope, t)
-                                    inputText = ""
+                                    viewModel.sendGameChatAsync(currentScope, t) { res ->
+                                        if (res.ok) {
+                                            inputText = ""
+                                            chatErrorText = ""
+                                        } else {
+                                            chatErrorText = res.errorMessage.ifEmpty { "Failed to send chat" }
+                                        }
+                                    }
                                 }
                             }
                         )
@@ -3160,8 +3189,14 @@ fun BoardChatZoomDialog(
                         onClick = {
                             val t = inputText.trim()
                             if (t.isNotEmpty()) {
-                                viewModel.sendGameChat(currentScope, t)
-                                inputText = ""
+                                viewModel.sendGameChatAsync(currentScope, t) { res ->
+                                    if (res.ok) {
+                                        inputText = ""
+                                        chatErrorText = ""
+                                    } else {
+                                        chatErrorText = res.errorMessage.ifEmpty { "Failed to send chat" }
+                                    }
+                                }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = OctiTheme.colors.accentBrass),

@@ -343,10 +343,10 @@ public class OctiAndroidAppIntegrationTest {
             assertEquals(401, vmLobbyChatRes.httpStatus);
             assertEquals("UNAUTHENTICATED", vmLobbyChatRes.errorCode);
 
-            OctiNetworkClient.ApiResult<Long> vmGameChatRes = vm.sendGameChat("all", "Hello game from guest");
-            assertFalse(vmGameChatRes.ok);
-            assertEquals(401, vmGameChatRes.httpStatus);
-            assertEquals("UNAUTHENTICATED", vmGameChatRes.errorCode);
+            OctiNetworkClient.ApiResult<Long> directGameChatRes = netClient.postGameChat("room-test-123", "all", "Hello game from guest");
+            assertFalse(directGameChatRes.ok);
+            assertEquals(401, directGameChatRes.httpStatus);
+            assertEquals("UNAUTHENTICATED", directGameChatRes.errorCode);
 
             // Guest can refresh lobby and observe tables
             OctiNetworkClient.ApiResult<OctiNetworkClient.LobbyStateData> lobbyRes = vm.refreshLobby();
@@ -355,6 +355,12 @@ public class OctiAndroidAppIntegrationTest {
             OctiNetworkClient.ApiResult<Boolean> observeRes = vm.observeTable("room-test-123", "");
             assertTrue(observeRes.ok);
             assertTrue(vm.getStatusBanner().getValue().contains("Observing as anonymous"));
+
+            // While observing unauthenticated, online room game chat must fail with 401 UNAUTHENTICATED
+            OctiNetworkClient.ApiResult<Long> vmGameChatRes = vm.sendGameChat("all", "Hello game from guest");
+            assertFalse(vmGameChatRes.ok);
+            assertEquals(401, vmGameChatRes.httpStatus);
+            assertEquals("UNAUTHENTICATED", vmGameChatRes.errorCode);
 
             // 2. Direct AuthResult linkIdentity with forceRelink=true
             netClient.setSessionToken("sess-test-token");
@@ -1101,7 +1107,7 @@ public class OctiAndroidAppIntegrationTest {
                         os.write(avatarPayload);
                         os.flush();
                         continue;
-                    } else if (reqLine.contains("/api/v1/tables") && reqLine.startsWith("POST") && !reqLine.contains("/leave") && !reqLine.contains("/observe")) {
+                    } else if (reqLine.contains("/api/v1/tables") && reqLine.startsWith("POST") && !reqLine.contains("/leave") && !reqLine.contains("/observe") && !reqLine.contains("/unobserve")) {
                         status = 201;
                         respBody = "{\n"
                                 + "  \"room_id\": \"room-leave-test-456\",\n"
@@ -1109,6 +1115,9 @@ public class OctiAndroidAppIntegrationTest {
                                 + "  \"phase\": \"WAITING_FOR_PLAYERS\"\n"
                                 + "}";
                     } else if (reqLine.contains("/leave")) {
+                        status = 200;
+                        respBody = "{\"ok\":true}";
+                    } else if (reqLine.contains("/unobserve")) {
                         status = 200;
                         respBody = "{\"ok\":true}";
                     } else if (reqLine.contains("/observe")) {

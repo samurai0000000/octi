@@ -727,6 +727,17 @@ final class OctiMiniJson {
         return defaultValue;
     }
 
+    static double getDouble(Map<String, Object> obj, String key, double defaultValue) {
+        if (obj == null || key == null) {
+            return defaultValue;
+        }
+        Object v = obj.get(key);
+        if (v instanceof Number n) {
+            return n.doubleValue();
+        }
+        return defaultValue;
+    }
+
     static boolean getBoolean(Map<String, Object> obj, String key, boolean defaultValue) {
         if (obj == null || key == null) {
             return defaultValue;

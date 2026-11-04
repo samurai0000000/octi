@@ -337,6 +337,54 @@ public final class OctiNetworkClient implements AutoCloseable {
         public int draws = 0;
     }
 
+    public static final class RobotDirectoryEntry {
+        public long robotId = 0;
+        public String robotUuid = "";
+        public String handle = "";
+        public String robotName = "";
+        public String displayName = "";
+        public String description = "";
+        public String bio = "";
+        public String avatarUrl = "";
+        public String ownerUuid = "";
+        public String ownerHandle = "";
+        public String ownerAvatarUrl = "";
+        public int gamesPlayed = 0;
+        public int wins = 0;
+        public int losses = 0;
+        public int draws = 0;
+        public double winRate = 0.0;
+        public long createdAt = 0;
+        public boolean revoked = false;
+        public boolean retired = false;
+        public String status = "active";
+    }
+
+    public static final class RobotProfileData {
+        public boolean isRobot = true;
+        public String uuid = "";
+        public String robotUuid = "";
+        public String handle = "";
+        public String robotName = "";
+        public String displayName = "";
+        public String description = "";
+        public String bio = "";
+        public String avatarUrl = "";
+        public String ownerUuid = "";
+        public String ownerHandle = "";
+        public String ownerAvatarUrl = "";
+        public int gamesPlayed = 0;
+        public int wins = 0;
+        public int losses = 0;
+        public int draws = 0;
+        public double winRate = 0.0;
+        public long createdAt = 0;
+        public boolean revoked = false;
+        public boolean retired = false;
+        public String status = "active";
+        public final List<ArchivedGameSummary> recentGames = new ArrayList<>();
+    }
+
     public static final class LobbyPlayerInfo {
         public String playerUuid = "";
         public String handle = "";
@@ -1483,6 +1531,125 @@ public final class OctiNetworkClient implements AutoCloseable {
                 res.data.add(row);
             }
         }
+        return res;
+    }
+
+    public ApiResult<List<RobotDirectoryEntry>> listRobotsDirectory(String query, String sort) {
+        return fetchRobotsDirectory(query, sort);
+    }
+
+    public ApiResult<List<RobotDirectoryEntry>> fetchRobotsDirectory(String query, String sort) {
+        ApiResult<List<RobotDirectoryEntry>> res = new ApiResult<>(new ArrayList<>());
+        StringBuilder path = new StringBuilder("/api/v1/robots/directory?limit=100");
+        if (query != null && !query.trim().isEmpty()) {
+            path.append("&q=").append(urlEncode(query.trim()));
+        }
+        if (sort != null && !sort.trim().isEmpty()) {
+            path.append("&sort=").append(urlEncode(sort.trim()));
+        }
+        RawResponse raw = doGet(path.toString());
+        if (!raw.transportOk || raw.status != 200 || raw.json == null) {
+            populateError(raw, res);
+            return res;
+        }
+        res.ok = true;
+        res.httpStatus = raw.status;
+        List<Object> arr = OctiMiniJson.getArray(raw.json, "robots");
+        if (arr != null) {
+            for (Object item : arr) {
+                if (item instanceof Map<?, ?>) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> m = (Map<String, Object>) item;
+                    RobotDirectoryEntry e = new RobotDirectoryEntry();
+                    e.robotId = OctiMiniJson.getLong(m, "robot_id", 0);
+                    e.robotUuid = OctiMiniJson.getString(m, "robot_uuid", "");
+                    if (e.robotUuid.isEmpty()) {
+                        e.robotUuid = OctiMiniJson.getString(m, "uuid", "");
+                    }
+                    e.robotName = OctiMiniJson.getString(m, "robot_name", "");
+                    if (e.robotName.isEmpty()) {
+                        e.robotName = OctiMiniJson.getString(m, "handle", "");
+                    }
+                    e.handle = e.robotName;
+                    e.displayName = OctiMiniJson.getString(m, "display_name", e.robotName);
+                    e.description = OctiMiniJson.getString(m, "description", "");
+                    e.bio = OctiMiniJson.getString(m, "bio", e.description);
+                    e.avatarUrl = OctiMiniJson.getString(m, "avatar_url", "");
+                    e.ownerUuid = OctiMiniJson.getString(m, "owner_uuid", "");
+                    e.ownerHandle = OctiMiniJson.getString(m, "owner_handle", "");
+                    e.ownerAvatarUrl = OctiMiniJson.getString(m, "owner_avatar_url", "");
+                    e.gamesPlayed = OctiMiniJson.getInt(m, "games_played", 0);
+                    e.wins = OctiMiniJson.getInt(m, "wins", 0);
+                    e.losses = OctiMiniJson.getInt(m, "losses", 0);
+                    e.draws = OctiMiniJson.getInt(m, "draws", 0);
+                    e.winRate = OctiMiniJson.getDouble(m, "win_rate", 0.0);
+                    e.createdAt = OctiMiniJson.getLong(m, "created_at", 0);
+                    e.revoked = OctiMiniJson.getBoolean(m, "revoked", false);
+                    e.retired = OctiMiniJson.getBoolean(m, "retired", e.revoked);
+                    e.status = OctiMiniJson.getString(m, "status", e.retired ? "retired" : "active");
+                    res.data.add(e);
+                }
+            }
+        }
+        return res;
+    }
+
+    public ApiResult<RobotProfileData> fetchRobotProfile(String robotIdOrUuid) {
+        ApiResult<RobotProfileData> res = new ApiResult<>(new RobotProfileData());
+        if (robotIdOrUuid == null || robotIdOrUuid.trim().isEmpty()) {
+            res.errorMessage = "Missing robot identifier";
+            return res;
+        }
+        RawResponse raw = doGet("/api/v1/robots/profile/" + urlEncode(robotIdOrUuid.trim()));
+        if (!raw.transportOk || raw.status != 200 || raw.json == null) {
+            raw = doGet("/api/v1/users/" + urlEncode(robotIdOrUuid.trim()));
+            if (!raw.transportOk || raw.status != 200 || raw.json == null) {
+                populateError(raw, res);
+                return res;
+            }
+        }
+        res.ok = true;
+        res.httpStatus = raw.status;
+        Map<String, Object> m = raw.json;
+        RobotProfileData p = new RobotProfileData();
+        p.isRobot = OctiMiniJson.getBoolean(m, "is_robot", true);
+        p.robotUuid = OctiMiniJson.getString(m, "robot_uuid", "");
+        if (p.robotUuid.isEmpty()) {
+            p.robotUuid = OctiMiniJson.getString(m, "uuid", "");
+        }
+        p.uuid = p.robotUuid;
+        p.robotName = OctiMiniJson.getString(m, "robot_name", "");
+        if (p.robotName.isEmpty()) {
+            p.robotName = OctiMiniJson.getString(m, "handle", "");
+        }
+        p.handle = p.robotName;
+        p.displayName = OctiMiniJson.getString(m, "display_name", p.robotName);
+        p.description = OctiMiniJson.getString(m, "description", "");
+        p.bio = OctiMiniJson.getString(m, "bio", p.description);
+        p.avatarUrl = OctiMiniJson.getString(m, "avatar_url", "");
+        p.ownerUuid = OctiMiniJson.getString(m, "owner_uuid", "");
+        p.ownerHandle = OctiMiniJson.getString(m, "owner_handle", "");
+        p.ownerAvatarUrl = OctiMiniJson.getString(m, "owner_avatar_url", "");
+        p.gamesPlayed = OctiMiniJson.getInt(m, "games_played", 0);
+        p.wins = OctiMiniJson.getInt(m, "wins", 0);
+        p.losses = OctiMiniJson.getInt(m, "losses", 0);
+        p.draws = OctiMiniJson.getInt(m, "draws", 0);
+        p.winRate = OctiMiniJson.getDouble(m, "win_rate", 0.0);
+        p.createdAt = OctiMiniJson.getLong(m, "created_at", 0);
+        p.revoked = OctiMiniJson.getBoolean(m, "revoked", false);
+        p.retired = OctiMiniJson.getBoolean(m, "retired", p.revoked);
+        p.status = OctiMiniJson.getString(m, "status", p.retired ? "retired" : "active");
+        List<Object> recent = OctiMiniJson.getArray(m, "recent_games");
+        if (recent != null) {
+            for (Object gObj : recent) {
+                if (gObj instanceof Map<?, ?>) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> gm = (Map<String, Object>) gObj;
+                    p.recentGames.add(parseArchivedGameSummary(gm));
+                }
+            }
+        }
+        res.data = p;
         return res;
     }
 

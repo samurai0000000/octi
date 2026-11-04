@@ -54,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -288,6 +289,7 @@ fun OctiMainAppContent(
 
     val context = LocalContext.current
     val currentTab by viewModel.currentTab.collectAsState()
+    val matchType by viewModel.matchType.collectAsState()
     val themeId by viewModel.theme.collectAsState()
     val sfxMuted by viewModel.sfxMuted.collectAsState()
     val statusBanner by viewModel.statusBanner.collectAsState()
@@ -360,11 +362,13 @@ fun OctiMainAppContent(
                                     .clickable { viewModel.setShowAccountDialog(true) }
                             )
                         }
-                        OutlinedButton(
-                            onClick = { viewModel.setShowNewGameDialog(true) },
-                            modifier = Modifier.padding(end = 4.dp)
-                        ) {
-                            Text("New Game", maxLines = 1)
+                        if (matchType != OctiAppViewModel.MatchType.ONLINE_ROOM) {
+                            OutlinedButton(
+                                onClick = { viewModel.setShowNewGameDialog(true) },
+                                modifier = Modifier.padding(end = 4.dp)
+                            ) {
+                                Text("New Game", maxLines = 1)
+                            }
                         }
                         Box {
                             TextButton(
@@ -580,22 +584,42 @@ fun OctiMainAppContent(
                                         color = OctiTheme.colors.accentBrass,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        OutlinedButton(
-                                            onClick = { viewModel.leaveOnlineTableAsync() }
-                                        ) {
-                                            Text("Leave Table")
-                                        }
-                                        if (isWaiting) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        val viewerSeat = activeGameView?.viewerSeat ?: 0
+                                        val isHost = !currentProfile?.uuid.isNullOrBlank() && currentProfile?.uuid == activeGameView?.hostUuid
+                                        val isAdmin = currentProfile?.isAdmin == true
+
+                                        if (isWaiting && viewerSeat == 0) {
                                             Button(
-                                                onClick = { viewModel.selectTab(OctiAppViewModel.AppTab.ONLINE_LOBBY) },
+                                                onClick = { viewModel.joinOnlineTableAsync(activeRoomId, -1, "") },
                                                 colors = ButtonDefaults.buttonColors(
                                                     containerColor = OctiTheme.colors.accentBrass,
                                                     contentColor = OctiTheme.colors.windowBg
                                                 )
                                             ) {
-                                                Text("Back to Lobby")
+                                                Text("Sit")
                                             }
+                                        }
+
+                                        if (isHost || isAdmin) {
+                                            Button(
+                                                onClick = { viewModel.purgeOnlineTableAsync(activeRoomId) },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = MaterialTheme.colorScheme.error,
+                                                    contentColor = Color.White
+                                                )
+                                            ) {
+                                                Text(if (isAdmin && !isHost) "Purge" else "Delete")
+                                            }
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = { viewModel.exitOnlineTableViewAsync() }
+                                        ) {
+                                            Text("Leave Table")
                                         }
                                     }
                                 }

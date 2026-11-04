@@ -458,12 +458,16 @@ fun OctiReserveHud(
                         }
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedButton(onClick = { viewModel.submitGameAction("DRAW_OFFER") }) {
-                            Text("Draw")
-                        }
-                        OutlinedButton(onClick = { viewModel.resignOnlineGame() }) {
-                            Text("Resign")
+                    val viewerSeat = activeGameView?.viewerSeat ?: 0
+                    val isOnlineInProgress = (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeGameView?.phase == "IN_PROGRESS" && viewerSeat > 0)
+                    if (isOnlineInProgress) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(onClick = { viewModel.submitGameAction("DRAW_OFFER") }) {
+                                Text("Draw")
+                            }
+                            OutlinedButton(onClick = { viewModel.resignOnlineGame() }) {
+                                Text("Resign")
+                            }
                         }
                     }
                 }

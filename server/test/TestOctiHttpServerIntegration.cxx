@@ -3794,7 +3794,7 @@ TEST(OctiHttpServerIntegrationTest, OAuthBrokerAndAccountLinking)
     CHECK_TRUE(rRoot.body.find("tab-account") != std::string::npos);
     CHECK_TRUE(rRoot.body.find("btn-toggle-robots-section") != std::string::npos);
     CHECK_TRUE(rRoot.body.find("account-robots-expand-body") != std::string::npos);
-    CHECK_TRUE(rRoot.body.find("nav-robots-btn") == std::string::npos);
+    CHECK_TRUE(rRoot.body.find("nav-robots-btn") != std::string::npos);
 
     /* 3. Authorize endpoint: provider validation */
     Reply rBadProv = http().get("/api/v1/auth/authorize?provider=twitter");
@@ -5776,6 +5776,7 @@ TEST(OctiHttpServerIntegrationTest, AdminIdentityAndPurgeEndpoints)
 
     User normalUser = signIn("google", "sub-normal-user", "Normal User");
     User adminUser = signIn("google", "sub-admin-google", "Admin User");
+    User otherUser = signIn("apple", "sub-other-normal-user", "Other Normal User");
 
     // GET /api/v1/profile/me for normal user has is_admin == false
     Reply rNormalMe = http().get("/api/v1/profile/me", normalUser.token);
@@ -5806,8 +5807,8 @@ TEST(OctiHttpServerIntegrationTest, AdminIdentityAndPurgeEndpoints)
     CHECK_TRUE(rGame.json.contains("idle_ms"));
     CHECK_TRUE(rGame.json.contains("ttl_remaining_ms"));
 
-    // Non-admin trying to purge active table gets 403 Forbidden
-    Reply rFailTablePurge = http().del("/api/v1/tables/" + room, normalUser.token);
+    // Non-admin, non-host trying to purge active table gets 403 Forbidden
+    Reply rFailTablePurge = http().del("/api/v1/tables/" + room, otherUser.token);
     EXPECT_STATUS(403, rFailTablePurge);
 
     // Admin purging active table gets 200 OK
@@ -5844,6 +5845,163 @@ TEST(OctiHttpServerIntegrationTest, AdminIdentityAndPurgeEndpoints)
     Reply rArchivePurgeAgain =
         http().del("/api/v1/archive/games/" + archivedGameId, adminUser.token);
     EXPECT_STATUS(404, rArchivePurgeAgain);
+}
+
+TEST(OctiHttpServerIntegrationTest, RobotsDirectoryAndProfileEndpoints)
+{
+    User u = signIn("google", "sub-robot-dir-owner", "RobotDirOwner");
+
+    Reply rBot = http().post(
+        "/api/v1/robots", u.token,
+        Json{{"robot_name", "dir-alpha-bot"}, {"description", "Alpha bot for directory testing"}});
+    EXPECT_STATUS(201, rBot);
+    std::string botUuid = rBot.json.value("robot_uuid", "");
+    std::string botToken = rBot.json.value("robot_token", "");
+    CHECK_FALSE(botUuid.empty());
+    CHECK_FALSE(botToken.empty());
+
+    /* Robot with 0 games played is NOT in the public directory */
+    Reply rDirEmpty = http().get("/api/v1/robots/directory");
+    EXPECT_STATUS(200, rDirEmpty);
+    CHECK_EQUAL(0, rDirEmpty.json.value("total", -1));
+
+    /* Robot profile returns 404 when games_played == 0 */
+    Reply rProf404 = http().get("/api/v1/robots/profile/" + botUuid);
+    EXPECT_STATUS(404, rProf404);
+
+    /* Human creates table with allow_robots: true and robot plays */
+    Reply rTable = http().post(
+        "/api/v1/tables", u.token,
+        Json{{"mode", "2P"}, {"bases", 3}, {"allow_robots", true}});
+    EXPECT_STATUS(201, rTable);
+    std::string roomId = rTable.json.value("room_id", "");
+    CHECK_FALSE(roomId.empty());
+
+    Reply rJoin = http().post(
+        "/api/v1/tables/" + roomId + "/join", botToken, Json{{"seat", 2}});
+    EXPECT_STATUS(200, rJoin);
+    CHECK_TRUE(rJoin.json.value("game_started", false));
+
+    /* Human resigns, giving robot a recorded win */
+    Reply rResign = http().post(
+        "/api/v1/games/" + roomId + "/resign", u.token, Json::object());
+    EXPECT_STATUS(200, rResign);
+    CHECK_TRUE(rResign.json.value("game_over", false));
+
+    /* Now robot has games_played > 0 and appears in public directory */
+    Reply rDir = http().get("/api/v1/robots/directory");
+    EXPECT_STATUS(200, rDir);
+    CHECK_TRUE(rDir.json.value("total", 0) >= 1);
+    Json bots = rDir.json["robots"];
+    CHECK_TRUE(bots.is_array());
+    bool found = false;
+    for (size_t i = 0; i < bots.size(); ++i) {
+        if (bots[i].value("robot_uuid", "") == botUuid) {
+            found = true;
+            STRCMP_EQUAL("dir-alpha-bot", bots[i].value("name", "").c_str());
+            STRCMP_EQUAL("active", bots[i].value("status", "").c_str());
+            CHECK_EQUAL(1, bots[i].value("games_played", 0));
+            CHECK_EQUAL(1, bots[i].value("wins", 0));
+            CHECK_EQUAL(0, bots[i].value("losses", 0));
+            CHECK_FALSE(bots[i].contains("token"));
+            CHECK_FALSE(bots[i].contains("token_prefix"));
+            STRCMP_EQUAL("RobotDirOwner", bots[i].value("owner_handle", "").c_str());
+        }
+    }
+    CHECK_TRUE(found);
+
+    /* Robot profile by UUID */
+    Reply rProfUuid = http().get("/api/v1/robots/profile/" + botUuid);
+    EXPECT_STATUS(200, rProfUuid);
+    CHECK_TRUE(rProfUuid.json.value("is_robot", false));
+    STRCMP_EQUAL("dir-alpha-bot", rProfUuid.json.value("name", "").c_str());
+    STRCMP_EQUAL("active", rProfUuid.json.value("status", "").c_str());
+    CHECK_EQUAL(1, rProfUuid.json.value("games_played", 0));
+    CHECK_EQUAL(1, rProfUuid.json.value("wins", 0));
+    CHECK_TRUE(rProfUuid.json["recent_games"].is_array());
+    CHECK_EQUAL(1, static_cast<int>(rProfUuid.json["recent_games"].size()));
+    STRCMP_EQUAL("WIN", rProfUuid.json["recent_games"][0].value("player_outcome", "").c_str());
+
+    /* Robot profile by name */
+    Reply rProfName = http().get("/api/v1/robots/profile/dir-alpha-bot");
+    EXPECT_STATUS(200, rProfName);
+    STRCMP_EQUAL(botUuid.c_str(), rProfName.json.value("robot_uuid", "").c_str());
+
+    /* User profile endpoint fallback to robot profile */
+    Reply rUserBot = http().get("/api/v1/users/dir-alpha-bot");
+    EXPECT_STATUS(200, rUserBot);
+    CHECK_TRUE(rUserBot.json.value("is_robot", false));
+    STRCMP_EQUAL("dir-alpha-bot", rUserBot.json.value("name", "").c_str());
+
+    /* Permanent deletion on robot with games played: in-place retirement */
+    Reply rDel = http().del("/api/v1/robots/" + botUuid + "?permanent=1", u.token);
+    EXPECT_STATUS(200, rDel);
+    CHECK_TRUE(rDel.json.value("deleted", false));
+    Reply rProfRetired = http().get("/api/v1/robots/profile/" + botUuid);
+    EXPECT_STATUS(200, rProfRetired);
+    STRCMP_EQUAL("retired", rProfRetired.json.value("status", "").c_str());
+
+    /* Permanent deletion on robot with 0 games played: physically deleted */
+    Reply rBot0 = http().post(
+        "/api/v1/robots", u.token,
+        Json{{"robot_name", "zero-game-bot"}});
+    EXPECT_STATUS(201, rBot0);
+    std::string bot0Uuid = rBot0.json.value("robot_uuid", "");
+    Reply rDel0 = http().del("/api/v1/robots/" + bot0Uuid + "?permanent=1", u.token);
+    EXPECT_STATUS(200, rDel0);
+    CHECK_TRUE(rDel0.json.value("deleted", false));
+    Reply rProf0 = http().get("/api/v1/robots/profile/" + bot0Uuid);
+    EXPECT_STATUS(404, rProf0);
+}
+
+TEST(OctiHttpServerIntegrationTest, TableHostDeleteEndpoint)
+{
+    User userA = signIn("google", "sub-table-host-a", "HostAlice");
+    User userB = signIn("apple", "sub-table-user-b", "GuestBob");
+
+    Reply rTab = http().post(
+        "/api/v1/tables", userA.token,
+        Json{{"mode", "2P"}, {"bases", 3}});
+    EXPECT_STATUS(201, rTab);
+    std::string roomId = rTab.json.value("room_id", "");
+    CHECK_FALSE(roomId.empty());
+
+    /* Guest userB attempts to delete table -> 403 ERR_FORBIDDEN */
+    Reply rDelB = http().del("/api/v1/tables/" + roomId, userB.token);
+    EXPECT_STATUS(403, rDelB);
+    STRCMP_EQUAL("ERR_FORBIDDEN", rDelB.json.value("error", "").c_str());
+
+    /* Host userA deletes table -> 200 OK */
+    Reply rDelA = http().del("/api/v1/tables/" + roomId, userA.token);
+    EXPECT_STATUS(200, rDelA);
+    STRCMP_EQUAL("purged", rDelA.json.value("status", "").c_str());
+
+    /* Admin deletes table created by host */
+    env->store.setAdminGoogleIdentities({"sub-admin-host-test"});
+    User admin = signIn("google", "sub-admin-host-test", "AdminCharlie");
+
+    Reply rTab2 = http().post(
+        "/api/v1/tables", userA.token,
+        Json{{"mode", "2P"}, {"bases", 3}});
+    EXPECT_STATUS(201, rTab2);
+    std::string roomId2 = rTab2.json.value("room_id", "");
+
+    Reply rDelAdmin = http().del("/api/v1/tables/" + roomId2, admin.token);
+    EXPECT_STATUS(200, rDelAdmin);
+    STRCMP_EQUAL("purged", rDelAdmin.json.value("status", "").c_str());
+}
+
+TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
+{
+    Reply rIndex = http().get("/");
+    EXPECT_STATUS(200, rIndex);
+    CHECK_TRUE(rIndex.body.find("id=\"tab-robots\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v2.3.2") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"robot-profile-detail\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"robots-tbody\"") != std::string::npos);
 }
 
 int main(int argc, char **argv)

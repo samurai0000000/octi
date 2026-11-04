@@ -26,9 +26,22 @@
 #include <QPainterPath>
 #include <QPixmap>
 #include <QRadioButton>
+#include <QSplitter>
 #include <QStandardItemModel>
 #include <QUrl>
 #include <QVBoxLayout>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#endif
+#include <httplib.h>
+#include <nlohmann/json.hpp>
+
 #include "OctiBoardCanvas.hxx"
 #include "OctiCore.hxx"
 #include "OctiDialogs.hxx"
@@ -2727,6 +2740,288 @@ void LeaderboardDialog::rebuildTable()
         _table->setItem(i, 5, new QTableWidgetItem(QString::number(r.losses)));
         _table->setItem(i, 6, new QTableWidgetItem(QString::number(r.draws)));
     }
+}
+
+/* ==================================================================== */
+/* 6b. RobotsDirectoryDialog                                            */
+/* ==================================================================== */
+
+RobotsDirectoryDialog::RobotsDirectoryDialog(OctiNetworkClient *netClient,
+                                             ThemeId theme,
+                                             QWidget *parent)
+    : QDialog(parent),
+      _netClient(netClient),
+      _theme(theme),
+      _searchEdit(nullptr),
+      _refreshBtn(nullptr),
+      _robotsTable(nullptr),
+      _profileBox(nullptr),
+      _profileHeaderLabel(nullptr),
+      _profileStatsLabel(nullptr),
+      _recentGamesTable(nullptr),
+      _replayBtn(nullptr),
+      _statusLabel(nullptr)
+{
+    setWindowTitle("OCTI Robots Directory & Profiles");
+    setMinimumSize(880, 560);
+
+    QVBoxLayout *root = new QVBoxLayout(this);
+    root->setSpacing(10);
+    root->setContentsMargins(12, 12, 12, 12);
+
+    QHBoxLayout *topBar = new QHBoxLayout();
+    _searchEdit = new QLineEdit(this);
+    _searchEdit->setPlaceholderText("Filter robots by handle or owner...");
+    _refreshBtn = new QPushButton("Refresh", this);
+    topBar->addWidget(new QLabel("Search:", this));
+    topBar->addWidget(_searchEdit, 1);
+    topBar->addWidget(_refreshBtn);
+    root->addLayout(topBar);
+
+    QSplitter *splitter = new QSplitter(Qt::Horizontal, this);
+
+    _robotsTable = new QTableWidget(0, 6, splitter);
+    _robotsTable->setHorizontalHeaderLabels(
+        QStringList() << "Robot Handle" << "Owner" << "Status"
+                      << "W / L / D" << "Win Rate" << "Elo 2P");
+    _robotsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    _robotsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    _robotsTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    _robotsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    splitter->addWidget(_robotsTable);
+
+    _profileBox = new QGroupBox("Robot Profile & Recent Matches", splitter);
+    QVBoxLayout *pLayout = new QVBoxLayout(_profileBox);
+    pLayout->setSpacing(6);
+    _profileHeaderLabel = new QLabel("Select a robot to view details", _profileBox);
+    _profileHeaderLabel->setStyleSheet("font-size: 14px; font-weight: bold;");
+    _profileStatsLabel = new QLabel("", _profileBox);
+    _profileStatsLabel->setWordWrap(true);
+    pLayout->addWidget(_profileHeaderLabel);
+    pLayout->addWidget(_profileStatsLabel);
+
+    _recentGamesTable = new QTableWidget(0, 5, _profileBox);
+    _recentGamesTable->setHorizontalHeaderLabels(
+        QStringList() << "Game ID" << "Mode" << "Result" << "Opponent" << "Plies");
+    _recentGamesTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    _recentGamesTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    _recentGamesTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    _recentGamesTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    pLayout->addWidget(_recentGamesTable, 1);
+
+    QHBoxLayout *pActBar = new QHBoxLayout();
+    _replayBtn = new QPushButton("Replay Selected Match", _profileBox);
+    _replayBtn->setEnabled(false);
+    pActBar->addWidget(_replayBtn);
+    pLayout->addLayout(pActBar);
+
+    splitter->addWidget(_profileBox);
+    splitter->setStretchFactor(0, 3);
+    splitter->setStretchFactor(1, 2);
+    root->addWidget(splitter, 1);
+
+    QHBoxLayout *botBar = new QHBoxLayout();
+    _statusLabel = new QLabel(this);
+    QPushButton *closeBtn = new QPushButton("Close", this);
+    botBar->addWidget(_statusLabel, 1);
+    botBar->addWidget(closeBtn);
+    root->addLayout(botBar);
+
+    QObject::connect(_searchEdit, &QLineEdit::textChanged, [this](const QString &text) {
+        refreshRobots(text.trimmed().toStdString());
+    });
+    QObject::connect(_refreshBtn, &QPushButton::clicked, [this]() {
+        refreshRobots(_searchEdit->text().trimmed().toStdString());
+    });
+    QObject::connect(_robotsTable, &QTableWidget::itemSelectionChanged, [this]() {
+        int r = _robotsTable->currentRow();
+        if (r >= 0 && r < static_cast<int>(_robots.size())) {
+            selectRobot(_robots[static_cast<std::size_t>(r)].robotUuid);
+        }
+    });
+    QObject::connect(_recentGamesTable, &QTableWidget::itemSelectionChanged, [this]() {
+        _replayBtn->setEnabled(_recentGamesTable->currentRow() >= 0);
+    });
+    QObject::connect(_recentGamesTable, &QTableWidget::cellDoubleClicked, [this](int row, int /*col*/) {
+        if (row >= 0 && row < static_cast<int>(_selectedProfile.recentGames.size()) && _onLoadReplayCallback && _netClient) {
+            const auto &g = _selectedProfile.recentGames[static_cast<std::size_t>(row)];
+            auto tRes = _netClient->downloadOctiTranscript(g.gameId);
+            if (tRes.ok) {
+                _onLoadReplayCallback(g.gameId, tRes.data, g);
+                accept();
+            }
+        }
+    });
+    QObject::connect(_replayBtn, &QPushButton::clicked, [this]() {
+        int row = _recentGamesTable->currentRow();
+        if (row >= 0 && row < static_cast<int>(_selectedProfile.recentGames.size()) && _onLoadReplayCallback && _netClient) {
+            const auto &g = _selectedProfile.recentGames[static_cast<std::size_t>(row)];
+            auto tRes = _netClient->downloadOctiTranscript(g.gameId);
+            if (tRes.ok) {
+                _onLoadReplayCallback(g.gameId, tRes.data, g);
+                accept();
+            }
+        }
+    });
+    QObject::connect(closeBtn, &QPushButton::clicked, [this]() {
+        accept();
+    });
+
+    setTheme(_theme);
+}
+
+RobotsDirectoryDialog::~RobotsDirectoryDialog() = default;
+
+void RobotsDirectoryDialog::setTheme(ThemeId theme)
+{
+    _theme = theme;
+    setStyleSheet(buildAppStyleSheet(_theme));
+}
+
+ThemeId RobotsDirectoryDialog::theme() const
+{
+    return _theme;
+}
+
+void RobotsDirectoryDialog::setOnLoadReplayCallback(
+    std::function<void(const std::string &gameId,
+                       const std::string &octiTranscript,
+                       const ArchivedGameSummary &summary)> cb)
+{
+    _onLoadReplayCallback = std::move(cb);
+}
+
+bool RobotsDirectoryDialog::refreshRobots(const std::string &query)
+{
+    if (!_netClient) {
+        if (_statusLabel) {
+            _statusLabel->setText("Network client is null");
+        }
+        return false;
+    }
+    _robots.clear();
+    std::string host = _netClient->host();
+    int port = _netClient->port();
+    httplib::Client cli(host, port);
+    cli.set_connection_timeout(3);
+    cli.set_read_timeout(5);
+    httplib::Headers headers;
+    if (!_netClient->sessionToken().empty()) {
+        headers.emplace("Authorization", "Bearer " + _netClient->sessionToken());
+    }
+    std::string path = "/api/v1/robots/directory";
+    if (!query.empty()) {
+        path += "?q=" + query;
+    }
+    auto res = cli.Get(path, headers);
+    if (!res || res->status != 200) {
+        if (_statusLabel) {
+            _statusLabel->setText(res ? QString("Fetch error: HTTP %1").arg(res->status)
+                                      : "Connection failed");
+        }
+        rebuildRobotsTable();
+        return false;
+    }
+    try {
+        auto j = nlohmann::json::parse(res->body, nullptr, false);
+        if (!j.is_discarded() && j.contains("robots") && j["robots"].is_array()) {
+            for (const auto &item : j["robots"]) {
+                RobotDirectoryEntry ent;
+                ent.robotUuid = item.value("robot_uuid", "");
+                ent.handle = item.value("handle", "");
+                ent.description = item.value("description", "");
+                ent.ownerUuid = item.value("owner_uuid", "");
+                ent.ownerHandle = item.value("owner_handle", "");
+                ent.status = item.value("status", "Active");
+                ent.gamesPlayed = item.value("games_played", 0);
+                ent.wins = item.value("wins", 0);
+                ent.losses = item.value("losses", 0);
+                ent.draws = item.value("draws", 0);
+                ent.winRate = item.value("win_rate", 0.0);
+                ent.elo2p = item.value("elo_2p", 1500);
+                _robots.push_back(ent);
+            }
+        }
+    } catch (...) {
+    }
+    if (_statusLabel) {
+        _statusLabel->setText(QString("Found %1 robot(s)").arg(_robots.size()));
+    }
+    rebuildRobotsTable();
+    return true;
+}
+
+bool RobotsDirectoryDialog::selectRobot(const std::string &robotUuid)
+{
+    if (!_netClient || robotUuid.empty()) {
+        return false;
+    }
+    auto res = _netClient->fetchPlayerProfile(robotUuid);
+    if (res.ok) {
+        _selectedProfile = res.data;
+        rebuildProfileCard();
+        return true;
+    }
+    return false;
+}
+
+void RobotsDirectoryDialog::rebuildRobotsTable()
+{
+    if (!_robotsTable) {
+        return;
+    }
+    _robotsTable->setRowCount(static_cast<int>(_robots.size()));
+    for (int i = 0; i < static_cast<int>(_robots.size()); ++i) {
+        const auto &r = _robots[static_cast<std::size_t>(i)];
+        _robotsTable->setItem(i, 0, new QTableWidgetItem(QString::fromStdString(r.handle)));
+        _robotsTable->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(r.ownerHandle.empty() ? r.ownerUuid : r.ownerHandle)));
+        _robotsTable->setItem(i, 2, new QTableWidgetItem(QString::fromStdString(r.status)));
+        QString record = QString("%1-%2-%3").arg(r.wins).arg(r.losses).arg(r.draws);
+        _robotsTable->setItem(i, 3, new QTableWidgetItem(record));
+        QString winRateStr = QString("%1%").arg(QString::number(r.winRate * 100.0, 'f', 1));
+        _robotsTable->setItem(i, 4, new QTableWidgetItem(winRateStr));
+        _robotsTable->setItem(i, 5, new QTableWidgetItem(QString::number(r.elo2p)));
+    }
+}
+
+void RobotsDirectoryDialog::rebuildProfileCard()
+{
+    if (!_profileHeaderLabel || !_profileStatsLabel || !_recentGamesTable) {
+        return;
+    }
+    _profileHeaderLabel->setText(QString::fromStdString(_selectedProfile.handle) + " (Robot)");
+    QString stats = QString("Owner: %1\nDescription: %2\nElo: %3 | Games: %4 (W:%5 L:%6 D:%7)")
+        .arg(QString::fromStdString(_selectedProfile.ownerHandle.empty() ? _selectedProfile.ownerUuid : _selectedProfile.ownerHandle))
+        .arg(QString::fromStdString(_selectedProfile.description))
+        .arg(_selectedProfile.elo2p)
+        .arg(_selectedProfile.gamesPlayed)
+        .arg(_selectedProfile.wins)
+        .arg(_selectedProfile.losses)
+        .arg(_selectedProfile.draws);
+    _profileStatsLabel->setText(stats);
+
+    _recentGamesTable->setRowCount(static_cast<int>(_selectedProfile.recentGames.size()));
+    for (int i = 0; i < static_cast<int>(_selectedProfile.recentGames.size()); ++i) {
+        const auto &g = _selectedProfile.recentGames[static_cast<std::size_t>(i)];
+        _recentGamesTable->setItem(i, 0, new QTableWidgetItem(QString::fromStdString(g.gameId)));
+        _recentGamesTable->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(g.mode)));
+        _recentGamesTable->setItem(i, 2, new QTableWidgetItem(QString::fromStdString(g.result)));
+        std::string opp;
+        for (const auto &p : g.players) {
+            if (p.playerUuid != _selectedProfile.uuid && p.playerUuid != _selectedProfile.robotUuid) {
+                if (!opp.empty()) {
+                    opp += ", ";
+                }
+                opp += p.handle.empty() ? p.playerUuid : p.handle;
+            }
+        }
+        if (opp.empty() && !g.players.empty()) {
+            opp = g.players[0].handle.empty() ? g.players[0].playerUuid : g.players[0].handle;
+        }
+        _recentGamesTable->setItem(i, 3, new QTableWidgetItem(QString::fromStdString(opp)));
+        _recentGamesTable->setItem(i, 4, new QTableWidgetItem(QString::number(g.plyCount)));
+    }
+    _replayBtn->setEnabled(false);
 }
 
 /* ==================================================================== */

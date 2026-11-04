@@ -1507,6 +1507,28 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
         }
     }
 
+    // 4b. When awaiting move confirmation, strictly guard against unwanted board interactions
+    if (_composer && _composer->isAwaitingConfirmation()) {
+        int gx = 0, gy = 0;
+        bool isContinuationHop = false;
+        if (_geometry.screenToSquare(pos, gx, gy) && _composer->isGuidedMoveActive()) {
+            for (const auto &sq : _composer->guidedNextSquares()) {
+                if (sq.first == gx && sq.second == gy) {
+                    isContinuationHop = true;
+                    break;
+                }
+            }
+        }
+        if (!isContinuationHop) {
+            cancelHandRotateHold();
+            if (isVisible()) {
+                presentPlyConfirmationIfNeeded();
+            }
+            update();
+            return;
+        }
+    }
+
     bool isGuidedDest = false;
     if (_composer->isGuidedMoveActive()) {
         int gx = 0, gy = 0;

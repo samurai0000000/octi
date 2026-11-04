@@ -25,6 +25,7 @@
 #include <QListWidgetItem>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QScrollBar>
@@ -455,9 +456,13 @@ OctiMainWindow::OctiMainWindow(
     _waitingRoomBannerLabel->setWordWrap(true);
     waitLayout->addWidget(_waitingRoomBannerLabel);
     QHBoxLayout *waitBtnRow = new QHBoxLayout();
-    _backToLobbyBtn = new QPushButton("Back to Lobby", _waitingRoomBannerWidget);
+    _sitSeatBtn = new QPushButton("Sit / Join Game", _waitingRoomBannerWidget);
+    _sitSeatBtn->setStyleSheet("QPushButton { background-color: #2563eb; color: white; font-weight: bold; }");
+    _deleteWaitingTableBtn = new QPushButton("Delete Table", _waitingRoomBannerWidget);
+    _deleteWaitingTableBtn->setStyleSheet("QPushButton { background-color: #dc2626; color: white; font-weight: bold; }");
     _leaveWaitingTableBtn = new QPushButton("Leave Table", _waitingRoomBannerWidget);
-    waitBtnRow->addWidget(_backToLobbyBtn);
+    waitBtnRow->addWidget(_sitSeatBtn);
+    waitBtnRow->addWidget(_deleteWaitingTableBtn);
     waitBtnRow->addWidget(_leaveWaitingTableBtn);
     waitLayout->addLayout(waitBtnRow);
     _waitingRoomBannerWidget->setVisible(false);
@@ -756,8 +761,32 @@ OctiMainWindow::OctiMainWindow(
     QObject::connect(_leaveWaitingTableBtn, &QPushButton::clicked, [this]() {
         leaveActiveOnlineTable(_onlineRoomId);
     });
-    QObject::connect(_backToLobbyBtn, &QPushButton::clicked, [this]() {
-        showLobbyView();
+    QObject::connect(_sitSeatBtn, &QPushButton::clicked, [this]() {
+        if (!_onlineRoomId.empty()) {
+            joinAndEnterOnlineTable(_onlineRoomId, 0, "");
+        }
+    });
+    QObject::connect(_deleteWaitingTableBtn, &QPushButton::clicked, [this]() {
+        if (_onlineRoomId.empty() || !_netClient) {
+            return;
+        }
+        bool isAdmin = _netClient->currentProfile().isAdmin;
+        QString title = isAdmin ? "Purge Table" : "Delete Table";
+        auto reply = QMessageBox::warning(
+            this,
+            title,
+            QString("Are you sure you want to delete table #%1?").arg(QString::fromStdString(_onlineRoomId)),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+        if (reply == QMessageBox::Yes) {
+            auto res = _netClient->purgeTable(_onlineRoomId);
+            if (!res.ok) {
+                QMessageBox::critical(this, QString("%1 Failed").arg(title), QString::fromStdString(res.errorMessage));
+            } else {
+                leaveOnlineRoom();
+                showLobbyView();
+            }
+        }
     });
     QObject::connect(_moderationBtn, &QPushButton::clicked, [this]() {
         if (!_onlineRoomId.empty()) {
@@ -855,7 +884,7 @@ OctiMainWindow::OctiMainWindow(
                     code = pd.passcode();
                 }
             }
-            joinAndEnterOnlineTable(table.roomId, 0, code);
+            observeOnlineTable(table.roomId, code);
         });
     _lobbyView->setOnLeaveTableRequested(
         [this](const std::string &roomId) {
@@ -1277,9 +1306,9 @@ void OctiMainWindow::setupMenuBar()
     // 1. &Game Menu
     QMenu *gameMenu = mb->addMenu("&Game");
 
-    QAction *actNewGame = gameMenu->addAction(createMenuIcon(MenuIconKind::NEW_GAME, _theme), "New Local / Bot Game...");
-    actNewGame->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_N));
-    QObject::connect(actNewGame, &QAction::triggered, this, [this]() {
+    _actNewGame = gameMenu->addAction(createMenuIcon(MenuIconKind::NEW_GAME, _theme), "New Local / Bot Game...");
+    _actNewGame->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_N));
+    QObject::connect(_actNewGame, &QAction::triggered, this, [this]() {
         NewLocalGameDialog dlg(_theme, this);
         dlg.setConfig(_localConfig);
         if (dlg.exec() == QDialog::Accepted) {
@@ -1445,6 +1474,19 @@ void OctiMainWindow::setupMenuBar()
     QObject::connect(actLeaderboard, &QAction::triggered, this, [this]() {
         LeaderboardDialog dlg(_netClient.get(), _theme, this);
         dlg.refreshLeaderboard("2P");
+        dlg.exec();
+    });
+
+    QAction *actRobots = onlineMenu->addAction("Robots Directory & Profiles...");
+    actRobots->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
+    QObject::connect(actRobots, &QAction::triggered, this, [this]() {
+        RobotsDirectoryDialog dlg(_netClient.get(), _theme, this);
+        dlg.setOnLoadReplayCallback(
+            [this](const std::string &, const std::string &transcript, const ArchivedGameSummary &) {
+                loadOctiTranscriptIntoReplay(transcript);
+                showBoardView();
+            });
+        dlg.refreshRobots();
         dlg.exec();
     });
 
@@ -2023,9 +2065,22 @@ ApiResult<bool> OctiMainWindow::leaveActiveOnlineTable(
         return res;
     }
 
-    res = _netClient->leaveTable(targetRoomId);
-    if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
-        showProtocolUpgradeRequired(res.errorMessage);
+    if (_inOnlineRoom && targetRoomId == _onlineRoomId) {
+        if (_onlineViewerSeat > 0) {
+            // Seated player exiting table view: do not vacate/forfeit so seat can be resumed from lobby
+            res.ok = true;
+            res.data = true;
+        } else {
+            res = _netClient->unobserveTable(targetRoomId);
+            if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
+                showProtocolUpgradeRequired(res.errorMessage);
+            }
+        }
+    } else {
+        res = _netClient->leaveTable(targetRoomId);
+        if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
+            showProtocolUpgradeRequired(res.errorMessage);
+        }
     }
 
     if (targetRoomId == _onlineRoomId || _inOnlineRoom) {
@@ -3359,6 +3414,17 @@ void OctiMainWindow::updateMatchActionsVisibility()
     bool waitingForPlayers =
         online && (_onlineGameView.phase == "WAITING_FOR_PLAYERS" ||
                    (!_onlineGameView.live && _onlineGameView.phase.empty()));
+    bool inProgress = (online && _onlineGameView.phase == "IN_PROGRESS");
+    bool seatedPlayer = (online && _onlineViewerSeat > 0);
+    bool canActInMatch = (seatedPlayer && inProgress);
+
+    if (_sidebarNewGameBtn) {
+        _sidebarNewGameBtn->setVisible(!online);
+        _sidebarNewGameBtn->setEnabled(!online);
+    }
+    if (_actNewGame) {
+        _actNewGame->setEnabled(!online);
+    }
 
     if (_waitingRoomBannerWidget) {
         _waitingRoomBannerWidget->setVisible(waitingForPlayers);
@@ -3373,6 +3439,20 @@ void OctiMainWindow::updateMatchActionsVisibility()
                     .arg(totalSeats));
         }
     }
+    if (_sitSeatBtn) {
+        bool canSit = (waitingForPlayers && _onlineViewerSeat == 0);
+        _sitSeatBtn->setVisible(canSit);
+        _sitSeatBtn->setEnabled(canSit);
+    }
+    if (_deleteWaitingTableBtn) {
+        bool isAdmin = (_netClient && _netClient->currentProfile().isAdmin);
+        std::string myUuid = (_netClient ? _netClient->currentProfile().uuid : "");
+        bool isHost = (!myUuid.empty() && _onlineGameView.hostUuid == myUuid);
+        bool canDelete = waitingForPlayers && (isAdmin || isHost);
+        _deleteWaitingTableBtn->setVisible(canDelete);
+        _deleteWaitingTableBtn->setEnabled(canDelete);
+        _deleteWaitingTableBtn->setText(isAdmin ? "Purge Table" : "Delete Table");
+    }
     if (_leaveWaitingTableBtn) {
         _leaveWaitingTableBtn->setEnabled(waitingForPlayers);
     }
@@ -3382,18 +3462,32 @@ void OctiMainWindow::updateMatchActionsVisibility()
     }
     if (_offerDrawBtn) {
         _offerDrawBtn->setVisible(online);
-        _offerDrawBtn->setEnabled(online && !waitingForPlayers);
+        _offerDrawBtn->setEnabled(canActInMatch);
     }
     if (_pauseResumeBtn) {
         _pauseResumeBtn->setVisible(online);
-        _pauseResumeBtn->setEnabled(online && !waitingForPlayers);
+        _pauseResumeBtn->setEnabled(canActInMatch);
     }
     if (_claimForfeitBtn) {
         _claimForfeitBtn->setVisible(online);
-        _claimForfeitBtn->setEnabled(online && !waitingForPlayers);
+        _claimForfeitBtn->setEnabled(canActInMatch);
+    }
+    bool localGameActive = (_board.getGame() && _board.getGame()->isGameStarted() && !_board.getGame()->isGameOver());
+    if (_undoRequestBtn) {
+        if (online) {
+            _undoRequestBtn->setVisible(true);
+            _undoRequestBtn->setEnabled(canActInMatch);
+        } else {
+            _undoRequestBtn->setVisible(true);
+            _undoRequestBtn->setEnabled(localGameActive);
+        }
     }
     if (_resignBtn) {
-        _resignBtn->setEnabled(!waitingForPlayers);
+        if (online) {
+            _resignBtn->setEnabled(canActInMatch);
+        } else {
+            _resignBtn->setEnabled(localGameActive);
+        }
     }
     if (_moderationBtn) {
         _moderationBtn->setVisible(online);

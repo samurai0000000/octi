@@ -2708,12 +2708,19 @@ TEST(DesktopAppIntegrationTest, LobbyTablesRedesignTimestampsSeatsAndLeaveTable)
         "Seat 2 (B): [Open]"));
     CHECK_TRUE(winA.lobbyView()->leaveTableButton()->isEnabled());
 
-    /* 3. Leave the waiting table via leaveActiveOnlineTable() */
+    /* 3. Leave the waiting table view via leaveActiveOnlineTable() (returns to lobby without destroying table) */
     auto leaveRes = winA.leaveActiveOnlineTable(roomId);
     CHECK_TRUE_TEXT(leaveRes.ok, leaveRes.errorMessage.c_str());
     CHECK_FALSE(winA.isInOnlineGame());
     STRCMP_EQUAL("", winA.onlineRoomId().c_str());
     CHECK_TRUE(winA.isLobbyViewVisible());
+    CHECK_TRUE(winA.lobbyView()->isMyTableBannerVisible());
+    CHECK_TRUE(winA.lobbyView()->findTable(roomId) != nullptr);
+
+    /* 4. Host deletes the waiting table via purgeTable() */
+    auto purgeRes = winA.netClient()->purgeTable(roomId);
+    CHECK_TRUE_TEXT(purgeRes.ok, purgeRes.errorMessage.c_str());
+    winA.lobbyView()->refreshLobby();
     CHECK_FALSE(winA.lobbyView()->isMyTableBannerVisible());
     CHECK_TRUE(winA.lobbyView()->findTable(roomId) == nullptr);
 }

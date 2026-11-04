@@ -18,6 +18,7 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QElapsedTimer>
+#include <QGroupBox>
 #include <QIcon>
 #include <QKeyEvent>
 #include <QLabel>
@@ -556,6 +557,66 @@ private:
     QPushButton *_refreshBtn;
     QTableWidget *_table;
     std::vector<LeaderboardRow> _rows;
+};
+
+class RobotsDirectoryDialog : public QDialog {
+public:
+    struct RobotDirectoryEntry {
+        std::string robotUuid;
+        std::string handle;
+        std::string description;
+        std::string ownerUuid;
+        std::string ownerHandle;
+        std::string status;
+        int gamesPlayed = 0;
+        int wins = 0;
+        int losses = 0;
+        int draws = 0;
+        double winRate = 0.0;
+        int elo2p = 1500;
+    };
+
+    explicit RobotsDirectoryDialog(OctiNetworkClient *netClient,
+                                  ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                                  QWidget *parent = nullptr);
+    ~RobotsDirectoryDialog() override;
+
+    void setTheme(ThemeId theme);
+    ThemeId theme() const;
+
+    bool refreshRobots(const std::string &query = "");
+    bool selectRobot(const std::string &robotUuid);
+
+    const std::vector<RobotDirectoryEntry> &robots() const { return _robots; }
+    const PlayerProfileInfo &selectedRobotProfile() const { return _selectedProfile; }
+
+    void setOnLoadReplayCallback(
+        std::function<void(const std::string &gameId,
+                           const std::string &octiTranscript,
+                           const ArchivedGameSummary &summary)> cb);
+
+private:
+    void rebuildRobotsTable();
+    void rebuildProfileCard();
+
+    OctiNetworkClient *_netClient;
+    ThemeId _theme;
+
+    QLineEdit *_searchEdit;
+    QPushButton *_refreshBtn;
+    QTableWidget *_robotsTable;
+    QGroupBox *_profileBox;
+    QLabel *_profileHeaderLabel;
+    QLabel *_profileStatsLabel;
+    QTableWidget *_recentGamesTable;
+    QPushButton *_replayBtn;
+    QLabel *_statusLabel;
+
+    std::vector<RobotDirectoryEntry> _robots;
+    PlayerProfileInfo _selectedProfile;
+    std::function<void(const std::string &gameId,
+                       const std::string &octiTranscript,
+                       const ArchivedGameSummary &summary)> _onLoadReplayCallback;
 };
 
 /*

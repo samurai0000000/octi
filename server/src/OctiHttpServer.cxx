@@ -822,6 +822,7 @@ struct OctiHttpServer::Impl {
     Json roomEventJson(const RoomEvent &e);
     Json lobbyEventJson(const LobbyEvent &e);
     Json gameSummaryJson(const GameRecord &g);
+    Json buildRobotProfilePayload(const RobotRecord &r);
 
     /* streaming */
     bool wantsStream(const Request &req) const;
@@ -850,6 +851,8 @@ struct OctiHttpServer::Impl {
     void handleUsersList(const Request &req, Response &res);
     void handleUserGet(const Request &req, Response &res);
     void handleRobotsList(const Request &req, Response &res);
+    void handleRobotsDirectory(const Request &req, Response &res);
+    void handleRobotProfileGet(const Request &req, Response &res);
     void handleRobotCreate(const Request &req, Response &res);
     void handleRobotPatch(const Request &req, Response &res);
     void handleRobotDelete(const Request &req, Response &res);
@@ -1312,7 +1315,9 @@ bool OctiHttpServer::Impl::requireAuth(const Request &req, Response &res,
         }
         if (path == "/api/v1/robots" || path.rfind("/api/v1/robots/", 0) == 0) {
             if (path != "/api/v1/robots/connect" &&
-                path != "/api/v1/robots/disconnect") {
+                path != "/api/v1/robots/disconnect" &&
+                path != "/api/v1/robots/directory" &&
+                path.rfind("/api/v1/robots/profile/", 0) != 0) {
                 sendError(res, 403, "FORBIDDEN_ROBOT",
                           "robots cannot manage robot registrations");
                 return false;
@@ -1757,6 +1762,8 @@ Json OctiHttpServer::Impl::gameSummaryJson(const GameRecord &g)
     Json players = Json::array();
     const int64_t ids[4] = {g.p1PlayerId, g.p2PlayerId, g.p3PlayerId,
                             g.p4PlayerId};
+    const int64_t robotIds[4] = {g.p1RobotId, g.p2RobotId, g.p3RobotId,
+                                 g.p4RobotId};
     const std::string *handles[4] = {&g.p1Handle, &g.p2Handle, &g.p3Handle,
                                      &g.p4Handle};
     for (int i = 0; i < 4; ++i) {
@@ -1766,7 +1773,13 @@ Json OctiHttpServer::Impl::gameSummaryJson(const GameRecord &g)
         Json p;
         p["seat"] = i + 1;
         p["handle"] = *handles[i];
-        if (ids[i] != 0) {
+        if (robotIds[i] > 0) {
+            p["is_robot"] = true;
+            RobotRecord rRec;
+            if (store.getRobotById(robotIds[i], rRec)) {
+                p["robot_uuid"] = rRec.robotUuid;
+            }
+        } else if (ids[i] != 0) {
             p["player_uuid"] = uuidOf(ids[i]);
         }
         players.push_back(p);
@@ -2980,6 +2993,99 @@ void OctiHttpServer::Impl::handleUsersList(const Request &req, Response &res)
     sendJson(res, 200, j);
 }
 
+Json OctiHttpServer::Impl::buildRobotProfilePayload(const RobotRecord &r)
+{
+    Json rj;
+    rj["is_robot"] = true;
+    rj["uuid"] = r.robotUuid;
+    rj["robot_uuid"] = r.robotUuid;
+    rj["name"] = r.robotName;
+    rj["handle"] = r.robotName;
+    rj["robot_name"] = r.robotName;
+    rj["display_name"] = r.robotName;
+    rj["description"] = r.description;
+    rj["bio"] = r.description;
+    rj["avatar_url"] = r.ownerAvatarUrl;
+    rj["owner_uuid"] = r.ownerUuid;
+    rj["owner_handle"] = r.ownerHandle;
+    rj["owner_avatar_url"] = r.ownerAvatarUrl;
+    rj["elo"] = 1200;
+    rj["games_played"] = r.gamesPlayed;
+    rj["wins"] = r.wins;
+    rj["losses"] = r.losses;
+    rj["draws"] = r.draws;
+    double wr = (r.gamesPlayed > 0)
+                    ? std::round((static_cast<double>(r.wins) / r.gamesPlayed) *
+                                 1000.0) /
+                          10.0
+                    : 0.0;
+    rj["win_rate"] = wr;
+    rj["revoked"] = r.revoked;
+    rj["token_deleted"] = r.tokenDeleted;
+    bool retired = (r.revoked || r.tokenDeleted);
+    rj["retired"] = retired;
+    rj["status"] = (!retired) ? "active" : "retired";
+    rj["created_at"] = r.createdAt;
+    rj["last_seen_at"] = 0;
+    rj["robots"] = Json::array();
+
+    ArchiveFilter af;
+    af.robotId = r.robotId;
+    af.robotUuid = r.robotUuid;
+    af.limit = 50;
+    af.offset = 0;
+    std::vector<GameRecord> games;
+    store.listArchivedGames(af, games, nullptr);
+
+    Json gamesArr = Json::array();
+    for (size_t i = 0; i < games.size(); ++i) {
+        const auto &g = games[i];
+        Json gj = gameSummaryJson(g);
+        gj["p1_handle"] = g.p1Handle;
+        gj["p2_handle"] = g.p2Handle;
+        gj["p3_handle"] = g.p3Handle;
+        gj["p4_handle"] = g.p4Handle;
+
+        int mySeat = 0;
+        if (r.robotId > 0) {
+            if (g.p1RobotId == r.robotId) mySeat = 1;
+            else if (g.p2RobotId == r.robotId) mySeat = 2;
+            else if (g.p3RobotId == r.robotId) mySeat = 3;
+            else if (g.p4RobotId == r.robotId) mySeat = 4;
+        }
+        if (mySeat == 0 && !r.robotName.empty()) {
+            std::string rn = lower(r.robotName);
+            if (lower(g.p1Handle) == rn) mySeat = 1;
+            else if (lower(g.p2Handle) == rn) mySeat = 2;
+            else if (lower(g.p3Handle) == rn) mySeat = 3;
+            else if (lower(g.p4Handle) == rn) mySeat = 4;
+        }
+
+        std::string outcome = "DRAW";
+        if (g.result == "DRAW" || (g.winnerSeat == 0 && g.winner == "NONE")) {
+            outcome = "DRAW";
+        } else if (g.result == "TEAM_13_WIN") {
+            outcome = (mySeat == 1 || mySeat == 3) ? "WIN" : "LOSS";
+        } else if (g.result == "TEAM_24_WIN") {
+            outcome = (mySeat == 2 || mySeat == 4) ? "WIN" : "LOSS";
+        } else if (g.winnerSeat > 0) {
+            outcome = (mySeat == g.winnerSeat) ? "WIN" : "LOSS";
+        } else if (g.winner == "A") {
+            outcome = (mySeat == 1) ? "WIN" : "LOSS";
+        } else if (g.winner == "B") {
+            outcome = (mySeat == 2) ? "WIN" : "LOSS";
+        } else if (g.winner == "C") {
+            outcome = (mySeat == 3) ? "WIN" : "LOSS";
+        } else if (g.winner == "D") {
+            outcome = (mySeat == 4) ? "WIN" : "LOSS";
+        }
+        gj["player_outcome"] = outcome;
+        gamesArr.push_back(gj);
+    }
+    rj["recent_games"] = gamesArr;
+    return rj;
+}
+
 void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
 {
     std::string id;
@@ -3005,28 +3111,16 @@ void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
     }
     if (!found) {
         RobotRecord robotRec;
-        if (store.getRobotByUuid(id, robotRec) && !robotRec.revoked) {
-            Json rj;
-            rj["is_robot"] = true;
-            rj["uuid"] = robotRec.robotUuid;
-            rj["robot_uuid"] = robotRec.robotUuid;
-            rj["handle"] = robotRec.robotName;
-            rj["robot_name"] = robotRec.robotName;
-            rj["display_name"] = robotRec.robotName;
-            rj["description"] = robotRec.description;
-            rj["bio"] = robotRec.description;
-            rj["avatar_url"] = robotRec.ownerAvatarUrl;
-            rj["owner_uuid"] = robotRec.ownerUuid;
-            rj["owner_handle"] = robotRec.ownerHandle;
-            rj["owner_avatar_url"] = robotRec.ownerAvatarUrl;
-            rj["games_played"] = robotRec.gamesPlayed;
-            rj["wins"] = robotRec.wins;
-            rj["losses"] = robotRec.losses;
-            rj["draws"] = robotRec.draws;
-            rj["created_at"] = robotRec.createdAt;
-            rj["robots"] = Json::array();
-            rj["recent_games"] = Json::array();
-            sendJson(res, 200, rj);
+        bool rFound = store.getRobotByUuid(id, robotRec);
+        if (!rFound) {
+            std::string h = id;
+            if (!h.empty() && h[0] == '@') {
+                h = h.substr(1);
+            }
+            rFound = store.getRobotByName(h, robotRec);
+        }
+        if (rFound && robotRec.gamesPlayed > 0) {
+            sendJson(res, 200, buildRobotProfilePayload(robotRec));
             return;
         }
     }
@@ -3054,26 +3148,18 @@ void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
 
     ArchiveFilter af;
     af.playerUuid = prof.uuid;
-    af.limit = 20;
+    af.limit = 50;
     af.offset = 0;
     std::vector<GameRecord> games;
     store.listArchivedGames(af, games, nullptr);
     Json gamesArr = Json::array();
     for (size_t i = 0; i < games.size(); ++i) {
         const auto &g = games[i];
-        Json gj;
-        gj["game_id"] = g.gameId;
-        gj["mode"] = g.gameMode;
+        Json gj = gameSummaryJson(g);
         gj["p1_handle"] = g.p1Handle;
         gj["p2_handle"] = g.p2Handle;
         gj["p3_handle"] = g.p3Handle;
         gj["p4_handle"] = g.p4Handle;
-        gj["result"] = g.result;
-        gj["winner"] = g.winner;
-        gj["winner_seat"] = g.winnerSeat;
-        gj["termination"] = g.termination;
-        gj["ply_count"] = g.plyCount;
-        gj["ended_at"] = g.endedAt;
 
         int mySeat = 0;
         if (prof.playerId > 0 && prof.playerId == g.p1PlayerId) mySeat = 1;
@@ -3112,6 +3198,128 @@ void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
     j["robots"] = robotsArr;
     j["recent_games"] = gamesArr;
     sendJson(res, 200, j);
+}
+
+void OctiHttpServer::Impl::handleRobotsDirectory(const Request &req, Response &res)
+{
+    RobotDirectoryFilter filter;
+    if (req.has_param("q")) {
+        filter.query = req.get_param_value("q");
+    }
+    if (req.has_param("sort")) {
+        filter.sortField = req.get_param_value("sort");
+    } else {
+        filter.sortField = "wins";
+    }
+    if (req.has_param("order")) {
+        std::string ord = lower(req.get_param_value("order"));
+        filter.sortAsc = (ord == "asc");
+    } else {
+        filter.sortAsc = false;
+    }
+    int limit = 50;
+    if (req.has_param("limit")) {
+        try {
+            limit = std::stoi(req.get_param_value("limit"));
+        } catch (...) {
+            limit = 50;
+        }
+    }
+    if (limit < 1) limit = 1;
+    if (limit > 100) limit = 100;
+    filter.limit = limit;
+
+    int offset = 0;
+    if (req.has_param("offset")) {
+        try {
+            offset = std::stoi(req.get_param_value("offset"));
+        } catch (...) {
+            offset = 0;
+        }
+    }
+    if (offset < 0) offset = 0;
+    filter.offset = offset;
+
+    std::vector<RobotRecord> list;
+    int64_t total = 0;
+    if (!store.listPublicRobotsDirectory(filter, list, &total)) {
+        sendError(res, 500, "INTERNAL_ERROR", "failed to list robots directory");
+        return;
+    }
+
+    Json arr = Json::array();
+    for (size_t i = 0; i < list.size(); ++i) {
+        const auto &r = list[i];
+        Json rj;
+        rj["robot_uuid"] = r.robotUuid;
+        rj["name"] = r.robotName;
+        rj["robot_name"] = r.robotName;
+        rj["display_name"] = r.robotName;
+        rj["description"] = r.description;
+        rj["bio"] = r.description;
+        rj["is_robot"] = true;
+        rj["elo"] = 1200;
+        rj["games_played"] = r.gamesPlayed;
+        rj["wins"] = r.wins;
+        rj["losses"] = r.losses;
+        rj["draws"] = r.draws;
+        double wr = (r.gamesPlayed > 0)
+                        ? std::round((static_cast<double>(r.wins) /
+                                      r.gamesPlayed) *
+                                     1000.0) /
+                              10.0
+                        : 0.0;
+        rj["win_rate"] = wr;
+        rj["revoked"] = r.revoked;
+        rj["token_deleted"] = r.tokenDeleted;
+        bool retired = (r.revoked || r.tokenDeleted);
+        rj["retired"] = retired;
+        rj["status"] = (!retired) ? "active" : "retired";
+        rj["created_at"] = r.createdAt;
+        rj["last_seen_at"] = 0;
+        rj["owner_uuid"] = r.ownerUuid;
+        rj["owner_handle"] = r.ownerHandle;
+        rj["owner_avatar_url"] = r.ownerAvatarUrl;
+        arr.push_back(rj);
+    }
+
+    Json resp;
+    resp["total"] = total;
+    resp["limit"] = limit;
+    resp["offset"] = offset;
+    resp["robots"] = arr;
+    sendJson(res, 200, resp);
+}
+
+void OctiHttpServer::Impl::handleRobotProfileGet(const Request &req, Response &res)
+{
+    std::string id;
+    std::unordered_map<std::string, std::string>::const_iterator it =
+        req.path_params.find("id");
+    if (it == req.path_params.end()) {
+        it = req.path_params.find("uuid");
+    }
+    if (it == req.path_params.end() || !isSafeId(it->second)) {
+        sendError(res, 404, "ERR_NOT_FOUND", "robot profile not found");
+        return;
+    }
+    id = it->second;
+
+    RobotRecord robotRec;
+    bool found = store.getRobotByUuid(id, robotRec);
+    if (!found) {
+        std::string h = id;
+        if (!h.empty() && h[0] == '@') {
+            h = h.substr(1);
+        }
+        found = store.getRobotByName(h, robotRec);
+    }
+    if (!found || robotRec.gamesPlayed <= 0) {
+        sendError(res, 404, "ERR_NOT_FOUND", "robot profile not found");
+        return;
+    }
+
+    sendJson(res, 200, buildRobotProfilePayload(robotRec));
 }
 
 void OctiHttpServer::Impl::handleRobotsList(const Request &req, Response &res)
@@ -3770,8 +3978,11 @@ void OctiHttpServer::Impl::handleTablePurge(const Request &req, Response &res)
     if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
         return;
     }
-    if (auth.isRobot || !store.isPlayerAdmin(auth.playerId)) {
-        sendError(res, 403, "FORBIDDEN", "admin privileges required");
+    bool isHost = !auth.isRobot && rooms.isTableHost(id, auth.playerId);
+    bool isAdmin = !auth.isRobot && store.isPlayerAdmin(auth.playerId);
+    if (!isHost && !isAdmin) {
+        sendError(res, 403, "ERR_FORBIDDEN",
+                  "only the table host or an administrator may delete a table");
         return;
     }
     RoomResult r = rooms.purgeRoom(id);
@@ -5995,6 +6206,8 @@ void OctiHttpServer::Impl::registerRoutes()
         {"GET", "/api/v1/users/:id", &Impl::handleUserGet},
         {"GET", "/api/v1/robots", &Impl::handleRobotsList},
         {"GET", "/api/v1/robots/export-conf", &Impl::handleRobotsExportConf},
+        {"GET", "/api/v1/robots/directory", &Impl::handleRobotsDirectory},
+        {"GET", "/api/v1/robots/profile/:id", &Impl::handleRobotProfileGet},
         {"POST", "/api/v1/robots/connect", &Impl::handleRobotsConnect},
         {"POST", "/api/v1/robots/disconnect", &Impl::handleRobotsDisconnect},
         {"POST", "/api/v1/robots", &Impl::handleRobotCreate},

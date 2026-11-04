@@ -1910,6 +1910,23 @@ RoomResult GameRoomManager::joinTable(const std::string &roomId,
     if (r->banned.count(playerId) != 0) {
         return fail(RoomCode::FORBIDDEN_BANNED, "banned from this room");
     }
+    int existingSeat = seatOfLocked(*r, playerId);
+    if (existingSeat != 0 && (seat == 0 || seat == existingSeat)) {
+        if (!r->seatConnected[existingSeat] || _seatRoom.count(playerId) == 0) {
+            touchOnlineLocked(playerId);
+            _players[playerId].lastActiveMs = now;
+            r->seatConnected[existingSeat] = true;
+            r->seatDisconnectedAt[existingSeat] = 0;
+            _seatRoom[playerId] = r->id;
+            refreshPresenceLocked(playerId);
+            saveRoomLocked(*r);
+            RoomResult res = success();
+            res.roomId = r->id;
+            res.seat = existingSeat;
+            res.gameStarted = (r->phase == RoomPhase::IN_PROGRESS);
+            return res;
+        }
+    }
     if (r->phase != RoomPhase::WAITING_FOR_PLAYERS) {
         return fail(RoomCode::INVALID_STATE, "table is not waiting for players");
     }
@@ -2016,6 +2033,13 @@ RoomResult GameRoomManager::purgeRoom(const std::string &roomId)
     return success();
 }
 
+bool GameRoomManager::isTableHost(const std::string &roomId, int64_t playerId) const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    const Room *r = findRoomLocked(roomId);
+    return r != nullptr && playerId != 0 && r->hostId == playerId;
+}
+
 RoomResult GameRoomManager::kickSeat(const std::string &roomId,
                                      int64_t hostPlayerId,
                                      int64_t targetPlayerId)
@@ -2081,7 +2105,22 @@ RoomResult GameRoomManager::observeRoom(const std::string &roomId,
     if (r->banned.count(playerId) != 0) {
         return fail(RoomCode::FORBIDDEN_BANNED, "banned from this room");
     }
-    if (seatOfLocked(*r, playerId) != 0) {
+    int existingSeat = seatOfLocked(*r, playerId);
+    if (existingSeat != 0) {
+        if (!r->seatConnected[existingSeat] || _seatRoom.count(playerId) == 0) {
+            touchOnlineLocked(playerId);
+            _players[playerId].lastActiveMs = now;
+            r->seatConnected[existingSeat] = true;
+            r->seatDisconnectedAt[existingSeat] = 0;
+            _seatRoom[playerId] = r->id;
+            refreshPresenceLocked(playerId);
+            saveRoomLocked(*r);
+            RoomResult res = success();
+            res.roomId = r->id;
+            res.seat = existingSeat;
+            res.gameStarted = (r->phase == RoomPhase::IN_PROGRESS);
+            return res;
+        }
         return fail(RoomCode::INVALID_STATE, "seated players need not observe");
     }
     if (r->config.observerPolicy == ObserverPolicy::NO_OBSERVERS &&
@@ -3206,27 +3245,28 @@ bool GameRoomManager::archiveLocked(Room &r)
     rec.edgeless = r.board->getGame()->useEdgelessBoard();
     rec.timeControl = timeControlString(r.config.timeControl);
 
-    auto fillSeatRec = [this, &r](int seat, int64_t &pidOut, std::string &handleOut) {
+    auto fillSeatRec = [this, &r](int seat, int64_t &pidOut, int64_t &ridOut, std::string &handleOut) {
         int64_t pid = r.seatPlayer[seat];
         if (isRobotActorId(pid)) {
+            pidOut = 0;
+            ridOut = robotIdFromActorId(pid);
             std::map<int64_t, PlayerInfo>::const_iterator pit = _players.find(pid);
             if (pit != _players.end()) {
-                pidOut = pit->second.ownerPlayerId;
                 handleOut = pit->second.handle;
             } else {
-                pidOut = 0;
                 handleOut = r.seatHandle[seat];
             }
         } else {
             pidOut = pid;
+            ridOut = 0;
             handleOut = r.seatHandle[seat];
         }
     };
-    fillSeatRec(1, rec.p1PlayerId, rec.p1Handle);
-    fillSeatRec(2, rec.p2PlayerId, rec.p2Handle);
+    fillSeatRec(1, rec.p1PlayerId, rec.p1RobotId, rec.p1Handle);
+    fillSeatRec(2, rec.p2PlayerId, rec.p2RobotId, rec.p2Handle);
     if (r.seatCount == 4) {
-        fillSeatRec(3, rec.p3PlayerId, rec.p3Handle);
-        fillSeatRec(4, rec.p4PlayerId, rec.p4Handle);
+        fillSeatRec(3, rec.p3PlayerId, rec.p3RobotId, rec.p3Handle);
+        fillSeatRec(4, rec.p4PlayerId, rec.p4RobotId, rec.p4Handle);
     }
     rec.result = r.result;
     rec.winnerSeat = r.winnerSeat;

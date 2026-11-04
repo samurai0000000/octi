@@ -280,7 +280,35 @@ fun OctiBoardCanvas(
                                 lastDragTimeMs = System.currentTimeMillis()
                                 val startSq = b.squareAt(startX - 1, startY - 1)
                                 val hasFriendlyPod = !startSq.isEmpty && turn != null && !startSq.hasEnemyOf(turn)
-                                if (composer.isGuidedMoveActive) {
+                                if (composer.isAwaitingConfirmation) {
+                                    if (composer.isGuidedMoveActive && composer.hasContinuationJump() && composer.isGuidedLegalDestination(endX, endY)) {
+                                        val prevCapCount = composer.captureChoices().size
+                                        val curSq = composer.guidedCurrentSquare()
+                                        if (composer.clickBoardSquareForGuidedMove(endX, endY)) {
+                                            viewModel.refreshDisplayBoard()
+                                            val capChoices = composer.captureChoices()
+                                            if (composer.isAwaitingConfirmation) {
+                                                val dx = Math.abs(endX - curSq[0])
+                                                val dy = Math.abs(endY - curSq[1])
+                                                val isCap = capChoices.size > prevCapCount
+                                                val cue = if (isCap) OctiSoundSynth.Cue.POD_CAPTURE
+                                                    else if (dx > 1 || dy > 1) OctiSoundSynth.Cue.POD_JUMP
+                                                    else OctiSoundSynth.Cue.POD_STEP
+                                                OctiSoundSynth.playCue(cue, !viewModel.sfxMuted.value)
+                                            }
+                                            if (capChoices.size > prevCapCount) {
+                                                val latestCap = capChoices.lastOrNull { !it.mandatory }
+                                                if (latestCap != null) {
+                                                    val jsq = b.squareAt(latestCap.jumpedX - 1, latestCap.jumpedY - 1)
+                                                    val jumpedPlayer = if (!jsq.isEmpty) jsq.getPodAt(0).type.toPlayer() else OctiPlayer.PLAYER_B
+                                                    viewModel.promptCapture(latestCap.jumpedX, latestCap.jumpedY, jumpedPlayer)
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        viewModel.setStatusBanner("Confirm or Cancel your staged move first")
+                                    }
+                                } else if (composer.isGuidedMoveActive) {
                                     val prevCapCount = composer.captureChoices().size
                                     val curSq = composer.guidedCurrentSquare()
                                     if (composer.clickBoardSquareForGuidedMove(endX, endY)) {
@@ -343,11 +371,19 @@ fun OctiBoardCanvas(
                     onDoubleTap = { offset ->
                         currentOnUserInteraction()
                         if (!viewModel.isInteractiveOnlineTurn()) return@detectTapGestures
+                        if (viewModel.composer.isAwaitingConfirmation) {
+                            viewModel.setStatusBanner("Confirm or Cancel your staged move first")
+                            return@detectTapGestures
+                        }
                         openZoomForOffset(offset, size)
                     },
                     onLongPress = { offset ->
                         currentOnUserInteraction()
                         if (!viewModel.isInteractiveOnlineTurn()) return@detectTapGestures
+                        if (viewModel.composer.isAwaitingConfirmation) {
+                            viewModel.setStatusBanner("Confirm or Cancel your staged move first")
+                            return@detectTapGestures
+                        }
                         openZoomForOffset(offset, size)
                     },
                     onTap = { offset ->
@@ -472,7 +508,7 @@ fun OctiBoardCanvas(
 
                             // Not a legal destination!
                             if (composer.isAwaitingConfirmation) {
-                                composer.finishGuidedMoveHere()
+                                viewModel.setStatusBanner("Confirm or Cancel your staged move first")
                                 viewModel.notifyComposerUpdated()
                                 return@detectTapGestures
                             } else {
@@ -487,10 +523,9 @@ fun OctiBoardCanvas(
                                 // Friendly pod: fall through to process guided move start
                             }
                         } else if (composer.isAwaitingConfirmation) {
-                            if (!isOriginSquare || !composer.hasOtherMovablePodAtOrigin()) {
-                                composer.cancelAndRollback()
-                                viewModel.refreshDisplayBoard()
-                            }
+                            viewModel.setStatusBanner("Confirm or Cancel your staged move first")
+                            viewModel.notifyComposerUpdated()
+                            return@detectTapGestures
                         }
 
                         if (b.game?.isGameOver == true) {

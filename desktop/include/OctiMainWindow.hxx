@@ -340,8 +340,10 @@ private:
 
     QWidget *_waitingRoomBannerWidget = nullptr;
     QLabel *_waitingRoomBannerLabel = nullptr;
+    QPushButton *_sitSeatBtn = nullptr;
+    QPushButton *_deleteWaitingTableBtn = nullptr;
     QPushButton *_leaveWaitingTableBtn = nullptr;
-    QPushButton *_backToLobbyBtn = nullptr;
+    QAction *_actNewGame = nullptr;
 
     QWidget *_proposalBannerWidget;
     QLabel *_proposalBannerLabel;

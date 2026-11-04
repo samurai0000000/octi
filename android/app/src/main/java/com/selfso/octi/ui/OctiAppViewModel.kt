@@ -389,6 +389,10 @@ class OctiAppViewModel @JvmOverloads constructor(
     private val _statusBanner = MutableStateFlow("")
     val statusBanner: StateFlow<String> = _statusBanner.asStateFlow()
 
+    fun setStatusBanner(msg: String) {
+        _statusBanner.value = msg
+    }
+
     // Online Authentication & Account Linking State
     private val _isAuthenticated = MutableStateFlow(false)
     val isAuthenticated: StateFlow<Boolean> = _isAuthenticated.asStateFlow()
@@ -486,6 +490,16 @@ class OctiAppViewModel @JvmOverloads constructor(
     private val _archivedGamesPage = MutableStateFlow(OctiNetworkClient.ArchivedGamesPage())
     val archivedGamesPage: StateFlow<OctiNetworkClient.ArchivedGamesPage> =
         _archivedGamesPage.asStateFlow()
+
+    private val _robotsDirectory =
+        MutableStateFlow<List<OctiNetworkClient.RobotDirectoryEntry>>(emptyList())
+    val robotsDirectory: StateFlow<List<OctiNetworkClient.RobotDirectoryEntry>> =
+        _robotsDirectory.asStateFlow()
+
+    private val _selectedRobotProfile =
+        MutableStateFlow<OctiNetworkClient.RobotProfileData?>(null)
+    val selectedRobotProfile: StateFlow<OctiNetworkClient.RobotProfileData?> =
+        _selectedRobotProfile.asStateFlow()
 
     // Dialog visibility flags for UI
     private val _showNewGameDialog = MutableStateFlow(false)
@@ -2311,6 +2325,39 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     @JvmOverloads
+    fun exitOnlineTableViewAsync(
+        roomId: String = _activeRoomId.value,
+        onDone: ActionCallback<Boolean>? = null
+    ) {
+        val targetRoomId = roomId.trim()
+        val isActiveRoom = (targetRoomId.isEmpty() || targetRoomId == _activeRoomId.value)
+        val resolvedRoomId = if (targetRoomId.isNotEmpty()) targetRoomId else _activeRoomId.value
+        val viewerSeat = _activeGameView.value?.viewerSeat ?: 0
+        _backgroundExecutor.submit {
+            val res = if (viewerSeat == 0 && resolvedRoomId.isNotEmpty()) {
+                netClient.unobserveTable(resolvedRoomId)
+            } else {
+                OctiNetworkClient.ApiResult(true)
+            }
+            runOnUiThreadOrSync {
+                if (isActiveRoom) {
+                    leaveVoiceChannel()
+                    netClient.stopGameEventStream()
+                    _activeRoomId.value = ""
+                    _activeGameView.value = null
+                    _gameChatLog.value = emptyList()
+                    _lastSubmittedOnlinePly = 0
+                    _matchType.value = MatchType.LOCAL_VS_BOT
+                    _currentTab.value = AppTab.ONLINE_LOBBY
+                    _statusBanner.value = "Returned to lobby"
+                }
+                refreshLobbyState()
+                onDone?.onDone(res.ok)
+            }
+        }
+    }
+
+    @JvmOverloads
     fun leaveOnlineTableAsync(
         roomId: String = _activeRoomId.value,
         onDone: ActionCallback<Boolean>? = null
@@ -2409,13 +2456,76 @@ class OctiAppViewModel @JvmOverloads constructor(
         }
     }
 
-    fun purgeTable(roomId: String) {
+    @JvmOverloads
+    fun purgeOnlineTableAsync(
+        roomId: String,
+        onDone: ActionCallback<Boolean>? = null
+    ) {
+        val targetRoomId = roomId.trim()
+        if (targetRoomId.isEmpty()) {
+            onDone?.onDone(false)
+            return
+        }
         _backgroundExecutor.submit {
-            val res = netClient.purgeTable(roomId)
-            if (res.ok) {
-                refreshLobbyState()
+            val res = netClient.purgeTable(targetRoomId)
+            runOnUiThreadOrSync {
+                if (res.ok) {
+                    if (targetRoomId == _activeRoomId.value) {
+                        leaveVoiceChannel()
+                        netClient.stopGameEventStream()
+                        _activeRoomId.value = ""
+                        _activeGameView.value = null
+                        _gameChatLog.value = emptyList()
+                        _lastSubmittedOnlinePly = 0
+                        _matchType.value = MatchType.LOCAL_PASS_AND_PLAY
+                        _currentTab.value = AppTab.ONLINE_LOBBY
+                        _statusBanner.value = "Table #$targetRoomId deleted"
+                    }
+                    refreshLobbyState()
+                } else {
+                    _statusBanner.value = "Delete table failed: ${res.errorMessage}"
+                }
+                onDone?.onDone(res.ok)
             }
         }
+    }
+
+    fun purgeTable(roomId: String) {
+        purgeOnlineTableAsync(roomId)
+    }
+
+    @JvmOverloads
+    fun refreshRobotsDirectoryAsync(
+        query: String = "",
+        sort: String = "wins"
+    ) {
+        _backgroundExecutor.submit {
+            val res = netClient.fetchRobotsDirectory(query, sort)
+            runOnUiThreadOrSync {
+                if (res.ok && res.data != null) {
+                    _robotsDirectory.value = res.data
+                }
+            }
+        }
+    }
+
+    fun selectRobotProfileAsync(robotIdOrUuid: String) {
+        if (robotIdOrUuid.isEmpty()) {
+            _selectedRobotProfile.value = null
+            return
+        }
+        _backgroundExecutor.submit {
+            val res = netClient.fetchRobotProfile(robotIdOrUuid)
+            runOnUiThreadOrSync {
+                if (res.ok && res.data != null) {
+                    _selectedRobotProfile.value = res.data
+                }
+            }
+        }
+    }
+
+    fun clearSelectedRobotProfile() {
+        _selectedRobotProfile.value = null
     }
 
     fun linkIdentity(
@@ -2958,6 +3068,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             return OctiNetworkClient.ApiResult(false)
         }
         val isActiveRoom = (targetRoomId == _activeRoomId.value)
+        val viewerSeat = _activeGameView.value?.viewerSeat ?: 0
         if (isActiveRoom) {
             leaveVoiceChannel()
             netClient.stopGameEventStream()
@@ -2965,17 +3076,13 @@ class OctiAppViewModel @JvmOverloads constructor(
         val res = netClient.leaveTable(targetRoomId)
         if (isActiveRoom) {
             runOnUiThreadOrSync {
-                val prevPhase = _activeGameView.value?.phase ?: "WAITING_FOR_PLAYERS"
                 _activeRoomId.value = ""
                 _activeGameView.value = null
                 _gameChatLog.value = emptyList()
                 _lastSubmittedOnlinePly = 0
-                if (_matchType.value == MatchType.ONLINE_ROOM &&
-                    (prevPhase == "WAITING_FOR_PLAYERS" || !board.game.isGameStarted || board.game.isGameOver)
-                ) {
-                    _matchType.value = MatchType.LOCAL_PASS_AND_PLAY
-                }
-                _statusBanner.value = "Left table #$targetRoomId"
+                _matchType.value = MatchType.LOCAL_VS_BOT
+                _currentTab.value = AppTab.ONLINE_LOBBY
+                _statusBanner.value = "Returned to lobby"
             }
         }
         refreshLobbyState()
@@ -3024,11 +3131,14 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun enterOnlineRoom(roomId: String): OctiNetworkClient.ApiResult<OctiNetworkClient.GameViewData> {
+        if (_activeRoomId.value != roomId) {
+            _gameChatLog.value = emptyList()
+        }
         _activeRoomId.value = roomId
         _matchType.value = MatchType.ONLINE_ROOM
         _currentTab.value = AppTab.BOARD
         val gvRes = refreshActiveGameView()
-        val sinceSeq = gvRes.data?.seq ?: 0L
+        val sinceSeq = 0L
         netClient.startGameEventStream(roomId, sinceSeq) { ev ->
             handleGameSseEvent(ev)
         }
@@ -3134,7 +3244,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             res.ok = false
             return res
         }
-        if (_matchType.value == MatchType.LOCAL_VS_BOT || _matchType.value == MatchType.LOCAL_PASS_AND_PLAY) {
+        if (_matchType.value != MatchType.ONLINE_ROOM || _activeRoomId.value.isBlank()) {
             val handle = _currentProfile.value?.handle?.ifEmpty { "You" } ?: "You"
             val myUuid = _currentProfile.value?.uuid ?: ""
             val userMsg = GameChatMessage(
@@ -3188,8 +3298,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             res.ok = false
             return res
         }
-        val lower = trimmed.lowercase(Locale.ROOT)
-        if (_matchType.value == MatchType.LOCAL_VS_BOT && (lower.startsWith("@bot") || lower.startsWith("@stock"))) {
+        if (_matchType.value != MatchType.ONLINE_ROOM || _activeRoomId.value.isBlank()) {
             return sendBoardChatMessage(scope, text)
         }
         if (!netClient.isAuthenticated) {
@@ -3205,8 +3314,9 @@ class OctiAppViewModel @JvmOverloads constructor(
         if (res.ok) {
             val handle = _currentProfile.value?.handle?.ifEmpty { "You" } ?: "You"
             val myUuid = _currentProfile.value?.uuid ?: ""
+            val userSeq = res.data ?: System.currentTimeMillis()
             val userMsg = GameChatMessage(
-                seq = res.data ?: System.currentTimeMillis(),
+                seq = userSeq,
                 scope = scope,
                 senderUuid = myUuid,
                 senderHandle = handle,
@@ -3215,12 +3325,78 @@ class OctiAppViewModel @JvmOverloads constructor(
                 atMs = System.currentTimeMillis()
             )
             val updated = ArrayList(_gameChatLog.value)
-            if (updated.none { it.seq == userMsg.seq && it.text == userMsg.text }) {
+            if (updated.none { (userSeq > 0L && it.seq == userSeq) || (it.seq == userSeq && it.text == userMsg.text) }) {
                 updated.add(userMsg)
                 _gameChatLog.value = updated
             }
         }
         return res
+    }
+
+    @JvmOverloads
+    fun sendGameChatAsync(
+        scope: String,
+        text: String,
+        onDone: ((OctiNetworkClient.ApiResult<Long>) -> Unit)? = null
+    ) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) {
+            val res = OctiNetworkClient.ApiResult<Long>(0L)
+            res.ok = false
+            onDone?.invoke(res)
+            return
+        }
+        if (_matchType.value != MatchType.ONLINE_ROOM || _activeRoomId.value.isBlank()) {
+            val res = sendBoardChatMessage(scope, text)
+            onDone?.invoke(res)
+            return
+        }
+        _backgroundExecutor.submit {
+            val roomId = _activeRoomId.value
+            val res = if (!netClient.isAuthenticated) {
+                val r = OctiNetworkClient.ApiResult<Long>(0L)
+                r.ok = false
+                r.httpStatus = 401
+                r.errorCode = "UNAUTHENTICATED"
+                r.errorMessage = "Sign in to chat"
+                r
+            } else {
+                netClient.postGameChat(roomId, scope, text)
+            }
+            runOnUiThreadOrSync {
+                if (res.ok) {
+                    val handle = _currentProfile.value?.handle?.ifEmpty { "You" } ?: "You"
+                    val myUuid = _currentProfile.value?.uuid ?: ""
+                    val userSeq = res.data ?: System.currentTimeMillis()
+                    val userMsg = GameChatMessage(
+                        seq = userSeq,
+                        scope = scope,
+                        senderUuid = myUuid,
+                        senderHandle = handle,
+                        seat = _activeGameView.value?.viewerSeat ?: 1,
+                        text = text,
+                        atMs = System.currentTimeMillis()
+                    )
+                    val cur = _gameChatLog.value
+                    if (cur.none { (userSeq > 0L && it.seq == userSeq) || (it.seq == userSeq && it.text == userMsg.text) }) {
+                        val updated = ArrayList(cur)
+                        updated.add(userMsg)
+                        _gameChatLog.value = updated
+                    }
+                } else {
+                    _statusBanner.value = "Chat failed: ${res.errorMessage}"
+                }
+                onDone?.invoke(res)
+            }
+        }
+    }
+
+    @JvmOverloads
+    fun sendGameChatAsync(
+        text: String,
+        onDone: ((OctiNetworkClient.ApiResult<Long>) -> Unit)? = null
+    ) {
+        sendGameChatAsync("ALL", text, onDone)
     }
 
     fun sendGameChat(text: String): OctiNetworkClient.ApiResult<Long> {
@@ -3336,8 +3512,13 @@ class OctiAppViewModel @JvmOverloads constructor(
         if ("CHAT" == ev.event || "CHAT_MESSAGE" == ev.event || "GAME_CHAT" == ev.event) {
             try {
                 val j = JSONObject(ev.dataJson)
+                val seq = j.optLong("seq", ev.id)
+                val cur = _gameChatLog.value
+                if (seq > 0L && cur.any { it.seq == seq }) {
+                    return
+                }
                 val msg = GameChatMessage(
-                    seq = j.optLong("seq", ev.id),
+                    seq = seq,
                     scope = j.optString("scope", "all"),
                     senderUuid = j.optString("player_uuid", ""),
                     senderHandle = j.optString("handle", ""),
@@ -3345,7 +3526,7 @@ class OctiAppViewModel @JvmOverloads constructor(
                     text = j.optString("text", ""),
                     atMs = j.optLong("at_ms", System.currentTimeMillis())
                 )
-                val updated = ArrayList(_gameChatLog.value)
+                val updated = ArrayList(cur)
                 updated.add(msg)
                 _gameChatLog.value = updated
             } catch (ignored: Exception) {

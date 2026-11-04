@@ -556,6 +556,7 @@ public:
                          const std::string &passcode);
     RoomResult leaveTable(const std::string &roomId, int64_t playerId);
     RoomResult purgeRoom(const std::string &roomId);
+    bool isTableHost(const std::string &roomId, int64_t playerId) const;
     RoomResult kickSeat(const std::string &roomId, int64_t hostPlayerId,
                         int64_t targetPlayerId);
     RoomResult observeRoom(const std::string &roomId, int64_t playerId);

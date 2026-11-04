@@ -686,6 +686,14 @@ tr.active-ply {
   z-index: 40;
   pointer-events: auto;
 }
+@keyframes barPulseAnim {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(200, 162, 83, 0.7); }
+  50% { transform: scale(1.03); box-shadow: 0 0 16px 4px rgba(200, 162, 83, 0.9); border-color: #F59E0B; }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(200, 162, 83, 0); }
+}
+.bar-pulse-alert {
+  animation: barPulseAnim 0.4s ease-in-out;
+}
 #web-staged-notation {
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 14px;
@@ -1100,10 +1108,12 @@ tr.active-ply {
   </div>
   <nav id="nav">
     <button type="button" data-tab="home" id="nav-home-btn" class="btn on">Home</button>
-    <button type="button" data-tab="play" id="tab-btn-play" class="btn">Web Player</button>
+    <button type="button" data-tab="play" id="tab-btn-play" class="btn">Play in Browser</button>
+    <button type="button" data-tab="online" id="nav-online-btn" class="btn">Play Online</button>
     <button type="button" data-tab="users" id="nav-users-btn" class="btn">Players</button>
-    <button type="button" data-tab="archive" id="nav-archive-btn" class="btn">Game Archive</button>
     <button type="button" data-tab="board" id="nav-board-btn" class="btn">Leaderboard</button>
+    <button type="button" data-tab="robots" id="nav-robots-btn" class="btn">Robots</button>
+    <button type="button" data-tab="archive" id="nav-archive-btn" class="btn">Game Archive</button>
     <button type="button" data-tab="account" id="nav-account-btn" class="btn">Account</button>
   </nav>
   <div class="header-right">
@@ -1186,11 +1196,7 @@ tr.active-ply {
 <!-- Tab 2: Web Player (Local vs. JS Robot & Online Play/Observe) -->
 <section id="tab-play" class="tab">
   <div class="panel">
-    <div id="web-play-toolbar-row" class="row" style="align-items:center;justify-content:space-between;margin-bottom:12px;">
-      <div style="display:flex;gap:8px;">
-        <button type="button" class="btn btn-primary" id="subtab-play-local">Play vs. Browser JS Robot</button>
-        <button type="button" class="btn" id="subtab-play-online">Online Lobby &amp; Observation</button>
-      </div>
+    <div id="web-play-toolbar-row" class="row" style="align-items:center;justify-content:flex-end;margin-bottom:12px;">
       <div style="display:flex;align-items:center;gap:10px;">
         <label style="display:flex;align-items:center;gap:4px;font-size:13px;">Theme:
           <select id="web-play-theme-select">
@@ -1249,7 +1255,7 @@ tr.active-ply {
           <!-- Non-Blocking Staged Ply Confirmation Bar -->
           <div id="web-ply-confirm-bar">
             <div>
-              <span class="dim" style="font-size:12px;margin-right:6px;">Staged Ply:</span>
+              <span class="dim" style="font-size:12px;margin-right:6px;">Confirm Move:</span>
               <span id="web-staged-notation">-</span>
             </div>
             <div class="row" style="gap:8px;margin:0;">
@@ -1333,6 +1339,7 @@ tr.active-ply {
 
             <!-- Compact Match Actions -->
             <div class="panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;">
+              <div id="web-online-seat-actions" style="display:none;margin-bottom:6px;gap:6px;" class="row"></div>
               <div class="row" style="gap:6px;margin:0;">
                 <button type="button" class="btn btn-primary" id="btn-web-new-game-setup" style="flex:1;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;padding:6px 8px;font-size:12px;">New Game...</button>
                 <button type="button" class="btn" id="btn-web-draw" style="padding:6px 8px;font-size:12px;">Draw</button>
@@ -1341,8 +1348,7 @@ tr.active-ply {
               </div>
               <div id="web-online-table-actions" style="display:none;margin-top:6px;" class="row">
                 <button type="button" class="btn" id="btn-web-leave-table" style="flex:1;border-color:#dc2626;color:#dc2626;padding:6px 8px;font-size:12px;">Leave Table</button>
-                <button type="button" class="btn" id="btn-web-back-lobby" style="flex:1;padding:6px 8px;font-size:12px;">Back to Lobby</button>
-                <button type="button" class="btn" id="btn-web-purge-table" style="display:none;flex:1;background:#dc2626;border-color:#b91c1c;color:#ffffff;padding:6px 8px;font-size:12px;">Purge Table</button>
+                <button type="button" class="btn" id="btn-web-purge-table" style="display:none;flex:1;background:#dc2626;border-color:#b91c1c;color:#ffffff;padding:6px 8px;font-size:12px;">Delete Table</button>
               </div>
             </div>
           </div>
@@ -1678,6 +1684,106 @@ tr.active-ply {
     <table id="lb-table"><thead><tr><th>#</th><th>Player</th><th>Elo</th>
       <th>Games</th><th>W</th><th>L</th><th>D</th></tr></thead>
       <tbody></tbody></table>
+  </div>
+</section>
+
+<!-- Tab 6: Robots (Public Directory & Veteran Profiles) -->
+<section id="tab-robots" class="tab">
+  <div class="panel">
+    <div class="row">
+      <input id="robots-search-q" placeholder="Search robot name, description, or owner..." style="min-width:280px;flex:1;">
+      <select id="robots-sort">
+        <option value="wins" selected>Wins</option>
+        <option value="games_played">Games Played</option>
+        <option value="win_rate">Win Rate</option>
+        <option value="robot_name">Robot Name</option>
+        <option value="created_at">Joined Date</option>
+      </select>
+      <select id="robots-order">
+        <option value="desc" selected>Descending</option>
+        <option value="asc">Ascending</option>
+      </select>
+      <button type="button" class="btn" id="btn-robots-search">Search</button>
+    </div>
+
+    <div id="robots-msg" class="dim" style="margin-bottom:8px;"></div>
+    <table id="robots-table">
+      <thead>
+        <tr>
+          <th>Robot</th>
+          <th>Owner</th>
+          <th>Description</th>
+          <th>Status</th>
+          <th>Games Played</th>
+          <th>Record (W-L-D)</th>
+          <th>Win Rate</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody id="robots-tbody"></tbody>
+    </table>
+
+    <div class="row" style="margin-top:12px;">
+      <button type="button" class="btn" id="robots-prev-btn">Prev</button>
+      <span id="robots-page-info" class="dim"></span>
+      <button type="button" class="btn" id="robots-next-btn">Next</button>
+    </div>
+  </div>
+
+  <!-- Detailed Robot Profile Panel -->
+  <div id="robot-profile-detail" class="panel" style="display:none;margin-top:16px;">
+    <div class="row" style="align-items:flex-start;justify-content:space-between;">
+      <div style="display:flex;gap:16px;align-items:center;">
+        <div id="robot-detail-avatar" style="width:64px;height:64px;border-radius:50%;overflow:hidden;background:#1E293B;display:flex;align-items:center;justify-content:center;font-size:28px;">&#x1F916;</div>
+        <div>
+          <h2 id="robot-detail-name" style="margin:0;">Robot Name</h2>
+          <div style="margin-top:4px;">
+            <span id="robot-detail-status-badge" class="badge">Active</span>
+            <span class="dim" style="margin-left:8px;">Owner: <a id="robot-detail-owner-link" href="#">@owner</a></span>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="btn" id="robot-detail-close">Close</button>
+    </div>
+
+    <p id="robot-detail-bio" class="dim" style="margin:12px 0;"></p>
+
+    <div class="cols" style="margin:16px 0;">
+      <div class="col-side" style="flex:1;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
+        <div class="dim" style="font-size:12px;">GAMES PLAYED</div>
+        <div id="robot-kpi-games" style="font-size:22px;font-weight:700;color:#F8FAFC;margin-top:4px;">0</div>
+      </div>
+      <div class="col-side" style="flex:1;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
+        <div class="dim" style="font-size:12px;">W - L - D</div>
+        <div id="robot-kpi-record" style="font-size:22px;font-weight:700;color:#38BDF8;margin-top:4px;">0 - 0 - 0</div>
+      </div>
+      <div class="col-side" style="flex:1;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
+        <div class="dim" style="font-size:12px;">WIN RATE</div>
+        <div id="robot-kpi-winrate" style="font-size:22px;font-weight:700;color:#10B981;margin-top:4px;">0.0%</div>
+      </div>
+      <div class="col-side" style="flex:1;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
+        <div class="dim" style="font-size:12px;">REGISTERED</div>
+        <div id="robot-kpi-created" style="font-size:14px;color:#94A3B8;margin-top:8px;">-</div>
+      </div>
+    </div>
+
+    <h3 style="margin:20px 0 10px 0;">Recent Match History</h3>
+    <div id="robot-detail-games-box">
+      <table id="robot-detail-games-table">
+        <thead>
+          <tr>
+            <th>Outcome</th>
+            <th>Mode</th>
+            <th>Players</th>
+            <th>Result</th>
+            <th>Plies</th>
+            <th>Date</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="robot-detail-games-tbody"></tbody>
+      </table>
+    </div>
   </div>
 </section>
 
@@ -5891,6 +5997,7 @@ var tabs = {
   users: $("tab-users"),
   archive: $("tab-archive"),
   board: $("tab-board"),
+  robots: $("tab-robots"),
   replay: $("tab-replay"),
   account: $("tab-account")
 };
@@ -5916,10 +6023,57 @@ if ($("btn-toggle-robots-section")) {
 }
 
 function switchTab(name) {
-  if (name === "robots") {
-    name = "account";
-    toggleAccountRobots(true);
+  if (name === "play" || name === "online") {
+    Array.prototype.forEach.call($("nav").querySelectorAll("button"), function (b) {
+      b.classList.toggle("on", b.getAttribute("data-tab") === name);
+    });
+    Object.keys(tabs).forEach(function (k) {
+      if (tabs[k]) {
+        tabs[k].classList.toggle("on", k === "play");
+      }
+    });
+    if (name === "play") {
+      if (activeOnlineGameId) {
+        stopOnlineGameSync();
+        activeOnlineGameId = "";
+        activeOnlineTableRoomId = "";
+      }
+      var pLocal = document.getElementById("play-local-panel");
+      var pOnline = document.getElementById("play-online-panel");
+      if (pLocal) pLocal.style.display = "block";
+      if (pOnline) pOnline.style.display = "none";
+      var tbRow = document.getElementById("web-play-toolbar-row");
+      if (tbRow) tbRow.style.display = "flex";
+      updateOnlineTableControls();
+      syncWebPlayBoardSquareSize();
+      if (activePlayState) {
+        renderPlayBoardCanvas();
+        renderAllWebReserves();
+        updatePlaySidebar();
+      }
+    } else { // online
+      if (activeOnlineGameId) {
+        var pLocal = document.getElementById("play-local-panel");
+        var pOnline = document.getElementById("play-online-panel");
+        if (pLocal) pLocal.style.display = "block";
+        if (pOnline) pOnline.style.display = "none";
+        var tbRow = document.getElementById("web-play-toolbar-row");
+        if (tbRow) tbRow.style.display = "flex";
+        updateOnlineTableControls();
+        syncWebPlayBoardSquareSize();
+      } else {
+        var pLocal = document.getElementById("play-local-panel");
+        var pOnline = document.getElementById("play-online-panel");
+        if (pLocal) pLocal.style.display = "none";
+        if (pOnline) pOnline.style.display = "block";
+        var tbRow = document.getElementById("web-play-toolbar-row");
+        if (tbRow) tbRow.style.display = "none";
+        refreshLobbyTables();
+      }
+    }
+    return;
   }
+
   if (!tabs[name]) { name = "home"; }
   Array.prototype.forEach.call($("nav").querySelectorAll("button"), function (b) {
     b.classList.toggle("on", b.getAttribute("data-tab") === name);
@@ -5937,17 +6091,12 @@ function switchTab(name) {
     lbLoad();
   } else if (name === "users") {
     usersSearch(usersOffset || 0);
+  } else if (name === "robots") {
+    loadRobotsDirectory(robotsOffset || 0);
   } else if (name === "account") {
     if (currentUser || localStorage.getItem("octi_jwt_token")) {
       loadMyProfile();
       loadMyRobots();
-    }
-  } else if (name === "play") {
-    syncWebPlayBoardSquareSize();
-    if (activePlayState) {
-      renderPlayBoardCanvas();
-      renderAllWebReserves();
-      updatePlaySidebar();
     }
   }
 }
@@ -6048,8 +6197,19 @@ function checkHash() {
     switchTab("replay");
     if (id) { arOpen(id); }
   } else if (h === "#robots") {
-    switchTab("account");
-    toggleAccountRobots(true);
+    switchTab("robots");
+  } else if (h.indexOf("#robots/") === 0) {
+    var rId = decodeURIComponent(h.substring(8));
+    switchTab("robots");
+    if (rId) { viewRobotProfile(rId); }
+  } else if (h === "#online") {
+    switchTab("online");
+  } else if (h.indexOf("#online/") === 0) {
+    var roomId = decodeURIComponent(h.substring(8));
+    switchTab("online");
+    if (roomId) { openOnlineTableBoard(roomId); }
+  } else if (h === "#play") {
+    switchTab("play");
   } else if (h.indexOf("#users/") === 0) {
     var uid = decodeURIComponent(h.substring(7));
     switchTab("users");
@@ -7000,7 +7160,22 @@ function openUserProfile(id) {
       var rTbody = el("tbody");
       rList.forEach(function (rb) {
         var rtr = el("tr");
-        rtr.appendChild(el("td", rb.robot_name));
+        var tdName = el("td");
+        if (rb.games_played > 0) {
+          var a = el("a", rb.robot_name, "");
+          a.style.cursor = "pointer";
+          a.style.color = "#38BDF8";
+          a.href = "#robots/" + encodeURIComponent(rb.robot_uuid);
+          a.addEventListener("click", function (e) {
+            e.preventDefault();
+            switchTab("robots");
+            viewRobotProfile(rb.robot_uuid);
+          });
+          tdName.appendChild(a);
+        } else {
+          tdName.textContent = rb.robot_name;
+        }
+        rtr.appendChild(tdName);
         rtr.appendChild(el("td", rb.description || "-"));
         rtr.appendChild(el("td", fmtTime(rb.created_at)));
         rTbody.appendChild(rtr);
@@ -7027,10 +7202,34 @@ function openUserProfile(id) {
         var tdOut = el("td");
         tdOut.appendChild(el("span", outStr || (isWin ? "WIN" : (isLoss ? "LOSS" : "DRAW")), badgeCls));
         var tdMode = el("td", gm.mode || "2P");
-        var pList = (gm.players && gm.players.length)
-          ? gm.players.map(function (p) { return p.handle; }).join(" vs ")
-          : [gm.p1_handle, gm.p2_handle, gm.p3_handle, gm.p4_handle].filter(Boolean).join(" vs ");
-        var tdPl = el("td", pList || "-");
+        var tdPl = el("td");
+        if (gm.players && gm.players.length) {
+          gm.players.forEach(function (p, pIdx) {
+            if (pIdx > 0) tdPl.appendChild(document.createTextNode(" vs "));
+            if (p.is_robot || p.robot_uuid) {
+              var a = el("a", "@" + p.handle);
+              a.href = "#robots/" + encodeURIComponent(p.robot_uuid || p.handle);
+              a.style.cursor = "pointer";
+              a.addEventListener("click", function (ev) {
+                ev.preventDefault();
+                viewRobotProfile(p.robot_uuid || p.handle);
+              });
+              tdPl.appendChild(a);
+            } else {
+              var aUser = el("a", "@" + p.handle);
+              aUser.href = "#users/" + encodeURIComponent(p.player_uuid || p.handle);
+              aUser.style.cursor = "pointer";
+              aUser.addEventListener("click", function (ev) {
+                ev.preventDefault();
+                openUserProfile(p.player_uuid || p.handle);
+              });
+              tdPl.appendChild(aUser);
+            }
+          });
+        } else {
+          var pList = [gm.p1_handle, gm.p2_handle, gm.p3_handle, gm.p4_handle].filter(Boolean).join(" vs ");
+          tdPl.textContent = pList || "-";
+        }
         var tdRes = el("td", (gm.status || gm.result || "") + (gm.termination ? (" (" + gm.termination + ")") : ""));
         var tdPlies = el("td", gm.ply_count !== undefined ? gm.ply_count : "-");
         var tdDate = el("td", fmtTime(gm.ended_at || gm.created_at));
@@ -7059,6 +7258,250 @@ $("btn-user-edit-self").addEventListener("click", function () {
 });
 $("user-detail-close").addEventListener("click", function () {
   $("user-profile-detail").style.display = "none";
+});
+
+var viewUserProfile = openUserProfile;
+
+/* =========================================================================
+ * Tab 6: Robots (Public Directory & Detailed Profiles)
+ * ========================================================================= */
+var robotsOffset = 0, ROBOTS_PAGE_LIMIT = 25, robotsTotal = 0, robotsLoaded = false;
+
+function loadRobotsDirectory(offset) {
+  robotsLoaded = true;
+  if (offset !== undefined) robotsOffset = Math.max(0, offset);
+  var q = $("robots-search-q") ? $("robots-search-q").value.trim() : "";
+  var sortField = $("robots-sort") ? $("robots-sort").value : "wins";
+  var sortOrder = $("robots-order") ? $("robots-order").value : "desc";
+  var url = "/api/v1/robots/directory?limit=" + ROBOTS_PAGE_LIMIT + "&offset=" + robotsOffset +
+            "&sort=" + encodeURIComponent(sortField) + "&order=" + encodeURIComponent(sortOrder);
+  if (q) url += "&q=" + encodeURIComponent(q);
+
+  var msgEl = $("robots-msg");
+  if (msgEl) msgEl.textContent = "Loading robots...";
+
+  api(url).then(function (data) {
+    robotsTotal = data.total || 0;
+    var tbody = $("robots-tbody");
+    if (!tbody) return;
+    clear(tbody);
+    if (!data.robots || data.robots.length === 0) {
+      if (msgEl) msgEl.textContent = "No robots found with active match history.";
+    } else {
+      if (msgEl) msgEl.textContent = "";
+      data.robots.forEach(function (r) {
+        var tr = el("tr");
+
+        // Robot Name (clickable)
+        var tdName = el("td");
+        var nameLink = el("a", r.robot_name || r.name, "");
+        nameLink.style.fontWeight = "700";
+        nameLink.style.cursor = "pointer";
+        nameLink.style.color = "#38BDF8";
+        nameLink.href = "#robots/" + encodeURIComponent(r.robot_uuid);
+        nameLink.addEventListener("click", function (e) {
+          e.preventDefault();
+          viewRobotProfile(r.robot_uuid);
+        });
+        tdName.appendChild(nameLink);
+
+        // Owner Handle (clickable)
+        var tdOwner = el("td");
+        if (r.owner_handle) {
+          var ownerLink = el("a", "@" + r.owner_handle, "");
+          ownerLink.href = "#users/" + encodeURIComponent(r.owner_uuid || r.owner_handle);
+          ownerLink.style.cursor = "pointer";
+          ownerLink.addEventListener("click", function (e) {
+            e.preventDefault();
+            switchTab("users");
+            openUserProfile(r.owner_uuid || r.owner_handle);
+          });
+          tdOwner.appendChild(ownerLink);
+        } else {
+          tdOwner.textContent = "-";
+        }
+
+        // Description
+        var tdDesc = el("td", r.description || "-", "dim");
+        tdDesc.style.maxWidth = "220px";
+        tdDesc.style.overflow = "hidden";
+        tdDesc.style.textOverflow = "ellipsis";
+        tdDesc.style.whiteSpace = "nowrap";
+
+        // Status Badge
+        var tdStatus = el("td");
+        var isRetired = (r.retired || r.status === "retired" || r.revoked || r.token_deleted);
+        var badgeCls = isRetired ? "badge badge-revoked" : "badge badge-active";
+        tdStatus.appendChild(el("span", isRetired ? "Retired" : "Active", badgeCls));
+
+        // Games Played
+        var tdGames = el("td", String(r.games_played || 0));
+
+        // Record (W-L-D)
+        var tdRec = el("td", (r.wins || 0) + " - " + (r.losses || 0) + " - " + (r.draws || 0));
+
+        // Win Rate
+        var wr = (r.win_rate !== undefined) ? (r.win_rate + "%") : "0.0%";
+        var tdWr = el("td", wr);
+
+        // Created
+        var tdDate = el("td", fmtTime(r.created_at));
+
+        [tdName, tdOwner, tdDesc, tdStatus, tdGames, tdRec, tdWr, tdDate].forEach(function (td) {
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    var pageInfo = $("robots-page-info");
+    if (pageInfo) {
+      var last = Math.min(robotsOffset + (data.robots ? data.robots.length : 0), robotsTotal);
+      pageInfo.textContent = robotsTotal ? ((robotsOffset + 1) + "-" + last + " of " + robotsTotal) : "0 robots";
+    }
+    if ($("robots-prev-btn")) $("robots-prev-btn").disabled = (robotsOffset <= 0);
+    if ($("robots-next-btn")) $("robots-next-btn").disabled = (robotsOffset + ROBOTS_PAGE_LIMIT >= robotsTotal);
+  }).catch(function (e) {
+    if (msgEl) {
+      msgEl.textContent = "Failed to load robots: " + e.message;
+      msgEl.className = "err";
+    }
+  });
+}
+
+function viewRobotProfile(id) {
+  if (!id) return;
+  api("/api/v1/robots/profile/" + encodeURIComponent(id)).then(function (r) {
+    var detailCard = $("robot-profile-detail");
+    if (!detailCard) return;
+
+    if (history.replaceState) {
+      history.replaceState(null, "", window.location.pathname + "#robots/" + encodeURIComponent(r.robot_uuid || id));
+    }
+
+    if ($("robot-detail-name")) $("robot-detail-name").textContent = r.robot_name || r.name;
+    var statusBadge = $("robot-detail-status-badge");
+    if (statusBadge) {
+      var isRetired = (r.retired || r.status === "retired" || r.revoked || r.token_deleted);
+      statusBadge.textContent = isRetired ? "Retired" : "Active";
+      statusBadge.className = isRetired ? "badge badge-revoked" : "badge badge-active";
+    }
+    var ownerLink = $("robot-detail-owner-link");
+    if (ownerLink) {
+      if (r.owner_handle) {
+        ownerLink.textContent = "@" + r.owner_handle;
+        ownerLink.href = "#users/" + encodeURIComponent(r.owner_uuid || r.owner_handle);
+        ownerLink.onclick = function (e) {
+          e.preventDefault();
+          switchTab("users");
+          openUserProfile(r.owner_uuid || r.owner_handle);
+        };
+      } else {
+        ownerLink.textContent = "-";
+        ownerLink.href = "#";
+        ownerLink.onclick = null;
+      }
+    }
+    if ($("robot-detail-bio")) $("robot-detail-bio").textContent = r.description || "No description provided.";
+    if ($("robot-kpi-games")) $("robot-kpi-games").textContent = String(r.games_played || 0);
+    if ($("robot-kpi-record")) $("robot-kpi-record").textContent = (r.wins || 0) + " - " + (r.losses || 0) + " - " + (r.draws || 0);
+    if ($("robot-kpi-winrate")) $("robot-kpi-winrate").textContent = (r.win_rate !== undefined ? r.win_rate : 0) + "%";
+    if ($("robot-kpi-created")) $("robot-kpi-created").textContent = fmtTime(r.created_at);
+
+    var tbody = $("robot-detail-games-tbody");
+    if (tbody) {
+      clear(tbody);
+      var gList = r.recent_games || [];
+      if (!gList.length) {
+        var trEmpty = el("tr");
+        var tdEmpty = el("td", "No recent match history.", "dim");
+        tdEmpty.colSpan = 7;
+        tdEmpty.style.textAlign = "center";
+        tdEmpty.style.padding = "16px";
+        trEmpty.appendChild(tdEmpty);
+        tbody.appendChild(trEmpty);
+      } else {
+        gList.forEach(function (gm) {
+          var tr = el("tr");
+          var outStr = gm.player_outcome || "DRAW";
+          var isWin = (outStr === "WIN");
+          var isLoss = (outStr === "LOSS");
+          var badgeCls = isWin ? "badge badge-active" : (isLoss ? "badge badge-revoked" : "badge");
+          var tdOut = el("td");
+          tdOut.appendChild(el("span", outStr, badgeCls));
+
+          var tdMode = el("td", gm.mode || "2P");
+
+          var tdPl = el("td");
+          var playersArr = gm.players || [];
+          if (playersArr.length) {
+            playersArr.forEach(function (p, idx) {
+              if (idx > 0) tdPl.appendChild(document.createTextNode(" vs "));
+              var pName = p.handle || ("Seat " + p.seat);
+              if (p.is_robot || p.robot_uuid) {
+                var a = el("a", pName, "");
+                a.style.cursor = "pointer";
+                a.style.color = "#38BDF8";
+                a.href = "#robots/" + encodeURIComponent(p.robot_uuid || p.handle);
+                a.addEventListener("click", function (e) {
+                  e.preventDefault();
+                  viewRobotProfile(p.robot_uuid || p.handle);
+                });
+                tdPl.appendChild(a);
+              } else if (p.player_uuid || p.handle) {
+                var a = el("a", pName, "");
+                a.style.cursor = "pointer";
+                a.href = "#users/" + encodeURIComponent(p.player_uuid || p.handle);
+                a.addEventListener("click", function (e) {
+                  e.preventDefault();
+                  switchTab("users");
+                  openUserProfile(p.player_uuid || p.handle);
+                });
+                tdPl.appendChild(a);
+              } else {
+                tdPl.appendChild(document.createTextNode(pName));
+              }
+            });
+          } else {
+            tdPl.textContent = [gm.p1_handle, gm.p2_handle, gm.p3_handle, gm.p4_handle].filter(Boolean).join(" vs ") || "-";
+          }
+
+          var tdRes = el("td", (gm.status || gm.result || "") + (gm.termination ? (" (" + gm.termination + ")") : ""));
+          var tdPlies = el("td", gm.ply_count !== undefined ? String(gm.ply_count) : "-");
+          var tdDate = el("td", fmtTime(gm.ended_at || gm.created_at || gm.started_at));
+
+          var tdAct = el("td");
+          var rpBtn = el("button", "View Replay", "btn");
+          rpBtn.style.padding = "3px 8px";
+          rpBtn.style.fontSize = "12px";
+          rpBtn.addEventListener("click", function () {
+            window.open(window.location.pathname + "#replay/" + encodeURIComponent(gm.game_id), "_blank");
+          });
+          tdAct.appendChild(rpBtn);
+
+          [tdOut, tdMode, tdPl, tdRes, tdPlies, tdDate, tdAct].forEach(function (td) {
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+      }
+    }
+
+    detailCard.style.display = "block";
+    detailCard.scrollIntoView({ behavior: "smooth" });
+  }).catch(function (e) {
+    alert("Failed to load robot profile: " + e.message);
+  });
+}
+
+if ($("btn-robots-search")) $("btn-robots-search").addEventListener("click", function () { loadRobotsDirectory(0); });
+if ($("robots-search-q")) $("robots-search-q").addEventListener("keydown", function (e) { if (e.key === "Enter") loadRobotsDirectory(0); });
+if ($("robots-sort")) $("robots-sort").addEventListener("change", function () { loadRobotsDirectory(0); });
+if ($("robots-order")) $("robots-order").addEventListener("change", function () { loadRobotsDirectory(0); });
+if ($("robots-prev-btn")) $("robots-prev-btn").addEventListener("click", function () { loadRobotsDirectory(robotsOffset - ROBOTS_PAGE_LIMIT); });
+if ($("robots-next-btn")) $("robots-next-btn").addEventListener("click", function () { loadRobotsDirectory(robotsOffset + ROBOTS_PAGE_LIMIT); });
+if ($("robot-detail-close")) $("robot-detail-close").addEventListener("click", function () {
+  if ($("robot-profile-detail")) $("robot-profile-detail").style.display = "none";
 });
 
 
@@ -7875,6 +8318,20 @@ function renderWebReserveCard(player, cardEl, state, isTurn) {
       nameText = "@" + foundSeat.handle + (foundSeat.is_robot ? " [BOT]" : "") + " (" + player + ")";
     } else {
       nameText = "Open Seat (" + player + ")";
+    }
+    if ((!foundSeat || !foundSeat.occupied) && activeOnlineRoomView.phase === "WAITING_FOR_PLAYERS" && activeOnlineViewerSeat === 0 && currentUser) {
+      var sitHdrBtn = document.createElement("button");
+      sitHdrBtn.type = "button";
+      sitHdrBtn.className = "btn btn-primary";
+      sitHdrBtn.style.padding = "2px 8px";
+      sitHdrBtn.style.fontSize = "11px";
+      sitHdrBtn.style.marginLeft = "8px";
+      sitHdrBtn.textContent = "Sit";
+      sitHdrBtn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        sitAtOnlineTable(activeOnlineGameId, seatNum);
+      });
+      header.appendChild(sitHdrBtn);
     }
   } else if (localMatchConfig.playMode === "bot") {
     if (player === localMatchConfig.humanSeat) {
@@ -8967,6 +9424,17 @@ if (playCanvas) {
     var dragDist = Math.hypot(raw.x - boardPressRawPos.x, raw.y - boardPressRawPos.y);
 
     if (dragDist > 14 && pressSq && releaseSq && (pressSq.x !== releaseSq.x || pressSq.y !== releaseSq.y)) {
+      if (moveComposer && moveComposer.isAwaitingConfirmation) {
+        if (moveComposer.isGuidedMoveActive) {
+          var matchD = moveComposer.guidedLegalDests.find(function (d) { return d.x === releaseSq.x && d.y === releaseSq.y; });
+          if (matchD) {
+            moveComposer.selectGuidedDestination(releaseSq.x, releaseSq.y);
+            return;
+          }
+        }
+        pulseConfirmBar();
+        return;
+      }
       if (moveComposer && moveComposer.isGuidedMoveActive) {
         var matchD = moveComposer.guidedLegalDests.find(function (d) { return d.x === releaseSq.x && d.y === releaseSq.y; });
         if (matchD) {
@@ -9065,9 +9533,40 @@ if (playCanvas) {
   });
 }
 
+function pulseConfirmBar() {
+  var bar = document.getElementById("web-ply-confirm-bar");
+  if (!bar) return;
+  bar.style.display = "flex";
+  bar.classList.remove("bar-pulse-alert");
+  void bar.offsetWidth;
+  bar.classList.add("bar-pulse-alert");
+  var commitBtn = document.getElementById("btn-web-commit-ply");
+  if (commitBtn) {
+    commitBtn.focus();
+  }
+}
+
 // Square Click Logic: Guided Move / Prong Addition / Zoom View
 function handlePlaySquareClick(x, y, ptX, ptY) {
   if (!moveComposer) return;
+
+  if (moveComposer.isAwaitingConfirmation) {
+    if (moveComposer.isGuidedMoveActive) {
+      var matchDest = moveComposer.guidedLegalDests.find(function (d) { return d.x === x && d.y === y; });
+      if (matchDest) {
+        moveComposer.selectGuidedDestination(x, y);
+        return;
+      }
+    }
+    var isOrigin = moveComposer.guidedOriginSquare && moveComposer.guidedOriginSquare.x === x && moveComposer.guidedOriginSquare.y === y;
+    if (isOrigin && moveComposer.hasOtherMovablePodAtOrigin()) {
+      openZoomedSquare(x, y);
+      return;
+    }
+    pulseConfirmBar();
+    return;
+  }
+
   var s = (moveComposer.previewState) ? moveComposer.previewState : activePlayState;
   var k = x + "," + y;
   var stack = s.map[k] || [];
@@ -10197,31 +10696,133 @@ function stopOnlineGameSync() {
   if (bar) bar.style.display = "none";
   var actRow = document.getElementById("web-online-table-actions");
   if (actRow) actRow.style.display = "none";
+  updateOnlineTableControls();
 }
 
-// Subtab Toggles
-var subtabLocal = document.getElementById("subtab-play-local");
-var subtabOnline = document.getElementById("subtab-play-online");
-if (subtabLocal && subtabOnline) {
-  subtabLocal.addEventListener("click", function () {
-    var wasOnline = !!activeOnlineGameId;
-    stopOnlineGameSync();
-    subtabLocal.className = "btn btn-primary";
-    subtabOnline.className = "btn";
-    document.getElementById("play-local-panel").style.display = "block";
-    document.getElementById("play-online-panel").style.display = "none";
-    syncWebPlayBoardSquareSize();
-    if (wasOnline) {
-      prepareLocalMatchInitialState();
+function updateOnlineTableControls() {
+  var newGameBtn = document.getElementById("btn-web-new-game-setup");
+  var drawBtn = document.getElementById("btn-web-draw");
+  var undoBtn = document.getElementById("btn-web-undo");
+  var resignBtn = document.getElementById("btn-web-resign");
+  var leaveTableBtn = document.getElementById("btn-web-leave-table");
+  var purgeBtn = document.getElementById("btn-web-purge-table");
+  var actRow = document.getElementById("web-online-table-actions");
+  var seatActionsEl = document.getElementById("web-online-seat-actions");
+
+  if (activeOnlineGameId) {
+    if (newGameBtn) newGameBtn.style.display = "none";
+    if (actRow) actRow.style.display = "flex";
+    if (leaveTableBtn) leaveTableBtn.style.display = "block";
+
+    var isSeated = (activeOnlineViewerSeat > 0);
+    var isProgress = (activeOnlineRoomView && activeOnlineRoomView.phase === "IN_PROGRESS");
+    var showPlayerActions = isSeated && isProgress;
+
+    if (drawBtn) drawBtn.style.display = showPlayerActions ? "" : "none";
+    if (undoBtn) undoBtn.style.display = showPlayerActions ? "" : "none";
+    if (resignBtn) resignBtn.style.display = showPlayerActions ? "" : "none";
+
+    var isHostInTable = (activeOnlineRoomView && Number(activeOnlineRoomView.host_seat || 1) === Number(activeOnlineViewerSeat || 0)) ||
+      (currentUser && activeOnlineRoomView && (
+        (activeOnlineRoomView.host_player_uuid && (currentUser.uuid === activeOnlineRoomView.host_player_uuid || currentUser.user_id === activeOnlineRoomView.host_player_uuid)) ||
+        (activeOnlineRoomView.host_handle && currentUser.handle === activeOnlineRoomView.host_handle)
+      ));
+    var isAdmin = !!(currentUser && currentUser.is_admin);
+    if (purgeBtn) {
+      if (isHostInTable || isAdmin) {
+        purgeBtn.textContent = isHostInTable ? "Delete Table" : "Purge Table";
+        purgeBtn.style.display = "block";
+      } else {
+        purgeBtn.style.display = "none";
+      }
     }
+
+    if (seatActionsEl) {
+      clear(seatActionsEl);
+      if (activeOnlineRoomView && activeOnlineRoomView.phase === "WAITING_FOR_PLAYERS" && activeOnlineViewerSeat === 0 && currentUser) {
+        var openSeats = (activeOnlineRoomView.seats || []).filter(function (s) { return !s.occupied && s.type !== "AI"; });
+        if (openSeats.length > 0) {
+          seatActionsEl.style.display = "flex";
+          openSeats.forEach(function (s) {
+            var sNum = s.seat;
+            var sLet = seatLetterOf(sNum);
+            var sitBtn = el("button", "Sit Seat " + sNum + " (" + sLet + ")", "btn btn-primary");
+            sitBtn.style.flex = "1";
+            sitBtn.style.background = "#059669";
+            sitBtn.style.borderColor = "#10B981";
+            sitBtn.style.fontWeight = "700";
+            sitBtn.style.fontSize = "12px";
+            sitBtn.style.padding = "6px 8px";
+            sitBtn.addEventListener("click", function () {
+              sitAtOnlineTable(activeOnlineGameId, sNum);
+            });
+            seatActionsEl.appendChild(sitBtn);
+          });
+        } else {
+          seatActionsEl.style.display = "none";
+        }
+      } else {
+        seatActionsEl.style.display = "none";
+      }
+    }
+  } else {
+    if (newGameBtn) newGameBtn.style.display = "";
+    if (actRow) actRow.style.display = "none";
+    if (leaveTableBtn) leaveTableBtn.style.display = "none";
+    if (purgeBtn) purgeBtn.style.display = "none";
+    if (seatActionsEl) seatActionsEl.style.display = "none";
+    if (drawBtn) drawBtn.style.display = "";
+    if (undoBtn) undoBtn.style.display = "";
+    if (resignBtn) resignBtn.style.display = "";
+  }
+}
+
+function sitAtOnlineTable(roomId, seat) {
+  if (!roomId) return;
+  var pass = "";
+  if (activeOnlineRoomView && activeOnlineRoomView.has_passcode) {
+    var prompted = window.prompt("Enter table passcode for " + roomId + ":", "");
+    if (prompted === null) return;
+    pass = prompted;
+  }
+  api("/api/v1/tables/" + encodeURIComponent(roomId) + "/join", {
+    method: "POST",
+    body: { seat: seat, passcode: pass }
+  }).then(function (data) {
+    if (data && data.seat) {
+      activeOnlineViewerSeat = data.seat;
+    }
+    syncOnlineGameRoom(roomId, true);
+  }).catch(function (e) {
+    alert("Failed to sit: " + e.message);
   });
-  subtabOnline.addEventListener("click", function () {
-    stopOnlineGameSync();
-    subtabOnline.className = "btn btn-primary";
-    subtabLocal.className = "btn";
-    document.getElementById("play-online-panel").style.display = "block";
-    document.getElementById("play-local-panel").style.display = "none";
-    loadOnlineTables();
+}
+
+function enterOnlineTable(roomId) {
+  if (!roomId) return;
+  api("/api/v1/tables/" + encodeURIComponent(roomId) + "/observe", { method: "POST" }).then(function (oRes) {
+    if ($("web-room-observers")) {
+      $("web-room-observers").textContent = (oRes.observer_handles || ["anonymous-127.0.0.1"]).join(", ");
+    }
+    refreshLobbyTables();
+    openOnlineTableBoard(roomId);
+  }).catch(function () {
+    openOnlineTableBoard(roomId);
+  });
+}
+
+function purgeOnlineTable(roomId) {
+  if (!roomId) return;
+  openPurgeConfirmModal("Are you sure you want to delete table #" + roomId + "?", function () {
+    api("/api/v1/tables/" + encodeURIComponent(roomId), { method: "DELETE" }).then(function () {
+      if (activeOnlineGameId === roomId) {
+        stopOnlineGameSync();
+        switchTab("online");
+      }
+      refreshLobbyTables();
+    }).catch(function (e) {
+      alert("Failed to delete table: " + e.message);
+    });
   });
 }
 
@@ -10471,6 +11072,7 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
     updatePlaySidebar();
     renderPlayBoardCanvas();
     renderAllWebReserves();
+    updateOnlineTableControls();
   }).catch(function () {});
 }
 
@@ -10498,12 +11100,19 @@ function openOnlineTableBoard(roomId) {
     activeOnlineChatMessages = [];
   }
 
-  if (subtabLocal && subtabOnline) {
-    subtabLocal.className = "btn";
-    subtabOnline.className = "btn btn-primary";
-  }
+  Array.prototype.forEach.call($("nav").querySelectorAll("button"), function (b) {
+    b.classList.toggle("on", b.getAttribute("data-tab") === "online");
+  });
+  Object.keys(tabs).forEach(function (k) {
+    if (tabs[k]) tabs[k].classList.toggle("on", k === "play");
+  });
   document.getElementById("play-local-panel").style.display = "block";
   document.getElementById("play-online-panel").style.display = "none";
+  var tbRow = document.getElementById("web-play-toolbar-row");
+  if (tbRow) tbRow.style.display = "flex";
+  if (history.replaceState) {
+    history.replaceState(null, "", window.location.pathname + "#online/" + encodeURIComponent(roomId));
+  }
 
   var startOverlay = document.getElementById("web-start-match-overlay");
   if (startOverlay) startOverlay.style.display = "none";
@@ -10520,13 +11129,10 @@ function openOnlineTableBoard(roomId) {
   }
   var actRow = document.getElementById("web-online-table-actions");
   if (actRow) actRow.style.display = "flex";
-  var purgeBtn = document.getElementById("btn-web-purge-table");
-  if (purgeBtn) {
-    purgeBtn.style.display = (currentUser && currentUser.is_admin) ? "block" : "none";
-  }
   var chatPanel = document.getElementById("web-board-chat-panel");
   if (chatPanel) chatPanel.style.display = "flex";
 
+  updateOnlineTableControls();
   renderRoomChatLogs();
   syncOnlineGameRoom(roomId, true);
   pollOnlineGameEvents(roomId);
@@ -10711,30 +11317,44 @@ if ($("web-board-chat-input")) {
 if ($("btn-web-leave-table")) {
   $("btn-web-leave-table").addEventListener("click", function () {
     var rid = activeOnlineGameId || currentMyTableRoomId;
-    stopOnlineGameSync();
-    if (rid) {
-      leaveTableById(rid);
+    if (!rid) {
+      stopOnlineGameSync();
+      switchTab("online");
+      refreshLobbyTables();
+      return;
     }
-    if (subtabOnline) subtabOnline.click();
-  });
-}
-if ($("btn-web-back-lobby")) {
-  $("btn-web-back-lobby").addEventListener("click", function () {
+    var isSeated = (activeOnlineViewerSeat > 0);
+    var isProgress = (activeOnlineRoomView && activeOnlineRoomView.phase === "IN_PROGRESS");
+    if (isSeated && isProgress) {
+      if (!window.confirm("Are you sure you want to leave? If you forfeit, your game may be conceded.")) {
+        return;
+      }
+    }
     stopOnlineGameSync();
-    if (subtabOnline) subtabOnline.click();
+    if (isSeated) {
+      api("/api/v1/tables/" + encodeURIComponent(rid) + "/leave", { method: "POST" }).then(function () {
+        switchTab("online");
+        refreshLobbyTables();
+      }).catch(function () {
+        switchTab("online");
+        refreshLobbyTables();
+      });
+    } else {
+      api("/api/v1/tables/" + encodeURIComponent(rid) + "/unobserve", { method: "POST" }).then(function () {
+        switchTab("online");
+        refreshLobbyTables();
+      }).catch(function () {
+        switchTab("online");
+        refreshLobbyTables();
+      });
+    }
   });
 }
 if ($("btn-web-purge-table")) {
   $("btn-web-purge-table").addEventListener("click", function () {
     var rid = activeOnlineGameId || currentMyTableRoomId;
     if (!rid) return;
-    openPurgeConfirmModal("Are you sure you want to immediately destroy table #" + rid + " without archiving?", function () {
-      api("/api/v1/tables/" + encodeURIComponent(rid), { method: "DELETE" }).then(function () {
-        stopOnlineGameSync();
-        if (subtabOnline) subtabOnline.click();
-        else refreshLobbyTables();
-      }).catch(function (e) { alert("Purge failed: " + e.message); });
-    });
+    purgeOnlineTable(rid);
   });
 }
 
@@ -11060,78 +11680,30 @@ function refreshLobbyTables() {
       tr.appendChild(el("td", String(obsCount)));
 
       var tdAct = el("td");
-      var amSeatedHere = isUserSeatedAtTable(t);
-      var seatsFilled = (t.seats_filled !== undefined) ? t.seats_filled : 0;
-
-      if (currentUser && !amSeatedHere && phase === "WAITING_FOR_PLAYERS" && seatsFilled < seatsTotal) {
-        var joinBtn = el("button", "Join Table", "btn btn-primary");
-        joinBtn.style.marginRight = "6px";
-        joinBtn.addEventListener("click", function () {
-          var pass = "";
-          if (t.has_passcode) {
-            var prompted = window.prompt("Enter table passcode for " + roomId + ":", "");
-            if (prompted === null) return;
-            pass = prompted;
-          }
-          api("/api/v1/tables/" + encodeURIComponent(roomId) + "/join", {
-            method: "POST",
-            body: { seat: 0, passcode: pass }
-          }).then(function () {
-            if ($("web-online-notice")) {
-              $("web-online-notice").textContent = "Joined table " + roomId + ".";
-            }
-            refreshLobbyTables();
-            openOnlineTableBoard(roomId);
-          }).catch(function (e) { alert("Failed to join: " + e.message); });
-        });
-        tdAct.appendChild(joinBtn);
-      }
-
-      if (currentUser && amSeatedHere) {
-        var openBtn = el("button", "Open Board", "btn btn-primary");
-        openBtn.style.marginRight = "6px";
-        openBtn.addEventListener("click", function () {
-          openOnlineTableBoard(roomId);
-        });
-        tdAct.appendChild(openBtn);
-
-        var leaveBtn = el("button", "Leave Table", "btn");
-        leaveBtn.style.marginRight = "6px";
-        leaveBtn.style.borderColor = "#dc2626";
-        leaveBtn.style.color = "#dc2626";
-        leaveBtn.addEventListener("click", function () {
-          leaveTableById(roomId);
-        });
-        tdAct.appendChild(leaveBtn);
-      }
-
-      var obsBtn = el("button", "Observe", "btn");
-      obsBtn.addEventListener("click", function () {
-        api("/api/v1/tables/" + encodeURIComponent(roomId) + "/observe", { method: "POST" }).then(function (oRes) {
-          $("web-room-observers").textContent = (oRes.observer_handles || t.observer_handles || ["anonymous-127.0.0.1"]).join(", ");
-          var roomLog = $("web-room-chat-log");
-          clear(roomLog);
-          roomLog.appendChild(el("div", "Observing table " + roomId));
-          refreshLobbyTables();
-          openOnlineTableBoard(roomId);
-        }).catch(function (e) { alert("Failed to observe: " + e.message); });
+      var joinBtn = el("button", "Join", "btn btn-primary");
+      joinBtn.style.marginRight = "6px";
+      joinBtn.addEventListener("click", function () {
+        enterOnlineTable(roomId);
       });
-      tdAct.appendChild(obsBtn);
+      tdAct.appendChild(joinBtn);
 
-      if (currentUser && currentUser.is_admin) {
-        var purgeBtn = el("button", "Purge", "btn");
-        purgeBtn.style.marginLeft = "6px";
-        purgeBtn.style.background = "#dc2626";
-        purgeBtn.style.borderColor = "#b91c1c";
-        purgeBtn.style.color = "#ffffff";
-        purgeBtn.addEventListener("click", function () {
-          openPurgeConfirmModal("Are you sure you want to immediately destroy table #" + roomId + " without archiving?", function () {
-            api("/api/v1/tables/" + encodeURIComponent(roomId), { method: "DELETE" }).then(function () {
-              refreshLobbyTables();
-            }).catch(function (e) { alert("Failed to purge table: " + e.message); });
-          });
+      var myUuid = currentUser ? (currentUser.uuid || currentUser.user_id || "") : "";
+      var isHost = currentUser && myUuid && (
+        (t.host_uuid && String(t.host_uuid) === String(myUuid)) ||
+        (t.host_player_uuid && String(t.host_player_uuid) === String(myUuid)) ||
+        (t.host_handle && currentUser.handle && t.host_handle === currentUser.handle)
+      );
+      var isAdmin = !!(currentUser && currentUser.is_admin);
+
+      if (isHost || isAdmin) {
+        var delBtn = el("button", isHost ? "Delete" : "Purge", "btn");
+        delBtn.style.background = "#dc2626";
+        delBtn.style.borderColor = "#b91c1c";
+        delBtn.style.color = "#ffffff";
+        delBtn.addEventListener("click", function () {
+          purgeOnlineTable(roomId);
         });
-        tdAct.appendChild(purgeBtn);
+        tdAct.appendChild(delBtn);
       }
 
       tr.appendChild(tdAct);
@@ -11196,6 +11768,9 @@ function submitCreateOnlineTable() {
       $("web-online-notice").textContent = "Created table " + res.room_id + ".";
     }
     refreshLobbyTables();
+    if (res && res.room_id) {
+      openOnlineTableBoard(res.room_id);
+    }
   }).catch(function (e) { alert("Failed to create table: " + e.message); });
 }
 
@@ -11360,7 +11935,39 @@ function arSearch(offset) {
       tdGame.title = g.game_id;
       var tdMode = el("td", g.mode);
       var tdSrc = el("td"); tdSrc.appendChild(srcBadge);
-      var tdPl = el("td", playersStr);
+      var tdPl = el("td");
+      var pls = g.players || [];
+      if (pls.length > 0) {
+        pls.forEach(function (p, idx) {
+          if (idx > 0) tdPl.appendChild(document.createTextNode(" vs "));
+          var sNum = p.seat || (idx + 1);
+          var side = p.player || seatLetterOf(sNum);
+          tdPl.appendChild(document.createTextNode(side + ": "));
+          if (p.is_robot || p.robot_uuid) {
+            var a = el("a", "@" + p.handle);
+            a.href = "#robots/" + encodeURIComponent(p.robot_uuid || p.handle);
+            a.style.cursor = "pointer";
+            a.addEventListener("click", function (ev) {
+              ev.stopPropagation();
+              ev.preventDefault();
+              viewRobotProfile(p.robot_uuid || p.handle);
+            });
+            tdPl.appendChild(a);
+          } else {
+            var aU = el("a", "@" + p.handle);
+            aU.href = "#users/" + encodeURIComponent(p.player_uuid || p.handle);
+            aU.style.cursor = "pointer";
+            aU.addEventListener("click", function (ev) {
+              ev.stopPropagation();
+              ev.preventDefault();
+              openUserProfile(p.player_uuid || p.handle);
+            });
+            tdPl.appendChild(aU);
+          }
+        });
+      } else {
+        tdPl.textContent = playersStr || "-";
+      }
       var tdWin = el("td"); tdWin.appendChild(winBadge);
       var tdRes = el("td", (g.status || g.result) + " (" + (g.termination || "") + ")");
       var tdPlies = el("td", g.ply_count);
@@ -11456,11 +12063,36 @@ function arOpen(id) {
       }
     }
     rpHandles = (g.players || []).map(function (p) { return p.handle; });
-    $("ar-info").textContent = (g.players || []).map(function (p, idx) {
-      var sNum = p.seat || (idx + 1);
-      var side = p.player || seatLetterOf(sNum);
-      return "Seat " + sNum + " (" + side + "): " + p.handle;
-    }).join("  |  ") + "  |  " + resultText(g);
+    var arInfoEl = $("ar-info");
+    if (arInfoEl) {
+      clear(arInfoEl);
+      (g.players || []).forEach(function (p, idx) {
+        if (idx > 0) arInfoEl.appendChild(document.createTextNode("  |  "));
+        var sNum = p.seat || (idx + 1);
+        var side = p.player || seatLetterOf(sNum);
+        arInfoEl.appendChild(document.createTextNode("Seat " + sNum + " (" + side + "): "));
+        if (p.is_robot || p.robot_uuid) {
+          var a = el("a", "@" + p.handle);
+          a.href = "#robots/" + encodeURIComponent(p.robot_uuid || p.handle);
+          a.style.cursor = "pointer";
+          a.addEventListener("click", function (ev) {
+            ev.preventDefault();
+            viewRobotProfile(p.robot_uuid || p.handle);
+          });
+          arInfoEl.appendChild(a);
+        } else {
+          var aU = el("a", "@" + p.handle);
+          aU.href = "#users/" + encodeURIComponent(p.player_uuid || p.handle);
+          aU.style.cursor = "pointer";
+          aU.addEventListener("click", function (ev) {
+            ev.preventDefault();
+            openUserProfile(p.player_uuid || p.handle);
+          });
+          arInfoEl.appendChild(aU);
+        }
+      });
+      arInfoEl.appendChild(document.createTextNode("  |  " + resultText(g)));
+    }
 
     api("/api/v1/archive/games/" + encodeURIComponent(id) + "/plies").then(function (pRes) {
       var rawPlies = pRes.plies || [];
@@ -11687,6 +12319,13 @@ Object.defineProperty(window, "activePlayState", {
 window.switchTab = switchTab;
 window.triggerAiBotTurn = triggerAiBotTurn;
 window.renderOnlineUsersRoster = renderOnlineUsersRoster;
+window.viewRobotProfile = viewRobotProfile;
+window.loadRobotsDirectory = loadRobotsDirectory;
+window.openOnlineTableBoard = openOnlineTableBoard;
+window.enterOnlineTable = enterOnlineTable;
+window.sitAtOnlineTable = sitAtOnlineTable;
+window.purgeOnlineTable = purgeOnlineTable;
+window.pulseConfirmBar = pulseConfirmBar;
 })();
 </script>
 </body>

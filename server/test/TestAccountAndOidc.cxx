@@ -1540,7 +1540,8 @@ TEST(AccountStoreTest, SchemaMatchesPlanAndHasNoGuestSupport)
     CHECK_EQUAL(8, countRows(
                        "SELECT COUNT(*) FROM pragma_table_info('linked_identities')"));
     CHECK_EQUAL(7, countRows("SELECT COUNT(*) FROM pragma_table_info('sessions')"));
-    CHECK_EQUAL(31, countRows("SELECT COUNT(*) FROM pragma_table_info('games')"));
+    CHECK_EQUAL(35, countRows("SELECT COUNT(*) FROM pragma_table_info('games')"));
+    CHECK_EQUAL(19, countRows("SELECT COUNT(*) FROM pragma_table_info('robots')"));
     CHECK_TRUE(countRows("SELECT COUNT(*) FROM sqlite_master WHERE type='index'"
                          " AND name='idx_games_ended_at'") == 1);
 
@@ -3447,6 +3448,168 @@ TEST(AccountStoreTest, RetroactiveInstallIdReconciliation)
     CHECK_EQUAL(2, store->deleteGamesByInstallId("device_A"));
     PlayerProfile checkProf;
     CHECK_FALSE(store->getPlayerByInstallId("device_A", checkProf));
+}
+
+TEST(AccountStoreTest, DeleteRobotRetentionAndDirectoryFiltering)
+{
+    LoginResult l1 = login("google", "sub-vet-owner", "Veteran Owner");
+    CHECK_TRUE(l1.ok);
+    int64_t ownerId = l1.profile.playerId;
+
+    LoginResult l2 = login("google", "sub-opponent", "Human Opponent");
+    CHECK_TRUE(l2.ok);
+    int64_t opponentId = l2.profile.playerId;
+
+    // Create 3 robots
+    CreateRobotResult r1 = store->createRobot(ownerId, "AlphaMaster", "Master alpha engine");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)r1.status);
+    CHECK_FALSE(r1.robot.tokenDeleted);
+
+    CreateRobotResult r2 = store->createRobot(ownerId, "BetaBlaster", "Fast beta tactician");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)r2.status);
+
+    CreateRobotResult r3 = store->createRobot(ownerId, "UnplayedBot", "Never played a game");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)r3.status);
+
+    // Test getRobotByName case-insensitive lookup
+    RobotRecord byName;
+    CHECK_TRUE(store->getRobotByName("alphamaster", byName));
+    STRCMP_EQUAL("AlphaMaster", byName.robotName.c_str());
+    STRCMP_EQUAL("Master alpha engine", byName.description.c_str());
+    CHECK_EQUAL(ownerId, byName.ownerPlayerId);
+    STRCMP_EQUAL(l1.profile.uuid.c_str(), byName.ownerUuid.c_str());
+    CHECK_TRUE(byName.token.empty()); // Public query clears token
+
+    // deleteRobot on unplayed robot (0 games) physically deletes it
+    CHECK_EQUAL((int)RobotStatus::OK, (int)store->deleteRobot(ownerId, r3.robot.robotUuid));
+    RobotRecord checkDeleted;
+    CHECK_FALSE(store->getRobotById(r3.robot.robotId, checkDeleted));
+    CHECK_FALSE(store->getRobotByName("UnplayedBot", checkDeleted));
+
+    // Record games for AlphaMaster (2 games: 1 win, 1 loss)
+    CHECK_TRUE(store->recordRobotGameOutcome(r1.robot.robotId, GameOutcome::WIN));
+    CHECK_TRUE(store->recordRobotGameOutcome(r1.robot.robotId, GameOutcome::LOSS));
+
+    // Archive 1 finished game for AlphaMaster (Seat 1: AlphaMaster, Seat 2: Human Opponent)
+    std::string err;
+    GameRecord g1 = record("g-bot-alpha-01", kNow, 0, opponentId);
+    g1.p1RobotId = r1.robot.robotId;
+    g1.p1Handle = "AlphaMaster";
+    g1.p2Handle = "Human Opponent";
+    CHECK_EQUAL((int)ArchiveStatus::OK, (int)store->archiveGame(g1, err));
+
+    // Record games for BetaBlaster (1 game: 1 win)
+    CHECK_TRUE(store->recordRobotGameOutcome(r2.robot.robotId, GameOutcome::WIN));
+    GameRecord g2 = record("g-bot-beta-01", kNow, opponentId, 0);
+    g2.p2RobotId = r2.robot.robotId;
+    g2.p1Handle = "Human Opponent";
+    g2.p2Handle = "BetaBlaster";
+    CHECK_EQUAL((int)ArchiveStatus::OK, (int)store->archiveGame(g2, err));
+
+    // listPublicRobotsDirectory:
+    // Unplayed bots (gamesPlayed == 0) are excluded
+    int64_t totalRobots = 0;
+    std::vector<RobotRecord> dir;
+    octi::RobotDirectoryFilter filter;
+    CHECK_TRUE(store->listPublicRobotsDirectory(filter, dir, &totalRobots));
+    CHECK_EQUAL(2, (int)totalRobots);
+    CHECK_EQUAL(2, (int)dir.size());
+
+    // Search query on robot_name
+    filter.query = "alpha";
+    CHECK_TRUE(store->listPublicRobotsDirectory(filter, dir, &totalRobots));
+    CHECK_EQUAL(1, (int)totalRobots);
+    STRCMP_EQUAL("AlphaMaster", dir[0].robotName.c_str());
+
+    // Search query on description
+    filter.query = "tactician";
+    CHECK_TRUE(store->listPublicRobotsDirectory(filter, dir, &totalRobots));
+    CHECK_EQUAL(1, (int)totalRobots);
+    STRCMP_EQUAL("BetaBlaster", dir[0].robotName.c_str());
+
+    // Search query on owner handle
+    filter.query = "Veteran";
+    CHECK_TRUE(store->listPublicRobotsDirectory(filter, dir, &totalRobots));
+    CHECK_EQUAL(2, (int)totalRobots);
+
+    // Sorting by win_rate descending:
+    // BetaBlaster has 1 win / 1 game (100%), AlphaMaster has 1 win / 2 games (50%)
+    filter.query.clear();
+    filter.sortField = "win_rate";
+    filter.sortAsc = false;
+    CHECK_TRUE(store->listPublicRobotsDirectory(filter, dir, &totalRobots));
+    CHECK_EQUAL(2, (int)dir.size());
+    STRCMP_EQUAL("BetaBlaster", dir[0].robotName.c_str());
+    STRCMP_EQUAL("AlphaMaster", dir[1].robotName.c_str());
+
+    // Sorting by games_played descending:
+    filter.sortField = "games_played";
+    CHECK_TRUE(store->listPublicRobotsDirectory(filter, dir, &totalRobots));
+    STRCMP_EQUAL("AlphaMaster", dir[0].robotName.c_str());
+    STRCMP_EQUAL("BetaBlaster", dir[1].robotName.c_str());
+
+    // Sorting by robot_name ascending:
+    filter.sortField = "robot_name";
+    filter.sortAsc = true;
+    CHECK_TRUE(store->listPublicRobotsDirectory(filter, dir, &totalRobots));
+    STRCMP_EQUAL("AlphaMaster", dir[0].robotName.c_str());
+    STRCMP_EQUAL("BetaBlaster", dir[1].robotName.c_str());
+
+    // deleteRobot on veteran robot (AlphaMaster has 2 games played):
+    // Must NOT delete from robots table!
+    CHECK_EQUAL((int)RobotStatus::OK, (int)store->deleteRobot(ownerId, r1.robot.robotUuid));
+
+    // Calling deleteRobot a second time returns NOT_FOUND
+    CHECK_EQUAL((int)RobotStatus::NOT_FOUND, (int)store->deleteRobot(ownerId, r1.robot.robotUuid));
+
+    // Robot profile still exists in database and stats are intact
+    RobotRecord vetRec;
+    CHECK_TRUE(store->getRobotById(r1.robot.robotId, vetRec));
+    CHECK_TRUE(vetRec.revoked);
+    CHECK_TRUE(vetRec.tokenDeleted);
+    CHECK_TRUE(vetRec.token.empty());
+    CHECK_TRUE(vetRec.tokenPrefix.empty());
+    CHECK_EQUAL(2, vetRec.gamesPlayed);
+    CHECK_EQUAL(1, vetRec.wins);
+    CHECK_EQUAL(1, vetRec.losses);
+
+    // Private owner list (listRobots) HIDES deleted tokens
+    std::vector<RobotRecord> ownerList;
+    CHECK_TRUE(store->listRobots(ownerId, ownerList));
+    CHECK_EQUAL(1, (int)ownerList.size());
+    STRCMP_EQUAL("BetaBlaster", ownerList[0].robotName.c_str());
+
+    // Public list by owner (listPublicRobotsByOwner) STILL includes veteran robot
+    std::vector<RobotRecord> publicOwnerList;
+    CHECK_TRUE(store->listPublicRobotsByOwner(ownerId, publicOwnerList));
+    CHECK_EQUAL(2, (int)publicOwnerList.size());
+
+    // Public robots directory STILL includes veteran robot
+    filter.sortField = "games_played";
+    filter.sortAsc = false;
+    CHECK_TRUE(store->listPublicRobotsDirectory(filter, dir, &totalRobots));
+    CHECK_EQUAL(2, (int)totalRobots);
+    STRCMP_EQUAL("AlphaMaster", dir[0].robotName.c_str());
+    CHECK_TRUE(dir[0].tokenDeleted);
+
+    // listArchivedGames filtering by robotId / robotUuid
+    std::vector<GameRecord> archivedGames;
+    int64_t archiveTotal = 0;
+    octi::ArchiveFilter af;
+    af.robotId = r1.robot.robotId;
+    CHECK_TRUE(store->listArchivedGames(af, archivedGames, &archiveTotal));
+    CHECK_EQUAL(1, (int)archiveTotal);
+    CHECK_EQUAL(1, (int)archivedGames.size());
+    STRCMP_EQUAL("g-bot-alpha-01", archivedGames[0].gameId.c_str());
+    CHECK_EQUAL(r1.robot.robotId, archivedGames[0].p1RobotId);
+
+    octi::ArchiveFilter afUuid;
+    afUuid.robotUuid = r2.robot.robotUuid;
+    CHECK_TRUE(store->listArchivedGames(afUuid, archivedGames, &archiveTotal));
+    CHECK_EQUAL(1, (int)archiveTotal);
+    CHECK_EQUAL(1, (int)archivedGames.size());
+    STRCMP_EQUAL("g-bot-beta-01", archivedGames[0].gameId.c_str());
+    CHECK_EQUAL(r2.robot.robotId, archivedGames[0].p2RobotId);
 }
 
 int main(int argc, char **argv)

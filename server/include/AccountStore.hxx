@@ -165,6 +165,10 @@ struct GameRecord {
     int64_t p2PlayerId = 0;
     int64_t p3PlayerId = 0;
     int64_t p4PlayerId = 0;
+    int64_t p1RobotId = 0;
+    int64_t p2RobotId = 0;
+    int64_t p3RobotId = 0;
+    int64_t p4RobotId = 0;
     std::string p1Handle;
     std::string p2Handle;
     std::string p3Handle;
@@ -199,6 +203,8 @@ enum class ArchiveStatus {
 struct ArchiveFilter {
     std::string mode;                   // empty = any
     std::string playerUuid;             // empty = any
+    std::string robotUuid;
+    int64_t robotId = 0;
     int limit = 20;                     // clamped to 1..maxLimit
     int offset = 0;                     // clamped to >= 0
     std::string source;                 // "", "online", "client_upload"
@@ -298,6 +304,15 @@ struct RobotRecord {
     int64_t createdAt = 0;
     bool revoked = false;
     int64_t revokedAt = 0;
+    bool tokenDeleted = false;
+};
+
+struct RobotDirectoryFilter {
+    std::string query;      // case-insensitive substring on robot_name, description, owner handle
+    std::string sortField;  // "wins" | "games_played" | "win_rate" | "robot_name" | "created_at"
+    bool sortAsc = false;
+    int limit = kDefaultUsersPageLimit; // 1..100
+    int offset = 0;
 };
 
 enum class RobotStatus {
@@ -429,6 +444,9 @@ public:
     bool listRobots(int64_t ownerPlayerId, std::vector<RobotRecord> &out);
     bool listPublicRobotsByOwner(int64_t ownerPlayerId,
                                  std::vector<RobotRecord> &out);
+    bool listPublicRobotsDirectory(const RobotDirectoryFilter &filter,
+                                   std::vector<RobotRecord> &out,
+                                   int64_t *total = nullptr);
     RobotStatus revokeRobot(int64_t ownerPlayerId,
                             const std::string &robotUuidOrName);
     RobotStatus deleteRobot(int64_t ownerPlayerId,
@@ -436,6 +454,7 @@ public:
     RobotTokenValidation validateRobotToken(const std::string &rawToken);
     bool getRobotById(int64_t robotId, RobotRecord &out);
     bool getRobotByUuid(const std::string &robotUuid, RobotRecord &out);
+    bool getRobotByName(const std::string &robotName, RobotRecord &out);
     bool recordRobotGameOutcome(int64_t robotId, GameOutcome outcome);
 
     /* mode: '2P' | '4P' | 'OFK'; limit clamped to 1..kMaxLeaderboardLimit. */
