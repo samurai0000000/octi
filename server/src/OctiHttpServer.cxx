@@ -1481,6 +1481,7 @@ Json OctiHttpServer::Impl::seatJson(const SeatView &s)
 {
     Json j;
     j["seat"] = s.seat;
+    j["occupied"] = (s.playerId != 0);
     j["player_uuid"] = s.playerId != 0 ? Json(uuidOf(s.playerId)) : Json();
     j["handle"] = s.handle;
     j["rating"] = s.rating;
@@ -1594,6 +1595,9 @@ Json OctiHttpServer::Impl::roomEventJson(const RoomEvent &e)
     }
     if (e.targetPlayerId != 0) {
         j["target_uuid"] = uuidOf(e.targetPlayerId);
+        if (!e.targetHandle.empty()) {
+            j["target_handle"] = e.targetHandle;
+        }
     }
     j["seat"] = e.seat;
     switch (e.type) {
@@ -1685,6 +1689,7 @@ Json OctiHttpServer::Impl::tableJson(const TableSummary &t)
         const TableSeatSummary &s = t.seats[i];
         Json sj;
         sj["seat"] = s.seat;
+        sj["occupied"] = (s.playerId != 0);
         sj["player_uuid"] = s.playerId != 0 ? uuidOf(s.playerId) : "";
         sj["handle"] = s.handle;
         sj["rating"] = s.rating;
@@ -1703,6 +1708,19 @@ Json OctiHttpServer::Impl::tableJson(const TableSummary &t)
             sj["robot_draws"] = s.robotDraws;
         }
         seatsArr.push_back(sj);
+    }
+    if (seatsArr.empty() && t.seatsTotal > 0) {
+        for (int i = 1; i <= t.seatsTotal; ++i) {
+            Json sj;
+            sj["seat"] = i;
+            sj["occupied"] = false;
+            sj["player_uuid"] = "";
+            sj["handle"] = "";
+            sj["rating"] = 1500;
+            sj["connected"] = false;
+            sj["is_robot"] = false;
+            seatsArr.push_back(sj);
+        }
     }
     j["seats"] = seatsArr;
     j["players"] = t.playerHandles;
@@ -3727,6 +3745,7 @@ void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
         e["uuid"] = rows[i].uuid;
         e["handle"] = rows[i].handle;
         e["display_name"] = rows[i].displayName;
+        e["avatar_url"] = rows[i].avatarUrl;
         e["elo"] = rows[i].elo;
         e["games_played"] = rows[i].gamesPlayed;
         e["wins"] = rows[i].wins;
@@ -6220,6 +6239,7 @@ void OctiHttpServer::Impl::registerRoutes()
         {"POST", "/api/v1/lobby/chat", &Impl::handleLobbyChat},
         {"GET", "/api/v1/lobby/events", &Impl::handleLobbyEvents},
         {"GET", "/api/v1/tables", &Impl::handleTables},
+        {"GET", "/api/v1/tables/:id", &Impl::handleGameGet},
         {"POST", "/api/v1/tables", &Impl::handleTableCreate},
         {"POST", "/api/v1/tables/:id/join", &Impl::handleTableJoin},
         {"POST", "/api/v1/tables/:id/leave", &Impl::handleTableLeave},

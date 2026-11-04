@@ -721,10 +721,26 @@ int main(int argc, char **argv)
             break;
         }
 
+        // Schedule heaviest variants (2P 1-Base, 2P 3-Base, OFK) before fast 4P
+        // positions (Longest-Processing-Time-First) to prevent end-of-ply
+        // single-thread stragglers from starving the other worker threads.
+        auto variantCostRank = [](const std::string &v) -> int {
+            if (v == "OFK") return 0;
+            if (v == "2P 1-Base") return 1;
+            if (v == "2P 3-Base") return 2;
+            return 3;
+        };
+        std::stable_sort(currentFrontier.begin(), currentFrontier.end(),
+                         [&](const FrontierNode &a, const FrontierNode &b) {
+                             return variantCostRank(a.variantLabel) <
+                                    variantCostRank(b.variantLabel);
+                         });
+
         long plyStartMs = steadyClockMs();
         std::size_t numNodes = currentFrontier.size();
         int numWorkers = std::min<int>(cfg.threads, static_cast<int>(numNodes));
         int smpPerWorker = std::max(1, cfg.threads / numWorkers);
+        int extraSmpWorkers = (numWorkers > 0) ? (cfg.threads % numWorkers) : 0;
 
         bool expandChildren = (ply + 1 < cfg.maxPly);
         std::size_t storeCount = static_cast<std::size_t>(std::min(3, cfg.botBranch));
@@ -742,6 +758,7 @@ int main(int argc, char **argv)
         std::atomic<std::size_t> nextIdx{0};
         std::atomic<std::size_t> completedNodes{0};
         std::mutex resultMutex;
+        std::mutex ioMutex;
         std::vector<GeneratedBookEntry> plyEntries;
         std::vector<FrontierNode> nextFrontierRaw;
 
@@ -751,7 +768,7 @@ int main(int argc, char **argv)
             octi::BotTuningProfile prof = bot.tuningProfile();
             prof.useOpeningBook = false;
             prof.rootScoreJitter = 0;
-            prof.lazySmpThreads = smpPerWorker;
+            prof.lazySmpThreads = smpPerWorker + (workerId < extraSmpWorkers ? 1 : 0);
             prof.maxSearchDepth = cfg.searchDepth;
             prof.timeBudgetMs = cfg.timeBudgetMs;
             bot.setTuningProfile(prof);
@@ -851,26 +868,32 @@ int main(int argc, char **argv)
                 }
 
                 std::size_t doneCount = completedNodes.fetch_add(1) + 1;
+                std::string bestCandMove =
+                    entry.candidates.empty() ? "-" : entry.candidates[0].move;
+                std::int16_t bestCandScore =
+                    entry.candidates.empty() ? 0 : entry.candidates[0].score;
+                int entryDepth = entry.depth;
                 {
                     std::lock_guard<std::mutex> lock(resultMutex);
                     if (!entry.candidates.empty()) {
-                        plyEntries.push_back(entry);
+                        plyEntries.push_back(std::move(entry));
                     }
-                    for (const auto &ch : localChildren) {
-                        nextFrontierRaw.push_back(ch);
+                    for (auto &ch : localChildren) {
+                        nextFrontierRaw.push_back(std::move(ch));
                     }
-                    if (doneCount == numNodes || doneCount % 5 == 0 || numNodes <= 10) {
-                        std::cout << "  [" << doneCount << "/" << numNodes << "] "
-                                  << node.variantLabel << " ply " << ply
-                                  << " (" << node.moveHistoryDesc << ") -> "
-                                  << (entry.candidates.empty() ? "-" : entry.candidates[0].move)
-                                  << " (score="
-                                  << (entry.candidates.empty() ? 0 : entry.candidates[0].score)
-                                  << ", d=" << entry.depth
-                                  << ", nodes=" << stats.nodesVisited
-                                  << ", " << stats.elapsedMs << "ms)\n"
-                                  << std::flush;
-                    }
+                }
+                if (doneCount == numNodes || doneCount % 5 == 0 || numNodes <= 10) {
+                    std::ostringstream logOss;
+                    logOss << "  [" << doneCount << "/" << numNodes << "] "
+                           << node.variantLabel << " ply " << ply
+                           << " (" << node.moveHistoryDesc << ") -> "
+                           << bestCandMove
+                           << " (score=" << bestCandScore
+                           << ", d=" << entryDepth
+                           << ", nodes=" << stats.nodesVisited
+                           << ", " << stats.elapsedMs << "ms)\n";
+                    std::lock_guard<std::mutex> ioLock(ioMutex);
+                    std::cout << logOss.str() << std::flush;
                 }
             }
         };

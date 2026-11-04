@@ -146,6 +146,7 @@ struct LeaderboardEntry {
     std::string uuid;
     std::string handle;
     std::string displayName;
+    std::string avatarUrl;
     int elo = 1200;
     int gamesPlayed = 0;
     int wins = 0;

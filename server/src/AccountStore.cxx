@@ -3707,15 +3707,15 @@ bool AccountStore::leaderboard(const std::string &mode, int limit,
     const char *sql = nullptr;
     if (mode == "2P") {
         sql = "SELECT uuid, handle, display_name, elo_2p, games_played, wins,"
-              " losses, draws FROM players ORDER BY elo_2p DESC,"
+              " losses, draws, avatar_url FROM players ORDER BY elo_2p DESC,"
               " games_played DESC, player_id ASC LIMIT ?1";
     } else if (mode == "4P") {
         sql = "SELECT uuid, handle, display_name, elo_4p, games_played, wins,"
-              " losses, draws FROM players ORDER BY elo_4p DESC,"
+              " losses, draws, avatar_url FROM players ORDER BY elo_4p DESC,"
               " games_played DESC, player_id ASC LIMIT ?1";
     } else if (mode == "OFK") {
         sql = "SELECT uuid, handle, display_name, elo_ofk, games_played, wins,"
-              " losses, draws FROM players ORDER BY elo_ofk DESC,"
+              " losses, draws, avatar_url FROM players ORDER BY elo_ofk DESC,"
               " games_played DESC, player_id ASC LIMIT ?1";
     } else {
         return false;
@@ -3746,6 +3746,7 @@ bool AccountStore::leaderboard(const std::string &mode, int limit,
         e.wins = static_cast<int>(s.colInt(5));
         e.losses = static_cast<int>(s.colInt(6));
         e.draws = static_cast<int>(s.colInt(7));
+        e.avatarUrl = s.colText(8);
         out.push_back(e);
     }
     return rc == SQLITE_DONE;

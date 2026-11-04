@@ -4764,10 +4764,27 @@ TEST(OctiHttpServerIntegrationTest, LobbyTablesSeatRosterChatTimestampAndWebUiRe
     STRCMP_EQUAL(host.uuid.c_str(), tJson["seats"][0].value("player_uuid", "").c_str());
     STRCMP_EQUAL("table_host", tJson["seats"][0].value("handle", "").c_str());
     CHECK_TRUE(tJson["seats"][0].value("connected", false));
+    CHECK_TRUE(tJson["seats"][0].value("occupied", false));
     CHECK_EQUAL(2, tJson["seats"][1].value("seat", 0));
     STRCMP_EQUAL("", tJson["seats"][1].value("player_uuid", "").c_str());
     STRCMP_EQUAL("", tJson["seats"][1].value("handle", "").c_str());
     CHECK_FALSE(tJson["seats"][1].value("connected", true));
+    CHECK_FALSE(tJson["seats"][1].value("occupied", true));
+
+    // Verify GET /api/v1/tables/{id} returns occupied seat booleans
+    Reply rTable = http().get("/api/v1/tables/" + roomId, host.token);
+    EXPECT_STATUS(200, rTable);
+    CHECK_TRUE(rTable.json.contains("seats") && rTable.json["seats"].is_array());
+    CHECK_EQUAL(2, static_cast<int>(rTable.json["seats"].size()));
+    CHECK_TRUE(rTable.json["seats"][0].value("occupied", false));
+    CHECK_FALSE(rTable.json["seats"][1].value("occupied", true));
+
+    // Verify GET /api/v1/leaderboard?mode=2P entries include avatar_url
+    Reply rLb = http().get("/api/v1/leaderboard?mode=2P");
+    EXPECT_STATUS(200, rLb);
+    CHECK_TRUE(rLb.json.contains("entries") && rLb.json["entries"].is_array());
+    CHECK_TRUE(rLb.json["entries"].size() >= 1);
+    CHECK_TRUE(rLb.json["entries"][0].contains("avatar_url"));
 
     // Verify recent_chat has epoch millisecond created_at_ms
     CHECK_TRUE(rLobby.json["recent_chat"].is_array());
@@ -5999,9 +6016,20 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("OCTI v2.3.2") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v2.3.3") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"robot-profile-detail\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"robots-tbody\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Quick Guide") == std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"web-room-chat-log\"") == std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"web-table-info-card\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("formatRoomEventForChat") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("has joined the table") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("has left the table") != std::string::npos);
+    size_t posChatBox = rIndex.body.find("id=\"web-lobby-chat-box\"");
+    size_t posUsersSec = rIndex.body.find("id=\"web-online-users-section\"");
+    CHECK_TRUE(posChatBox != std::string::npos);
+    CHECK_TRUE(posUsersSec != std::string::npos);
+    CHECK_TRUE(posChatBox < posUsersSec);
 }
 
 int main(int argc, char **argv)

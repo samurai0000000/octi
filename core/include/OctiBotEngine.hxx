@@ -207,6 +207,7 @@ private:
     bool _customTimeBudget;
     std::uint64_t _rngState;
     std::vector<TranspositionEntry> _tt;
+    std::atomic<bool> _stopSearch{false};
     std::atomic<int> _liveDepthReached{0};
     std::atomic<std::uint64_t> _liveNodesVisited{0};
     std::atomic<int> _liveBestScore{0};

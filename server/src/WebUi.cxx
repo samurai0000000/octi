@@ -385,6 +385,94 @@ tr.active-ply {
   border-top: 1px solid var(--line);
   padding-top: 10px;
 }
+/* Home Page Hero, Highlights & Emblem Styles */
+.home-hero-panel {
+  background: linear-gradient(135deg, #0B0F17 0%, #152238 58%, #1E293B 100%);
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 24px 28px;
+  color: #F8FAFC;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  margin-bottom: 20px;
+}
+.home-hero-grid {
+  display: grid;
+  grid-template-columns: 1.25fr 0.95fr;
+  gap: 28px;
+  align-items: center;
+}
+@media (max-width: 900px) {
+  .home-hero-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+.home-hero-copy {
+  display: flex;
+  flex-direction: column;
+}
+.home-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  background: rgba(200, 162, 83, 0.15);
+  border: 1px solid #C8A253;
+  color: #FDE047;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+.home-hero-copy h1 {
+  margin: 0 0 10px 0;
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  color: #FFFFFF;
+  line-height: 1.25;
+}
+.home-hero-copy p {
+  font-size: 14.5px;
+  color: #94A3B8;
+  margin: 0 0 18px 0;
+  line-height: 1.6;
+}
+.home-hero-art {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.home-hero-art svg {
+  width: 100%;
+  max-width: 440px;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+.home-highlights-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+.home-highlight-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #CBD5E1;
+}
+.home-highlight-pill strong {
+  color: #38BDF8;
+}
+
 /* Features grid */
 .features-grid {
   display: grid;
@@ -395,9 +483,26 @@ tr.active-ply {
 .feature-card {
   background: #ffffff;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  border-radius: 10px;
+  padding: 18px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  border-color: #CBD5E1;
+}
+.feature-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
 }
 .feature-card h3 {
   margin: 0 0 6px 0;
@@ -408,6 +513,7 @@ tr.active-ply {
   margin: 0;
   color: var(--dim);
   font-size: 13.5px;
+  line-height: 1.5;
 }
 /* Rules grid */
 .rules-grid {
@@ -417,20 +523,41 @@ tr.active-ply {
   margin-top: 12px;
 }
 .rule-box {
-  background: #fbfbfa;
+  background: #ffffff;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 14px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+}
+.rule-diagram-wrap {
+  width: 100%;
+  background: #0B0F17;
+  border: 1px solid #1E293B;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rule-diagram-wrap svg {
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  display: block;
 }
 .rule-box h4 {
   margin: 0 0 6px 0;
-  font-size: 14px;
+  font-size: 14.5px;
   color: var(--acc-bright);
 }
 .rule-box p {
   margin: 0;
   font-size: 13px;
   color: var(--dim);
+  line-height: 1.5;
 }
 @media (max-width: 640px) {
   main {
@@ -552,8 +679,8 @@ tr.active-ply {
     flex: none !important;
     margin: 0 auto !important;
   }
-  .web-quick-guide-card {
-    display: none !important;
+  #web-table-info-card {
+    grid-column: 1 / -1 !important;
   }
   .web-res-card {
     padding: 6px 8px !important;
@@ -654,20 +781,69 @@ tr.active-ply {
 .web-res-well.interactive:hover {
   background: rgba(200, 162, 83, 0.25);
 }
-.web-quick-guide-card {
-  background: #101622;
-  border: 1px solid #1E293B;
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 11.5px;
-  color: #94A3B8;
-  line-height: 1.5;
+.chat-msg-row {
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  line-height: 1.4;
+  word-break: break-word;
 }
-.web-quick-guide-card strong {
-  color: #E2E8F0;
-  display: block;
-  margin-bottom: 4px;
-  font-size: 12px;
+.chat-msg-row:last-child {
+  border-bottom: none;
+}
+.chat-msg-ts {
+  color: #94A3B8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  margin-right: 6px;
+}
+.chat-msg-scope {
+  color: #A78BFA;
+  font-size: 10.5px;
+  font-weight: 700;
+  margin-right: 5px;
+}
+.chat-msg-user {
+  color: #38BDF8;
+  font-weight: 700;
+  margin-right: 5px;
+}
+.chat-msg-user.is-self {
+  color: #34D399;
+}
+.chat-msg-user.is-bot {
+  color: #FBBF24;
+}
+.chat-msg-user.is-system {
+  color: #C8A253;
+}
+.chat-msg-text {
+  color: #F1F5F9;
+}
+.chat-msg-text.is-event {
+  color: #FDE68A;
+  font-style: italic;
+}
+#web-lobby-chat-log .chat-msg-ts {
+  color: #64748B;
+}
+#web-lobby-chat-log .chat-msg-user {
+  color: #0284C7;
+}
+#web-lobby-chat-log .chat-msg-user.is-self {
+  color: #059669;
+}
+#web-lobby-chat-log .chat-msg-user.is-bot {
+  color: #D97706;
+}
+#web-lobby-chat-log .chat-msg-text {
+  color: #0F172A;
+}
+.btn-seat-action:disabled {
+  opacity: 0.42 !important;
+  cursor: not-allowed !important;
+  background: #1E293B !important;
+  border-color: #334155 !important;
+  color: #64748B !important;
 }
 #web-ply-confirm-bar {
   position: absolute;
@@ -1125,17 +1301,141 @@ tr.active-ply {
 
 <!-- Tab 1: Home (Default Top Page) -->
 <section id="tab-home" class="tab on">
-  <div class="panel" style="background:linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);">
-    <div style="max-width:800px;margin:10px 0;">
-      <h1 style="margin:0 0 8px 0;font-size:28px;letter-spacing:-0.02em;">OCTI &amp; OCTI for Kids (OFK)</h1>
-      <p style="font-size:15px;color:var(--dim);margin:0 0 16px 0;line-height:1.6;">
-        The timeless strategy game of tactical growth, prong directional control, multi-hop jumping, and base infiltration.
-        Compete directly in your browser against client-side minimax JS robots, join real-time multiplayer tables, explore grandmaster replays, or register automated bots.
-      </p>
-      <div class="row">
-        <button type="button" class="btn btn-primary" id="home-cta-play" style="padding:10px 18px;font-size:14px;">Play in Browser (vs. JS Robot or Online)</button>
-        <button type="button" class="btn" id="home-cta-users" style="padding:10px 18px;font-size:14px;">Browse Registered Players</button>
-        <button type="button" class="btn" id="home-cta-account" style="padding:10px 18px;font-size:14px;">Sign In with Google</button>
+  <div class="home-hero-panel">
+    <div class="home-hero-grid">
+      <div class="home-hero-copy">
+        <div class="home-pill-badge">OFFICIAL PLATFORM &bull; 2P / 4P / OFK</div>
+        <h1>OCTI &amp; OCTI for Kids (OFK)</h1>
+        <p>
+          The timeless strategy game of tactical growth, prong directional control, multi-hop chain jumping, and home base infiltration.
+          Compete directly in your browser against client-side minimax JS robots, join real-time multiplayer tables, explore grandmaster replays, or register automated bots.
+        </p>
+        <div class="row" style="gap:10px;margin-bottom:12px;">
+          <button type="button" class="btn btn-primary" id="home-cta-play" style="padding:10px 18px;font-size:14px;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Play in Browser</button>
+          <button type="button" class="btn" id="home-cta-online" style="padding:10px 18px;font-size:14px;">Play Online</button>
+          <button type="button" class="btn" id="home-cta-users" style="padding:10px 18px;font-size:14px;">Browse Players</button>
+          <button type="button" class="btn" id="home-cta-account" style="padding:10px 18px;font-size:14px;">Sign In with Google</button>
+        </div>
+        <div class="home-highlights-strip">
+          <span class="home-highlight-pill"><strong>9&times;9 &amp; 6&times;7</strong> Boards</span>
+          <span class="home-highlight-pill"><strong>Browser Web Worker</strong> AI</span>
+          <span class="home-highlight-pill"><strong>Live Multiplayer</strong> &amp; ELO</span>
+          <span class="home-highlight-pill"><strong>Bot &amp; Replay</strong> Open API</span>
+        </div>
+      </div>
+      <div class="home-hero-art">
+        <svg viewBox="0 0 420 300" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="heroBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#080C14"/>
+              <stop offset="100%" stop-color="#111B2C"/>
+            </linearGradient>
+            <radialGradient id="podGlowEmerald" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#10B981" stop-opacity="0.4"/>
+              <stop offset="100%" stop-color="#10B981" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="podGlowRuby" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#F43F5E" stop-opacity="0.4"/>
+              <stop offset="100%" stop-color="#F43F5E" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="goldJumpGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#E5C158" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="#E5C158" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <rect x="0" y="0" width="420" height="300" rx="10" fill="url(#heroBgGrad)" stroke="#2D3A54" stroke-width="1.5"/>
+
+          <!-- Board Grid Surface (5 columns x 4 rows) -->
+          <g transform="translate(45, 30)">
+            <!-- Row 0 -->
+            <rect x="0" y="0" width="66" height="60" fill="#141E30" stroke="#1E293B"/>
+            <rect x="66" y="0" width="66" height="60" fill="#0F1726" stroke="#1E293B"/>
+            <!-- Ruby Home Base Square -->
+            <rect x="132" y="0" width="66" height="60" fill="#2E0D19" stroke="#F43F5E" stroke-width="1.5"/>
+            <text x="165" y="35" text-anchor="middle" fill="#FDA4AF" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="800" letter-spacing="1">OCTI</text>
+            <rect x="198" y="0" width="66" height="60" fill="#0F1726" stroke="#1E293B"/>
+            <rect x="264" y="0" width="66" height="60" fill="#141E30" stroke="#1E293B"/>
+
+            <!-- Row 1 -->
+            <rect x="0" y="60" width="66" height="60" fill="#0F1726" stroke="#1E293B"/>
+            <rect x="66" y="60" width="66" height="60" fill="#141E30" stroke="#1E293B"/>
+            <rect x="132" y="60" width="66" height="60" fill="#0F1726" stroke="#1E293B"/>
+            <rect x="198" y="60" width="66" height="60" fill="#141E30" stroke="#1E293B"/>
+            <rect x="264" y="60" width="66" height="60" fill="#0F1726" stroke="#1E293B"/>
+
+            <!-- Row 2 -->
+            <rect x="0" y="120" width="66" height="60" fill="#141E30" stroke="#1E293B"/>
+            <rect x="66" y="120" width="66" height="60" fill="#0F1726" stroke="#1E293B"/>
+            <rect x="132" y="120" width="66" height="60" fill="#141E30" stroke="#1E293B"/>
+            <rect x="198" y="120" width="66" height="60" fill="#0F1726" stroke="#1E293B"/>
+            <rect x="264" y="120" width="66" height="60" fill="#141E30" stroke="#1E293B"/>
+
+            <!-- Row 3 -->
+            <rect x="0" y="180" width="66" height="60" fill="#0F1726" stroke="#1E293B"/>
+            <rect x="66" y="180" width="66" height="60" fill="#141E30" stroke="#1E293B"/>
+            <!-- Emerald Home Base Square -->
+            <rect x="132" y="180" width="66" height="60" fill="#062E22" stroke="#10B981" stroke-width="1.5"/>
+            <text x="165" y="215" text-anchor="middle" fill="#6EE7B7" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="800" letter-spacing="1">OCTI</text>
+            <rect x="198" y="180" width="66" height="60" fill="#141E30" stroke="#1E293B"/>
+            <rect x="264" y="180" width="66" height="60" fill="#0F1726" stroke="#1E293B"/>
+
+            <!-- Board Coordinates -->
+            <g fill="#64748B" font-family="ui-monospace, SFMono-Regular, monospace" font-size="10" font-weight="600">
+              <text x="-12" y="34">4</text>
+              <text x="-12" y="94">3</text>
+              <text x="-12" y="154">2</text>
+              <text x="-12" y="214">1</text>
+              <text x="33" y="254" text-anchor="middle">A</text>
+              <text x="99" y="254" text-anchor="middle">B</text>
+              <text x="165" y="254" text-anchor="middle">C</text>
+              <text x="231" y="254" text-anchor="middle">D</text>
+              <text x="297" y="254" text-anchor="middle">E</text>
+            </g>
+
+            <!-- Jump Trajectory Arc & Capture Reticle -->
+            <circle cx="165" cy="150" r="30" fill="url(#goldJumpGlow)"/>
+            <path d="M 99 136 Q 165 72 231 136" fill="none" stroke="#E5C158" stroke-width="2.5" stroke-dasharray="5 4" stroke-linecap="round"/>
+            <circle cx="231" cy="150" r="18" fill="none" stroke="#10B981" stroke-width="1.8" stroke-dasharray="3 3"/>
+            <polygon points="228,136 235,138 231,145" fill="#E5C158"/>
+
+            <!-- Captured Ruby Pod in C2 (Jumped) -->
+            <g transform="translate(165, 150)">
+              <circle cx="0" cy="0" r="24" fill="none" stroke="#EF4444" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <line x1="-28" y1="0" x2="-22" y2="0" stroke="#EF4444" stroke-width="1.8"/>
+              <line x1="22" y1="0" x2="28" y2="0" stroke="#EF4444" stroke-width="1.8"/>
+              <line x1="0" y1="-28" x2="0" y2="-22" stroke="#EF4444" stroke-width="1.8"/>
+              <line x1="0" y1="22" x2="0" y2="28" stroke="#EF4444" stroke-width="1.8"/>
+              <line x1="0" y1="12" x2="0" y2="21" stroke="#E5C158" stroke-width="3" stroke-linecap="round"/>
+              <polygon points="-6,-14 6,-14 14,-6 14,6 6,14 -6,14 -14,6 -14,-6" fill="#F43F5E" stroke="#FDA4AF" stroke-width="1.5"/>
+              <circle cx="0" cy="0" r="6" fill="#881337"/>
+            </g>
+
+            <!-- Jumping Emerald Pod in B2 (Jumper) -->
+            <g transform="translate(99, 150)">
+              <line x1="10" y1="-10" x2="20" y2="-20" stroke="#E5C158" stroke-width="3.5" stroke-linecap="round"/>
+              <line x1="14" y1="0" x2="24" y2="0" stroke="#E5C158" stroke-width="3.5" stroke-linecap="round"/>
+              <line x1="0" y1="-14" x2="0" y2="-23" stroke="#E5C158" stroke-width="3.5" stroke-linecap="round"/>
+              <polygon points="-6,-14 6,-14 14,-6 14,6 6,14 -6,14 -14,6 -14,-6" fill="#10B981" stroke="#6EE7B7" stroke-width="1.5"/>
+              <circle cx="0" cy="0" r="6" fill="#064E3B"/>
+            </g>
+
+            <!-- Second Ruby Pod at D3 (Advancing) -->
+            <g transform="translate(231, 90)">
+              <line x1="0" y1="14" x2="0" y2="23" stroke="#E5C158" stroke-width="3" stroke-linecap="round"/>
+              <line x1="-10" y1="10" x2="-18" y2="18" stroke="#E5C158" stroke-width="3" stroke-linecap="round"/>
+              <polygon points="-6,-14 6,-14 14,-6 14,6 6,14 -6,14 -14,6 -14,-6" fill="#F43F5E" stroke="#FDA4AF" stroke-width="1.5"/>
+              <circle cx="0" cy="0" r="6" fill="#881337"/>
+            </g>
+
+            <!-- Infiltrating Emerald Pod at C4 attacking Ruby Base! -->
+            <g transform="translate(165, 30)">
+              <circle cx="0" cy="0" r="26" fill="url(#podGlowEmerald)"/>
+              <line x1="0" y1="-14" x2="0" y2="-22" stroke="#FDE047" stroke-width="3.5" stroke-linecap="round"/>
+              <polygon points="-6,-14 6,-14 14,-6 14,6 6,14 -6,14 -14,6 -14,-6" fill="#10B981" stroke="#FDE047" stroke-width="2"/>
+              <circle cx="0" cy="0" r="6" fill="#064E3B"/>
+            </g>
+          </g>
+        </svg>
       </div>
     </div>
   </div>
@@ -1144,26 +1444,69 @@ tr.active-ply {
     <h2>Platform Features</h2>
     <div class="features-grid">
       <div class="feature-card">
+        <div class="feature-icon-wrap" style="background:rgba(16,185,129,0.12);">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="18" height="18" rx="3" stroke="#10B981" stroke-width="1.8"/>
+            <path d="M3 9H21M3 15H21M9 3V21M15 3V21" stroke="#10B981" stroke-width="1.4" stroke-opacity="0.6"/>
+            <circle cx="9" cy="9" r="2.5" fill="#10B981"/>
+            <circle cx="15" cy="15" r="2.5" fill="#F43F5E"/>
+          </svg>
+        </div>
         <h3>Web Player (2P / OFK / 4P)</h3>
         <p>Play locally against asynchronous minimax JS robots (0% server load) or join online multiplayer tables and observe active matches.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon-wrap" style="background:rgba(56,189,248,0.12);">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="8" r="4" stroke="#0284C7" stroke-width="1.8"/>
+            <path d="M4 20C4 16.5 7.5 14 12 14C16.5 14 20 16.5 20 20" stroke="#0284C7" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
         <h3>Registered Players &amp; Profiles</h3>
         <p>Public member directory, detailed player dossiers, Elo rating curves, win/loss breakdowns, and linked Google authentication.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon-wrap" style="background:rgba(200,162,83,0.15);">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="9" stroke="#C8A253" stroke-width="1.8"/>
+            <path d="M12 7V12L15.5 14" stroke="#C8A253" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M5 2.5L2 5.5L5 8.5" stroke="#C8A253" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
         <h3>Game Archive &amp; Replays</h3>
         <p>Comprehensive transcript dataset with step-by-step visual move replays, ply timeline navigation, AI search metrics, and NDJSON exports.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon-wrap" style="background:rgba(245,158,11,0.12);">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 9V4H18V9C18 12.3 15.3 15 12 15C8.7 15 6 12.3 6 9Z" stroke="#D97706" stroke-width="1.8"/>
+            <path d="M6 6H3C3 9 5 11 7 11.5M18 6H21C21 9 19 11 17 11.5M12 15V19M8 21H16" stroke="#D97706" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
         <h3>Global ELO Leaderboard</h3>
         <p>Official rankings across 2-Player (9x9 3-Base), 4-Player, and OCTI for Kids (6x7) modes updated continuously.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon-wrap" style="background:rgba(168,85,247,0.12);">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="5" y="7" width="14" height="12" rx="2" stroke="#9333EA" stroke-width="1.8"/>
+            <circle cx="9" cy="12" r="1.5" fill="#9333EA"/>
+            <circle cx="15" cy="12" r="1.5" fill="#9333EA"/>
+            <path d="M9 16H15M12 3V7M2 13H5M19 13H22" stroke="#9333EA" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
         <h3>Bot &amp; Robot Token Registry</h3>
         <p>Registered players can register up to 3 automated bots, generate secret bearer tokens, and compete programmatically via the table API.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon-wrap" style="background:rgba(59,130,246,0.12);">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="4" width="14" height="10" rx="1.5" stroke="#2563EB" stroke-width="1.8"/>
+            <path d="M5 17H13M9 14V17" stroke="#2563EB" stroke-width="1.8" stroke-linecap="round"/>
+            <rect x="15" y="9" width="7" height="12" rx="1.5" stroke="#2563EB" stroke-width="1.8"/>
+            <line x1="18" y1="18" x2="19" y2="18" stroke="#2563EB" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
         <h3>Desktop &amp; Android Apps</h3>
         <p>Native client applications featuring hardware-accelerated 3D boards, AI engine analysis, and offline matches. Download: <a href="/software/windows/" target="_blank">Windows Desktop</a> | <a href="/software/android/" target="_blank">Android APK</a></p>
       </div>
@@ -1174,18 +1517,107 @@ tr.active-ply {
     <h2>How to Play OCTI</h2>
     <div class="rules-grid">
       <div class="rule-box">
+        <div class="rule-diagram-wrap">
+          <svg viewBox="0 0 240 110" xmlns="http://www.w3.org/2000/svg">
+            <rect width="240" height="110" fill="#0B0F17"/>
+            <g transform="translate(70, 55)">
+              <circle cx="0" cy="-30" r="3" fill="#E5C158"/>
+              <circle cx="21" cy="-21" r="3" fill="#64748B"/>
+              <circle cx="30" cy="0" r="3" fill="#64748B"/>
+              <circle cx="21" cy="21" r="3" fill="#64748B"/>
+              <circle cx="0" cy="30" r="3" fill="#64748B"/>
+              <circle cx="-21" cy="21" r="3" fill="#64748B"/>
+              <circle cx="-30" cy="0" r="3" fill="#64748B"/>
+              <circle cx="-21" cy="-21" r="3" fill="#64748B"/>
+              <polygon points="-10,-24 10,-24 24,-10 24,10 10,24 -10,24 -24,10 -24,-10" fill="#10B981" stroke="#34D399" stroke-width="2"/>
+              <circle cx="0" cy="0" r="9" fill="#064E3B"/>
+              <text x="0" y="3" text-anchor="middle" fill="#A7F3D0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="700">8 SOX</text>
+            </g>
+            <g transform="translate(145, 30)">
+              <rect x="0" y="0" width="75" height="24" rx="4" fill="#1E293B" stroke="#334155"/>
+              <polygon points="12,12 16,8 20,12 16,16" fill="#10B981"/>
+              <text x="32" y="16" fill="#E2E8F0" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11" font-weight="700">Pods: 4</text>
+            </g>
+            <g transform="translate(145, 60)">
+              <rect x="0" y="0" width="75" height="24" rx="4" fill="#1E293B" stroke="#334155"/>
+              <line x1="12" y1="12" x2="20" y2="12" stroke="#E5C158" stroke-width="3" stroke-linecap="round"/>
+              <text x="32" y="16" fill="#E2E8F0" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11" font-weight="700">Prongs: 25</text>
+            </g>
+          </svg>
+        </div>
         <h4>1. Pods &amp; Reserves</h4>
         <p>Players begin with pods on their home base squares and in reserve. Pods are octagonal pieces that can hold prongs and stack upon each other.</p>
       </div>
       <div class="rule-box">
+        <div class="rule-diagram-wrap">
+          <svg viewBox="0 0 240 110" xmlns="http://www.w3.org/2000/svg">
+            <rect width="240" height="110" fill="#0B0F17"/>
+            <g transform="translate(120, 52)">
+              <line x1="0" y1="-18" x2="0" y2="-38" stroke="#E5C158" stroke-width="3.5" stroke-linecap="round"/>
+              <polygon points="-4,-35 0,-43 4,-35" fill="#FDE047"/>
+              <line x1="13" y1="-13" x2="27" y2="-27" stroke="#E5C158" stroke-width="3.5" stroke-linecap="round"/>
+              <polygon points="21,-29 31,-31 29,-21" fill="#FDE047"/>
+              <line x1="18" y1="0" x2="38" y2="0" stroke="#E5C158" stroke-width="3.5" stroke-linecap="round"/>
+              <polygon points="35,-4 43,0 35,4" fill="#FDE047"/>
+              <line x1="-13" y1="-13" x2="-27" y2="-27" stroke="#E5C158" stroke-width="3.5" stroke-linecap="round"/>
+              <polygon points="-29,-21 -31,-31 -21,-29" fill="#FDE047"/>
+              <polygon points="-8,-18 8,-18 18,-8 18,8 8,18 -8,18 -18,8 -18,-8" fill="#10B981" stroke="#34D399" stroke-width="2"/>
+              <circle cx="0" cy="0" r="7" fill="#064E3B"/>
+            </g>
+            <text x="120" y="98" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600">Prongs define Move &amp; Jump Vectors</text>
+          </svg>
+        </div>
         <h4>2. Prongs &amp; Direction</h4>
         <p>On your turn, you can allocate a directional prong (North, North-East, East, etc.) to one of your pods, granting movement and jumping vectors.</p>
       </div>
       <div class="rule-box">
+        <div class="rule-diagram-wrap">
+          <svg viewBox="0 0 240 110" xmlns="http://www.w3.org/2000/svg">
+            <rect width="240" height="110" fill="#0B0F17"/>
+            <g transform="translate(15, 14)">
+              <rect x="10" y="10" width="60" height="55" fill="#141E30" stroke="#1E293B" rx="4"/>
+              <rect x="75" y="10" width="60" height="55" fill="#0F1726" stroke="#1E293B" rx="4"/>
+              <rect x="140" y="10" width="60" height="55" fill="#141E30" stroke="#1E293B" rx="4"/>
+              <path d="M 40 25 Q 105 -5 170 25" fill="none" stroke="#E5C158" stroke-width="2.5" stroke-dasharray="4 3" stroke-linecap="round"/>
+              <polygon points="166,22 173,27 167,31" fill="#E5C158"/>
+              <g transform="translate(40, 37)">
+                <line x1="8" y1="0" x2="16" y2="0" stroke="#E5C158" stroke-width="3" stroke-linecap="round"/>
+                <polygon points="-5,-12 5,-12 12,-5 12,5 5,12 -5,12 -12,5 -12,-5" fill="#10B981" stroke="#34D399" stroke-width="1.5"/>
+                <circle cx="0" cy="0" r="4.5" fill="#064E3B"/>
+              </g>
+              <g transform="translate(105, 37)">
+                <circle cx="0" cy="0" r="18" fill="none" stroke="#EF4444" stroke-width="1.5" stroke-dasharray="3 2"/>
+                <polygon points="-5,-12 5,-12 12,-5 12,5 5,12 -5,12 -12,5 -12,-5" fill="#F43F5E" stroke="#FDA4AF" stroke-width="1.5"/>
+                <circle cx="0" cy="0" r="4.5" fill="#881337"/>
+              </g>
+              <g transform="translate(170, 37)">
+                <circle cx="0" cy="0" r="14" fill="none" stroke="#10B981" stroke-width="1.5" stroke-dasharray="3 2"/>
+                <text x="0" y="4" text-anchor="middle" fill="#34D399" font-family="ui-monospace, SFMono-Regular, monospace" font-size="10" font-weight="700">LAND</text>
+              </g>
+              <text x="105" y="82" text-anchor="middle" fill="#FDE68A" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600">Jump over Pod &bull; Optional Capture</text>
+            </g>
+          </svg>
+        </div>
         <h4>3. Move, Jump &amp; Capture</h4>
         <p>Pods can step into adjacent empty squares or jump over adjacent pods along prong directions. Jumping enemy pods allows capturing or stacking.</p>
       </div>
       <div class="rule-box">
+        <div class="rule-diagram-wrap">
+          <svg viewBox="0 0 240 110" xmlns="http://www.w3.org/2000/svg">
+            <rect width="240" height="110" fill="#0B0F17"/>
+            <g transform="translate(120, 54)">
+              <rect x="-42" y="-30" width="84" height="60" fill="#2E0D19" stroke="#F43F5E" stroke-width="2" rx="6"/>
+              <text x="0" y="24" text-anchor="middle" fill="#FDA4AF" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="800" letter-spacing="1">OCTI BASE</text>
+              <path d="M -16 -24 L -10 -18 L 0 -26 L 10 -18 L 16 -24 L 14 -12 L -14 -12 Z" fill="#FDE047" stroke="#C8A253" stroke-width="1"/>
+              <circle cx="-16" cy="-25" r="1.5" fill="#FFF"/>
+              <circle cx="0" cy="-27" r="1.5" fill="#FFF"/>
+              <circle cx="16" cy="-25" r="1.5" fill="#FFF"/>
+              <polygon points="-7,-15 7,-15 15,-7 15,7 7,15 -7,15 -15,7 -15,-7" fill="#10B981" stroke="#FDE047" stroke-width="2"/>
+              <circle cx="0" cy="0" r="5" fill="#064E3B"/>
+            </g>
+            <text x="120" y="100" text-anchor="middle" fill="#6EE7B7" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="700">Infiltrate Opponent Base = Instant Win</text>
+          </svg>
+        </div>
         <h4>4. Victory Conditions</h4>
         <p>Win immediately by moving any of your pods onto any opponent's home base square, or by capturing all opponent pods so none remain.</p>
       </div>
@@ -1213,18 +1645,30 @@ tr.active-ply {
     <div id="play-local-panel">
       <!-- Tabletop 3-column stage -->
       <div class="web-tabletop-wrap">
-        <!-- Left Column: Reserve HUD Cards (Player B top, Player A bottom, Quick Guide middle) -->
+        <!-- Left Column: Reserve HUD Cards (Player B top, Player A bottom, Table/Match Info Card middle) -->
         <div id="web-play-reserves-col">
           <div id="web-res-card-b" class="web-res-card"></div>
           <div id="web-res-card-c" class="web-res-card" style="display:none;"></div>
           <div id="web-res-card-d" class="web-res-card" style="display:none;"></div>
-          <div class="web-quick-guide-card panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;color:#94A3B8;font-size:11px;line-height:1.4;">
-            <strong style="color:#C8A253;font-size:12px;margin-bottom:4px;display:block;">Quick Guide</strong>
-            <div>&bull; <strong>Right-click / Double-click:</strong> Zoom Square</div>
-            <div>&bull; <strong>Click Pod:</strong> Guided Move / Jump</div>
-            <div>&bull; <strong>Click Outer Socket:</strong> Add Prong</div>
-            <div>&bull; <strong>Wheel / Pinch:</strong> Zoom Board (1.0x&ndash;3.0x)</div>
-            <div>&bull; <strong>Drag Empty Space:</strong> Rotate 90&deg; Snap</div>
+          <div id="web-table-info-card" class="panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;color:#F8FAFC;">
+            <div id="web-play-online-status-bar" style="display:none;align-items:center;justify-content:space-between;background:#1E293B;border:1px solid #334155;border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:12px;gap:6px;flex-wrap:wrap;">
+              <strong id="web-play-online-table-title" style="color:#38BDF8;">Online Table</strong>
+              <span id="web-play-online-ttl-badge" class="badge" style="background:#0F172A;color:#FDE047;border:1px solid #C8A253;font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px;" title="60-minute move-inactivity table countdown">Idle TTL: 60:00</span>
+              <span id="web-play-online-role-badge" class="badge" style="background:#0F172A;color:#E2E8F0;font-size:11px;">Observer</span>
+            </div>
+            <div id="web-play-online-table-meta" class="dim" style="display:none;font-size:11.5px;margin-bottom:6px;line-height:1.35;color:#94A3B8;"></div>
+            <div id="web-play-local-summary" class="dim" style="font-size:11.5px;margin-bottom:6px;line-height:1.35;color:#94A3B8;">Local Match &bull; vs JS Robot</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span id="web-play-mode-badge" class="badge" style="background:#1E293B;color:#94A3B8;">2P (9x9)</span>
+              <span id="web-play-turn-badge" class="badge" style="background:#064E3B;color:#6EE7B7;">Player A Turn</span>
+            </div>
+            <div id="web-play-clock-bar" style="display:flex;gap:6px;margin-top:4px;">
+              <div id="web-clock-a" style="flex:1;background:#064E3B;color:#ECFDF5;padding:4px 6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;">A: --:--</div>
+              <div id="web-clock-b" style="flex:1;background:#881337;color:#FFF1F2;padding:4px 6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;">B: --:--</div>
+              <div id="web-clock-c" style="display:none;flex:1;background:#1E3A8A;color:#EFF6FF;padding:4px 6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;">C: --:--</div>
+              <div id="web-clock-d" style="display:none;flex:1;background:#78350F;color:#FFFBEB;padding:4px 6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;">D: --:--</div>
+            </div>
+            <div id="web-play-archive-status" class="dim" style="margin-top:4px;font-size:11px;"></div>
           </div>
           <div id="web-res-card-a" class="web-res-card"></div>
         </div>
@@ -1291,29 +1735,9 @@ tr.active-ply {
 
         <!-- Right Column: Sidebar (50/50 Desktop Split: Top Half Status/History/Actions, Bottom Half Table Chat) -->
         <div id="web-play-side-col">
-          <!-- Top Half (50%): Status & Clocks, Move History + VCR, Match Actions -->
+          <!-- Top Half (50%): Move History + VCR, Match Actions -->
           <div id="web-side-top-half" style="flex:1 1 50%;min-height:0;display:flex;flex-direction:column;gap:8px;">
-            <!-- Top Card: Match Status & Clocks -->
-            <div class="panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;color:#F8FAFC;">
-              <div id="web-play-online-status-bar" style="display:none;align-items:center;justify-content:space-between;background:#1E293B;border:1px solid #334155;border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:12px;">
-                <strong id="web-play-online-table-title" style="color:#38BDF8;">Online Table</strong>
-                <span id="web-play-online-ttl-badge" class="badge" style="background:#0F172A;color:#FDE047;border:1px solid #C8A253;font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px;" title="60-minute move-inactivity table countdown">Idle TTL: 60:00</span>
-                <span id="web-play-online-role-badge" class="badge" style="background:#0F172A;color:#E2E8F0;font-size:11px;">Observer</span>
-              </div>
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                <span id="web-play-mode-badge" class="badge" style="background:#1E293B;color:#94A3B8;">2P (9x9)</span>
-                <span id="web-play-turn-badge" class="badge" style="background:#064E3B;color:#6EE7B7;">Player A Turn</span>
-              </div>
-              <div id="web-play-clock-bar" style="display:flex;gap:6px;margin-top:4px;">
-                <div id="web-clock-a" style="flex:1;background:#064E3B;color:#ECFDF5;padding:4px 6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;">A: --:--</div>
-                <div id="web-clock-b" style="flex:1;background:#881337;color:#FFF1F2;padding:4px 6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;">B: --:--</div>
-                <div id="web-clock-c" style="display:none;flex:1;background:#1E3A8A;color:#EFF6FF;padding:4px 6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;">C: --:--</div>
-                <div id="web-clock-d" style="display:none;flex:1;background:#78350F;color:#FFFBEB;padding:4px 6px;border-radius:6px;text-align:center;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;">D: --:--</div>
-              </div>
-              <div id="web-play-archive-status" class="dim" style="margin-top:4px;font-size:11px;"></div>
-            </div>
-
-            <!-- Middle Card: Color-Coded Move History & VCR Replay -->
+            <!-- Color-Coded Move History & VCR Replay -->
             <div class="panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;flex:1;min-height:0;display:flex;flex-direction:column;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
                 <strong style="color:#C8A253;font-size:13px;">Move History</strong>
@@ -1452,6 +1876,17 @@ tr.active-ply {
           </table>
         </div>
 
+        <div class="panel" style="margin-top:12px;padding:12px;" id="web-lobby-chat-box">
+          <h4 style="margin:0 0 8px 0;font-size:14px;">Lobby Chat</h4>
+          <div id="web-lobby-chat-log" style="height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:8px;background:#fff;margin-bottom:8px;font-size:13px;">
+            <div class="dim">Connected to lobby chat.</div>
+          </div>
+          <div class="row" style="margin:0;">
+            <input id="web-chat-input" placeholder="Sign in to chat (observing as anonymous-127.0.0.1)" style="flex:1;" disabled>
+            <button type="button" class="btn" id="btn-web-chat-send" disabled>Send</button>
+          </div>
+        </div>
+
         <div id="web-online-users-section" class="panel" style="margin-top:12px;padding:12px;">
           <div class="web-online-users-header">
             <h4 style="margin:0;font-size:14px;">Connected Users (<span id="web-online-users-count">0</span>)</h4>
@@ -1460,25 +1895,6 @@ tr.active-ply {
           <div id="web-online-users-list">
             <div class="dim" style="font-size:12.5px;">No connected users right now.</div>
           </div>
-        </div>
-
-        <div class="cols" style="margin-top:18px;">
-          <div class="col-side" style="flex:1;" id="web-lobby-chat-box">
-            <h4>Lobby Chat</h4>
-            <div id="web-lobby-chat-log" style="height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:8px;background:#fff;margin-bottom:8px;font-size:13px;">
-              <div class="dim">Connected to lobby chat.</div>
-            </div>
-          </div>
-          <div class="col-side" style="flex:1;">
-            <h4>Game Room Chat</h4>
-            <div id="web-room-chat-log" style="height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:8px;background:#fff;margin-bottom:8px;font-size:13px;">
-              <div class="dim">No active table selected.</div>
-            </div>
-          </div>
-        </div>
-        <div class="row">
-          <input id="web-chat-input" placeholder="Sign in to chat (observing as anonymous-127.0.0.1)" style="flex:1;" disabled>
-          <button type="button" class="btn" id="btn-web-chat-send" disabled>Send</button>
         </div>
       </div>
     </div>
@@ -6229,6 +6645,7 @@ window.addEventListener("hashchange", checkHash);
  * Tab 1: Home (Default Top Page)
  * ========================================================================= */
 $("home-cta-play").addEventListener("click", function () { switchTab("play"); });
+if ($("home-cta-online")) $("home-cta-online").addEventListener("click", function () { switchTab("online"); });
 $("home-cta-users").addEventListener("click", function () { switchTab("users"); });
 $("home-cta-account").addEventListener("click", function () { switchTab("account"); });
 
@@ -8279,6 +8696,43 @@ WebMoveComposer.prototype.cancelAndRollback = function () {
 
 
 
+function seatLetterOf(seat) {
+  return seat === 1 ? "A" : (seat === 2 ? "B" : (seat === 3 ? "C" : (seat === 4 ? "D" : String(seat))));
+}
+
+function isSeatOccupiedInView(s) {
+  if (!s) return false;
+  return Boolean(s.occupied || s.player_uuid || s.user_id || s.handle || s.is_robot || s.robot_uuid);
+}
+
+function seatDisabledReason(view, seatNum) {
+  if (!currentUser) return "Sign in to take a seat";
+  if (!view) return "Loading table state...";
+  var phase = view.phase || "WAITING_FOR_PLAYERS";
+  if (phase !== "WAITING_FOR_PLAYERS") return "Match already in progress";
+  if (activeOnlineViewerSeat > 0) {
+    return activeOnlineViewerSeat === seatNum
+      ? "You are already seated here"
+      : ("You are already seated in Seat " + activeOnlineViewerSeat + " (" + seatLetterOf(activeOnlineViewerSeat) + ")");
+  }
+  var viewRoomId = view.room_id || view.table_id || activeOnlineGameId || "";
+  if (currentMyTableRoomId && viewRoomId && currentMyTableRoomId !== viewRoomId) {
+    return "You are already seated at Table #" + currentMyTableRoomId;
+  }
+  var seats = Array.isArray(view.seats) ? view.seats : [];
+  for (var i = 0; i < seats.length; i++) {
+    var st = seats[i];
+    if ((st.seat || (i + 1)) === seatNum && isSeatOccupiedInView(st)) {
+      return "Seat " + seatNum + " (" + seatLetterOf(seatNum) + ") is occupied by @" + (st.handle || "player");
+    }
+  }
+  return "";
+}
+
+function canViewerSitAtSeat(view, seatNum) {
+  return seatDisabledReason(view, seatNum) === "";
+}
+
 /* --- Vector Reserve HUD Rendering --- */
 function renderWebReserveCard(player, cardEl, state, isTurn) {
   if (!cardEl) return;
@@ -8305,32 +8759,41 @@ function renderWebReserveCard(player, cardEl, state, isTurn) {
   titleSpan.appendChild(dotSpan);
 
   var nameText = "PLAYER " + player;
-  if (activeOnlineGameId && activeOnlineRoomView && Array.isArray(activeOnlineRoomView.seats)) {
+  if (activeOnlineGameId) {
     var seatNum = (player === "A") ? 1 : ((player === "B") ? 2 : ((player === "C") ? 3 : 4));
     var foundSeat = null;
-    for (var si = 0; si < activeOnlineRoomView.seats.length; si++) {
-      if ((activeOnlineRoomView.seats[si].seat || (si + 1)) === seatNum) {
-        foundSeat = activeOnlineRoomView.seats[si];
-        break;
+    if (activeOnlineRoomView && Array.isArray(activeOnlineRoomView.seats)) {
+      for (var si = 0; si < activeOnlineRoomView.seats.length; si++) {
+        if ((activeOnlineRoomView.seats[si].seat || (si + 1)) === seatNum) {
+          foundSeat = activeOnlineRoomView.seats[si];
+          break;
+        }
       }
     }
-    if (foundSeat && foundSeat.handle) {
-      nameText = "@" + foundSeat.handle + (foundSeat.is_robot ? " [BOT]" : "") + " (" + player + ")";
+    if (isSeatOccupiedInView(foundSeat)) {
+      nameText = "@" + (foundSeat.handle || "player") + (foundSeat.is_robot ? " [BOT]" : "") + " (" + player + ")";
     } else {
       nameText = "Open Seat (" + player + ")";
     }
-    if ((!foundSeat || !foundSeat.occupied) && activeOnlineRoomView.phase === "WAITING_FOR_PLAYERS" && activeOnlineViewerSeat === 0 && currentUser) {
+    if ((!activeOnlineRoomView || (activeOnlineRoomView.phase || "WAITING_FOR_PLAYERS") === "WAITING_FOR_PLAYERS") && !isSeatOccupiedInView(foundSeat)) {
       var sitHdrBtn = document.createElement("button");
       sitHdrBtn.type = "button";
-      sitHdrBtn.className = "btn btn-primary";
+      sitHdrBtn.className = "btn btn-primary btn-seat-action";
       sitHdrBtn.style.padding = "2px 8px";
       sitHdrBtn.style.fontSize = "11px";
       sitHdrBtn.style.marginLeft = "8px";
       sitHdrBtn.textContent = "Sit";
-      sitHdrBtn.addEventListener("click", function (ev) {
-        ev.stopPropagation();
-        sitAtOnlineTable(activeOnlineGameId, seatNum);
-      });
+      var canSit = canViewerSitAtSeat(activeOnlineRoomView, seatNum);
+      sitHdrBtn.disabled = !canSit;
+      sitHdrBtn.title = canSit
+        ? ("Take Seat " + seatNum + " (" + player + ")")
+        : seatDisabledReason(activeOnlineRoomView, seatNum);
+      if (canSit) {
+        sitHdrBtn.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          sitAtOnlineTable(activeOnlineGameId, seatNum);
+        });
+      }
       header.appendChild(sitHdrBtn);
     }
   } else if (localMatchConfig.playMode === "bot") {
@@ -9960,6 +10423,9 @@ function prepareLocalMatchInitialState() {
   playVcrIndex = 0;
   lastMoveHighlightSquares = [];
 
+  activeOnlineChatMessages = [{ handle: "bot", is_robot: true, text: "Table ready. Click Start Match or type @bot help for commands.", at_ms: Date.now(), scope: "ALL" }];
+  renderRoomChatLogs();
+
   var startOverlay = document.getElementById("web-start-match-overlay");
   if (startOverlay) startOverlay.style.display = "flex";
 
@@ -9995,6 +10461,14 @@ if (btnStartMatch) {
     var startOverlay = document.getElementById("web-start-match-overlay");
     if (startOverlay) startOverlay.style.display = "none";
     matchStarted = true;
+
+    activeOnlineChatMessages.push({
+      handle: (currentUser && currentUser.handle) ? currentUser.handle : "You",
+      is_event: true,
+      text: "started the match",
+      at_ms: Date.now()
+    });
+    renderRoomChatLogs();
 
     // Reset clocks
     var initialSec = 0;
@@ -10063,6 +10537,21 @@ if (btnStartMatch) {
 function updatePlaySidebar() {
   if (!activePlayState) return;
   var s = activePlayState;
+
+  var onlineBar = document.getElementById("web-play-online-status-bar");
+  var onlineMetaEl = document.getElementById("web-play-online-table-meta");
+  var localSumEl = document.getElementById("web-play-local-summary");
+  if (!activeOnlineGameId) {
+    if (onlineBar) onlineBar.style.display = "none";
+    if (onlineMetaEl) onlineMetaEl.style.display = "none";
+    if (localSumEl) {
+      localSumEl.style.display = "block";
+      var botSummary = (localMatchConfig.playMode === "bot" ? ("vs JS Robot (Lv" + localMatchConfig.botDifficulty + ")") : "Pass & Play");
+      var timeSummary = (localMatchConfig.timeControl === "untimed" ? "Untimed" : localMatchConfig.timeControl);
+      localSumEl.textContent = "Local Match \u2022 " + botSummary + " \u2022 " + timeSummary;
+    }
+  }
+
   var is4p = (s.mode === "4" || s.mode === "4P");
   var modeBadge = document.getElementById("web-play-mode-badge");
   if (modeBadge) {
@@ -10531,13 +11020,20 @@ if (btnUndo) {
       return;
     }
     if (activeOnlineGameId) {
-      api("/api/v1/games/" + encodeURIComponent(activeOnlineGameId) + "/action", {
+      var targetRoom = activeOnlineGameId;
+      var hasPendingUndo = activeOnlineRoomView && Array.isArray(activeOnlineRoomView.proposals) &&
+        activeOnlineRoomView.proposals.some(function (p) {
+          return (p.type === "UNDO_REQUEST" || p.action === "UNDO_REQUEST" || p.proposal === "UNDO_REQUEST") &&
+            (!currentUser || !currentUser.uuid || p.by_uuid !== currentUser.uuid);
+        });
+      var undoAction = hasPendingUndo ? "accept_undo" : "request_undo";
+      api("/api/v1/games/" + encodeURIComponent(targetRoom) + "/action", {
         method: "POST",
-        body: { action: "request_undo" }
+        body: { action: undoAction }
       }).then(function () {
-        pollOnlineGameEvents(activeOnlineGameId);
+        pollOnlineGameEvents(targetRoom);
       }).catch(function (e) {
-        alert("Undo request failed: " + e.message);
+        alert((undoAction === "accept_undo" ? "Accept undo" : "Undo request") + " failed: " + e.message);
       });
       return;
     }
@@ -10545,6 +11041,14 @@ if (btnUndo) {
     if (goOverlay) goOverlay.style.display = "none";
     var thinkOverlay = document.getElementById("web-thinking-overlay");
     if (thinkOverlay) thinkOverlay.style.display = "none";
+
+    activeOnlineChatMessages.push({
+      handle: (currentUser && currentUser.handle) ? currentUser.handle : "You",
+      is_event: true,
+      text: "undid the last move",
+      at_ms: Date.now()
+    });
+    renderRoomChatLogs();
 
     if (localMatchConfig.playMode === "bot") {
       while (playMatchPlies.length > 1) {
@@ -10592,13 +11096,19 @@ if (btnDraw) {
     if (!activePlayState || activePlayState.status === "O" || activePlayState.status === "R") return;
     if (activeOnlineGameId) {
       var targetRoom = activeOnlineGameId;
-      api("/api/v1/games/" + encodeURIComponent(targetRoom) + "/proposals", {
+      var hasPendingDraw = activeOnlineRoomView && Array.isArray(activeOnlineRoomView.proposals) &&
+        activeOnlineRoomView.proposals.some(function (p) {
+          return (p.type === "DRAW_OFFER" || p.action === "DRAW_OFFER" || p.proposal === "DRAW_OFFER") &&
+            (!currentUser || !currentUser.uuid || p.by_uuid !== currentUser.uuid);
+        });
+      var drawAction = hasPendingDraw ? "accept_draw" : "offer_draw";
+      api("/api/v1/games/" + encodeURIComponent(targetRoom) + "/action", {
         method: "POST",
-        body: { type: "DRAW_OFFER" }
+        body: { action: drawAction }
       }).then(function () {
         pollOnlineGameEvents(targetRoom);
       }).catch(function (e) {
-        alert("Draw offer failed: " + e.message);
+        alert((drawAction === "accept_draw" ? "Accept draw" : "Draw offer") + " failed: " + e.message);
       });
       return;
     }
@@ -10620,6 +11130,13 @@ if (btnDraw) {
       goSub.textContent = "MUTUAL AGREEMENT";
       goOverlay.style.display = "flex";
     }
+    activeOnlineChatMessages.push({
+      handle: (currentUser && currentUser.handle) ? currentUser.handle : "You",
+      is_event: true,
+      text: "declared the game a draw",
+      at_ms: Date.now()
+    });
+    renderRoomChatLogs();
     updatePlaySidebar();
   });
 }
@@ -10669,6 +11186,14 @@ if (btnResign) {
       goSub.textContent = "VICTORY BY RESIGNATION";
       goOverlay.style.display = "flex";
     }
+
+    activeOnlineChatMessages.push({
+      handle: (currentUser && currentUser.handle) ? currentUser.handle : "You",
+      is_event: true,
+      text: "has resigned the game",
+      at_ms: Date.now()
+    });
+    renderRoomChatLogs();
 
     updatePlaySidebar();
     renderPlayBoardCanvas();
@@ -10739,27 +11264,32 @@ function updateOnlineTableControls() {
 
     if (seatActionsEl) {
       clear(seatActionsEl);
-      if (activeOnlineRoomView && activeOnlineRoomView.phase === "WAITING_FOR_PLAYERS" && activeOnlineViewerSeat === 0 && currentUser) {
-        var openSeats = (activeOnlineRoomView.seats || []).filter(function (s) { return !s.occupied && s.type !== "AI"; });
-        if (openSeats.length > 0) {
-          seatActionsEl.style.display = "flex";
-          openSeats.forEach(function (s) {
-            var sNum = s.seat;
-            var sLet = seatLetterOf(sNum);
-            var sitBtn = el("button", "Sit Seat " + sNum + " (" + sLet + ")", "btn btn-primary");
-            sitBtn.style.flex = "1";
-            sitBtn.style.background = "#059669";
-            sitBtn.style.borderColor = "#10B981";
-            sitBtn.style.fontWeight = "700";
-            sitBtn.style.fontSize = "12px";
-            sitBtn.style.padding = "6px 8px";
-            sitBtn.addEventListener("click", function () {
-              sitAtOnlineTable(activeOnlineGameId, sNum);
-            });
-            seatActionsEl.appendChild(sitBtn);
-          });
-        } else {
-          seatActionsEl.style.display = "none";
+      if (activeOnlineGameId && (!activeOnlineRoomView || (activeOnlineRoomView.phase || "WAITING_FOR_PLAYERS") === "WAITING_FOR_PLAYERS") && activeOnlineViewerSeat === 0) {
+        var seatsTotal = 2;
+        if (activeOnlineRoomView && Array.isArray(activeOnlineRoomView.seats) && activeOnlineRoomView.seats.length > 0) {
+          seatsTotal = activeOnlineRoomView.seats.length;
+        } else if (activeOnlineRoomView && (activeOnlineRoomView.game_mode === "4P" || activeOnlineRoomView.ruleset === "4P" || activeOnlineRoomView.mode === "4P")) {
+          seatsTotal = 4;
+        }
+        seatActionsEl.style.display = "flex";
+        for (var sNum = 1; sNum <= seatsTotal; sNum++) {
+          var sLet = seatLetterOf(sNum);
+          var canSit = canViewerSitAtSeat(activeOnlineRoomView, sNum);
+          var sitBtn = el("button", "Sit Seat " + sNum + " (" + sLet + ")", "btn btn-primary btn-seat-action");
+          sitBtn.style.flex = "1";
+          sitBtn.style.fontWeight = "700";
+          sitBtn.style.fontSize = "12px";
+          sitBtn.style.padding = "6px 8px";
+          sitBtn.disabled = !canSit;
+          sitBtn.title = canSit ? ("Take Seat " + sNum + " (" + sLet + ")") : seatDisabledReason(activeOnlineRoomView, sNum);
+          (function (targetSeatNum, isEligible) {
+            if (isEligible) {
+              sitBtn.addEventListener("click", function () {
+                sitAtOnlineTable(activeOnlineGameId, targetSeatNum);
+              });
+            }
+          })(sNum, canSit);
+          seatActionsEl.appendChild(sitBtn);
         }
       } else {
         seatActionsEl.style.display = "none";
@@ -10861,11 +11391,176 @@ function buildInitialFenForRules(modeStr, basesNum, superProngsBool, edgelessBoo
   return "2:" + b + ":" + sp + ":" + ed + ":P:A:-:0:" + r2p + ":" + r2p + ":A33,A53,A73,B37,B57,B77";
 }
 
+function scrollChatLogsToBottom(els) {
+  var list = Array.isArray(els) ? els : [els];
+  list.forEach(function (el) {
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  });
+  if (typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(function () {
+      list.forEach(function (el) {
+        if (!el) return;
+        el.scrollTop = el.scrollHeight;
+      });
+    });
+  }
+}
+
+function proposalLabel(p) {
+  if (!p) return "proposal";
+  var s = String(p).toUpperCase();
+  if (s === "DRAW_OFFER" || s === "DRAW") return "draw offer";
+  if (s === "UNDO_REQUEST" || s === "UNDO") return "undo request";
+  if (s === "PAUSE_REQUEST" || s === "PAUSE") return "pause request";
+  if (s === "REMATCH_REQUEST" || s === "REMATCH") return "rematch request";
+  return String(p).toLowerCase().replace(/_/g, " ");
+}
+
+function formatRoomEventForChat(ev) {
+  if (!ev) return null;
+  var type = ev.type || "";
+  var base = {
+    seq: ev.seq,
+    at_ms: ev.at_ms || ev.created_at_ms || Date.now(),
+    handle: ev.handle || "table",
+    is_robot: !!ev.is_robot,
+    is_event: true,
+    text: ""
+  };
+
+  if (type === "OBSERVER_JOINED") {
+    base.handle = ev.handle || "observer";
+    base.text = "has joined the table";
+    return base;
+  }
+  if (type === "OBSERVER_LEFT") {
+    base.handle = ev.handle || "observer";
+    base.text = (ev.detail === "evicted" ? "was evicted from the table" : "has left the table");
+    return base;
+  }
+  if (type === "ROOM_CREATED") {
+    base.handle = ev.handle || "host";
+    base.text = "created the table";
+    return base;
+  }
+  if (type === "SEAT_JOINED") {
+    base.handle = ev.handle || "player";
+    base.text = "sat down as Player " + seatLetterOf(ev.seat || 1) + " (Seat " + (ev.seat || 1) + ")";
+    return base;
+  }
+  if (type === "SEAT_LEFT") {
+    base.handle = ev.handle || "player";
+    base.text = "has left the table" + (ev.seat ? (" (Seat " + ev.seat + ")") : "");
+    return base;
+  }
+  if (type === "SEAT_KICKED") {
+    base.handle = ev.handle || "host";
+    base.text = "removed " + (ev.target_handle ? ("@" + ev.target_handle) : "player") + " from Seat " + (ev.seat || "");
+    return base;
+  }
+  if (type === "HOST_CHANGED") {
+    base.handle = ev.handle || "host";
+    base.text = "is now the table host";
+    return base;
+  }
+  if (type === "GAME_STARTED") {
+    base.handle = "table";
+    base.text = "Match started" + (ev.detail ? (" (" + ev.detail + ")") : "");
+    return base;
+  }
+  if (type === "PROPOSAL_OFFERED") {
+    var p = ev.proposal || "";
+    if (p === "DRAW_OFFER") base.text = "offered a draw";
+    else if (p === "UNDO_REQUEST") base.text = "requested to undo the last move";
+    else if (p === "PAUSE_REQUEST") base.text = "requested to pause the game";
+    else if (p === "REMATCH_REQUEST") base.text = "requested a rematch";
+    else base.text = "offered a " + proposalLabel(p);
+    return base;
+  }
+  if (type === "PROPOSAL_ACCEPTED") {
+    base.text = "accepted the " + proposalLabel(ev.proposal);
+    return base;
+  }
+  if (type === "PROPOSAL_DECLINED") {
+    base.text = ((ev.note === "withdrawn") ? "withdrew the " : "declined the ") + proposalLabel(ev.proposal);
+    return base;
+  }
+  if (type === "PROPOSAL_EXPIRED") {
+    base.handle = "table";
+    base.text = "proposal (" + proposalLabel(ev.proposal) + ") expired";
+    return base;
+  }
+  if (type === "UNDO_APPLIED") {
+    base.handle = ev.handle || "player";
+    base.text = "undid move " + (ev.move || "");
+    return base;
+  }
+  if (type === "GAME_PAUSED") {
+    base.text = "paused the game";
+    return base;
+  }
+  if (type === "GAME_RESUMED") {
+    base.text = "resumed the game";
+    return base;
+  }
+  if (type === "REMATCH_CREATED") {
+    base.text = "started a rematch" + (ev.room_id ? (" in Table #" + ev.room_id) : "");
+    return base;
+  }
+  if (type === "GAME_OVER") {
+    if (ev.termination === "RESIGNATION") {
+      base.handle = ev.handle || "player";
+      base.text = "has resigned the game" + (ev.winner_seat ? (" \u2014 Player " + seatLetterOf(ev.winner_seat) + " wins!") : "");
+    } else if (ev.termination === "AGREED_DRAW") {
+      base.handle = ev.handle || "table";
+      base.text = "Game ended in a draw by mutual agreement";
+    } else if (ev.termination === "TIMEOUT") {
+      base.handle = ev.handle || "player";
+      base.text = "ran out of time" + (ev.winner_seat ? (" \u2014 Player " + seatLetterOf(ev.winner_seat) + " wins!") : "");
+    } else if (ev.termination === "DISCONNECT_FORFEIT") {
+      base.handle = ev.handle || "player";
+      base.text = "forfeited by disconnect" + (ev.winner_seat ? (" \u2014 Player " + seatLetterOf(ev.winner_seat) + " wins!") : "");
+    } else {
+      base.handle = ev.handle || "table";
+      base.text = ev.winner_seat
+        ? ("won the game by " + (ev.termination || "victory") + "!")
+        : ("Game over: " + (ev.result || "") + " (" + (ev.termination || "") + ")");
+    }
+    return base;
+  }
+  if (type === "PLAYER_DISCONNECTED") {
+    base.handle = ev.handle || "player";
+    base.text = "disconnected from the table";
+    return base;
+  }
+  if (type === "PLAYER_RECONNECTED") {
+    base.handle = ev.handle || "player";
+    base.text = "has rejoined the table" + (ev.seat ? (" (Seat " + ev.seat + ")") : "");
+    return base;
+  }
+  if (type === "OBSERVER_BANNED") {
+    base.handle = ev.handle || "host";
+    base.text = "banned " + (ev.target_handle ? ("@" + ev.target_handle) : "user") + " from the table";
+    return base;
+  }
+  if (type === "USER_MUTED") {
+    base.handle = ev.handle || "host";
+    base.text = "updated mute settings for " + (ev.target_handle ? ("@" + ev.target_handle) : "user");
+    return base;
+  }
+  if (type === "POLICY_UPDATED") {
+    base.handle = ev.handle || "host";
+    base.text = "updated table policies";
+    return base;
+  }
+  return null;
+}
+
 function renderRoomChatLogs() {
   var targets = [
     document.getElementById("web-board-chat-log"),
-    document.getElementById("web-board-chat-zoom-log"),
-    document.getElementById("web-room-chat-log")
+    document.getElementById("web-board-chat-zoom-log")
   ];
   targets.forEach(function (logEl) {
     if (!logEl) return;
@@ -10879,15 +11574,31 @@ function renderRoomChatLogs() {
     }
     activeOnlineChatMessages.forEach(function (m) {
       var ts = formatLobbyChatTime(m.at_ms || m.created_at_ms || Date.now());
-      var sender = m.handle ? ("@" + m.handle + (m.is_robot ? " [BOT]" : "")) : "system";
-      var scopePrefix = (m.scope && m.scope.toUpperCase() === "TEAM") ? "[TEAM] " : "";
-      var row = el("div", "[" + ts + "] " + scopePrefix + sender + ": " + (m.text || ""));
-      row.style.marginBottom = "4px";
-      row.style.wordBreak = "break-word";
+      var row = el("div", null, "chat-msg-row");
+      row.appendChild(el("span", "[" + ts + "]", "chat-msg-ts"));
+      if (m.scope && m.scope.toUpperCase() === "TEAM") {
+        row.appendChild(el("span", "[TEAM]", "chat-msg-scope"));
+      }
+      var rawHandle = (m.handle || "system").replace(/^@/, "");
+      var isSelf = Boolean(currentUser && currentUser.handle && rawHandle === currentUser.handle) || rawHandle === "You";
+      var isBot = Boolean(m.is_robot || rawHandle === "bot");
+      var isSys = (rawHandle === "system" || rawHandle === "table");
+      var userClass = "chat-msg-user" + (isSelf ? " is-self" : (isBot ? " is-bot" : (isSys ? " is-system" : "")));
+      if (m.is_event) {
+        var uSpan = el("span", "@" + rawHandle + (m.is_robot ? " [BOT]" : ""), userClass);
+        var tSpan = el("span", " " + (m.text || ""), "chat-msg-text is-event");
+        row.appendChild(uSpan);
+        row.appendChild(tSpan);
+      } else {
+        var uSpan = el("span", "@" + rawHandle + (m.is_robot ? " [BOT]" : "") + ":", userClass);
+        var tSpan = el("span", m.text || "", "chat-msg-text");
+        row.appendChild(uSpan);
+        row.appendChild(tSpan);
+      }
       logEl.appendChild(row);
     });
-    logEl.scrollTop = logEl.scrollHeight;
   });
+  scrollChatLogsToBottom(targets);
 }
 
 function renderWebBoardChatLog() {
@@ -10909,19 +11620,22 @@ function pollOnlineGameEvents(roomId) {
       if (ev.type === "CHAT" || ev.type === "BOARD_CHAT") {
         activeOnlineChatMessages.push(ev);
         changedChat = true;
-      } else if (ev.type === "PROPOSAL_OFFERED" || ev.type === "PROPOSAL_ACCEPTED" ||
-                 ev.type === "PROPOSAL_DECLINED" || ev.type === "UNDO_APPLIED") {
-        activeOnlineChatMessages.push({
-          seq: ev.seq,
-          at_ms: ev.at_ms,
-          handle: ev.handle || "table",
-          is_robot: !!ev.is_robot,
-          text: "[" + ev.type + "] " + (ev.proposal || ev.move || "")
-        });
-        changedChat = true;
-        needsRoomRefresh = true;
-      } else if (ev.type === "MOVE" || ev.type === "GAME_STARTED" || ev.type === "GAME_OVER" ||
-                 ev.type === "SEAT_JOINED" || ev.type === "SEAT_LEFT") {
+      } else {
+        var chatEv = formatRoomEventForChat(ev);
+        if (chatEv) {
+          activeOnlineChatMessages.push(chatEv);
+          changedChat = true;
+        }
+      }
+      if (ev.type === "MOVE" || ev.type === "GAME_STARTED" || ev.type === "GAME_OVER" ||
+          ev.type === "SEAT_JOINED" || ev.type === "SEAT_LEFT" ||
+          ev.type === "OBSERVER_JOINED" || ev.type === "OBSERVER_LEFT" ||
+          ev.type === "SEAT_KICKED" || ev.type === "HOST_CHANGED" ||
+          ev.type === "PLAYER_DISCONNECTED" || ev.type === "PLAYER_RECONNECTED" ||
+          ev.type === "GAME_PAUSED" || ev.type === "GAME_RESUMED" ||
+          ev.type === "REMATCH_CREATED" ||
+          ev.type === "PROPOSAL_OFFERED" || ev.type === "PROPOSAL_ACCEPTED" ||
+          ev.type === "PROPOSAL_DECLINED" || ev.type === "UNDO_APPLIED") {
         needsRoomRefresh = true;
       }
       if (ev.type === "MOVE" || ev.type === "UNDO_APPLIED") {
@@ -10969,9 +11683,16 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
     var bar = document.getElementById("web-play-online-status-bar");
     var titleEl = document.getElementById("web-play-online-table-title");
     var roleEl = document.getElementById("web-play-online-role-badge");
+    var onlineMetaEl = document.getElementById("web-play-online-table-meta");
+    var localSumEl = document.getElementById("web-play-local-summary");
+    if (localSumEl) localSumEl.style.display = "none";
     if (bar && titleEl) {
       titleEl.textContent = "Table #" + roomId + " \u2022 " + (res.phase || "IN_PROGRESS");
       bar.style.display = "flex";
+    }
+    if (onlineMetaEl) {
+      onlineMetaEl.style.display = "block";
+      onlineMetaEl.textContent = "Host: @" + (res.host_handle || "host") + " \u2022 " + formatTableRulesetSummary(res) + " \u2022 Observers: " + (res.observer_count !== undefined ? res.observer_count : 0);
     }
     if (res.ttl_remaining_ms !== undefined && res.ttl_remaining_ms >= 0) {
       onlineRoomTtlRemainingMs = res.ttl_remaining_ms;
@@ -11388,12 +12109,21 @@ function renderLobbyChatMessages(chatList) {
   }
   arr.forEach(function (m) {
     var ts = formatLobbyChatTime(m.created_at_ms || m.at_ms);
-    var h = m.handle ? ("@" + m.handle) : "player";
-    var line = el("div", "[" + ts + "] " + h + ": " + (m.text || ""));
-    line.style.marginBottom = "4px";
-    log.appendChild(line);
+    var rawHandle = (m.handle || "player").replace(/^@/, "");
+    var isSelf = Boolean(currentUser && currentUser.handle && rawHandle === currentUser.handle) || rawHandle === "You";
+    var isBot = Boolean(m.is_robot || rawHandle === "bot");
+    var row = el("div", null, "chat-msg-row");
+    row.appendChild(el("span", "[" + ts + "]", "chat-msg-ts"));
+    if (m.scope && m.scope.toUpperCase() === "TEAM") {
+      row.appendChild(el("span", "[TEAM]", "chat-msg-scope"));
+    }
+    var uSpan = el("span", "@" + rawHandle + (m.is_robot ? " [BOT]" : "") + ":", "chat-msg-user" + (isSelf ? " is-self" : (isBot ? " is-bot" : "")));
+    var tSpan = el("span", m.text || "", "chat-msg-text");
+    row.appendChild(uSpan);
+    row.appendChild(tSpan);
+    log.appendChild(row);
   });
-  log.scrollTop = log.scrollHeight;
+  scrollChatLogsToBottom([log]);
 }
 
 function formatTableRulesetSummary(t) {
@@ -12244,9 +12974,50 @@ function lbLoad() {
     clear(body);
     $("lb-msg").textContent = j.entries.length ? "" : "No ranked players yet.";
     j.entries.forEach(function (e) {
-      var tr = el("tr");
-      cellRow(tr, [e.rank, e.display_name || e.handle, e.elo, e.games_played,
-                   e.wins, e.losses, e.draws]);
+      var tr = el("tr", null, "click");
+      tr.appendChild(el("td", e.rank));
+
+      var tdPlayer = el("td");
+      var pWrap = el("div");
+      pWrap.style.display = "inline-flex";
+      pWrap.style.alignItems = "center";
+      pWrap.style.gap = "10px";
+      pWrap.appendChild(createAvatarEl(e.avatar_url, e.handle, 28));
+
+      var pLink = el("a");
+      var targetId = e.uuid || e.handle || "";
+      pLink.href = "#users/" + encodeURIComponent(targetId);
+      pLink.style.display = "inline-flex";
+      pLink.style.alignItems = "baseline";
+      pLink.style.gap = "6px";
+      pLink.style.fontWeight = "600";
+      pLink.style.color = "var(--acc-bright)";
+      pLink.style.textDecoration = "none";
+      var primaryName = e.display_name || ("@" + e.handle);
+      pLink.appendChild(el("span", primaryName));
+      if (e.display_name && e.handle && e.display_name !== e.handle) {
+        var hSub = el("span", "@" + e.handle, "dim");
+        hSub.style.fontSize = "12px";
+        hSub.style.fontWeight = "400";
+        pLink.appendChild(hSub);
+      }
+      pLink.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        switchTab("users");
+        openUserProfile(targetId);
+      });
+      pWrap.appendChild(pLink);
+      tdPlayer.appendChild(pWrap);
+      tr.appendChild(tdPlayer);
+
+      [e.elo, e.games_played, e.wins, e.losses, e.draws].forEach(function (v) {
+        tr.appendChild(el("td", v));
+      });
+      tr.addEventListener("click", function () {
+        switchTab("users");
+        openUserProfile(targetId);
+      });
       body.appendChild(tr);
     });
   }).catch(function (e) { $("lb-msg").textContent = "Error: " + e.message; });

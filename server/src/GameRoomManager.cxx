@@ -1559,6 +1559,9 @@ int64_t GameRoomManager::emitLocked(Room &r, RoomEvent e, int64_t now)
     if (e.handle.empty() && e.playerId != 0) {
         e.handle = handleOf(e.playerId);
     }
+    if (e.targetHandle.empty() && e.targetPlayerId != 0) {
+        e.targetHandle = handleOf(e.targetPlayerId);
+    }
     if (e.playerId != 0) {
         std::map<int64_t, PlayerInfo>::const_iterator pit = _players.find(e.playerId);
         if (pit != _players.end()) {
@@ -1918,9 +1921,14 @@ RoomResult GameRoomManager::joinTable(const std::string &roomId,
             r->seatConnected[existingSeat] = true;
             r->seatDisconnectedAt[existingSeat] = 0;
             _seatRoom[playerId] = r->id;
+            RoomEvent e;
+            e.type = RoomEventType::PLAYER_RECONNECTED;
+            e.playerId = playerId;
+            e.seat = existingSeat;
+            RoomResult res = success();
+            res.seq = emitLocked(*r, e, now);
             refreshPresenceLocked(playerId);
             saveRoomLocked(*r);
-            RoomResult res = success();
             res.roomId = r->id;
             res.seat = existingSeat;
             res.gameStarted = (r->phase == RoomPhase::IN_PROGRESS);
@@ -2113,9 +2121,14 @@ RoomResult GameRoomManager::observeRoom(const std::string &roomId,
             r->seatConnected[existingSeat] = true;
             r->seatDisconnectedAt[existingSeat] = 0;
             _seatRoom[playerId] = r->id;
+            RoomEvent e;
+            e.type = RoomEventType::PLAYER_RECONNECTED;
+            e.playerId = playerId;
+            e.seat = existingSeat;
+            RoomResult res = success();
+            res.seq = emitLocked(*r, e, now);
             refreshPresenceLocked(playerId);
             saveRoomLocked(*r);
-            RoomResult res = success();
             res.roomId = r->id;
             res.seat = existingSeat;
             res.gameStarted = (r->phase == RoomPhase::IN_PROGRESS);
@@ -2634,7 +2647,7 @@ RoomResult GameRoomManager::submitMove(const std::string &roomId,
 
     if (g->isGameOver()) {
         std::string term = classifyRuleTermination(*r->board, *g);
-        finishGameLocked(*r, now, term, static_cast<int>(g->getWinner()));
+        finishGameLocked(*r, now, term, static_cast<int>(g->getWinner()), playerId);
         res.gameOver = true;
     } else {
         r->turnStartedMs = now;
@@ -2657,7 +2670,8 @@ void GameRoomManager::forfeitSeatLocked(Room &r, int64_t now, int loserSeat,
     } else {
         winner = 3 - loserSeat;
     }
-    finishGameLocked(r, now, termination, winner);
+    int64_t loserId = (loserSeat >= 1 && loserSeat <= r.seatCount) ? r.seatPlayer[loserSeat] : 0;
+    finishGameLocked(r, now, termination, winner, loserId);
 }
 
 RoomResult GameRoomManager::resign(const std::string &roomId, int64_t playerId)
@@ -3033,7 +3047,7 @@ RoomResult GameRoomManager::completeProposalLocked(Room &r, ProposalType type,
         if (r.phase != RoomPhase::IN_PROGRESS) {
             return fail(RoomCode::INVALID_STATE, "game is not in progress");
         }
-        finishGameLocked(r, now, "AGREED_DRAW", 0);
+        finishGameLocked(r, now, "AGREED_DRAW", 0, proposerId);
         res.gameOver = true;
         return res;
     case ProposalType::PAUSE_REQUEST: {
@@ -3183,7 +3197,7 @@ RoomResult GameRoomManager::spawnRematchLocked(Room &old, int64_t now)
 
 void GameRoomManager::finishGameLocked(Room &r, int64_t now,
                                        const std::string &termination,
-                                       int winnerSeat)
+                                       int winnerSeat, int64_t actorPlayerId)
 {
     r.phase = RoomPhase::FINISHED;
     r.paused = false;
@@ -3211,6 +3225,7 @@ void GameRoomManager::finishGameLocked(Room &r, int64_t now,
 
     RoomEvent e;
     e.type = RoomEventType::GAME_OVER;
+    e.playerId = actorPlayerId;
     e.seat = winnerSeat;
     e.detail = termination;
     e.text = r.result;

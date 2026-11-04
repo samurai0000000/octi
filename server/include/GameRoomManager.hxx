@@ -237,6 +237,7 @@ struct RoomEvent {
     int64_t playerId = 0;
     std::string handle;
     int64_t targetPlayerId = 0;
+    std::string targetHandle;
     int seat = 0;
     ChatScope scope = ChatScope::ALL;
     int ply = 0;
@@ -709,7 +710,7 @@ private:
 
     /* game flow */
     void finishGameLocked(Room &r, int64_t now, const std::string &termination,
-                          int winnerSeat);
+                          int winnerSeat, int64_t actorPlayerId = 0);
     void forfeitSeatLocked(Room &r, int64_t now, int loserSeat,
                            const std::string &termination);
     bool archiveLocked(Room &r);
