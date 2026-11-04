@@ -56,8 +56,8 @@ struct HttpServerConfig {
     int64_t exportRateLimitWindowMs = 60 * 1000;
 
     /* Worker pool: base threads, dynamic ceiling, queued connections. */
-    size_t workerThreads = 24;
-    size_t maxWorkerThreads = 64;
+    size_t workerThreads = 48;
+    size_t maxWorkerThreads = 160;
     size_t maxQueuedRequests = 256;
     int readTimeoutSec = 5;
     int writeTimeoutSec = 5;
@@ -69,7 +69,7 @@ struct HttpServerConfig {
      * most sseBatchLimit events and writes them out. Streams are bounded in
      * time; clients resume with Last-Event-ID.
      */
-    int maxSseStreams = 16;
+    int maxSseStreams = 96;
     int ssePollMs = 200;
     int sseHeartbeatMs = 15000;
     int64_t sseMaxDurationMs = 10LL * 60 * 1000;

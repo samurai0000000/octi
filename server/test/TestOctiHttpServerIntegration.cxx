@@ -3589,35 +3589,33 @@ TEST(OctiHttpServerIntegrationTest, RobotRegistration)
     EXPECT_STATUS(401, http().get("/api/v1/robots"));
     EXPECT_STATUS(401, http().post("/api/v1/robots", "", Json{{"robot_name", "unauth_bot"}}));
 
-    /* 2. Create 3 robots up to the maximum limit */
+    /* 2. Create 32 robots up to the maximum limit */
     Reply r1 = http().post("/api/v1/robots", a.token,
-                          Json{{"robot_name", "octi_engine_a"},
+                          Json{{"robot_name", "octi_engine_01"},
                                {"description", "First engine"}});
     EXPECT_STATUS(201, r1);
     std::string bot1Uuid = r1.json.value("robot_uuid", "");
     CHECK_FALSE(bot1Uuid.empty());
     std::string token1 = r1.json.value("robot_token", "");
     CHECK_TRUE(token1.rfind("octi_bot_", 0) == 0);
-    STRCMP_EQUAL("octi_engine_a", r1.json.value("robot_name", "").c_str());
+    STRCMP_EQUAL("octi_engine_01", r1.json.value("robot_name", "").c_str());
     CHECK_FALSE(r1.json.value("revoked", true));
 
-    Reply r2 = http().post("/api/v1/robots", a.token,
-                          Json{{"robot_name", "octi_engine_b"}});
-    EXPECT_STATUS(201, r2);
-    std::string bot2Uuid = r2.json.value("robot_uuid", "");
+    for (int i = 2; i <= 32; ++i) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "octi_engine_%02d", i);
+        Reply r = http().post("/api/v1/robots", a.token, Json{{"robot_name", buf}});
+        EXPECT_STATUS(201, r);
+    }
 
-    Reply r3 = http().post("/api/v1/robots", a.token,
-                          Json{{"robot_name", "octi_engine_c"}});
-    EXPECT_STATUS(201, r3);
-
-    /* 3. 4th robot attempt is rejected with 409 ROBOT_LIMIT_REACHED */
-    Reply r4 = http().post("/api/v1/robots", a.token,
-                          Json{{"robot_name", "octi_engine_d"}});
-    EXPECT_ERROR(409, "ROBOT_LIMIT_REACHED", r4);
+    /* 3. 33rd robot attempt is rejected with 409 ROBOT_LIMIT_REACHED */
+    Reply rOver = http().post("/api/v1/robots", a.token,
+                             Json{{"robot_name", "octi_engine_33"}});
+    EXPECT_ERROR(409, "ROBOT_LIMIT_REACHED", rOver);
 
     /* 4. Duplicate name rejected with 409 ROBOT_NAME_TAKEN */
     Reply rDup = http().post("/api/v1/robots", b.token,
-                            Json{{"robot_name", "octi_engine_a"}});
+                            Json{{"robot_name", "octi_engine_01"}});
     EXPECT_ERROR(409, "ROBOT_NAME_TAKEN", rDup);
 
     /* 5. Invalid robot name rejected with 400 INVALID_ROBOT_NAME */
@@ -3628,11 +3626,11 @@ TEST(OctiHttpServerIntegrationTest, RobotRegistration)
     /* 6. List robots for owner includes full robot_token */
     Reply rList = http().get("/api/v1/robots", a.token);
     EXPECT_STATUS(200, rList);
-    CHECK_EQUAL(3, rList.json.value("max_robots", 0));
-    CHECK_EQUAL(3, rList.json.value("active_count", 0));
+    CHECK_EQUAL(32, rList.json.value("max_robots", 0));
+    CHECK_EQUAL(32, rList.json.value("active_count", 0));
     Json bots = rList.json["robots"];
     CHECK_TRUE(bots.is_array());
-    CHECK_EQUAL(3, static_cast<int>(bots.size()));
+    CHECK_EQUAL(32, static_cast<int>(bots.size()));
     CHECK_FALSE(bots[0].value("robot_token", "").empty());
 
     /* 7. Patch robot description */
@@ -3655,16 +3653,16 @@ TEST(OctiHttpServerIntegrationTest, RobotRegistration)
     Reply rRevokeAgain = http().del("/api/v1/robots/" + bot1Uuid, a.token);
     CHECK_TRUE(rRevokeAgain.status == 404 || rRevokeAgain.status == 409);
 
-    /* Active count decreased to 2 */
+    /* Active count decreased to 31 */
     Reply rListAfter = http().get("/api/v1/robots", a.token);
     EXPECT_STATUS(200, rListAfter);
-    CHECK_EQUAL(2, rListAfter.json.value("active_count", 0));
+    CHECK_EQUAL(31, rListAfter.json.value("active_count", 0));
 
     /* 9. Re-registering released robot name succeeds now that old one is revoked */
     Reply rReuseName = http().post("/api/v1/robots", b.token,
-                                  Json{{"robot_name", "octi_engine_a"}});
+                                  Json{{"robot_name", "octi_engine_01"}});
     EXPECT_STATUS(201, rReuseName);
-    STRCMP_EQUAL("octi_engine_a", rReuseName.json.value("robot_name", "").c_str());
+    STRCMP_EQUAL("octi_engine_01", rReuseName.json.value("robot_name", "").c_str());
 }
 
 TEST(OctiHttpServerIntegrationTest, VisibleAnonymousObservation)
@@ -5553,6 +5551,172 @@ TEST(OctiHttpServerIntegrationTest, LobbyConnectedUsersMultiClientCollapseAndIdl
     CHECK_EQUAL(2, static_cast<int>(aliceAfterLogout["clients"].size()));
     STRCMP_EQUAL("android", aliceAfterLogout["clients"][0].get<std::string>().c_str());
     STRCMP_EQUAL("desktop", aliceAfterLogout["clients"][1].get<std::string>().c_str());
+}
+
+TEST(OctiHttpServerIntegrationTest, RobotConnectDisconnectAndLeaseSuperseding)
+{
+    User u = signIn("google", "sub-robot-proto-user", "RobotMaster");
+
+    // Create a robot
+    Reply rCreate = http().post(
+        "/api/v1/robots", u.token,
+        Json{{"robot_name", "deep-octi"}, {"description", "Neural OCTI bot"}});
+    EXPECT_STATUS(201, rCreate);
+    std::string botToken = rCreate.json.value("robot_token", "");
+    std::string botUuid = rCreate.json.value("robot_uuid", "");
+    CHECK_FALSE(botToken.empty());
+    CHECK_FALSE(botUuid.empty());
+
+    // Connect without token -> 401
+    Reply rNoToken = http().post("/api/v1/robots/connect", "", Json::object());
+    CHECK_EQUAL(401, rNoToken.status);
+
+    // Connect with bad token -> 401
+    Reply rBadToken = http().post("/api/v1/robots/connect", "octi_bot_bogus", Json::object());
+    CHECK_EQUAL(401, rBadToken.status);
+
+    // Initial connect with Bearer auth
+    Reply rConn1 = http().post("/api/v1/robots/connect", botToken, Json::object());
+    EXPECT_STATUS(200, rConn1);
+    CHECK_TRUE(rConn1.json.value("ok", false));
+    std::string lease1 = rConn1.json.value("lease_id", "");
+    CHECK_EQUAL(32, static_cast<int>(lease1.size()));
+    STRCMP_EQUAL("deep-octi", rConn1.json.value("robot_name", "").c_str());
+    CHECK_FALSE(rConn1.json.value("in_game", true));
+
+    // Connect with if_unused: true while active -> 409 ROBOT_TOKEN_IN_USE
+    Reply rInUse = http().post("/api/v1/robots/connect", botToken, Json{{"if_unused", true}});
+    CHECK_EQUAL(409, rInUse.status);
+    STRCMP_EQUAL("ROBOT_TOKEN_IN_USE", rInUse.json.value("error", "").c_str());
+
+    // Connect again without if_unused mints a superseding lease
+    Reply rConn2 = http().post("/api/v1/robots/connect", botToken, Json{{"if_unused", false}});
+    EXPECT_STATUS(200, rConn2);
+    std::string lease2 = rConn2.json.value("lease_id", "");
+    CHECK_EQUAL(32, static_cast<int>(lease2.size()));
+    CHECK_TRUE(lease1 != lease2);
+
+    // Request with old lease header is rejected with 409 ROBOT_TOKEN_SUPERSEDED
+    httplib::Headers hOld = {{"X-Octi-Robot-Lease", lease1}};
+    Reply rOld = http().get("/api/v1/lobby/state", botToken, hOld);
+    CHECK_EQUAL(409, rOld.status);
+    STRCMP_EQUAL("ROBOT_TOKEN_SUPERSEDED", rOld.json.value("error", "").c_str());
+
+    // Request with new active lease header succeeds
+    httplib::Headers hNew = {{"X-Octi-Robot-Lease", lease2}};
+    Reply rNew = http().get("/api/v1/lobby/state", botToken, hNew);
+    EXPECT_STATUS(200, rNew);
+
+    // Disconnect robot
+    Reply rDisc = http().post("/api/v1/robots/disconnect", botToken, Json::object(), hNew);
+    EXPECT_STATUS(200, rDisc);
+    CHECK_TRUE(rDisc.json.value("ok", false));
+}
+
+TEST(OctiHttpServerIntegrationTest, RobotExportConfAndForbiddenEndpoints)
+{
+    User u = signIn("google", "sub-export-proto-user", "ExportMaster");
+
+    Reply r1 = http().post(
+        "/api/v1/robots", u.token,
+        Json{{"robot_name", "export-bot-1"}, {"description", "First bot"}});
+    EXPECT_STATUS(201, r1);
+    std::string tok1 = r1.json.value("robot_token", "");
+
+    Reply r2 = http().post(
+        "/api/v1/robots", u.token,
+        Json{{"robot_name", "export-bot-2"}, {"description", "Second bot"}});
+    EXPECT_STATUS(201, r2);
+    std::string tok2 = r2.json.value("robot_token", "");
+
+    // Human downloads export-conf
+    Reply rExport = http().get("/api/v1/robots/export-conf", u.token);
+    EXPECT_STATUS(200, rExport);
+    CHECK_TRUE(rExport.body.find("export-bot-1=" + tok1) != std::string::npos);
+    CHECK_TRUE(rExport.body.find("export-bot-2=" + tok2) != std::string::npos);
+
+    // Robot cannot call export-conf -> 403 FORBIDDEN_ROBOT
+    Reply rBotExport = http().get("/api/v1/robots/export-conf", tok1);
+    CHECK_EQUAL(403, rBotExport.status);
+    STRCMP_EQUAL("FORBIDDEN_ROBOT", rBotExport.json.value("error", "").c_str());
+
+    // Robot calling forbidden endpoints:
+    Reply rAuth = http().get("/api/v1/auth/identities", tok1);
+    CHECK_EQUAL(403, rAuth.status);
+    STRCMP_EQUAL("FORBIDDEN_ROBOT", rAuth.json.value("error", "").c_str());
+
+    Reply rRobotMgmt = http().post(
+        "/api/v1/robots", tok1,
+        Json{{"robot_name", "sub-bot"}, {"description", "Illegal child bot"}});
+    CHECK_EQUAL(403, rRobotMgmt.status);
+    STRCMP_EQUAL("FORBIDDEN_ROBOT", rRobotMgmt.json.value("error", "").c_str());
+
+    Reply rProfilePatch = http().patch(
+        "/api/v1/profile", tok1, Json{{"display_name", "Robot Impostor"}});
+    CHECK_EQUAL(403, rProfilePatch.status);
+    STRCMP_EQUAL("FORBIDDEN_ROBOT", rProfilePatch.json.value("error", "").c_str());
+
+    Reply rVoice = http().post(
+        "/api/v1/games/dummy-game/voice-signal", tok1, Json::object());
+    CHECK_EQUAL(403, rVoice.status);
+    STRCMP_EQUAL("FORBIDDEN_ROBOT", rVoice.json.value("error", "").c_str());
+}
+
+TEST(OctiHttpServerIntegrationTest, RobotGamePlayAndMoveAiTelemetry)
+{
+    User u = signIn("google", "sub-telemetry-user", "TelemetryHuman");
+
+    Reply rBot = http().post(
+        "/api/v1/robots", u.token,
+        Json{{"robot_name", "ai-search-bot"}, {"description", "Bot with search telemetry"}});
+    EXPECT_STATUS(201, rBot);
+    std::string botToken = rBot.json.value("robot_token", "");
+
+    // Human creates table with allow_robots: true
+    Reply rTable = http().post(
+        "/api/v1/tables", u.token,
+        Json{{"mode", "2P"}, {"bases", 3}, {"allow_robots", true}});
+    EXPECT_STATUS(201, rTable);
+    std::string roomId = rTable.json.value("room_id", "");
+    CHECK_FALSE(roomId.empty());
+
+    // Robot joins table seat 2
+    Reply rJoin = http().post(
+        "/api/v1/tables/" + roomId + "/join", botToken, Json{{"seat", 2}});
+    EXPECT_STATUS(200, rJoin);
+    CHECK_TRUE(rJoin.json.value("game_started", false));
+
+    // Robot connect now reports active_room_id
+    Reply rConn = http().post("/api/v1/robots/connect", botToken, Json::object());
+    EXPECT_STATUS(200, rConn);
+    STRCMP_EQUAL(roomId.c_str(), rConn.json.value("active_room_id", "").c_str());
+    CHECK_TRUE(rConn.json.value("in_game", false));
+
+    // Human submits move 1
+    Reply rM1 = http().post(
+        "/api/v1/games/" + roomId + "/move", u.token, Json{{"move", "73+a"}});
+    EXPECT_STATUS(200, rM1);
+
+    // Robot submits move 2 with AI telemetry
+    Json aiData = {
+        {"depth", 6},
+        {"nodes", 48210},
+        {"score", 35},
+        {"elapsed_ms", 125}
+    };
+    Reply rM2 = http().post(
+        "/api/v1/games/" + roomId + "/move", botToken,
+        Json{{"move", "77+e"}, {"ai", aiData}});
+    EXPECT_STATUS(200, rM2);
+    CHECK_TRUE(rM2.json.contains("move"));
+    STRCMP_EQUAL("77+e", rM2.json.value("move", "").c_str());
+
+    // Verify room view reflects moves
+    Reply rView = http().get("/api/v1/games/" + roomId, u.token);
+    EXPECT_STATUS(200, rView);
+    CHECK_EQUAL(2, rView.json.value("ply_count", 0));
+    CHECK_TRUE(rView.json["seats"][1].value("is_robot", false));
+    STRCMP_EQUAL("ai-search-bot", rView.json["seats"][1].value("handle", "").c_str());
 }
 
 int main(int argc, char **argv)

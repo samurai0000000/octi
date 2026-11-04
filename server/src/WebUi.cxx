@@ -1219,6 +1219,7 @@ tr.active-ply {
             <label><input type="checkbox" id="web-create-super-prongs"> Superprongs</label>
             <label><input type="checkbox" id="web-create-edgeless"> Edgeless</label>
             <label><input type="checkbox" id="web-create-rated" checked> Rated</label>
+            <label><input type="checkbox" id="web-create-allow-robots" checked> Allow Robots</label>
             <label>Passcode:
               <input id="web-create-passcode" type="password" placeholder="Optional" maxlength="32" style="width:110px;">
             </label>
@@ -1557,15 +1558,16 @@ tr.active-ply {
     <div class="panel" id="account-robots-panel" style="margin-top:16px;">
       <div class="row" style="align-items:center;">
         <h3 style="margin:0;">Robot Registration &amp; Token Management</h3>
-        <span id="robots-quota-badge" class="badge" style="margin-left:12px;">Active Robots: 0 / 3</span>
+        <span id="robots-quota-badge" class="badge" style="margin-left:12px;">Active Robots: 0 / 32</span>
         <button type="button" class="btn" id="btn-toggle-robots-section" aria-expanded="false" style="margin-left:auto;">Show Robot Registration &#9662;</button>
       </div>
       <div id="account-robots-expand-body" style="display:none;margin-top:14px;">
-        <p class="dim" style="margin-top:0;">Each registered user can register up to <strong>3 active robots</strong> (<code>octi_bot_&lt;token&gt;</code>) with a globally unique <code>robot_name</code>.</p>
+        <p class="dim" style="margin-top:0;">Each registered user can register up to <strong>32 active robots</strong> (<code>octi_bot_&lt;token&gt;</code>) with a globally unique <code>robot_name</code>.</p>
         <div class="row" style="margin-top:10px;">
           <input id="robot-name-input" placeholder="Robot Name (3..24 chars [A-Za-z0-9_-])" maxlength="24" style="flex:1;">
           <input id="robot-desc-input" placeholder="Robot Description (optional, max 256 chars)" maxlength="256" style="flex:2;">
           <button type="button" class="btn btn-primary" id="btn-create-robot">Create Robot &amp; Generate Token</button>
+          <button type="button" class="btn" id="btn-export-robots-conf" style="margin-left:8px;">Export tokens.conf</button>
         </div>
         <div id="robot-new-token-box" style="display:none;background:#eff6ff;border:1px solid #93c5fd;padding:12px;border-radius:8px;margin-top:10px;"></div>
         <div style="margin-top:14px;">
@@ -1575,6 +1577,7 @@ tr.active-ply {
               <tr>
                 <th>Robot Name</th>
                 <th>Description</th>
+                <th>Record</th>
                 <th>Secret Token</th>
                 <th>Status</th>
                 <th>Created</th>
@@ -5849,15 +5852,16 @@ function loadMyRobots() {
     robots.forEach(function (r) {
       if (!r.revoked && (r.status || "ACTIVE").toUpperCase() === "ACTIVE") activeCount++;
     });
+    var maxR = res.max_robots || 32;
     var badge = $("robots-quota-badge");
     if (badge) {
-      badge.textContent = "Active Robots: " + activeCount + " / 3";
-      badge.className = "badge " + (activeCount >= 3 ? "badge-revoked" : "badge-active");
+      badge.textContent = "Active Robots: " + activeCount + " / " + maxR;
+      badge.className = "badge " + (activeCount >= maxR ? "badge-revoked" : "badge-active");
     }
     var createBtn = $("btn-create-robot");
     if (createBtn) {
-      createBtn.disabled = (activeCount >= 3);
-      createBtn.title = activeCount >= 3 ? "Maximum quota of 3 active robots reached" : "";
+      createBtn.disabled = (activeCount >= maxR);
+      createBtn.title = activeCount >= maxR ? "Maximum quota of " + maxR + " active robots reached" : "";
     }
 
     var tbody = $("robots-tbody");
@@ -5866,7 +5870,7 @@ function loadMyRobots() {
     if (!robots.length) {
       var trEmpty = el("tr");
       var tdEmpty = el("td", "No robots registered yet.", "dim");
-      tdEmpty.colSpan = 6;
+      tdEmpty.colSpan = 7;
       trEmpty.appendChild(tdEmpty);
       tbody.appendChild(trEmpty);
       return;
@@ -5922,6 +5926,14 @@ function loadMyRobots() {
       tdDesc.appendChild(descInput);
       tdDesc.appendChild(editBtn);
       tdDesc.appendChild(saveBtn);
+
+      /* Record */
+      var w = r.wins || 0;
+      var l = r.losses || 0;
+      var d = r.draws || 0;
+      var gp = r.games_played || (w + l + d);
+      var tdRecord = el("td", w + "W - " + l + "L - " + d + "D");
+      tdRecord.title = gp + " games played";
 
       /* Secret Token with Show/Hide & Copy */
       var tdTok = el("td");
@@ -5985,10 +5997,33 @@ function loadMyRobots() {
         tdAct.textContent = "-";
       }
 
-      [tdName, tdDesc, tdTok, tdStat, tdCreated, tdAct].forEach(function (td) { tr.appendChild(td); });
+      [tdName, tdDesc, tdRecord, tdTok, tdStat, tdCreated, tdAct].forEach(function (td) { tr.appendChild(td); });
       tbody.appendChild(tr);
     });
   }).catch(function () {});
+}
+
+if ($("btn-export-robots-conf")) {
+  $("btn-export-robots-conf").addEventListener("click", function () {
+    var tok = sessionToken || (currentUser && currentUser.token) || "";
+    fetch("/api/v1/robots/export-conf", {
+      headers: tok ? { "Authorization": "Bearer " + tok } : {}
+    }).then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.blob();
+    }).then(function (blob) {
+      var url = window.URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "tokens.conf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    }).catch(function (err) {
+      alert("Failed to export tokens.conf: " + err.message);
+    });
+  });
 }
 
 $("btn-create-robot").addEventListener("click", function () {
@@ -9411,6 +9446,16 @@ function renderOnlineUsersRoster(players) {
     var handleSpan = el("span", handleText, "web-user-handle");
     chip.appendChild(handleSpan);
 
+    if (p.is_robot) {
+      var botBadge = el("span", "BOT", "badge badge-active");
+      botBadge.style.fontSize = "10px";
+      botBadge.style.padding = "1px 5px";
+      botBadge.style.marginLeft = "4px";
+      botBadge.style.background = "#dbeafe";
+      botBadge.style.color = "#1e40af";
+      chip.appendChild(botBadge);
+    }
+
     var clients = Array.isArray(p.clients) ? p.clients : [];
     if (clients.length) {
       var clientsSpan = el("span", null, "web-user-clients");
@@ -9524,8 +9569,9 @@ function refreshLobbyTables() {
           var sNum = s.seat || 1;
           var side = seatLetterOf(sNum);
           var occupied = !!(s.handle || s.player_uuid);
+          var botTag = s.is_robot ? " [BOT]" : "";
           var txt = "Seat " + sNum + " (" + side + "): " +
-            (occupied ? ("@" + s.handle + (s.rating ? " (" + s.rating + ")" : "")) : "Open");
+            (occupied ? ("@" + s.handle + botTag + (s.rating ? " (" + s.rating + ")" : "")) : "Open");
           var pill = el("span", txt, "badge");
           pill.style.background = occupied ? "#dbeafe" : "#f4f4f5";
           pill.style.color = occupied ? "#1e40af" : "#71717a";
@@ -9638,6 +9684,7 @@ function submitCreateOnlineTable() {
   }
   if (mode === "4P" && bases === 4) bases = 1;
   var rated = $("web-create-rated") ? !!$("web-create-rated").checked : true;
+  var allowRobots = $("web-create-allow-robots") ? !!$("web-create-allow-robots").checked : true;
   var tcVal = $("web-create-tc") ? $("web-create-tc").value : "untimed";
   var passcode = $("web-create-passcode") ? $("web-create-passcode").value : "";
 
@@ -9647,6 +9694,7 @@ function submitCreateOnlineTable() {
     super_prongs: superProngs,
     edgeless: edgeless,
     rated: rated,
+    allow_robots: allowRobots,
     time_control: tcVal
   };
   if (passcode) {

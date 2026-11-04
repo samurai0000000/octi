@@ -1553,6 +1553,8 @@ CreateTableDialog::CreateTableDialog(OctiNetworkClient *netClient,
     _edgelessCheck = new QCheckBox("Enable Edgeless Torus Wrap-Around", this);
     _ratedCheck = new QCheckBox("Rated Match (Elo)", this);
     _ratedCheck->setChecked(true);
+    _allowRobotsCheck = new QCheckBox("Allow Robots", this);
+    _allowRobotsCheck->setChecked(true);
     _takebackCheck = new QCheckBox("Allow Undo / Takeback Requests", this);
 
     _timeControlCheck = new QCheckBox("Enable Fischer Clock", this);
@@ -1581,6 +1583,7 @@ CreateTableDialog::CreateTableDialog(OctiNetworkClient *netClient,
     form->addRow("", _superProngsCheck);
     form->addRow("", _edgelessCheck);
     form->addRow("", _ratedCheck);
+    form->addRow("", _allowRobotsCheck);
     form->addRow("", _takebackCheck);
     form->addRow("", _timeControlCheck);
     form->addRow("Initial Time (s):", _initialSecSpin);
@@ -1666,6 +1669,7 @@ void CreateTableDialog::setRequest(const CreateTableRequest &req)
     _superProngsCheck->setChecked(req.superProngs);
     _edgelessCheck->setChecked(req.edgeless);
     _ratedCheck->setChecked(req.rated);
+    _allowRobotsCheck->setChecked(req.allowRobots);
     _takebackCheck->setChecked(req.allowTakeback);
     _timeControlCheck->setChecked(req.timeControlEnabled);
     if (req.initialMs > 0) {
@@ -1695,6 +1699,7 @@ CreateTableRequest CreateTableDialog::buildRequest() const
     req.superProngs = _superProngsCheck->isChecked();
     req.edgeless = _edgelessCheck->isChecked();
     req.rated = _ratedCheck->isChecked();
+    req.allowRobots = _allowRobotsCheck->isChecked();
     req.allowTakeback = _takebackCheck->isChecked();
     req.timeControlEnabled = _timeControlCheck->isChecked();
     req.initialMs =
@@ -1835,6 +1840,8 @@ MatchmakingDialog::MatchmakingDialog(OctiNetworkClient *netClient,
 
     _superProngsCheck = new QCheckBox("Superprongs (!)", this);
     _edgelessCheck = new QCheckBox("Edgeless Board", this);
+    _allowRobotsCheck = new QCheckBox("Allow Robots", this);
+    _allowRobotsCheck->setChecked(true);
     _timeControlCheck = new QCheckBox("Fischer Clock", this);
     _initialSecSpin = new QSpinBox(this);
     _initialSecSpin->setRange(10, 14400);
@@ -1847,6 +1854,7 @@ MatchmakingDialog::MatchmakingDialog(OctiNetworkClient *netClient,
     form->addRow("Bases:", _basesCombo);
     form->addRow("", _superProngsCheck);
     form->addRow("", _edgelessCheck);
+    form->addRow("", _allowRobotsCheck);
     form->addRow("", _timeControlCheck);
     form->addRow("Initial (s):", _initialSecSpin);
     form->addRow("Increment (s):", _incrementSecSpin);
@@ -1930,6 +1938,7 @@ void MatchmakingDialog::setRequest(const MatchmakingRequest &req)
     }
     _superProngsCheck->setChecked(req.superProngs);
     _edgelessCheck->setChecked(req.edgeless);
+    _allowRobotsCheck->setChecked(req.allowRobots);
     _timeControlCheck->setChecked(req.timeControlEnabled);
     if (req.initialMs > 0) {
         _initialSecSpin->setValue(static_cast<int>(req.initialMs / 1000));
@@ -1945,6 +1954,7 @@ MatchmakingRequest MatchmakingDialog::buildRequest() const
     req.bases = _basesCombo->currentData().toInt();
     req.superProngs = _superProngsCheck->isChecked();
     req.edgeless = _edgelessCheck->isChecked();
+    req.allowRobots = _allowRobotsCheck->isChecked();
     req.timeControlEnabled = _timeControlCheck->isChecked();
     req.initialMs =
         static_cast<std::int64_t>(_initialSecSpin->value()) * 1000LL;

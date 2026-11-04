@@ -133,6 +133,7 @@ const char *toString(RoomCode v)
     case RoomCode::SEAT_TAKEN: return "SEAT_TAKEN";
     case RoomCode::ALREADY_SEATED: return "ALREADY_SEATED";
     case RoomCode::CONFLICT: return "CONFLICT";
+    case RoomCode::ROBOTS_NOT_ALLOWED: return "ROBOTS_NOT_ALLOWED";
     case RoomCode::LIMIT_REACHED: return "LIMIT_REACHED";
     case RoomCode::INTERNAL_ERROR: return "INTERNAL_ERROR";
     }
@@ -525,6 +526,7 @@ struct GameRoomManager::Room {
         int64_t clockBeforeMs = 0;
         int64_t clockAfterMs = 0;
         int64_t elapsedMs = 0;
+        MoveTelemetry telemetry;
     };
 
     struct Mute {
@@ -750,6 +752,31 @@ int64_t GameRoomManager::ensureAnonymousObserver(const std::string &ipAddress)
 
 bool GameRoomManager::ensurePlayerLocked(int64_t playerId, bool refresh)
 {
+    if (isRobotActorId(playerId)) {
+        std::map<int64_t, PlayerInfo>::iterator it = _players.find(playerId);
+        if (it != _players.end() && !refresh) {
+            return true;
+        }
+        int64_t robotId = robotIdFromActorId(playerId);
+        RobotRecord robotRec;
+        if (!_store.getRobotById(robotId, robotRec) || robotRec.revoked) {
+            return false;
+        }
+        PlayerInfo &pi = _players[playerId];
+        pi.handle = robotRec.robotName;
+        pi.isRobot = true;
+        pi.playerUuid = robotRec.robotUuid;
+        pi.robotDescription = robotRec.description;
+        pi.ownerPlayerId = robotRec.ownerPlayerId;
+        pi.ownerUuid = robotRec.ownerUuid;
+        pi.ownerHandle = robotRec.ownerHandle;
+        pi.avatarUrl = robotRec.ownerAvatarUrl;
+        pi.robotGamesPlayed = robotRec.gamesPlayed;
+        pi.robotWins = robotRec.wins;
+        pi.robotLosses = robotRec.losses;
+        pi.robotDraws = robotRec.draws;
+        return true;
+    }
     if (playerId <= 0) {
         return playerId < 0 && _players.find(playerId) != _players.end();
     }
@@ -761,7 +788,11 @@ bool GameRoomManager::ensurePlayerLocked(int64_t playerId, bool refresh)
     if (!_store.getProfileById(playerId, p)) {
         return false;
     }
-    _players[playerId].handle = p.handle;
+    PlayerInfo &pi = _players[playerId];
+    pi.handle = p.handle;
+    pi.isRobot = false;
+    pi.playerUuid = p.uuid;
+    pi.avatarUrl = p.avatarUrl;
     return true;
 }
 
@@ -861,6 +892,22 @@ void GameRoomManager::pushLobbyEventLocked(LobbyEvent e)
     if (e.createdAtMs <= 0) {
         e.createdAtMs = currentWallEpochMs();
     }
+    if (e.playerId != 0) {
+        std::map<int64_t, PlayerInfo>::const_iterator pit = _players.find(e.playerId);
+        if (pit != _players.end()) {
+            e.isRobot = pit->second.isRobot;
+            e.robotUuid = pit->second.playerUuid;
+            e.robotDescription = pit->second.robotDescription;
+            e.ownerPlayerId = pit->second.ownerPlayerId;
+            e.ownerUuid = pit->second.ownerUuid;
+            e.ownerHandle = pit->second.ownerHandle;
+            e.avatarUrl = pit->second.avatarUrl;
+            e.robotGamesPlayed = pit->second.robotGamesPlayed;
+            e.robotWins = pit->second.robotWins;
+            e.robotLosses = pit->second.robotLosses;
+            e.robotDraws = pit->second.robotDraws;
+        }
+    }
     bool isChat = e.type == LobbyEventType::LOBBY_CHAT;
     _lobbyEvents.push_back(std::move(e));
     if (isChat) {
@@ -933,7 +980,7 @@ void GameRoomManager::announceTableLocked(const Room &r, bool closed)
 RoomResult GameRoomManager::enterLobby(int64_t playerId)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    if (!ensurePlayerLocked(playerId, playerId > 0)) {
+    if (!ensurePlayerLocked(playerId, playerId > 0 || isRobotActorId(playerId))) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -1057,7 +1104,7 @@ void GameRoomManager::recordClientHeartbeat(int64_t playerId,
         pi.lastActiveMs = now;
     }
     if (clientType == "web" || clientType == "android" ||
-        clientType == "desktop") {
+        clientType == "desktop" || clientType == "robot") {
         pi.clientLastSeenMs[clientType] = now;
     }
     refreshPresenceLocked(playerId);
@@ -1066,7 +1113,7 @@ void GameRoomManager::recordClientHeartbeat(int64_t playerId,
 void GameRoomManager::clearClientPresence(int64_t playerId,
                                           const std::string &clientType)
 {
-    if (playerId <= 0) {
+    if (playerId <= 0 && !isRobotActorId(playerId)) {
         return;
     }
     bool shouldLeave = false;
@@ -1225,6 +1272,20 @@ TableSummary GameRoomManager::summarize(const Room &r) const
             ss.handle = r.seatHandle[s];
             ss.rating = r.seatRating[s] > 0 ? r.seatRating[s] : 1500;
             ss.connected = r.seatConnected[s];
+            std::map<int64_t, PlayerInfo>::const_iterator pit = _players.find(r.seatPlayer[s]);
+            if (pit != _players.end()) {
+                ss.isRobot = pit->second.isRobot;
+                ss.robotUuid = pit->second.playerUuid;
+                ss.robotDescription = pit->second.robotDescription;
+                ss.ownerPlayerId = pit->second.ownerPlayerId;
+                ss.ownerUuid = pit->second.ownerUuid;
+                ss.ownerHandle = pit->second.ownerHandle;
+                ss.avatarUrl = pit->second.avatarUrl;
+                ss.robotGamesPlayed = pit->second.robotGamesPlayed;
+                ss.robotWins = pit->second.robotWins;
+                ss.robotLosses = pit->second.robotLosses;
+                ss.robotDraws = pit->second.robotDraws;
+            }
             ++t.seatsFilled;
             t.playerHandles.push_back(r.seatHandle[s]);
         } else {
@@ -1269,7 +1330,7 @@ LobbySnapshot GameRoomManager::lobbyState() const
         if (!it->second.online) {
             continue;
         }
-        if (it->first < 0 &&
+        if (it->first < 0 && !isRobotActorId(it->first) &&
             (it->second.handle == "anonymous-127.0.0.1" ||
              it->second.handle == "anonymous-::1" ||
              it->second.handle == "anonymous-::ffff:127.0.0.1" ||
@@ -1281,6 +1342,17 @@ LobbySnapshot GameRoomManager::lobbyState() const
         pe.playerId = it->first;
         pe.handle = it->second.handle;
         pe.status = presenceLocked(it->first, &pe.roomId);
+        pe.isRobot = it->second.isRobot;
+        pe.robotUuid = it->second.playerUuid;
+        pe.robotDescription = it->second.robotDescription;
+        pe.ownerPlayerId = it->second.ownerPlayerId;
+        pe.ownerUuid = it->second.ownerUuid;
+        pe.ownerHandle = it->second.ownerHandle;
+        pe.avatarUrl = it->second.avatarUrl;
+        pe.robotGamesPlayed = it->second.robotGamesPlayed;
+        pe.robotWins = it->second.robotWins;
+        pe.robotLosses = it->second.robotLosses;
+        pe.robotDraws = it->second.robotDraws;
         for (std::map<std::string, int64_t>::const_iterator cit =
                  it->second.clientLastSeenMs.begin();
              cit != it->second.clientLastSeenMs.end(); ++cit) {
@@ -1344,7 +1416,7 @@ size_t GameRoomManager::onlinePlayerCount() const
         if (!it->second.online) {
             continue;
         }
-        if (it->first < 0 &&
+        if (it->first < 0 && !isRobotActorId(it->first) &&
             (it->second.handle == "anonymous-127.0.0.1" ||
              it->second.handle == "anonymous-::1" ||
              it->second.handle == "anonymous-::ffff:127.0.0.1" ||
@@ -1355,6 +1427,23 @@ size_t GameRoomManager::onlinePlayerCount() const
         ++n;
     }
     return n;
+}
+
+bool GameRoomManager::findActiveRoomForActor(int64_t actorId,
+                                             std::string &outRoomId) const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    std::map<int64_t, std::string>::const_iterator it = _seatRoom.find(actorId);
+    if (it == _seatRoom.end()) {
+        return false;
+    }
+    const Room *r = findRoomLocked(it->second);
+    if (r != nullptr && (r->phase == RoomPhase::WAITING_FOR_PLAYERS ||
+                         r->phase == RoomPhase::IN_PROGRESS)) {
+        outRoomId = r->id;
+        return true;
+    }
+    return false;
 }
 
 std::string GameRoomManager::newRoomIdLocked()
@@ -1450,6 +1539,22 @@ int64_t GameRoomManager::emitLocked(Room &r, RoomEvent e, int64_t now)
     if (e.handle.empty() && e.playerId != 0) {
         e.handle = handleOf(e.playerId);
     }
+    if (e.playerId != 0) {
+        std::map<int64_t, PlayerInfo>::const_iterator pit = _players.find(e.playerId);
+        if (pit != _players.end()) {
+            e.isRobot = pit->second.isRobot;
+            e.robotUuid = pit->second.playerUuid;
+            e.robotDescription = pit->second.robotDescription;
+            e.ownerPlayerId = pit->second.ownerPlayerId;
+            e.ownerUuid = pit->second.ownerUuid;
+            e.ownerHandle = pit->second.ownerHandle;
+            e.avatarUrl = pit->second.avatarUrl;
+            e.robotGamesPlayed = pit->second.robotGamesPlayed;
+            e.robotWins = pit->second.robotWins;
+            e.robotLosses = pit->second.robotLosses;
+            e.robotDraws = pit->second.robotDraws;
+        }
+    }
     const int64_t seq = e.seq;
     if (e.type == RoomEventType::VOICE_SIGNAL) {
         size_t pending = 0;
@@ -1502,7 +1607,7 @@ void GameRoomManager::purgeUserEventsLocked(Room &r, int64_t playerId)
 
 int GameRoomManager::seatOfLocked(const Room &r, int64_t playerId) const
 {
-    if (playerId <= 0) {
+    if (playerId <= 0 && !isRobotActorId(playerId)) {
         return 0;
     }
     for (int s = 1; s <= r.seatCount; ++s) {
@@ -1628,12 +1733,16 @@ void GameRoomManager::seatPlayerLocked(Room &r, int seat, int64_t playerId,
 {
     r.seatPlayer[seat] = playerId;
     r.seatHandle[seat] = handleOf(playerId);
-    PlayerProfile prof;
     r.seatRating[seat] = 0;
-    if (_store.getProfileById(playerId, prof)) {
-        r.seatRating[seat] = r.config.mode == GAME_MODE_4     ? prof.elo4p
-                             : r.config.mode == GAME_MODE_OFK ? prof.eloOfk
-                                                              : prof.elo2p;
+    if (isRobotActorId(playerId)) {
+        r.seatRating[seat] = 1200;
+    } else {
+        PlayerProfile prof;
+        if (_store.getProfileById(playerId, prof)) {
+            r.seatRating[seat] = r.config.mode == GAME_MODE_4     ? prof.elo4p
+                                 : r.config.mode == GAME_MODE_OFK ? prof.eloOfk
+                                                                  : prof.elo2p;
+        }
     }
     r.seatConnected[seat] = true;
     r.seatDisconnectedAt[seat] = 0;
@@ -1730,7 +1839,8 @@ RoomResult GameRoomManager::createTable(int64_t hostPlayerId,
                                         const GameTableConfig &config)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    if (hostPlayerId <= 0 || !ensurePlayerLocked(hostPlayerId)) {
+    if ((hostPlayerId <= 0 && !isRobotActorId(hostPlayerId)) ||
+        !ensurePlayerLocked(hostPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     GameTableConfig cfg;
@@ -1767,8 +1877,12 @@ RoomResult GameRoomManager::joinTable(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
+    if ((playerId <= 0 && !isRobotActorId(playerId)) ||
+        !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
+    }
+    if (!r->config.allowRobots && isRobotActorId(playerId)) {
+        return fail(RoomCode::ROBOTS_NOT_ALLOWED, "This table does not allow robots");
     }
     int64_t now = nowMs();
     advanceRoomLocked(*r, now);
@@ -1831,7 +1945,8 @@ RoomResult GameRoomManager::leaveTable(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
+    if ((playerId <= 0 && !isRobotActorId(playerId)) ||
+        !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -1861,7 +1976,8 @@ RoomResult GameRoomManager::kickSeat(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (hostPlayerId <= 0 || !ensurePlayerLocked(hostPlayerId)) {
+    if ((hostPlayerId <= 0 && !isRobotActorId(hostPlayerId)) ||
+        !ensurePlayerLocked(hostPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -1976,7 +2092,8 @@ RoomResult GameRoomManager::enqueueMatchmaking(int64_t playerId,
                                                const MatchRuleset &ruleset)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
+    if ((playerId <= 0 && !isRobotActorId(playerId)) ||
+        !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     MatchRuleset rs = ruleset.normalized();
@@ -1986,13 +2103,18 @@ RoomResult GameRoomManager::enqueueMatchmaking(int64_t playerId,
     if (_seatRoom.count(playerId) != 0) {
         return fail(RoomCode::ALREADY_SEATED, "already seated at a table");
     }
-    PlayerProfile p;
-    if (!_store.getProfileById(playerId, p)) {
-        return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
-    }
-    int rating = rs.mode == GAME_MODE_4 ? p.elo4p
+    int rating = 1200;
+    if (isRobotActorId(playerId)) {
+        rating = 1200;
+    } else {
+        PlayerProfile p;
+        if (!_store.getProfileById(playerId, p)) {
+            return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
+        }
+        rating = rs.mode == GAME_MODE_4 ? p.elo4p
                  : rs.mode == GAME_MODE_OFK ? p.eloOfk
                                             : p.elo2p;
+    }
     touchOnlineLocked(playerId);
     _players[playerId].lastActiveMs = nowMs();
     switch (_queue.enqueue(playerId, rating, rs)) {
@@ -2013,7 +2135,8 @@ RoomResult GameRoomManager::enqueueMatchmaking(int64_t playerId,
 RoomResult GameRoomManager::dequeueMatchmaking(int64_t playerId)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
+    if ((playerId <= 0 && !isRobotActorId(playerId)) ||
+        !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     if (!_queue.dequeue(playerId)) {
@@ -2055,6 +2178,7 @@ void GameRoomManager::spawnMatchRoomLocked(const MatchGroup &g, int64_t now)
     cfg.timeControl.incrementMs = g.ruleset.incrementMs;
     cfg.rated = true;
     cfg.allowTakeback = false;
+    cfg.allowRobots = g.ruleset.allowRobots;
 
     int64_t hostId = g.players.empty() ? 0 : g.players[0].playerId;
     Room *r = createRoomLocked(cfg, hostId, now);
@@ -2285,12 +2409,21 @@ RoomResult GameRoomManager::submitMove(const std::string &roomId,
                                        int64_t playerId,
                                        const std::string &moveText)
 {
+    return submitMove(roomId, playerId, moveText, MoveTelemetry{});
+}
+
+RoomResult GameRoomManager::submitMove(const std::string &roomId,
+                                       int64_t playerId,
+                                       const std::string &moveText,
+                                       const MoveTelemetry &telemetry)
+{
     std::lock_guard<std::mutex> lock(_mutex);
     Room *r = findRoomLocked(roomId);
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
+    if ((playerId <= 0 && !isRobotActorId(playerId)) ||
+        !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2352,6 +2485,7 @@ RoomResult GameRoomManager::submitMove(const std::string &roomId,
     ply.move = hist.back().second.asString();
     ply.clockBeforeMs = before;
     ply.elapsedMs = elapsed;
+    ply.telemetry = telemetry;
     if (r->config.timeControl.enabled) {
         ply.clockAfterMs = before - elapsed + r->config.timeControl.incrementMs;
         r->clockMs[seat] = ply.clockAfterMs;
@@ -2360,6 +2494,17 @@ RoomResult GameRoomManager::submitMove(const std::string &roomId,
     OctiPlyMetadata pmeta;
     pmeta.elapsedMs = elapsed;
     pmeta.clockAfterMs = r->config.timeControl.enabled ? ply.clockAfterMs : -1;
+    if (telemetry.present) {
+        pmeta.isAiMove = true;
+        pmeta.aiDepthReached = telemetry.depth;
+        pmeta.aiNodesVisited = static_cast<std::uint64_t>(telemetry.nodes);
+        pmeta.aiBestScore = telemetry.score;
+        if (telemetry.elapsedMs > 0) {
+            pmeta.elapsedMs = telemetry.elapsedMs;
+        }
+    } else if (isRobotActorId(playerId)) {
+        pmeta.isAiMove = true;
+    }
     g->setLastPlyMetadata(pmeta);
     r->lastActivityMs = now;
 
@@ -2429,7 +2574,8 @@ RoomResult GameRoomManager::resign(const std::string &roomId, int64_t playerId)
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
+    if ((playerId <= 0 && !isRobotActorId(playerId)) ||
+        !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2532,7 +2678,8 @@ RoomResult GameRoomManager::claimDisconnectForfeit(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (claimantPlayerId <= 0 || !ensurePlayerLocked(claimantPlayerId)) {
+    if ((claimantPlayerId <= 0 && !isRobotActorId(claimantPlayerId)) ||
+        !ensurePlayerLocked(claimantPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2612,7 +2759,8 @@ RoomResult GameRoomManager::submitProposal(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
+    if ((playerId <= 0 && !isRobotActorId(playerId)) ||
+        !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2703,7 +2851,8 @@ RoomResult GameRoomManager::respondProposal(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
+    if ((playerId <= 0 && !isRobotActorId(playerId)) ||
+        !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2851,7 +3000,8 @@ RoomResult GameRoomManager::resumeGame(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
+    if ((playerId <= 0 && !isRobotActorId(playerId)) ||
+        !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -2985,6 +3135,14 @@ bool GameRoomManager::archiveLocked(Room &r)
 {
     ++r.archiveAttempts;
 
+    bool hasRobotSeat = false;
+    for (int s = 1; s <= r.seatCount; ++s) {
+        if (isRobotActorId(r.seatPlayer[s])) {
+            hasRobotSeat = true;
+            break;
+        }
+    }
+
     GameRecord rec;
     rec.gameId = r.id;
     rec.gameMode = modeName(r.config.mode);
@@ -2992,15 +3150,28 @@ bool GameRoomManager::archiveLocked(Room &r)
     rec.superProngs = r.board->getGame()->useSuperProngs();
     rec.edgeless = r.board->getGame()->useEdgelessBoard();
     rec.timeControl = timeControlString(r.config.timeControl);
-    rec.p1PlayerId = r.seatPlayer[1];
-    rec.p2PlayerId = r.seatPlayer[2];
-    rec.p1Handle = r.seatHandle[1];
-    rec.p2Handle = r.seatHandle[2];
+
+    auto fillSeatRec = [this, &r](int seat, int64_t &pidOut, std::string &handleOut) {
+        int64_t pid = r.seatPlayer[seat];
+        if (isRobotActorId(pid)) {
+            std::map<int64_t, PlayerInfo>::const_iterator pit = _players.find(pid);
+            if (pit != _players.end()) {
+                pidOut = pit->second.ownerPlayerId;
+                handleOut = pit->second.handle;
+            } else {
+                pidOut = 0;
+                handleOut = r.seatHandle[seat];
+            }
+        } else {
+            pidOut = pid;
+            handleOut = r.seatHandle[seat];
+        }
+    };
+    fillSeatRec(1, rec.p1PlayerId, rec.p1Handle);
+    fillSeatRec(2, rec.p2PlayerId, rec.p2Handle);
     if (r.seatCount == 4) {
-        rec.p3PlayerId = r.seatPlayer[3];
-        rec.p4PlayerId = r.seatPlayer[4];
-        rec.p3Handle = r.seatHandle[3];
-        rec.p4Handle = r.seatHandle[4];
+        fillSeatRec(3, rec.p3PlayerId, rec.p3Handle);
+        fillSeatRec(4, rec.p4PlayerId, rec.p4Handle);
     }
     rec.result = r.result;
     rec.winnerSeat = r.winnerSeat;
@@ -3030,7 +3201,37 @@ bool GameRoomManager::archiveLocked(Room &r)
     rec.installId = "";
 
     std::vector<RatingUpdate> updates;
-    if (r.config.rated) {
+    if (hasRobotSeat) {
+        // Human-Only Elo Invariant: never update Elo ratings when a robot played.
+        // Record per-robot W/L/D outcome in AccountStore.
+        for (int s = 1; s <= r.seatCount; ++s) {
+            int64_t pid = r.seatPlayer[s];
+            if (isRobotActorId(pid)) {
+                GameOutcome outcome = GameOutcome::DRAW;
+                if (r.winnerSeat != 0) {
+                    if (r.config.mode == GAME_MODE_4) {
+                        int team = (s % 2 == 1) ? 1 : 2;
+                        outcome = (r.winnerSeat == team) ? GameOutcome::WIN : GameOutcome::LOSS;
+                    } else {
+                        outcome = (r.winnerSeat == s) ? GameOutcome::WIN : GameOutcome::LOSS;
+                    }
+                }
+                int64_t robotId = robotIdFromActorId(pid);
+                _store.recordRobotGameOutcome(robotId, outcome);
+                std::map<int64_t, PlayerInfo>::iterator pit = _players.find(pid);
+                if (pit != _players.end()) {
+                    pit->second.robotGamesPlayed++;
+                    if (outcome == GameOutcome::WIN) {
+                        pit->second.robotWins++;
+                    } else if (outcome == GameOutcome::LOSS) {
+                        pit->second.robotLosses++;
+                    } else {
+                        pit->second.robotDraws++;
+                    }
+                }
+            }
+        }
+    } else if (r.config.rated) {
         PlayerProfile prof[5];
         for (int s = 1; s <= r.seatCount; ++s) {
             if (!_store.getProfileById(r.seatPlayer[s], prof[s])) {
@@ -3109,6 +3310,17 @@ std::string GameRoomManager::buildTranscriptLocked(const Room &r) const
         OctiPlyMetadata pmd;
         pmd.elapsedMs = p.elapsedMs;
         pmd.clockAfterMs = r.config.timeControl.enabled ? p.clockAfterMs : -1;
+        if (p.telemetry.present) {
+            pmd.isAiMove = true;
+            pmd.aiDepthReached = p.telemetry.depth;
+            pmd.aiNodesVisited = static_cast<std::uint64_t>(p.telemetry.nodes);
+            pmd.aiBestScore = p.telemetry.score;
+            if (p.telemetry.elapsedMs > 0) {
+                pmd.elapsedMs = p.telemetry.elapsedMs;
+            }
+        } else if (p.seat >= 1 && p.seat <= r.seatCount && isRobotActorId(r.seatPlayer[p.seat])) {
+            pmd.isAiMove = true;
+        }
         g->setPlyMetadata(i, pmd);
     }
 
@@ -3145,7 +3357,7 @@ std::string GameRoomManager::buildTranscriptLocked(const Room &r) const
         OctiPlayerMetadata pmd;
         pmd.seat = s;
         pmd.player = static_cast<OctiPlayer>(PLAYER_A + s - 1);
-        pmd.type = "HUMAN";
+        pmd.type = isRobotActorId(r.seatPlayer[s]) ? "ROBOT" : "HUMAN";
         pmd.handle = r.seatPlayer[s] != 0 ? cleanHeaderValue(r.seatHandle[s]) : ("Seat " + std::to_string(s));
         meta.players.push_back(pmd);
     }
@@ -3167,7 +3379,8 @@ RoomResult GameRoomManager::postBoardChat(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (senderPlayerId <= 0 || !ensurePlayerLocked(senderPlayerId)) {
+    if ((senderPlayerId <= 0 && !isRobotActorId(senderPlayerId)) ||
+        !ensurePlayerLocked(senderPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -3364,7 +3577,8 @@ RoomResult GameRoomManager::banUser(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (actorPlayerId <= 0 || !ensurePlayerLocked(actorPlayerId)) {
+    if ((actorPlayerId <= 0 && !isRobotActorId(actorPlayerId)) ||
+        !ensurePlayerLocked(actorPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -3379,7 +3593,8 @@ RoomResult GameRoomManager::banUser(const std::string &roomId,
     if (targetPlayerId == actorPlayerId) {
         return fail(RoomCode::INVALID_ARGUMENT, "cannot ban yourself");
     }
-    if (targetPlayerId <= 0 || !ensurePlayerLocked(targetPlayerId)) {
+    if ((targetPlayerId <= 0 && !isRobotActorId(targetPlayerId)) ||
+        !ensurePlayerLocked(targetPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown target player");
     }
     std::string cleanReason;
@@ -3443,7 +3658,8 @@ RoomResult GameRoomManager::muteUser(const std::string &roomId,
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (actorPlayerId <= 0 || !ensurePlayerLocked(actorPlayerId)) {
+    if ((actorPlayerId <= 0 && !isRobotActorId(actorPlayerId)) ||
+        !ensurePlayerLocked(actorPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     int64_t now = nowMs();
@@ -3458,7 +3674,8 @@ RoomResult GameRoomManager::muteUser(const std::string &roomId,
     if (targetPlayerId == actorPlayerId) {
         return fail(RoomCode::INVALID_ARGUMENT, "cannot mute yourself");
     }
-    if (targetPlayerId <= 0 || !ensurePlayerLocked(targetPlayerId)) {
+    if ((targetPlayerId <= 0 && !isRobotActorId(targetPlayerId)) ||
+        !ensurePlayerLocked(targetPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown target player");
     }
     /* Mutes are room-wide, so a seated player cannot be silenced. */
@@ -3512,7 +3729,8 @@ RoomResult GameRoomManager::updateRoomPolicies(
     if (r == nullptr) {
         return fail(RoomCode::NOT_FOUND, "no such room");
     }
-    if (actorPlayerId <= 0 || !ensurePlayerLocked(actorPlayerId)) {
+    if ((actorPlayerId <= 0 && !isRobotActorId(actorPlayerId)) ||
+        !ensurePlayerLocked(actorPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     if (!observerPolicyIn && !voicePolicyIn) {
@@ -3588,6 +3806,22 @@ void GameRoomManager::fillView(const Room &r, int64_t viewerId, int64_t now,
         sv.handle = r.seatHandle[s];
         sv.rating = r.seatRating[s];
         sv.connected = r.seatConnected[s];
+        if (sv.playerId != 0) {
+            std::map<int64_t, PlayerInfo>::const_iterator pit = _players.find(sv.playerId);
+            if (pit != _players.end()) {
+                sv.isRobot = pit->second.isRobot;
+                sv.robotUuid = pit->second.playerUuid;
+                sv.robotDescription = pit->second.robotDescription;
+                sv.ownerPlayerId = pit->second.ownerPlayerId;
+                sv.ownerUuid = pit->second.ownerUuid;
+                sv.ownerHandle = pit->second.ownerHandle;
+                sv.avatarUrl = pit->second.avatarUrl;
+                sv.robotGamesPlayed = pit->second.robotGamesPlayed;
+                sv.robotWins = pit->second.robotWins;
+                sv.robotLosses = pit->second.robotLosses;
+                sv.robotDraws = pit->second.robotDraws;
+            }
+        }
         sv.eliminated = r.phase == RoomPhase::IN_PROGRESS &&
                         g->isPlayerEliminated(static_cast<OctiPlayer>(s));
         if (!sv.connected && r.phase == RoomPhase::IN_PROGRESS) {
@@ -3796,6 +4030,7 @@ void GameRoomManager::saveRoomLocked(const Room &r)
     cfg["timeControl"] = tc;
     cfg["rated"] = r.config.rated;
     cfg["allowTakeback"] = r.config.allowTakeback;
+    cfg["allowRobots"] = r.config.allowRobots;
     cfg["observerPolicy"] = toString(r.config.observerPolicy);
     cfg["voicePolicy"] = toString(r.config.voicePolicy);
     cfg["passcode"] = r.config.passcode;
@@ -3842,6 +4077,14 @@ void GameRoomManager::saveRoomLocked(const Room &r)
         p["clockBeforeMs"] = r.plies[i].clockBeforeMs;
         p["clockAfterMs"] = r.plies[i].clockAfterMs;
         p["elapsedMs"] = r.plies[i].elapsedMs;
+        if (r.plies[i].telemetry.present) {
+            Json tj;
+            tj["depth"] = r.plies[i].telemetry.depth;
+            tj["nodes"] = r.plies[i].telemetry.nodes;
+            tj["score"] = r.plies[i].telemetry.score;
+            tj["elapsedMs"] = r.plies[i].telemetry.elapsedMs;
+            p["telemetry"] = tj;
+        }
         plies.push_back(p);
     }
     j["plies"] = plies;
@@ -4086,6 +4329,7 @@ bool GameRoomManager::restoreFromStoreLocked()
                 }
                 r->config.rated = cfg.value("rated", true);
                 r->config.allowTakeback = cfg.value("allowTakeback", false);
+                r->config.allowRobots = cfg.value("allowRobots", true);
                 parseObserverPolicy(cfg.value("observerPolicy", "OPEN"),
                                     r->config.observerPolicy);
                 parseVoicePolicy(cfg.value("voicePolicy", "PLAYERS_ONLY"),
@@ -4102,7 +4346,7 @@ bool GameRoomManager::restoreFromStoreLocked()
             }
 
             r->hostId = j.value("hostId", 0LL);
-            if (r->hostId <= 0) {
+            if (r->hostId <= 0 && !isRobotActorId(r->hostId)) {
                 _store.deleteLiveRoom(row.roomId, err);
                 continue;
             }
@@ -4147,6 +4391,14 @@ bool GameRoomManager::restoreFromStoreLocked()
                     ply.clockBeforeMs = pj.value("clockBeforeMs", 0LL);
                     ply.clockAfterMs = pj.value("clockAfterMs", 0LL);
                     ply.elapsedMs = pj.value("elapsedMs", 0LL);
+                    if (pj.contains("telemetry") && pj["telemetry"].is_object()) {
+                        const Json &tj = pj["telemetry"];
+                        ply.telemetry.present = true;
+                        ply.telemetry.depth = tj.value("depth", 0);
+                        ply.telemetry.nodes = tj.value("nodes", 0LL);
+                        ply.telemetry.score = tj.value("score", 0);
+                        ply.telemetry.elapsedMs = tj.value("elapsedMs", 0LL);
+                    }
                     r->plies.push_back(ply);
                 }
             }
@@ -4303,12 +4555,12 @@ bool GameRoomManager::restoreFromStoreLocked()
             r->endedAtSec = j.value("endedAtSec", 0LL);
 
             // Link presence and seat mapping
-            if (r->hostId > 0) {
+            if (r->hostId > 0 || isRobotActorId(r->hostId)) {
                 ensurePlayerLocked(r->hostId);
             }
             for (int s = 1; s <= r->seatCount; ++s) {
                 int64_t pid = r->seatPlayer[s];
-                if (pid > 0) {
+                if (pid > 0 || isRobotActorId(pid)) {
                     ensurePlayerLocked(pid);
                     if (r->phase != RoomPhase::FINISHED) {
                         _seatRoom[pid] = r->id;

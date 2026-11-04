@@ -20,6 +20,7 @@
 #include <nlohmann/json.hpp>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+#include <openssl/rand.h>
 
 #include <algorithm>
 #include <atomic>
@@ -440,6 +441,7 @@ int statusFor(RoomCode c)
     case RoomCode::FORBIDDEN_SEATED_TARGET:
     case RoomCode::FORBIDDEN_PASSCODE:
     case RoomCode::FORBIDDEN_NOT_HOST:
+    case RoomCode::ROBOTS_NOT_ALLOWED:
     case RoomCode::NOT_YOUR_TURN:
         return 403;
     case RoomCode::INVALID_STATE:
@@ -543,6 +545,7 @@ Json configJson(const GameTableConfig &c)
     j["time_control"] = tc;
     j["rated"] = c.rated;
     j["allow_takeback"] = c.allowTakeback;
+    j["allow_robots"] = c.allowRobots;
     j["observer_policy"] = toString(c.observerPolicy);
     j["voice_policy"] = toString(c.voicePolicy);
     return j;
@@ -633,6 +636,7 @@ bool parseTableConfig(const Json &b, GameTableConfig &cfg, std::string &err)
         !fieldBool(b, "edgeless", false, cfg.useEdgelessBoard, err) ||
         !fieldBool(b, "rated", false, cfg.rated, err) ||
         !fieldBool(b, "allow_takeback", false, cfg.allowTakeback, err) ||
+        !fieldBool(b, "allow_robots", false, cfg.allowRobots, err) ||
         !parseTimeControl(b, cfg.timeControl, err)) {
         return false;
     }
@@ -687,6 +691,22 @@ struct SlotGuard {
     std::atomic<int> &_counter;
 };
 
+std::string generateLeaseId()
+{
+    unsigned char b[16];
+    if (RAND_bytes(b, sizeof(b)) != 1) {
+        return std::string(32, '0');
+    }
+    static const char hex[] = "0123456789abcdef";
+    std::string out;
+    out.reserve(32);
+    for (size_t i = 0; i < sizeof(b); ++i) {
+        out.push_back(hex[(b[i] >> 4) & 0x0F]);
+        out.push_back(hex[b[i] & 0x0F]);
+    }
+    return out;
+}
+
 struct StreamState {
     std::shared_ptr<SlotGuard> slot;
     PollFn fetch;
@@ -699,6 +719,10 @@ struct StreamState {
     int64_t lastAuthMs = 0;
     bool first = true;
     bool gapSent = false;
+    bool isRobot = false;
+    int64_t robotId = 0;
+    std::string leaseId;
+    std::shared_ptr<void> robotStreamGuard;
 };
 
 std::string sseFrame(const Frame &f)
@@ -719,10 +743,44 @@ bool putText(httplib::DataSink &sink, const std::string &text)
 /* ------------------------------------------------------------------ */
 
 struct OctiHttpServer::Impl {
+    struct ActiveRobotLease {
+        std::string leaseId;
+        int64_t connectedAtMs = 0;
+        int64_t lastSeenMs = 0;
+        std::string clientIp;
+        std::string clientType = "robot";
+        int activeStreams = 0;
+    };
+
+    struct RobotStreamGuard {
+        std::mutex &mutex;
+        std::map<int64_t, ActiveRobotLease> &leases;
+        int64_t robotId;
+        RobotStreamGuard(std::mutex &m, std::map<int64_t, ActiveRobotLease> &l, int64_t rId)
+            : mutex(m), leases(l), robotId(rId)
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            auto it = leases.find(robotId);
+            if (it != leases.end()) {
+                ++it->second.activeStreams;
+            }
+        }
+        ~RobotStreamGuard()
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            auto it = leases.find(robotId);
+            if (it != leases.end() && it->second.activeStreams > 0) {
+                --it->second.activeStreams;
+            }
+        }
+    };
+
     struct Auth {
         int64_t playerId = 0;
         std::string token;
         std::string clientType;
+        bool isRobot = false;
+        RobotRecord robotRecord;
     };
 
     Impl(AccountStore &s, OidcVerifier &v, GameRoomManager &r,
@@ -794,6 +852,9 @@ struct OctiHttpServer::Impl {
     void handleRobotCreate(const Request &req, Response &res);
     void handleRobotPatch(const Request &req, Response &res);
     void handleRobotDelete(const Request &req, Response &res);
+    void handleRobotsConnect(const Request &req, Response &res);
+    void handleRobotsDisconnect(const Request &req, Response &res);
+    void handleRobotsExportConf(const Request &req, Response &res);
     void handleLeaderboard(const Request &req, Response &res);
     void handleLobbyState(const Request &req, Response &res);
     void handleLobbyChat(const Request &req, Response &res);
@@ -869,6 +930,9 @@ struct OctiHttpServer::Impl {
     std::mutex cacheMutex;
     std::map<int64_t, std::string> uuidById;
     std::map<std::string, int64_t> idByUuid;
+
+    std::mutex _robotLeaseMutex;
+    std::map<int64_t, ActiveRobotLease> _activeRobotLeases;
 };
 
 OctiHttpServer::Impl::Impl(AccountStore &s, OidcVerifier &v,
@@ -1040,7 +1104,33 @@ void OctiHttpServer::Impl::tickLoop()
 
 std::string OctiHttpServer::Impl::uuidOf(int64_t playerId)
 {
-    if (playerId <= 0) {
+    if (playerId == 0) {
+        return std::string();
+    }
+    if (isRobotActorId(playerId)) {
+        int64_t robotId = robotIdFromActorId(playerId);
+        {
+            std::lock_guard<std::mutex> lock(cacheMutex);
+            std::map<int64_t, std::string>::const_iterator it =
+                uuidById.find(playerId);
+            if (it != uuidById.end()) {
+                return it->second;
+            }
+        }
+        RobotRecord r;
+        if (!store.getRobotById(robotId, r)) {
+            return std::string();
+        }
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        if (uuidById.size() >= kMaxCacheEntries) {
+            uuidById.clear();
+            idByUuid.clear();
+        }
+        uuidById[playerId] = r.robotUuid;
+        idByUuid[r.robotUuid] = playerId;
+        return r.robotUuid;
+    }
+    if (playerId < 0) {
         return std::string();
     }
     {
@@ -1081,18 +1171,31 @@ bool OctiHttpServer::Impl::playerIdOfUuid(const std::string &uuid,
         }
     }
     PlayerProfile p;
-    if (!store.getProfileByUuid(uuid, p)) {
-        return false;
+    if (store.getProfileByUuid(uuid, p)) {
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        if (uuidById.size() >= kMaxCacheEntries) {
+            uuidById.clear();
+            idByUuid.clear();
+        }
+        uuidById[p.playerId] = p.uuid;
+        idByUuid[p.uuid] = p.playerId;
+        playerId = p.playerId;
+        return true;
     }
-    std::lock_guard<std::mutex> lock(cacheMutex);
-    if (uuidById.size() >= kMaxCacheEntries) {
-        uuidById.clear();
-        idByUuid.clear();
+    RobotRecord r;
+    if (store.getRobotByUuid(uuid, r)) {
+        int64_t actorId = makeRobotActorId(r.robotId);
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        if (uuidById.size() >= kMaxCacheEntries) {
+            uuidById.clear();
+            idByUuid.clear();
+        }
+        uuidById[actorId] = r.robotUuid;
+        idByUuid[r.robotUuid] = actorId;
+        playerId = actorId;
+        return true;
     }
-    uuidById[p.playerId] = p.uuid;
-    idByUuid[p.uuid] = p.playerId;
-    playerId = p.playerId;
-    return true;
+    return false;
 }
 
 /* Reads body[key] (a player uuid) and resolves it; writes 400/404 on error. */
@@ -1178,12 +1281,75 @@ bool OctiHttpServer::Impl::requireAuth(const Request &req, Response &res,
                   "missing or malformed Authorization: Bearer header");
         return false;
     }
+    if (token.rfind("octi_bot_", 0) == 0) {
+        RobotTokenValidation val = store.validateRobotToken(token);
+        if (!val.valid || val.robot.revoked) {
+            res.set_header("WWW-Authenticate", "Bearer error=\"invalid_token\"");
+            sendError(res, 401, "UNAUTHORIZED", "invalid or revoked robot token");
+            return false;
+        }
+        RobotRecord robot = val.robot;
+        if (req.has_header("X-Octi-Robot-Lease")) {
+            std::string leaseHeader = req.get_header_value("X-Octi-Robot-Lease");
+            std::lock_guard<std::mutex> lock(_robotLeaseMutex);
+            auto it = _activeRobotLeases.find(robot.robotId);
+            if (it != _activeRobotLeases.end() && !it->second.leaseId.empty() &&
+                it->second.leaseId != leaseHeader) {
+                sendError(res, 409, "ROBOT_TOKEN_SUPERSEDED",
+                          "robot connection lease has been superseded by a newer connection");
+                return false;
+            }
+        }
+
+        const std::string &path = req.path;
+        if (path.rfind("/api/v1/auth", 0) == 0) {
+            sendError(res, 403, "FORBIDDEN_ROBOT",
+                      "robots cannot access human authentication endpoints");
+            return false;
+        }
+        if (path == "/api/v1/robots" || path.rfind("/api/v1/robots/", 0) == 0) {
+            if (path != "/api/v1/robots/connect" &&
+                path != "/api/v1/robots/disconnect") {
+                sendError(res, 403, "FORBIDDEN_ROBOT",
+                          "robots cannot manage robot registrations");
+                return false;
+            }
+        }
+        if (path.rfind("/api/v1/profile", 0) == 0 && req.method == "PATCH") {
+            sendError(res, 403, "FORBIDDEN_ROBOT",
+                      "robots cannot update human profiles");
+            return false;
+        }
+        if (path.find("/voice") != std::string::npos) {
+            sendError(res, 403, "FORBIDDEN_ROBOT",
+                      "robots cannot participate in voice channels");
+            return false;
+        }
+
+        auth.isRobot = true;
+        auth.robotRecord = robot;
+        auth.playerId = makeRobotActorId(robot.robotId);
+        auth.token = token;
+        auth.clientType = "robot";
+
+        {
+            std::lock_guard<std::mutex> lock(_robotLeaseMutex);
+            auto it = _activeRobotLeases.find(robot.robotId);
+            if (it != _activeRobotLeases.end()) {
+                it->second.lastSeenMs = steadyMs();
+            }
+        }
+        rooms.recordClientHeartbeat(auth.playerId, "robot", true);
+        return true;
+    }
+
     SessionValidation sv = store.validateSession(token);
     if (!sv.valid) {
         res.set_header("WWW-Authenticate", "Bearer error=\"invalid_token\"");
         sendError(res, 401, "UNAUTHORIZED", "invalid or expired session");
         return false;
     }
+    auth.isRobot = false;
     auth.playerId = sv.playerId;
     auth.token = token;
     auth.clientType = detectClientType(req);
@@ -1315,6 +1481,19 @@ Json OctiHttpServer::Impl::seatJson(const SeatView &s)
     j["forfeit_claimable"] = s.forfeitClaimable;
     j["clock_ms"] = s.clockMs;
     j["eliminated"] = s.eliminated;
+    j["is_robot"] = s.isRobot;
+    if (s.isRobot) {
+        j["robot_uuid"] = s.robotUuid;
+        j["robot_description"] = s.robotDescription;
+        j["owner_player_id"] = s.ownerPlayerId;
+        j["owner_uuid"] = s.ownerUuid;
+        j["owner_handle"] = s.ownerHandle;
+        j["avatar_url"] = s.avatarUrl;
+        j["robot_games_played"] = s.robotGamesPlayed;
+        j["robot_wins"] = s.robotWins;
+        j["robot_losses"] = s.robotLosses;
+        j["robot_draws"] = s.robotDraws;
+    }
     return j;
 }
 
@@ -1389,6 +1568,15 @@ Json OctiHttpServer::Impl::roomEventJson(const RoomEvent &e)
     j["seq"] = e.seq;
     j["type"] = toString(e.type);
     j["at_ms"] = e.atMs;
+    j["is_robot"] = e.isRobot;
+    if (e.isRobot) {
+        j["robot_uuid"] = e.robotUuid;
+        j["robot_description"] = e.robotDescription;
+        j["owner_player_id"] = e.ownerPlayerId;
+        j["owner_uuid"] = e.ownerUuid;
+        j["owner_handle"] = e.ownerHandle;
+        j["avatar_url"] = e.avatarUrl;
+    }
     if (e.playerId != 0) {
         j["player_uuid"] = uuidOf(e.playerId);
         j["handle"] = e.handle;
@@ -1490,6 +1678,19 @@ Json OctiHttpServer::Impl::tableJson(const TableSummary &t)
         sj["handle"] = s.handle;
         sj["rating"] = s.rating;
         sj["connected"] = s.connected;
+        sj["is_robot"] = s.isRobot;
+        if (s.isRobot) {
+            sj["robot_uuid"] = s.robotUuid;
+            sj["robot_description"] = s.robotDescription;
+            sj["owner_player_id"] = s.ownerPlayerId;
+            sj["owner_uuid"] = s.ownerUuid;
+            sj["owner_handle"] = s.ownerHandle;
+            sj["avatar_url"] = s.avatarUrl;
+            sj["robot_games_played"] = s.robotGamesPlayed;
+            sj["robot_wins"] = s.robotWins;
+            sj["robot_losses"] = s.robotLosses;
+            sj["robot_draws"] = s.robotDraws;
+        }
         seatsArr.push_back(sj);
     }
     j["seats"] = seatsArr;
@@ -1507,6 +1708,15 @@ Json OctiHttpServer::Impl::lobbyEventJson(const LobbyEvent &e)
     int64_t tsMs = (e.createdAtMs > 0) ? e.createdAtMs : e.atMs;
     j["at_ms"] = tsMs;
     j["created_at_ms"] = tsMs;
+    j["is_robot"] = e.isRobot;
+    if (e.isRobot) {
+        j["robot_uuid"] = e.robotUuid;
+        j["robot_description"] = e.robotDescription;
+        j["owner_player_id"] = e.ownerPlayerId;
+        j["owner_uuid"] = e.ownerUuid;
+        j["owner_handle"] = e.ownerHandle;
+        j["avatar_url"] = e.avatarUrl;
+    }
     if (e.playerId != 0) {
         j["player_uuid"] = uuidOf(e.playerId);
         j["handle"] = e.handle;
@@ -1610,11 +1820,33 @@ bool OctiHttpServer::Impl::streamStep(StreamState &st,
     }
     if (st.playerId != 0 && now - st.lastAuthMs >= cfg.sseSessionRecheckMs) {
         st.lastAuthMs = now;
-        SessionValidation sv = store.validateSession(st.token);
-        if (!sv.valid || sv.playerId != st.playerId) {
-            putText(sink, "event: closed\ndata: {\"error\":\"UNAUTHORIZED\"}\n\n");
-            sink.done();
-            return true;
+        if (st.isRobot) {
+            RobotTokenValidation val = store.validateRobotToken(st.token);
+            if (!val.valid || val.robot.revoked) {
+                putText(sink, "event: closed\ndata: {\"error\":\"UNAUTHORIZED\"}\n\n");
+                sink.done();
+                return true;
+            }
+            if (!st.leaseId.empty()) {
+                std::lock_guard<std::mutex> lock(_robotLeaseMutex);
+                auto it = _activeRobotLeases.find(st.robotId);
+                if (it != _activeRobotLeases.end() && !it->second.leaseId.empty() &&
+                    it->second.leaseId != st.leaseId) {
+                    putText(sink, "event: closed\ndata: {\"error\":\"ROBOT_TOKEN_SUPERSEDED\"}\n\n");
+                    sink.done();
+                    return true;
+                }
+                if (it != _activeRobotLeases.end()) {
+                    it->second.lastSeenMs = steadyMs();
+                }
+            }
+        } else {
+            SessionValidation sv = store.validateSession(st.token);
+            if (!sv.valid || sv.playerId != st.playerId) {
+                putText(sink, "event: closed\ndata: {\"error\":\"UNAUTHORIZED\"}\n\n");
+                sink.done();
+                return true;
+            }
         }
         rooms.recordClientHeartbeat(st.playerId, st.clientType, false);
     }
@@ -1736,7 +1968,22 @@ void OctiHttpServer::Impl::respondEvents(const Request &req, Response &res,
     st->token = auth.token;
     st->playerId = auth.playerId;
     st->clientType = auth.clientType;
-    if (auth.playerId > 0) {
+    if (auth.isRobot) {
+        st->isRobot = true;
+        st->robotId = auth.robotRecord.robotId;
+        if (req.has_header("X-Octi-Robot-Lease")) {
+            st->leaseId = req.get_header_value("X-Octi-Robot-Lease");
+        } else {
+            std::lock_guard<std::mutex> lock(_robotLeaseMutex);
+            auto it = _activeRobotLeases.find(st->robotId);
+            if (it != _activeRobotLeases.end()) {
+                st->leaseId = it->second.leaseId;
+            }
+        }
+        st->robotStreamGuard = std::make_shared<RobotStreamGuard>(
+            _robotLeaseMutex, _activeRobotLeases, st->robotId);
+    }
+    if (auth.playerId != 0) {
         rooms.recordClientHeartbeat(auth.playerId, auth.clientType, false);
     }
 
@@ -2502,6 +2749,29 @@ void OctiHttpServer::Impl::handleProfileGet(const Request &req, Response &res)
     if (!requireAuth(req, res, auth)) {
         return;
     }
+    if (auth.isRobot) {
+        Json j;
+        j["uuid"] = auth.robotRecord.robotUuid;
+        j["handle"] = auth.robotRecord.robotName;
+        j["display_name"] = auth.robotRecord.robotName;
+        j["avatar_url"] = auth.robotRecord.ownerAvatarUrl;
+        j["bio"] = auth.robotRecord.description;
+        j["is_robot"] = true;
+        j["robot_uuid"] = auth.robotRecord.robotUuid;
+        j["robot_name"] = auth.robotRecord.robotName;
+        j["description"] = auth.robotRecord.description;
+        j["owner_uuid"] = auth.robotRecord.ownerUuid;
+        j["owner_handle"] = auth.robotRecord.ownerHandle;
+        j["owner_avatar_url"] = auth.robotRecord.ownerAvatarUrl;
+        j["games_played"] = auth.robotRecord.gamesPlayed;
+        j["wins"] = auth.robotRecord.wins;
+        j["losses"] = auth.robotRecord.losses;
+        j["draws"] = auth.robotRecord.draws;
+        j["created_at"] = auth.robotRecord.createdAt;
+        j["linked_identities"] = Json::array();
+        sendJson(res, 200, j);
+        return;
+    }
     PlayerProfile p;
     if (!store.getProfileById(auth.playerId, p)) {
         sendError(res, 401, "UNAUTHORIZED", "unknown player");
@@ -2724,6 +2994,33 @@ void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
         }
         found = store.getProfileByHandle(h, prof);
     }
+    if (!found) {
+        RobotRecord robotRec;
+        if (store.getRobotByUuid(id, robotRec) && !robotRec.revoked) {
+            Json rj;
+            rj["is_robot"] = true;
+            rj["uuid"] = robotRec.robotUuid;
+            rj["robot_uuid"] = robotRec.robotUuid;
+            rj["handle"] = robotRec.robotName;
+            rj["robot_name"] = robotRec.robotName;
+            rj["display_name"] = robotRec.robotName;
+            rj["description"] = robotRec.description;
+            rj["bio"] = robotRec.description;
+            rj["avatar_url"] = robotRec.ownerAvatarUrl;
+            rj["owner_uuid"] = robotRec.ownerUuid;
+            rj["owner_handle"] = robotRec.ownerHandle;
+            rj["owner_avatar_url"] = robotRec.ownerAvatarUrl;
+            rj["games_played"] = robotRec.gamesPlayed;
+            rj["wins"] = robotRec.wins;
+            rj["losses"] = robotRec.losses;
+            rj["draws"] = robotRec.draws;
+            rj["created_at"] = robotRec.createdAt;
+            rj["robots"] = Json::array();
+            rj["recent_games"] = Json::array();
+            sendJson(res, 200, rj);
+            return;
+        }
+    }
     if (!found || prof.banned) {
         sendError(res, 404, "NOT_FOUND", "no such user");
         return;
@@ -2738,6 +3035,10 @@ void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
         rj["robot_uuid"] = r.robotUuid;
         rj["robot_name"] = r.robotName;
         rj["description"] = r.description;
+        rj["games_played"] = r.gamesPlayed;
+        rj["wins"] = r.wins;
+        rj["losses"] = r.losses;
+        rj["draws"] = r.draws;
         rj["created_at"] = r.createdAt;
         robotsArr.push_back(rj);
     }
@@ -2831,6 +3132,10 @@ void OctiHttpServer::Impl::handleRobotsList(const Request &req, Response &res)
         rj["robot_token"] = r.token;
         rj["token_prefix"] = r.tokenPrefix;
         rj["created_at"] = r.createdAt;
+        rj["games_played"] = r.gamesPlayed;
+        rj["wins"] = r.wins;
+        rj["losses"] = r.losses;
+        rj["draws"] = r.draws;
         rj["revoked"] = r.revoked;
         rj["revoked_at"] = r.revokedAt;
         arr.push_back(rj);
@@ -2894,7 +3199,8 @@ void OctiHttpServer::Impl::handleRobotCreate(const Request &req, Response &res)
         sendError(res, 409, "ROBOT_NAME_TAKEN", "robot name already taken");
         return;
     case RobotStatus::ROBOT_LIMIT_REACHED:
-        sendError(res, 409, "ROBOT_LIMIT_REACHED", "robot limit reached (max 3)");
+        sendError(res, 409, "ROBOT_LIMIT_REACHED",
+                  "robot limit reached (max " + std::to_string(kMaxRobotsPerPlayer) + ")");
         return;
     default:
         break;
@@ -2968,6 +3274,176 @@ void OctiHttpServer::Impl::handleRobotDelete(const Request &req, Response &res)
         break;
     }
     sendError(res, 500, "INTERNAL_ERROR", "failed to revoke robot");
+}
+
+void OctiHttpServer::Impl::handleRobotsConnect(const Request &req, Response &res)
+{
+    std::string token;
+    Json body;
+    bool bodyRead = readJsonBody(req, res, body, true);
+    if (!bodyRead) {
+        return;
+    }
+    if (!extractBearer(req, token)) {
+        std::string err;
+        if (fieldPresent(body, "robot_token")) {
+            fieldString(body, "robot_token", false, token, err);
+        } else if (fieldPresent(body, "token")) {
+            fieldString(body, "token", false, token, err);
+        }
+    }
+    if (token.empty()) {
+        res.set_header("WWW-Authenticate", "Bearer");
+        sendError(res, 401, "UNAUTHORIZED", "missing robot token");
+        return;
+    }
+    RobotTokenValidation val = store.validateRobotToken(token);
+    if (!val.valid || val.robot.revoked) {
+        res.set_header("WWW-Authenticate", "Bearer error=\"invalid_token\"");
+        sendError(res, 401, "UNAUTHORIZED", "invalid or revoked robot token");
+        return;
+    }
+    RobotRecord robotRec = val.robot;
+
+    bool ifUnused = false;
+    std::string err;
+    fieldBool(body, "if_unused", false, ifUnused, err);
+
+    int64_t actorId = makeRobotActorId(robotRec.robotId);
+    const int64_t now = steadyMs();
+
+    std::string leaseId;
+    {
+        std::lock_guard<std::mutex> lock(_robotLeaseMutex);
+        auto it = _activeRobotLeases.find(robotRec.robotId);
+        if (ifUnused && it != _activeRobotLeases.end() && !it->second.leaseId.empty()) {
+            if (it->second.activeStreams > 0 || (now - it->second.lastSeenMs < 30000)) {
+                sendError(res, 409, "ROBOT_TOKEN_IN_USE",
+                          "robot token is currently active on another connection");
+                return;
+            }
+        }
+        leaseId = generateLeaseId();
+        ActiveRobotLease &lease = _activeRobotLeases[robotRec.robotId];
+        lease.leaseId = leaseId;
+        lease.connectedAtMs = now;
+        lease.lastSeenMs = now;
+        lease.clientIp = req.remote_addr;
+        lease.clientType = "robot";
+    }
+
+    rooms.enterLobby(actorId);
+    rooms.recordClientHeartbeat(actorId, "robot", true);
+
+    std::string activeRoomId;
+    bool hasActiveRoom = rooms.findActiveRoomForActor(actorId, activeRoomId);
+
+    Json j;
+    j["ok"] = true;
+    j["lease_id"] = leaseId;
+    j["robot_id"] = robotRec.robotId;
+    j["robot_uuid"] = robotRec.robotUuid;
+    j["robot_name"] = robotRec.robotName;
+    j["description"] = robotRec.description;
+    j["owner_uuid"] = robotRec.ownerUuid;
+    j["owner_handle"] = robotRec.ownerHandle;
+    j["owner_avatar_url"] = robotRec.ownerAvatarUrl;
+    j["active_room_id"] = hasActiveRoom ? activeRoomId : "";
+    j["in_game"] = hasActiveRoom;
+    sendJson(res, 200, j);
+}
+
+void OctiHttpServer::Impl::handleRobotsDisconnect(const Request &req, Response &res)
+{
+    std::string token;
+    Json body;
+    bool bodyRead = readJsonBody(req, res, body, true);
+    if (!bodyRead) {
+        return;
+    }
+    if (!extractBearer(req, token)) {
+        std::string err;
+        if (fieldPresent(body, "robot_token")) {
+            fieldString(body, "robot_token", false, token, err);
+        } else if (fieldPresent(body, "token")) {
+            fieldString(body, "token", false, token, err);
+        }
+    }
+    if (token.empty()) {
+        res.set_header("WWW-Authenticate", "Bearer");
+        sendError(res, 401, "UNAUTHORIZED", "missing robot token");
+        return;
+    }
+    RobotTokenValidation val = store.validateRobotToken(token);
+    if (!val.valid || val.robot.revoked) {
+        res.set_header("WWW-Authenticate", "Bearer error=\"invalid_token\"");
+        sendError(res, 401, "UNAUTHORIZED", "invalid or revoked robot token");
+        return;
+    }
+    RobotRecord robotRec = val.robot;
+
+    std::string leaseHeader;
+    if (req.has_header("X-Octi-Robot-Lease")) {
+        leaseHeader = req.get_header_value("X-Octi-Robot-Lease");
+    } else if (fieldPresent(body, "lease_id")) {
+        std::string err;
+        fieldString(body, "lease_id", false, leaseHeader, err);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(_robotLeaseMutex);
+        auto it = _activeRobotLeases.find(robotRec.robotId);
+        if (it != _activeRobotLeases.end()) {
+            if (leaseHeader.empty() || it->second.leaseId == leaseHeader) {
+                _activeRobotLeases.erase(it);
+            }
+        }
+    }
+
+    int64_t actorId = makeRobotActorId(robotRec.robotId);
+    rooms.clearClientPresence(actorId, "robot");
+    rooms.leaveLobby(actorId);
+
+    Json j;
+    j["ok"] = true;
+    sendJson(res, 200, j);
+}
+
+void OctiHttpServer::Impl::handleRobotsExportConf(const Request &req, Response &res)
+{
+    Auth auth;
+    if (!requireAuth(req, res, auth)) {
+        return;
+    }
+    if (auth.isRobot || auth.playerId <= 0) {
+        sendError(res, 403, "FORBIDDEN_ROBOT", "robots cannot export token configs");
+        return;
+    }
+    PlayerProfile prof;
+    if (!store.getProfileById(auth.playerId, prof)) {
+        sendError(res, 401, "UNAUTHORIZED", "unknown player");
+        return;
+    }
+    std::vector<RobotRecord> robots;
+    if (!store.listRobots(auth.playerId, robots)) {
+        sendError(res, 500, "INTERNAL_ERROR", "failed to list robots");
+        return;
+    }
+    std::ostringstream ss;
+    ss << "# octi tokens.conf\n";
+    ss << "# Owner: " << prof.handle << " (" << prof.uuid << ")\n";
+    ss << "# Format: <robot_name>=<robot_token>\n\n";
+    for (size_t i = 0; i < robots.size(); ++i) {
+        const auto &r = robots[i];
+        if (!r.revoked && !r.token.empty()) {
+            ss << r.robotName << "=" << r.token << "\n";
+        }
+    }
+    std::string conf = ss.str();
+    res.status = 200;
+    res.set_header("Cache-Control", "no-store");
+    res.set_header("Content-Disposition", "attachment; filename=\"tokens.conf\"");
+    res.set_content(conf, "text/plain; charset=utf-8");
 }
 
 void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
@@ -3057,14 +3533,16 @@ void OctiHttpServer::Impl::handleLobbyState(const Request &req, Response &res)
     for (size_t i = 0; i < snap.players.size(); ++i) {
         PlayerProfile pProf;
         std::string avatarUrl;
-        if (snap.players[i].playerId > 0 && store.getProfileById(snap.players[i].playerId, pProf)) {
+        if (snap.players[i].isRobot) {
+            avatarUrl = snap.players[i].avatarUrl;
+        } else if (snap.players[i].playerId > 0 && store.getProfileById(snap.players[i].playerId, pProf)) {
             avatarUrl = pProf.avatarUrl;
         }
         Json clientsArr = Json::array();
         for (size_t ci = 0; ci < snap.players[i].clients.size(); ++ci) {
             clientsArr.push_back(snap.players[i].clients[ci]);
         }
-        players.push_back({
+        Json pj = {
             {"player_uuid", uuidOf(snap.players[i].playerId)},
             {"handle", snap.players[i].handle},
             {"avatar_url", avatarUrl},
@@ -3072,8 +3550,21 @@ void OctiHttpServer::Impl::handleLobbyState(const Request &req, Response &res)
             {"room_id", snap.players[i].roomId},
             {"clients", clientsArr},
             {"online_sec", snap.players[i].onlineSec},
-            {"idle_sec", snap.players[i].idleSec}
-        });
+            {"idle_sec", snap.players[i].idleSec},
+            {"is_robot", snap.players[i].isRobot}
+        };
+        if (snap.players[i].isRobot) {
+            pj["robot_uuid"] = snap.players[i].robotUuid;
+            pj["robot_description"] = snap.players[i].robotDescription;
+            pj["owner_player_id"] = snap.players[i].ownerPlayerId;
+            pj["owner_uuid"] = snap.players[i].ownerUuid;
+            pj["owner_handle"] = snap.players[i].ownerHandle;
+            pj["robot_games_played"] = snap.players[i].robotGamesPlayed;
+            pj["robot_wins"] = snap.players[i].robotWins;
+            pj["robot_losses"] = snap.players[i].robotLosses;
+            pj["robot_draws"] = snap.players[i].robotDraws;
+        }
+        players.push_back(pj);
     }
     j["players"] = players;
     Json tables = Json::array();
@@ -3306,6 +3797,7 @@ void OctiHttpServer::Impl::handleEnqueue(const Request &req, Response &res)
     rs.useEdgelessBoard = c.useEdgelessBoard;
     rs.initialMs = c.timeControl.enabled ? c.timeControl.initialMs : 0;
     rs.incrementMs = c.timeControl.enabled ? c.timeControl.incrementMs : 0;
+    rs.allowRobots = c.allowRobots;
     Json j;
     j["queued"] = true;
     finishRoom(res, rooms.enqueueMatchmaking(auth.playerId, rs), j);
@@ -3392,7 +3884,24 @@ void OctiHttpServer::Impl::handleMove(const Request &req, Response &res)
         sendError(res, 400, "INVALID_ARGUMENT", err);
         return;
     }
-    RoomResult r = rooms.submitMove(id, auth.playerId, move);
+    GameRoomManager::MoveTelemetry telemetry;
+    if (body.contains("ai") && body["ai"].is_object()) {
+        const auto &ai = body["ai"];
+        telemetry.present = true;
+        if (ai.contains("depth") && ai["depth"].is_number_integer()) {
+            telemetry.depth = ai["depth"].get<int>();
+        }
+        if (ai.contains("nodes") && ai["nodes"].is_number_integer()) {
+            telemetry.nodes = ai["nodes"].get<int64_t>();
+        }
+        if (ai.contains("score") && ai["score"].is_number_integer()) {
+            telemetry.score = ai["score"].get<int>();
+        }
+        if (ai.contains("elapsed_ms") && ai["elapsed_ms"].is_number_integer()) {
+            telemetry.elapsedMs = ai["elapsed_ms"].get<int64_t>();
+        }
+    }
+    RoomResult r = rooms.submitMove(id, auth.playerId, move, telemetry);
     Json j;
     j["move"] = r.move;
     j["clock_ms"] = r.clockMs;
@@ -5391,6 +5900,9 @@ void OctiHttpServer::Impl::registerRoutes()
         {"GET", "/api/v1/users", &Impl::handleUsersList},
         {"GET", "/api/v1/users/:id", &Impl::handleUserGet},
         {"GET", "/api/v1/robots", &Impl::handleRobotsList},
+        {"GET", "/api/v1/robots/export-conf", &Impl::handleRobotsExportConf},
+        {"POST", "/api/v1/robots/connect", &Impl::handleRobotsConnect},
+        {"POST", "/api/v1/robots/disconnect", &Impl::handleRobotsDisconnect},
         {"POST", "/api/v1/robots", &Impl::handleRobotCreate},
         {"PATCH", "/api/v1/robots/:id", &Impl::handleRobotPatch},
         {"DELETE", "/api/v1/robots/:id", &Impl::handleRobotDelete},

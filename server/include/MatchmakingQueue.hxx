@@ -18,6 +18,11 @@
 
 namespace octi {
 
+static constexpr int64_t kRobotActorIdBase = -1000000000LL;
+static inline bool isRobotActorId(int64_t id) { return id <= kRobotActorIdBase; }
+static inline int64_t makeRobotActorId(int64_t robotId) { return kRobotActorIdBase - robotId; }
+static inline int64_t robotIdFromActorId(int64_t actorId) { return kRobotActorIdBase - actorId; }
+
 /*
  * The ruleset options that bucket the queue: players are only ever matched
  * with players asking for exactly the same ruleset.
@@ -29,6 +34,7 @@ struct MatchRuleset {
     bool useEdgelessBoard = false;
     int64_t initialMs = 0;          // 0 = untimed
     int64_t incrementMs = 0;
+    bool allowRobots = true;
 
     bool operator==(const MatchRuleset &o) const;
     bool operator!=(const MatchRuleset &o) const { return !(*this == o); }

@@ -3132,15 +3132,52 @@ TEST(AccountStoreTest, RobotCrudAndTokenValidation)
     CreateRobotResult rMissing = store->createRobot(999999, "bot-missing", "No owner");
     CHECK_EQUAL((int)RobotStatus::NOT_FOUND, (int)rMissing.status);
 
-    // Create 2 more to hit max limit (3)
+    // Create 2 more
     CreateRobotResult r2 = store->createRobot(pid, "bot-two", "Second bot");
     CHECK_EQUAL((int)RobotStatus::OK, (int)r2.status);
     CreateRobotResult r3 = store->createRobot(pid, "bot-three", "Third bot");
     CHECK_EQUAL((int)RobotStatus::OK, (int)r3.status);
 
-    // 4th robot rejected by quota limit
-    CreateRobotResult r4 = store->createRobot(pid, "bot-four", "Fourth bot");
-    CHECK_EQUAL((int)RobotStatus::ROBOT_LIMIT_REACHED, (int)r4.status);
+    // Create 29 more to hit max limit (32)
+    std::vector<std::string> extraUuids;
+    for (int i = 4; i <= 32; ++i) {
+        std::string name = "bot-" + std::to_string(i);
+        CreateRobotResult ri = store->createRobot(pid, name, "Bot " + std::to_string(i));
+        CHECK_EQUAL((int)RobotStatus::OK, (int)ri.status);
+        extraUuids.push_back(ri.robot.robotUuid);
+    }
+
+    // 33rd robot rejected by quota limit (max 32)
+    CreateRobotResult r33 = store->createRobot(pid, "bot-33", "Thirty-third bot");
+    CHECK_EQUAL((int)RobotStatus::ROBOT_LIMIT_REACHED, (int)r33.status);
+
+    // Test getRobotById & getRobotByUuid
+    RobotRecord fetchedById;
+    CHECK_TRUE(store->getRobotById(r1.robot.robotId, fetchedById));
+    STRCMP_EQUAL("bot-one", fetchedById.robotName.c_str());
+    CHECK_EQUAL(pid, fetchedById.ownerPlayerId);
+    STRCMP_EQUAL(r1.robot.robotUuid.c_str(), fetchedById.robotUuid.c_str());
+
+    RobotRecord fetchedByUuid;
+    CHECK_TRUE(store->getRobotByUuid(r1.robot.robotUuid, fetchedByUuid));
+    STRCMP_EQUAL("bot-one", fetchedByUuid.robotName.c_str());
+    CHECK_EQUAL(r1.robot.robotId, fetchedByUuid.robotId);
+
+    // Test recordRobotGameOutcome
+    CHECK_EQUAL(0, fetchedById.gamesPlayed);
+    CHECK_EQUAL(0, fetchedById.wins);
+    CHECK_EQUAL(0, fetchedById.losses);
+    CHECK_EQUAL(0, fetchedById.draws);
+
+    CHECK_TRUE(store->recordRobotGameOutcome(r1.robot.robotId, GameOutcome::WIN));
+    CHECK_TRUE(store->recordRobotGameOutcome(r1.robot.robotId, GameOutcome::LOSS));
+    CHECK_TRUE(store->recordRobotGameOutcome(r1.robot.robotId, GameOutcome::DRAW));
+
+    CHECK_TRUE(store->getRobotById(r1.robot.robotId, fetchedById));
+    CHECK_EQUAL(3, fetchedById.gamesPlayed);
+    CHECK_EQUAL(1, fetchedById.wins);
+    CHECK_EQUAL(1, fetchedById.losses);
+    CHECK_EQUAL(1, fetchedById.draws);
 
     // Update description
     CHECK_EQUAL((int)RobotStatus::OK,
@@ -3149,14 +3186,14 @@ TEST(AccountStoreTest, RobotCrudAndTokenValidation)
     // Owner list contains full token
     std::vector<RobotRecord> ownerBots;
     CHECK_TRUE(store->listRobots(pid, ownerBots));
-    CHECK_EQUAL(3, (int)ownerBots.size());
+    CHECK_EQUAL(32, (int)ownerBots.size());
     CHECK_TRUE(!ownerBots[0].token.empty());
     CHECK_TRUE(!ownerBots[0].tokenPrefix.empty());
 
     // Public list strips token and tokenPrefix
     std::vector<RobotRecord> pubBots;
     CHECK_TRUE(store->listPublicRobotsByOwner(pid, pubBots));
-    CHECK_EQUAL(3, (int)pubBots.size());
+    CHECK_EQUAL(32, (int)pubBots.size());
     for (size_t i = 0; i < pubBots.size(); ++i) {
         CHECK_TRUE(pubBots[i].token.empty());
         CHECK_TRUE(pubBots[i].tokenPrefix.empty());
@@ -3184,9 +3221,9 @@ TEST(AccountStoreTest, RobotCrudAndTokenValidation)
     CreateRobotResult rReuse = store->createRobot(pid, "bot-one", "Recreated bot one");
     CHECK_EQUAL((int)RobotStatus::OK, (int)rReuse.status);
 
-    // Active count is now 3 again (bot-two, bot-three, bot-one) -> creating 4th robot hits limit
-    CreateRobotResult r4New = store->createRobot(pid, "bot-four", "Fourth bot");
-    CHECK_EQUAL((int)RobotStatus::ROBOT_LIMIT_REACHED, (int)r4New.status);
+    // Active count is now 32 again -> creating 33rd robot hits limit
+    CreateRobotResult r33New = store->createRobot(pid, "bot-33", "Thirty-third bot");
+    CHECK_EQUAL((int)RobotStatus::ROBOT_LIMIT_REACHED, (int)r33New.status);
 
     // Banned owner revokes token validation
     CHECK_TRUE(store->setBanned(pid, true));

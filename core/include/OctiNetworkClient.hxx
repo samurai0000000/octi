@@ -4,8 +4,8 @@
  * Copyright (C) 2026, Charles Chiou
  */
 
-#ifndef OCTI_DESKTOP_OCTI_NETWORK_CLIENT_HXX
-#define OCTI_DESKTOP_OCTI_NETWORK_CLIENT_HXX
+#ifndef OCTI_CORE_OCTI_NETWORK_CLIENT_HXX
+#define OCTI_CORE_OCTI_NETWORK_CLIENT_HXX
 
 #include <cstdint>
 #include <functional>
@@ -136,6 +136,15 @@ struct PlayerProfileInfo {
     std::int64_t lastSeenAt = 0;
     std::vector<LinkedIdentityInfo> identities;
     std::vector<ArchivedGameSummary> recentGames;
+    bool isRobot = false;
+    std::string robotUuid;
+    std::string description;
+    std::string ownerUuid;
+    std::string ownerHandle;
+    int robotGamesPlayed = 0;
+    int robotWins = 0;
+    int robotLosses = 0;
+    int robotDraws = 0;
 };
 
 struct SsoLoginData {
@@ -179,6 +188,15 @@ struct LobbyPlayerInfo {
     std::vector<std::string> clients;
     std::int64_t onlineSec = 0;
     std::int64_t idleSec = 0;
+    bool isRobot = false;
+    std::string robotUuid;
+    std::string description;
+    std::string ownerUuid;
+    std::string ownerHandle;
+    int robotGamesPlayed = 0;
+    int robotWins = 0;
+    int robotLosses = 0;
+    int robotDraws = 0;
 };
 
 struct LobbyChatEntry {
@@ -188,6 +206,10 @@ struct LobbyChatEntry {
     std::string handle;
     std::string text;
     std::int64_t createdAtMs = 0;
+    bool isRobot = false;
+    std::string robotUuid;
+    std::string ownerUuid;
+    std::string ownerHandle;
 };
 using LobbyChatMessage = LobbyChatEntry;
 
@@ -197,6 +219,16 @@ struct TableSeatInfo {
     std::string handle;
     int rating = 1500;
     bool connected = false;
+    bool isRobot = false;
+    std::string robotUuid;
+    std::string description;
+    std::string ownerUuid;
+    std::string ownerHandle;
+    std::string avatarUrl;
+    int robotGamesPlayed = 0;
+    int robotWins = 0;
+    int robotLosses = 0;
+    int robotDraws = 0;
 };
 
 struct TableSummaryInfo {
@@ -223,6 +255,7 @@ struct TableSummaryInfo {
     std::vector<TableSeatInfo> seats;
     std::vector<std::string> players;
     int observerCount = 0;
+    bool allowRobots = true;
 };
 
 struct LobbyStateData {
@@ -246,6 +279,7 @@ struct CreateTableRequest {
     std::string observerPolicy = "OPEN";
     std::string voicePolicy = "PLAYERS_ONLY";
     std::string passcode;
+    bool allowRobots = true;
 };
 
 struct CreateTableResponse {
@@ -267,6 +301,7 @@ struct MatchmakingRequest {
     bool timeControlEnabled = false;
     std::int64_t initialMs = 0;
     std::int64_t incrementMs = 0;
+    bool allowRobots = true;
 };
 
 struct MatchmakingStatusData {
@@ -287,6 +322,16 @@ struct GameSeatInfo {
     bool forfeitClaimable = false;
     std::int64_t clockMs = -1;
     bool eliminated = false;
+    bool isRobot = false;
+    std::string robotUuid;
+    std::string description;
+    std::string ownerUuid;
+    std::string ownerHandle;
+    std::string avatarUrl;
+    int robotGamesPlayed = 0;
+    int robotWins = 0;
+    int robotLosses = 0;
+    int robotDraws = 0;
 };
 
 struct GameProposalInfo {
@@ -338,6 +383,30 @@ struct GameViewData {
     bool archived = false;
     std::string rematchRoomId;
     std::int64_t createdAtMs = 0;
+    bool allowRobots = true;
+};
+
+struct RobotConnectData {
+    std::string leaseId;
+    std::string robotUuid;
+    std::string handle;
+    std::string description;
+    std::string ownerUuid;
+    std::string ownerHandle;
+    std::string avatarUrl;
+    std::string activeRoomId;
+    int gamesPlayed = 0;
+    int wins = 0;
+    int losses = 0;
+    int draws = 0;
+};
+
+struct MoveTelemetryData {
+    bool present = false;
+    int depth = 0;
+    std::int64_t nodes = 0;
+    int score = 0;
+    std::int64_t elapsedMs = 0;
 };
 
 struct MoveSubmitData {
@@ -433,6 +502,16 @@ public:
     void clearSessionToken();
     bool isAuthenticated() const { return !sessionToken().empty(); }
 
+    void setBotToken(const std::string &token);
+    bool isRobotToken() const;
+
+    void setClientType(const std::string &clientType);
+    std::string clientType() const;
+
+    void setRobotLeaseId(const std::string &leaseId);
+    std::string robotLeaseId() const;
+    void clearRobotLeaseId();
+
     void setInstallId(const std::string &installId);
     std::string installId() const;
 
@@ -520,6 +599,10 @@ public:
     ApiResult<MoveSubmitData> submitMove(
         const std::string &roomId,
         const std::string &moveStr);
+    ApiResult<MoveSubmitData> submitMove(
+        const std::string &roomId,
+        const std::string &moveStr,
+        const MoveTelemetryData &telemetry);
     ApiResult<bool> resignGame(const std::string &roomId);
     ApiResult<GameActionData> submitGameAction(
         const std::string &roomId,
@@ -573,6 +656,11 @@ public:
         const CrashReportRequest &req);
     ApiResult<int> deleteInstallArchiveData(
         const std::string &installId);
+
+    /* ---- 36..38: Robot Protocol & Administration ---- */
+    ApiResult<RobotConnectData> connectRobot(bool ifUnused = false);
+    ApiResult<bool> disconnectRobot();
+    ApiResult<std::string> exportRobotTokensConf();
 
     /* ---- Poll & Server-Sent Events (SSE) Live Streams ---- */
     ApiResult<std::vector<SseEvent>> pollLobbyEvents(
@@ -657,7 +745,7 @@ private:
 
 } // namespace octi
 
-#endif // OCTI_DESKTOP_OCTI_NETWORK_CLIENT_HXX
+#endif // OCTI_CORE_OCTI_NETWORK_CLIENT_HXX
 
 /*
  * Local variables:

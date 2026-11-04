@@ -59,7 +59,8 @@ configure_file(
 )
 
 set(OCTI_THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party")
-if(NOT EXISTS "${OCTI_THIRD_PARTY_DIR}/json/include/nlohmann/json.hpp")
+if(NOT EXISTS "${OCTI_THIRD_PARTY_DIR}/json/include/nlohmann/json.hpp" OR
+   NOT EXISTS "${OCTI_THIRD_PARTY_DIR}/cpp-httplib/httplib.h")
     message(FATAL_ERROR
         "third_party submodules missing; run: git submodule update --init --recursive")
 endif()
@@ -73,6 +74,7 @@ add_library(octi_core STATIC
     src/OctiBoard.cxx
     src/OctiGame.cxx
     src/OctiBotEngine.cxx
+    src/OctiNetworkClient.cxx
 )
 
 target_include_directories(octi_core PUBLIC
@@ -82,7 +84,27 @@ target_include_directories(octi_core PUBLIC
 
 target_include_directories(octi_core SYSTEM PUBLIC
     ${OCTI_THIRD_PARTY_DIR}/json/include
+    ${OCTI_THIRD_PARTY_DIR}/cpp-httplib
 )
+
+if(WIN32)
+    target_link_libraries(octi_core PUBLIC
+        ws2_32
+        crypt32
+        winhttp
+    )
+else()
+    find_package(Threads REQUIRED)
+    find_package(OpenSSL REQUIRED)
+    target_compile_definitions(octi_core PUBLIC
+        CPPHTTPLIB_OPENSSL_SUPPORT
+    )
+    target_link_libraries(octi_core PUBLIC
+        Threads::Threads
+        OpenSSL::SSL
+        OpenSSL::Crypto
+    )
+endif()
 
 if(OCTI_CORE_BUILD_TESTS AND NOT WIN32)
     find_package(PkgConfig REQUIRED)

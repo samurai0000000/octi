@@ -4311,6 +4311,156 @@ TEST(GameRoomManagerTest, TableSummaryIncludesDetailedSeatRoster)
     CHECK_FALSE(t.seats[1].connected);
 }
 
+TEST(GameRoomManagerTest, RobotActorIdsAndAllowRobotsToggle)
+{
+    CreateRobotResult cr = store->createRobot(p[0], "octi-bot-alpha", "Alpha bot");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)cr.status);
+    int64_t robotActorId = makeRobotActorId(cr.robot.robotId);
+    CHECK_TRUE(isRobotActorId(robotActorId));
+    CHECK_EQUAL(cr.robot.robotId, robotIdFromActorId(robotActorId));
+
+    // Table with allowRobots = false rejects robot
+    GameTableConfig cNoBots = cfg();
+    cNoBots.allowRobots = false;
+    RoomResult r1 = mgr->createTable(p[0], cNoBots);
+    EXPECT_OK(r1);
+    RoomResult joinRejected = mgr->joinTable(r1.roomId, robotActorId, 2, "");
+    CHECK_EQUAL((int)RoomCode::ROBOTS_NOT_ALLOWED, (int)joinRejected.code);
+
+    // Leave first table so p[0] is free to create the next table
+    EXPECT_OK(mgr->leaveTable(r1.roomId, p[0]));
+
+    // Table with allowRobots = true accepts robot
+    GameTableConfig cAllow = cfg();
+    cAllow.allowRobots = true;
+    RoomResult r2 = mgr->createTable(p[0], cAllow);
+    EXPECT_OK(r2);
+    RoomResult joinOk = mgr->joinTable(r2.roomId, robotActorId, 2, "");
+    EXPECT_OK(joinOk);
+
+    RoomView view;
+    EXPECT_OK(mgr->getRoomView(r2.roomId, p[0], view));
+    CHECK_TRUE(view.seats[1].isRobot);
+    STRCMP_EQUAL("octi-bot-alpha", view.seats[1].handle.c_str());
+    STRCMP_EQUAL("Alpha bot", view.seats[1].robotDescription.c_str());
+    CHECK_EQUAL(p[0], view.seats[1].ownerPlayerId);
+    STRCMP_EQUAL(cr.robot.ownerUuid.c_str(), view.seats[1].ownerUuid.c_str());
+}
+
+TEST(GameRoomManagerTest, HumanOnlyEloInvariantAndRobotGameOutcomes)
+{
+    CreateRobotResult cr = store->createRobot(p[0], "bot-sparring", "Sparring partner");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)cr.status);
+    int64_t robotActorId = makeRobotActorId(cr.robot.robotId);
+
+    PlayerProfile profBefore;
+    CHECK_TRUE(store->getProfileById(p[0], profBefore));
+    int initialElo = profBefore.elo2p;
+    int initialGames = profBefore.gamesPlayed;
+
+    GameTableConfig c = cfg();
+    c.mode = GAME_MODE_2;
+    c.bases = GAME_BASES_1;
+    c.rated = true;
+    c.allowRobots = true;
+    c.timeControl.enabled = false;
+
+    RoomResult crTable = mgr->createTable(p[0], c);
+    EXPECT_OK(crTable);
+    std::string roomId = crTable.roomId;
+
+    RoomResult jBot = mgr->joinTable(roomId, robotActorId, 2, "");
+    EXPECT_OK(jBot);
+
+    std::string activeRoom;
+    CHECK_TRUE(mgr->findActiveRoomForActor(robotActorId, activeRoom));
+    STRCMP_EQUAL(roomId.c_str(), activeRoom.c_str());
+
+    // Play two player winning sequence to completion (seat 1 wins)
+    std::vector<int> mover = moverSeats(GAME_MODE_2, false, kTwoPlayerWin);
+    for (size_t i = 0; i < kTwoPlayerWin.size(); ++i) {
+        int64_t actor = (mover[i] == 1) ? p[0] : robotActorId;
+        RoomResult mr = mgr->submitMove(roomId, actor, kTwoPlayerWin[i]);
+        EXPECT_OK(mr);
+    }
+
+    // Game completed
+    RoomView finishedView;
+    EXPECT_OK(mgr->getRoomView(roomId, p[0], finishedView));
+    STRCMP_EQUAL("FINISHED", toString(finishedView.phase));
+
+    // Active room lookup for robot is now false
+    CHECK_FALSE(mgr->findActiveRoomForActor(robotActorId, activeRoom));
+
+    // Human-Only Elo Invariant: human Elo & gamesPlayed in players table are UNTOUCHED!
+    PlayerProfile profAfter;
+    CHECK_TRUE(store->getProfileById(p[0], profAfter));
+    CHECK_EQUAL(initialElo, profAfter.elo2p);
+    CHECK_EQUAL(initialGames, profAfter.gamesPlayed);
+
+    // Robot outcomes recorded in robots table
+    RobotRecord botRec;
+    CHECK_TRUE(store->getRobotById(cr.robot.robotId, botRec));
+    CHECK_EQUAL(1, botRec.gamesPlayed);
+    CHECK_EQUAL(0, botRec.wins);
+    CHECK_EQUAL(1, botRec.losses);
+    CHECK_EQUAL(0, botRec.draws);
+}
+
+TEST(GameRoomManagerTest, MatchmakingRobotCompatibility)
+{
+    CreateRobotResult cr = store->createRobot(p[0], "match-bot", "Matchmaking bot");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)cr.status);
+    int64_t robotActorId = makeRobotActorId(cr.robot.robotId);
+
+    MatchRuleset rsHumanNoBots;
+    rsHumanNoBots.mode = GAME_MODE_2;
+    rsHumanNoBots.bases = GAME_BASES_3;
+    rsHumanNoBots.allowRobots = false;
+
+    MatchRuleset rsRobot;
+    rsRobot.mode = GAME_MODE_2;
+    rsRobot.bases = GAME_BASES_3;
+    rsRobot.allowRobots = true;
+
+    // Human with allowRobots=false enqueues
+    RoomResult q1 = mgr->enqueueMatchmaking(p[1], rsHumanNoBots);
+    EXPECT_OK(q1);
+
+    // Robot enqueues
+    RoomResult qBot = mgr->enqueueMatchmaking(robotActorId, rsRobot);
+    EXPECT_OK(qBot);
+
+    // Tick: neither matched because p[1] disallowed robots
+    CHECK_EQUAL(0, mgr->tick().matchesSpawned);
+    CHECK_TRUE(mgr->matchmakingStatus(p[1]).queued);
+    CHECK_TRUE(mgr->matchmakingStatus(robotActorId).queued);
+
+    // Dequeue p[1] so only robotActorId remains in queue
+    EXPECT_OK(mgr->dequeueMatchmaking(p[1]));
+    CHECK_FALSE(mgr->matchmakingStatus(p[1]).queued);
+
+    // Another human with allowRobots=true enqueues
+    MatchRuleset rsHumanAllowBots;
+    rsHumanAllowBots.mode = GAME_MODE_2;
+    rsHumanAllowBots.bases = GAME_BASES_3;
+    rsHumanAllowBots.allowRobots = true;
+
+    RoomResult q2 = mgr->enqueueMatchmaking(p[2], rsHumanAllowBots);
+    EXPECT_OK(q2);
+
+    // Tick: p[2] and robotActorId match!
+    CHECK_EQUAL(1, mgr->tick().matchesSpawned);
+
+    MatchmakingStatus sBotAfter = mgr->matchmakingStatus(robotActorId);
+    CHECK_FALSE(sBotAfter.queued);
+    CHECK_FALSE(sBotAfter.matchedRoomId.empty());
+
+    MatchmakingStatus sHuman2After = mgr->matchmakingStatus(p[2]);
+    CHECK_FALSE(sHuman2After.queued);
+    STRCMP_EQUAL(sBotAfter.matchedRoomId.c_str(), sHuman2After.matchedRoomId.c_str());
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

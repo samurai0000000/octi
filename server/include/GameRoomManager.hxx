@@ -90,6 +90,7 @@ enum class RoomCode {
     SEAT_TAKEN,
     ALREADY_SEATED,
     CONFLICT,                   // e.g. proposal already pending, already queued
+    ROBOTS_NOT_ALLOWED,
     LIMIT_REACHED,
     INTERNAL_ERROR
 };
@@ -133,6 +134,7 @@ struct GameTableConfig {
     ObserverPolicy observerPolicy = ObserverPolicy::OPEN;
     VoicePolicy voicePolicy = VoicePolicy::PLAYERS_ONLY;
     std::string passcode;           // empty = public table
+    bool allowRobots = true;
 };
 
 /* Tunable resource bounds; defaults are production values. */
@@ -241,6 +243,17 @@ struct RoomEvent {
     int64_t elapsedMs = 0;
     std::string text;
     std::string detail;
+    bool isRobot = false;
+    std::string robotUuid;
+    std::string robotDescription;
+    int64_t ownerPlayerId = 0;
+    std::string ownerUuid;
+    std::string ownerHandle;
+    std::string avatarUrl;
+    int robotGamesPlayed = 0;
+    int robotWins = 0;
+    int robotLosses = 0;
+    int robotDraws = 0;
 };
 
 struct RoomPoll {
@@ -264,6 +277,17 @@ struct SeatView {
     bool forfeitClaimable = false;  // disconnected past the grace window
     int64_t clockMs = -1;           // live remaining time, -1 if untimed
     bool eliminated = false;
+    bool isRobot = false;
+    std::string robotUuid;
+    std::string robotDescription;
+    int64_t ownerPlayerId = 0;
+    std::string ownerUuid;
+    std::string ownerHandle;
+    std::string avatarUrl;
+    int robotGamesPlayed = 0;
+    int robotWins = 0;
+    int robotLosses = 0;
+    int robotDraws = 0;
 };
 
 struct ProposalView {
@@ -312,6 +336,17 @@ struct TableSeatSummary {
     std::string handle;
     int rating = 1500;
     bool connected = false;
+    bool isRobot = false;
+    std::string robotUuid;
+    std::string robotDescription;
+    int64_t ownerPlayerId = 0;
+    std::string ownerUuid;
+    std::string ownerHandle;
+    std::string avatarUrl;
+    int robotGamesPlayed = 0;
+    int robotWins = 0;
+    int robotLosses = 0;
+    int robotDraws = 0;
 };
 
 struct TableSummary {
@@ -355,6 +390,17 @@ struct LobbyEvent {
     std::string text;               // chat text
     PresenceStatus status = PresenceStatus::IN_LOBBY;
     std::string roomId;
+    bool isRobot = false;
+    std::string robotUuid;
+    std::string robotDescription;
+    int64_t ownerPlayerId = 0;
+    std::string ownerUuid;
+    std::string ownerHandle;
+    std::string avatarUrl;
+    int robotGamesPlayed = 0;
+    int robotWins = 0;
+    int robotLosses = 0;
+    int robotDraws = 0;
 };
 
 struct LobbyPoll {
@@ -372,6 +418,17 @@ struct PresenceEntry {
     std::vector<std::string> clients;
     int64_t onlineSec = 0;
     int64_t idleSec = 0;
+    bool isRobot = false;
+    std::string robotUuid;
+    std::string robotDescription;
+    int64_t ownerPlayerId = 0;
+    std::string ownerUuid;
+    std::string ownerHandle;
+    std::string avatarUrl;
+    int robotGamesPlayed = 0;
+    int robotWins = 0;
+    int robotLosses = 0;
+    int robotDraws = 0;
 };
 
 struct LobbySnapshot {
@@ -426,6 +483,19 @@ struct TickReport {
  */
 class GameRoomManager {
 public:
+    static constexpr int64_t kRobotActorIdBase = octi::kRobotActorIdBase;
+    static bool isRobotActorId(int64_t id) { return octi::isRobotActorId(id); }
+    static int64_t makeRobotActorId(int64_t robotId) { return octi::makeRobotActorId(robotId); }
+    static int64_t robotIdFromActorId(int64_t actorId) { return octi::robotIdFromActorId(actorId); }
+
+    struct MoveTelemetry {
+        bool present = false;
+        int depth = 0;
+        int64_t nodes = 0;
+        int score = 0;
+        int64_t elapsedMs = 0;
+    };
+
     static constexpr size_t kMaxChatBytes = 500;
     static constexpr size_t kMaxVoicePayloadBytes = 4096;
     static constexpr size_t kMaxMoveBytes = 512;
@@ -493,6 +563,9 @@ public:
 
     /* ---- play ---- */
     RoomResult submitMove(const std::string &roomId, int64_t playerId,
+                          const std::string &moveText,
+                          const MoveTelemetry &telemetry);
+    RoomResult submitMove(const std::string &roomId, int64_t playerId,
                           const std::string &moveText);
     RoomResult resign(const std::string &roomId, int64_t playerId);
     RoomResult submitProposal(const std::string &roomId, int64_t playerId,
@@ -548,12 +621,25 @@ public:
     /* Number of players currently online (cheap; no snapshot is built). */
     size_t onlinePlayerCount() const;
 
+    bool findActiveRoomForActor(int64_t actorId, std::string &outRoomId) const;
+
     int64_t ensureAnonymousObserver(const std::string &ipAddress);
 
 private:
     struct Room;
     struct PlayerInfo {
         std::string handle;
+        bool isRobot = false;
+        std::string playerUuid;
+        std::string robotDescription;
+        int64_t ownerPlayerId = 0;
+        std::string ownerUuid;
+        std::string ownerHandle;
+        std::string avatarUrl;
+        int robotGamesPlayed = 0;
+        int robotWins = 0;
+        int robotLosses = 0;
+        int robotDraws = 0;
         bool online = false;
         PresenceStatus lastPresence = PresenceStatus::OFFLINE;
         int64_t onlineSinceMs = 0;

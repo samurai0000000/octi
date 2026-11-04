@@ -14,6 +14,7 @@
 #include "OctiGame.hxx"
 #include "OctiBotEngine.hxx"
 #include "OctiCrypto.hxx"
+#include "OctiNetworkClient.hxx"
 #include "Version.hxx"
 #include <chrono>
 #include <nlohmann/json.hpp>
@@ -2981,6 +2982,91 @@ TEST(OctiBotTacticalUpgradeTest, BotEngineThreeVariants2P4POfkEvaluationAndTacti
         std::string chosen = bot.chooseMove(boardOfk);
         CHECK_EQUAL(std::string("33a-35x"), chosen);
     }
+}
+
+TEST_GROUP(OctiCore_NetworkClient)
+{
+};
+
+TEST(OctiCore_NetworkClient, NominalTokenAndLeaseMetadata)
+{
+    octi::OctiNetworkClient client;
+    CHECK_EQUAL(std::string("desktop"), client.clientType());
+    CHECK_FALSE(client.isRobotToken());
+    CHECK_FALSE(client.isAuthenticated());
+
+    client.setBotToken("octi_bot_test123");
+    CHECK_TRUE(client.isRobotToken());
+    CHECK_EQUAL(std::string("robot"), client.clientType());
+    CHECK_TRUE(client.isAuthenticated());
+    CHECK_EQUAL(std::string("octi_bot_test123"), client.sessionToken());
+
+    client.setSessionToken("human_session_xyz");
+    CHECK_FALSE(client.isRobotToken());
+    CHECK_EQUAL(std::string("desktop"), client.clientType());
+    CHECK_TRUE(client.isAuthenticated());
+    CHECK_EQUAL(std::string("human_session_xyz"), client.sessionToken());
+
+    client.setRobotLeaseId("lease_abc");
+    CHECK_EQUAL(std::string("lease_abc"), client.robotLeaseId());
+    client.clearRobotLeaseId();
+    CHECK_EQUAL(std::string(""), client.robotLeaseId());
+
+    client.setClientType("custom_client");
+    CHECK_EQUAL(std::string("custom_client"), client.clientType());
+}
+
+TEST(OctiCore_NetworkClient, BoundarySseParsing)
+{
+    // Empty buffer
+    std::string emptyBuf;
+    std::vector<octi::SseEvent> events =
+        octi::OctiNetworkClient::parseSseBuffer(emptyBuf);
+    CHECK_EQUAL(0, events.size());
+    CHECK_EQUAL(0, emptyBuf.length());
+
+    // Partial frame across chunks
+    std::string partialBuf = "id: 10\nevent: update\ndata: {\"key\":\"val";
+    events = octi::OctiNetworkClient::parseSseBuffer(partialBuf);
+    CHECK_EQUAL(0, events.size());
+    CHECK_TRUE(partialBuf.length() > 0);
+
+    partialBuf += "\"}\n\n";
+    events = octi::OctiNetworkClient::parseSseBuffer(partialBuf);
+    CHECK_EQUAL(1, events.size());
+    CHECK_EQUAL(10, events[0].id);
+    CHECK_EQUAL(std::string("update"), events[0].event);
+    CHECK_EQUAL(std::string("{\"key\":\"val\"}"), events[0].dataJson);
+    CHECK_EQUAL(0, partialBuf.length());
+
+    // Multi-line data frame
+    std::string multiLineBuf =
+        "id: 20\nevent: msg\ndata: line 1\ndata: line 2\n\n";
+    events = octi::OctiNetworkClient::parseSseBuffer(multiLineBuf);
+    CHECK_EQUAL(1, events.size());
+    CHECK_EQUAL(20, events[0].id);
+    CHECK_EQUAL(std::string("msg"), events[0].event);
+    CHECK_EQUAL(std::string("line 1\nline 2"), events[0].dataJson);
+    CHECK_EQUAL(0, multiLineBuf.length());
+
+    // \r\n vs \n line endings, and comment lines (: heartbeat)
+    std::string mixedBuf =
+        ": heartbeat\r\n: ping\r\nid: 30\r\nevent: chat\r\ndata: {\"msg\":\"hi\"}\r\n\r\n";
+    events = octi::OctiNetworkClient::parseSseBuffer(mixedBuf);
+    CHECK_EQUAL(1, events.size());
+    CHECK_EQUAL(30, events[0].id);
+    CHECK_EQUAL(std::string("chat"), events[0].event);
+    CHECK_EQUAL(std::string("{\"msg\":\"hi\"}"), events[0].dataJson);
+    CHECK_EQUAL(0, mixedBuf.length());
+}
+
+TEST(OctiCore_NetworkClient, FaultClosedLoopbackConnection)
+{
+    std::unique_ptr<octi::OctiNetworkClient> client =
+        octi::OctiNetworkClient::createForLoopbackTest(1);
+    CHECK_TRUE(client != nullptr);
+    octi::ApiResult<octi::HealthInfo> res = client->fetchHealth();
+    CHECK_FALSE(res.ok);
 }
 
 int main(int argc, char **argv)

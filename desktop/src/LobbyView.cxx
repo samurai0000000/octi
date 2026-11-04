@@ -453,8 +453,9 @@ QString LobbyView::formatSeatOccupancySummary(const TableSummaryInfo &table)
         QString letter = seatLetterForIndex(s);
         const TableSeatInfo *seat = findSeatInfo(table, s);
         if (seat && (!seat->handle.empty() || !seat->playerUuid.empty())) {
-            parts << QString("%1: %2").arg(
-                letter, formatHandleWithAt(seat->handle));
+            QString botTag = seat->isRobot ? " [BOT]" : "";
+            parts << QString("%1: %2%3").arg(
+                letter, formatHandleWithAt(seat->handle), botTag);
         } else if (table.seats.empty() && s == 1 &&
                    table.seatsFilled >= 1 && !table.hostHandle.empty()) {
             parts << QString("%1: %2").arg(
@@ -480,10 +481,12 @@ QString LobbyView::formatSeatBreakdownText(const TableSummaryInfo &table)
         const TableSeatInfo *seat = findSeatInfo(table, s);
         if (seat && (!seat->handle.empty() || !seat->playerUuid.empty())) {
             QString connTag = seat->connected ? "" : " [away]";
-            lines << QString("Seat %1 (%2): %3 (%4)%5")
+            QString botTag = seat->isRobot ? " [BOT]" : "";
+            lines << QString("Seat %1 (%2): %3%4 (%5)%6")
                          .arg(s)
                          .arg(letter)
                          .arg(formatHandleWithAt(seat->handle))
+                         .arg(botTag)
                          .arg(seat->rating > 0 ? seat->rating : 1500)
                          .arg(connTag);
         } else if (table.seats.empty() && s == 1 &&
@@ -928,8 +931,11 @@ void LobbyView::rebuildPlayersTable()
     for (int i = 0; i < static_cast<int>(_players.size()); ++i) {
         const LobbyPlayerInfo &p = _players[static_cast<std::size_t>(i)];
 
-        QTableWidgetItem *userItem =
-            new QTableWidgetItem(formatHandleWithAt(p.handle));
+        QString handleText = formatHandleWithAt(p.handle);
+        if (p.isRobot) {
+            handleText += " [BOT]";
+        }
+        QTableWidgetItem *userItem = new QTableWidgetItem(handleText);
         userItem->setIcon(makeAvatarIcon(p.handle, _theme));
         _playersTable->setItem(i, 0, userItem);
 

@@ -277,7 +277,7 @@ struct UserDirectoryEntry {
     int activeRobotsCount = 0;
 };
 
-static constexpr int kMaxRobotsPerPlayer = 3;
+static constexpr int kMaxRobotsPerPlayer = 32;
 
 struct RobotRecord {
     int64_t robotId = 0;
@@ -285,10 +285,15 @@ struct RobotRecord {
     int64_t ownerPlayerId = 0;
     std::string ownerUuid;
     std::string ownerHandle;
+    std::string ownerAvatarUrl;
     std::string robotName;
     std::string description;
     std::string token;       // Full "octi_bot_<base64url>" for owner; cleared in public queries
     std::string tokenPrefix; // "octi_bot_xxxx..."
+    int gamesPlayed = 0;
+    int wins = 0;
+    int losses = 0;
+    int draws = 0;
     int64_t createdAt = 0;
     bool revoked = false;
     int64_t revokedAt = 0;
@@ -424,6 +429,9 @@ public:
     RobotStatus revokeRobot(int64_t ownerPlayerId,
                             const std::string &robotUuidOrName);
     RobotTokenValidation validateRobotToken(const std::string &rawToken);
+    bool getRobotById(int64_t robotId, RobotRecord &out);
+    bool getRobotByUuid(const std::string &robotUuid, RobotRecord &out);
+    bool recordRobotGameOutcome(int64_t robotId, GameOutcome outcome);
 
     /* mode: '2P' | '4P' | 'OFK'; limit clamped to 1..kMaxLeaderboardLimit. */
     bool leaderboard(const std::string &mode, int limit,

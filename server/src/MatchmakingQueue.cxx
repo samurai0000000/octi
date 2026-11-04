@@ -132,7 +132,7 @@ EnqueueStatus MatchmakingQueue::enqueue(int64_t playerId, int rating,
                                         const MatchRuleset &ruleset)
 {
     MatchRuleset rs = ruleset.normalized();
-    if (playerId <= 0 || !rs.isValid() || rating < 0) {
+    if ((playerId <= 0 && !isRobotActorId(playerId)) || !rs.isValid() || rating < 0) {
         return EnqueueStatus::INVALID;
     }
     std::lock_guard<std::mutex> lock(_mutex);
@@ -189,6 +189,14 @@ bool MatchmakingQueue::compatibleLocked(const Entry &a, const Entry &b,
                                         int64_t now) const
 {
     if (a.ruleset != b.ruleset) {
+        return false;
+    }
+    bool aIsRobot = isRobotActorId(a.playerId);
+    bool bIsRobot = isRobotActorId(b.playerId);
+    if (aIsRobot && !b.ruleset.allowRobots) {
+        return false;
+    }
+    if (bIsRobot && !a.ruleset.allowRobots) {
         return false;
     }
     int wa = windowLocked(std::max<int64_t>(0, now - a.enqueuedAtMs));
@@ -277,6 +285,14 @@ std::vector<MatchGroup> MatchmakingQueue::findMatches()
 
             MatchGroup g;
             g.ruleset = b->first;
+            bool anyDisallowRobots = false;
+            for (size_t k = 0; k < chosen.size(); ++k) {
+                if (!chosen[k]->ruleset.allowRobots) {
+                    anyDisallowRobots = true;
+                    break;
+                }
+            }
+            g.ruleset.allowRobots = !anyDisallowRobots;
             if (need == 2) {
                 g.players.push_back(describeLocked(*chosen[0], now));
                 g.players.push_back(describeLocked(*chosen[1], now));
@@ -346,7 +362,7 @@ void MatchmakingQueue::restore(const std::vector<QueuedPlayerSnapshot> &entries)
     for (size_t i = 0; i < entries.size(); ++i) {
         const QueuedPlayerSnapshot &s = entries[i];
         MatchRuleset rs = s.ruleset.normalized();
-        if (s.playerId <= 0 || !rs.isValid() || s.rating < 0) {
+        if ((s.playerId <= 0 && !isRobotActorId(s.playerId)) || !rs.isValid() || s.rating < 0) {
             continue;
         }
         if (_entries.count(s.playerId) != 0 || _entries.size() >= kMaxQueueSize) {

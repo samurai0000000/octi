@@ -70,7 +70,6 @@ set(OCTI_DESKTOP_LIB_SOURCES
     src/OctiBoardCanvas.cxx
     src/OctiReservePanel.cxx
     src/ClientConfigStore.cxx
-    src/OctiNetworkClient.cxx
     src/OctiCrashReporter.cxx
     src/P2pVoiceEngine.cxx
     src/OctiDialogs.cxx

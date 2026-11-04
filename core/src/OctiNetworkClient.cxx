@@ -178,6 +178,15 @@ PlayerProfileInfo parsePlayerProfile(const Json &j)
     p.draws = j.value("draws", 0);
     p.createdAt = j.value("created_at", static_cast<std::int64_t>(0));
     p.lastSeenAt = j.value("last_seen_at", static_cast<std::int64_t>(0));
+    p.isRobot = j.value("is_robot", false);
+    p.robotUuid = j.value("robot_uuid", "");
+    p.description = j.value("description", j.value("robot_description", ""));
+    p.ownerUuid = j.value("owner_uuid", "");
+    p.ownerHandle = j.value("owner_handle", "");
+    p.robotGamesPlayed = j.value("robot_games_played", p.isRobot ? p.gamesPlayed : 0);
+    p.robotWins = j.value("robot_wins", p.isRobot ? p.wins : 0);
+    p.robotLosses = j.value("robot_losses", p.isRobot ? p.losses : 0);
+    p.robotDraws = j.value("robot_draws", p.isRobot ? p.draws : 0);
     if (j.contains("linked_identities")) {
         p.identities = parseLinkedIdentities(j["linked_identities"]);
     }
@@ -215,6 +224,7 @@ TableSummaryInfo parseTableSummary(const Json &j)
     t.voicePolicy = j.value("voice_policy", "PLAYERS_ONLY");
     t.phase = j.value("phase", "WAITING_FOR_PLAYERS");
     t.hasPasscode = j.value("has_passcode", false);
+    t.allowRobots = j.value("allow_robots", true);
     if (j.contains("host_uuid") && j["host_uuid"].is_string()) {
         t.hostUuid = j["host_uuid"].get<std::string>();
     }
@@ -241,6 +251,22 @@ TableSummaryInfo parseTableSummary(const Json &j)
             }
             si.rating = seatsArr[i].value("rating", 1500);
             si.connected = seatsArr[i].value("connected", false);
+            si.isRobot = seatsArr[i].value("is_robot", false);
+            si.robotUuid = seatsArr[i].value("robot_uuid", "");
+            si.description = seatsArr[i].value(
+                "description", seatsArr[i].value("robot_description", ""));
+            si.ownerUuid = seatsArr[i].value("owner_uuid", "");
+            si.ownerHandle = seatsArr[i].value("owner_handle", "");
+            si.avatarUrl = seatsArr[i].value("avatar_url", "");
+            int gp = seatsArr[i].value("games_played", 0);
+            int w = seatsArr[i].value("wins", 0);
+            int l = seatsArr[i].value("losses", 0);
+            int d = seatsArr[i].value("draws", 0);
+            si.robotGamesPlayed =
+                seatsArr[i].value("robot_games_played", si.isRobot ? gp : 0);
+            si.robotWins = seatsArr[i].value("robot_wins", si.isRobot ? w : 0);
+            si.robotLosses = seatsArr[i].value("robot_losses", si.isRobot ? l : 0);
+            si.robotDraws = seatsArr[i].value("robot_draws", si.isRobot ? d : 0);
             t.seats.push_back(si);
         }
     }
@@ -283,6 +309,7 @@ GameViewData parseGameView(const Json &j)
     v.paused = j.value("paused", false);
     v.hasPasscode = j.value("has_passcode", false);
     v.hostUuid = j.value("host_uuid", "");
+    v.allowRobots = j.value("allow_robots", true);
     v.viewerSeat = j.value("viewer_seat", 0);
     if (j.contains("seats") && j["seats"].is_array()) {
         const Json &arr = j["seats"];
@@ -305,6 +332,22 @@ GameViewData parseGameView(const Json &j)
             s.clockMs =
                 arr[i].value("clock_ms", static_cast<std::int64_t>(-1));
             s.eliminated = arr[i].value("eliminated", false);
+            s.isRobot = arr[i].value("is_robot", false);
+            s.robotUuid = arr[i].value("robot_uuid", "");
+            s.description = arr[i].value(
+                "description", arr[i].value("robot_description", ""));
+            s.ownerUuid = arr[i].value("owner_uuid", "");
+            s.ownerHandle = arr[i].value("owner_handle", "");
+            s.avatarUrl = arr[i].value("avatar_url", "");
+            int gp = arr[i].value("games_played", 0);
+            int w = arr[i].value("wins", 0);
+            int l = arr[i].value("losses", 0);
+            int d = arr[i].value("draws", 0);
+            s.robotGamesPlayed =
+                arr[i].value("robot_games_played", s.isRobot ? gp : 0);
+            s.robotWins = arr[i].value("robot_wins", s.isRobot ? w : 0);
+            s.robotLosses = arr[i].value("robot_losses", s.isRobot ? l : 0);
+            s.robotDraws = arr[i].value("robot_draws", s.isRobot ? d : 0);
             v.seats.push_back(s);
         }
     }
@@ -716,12 +759,15 @@ struct OctiNetworkClient::Impl {
     mutable std::mutex tokenMutex;
     std::string sessionToken;
     std::string installId;
+    std::string clientType;
+    bool explicitClientType = false;
+    std::string robotLeaseId;
 
     SseRunner lobbyStream;
     SseRunner gameStream;
 
     Impl(const std::string &h, int p)
-        : host(h), port(p)
+        : host(h), port(p), clientType("desktop"), explicitClientType(false)
     {
     }
 
@@ -749,14 +795,27 @@ struct OctiNetworkClient::Impl {
         installId = id;
     }
 
+    std::string currentClientType() const
+    {
+        std::lock_guard<std::mutex> lock(tokenMutex);
+        return clientType.empty() ? "desktop" : clientType;
+    }
+
+    std::string currentRobotLeaseId() const
+    {
+        std::lock_guard<std::mutex> lock(tokenMutex);
+        return robotLeaseId;
+    }
+
     httplib::Headers authHeaders(
         const httplib::Headers &extra = httplib::Headers()) const
     {
         httplib::Headers h = extra;
         h.emplace("X-Octi-Protocol-Version",
                   std::to_string(OCTI_PROTOCOL_VERSION));
-        h.emplace("X-Octi-Client-Type", "desktop");
-        h.emplace("User-Agent", std::string("octi-desktop/") + OCTI_APP_VERSION);
+        std::string cType = currentClientType();
+        h.emplace("X-Octi-Client-Type", cType);
+        h.emplace("User-Agent", std::string("octi-") + cType + "/" + OCTI_APP_VERSION);
         std::string tok = currentToken();
         if (!tok.empty()) {
             h.emplace("Authorization", "Bearer " + tok);
@@ -764,6 +823,10 @@ struct OctiNetworkClient::Impl {
         std::string inst = currentInstallId();
         if (!inst.empty()) {
             h.emplace("X-Octi-Install-Id", inst);
+        }
+        std::string lease = currentRobotLeaseId();
+        if (!lease.empty()) {
+            h.emplace("X-Octi-Robot-Lease", lease);
         }
         return h;
     }
@@ -863,8 +926,9 @@ struct OctiNetworkClient::Impl {
         int timeoutSec = 10) const
     {
         try {
+            std::string ua = std::string("octi-") + currentClientType() + "/" + OCTI_APP_VERSION;
             HINTERNET hSession = WinHttpOpen(
-                L"octi-desktop/2.1",
+                toWide(ua).c_str(),
                 WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                 WINHTTP_NO_PROXY_NAME,
                 WINHTTP_NO_PROXY_BYPASS,
@@ -915,7 +979,7 @@ struct OctiNetworkClient::Impl {
             if (!contentType.empty()) {
                 headerStr += "Content-Type: " + contentType + "\r\n";
             }
-            headerStr += "User-Agent: octi-desktop\r\n";
+            headerStr += "User-Agent: " + ua + "\r\n";
 
             std::wstring wideHeaders = toWide(headerStr);
             if (!wideHeaders.empty()) {
@@ -1479,6 +1543,10 @@ struct OctiNetworkClient::Impl {
                                                 ? "?stream=1&since_seq="
                                                 : "&stream=1&since_seq=") +
                                            std::to_string(curSeq);
+                        std::string lease = currentRobotLeaseId();
+                        if (!lease.empty()) {
+                            path += "&lease_id=" + urlEncode(lease);
+                        }
 
 #ifdef _WIN32
                         if (port == 443) {
@@ -1602,6 +1670,13 @@ void OctiNetworkClient::setSessionToken(const std::string &token)
 {
     std::lock_guard<std::mutex> lock(_impl->tokenMutex);
     _impl->sessionToken = token;
+    if (!_impl->explicitClientType) {
+        if (token.rfind("octi_bot_", 0) == 0) {
+            _impl->clientType = "robot";
+        } else {
+            _impl->clientType = "desktop";
+        }
+    }
 }
 
 std::string OctiNetworkClient::sessionToken() const
@@ -1613,6 +1688,53 @@ void OctiNetworkClient::clearSessionToken()
 {
     std::lock_guard<std::mutex> lock(_impl->tokenMutex);
     _impl->sessionToken.clear();
+    if (!_impl->explicitClientType) {
+        _impl->clientType = "desktop";
+    }
+}
+
+void OctiNetworkClient::setBotToken(const std::string &token)
+{
+    std::lock_guard<std::mutex> lock(_impl->tokenMutex);
+    _impl->sessionToken = token;
+    if (!_impl->explicitClientType) {
+        _impl->clientType = "robot";
+    }
+}
+
+bool OctiNetworkClient::isRobotToken() const
+{
+    std::string tok = sessionToken();
+    return tok.rfind("octi_bot_", 0) == 0;
+}
+
+void OctiNetworkClient::setClientType(const std::string &clientType)
+{
+    std::lock_guard<std::mutex> lock(_impl->tokenMutex);
+    _impl->clientType = clientType;
+    _impl->explicitClientType = true;
+}
+
+std::string OctiNetworkClient::clientType() const
+{
+    return _impl->currentClientType();
+}
+
+void OctiNetworkClient::setRobotLeaseId(const std::string &leaseId)
+{
+    std::lock_guard<std::mutex> lock(_impl->tokenMutex);
+    _impl->robotLeaseId = leaseId;
+}
+
+std::string OctiNetworkClient::robotLeaseId() const
+{
+    return _impl->currentRobotLeaseId();
+}
+
+void OctiNetworkClient::clearRobotLeaseId()
+{
+    std::lock_guard<std::mutex> lock(_impl->tokenMutex);
+    _impl->robotLeaseId.clear();
 }
 
 void OctiNetworkClient::setInstallId(const std::string &installId)
@@ -2021,6 +2143,21 @@ ApiResult<LobbyStateData> OctiNetworkClient::fetchLobbyState()
             p.roomId = pl[i].value("room_id", "");
             p.onlineSec = pl[i].value("online_sec", static_cast<std::int64_t>(0));
             p.idleSec = pl[i].value("idle_sec", static_cast<std::int64_t>(0));
+            p.isRobot = pl[i].value("is_robot", false);
+            p.robotUuid = pl[i].value("robot_uuid", "");
+            p.description = pl[i].value(
+                "description", pl[i].value("robot_description", ""));
+            p.ownerUuid = pl[i].value("owner_uuid", "");
+            p.ownerHandle = pl[i].value("owner_handle", "");
+            int gp = pl[i].value("games_played", 0);
+            int w = pl[i].value("wins", 0);
+            int l = pl[i].value("losses", 0);
+            int d = pl[i].value("draws", 0);
+            p.robotGamesPlayed =
+                pl[i].value("robot_games_played", p.isRobot ? gp : 0);
+            p.robotWins = pl[i].value("robot_wins", p.isRobot ? w : 0);
+            p.robotLosses = pl[i].value("robot_losses", p.isRobot ? l : 0);
+            p.robotDraws = pl[i].value("robot_draws", p.isRobot ? d : 0);
             if (pl[i].contains("clients") && pl[i]["clients"].is_array()) {
                 for (std::size_t ci = 0; ci < pl[i]["clients"].size(); ++ci) {
                     if (pl[i]["clients"][ci].is_string()) {
@@ -2054,6 +2191,10 @@ ApiResult<LobbyStateData> OctiNetworkClient::fetchLobbyState()
             c.playerUuid = ch[i].value("player_uuid", "");
             c.handle = ch[i].value("handle", "");
             c.text = ch[i].value("text", "");
+            c.isRobot = ch[i].value("is_robot", false);
+            c.robotUuid = ch[i].value("robot_uuid", "");
+            c.ownerUuid = ch[i].value("owner_uuid", "");
+            c.ownerHandle = ch[i].value("owner_handle", "");
             res.data.recentChat.push_back(c);
         }
     }
@@ -2110,6 +2251,7 @@ ApiResult<CreateTableResponse> OctiNetworkClient::createTable(
     body["bases"] = req.bases;
     body["super_prongs"] = req.superProngs;
     body["edgeless"] = req.edgeless;
+    body["allow_robots"] = req.allowRobots;
     body["rated"] = req.rated;
     body["allow_takeback"] = req.allowTakeback;
     body["observer_policy"] = req.observerPolicy;
@@ -2266,6 +2408,7 @@ ApiResult<bool> OctiNetworkClient::enqueueMatchmaking(
     body["bases"] = req.bases;
     body["super_prongs"] = req.superProngs;
     body["edgeless"] = req.edgeless;
+    body["allow_robots"] = req.allowRobots;
     if (req.timeControlEnabled && req.initialMs > 0) {
         Json tc;
         tc["initial_ms"] = req.initialMs;
@@ -2342,9 +2485,25 @@ ApiResult<MoveSubmitData> OctiNetworkClient::submitMove(
     const std::string &roomId,
     const std::string &moveStr)
 {
+    return submitMove(roomId, moveStr, MoveTelemetryData());
+}
+
+ApiResult<MoveSubmitData> OctiNetworkClient::submitMove(
+    const std::string &roomId,
+    const std::string &moveStr,
+    const MoveTelemetryData &telemetry)
+{
     ApiResult<MoveSubmitData> res;
     Json body;
     body["move"] = moveStr;
+    if (telemetry.present) {
+        Json ai;
+        ai["depth"] = telemetry.depth;
+        ai["nodes"] = telemetry.nodes;
+        ai["score"] = telemetry.score;
+        ai["elapsed_ms"] = telemetry.elapsedMs;
+        body["ai"] = ai;
+    }
     Impl::RawResponse raw = _impl->doPost(
         "/api/v1/games/" + urlEncode(roomId) + "/move", body);
     if (!raw.transportOk || raw.status != 200 || !raw.json.is_object()) {
@@ -2733,6 +2892,80 @@ ApiResult<int> OctiNetworkClient::deleteInstallArchiveData(
     return res;
 }
 
+/* ---- 36..38: Robot Protocol & Administration ---- */
+
+ApiResult<RobotConnectData> OctiNetworkClient::connectRobot(bool ifUnused)
+{
+    ApiResult<RobotConnectData> res;
+    Json body;
+    body["if_unused"] = ifUnused;
+    Impl::RawResponse raw = _impl->doPost("/api/v1/robots/connect", body);
+    if (!raw.transportOk || (raw.status != 200 && raw.status != 201) ||
+        !raw.json.is_object()) {
+        Impl::populateError(raw, res);
+        return res;
+    }
+    res.ok = true;
+    res.httpStatus = raw.status;
+    const Json &d = (raw.json.contains("data") && raw.json["data"].is_object())
+        ? raw.json["data"]
+        : raw.json;
+    res.data.leaseId = d.value("lease_id", "");
+    res.data.robotUuid = d.value("robot_uuid", "");
+    res.data.handle = d.value("handle", d.value("robot_name", ""));
+    res.data.description =
+        d.value("description", d.value("robot_description", ""));
+    res.data.ownerUuid = d.value("owner_uuid", "");
+    res.data.ownerHandle = d.value("owner_handle", "");
+    res.data.avatarUrl = d.value("avatar_url", "");
+    res.data.activeRoomId = d.value("active_room_id", "");
+    res.data.gamesPlayed =
+        d.value("games_played", d.value("robot_games_played", 0));
+    res.data.wins = d.value("wins", d.value("robot_wins", 0));
+    res.data.losses = d.value("losses", d.value("robot_losses", 0));
+    res.data.draws = d.value("draws", d.value("robot_draws", 0));
+
+    if (!res.data.leaseId.empty()) {
+        setRobotLeaseId(res.data.leaseId);
+    }
+    return res;
+}
+
+ApiResult<bool> OctiNetworkClient::disconnectRobot()
+{
+    ApiResult<bool> res;
+    Impl::RawResponse raw =
+        _impl->doPost("/api/v1/robots/disconnect", Json::object());
+    clearRobotLeaseId();
+    if (!raw.transportOk || raw.status != 200) {
+        Impl::populateError(raw, res);
+        return res;
+    }
+    res.ok = true;
+    res.httpStatus = raw.status;
+    res.data = true;
+    return res;
+}
+
+ApiResult<std::string> OctiNetworkClient::exportRobotTokensConf()
+{
+    ApiResult<std::string> res;
+    Impl::RawResponse raw = _impl->doGet("/api/v1/robots/export-conf");
+    if (!raw.transportOk || raw.status != 200) {
+        Impl::populateError(raw, res);
+        return res;
+    }
+    res.ok = true;
+    res.httpStatus = raw.status;
+    if (raw.json.is_object() && raw.json.contains("conf") &&
+        raw.json["conf"].is_string()) {
+        res.data = raw.json["conf"].get<std::string>();
+    } else {
+        res.data = raw.body;
+    }
+    return res;
+}
+
 /* ---- Poll & Server-Sent Events (SSE) Live Streams ---- */
 
 ApiResult<std::vector<SseEvent>> OctiNetworkClient::pollLobbyEvents(
@@ -2743,6 +2976,10 @@ ApiResult<std::vector<SseEvent>> OctiNetworkClient::pollLobbyEvents(
     std::string path = "/api/v1/lobby/events?since_seq=" +
                        std::to_string(sinceSeq) +
                        "&limit=" + std::to_string(limit);
+    std::string lease = _impl->currentRobotLeaseId();
+    if (!lease.empty()) {
+        path += "&lease_id=" + urlEncode(lease);
+    }
     Impl::RawResponse raw = _impl->doGet(path);
     if (!raw.transportOk || raw.status != 200 || !raw.json.is_object()) {
         Impl::populateError(raw, res);
@@ -2775,6 +3012,10 @@ ApiResult<std::vector<SseEvent>> OctiNetworkClient::pollGameEvents(
     std::string path = "/api/v1/games/" + urlEncode(roomId) +
                        "/events?since_seq=" + std::to_string(sinceSeq) +
                        "&limit=" + std::to_string(limit);
+    std::string lease = _impl->currentRobotLeaseId();
+    if (!lease.empty()) {
+        path += "&lease_id=" + urlEncode(lease);
+    }
     Impl::RawResponse raw = _impl->doGet(path);
     if (!raw.transportOk || raw.status != 200 || !raw.json.is_object()) {
         Impl::populateError(raw, res);

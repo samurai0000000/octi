@@ -334,6 +334,7 @@ private:
     QCheckBox *_edgelessCheck;
     QCheckBox *_ratedCheck;
     QCheckBox *_takebackCheck;
+    QCheckBox *_allowRobotsCheck;
     QCheckBox *_timeControlCheck;
     QSpinBox *_initialSecSpin;
     QSpinBox *_incrementSecSpin;
@@ -396,6 +397,7 @@ private:
     QComboBox *_basesCombo;
     QCheckBox *_superProngsCheck;
     QCheckBox *_edgelessCheck;
+    QCheckBox *_allowRobotsCheck;
     QCheckBox *_timeControlCheck;
     QSpinBox *_initialSecSpin;
     QSpinBox *_incrementSecSpin;

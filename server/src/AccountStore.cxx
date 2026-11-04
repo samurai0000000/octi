@@ -90,6 +90,10 @@ const char kSchemaSql[] =
     " token TEXT NOT NULL DEFAULT '',"
     " token_hash TEXT NOT NULL UNIQUE,"
     " token_prefix TEXT NOT NULL DEFAULT '',"
+    " games_played INTEGER NOT NULL DEFAULT 0,"
+    " wins INTEGER NOT NULL DEFAULT 0,"
+    " losses INTEGER NOT NULL DEFAULT 0,"
+    " draws INTEGER NOT NULL DEFAULT 0,"
     " created_at INTEGER NOT NULL,"
     " revoked INTEGER NOT NULL DEFAULT 0,"
     " revoked_at INTEGER NOT NULL DEFAULT 0"
@@ -1703,6 +1707,26 @@ bool AccountStore::openOrCreate(const std::string &path, std::string &error)
                 }
             }
 
+            std::set<std::string> rcols;
+            Stmt rinfo(db, "PRAGMA table_info(robots)");
+            while (rinfo.step() == SQLITE_ROW) {
+                rcols.insert(rinfo.colText(1));
+            }
+            if (!rcols.empty()) {
+                if (rcols.find("games_played") == rcols.end()) {
+                    execSql(db, "ALTER TABLE robots ADD COLUMN games_played INTEGER NOT NULL DEFAULT 0;");
+                }
+                if (rcols.find("wins") == rcols.end()) {
+                    execSql(db, "ALTER TABLE robots ADD COLUMN wins INTEGER NOT NULL DEFAULT 0;");
+                }
+                if (rcols.find("losses") == rcols.end()) {
+                    execSql(db, "ALTER TABLE robots ADD COLUMN losses INTEGER NOT NULL DEFAULT 0;");
+                }
+                if (rcols.find("draws") == rcols.end()) {
+                    execSql(db, "ALTER TABLE robots ADD COLUMN draws INTEGER NOT NULL DEFAULT 0;");
+                }
+            }
+
             execSql(db, "CREATE TABLE IF NOT EXISTS player_installs ("
                         " install_id TEXT PRIMARY KEY,"
                         " player_id INTEGER NOT NULL REFERENCES players(player_id) ON DELETE CASCADE,"
@@ -2937,10 +2961,15 @@ CreateRobotResult AccountStore::createRobot(int64_t ownerPlayerId,
     res.robot.ownerPlayerId = ownerPlayerId;
     res.robot.ownerUuid = owner.uuid;
     res.robot.ownerHandle = owner.handle;
+    res.robot.ownerAvatarUrl = owner.avatarUrl;
     res.robot.robotName = robotName;
     res.robot.description = description;
     res.robot.token = rawToken;
     res.robot.tokenPrefix = tokenPrefix;
+    res.robot.gamesPlayed = 0;
+    res.robot.wins = 0;
+    res.robot.losses = 0;
+    res.robot.draws = 0;
     res.robot.createdAt = now;
     res.robot.revoked = false;
     res.robot.revokedAt = 0;
@@ -2997,8 +3026,8 @@ bool AccountStore::listRobots(int64_t ownerPlayerId, std::vector<RobotRecord> &o
         return false;
     }
     out.clear();
-    Stmt s(_db, "SELECT r.robot_id, r.robot_uuid, r.owner_player_id, p.uuid, p.handle,"
-                " r.robot_name, r.description, r.token, r.token_prefix, r.created_at,"
+    Stmt s(_db, "SELECT r.robot_id, r.robot_uuid, r.owner_player_id, p.uuid, p.handle, p.avatar_url,"
+                " r.robot_name, r.description, r.token, r.token_prefix, r.games_played, r.wins, r.losses, r.draws, r.created_at,"
                 " r.revoked, r.revoked_at FROM robots r"
                 " JOIN players p ON p.player_id = r.owner_player_id"
                 " WHERE r.owner_player_id = ?1"
@@ -3012,13 +3041,18 @@ bool AccountStore::listRobots(int64_t ownerPlayerId, std::vector<RobotRecord> &o
         r.ownerPlayerId = s.colInt(2);
         r.ownerUuid = s.colText(3);
         r.ownerHandle = s.colText(4);
-        r.robotName = s.colText(5);
-        r.description = s.colText(6);
-        r.token = s.colText(7);
-        r.tokenPrefix = s.colText(8);
-        r.createdAt = s.colInt(9);
-        r.revoked = s.colInt(10) != 0;
-        r.revokedAt = s.colInt(11);
+        r.ownerAvatarUrl = s.colText(5);
+        r.robotName = s.colText(6);
+        r.description = s.colText(7);
+        r.token = s.colText(8);
+        r.tokenPrefix = s.colText(9);
+        r.gamesPlayed = s.colInt(10);
+        r.wins = s.colInt(11);
+        r.losses = s.colInt(12);
+        r.draws = s.colInt(13);
+        r.createdAt = s.colInt(14);
+        r.revoked = s.colInt(15) != 0;
+        r.revokedAt = s.colInt(16);
         out.push_back(r);
     }
     return rc == SQLITE_DONE;
@@ -3031,8 +3065,8 @@ bool AccountStore::listPublicRobotsByOwner(int64_t ownerPlayerId, std::vector<Ro
         return false;
     }
     out.clear();
-    Stmt s(_db, "SELECT r.robot_id, r.robot_uuid, r.owner_player_id, p.uuid, p.handle,"
-                " r.robot_name, r.description, r.created_at, r.revoked, r.revoked_at"
+    Stmt s(_db, "SELECT r.robot_id, r.robot_uuid, r.owner_player_id, p.uuid, p.handle, p.avatar_url,"
+                " r.robot_name, r.description, r.games_played, r.wins, r.losses, r.draws, r.created_at, r.revoked, r.revoked_at"
                 " FROM robots r"
                 " JOIN players p ON p.player_id = r.owner_player_id"
                 " WHERE r.owner_player_id = ?1 AND r.revoked = 0"
@@ -3046,13 +3080,18 @@ bool AccountStore::listPublicRobotsByOwner(int64_t ownerPlayerId, std::vector<Ro
         r.ownerPlayerId = s.colInt(2);
         r.ownerUuid = s.colText(3);
         r.ownerHandle = s.colText(4);
-        r.robotName = s.colText(5);
-        r.description = s.colText(6);
+        r.ownerAvatarUrl = s.colText(5);
+        r.robotName = s.colText(6);
+        r.description = s.colText(7);
         r.token.clear();
         r.tokenPrefix.clear();
-        r.createdAt = s.colInt(7);
-        r.revoked = s.colInt(8) != 0;
-        r.revokedAt = s.colInt(9);
+        r.gamesPlayed = s.colInt(8);
+        r.wins = s.colInt(9);
+        r.losses = s.colInt(10);
+        r.draws = s.colInt(11);
+        r.createdAt = s.colInt(12);
+        r.revoked = s.colInt(13) != 0;
+        r.revokedAt = s.colInt(14);
         out.push_back(r);
     }
     return rc == SQLITE_DONE;
@@ -3112,8 +3151,8 @@ RobotTokenValidation AccountStore::validateRobotToken(const std::string &rawToke
         return res;
     }
 
-    Stmt s(_db, "SELECT r.robot_id, r.robot_uuid, r.owner_player_id, p.uuid, p.handle,"
-                " r.robot_name, r.description, r.token, r.token_prefix, r.created_at,"
+    Stmt s(_db, "SELECT r.robot_id, r.robot_uuid, r.owner_player_id, p.uuid, p.handle, p.avatar_url,"
+                " r.robot_name, r.description, r.token, r.token_prefix, r.games_played, r.wins, r.losses, r.draws, r.created_at,"
                 " r.revoked, r.revoked_at FROM robots r"
                 " JOIN players p ON p.player_id = r.owner_player_id"
                 " WHERE r.token_hash = ?1 AND r.revoked = 0");
@@ -3127,13 +3166,18 @@ RobotTokenValidation AccountStore::validateRobotToken(const std::string &rawToke
     res.robot.ownerPlayerId = s.colInt(2);
     res.robot.ownerUuid = s.colText(3);
     res.robot.ownerHandle = s.colText(4);
-    res.robot.robotName = s.colText(5);
-    res.robot.description = s.colText(6);
-    res.robot.token = s.colText(7);
-    res.robot.tokenPrefix = s.colText(8);
-    res.robot.createdAt = s.colInt(9);
-    res.robot.revoked = s.colInt(10) != 0;
-    res.robot.revokedAt = s.colInt(11);
+    res.robot.ownerAvatarUrl = s.colText(5);
+    res.robot.robotName = s.colText(6);
+    res.robot.description = s.colText(7);
+    res.robot.token = s.colText(8);
+    res.robot.tokenPrefix = s.colText(9);
+    res.robot.gamesPlayed = s.colInt(10);
+    res.robot.wins = s.colInt(11);
+    res.robot.losses = s.colInt(12);
+    res.robot.draws = s.colInt(13);
+    res.robot.createdAt = s.colInt(14);
+    res.robot.revoked = s.colInt(15) != 0;
+    res.robot.revokedAt = s.colInt(16);
 
     if (!loadProfileById(_db, res.robot.ownerPlayerId, res.owner)) {
         return res;
@@ -3143,6 +3187,98 @@ RobotTokenValidation AccountStore::validateRobotToken(const std::string &rawToke
     }
     res.valid = true;
     return res;
+}
+
+bool AccountStore::getRobotById(int64_t robotId, RobotRecord &out)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db || robotId <= 0) {
+        return false;
+    }
+    Stmt s(_db, "SELECT r.robot_id, r.robot_uuid, r.owner_player_id, p.uuid, p.handle, p.avatar_url,"
+                " r.robot_name, r.description, r.token, r.token_prefix, r.games_played, r.wins, r.losses, r.draws, r.created_at,"
+                " r.revoked, r.revoked_at FROM robots r"
+                " JOIN players p ON p.player_id = r.owner_player_id"
+                " WHERE r.robot_id = ?1");
+    s.bindInt(1, robotId);
+    if (s.step() != SQLITE_ROW) {
+        return false;
+    }
+    out.robotId = s.colInt(0);
+    out.robotUuid = s.colText(1);
+    out.ownerPlayerId = s.colInt(2);
+    out.ownerUuid = s.colText(3);
+    out.ownerHandle = s.colText(4);
+    out.ownerAvatarUrl = s.colText(5);
+    out.robotName = s.colText(6);
+    out.description = s.colText(7);
+    out.token = s.colText(8);
+    out.tokenPrefix = s.colText(9);
+    out.gamesPlayed = s.colInt(10);
+    out.wins = s.colInt(11);
+    out.losses = s.colInt(12);
+    out.draws = s.colInt(13);
+    out.createdAt = s.colInt(14);
+    out.revoked = s.colInt(15) != 0;
+    out.revokedAt = s.colInt(16);
+    return true;
+}
+
+bool AccountStore::getRobotByUuid(const std::string &robotUuid, RobotRecord &out)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db || robotUuid.empty()) {
+        return false;
+    }
+    Stmt s(_db, "SELECT r.robot_id, r.robot_uuid, r.owner_player_id, p.uuid, p.handle, p.avatar_url,"
+                " r.robot_name, r.description, r.token, r.token_prefix, r.games_played, r.wins, r.losses, r.draws, r.created_at,"
+                " r.revoked, r.revoked_at FROM robots r"
+                " JOIN players p ON p.player_id = r.owner_player_id"
+                " WHERE r.robot_uuid = ?1");
+    s.bindText(1, robotUuid);
+    if (s.step() != SQLITE_ROW) {
+        return false;
+    }
+    out.robotId = s.colInt(0);
+    out.robotUuid = s.colText(1);
+    out.ownerPlayerId = s.colInt(2);
+    out.ownerUuid = s.colText(3);
+    out.ownerHandle = s.colText(4);
+    out.ownerAvatarUrl = s.colText(5);
+    out.robotName = s.colText(6);
+    out.description = s.colText(7);
+    out.token = s.colText(8);
+    out.tokenPrefix = s.colText(9);
+    out.gamesPlayed = s.colInt(10);
+    out.wins = s.colInt(11);
+    out.losses = s.colInt(12);
+    out.draws = s.colInt(13);
+    out.createdAt = s.colInt(14);
+    out.revoked = s.colInt(15) != 0;
+    out.revokedAt = s.colInt(16);
+    return true;
+}
+
+bool AccountStore::recordRobotGameOutcome(int64_t robotId, GameOutcome outcome)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db || robotId <= 0) {
+        return false;
+    }
+    const char *sql = nullptr;
+    if (outcome == GameOutcome::WIN) {
+        sql = "UPDATE robots SET games_played = games_played + 1, wins = wins + 1 WHERE robot_id = ?1";
+    } else if (outcome == GameOutcome::LOSS) {
+        sql = "UPDATE robots SET games_played = games_played + 1, losses = losses + 1 WHERE robot_id = ?1";
+    } else {
+        sql = "UPDATE robots SET games_played = games_played + 1, draws = draws + 1 WHERE robot_id = ?1";
+    }
+    Stmt s(_db, sql);
+    s.bindInt(1, robotId);
+    if (s.step() != SQLITE_DONE) {
+        return false;
+    }
+    return sqlite3_changes(_db) > 0;
 }
 
 bool AccountStore::leaderboard(const std::string &mode, int limit,
