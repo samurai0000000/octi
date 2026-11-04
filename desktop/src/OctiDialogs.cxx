@@ -2730,13 +2730,13 @@ NewLocalGameDialog::NewLocalGameDialog(ThemeId theme, QWidget *parent)
 
     _difficultyCombo = new QComboBox(this);
     _difficultyCombo->addItem(
-        QString::fromUtf8("Level 1 \xE2\x80\x94 Casual (3s)"),
+        QString::fromUtf8("Level 1 \xE2\x80\x94 Casual (5s)"),
         static_cast<int>(BotDifficulty::CASUAL));
     _difficultyCombo->addItem(
-        QString::fromUtf8("Level 2 \xE2\x80\x94 Tactical (8s)"),
+        QString::fromUtf8("Level 2 \xE2\x80\x94 Tactical (10s)"),
         static_cast<int>(BotDifficulty::TACTICAL));
     _difficultyCombo->addItem(
-        QString::fromUtf8("Level 3 \xE2\x80\x94 Master (15s)"),
+        QString::fromUtf8("Level 3 \xE2\x80\x94 Master (20s)"),
         static_cast<int>(BotDifficulty::MASTER));
     _difficultyCombo->setCurrentIndex(1);
 
@@ -6019,10 +6019,10 @@ QString OctiStartMatchDialog::formatConfigSummary(const LocalGameConfig &cfg)
     if (cfg.playType == LocalPlayType::VS_AI_BOT) {
         QString lvStr;
         switch (cfg.botDifficulty) {
-        case BotDifficulty::CASUAL:   lvStr = "Lv1 \xE2\x80\xA2 3s"; break;
-        case BotDifficulty::TACTICAL: lvStr = "Lv2 \xE2\x80\xA2 8s"; break;
-        case BotDifficulty::MASTER:   lvStr = "Lv3 \xE2\x80\xA2 15s"; break;
-        default:                      lvStr = "Lv2 \xE2\x80\xA2 8s"; break;
+        case BotDifficulty::CASUAL:   lvStr = "Lv1 \xE2\x80\xA2 5s"; break;
+        case BotDifficulty::TACTICAL: lvStr = "Lv2 \xE2\x80\xA2 10s"; break;
+        case BotDifficulty::MASTER:   lvStr = "Lv3 \xE2\x80\xA2 20s"; break;
+        default:                      lvStr = "Lv2 \xE2\x80\xA2 10s"; break;
         }
         line1 = QString("vs AI Bot (%1) \xE2\x80\xA2 %2").arg(lvStr, seatStr);
     } else {

@@ -9,8 +9,8 @@ package com.selfso.octi;
 public class BotTuningProfile {
 
     // --- 1. Search Horizon, Quiescence & Concurrency ---
-    public int timeBudgetMs = 8000;
-    public int maxSearchDepth = 6;
+    public int timeBudgetMs = 10000;
+    public int maxSearchDepth = 64;
     public int maxQuiesceDepth = 2;
     public int quiesceBranchCap = 6;
     public int rootBranchCap = 36;
@@ -18,6 +18,7 @@ public class BotTuningProfile {
     public int lazySmpThreads = 2;
     public int compositeMoveMaxPly = 1;
     public int rootScoreJitter = 25;
+    public boolean useOpeningBook = true;
 
     // --- 2. Base Occupation & Distance Weights ---
     public int capturedEnemyBaseBonus = 28000;
@@ -77,6 +78,7 @@ public class BotTuningProfile {
             this.lazySmpThreads = other.lazySmpThreads;
             this.compositeMoveMaxPly = other.compositeMoveMaxPly;
             this.rootScoreJitter = other.rootScoreJitter;
+            this.useOpeningBook = other.useOpeningBook;
 
             this.capturedEnemyBaseBonus = other.capturedEnemyBaseBonus;
             this.lostAlliedBasePenalty = other.lostAlliedBasePenalty;

@@ -294,13 +294,13 @@ public final class OctiBoardRenderer {
 
         String line1;
         if (vsBot) {
-            String botLabel = "Lv2 • 8s";
+            String botLabel = "Lv2 • 10s";
             if (difficulty != null) {
                 String name = difficulty.name();
                 if ("QUICK".equalsIgnoreCase(name) || difficulty == OctiBotEngine.BotDifficulty.CASUAL) {
-                    botLabel = "Lv1 • 3s";
+                    botLabel = "Lv1 • 5s";
                 } else if ("TACTICAL".equalsIgnoreCase(name) || difficulty == OctiBotEngine.BotDifficulty.TACTICAL) {
-                    botLabel = "Lv2 • 8s";
+                    botLabel = "Lv2 • 10s";
                 } else if ("STRATEGIC".equalsIgnoreCase(name) || difficulty == OctiBotEngine.BotDifficulty.MASTER) {
                     botLabel = "Lv3 • 20s";
                 } else if ("DEEP".equalsIgnoreCase(name)) {

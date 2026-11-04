@@ -5053,7 +5053,12 @@ assert.strictEqual(moveComposer.commitStagedMove(), true);
 assert.strictEqual(activeState.turn, "B", "Turn must advance from A to B after human move commit");
 
 // Bot search on B's turn & Level 2 tactical quality checks
-assert.strictEqual(BOT_PROFILES[2].timeBudgetMs, 8000, "Level 2 time budget must be 8000ms");
+assert.strictEqual(BOT_PROFILES[1].timeBudgetMs, 5000, "Level 1 time budget must be 5000ms");
+assert.strictEqual(BOT_PROFILES[2].timeBudgetMs, 10000, "Level 2 time budget must be 10000ms");
+assert.strictEqual(BOT_PROFILES[3].timeBudgetMs, 20000, "Level 3 time budget must be 20000ms");
+assert.strictEqual(BOT_PROFILES[1].useOpeningBook, false, "Level 1 opening book must be disabled");
+assert.strictEqual(BOT_PROFILES[2].useOpeningBook, true, "Level 2 opening book must be enabled");
+assert.strictEqual(BOT_PROFILES[3].useOpeningBook, true, "Level 3 opening book must be enabled");
 assert.ok(BOT_PROFILES[2].maxSearchDepth >= 6, "Level 2 maxSearchDepth must be >= 6");
 var botRes = botSearch(serializeOctiFen(activeState), 1, "2P", "B");
 assert.ok(botRes && botRes.bestMove, "botSearch must return a valid move for B");
@@ -5175,6 +5180,7 @@ var tr4p = {
   timestamp: Math.floor(Date.now() / 1000)
 };
 fs.writeFileSync(process.argv[3], JSON.stringify(tr4p));
+if (typeof process !== "undefined" && typeof process.exit === "function") process.exit(0);
 )NODEJS";
     }
     int rcRun = std::system(("node " + nodeHarnessPath + " " + out2pPath + " " + out4pPath).c_str());

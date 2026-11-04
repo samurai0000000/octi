@@ -2201,7 +2201,7 @@ TEST(DesktopAppIntegrationTest, CenteredStartMatchPromptAndPreStartGatingForPlay
     c1.useEdgelessBoard = false;
     c1.timeControlEnabled = false;
     QString s1 = OctiStartMatchDialog::formatConfigSummary(c1);
-    STRCMP_EQUAL("vs AI Bot (Lv1 \xE2\x80\xA2 3s) \xE2\x80\xA2 Seat A (Red)\n2P (9x9) \xE2\x80\xA2 3 Bases \xE2\x80\xA2 Standard", s1.toUtf8().constData());
+    STRCMP_EQUAL("vs AI Bot (Lv1 \xE2\x80\xA2 5s) \xE2\x80\xA2 Seat A (Red)\n2P (9x9) \xE2\x80\xA2 3 Bases \xE2\x80\xA2 Standard", s1.toUtf8().constData());
 
     LocalGameConfig c2;
     c2.playType = LocalPlayType::VS_AI_BOT;
@@ -2211,7 +2211,7 @@ TEST(DesktopAppIntegrationTest, CenteredStartMatchPromptAndPreStartGatingForPlay
     c2.bases = GAME_BASES_1;
     c2.useSuperProngs = true;
     QString s2 = OctiStartMatchDialog::formatConfigSummary(c2);
-    STRCMP_EQUAL("vs AI Bot (Lv2 \xE2\x80\xA2 8s) \xE2\x80\xA2 Seat B (Green)\n4P (9x9) \xE2\x80\xA2 1 Base \xE2\x80\xA2 Super-Prongs", s2.toUtf8().constData());
+    STRCMP_EQUAL("vs AI Bot (Lv2 \xE2\x80\xA2 10s) \xE2\x80\xA2 Seat B (Green)\n4P (9x9) \xE2\x80\xA2 1 Base \xE2\x80\xA2 Super-Prongs", s2.toUtf8().constData());
 
     LocalGameConfig c3;
     c3.playType = LocalPlayType::PASS_AND_PLAY;
@@ -2230,7 +2230,7 @@ TEST(DesktopAppIntegrationTest, CenteredStartMatchPromptAndPreStartGatingForPlay
     c4.useEdgelessBoard = true;
     c4.timeControlEnabled = true;
     QString s4 = OctiStartMatchDialog::formatConfigSummary(c4);
-    STRCMP_EQUAL("vs AI Bot (Lv3 \xE2\x80\xA2 15s) \xE2\x80\xA2 Seat A (Red)\n2P (9x9) \xE2\x80\xA2 3 Bases \xE2\x80\xA2 Edgeless \xE2\x80\xA2 Clock", s4.toUtf8().constData());
+    STRCMP_EQUAL("vs AI Bot (Lv3 \xE2\x80\xA2 20s) \xE2\x80\xA2 Seat A (Red)\n2P (9x9) \xE2\x80\xA2 3 Bases \xE2\x80\xA2 Edgeless \xE2\x80\xA2 Clock", s4.toUtf8().constData());
 
     OctiStartMatchDialog dlgConfig(c1, ThemeId::OBSIDIAN_BRASS, &win);
     STRCMP_EQUAL(s1.toUtf8().constData(), dlgConfig.configSummaryText().toUtf8().constData());

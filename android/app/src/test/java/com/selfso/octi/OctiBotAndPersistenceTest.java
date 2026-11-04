@@ -21,21 +21,21 @@ public class OctiBotAndPersistenceTest {
 
     @Test
     public void testDefaultBudgetAndDepthAndCapsForDifficulty_EMF_B02() {
-        // CASUAL: 3000ms (3s), depth 5, root cap 28, branch cap 18
-        assertEquals(3000, OctiBotEngine.defaultBudgetForDifficulty(OctiBotEngine.BotDifficulty.CASUAL));
-        assertEquals(5, OctiBotEngine.maxDepthForDifficulty(OctiBotEngine.BotDifficulty.CASUAL));
+        // CASUAL: 5000ms (5s), depth 3, root cap 28, branch cap 18
+        assertEquals(5000, OctiBotEngine.defaultBudgetForDifficulty(OctiBotEngine.BotDifficulty.CASUAL));
+        assertEquals(3, OctiBotEngine.maxDepthForDifficulty(OctiBotEngine.BotDifficulty.CASUAL));
         assertEquals(28, OctiBotEngine.rootCapForDifficulty(OctiBotEngine.BotDifficulty.CASUAL));
         assertEquals(18, OctiBotEngine.branchCapForDifficulty(OctiBotEngine.BotDifficulty.CASUAL));
 
-        // TACTICAL: 8000ms (8s), depth 7, root cap 40, branch cap 24
-        assertEquals(8000, OctiBotEngine.defaultBudgetForDifficulty(OctiBotEngine.BotDifficulty.TACTICAL));
-        assertEquals(7, OctiBotEngine.maxDepthForDifficulty(OctiBotEngine.BotDifficulty.TACTICAL));
+        // TACTICAL: 10000ms (10s), depth 64, root cap 40, branch cap 24
+        assertEquals(10000, OctiBotEngine.defaultBudgetForDifficulty(OctiBotEngine.BotDifficulty.TACTICAL));
+        assertEquals(64, OctiBotEngine.maxDepthForDifficulty(OctiBotEngine.BotDifficulty.TACTICAL));
         assertEquals(40, OctiBotEngine.rootCapForDifficulty(OctiBotEngine.BotDifficulty.TACTICAL));
         assertEquals(24, OctiBotEngine.branchCapForDifficulty(OctiBotEngine.BotDifficulty.TACTICAL));
 
-        // MASTER: 15000ms (15s), depth 9, root cap 56, branch cap 32
-        assertEquals(15000, OctiBotEngine.defaultBudgetForDifficulty(OctiBotEngine.BotDifficulty.MASTER));
-        assertEquals(9, OctiBotEngine.maxDepthForDifficulty(OctiBotEngine.BotDifficulty.MASTER));
+        // MASTER: 20000ms (20s), depth 64, root cap 56, branch cap 32
+        assertEquals(20000, OctiBotEngine.defaultBudgetForDifficulty(OctiBotEngine.BotDifficulty.MASTER));
+        assertEquals(64, OctiBotEngine.maxDepthForDifficulty(OctiBotEngine.BotDifficulty.MASTER));
         assertEquals(56, OctiBotEngine.rootCapForDifficulty(OctiBotEngine.BotDifficulty.MASTER));
         assertEquals(32, OctiBotEngine.branchCapForDifficulty(OctiBotEngine.BotDifficulty.MASTER));
 
@@ -43,7 +43,7 @@ public class OctiBotAndPersistenceTest {
         assertEquals(262144, OctiBotEngine.TT_SIZE);
 
         OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
-        assertEquals(8000, bot.timeBudgetMs());
+        assertEquals(10000, bot.timeBudgetMs());
         assertFalse(bot.isCustomTimeBudget());
 
         bot.setTimeBudgetMs(25);
@@ -51,7 +51,7 @@ public class OctiBotAndPersistenceTest {
         assertTrue(bot.isCustomTimeBudget());
 
         bot.restoreDefaultBudget();
-        assertEquals(8000, bot.timeBudgetMs());
+        assertEquals(10000, bot.timeBudgetMs());
         assertFalse(bot.isCustomTimeBudget());
     }
 
@@ -169,6 +169,7 @@ public class OctiBotAndPersistenceTest {
         searchBoard.getGame().start(OctiPlayer.PLAYER_A);
         OctiBotEngine masterBot = new OctiBotEngine(OctiBotEngine.BotDifficulty.MASTER);
         masterBot.setTimeBudgetMs(600);
+        masterBot.tuningProfile().useOpeningBook = false;
         OctiBotEngine.BotSearchStats stats = new OctiBotEngine.BotSearchStats();
         String chosenDirect = masterBot.chooseMove(searchBoard, stats);
         assertFalse("Level 3 direct search must return a non-empty move", chosenDirect.isEmpty());

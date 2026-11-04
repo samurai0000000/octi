@@ -1725,8 +1725,8 @@ public class OctiBoardEngineTest {
     public void testTuningProfilesDefaultAndCustom() {
         OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
         OctiBotEngine.BotTuningProfile prof = bot.tuningProfile();
-        assertEquals(8000, prof.timeBudgetMs);
-        assertEquals(6, prof.maxSearchDepth);
+        assertEquals(10000, prof.timeBudgetMs);
+        assertEquals(64, prof.maxSearchDepth);
         assertEquals(2, prof.maxQuiesceDepth);
         assertEquals(6, prof.quiesceBranchCap);
         assertEquals(40, prof.rootBranchCap);
@@ -1933,6 +1933,146 @@ public class OctiBoardEngineTest {
             String chosen = bot.chooseMove(boardOfk);
             assertEquals("33a-35x", chosen);
         }
+    }
+
+    @Test
+    public void testCanonicalOpeningHashAndCPlusPlusBitParity() {
+        // 1. Bit-for-bit parity with C++ OctiOpeningBookData.hxx initial positions
+        OctiBoard b2p3 = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+        b2p3.getGame().start(OctiPlayer.PLAYER_A);
+        assertEquals(0x3BCD8E7CEAE1563EL, OctiBotEngine.computePositionHashStatic(b2p3));
+        assertEquals(0x3BCD8E7CEAE1563EL, OctiBotEngine.computeCanonicalOpeningHash(b2p3));
+
+        OctiBoard b2p1 = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_1);
+        b2p1.getGame().start(OctiPlayer.PLAYER_A);
+        assertEquals(0x26BE80163B6578BBL, OctiBotEngine.computePositionHashStatic(b2p1));
+        assertEquals(0x26BE80163B6578BBL, OctiBotEngine.computeCanonicalOpeningHash(b2p1));
+
+        OctiBoard bOfk = new OctiBoard(OctiGameMode.GAME_MODE_OFK);
+        bOfk.getGame().start(OctiPlayer.PLAYER_A);
+        assertEquals(0xBF20205531084330L, OctiBotEngine.computePositionHashStatic(bOfk));
+        assertEquals(0xBF20205531084330L, OctiBotEngine.computeCanonicalOpeningHash(bOfk));
+
+        OctiBoard b4p = new OctiBoard(OctiGameMode.GAME_MODE_4);
+        b4p.getGame().start(OctiPlayer.PLAYER_A);
+        assertEquals(0x5C3D5244B85BC3A6L, OctiBotEngine.computePositionHashStatic(b4p));
+        assertEquals(0x5C3D5244B85BC3A6L, OctiBotEngine.computeCanonicalOpeningHash(b4p));
+
+        // 2. Commuting prong additions produce identical hashes
+        OctiBoard bComm1 = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+        bComm1.getGame().start(OctiPlayer.PLAYER_A);
+        bComm1.getGame().move("33+c");
+        bComm1.getGame().move("37+g");
+        bComm1.getGame().move("53+b");
+
+        OctiBoard bComm2 = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+        bComm2.getGame().start(OctiPlayer.PLAYER_A);
+        bComm2.getGame().move("53+b");
+        bComm2.getGame().move("37+g");
+        bComm2.getGame().move("33+c");
+
+        assertEquals(OctiBotEngine.computePositionHashStatic(bComm1), OctiBotEngine.computePositionHashStatic(bComm2));
+        assertEquals(OctiBotEngine.computeCanonicalOpeningHash(bComm1), OctiBotEngine.computeCanonicalOpeningHash(bComm2));
+
+        // 3. Horizontal mirror symmetry on 2P 9x9 (33+b vs 73+h)
+        OctiBoard bMirLeft = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+        bMirLeft.getGame().start(OctiPlayer.PLAYER_A);
+        bMirLeft.getGame().move("33+b");
+
+        OctiBoard bMirRight = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+        bMirRight.getGame().start(OctiPlayer.PLAYER_A);
+        bMirRight.getGame().move("73+h");
+
+        boolean[] mirLeftFlag = new boolean[1];
+        boolean[] mirRightFlag = new boolean[1];
+        long canonLeft = OctiBotEngine.computeCanonicalOpeningHash(bMirLeft, mirLeftFlag);
+        long canonRight = OctiBotEngine.computeCanonicalOpeningHash(bMirRight, mirRightFlag);
+        assertEquals(canonLeft, canonRight);
+        assertTrue(mirLeftFlag[0] != mirRightFlag[0]);
+
+        // 4. Horizontal mirror symmetry on OFK 6x7 (22+b vs 52+h)
+        OctiBoard ofkLeft = new OctiBoard(OctiGameMode.GAME_MODE_OFK);
+        ofkLeft.getGame().start(OctiPlayer.PLAYER_A);
+        ofkLeft.getGame().move("22+b");
+
+        OctiBoard ofkRight = new OctiBoard(OctiGameMode.GAME_MODE_OFK);
+        ofkRight.getGame().start(OctiPlayer.PLAYER_A);
+        ofkRight.getGame().move("52+h");
+
+        boolean[] ofkLeftMir = new boolean[1];
+        boolean[] ofkRightMir = new boolean[1];
+        long ofkCanonLeft = OctiBotEngine.computeCanonicalOpeningHash(ofkLeft, ofkLeftMir);
+        long ofkCanonRight = OctiBotEngine.computeCanonicalOpeningHash(ofkRight, ofkRightMir);
+        assertEquals(ofkCanonLeft, ofkCanonRight);
+        assertTrue(ofkLeftMir[0] != ofkRightMir[0]);
+    }
+
+    @Test
+    public void testMirrorMoveNotationAndOpeningBookLookup() {
+        // 1. Move notation horizontal reflection
+        assertEquals("73+h", OctiBotEngine.mirrorMoveNotation("33+b", 9));
+        assertEquals("33+b", OctiBotEngine.mirrorMoveNotation("73+h", 9));
+        assertEquals("53+a", OctiBotEngine.mirrorMoveNotation("53+a", 9));
+        assertEquals("73gh-55-35x", OctiBotEngine.mirrorMoveNotation("33bc-55-75x", 9));
+        assertEquals("52+h", OctiBotEngine.mirrorMoveNotation("22+b", 6));
+        assertEquals("22+b", OctiBotEngine.mirrorMoveNotation("52+h", 6));
+
+        // 2. Default opening book and depth per difficulty level
+        OctiBotEngine casualBot = new OctiBotEngine(OctiBotEngine.BotDifficulty.CASUAL);
+        assertFalse(casualBot.tuningProfile().useOpeningBook);
+        assertEquals(3, casualBot.tuningProfile().maxSearchDepth);
+        OctiBotEngine tacticalBot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
+        assertTrue(tacticalBot.tuningProfile().useOpeningBook);
+        assertEquals(64, tacticalBot.tuningProfile().maxSearchDepth);
+        OctiBotEngine masterBot = new OctiBotEngine(OctiBotEngine.BotDifficulty.MASTER);
+        assertTrue(masterBot.tuningProfile().useOpeningBook);
+        assertEquals(64, masterBot.tuningProfile().maxSearchDepth);
+
+        // 3. probeOpeningBook and chooseMove instant hit on initial position
+        OctiBoard b2p3 = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+        b2p3.getGame().start(OctiPlayer.PLAYER_A);
+
+        OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
+        bot.tuningProfile().rootScoreJitter = 0;
+        String[] outMove = new String[1];
+        int[] outScore = new int[1];
+        int[] outDepth = new int[1];
+        boolean hit = bot.probeOpeningBook(b2p3, outMove, outScore, outDepth);
+        assertTrue(hit);
+        assertNotNull(outMove[0]);
+        assertFalse(outMove[0].isEmpty());
+        assertEquals(8, outDepth[0]);
+
+        OctiBotEngine.BotSearchStats stats = new OctiBotEngine.BotSearchStats();
+        String chosen = bot.chooseMove(b2p3, stats);
+        assertEquals(outMove[0], chosen);
+        assertEquals(1, stats.nodesVisited);
+        assertEquals(8, stats.depthReached);
+
+        // 3. Bypass when useOpeningBook is disabled
+        bot.tuningProfile().useOpeningBook = false;
+        boolean disabledHit = bot.probeOpeningBook(b2p3, outMove);
+        assertFalse(disabledHit);
+
+        // 4. Fault injection: corrupted/illegal move in candidate table
+        OctiBotEngine.OpeningBookEntry[] corruptTable = new OctiBotEngine.OpeningBookEntry[] {
+            new OctiBotEngine.OpeningBookEntry(0x3BCD8E7CEAE1563EL, 8,
+                new OctiBotEngine.OpeningBookCandidate("99+a", 500),
+                new OctiBotEngine.OpeningBookCandidate("invalid_syntax", 400),
+                new OctiBotEngine.OpeningBookCandidate("53+a", 120))
+        };
+        BotTuningProfile prof = new BotTuningProfile();
+        prof.useOpeningBook = true;
+        prof.rootScoreJitter = 0;
+        String[] corruptMove = new String[1];
+        int[] corruptScore = new int[1];
+        int[] corruptDepth = new int[1];
+        boolean corruptHit = OctiBotEngine.probeOpeningBookTable(
+                b2p3, corruptTable, prof, new long[] { 0L }, corruptMove, corruptScore, corruptDepth);
+        assertTrue(corruptHit);
+        assertEquals("53+a", corruptMove[0]);
+        assertEquals(120, corruptScore[0]);
+        assertEquals(8, corruptDepth[0]);
     }
 
     // -------------------------------------------------------------------------

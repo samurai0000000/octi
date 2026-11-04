@@ -1226,7 +1226,7 @@ tr.active-ply {
 
           <!-- Non-Modal Board-Scoped Start Match Overlay -->
           <div id="web-start-match-overlay">
-            <div id="web-start-summary-line1">vs AI Bot (Lv2 &bull; 8s) &bull; Seat A (Emerald)</div>
+            <div id="web-start-summary-line1">vs AI Bot (Lv2 &bull; 10s) &bull; Seat A (Emerald)</div>
             <div id="web-start-summary-line2">2P (9x9) &bull; 3 Bases &bull; Standard Rules</div>
             <div class="row" style="gap:12px;margin:0;">
               <button type="button" class="btn" id="btn-web-change-type" style="padding:10px 18px;font-size:14px;">Change Type</button>
@@ -1798,8 +1798,8 @@ tr.active-ply {
       </label>
       <label style="display:flex;justify-content:space-between;align-items:center;">Bot Difficulty:
         <select id="setup-bot-difficulty" style="background:#161D26;color:#fff;border-color:#2D3A54;">
-          <option value="1">Lv1: Fast (2s)</option>
-          <option value="2" selected>Lv2: Balanced (8s)</option>
+          <option value="1">Lv1: Fast (5s)</option>
+          <option value="2" selected>Lv2: Balanced (10s)</option>
           <option value="3">Lv3: Deep (20s)</option>
         </select>
       </label>
@@ -4017,8 +4017,8 @@ function applyMoveToState(s, move, player) {
 }
 
 var DEFAULT_BOT_TUNING = {
-  timeBudgetMs: 8000,
-  maxSearchDepth: 8,
+  timeBudgetMs: 10000,
+  maxSearchDepth: 64,
   maxQuiesceDepth: 2,
   quiesceBranchCap: 6,
   rootBranchCap: 40,
@@ -4026,6 +4026,7 @@ var DEFAULT_BOT_TUNING = {
   lazySmpThreads: 1,
   compositeMoveMaxPly: 1,
   rootScoreJitter: 20,
+  useOpeningBook: true,
   capturedEnemyBaseBonus: 28000,
   lostAlliedBasePenalty: 32000,
   neutralOctiSquareBonus: 4000,
@@ -4067,8 +4068,9 @@ var DEFAULT_BOT_TUNING = {
 
 var BOT_PROFILES = {
   1: Object.assign({}, DEFAULT_BOT_TUNING, {
-    timeBudgetMs: 2000,
+    timeBudgetMs: 5000,
     maxSearchDepth: 3,
+    useOpeningBook: false,
     maxQuiesceDepth: 0,
     quiesceBranchCap: 0,
     rootBranchCap: 24,
@@ -4095,8 +4097,9 @@ var BOT_PROFILES = {
     moveOrderBlunderPenalty: 2000
   }),
   2: Object.assign({}, DEFAULT_BOT_TUNING, {
-    timeBudgetMs: 8000,
-    maxSearchDepth: 8,
+    timeBudgetMs: 10000,
+    maxSearchDepth: 64,
+    useOpeningBook: true,
     maxQuiesceDepth: 2,
     quiesceBranchCap: 6,
     rootBranchCap: 40,
@@ -4104,8 +4107,9 @@ var BOT_PROFILES = {
     rootScoreJitter: 0
   }),
   3: Object.assign({}, DEFAULT_BOT_TUNING, {
-    timeBudgetMs: 15000,
-    maxSearchDepth: 10,
+    timeBudgetMs: 20000,
+    maxSearchDepth: 64,
+    useOpeningBook: true,
     maxQuiesceDepth: 4,
     quiesceBranchCap: 10,
     rootBranchCap: 56,
@@ -5153,6 +5157,408 @@ function alphaBeta(s, depth, ply, alpha, beta, botSide, curPlayer, ctx, prof, tt
   return bestScore;
 }
 
+/* =========================================================================
+ * Zobrist Hashing & Opening Book Lookup
+ * ========================================================================= */
+
+function mirrorDirCharHorizontal(ch) {
+  if (!ch) return "";
+  var lower = ch.toLowerCase();
+  var isUpper = (ch === ch.toUpperCase());
+  var map = { a: "a", b: "h", c: "g", d: "f", e: "e", f: "d", g: "c", h: "b" };
+  var res = map[lower] || lower;
+  return isUpper ? res.toUpperCase() : res;
+}
+
+function mirrorProngs(prongs) {
+  if (!prongs) return [0, 0, 0, 0, 0, 0, 0, 0];
+  return [
+    prongs[0],
+    prongs[7],
+    prongs[6],
+    prongs[5],
+    prongs[4],
+    prongs[3],
+    prongs[2],
+    prongs[1]
+  ];
+}
+
+function mirrorProngStr(str) {
+  if (!str) return "";
+  var p = parseProngConfig(str);
+  var mp = mirrorProngs(p.prongs);
+  return formatProngConfig(mp);
+}
+
+function mirrorMoveNotation(moveStr, boardW) {
+  if (!moveStr || typeof moveStr !== "string" || !boardW || boardW < 1 || boardW > 9) return "";
+  if (moveStr.indexOf(",") !== -1) {
+    return moveStr.split(",").map(function (m) { return mirrorMoveNotation(m.trim(), boardW); }).join(",");
+  }
+  if (moveStr.indexOf(";") !== -1) {
+    return moveStr.split(";").map(function (m) { return mirrorMoveNotation(m.trim(), boardW); }).join(";");
+  }
+
+  var move = moveStr.trim();
+  if (!move) return "";
+
+  // 1. Prong reposition: e.g. 33bc+d-b or 33bc-b+d
+  if (move.indexOf("+") !== -1 && move.indexOf("-") !== -1) {
+    var mRepo = /^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])(!?)-([a-hA-H])(!?)$/.exec(move);
+    if (mRepo) {
+      var mx = (boardW + 1) - parseInt(mRepo[1], 10);
+      return mx + "" + mRepo[2] + mirrorProngStr(mRepo[3]) + "+" + mirrorDirCharHorizontal(mRepo[4]) + mRepo[5] + "-" + mirrorDirCharHorizontal(mRepo[6]) + mRepo[7];
+    }
+    var mRepo2 = /^([1-9])([1-9])([a-hA-H!]*)-([a-hA-H])(!?)\+([a-hA-H])(!?)$/.exec(move);
+    if (mRepo2) {
+      var mx2 = (boardW + 1) - parseInt(mRepo2[1], 10);
+      return mx2 + "" + mRepo2[2] + mirrorProngStr(mRepo2[3]) + "-" + mirrorDirCharHorizontal(mRepo2[4]) + mRepo2[5] + "+" + mirrorDirCharHorizontal(mRepo2[6]) + mRepo2[7];
+    }
+  }
+
+  // 2. Prong addition: e.g. 33+b, 33bc+d, 33+b!
+  if (move.indexOf("+") !== -1) {
+    var mAdd = /^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])(!?)$/.exec(move);
+    if (mAdd) {
+      var ax = (boardW + 1) - parseInt(mAdd[1], 10);
+      return ax + "" + mAdd[2] + mirrorProngStr(mAdd[3]) + "+" + mirrorDirCharHorizontal(mAdd[4]) + mAdd[5];
+    }
+  }
+
+  // 3. Hop / jump chain: e.g. 33bc-55-75x, 33-35
+  if (move.indexOf("-") !== -1) {
+    var hops = move.split("-");
+    var mFirst = /^([1-9])([1-9])([a-hA-H!]*)$/.exec(hops[0]);
+    if (!mFirst) return "";
+    var sx = (boardW + 1) - parseInt(mFirst[1], 10);
+    var mirHops = [sx + "" + mFirst[2] + mirrorProngStr(mFirst[3])];
+    for (var i = 1; i < hops.length; i++) {
+      var mHop = /^([1-9])([1-9])(.*)$/.exec(hops[i]);
+      if (!mHop) return "";
+      var hx = (boardW + 1) - parseInt(mHop[1], 10);
+      mirHops.push(hx + "" + mHop[2] + mHop[3]);
+    }
+    return mirHops.join("-");
+  }
+
+  // 4. Pod drop / liberation: e.g. 33, 33*
+  var mDrop = /^([1-9])([1-9])(\*?)$/.exec(move);
+  if (mDrop) {
+    var dx = (boardW + 1) - parseInt(mDrop[1], 10);
+    return dx + "" + mDrop[2] + mDrop[3];
+  }
+
+  return move;
+}
+
+function initZobristTables() {
+  var state = 0x9E3779B97F4A7C15n;
+  function splitmix64() {
+    state = (state + 0x9E3779B97F4A7C15n) & 0xFFFFFFFFFFFFFFFFn;
+    var z = state;
+    z = ((z ^ (z >> 30n)) * 0xBF58476D1CE4E5B9n) & 0xFFFFFFFFFFFFFFFFn;
+    z = ((z ^ (z >> 27n)) * 0x94D049BB133111EBn) & 0xFFFFFFFFFFFFFFFFn;
+    return (z ^ (z >> 31n)) & 0xFFFFFFFFFFFFFFFFn;
+  }
+  var z = {
+    piece: [], prong: [], baseCaptured: [],
+    freePods: [], capturedPods: [], freeProngs: [], freeSuperProngs: [],
+    turn: [], mode: [], basesToWin: [], edgeless: [], superProngs: []
+  };
+  for (var sq = 0; sq < 81; sq++) {
+    z.piece[sq] = []; z.prong[sq] = [];
+    for (var p = 0; p < 7; p++) {
+      z.piece[sq][p] = [];
+      for (var t = 0; t < 4; t++) z.piece[sq][p][t] = splitmix64();
+      z.prong[sq][p] = [];
+      for (var d = 0; d < 8; d++) {
+        z.prong[sq][p][d] = [];
+        for (var pt = 0; pt < 3; pt++) z.prong[sq][p][d][pt] = splitmix64();
+      }
+    }
+    z.baseCaptured[sq] = [];
+    for (var c = 0; c < 5; c++) z.baseCaptured[sq][c] = splitmix64();
+  }
+  for (var pl = 0; pl < 5; pl++) {
+    z.freePods[pl] = []; z.capturedPods[pl] = []; z.freeProngs[pl] = []; z.freeSuperProngs[pl] = [];
+    for (var i = 0; i < 8; i++) { z.freePods[pl][i] = splitmix64(); z.capturedPods[pl][i] = splitmix64(); }
+    for (var i = 0; i < 33; i++) z.freeProngs[pl][i] = splitmix64();
+    for (var i = 0; i < 9; i++) z.freeSuperProngs[pl][i] = splitmix64();
+    z.turn[pl] = splitmix64();
+  }
+  for (var m = 0; m < 4; m++) z.mode[m] = splitmix64();
+  for (var b = 0; b < 5; b++) z.basesToWin[b] = splitmix64();
+  for (var e = 0; e < 2; e++) z.edgeless[e] = splitmix64();
+  for (var s = 0; s < 2; s++) z.superProngs[s] = splitmix64();
+  return z;
+}
+
+var ZOBRIST_TABLES = initZobristTables();
+
+function computePositionHashBigInt(s, mirrorHorizontal) {
+  var h = 0n;
+  if (!s || typeof ZOBRIST_TABLES === "undefined" || !ZOBRIST_TABLES) return h;
+  var ZOB = ZOBRIST_TABLES;
+  var modeIdx = (s.mode === "OFK") ? 3 : (s.mode === "4" || s.mode === "4P") ? 2 : 1;
+  h ^= ZOB.mode[modeIdx % 4];
+  var playerLetters = { A: 1, B: 2, C: 3, D: 4 };
+  var turnVal = playerLetters[s.turn] || 0;
+  h ^= ZOB.turn[turnVal % 5];
+  var btw = Math.min(4, Math.max(0, s.bases || (s.mode === "OFK" ? 1 : 3)));
+  h ^= ZOB.basesToWin[btw];
+  h ^= ZOB.edgeless[s.edgeless ? 1 : 0];
+  h ^= ZOB.superProngs[s.superProngs ? 1 : 0];
+
+  var w = s.gw || (s.mode === "OFK" ? 6 : 9);
+  var hgt = s.gh || (s.mode === "OFK" ? 7 : 9);
+
+  for (var y = 0; y < hgt; y++) {
+    for (var x = 0; x < w; x++) {
+      var effX = mirrorHorizontal ? ((w - 1) - x) : x;
+      var sqIdx = y * 9 + effX;
+      if (sqIdx < 0 || sqIdx >= 81) continue;
+
+      var k = (x + 1) + "," + (y + 1);
+      var pods = (s.map && s.map[k]) ? s.map[k] : [];
+
+      var baseOwner = 0;
+      if (modeIdx === 1) {
+        if (y === 2 && (x === 2 || x === 4 || x === 6)) baseOwner = 1;
+        else if (y === 6 && (x === 2 || x === 4 || x === 6)) baseOwner = 2;
+      } else if (modeIdx === 3) {
+        if (y === 1 && (x >= 1 && x <= 4)) baseOwner = 1;
+        else if (y === 5 && (x >= 1 && x <= 4)) baseOwner = 2;
+      } else if (modeIdx === 2) {
+        if (x === 2 && y === 2) baseOwner = 1;
+        else if (x === 2 && y === 6) baseOwner = 2;
+        else if (x === 6 && y === 6) baseOwner = 3;
+        else if (x === 6 && y === 2) baseOwner = 4;
+      }
+      if (baseOwner > 0 && pods.length > 0) {
+        for (var pl = 1; pl <= 4; pl++) {
+          var isAllied = (modeIdx === 2) ? ((baseOwner === 1 || baseOwner === 3) ? (pl === 1 || pl === 3) : (pl === 2 || pl === 4)) : (baseOwner === pl);
+          if (!isAllied) {
+            var plLetter = ["A", "B", "C", "D"][pl - 1];
+            var occ = pods.some(function (p) { return p.owner === plLetter; });
+            if (occ) {
+              h ^= ZOB.baseCaptured[sqIdx][pl];
+              break;
+            }
+          }
+        }
+      }
+
+      var numPods = Math.min(7, pods.length);
+      for (var p = 0; p < numPods; p++) {
+        var pod = pods[p];
+        var pType = (playerLetters[pod.owner] || 1) - 1;
+        if (pType >= 0 && pType < 4) {
+          h ^= ZOB.piece[sqIdx][p][pType];
+        }
+        for (var d = 0; d < 8; d++) {
+          var effD = mirrorHorizontal ? (d === 0 ? 0 : 8 - d) : d;
+          var ptIdx = (pod.cfg && pod.cfg.prongs) ? (pod.cfg.prongs[d] || 0) : 0;
+          if (ptIdx >= 0 && ptIdx < 3 && effD >= 0 && effD < 8) {
+            h ^= ZOB.prong[sqIdx][p][effD][ptIdx];
+          }
+        }
+      }
+    }
+  }
+
+  var numPlayers = (modeIdx === 2) ? 4 : 2;
+  for (var pl = 1; pl <= numPlayers; pl++) {
+    var r = (s.reserves && s.reserves[pl - 1]) ? s.reserves[pl - 1] : { freePods: 0, capturedPods: 0, freeProngs: 0, freeSuper: 0 };
+    var fp = Math.min(7, Math.max(0, r.freePods || 0));
+    var cp = Math.min(7, Math.max(0, r.capturedPods || 0));
+    var fpr = Math.min(32, Math.max(0, r.freeProngs || 0));
+    var fspr = Math.min(8, Math.max(0, r.freeSuper || 0));
+    h ^= ZOB.freePods[pl][fp];
+    h ^= ZOB.capturedPods[pl][cp];
+    h ^= ZOB.freeProngs[pl][fpr];
+    h ^= ZOB.freeSuperProngs[pl][fspr];
+  }
+
+  return h;
+}
+
+function computeCanonicalOpeningHash(s) {
+  var hDirect = computePositionHashBigInt(s, false);
+  function toHex(val) {
+    var hex = val.toString(16).toUpperCase();
+    while (hex.length < 16) hex = "0" + hex;
+    return "0x" + hex;
+  }
+  if (!s || s.mode === "4" || s.mode === "4P") {
+    return { hash: hDirect, key: toHex(hDirect), mirrored: false };
+  }
+  var hMirror = computePositionHashBigInt(s, true);
+  if (hMirror < hDirect) {
+    return { hash: hMirror, key: toHex(hMirror), mirrored: true };
+  }
+  return { hash: hDirect, key: toHex(hDirect), mirrored: false };
+}
+
+var OPENING_BOOK = {
+  "0x0B45FE3410182A4D": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: 12 },
+      { move: "77+f", score: 8 },
+      { move: "37+d", score: 8 }
+    ]
+  },
+  "0x1636F05EC19C04C8": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: 12 },
+      { move: "77+f", score: 8 },
+      { move: "37+d", score: 8 }
+    ]
+  },
+  "0x26BE80163B6578BB": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 55 },
+      { move: "33+b", score: 48 },
+      { move: "73+h", score: 48 }
+    ]
+  },
+  "0x3BCD8E7CEAE1563E": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 45 },
+      { move: "33+b", score: 40 },
+      { move: "73+h", score: 40 }
+    ]
+  },
+  "0x3E7C56E08875ECA9": {
+    depth: 8,
+    candidates: [
+      { move: "46+e", score: 12 },
+      { move: "36+e", score: 12 },
+      { move: "56+f", score: 8 }
+    ]
+  },
+  "0x42F7FBED36E9148F": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: 12 },
+      { move: "37+d", score: 8 },
+      { move: "77+f", score: 8 }
+    ]
+  },
+  "0x5C3D5244B85BC3A6": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 40 },
+      { move: "33+b", score: 35 },
+      { move: "33+c", score: 25 }
+    ]
+  },
+  "0x62F499414419B482": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: 15 },
+      { move: "77+e", score: 10 },
+      { move: "37+d", score: 8 }
+    ]
+  },
+  "0x97220033605ECA2D": {
+    depth: 8,
+    candidates: [
+      { move: "46+e", score: 10 },
+      { move: "36+e", score: 10 },
+      { move: "56+f", score: 5 }
+    ]
+  },
+  "0xBF20205531084330": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: 50 },
+      { move: "42+a", score: 50 },
+      { move: "22+b", score: 42 }
+    ]
+  },
+  "0xE61535559B2C9569": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: 10 },
+      { move: "37+d", score: 5 },
+      { move: "77+f", score: 5 }
+    ]
+  },
+  "0xFB663B3F4AA8BBEC": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: 10 },
+      { move: "37+d", score: 5 },
+      { move: "77+f", score: 5 }
+    ]
+  }
+};
+
+function probeOpeningBook(s, moves, prof) {
+  if (!prof || prof.useOpeningBook === false || !s || !moves || !moves.length) {
+    return null;
+  }
+  if (s.status === "O" || s.status === "R" || !s.turn || s.turn === "-") {
+    return null;
+  }
+
+  var canon = computeCanonicalOpeningHash(s);
+  var entry = OPENING_BOOK[canon.key];
+  if (!entry || !entry.candidates || !entry.candidates.length) {
+    return null;
+  }
+
+  var w = s.gw || (s.mode === "OFK" ? 6 : 9);
+  var validCands = [];
+  for (var i = 0; i < entry.candidates.length; i++) {
+    var cand = entry.candidates[i];
+    if (!cand || !cand.move) continue;
+    var candMoveStr = canon.mirrored ? mirrorMoveNotation(cand.move, w) : cand.move;
+    if (!candMoveStr) continue;
+
+    var isLegal = false;
+    for (var m = 0; m < moves.length; m++) {
+      if (moves[m] === candMoveStr) {
+        isLegal = true;
+        break;
+      }
+    }
+    if (isLegal) {
+      validCands.push({ move: candMoveStr, score: cand.score });
+    }
+  }
+
+  if (!validCands.length) {
+    return null;
+  }
+
+  var bestScore = validCands[0].score;
+  var window = (prof.rootScoreJitter > 0) ? prof.rootScoreJitter : 15;
+  var eligible = [];
+  for (var j = 0; j < validCands.length; j++) {
+    if (validCands[j].score >= bestScore - window) {
+      eligible.push(validCands[j]);
+    }
+  }
+
+  var chosen = eligible[0];
+  if (eligible.length > 1 && prof.rootScoreJitter > 0) {
+    var pickIdx = Math.floor(Math.random() * eligible.length);
+    chosen = eligible[pickIdx];
+  }
+
+  return {
+    bestMove: chosen.move,
+    score: chosen.score,
+    depth: entry.depth || 8
+  };
+}
+
 function botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs) {
   var s = parseOctiFen(fen);
   if (!s) return { bestMove: null, score: 0, nodes: 0, depth: 0 };
@@ -5189,6 +5595,20 @@ function botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs) {
         score: 999999,
         nodes: ctx.nodes,
         depth: 1,
+        elapsedMs: Date.now() - t0
+      };
+    }
+  }
+
+  // 2. Precomputed Zobrist opening playbook lookup
+  if (prof.useOpeningBook !== false) {
+    var bookHit = probeOpeningBook(s, moves, prof);
+    if (bookHit) {
+      return {
+        bestMove: bookHit.bestMove,
+        score: bookHit.score,
+        nodes: 1,
+        depth: bookHit.depth,
         elapsedMs: Date.now() - t0
       };
     }
@@ -5373,7 +5793,17 @@ try {
     evaluateState.toString(),
     orderMoves.toString(),
     quiesce.toString(),
-    alphaBeta.toString()
+    alphaBeta.toString(),
+    "var OPENING_BOOK = " + JSON.stringify(OPENING_BOOK) + ";",
+    initZobristTables.toString(),
+    "var ZOBRIST_TABLES = initZobristTables();",
+    mirrorDirCharHorizontal.toString(),
+    mirrorProngs.toString(),
+    mirrorProngStr.toString(),
+    mirrorMoveNotation.toString(),
+    computePositionHashBigInt.toString(),
+    computeCanonicalOpeningHash.toString(),
+    probeOpeningBook.toString()
   ];
   var workerCode = workerParts.join(String.fromCharCode(10));
   var blob = new Blob([workerCode], { type: "application/javascript" });
@@ -9153,7 +9583,7 @@ function generateOctiTranscriptV3() {
   var isPass = (localMatchConfig.playMode === "pass");
   var diff = localMatchConfig.botDifficulty || 2;
   var prof = BOT_PROFILES[diff] || BOT_PROFILES[2];
-  var budgetMs = prof.timeBudgetMs || 3000;
+  var budgetMs = prof.timeBudgetMs || 10000;
   var humanHandle = (currentUser && currentUser.handle) ? currentUser.handle : null;
 
   function makeSeatMeta(seatNum, seatLetter, defaultBotName) {
@@ -9276,7 +9706,7 @@ function onLocalMoveCommitted(notation, newState, aiMeta) {
     var prof = BOT_PROFILES[diff] || BOT_PROFILES[2];
     plyObj.ai = {
       difficulty: diff,
-      budgetMs: prof.timeBudgetMs || 3000,
+      budgetMs: prof.timeBudgetMs || 10000,
       depthReached: aiMeta.depth,
       nodesVisited: aiMeta.nodes,
       bestScore: aiMeta.score,
@@ -9359,7 +9789,7 @@ function triggerAiBotTurn() {
   var titleEl = document.getElementById("web-thinking-title");
   var fillEl = document.getElementById("web-thinking-progress-fill");
   var txtEl = document.getElementById("web-thinking-progress-text");
-  var defaultBudgetMs = (diff === 1) ? 3000 : ((diff === 3) ? 15000 : 8000);
+  var defaultBudgetMs = (diff === 1) ? 5000 : ((diff === 3) ? 20000 : 10000);
 
   if (thinkOverlay) thinkOverlay.style.display = "flex";
   if (titleEl) {

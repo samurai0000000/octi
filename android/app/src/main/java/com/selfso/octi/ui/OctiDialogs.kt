@@ -293,9 +293,9 @@ fun NewGameSetupDialog(
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OctiBotEngine.BotDifficulty.values().forEach { diff ->
                             val label = when (diff) {
-                                OctiBotEngine.BotDifficulty.CASUAL -> "Lv1 (3s)"
-                                OctiBotEngine.BotDifficulty.TACTICAL -> "Lv2 (8s)"
-                                OctiBotEngine.BotDifficulty.MASTER -> "Lv3 (15s)"
+                                OctiBotEngine.BotDifficulty.CASUAL -> "Lv1 (5s)"
+                                OctiBotEngine.BotDifficulty.TACTICAL -> "Lv2 (10s)"
+                                OctiBotEngine.BotDifficulty.MASTER -> "Lv3 (20s)"
                             }
                             FilterChip(
                                 selected = difficulty == diff,

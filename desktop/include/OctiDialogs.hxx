@@ -949,7 +949,7 @@ private:
 class OctiThinkingDialog : public QDialog {
 public:
     explicit OctiThinkingDialog(BotDifficulty difficulty = BotDifficulty::TACTICAL,
-                                int budgetMs = 8000,
+                                int budgetMs = 10000,
                                 ThemeId theme = ThemeId::OBSIDIAN_BRASS,
                                 QWidget *parent = nullptr);
     ~OctiThinkingDialog() override;

@@ -274,6 +274,10 @@ public class OctiGame {
         return bases;
     }
 
+    public int getBasesToWin() {
+        return (bases != null) ? bases.getValue() : ((mode == OctiGameMode.GAME_MODE_OFK) ? 1 : 3);
+    }
+
     public boolean useSuperProngs() {
         return useSuperProngs;
     }

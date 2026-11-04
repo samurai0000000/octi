@@ -876,7 +876,7 @@ public class OctiGuiRefinementV2Test {
                 OctiBotEngine.BotDifficulty.TACTICAL,
                 OctiPlayer.PLAYER_A
         );
-        assertEquals("vs AI Bot (Lv2 • 8s) • Seat A (Green)\n2P (9x9) • 3 Bases • Standard", sA);
+        assertEquals("vs AI Bot (Lv2 • 10s) • Seat A (Green)\n2P (9x9) • 3 Bases • Standard", sA);
 
         // 2. 2P vs Bot (TACTICAL, Seat B)
         String sB = OctiBoardRenderer.formatStartMatchConfigSummary(
@@ -888,7 +888,7 @@ public class OctiGuiRefinementV2Test {
                 OctiBotEngine.BotDifficulty.TACTICAL,
                 OctiPlayer.PLAYER_B
         );
-        assertEquals("vs AI Bot (Lv2 • 8s) • Seat B (Red)\n2P (9x9) • 3 Bases • Standard", sB);
+        assertEquals("vs AI Bot (Lv2 • 10s) • Seat B (Red)\n2P (9x9) • 3 Bases • Standard", sB);
 
         // 3. 2P Pass-and-Play with Super-Prongs + Edgeless
         String sPass = OctiBoardRenderer.formatStartMatchConfigSummary(
@@ -912,7 +912,7 @@ public class OctiGuiRefinementV2Test {
                 OctiBotEngine.BotDifficulty.TACTICAL,
                 OctiPlayer.PLAYER_A
         );
-        assertEquals("vs AI Bot (Lv2 • 8s) • Seat A (Green)\nOFK (6x7) • 1 Base", sOfk);
+        assertEquals("vs AI Bot (Lv2 • 10s) • Seat A (Green)\nOFK (6x7) • 1 Base", sOfk);
     }
 
     @Test

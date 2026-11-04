@@ -106,70 +106,73 @@ public class OctiBotEngine {
     }
 
     // Direct Binary 64-bit Zobrist Tables
-    private static final long[][][][] ZOB_POD_PRESENCE = new long[9][9][7][5];
-    private static final long[][][][][][] ZOB_PRONG = new long[9][9][7][5][9][3];
-    private static final long[][][] ZOB_BASE_CAPTURED = new long[9][9][5];
+    private static final long[][][] ZOB_PIECE = new long[81][7][4];
+    private static final long[][][][] ZOB_PRONG = new long[81][7][8][3];
+    private static final long[][] ZOB_BASE_CAPTURED = new long[81][5];
+    private static final long[][] ZOB_FREE_PODS = new long[5][8];
+    private static final long[][] ZOB_CAPTURED_PODS = new long[5][8];
+    private static final long[][] ZOB_FREE_PRONGS = new long[5][33];
+    private static final long[][] ZOB_FREE_SUPER_PRONGS = new long[5][9];
     private static final long[] ZOB_TURN = new long[5];
-    private static final long[] ZOB_MODE = new long[5];
-    private static final long[][][] ZOB_RESERVE = new long[5][4][32];
+    private static final long[] ZOB_MODE = new long[4];
+    private static final long[] ZOB_BASES_TO_WIN = new long[5];
+    private static final long[] ZOB_EDGELESS = new long[2];
+    private static final long[] ZOB_SUPER_PRONGS = new long[2];
 
     static {
-        long seed = 0x5EED2026_C0DEC001L;
-        // SplitMix64 generator for deterministic, high-entropy 64-bit Zobrist keys
-        for (int x = 0; x < 9; x++) {
-            for (int y = 0; y < 9; y++) {
-                for (int s = 0; s < 7; s++) {
-                    for (int p = 0; p < 5; p++) {
-                        seed += 0x9E3779B97F4A7C15L;
-                        long z = seed;
-                        z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
-                        z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
-                        ZOB_POD_PRESENCE[x][y][s][p] = z ^ (z >>> 31);
+        long state = 0x9E3779B97F4A7C15L;
+        class SplitMix64Gen {
+            long s;
+            SplitMix64Gen(long seed) { this.s = seed; }
+            long next() {
+                s += 0x9E3779B97F4A7C15L;
+                long z = s;
+                z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
+                z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
+                return z ^ (z >>> 31);
+            }
+        }
+        SplitMix64Gen sm = new SplitMix64Gen(state);
 
-                        for (int d = 0; d < 9; d++) {
-                            for (int pt = 0; pt < 3; pt++) {
-                                seed += 0x9E3779B97F4A7C15L;
-                                z = seed;
-                                z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
-                                z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
-                                ZOB_PRONG[x][y][s][p][d][pt] = z ^ (z >>> 31);
-                            }
-                        }
+        for (int sq = 0; sq < 81; ++sq) {
+            for (int p = 0; p < 7; ++p) {
+                for (int t = 0; t < 4; ++t) {
+                    ZOB_PIECE[sq][p][t] = sm.next();
+                }
+                for (int d = 0; d < 8; ++d) {
+                    for (int pt = 0; pt < 3; ++pt) {
+                        ZOB_PRONG[sq][p][d][pt] = sm.next();
                     }
                 }
-                for (int p = 0; p < 5; p++) {
-                    seed += 0x9E3779B97F4A7C15L;
-                    long z = seed;
-                    z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
-                    z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
-                    ZOB_BASE_CAPTURED[x][y][p] = z ^ (z >>> 31);
-                }
+            }
+            for (int c = 0; c < 5; ++c) {
+                ZOB_BASE_CAPTURED[sq][c] = sm.next();
             }
         }
-        for (int p = 0; p < 5; p++) {
-            seed += 0x9E3779B97F4A7C15L;
-            long z = seed;
-            z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
-            z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
-            ZOB_TURN[p] = z ^ (z >>> 31);
-        }
-        for (int m = 0; m < 5; m++) {
-            seed += 0x9E3779B97F4A7C15L;
-            long z = seed;
-            z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
-            z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
-            ZOB_MODE[m] = z ^ (z >>> 31);
-        }
-        for (int p = 0; p < 5; p++) {
-            for (int r = 0; r < 4; r++) {
-                for (int c = 0; c < 32; c++) {
-                    seed += 0x9E3779B97F4A7C15L;
-                    long z = seed;
-                    z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
-                    z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
-                    ZOB_RESERVE[p][r][c] = z ^ (z >>> 31);
-                }
+        for (int pl = 0; pl < 5; ++pl) {
+            for (int i = 0; i < 8; ++i) {
+                ZOB_FREE_PODS[pl][i] = sm.next();
+                ZOB_CAPTURED_PODS[pl][i] = sm.next();
             }
+            for (int i = 0; i < 33; ++i) {
+                ZOB_FREE_PRONGS[pl][i] = sm.next();
+            }
+            for (int i = 0; i < 9; ++i) {
+                ZOB_FREE_SUPER_PRONGS[pl][i] = sm.next();
+            }
+            ZOB_TURN[pl] = sm.next();
+        }
+        for (int m = 0; m < 4; ++m) {
+            ZOB_MODE[m] = sm.next();
+        }
+        for (int b = 0; b < 5; ++b) {
+            ZOB_BASES_TO_WIN[b] = sm.next();
+        }
+        for (int e = 0; e < 2; ++e) {
+            ZOB_EDGELESS[e] = sm.next();
+        }
+        for (int s = 0; s < 2; ++s) {
+            ZOB_SUPER_PRONGS[s] = sm.next();
         }
     }
 
@@ -258,8 +261,9 @@ public class OctiBotEngine {
     public static BotTuningProfile defaultProfileForDifficulty(int diffLevel) {
         BotTuningProfile p = new BotTuningProfile();
         if (diffLevel <= 1) { // CASUAL (Level 1)
-            p.timeBudgetMs = 3000;
+            p.timeBudgetMs = 5000;
             p.maxSearchDepth = 3;
+            p.useOpeningBook = false;
             p.maxQuiesceDepth = 0;
             p.quiesceBranchCap = 0;
             p.rootBranchCap = 24;
@@ -287,8 +291,8 @@ public class OctiBotEngine {
             p.soleArmedPodDangerPenalty = 1000;
             p.moveOrderBlunderPenalty = 2000;
         } else if (diffLevel == 2) { // TACTICAL (Level 2)
-            p.timeBudgetMs = 8000;
-            p.maxSearchDepth = 6;
+            p.timeBudgetMs = 10000;
+            p.maxSearchDepth = 64;
             p.maxQuiesceDepth = 2;
             p.quiesceBranchCap = 6;
             p.rootBranchCap = 40;
@@ -316,8 +320,8 @@ public class OctiBotEngine {
             p.soleArmedPodDangerPenalty = 3500;
             p.moveOrderBlunderPenalty = 7000;
         } else { // MASTER (Level 3)
-            p.timeBudgetMs = 15000;
-            p.maxSearchDepth = 9;
+            p.timeBudgetMs = 20000;
+            p.maxSearchDepth = 64;
             p.maxQuiesceDepth = 4;
             p.quiesceBranchCap = 10;
             p.rootBranchCap = 56;
@@ -376,33 +380,33 @@ public class OctiBotEngine {
 
     public static int defaultBudgetForDifficulty(BotDifficulty d) {
         if (d == null) {
-            return 8000;
+            return 10000;
         }
         switch (d) {
             case CASUAL:
-                return 3000;
+                return 5000;
             case TACTICAL:
-                return 8000;
+                return 10000;
             case MASTER:
-                return 15000;
+                return 20000;
             default:
-                return 8000;
+                return 10000;
         }
     }
 
     public static int maxDepthForDifficulty(BotDifficulty d) {
         if (d == null) {
-            return 7;
+            return 64;
         }
         switch (d) {
             case CASUAL:
-                return 5;
+                return 3;
             case TACTICAL:
-                return 7;
+                return 64;
             case MASTER:
-                return 9;
+                return 64;
             default:
-                return 7;
+                return 64;
         }
     }
 
@@ -451,55 +455,77 @@ public class OctiBotEngine {
         return System.nanoTime() / 1_000_000L;
     }
 
-    /**
-     * Computes a fast, deterministic 64-bit Zobrist binary hash over square pod configs,
-     * captured base flags, reserve counts, turn, and game mode (zero string allocations!).
-     */
-    public static long computePositionHash(OctiBoard board) {
-        if (board == null) {
-            return 0L;
+    public static OctiDir mirrorDirHorizontal(OctiDir d) {
+        if (d == null) {
+            return OctiDir.DIR_UNDEF;
         }
-        long h = 0xCBF29CE484222325L;
+        switch (d) {
+            case DIR_N:  return OctiDir.DIR_N;
+            case DIR_NE: return OctiDir.DIR_NW;
+            case DIR_E:  return OctiDir.DIR_W;
+            case DIR_SE: return OctiDir.DIR_SW;
+            case DIR_S:  return OctiDir.DIR_S;
+            case DIR_SW: return OctiDir.DIR_SE;
+            case DIR_W:  return OctiDir.DIR_E;
+            case DIR_NW: return OctiDir.DIR_NE;
+            default:     return OctiDir.DIR_UNDEF;
+        }
+    }
+
+    private static long computePositionHashInternal(OctiBoard board, boolean mirrorHorizontal) {
+        long h = 0L;
+        if (board == null) {
+            return h;
+        }
         OctiGame game = board.getGame();
         if (game == null) {
             return h;
         }
 
+        int w = board.getBoardWidth();
+        int hgt = board.getBoardHeight();
         OctiGameMode mode = board.getGameMode();
-        h ^= ZOB_MODE[mode != null ? mode.ordinal() : 0];
-
+        int modeVal = (mode != null) ? mode.getValue() : 0;
+        h ^= ZOB_MODE[modeVal % 4];
         OctiPlayer turn = game.getTurn();
         int turnVal = (turn != null) ? turn.getValue() : 0;
-        if (turnVal >= 0 && turnVal < 5) {
-            h ^= ZOB_TURN[turnVal];
-        }
+        h ^= ZOB_TURN[turnVal % 5];
+        int btw = Math.min(4, Math.max(0, game.getBasesToWin()));
+        h ^= ZOB_BASES_TO_WIN[btw];
+        h ^= ZOB_EDGELESS[game.useEdgelessBoard() ? 1 : 0];
+        h ^= ZOB_SUPER_PRONGS[game.useSuperProngs() ? 1 : 0];
 
-        int w = board.getBoardWidth();
-        int hRows = board.getBoardHeight();
-
-        for (int y = 0; y < hRows; y++) {
-            for (int x = 0; x < w; x++) {
+        for (int y = 0; y < hgt; ++y) {
+            for (int x = 0; x < w; ++x) {
+                int effX = mirrorHorizontal ? ((w - 1) - x) : x;
+                int sqIdx = y * 9 + effX;
+                if (sqIdx < 0 || sqIdx >= 81) {
+                    continue;
+                }
                 OctiSquare sq = board.squareAt(x, y);
-                if (sq.isCaptured() && sq.getNumPods() > 0) {
-                    OctiPlayer capPlayer = sq.getPodAt(sq.getNumPods() - 1).getType().toPlayer();
-                    int cpVal = (capPlayer != null) ? capPlayer.getValue() : 0;
-                    if (cpVal >= 0 && cpVal < 5) {
-                        h ^= ZOB_BASE_CAPTURED[x][y][cpVal];
+                if (sq.isCaptured()) {
+                    for (int pl = 1; pl <= 4; ++pl) {
+                        if (sq.isCapturedBy(OctiPlayer.fromValue(pl))) {
+                            h ^= ZOB_BASE_CAPTURED[sqIdx][pl];
+                            break;
+                        }
                     }
                 }
-                int numPods = sq.getNumPods();
-                for (int s = 0; s < numPods && s < 7; s++) {
-                    OctiPod pod = sq.getPodAt(s);
-                    OctiPlayer owner = pod.getType().toPlayer();
-                    int oVal = (owner != null) ? owner.getValue() : 0;
-                    if (oVal >= 0 && oVal < 5) {
-                        h ^= ZOB_POD_PRESENCE[x][y][s][oVal];
-                        for (int d = 0; d < OctiDir.DIR_MAX; d++) {
-                            OctiDir dir = OctiDir.fromIndex(d);
-                            OctiProngType pt = pod.prongAt(dir);
-                            if (pt != OctiProngType.NO_PRONG) {
-                                h ^= ZOB_PRONG[x][y][s][oVal][d][pt.getValue()];
-                            }
+                int numPods = Math.min(7, sq.getNumPods());
+                for (int p = 0; p < numPods; ++p) {
+                    OctiPod pod = sq.getPodAt(p);
+                    int pType = (pod.getType() != null ? pod.getType().getValue() : 0) - 1;
+                    if (pType >= 0 && pType < 4) {
+                        h ^= ZOB_PIECE[sqIdx][p][pType];
+                    }
+                    for (int d = 0; d < 8; ++d) {
+                        OctiDir srcDir = OctiDir.fromIndex(d);
+                        OctiDir effDir = mirrorHorizontal ? mirrorDirHorizontal(srcDir) : srcDir;
+                        OctiProngType pt = pod.prongAt(srcDir);
+                        int ptIdx = (pt != null) ? pt.getValue() : 0;
+                        int dIdx = (effDir != null && effDir != OctiDir.DIR_UNDEF) ? effDir.getIndex() : 0;
+                        if (ptIdx >= 0 && ptIdx < 3 && dIdx >= 0 && dIdx < 8) {
+                            h ^= ZOB_PRONG[sqIdx][p][dIdx][ptIdx];
                         }
                     }
                 }
@@ -507,19 +533,340 @@ public class OctiBotEngine {
         }
 
         int numPlayers = (mode == OctiGameMode.GAME_MODE_4) ? 4 : 2;
-        for (int pIdx = 1; pIdx <= numPlayers; pIdx++) {
-            OctiPlayer p = OctiPlayer.fromValue(pIdx);
-            int fp = Math.min(31, Math.max(0, game.getFreePods(p)));
-            int cp = Math.min(31, Math.max(0, game.getCapturedPods(p)));
-            int fpr = Math.min(31, Math.max(0, game.getFreeProngs(p)));
-            int fspr = Math.min(31, Math.max(0, game.getFreeSuperProngs(p)));
-            h ^= ZOB_RESERVE[pIdx][0][fp];
-            h ^= ZOB_RESERVE[pIdx][1][cp];
-            h ^= ZOB_RESERVE[pIdx][2][fpr];
-            h ^= ZOB_RESERVE[pIdx][3][fspr];
+        for (int pl = 1; pl <= numPlayers; ++pl) {
+            OctiPlayer p = OctiPlayer.fromValue(pl);
+            int fp = Math.min(7, Math.max(0, game.getFreePods(p)));
+            int cp = Math.min(7, Math.max(0, game.getCapturedPods(p)));
+            int fpr = Math.min(32, Math.max(0, game.getFreeProngs(p)));
+            int fspr = Math.min(8, Math.max(0, game.getFreeSuperProngs(p)));
+            h ^= ZOB_FREE_PODS[pl][fp];
+            h ^= ZOB_CAPTURED_PODS[pl][cp];
+            h ^= ZOB_FREE_PRONGS[pl][fpr];
+            h ^= ZOB_FREE_SUPER_PRONGS[pl][fspr];
         }
 
         return h;
+    }
+
+    public static long computePositionHashStatic(OctiBoard board) {
+        return computePositionHashInternal(board, false);
+    }
+
+    public static long computePositionHash(OctiBoard board) {
+        return computePositionHashStatic(board);
+    }
+
+    public static long computeCanonicalOpeningHash(OctiBoard board, boolean[] outMirrored) {
+        long hDirect = computePositionHashInternal(board, false);
+        if (board == null || board.getGameMode() == OctiGameMode.GAME_MODE_4) {
+            if (outMirrored != null && outMirrored.length > 0) {
+                outMirrored[0] = false;
+            }
+            return hDirect;
+        }
+
+        long hMirror = computePositionHashInternal(board, true);
+        if (Long.compareUnsigned(hMirror, hDirect) < 0) {
+            if (outMirrored != null && outMirrored.length > 0) {
+                outMirrored[0] = true;
+            }
+            return hMirror;
+        }
+        if (outMirrored != null && outMirrored.length > 0) {
+            outMirrored[0] = false;
+        }
+        return hDirect;
+    }
+
+    public static long computeCanonicalOpeningHash(OctiBoard board) {
+        return computeCanonicalOpeningHash(board, null);
+    }
+
+    public static String mirrorMoveNotation(String moveNotation, int boardWidth) {
+        if (moveNotation == null || boardWidth < 1 || boardWidth > 9) {
+            return "";
+        }
+        try {
+            OctiMove parsed = new OctiMove(moveNotation);
+            if (parsed.isEmpty()) {
+                return "";
+            }
+            List<OctiMoveOp> mirroredOps = new ArrayList<>();
+            for (OctiMoveOp srcOp : parsed.getOps()) {
+                OctiMoveOp op = new OctiMoveOp(srcOp);
+                int mx0 = (boardWidth - 1) - op.x0;
+                if (mx0 < 0 || mx0 >= boardWidth) {
+                    return "";
+                }
+                op.x0 = mx0;
+
+                OctiPod mirroredPod = new OctiPod(op.pod.getType());
+                for (int d = 0; d < 8; ++d) {
+                    OctiDir dir = OctiDir.fromIndex(d);
+                    OctiProngType pt = op.pod.prongAt(dir);
+                    if (pt != OctiProngType.NO_PRONG) {
+                        mirroredPod.addProng(mirrorDirHorizontal(dir),
+                                pt == OctiProngType.SUPER_PRONG);
+                    }
+                }
+                op.pod = mirroredPod;
+
+                if (op.addProngDir != OctiDir.DIR_UNDEF) {
+                    op.addProngDir = mirrorDirHorizontal(op.addProngDir);
+                }
+                if (op.rmProngDir != OctiDir.DIR_UNDEF) {
+                    op.rmProngDir = mirrorDirHorizontal(op.rmProngDir);
+                }
+                for (OctiHop h : op.hops) {
+                    int mhx = (boardWidth - 1) - h.x;
+                    if (mhx < 0 || mhx >= boardWidth) {
+                        return "";
+                    }
+                    h.x = mhx;
+                }
+                mirroredOps.add(op);
+            }
+            OctiMove mirroredMove = new OctiMove(mirroredOps);
+            return mirroredMove.asString();
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
+    public static final class OpeningBookCandidate {
+        public final String move;
+        public final short score;
+
+        public OpeningBookCandidate(String move, int score) {
+            this.move = move;
+            this.score = (short) score;
+        }
+    }
+
+    public static final class OpeningBookEntry {
+        public final long canonicalKey;
+        public final byte depth;
+        public final OpeningBookCandidate[] candidates;
+
+        public OpeningBookEntry(long canonicalKey, int depth, OpeningBookCandidate... candidates) {
+            this.canonicalKey = canonicalKey;
+            this.depth = (byte) depth;
+            this.candidates = candidates;
+        }
+    }
+
+    private static final OpeningBookEntry[] OPENING_BOOK = new OpeningBookEntry[] {
+        // 2P 1-Base ply 1 after 33+b / 73+h
+        new OpeningBookEntry(0x0B45FE3410182A4DL, 8,
+            new OpeningBookCandidate("57+e", 12),
+            new OpeningBookCandidate("77+f", 8),
+            new OpeningBookCandidate("37+d", 8)),
+        // 2P 3-Base ply 1 after 33+b / 73+h
+        new OpeningBookEntry(0x1636F05EC19C04C8L, 8,
+            new OpeningBookCandidate("57+e", 12),
+            new OpeningBookCandidate("77+f", 8),
+            new OpeningBookCandidate("37+d", 8)),
+        // 2P 1-Base ply 0 (A to move)
+        new OpeningBookEntry(0x26BE80163B6578BBL, 8,
+            new OpeningBookCandidate("53+a", 55),
+            new OpeningBookCandidate("33+b", 48),
+            new OpeningBookCandidate("73+h", 48)),
+        // 2P 3-Base ply 0 (A to move)
+        new OpeningBookEntry(0x3BCD8E7CEAE1563EL, 8,
+            new OpeningBookCandidate("53+a", 45),
+            new OpeningBookCandidate("33+b", 40),
+            new OpeningBookCandidate("73+h", 40)),
+        // OFK ply 1 after 22+b / 52+h
+        new OpeningBookEntry(0x3E7C56E08875ECA9L, 8,
+            new OpeningBookCandidate("46+e", 12),
+            new OpeningBookCandidate("36+e", 12),
+            new OpeningBookCandidate("56+f", 8)),
+        // 2P 3-Base ply 1 after 53+b / 53+h
+        new OpeningBookEntry(0x42F7FBED36E9148FL, 8,
+            new OpeningBookCandidate("57+e", 12),
+            new OpeningBookCandidate("37+d", 8),
+            new OpeningBookCandidate("77+f", 8)),
+        // 4P ply 0 (A to move)
+        new OpeningBookEntry(0x5C3D5244B85BC3A6L, 8,
+            new OpeningBookCandidate("33+a", 40),
+            new OpeningBookCandidate("33+b", 35),
+            new OpeningBookCandidate("33+c", 25)),
+        // 2P 3-Base ply 1 after 33+a / 73+a
+        new OpeningBookEntry(0x62F499414419B482L, 8,
+            new OpeningBookCandidate("57+e", 15),
+            new OpeningBookCandidate("77+e", 10),
+            new OpeningBookCandidate("37+d", 8)),
+        // OFK ply 1 after 32+a / 42+a
+        new OpeningBookEntry(0x97220033605ECA2DL, 8,
+            new OpeningBookCandidate("46+e", 10),
+            new OpeningBookCandidate("36+e", 10),
+            new OpeningBookCandidate("56+f", 5)),
+        // OFK ply 0 (A to move)
+        new OpeningBookEntry(0xBF20205531084330L, 8,
+            new OpeningBookCandidate("32+a", 50),
+            new OpeningBookCandidate("42+a", 50),
+            new OpeningBookCandidate("22+b", 42)),
+        // 2P 3-Base ply 1 after 53+a
+        new OpeningBookEntry(0xE61535559B2C9569L, 8,
+            new OpeningBookCandidate("57+e", 10),
+            new OpeningBookCandidate("37+d", 5),
+            new OpeningBookCandidate("77+f", 5)),
+        // 2P 1-Base ply 1 after 53+a
+        new OpeningBookEntry(0xFB663B3F4AA8BBECL, 8,
+            new OpeningBookCandidate("57+e", 10),
+            new OpeningBookCandidate("37+d", 5),
+            new OpeningBookCandidate("77+f", 5))
+    };
+
+    public static boolean probeOpeningBookTable(OctiBoard board,
+                                                OpeningBookEntry[] entries,
+                                                com.selfso.octi.BotTuningProfile profile,
+                                                long[] rngStateHolder,
+                                                String[] outMove,
+                                                int[] outScore,
+                                                int[] outDepth) {
+        if (outMove != null && outMove.length > 0) {
+            outMove[0] = "";
+        }
+        if (profile == null || !profile.useOpeningBook || entries == null || entries.length == 0 || board == null) {
+            return false;
+        }
+        OctiGame srcGame = board.getGame();
+        if (srcGame == null || !srcGame.isGameStarted() || srcGame.isGameOver()
+                || srcGame.getTurn() == OctiPlayer.PLAYER_UNDEF) {
+            return false;
+        }
+
+        boolean[] mirroredHolder = new boolean[1];
+        long key = computeCanonicalOpeningHash(board, mirroredHolder);
+        boolean mirrored = mirroredHolder[0];
+
+        int lo = 0;
+        int hi = entries.length;
+        OpeningBookEntry found = null;
+        while (lo < hi) {
+            int mid = lo + (hi - lo) / 2;
+            int cmp = Long.compareUnsigned(entries[mid].canonicalKey, key);
+            if (cmp < 0) {
+                lo = mid + 1;
+            } else if (cmp > 0) {
+                hi = mid;
+            } else {
+                found = entries[mid];
+                break;
+            }
+        }
+
+        if (found == null || found.candidates == null || found.candidates.length == 0) {
+            return false;
+        }
+
+        List<OctiMove> legalMoves = srcGame.generateLegalMoves();
+        if (legalMoves.isEmpty()) {
+            return false;
+        }
+
+        int w = board.getBoardWidth();
+        int maxCands = Math.min(3, found.candidates.length);
+
+        class ValidCand {
+            final String moveStr;
+            final int score;
+            ValidCand(String moveStr, int score) {
+                this.moveStr = moveStr;
+                this.score = score;
+            }
+        }
+        List<ValidCand> validCands = new ArrayList<>(maxCands);
+
+        for (int i = 0; i < maxCands; ++i) {
+            OpeningBookCandidate cand = found.candidates[i];
+            if (cand == null || cand.move == null || cand.move.isEmpty()) {
+                continue;
+            }
+            String candMoveStr = mirrored ? mirrorMoveNotation(cand.move, w) : cand.move;
+            if (candMoveStr == null || candMoveStr.isEmpty()) {
+                continue;
+            }
+            try {
+                OctiMove parsed = new OctiMove(candMoveStr);
+                String canonicalStr = parsed.asString();
+                boolean isLegal = false;
+                for (OctiMove lm : legalMoves) {
+                    if (lm.equals(parsed) || lm.asString().equals(canonicalStr)) {
+                        isLegal = true;
+                        candMoveStr = lm.asString();
+                        break;
+                    }
+                }
+                if (!isLegal && parsed.getOps().size() > 1 &&
+                        board.getGameMode() != OctiGameMode.GAME_MODE_OFK) {
+                    try {
+                        OctiBoard testBoard = new OctiBoard();
+                        testBoard.suppressBoardUpdateNotification(true);
+                        testBoard.fromPositionString(board.toPositionString());
+                        if (testBoard.getGame() != null) {
+                            testBoard.getGame().setSearchMode(true);
+                            testBoard.getGame().move(parsed);
+                            isLegal = true;
+                            candMoveStr = canonicalStr;
+                        }
+                    } catch (Throwable ignored) {
+                        isLegal = false;
+                    }
+                }
+                if (isLegal) {
+                    validCands.add(new ValidCand(candMoveStr, cand.score));
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+
+        if (validCands.isEmpty()) {
+            return false;
+        }
+
+        int bestScore = validCands.get(0).score;
+        int window = (profile.rootScoreJitter > 0) ? profile.rootScoreJitter : 15;
+        int eligibleCount = 1;
+        for (int i = 1; i < validCands.size(); ++i) {
+            if (validCands.get(i).score >= bestScore - window) {
+                eligibleCount++;
+            }
+        }
+
+        int chosenIdx = 0;
+        if (eligibleCount > 1 && profile.rootScoreJitter > 0 && rngStateHolder != null && rngStateHolder.length > 0) {
+            long x = rngStateHolder[0] != 0L ? rngStateHolder[0] : 0x5EED2026L;
+            x ^= (x << 13);
+            x ^= (x >>> 7);
+            x ^= (x << 17);
+            rngStateHolder[0] = x;
+            chosenIdx = (int) Math.floorMod(x, eligibleCount);
+        }
+
+        ValidCand chosen = validCands.get(chosenIdx);
+        if (outMove != null && outMove.length > 0) {
+            outMove[0] = chosen.moveStr;
+        }
+        if (outScore != null && outScore.length > 0) {
+            outScore[0] = chosen.score;
+        }
+        if (outDepth != null && outDepth.length > 0) {
+            outDepth[0] = found.depth;
+        }
+        return true;
+    }
+
+    public boolean probeOpeningBook(OctiBoard board, String[] outMove, int[] outScore, int[] outDepth) {
+        long[] rngHolder = new long[] { this.rngState };
+        boolean hit = probeOpeningBookTable(board, OPENING_BOOK, this.profile, rngHolder, outMove, outScore, outDepth);
+        this.rngState = rngHolder[0];
+        return hit;
+    }
+
+    public boolean probeOpeningBook(OctiBoard board, String[] outMove) {
+        return probeOpeningBook(board, outMove, null, null);
     }
 
     private static boolean isEnemyHomeSquareFor(OctiSquareType sqType,
@@ -2218,6 +2565,25 @@ public class OctiBotEngine {
             } catch (Throwable ignored) {
             }
             game.restoreSnapshot(rootSnap);
+        }
+
+        // 2. Probe precomputed Zobrist opening playbook if enabled
+        if (profile.useOpeningBook) {
+            String[] bookMoveHolder = new String[1];
+            int[] bookScoreHolder = new int[1];
+            int[] bookDepthHolder = new int[1];
+            if (probeOpeningBook(scratchBoard, bookMoveHolder, bookScoreHolder, bookDepthHolder)) {
+                liveDepth.set(bookDepthHolder[0]);
+                liveNodes.set(1L);
+                liveScore.set(bookScoreHolder[0]);
+                if (outStats != null) {
+                    outStats.depthReached = bookDepthHolder[0];
+                    outStats.nodesVisited = 1L;
+                    outStats.bestScore = bookScoreHolder[0];
+                    outStats.elapsedMs = Math.max(0L, steadyClockMs() - startMs);
+                }
+                return bookMoveHolder[0];
+            }
         }
 
         int rootCap = (profile.rootBranchCap > 0) ? profile.rootBranchCap : 40;
