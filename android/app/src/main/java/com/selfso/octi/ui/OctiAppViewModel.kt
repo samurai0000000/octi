@@ -539,6 +539,7 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     private val _showGameOverDialog = MutableStateFlow(false)
     val showGameOverDialog: StateFlow<Boolean> = _showGameOverDialog.asStateFlow()
+    private var _gameOverDialogShownForCurrentOnlineMatch: Boolean = false
 
     private val _showExportMovesDialog = MutableStateFlow(false)
     val showExportMovesDialog: StateFlow<Boolean> = _showExportMovesDialog.asStateFlow()
@@ -595,6 +596,13 @@ class OctiAppViewModel @JvmOverloads constructor(
     private val _totalGameSec = MutableStateFlow(0)
     val totalGameSec: StateFlow<Int> = _totalGameSec.asStateFlow()
 
+    private val _clockTickRevision = MutableStateFlow(0L)
+    val clockTickRevision: StateFlow<Long> = _clockTickRevision.asStateFlow()
+    private val _clockA = MutableStateFlow(-1L)
+    val clockA: StateFlow<Long> = _clockA.asStateFlow()
+    private val _clockB = MutableStateFlow(-1L)
+    val clockB: StateFlow<Long> = _clockB.asStateFlow()
+
     fun matchStartedEpochSec(): Long = _matchStartedEpochSec
     fun currentTurnStartEpochMs(): Long = _currentTurnStartEpochMs
 
@@ -640,9 +648,27 @@ class OctiAppViewModel @JvmOverloads constructor(
             _turnElapsedSec.value = ((now - _currentTurnStartEpochMs) / 1000L).toInt().coerceAtLeast(0)
         }
         val gv = _activeGameView.value
-        if (gv != null && gv.ttlRemainingMs > 0L) {
-            gv.ttlRemainingMs = (gv.ttlRemainingMs - 1000L).coerceAtLeast(0L)
-            _activeGameView.value = gv
+        if (gv != null) {
+            if (_matchType.value == MatchType.ONLINE_ROOM) {
+                if (gv.phase == "IN_PROGRESS" && !gv.paused && gv.timeControlEnabled) {
+                    val turnSeat = gv.turnSeat
+                    val seat = gv.seats.firstOrNull { it.seat == turnSeat }
+                    if (seat != null && seat.clockMs > 0L) {
+                        seat.clockMs = (seat.clockMs - 1000L).coerceAtLeast(0L)
+                    }
+                    val s1 = gv.seats.firstOrNull { it.seat == 1 }
+                    val s2 = gv.seats.firstOrNull { it.seat == 2 }
+                    _clockA.value = s1?.clockMs ?: -1L
+                    _clockB.value = s2?.clockMs ?: -1L
+                } else if (gv.phase == "WAITING_FOR_PLAYERS" && gv.ttlRemainingMs > 0L) {
+                    gv.ttlRemainingMs = (gv.ttlRemainingMs - 1000L).coerceAtLeast(0L)
+                }
+                _clockTickRevision.value += 1L
+                _activeGameView.value = gv
+            } else if (gv.ttlRemainingMs > 0L) {
+                gv.ttlRemainingMs = (gv.ttlRemainingMs - 1000L).coerceAtLeast(0L)
+                _activeGameView.value = gv
+            }
         }
         val lobby = _lobbyState.value
         if (lobby != null && lobby.tables.isNotEmpty()) {
@@ -1166,6 +1192,10 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     fun livePlyCount(): Int {
         return Math.max(0, _fenHistory.size - 1)
+    }
+
+    fun fenHistorySize(): Int {
+        return _fenHistory.size
     }
 
     fun isViewingHistory(): Boolean {
@@ -2311,6 +2341,9 @@ class OctiAppViewModel @JvmOverloads constructor(
             val apiRes = joinOnlineTable(tableId, preferredSeat, passcode)
             val res = OctiNetworkClient.TableActionResult.fromApiResult(apiRes, tableId)
             runOnUiThreadOrSync {
+                if (!res.ok) {
+                    _statusBanner.value = "Failed to sit: ${res.errorMessage}"
+                }
                 onDone?.onDone(res)
             }
         }
@@ -2324,18 +2357,30 @@ class OctiAppViewModel @JvmOverloads constructor(
         joinOnlineTableAsync(tableId, -1, passcode, onDone)
     }
 
+    fun exitOnlineTableViewAsync(
+        roomId: String,
+        onDone: ActionCallback<Boolean>?
+    ) {
+        exitOnlineTableViewAsync(roomId, false, onDone)
+    }
+
     @JvmOverloads
     fun exitOnlineTableViewAsync(
         roomId: String = _activeRoomId.value,
+        leaveSeatOnServer: Boolean = false,
         onDone: ActionCallback<Boolean>? = null
     ) {
         val targetRoomId = roomId.trim()
         val isActiveRoom = (targetRoomId.isEmpty() || targetRoomId == _activeRoomId.value)
         val resolvedRoomId = if (targetRoomId.isNotEmpty()) targetRoomId else _activeRoomId.value
-        val viewerSeat = _activeGameView.value?.viewerSeat ?: 0
+        val gv = _activeGameView.value
+        val viewerSeat = gv?.viewerSeat ?: 0
+        val shouldLeaveSeatOnServer = (leaveSeatOnServer || (viewerSeat > 0 && gv?.phase != "IN_PROGRESS"))
         _backgroundExecutor.submit {
             val res = if (viewerSeat == 0 && resolvedRoomId.isNotEmpty()) {
                 netClient.unobserveTable(resolvedRoomId)
+            } else if (shouldLeaveSeatOnServer && resolvedRoomId.isNotEmpty()) {
+                netClient.leaveTable(resolvedRoomId)
             } else {
                 OctiNetworkClient.ApiResult(true)
             }
@@ -3131,6 +3176,8 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun enterOnlineRoom(roomId: String): OctiNetworkClient.ApiResult<OctiNetworkClient.GameViewData> {
+        _awaitingMatchStart.value = false
+        _gameOverDialogShownForCurrentOnlineMatch = false
         if (_activeRoomId.value != roomId) {
             _gameChatLog.value = emptyList()
         }
@@ -3157,52 +3204,131 @@ class OctiAppViewModel @JvmOverloads constructor(
         return res
     }
 
+    @JvmOverloads
+    fun refreshActiveGameViewAsync(
+        onDone: ActionCallback<OctiNetworkClient.GameViewData>? = null
+    ): java.util.concurrent.Future<OctiNetworkClient.ApiResult<OctiNetworkClient.GameViewData>> {
+        return _backgroundExecutor.submit<OctiNetworkClient.ApiResult<OctiNetworkClient.GameViewData>> {
+            val res = refreshActiveGameView()
+            runOnUiThreadOrSync {
+                if (res.ok && res.data != null) {
+                    onDone?.onDone(res.data)
+                }
+            }
+            res
+        }
+    }
+
     fun applyGameView(gv: OctiNetworkClient.GameViewData) {
         applyGameViewToBoard(gv)
     }
 
     private fun applyGameViewToBoard(gv: OctiNetworkClient.GameViewData) {
+        _awaitingMatchStart.value = false
         val prevPhase = _activeGameView.value?.phase
         _activeGameView.value = gv
         _lastSubmittedOnlinePly = gv.moves.size
+
+        if (gv.rematchRoomId.isNotEmpty() && gv.rematchRoomId != _activeRoomId.value) {
+            enterOnlineRoom(gv.rematchRoomId)
+            return
+        }
+
         if (gv.phase == "IN_PROGRESS" && prevPhase == "WAITING_FOR_PLAYERS") {
             _currentTab.value = AppTab.BOARD
             _statusBanner.value = "Match #${gv.roomId} started!"
         } else if (gv.phase == "WAITING_FOR_PLAYERS") {
-            val filled = gv.seats.count { it.playerUuid.isNotEmpty() || it.handle.isNotEmpty() }
-            val total = gv.seats.size.coerceAtLeast(2)
-            _statusBanner.value = "Table #${gv.roomId} — Waiting for players ($filled/$total)"
+            if (!netClient.isAuthenticated && gv.viewerSeat == 0) {
+                _statusBanner.value = "Observing as anonymous — Sign in to play or chat"
+            } else {
+                val filled = gv.seats.count { it.playerUuid.isNotEmpty() || it.handle.isNotEmpty() }
+                val total = gv.seats.size.coerceAtLeast(2)
+                _statusBanner.value = "Table #${gv.roomId} — Waiting for players ($filled/$total)"
+            }
         }
-        if (gv.fen.isNotEmpty()) {
-            try {
-                board.fromPositionString(gv.fen)
-                composer.attachBoard(board)
-                composer.setConfirmAllMoves(_confirmAllMoves.value)
-                if (_fenHistory.isEmpty() || _fenHistory.last() != gv.fen) {
-                    if (gv.moves.isEmpty()) {
-                        _fenHistory.clear()
-                        _moveHistory.clear()
-                        _fenHistory.add(gv.fen)
-                        clearLastMoveIndicators()
-                    } else {
-                        while (_moveHistory.size < gv.moves.size) {
-                            _moveHistory.add(gv.moves[_moveHistory.size])
+
+        val s1 = gv.seats.firstOrNull { it.seat == 1 }
+        val s2 = gv.seats.firstOrNull { it.seat == 2 }
+        _clockA.value = s1?.clockMs ?: -1L
+        _clockB.value = s2?.clockMs ?: -1L
+
+        synchronized(board) {
+            val needFullRebuild = (gv.moves != _moveHistory || _fenHistory.isEmpty() || _fenHistory.size != gv.moves.size + 1)
+            if (needFullRebuild) {
+                try {
+                    val mode = modeFromWireCode(gv.mode)
+                    val bases = OctiGameBases.fromValue(gv.bases)
+                    board.setGameMode(mode, gv.superProngs, gv.edgeless, bases)
+                    displayBoard.setGameMode(mode, gv.superProngs, gv.edgeless, bases)
+                    board.game?.start(OctiPlayer.PLAYER_A)
+                    displayBoard.game?.start(OctiPlayer.PLAYER_A)
+
+                    _fenHistory.clear()
+                    _moveHistory.clear()
+                    _fenHistory.add(board.toPositionString())
+
+                    var replayOk = true
+                    for (m in gv.moves) {
+                        try {
+                            board.game?.move(m)
+                            _moveHistory.add(m)
+                            _fenHistory.add(board.toPositionString())
+                        } catch (e: Exception) {
+                            replayOk = false
+                            break
                         }
-                        _fenHistory.add(gv.fen)
-                        val latestMoveStr = gv.moves.lastOrNull() ?: ""
+                    }
+
+                    if (!replayOk || (gv.fen.isNotEmpty() && board.toPositionString() != gv.fen)) {
+                        if (gv.fen.isNotEmpty()) {
+                            board.fromPositionString(gv.fen)
+                            if (_fenHistory.isEmpty() || _fenHistory.last() != gv.fen) {
+                                _fenHistory.add(gv.fen)
+                            }
+                        }
+                    }
+
+                    _viewingPly.value = livePlyCount()
+                    displayBoard.fromPositionString(board.toPositionString())
+                    composer.attachBoard(board)
+                    composer.setConfirmAllMoves(_confirmAllMoves.value)
+
+                    val latestMoveStr = gv.moves.lastOrNull() ?: ""
+                    if (latestMoveStr.isNotEmpty()) {
                         val edgeless = board.game?.useEdgelessBoard() == true
                         _lastMoveModifiedSquares.value = OctiBoardRenderer.extractModifiedSquares(latestMoveStr, edgeless)
                         _lastMoveIndicatorSetAtMs = System.currentTimeMillis()
+                    } else {
+                        clearLastMoveIndicators()
+                    }
+                } catch (ignored: RuntimeException) {
+                }
+            } else {
+                val stagedActive = (composer.hasStagedMove() || _awaitingConfirmation.value)
+                if (gv.phase == "IN_PROGRESS" && !gv.paused && stagedActive) {
+                    // Preserve staged move across non-move SSE refreshes
+                } else {
+                    if (gv.fen.isNotEmpty()) {
+                        try {
+                            board.fromPositionString(gv.fen)
+                            displayBoard.fromPositionString(gv.fen)
+                            composer.attachBoard(board)
+                            composer.setConfirmAllMoves(_confirmAllMoves.value)
+                        } catch (ignored: RuntimeException) {
+                        }
                     }
                 }
-                if (!isViewingHistory() || _viewingPly.value >= livePlyCount() - 1) {
-                    displayBoard.fromPositionString(gv.fen)
-                    _viewingPly.value = livePlyCount()
-                }
-                if (board.game?.isGameOver == true) {
-                    _showGameOverDialog.value = true
-                }
-            } catch (ignored: RuntimeException) {
+            }
+        }
+        if (gv.phase == "FINISHED") {
+            if (!_gameOverDialogShownForCurrentOnlineMatch) {
+                _gameOverDialogShownForCurrentOnlineMatch = true
+                _showGameOverDialog.value = true
+            }
+        } else {
+            _gameOverDialogShownForCurrentOnlineMatch = false
+            if (board.game?.isGameOver == true) {
+                _showGameOverDialog.value = true
             }
         }
         if (gv.viewerSeat >= 1 && _autoRotateSeatView.value) {
@@ -3418,11 +3544,83 @@ class OctiAppViewModel @JvmOverloads constructor(
         }
     }
 
+    fun isOnlineGameOver(): Boolean {
+        val gv = _activeGameView.value
+        if (_matchType.value == MatchType.ONLINE_ROOM && gv?.phase == "FINISHED") {
+            return true
+        }
+        return board.game?.isGameOver == true
+    }
+
+    fun describeOnlineGameOverBanner(): String {
+        val gv = _activeGameView.value
+        if (_matchType.value == MatchType.ONLINE_ROOM && gv?.phase == "FINISHED") {
+            if (gv.winnerSeat > 0) {
+                val winSeat = gv.winnerSeat
+                val seatObj = gv.seats.firstOrNull { it.seat == winSeat }
+                val handle = seatObj?.handle?.ifEmpty { "Seat $winSeat" } ?: "Seat $winSeat"
+                val cleanHandle = handle.removePrefix("@")
+                val isBot = seatObj?.isRobot == true || cleanHandle.equals("stock", ignoreCase = true) || (seatObj?.playerUuid?.startsWith("bot") == true)
+                val tag = if (isBot) "@$cleanHandle [BOT]" else "@$cleanHandle"
+                return if (gv.mode == "4P") {
+                    if (winSeat == 1 || winSeat == 3) {
+                        "Team A & C Wins!"
+                    } else {
+                        "Team B & D Wins!"
+                    }
+                } else {
+                    "Winner: $tag"
+                }
+            } else if (gv.result == "DRAW") {
+                return "Match Drawn"
+            } else {
+                return "Match Complete"
+            }
+        }
+        val game = board.game
+        val winner = game?.winner
+        if (winner == null || winner == OctiPlayer.PLAYER_UNDEF) {
+            return "Game Over — Stalemate"
+        }
+        return if (board.gameMode == OctiGameMode.GAME_MODE_4) {
+            if (winner == OctiPlayer.PLAYER_A || winner == OctiPlayer.PLAYER_C) {
+                "Team A & C Wins!"
+            } else {
+                "Team B & D Wins!"
+            }
+        } else {
+            "Game Over — Winner: $winner"
+        }
+    }
+
+    fun describeOnlineTerminationReason(): String {
+        val gv = _activeGameView.value
+        if (_matchType.value == MatchType.ONLINE_ROOM && gv?.phase == "FINISHED") {
+            val term = gv.termination.ifEmpty { "CONCLUDED" }
+            return when (term) {
+                "RESIGNATION" -> "Match concluded by resignation"
+                "AGREED_DRAW" -> "Draw agreed by mutual consent"
+                "DISCONNECT_FORFEIT" -> "Opponent forfeited by disconnection"
+                "TIMEOUT" -> "Match concluded by time expiration"
+                "BASE_OCCUPATION" -> "Winning base occupied"
+                "POD_ELIMINATION" -> "All opponent pods captured"
+                else -> term.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }
+            }
+        }
+        return OctiDialogs.describeTerminationReason(board)
+    }
+
     fun submitGameAction(
         action: String
     ): OctiNetworkClient.ApiResult<OctiNetworkClient.GameActionData> {
         val roomId = _activeRoomId.value
-        val res = netClient.submitGameAction(roomId, action)
+        val res = if (isMainThread()) {
+            _backgroundExecutor.submit<OctiNetworkClient.ApiResult<OctiNetworkClient.GameActionData>> {
+                netClient.submitGameAction(roomId, action)
+            }.get()
+        } else {
+            netClient.submitGameAction(roomId, action)
+        }
         if (res.ok) {
             refreshActiveGameView()
         }
@@ -3457,11 +3655,116 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     fun resignOnlineGame(): OctiNetworkClient.ApiResult<Boolean> {
         val roomId = _activeRoomId.value
-        val res = netClient.resignGame(roomId)
+        val res = if (isMainThread()) {
+            _backgroundExecutor.submit<OctiNetworkClient.ApiResult<Boolean>> {
+                netClient.resignGame(roomId)
+            }.get()
+        } else {
+            netClient.resignGame(roomId)
+        }
         if (res.ok) {
             refreshActiveGameView()
         }
         return res
+    }
+
+    @JvmOverloads
+    fun submitGameActionAsync(
+        action: String,
+        onDone: ActionCallback<OctiNetworkClient.GameActionData>? = null
+    ): java.util.concurrent.Future<OctiNetworkClient.ApiResult<OctiNetworkClient.GameActionData>> {
+        return _backgroundExecutor.submit<OctiNetworkClient.ApiResult<OctiNetworkClient.GameActionData>> {
+            val res = submitGameAction(action)
+            runOnUiThreadOrSync {
+                if (res.data != null) {
+                    onDone?.onDone(res.data)
+                }
+            }
+            res
+        }
+    }
+
+    @JvmOverloads
+    fun resignOnlineGameAsync(
+        onDone: ActionCallback<Boolean>? = null
+    ): java.util.concurrent.Future<OctiNetworkClient.ApiResult<Boolean>> {
+        return _backgroundExecutor.submit<OctiNetworkClient.ApiResult<Boolean>> {
+            val res = resignOnlineGame()
+            runOnUiThreadOrSync {
+                onDone?.onDone(res.ok)
+            }
+            res
+        }
+    }
+
+    @JvmOverloads
+    fun proposeDraw(
+        onDone: ActionCallback<OctiNetworkClient.GameActionData>? = null
+    ): java.util.concurrent.Future<OctiNetworkClient.ApiResult<OctiNetworkClient.GameActionData>> {
+        val gv = _activeGameView.value
+        val myUuid = _currentProfile.value?.uuid ?: configStore.preferences().playerUuid
+        val hasOpponentDrawOffer = gv?.proposals?.any { it.type == "DRAW_OFFER" && it.proposerUuid != myUuid } == true
+        val action = if (hasOpponentDrawOffer) "accept_draw" else "offer_draw"
+        return submitGameActionAsync(action, onDone)
+    }
+
+    @JvmOverloads
+    fun proposeUndo(
+        onDone: ActionCallback<OctiNetworkClient.GameActionData>? = null
+    ): java.util.concurrent.Future<OctiNetworkClient.ApiResult<OctiNetworkClient.GameActionData>> {
+        return submitGameActionAsync("request_undo", onDone)
+    }
+
+    @JvmOverloads
+    fun proposePauseOrResume(
+        onDone: ActionCallback<OctiNetworkClient.GameActionData>? = null
+    ): java.util.concurrent.Future<OctiNetworkClient.ApiResult<OctiNetworkClient.GameActionData>> {
+        val gv = _activeGameView.value
+        val action = if (gv?.paused == true) "resume" else "request_pause"
+        return submitGameActionAsync(action, onDone)
+    }
+
+    @JvmOverloads
+    fun proposeRematch(
+        onDone: ActionCallback<OctiNetworkClient.GameActionData>? = null
+    ): java.util.concurrent.Future<OctiNetworkClient.ApiResult<OctiNetworkClient.GameActionData>> {
+        val gv = _activeGameView.value
+        val myUuid = _currentProfile.value?.uuid ?: configStore.preferences().playerUuid
+        val hasOpponentRematch = gv?.proposals?.any { it.type == "REMATCH_REQUEST" && it.proposerUuid != myUuid } == true
+        val action = if (hasOpponentRematch) "accept_rematch" else "request_rematch"
+        return submitGameActionAsync(action, onDone)
+    }
+
+    @JvmOverloads
+    fun acceptActiveProposal(
+        onDone: ActionCallback<OctiNetworkClient.GameActionData>? = null
+    ): java.util.concurrent.Future<OctiNetworkClient.ApiResult<OctiNetworkClient.GameActionData>> {
+        val gv = _activeGameView.value
+        val prop = gv?.proposals?.firstOrNull()
+        val action = when (prop?.type) {
+            "DRAW_OFFER" -> "accept_draw"
+            "PAUSE_REQUEST" -> "accept_pause"
+            "UNDO_REQUEST" -> "accept_undo"
+            "REMATCH_REQUEST" -> "accept_rematch"
+            else -> "accept_draw"
+        }
+        return submitGameActionAsync(action, onDone)
+    }
+
+    @JvmOverloads
+    fun declineActiveProposal(
+        onDone: ActionCallback<OctiNetworkClient.GameActionData>? = null
+    ): java.util.concurrent.Future<OctiNetworkClient.ApiResult<OctiNetworkClient.GameActionData>> {
+        val gv = _activeGameView.value
+        val prop = gv?.proposals?.firstOrNull()
+        val action = when (prop?.type) {
+            "DRAW_OFFER" -> "decline_draw"
+            "PAUSE_REQUEST" -> "decline_pause"
+            "UNDO_REQUEST" -> "decline_undo"
+            "REMATCH_REQUEST" -> "decline_rematch"
+            else -> "decline_draw"
+        }
+        return submitGameActionAsync(action, onDone)
     }
 
     fun muteParticipant(
@@ -3534,41 +3837,44 @@ class OctiAppViewModel @JvmOverloads constructor(
         }
 
         var evType = ""
+        var dataObj: JSONObject? = null
         try {
             if (ev.dataJson.isNotEmpty() && ev.dataJson.startsWith("{")) {
-                val j = JSONObject(ev.dataJson)
-                evType = j.optString("type", "")
+                dataObj = JSONObject(ev.dataJson)
+                evType = dataObj.optString("type", "")
             }
         } catch (ignored: Exception) {
         }
 
-        if ("MOVE" == ev.event ||
-            "MOVE_APPLIED" == ev.event ||
-            "GAME_STARTED" == ev.event ||
-            "GAME_OVER" == ev.event ||
-            "PROPOSAL" == ev.event ||
-            "PROPOSAL_UPDATED" == ev.event ||
-            "ACTION" == ev.event ||
-            "ACTION_APPLIED" == ev.event ||
-            "PLAYER_JOINED" == ev.event ||
-            "PLAYER_LEFT" == ev.event ||
-            "POLICY_UPDATED" == ev.event ||
-            "reconnect" == ev.event ||
-            "gap" == ev.event ||
-            "PLAYER_DISCONNECTED" == ev.event ||
-            "PLAYER_RECONNECTED" == ev.event ||
-            "GAME_PAUSED" == ev.event ||
-            "GAME_RESUMED" == ev.event ||
-            "MOVE_UNDONE" == ev.event ||
-            "UNDO_APPLIED" == ev.event ||
-            "REMATCH_CREATED" == ev.event ||
-            "PLAYER_DISCONNECTED" == evType ||
-            "PLAYER_RECONNECTED" == evType ||
-            "GAME_PAUSED" == evType ||
-            "GAME_RESUMED" == evType ||
-            "MOVE_UNDONE" == evType ||
-            "REMATCH_CREATED" == evType
-        ) {
+        val eventName = if (ev.event.isNotEmpty()) ev.event else evType
+
+        if (eventName == "REMATCH_CREATED") {
+            var newRoomId = ""
+            if (dataObj != null) {
+                newRoomId = dataObj.optString("room_id", dataObj.optString("text", ""))
+            } else if (ev.dataJson.isNotEmpty()) {
+                newRoomId = ev.dataJson.trim().removeSurrounding("\"")
+            }
+            if (newRoomId.isNotEmpty() && newRoomId != _activeRoomId.value) {
+                enterOnlineRoom(newRoomId)
+                return
+            }
+        }
+
+        val isLifecycleEvent = when (eventName) {
+            "SEAT_JOINED", "SEAT_LEFT", "SEAT_KICKED", "HOST_CHANGED",
+            "OBSERVER_JOINED", "OBSERVER_LEFT", "GAME_STARTED",
+            "MOVE", "MOVE_APPLIED", "UNDO_APPLIED", "MOVE_UNDONE",
+            "PROPOSAL_OFFERED", "PROPOSAL_ACCEPTED", "PROPOSAL_DECLINED", "PROPOSAL_EXPIRED",
+            "PROPOSAL", "PROPOSAL_UPDATED", "ACTION", "ACTION_APPLIED",
+            "GAME_PAUSED", "GAME_RESUMED",
+            "PLAYER_DISCONNECTED", "PLAYER_RECONNECTED",
+            "GAME_OVER", "POLICY_UPDATED", "PLAYER_JOINED", "PLAYER_LEFT",
+            "reconnect", "gap" -> true
+            else -> false
+        }
+
+        if (isLifecycleEvent) {
             refreshActiveGameView()
         }
     }

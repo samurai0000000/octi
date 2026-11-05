@@ -218,6 +218,16 @@ bool OctiMoveComposer::confirmAllMoves() const
     return _confirmAllMoves;
 }
 
+bool OctiMoveComposer::hasStagedMove() const
+{
+    return !_stagedOps.empty() || _awaitingConfirmation || _guidedMoveActive;
+}
+
+bool OctiMoveComposer::isTurnInProgress() const
+{
+    return hasStagedMove();
+}
+
 void OctiMoveComposer::setMoveCommittedCallback(
     std::function<void(const std::string &moveNotation)> cb)
 {

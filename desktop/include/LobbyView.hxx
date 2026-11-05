@@ -92,9 +92,11 @@ public:
 
     QPushButton *createTableButton() const { return _createTableBtn; }
     QPushButton *joinTableButton() const { return _joinSelectedBtn; }
+    QPushButton *joinSelectedButton() const { return _joinSelectedBtn; }
     QPushButton *joinButton() const { return _joinSelectedBtn; }
     QPushButton *leaveTableButton() const { return _leaveTableBtn; }
     QPushButton *observeTableButton() const { return _observeSelectedBtn; }
+    QPushButton *observeSelectedButton() const { return _observeSelectedBtn; }
     QPushButton *observeButton() const { return _observeSelectedBtn; }
     QPushButton *matchmakingButton() const { return _matchmakingBtn; }
     QPushButton *quickMatchButton() const { return _matchmakingBtn; }

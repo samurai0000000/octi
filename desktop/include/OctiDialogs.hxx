@@ -365,6 +365,8 @@ private:
     QLineEdit *_passcodeEdit;
 };
 
+using TablePasscodePromptDialog = PasscodeDialog;
+
 /*
  * 4. MatchmakingDialog
  */
@@ -561,20 +563,7 @@ private:
 
 class RobotsDirectoryDialog : public QDialog {
 public:
-    struct RobotDirectoryEntry {
-        std::string robotUuid;
-        std::string handle;
-        std::string description;
-        std::string ownerUuid;
-        std::string ownerHandle;
-        std::string status;
-        int gamesPlayed = 0;
-        int wins = 0;
-        int losses = 0;
-        int draws = 0;
-        double winRate = 0.0;
-        int elo2p = 1500;
-    };
+    using RobotDirectoryEntry = octi::RobotDirectoryEntry;
 
     explicit RobotsDirectoryDialog(OctiNetworkClient *netClient,
                                   ThemeId theme = ThemeId::OBSIDIAN_BRASS,

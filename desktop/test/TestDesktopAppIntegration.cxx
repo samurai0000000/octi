@@ -674,7 +674,8 @@ TEST(DesktopAppIntegrationTest,
         CHECK_FALSE(guestWin.lobbyView()->createTableButton()->isEnabled());
         CHECK_FALSE(guestWin.lobbyView()->joinButton()->isEnabled());
         CHECK_FALSE(guestWin.lobbyView()->leaveTableButton()->isEnabled());
-        CHECK_TRUE(guestWin.lobbyView()->quickMatchButton() == nullptr);
+        CHECK_TRUE(guestWin.lobbyView()->quickMatchButton() != nullptr);
+        CHECK_FALSE(guestWin.lobbyView()->quickMatchButton()->isEnabled());
         CHECK_FALSE(guestWin.lobbyView()->chatInput()->isEnabled());
         CHECK_FALSE(guestWin.lobbyView()->chatSendButton()->isEnabled());
         STRCMP_EQUAL("Sign in to chat",
@@ -694,7 +695,8 @@ TEST(DesktopAppIntegrationTest,
         guestWin.showLobbyView();
         CHECK_TRUE(guestWin.lobbyView()->createTableButton()->isEnabled());
         CHECK_TRUE(guestWin.lobbyView()->joinButton()->isEnabled());
-        CHECK_TRUE(guestWin.lobbyView()->quickMatchButton() == nullptr);
+        CHECK_TRUE(guestWin.lobbyView()->quickMatchButton() != nullptr);
+        CHECK_TRUE(guestWin.lobbyView()->quickMatchButton()->isEnabled());
         CHECK_TRUE(guestWin.lobbyView()->chatInput()->isEnabled());
         CHECK_TRUE(guestWin.lobbyView()->chatSendButton()->isEnabled());
         STRCMP_EQUAL("Message the global lobby...",
@@ -2914,12 +2916,512 @@ TEST(DesktopAppIntegrationTest, RightSidebarFiftyFiftyLayoutAndZoomChatDialog)
     zoomDlg->close();
 }
 
+TEST(DesktopAppIntegrationTest, RobotsDirectoryViaNetworkClient)
+{
+    LiveServerEnv env;
+    auto client = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto res = client->fetchRobotsDirectory();
+    CHECK_TRUE_TEXT(res.ok, res.errorMessage.c_str());
+    LONGS_EQUAL(200, res.httpStatus);
+}
+
+TEST(DesktopAppIntegrationTest, LobbyViewObserveInProgressAndFullTables)
+{
+    LiveServerEnv env;
+    std::string cfgPath = env.dir + "/client_lobby_obs.json";
+    OctiMainWindow win(OctiNetworkClient::createForLoopbackTest(env.port()), cfgPath);
+    win.showLobbyView();
+    LobbyView *lobby = win.lobbyView();
+    CHECK_TRUE(lobby != nullptr);
+
+    LobbyStateData state;
+    TableSummaryInfo t1;
+    t1.roomId = "room-inprogress-1";
+    t1.mode = "2P";
+    t1.phase = "IN_PROGRESS";
+    t1.observerPolicy = "OPEN_OBSERVERS";
+    t1.seatsTotal = 2;
+    t1.seatsFilled = 2;
+    state.tables.push_back(t1);
+
+    TableSummaryInfo t2;
+    t2.roomId = "room-full-waiting-2";
+    t2.mode = "2P";
+    t2.phase = "WAITING_FOR_PLAYERS";
+    t2.observerPolicy = "OPEN_OBSERVERS";
+    t2.seatsTotal = 2;
+    t2.seatsFilled = 2;
+    state.tables.push_back(t2);
+
+    lobby->refreshFromLobbyState(state);
+    lobby->selectRoomId("room-inprogress-1");
+
+    QPushButton *joinBtn = lobby->joinSelectedButton();
+    CHECK_TRUE(joinBtn != nullptr);
+    CHECK_TRUE(joinBtn->isEnabled());
+    STRCMP_EQUAL("Observe Table", joinBtn->text().toUtf8().constData());
+
+    bool observed = false;
+    std::string observedRoom;
+    lobby->setOnObserveTableRequested([&](const TableSummaryInfo &table) {
+        observed = true;
+        observedRoom = table.roomId;
+    });
+
+    joinBtn->click();
+    CHECK_TRUE(observed);
+    STRCMP_EQUAL("room-inprogress-1", observedRoom.c_str());
+
+    /* Test full waiting table */
+    observed = false;
+    observedRoom.clear();
+    lobby->selectRoomId("room-full-waiting-2");
+    CHECK_TRUE(joinBtn->isEnabled());
+    STRCMP_EQUAL("Observe Table", joinBtn->text().toUtf8().constData());
+    joinBtn->click();
+    CHECK_TRUE(observed);
+    STRCMP_EQUAL("room-full-waiting-2", observedRoom.c_str());
+}
+
+TEST(DesktopAppIntegrationTest, LobbyViewMatchmakingButtonAndMatchFoundSse)
+{
+    LiveServerEnv env;
+    std::string cfgPath = env.dir + "/client_mm.json";
+    OctiMainWindow win(OctiNetworkClient::createForLoopbackTest(env.port()), cfgPath);
+    LobbyView *lobby = win.lobbyView();
+    CHECK_TRUE(lobby != nullptr);
+
+    QPushButton *mmBtn = lobby->quickMatchButton();
+    CHECK_TRUE(mmBtn != nullptr);
+
+    bool matchFoundCalled = false;
+    std::string matchedRoomId;
+    lobby->setOnMatchFoundCallback([&](const std::string &roomId) {
+        matchFoundCalled = true;
+        matchedRoomId = roomId;
+    });
+
+    SseEvent ev;
+    ev.event = "MATCH_FOUND";
+    ev.id = 1;
+    ev.dataJson = "{\"room_id\":\"room-quickmatch-999\"}";
+    lobby->handleLobbySseEvent(ev);
+
+    CHECK_TRUE(matchFoundCalled);
+    STRCMP_EQUAL("room-quickmatch-999", matchedRoomId.c_str());
+}
+
+TEST(DesktopAppIntegrationTest, ExpiredSessionTokenCleanupOnStartup)
+{
+    LiveServerEnv env;
+    std::string cfgPath = env.dir + "/client_expired_401.json";
+    {
+        ClientConfigStore cfg(cfgPath);
+        cfg.preferences().sessionToken = "invalid-or-expired-token-401";
+        cfg.preferences().playerUuid = "uuid-expired-user";
+        cfg.preferences().handle = "ExpiredUser";
+        std::string err;
+        CHECK_TRUE(cfg.save(err));
+    }
+
+    OctiMainWindow win(OctiNetworkClient::createForLoopbackTest(env.port()), cfgPath);
+    win.resize(1024, 768);
+    win.show();
+    win.pumpUiEvents();
+
+    /* With an expired session token, server returns 401.
+     * OctiMainWindow should clear _authenticated and clear saved session. */
+    CHECK_FALSE(win.isAuthenticated());
+    CHECK_TRUE(win.configStore()->preferences().sessionToken.empty());
+    CHECK_TRUE(win.currentProfile().uuid.empty());
+}
+
 TEST(DesktopAppIntegrationTest, OnlineMoveTurnGuardAndRollback)
 {
     std::string cfgPath = "/tmp/octi_turn_guard_test.json";
     OctiMainWindow win(nullptr, cfgPath, true);
     // In local game, isInteractiveOnlineTurn() should return true
     CHECK_TRUE(win.isInteractiveOnlineTurn());
+}
+
+TEST(DesktopAppIntegrationTest, OnlineRoomEntryClearsAwaitingMatchStartAndGatesInteraction)
+{
+    LiveServerEnv env;
+
+    auto clientA = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginA = clientA->loginWithSso(
+        "google", makeToken("google", "sub-gate-a", "AliceGate"), "AliceGate");
+    CHECK_TRUE_TEXT(loginA.ok, loginA.errorMessage.c_str());
+
+    std::string cfgA = env.dir + "/client_gate_a.json";
+    OctiMainWindow winA(std::move(clientA), cfgA);
+    winA.applyAuthenticatedProfile(loginA.data.profile);
+
+    /* 1. Startup / Local match begins awaiting start */
+    winA.beginAwaitingMatchStart();
+    CHECK_TRUE(winA.isAwaitingMatchStart());
+
+    /* 2. Entering online room clears _awaitingMatchStart */
+    CreateTableRequest req;
+    req.mode = "2P";
+    req.bases = 3;
+    auto createRes = winA.createAndEnterOnlineTable(req);
+    CHECK_TRUE_TEXT(createRes.ok, createRes.errorMessage.c_str());
+    std::string roomId = createRes.data.roomId;
+
+    CHECK_FALSE(winA.isAwaitingMatchStart());
+    /* In WAITING_FOR_PLAYERS, turn is not interactive */
+    CHECK_FALSE(winA.isInteractiveOnlineTurn());
+
+    /* 3. Second player joins -> match starts (IN_PROGRESS) */
+    auto clientB = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginB = clientB->loginWithSso(
+        "google", makeToken("google", "sub-gate-b", "BobGate"), "BobGate");
+    CHECK_TRUE_TEXT(loginB.ok, loginB.errorMessage.c_str());
+
+    std::string cfgB = env.dir + "/client_gate_b.json";
+    OctiMainWindow winB(std::move(clientB), cfgB);
+    winB.applyAuthenticatedProfile(loginB.data.profile);
+
+    winB.beginAwaitingMatchStart();
+    CHECK_TRUE(winB.isAwaitingMatchStart());
+    auto joinRes = winB.joinAndEnterOnlineTable(roomId, 2);
+    CHECK_TRUE_TEXT(joinRes.ok, joinRes.errorMessage.c_str());
+
+    CHECK_FALSE(winB.isAwaitingMatchStart());
+
+    winA.refreshOnlineGameView();
+    winB.refreshOnlineGameView();
+
+    STRCMP_EQUAL("IN_PROGRESS", winA.onlineRoomPhase().c_str());
+    /* Active player A can interact; off-turn player B cannot */
+    CHECK_TRUE(winA.isInteractiveOnlineTurn());
+    CHECK_FALSE(winB.isInteractiveOnlineTurn());
+
+    /* 4. Observer cannot interact */
+    auto clientC = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginC = clientC->loginWithSso(
+        "google", makeToken("google", "sub-gate-c", "CarolObs"), "CarolObs");
+    CHECK_TRUE_TEXT(loginC.ok, loginC.errorMessage.c_str());
+
+    std::string cfgC = env.dir + "/client_gate_c.json";
+    OctiMainWindow winC(std::move(clientC), cfgC);
+    winC.applyAuthenticatedProfile(loginC.data.profile);
+    auto obsRes = winC.observeOnlineTable(roomId);
+    CHECK_TRUE_TEXT(obsRes.ok, obsRes.errorMessage.c_str());
+    winC.refreshOnlineGameView();
+    CHECK_FALSE(winC.isInteractiveOnlineTurn());
+}
+
+TEST(DesktopAppIntegrationTest, StagedMovePreservedAcrossNonMoveSseEvents)
+{
+    LiveServerEnv env;
+
+    auto clientA = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginA = clientA->loginWithSso(
+        "google", makeToken("google", "sub-stage-a", "StageHostA"), "StageHostA");
+    CHECK_TRUE_TEXT(loginA.ok, loginA.errorMessage.c_str());
+
+    std::string cfgA = env.dir + "/client_stage_a.json";
+    OctiMainWindow winA(std::move(clientA), cfgA);
+    winA.applyAuthenticatedProfile(loginA.data.profile);
+
+    CreateTableRequest req;
+    req.mode = "2P";
+    req.bases = 3;
+    auto createRes = winA.createAndEnterOnlineTable(req);
+    CHECK_TRUE_TEXT(createRes.ok, createRes.errorMessage.c_str());
+    std::string roomId = createRes.data.roomId;
+
+    auto clientB = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginB = clientB->loginWithSso(
+        "google", makeToken("google", "sub-stage-b", "StageGuestB"), "StageGuestB");
+    CHECK_TRUE_TEXT(loginB.ok, loginB.errorMessage.c_str());
+
+    std::string cfgB = env.dir + "/client_stage_b.json";
+    OctiMainWindow winB(std::move(clientB), cfgB);
+    winB.applyAuthenticatedProfile(loginB.data.profile);
+    CHECK_TRUE(winB.joinAndEnterOnlineTable(roomId, 2).ok);
+
+    winA.refreshOnlineGameView();
+    CHECK_TRUE(winA.isInteractiveOnlineTurn());
+
+    /* Stage a move: add a prong with confirm-all enabled so it stages */
+    winA.setConfirmAllMoves(true);
+    CHECK_TRUE(winA.moveComposer()->stageOrCommitAddProng(5, 3, 0, DIR_N, false));
+    CHECK_TRUE(winA.moveComposer()->hasStagedMove());
+    CHECK_TRUE(winA.moveComposer()->isTurnInProgress());
+
+    /* Deliver non-move SSE events: CHAT, OBSERVER_JOINED */
+    SseEvent chatEv;
+    chatEv.id = 10;
+    chatEv.event = "CHAT";
+    chatEv.dataJson = Json({
+        {"seq", 10},
+        {"scope", "ALL"},
+        {"handle", "StageGuestB"},
+        {"text", "Hello during staged turn!"}
+    }).dump();
+    winA.handleGameSseEvent(chatEv);
+
+    SseEvent obsEv;
+    obsEv.id = 11;
+    obsEv.event = "OBSERVER_JOINED";
+    obsEv.dataJson = Json({{"handle", "SpectatorX"}}).dump();
+    winA.handleGameSseEvent(obsEv);
+    winA.refreshOnlineGameView();
+
+    /* Staged move MUST NOT be rolled back or wiped by non-move events or refreshes */
+    CHECK_TRUE(winA.moveComposer()->hasStagedMove());
+    CHECK_TRUE(winA.moveComposer()->isTurnInProgress());
+}
+
+TEST(DesktopAppIntegrationTest, GameChatMessageDeduplicationOnIncomingChatSse)
+{
+    LiveServerEnv env;
+
+    auto clientA = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginA = clientA->loginWithSso(
+        "google", makeToken("google", "sub-chat-dedup-a", "DedupAlice"), "DedupAlice");
+    CHECK_TRUE_TEXT(loginA.ok, loginA.errorMessage.c_str());
+
+    std::string cfgA = env.dir + "/client_dedup_a.json";
+    OctiMainWindow winA(std::move(clientA), cfgA);
+    winA.applyAuthenticatedProfile(loginA.data.profile);
+
+    CreateTableRequest req;
+    req.mode = "2P";
+    req.bases = 3;
+    auto createRes = winA.createAndEnterOnlineTable(req);
+    CHECK_TRUE_TEXT(createRes.ok, createRes.errorMessage.c_str());
+    std::string roomId = createRes.data.roomId;
+
+    /* Send chat message */
+    CHECK_TRUE(winA.sendGameChatMessage("ALL", "Dedup testing message"));
+    LONGS_EQUAL(1, winA.gameChatLines().size());
+
+    /* Incoming CHAT SSE event arrives for that exact message */
+    SseEvent chatEv;
+    chatEv.id = 1;
+    chatEv.event = "CHAT";
+    chatEv.dataJson = Json({
+        {"seq", 1},
+        {"scope", "ALL"},
+        {"handle", "DedupAlice"},
+        {"player_uuid", loginA.data.profile.uuid},
+        {"text", "Dedup testing message"}
+    }).dump();
+    winA.handleGameSseEvent(chatEv);
+
+    /* Must still be 1 entry (not duplicated) */
+    LONGS_EQUAL(1, winA.gameChatLines().size());
+}
+
+TEST(DesktopAppIntegrationTest, OnlineResignationAndDrawTriggerGameOverAndResetState)
+{
+    LiveServerEnv env;
+
+    auto clientA = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginA = clientA->loginWithSso(
+        "google", makeToken("google", "sub-go-a", "GoAlice"), "GoAlice");
+    CHECK_TRUE_TEXT(loginA.ok, loginA.errorMessage.c_str());
+
+    std::string cfgA = env.dir + "/client_go_a.json";
+    OctiMainWindow winA(std::move(clientA), cfgA);
+    winA.applyAuthenticatedProfile(loginA.data.profile);
+
+    CreateTableRequest req;
+    req.mode = "2P";
+    req.bases = 3;
+    auto createRes = winA.createAndEnterOnlineTable(req);
+    CHECK_TRUE_TEXT(createRes.ok, createRes.errorMessage.c_str());
+    std::string roomId = createRes.data.roomId;
+
+    auto clientB = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginB = clientB->loginWithSso(
+        "google", makeToken("google", "sub-go-b", "GoBob"), "GoBob");
+    CHECK_TRUE_TEXT(loginB.ok, loginB.errorMessage.c_str());
+
+    std::string cfgB = env.dir + "/client_go_b.json";
+    OctiMainWindow winB(std::move(clientB), cfgB);
+    winB.applyAuthenticatedProfile(loginB.data.profile);
+    CHECK_TRUE(winB.joinAndEnterOnlineTable(roomId, 2).ok);
+
+    winA.refreshOnlineGameView();
+    CHECK_FALSE(winA.isGameOverDialogShownForCurrentMatch());
+
+    /* Bob resigns -> server transitions phase to FINISHED with RESIGNATION */
+    auto resignRes = winB.resignCurrentGame();
+    CHECK_TRUE_TEXT(resignRes.ok, resignRes.errorMessage.c_str());
+
+    winA.refreshOnlineGameView();
+    STRCMP_EQUAL("FINISHED", winA.onlineRoomPhase().c_str());
+
+    /* Match turn status label must indicate Match Complete */
+    CHECK_TRUE(winA.matchTurnStatusLabel() != nullptr);
+    CHECK_TRUE(winA.matchTurnStatusLabel()->text().contains("Match Complete"));
+    CHECK_TRUE(winA.isGameOverDialogShownForCurrentMatch());
+
+    /* Entering a new online room resets _gameOverDialogShownForCurrentMatch */
+    CreateTableRequest req2;
+    req2.mode = "2P";
+    req2.bases = 1;
+    auto createRes2 = winA.createAndEnterOnlineTable(req2);
+    CHECK_TRUE_TEXT(createRes2.ok, createRes2.errorMessage.c_str());
+    CHECK_FALSE(winA.isGameOverDialogShownForCurrentMatch());
+}
+
+TEST(DesktopAppIntegrationTest, RematchCreatedSseTransitionsOnlineRoom)
+{
+    LiveServerEnv env;
+
+    auto clientA = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginA = clientA->loginWithSso(
+        "google", makeToken("google", "sub-rematch-a", "RematchAlice"), "RematchAlice");
+    CHECK_TRUE_TEXT(loginA.ok, loginA.errorMessage.c_str());
+
+    std::string cfgA = env.dir + "/client_rematch_a.json";
+    OctiMainWindow winA(std::move(clientA), cfgA);
+    winA.applyAuthenticatedProfile(loginA.data.profile);
+
+    CreateTableRequest req;
+    req.mode = "2P";
+    req.bases = 3;
+    auto createRes = winA.createAndEnterOnlineTable(req);
+    CHECK_TRUE_TEXT(createRes.ok, createRes.errorMessage.c_str());
+    std::string oldRoomId = createRes.data.roomId;
+    STRCMP_EQUAL(oldRoomId.c_str(), winA.onlineRoomId().c_str());
+
+    /* REMATCH_CREATED SSE event arrives with new room_id */
+    SseEvent ev;
+    ev.event = "REMATCH_CREATED";
+    ev.id = 55;
+    ev.dataJson = Json({{"room_id", "room-rematch-new-777"}}).dump();
+    winA.handleGameSseEvent(ev);
+
+    STRCMP_EQUAL("room-rematch-new-777", winA.onlineRoomId().c_str());
+}
+
+TEST(DesktopAppIntegrationTest, OnlineClockTickingAndUntimedReserveDisplay)
+{
+    LiveServerEnv env;
+
+    auto clientA = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginA = clientA->loginWithSso(
+        "google", makeToken("google", "sub-clock-a", "ClockAlice"), "ClockAlice");
+    CHECK_TRUE_TEXT(loginA.ok, loginA.errorMessage.c_str());
+
+    std::string cfgA = env.dir + "/client_clock_a.json";
+    OctiMainWindow winA(std::move(clientA), cfgA);
+    winA.applyAuthenticatedProfile(loginA.data.profile);
+
+    /* 1. Untimed match */
+    CreateTableRequest reqUntimed;
+    reqUntimed.mode = "2P";
+    reqUntimed.bases = 3;
+    reqUntimed.timeControlEnabled = false;
+    auto createUntimed = winA.createAndEnterOnlineTable(reqUntimed);
+    CHECK_TRUE_TEXT(createUntimed.ok, createUntimed.errorMessage.c_str());
+
+    CHECK_FALSE(winA.reservePanel()->isTimeControlEnabled());
+
+    /* Purge untimed table so Alice can create the timed table */
+    winA.netClient()->purgeTable(createUntimed.data.roomId);
+    winA.leaveOnlineRoom();
+
+    /* 2. Timed match */
+    CreateTableRequest reqTimed;
+    reqTimed.mode = "2P";
+    reqTimed.bases = 3;
+    reqTimed.timeControlEnabled = true;
+    reqTimed.initialMs = 300000;
+    reqTimed.incrementMs = 5000;
+    auto createTimed = winA.createAndEnterOnlineTable(reqTimed);
+    CHECK_TRUE_TEXT(createTimed.ok, createTimed.errorMessage.c_str());
+    std::string roomId = createTimed.data.roomId;
+
+    auto clientB = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginB = clientB->loginWithSso(
+        "google", makeToken("google", "sub-clock-b", "ClockBob"), "ClockBob");
+    CHECK_TRUE_TEXT(loginB.ok, loginB.errorMessage.c_str());
+    std::string cfgB = env.dir + "/client_clock_b.json";
+    OctiMainWindow winB(std::move(clientB), cfgB);
+    winB.applyAuthenticatedProfile(loginB.data.profile);
+    CHECK_TRUE(winB.joinAndEnterOnlineTable(roomId, 2).ok);
+
+    winA.refreshOnlineGameView();
+    STRCMP_EQUAL("IN_PROGRESS", winA.onlineRoomPhase().c_str());
+    CHECK_TRUE(winA.reservePanel()->isTimeControlEnabled());
+
+    long startMs = winA.board()->getGame()->getTimeRemaining(PLAYER_A);
+    CHECK_TRUE(startMs > 290000L && startMs <= 300000L);
+
+    /* Tick local clock by 1000ms */
+    winA.tickLocalClock(1000);
+    long afterTickMs = winA.board()->getGame()->getTimeRemaining(PLAYER_A);
+    LONGS_EQUAL(startMs - 1000L, afterTickMs);
+
+    winA.netClient()->purgeTable(roomId);
+}
+
+TEST(DesktopAppIntegrationTest, LeavingWaitingRoomTableVacatesSeatOnServer)
+{
+    LiveServerEnv env;
+
+    auto clientA = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginA = clientA->loginWithSso(
+        "google", makeToken("google", "sub-vacate-a", "VacateAlice"), "VacateAlice");
+    CHECK_TRUE_TEXT(loginA.ok, loginA.errorMessage.c_str());
+
+    std::string cfgA = env.dir + "/client_vacate_a.json";
+    OctiMainWindow winA(std::move(clientA), cfgA);
+    winA.applyAuthenticatedProfile(loginA.data.profile);
+
+    auto clientB = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginB = clientB->loginWithSso(
+        "google", makeToken("google", "sub-vacate-b", "VacateBob"), "VacateBob");
+    CHECK_TRUE_TEXT(loginB.ok, loginB.errorMessage.c_str());
+
+    std::string cfgB = env.dir + "/client_vacate_b.json";
+    OctiMainWindow winB(std::move(clientB), cfgB);
+    winB.applyAuthenticatedProfile(loginB.data.profile);
+
+    /* Alice creates 4P table */
+    CreateTableRequest req4P;
+    req4P.mode = "4P";
+    req4P.bases = 1;
+    auto createRes4P = winA.createAndEnterOnlineTable(req4P);
+    CHECK_TRUE_TEXT(createRes4P.ok, createRes4P.errorMessage.c_str());
+    std::string room4P = createRes4P.data.roomId;
+
+    auto joinRes = winB.joinAndEnterOnlineTable(room4P, 2);
+    CHECK_TRUE_TEXT(joinRes.ok, joinRes.errorMessage.c_str());
+    STRCMP_EQUAL("WAITING_FOR_PLAYERS", winB.onlineRoomPhase().c_str());
+    LONGS_EQUAL(2, winB.onlineViewerSeat());
+
+    /* Bob leaves the waiting table */
+    auto leaveRes = winB.leaveActiveOnlineTable(room4P);
+    CHECK_TRUE_TEXT(leaveRes.ok, leaveRes.errorMessage.c_str());
+    CHECK_FALSE(winB.isInOnlineGame());
+
+    /* Verify Bob is no longer seated on server */
+    auto viewRes = winA.netClient()->fetchGameView(room4P);
+    CHECK_TRUE_TEXT(viewRes.ok, viewRes.errorMessage.c_str());
+    int filledSeats = 0;
+    for (const auto &seat : viewRes.data.seats) {
+        if (!seat.playerUuid.empty()) {
+            filledSeats++;
+        }
+    }
+    LONGS_EQUAL(1, filledSeats);
+    CHECK_TRUE(viewRes.data.seats[1].playerUuid.empty());
+
+    /* Bob can immediately create another table without ALREADY_SEATED */
+    CreateTableRequest reqBob;
+    reqBob.mode = "2P";
+    reqBob.bases = 1;
+    auto createBob = winB.createAndEnterOnlineTable(reqBob);
+    CHECK_TRUE_TEXT(createBob.ok, createBob.errorMessage.c_str());
 }
 
 extern "C" const char *__lsan_default_suppressions()

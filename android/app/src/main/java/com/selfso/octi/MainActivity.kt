@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -40,7 +41,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import kotlinx.coroutines.delay
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -287,9 +290,28 @@ fun OctiMainAppContent(
         }
     }
 
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000L)
+            viewModel.tickClock()
+        }
+    }
+
     val context = LocalContext.current
     val currentTab by viewModel.currentTab.collectAsState()
     val matchType by viewModel.matchType.collectAsState()
+    val activeRoomId by viewModel.activeRoomId.collectAsState()
+    val activeGameView by viewModel.activeGameView.collectAsState()
+
+    LaunchedEffect(matchType, activeRoomId) {
+        if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeRoomId.isNotEmpty()) {
+            while (true) {
+                delay(3000L)
+                viewModel.refreshActiveGameViewAsync()
+            }
+        }
+    }
+
     val themeId by viewModel.theme.collectAsState()
     val sfxMuted by viewModel.sfxMuted.collectAsState()
     val statusBanner by viewModel.statusBanner.collectAsState()
@@ -316,6 +338,8 @@ fun OctiMainAppContent(
     var showSplash by remember { mutableStateOf(true) }
     var splashLoopIndefinitely by remember { mutableStateOf(false) }
     var showTopMenu by remember { mutableStateOf(false) }
+    var pendingPasscodeSeat by remember { mutableStateOf<Int?>(null) }
+    var joinSeatPasscodeInput by remember { mutableStateOf("") }
 
     Scaffold(
         containerColor = OctiTheme.colors.windowBg,
@@ -496,7 +520,8 @@ fun OctiMainAppContent(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val isGameOver = viewModel.board.game?.isGameOver == true && boardRev >= 0L
+                        val isOnlineRoom = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM
+                        val isGameOver = viewModel.isOnlineGameOver() && boardRev >= 0L
                         if (isGameOver) {
                             Card(
                                 modifier = Modifier
@@ -513,20 +538,45 @@ fun OctiMainAppContent(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val titleText = if (isOnlineRoom) {
+                                        viewModel.describeOnlineGameOverBanner()
+                                    } else {
+                                        "GAME OVER — Winner: ${viewModel.board.game?.winner}"
+                                    }
                                     Text(
-                                        text = "GAME OVER — Winner: ${viewModel.board.game?.winner}",
+                                        text = titleText,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = OctiTheme.colors.accentBrass
+                                        color = OctiTheme.colors.accentBrass,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
-                                    Button(
-                                        onClick = { viewModel.setShowNewGameDialog(true) },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = OctiTheme.colors.accentBrass,
-                                            contentColor = OctiTheme.colors.windowBg
-                                        )
-                                    ) {
-                                        Text("New Game", fontWeight = FontWeight.Bold)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        if (isOnlineRoom) {
+                                            Button(
+                                                onClick = { viewModel.proposeRematch() },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = OctiTheme.colors.accentBrass,
+                                                    contentColor = OctiTheme.colors.windowBg
+                                                )
+                                            ) {
+                                                Text("Rematch", fontWeight = FontWeight.Bold)
+                                            }
+                                            OutlinedButton(
+                                                onClick = { viewModel.exitOnlineTableViewAsync() }
+                                            ) {
+                                                Text("Back to Lobby", fontWeight = FontWeight.SemiBold)
+                                            }
+                                        } else {
+                                            Button(
+                                                onClick = { viewModel.setShowNewGameDialog(true) },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = OctiTheme.colors.accentBrass,
+                                                    contentColor = OctiTheme.colors.windowBg
+                                                )
+                                            ) {
+                                                Text("New Game", fontWeight = FontWeight.Bold)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -539,10 +589,7 @@ fun OctiMainAppContent(
                         val aspectRatio = if (isSideways) rows.toFloat() / cols.toFloat() else cols.toFloat() / rows.toFloat()
                         val lastMoveModifiedSquares by viewModel.lastMoveModifiedSquares.collectAsState()
                         val awaitingMatchStart by viewModel.awaitingMatchStart.collectAsState()
-                        val matchType by viewModel.matchType.collectAsState()
-                        val activeRoomId by viewModel.activeRoomId.collectAsState()
-                        val activeGameView by viewModel.activeGameView.collectAsState()
-                        val gameOver = viewModel.board.game?.isGameOver == true
+                        val gameOver = viewModel.isOnlineGameOver()
                         val humanSeat by viewModel.humanSeat.collectAsState()
                         val vsBot = matchType != OctiAppViewModel.MatchType.LOCAL_PASS_AND_PLAY
                         val botDifficulty by viewModel.botDifficulty.collectAsState()
@@ -593,14 +640,28 @@ fun OctiMainAppContent(
                                         val isAdmin = currentProfile?.isAdmin == true
 
                                         if (isWaiting && viewerSeat == 0) {
-                                            Button(
-                                                onClick = { viewModel.joinOnlineTableAsync(activeRoomId, -1, "") },
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = OctiTheme.colors.accentBrass,
-                                                    contentColor = OctiTheme.colors.windowBg
-                                                )
-                                            ) {
-                                                Text("Sit")
+                                            val maxSeats = if (activeGameView?.mode == "4P") 4 else 2
+                                            for (s in 1..maxSeats) {
+                                                val sLetter = when (s) { 1 -> "A"; 2 -> "B"; 3 -> "C"; 4 -> "D"; else -> "$s" }
+                                                val seatObj = activeGameView?.seats?.firstOrNull { it.seat == s }
+                                                val isOccupied = seatObj != null && (seatObj.playerUuid.isNotEmpty() || seatObj.handle.isNotEmpty())
+                                                val canSit = !isOccupied && isAuthenticated
+                                                Button(
+                                                    onClick = {
+                                                        if (activeGameView?.hasPasscode == true) {
+                                                            pendingPasscodeSeat = s
+                                                        } else {
+                                                            viewModel.joinOnlineTableAsync(activeRoomId, s, "")
+                                                        }
+                                                    },
+                                                    enabled = canSit,
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = OctiTheme.colors.accentBrass,
+                                                        contentColor = OctiTheme.colors.windowBg
+                                                    )
+                                                ) {
+                                                    Text("Sit $sLetter ($s)")
+                                                }
                                             }
                                         }
 
@@ -620,6 +681,80 @@ fun OctiMainAppContent(
                                             onClick = { viewModel.exitOnlineTableViewAsync() }
                                         ) {
                                             Text("Leave Table")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Proposals Banner (Draw, Undo, Pause, Rematch)
+                        if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeGameView?.proposals?.isNotEmpty() == true) {
+                            val prop = activeGameView?.proposals?.firstOrNull()
+                            if (prop != null) {
+                                val myUuid = currentProfile?.uuid ?: ""
+                                val viewerSeat = activeGameView?.viewerSeat ?: 0
+                                val proposerSeat = activeGameView?.seats?.firstOrNull { it.playerUuid == prop.proposerUuid }
+                                val proposerHandle = if (proposerSeat != null && proposerSeat.handle.isNotEmpty()) {
+                                    proposerSeat.handle
+                                } else {
+                                    "Opponent"
+                                }
+                                val cleanHandle = proposerHandle.removePrefix("@")
+                                val propTitle = when (prop.type) {
+                                    "DRAW_OFFER" -> "Draw offer from @$cleanHandle"
+                                    "UNDO_REQUEST" -> "Undo request from @$cleanHandle"
+                                    "PAUSE_REQUEST" -> "Pause request from @$cleanHandle"
+                                    "REMATCH_REQUEST" -> "Rematch offer from @$cleanHandle"
+                                    else -> "Proposal from @$cleanHandle"
+                                }
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+                                    border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = propTitle,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = OctiTheme.colors.accentBrass,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (viewerSeat > 0 && prop.proposerUuid != myUuid) {
+                                                Button(
+                                                    onClick = { viewModel.acceptActiveProposal() },
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = OctiTheme.colors.accentBrass,
+                                                        contentColor = OctiTheme.colors.windowBg
+                                                    )
+                                                ) {
+                                                    Text("Accept")
+                                                }
+                                                OutlinedButton(
+                                                    onClick = { viewModel.declineActiveProposal() }
+                                                ) {
+                                                    Text("Decline")
+                                                }
+                                            } else if (prop.proposerUuid == myUuid) {
+                                                OutlinedButton(
+                                                    onClick = { viewModel.declineActiveProposal() }
+                                                ) {
+                                                    Text("Withdraw")
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -847,22 +982,89 @@ fun OctiMainAppContent(
             )
         }
 
-        if (showGameOverDialog && viewModel.board.game?.isGameOver == true) {
+        if (showGameOverDialog && (viewModel.board.game?.isGameOver == true || viewModel.isOnlineGameOver())) {
+            val isOnline = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM
             val game = viewModel.board.game
-            val termReason = com.selfso.octi.ui.OctiDialogs.describeTerminationReason(viewModel.board)
+            val termReason = if (isOnline) {
+                viewModel.describeOnlineTerminationReason()
+            } else {
+                com.selfso.octi.ui.OctiDialogs.describeTerminationReason(viewModel.board)
+            }
+            val customTitle = if (isOnline) viewModel.describeOnlineGameOverBanner() else null
+            val newGameBtn = if (isOnline) "Rematch" else "New Game"
+            val reviewBtn = if (isOnline) "Back to Lobby" else "Review Board"
             GameOverDialog(
                 winner = game?.winner ?: OctiPlayer.PLAYER_A,
-                matchLabel = statusBanner,
+                matchLabel = if (isOnline) "" else statusBanner,
                 totalPlies = viewModel.livePlyCount(),
                 resigned = game?.isGameResigned == true,
                 gameMode = viewModel.board.gameMode,
                 terminationReason = termReason,
+                customTitle = customTitle,
+                newGameButtonText = newGameBtn,
+                reviewBoardButtonText = reviewBtn,
                 onNewGame = {
                     viewModel.dismissGameOverDialog()
-                    viewModel.setShowNewGameDialog(true)
+                    if (isOnline) {
+                        viewModel.proposeRematch()
+                    } else {
+                        viewModel.setShowNewGameDialog(true)
+                    }
                 },
                 onReviewBoard = {
                     viewModel.dismissGameOverDialog()
+                    if (isOnline) {
+                        viewModel.exitOnlineTableViewAsync()
+                    }
+                }
+            )
+        }
+
+        pendingPasscodeSeat?.let { seatNum ->
+            AlertDialog(
+                onDismissRequest = {
+                    pendingPasscodeSeat = null
+                    joinSeatPasscodeInput = ""
+                },
+                containerColor = OctiTheme.colors.panelCardBg,
+                titleContentColor = OctiTheme.colors.accentBrass,
+                textContentColor = OctiTheme.colors.textPrimary,
+                title = { Text("Enter Table Passcode") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("This table requires a passcode to sit.")
+                        OutlinedTextField(
+                            value = joinSeatPasscodeInput,
+                            onValueChange = { joinSeatPasscodeInput = it },
+                            label = { Text("Passcode") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val code = joinSeatPasscodeInput.trim()
+                            pendingPasscodeSeat = null
+                            joinSeatPasscodeInput = ""
+                            viewModel.joinOnlineTableAsync(activeRoomId, seatNum, code)
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OctiTheme.colors.accentBrass,
+                            contentColor = OctiTheme.colors.windowBg
+                        )
+                    ) {
+                        Text("Sit")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = {
+                        pendingPasscodeSeat = null
+                        joinSeatPasscodeInput = ""
+                    }) {
+                        Text("Cancel")
+                    }
                 }
             )
         }

@@ -15,6 +15,7 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QPixmap>
+#include <QScrollBar>
 #include <QTimeZone>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -198,8 +199,9 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
 
     QHBoxLayout *toolbar = new QHBoxLayout();
     _createTableBtn = new QPushButton("+ Create Table", tablesBox);
+    _matchmakingBtn = new QPushButton("Quick Match...", tablesBox);
     _joinSelectedBtn = new QPushButton("Join Selected Table", tablesBox);
-    _leaveTableBtn = new QPushButton("Leave Table", tablesBox);
+    _leaveTableBtn = new QPushButton("Leave Seat", tablesBox);
     _observeSelectedBtn = new QPushButton("Observe Selected Table", tablesBox);
     _observeSelectedBtn->setVisible(false);
     _refreshBtn = new QPushButton("Refresh", tablesBox);
@@ -207,6 +209,7 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     _purgeTableBtn->setStyleSheet("QPushButton { background-color: #dc2626; color: white; font-weight: bold; }");
     _purgeTableBtn->setVisible(false);
     toolbar->addWidget(_createTableBtn);
+    toolbar->addWidget(_matchmakingBtn);
     toolbar->addWidget(_joinSelectedBtn);
     toolbar->addWidget(_leaveTableBtn);
     toolbar->addWidget(_refreshBtn);
@@ -300,8 +303,15 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
                 if (_onOpenActiveBoardRequested) {
                     _onOpenActiveBoardRequested();
                 }
-            } else if (_onJoinTableRequested) {
-                _onJoinTableRequested(t);
+            } else if (t.phase == "WAITING_FOR_PLAYERS" && t.seatsFilled < t.seatsTotal &&
+                       _netClient && _netClient->isAuthenticated()) {
+                if (_onJoinTableRequested) {
+                    _onJoinTableRequested(t);
+                }
+            } else if (t.observerPolicy != "NO_OBSERVERS") {
+                if (_onObserveTableRequested) {
+                    _onObserveTableRequested(t);
+                }
             }
         }
     });
@@ -310,10 +320,29 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
             _onCreateTableRequested();
         }
     });
+    QObject::connect(_matchmakingBtn, &QPushButton::clicked, [this]() {
+        if (_onMatchmakingRequested) {
+            _onMatchmakingRequested();
+        }
+    });
     QObject::connect(_joinSelectedBtn, &QPushButton::clicked, [this]() {
         const TableSummaryInfo *t = findTable(selectedRoomId());
-        if (t && _onJoinTableRequested) {
-            _onJoinTableRequested(*t);
+        if (!t) {
+            return;
+        }
+        if (isViewerSeatedAtTable(*t)) {
+            if (_onOpenActiveBoardRequested) {
+                _onOpenActiveBoardRequested();
+            }
+        } else if (t->phase == "WAITING_FOR_PLAYERS" && t->seatsFilled < t->seatsTotal &&
+                   _netClient && _netClient->isAuthenticated()) {
+            if (_onJoinTableRequested) {
+                _onJoinTableRequested(*t);
+            }
+        } else if (t->observerPolicy != "NO_OBSERVERS") {
+            if (_onObserveTableRequested) {
+                _onObserveTableRequested(*t);
+            }
         }
     });
     QObject::connect(_leaveTableBtn, &QPushButton::clicked, [this]() {
@@ -717,16 +746,24 @@ void LobbyView::updateInspectorAndSelectionControls()
     }
 
     if (_joinSelectedBtn) {
-        if (!authed) {
-            _joinSelectedBtn->setEnabled(false);
-        } else if (selected) {
-            bool canJoin =
-                (selected->phase == "WAITING_FOR_PLAYERS" &&
-                 selected->seatsFilled < selected->seatsTotal &&
-                 !isViewerSeatedAtTable(*selected));
-            _joinSelectedBtn->setEnabled(canJoin);
-        } else {
+        if (!selected) {
+            _joinSelectedBtn->setText("Join Table");
+            _joinSelectedBtn->setEnabled(authed);
+        } else if (isViewerSeatedAtTable(*selected)) {
+            _joinSelectedBtn->setText("Open My Table");
             _joinSelectedBtn->setEnabled(true);
+        } else if (selected->phase == "WAITING_FOR_PLAYERS" &&
+                   selected->seatsFilled < selected->seatsTotal) {
+            if (authed) {
+                _joinSelectedBtn->setText("Join Table");
+                _joinSelectedBtn->setEnabled(true);
+            } else {
+                _joinSelectedBtn->setText("Observe Table");
+                _joinSelectedBtn->setEnabled(selected->observerPolicy != "NO_OBSERVERS");
+            }
+        } else {
+            _joinSelectedBtn->setText("Observe Table");
+            _joinSelectedBtn->setEnabled(selected->observerPolicy != "NO_OBSERVERS");
         }
     }
 
@@ -734,7 +771,12 @@ void LobbyView::updateInspectorAndSelectionControls()
         bool canLeaveSelected =
             authed && selected && isViewerSeatedAtTable(*selected);
         bool canLeaveBanner = authed && !_bannerRoomId.empty();
+        _leaveTableBtn->setText("Leave Seat");
         _leaveTableBtn->setEnabled(canLeaveSelected || canLeaveBanner);
+    }
+
+    if (_matchmakingBtn) {
+        _matchmakingBtn->setEnabled(authed);
     }
 
     if (_observeSelectedBtn) {
@@ -785,6 +827,9 @@ void LobbyView::updateAuthUiState()
     }
     if (_createTableBtn) {
         _createTableBtn->setEnabled(authed);
+    }
+    if (_matchmakingBtn) {
+        _matchmakingBtn->setEnabled(authed);
     }
     if (_chatInput) {
         _chatInput->setEnabled(authed);
@@ -904,6 +949,10 @@ void LobbyView::appendLobbyChatEntry(const LobbyChatEntry &entry)
     _chatMessages.push_back(normalized);
     if (_chatTranscript) {
         _chatTranscript->appendPlainText(formatChatMessageLine(normalized));
+        if (_chatTranscript->verticalScrollBar()) {
+            _chatTranscript->verticalScrollBar()->setValue(
+                _chatTranscript->verticalScrollBar()->maximum());
+        }
     }
 }
 
@@ -1099,6 +1148,10 @@ void LobbyView::rebuildChatTranscript()
     for (std::size_t i = 0; i < _chatMessages.size(); ++i) {
         const LobbyChatEntry &c = _chatMessages[i];
         _chatTranscript->appendPlainText(formatChatMessageLine(c));
+    }
+    if (_chatTranscript->verticalScrollBar()) {
+        _chatTranscript->verticalScrollBar()->setValue(
+            _chatTranscript->verticalScrollBar()->maximum());
     }
 }
 

@@ -158,6 +158,9 @@ public:
     QString waitingRoomBannerText() const;
     QPushButton *leaveTableButton() const { return _leaveTableBtn; }
     QPushButton *leaveWaitingTableButton() const { return _leaveWaitingTableBtn; }
+    QLabel *matchTurnStatusLabel() const { return _matchTurnStatusLabel; }
+    bool isGameOverDialogShownForCurrentMatch() const { return _gameOverDialogShownForCurrentMatch; }
+    void tickLocalClock(int elapsedMs = 100);
 
     bool refreshOnlineGameView();
     void applyGameViewData(const GameViewData &view);
@@ -295,11 +298,13 @@ private:
 
     bool _inOnlineRoom;
     std::string _onlineRoomId;
+    std::string _pendingOnlinePasscode;
     int _onlineViewerSeat;
     bool _onlineAutoOriented;
     GameViewData _onlineGameView;
     std::vector<std::string> _appliedOnlineMoves;
     std::vector<std::string> _gameChatLines;
+    std::int64_t _lastGameChatSeq;
     int _vcrTotalPlies;
 
     /* ---- Top Navigation Bar Widgets ---- */

@@ -28,6 +28,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -106,6 +108,8 @@ public final class P2pVoiceEngine implements AutoCloseable {
 
     private final Map<String, PeerVoiceEndpoint> _peers = new HashMap<>();
 
+    private final ExecutorService _asyncExecutor = Executors.newSingleThreadExecutor();
+
     private Thread _rxThread = null;
     private Thread _hwCaptureThread = null;
     private AudioRecord _audioRecord = null;
@@ -113,6 +117,50 @@ public final class P2pVoiceEngine implements AutoCloseable {
 
     public P2pVoiceEngine(OctiNetworkClient netClient) {
         _netClient = netClient;
+    }
+
+    private static boolean isMainThread() {
+        try {
+            android.os.Looper mainLooper = android.os.Looper.getMainLooper();
+            return mainLooper != null && mainLooper.getThread() == Thread.currentThread();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private void runOnBackgroundOrSync(Runnable r) {
+        if (isMainThread()) {
+            _asyncExecutor.submit(r);
+        } else {
+            r.run();
+        }
+    }
+
+    public static String resolveLocalNonLoopbackIp() {
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> interfaces =
+                    java.net.NetworkInterface.getNetworkInterfaces();
+            if (interfaces != null) {
+                while (interfaces.hasMoreElements()) {
+                    java.net.NetworkInterface nif = interfaces.nextElement();
+                    if (!nif.isUp() || nif.isLoopback()) {
+                        continue;
+                    }
+                    java.util.Enumeration<java.net.InetAddress> addresses = nif.getInetAddresses();
+                    while (addresses.hasMoreElements()) {
+                        java.net.InetAddress addr = addresses.nextElement();
+                        if (!addr.isLoopbackAddress() && addr instanceof java.net.Inet4Address) {
+                            String hostAddress = addr.getHostAddress();
+                            if (hostAddress != null && !hostAddress.isEmpty()) {
+                                return hostAddress;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return "127.0.0.1";
     }
 
     public static byte linear16ToUlaw(short pcm) {
@@ -302,7 +350,7 @@ public final class P2pVoiceEngine implements AutoCloseable {
             sock = new DatagramSocket(null);
             sock.setReuseAddress(true);
             sock.setSoTimeout(40);
-            sock.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0));
+            sock.bind(new InetSocketAddress(0));
             boundPort = sock.getLocalPort();
         } catch (Exception e) {
             if (errorOut != null) {
@@ -332,8 +380,10 @@ public final class P2pVoiceEngine implements AutoCloseable {
         rx.start();
 
         if (_netClient != null) {
-            _netClient.submitVoiceMeta(roomId, "JOINED_VOICE");
-            _netClient.submitVoiceMeta(roomId, "MIC_MUTED");
+            runOnBackgroundOrSync(() -> {
+                _netClient.submitVoiceMeta(roomId, "JOINED_VOICE");
+                _netClient.submitVoiceMeta(roomId, "MIC_MUTED");
+            });
         }
 
         return true;
@@ -383,13 +433,17 @@ public final class P2pVoiceEngine implements AutoCloseable {
         }
 
         if (wasInRoom && _netClient != null && activeRoom != null && !activeRoom.isEmpty()) {
-            _netClient.submitVoiceMeta(activeRoom, "LEFT_VOICE");
+            final String rId = activeRoom;
+            runOnBackgroundOrSync(() -> {
+                _netClient.submitVoiceMeta(rId, "LEFT_VOICE");
+            });
         }
     }
 
     @Override
     public void close() {
         leaveVoiceRoom();
+        _asyncExecutor.shutdown();
     }
 
     public boolean isInVoiceRoom() {
@@ -438,7 +492,10 @@ public final class P2pVoiceEngine implements AutoCloseable {
 
         boolean prev = _pttActive.getAndSet(talking);
         if (prev != talking && _netClient != null && activeRoom != null && !activeRoom.isEmpty()) {
-            _netClient.submitVoiceMeta(activeRoom, talking ? "MIC_UNMUTED" : "MIC_MUTED");
+            final String rId = activeRoom;
+            runOnBackgroundOrSync(() -> {
+                _netClient.submitVoiceMeta(rId, talking ? "MIC_UNMUTED" : "MIC_MUTED");
+            });
         }
         return true;
     }
@@ -482,23 +539,30 @@ public final class P2pVoiceEngine implements AutoCloseable {
             return false;
         }
 
-        Map<String, Object> offerPayload = new LinkedHashMap<>();
-        offerPayload.put("udp_host", "127.0.0.1");
-        offerPayload.put("udp_port", localPort);
-        offerPayload.put("codec", "pcmu-16k-20ms");
-        offerPayload.put("session_key", sessionKey);
-        OctiNetworkClient.ApiResult<Long> r1 = _netClient.submitVoiceSignal(
-                activeRoom, peerPlayerUuid, "SDP_OFFER", OctiMiniJson.stringify(offerPayload));
-        if (!r1.ok) {
-            return false;
-        }
+        final String localIp = resolveLocalNonLoopbackIp();
+        final String rId = activeRoom;
+        final String pUuid = peerPlayerUuid;
+        final int lPort = localPort;
+        final String sKey = sessionKey;
+        runOnBackgroundOrSync(() -> {
+            Map<String, Object> offerPayload = new LinkedHashMap<>();
+            offerPayload.put("udp_host", localIp);
+            offerPayload.put("udp_port", lPort);
+            offerPayload.put("codec", "pcmu-16k-20ms");
+            offerPayload.put("session_key", sKey);
+            OctiNetworkClient.ApiResult<Long> r1 = _netClient.submitVoiceSignal(
+                    rId, pUuid, "SDP_OFFER", OctiMiniJson.stringify(offerPayload));
+            if (!r1.ok) {
+                return;
+            }
 
-        Map<String, Object> icePayload = new LinkedHashMap<>();
-        icePayload.put("udp_host", "127.0.0.1");
-        icePayload.put("udp_port", localPort);
-        OctiNetworkClient.ApiResult<Long> r2 = _netClient.submitVoiceSignal(
-                activeRoom, peerPlayerUuid, "ICE_CANDIDATE", OctiMiniJson.stringify(icePayload));
-        return r2.ok;
+            Map<String, Object> icePayload = new LinkedHashMap<>();
+            icePayload.put("udp_host", localIp);
+            icePayload.put("udp_port", lPort);
+            _netClient.submitVoiceSignal(
+                    rId, pUuid, "ICE_CANDIDATE", OctiMiniJson.stringify(icePayload));
+        });
+        return true;
     }
 
     public void handleGameSseEvent(OctiNetworkClient.SseEvent ev) {
@@ -596,19 +660,26 @@ public final class P2pVoiceEngine implements AutoCloseable {
             }
 
             if (sendAnswer && _netClient != null && !activeRoom.isEmpty()) {
-                Map<String, Object> answerPayload = new LinkedHashMap<>();
-                answerPayload.put("udp_host", "127.0.0.1");
-                answerPayload.put("udp_port", localPort);
-                answerPayload.put("codec", "pcmu-16k-20ms");
-                answerPayload.put("session_key", localKey);
-                _netClient.submitVoiceSignal(
-                        activeRoom, fromUuid, "SDP_ANSWER", OctiMiniJson.stringify(answerPayload));
+                final String rId = activeRoom;
+                final String fUuid = fromUuid;
+                final int lPort = localPort;
+                final String lKey = localKey;
+                runOnBackgroundOrSync(() -> {
+                    String localIp = resolveLocalNonLoopbackIp();
+                    Map<String, Object> answerPayload = new LinkedHashMap<>();
+                    answerPayload.put("udp_host", localIp);
+                    answerPayload.put("udp_port", lPort);
+                    answerPayload.put("codec", "pcmu-16k-20ms");
+                    answerPayload.put("session_key", lKey);
+                    _netClient.submitVoiceSignal(
+                            rId, fUuid, "SDP_ANSWER", OctiMiniJson.stringify(answerPayload));
 
-                Map<String, Object> icePayload = new LinkedHashMap<>();
-                icePayload.put("udp_host", "127.0.0.1");
-                icePayload.put("udp_port", localPort);
-                _netClient.submitVoiceSignal(
-                        activeRoom, fromUuid, "ICE_CANDIDATE", OctiMiniJson.stringify(icePayload));
+                    Map<String, Object> icePayload = new LinkedHashMap<>();
+                    icePayload.put("udp_host", localIp);
+                    icePayload.put("udp_port", lPort);
+                    _netClient.submitVoiceSignal(
+                            rId, fUuid, "ICE_CANDIDATE", OctiMiniJson.stringify(icePayload));
+                });
             }
             return;
         }
@@ -656,7 +727,10 @@ public final class P2pVoiceEngine implements AutoCloseable {
             }
 
             if (needNotifyMuted && _netClient != null && !activeRoom.isEmpty()) {
-                _netClient.submitVoiceMeta(activeRoom, "MIC_MUTED");
+                final String rId = activeRoom;
+                runOnBackgroundOrSync(() -> {
+                    _netClient.submitVoiceMeta(rId, "MIC_MUTED");
+                });
             }
             return;
         }
@@ -695,7 +769,10 @@ public final class P2pVoiceEngine implements AutoCloseable {
                 }
             }
             if (notifyMuted && _netClient != null && !activeRoom.isEmpty()) {
-                _netClient.submitVoiceMeta(activeRoom, "MIC_MUTED");
+                final String rId = activeRoom;
+                runOnBackgroundOrSync(() -> {
+                    _netClient.submitVoiceMeta(rId, "MIC_MUTED");
+                });
             }
         }
     }

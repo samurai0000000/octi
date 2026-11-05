@@ -923,6 +923,11 @@ public class OctiAndroidAppIntegrationTest {
         private final Thread _acceptThread;
         final List<String> receivedInstallIds = new ArrayList<>();
         final List<Map<String, Object>> receivedPatchBodies = new ArrayList<>();
+        final List<String> receivedLeaveRooms = new ArrayList<>();
+        final List<String> receivedUnobserveRooms = new ArrayList<>();
+        final List<String> receivedGameActions = new ArrayList<>();
+        volatile String tablePasscodeRequired = null;
+        volatile String customGameViewJson = null;
         volatile String currentHandle = "samurai";
         volatile String currentDisplayName = "User";
         volatile String currentAvatarUrl = "/api/v1/avatars/1.png";
@@ -1107,7 +1112,7 @@ public class OctiAndroidAppIntegrationTest {
                         os.write(avatarPayload);
                         os.flush();
                         continue;
-                    } else if (reqLine.contains("/api/v1/tables") && reqLine.startsWith("POST") && !reqLine.contains("/leave") && !reqLine.contains("/observe") && !reqLine.contains("/unobserve")) {
+                    } else if (reqLine.contains("/api/v1/tables") && reqLine.startsWith("POST") && !reqLine.contains("/leave") && !reqLine.contains("/observe") && !reqLine.contains("/unobserve") && !reqLine.contains("/join")) {
                         status = 201;
                         respBody = "{\n"
                                 + "  \"room_id\": \"room-leave-test-456\",\n"
@@ -1115,24 +1120,78 @@ public class OctiAndroidAppIntegrationTest {
                                 + "  \"phase\": \"WAITING_FOR_PLAYERS\"\n"
                                 + "}";
                     } else if (reqLine.contains("/leave")) {
+                        Matcher m = Pattern.compile("/api/v1/tables/([^/?# ]+)/leave").matcher(reqLine);
+                        if (m.find()) {
+                            synchronized (receivedLeaveRooms) {
+                                receivedLeaveRooms.add(m.group(1));
+                            }
+                        }
                         status = 200;
                         respBody = "{\"ok\":true}";
                     } else if (reqLine.contains("/unobserve")) {
+                        Matcher m = Pattern.compile("/api/v1/tables/([^/?# ]+)/unobserve").matcher(reqLine);
+                        if (m.find()) {
+                            synchronized (receivedUnobserveRooms) {
+                                receivedUnobserveRooms.add(m.group(1));
+                            }
+                        }
                         status = 200;
                         respBody = "{\"ok\":true}";
                     } else if (reqLine.contains("/observe")) {
                         status = 200;
                         respBody = "{\"ok\":true}";
-                    } else if (reqLine.contains("/api/v1/games/room-leave-test-456")) {
+                    } else if (reqLine.contains("/api/v1/tables/") && reqLine.contains("/join")) {
+                        String pass = OctiMiniJson.getString(reqJson, "passcode", "");
+                        int seat = OctiMiniJson.getInt(reqJson, "seat", 2);
+                        if (tablePasscodeRequired != null && !tablePasscodeRequired.equals(pass)) {
+                            status = 403;
+                            respBody = "{\"error\":\"invalid_passcode\",\"message\":\"Incorrect table passcode\"}";
+                        } else {
+                            status = 200;
+                            respBody = "{\"room_id\":\"room-test-123\",\"seat\":" + seat + ",\"phase\":\"WAITING_FOR_PLAYERS\"}";
+                        }
+                    } else if (reqLine.contains("/api/v1/games/") && reqLine.contains("/action")) {
+                        String act = OctiMiniJson.getString(reqJson, "action", "");
+                        synchronized (receivedGameActions) {
+                            receivedGameActions.add(act);
+                        }
                         status = 200;
                         respBody = "{\n"
-                                + "  \"room_id\": \"room-leave-test-456\",\n"
-                                + "  \"mode\": \"2P\",\n"
-                                + "  \"phase\": \"WAITING_FOR_PLAYERS\",\n"
-                                + "  \"fen\": \"\",\n"
-                                + "  \"seats\": [],\n"
-                                + "  \"observers\": []\n"
+                                + "  \"room_id\":\"room-test-123\",\n"
+                                + "  \"action\":\"" + act + "\",\n"
+                                + "  \"proposal_id\":\"prop-test-1\",\n"
+                                + "  \"game_over\":false,\n"
+                                + "  \"seq\":1\n"
                                 + "}";
+                    } else if (reqLine.contains("/api/v1/games/") && reqLine.contains("/resign")) {
+                        status = 200;
+                        respBody = "{\"room_id\":\"room-test-123\",\"game_over\":true}";
+                    } else if (reqLine.contains("/api/v1/games/") && reqLine.contains("/events")) {
+                        String sseHeaders = "HTTP/1.1 200 OK\r\n"
+                                + "Content-Type: text/event-stream\r\n"
+                                + "Cache-Control: no-cache\r\n"
+                                + "Connection: close\r\n\r\n";
+                        OutputStream os = s.getOutputStream();
+                        os.write(sseHeaders.getBytes(StandardCharsets.UTF_8));
+                        os.flush();
+                        continue;
+                    } else if (reqLine.contains("/api/v1/games/")) {
+                        if (customGameViewJson != null) {
+                            status = 200;
+                            respBody = customGameViewJson;
+                        } else {
+                            Matcher m = Pattern.compile("/api/v1/games/([^/?# ]+)").matcher(reqLine);
+                            String rId = m.find() ? m.group(1) : "room-test-123";
+                            status = 200;
+                            respBody = "{\n"
+                                    + "  \"room_id\": \"" + rId + "\",\n"
+                                    + "  \"mode\": \"2P\",\n"
+                                    + "  \"phase\": \"WAITING_FOR_PLAYERS\",\n"
+                                    + "  \"fen\": \"\",\n"
+                                    + "  \"seats\": [],\n"
+                                    + "  \"observers\": []\n"
+                                    + "}";
+                        }
                     } else if (reqLine.contains("/view")) {
                         status = 200;
                         respBody = "{\n"
@@ -2047,6 +2106,613 @@ public class OctiAndroidAppIntegrationTest {
                     assertTrue(OctiMiniJson.getInt(uploadedAiObj, "difficulty", 0) > 0);
                     assertTrue(OctiMiniJson.getInt(uploadedAiObj, "depthReached", 0) >= 1);
                     assertTrue(OctiMiniJson.getLong(uploadedAiObj, "nodesVisited", 0L) >= 1L);
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testOnlineRoomEntryClearsAwaitingMatchStart() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_awaiting_match.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+                configStore.preferences().setSessionToken("sess-valid-token");
+                configStore.save();
+
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+
+                    // 1. beginAwaitingMatchStart followed by createOnlineTableAsync clears awaitingMatchStart
+                    vm.beginAwaitingMatchStart();
+                    assertTrue("Precondition: awaitingMatchStart must be true", vm.getAwaitingMatchStart().getValue());
+
+                    CountDownLatch createLatch = new CountDownLatch(1);
+                    OctiNetworkClient.CreateTableRequest req = new OctiNetworkClient.CreateTableRequest();
+                    req.mode = "2P";
+                    req.bases = 3;
+                    vm.createOnlineTableAsync(req, res -> {
+                        assertTrue(res.ok);
+                        createLatch.countDown();
+                    });
+                    assertTrue("createOnlineTableAsync timed out", createLatch.await(5, TimeUnit.SECONDS));
+                    assertFalse("createOnlineTableAsync must clear awaitingMatchStart to false", vm.getAwaitingMatchStart().getValue());
+
+                    // 2. beginAwaitingMatchStart followed by joinOnlineTableAsync clears awaitingMatchStart
+                    vm.beginAwaitingMatchStart();
+                    assertTrue("Precondition: awaitingMatchStart must be true", vm.getAwaitingMatchStart().getValue());
+
+                    CountDownLatch joinLatch = new CountDownLatch(1);
+                    vm.joinOnlineTableAsync("room-test-123", "", res -> {
+                        assertTrue(res.ok);
+                        joinLatch.countDown();
+                    });
+                    assertTrue("joinOnlineTableAsync timed out", joinLatch.await(5, TimeUnit.SECONDS));
+                    assertFalse("joinOnlineTableAsync must clear awaitingMatchStart to false", vm.getAwaitingMatchStart().getValue());
+
+                    // 3. beginAwaitingMatchStart followed by observeOnlineTableAsync clears awaitingMatchStart
+                    vm.beginAwaitingMatchStart();
+                    assertTrue("Precondition: awaitingMatchStart must be true", vm.getAwaitingMatchStart().getValue());
+
+                    CountDownLatch obsLatch = new CountDownLatch(1);
+                    vm.observeOnlineTableAsync("room-test-123", "", res -> {
+                        assertTrue(res.ok);
+                        obsLatch.countDown();
+                    });
+                    assertTrue("observeOnlineTableAsync timed out", obsLatch.await(5, TimeUnit.SECONDS));
+                    assertFalse("observeOnlineTableAsync must clear awaitingMatchStart to false", vm.getAwaitingMatchStart().getValue());
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testHostWaitingForPlayersTransitionsToInProgressOnSseEvents() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_host_waiting.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+                configStore.preferences().setSessionToken("sess-valid-token");
+                configStore.save();
+
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+
+                    CountDownLatch createLatch = new CountDownLatch(1);
+                    OctiNetworkClient.CreateTableRequest req = new OctiNetworkClient.CreateTableRequest();
+                    req.mode = "2P";
+                    req.bases = 3;
+                    vm.createOnlineTableAsync(req, res -> {
+                        assertTrue(res.ok);
+                        createLatch.countDown();
+                    });
+                    assertTrue(createLatch.await(5, TimeUnit.SECONDS));
+                    assertEquals("WAITING_FOR_PLAYERS", vm.getActiveGameView().getValue().phase);
+
+                    // Server now has 2 seats filled and is IN_PROGRESS
+                    server.customGameViewJson = "{\n"
+                            + "  \"room_id\": \"room-leave-test-456\",\n"
+                            + "  \"mode\": \"2P\",\n"
+                            + "  \"phase\": \"IN_PROGRESS\",\n"
+                            + "  \"fen\": \"\",\n"
+                            + "  \"viewerSeat\": 1,\n"
+                            + "  \"seats\": [\n"
+                            + "    {\"seat\": 1, \"handle\": \"samurai\", \"clock_ms\": 300000},\n"
+                            + "    {\"seat\": 2, \"handle\": \"opponent\", \"clock_ms\": 300000}\n"
+                            + "  ],\n"
+                            + "  \"observers\": []\n"
+                            + "}";
+
+                    // Dispatch SEAT_JOINED SSE event
+                    OctiNetworkClient.SseEvent ev = new OctiNetworkClient.SseEvent();
+                    ev.event = "SEAT_JOINED";
+                    ev.id = 2L;
+                    ev.dataJson = "{\"seat\":2,\"handle\":\"opponent\"}";
+                    vm.handleGameSseEvent(ev);
+
+                    assertNotNull(vm.getActiveGameView().getValue());
+                    assertEquals("IN_PROGRESS", vm.getActiveGameView().getValue().phase);
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testMidGameJoinAndUndoRebuildsFenAndMoveHistoryForVcr() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_midgame_vcr.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (OctiAppViewModel vm = new OctiAppViewModel(new ClientConfigStore(cfgFile))) {
+            vm.setStorageRootDir(_tempDir);
+            vm.setAsyncBotThinkingEnabled(false);
+
+            // Simulate joining a 2P game mid-game where 4 plies have already been made
+            OctiNetworkClient.GameViewData gv = new OctiNetworkClient.GameViewData();
+            gv.roomId = "room-midgame-123";
+            gv.mode = "2P";
+            gv.bases = 3;
+            gv.phase = "IN_PROGRESS";
+            gv.moves.add("53+a");
+            gv.moves.add("57+e");
+            gv.moves.add("53a-54");
+            gv.moves.add("57e-56");
+
+            // Compute expected fen by playing the moves locally
+            OctiBoard b = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+            b.getGame().start(OctiPlayer.PLAYER_A);
+            for (String m : gv.moves) {
+                b.getGame().move(m);
+            }
+            gv.fen = b.toPositionString();
+
+            vm.applyGameView(gv);
+
+            assertEquals("fenHistorySize must be plies + 1", gv.moves.size() + 1, vm.fenHistorySize());
+            assertEquals("moveHistory must have all 4 moves", gv.moves.size(), vm.moveHistory().size());
+
+            // Test VCR replay navigation
+            int ply0 = vm.vcrFirst();
+            assertEquals(0, ply0);
+            int ply1 = vm.vcrNext();
+            assertEquals(1, ply1);
+            int plyLast = vm.vcrLast();
+            assertEquals(4, plyLast);
+
+            // Now simulate server UNDO_APPLIED: 1 move undone, so 3 plies remain
+            OctiNetworkClient.GameViewData gvUndo = new OctiNetworkClient.GameViewData();
+            gvUndo.roomId = "room-midgame-123";
+            gvUndo.mode = "2P";
+            gvUndo.bases = 3;
+            gvUndo.phase = "IN_PROGRESS";
+            gvUndo.moves.add("53+a");
+            gvUndo.moves.add("57+e");
+            gvUndo.moves.add("53a-54");
+            OctiBoard bUndo = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+            bUndo.getGame().start(OctiPlayer.PLAYER_A);
+            for (String m : gvUndo.moves) {
+                bUndo.getGame().move(m);
+            }
+            gvUndo.fen = bUndo.toPositionString();
+
+            vm.applyGameView(gvUndo);
+
+            assertEquals("fenHistorySize after undo must be 4", 4, vm.fenHistorySize());
+            assertEquals("moveHistory after undo must have 3 moves", 3, vm.moveHistory().size());
+            assertEquals(3, vm.vcrLast());
+        }
+    }
+
+    @Test
+    public void testExitOnlineTableViewVacatesSeatOnServerWhenWaitingOrFinished() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_exit_seat.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+                configStore.preferences().setSessionToken("sess-valid-token");
+                configStore.save();
+
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+
+                    // Seated at Seat 2 in WAITING_FOR_PLAYERS
+                    CountDownLatch joinLatch = new CountDownLatch(1);
+                    vm.joinOnlineTableAsync("room-test-123", "", res -> {
+                        assertTrue(res.ok);
+                        joinLatch.countDown();
+                    });
+                    assertTrue(joinLatch.await(5, TimeUnit.SECONDS));
+
+                    // Server reports game view where viewer is seated at seat 2
+                    OctiNetworkClient.GameViewData gv = new OctiNetworkClient.GameViewData();
+                    gv.roomId = "room-test-123";
+                    gv.phase = "WAITING_FOR_PLAYERS";
+                    gv.viewerSeat = 2;
+                    OctiNetworkClient.GameSeatInfo s2 = new OctiNetworkClient.GameSeatInfo();
+                    s2.seat = 2;
+                    s2.handle = "samurai";
+                    gv.seats.add(s2);
+                    vm.applyGameView(gv);
+
+                    // Exit table view while seated in WAITING_FOR_PLAYERS -> must call leaveTable on server!
+                    CountDownLatch exitLatch = new CountDownLatch(1);
+                    vm.exitOnlineTableViewAsync("room-test-123", ok -> {
+                        assertTrue(ok);
+                        exitLatch.countDown();
+                    });
+                    assertTrue("exitOnlineTableViewAsync timed out", exitLatch.await(5, TimeUnit.SECONDS));
+
+                    synchronized (server.receivedLeaveRooms) {
+                        assertTrue("Server must have received /leave for room-test-123",
+                                server.receivedLeaveRooms.contains("room-test-123"));
+                    }
+                    assertEquals("", vm.getActiveRoomId().getValue());
+                    assertNull(vm.getActiveGameView().getValue());
+
+                    // Now test observer exiting: observing must call unobserveTable and NOT leaveTable
+                    CountDownLatch obsLatch = new CountDownLatch(1);
+                    vm.observeOnlineTableAsync("room-test-123", "", res -> {
+                        assertTrue(res.ok);
+                        obsLatch.countDown();
+                    });
+                    assertTrue(obsLatch.await(5, TimeUnit.SECONDS));
+
+                    OctiNetworkClient.GameViewData gvObs = new OctiNetworkClient.GameViewData();
+                    gvObs.roomId = "room-test-123";
+                    gvObs.phase = "WAITING_FOR_PLAYERS";
+                    gvObs.viewerSeat = 0;
+                    vm.applyGameView(gvObs);
+
+                    server.receivedLeaveRooms.clear();
+                    CountDownLatch obsExitLatch = new CountDownLatch(1);
+                    vm.exitOnlineTableViewAsync("room-test-123", ok -> {
+                        assertTrue(ok);
+                        obsExitLatch.countDown();
+                    });
+                    assertTrue(obsExitLatch.await(5, TimeUnit.SECONDS));
+
+                    synchronized (server.receivedUnobserveRooms) {
+                        assertTrue("Observer exit must call /unobserve",
+                                server.receivedUnobserveRooms.contains("room-test-123"));
+                    }
+                    synchronized (server.receivedLeaveRooms) {
+                        assertFalse("Observer exit must NOT call /leave",
+                                server.receivedLeaveRooms.contains("room-test-123"));
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testRematchCreatedSseEventTransitionsToNewRoom() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_rematch.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+                configStore.preferences().setSessionToken("sess-valid-token");
+                configStore.save();
+
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+
+                    vm.enterOnlineRoom("room-orig-123");
+                    assertEquals("room-orig-123", vm.getActiveRoomId().getValue());
+
+                    // Receive REMATCH_CREATED SSE event
+                    OctiNetworkClient.SseEvent ev = new OctiNetworkClient.SseEvent();
+                    ev.event = "REMATCH_CREATED";
+                    ev.id = 5L;
+                    ev.dataJson = "{\"room_id\":\"room-rematch-789\"}";
+                    vm.handleGameSseEvent(ev);
+
+                    assertEquals("activeRoomId must transition to new rematch room",
+                            "room-rematch-789", vm.getActiveRoomId().getValue());
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testTickClockDecrementsActiveSeatClockAndIncrementsRevision() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_tick_clock.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (OctiAppViewModel vm = new OctiAppViewModel(new ClientConfigStore(cfgFile))) {
+            vm.setStorageRootDir(_tempDir);
+            vm.setAsyncBotThinkingEnabled(false);
+
+            OctiNetworkClient.GameViewData gv = new OctiNetworkClient.GameViewData();
+            gv.roomId = "room-timed-123";
+            gv.mode = "2P";
+            gv.bases = 3;
+            gv.phase = "IN_PROGRESS";
+            gv.paused = false;
+            gv.timeControlEnabled = true;
+            gv.turnSeat = 1;
+
+            OctiNetworkClient.GameSeatInfo s1 = new OctiNetworkClient.GameSeatInfo();
+            s1.seat = 1;
+            s1.clockMs = 300000L;
+            gv.seats.add(s1);
+
+            OctiNetworkClient.GameSeatInfo s2 = new OctiNetworkClient.GameSeatInfo();
+            s2.seat = 2;
+            s2.clockMs = 300000L;
+            gv.seats.add(s2);
+
+            vm.setOnlineMatchForTest("room-timed-123", gv);
+
+            long revBefore = vm.getClockTickRevision().getValue();
+            vm.tickClock();
+
+            assertEquals("clockTickRevision must increment by 1",
+                    revBefore + 1L, vm.getClockTickRevision().getValue().longValue());
+            assertEquals("Seat 1 clockMs must decrement by 1000L",
+                    299000L, s1.clockMs);
+            assertEquals("Seat 2 clockMs must remain unchanged",
+                    300000L, s2.clockMs);
+        }
+    }
+
+    @Test
+    public void testOnlineProposalsAndActionsWorkflow() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_proposals.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+                configStore.preferences().setSessionToken("sess-valid-token");
+                configStore.preferences().setPlayerUuid("my-player-uuid");
+                configStore.preferences().setHandle("AlicePlayer");
+                configStore.save();
+
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+
+                    vm.enterOnlineRoom("room-test-123");
+
+                    OctiNetworkClient.GameViewData gv = new OctiNetworkClient.GameViewData();
+                    gv.roomId = "room-test-123";
+                    gv.mode = "2P";
+                    gv.phase = "IN_PROGRESS";
+                    gv.viewerSeat = 1;
+
+                    OctiNetworkClient.GameSeatInfo s1 = new OctiNetworkClient.GameSeatInfo();
+                    s1.seat = 1;
+                    s1.playerUuid = "my-player-uuid";
+                    s1.handle = "AlicePlayer";
+                    gv.seats.add(s1);
+
+                    OctiNetworkClient.GameSeatInfo s2 = new OctiNetworkClient.GameSeatInfo();
+                    s2.seat = 2;
+                    s2.playerUuid = "opponent-uuid";
+                    s2.handle = "BobPlayer";
+                    gv.seats.add(s2);
+
+                    vm.applyGameView(gv);
+
+                    // 1. Propose Draw with no incoming proposal -> sends "offer_draw"
+                    server.receivedGameActions.clear();
+                    vm.proposeDraw().get(5, TimeUnit.SECONDS);
+                    synchronized (server.receivedGameActions) {
+                        assertTrue("Must submit offer_draw", server.receivedGameActions.contains("offer_draw"));
+                    }
+
+                    // 2. Incoming Draw offer from opponent -> acceptActiveProposal() sends "accept_draw"
+                    server.receivedGameActions.clear();
+                    OctiNetworkClient.GameProposalInfo drawProp = new OctiNetworkClient.GameProposalInfo();
+                    drawProp.type = "DRAW_OFFER";
+                    drawProp.proposerUuid = "opponent-uuid";
+                    gv.proposals.clear();
+                    gv.proposals.add(drawProp);
+                    vm.applyGameView(gv);
+
+                    vm.acceptActiveProposal().get(5, TimeUnit.SECONDS);
+                    synchronized (server.receivedGameActions) {
+                        assertTrue("Must submit accept_draw", server.receivedGameActions.contains("accept_draw"));
+                    }
+
+                    // 3. Propose Undo -> sends "request_undo"
+                    server.receivedGameActions.clear();
+                    gv.proposals.clear();
+                    vm.applyGameView(gv);
+
+                    vm.proposeUndo().get(5, TimeUnit.SECONDS);
+                    synchronized (server.receivedGameActions) {
+                        assertTrue("Must submit request_undo", server.receivedGameActions.contains("request_undo"));
+                    }
+
+                    // 4. Incoming Undo request from opponent -> acceptActiveProposal() sends "accept_undo"
+                    server.receivedGameActions.clear();
+                    OctiNetworkClient.GameProposalInfo undoProp = new OctiNetworkClient.GameProposalInfo();
+                    undoProp.type = "UNDO_REQUEST";
+                    undoProp.proposerUuid = "opponent-uuid";
+                    gv.proposals.clear();
+                    gv.proposals.add(undoProp);
+                    vm.applyGameView(gv);
+
+                    vm.acceptActiveProposal().get(5, TimeUnit.SECONDS);
+                    synchronized (server.receivedGameActions) {
+                        assertTrue("Must submit accept_undo", server.receivedGameActions.contains("accept_undo"));
+                    }
+
+                    // 5. Propose Pause (when unpaused) -> sends "request_pause"
+                    server.receivedGameActions.clear();
+                    gv.proposals.clear();
+                    gv.paused = false;
+                    vm.applyGameView(gv);
+
+                    vm.proposePauseOrResume().get(5, TimeUnit.SECONDS);
+                    synchronized (server.receivedGameActions) {
+                        assertTrue("Must submit request_pause", server.receivedGameActions.contains("request_pause"));
+                    }
+
+                    // 6. Incoming Pause request from opponent -> acceptActiveProposal() sends "accept_pause"
+                    server.receivedGameActions.clear();
+                    OctiNetworkClient.GameProposalInfo pauseProp = new OctiNetworkClient.GameProposalInfo();
+                    pauseProp.type = "PAUSE_REQUEST";
+                    pauseProp.proposerUuid = "opponent-uuid";
+                    gv.proposals.clear();
+                    gv.proposals.add(pauseProp);
+                    vm.applyGameView(gv);
+
+                    vm.acceptActiveProposal().get(5, TimeUnit.SECONDS);
+                    synchronized (server.receivedGameActions) {
+                        assertTrue("Must submit accept_pause", server.receivedGameActions.contains("accept_pause"));
+                    }
+
+                    // 7. Propose Pause/Resume (when paused) -> sends "resume"
+                    server.receivedGameActions.clear();
+                    gv.proposals.clear();
+                    gv.paused = true;
+                    vm.applyGameView(gv);
+
+                    vm.proposePauseOrResume().get(5, TimeUnit.SECONDS);
+                    synchronized (server.receivedGameActions) {
+                        assertTrue("Must submit resume", server.receivedGameActions.contains("resume"));
+                    }
+
+                    // 8. Claim forfeit -> sends "claim_forfeit"
+                    server.receivedGameActions.clear();
+                    vm.claimOpponentForfeit();
+                    synchronized (server.receivedGameActions) {
+                        assertTrue("Must submit claim_forfeit", server.receivedGameActions.contains("claim_forfeit"));
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testOnlineAuthoritativeFinishedGameOverAndBannerFormatting() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_game_over.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+                configStore.preferences().setSessionToken("sess-valid-token");
+                configStore.preferences().setPlayerUuid("p-alice");
+                configStore.preferences().setHandle("AlicePlayer");
+                configStore.save();
+
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+
+                    vm.enterOnlineRoom("room-test-123");
+
+                    // Initial game is IN_PROGRESS and local board is not game over
+                    assertFalse(vm.isOnlineGameOver());
+                    assertFalse(vm.getShowGameOverDialog().getValue());
+
+                    // Scenario 1: Resignation game over
+                    OctiNetworkClient.GameViewData gvResign = new OctiNetworkClient.GameViewData();
+                    gvResign.roomId = "room-test-123";
+                    gvResign.mode = "2P";
+                    gvResign.phase = "FINISHED";
+                    gvResign.result = "WIN";
+                    gvResign.winnerSeat = 2;
+                    gvResign.termination = "RESIGNATION";
+                    gvResign.viewerSeat = 1;
+
+                    OctiNetworkClient.GameSeatInfo s1 = new OctiNetworkClient.GameSeatInfo();
+                    s1.seat = 1;
+                    s1.playerUuid = "p-alice";
+                    s1.handle = "AlicePlayer";
+                    gvResign.seats.add(s1);
+
+                    OctiNetworkClient.GameSeatInfo s2 = new OctiNetworkClient.GameSeatInfo();
+                    s2.seat = 2;
+                    s2.playerUuid = "p-viper";
+                    s2.handle = "Viper";
+                    gvResign.seats.add(s2);
+
+                    vm.applyGameView(gvResign);
+
+                    assertTrue("isOnlineGameOver must be true when phase == FINISHED", vm.isOnlineGameOver());
+                    assertTrue("showGameOverDialog must be triggered on transition to FINISHED",
+                            vm.getShowGameOverDialog().getValue());
+
+                    String banner = vm.describeOnlineGameOverBanner();
+                    assertTrue("Banner must describe winner @Viper: " + banner,
+                            banner.contains("@Viper") || banner.contains("Viper"));
+
+                    String termReason = vm.describeOnlineTerminationReason();
+                    assertTrue("Termination reason must mention resignation: " + termReason,
+                            termReason.toLowerCase().contains("resignation"));
+
+                    // Dismiss dialog and re-apply FINISHED game view: dialog must not re-trigger
+                    vm.dismissGameOverDialog();
+                    assertFalse(vm.getShowGameOverDialog().getValue());
+                    vm.applyGameView(gvResign);
+                    assertFalse("Dialog must not re-open while already shown for current match",
+                            vm.getShowGameOverDialog().getValue());
+
+                    // Scenario 2: Agreed Draw game over
+                    OctiNetworkClient.GameViewData gvDraw = new OctiNetworkClient.GameViewData();
+                    gvDraw.roomId = "room-test-456";
+                    gvDraw.mode = "2P";
+                    gvDraw.phase = "FINISHED";
+                    gvDraw.result = "DRAW";
+                    gvDraw.winnerSeat = 0;
+                    gvDraw.termination = "AGREED_DRAW";
+                    gvDraw.viewerSeat = 1;
+                    gvDraw.seats.add(s1);
+                    gvDraw.seats.add(s2);
+
+                    // Entering new room resets dialog shown flag
+                    vm.enterOnlineRoom("room-test-456");
+                    vm.applyGameView(gvDraw);
+
+                    assertTrue("isOnlineGameOver must be true for draw", vm.isOnlineGameOver());
+                    assertTrue("showGameOverDialog must trigger for draw in new match",
+                            vm.getShowGameOverDialog().getValue());
+
+                    String drawBanner = vm.describeOnlineGameOverBanner();
+                    assertTrue("Banner must describe Draw: " + drawBanner,
+                            drawBanner.toLowerCase().contains("draw"));
+
+                    String drawTerm = vm.describeOnlineTerminationReason();
+                    assertTrue("Termination must describe agreed draw: " + drawTerm,
+                            drawTerm.toLowerCase().contains("draw") || drawTerm.contains("AGREED_DRAW"));
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testJoinOnlineTableAsyncPerSeatAndPasscodeErrorFeedback() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_passcode.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            server.tablePasscodeRequired = "dragon_pass";
+
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+                configStore.preferences().setSessionToken("sess-valid-token");
+                configStore.save();
+
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+
+                    // Attempt join with WRONG passcode -> must fail with statusBanner error feedback
+                    CountDownLatch failLatch = new CountDownLatch(1);
+                    vm.joinOnlineTableAsync("room-test-123", 2, "wrong_code", res -> {
+                        assertFalse("Join with wrong passcode must fail", res.ok);
+                        failLatch.countDown();
+                    });
+                    assertTrue("joinOnlineTableAsync timed out", failLatch.await(5, TimeUnit.SECONDS));
+
+                    String banner = vm.getStatusBanner().getValue();
+                    assertTrue("statusBanner must describe failure: " + banner,
+                            banner.contains("Failed to sit"));
+                    assertTrue("statusBanner must mention error message: " + banner,
+                            banner.contains("Incorrect table passcode"));
+
+                    // Attempt join with CORRECT passcode -> succeeds
+                    CountDownLatch okLatch = new CountDownLatch(1);
+                    vm.joinOnlineTableAsync("room-test-123", 2, "dragon_pass", res -> {
+                        assertTrue("Join with correct passcode must succeed", res.ok);
+                        okLatch.countDown();
+                    });
+                    assertTrue("joinOnlineTableAsync timed out", okLatch.await(5, TimeUnit.SECONDS));
                 }
             }
         }

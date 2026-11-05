@@ -1935,6 +1935,9 @@ fun GameOverDialog(
     resigned: Boolean,
     gameMode: OctiGameMode = OctiGameMode.GAME_MODE_2,
     terminationReason: String = "",
+    customTitle: String? = null,
+    newGameButtonText: String = "New Game",
+    reviewBoardButtonText: String = "Review Board",
     onNewGame: () -> Unit,
     onReviewBoard: () -> Unit
 ) {
@@ -1961,7 +1964,7 @@ fun GameOverDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                val titleText = when {
+                val titleText = customTitle ?: when {
                     gameMode == OctiGameMode.GAME_MODE_4 -> {
                         if (winner == OctiPlayer.PLAYER_A || winner == OctiPlayer.PLAYER_C) {
                             "Team A & C Wins!"
@@ -2006,7 +2009,7 @@ fun GameOverDialog(
                         onClick = onReviewBoard,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Review Board", fontWeight = FontWeight.SemiBold)
+                        Text(reviewBoardButtonText, fontWeight = FontWeight.SemiBold)
                     }
                     Button(
                         onClick = onNewGame,
@@ -2016,7 +2019,7 @@ fun GameOverDialog(
                             contentColor = OctiTheme.colors.windowBg
                         )
                     ) {
-                        Text("New Game", fontWeight = FontWeight.Bold)
+                        Text(newGameButtonText, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -2970,8 +2973,14 @@ fun BoardChatZoomDialog(
     onDismiss: () -> Unit
 ) {
     val chatLog by viewModel.gameChatLog.collectAsState()
+    val matchType by viewModel.matchType.collectAsState()
+    val activeGameView by viewModel.activeGameView.collectAsState()
+    val canTeamChat = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeGameView?.mode == "4P" && (activeGameView?.viewerSeat ?: 0) > 0
     var inputText by remember { mutableStateOf("") }
     var currentScope by remember { mutableStateOf("ALL") }
+    if (!canTeamChat && currentScope != "ALL") {
+        currentScope = "ALL"
+    }
     var chatErrorText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
@@ -3136,24 +3145,26 @@ fun BoardChatZoomDialog(
                     )
                 }
 
-                // Input row with ALL/TEAM scope toggle button, OutlinedTextField, and Send button
+                // Input row with ALL/TEAM scope toggle button (if 4P seated online), OutlinedTextField, and Send button
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OutlinedButton(
-                        onClick = {
-                            currentScope = if (currentScope == "ALL") "TEAM" else "ALL"
-                        },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        modifier = Modifier.height(48.dp)
-                    ) {
-                        Text(
-                            text = currentScope,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold
-                        )
+                    if (canTeamChat) {
+                        OutlinedButton(
+                            onClick = {
+                                currentScope = if (currentScope == "ALL") "TEAM" else "ALL"
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.height(48.dp)
+                        ) {
+                            Text(
+                                text = currentScope,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
 
                     OutlinedTextField(

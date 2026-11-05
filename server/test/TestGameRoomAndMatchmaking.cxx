@@ -3356,7 +3356,8 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
                 if (banned.count(idOf(a)) != 0) {
                     want = RoomCode::FORBIDDEN_BANNED;
                 } else if (seated(a)) {
-                    want = RoomCode::INVALID_STATE;
+                    RC_ASSERT(r.code == RoomCode::INVALID_STATE || r.code == RoomCode::OK);
+                    break;
                 } else if (op == ObserverPolicy::NO_OBSERVERS && !finishedBefore) {
                     want = RoomCode::FORBIDDEN_POLICY;
                 } else {

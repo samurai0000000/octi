@@ -1543,6 +1543,51 @@ TEST(OctiHttpServerIntegrationTest, TakebackOnCasualTable)
     CHECK_EQUAL(1, static_cast<int>(ofType(events(room, ""), "UNDO_APPLIED").size()));
 }
 
+TEST(OctiHttpServerIntegrationTest, ActionAliasesAndClaimForfeitSupport)
+{
+    User a = signIn("google", "sub-action-a", "Alice Alias");
+    User b = signIn("apple", "sub-action-b", "Bob Alias");
+    std::vector<User> users = {a, b};
+
+    std::string casual = startGame(
+        users, Json{{"rated", false}, {"allow_takeback", true}});
+    CHECK_EQUAL(2, playPlies(casual, users, GAME_MODE_2, 2));
+
+    /* Uppercase DRAW_OFFER -> offer_draw, DECLINE_DRAW -> decline_draw */
+    EXPECT_STATUS(200, act(casual, a, "DRAW_OFFER"));
+    EXPECT_STATUS(200, act(casual, b, "DECLINE_DRAW"));
+
+    /* Uppercase PAUSE_REQUEST -> request_pause, ACCEPT_PAUSE -> accept_pause, RESUME -> resume */
+    EXPECT_STATUS(200, act(casual, a, "PAUSE_REQUEST"));
+    EXPECT_STATUS(200, act(casual, b, "ACCEPT_PAUSE"));
+    CHECK_TRUE(view(casual).value("paused", false));
+    EXPECT_STATUS(200, act(casual, a, "RESUME"));
+    CHECK_FALSE(view(casual).value("paused", true));
+
+    /* Uppercase UNDO_REQUEST -> request_undo, DECLINE_UNDO -> decline_undo */
+    EXPECT_STATUS(200, act(casual, a, "UNDO_REQUEST"));
+    EXPECT_STATUS(200, act(casual, b, "DECLINE_UNDO"));
+
+    /* claim_forfeit routing: when both players are connected and grace has not elapsed,
+     * rooms.claimDisconnectForfeit returns INVALID_STATE (409) rather than 400 unknown action. */
+    Reply cf = act(casual, a, "claim_forfeit");
+    LONGS_EQUAL(409, cf.status);
+    STRCMP_EQUAL("INVALID_STATE", cf.json.value("error", "").c_str());
+
+    /* Complete casual game with agreed draw via uppercase aliases */
+    EXPECT_STATUS(200, act(casual, a, "DRAW_OFFER"));
+    Reply accDraw = act(casual, b, "ACCEPT_DRAW");
+    EXPECT_STATUS(200, accDraw);
+    CHECK_TRUE(accDraw.json.value("game_over", false));
+
+    /* Uppercase REMATCH_REQUEST -> request_rematch, ACCEPT_REMATCH -> accept_rematch */
+    EXPECT_STATUS(200, act(casual, a, "REMATCH_REQUEST"));
+    Reply accRematch = act(casual, b, "ACCEPT_REMATCH");
+    EXPECT_STATUS(200, accRematch);
+    std::string rematchRoom = view(casual).value("rematch_room_id", "");
+    CHECK_FALSE(rematchRoom.empty());
+}
+
 /* ================================================================== */
 /* Boundary                                                            */
 /* ================================================================== */
@@ -6016,7 +6061,7 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("OCTI v2.3.3") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v2.3.4") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"robot-profile-detail\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"robots-tbody\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Quick Guide") == std::string::npos);

@@ -1531,6 +1531,10 @@ public class OctiMoveComposer {
         return awaitingConfirmation && !stagedOps.isEmpty();
     }
 
+    public boolean hasStagedMove() {
+        return hasActiveTurn() || isAwaitingConfirmation();
+    }
+
     public boolean hasActiveTurn() {
         return isGuidedMoveActive() || isAwaitingConfirmation();
     }

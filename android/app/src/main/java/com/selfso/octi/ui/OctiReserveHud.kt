@@ -73,6 +73,7 @@ fun OctiReserveHud(
     modifier: Modifier = Modifier
 ) {
     val boardRev by viewModel.boardRevision.collectAsState()
+    val clockTickRevision by viewModel.clockTickRevision.collectAsState()
     val currentBoardRev = boardRev
     val awaitingConfirmation by viewModel.awaitingConfirmation.collectAsState()
     val stagedMoveNotation by viewModel.stagedMoveNotation.collectAsState()
@@ -98,7 +99,7 @@ fun OctiReserveHud(
     val game = activeBoard.game
     val turn = game?.turn ?: OctiPlayer.PLAYER_A
     val useSuperProngs = game?.useSuperProngs() == true
-    val isGameOver = game?.isGameOver == true
+    val isGameOver = (game?.isGameOver == true) || viewModel.isOnlineGameOver()
     val awaitingConfirm = (awaitingConfirmation || viewModel.composer.isAwaitingConfirmation) && currentBoardRev >= 0L
     val stagedNotation = if (awaitingConfirm) {
         stagedMoveNotation.ifEmpty { viewModel.composer.stagedMoveNotation() }
@@ -121,7 +122,11 @@ fun OctiReserveHud(
             ) {
                 Text(
                     text = if (isGameOver) {
-                        "Winner: ${game?.winner}"
+                        if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM) {
+                            viewModel.describeOnlineGameOverBanner()
+                        } else {
+                            "Winner: ${game?.winner}"
+                        }
                     } else {
                         "Turn: ${turn.name} (Ply $viewingPly/$totalPlies)"
                     },
@@ -183,9 +188,29 @@ fun OctiReserveHud(
                         } else {
                             "PLAYER $seatLetter"
                         }
+                        val clockText = if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM) {
+                            if (activeGameView?.timeControlEnabled == true) {
+                                val clockMs = resolvedSeat?.clockMs ?: 0L
+                                val totalSec = maxOf(0L, clockMs / 1000L)
+                                val mm = totalSec / 60L
+                                val ss = totalSec % 60L
+                                String.format(java.util.Locale.US, "%02d:%02d", mm, ss)
+                            } else {
+                                "Untimed"
+                            }
+                        } else null
+                        val isWaiting = activeGameView?.phase == "WAITING_FOR_PLAYERS"
+                        val viewerSeat = activeGameView?.viewerSeat ?: 0
+                        val isSeatOccupied = resolvedSeat != null && (resolvedSeat.playerUuid.isNotEmpty() || resolvedSeat.handle.isNotEmpty())
+                        val onSit = if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM &&
+                            isWaiting && viewerSeat == 0 && !isSeatOccupied) {
+                            { viewModel.joinOnlineTableAsync(activeRoomId, p.value, "") }
+                        } else null
                         PlayerReserveCard(
                             player = p,
                             displayName = seatLabel,
+                            clockText = clockText,
+                            onSit = onSit,
                             isTurn = !isGameOver && (p == turn),
                             freePods = game?.getFreePods(p) ?: 0,
                             freeProngs = game?.getFreeProngs(p) ?: 0,
@@ -263,9 +288,29 @@ fun OctiReserveHud(
                                 } else {
                                     "PLAYER $seatLetter"
                                 }
+                                val clockText = if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM) {
+                                    if (activeGameView?.timeControlEnabled == true) {
+                                        val clockMs = resolvedSeat?.clockMs ?: 0L
+                                        val totalSec = maxOf(0L, clockMs / 1000L)
+                                        val mm = totalSec / 60L
+                                        val ss = totalSec % 60L
+                                        String.format(java.util.Locale.US, "%02d:%02d", mm, ss)
+                                    } else {
+                                        "Untimed"
+                                    }
+                                } else null
+                                val isWaiting = activeGameView?.phase == "WAITING_FOR_PLAYERS"
+                                val viewerSeat = activeGameView?.viewerSeat ?: 0
+                                val isSeatOccupied = resolvedSeat != null && (resolvedSeat.playerUuid.isNotEmpty() || resolvedSeat.handle.isNotEmpty())
+                                val onSit = if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM &&
+                                    isWaiting && viewerSeat == 0 && !isSeatOccupied) {
+                                    { viewModel.joinOnlineTableAsync(activeRoomId, p.value, "") }
+                                } else null
                                 PlayerReserveCard(
                                     player = p,
                                     displayName = seatLabel,
+                                    clockText = clockText,
+                                    onSit = onSit,
                                     isTurn = !isGameOver && (p == turn),
                                     freePods = game?.getFreePods(p) ?: 0,
                                     freeProngs = game?.getFreeProngs(p) ?: 0,
@@ -427,46 +472,66 @@ fun OctiReserveHud(
 
             if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeRoomId.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (!inVoiceRoom) {
-                            OutlinedButton(onClick = { viewModel.joinVoiceChannel() }) {
-                                Text("Join Voice")
-                            }
-                        } else {
-                            Button(
-                                onClick = { viewModel.setPushToTalkPressed(!isPttActive) },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isPttActive) {
-                                        OctiTheme.colors.legalStep
-                                    } else {
-                                        OctiTheme.colors.accentBrass
-                                    },
-                                    contentColor = OctiTheme.colors.windowBg
-                                )
-                            ) {
-                                Text(if (isPttActive) "PTT: TALKING" else "PTT: Muted")
-                            }
-                            Spacer(modifier = Modifier.width(4.dp))
-                            OutlinedButton(onClick = { viewModel.leaveVoiceChannel() }) {
-                                Text("Leave Voice")
-                            }
+                    if (!inVoiceRoom) {
+                        OutlinedButton(onClick = { viewModel.joinVoiceChannel() }) {
+                            Text("Join Voice")
+                        }
+                    } else {
+                        Button(
+                            onClick = { viewModel.setPushToTalkPressed(!isPttActive) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isPttActive) {
+                                    OctiTheme.colors.legalStep
+                                } else {
+                                    OctiTheme.colors.accentBrass
+                                },
+                                contentColor = OctiTheme.colors.windowBg
+                            )
+                        ) {
+                            Text(if (isPttActive) "PTT: TALKING" else "PTT: Muted")
+                        }
+                        OutlinedButton(onClick = { viewModel.leaveVoiceChannel() }) {
+                            Text("Leave Voice")
                         }
                     }
 
                     val viewerSeat = activeGameView?.viewerSeat ?: 0
-                    val isOnlineInProgress = (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeGameView?.phase == "IN_PROGRESS" && viewerSeat > 0)
-                    if (isOnlineInProgress) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            OutlinedButton(onClick = { viewModel.submitGameAction("DRAW_OFFER") }) {
-                                Text("Draw")
+                    val isOnlineSeatedPlayer = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && viewerSeat > 0
+                    val isOnlineActivePhase = activeGameView?.phase == "IN_PROGRESS" || activeGameView?.phase == "PAUSED"
+                    if (isOnlineSeatedPlayer && isOnlineActivePhase) {
+                        val canOnlineUndo = activeGameView?.allowTakeback == true &&
+                            activeGameView?.rated == false &&
+                            (activeGameView?.moves?.isNotEmpty() == true)
+                        val anyOpponentForfeitClaimable = activeGameView?.seats?.any { it.seat != viewerSeat && it.forfeitClaimable } == true
+
+                        if (canOnlineUndo) {
+                            OutlinedButton(onClick = { viewModel.proposeUndo() }) {
+                                Text("Undo")
                             }
-                            OutlinedButton(onClick = { viewModel.resignOnlineGame() }) {
-                                Text("Resign")
+                        }
+                        OutlinedButton(onClick = { viewModel.proposeDraw() }) {
+                            Text("Draw")
+                        }
+                        OutlinedButton(onClick = { viewModel.resignOnlineGameAsync() }) {
+                            Text("Resign")
+                        }
+                        OutlinedButton(onClick = { viewModel.proposePauseOrResume() }) {
+                            Text(if (activeGameView?.paused == true) "Resume" else "Pause")
+                        }
+                        if (anyOpponentForfeitClaimable) {
+                            Button(
+                                onClick = { viewModel.claimOpponentForfeit() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Text("Claim Forfeit")
                             }
                         }
                     }
@@ -561,6 +626,8 @@ fun PlayerReserveCard(
     ownCapPods: Int = 0,
     gameMode: OctiGameMode = OctiGameMode.GAME_MODE_2,
     displayName: String? = null,
+    clockText: String? = null,
+    onSit: (() -> Unit)? = null,
     onStartPodPlacement: (() -> Unit)? = null,
     onStartLiberatePlacement: (() -> Unit)? = null,
     onStartProngPlacement: (() -> Unit)? = null,
@@ -589,12 +656,45 @@ fun PlayerReserveCard(
         Column(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
-            Text(
-                text = displayName ?: "PLAYER $letter",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = if (isTurn) OctiTheme.colors.accentBrass else OctiTheme.colors.textSecondary
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = displayName ?: "PLAYER $letter",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isTurn) OctiTheme.colors.accentBrass else OctiTheme.colors.textSecondary,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (clockText != null) {
+                        Text(
+                            text = clockText,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isTurn) OctiTheme.colors.legalStep else OctiTheme.colors.textSecondary
+                        )
+                    }
+                    if (onSit != null) {
+                        Button(
+                            onClick = onSit,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(24.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = OctiTheme.colors.accentBrass,
+                                contentColor = OctiTheme.colors.windowBg
+                            )
+                        ) {
+                            Text("Sit", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(4.dp))
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),

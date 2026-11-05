@@ -4237,6 +4237,35 @@ void OctiHttpServer::Impl::handleAction(const Request &req, Response &res)
         sendError(res, 400, "INVALID_ARGUMENT", err);
         return;
     }
+
+    if (action == "DRAW_OFFER") {
+        action = "offer_draw";
+    } else if (action == "ACCEPT_DRAW") {
+        action = "accept_draw";
+    } else if (action == "DECLINE_DRAW") {
+        action = "decline_draw";
+    } else if (action == "PAUSE_REQUEST") {
+        action = "request_pause";
+    } else if (action == "ACCEPT_PAUSE") {
+        action = "accept_pause";
+    } else if (action == "DECLINE_PAUSE") {
+        action = "decline_pause";
+    } else if (action == "RESUME") {
+        action = "resume";
+    } else if (action == "UNDO_REQUEST") {
+        action = "request_undo";
+    } else if (action == "ACCEPT_UNDO") {
+        action = "accept_undo";
+    } else if (action == "DECLINE_UNDO") {
+        action = "decline_undo";
+    } else if (action == "REMATCH_REQUEST") {
+        action = "request_rematch";
+    } else if (action == "ACCEPT_REMATCH") {
+        action = "accept_rematch";
+    } else if (action == "DECLINE_REMATCH") {
+        action = "decline_rematch";
+    }
+
     const int64_t pid = auth.playerId;
     RoomResult r;
     if (action == "offer_draw") {
@@ -4265,6 +4294,8 @@ void OctiHttpServer::Impl::handleAction(const Request &req, Response &res)
         r = rooms.respondProposal(id, pid, ProposalType::REMATCH_REQUEST, true);
     } else if (action == "decline_rematch") {
         r = rooms.respondProposal(id, pid, ProposalType::REMATCH_REQUEST, false);
+    } else if (action == "claim_forfeit") {
+        r = rooms.claimDisconnectForfeit(id, pid);
     } else {
         sendError(res, 400, "INVALID_ARGUMENT", "unknown action");
         return;

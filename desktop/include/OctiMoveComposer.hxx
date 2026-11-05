@@ -109,6 +109,9 @@ public:
     bool commitStagedMove();
     void cancelAndRollback();
 
+    bool hasStagedMove() const;
+    bool isTurnInProgress() const;
+
 private:
     struct HopCaptureLink {
         std::size_t opIndex = 0;

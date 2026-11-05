@@ -174,6 +174,7 @@ OctiMainWindow::OctiMainWindow(
       _inOnlineRoom(false),
       _onlineViewerSeat(0),
       _onlineAutoOriented(false),
+      _lastGameChatSeq(0),
       _vcrTotalPlies(0),
       _brandLabel(nullptr),
       _serverStatusLabel(nullptr),
@@ -763,7 +764,32 @@ OctiMainWindow::OctiMainWindow(
     });
     QObject::connect(_sitSeatBtn, &QPushButton::clicked, [this]() {
         if (!_onlineRoomId.empty()) {
-            joinAndEnterOnlineTable(_onlineRoomId, 0, "");
+            std::string code = _pendingOnlinePasscode;
+            if (_onlineGameView.hasPasscode && code.empty()) {
+                PasscodeDialog pd(_onlineRoomId, _theme, this);
+                if (pd.exec() != QDialog::Accepted) {
+                    return;
+                }
+                code = pd.passcode();
+                _pendingOnlinePasscode = code;
+            }
+            int chosenSeat = 0;
+            int totalSeats = (_onlineGameView.mode == "4P" ||
+                              _onlineGameView.mode == "4P_FFA") ? 4 : 2;
+            for (int s = 1; s <= totalSeats; ++s) {
+                bool occupied = false;
+                for (const auto &seatInfo : _onlineGameView.seats) {
+                    if (seatInfo.seat == s) {
+                        occupied = true;
+                        break;
+                    }
+                }
+                if (!occupied) {
+                    chosenSeat = s;
+                    break;
+                }
+            }
+            joinAndEnterOnlineTable(_onlineRoomId, chosenSeat, code);
         }
     });
     QObject::connect(_deleteWaitingTableBtn, &QPushButton::clicked, [this]() {
@@ -860,8 +886,8 @@ OctiMainWindow::OctiMainWindow(
     });
     _lobbyView->setOnJoinTableRequested(
         [this](const TableSummaryInfo &table) {
-            std::string code;
-            if (table.hasPasscode) {
+            std::string code = _pendingOnlinePasscode;
+            if (table.hasPasscode && code.empty()) {
                 if (isVisible()) {
                     bool ok = false;
                     QString entered = QInputDialog::getText(
@@ -883,6 +909,7 @@ OctiMainWindow::OctiMainWindow(
                     }
                     code = pd.passcode();
                 }
+                _pendingOnlinePasscode = code;
             }
             observeOnlineTable(table.roomId, code);
         });
@@ -895,8 +922,8 @@ OctiMainWindow::OctiMainWindow(
     });
     _lobbyView->setOnObserveTableRequested(
         [this](const TableSummaryInfo &table) {
-            std::string code;
-            if (table.hasPasscode) {
+            std::string code = _pendingOnlinePasscode;
+            if (table.hasPasscode && code.empty()) {
                 if (isVisible()) {
                     bool ok = false;
                     QString entered = QInputDialog::getText(
@@ -918,6 +945,7 @@ OctiMainWindow::OctiMainWindow(
                     }
                     code = pd.passcode();
                 }
+                _pendingOnlinePasscode = code;
             }
             observeOnlineTable(table.roomId, code);
         });
@@ -968,12 +996,9 @@ OctiMainWindow::OctiMainWindow(
     updateStartMatchOverlay();
 
     _onlineTtlTimer = new QTimer(this);
-    _onlineTtlTimer->setInterval(1000);
+    _onlineTtlTimer->setInterval(100);
     QObject::connect(_onlineTtlTimer, &QTimer::timeout, this, [this]() {
-        if (_inOnlineRoom && !_onlineRoomId.empty() && _onlineGameView.ttlRemainingMs > 0) {
-            _onlineGameView.ttlRemainingMs = std::max<int64_t>(0, _onlineGameView.ttlRemainingMs - 1000);
-            updateMatchActionsVisibility();
-        }
+        tickLocalClock(100);
     });
     _onlineTtlTimer->start();
 
@@ -1147,6 +1172,18 @@ void OctiMainWindow::refreshAuthenticatedProfileFromServer()
     auto res = _netClient->fetchMyProfile();
     if (res.ok && !res.data.uuid.empty()) {
         applyAuthenticatedProfile(res.data);
+    } else if (!res.ok && res.httpStatus == 401) {
+        _authenticated = false;
+        _profile = PlayerProfileInfo();
+        _netClient->clearSessionToken();
+        _configStore.clearSession();
+        std::string err;
+        _configStore.save(err);
+        if (_lobbyView) {
+            _lobbyView->setViewerIdentity("", "");
+            _lobbyView->updateAuthUiState();
+        }
+        updateTopBarLabels();
     }
 }
 
@@ -1168,6 +1205,15 @@ void OctiMainWindow::showLobbyView()
         _lobbyView->refreshLobby();
         if (_authenticated) {
             refreshAuthenticatedProfileFromServer();
+        }
+        if (!_offlineMode && _netClient && !_netClient->isLobbyEventStreamActive()) {
+            _netClient->startLobbyEventStream(0, [this](const SseEvent &ev) {
+                _dispatcher.post([this, ev]() {
+                    if (_lobbyView) {
+                        _lobbyView->handleLobbySseEvent(ev);
+                    }
+                });
+            });
         }
     }
     updateStartMatchOverlay();
@@ -1437,8 +1483,14 @@ void OctiMainWindow::setupMenuBar()
     actSignIn->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_I));
     QObject::connect(actSignIn, &QAction::triggered, this, [this]() {
         SsoOnboardingDialog dlg(_netClient.get(), &_configStore, _theme, this);
+        dlg.setOnSignedInCallback([this](const PlayerProfileInfo &prof) {
+            applyAuthenticatedProfile(prof);
+        });
         if (dlg.exec() == QDialog::Accepted) {
             _authenticated = true;
+            if (!dlg.loggedInProfile().uuid.empty()) {
+                applyAuthenticatedProfile(dlg.loggedInProfile());
+            }
             updateTopBarLabels();
         }
     });
@@ -1937,12 +1989,19 @@ ApiResult<CreateTableResponse> OctiMainWindow::createAndEnterOnlineTable(
 
     leaveOnlineRoom();
     _isLocalBotGame = false;
+    _awaitingMatchStart = false;
+    _gameOverDialogShownForCurrentMatch = false;
+    updateStartMatchOverlay();
     _inOnlineRoom = true;
     _onlineRoomId = res.data.roomId;
+    if (!req.passcode.empty()) {
+        _pendingOnlinePasscode = req.passcode;
+    }
     _onlineViewerSeat = res.data.seat;
     _onlineAutoOriented = false;
     _appliedOnlineMoves.clear();
     _gameChatLines.clear();
+    _lastGameChatSeq = 0;
     if (_gameChatTranscript) {
         _gameChatTranscript->clear();
     }
@@ -1980,12 +2039,19 @@ ApiResult<JoinTableResponse> OctiMainWindow::joinAndEnterOnlineTable(
 
     leaveOnlineRoom();
     _isLocalBotGame = false;
+    _awaitingMatchStart = false;
+    _gameOverDialogShownForCurrentMatch = false;
+    updateStartMatchOverlay();
     _inOnlineRoom = true;
     _onlineRoomId = res.data.roomId;
+    if (!passcode.empty()) {
+        _pendingOnlinePasscode = passcode;
+    }
     _onlineViewerSeat = res.data.seat;
     _onlineAutoOriented = false;
     _appliedOnlineMoves.clear();
     _gameChatLines.clear();
+    _lastGameChatSeq = 0;
     if (_gameChatTranscript) {
         _gameChatTranscript->clear();
     }
@@ -2022,12 +2088,19 @@ ApiResult<bool> OctiMainWindow::observeOnlineTable(
 
     leaveOnlineRoom();
     _isLocalBotGame = false;
+    _awaitingMatchStart = false;
+    _gameOverDialogShownForCurrentMatch = false;
+    updateStartMatchOverlay();
     _inOnlineRoom = true;
     _onlineRoomId = roomId;
+    if (!passcode.empty()) {
+        _pendingOnlinePasscode = passcode;
+    }
     _onlineViewerSeat = 0;
     _onlineAutoOriented = false;
     _appliedOnlineMoves.clear();
     _gameChatLines.clear();
+    _lastGameChatSeq = 0;
     if (_gameChatTranscript) {
         _gameChatTranscript->clear();
     }
@@ -2066,7 +2139,15 @@ ApiResult<bool> OctiMainWindow::leaveActiveOnlineTable(
     }
 
     if (_inOnlineRoom && targetRoomId == _onlineRoomId) {
-        if (_onlineViewerSeat > 0) {
+        bool isHost = (!_profile.uuid.empty() && !_onlineGameView.hostUuid.empty() &&
+                       _onlineGameView.hostUuid == _profile.uuid);
+        if (_onlineViewerSeat > 0 && _onlineGameView.phase != "IN_PROGRESS" &&
+            (!isHost || _onlineGameView.phase == "FINISHED")) {
+            res = _netClient->leaveTable(targetRoomId);
+            if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
+                showProtocolUpgradeRequired(res.errorMessage);
+            }
+        } else if (_onlineViewerSeat > 0) {
             // Seated player exiting table view: do not vacate/forfeit so seat can be resumed from lobby
             res.ok = true;
             res.data = true;
@@ -2105,10 +2186,22 @@ void OctiMainWindow::leaveOnlineRoom()
     }
     _inOnlineRoom = false;
     _onlineRoomId.clear();
+    _pendingOnlinePasscode.clear();
     _onlineViewerSeat = 0;
     _onlineAutoOriented = false;
     _onlineGameView = GameViewData();
     _appliedOnlineMoves.clear();
+    _gameChatLines.clear();
+    _lastGameChatSeq = 0;
+    _gameOverDialogShownForCurrentMatch = false;
+    if (_boardCanvas) {
+        _boardCanvas->setTurnIndicatorVisible(!_awaitingMatchStart);
+    }
+    if (_reservePanel) {
+        _reservePanel->setTimeControlEnabled(true);
+        _reservePanel->clearSeatMetadata();
+        _reservePanel->refresh();
+    }
     if (_lobbyView) {
         _lobbyView->setActiveRoomState(
             _inOnlineRoom, _onlineRoomId, _onlineViewerSeat, _onlineGameView);
@@ -2138,13 +2231,15 @@ int OctiMainWindow::onlineViewerSeat() const
 bool OctiMainWindow::isInteractiveOnlineTurn() const
 {
     if (!_inOnlineRoom) {
-        return true;
+        return !_awaitingMatchStart;
     }
-    if (_onlineGameView.phase != "IN_PROGRESS") {
+    if (_onlineGameView.phase != "IN_PROGRESS" || _onlineGameView.paused) {
         return false;
     }
-    if (_onlineViewerSeat >= 1 && _onlineViewerSeat <= 4 &&
-        _onlineGameView.turnSeat == _onlineViewerSeat) {
+    if (_onlineViewerSeat < 1 || _onlineViewerSeat > 4) {
+        return false;
+    }
+    if (_onlineGameView.turnSeat == _onlineViewerSeat) {
         return true;
     }
     if (_board.getGame() &&
@@ -2170,6 +2265,34 @@ QString OctiMainWindow::waitingRoomBannerText() const
     return _waitingRoomBannerLabel ? _waitingRoomBannerLabel->text() : QString();
 }
 
+void OctiMainWindow::tickLocalClock(int elapsedMs)
+{
+    if (_inOnlineRoom && !_onlineRoomId.empty()) {
+        if (_onlineGameView.phase == "IN_PROGRESS" && !_onlineGameView.paused &&
+            _onlineGameView.timeControlEnabled) {
+            OctiPlayer turn = _board.getGame() ? _board.getGame()->getTurn() : PLAYER_UNDEF;
+            if (turn >= PLAYER_A && turn <= PLAYER_D) {
+                long curMs = _board.getGame()->getTimeRemaining(turn);
+                long newMs = std::max(0L, curMs - static_cast<long>(elapsedMs));
+                _board.getGame()->setTimeRemaining(turn, newMs);
+                for (auto &s : _onlineGameView.seats) {
+                    if (s.seat == static_cast<int>(turn)) {
+                        s.clockMs = std::max<int64_t>(0, s.clockMs - elapsedMs);
+                        break;
+                    }
+                }
+                if (_reservePanel) {
+                    _reservePanel->update();
+                }
+            }
+        } else if (_onlineGameView.phase == "WAITING_FOR_PLAYERS" && _onlineGameView.ttlRemainingMs > 0) {
+            _onlineGameView.ttlRemainingMs = std::max<int64_t>(0, _onlineGameView.ttlRemainingMs - elapsedMs);
+            updateTopBarLabels();
+            updateMatchActionsVisibility();
+        }
+    }
+}
+
 bool OctiMainWindow::refreshOnlineGameView()
 {
     if (!_netClient || _onlineRoomId.empty()) {
@@ -2188,9 +2311,52 @@ bool OctiMainWindow::refreshOnlineGameView()
 
 void OctiMainWindow::applyGameViewData(const GameViewData &view)
 {
+    if (!view.rematchRoomId.empty() && view.rematchRoomId != _onlineRoomId && !_onlineRoomId.empty()) {
+        if (_netClient) {
+            _netClient->stopGameEventStream();
+        }
+        _onlineRoomId = view.rematchRoomId;
+        _appliedOnlineMoves.clear();
+        _gameChatLines.clear();
+        _lastGameChatSeq = 0;
+        if (_gameChatTranscript) {
+            _gameChatTranscript->clear();
+        }
+        _gameOverDialogShownForCurrentMatch = false;
+        if (_netClient) {
+            _netClient->startGameEventStream(_onlineRoomId, 0, [this](const SseEvent &ev) {
+                _dispatcher.post([this, ev]() {
+                    handleGameSseEvent(ev);
+                });
+            });
+        }
+        refreshOnlineGameView();
+        return;
+    }
+
+    _awaitingMatchStart = false;
+    updateStartMatchOverlay();
+    if (view.phase != "FINISHED") {
+        _gameOverDialogShownForCurrentMatch = false;
+    }
+
+    bool prevPaused = _onlineGameView.paused;
+    std::string prevPhase = _onlineGameView.phase;
+    std::size_t prevMovesCount = _appliedOnlineMoves.size();
     _onlineGameView = view;
+
     if (view.viewerSeat > 0) {
         _onlineViewerSeat = view.viewerSeat;
+    } else if (!view.seats.empty() && !_profile.uuid.empty()) {
+        _onlineViewerSeat = 0;
+        for (const auto &s : view.seats) {
+            if (s.playerUuid == _profile.uuid) {
+                _onlineViewerSeat = s.seat;
+                break;
+            }
+        }
+    } else {
+        _onlineViewerSeat = 0;
     }
 
     OctiGameMode targetMode = GAME_MODE_2;
@@ -2271,23 +2437,43 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
         }
     }
 
-    _composer.attachBoard(&_board);
-    if (_boardCanvas) {
-        _boardCanvas->attachBoard(&_board, &_composer, &_soundSynth);
-        if (!latestOnlineMoveStr.empty()) {
-            try {
-                OctiMove parsedOnlineMove(latestOnlineMoveStr);
-                _boardCanvas->setLastMoveModifiedSquares(
-                    OctiBoardCanvas::extractModifiedSquares(
-                        parsedOnlineMove, view.edgeless,
-                        _board.getBoardWidth(), _board.getBoardHeight()));
-            } catch (...) {
+    bool boardChanged = needFullRebuild ||
+                        (_appliedOnlineMoves.size() != prevMovesCount) ||
+                        (view.phase != prevPhase) ||
+                        (view.paused != prevPaused);
+
+    if (boardChanged || !_composer.hasStagedMove()) {
+        _composer.attachBoard(&_board);
+        if (_boardCanvas) {
+            _boardCanvas->attachBoard(&_board, &_composer, &_soundSynth);
+            if (!latestOnlineMoveStr.empty()) {
+                try {
+                    OctiMove parsedOnlineMove(latestOnlineMoveStr);
+                    _boardCanvas->setLastMoveModifiedSquares(
+                        OctiBoardCanvas::extractModifiedSquares(
+                            parsedOnlineMove, view.edgeless,
+                            _board.getBoardWidth(), _board.getBoardHeight()));
+                } catch (...) {
+                }
             }
         }
+    }
+
+    if (_boardCanvas) {
+        _boardCanvas->setTurnIndicatorVisible(isInteractiveOnlineTurn());
         _boardCanvas->update();
     }
+
     if (_reservePanel) {
-        _reservePanel->attach(&_board, &_composer, _boardCanvas, &_soundSynth);
+        _reservePanel->setTimeControlEnabled(view.timeControlEnabled);
+        _reservePanel->clearSeatMetadata();
+        for (const auto &s : view.seats) {
+            _reservePanel->setSeatMetadata(
+                s.seat, s.handle, s.rating, s.isRobot, s.connected, s.eliminated);
+        }
+        if (boardChanged || !_composer.hasStagedMove()) {
+            _reservePanel->attach(&_board, &_composer, _boardCanvas, &_soundSynth);
+        }
         _reservePanel->refresh();
     }
 
@@ -2312,14 +2498,32 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
 
     Json j = Json::parse(ev.dataJson, nullptr, false);
     if (ev.event == "CHAT" && j.is_object()) {
+        std::int64_t seq = (ev.id > 0) ? ev.id : j.value("seq", 0LL);
         std::string scope = j.value("scope", "ALL");
         std::string handle = j.value("handle", "Player");
         std::string text = j.value("text", "");
+        std::string playerUuid = j.value("player_uuid", "");
         std::string line = "[" + scope + "] " + handle + ": " + text;
+        if (seq > 0 && seq == _lastGameChatSeq) {
+            return;
+        }
+        if (!playerUuid.empty() && playerUuid == _profile.uuid &&
+            !_gameChatLines.empty() && _gameChatLines.back() == line) {
+            return;
+        }
         _gameChatLines.push_back(line);
         if (_gameChatTranscript) {
             _gameChatTranscript->appendPlainText(
                 QString::fromStdString(line));
+            _gameChatTranscript->verticalScrollBar()->setValue(
+                _gameChatTranscript->verticalScrollBar()->maximum());
+        }
+        if (_boardChatZoomDialog) {
+            QPlainTextEdit *zt = _boardChatZoomDialog->findChild<QPlainTextEdit *>("boardChatZoomTranscript");
+            if (zt) {
+                zt->appendPlainText(QString::fromStdString(line));
+                zt->verticalScrollBar()->setValue(zt->verticalScrollBar()->maximum());
+            }
         }
         return;
     }
@@ -2335,8 +2539,27 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
 
     if (ev.event == "REMATCH_CREATED" && j.is_object()) {
         std::string newRoomId = j.value("room_id", "");
-        if (!newRoomId.empty()) {
-            _onlineGameView.rematchRoomId = newRoomId;
+        if (!newRoomId.empty() && newRoomId != _onlineRoomId && !_onlineRoomId.empty()) {
+            if (_netClient) {
+                _netClient->stopGameEventStream();
+            }
+            _onlineRoomId = newRoomId;
+            _appliedOnlineMoves.clear();
+            _gameChatLines.clear();
+            _lastGameChatSeq = 0;
+            if (_gameChatTranscript) {
+                _gameChatTranscript->clear();
+            }
+            _gameOverDialogShownForCurrentMatch = false;
+            if (_netClient) {
+                _netClient->startGameEventStream(_onlineRoomId, 0, [this](const SseEvent &ev) {
+                    _dispatcher.post([this, ev]() {
+                        handleGameSseEvent(ev);
+                    });
+                });
+            }
+            refreshOnlineGameView();
+            return;
         }
     }
 
@@ -2347,6 +2570,65 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
         }
         showLobbyView();
         return;
+    }
+
+    std::string sysMsg;
+    if (ev.event == "SEAT_JOINED") {
+        std::string h = j.value("handle", "Player");
+        int s = j.value("seat", 0);
+        sysMsg = "[System] @" + h + " joined Seat " + std::to_string(s);
+    } else if (ev.event == "SEAT_LEFT") {
+        std::string h = j.value("handle", "Player");
+        int s = j.value("seat", 0);
+        sysMsg = "[System] @" + h + " left Seat " + std::to_string(s);
+    } else if (ev.event == "OBSERVER_JOINED") {
+        std::string h = j.value("handle", "Spectator");
+        sysMsg = "[System] @" + h + " joined as observer";
+    } else if (ev.event == "OBSERVER_LEFT") {
+        std::string h = j.value("handle", "Spectator");
+        sysMsg = "[System] @" + h + " left observer";
+    } else if (ev.event == "GAME_STARTED") {
+        sysMsg = "[System] Game started";
+    } else if (ev.event == "PROPOSAL_OFFERED") {
+        std::string h = j.value("handle", "Player");
+        std::string prop = j.value("proposal", "");
+        sysMsg = "[System] @" + h + " offered " + prop;
+    } else if (ev.event == "PROPOSAL_ACCEPTED") {
+        std::string prop = j.value("proposal", "");
+        sysMsg = "[System] Proposal accepted: " + prop;
+    } else if (ev.event == "PROPOSAL_DECLINED") {
+        std::string prop = j.value("proposal", "");
+        sysMsg = "[System] Proposal declined: " + prop;
+    } else if (ev.event == "UNDO_APPLIED") {
+        sysMsg = "[System] Move undone";
+    } else if (ev.event == "GAME_PAUSED") {
+        sysMsg = "[System] Game paused";
+    } else if (ev.event == "GAME_RESUMED") {
+        sysMsg = "[System] Game resumed";
+    } else if (ev.event == "PLAYER_DISCONNECTED") {
+        std::string h = j.value("handle", "Player");
+        sysMsg = "[System] @" + h + " disconnected";
+    } else if (ev.event == "PLAYER_RECONNECTED") {
+        std::string h = j.value("handle", "Player");
+        sysMsg = "[System] @" + h + " reconnected";
+    } else if (ev.event == "GAME_OVER") {
+        sysMsg = "[System] Game over";
+    }
+
+    if (!sysMsg.empty()) {
+        _gameChatLines.push_back(sysMsg);
+        if (_gameChatTranscript) {
+            _gameChatTranscript->appendPlainText(QString::fromStdString(sysMsg));
+            _gameChatTranscript->verticalScrollBar()->setValue(
+                _gameChatTranscript->verticalScrollBar()->maximum());
+        }
+        if (_boardChatZoomDialog) {
+            QPlainTextEdit *zt = _boardChatZoomDialog->findChild<QPlainTextEdit *>("boardChatZoomTranscript");
+            if (zt) {
+                zt->appendPlainText(QString::fromStdString(sysMsg));
+                zt->verticalScrollBar()->setValue(zt->verticalScrollBar()->maximum());
+            }
+        }
     }
 
     if (ev.event == "MOVE" || ev.event == "UNDO_APPLIED") {
@@ -2361,6 +2643,7 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
         ev.event == "UNDO_APPLIED" || ev.event == "REMATCH_CREATED" ||
         ev.event == "GAME_OVER" || ev.event == "POLICY_UPDATED" ||
         ev.event == "SEAT_JOINED" || ev.event == "SEAT_LEFT" ||
+        ev.event == "OBSERVER_JOINED" || ev.event == "OBSERVER_LEFT" ||
         ev.event == "OBSERVER_BANNED" || ev.event == "VOICE_META" ||
         ev.event == "reconnect" || ev.event == "gap" ||
         ev.event == "PLAYER_DISCONNECTED" || ev.event == "PLAYER_RECONNECTED" ||
@@ -2403,10 +2686,15 @@ void OctiMainWindow::handleLocalOrOnlineMoveCommitted(
             refreshOnlineGameView();
             return;
         }
-        _appliedOnlineMoves.push_back(moveNotation);
         auto res = _netClient->submitMove(_onlineRoomId, moveNotation);
-        if (!res.ok) {
-            _appliedOnlineMoves.clear();
+        if (res.ok) {
+            std::string appliedMove = res.data.move.empty() ? moveNotation : res.data.move;
+            _appliedOnlineMoves.push_back(appliedMove);
+        } else {
+            if (_matchTurnStatusLabel) {
+                _matchTurnStatusLabel->setText(
+                    QString::fromStdString(res.errorMessage.empty() ? "Move rejected" : res.errorMessage));
+            }
             if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
                 showProtocolUpgradeRequired(res.errorMessage);
             }
@@ -2578,6 +2866,7 @@ bool OctiMainWindow::sendGameChatMessage(const std::string &scope,
         if (!res.ok) {
             return false;
         }
+        _lastGameChatSeq = res.data;
         std::string handle =
             _profile.handle.empty() ? "Me" : _profile.handle;
         std::string line = "[" + scope + "] " + handle + ": " + text;
@@ -3416,7 +3705,20 @@ void OctiMainWindow::updateMatchActionsVisibility()
                    (!_onlineGameView.live && _onlineGameView.phase.empty()));
     bool inProgress = (online && _onlineGameView.phase == "IN_PROGRESS");
     bool seatedPlayer = (online && _onlineViewerSeat > 0);
-    bool canActInMatch = (seatedPlayer && inProgress);
+    bool viewerEliminated = false;
+    if (_onlineViewerSeat >= 1 && _onlineViewerSeat <= 4) {
+        for (const auto &s : _onlineGameView.seats) {
+            if (s.seat == _onlineViewerSeat && s.eliminated) {
+                viewerEliminated = true;
+                break;
+            }
+        }
+        if (!viewerEliminated && _board.getGame()) {
+            viewerEliminated = _board.getGame()->isPlayerEliminated(
+                static_cast<OctiPlayer>(_onlineViewerSeat));
+        }
+    }
+    bool canActInMatch = (seatedPlayer && inProgress && !viewerEliminated);
 
     if (_sidebarNewGameBtn) {
         _sidebarNewGameBtn->setVisible(!online);
@@ -3467,16 +3769,26 @@ void OctiMainWindow::updateMatchActionsVisibility()
     if (_pauseResumeBtn) {
         _pauseResumeBtn->setVisible(online);
         _pauseResumeBtn->setEnabled(canActInMatch);
+        _pauseResumeBtn->setText(_onlineGameView.paused ? "Resume" : "Pause");
     }
     if (_claimForfeitBtn) {
+        bool opponentForfeitClaimable = false;
+        for (const auto &s : _onlineGameView.seats) {
+            if (s.seat != _onlineViewerSeat && s.forfeitClaimable) {
+                opponentForfeitClaimable = true;
+                break;
+            }
+        }
         _claimForfeitBtn->setVisible(online);
-        _claimForfeitBtn->setEnabled(canActInMatch);
+        _claimForfeitBtn->setEnabled(canActInMatch && opponentForfeitClaimable);
     }
     bool localGameActive = (_board.getGame() && _board.getGame()->isGameStarted() && !_board.getGame()->isGameOver());
     if (_undoRequestBtn) {
         if (online) {
+            bool canUndoOnline = canActInMatch && _onlineGameView.allowTakeback &&
+                                 !_onlineGameView.rated && _onlineGameView.plyCount > 0;
             _undoRequestBtn->setVisible(true);
-            _undoRequestBtn->setEnabled(canActInMatch);
+            _undoRequestBtn->setEnabled(canUndoOnline);
         } else {
             _undoRequestBtn->setVisible(true);
             _undoRequestBtn->setEnabled(localGameActive);
@@ -3499,9 +3811,24 @@ void OctiMainWindow::updateMatchActionsVisibility()
         _voiceBox->setVisible(online);
     }
 
+    if (_chatScopeCombo) {
+        _chatScopeCombo->blockSignals(true);
+        _chatScopeCombo->clear();
+        _chatScopeCombo->addItem("ALL", "ALL");
+        if (_onlineGameView.mode == "4P" && _onlineViewerSeat > 0) {
+            _chatScopeCombo->addItem("TEAM", "TEAM");
+        }
+        _chatScopeCombo->blockSignals(false);
+    }
+
     bool isObservingUnauthed = (online && !isAuthenticated());
+    bool isSilentObserver = (online && _onlineViewerSeat <= 0 &&
+                             _onlineGameView.observerPolicy == "SILENT_OBSERVERS");
     if (_gameChatInput) {
-        if (isObservingUnauthed) {
+        if (isSilentObserver) {
+            _gameChatInput->setEnabled(false);
+            _gameChatInput->setPlaceholderText("Silent observers policy in effect");
+        } else if (isObservingUnauthed) {
             _gameChatInput->setEnabled(false);
             _gameChatInput->setPlaceholderText("Sign in to chat");
         } else {
@@ -3510,7 +3837,7 @@ void OctiMainWindow::updateMatchActionsVisibility()
         }
     }
     if (_sendGameChatBtn) {
-        _sendGameChatBtn->setEnabled(!isObservingUnauthed);
+        _sendGameChatBtn->setEnabled(!isObservingUnauthed && !isSilentObserver);
     }
 
     if (_matchModeLabel) {
@@ -3538,7 +3865,15 @@ void OctiMainWindow::updateMatchActionsVisibility()
     if (_matchTurnStatusLabel) {
         if (waitingForPlayers) {
             _matchTurnStatusLabel->setText("Waiting for Players...");
-        } else if (_awaitingMatchStart) {
+        } else if (online && _onlineGameView.phase == "FINISHED") {
+            QString term = QString::fromStdString(_onlineGameView.termination);
+            if (!term.isEmpty()) {
+                _matchTurnStatusLabel->setText(
+                    QString("Match Complete \xe2\x80\x94 %1").arg(term));
+            } else {
+                _matchTurnStatusLabel->setText("Match Complete");
+            }
+        } else if (_awaitingMatchStart && !online) {
             _matchTurnStatusLabel->setText("Awaiting Match Start");
         } else {
             const OctiGame *g = _board.getGame();
@@ -3564,7 +3899,9 @@ void OctiMainWindow::updateMatchActionsVisibility()
 void OctiMainWindow::checkAndPresentGameOver()
 {
     const OctiGame *g = _board.getGame();
-    if (!g || !g->isGameOver()) {
+    bool localGameOver = (g && g->isGameOver());
+    bool onlineGameOver = (_inOnlineRoom && _onlineGameView.phase == "FINISHED");
+    if (!localGameOver && !onlineGameOver) {
         return;
     }
     if (_gameOverDialogShownForCurrentMatch) {
@@ -3572,6 +3909,7 @@ void OctiMainWindow::checkAndPresentGameOver()
     }
     _gameOverDialogShownForCurrentMatch = true;
     _soundSynth.triggerCue(SoundCue::GAME_VICTORY);
+    updateTopBarLabels();
     updateMatchActionsVisibility();
     if (_boardCanvas) {
         _boardCanvas->update();
@@ -3581,18 +3919,41 @@ void OctiMainWindow::checkAndPresentGameOver()
     }
     uploadCompletedBotGameIfEligible(false);
     if (isVisible()) {
-        GameOverDialog dlg(&_board, _theme, this);
-        dlg.exec();
-        if (dlg.newGameRequested()) {
-            if (_inOnlineRoom && !_onlineRoomId.empty()) {
+        if (onlineGameOver && !localGameOver) {
+            std::string banner = "Match Complete";
+            if (_onlineGameView.winnerSeat > 0) {
+                std::string winHandle = "Seat " + std::to_string(_onlineGameView.winnerSeat);
+                for (const auto &s : _onlineGameView.seats) {
+                    if (s.seat == _onlineGameView.winnerSeat && !s.handle.empty()) {
+                        winHandle = "@" + s.handle;
+                        break;
+                    }
+                }
+                banner = "Winner: " + winHandle;
+            } else if (_onlineGameView.result == "DRAW") {
+                banner = "Match Drawn";
+            }
+            GameOverDialog dlg(banner, _onlineGameView.termination,
+                               static_cast<int>(_appliedOnlineMoves.size()),
+                               exportCurrentOctiTranscript(), _theme, this);
+            dlg.exec();
+            if (dlg.newGameRequested()) {
                 proposeRematch();
-            } else {
-                NewLocalGameDialog newDlg(_theme, this);
-                newDlg.setConfig(_localConfig);
-                if (newDlg.exec() == QDialog::Accepted) {
-                    startNewLocalGame(newDlg.config());
-                    beginAwaitingMatchStart();
-                    promptStartMatchIfVisible();
+            }
+        } else {
+            GameOverDialog dlg(&_board, _theme, this);
+            dlg.exec();
+            if (dlg.newGameRequested()) {
+                if (_inOnlineRoom && !_onlineRoomId.empty()) {
+                    proposeRematch();
+                } else {
+                    NewLocalGameDialog newDlg(_theme, this);
+                    newDlg.setConfig(_localConfig);
+                    if (newDlg.exec() == QDialog::Accepted) {
+                        startNewLocalGame(newDlg.config());
+                        beginAwaitingMatchStart();
+                        promptStartMatchIfVisible();
+                    }
                 }
             }
         }
@@ -3796,7 +4157,8 @@ void OctiMainWindow::showTelemetrySettingsDialog()
 
 void OctiMainWindow::updateProposalBannerUi()
 {
-    if (!_proposalBannerWidget || !_proposalBannerLabel) {
+    if (!_proposalBannerWidget || !_proposalBannerLabel ||
+        !_acceptProposalBtn || !_declineProposalBtn) {
         return;
     }
     if (_onlineGameView.proposals.empty()) {
@@ -3805,10 +4167,42 @@ void OctiMainWindow::updateProposalBannerUi()
         return;
     }
     const GameProposalInfo &prop = _onlineGameView.proposals.front();
+    std::string proposerName = prop.proposerUuid;
+    for (const auto &seat : _onlineGameView.seats) {
+        if (seat.playerUuid == prop.proposerUuid && !seat.handle.empty()) {
+            proposerName = "@" + seat.handle;
+            break;
+        }
+    }
     _proposalBannerLabel->setText(
         QString("Proposal: %1 (from %2)")
             .arg(QString::fromStdString(prop.type))
-            .arg(QString::fromStdString(prop.proposerUuid)));
+            .arg(QString::fromStdString(proposerName)));
+
+    if (_onlineViewerSeat <= 0) {
+        _acceptProposalBtn->setVisible(false);
+        _declineProposalBtn->setVisible(false);
+    } else if (prop.proposerUuid == _profile.uuid) {
+        _acceptProposalBtn->setVisible(false);
+        _declineProposalBtn->setText("Withdraw");
+        _declineProposalBtn->setVisible(true);
+        _declineProposalBtn->setEnabled(true);
+    } else {
+        _acceptProposalBtn->setText("Accept");
+        _acceptProposalBtn->setVisible(true);
+        bool alreadyAccepted = false;
+        for (const auto &acceptedUuid : prop.acceptedBy) {
+            if (acceptedUuid == _profile.uuid) {
+                alreadyAccepted = true;
+                break;
+            }
+        }
+        _acceptProposalBtn->setEnabled(!alreadyAccepted);
+        _declineProposalBtn->setText("Decline");
+        _declineProposalBtn->setVisible(true);
+        _declineProposalBtn->setEnabled(true);
+    }
+
     _proposalBannerWidget->setVisible(true);
 }
 

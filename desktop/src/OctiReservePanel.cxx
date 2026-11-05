@@ -46,6 +46,7 @@ OctiReservePanel::OctiReservePanel(QWidget *parent)
     , _theme(ThemeId::OBSIDIAN_BRASS)
     , _pttActive(false)
     , _voiceMutedByRoom(false)
+    , _timeControlEnabled(true)
 {
     setMinimumSize(280, 480);
 }
@@ -117,6 +118,45 @@ void OctiReservePanel::setVoiceMutedByRoom(bool muted)
 bool OctiReservePanel::isVoiceMutedByRoom() const
 {
     return _voiceMutedByRoom;
+}
+
+void OctiReservePanel::setTimeControlEnabled(bool enabled)
+{
+    _timeControlEnabled = enabled;
+    update();
+}
+
+bool OctiReservePanel::isTimeControlEnabled() const
+{
+    return _timeControlEnabled;
+}
+
+void OctiReservePanel::setSeatMetadata(int seat, const std::string &handle, int rating,
+                                      bool isRobot, bool connected, bool eliminated)
+{
+    ReserveSeatMetadata meta;
+    meta.handle = handle;
+    meta.rating = rating;
+    meta.isRobot = isRobot;
+    meta.connected = connected;
+    meta.eliminated = eliminated;
+    _seatMetadata[seat] = meta;
+    update();
+}
+
+void OctiReservePanel::clearSeatMetadata()
+{
+    _seatMetadata.clear();
+    update();
+}
+
+const ReserveSeatMetadata *OctiReservePanel::seatMetadata(int seat) const
+{
+    auto it = _seatMetadata.find(seat);
+    if (it != _seatMetadata.end()) {
+        return &it->second;
+    }
+    return nullptr;
 }
 
 QString OctiReservePanel::formatClockMs(long ms)
@@ -240,7 +280,22 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
 
         // Player header & Fischer digital clock
         int pLetterIdx = player - PLAYER_A;
-        QString pName = QString("Player %1").arg(QChar('A' + pLetterIdx));
+        QString pName;
+        const ReserveSeatMetadata *meta = seatMetadata(static_cast<int>(player));
+        if (meta && !meta->handle.empty()) {
+            pName = QString("@%1").arg(QString::fromStdString(meta->handle));
+            if (meta->rating > 0) {
+                pName += QString(" (%1)").arg(meta->rating);
+            }
+            if (meta->isRobot) {
+                pName += " [BOT]";
+            }
+            if (!meta->connected) {
+                pName += " [Offline]";
+            }
+        } else {
+            pName = QString("Player %1").arg(QChar('A' + pLetterIdx));
+        }
         if (mode == GAME_MODE_4) {
             pName += (player == PLAYER_A || player == PLAYER_C)
                 ? " (Team A+C)" : " (Team B+D)";
@@ -260,14 +315,19 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
                           cardRect.width() * 0.65, 22.0),
                    Qt::AlignVCenter | Qt::AlignLeft, pName);
 
-        long remMs = game ? game->getTimeRemaining(player) : 600000L;
-        if (remMs <= 0) {
-            remMs = 600000L;
+        long remMs = game ? game->getTimeRemaining(player) : -1L;
+        QString clockStr;
+        if (!_timeControlEnabled || remMs < 0) {
+            clockStr = "Untimed";
+        } else if (remMs == 0) {
+            clockStr = "00:00.0";
+        } else {
+            clockStr = formatClockMs(remMs);
         }
         p.setPen(pal.textPrimary);
         p.drawText(QRectF(cardRect.right() - 100.0, cardRect.top() + 6.0,
                           90.0, 22.0),
-                   Qt::AlignVCenter | Qt::AlignRight, formatClockMs(remMs));
+                   Qt::AlignVCenter | Qt::AlignRight, clockStr);
 
         // Resource wells (Free Pods, Captured, Normal Prongs, Superprongs)
         OctiPlayer opp = (player == PLAYER_A) ? PLAYER_B : PLAYER_A;

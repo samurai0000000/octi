@@ -2986,17 +2986,32 @@ public final class OctiNetworkClient implements AutoCloseable {
 
                 int httpStatus = 0;
                 boolean terminalEventSeen = false;
-                Socket sock;
+                Socket sock = null;
+                String connHost = _host;
+                int connPort = _port;
                 try {
                     sock = createConnectedSocket(_host, _port, 5000, 30000);
                 } catch (Exception ioe) {
-                    try {
-                        Thread.sleep(1000L);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        break;
+                    if ("octi.selfso.com".equals(_host) && _port == 443) {
+                        try {
+                            sock = createConnectedSocket(
+                                    OctiDefs.OCTI_SERVER_FALLBACK_HOST,
+                                    OctiDefs.OCTI_SERVER_FALLBACK_PORT,
+                                    5000, 30000);
+                            connHost = OctiDefs.OCTI_SERVER_FALLBACK_HOST;
+                            connPort = OctiDefs.OCTI_SERVER_FALLBACK_PORT;
+                        } catch (Exception ignored) {
+                        }
                     }
-                    continue;
+                    if (sock == null) {
+                        try {
+                            Thread.sleep(1000L);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                        continue;
+                    }
                 }
                 synchronized (runner.mutex) {
                     if (runner.stopRequested.get()) {
@@ -3015,10 +3030,10 @@ public final class OctiNetworkClient implements AutoCloseable {
 
                     StringBuilder req = new StringBuilder(256);
                     req.append("GET ").append(path).append(" HTTP/1.1\r\n");
-                    if (_port == 443) {
-                        req.append("Host: ").append(_host).append("\r\n");
+                    if (connPort == 443) {
+                        req.append("Host: ").append(connHost).append("\r\n");
                     } else {
-                        req.append("Host: ").append(_host).append(':').append(_port).append("\r\n");
+                        req.append("Host: ").append(connHost).append(':').append(connPort).append("\r\n");
                     }
                     req.append("Accept: text/event-stream\r\n");
                     req.append("User-Agent: octi-android/").append(OctiDefs.OCTI_APP_VERSION).append("\r\n");

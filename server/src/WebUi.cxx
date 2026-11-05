@@ -1496,7 +1496,7 @@ tr.active-ply {
           </svg>
         </div>
         <h3>Bot &amp; Robot Token Registry</h3>
-        <p>Registered players can register up to 3 automated bots, generate secret bearer tokens, and compete programmatically via the table API.</p>
+        <p>Registered players can register up to 32 automated bots, generate secret bearer tokens, and compete programmatically via the table API. Explore: <a href="/robots/">Bring your 'bot! Developer Guide</a></p>
       </div>
       <div class="feature-card">
         <div class="feature-icon-wrap" style="background:rgba(59,130,246,0.12);">
@@ -2105,6 +2105,145 @@ tr.active-ply {
 
 <!-- Tab 6: Robots (Public Directory & Veteran Profiles) -->
 <section id="tab-robots" class="tab">
+  <div class="home-hero-panel" style="background:linear-gradient(135deg, #070B12 0%, #0F1F2E 52%, #132A26 100%);border:1px solid #1E3A4C;margin-bottom:18px;">
+    <div class="home-hero-grid">
+      <div class="home-hero-copy">
+        <div class="home-pill-badge" style="background:rgba(16,185,129,0.16);border-color:#10B981;color:#6EE7B7;">OPEN AI ARENA &bull; C++17 SDK &bull; REST + SSE API &bull; LINUX &amp; WINDOWS</div>
+        <h1 style="font-size:32px;margin:0 0 10px 0;color:#FFFFFF;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span>Bring your &rsquo;bot!</span>
+          <span style="font-size:13px;font-weight:700;padding:4px 10px;border-radius:6px;background:rgba(200,162,83,0.2);border:1px solid #E5C158;color:#FDE047;letter-spacing:0.04em;">OCTIBOT v1.1.0</span>
+        </h1>
+        <p style="font-size:14.5px;color:#CBD5E1;margin:0 0 18px 0;line-height:1.65;">
+          Design, train, and deploy your own autonomous OCTI robot&mdash;from alpha-beta minimax and Monte Carlo Tree Search to deep neural networks and Centaur LLM agents. Register up to <strong>32 robot tokens</strong> on your account, broadcast live search telemetry directly in table chat, and test your algorithm&rsquo;s creativity against human players and rival engines.
+        </p>
+        <div class="row" style="gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+          <a href="/robots/" class="btn btn-primary" style="padding:10px 20px;font-size:14px;background:linear-gradient(135deg,#10B981 0%,#059669 100%);border-color:#34D399;color:#04130E;font-weight:800;box-shadow:0 4px 14px rgba(16,185,129,0.35);">
+            Bring Your &rsquo;Bot! Onboarding &amp; Developer Guide &rarr;
+          </a>
+          <button type="button" class="btn" onclick="var b=document.getElementById('nav-account-btn');if(b)b.click();" style="padding:10px 16px;font-size:13.5px;background:#1E293B;border-color:#475569;color:#F8FAFC;">
+            Generate Bot Token (#account)
+          </button>
+          <a href="/robots/" class="btn" style="padding:10px 16px;font-size:13.5px;background:rgba(255,255,255,0.06);border-color:#334155;color:#E2E8F0;">
+            octibot C++ SDK &amp; Quickstart &nearr;
+          </a>
+        </div>
+        <div class="home-highlights-strip" style="margin-top:12px;">
+          <span class="home-highlight-pill"><strong>Ubuntu 24.04 &amp; Windows</strong> Guides</span>
+          <span class="home-highlight-pill"><strong>Live Table Chat</strong> Search Telemetry</span>
+          <span class="home-highlight-pill"><strong>W-L-D &amp; Win Rate</strong> Tracking</span>
+          <span class="home-highlight-pill"><strong>Human-Only ELO</strong> Protected</span>
+        </div>
+      </div>
+      <div class="home-hero-art">
+        <a href="/robots/" title="Open Bring Your 'Bot! Onboarding &amp; Developer Guide" style="display:block;width:100%;max-width:440px;text-decoration:none;">
+          <svg viewBox="0 0 440 280" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="botCardBg" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#070D17"/>
+                <stop offset="55%" stop-color="#0D1B2A"/>
+                <stop offset="100%" stop-color="#09221E"/>
+              </linearGradient>
+              <radialGradient id="botCoreGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#10B981" stop-opacity="0.45"/>
+                <stop offset="100%" stop-color="#10B981" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="botHudBar" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#10B981"/>
+                <stop offset="50%" stop-color="#38BDF8"/>
+                <stop offset="100%" stop-color="#E5C158"/>
+              </linearGradient>
+            </defs>
+            <rect x="0" y="0" width="440" height="280" rx="12" fill="url(#botCardBg)" stroke="#1E3A4C" stroke-width="1.5"/>
+            <rect x="14" y="12" width="412" height="3" rx="1.5" fill="url(#botHudBar)" opacity="0.85"/>
+
+            <!-- Subtle Tactical Grid Background -->
+            <g stroke="#1E293B" stroke-width="1" opacity="0.65">
+              <line x1="20" y1="55" x2="420" y2="55"/>
+              <line x1="20" y1="105" x2="420" y2="105"/>
+              <line x1="20" y1="155" x2="420" y2="155"/>
+              <line x1="20" y1="205" x2="420" y2="205"/>
+              <line x1="90" y1="25" x2="90" y2="230"/>
+              <line x1="165" y1="25" x2="165" y2="230"/>
+              <line x1="240" y1="25" x2="240" y2="230"/>
+              <line x1="315" y1="25" x2="315" y2="230"/>
+            </g>
+
+            <!-- Search Tree / Neural Evaluation Graph (Right Side) -->
+            <g stroke="#38BDF8" stroke-width="1.6" stroke-dasharray="3 3" opacity="0.75">
+              <line x1="145" y1="125" x2="250" y2="62"/>
+              <line x1="145" y1="125" x2="250" y2="125"/>
+              <line x1="145" y1="125" x2="250" y2="188"/>
+              <line x1="250" y1="62" x2="355" y2="44"/>
+              <line x1="250" y1="62" x2="355" y2="82"/>
+              <line x1="250" y1="125" x2="355" y2="125"/>
+              <line x1="250" y1="188" x2="355" y2="170"/>
+              <line x1="250" y1="188" x2="355" y2="206"/>
+            </g>
+
+            <!-- Principal Variation Highlighted Path -->
+            <path d="M 145 125 L 250 62 L 355 44" fill="none" stroke="#10B981" stroke-width="3"/>
+
+            <!-- Candidate Nodes -->
+            <g font-family="ui-monospace, SFMono-Regular, monospace" font-size="10" font-weight="700">
+              <rect x="218" y="48" width="64" height="26" rx="5" fill="#062E22" stroke="#10B981" stroke-width="1.8"/>
+              <text x="250" y="65" text-anchor="middle" fill="#6EE7B7">c3-e5:c7!</text>
+
+              <rect x="218" y="112" width="64" height="26" rx="5" fill="#0F172A" stroke="#38BDF8" stroke-width="1.2"/>
+              <text x="250" y="129" text-anchor="middle" fill="#93C5FD">b2+a</text>
+
+              <rect x="218" y="175" width="64" height="26" rx="5" fill="#0F172A" stroke="#475569" stroke-width="1.2"/>
+              <text x="250" y="192" text-anchor="middle" fill="#94A3B8">f2-f3</text>
+
+              <!-- Leaf Eval Badges -->
+              <rect x="330" y="31" width="84" height="24" rx="5" fill="#10B981"/>
+              <text x="372" y="47" text-anchor="middle" fill="#04130E">+420 cp ★</text>
+
+              <rect x="330" y="70" width="84" height="22" rx="4" fill="#1E293B" stroke="#334155"/>
+              <text x="372" y="85" text-anchor="middle" fill="#CBD5E1">+145 cp</text>
+
+              <rect x="330" y="114" width="84" height="22" rx="4" fill="#1E293B" stroke="#334155"/>
+              <text x="372" y="129" text-anchor="middle" fill="#93C5FD">+80 cp</text>
+
+              <rect x="330" y="158" width="84" height="22" rx="4" fill="#1E293B" stroke="#334155"/>
+              <text x="372" y="173" text-anchor="middle" fill="#94A3B8">-35 cp</text>
+
+              <rect x="330" y="194" width="84" height="22" rx="4" fill="#2E0D19" stroke="#F43F5E"/>
+              <text x="372" y="209" text-anchor="middle" fill="#FDA4AF">-290 cp</text>
+            </g>
+
+            <!-- Central Glowing Robot OCTI Pod Emblem (Left Side) -->
+            <g transform="translate(102, 125)">
+              <circle cx="0" cy="0" r="64" fill="url(#botCoreGlow)"/>
+              <circle cx="0" cy="0" r="46" fill="none" stroke="#10B981" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.7"/>
+              <!-- 8 Directional Prongs -->
+              <line x1="0" y1="-26" x2="0" y2="-44" stroke="#E5C158" stroke-width="4.5" stroke-linecap="round"/>
+              <line x1="18" y1="-18" x2="31" y2="-31" stroke="#E5C158" stroke-width="4.5" stroke-linecap="round"/>
+              <line x1="26" y1="0" x2="44" y2="0" stroke="#E5C158" stroke-width="4.5" stroke-linecap="round"/>
+              <line x1="18" y1="18" x2="31" y2="31" stroke="#38BDF8" stroke-width="3.5" stroke-linecap="round"/>
+              <line x1="0" y1="26" x2="0" y2="42" stroke="#38BDF8" stroke-width="3.5" stroke-linecap="round"/>
+              <line x1="-18" y1="-18" x2="-31" y2="-31" stroke="#E5C158" stroke-width="4.5" stroke-linecap="round"/>
+              <line x1="-26" y1="0" x2="-42" y2="0" stroke="#38BDF8" stroke-width="3.5" stroke-linecap="round"/>
+
+              <!-- Octagonal Robot Pod Body -->
+              <polygon points="-13,-30 13,-30 30,-13 30,13 13,30 -13,30 -30,13 -30,-13" fill="#064E3B" stroke="#34D399" stroke-width="2.5"/>
+              <!-- Robot Visor & Eyes -->
+              <rect x="-18" y="-10" width="36" height="16" rx="5" fill="#090D16" stroke="#38BDF8" stroke-width="1.4"/>
+              <circle cx="-8" cy="-2" r="3.5" fill="#38BDF8"/>
+              <circle cx="8" cy="-2" r="3.5" fill="#10B981"/>
+              <text x="0" y="18" text-anchor="middle" fill="#A7F3D0" font-family="ui-monospace, SFMono-Regular, monospace" font-size="8.5" font-weight="800" letter-spacing="0.08em">AI POD</text>
+            </g>
+
+            <!-- Live Table Chat Telemetry Banner at Bottom -->
+            <rect x="16" y="232" width="408" height="34" rx="7" fill="#090F1A" stroke="#334155" stroke-width="1.2"/>
+            <circle cx="32" cy="249" r="5" fill="#10B981"/>
+            <text x="45" y="253" fill="#FDE047" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11" font-weight="700">[Chat] @stock:</text>
+            <text x="142" y="253" fill="#6EE7B7" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11">depth=8 | nodes=581440 | eval=420 | 3120ms</text>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </div>
+
   <div class="panel">
     <div class="row">
       <input id="robots-search-q" placeholder="Search robot name, description, or owner..." style="min-width:280px;flex:1;">

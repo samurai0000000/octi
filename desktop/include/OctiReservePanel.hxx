@@ -8,6 +8,8 @@
 #define OCTI_DESKTOP_OCTI_RESERVE_PANEL_HXX
 
 #include <functional>
+#include <map>
+#include <string>
 #include <QImage>
 #include <QMouseEvent>
 #include <QPaintEvent>
@@ -22,6 +24,14 @@
 #include "OctiTheme.hxx"
 
 namespace octi {
+
+struct ReserveSeatMetadata {
+    std::string handle;
+    int rating = 0;
+    bool isRobot = false;
+    bool connected = true;
+    bool eliminated = false;
+};
 
 class OctiReservePanel : public QWidget {
 public:
@@ -58,6 +68,13 @@ public:
     QRectF playerCardRect(OctiPlayer player) const;
     int iconGlyphCountRendered() const { return _iconGlyphCountRendered; }
 
+    void setTimeControlEnabled(bool enabled);
+    bool isTimeControlEnabled() const;
+    void setSeatMetadata(int seat, const std::string &handle, int rating,
+                         bool isRobot, bool connected, bool eliminated);
+    void clearSeatMetadata();
+    const ReserveSeatMetadata *seatMetadata(int seat) const;
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
@@ -73,6 +90,8 @@ private:
 
     bool _pttActive;
     bool _voiceMutedByRoom;
+    bool _timeControlEnabled;
+    std::map<int, ReserveSeatMetadata> _seatMetadata;
     std::function<void(bool talking)> _pttCallback;
 
     QRectF _freePodWellRect;
