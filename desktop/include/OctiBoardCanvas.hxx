@@ -101,6 +101,9 @@ public:
     void setTurnIndicatorVisible(bool visible);
     bool isTurnIndicatorVisible() const { return _turnIndicatorVisible; }
 
+    void setInteractiveEnabled(bool enabled);
+    bool isInteractiveEnabled() const { return _interactiveEnabled; }
+
     static int activeTurnScreenEdge(OctiGameMode mode,
                                    OctiPlayer activeTurn,
                                    BoardRotation boardRotation);
@@ -202,6 +205,7 @@ private:
     std::vector<QPoint> _lastMoveModifiedSquares;
     qint64 _lastMoveAnimStartMs;
     bool _turnIndicatorVisible;
+    bool _interactiveEnabled;
     qint64 _renderTimeOverrideMs = -1;
     std::function<bool(int, int)> _zoomedSquareOpenHook;
 };

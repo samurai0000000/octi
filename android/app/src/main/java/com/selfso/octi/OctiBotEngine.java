@@ -808,6 +808,11 @@ public class OctiBotEngine {
         return probeOpeningBook(board, outMove, null, null);
     }
 
+    public String probeOpeningBook(OctiBoard board) {
+        String[] outMove = new String[1];
+        return probeOpeningBook(board, outMove, null, null) && outMove[0] != null ? outMove[0] : "";
+    }
+
     private static boolean isEnemyHomeSquareFor(OctiSquareType sqType,
                                                 OctiGameMode mode,
                                                 OctiPlayer p) {

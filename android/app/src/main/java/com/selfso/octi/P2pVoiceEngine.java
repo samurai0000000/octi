@@ -119,7 +119,18 @@ public final class P2pVoiceEngine implements AutoCloseable {
         _netClient = netClient;
     }
 
+    public static void setSimulatedUiThreadForTest(boolean isUiThread) {
+        OctiNetworkClient.setSimulatedUiThreadForTest(isUiThread);
+    }
+
+    public static void assertNotMainThread() {
+        OctiNetworkClient.assertNotMainThread();
+    }
+
     private static boolean isMainThread() {
+        if (OctiNetworkClient.isCurrentThreadUiThread()) {
+            return true;
+        }
         try {
             android.os.Looper mainLooper = android.os.Looper.getMainLooper();
             return mainLooper != null && mainLooper.getThread() == Thread.currentThread();
@@ -334,6 +345,9 @@ public final class P2pVoiceEngine implements AutoCloseable {
     }
 
     public boolean joinVoiceRoom(String roomId, String localPlayerUuid, StringBuilder errorOut) {
+        if (OctiNetworkClient.isSimulatedUiThreadActiveForTest()) {
+            assertNotMainThread();
+        }
         leaveVoiceRoom();
 
         if (roomId == null || roomId.isEmpty() ||
@@ -390,6 +404,9 @@ public final class P2pVoiceEngine implements AutoCloseable {
     }
 
     public void leaveVoiceRoom() {
+        if (OctiNetworkClient.isSimulatedUiThreadActiveForTest()) {
+            assertNotMainThread();
+        }
         String activeRoom;
         boolean wasInRoom;
         DatagramSocket sockToClose;
@@ -442,7 +459,11 @@ public final class P2pVoiceEngine implements AutoCloseable {
 
     @Override
     public void close() {
-        leaveVoiceRoom();
+        if (isMainThread()) {
+            _asyncExecutor.submit(this::leaveVoiceRoom);
+        } else {
+            leaveVoiceRoom();
+        }
         _asyncExecutor.shutdown();
     }
 
@@ -747,7 +768,7 @@ public final class P2pVoiceEngine implements AutoCloseable {
                 }
             }
             if (isSelf) {
-                leaveVoiceRoom();
+                runOnBackgroundOrSync(this::leaveVoiceRoom);
             }
             return;
         }

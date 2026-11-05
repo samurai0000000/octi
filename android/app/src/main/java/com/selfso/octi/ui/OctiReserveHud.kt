@@ -504,13 +504,10 @@ fun OctiReserveHud(
                     val isOnlineSeatedPlayer = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && viewerSeat > 0
                     val isOnlineActivePhase = activeGameView?.phase == "IN_PROGRESS" || activeGameView?.phase == "PAUSED"
                     if (isOnlineSeatedPlayer && isOnlineActivePhase) {
-                        val canOnlineUndo = activeGameView?.allowTakeback == true &&
-                            activeGameView?.rated == false &&
-                            (activeGameView?.moves?.isNotEmpty() == true)
                         val anyOpponentForfeitClaimable = activeGameView?.seats?.any { it.seat != viewerSeat && it.forfeitClaimable } == true
 
-                        if (canOnlineUndo) {
-                            OutlinedButton(onClick = { viewModel.proposeUndo() }) {
+                        if (viewModel.isOnlineUndoVisible) {
+                            OutlinedButton(onClick = { viewModel.requestOrAcceptOnlineUndo() }) {
                                 Text("Undo")
                             }
                         }

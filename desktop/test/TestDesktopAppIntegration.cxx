@@ -26,6 +26,7 @@
 #include <thread>
 #include <vector>
 
+#include <QAction>
 #include <QApplication>
 #include <QClipboard>
 #include <QDateTime>
@@ -47,6 +48,7 @@
 #include "OctiDialogs.hxx"
 #include "OctiMainWindow.hxx"
 #include "OctiNetworkClient.hxx"
+#include "OctiOpeningBookData.hxx"
 #include "P2pVoiceEngine.hxx"
 
 #include "selfupdate/Sha256.hxx"
@@ -3422,6 +3424,172 @@ TEST(DesktopAppIntegrationTest, LeavingWaitingRoomTableVacatesSeatOnServer)
     reqBob.bases = 1;
     auto createBob = winB.createAndEnterOnlineTable(reqBob);
     CHECK_TRUE_TEXT(createBob.ok, createBob.errorMessage.c_str());
+}
+
+TEST(DesktopAppIntegrationTest, GuiDesignBookCrossPlatformParityAndSseStormPrevention)
+{
+    /* 1. Verify canonical opening book entry count (2,038 positions) */
+    LONGS_EQUAL(2038, static_cast<long>(octi::g_openingBookEntryCount));
+
+    QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);
+    QString artifactDir = repoRootStr + "/plan/plan_gui_design_book_and_cross_platform_parity.artifacts/desktop";
+    QDir().mkpath(artifactDir);
+
+    LiveServerEnv env;
+    RoomLimits testLimits;
+    testLimits.lobbyChatBurst = 100;
+    testLimits.boardChatBurst = 100;
+    env.rooms->setLimits(testLimits);
+
+    auto clientA = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginA = clientA->loginWithSso(
+        "google", makeToken("google", "sub-gdb-alice", "Alice_GDB"), "Alice_GDB");
+    CHECK_TRUE_TEXT(loginA.ok, loginA.errorMessage.c_str());
+
+    auto clientB = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginB = clientB->loginWithSso(
+        "google", makeToken("google", "sub-gdb-bob", "Bob_GDB"), "Bob_GDB");
+    CHECK_TRUE_TEXT(loginB.ok, loginB.errorMessage.c_str());
+
+    /* Pre-populate LiveServerEnv with 32 lobby chat events before winB enters the lobby */
+    for (int i = 1; i <= 32; ++i) {
+        auto chatRes = clientA->postLobbyChat("Pre-existing lobby event #" + std::to_string(i));
+        CHECK_TRUE_TEXT(chatRes.ok, chatRes.errorMessage.c_str());
+    }
+
+    std::string cfgPathA = env.dir + "/gdb_alice.json";
+    std::string cfgPathB = env.dir + "/gdb_bob.json";
+    OctiMainWindow winA(std::move(clientA), cfgPathA);
+    OctiMainWindow winB(std::move(clientB), cfgPathB);
+
+    winA.resize(1440, 900);
+    winB.resize(1440, 900);
+    winA.show();
+    winB.show();
+    winA.pumpUiEvents();
+    winB.pumpUiEvents();
+
+    /* 2. CHK-04: Single left-click on an empty friendly home square (3,3) stages "33" */
+    {
+        LocalGameConfig localCfg;
+        localCfg.playType = LocalPlayType::PASS_AND_PLAY;
+        localCfg.mode = GAME_MODE_2;
+        localCfg.bases = GAME_BASES_3;
+        localCfg.humanSeat = PLAYER_A;
+        winA.startNewLocalGame(localCfg);
+        winA.confirmMatchStart();
+
+        /* Clear home square (3,3) [0-based (2,2)] so it is an empty friendly home square for Player A */
+        winA.board()->squareAt(2, 2).clear();
+        CHECK_TRUE(winA.board()->squareAt(2, 2).isEmpty());
+        CHECK_TRUE(winA.board()->getGame()->getFreePods(PLAYER_A) > 0);
+        winA.moveComposer()->refreshLegalMoves();
+
+        QPointF pt33 = winA.boardCanvas()->geometry().squareCenter(3, 3);
+        QMouseEvent press33(QEvent::MouseButtonPress, pt33, pt33, pt33,
+                            Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(winA.boardCanvas(), &press33);
+        QMouseEvent release33(QEvent::MouseButtonRelease, pt33, pt33, pt33,
+                              Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(winA.boardCanvas(), &release33);
+        winA.pumpUiEvents();
+
+        CHECK_TRUE(winA.moveComposer()->isAwaitingConfirmation());
+        STRCMP_EQUAL("33", winA.moveComposer()->stagedMoveNotation().c_str());
+
+        QImage localShot = winA.renderWindowToImage(1440, 900);
+        CHECK_FALSE(localShot.isNull());
+        QString localShotPath = artifactDir + "/desktop_local_home_click_staged.png";
+        CHECK_TRUE(localShot.save(localShotPath));
+        CHECK_TRUE(QFileInfo(localShotPath).size() > 15000);
+
+        winA.moveComposer()->cancelAndRollback();
+    }
+
+    /* 3. CHK-14: Entering Lobby with 32 pre-existing events uses since_seq = latestSeq (<= 2 /api/v1/lobby calls) */
+    winA.applyAuthenticatedProfile(loginA.data.profile);
+    winB.applyAuthenticatedProfile(loginB.data.profile);
+    winB.showLobbyView();
+    for (int i = 0; i < 8; ++i) {
+        winB.pumpUiEvents();
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    }
+    CHECK_TRUE(winB.lobbyView()->latestLobbySeq() >= 32);
+    CHECK_TRUE_TEXT(
+        winB.lobbyView()->lobbyRefreshCount() <= 2,
+        ("Expected <= 2 lobby state fetches on lobby entry, got " +
+         std::to_string(winB.lobbyView()->lobbyRefreshCount())).c_str());
+
+    /* 4. Host Alice creates a 2P table; Bob joins via Lobby "Join Table" button as Seat 2 (B) */
+    CreateTableRequest req;
+    req.mode = "2P";
+    req.bases = 3;
+    auto created = winA.createAndEnterOnlineTable(req);
+    CHECK_TRUE_TEXT(created.ok, created.errorMessage.c_str());
+    std::string roomId = created.data.roomId;
+    LONGS_EQUAL(1, winA.onlineViewerSeat());
+    LONGS_EQUAL(static_cast<long>(BoardRotation::ROT_0),
+                static_cast<long>(winA.boardCanvas()->boardRotation()));
+
+    /* Pre-populate 10 room chat messages before Bob joins to verify room SSE since_seq deduplication */
+    for (int i = 1; i <= 10; ++i) {
+        CHECK_TRUE(winA.sendGameChatMessage("ALL", "Room warmup chat #" + std::to_string(i)));
+    }
+
+    winB.lobbyView()->refreshLobby();
+    winB.lobbyView()->selectRoomId(roomId);
+    CHECK_TRUE(winB.lobbyView()->joinTableButton()->isEnabled());
+    winB.lobbyView()->joinTableButton()->click();
+    winB.pumpUiEvents();
+    winA.refreshOnlineGameView();
+    winA.pumpUiEvents();
+
+    CHECK_TRUE(winB.isInOnlineGame());
+    LONGS_EQUAL(2, winB.onlineViewerSeat());
+    STRCMP_EQUAL("IN_PROGRESS", winB.currentOnlineGameView().phase.c_str());
+
+    /* 5. CHK-03 & CHK-12: Seat 2 (Player B) auto-rotates to ROT_180 and swaps Reserve Cards */
+    LONGS_EQUAL(static_cast<long>(BoardRotation::ROT_180),
+                static_cast<long>(winB.boardCanvas()->boardRotation()));
+    QImage onlineSeatBShot = winB.renderWindowToImage(1440, 900);
+    CHECK_FALSE(onlineSeatBShot.isNull());
+    CHECK_TRUE(winB.reservePanel()->playerCardRect(PLAYER_B).top() >
+               winB.reservePanel()->playerCardRect(PLAYER_A).top());
+
+    QString onlineShotPath = artifactDir + "/desktop_online_seat_b_rotated_pink_light.png";
+    CHECK_TRUE(onlineSeatBShot.save(onlineShotPath));
+    CHECK_TRUE(QFileInfo(onlineShotPath).size() > 15000);
+
+    /* 6. CHK-01: Undo button and action are hidden/disabled in online games */
+    CHECK_FALSE(winA.undoButton()->isVisible());
+    CHECK_FALSE(winA.undoButton()->isEnabled());
+    CHECK_FALSE(winB.undoButton()->isVisible());
+    CHECK_FALSE(winB.undoButton()->isEnabled());
+    if (winA.undoAction()) {
+        CHECK_FALSE(winA.undoAction()->isEnabled());
+    }
+
+    /* 7. CHK-02: Pink (#FF69B4) turn indicator is visible BOTH on viewer's turn (winA) and opponent's turn (winB) */
+    CHECK_TRUE(winA.boardCanvas()->isInteractiveEnabled());
+    CHECK_FALSE(winB.boardCanvas()->isInteractiveEnabled());
+    CHECK_TRUE(winA.boardCanvas()->isTurnIndicatorVisible());
+    CHECK_TRUE(winB.boardCanvas()->isTurnIndicatorVisible());
+
+    /* 8. CHK-11: Sending a real QWheelEvent to winB.boardCanvas() while it is opponent's turn zooms the board */
+    DOUBLES_EQUAL(1.0, winB.boardCanvas()->boardZoomScale(), 1e-6);
+    QPointF centerPt = winB.boardCanvas()->geometry().boardOuterRect().center();
+    QWheelEvent wheelEv(centerPt, centerPt, QPoint(0, 0), QPoint(0, 120),
+                        Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(winB.boardCanvas(), &wheelEv);
+    CHECK_TRUE(winB.boardCanvas()->boardZoomScale() > 1.0);
+    winB.boardCanvas()->resetBoardZoom();
+    DOUBLES_EQUAL(1.0, winB.boardCanvas()->boardZoomScale(), 1e-6);
+
+    /* 9. CHK-14: Leaving an IN_PROGRESS table cleanly returns to Lobby without hanging */
+    auto leaveInProg = winB.leaveActiveOnlineTable(roomId);
+    CHECK_TRUE_TEXT(leaveInProg.ok, leaveInProg.errorMessage.c_str());
+    CHECK_FALSE(winB.isInOnlineGame());
+    CHECK_TRUE(winB.isLobbyViewVisible());
 }
 
 extern "C" const char *__lsan_default_suppressions()

@@ -18,11 +18,14 @@ public class OctiSoundSynth {
         POD_JUMP,
         POD_CAPTURE,
         CLOCK_LOW_TICK,
-        GAME_VICTORY
+        GAME_VICTORY;
+
+        public static final SoundCue POD_DROP = POD_PLACE;
     }
 
     public static final class Cue {
         public static final SoundCue POD_PLACE = SoundCue.POD_PLACE;
+        public static final SoundCue POD_DROP = SoundCue.POD_PLACE;
         public static final SoundCue PRONG_SNAP = SoundCue.PRONG_SNAP;
         public static final SoundCue POD_STEP = SoundCue.POD_STEP;
         public static final SoundCue POD_JUMP = SoundCue.POD_JUMP;

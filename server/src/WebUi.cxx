@@ -3357,14 +3357,14 @@ function drawBoardState(state) {
     }
   }
 
-  /* 5. Pods, prongs, superprongs & layered 3D multi-pod stacks */
+  /* 5. Pods, prongs, superprongs & layered 3D multi-pod stacks (GDB-04.2a: most prongs at bottom, fewest on top) */
   for (var py = 1; py <= parsed.gh; py++) {
     for (var px = 1; px <= parsed.gw; px++) {
       var podStack = parsed.map[px + "," + py];
       if (!podStack || !podStack.length) { continue; }
       var baseRect = geom.squareRect(px, py);
       var sorted = podStack.slice().sort(function (a, b) {
-        return a.cfg.count - b.cfg.count;
+        return b.cfg.count - a.cfg.count;
       });
       var maxLayers = Math.min(sorted.length, 4);
       var isHover = state.hoverSq && state.hoverSq.x === px && state.hoverSq.y === py;
@@ -6117,112 +6117,18346 @@ function computeCanonicalOpeningHash(s) {
 
 // BEGIN_OPENING_BOOK_DATA
 var OPENING_BOOK = {
-  // 2P 1-Base ply 1 (after 33+b / 73+h)
+  // OFK ply 3 (after 22+b 56+f 42+a)
+  "0x00172E8C050D20ED": {
+    depth: 8,
+    candidates: [
+      { move: "46+e", score: -4483 },
+      { move: "36+d", score: -4483 },
+      { move: "36+f", score: -5052 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 26+d 22+c 26d-35)
+  "0x002920C091653AD3": {
+    depth: 8,
+    candidates: [
+      { move: "42a+h", score: 443 },
+      { move: "32+b", score: -239 },
+      { move: "32+a", score: -980 }
+    ]
+  },
+  // OFK ply 2 (after 32+b 46+f)
+  "0x004C97ACE487F4A2": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: -28 },
+      { move: "42+a", score: -28 },
+      { move: "32b+e", score: -180 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+b 73+e)
+  "0x005F3329D7449A0D": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+e 73+g)
+  "0x00697FA1E33C8D2E": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 20 },
+      { move: "33h+b", score: 20 },
+      { move: "33h+c", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 77+f 73+a 57+f)
+  "0x007F3607973EA85C": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 120 },
+      { move: "53+a", score: 120 },
+      { move: "53+h", score: -610 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 53+b 77+f)
+  "0x00880FB151FECD8C": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 33+a 77+f)
+  "0x00A4D38453FED25E": {
+    depth: 8,
+    candidates: [
+      { move: "73a+h", score: 0 },
+      { move: "53g+b", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 33+b 57d+e)
+  "0x00CA09C78AFE19B9": {
+    depth: 8,
+    candidates: [
+      { move: "53g+b", score: -400 },
+      { move: "33+a", score: -400 },
+      { move: "73h+a", score: -400 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+d 53+b)
+  "0x00E070DC835A080B": {
+    depth: 8,
+    candidates: [
+      { move: "57d-66", score: -2980 },
+      { move: "77+f", score: -3090 },
+      { move: "37+d", score: -3090 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+e 53+b 57+f)
+  "0x00F5D335026032DA": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -62 },
+      { move: "53h+a", score: -62 },
+      { move: "33+b", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+d 73+h 57+e)
+  "0x01012D3ED6339499": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33b+a", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 33+b 57+d)
+  "0x0120B090FBB8397E": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "53a+h", score: 0 },
+      { move: "53a+b", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 73+a 37+d)
+  "0x0125C4D38C928CA4": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -610 },
+      { move: "53c+h", score: -610 },
+      { move: "53c+b", score: -1090 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 46+f 22+c 46f+d)
+  "0x0133151A7F82671E": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: 39 },
+      { move: "32+a", score: 39 },
+      { move: "42a+h", score: 39 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+h 73+e)
+  "0x0147C7CCD1438649": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+c 33+b)
+  "0x014C92CB7EAFBC8A": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2880 },
+      { move: "57c+d", score: -2900 },
+      { move: "37+d", score: -3000 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+g 73+f)
+  "0x014D09532C5A8006": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 2 (after 33+h 37+b)
+  "0x017504839F2D16FB": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 260 },
+      { move: "77+a", score: 260 },
+      { move: "77+g", score: 140 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 56+f 42+a 36+g)
+  "0x01A62CFEC767626D": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: 2440 },
+      { move: "32b-43", score: 2320 },
+      { move: "52+g", score: 1931 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 77+e 53+b)
+  "0x01D6C93A22AC5CE8": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "37+d", score: -2024 },
+      { move: "57+f", score: -2024 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 33+h 57+f)
+  "0x020378A0DE391EFC": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -120 },
+      { move: "53a+h", score: -120 },
+      { move: "53a+b", score: -1050 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 33+b 57+d)
+  "0x02210714DFF08D51": {
+    depth: 8,
+    candidates: [
+      { move: "53c+h", score: -730 },
+      { move: "73+h", score: -730 },
+      { move: "53c+b", score: -730 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+f 53b-64 57+f)
+  "0x022953EEBF673C16": {
+    depth: 8,
+    candidates: [
+      { move: "53", score: 270 },
+      { move: "64b+a", score: -470 },
+      { move: "33+a", score: -470 }
+    ]
+  },
+  // 4P ply 1 (after 33+d)
+  "0x0257AC58B9AAA876": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -1116 },
+      { move: "37+d", score: -1116 },
+      { move: "37+f", score: -1116 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 46+f 52+h)
+  "0x0259A90DB5523446": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -3382 },
+      { move: "46+e", score: -3382 },
+      { move: "36d-45", score: -3382 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+e 32b-43 26+a)
+  "0x026C8E2E3D43CC70": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: 1101 },
+      { move: "33h+a", score: 1101 },
+      { move: "22+b", score: 260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 33+a 77+d)
+  "0x02774F7C47B2791B": {
+    depth: 8,
+    candidates: [
+      { move: "53b-64", score: 462 },
+      { move: "73+a", score: 462 },
+      { move: "53b+a", score: 462 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+f 32b+a 46f-35)
+  "0x0290A14530580774": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -688 },
+      { move: "32ab-43", score: -688 },
+      { move: "32ab+h", score: -1308 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+e 33+h 77+f)
+  "0x02B4B49D0EBEEEEE": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "53b+a", score: -120 },
+      { move: "53b-64", score: -630 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 46+f 32b+a)
+  "0x02B8C043D5753CC3": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -4483 },
+      { move: "46+e", score: -4483 },
+      { move: "36d-45", score: -4483 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+e 73+g)
+  "0x02BEE95E70EBF5DB": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 160 },
+      { move: "33h+b", score: 160 },
+      { move: "33h+c", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+g 73+g)
+  "0x02C30BE9965279BE": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 56+f 42+c)
+  "0x02EAB3D9C48784AF": {
+    depth: 8,
+    candidates: [
+      { move: "46+e", score: -2962 },
+      { move: "36+d", score: -2962 },
+      { move: "46+f", score: -4663 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 77+e 53b+a 57+f)
+  "0x03468309F7C436A3": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "33+b", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 46+e 42+e 56+f)
+  "0x034E54324475DD27": {
+    depth: 8,
+    candidates: [
+      { move: "42e+h", score: -3107 },
+      { move: "22+b", score: -3107 },
+      { move: "22+c", score: -3107 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 57+d 73+a)
+  "0x0355E97F5BD7727C": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2024 },
+      { move: "77+f", score: -2024 },
+      { move: "37+e", score: -2024 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+e 77+d)
+  "0x037E9EEA20C56F45": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 32b+c 56+f)
+  "0x0388F8D5EB971353": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: -3398 },
+      { move: "32+b", score: -3398 },
+      { move: "22+b", score: -3782 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+c 73+h)
+  "0x03918249B07C3A9A": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2480 },
+      { move: "57c+f", score: -2480 },
+      { move: "77+e", score: -2480 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+g 73+f)
+  "0x039A9FACBF8DF8F3": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 57+f 53)
+  "0x039B09895876D2BF": {
+    depth: 8,
+    candidates: [
+      { move: "57f-46", score: -2630 },
+      { move: "37+d", score: -2630 },
+      { move: "57f+e", score: -2630 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+d 73+e)
+  "0x03B9904D87FF6677": {
+    depth: 8,
+    candidates: [
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+a", score: -380 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+e 53+h 57+d)
+  "0x03C5A29871D995BE": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53h+a", score: 0 },
+      { move: "33a+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+d 53+b 37+e)
+  "0x03D61B0527E11558": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -120 },
+      { move: "33+a", score: -120 },
+      { move: "53h+a", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+d 33+h 77+f)
+  "0x03DFDFA634A22CC3": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: -590 },
+      { move: "33+b", score: -740 },
+      { move: "33+a", score: -1020 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 77+f 73+a)
+  "0x03E4B31BD03809FE": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2690 },
+      { move: "57+f", score: -2690 },
+      { move: "57+e", score: -3090 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+f 42+h 46f+c)
+  "0x03E8AB7F773876C6": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: 2418 },
+      { move: "52h+g", score: 2418 },
+      { move: "32b-43", score: 2418 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+f 32+a 26+d)
+  "0x04128976B567D329": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: 640 },
+      { move: "42+b", score: -2741 },
+      { move: "42+a", score: -3515 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+f 33+a 77+f)
+  "0x043D09917B2DA6EF": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -120 },
+      { move: "73a+h", score: -210 },
+      { move: "53h+a", score: -470 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+e 53+h 77+f)
+  "0x044E141885672FCD": {
+    depth: 8,
+    candidates: [
+      { move: "53", score: 150 },
+      { move: "33+a", score: 0 },
+      { move: "53b-64", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+e 33+b)
+  "0x04527352171E2C87": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2480 },
+      { move: "57e+d", score: -2480 },
+      { move: "37+e", score: -2480 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 77+f 73+b)
+  "0x0454E50B4C76A717": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2024 },
+      { move: "57+e", score: -2024 },
+      { move: "77f+e", score: -2024 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 57+d 33a+b)
+  "0x0473EEFC3A958160": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2086 },
+      { move: "77+e", score: -2086 },
+      { move: "37+e", score: -2086 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+d 73+h 77+e)
+  "0x04835EC9CEA89AF8": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: -62 },
+      { move: "53+a", score: -62 },
+      { move: "73h+a", score: -62 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+g 73+e)
+  "0x04A643D630066E16": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 77+e 73+a 57+d)
+  "0x04B7ECA3EE733C69": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 0 },
+      { move: "53+h", score: 0 },
+      { move: "33a+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 53+b 57+f)
+  "0x04E083C8E83B4C36": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+f 22b+a 36+e)
+  "0x04EB190AD2D0322C": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -3579 },
+      { move: "42+b", score: -3579 },
+      { move: "42+g", score: -3579 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 46+e 42+e)
+  "0x04EBD775A8CC9A5D": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -3463 },
+      { move: "46+f", score: -3463 },
+      { move: "46+a", score: -3463 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+b 77+a)
+  "0x04F34FB6C1541313": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1216 },
+      { move: "73+e", score: -1216 },
+      { move: "73+g", score: -1336 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+d 33+c 37+e)
+  "0x0504B1C0BD1296AD": {
+    depth: 8,
+    candidates: [
+      { move: "73g+h", score: -400 },
+      { move: "53a+h", score: -400 },
+      { move: "53a+b", score: -400 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 77+e 73+h)
+  "0x05111EA2658B8F48": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -3930 },
+      { move: "57+d", score: -3930 },
+      { move: "57+f", score: -3930 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 26+d 32b+e)
+  "0x055892E82B1AB81E": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -3463 },
+      { move: "46+f", score: -3463 },
+      { move: "46+a", score: -3463 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 32b-43 36+g)
+  "0x05718DBBCC76AF31": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: 1024 },
+      { move: "52+h", score: 1024 },
+      { move: "52+g", score: 992 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 73+h 57+f)
+  "0x05B2BD47A788746A": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 62 },
+      { move: "73+a", score: 62 },
+      { move: "33b+a", score: 62 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 37+d 73+h)
+  "0x05B8CA0566580C40": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2080 },
+      { move: "57+d", score: -2080 },
+      { move: "37+e", score: -2080 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+e 53+h)
+  "0x05D30689666F8876": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2024 },
+      { move: "77e+f", score: -2024 },
+      { move: "57+e", score: -2176 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+c 77+d)
+  "0x05DDD26B93DEEBE6": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -996 },
+      { move: "73+e", score: -996 },
+      { move: "73+g", score: -1116 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+d 33+a 37+d)
+  "0x05E1AE9791B694D0": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 120 },
+      { move: "53h-44", score: 120 },
+      { move: "53h+a", score: 120 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+d 77+g)
+  "0x05FAF58C429264C2": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+a 73+g)
+  "0x06596697A845F2E4": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+c 73+a)
+  "0x0667EC41F1FA77B7": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -3490 },
+      { move: "37+d", score: -3490 },
+      { move: "57g+d", score: -3750 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+e 73+f)
+  "0x0674AA5FE4E5881D": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+e 73+h)
+  "0x068F63D0D9CDAA97": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2080 },
+      { move: "57e+f", score: -2080 },
+      { move: "77+e", score: -2080 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+b 73+g)
+  "0x06A630444831673F": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 37+d 73+h)
+  "0x06AB8A3D836CB2AA": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2282 },
+      { move: "57+d", score: -2282 },
+      { move: "57+f", score: -2282 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+f 33+a)
+  "0x06BC09C2353A0DB5": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2830 },
+      { move: "57d+e", score: -2840 },
+      { move: "77+e", score: -2950 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+e 73+g)
+  "0x06CA33205027098D": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+d 73+h 57d+f)
+  "0x06E56D50C2D49525": {
+    depth: 8,
+    candidates: [
+      { move: "53h+a", score: -120 },
+      { move: "73+h", score: -120 },
+      { move: "73+a", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+g 77+d)
+  "0x070A449400099313": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1136 },
+      { move: "73+e", score: -1136 },
+      { move: "73+g", score: -1256 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 73+h 37d+e)
+  "0x07300EF53B0C9E81": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33b+a", score: 0 },
+      { move: "53a+h", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 77+f 53+h 37+d)
+  "0x0739CA56284FA71A": {
+    depth: 8,
+    candidates: [
+      { move: "53", score: 180 },
+      { move: "53h-44", score: 120 },
+      { move: "53h+a", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+g 73+g)
+  "0x0750DCAD2B838535": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+a 73+g)
+  "0x075E953844CA1B98": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 53b+a 37+d)
+  "0x07768DBBDCC4C11A": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 400 },
+      { move: "33+a", score: 400 },
+      { move: "33+b", score: 400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+e 33b+a 77e+f)
+  "0x07B32F64BD113D9C": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+h 73+g)
+  "0x07BEC4A14E367B7B": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 77+e 53+h 57+f)
+  "0x07D3D4B66322C1C6": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "53h+a", score: -120 },
+      { move: "73+a", score: -310 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 57+d 73+h)
+  "0x0800DCAB8E29F26C": {
+    depth: 8,
+    candidates: [
+      { move: "57f+d", score: -3500 },
+      { move: "77+f", score: -3500 },
+      { move: "37+d", score: -3600 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+e 53+h 57+d)
+  "0x08157F420F13C8BD": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+e 73+h 37+e)
+  "0x08322B730FB11B54": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "33h+a", score: -62 },
+      { move: "73h+a", score: -62 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+d 73+f)
+  "0x083B7CE279582DED": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+d 73+h 57+d)
+  "0x084E3BC6CF91D5E3": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 0 },
+      { move: "53+a", score: 0 },
+      { move: "53+h", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 57+d 73+g)
+  "0x086484BC5AE95F06": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -1686 },
+      { move: "37+e", score: -1686 },
+      { move: "57f+e", score: -1686 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 73+h 57d+e)
+  "0x086AD22B9530CDDE": {
+    depth: 8,
+    candidates: [
+      { move: "73h+a", score: -520 },
+      { move: "33+a", score: -520 },
+      { move: "53c+h", score: -520 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 33+h 37+f)
+  "0x0875640C7BC7752E": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "73b+a", score: 400 },
+      { move: "53h+a", score: 400 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 73+a 57c+f)
+  "0x08825DBABD0710FE": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 400 },
+      { move: "53+a", score: 400 },
+      { move: "73h+a", score: 390 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+d 73+g)
+  "0x0885E59DCD9AAC7D": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+b", score: -380 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+g 73+g)
+  "0x08A2C27A1CD62359": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 33+c 77+f)
+  "0x08B563CD4620511A": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -1010 },
+      { move: "53g+h", score: -1050 },
+      { move: "53g+b", score: -1550 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+d 33+a 57d-66)
+  "0x08BC1CCC69B857CD": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "53h+b", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 57+d 53+b)
+  "0x08D17D1DDBF575B4": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2396 },
+      { move: "77+f", score: -2396 },
+      { move: "37+e", score: -2402 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+g 77+g)
+  "0x08DF7DA4E610BA5B": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 57+e 73+b)
+  "0x08E590B18D6F26BB": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2024 },
+      { move: "77+e", score: -2024 },
+      { move: "37+d", score: -2024 }
+    ]
+  },
+  // OFK ply 2 (after 32+b 36+d)
+  "0x08EE9C0681127B36": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: -620 },
+      { move: "42+a", score: -620 },
+      { move: "32b-43", score: -620 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 77+e 33b+a)
+  "0x09622CF5D137FC44": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "57+f", score: -2086 },
+      { move: "37e+d", score: -2086 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 33+a 57+e)
+  "0x09B3016E08814A3B": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "53a+h", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 73+h 77+f)
+  "0x09DA63262299475A": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 62 },
+      { move: "53+a", score: 62 },
+      { move: "73h+a", score: 62 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+a 73+e)
+  "0x09F137ACB37E2D19": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+a 73+g)
+  "0x0A07A8D7A8FBC63A": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: 0 },
+      { move: "33a+b", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+c 77+g)
+  "0x0A08EB5B75C7C2AE": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 36+d 32b+a)
+  "0x0A1ACBE9B0E0B357": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -3801 },
+      { move: "46f-35", score: -3801 },
+      { move: "26+d", score: -4243 }
+    ]
+  },
+  // OFK ply 2 (after 32+b 36+e)
+  "0x0A4892853E575C29": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: -28 },
+      { move: "42+a", score: -28 },
+      { move: "32b+e", score: -180 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 77+e 73+a)
+  "0x0A525D58A28E5B20": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "37+d", score: -2086 },
+      { move: "57+d", score: -2086 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+g 73+g)
+  "0x0A7554858F015BAC": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+h 73+g)
+  "0x0A7BB21C9B264C43": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 73+h 77+f)
+  "0x0A81DCF8C03E5936": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -730 },
+      { move: "53g+b", score: -730 },
+      { move: "53g+h", score: -1180 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+e 33+b 57e+d)
+  "0x0AB7C2A95BE34BCE": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33b+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+e 33+a)
+  "0x0AD17CC92493F83D": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "37+e", score: -2086 },
+      { move: "57+f", score: -2086 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 77+f 33+a)
+  "0x0AD8B86A37D0C1A6": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2690 },
+      { move: "57+f", score: -2690 },
+      { move: "57+e", score: -3090 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 53c+h 37+e)
+  "0x0ADA987C00BC4468": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -860 },
+      { move: "33+b", score: -860 },
+      { move: "73+a", score: -1010 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+e 33h+a 77+e)
+  "0x0B025ADE7C08BC30": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "73+a", score: -62 },
+      { move: "53+b", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+e 53+b 57+f)
+  "0x0B250EEF7CAA6FD9": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53b+a", score: 0 },
+      { move: "73+h", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+e 53+h 57+f)
+  "0x0B36B7722A92EF3F": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -120 },
+      { move: "53b+a", score: -120 },
+      { move: "33+b", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 1 (after 33+b)
   "0x0B45FE3410182A4D": {
     depth: 8,
     candidates: [
-      { move: "57+e", score: 12 },
-      { move: "77+f", score: 8 },
-      { move: "37+d", score: 8 }
+      { move: "57+f", score: -3100 },
+      { move: "57+d", score: -3350 },
+      { move: "57+e", score: -3350 }
     ]
   },
-  // 2P 3-Base ply 1 (after 33+b / 73+h)
+  // 2P 3-Base ply 4 (after 33+a 37+d 33a+b 77+f)
+  "0x0B4AF8019CF3D416": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -138 },
+      { move: "53+b", score: -138 },
+      { move: "53+h", score: -138 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+f 73+h)
+  "0x0B570CBCEB751323": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -2886 },
+      { move: "57+d", score: -2886 },
+      { move: "37+f", score: -2886 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 73+h 57+f)
+  "0x0B5D7BFE2AA56B09": {
+    depth: 8,
+    candidates: [
+      { move: "53g+h", score: -610 },
+      { move: "73+a", score: -610 },
+      { move: "73+h", score: -730 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+b 73+g)
+  "0x0B6346F99D215007": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+d 73+h 77+f)
+  "0x0B6DF3F6EA10F261": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: -120 },
+      { move: "53+b", score: -120 },
+      { move: "53+a", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+e 33+h 77+e)
+  "0x0B817B4FFA151F2D": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -62 },
+      { move: "73+b", score: -62 },
+      { move: "73+h", score: -62 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 46+e 32+a)
+  "0x0B8A8D7BA198BE7A": {
+    depth: 8,
+    candidates: [
+      { move: "36+d", score: -4725 },
+      { move: "36+a", score: -6570 },
+      { move: "56+f", score: -6570 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 33+b 37+d)
+  "0x0B9772580FE53ECF": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 0 },
+      { move: "53+a", score: 0 },
+      { move: "53+h", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 73+h 57+f)
+  "0x0BF4AF592976E801": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53h-44", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // OFK ply 2 (after 32+a 56+f)
+  "0x0BFBD718BD817E6A": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: 0 },
+      { move: "32+b", score: 0 },
+      { move: "32+e", score: -578 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+d 73+f)
+  "0x0C4FA69C5994D1BB": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -100 },
+      { move: "33d+b", score: -100 },
+      { move: "33d+h", score: -100 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 73+a 37+f)
+  "0x0C593C7C035B3913": {
+    depth: 8,
+    candidates: [
+      { move: "53b-64", score: 462 },
+      { move: "33+a", score: 462 },
+      { move: "53b+a", score: 462 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+a 73+e)
+  "0x0C62E0E80EAFD192": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 57+e 33+a)
+  "0x0C637E934FB15138": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2086 },
+      { move: "77+e", score: -2086 },
+      { move: "37+d", score: -2086 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+g 73+e)
+  "0x0C6CA97D61E64F3F": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+d 33+b 57d-66)
+  "0x0C7D02CB03B6FA63": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 73+a 77+f)
+  "0x0CADE0F76130DA36": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 400 },
+      { move: "53a+h", score: 400 },
+      { move: "33+a", score: 400 }
+    ]
+  },
+  // 4P ply 2 (after 33+d 37+f)
+  "0x0CB0723E4A3D21C3": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -260 },
+      { move: "77+a", score: -260 },
+      { move: "77+g", score: -380 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 37+d 33+b)
+  "0x0CC4B6EF930DEA18": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2200 },
+      { move: "57+d", score: -2200 },
+      { move: "77+f", score: -2200 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 37+d 33+h)
+  "0x0CE6C95B92C479B5": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2360 },
+      { move: "57+d", score: -2360 },
+      { move: "57+f", score: -2480 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+d 73+a 77+f)
+  "0x0D0102E09CC56EB7": {
+    depth: 8,
+    candidates: [
+      { move: "73a+h", score: -690 },
+      { move: "33+b", score: -740 },
+      { move: "53b+h", score: -930 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 37+d 53b-64)
+  "0x0D10451319016960": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2480 },
+      { move: "57+f", score: -2480 },
+      { move: "77+e", score: -2480 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+e 53+h)
+  "0x0D2013633D24F2F7": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -2382 },
+      { move: "37e+d", score: -2396 },
+      { move: "57+d", score: -2402 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+d 77+e)
+  "0x0D314857BD78CAB5": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 56+f 22+c)
+  "0x0D3A8CA49E89E320": {
+    depth: 8,
+    candidates: [
+      { move: "46+e", score: -3463 },
+      { move: "36+d", score: -3463 },
+      { move: "36+a", score: -3463 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 77+e 53b+a)
+  "0x0DA332F2BB3951EA": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -2396 },
+      { move: "37e+d", score: -2396 },
+      { move: "57+d", score: -2402 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+f 32b-43 46f-35)
+  "0x0DDAA3F79FDC54BF": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -267 },
+      { move: "43b+a", score: -688 },
+      { move: "43b+h", score: -1012 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 37+e 53+b)
+  "0x0E1062CE4E9D5593": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -2282 },
+      { move: "37+d", score: -2282 },
+      { move: "57+d", score: -2396 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 32+a 36+e)
+  "0x0E168C5F6FB77BA2": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -179 },
+      { move: "22b-33", score: -620 },
+      { move: "22b+h", score: -1020 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 37+d 73+h)
+  "0x0E19A66D5DDE6C08": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2480 },
+      { move: "57+f", score: -2480 },
+      { move: "77+e", score: -2480 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+f 73+a)
+  "0x0E1CD22E2AF4D9D2": {
+    depth: 8,
+    candidates: [
+      { move: "57f-46", score: -2080 },
+      { move: "57f+e", score: -2080 },
+      { move: "77+e", score: -2080 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 53b+a 37+d)
+  "0x0E4A86CA3B2C0942": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "73+a", score: 400 },
+      { move: "73+h", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+d 73+e)
+  "0x0E7CE6F052EF514F": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+d 73+f)
+  "0x0E983063CA43A94E": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -240 },
+      { move: "33d+b", score: -240 },
+      { move: "33d+h", score: -240 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 77+f 73+a)
+  "0x0E9A87FCDBC3CF15": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2690 },
+      { move: "77+f", score: -2690 },
+      { move: "57+f", score: -2970 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+g 73+f)
+  "0x0EBF17841B0F266A": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 33+b 37+e)
+  "0x0EEC621BDEC9C24A": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -520 },
+      { move: "53c+b", score: -520 },
+      { move: "53c+h", score: -610 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 36+d 42+e)
+  "0x0EEFD25C721C32D6": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -3463 },
+      { move: "36+e", score: -3463 },
+      { move: "46f-35", score: -3463 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+e 73+b 77+e)
+  "0x0F07956D38CB68AE": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "73b+a", score: -62 },
+      { move: "53+h", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+d 53+h 77+f)
+  "0x0F08C79770E0DAA5": {
+    depth: 8,
+    candidates: [
+      { move: "53h+a", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "73+a", score: -138 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+d 53+b 77+e)
+  "0x0F3378C16E513BA1": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "73+a", score: -120 },
+      { move: "33h+a", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 73+h 77+e)
+  "0x0F6D754C01A59CB0": {
+    depth: 8,
+    candidates: [
+      { move: "53g+h", score: -30 },
+      { move: "33b+a", score: -30 },
+      { move: "73+a", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+f 53b-64 57f-46)
+  "0x0F74E1B54769FF0B": {
+    depth: 8,
+    candidates: [
+      { move: "53", score: 150 },
+      { move: "73+h", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+e 33+h 37+e)
+  "0x0F84B4FCBED6CBB3": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -62 },
+      { move: "73b+a", score: -62 },
+      { move: "33+h", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 53a+b 77+f)
+  "0x0F8BE606F6FD79B8": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 62 },
+      { move: "73+a", score: 62 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+g 73+g)
+  "0x0F9A36067A63A41C": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 33+b 57c+d)
+  "0x0FA923303252DBC3": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 400 },
+      { move: "73+a", score: 400 },
+      { move: "33b+a", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+a 73+f)
+  "0x0FB6ADBE98C951BB": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+e 53+b 37+d)
+  "0x10011103B30BC910": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -62 },
+      { move: "73h+a", score: -62 },
+      { move: "53h+a", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+h 37+d)
+  "0x101EDCB755B8D169": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "53+b", score: 0 },
+      { move: "73+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+d 73+f)
+  "0x102042A61C42A375": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 42+a 36+g)
+  "0x1030B70DADF5EF3C": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: 1370 },
+      { move: "42h+g", score: 1370 },
+      { move: "42h-33", score: 1024 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 46+f 32b-43)
+  "0x104D7BE69B24A152": {
+    depth: 8,
+    candidates: [
+      { move: "46+e", score: -4725 },
+      { move: "36d-45", score: -4725 },
+      { move: "56+f", score: -6570 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 46+e 32b+g)
+  "0x10A797A28D9FC067": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -3496 },
+      { move: "36+d", score: -3496 },
+      { move: "36+e", score: -4103 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 56+f 52+a 36+d)
+  "0x10C68BC8EE0C20E7": {
+    depth: 8,
+    candidates: [
+      { move: "52a+h", score: -3579 },
+      { move: "42+a", score: -3602 },
+      { move: "32b+g", score: -3782 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 77+e 53b+a)
+  "0x10D03C986ABD7F6F": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -3270 },
+      { move: "77+f", score: -3270 },
+      { move: "57+f", score: -3350 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 26+d 22+c 46+d)
+  "0x10DE9518D98D02F3": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -160 },
+      { move: "32a+b", score: -201 },
+      { move: "52+h", score: -1733 }
+    ]
+  },
+  // 4P ply 2 (after 33+h 37+g)
+  "0x10DF96040FEB530D": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 280 },
+      { move: "77+a", score: 280 },
+      { move: "77+g", score: 160 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 26+d 52+h)
+  "0x10DFD3BD3E5C3A31": {
+    depth: 8,
+    candidates: [
+      { move: "46+f", score: -6570 },
+      { move: "36+e", score: -6570 },
+      { move: "26d+a", score: -6783 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+e 33+a)
+  "0x111070F99E357FBD": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2480 },
+      { move: "57e+d", score: -2480 },
+      { move: "37+e", score: -2480 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+d 73+a)
+  "0x1116E6A0C55DF42D": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -2024 },
+      { move: "57+d", score: -2024 },
+      { move: "57+e", score: -2024 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 53c+h 57d-66)
+  "0x112E17648CE2D068": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -400 },
+      { move: "53ch-44", score: -400 },
+      { move: "73+a", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 33+a 77+d)
+  "0x115C5CFBD35693D1": {
+    depth: 8,
+    candidates: [
+      { move: "53b-64", score: 462 },
+      { move: "73+a", score: 462 },
+      { move: "53b+a", score: 462 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 53c+h 57f-46)
+  "0x116E60FF9E5FFE68": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -1180 },
+      { move: "53bg+h", score: -1180 },
+      { move: "73+a", score: -1180 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+b 57+f)
+  "0x117321D534CC98D4": {
+    depth: 8,
+    candidates: [
+      { move: "53b-64", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 36+e 42+h)
+  "0x118DFF6EDDAD10F7": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -6435 },
+      { move: "46+f", score: -6435 },
+      { move: "46+c", score: -6435 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+d 33+h)
+  "0x1195C73143405730": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "37+e", score: -2024 },
+      { move: "77f+e", score: -2024 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 53+h 77+f)
+  "0x11AEAB8CA7DA720D": {
+    depth: 8,
+    candidates: [
+      { move: "53b+a", score: 0 },
+      { move: "33+b", score: -62 },
+      { move: "73a+h", score: -138 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+g 73+e)
+  "0x11E4407DB92D3D2C": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+a 73+e)
+  "0x11EA09E8D664A381": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+e 73+h 57+f)
+  "0x11F5EF0867586F53": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33b+a", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 4P ply 2 (after 33+h 37+c)
+  "0x120800FB9C3C2BF8": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 140 },
+      { move: "77+a", score: 140 },
+      { move: "77+g", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+a 73+g)
+  "0x121C9693CDE148A2": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+g 73+f)
+  "0x12300D2B2F4BBD05": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 33+h 57+d)
+  "0x124076ABBFD51524": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -460 },
+      { move: "53b+a", score: -460 },
+      { move: "53b-64", score: -510 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+h 73+g)
+  "0x12608C58FE3CC2DB": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 73+a 37d+e)
+  "0x12720D5EB227CDBB": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53a+h", score: 0 },
+      { move: "53a+b", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+f 73+a 37+d)
+  "0x127BC9FDA164F420": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -610 },
+      { move: "33a+b", score: -610 },
+      { move: "53h+a", score: -690 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 52+g 46e+f)
+  "0x12A408B93EA38888": {
+    depth: 8,
+    candidates: [
+      { move: "32b-43", score: -1020 },
+      { move: "52g+h", score: -1020 },
+      { move: "42+a", score: -1020 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 22b+c 36+e)
+  "0x12A81FD943AEB344": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -3979 },
+      { move: "42+g", score: -3979 },
+      { move: "42+a", score: -4000 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+h 73+f)
+  "0x12DE15274AFE434B": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 46+e 32b-43)
+  "0x12EB75652461864D": {
+    depth: 8,
+    candidates: [
+      { move: "46+f", score: -6435 },
+      { move: "46+c", score: -6435 },
+      { move: "26+d", score: -6435 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 53a+b 77+f)
+  "0x12F8E86C2779573D": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 120 },
+      { move: "53ah-44", score: 120 },
+      { move: "73+a", score: 120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+e 53c+b 77+f)
+  "0x1312513B563F77FA": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -1180 },
+      { move: "33+a", score: -1180 },
+      { move: "73+a", score: -1200 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+e 73+g)
+  "0x13147BD9E02DB02D": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+c 73+h)
+  "0x1325EFEA78D1248D": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -3630 },
+      { move: "37+d", score: -3630 },
+      { move: "57g+d", score: -3630 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 46+f 52+h)
+  "0x132BF1ED62E837E8": {
+    depth: 8,
+    candidates: [
+      { move: "36d-45", score: -4725 },
+      { move: "46+e", score: -4725 },
+      { move: "56+f", score: -6570 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 53a+h 77+f)
+  "0x133988A0EAA827C7": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 400 },
+      { move: "53ab-64", score: 400 },
+      { move: "33+a", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+a 73+f)
+  "0x1339B711AC8DCAD4": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+e 53c+b 37+d)
+  "0x135226A0448259FA": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -400 },
+      { move: "73+a", score: -400 },
+      { move: "73+h", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+d 73+h)
+  "0x136AA8078C5A428D": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "77+e", score: -2086 },
+      { move: "37d+e", score: -2086 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 57+d 53+g)
+  "0x136FDC44FB70F757": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -1686 },
+      { move: "37+e", score: -1686 },
+      { move: "57f+e", score: -1686 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+b 73+g)
+  "0x137878BDF83BDE9F": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+d 73+a 57d+f)
+  "0x13A76EFB4BFFC61F": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "53h+b", score: -120 },
+      { move: "33a+b", score: -210 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+b 73+f)
+  "0x13C6E1C24CF95F0F": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 46+f 32+a)
+  "0x13CA98A302CF3F6D": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -6435 },
+      { move: "36d+g", score: -6435 },
+      { move: "46+e", score: -6435 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+d 73+h)
+  "0x13E989960A47E190": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "77+e", score: -2086 },
+      { move: "37d+e", score: -2086 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+f 73+b 37+e)
+  "0x140B8C4ABFE3AF85": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "73h+a", score: -62 },
+      { move: "33h+a", score: -62 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+c 33+a)
+  "0x140E9160F784EFB0": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -3000 },
+      { move: "77+f", score: -3000 },
+      { move: "57c+d", score: -3020 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 33+b 77+f)
+  "0x141645D64A7B723A": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 338 },
+      { move: "53h+a", score: 338 },
+      { move: "33+h", score: 280 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+f 32b+a 36+e)
+  "0x1432FD45812CFA41": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -1287 },
+      { move: "32ab-43", score: -1287 },
+      { move: "52+h", score: -1747 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+e 73+a 37+d)
+  "0x14432E955F18C7A3": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "53+h", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+g 73+e)
+  "0x1477973904FCC1A7": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 2 (after 33+d 37+e)
+  "0x14AB4C7A2F27AF5B": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -260 },
+      { move: "77+a", score: -260 },
+      { move: "77+g", score: -380 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+e 33+a 37+d)
+  "0x14C00F04D90564BE": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "33+b", score: 0 },
+      { move: "73a+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+h 73+g)
+  "0x14C3C0D94D274678": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 77+f 73+h 57+f)
+  "0x14E192AAF48EC959": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 0 },
+      { move: "53+a", score: 0 },
+      { move: "53+b", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+d 53a+b)
+  "0x152152E68C6CF82C": {
+    depth: 8,
+    candidates: [
+      { move: "57d-66", score: -3350 },
+      { move: "77+f", score: -3350 },
+      { move: "57d+e", score: -3350 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+a 73+g)
+  "0x152462EFAB54CFE7": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+f 53+h)
+  "0x153B2D27583E7C6F": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2424 },
+      { move: "57+g", score: -2486 },
+      { move: "57+d", score: -2502 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+g 77+a)
+  "0x1559DD31519256E5": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 26+d 42+a 46+f)
+  "0x1581B8D802FAD802": {
+    depth: 8,
+    candidates: [
+      { move: "32a+b", score: -1287 },
+      { move: "32a+g", score: -2107 },
+      { move: "52+h", score: -2348 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 77+e 53+b 37+d)
+  "0x158362F4AB90C771": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "53h+a", score: 0 },
+      { move: "33+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 53b+a 57+c)
+  "0x159CFEF085F15B2A": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 800 },
+      { move: "73+a", score: 800 },
+      { move: "73+h", score: 800 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 57+d 33+a)
+  "0x15A273770A715B31": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2690 },
+      { move: "37+d", score: -2690 },
+      { move: "57d-66", score: -3100 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 42+a 56+f)
+  "0x15AB5B9BFF69CC5D": {
+    depth: 8,
+    candidates: [
+      { move: "32b-43", score: -59 },
+      { move: "52+h", score: -179 },
+      { move: "52+b", score: -1020 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 73+a 37f+e)
+  "0x15AB66C072309BAD": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33h+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+b 73+g)
+  "0x15DB343C4B205A3C": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+e 73+e)
+  "0x15ED78B47F584D1F": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+c 77+f)
+  "0x15F73C0A3B55AEA0": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -400 },
+      { move: "53g+b", score: -400 },
+      { move: "33+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+h 73+g)
+  "0x16145626DEF03E8D": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+d 42+a 36d-45)
+  "0x161464CEC2E85916": {
+    depth: 8,
+    candidates: [
+      { move: "42a+h", score: -1747 },
+      { move: "42a+b", score: -2348 },
+      { move: "32+a", score: -2348 }
+    ]
+  },
+  // 2P 3-Base ply 1 (after 33+b)
   "0x1636F05EC19C04C8": {
     depth: 8,
     candidates: [
-      { move: "57+e", score: 12 },
-      { move: "77+f", score: 8 },
-      { move: "37+d", score: 8 }
+      { move: "57+e", score: -2024 },
+      { move: "57+f", score: -2024 },
+      { move: "37+d", score: -2024 }
     ]
   },
-  // 2P 1-Base ply 0 (A to move)
+  // 2P 1-Base ply 4 (after 53+c 57+c 53c+b 37+d)
+  "0x164CC7392D33C9F7": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53bc-64", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 36+d 22+c)
+  "0x168B4C00735A6F13": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -3463 },
+      { move: "36+e", score: -3463 },
+      { move: "46f+a", score: -3463 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 42+a 46+a)
+  "0x16A0A8C47F2E89FA": {
+    depth: 8,
+    candidates: [
+      { move: "32a+b", score: -580 },
+      { move: "42+a", score: -580 },
+      { move: "52h-43", score: -580 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+b 77+d)
+  "0x16A0D61390CFD6E5": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 73+a 77+e)
+  "0x16B33CA2017FC13F": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "53b+a", score: 400 },
+      { move: "73a+h", score: 400 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+b 37+d)
+  "0x16E47C32DE61104A": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 0 },
+      { move: "53+b", score: 0 },
+      { move: "53+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+e 53+h 37+d)
+  "0x16FBB18638D20833": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -710 },
+      { move: "53h+b", score: -710 },
+      { move: "73+a", score: -744 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+b 73+g)
+  "0x170CA2C3D8F722C9": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 46+e 22b+c)
+  "0x17341EFD8D81769C": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -3463 },
+      { move: "36+d", score: -3463 },
+      { move: "36+a", score: -3463 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 26+d 22b-33)
+  "0x1759477B4CC7D185": {
+    depth: 8,
+    candidates: [
+      { move: "56f+d", score: -3595 },
+      { move: "56f-45", score: -3595 },
+      { move: "36+e", score: -5061 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 33+a 57+d)
+  "0x176304BF56DBDE6B": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -610 },
+      { move: "53c+b", score: -610 },
+      { move: "33a+b", score: -1850 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+g 73+g)
+  "0x178108421F792A84": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+c 77+a)
+  "0x178E4BCEC2452E10": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 33+h 37d+e)
+  "0x17B8DC764A47ABFC": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -62 },
+      { move: "73+h", score: -62 },
+      { move: "53a+b", score: -62 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 77+f 73+b 57+d)
+  "0x17C25A9AD10FEEDB": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -120 },
+      { move: "53+h", score: -120 },
+      { move: "53+c", score: -730 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+d 53+a 57d+e)
+  "0x17C4CCC38A67654B": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53a+h", score: 0 },
+      { move: "33b+a", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 42+h 46+f)
+  "0x17E5DC1A4F36D8F6": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: 640 },
+      { move: "32b-43", score: 640 },
+      { move: "52h+b", score: -1020 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+a 73+g)
+  "0x17F3F4103883B712": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 53+c 77+e)
+  "0x183B745A43E1395D": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -400 },
+      { move: "73a+h", score: -400 },
+      { move: "53g+h", score: -400 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+e 73+b 57e+d)
+  "0x1850E710359748F5": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -120 },
+      { move: "53+b", score: -120 },
+      { move: "73h+a", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 37+e 53+h)
+  "0x186210C8B40FA1CD": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2282 },
+      { move: "77+f", score: -2282 },
+      { move: "57+f", score: -2396 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+d 77+a)
+  "0x187C5519F510887C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+d 77+b)
+  "0x188303CA15641DA7": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 52+g 36+e)
+  "0x18A00D90E4732003": {
+    depth: 8,
+    candidates: [
+      { move: "32b-43", score: -1020 },
+      { move: "42+a", score: -1020 },
+      { move: "52g+h", score: -1020 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 22b+c 46+f)
+  "0x18AC1AF0997E1BCF": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -3979 },
+      { move: "32+a", score: -4002 },
+      { move: "42+c", score: -4182 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 46+e 42+c)
+  "0x18E42180D78F1113": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -2962 },
+      { move: "36+d", score: -2962 },
+      { move: "56+g", score: -3963 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 36+d 32b-43)
+  "0x18EF704CFEB12EC6": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -6435 },
+      { move: "36+e", score: -6435 },
+      { move: "46f+c", score: -6435 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+a 73+e)
+  "0x1920E343878482A8": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 57+e 33+b)
+  "0x19217D38C69A0202": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2086 },
+      { move: "77+e", score: -2086 },
+      { move: "77+f", score: -2086 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 77+f 73+b)
+  "0x1927EB619DF28992": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2360 },
+      { move: "57+d", score: -2360 },
+      { move: "37+d", score: -2480 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+e 53+h 77+f)
+  "0x193D1A7254E30148": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 73+a 77+f)
+  "0x196CC2CD6E062A11": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 400 },
+      { move: "53+a", score: 400 },
+      { move: "33b+a", score: 400 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+b 77+g)
+  "0x1975EF2376D6FFAD": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1216 },
+      { move: "73+e", score: -1216 },
+      { move: "73+g", score: -1336 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 37+d 33+a)
+  "0x1986B5441A26B922": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2200 },
+      { move: "77+f", score: -2200 },
+      { move: "57+e", score: -2200 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+d 77+h)
+  "0x199BF72F136301E3": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 57+e 33b+a)
+  "0x19A25CA94087A11F": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2086 },
+      { move: "77+e", score: -2086 },
+      { move: "37+d", score: -2086 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 73+b 37f+e)
+  "0x19F70ACBD7FA0E0C": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33h+a", score: 0 },
+      { move: "73+h", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 53a+b 37+d)
+  "0x1A0583D10D40EF9F": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 400 },
+      { move: "53ah-44", score: 400 },
+      { move: "73+a", score: 400 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 36+e 42+a)
+  "0x1A19BCD51605B551": {
+    depth: 8,
+    candidates: [
+      { move: "46e+f", score: -4450 },
+      { move: "36+e", score: -4450 },
+      { move: "36+d", score: -4483 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+e 53c+h 37+d)
+  "0x1A2E5A4AB1D7BFA2": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -1180 },
+      { move: "73+a", score: -1180 },
+      { move: "53bg-64", score: -1200 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 73+a 77+e)
+  "0x1A2F76E7888ECF8A": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53g+b", score: 0 },
+      { move: "73+a", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+d 42+a 36d+g)
+  "0x1A34B224772547B7": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: 2418 },
+      { move: "42h-33", score: 2418 },
+      { move: "22+c", score: 2418 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+f 53+h 37+d)
+  "0x1A4AC43CF9CB899F": {
+    depth: 8,
+    candidates: [
+      { move: "53h+a", score: 62 },
+      { move: "73+a", score: 62 },
+      { move: "73+h", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 53b-64 57+e)
+  "0x1A5ACBBE133781CD": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "44h+a", score: 0 },
+      { move: "73+h", score: -120 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 22b-33 26d+f)
+  "0x1A6570C7B0EEC96E": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -548 },
+      { move: "42+b", score: -692 },
+      { move: "33b+a", score: -1400 }
+    ]
+  },
+  // OFK ply 2 (after 22+b 26+d)
+  "0x1A68E6B60A1C7541": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: -620 },
+      { move: "42+h", score: -620 },
+      { move: "22b-33", score: -620 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 53c+h 57+e)
+  "0x1A6E2DD1A36A91A2": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -400 },
+      { move: "73+a", score: -400 },
+      { move: "33+a", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+f 73+b)
+  "0x1A93E135A080379A": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2024 },
+      { move: "77d+e", score: -2024 },
+      { move: "57+f", score: -2024 }
+    ]
+  },
+  // OFK ply 1 (after 32+b)
+  "0x1A9B50BEC8C890F5": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -4143 },
+      { move: "56+f", score: -4143 },
+      { move: "36+e", score: -4143 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+e 42+a 26+a)
+  "0x1AC4F02B6B5A4241": {
+    depth: 8,
+    candidates: [
+      { move: "32b-43", score: 1101 },
+      { move: "32b+a", score: 1101 },
+      { move: "52+h", score: 260 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+a 73+g)
+  "0x1AD67C389C01698B": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+g 73+g)
+  "0x1AD835ADF348F726": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 33+a 57c+d)
+  "0x1AEB209BBB7988F9": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 400 },
+      { move: "53a+h", score: 400 },
+      { move: "73+h", score: 280 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 26+d 42+a 26d+a)
+  "0x1B04967CD787CF76": {
+    depth: 8,
+    candidates: [
+      { move: "42h-33", score: 1160 },
+      { move: "22+b", score: 1160 },
+      { move: "42h+a", score: 1127 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+f 77+d)
+  "0x1B65A0AE45DFE1DD": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 36+d 32+a)
+  "0x1B689309675AB0F9": {
+    depth: 8,
+    candidates: [
+      { move: "46f-35", score: -4725 },
+      { move: "36+e", score: -4725 },
+      { move: "26+d", score: -6570 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 26+d 52+g 46+a)
+  "0x1B6C63A2848D42B2": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: 0 },
+      { move: "42h-33", score: 0 },
+      { move: "22c+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+d 33+h 77+f)
+  "0x1B75B9794B7EE4E7": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "53a+b", score: -120 },
+      { move: "73+a", score: -710 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+f 32b-43 36+e)
+  "0x1B78FFF72EA8A98A": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -1020 },
+      { move: "43b+h", score: -1020 },
+      { move: "52+h", score: -1068 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 46+f 42+h)
+  "0x1B89FA47077DB87C": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -6435 },
+      { move: "36+e", score: -6435 },
+      { move: "46f+c", score: -6435 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+d 73+e)
+  "0x1BA2AE09E2E5E8EF": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+b", score: -380 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 33h+a 57+e)
+  "0x1BC3E6B37E06D08A": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 77+f 73+h)
+  "0x1BD8845752E89C2F": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -3090 },
+      { move: "77+f", score: -3090 },
+      { move: "57+d", score: -3090 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 53+h 57+d)
+  "0x1BDE9CDC14C31B26": {
+    depth: 8,
+    candidates: [
+      { move: "53h-44", score: 62 },
+      { move: "73+a", score: 62 },
+      { move: "53h+a", score: 62 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+g 73+g)
+  "0x1BDFC6021FC71E5A": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 26+d 32b+e 46+f)
+  "0x1BEF28A4870554B5": {
+    depth: 8,
+    candidates: [
+      { move: "42eh-33", score: -1068 },
+      { move: "22+b", score: -1068 },
+      { move: "42eh+b", score: -1887 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 33+b 57+d)
+  "0x1C53BEFA2A3C17FB": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "33+b", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 1 (after 53+c)
+  "0x1C59CC8CD1FD5C7A": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2700 },
+      { move: "57+f", score: -2700 },
+      { move: "57+e", score: -2950 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 26+d 22b+c)
+  "0x1C67C02BA690F42C": {
+    depth: 8,
+    candidates: [
+      { move: "46+e", score: -3283 },
+      { move: "36+d", score: -3283 },
+      { move: "56f-45", score: -3283 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+e 73+a 77+f)
+  "0x1C72235407B7BA1C": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 0 },
+      { move: "53+a", score: 0 },
+      { move: "33b+a", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 46+e 22+c)
+  "0x1C8F4929A98AC798": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -3463 },
+      { move: "46+a", score: -3463 },
+      { move: "46+f", score: -3463 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+e 32b+a 36e+d)
+  "0x1C90F6EFE4B975D5": {
+    depth: 8,
+    candidates: [
+      { move: "32ab-43", score: -88 },
+      { move: "42+a", score: -88 },
+      { move: "52+h", score: -640 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 77+e 33+h)
+  "0x1CA5C750F328726D": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -3030 },
+      { move: "57+d", score: -3230 },
+      { move: "77e+f", score: -3230 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+a 73+f)
+  "0x1CCBA9C69BD86CB8": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+d 73+a 57+d)
+  "0x1CD09F6BAC21B4E6": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 0 },
+      { move: "53+a", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+d 73+e)
+  "0x1D01E28851FE6C4C": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 20 },
+      { move: "33h+b", score: 20 },
+      { move: "33h+c", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+c 57+c)
+  "0x1D0A57B7116C1602": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "33+b", score: 0 },
+      { move: "53g+h", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 26+d 52+g)
+  "0x1D3C0CB42A5CE5DB": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -3463 },
+      { move: "46+f", score: -3463 },
+      { move: "46+a", score: -3463 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 57+d 73+a)
+  "0x1D42DF000702A156": {
+    depth: 8,
+    candidates: [
+      { move: "57f+d", score: -3500 },
+      { move: "77+f", score: -3500 },
+      { move: "37+d", score: -3600 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 42+c 26+d)
+  "0x1D7820A419A0D4CB": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: -3553 },
+      { move: "52+a", score: -3553 },
+      { move: "42c+h", score: -3553 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 57+d 53+b)
+  "0x1D937EB652DE268E": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2282 },
+      { move: "37+e", score: -2282 },
+      { move: "37+d", score: -2382 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 73+h 57c+f)
+  "0x1DC05E11342C43C4": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 280 },
+      { move: "53+b", score: 280 },
+      { move: "73h+a", score: 280 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+e 52+h 46+a)
+  "0x1DDC627DBB9C1FE8": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: 544 },
+      { move: "42h-33", score: 544 },
+      { move: "42h+a", score: 187 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+d 73+f)
+  "0x1DE5341BC952944D": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 33+h 37f+e)
+  "0x1DF2C5789339DA92": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "73b+a", score: 0 },
+      { move: "33+h", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+f 73+a)
+  "0x1E150F17625E4019": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "37+e", score: -2086 },
+      { move: "77d+e", score: -2086 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+a 73+f)
+  "0x1E1C3F39080F144D": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 46+f 22+c)
+  "0x1E2947AA16CFE087": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -3980 },
+      { move: "36d+f", score: -4523 },
+      { move: "36d+e", score: -4843 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+d 73+a 77+f)
+  "0x1E2FF05D633BA15B": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: -258 },
+      { move: "53+b", score: -258 },
+      { move: "33a+b", score: -258 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 53b+a 57+f)
+  "0x1E358D6326401826": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "53ah-44", score: 0 },
+      { move: "73+a", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 46+e 42+c 36+d)
+  "0x1E8CD6321AB68F77": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: -2108 },
+      { move: "32g+b", score: -2108 },
+      { move: "32g+a", score: -2500 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+d 53+h)
+  "0x1E97BD7101BC277B": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "37+d", score: -2086 },
+      { move: "37+e", score: -2144 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+e 73+g)
+  "0x1ED10D64353D8715": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 56+f 42+a 36+f)
+  "0x1F0D7C3C6C40A774": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: 1020 },
+      { move: "42a+h", score: 1020 },
+      { move: "32+b", score: 140 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+e 73+h)
+  "0x1F105EF32BA5081A": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "57+d", score: -2086 },
+      { move: "77e+f", score: -2086 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+a 73+g)
+  "0x1F45AB7C21D09500": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+c 33+a)
+  "0x1F56DDBDCC6D5781": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2486 },
+      { move: "37+f", score: -2486 },
+      { move: "37+d", score: -2486 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 53c+h 77+f)
+  "0x1F70CC48CADB01AF": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "53ch-44", score: 0 },
+      { move: "73+a", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 26+d 42+a 36+e)
+  "0x1F85BDF1D82A7089": {
+    depth: 8,
+    candidates: [
+      { move: "32a+b", score: -1287 },
+      { move: "32a+g", score: -2107 },
+      { move: "52+h", score: -2348 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 73+a 77+f)
+  "0x1FC3DF5349150A0C": {
+    depth: 8,
+    candidates: [
+      { move: "53g+b", score: -610 },
+      { move: "73+h", score: -610 },
+      { move: "33a+b", score: -1850 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+d 73+e)
+  "0x1FD67477C22914B9": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 160 },
+      { move: "33h+b", score: 160 },
+      { move: "33h+c", score: 20 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+d 73+a 57+f)
+  "0x1FF3575B89A09364": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: -258 },
+      { move: "33a+b", score: -258 },
+      { move: "53+c", score: -462 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+e 33+a 57e+d)
+  "0x1FF5C102D2C818F4": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "33a+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+e 33+a 77+e)
+  "0x20068D8108C7B8E8": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "33a+b", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+f 73+a 57+e)
+  "0x200F49221B848173": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -690 },
+      { move: "33a+b", score: -690 },
+      { move: "73+h", score: -740 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+e 42+a 36+e)
+  "0x2037E5690753889E": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: -761 },
+      { move: "32+a", score: -761 },
+      { move: "32+b", score: -940 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 26+d 32b+a 36+e)
+  "0x203E0525686EB3AF": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: -1287 },
+      { move: "42ah-33", score: -1287 },
+      { move: "22+b", score: -1615 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+h 73+g)
+  "0x2067FC2FBC5AE860": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+e 53a+b 77+f)
+  "0x208C68B39D99226E": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53ah-44", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 73+b 57+e)
+  "0x2098658C7B42C64A": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 338 },
+      { move: "53h+a", score: 338 },
+      { move: "33h+a", score: 338 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+e 53+b 57+f)
+  "0x20A2F8218E78C81C": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -120 },
+      { move: "53b+a", score: -120 },
+      { move: "73+h", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 73+b 57c+d)
+  "0x20A83BDC025E0B85": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 280 },
+      { move: "53+h", score: 280 },
+      { move: "33b+a", score: 280 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+b 73+g)
+  "0x20E4B0376FF3F7C2": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+e 53+b 77+f)
+  "0x21024F92A4C33494": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "73+a", score: -120 },
+      { move: "53b+a", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+a 77+e)
+  "0x21128F1A7C1A6B78": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+d 73+e)
+  "0x21138112B9D0E046": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 160 },
+      { move: "33b+h", score: 160 },
+      { move: "33b+c", score: 20 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 53c+b 77+f)
+  "0x2126A67FFE622CA9": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -650 },
+      { move: "33+a", score: -650 },
+      { move: "33+b", score: -730 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+a 73+f)
+  "0x213EC766EEEBE06F": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 73+b 37+d)
+  "0x214B9E260B20D904": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 280 },
+      { move: "33+b", score: 280 },
+      { move: "33+c", score: -62 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 37+d 53b-64 77+e)
+  "0x2175B6015E7780B0": {
+    depth: 8,
+    candidates: [
+      { move: "53", score: 150 },
+      { move: "73+h", score: 0 },
+      { move: "64b+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+a 73+g)
+  "0x21805E195A2961FF": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+d 42+a 46+e)
+  "0x21A7A3FB162B85B3": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: 640 },
+      { move: "42h-33", score: 640 },
+      { move: "22+h", score: -1020 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 56+f 42+e)
+  "0x21BF94B66BA7C442": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -3463 },
+      { move: "46+f", score: -3463 },
+      { move: "46+a", score: -3960 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+b 73+f)
+  "0x21C191B50E9F75B4": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 37+c 33+a)
+  "0x21C8620AA5C4215A": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2486 },
+      { move: "57+d", score: -2486 },
+      { move: "37+f", score: -2486 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+e 73+b)
+  "0x21D5AB96505CFCE5": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "37+e", score: -2024 },
+      { move: "57+f", score: -2024 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+e 53+h 57e+f)
+  "0x22068C55F7A13561": {
+    depth: 8,
+    candidates: [
+      { move: "73a+h", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 77+e 33+b)
+  "0x2260323588D18692": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -3990 },
+      { move: "57+d", score: -3990 },
+      { move: "77e+f", score: -3990 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 73+a 77+e)
+  "0x2279213C6D823002": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -400 },
+      { move: "53c+h", score: -400 },
+      { move: "53c+b", score: -1010 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 73+h 77+e)
+  "0x227C557F1AA885D8": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "33+b", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+e 73+a)
+  "0x228E497155932A29": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2080 },
+      { move: "57e+d", score: -2080 },
+      { move: "37+e", score: -2080 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+e 42+a 36+d)
+  "0x2291EBEAB816AF81": {
+    depth: 8,
+    candidates: [
+      { move: "42a+h", score: -1747 },
+      { move: "32+a", score: -2348 },
+      { move: "42a+b", score: -2527 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 36+e 42+c 46+e)
+  "0x22CA783CC6D92CDC": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -2108 },
+      { move: "42c+h", score: -2108 },
+      { move: "42c+b", score: -2108 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+e 77+h)
+  "0x22CDD50ED54B0997": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+d 53a+b 57d-66)
+  "0x22F0597755F9ABFC": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53ab-64", score: 0 },
+      { move: "73+a", score: -780 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 26+d 32b-43 46+a)
+  "0x2301213CBD94DFA2": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: 544 },
+      { move: "52+h", score: 544 },
+      { move: "43b+a", score: 187 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+b 73+e)
+  "0x23122F4C74761CE1": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+e 33+b 77+e)
+  "0x2336FC2C7B7E1F8C": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 },
+      { move: "53a+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 57+d 53+b)
+  "0x23568BD32927D271": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2276 },
+      { move: "77+e", score: -2276 },
+      { move: "37+e", score: -2282 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 57+e 73+b)
+  "0x2362667F7FBD817E": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2024 },
+      { move: "77+e", score: -2024 },
+      { move: "37+d", score: -2024 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+e 73+h 57+e)
+  "0x23B5DDBDFD63BC91": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73h+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+d 73+f)
+  "0x23BC8A2C8B8A8A28": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+d 73+e)
+  "0x23C417ED2A0798B3": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 20 },
+      { move: "33b+h", score: 20 },
+      { move: "33b+c", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 57+e 33+h)
+  "0x23E147EEF9A02263": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2024 },
+      { move: "37+e", score: -2024 },
+      { move: "77+f", score: -2024 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+d 73+g 37+e)
+  "0x240177AE1D9FB6D6": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -400 },
+      { move: "53a+h", score: -400 },
+      { move: "53a+b", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+g 73+g)
+  "0x241DC0C888B103D9": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 77+e 53b+a 57+d)
+  "0x2437AF9E1A9E3F79": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "73+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+d 73+h 77+f)
+  "0x246CEB1ADA1C2227": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53a+b", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 57+d 53+h)
+  "0x24708C504865216D": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2282 },
+      { move: "77+e", score: -2282 },
+      { move: "77+f", score: -2382 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+e 73+b 37+e)
+  "0x248063A3CA19CF6B": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "73b+a", score: -62 },
+      { move: "33h+a", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+b 57+e)
+  "0x2490FCED64816519": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 42+g 36e+d)
+  "0x249BDCDBF79E62D6": {
+    depth: 8,
+    candidates: [
+      { move: "42g+h", score: -2108 },
+      { move: "32+a", score: -2110 },
+      { move: "42g+b", score: -2168 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 33+h 57+e)
+  "0x249DAA3F3F8112D4": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 338 },
+      { move: "73b+a", score: 338 },
+      { move: "53h+a", score: 338 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+d 53+h 77+e)
+  "0x24A73792CABB1C82": {
+    depth: 8,
+    candidates: [
+      { move: "53b+a", score: -120 },
+      { move: "33+b", score: -120 },
+      { move: "33+a", score: -310 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+b 77+d)
+  "0x24A7A664D2A9FC5E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // OFK ply 2 (after 22+b 36+d)
+  "0x24AB91F2A43A88FE": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -28 },
+      { move: "32+b", score: -28 },
+      { move: "32+e", score: -180 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 53+b 77+e)
+  "0x24B48E0F9C839C64": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 33+a 57f+e)
+  "0x24CB236606A09907": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -400 },
+      { move: "53c+b", score: -400 },
+      { move: "33a+b", score: -520 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+b 73+g)
+  "0x250BD2B49A910872": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+a", score: 140 },
+      { move: "33c+h", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+e 73+f)
+  "0x2539B63A47D70EF1": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 32+a 46+c)
+  "0x25412AA087DA1E31": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: 2440 },
+      { move: "52h+g", score: 1931 },
+      { move: "32+c", score: 891 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 33+h 37+d)
+  "0x254E51954FE30D9A": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 338 },
+      { move: "33h+a", score: 338 },
+      { move: "53b+a", score: 338 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+c 77+b)
+  "0x25766D6A60579170": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 53a+h 37+d)
+  "0x2592892AF428B263": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 400 },
+      { move: "53ah-44", score: 400 },
+      { move: "73+a", score: 400 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+f 77+d)
+  "0x25A055CB3E261522": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 26+d 42+a)
+  "0x25ABE44DC97C4D46": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -3690 },
+      { move: "46+f", score: -3690 },
+      { move: "46+a", score: -4663 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+e 33h+a)
+  "0x25D06425149F287B": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "37+e", score: -2024 },
+      { move: "57+f", score: -2024 }
+    ]
+  },
+  // OFK ply 2 (after 32+a 46+e)
+  "0x25DABE2ED5658D56": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -28 },
+      { move: "22+b", score: -28 },
+      { move: "42+e", score: -578 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+a 73+g)
+  "0x25F484677AE59DA9": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+d 73+e)
+  "0x25FB103EA03DF68A": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+d 73+g)
+  "0x260D8F45BBB81DA9": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+a 37+d)
+  "0x26690582F0F3FB34": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53a+b", score: 0 },
+      { move: "33+b", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+d 73+h 57d+e)
+  "0x269512754E6EBC0A": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: -120 },
+      { move: "53+b", score: -120 },
+      { move: "33b+a", score: -120 }
+    ]
+  },
+  // 4P ply 2 (after 33+c 37+e)
+  "0x26AC3C0D6D4185E0": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -140 },
+      { move: "77+a", score: -140 },
+      { move: "77+g", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+d 77+e)
+  "0x26B6BE994FAA6D70": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 2P 1-Base ply 0 (initial)
   "0x26BE80163B6578BB": {
     depth: 8,
     candidates: [
-      { move: "53+a", score: 55 },
-      { move: "33+b", score: 48 },
-      { move: "73+h", score: 48 }
+      { move: "53+b", score: 0 },
+      { move: "53+h", score: 0 },
+      { move: "33+b", score: -250 }
     ]
   },
-  // 2P 3-Base ply 0 (A to move)
+  // 2P 1-Base ply 3 (after 53+c 57+f 53c+h)
+  "0x26BF6B6E47CAADB8": {
+    depth: 8,
+    candidates: [
+      { move: "57d-66", score: -2170 },
+      { move: "77+f", score: -2950 },
+      { move: "77+e", score: -2950 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+d 53c+h)
+  "0x26FF1CF5557783B8": {
+    depth: 8,
+    candidates: [
+      { move: "57d-66", score: -2170 },
+      { move: "37+d", score: -2290 },
+      { move: "77+f", score: -2290 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 46+f 22+c 46f+e)
+  "0x271E42684607E3D8": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: 162 },
+      { move: "22c+b", score: -878 },
+      { move: "42+a", score: -1243 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+a 73+g)
+  "0x27231298E932E55C": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+d 77+h)
+  "0x275E024A689AF51C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 57+e 33h+a)
+  "0x2767A9CC3B7E55E0": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2024 },
+      { move: "77+e", score: -2024 },
+      { move: "37+d", score: -2024 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+e 53+h 57+f)
+  "0x2784FFA2EF3A3B00": {
+    depth: 8,
+    candidates: [
+      { move: "53b+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 56+f 52+g 36+f)
+  "0x279A94C58F600FE9": {
+    depth: 8,
+    candidates: [
+      { move: "32b+a", score: -2828 },
+      { move: "32b+d", score: -2828 },
+      { move: "42+c", score: -2843 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+g 77+b)
+  "0x27A1FB95F380E985": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+b 73+g)
+  "0x27DC444B09467087": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+e 73+e)
+  "0x27EA08C33D3E67A4": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 73+a 37+f)
+  "0x27F75D71CDD60675": {
+    depth: 8,
+    candidates: [
+      { move: "53h-44", score: 462 },
+      { move: "73+a", score: 462 },
+      { move: "53h+a", score: 462 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 33a+b 37+e)
+  "0x28161DEE7DE368B0": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+e 73+e)
+  "0x281816140A6BC1C8": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -260 },
+      { move: "33g+h", score: -260 },
+      { move: "33g+a", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+b 73+g)
+  "0x282E5A9C3E13D6EB": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+a", score: -280 },
+      { move: "33g+h", score: -280 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+f 73+b 77f+e)
+  "0x283116190B004EC7": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "33b+a", score: -62 },
+      { move: "73b+a", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+e 53+h 37+d)
+  "0x283E44E3432BFCCC": {
+    depth: 8,
+    candidates: [
+      { move: "53h+a", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33b+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 33+h 37+d)
+  "0x28779557ECC8115C": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 338 },
+      { move: "73b+a", score: 338 },
+      { move: "53h+a", score: 338 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 26+d 22+c)
+  "0x2886466552F88E8B": {
+    depth: 8,
+    candidates: [
+      { move: "46+f", score: -3980 },
+      { move: "26d-35", score: -3980 },
+      { move: "46+d", score: -4523 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+h 73+g)
+  "0x28D1A343A509CA72": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 57+d 73+a)
+  "0x28D21FB1A905D5B9": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2086 },
+      { move: "77+f", score: -2086 },
+      { move: "77+e", score: -2086 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 37+d 33b-44 77+f)
+  "0x28F63BC58B8053E0": {
+    depth: 8,
+    candidates: [
+      { move: "33", score: 270 },
+      { move: "53+a", score: -3390 },
+      { move: "44b+c", score: -3390 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+e 77+d)
+  "0x28F96824D217C880": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+d 32+a 56+f)
+  "0x290C481D1C833116": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -1020 },
+      { move: "42+b", score: -1660 },
+      { move: "52+h", score: -1721 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+f 33+a 57+e)
+  "0x29334253FC6C492B": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53b+a", score: 0 },
+      { move: "53b-64", score: -510 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+e 73+g)
+  "0x29391F908239521E": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 160 },
+      { move: "33a+h", score: 160 },
+      { move: "33a+c", score: 20 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 73+h 77+d)
+  "0x295BB3EC338B8035": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 62 },
+      { move: "33+a", score: 62 },
+      { move: "73h+a", score: 62 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 57+d 33+c)
+  "0x296142D2FA647F7D": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -1686 },
+      { move: "37+e", score: -1686 },
+      { move: "57f+e", score: -1686 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 77+e 53+h)
+  "0x29614E59A3C75C49": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -2382 },
+      { move: "57+c", score: -2486 },
+      { move: "57+d", score: -2768 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+h 73+f)
+  "0x298837068CD64B3F": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+d 73+e)
+  "0x29A5DE7EA083C254": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 73+h 77+d)
+  "0x29D8927DB5962328": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 62 },
+      { move: "53+a", score: 62 },
+      { move: "73h+a", score: 62 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+g 73+g)
+  "0x29D8B6755DA134E1": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+e 33+a 37+e)
+  "0x29DAE16FED02E423": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -400 },
+      { move: "73+h", score: -400 },
+      { move: "33a+b", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+c 73+a)
+  "0x29FDDC37D2EDC225": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2486 },
+      { move: "37+f", score: -2486 },
+      { move: "77+d", score: -2486 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+h 73+g)
+  "0x2A0635BC36DEB287": {
+    depth: 8,
+    candidates: [
+      { move: "33b+h", score: 140 },
+      { move: "33b+a", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 77+f 53b-64)
+  "0x2A069F95E413DCCC": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2600 },
+      { move: "57+e", score: -2600 },
+      { move: "77+f", score: -2600 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 77+e 53+b)
+  "0x2A513FF4D07EFB2D": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2144 },
+      { move: "57+f", score: -2144 },
+      { move: "57+d", score: -2396 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+d 77+a)
+  "0x2A7B256EB776A2C7": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+d 77+b)
+  "0x2A8473BD5702371C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+e 73+e)
+  "0x2ACF80EB99BCB93D": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -120 },
+      { move: "33g+h", score: -120 },
+      { move: "33g+a", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 33+a 37+e)
+  "0x2AD9FAD0724CE465": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -400 },
+      { move: "53g+h", score: -400 },
+      { move: "73a+h", score: -1010 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+e 73+h 77+e)
+  "0x2AEA90C29EBB4347": {
+    depth: 8,
+    candidates: [
+      { move: "53c+b", score: -400 },
+      { move: "33+a", score: -400 },
+      { move: "73h+a", score: -400 }
+    ]
+  },
+  // 4P ply 2 (after 33+a 37+b)
+  "0x2AF2F24D6DFFB13E": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 260 },
+      { move: "77+a", score: 260 },
+      { move: "77+g", score: 140 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+e 42+c 56+g)
+  "0x2B16CCA8C48820C2": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: -1040 },
+      { move: "42c+h", score: -1040 },
+      { move: "22b+c", score: -1040 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+e 73+b)
+  "0x2B536BBE2712FCC1": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2360 },
+      { move: "57e+d", score: -2360 },
+      { move: "37+d", score: -2480 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 56+f 52+a 46+e)
+  "0x2B5A36AEAB4CCC3D": {
+    depth: 8,
+    candidates: [
+      { move: "22a+b", score: -3579 },
+      { move: "32+a", score: -3602 },
+      { move: "42h+g", score: -3782 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 77+f 33b+a)
+  "0x2BD6DC76FA67D44C": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2086 },
+      { move: "57+e", score: -2086 },
+      { move: "77f+e", score: -2086 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+b 73+e)
+  "0x2BD8C5E725963DC8": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+e 73+g)
+  "0x2BEE896F11EE2AEB": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 20 },
+      { move: "33a+h", score: 20 },
+      { move: "33a+c", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+a 57+d)
+  "0x2C034D1397B8165C": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 0 },
+      { move: "53+b", score: 0 },
+      { move: "73a+h", score: -252 }
+    ]
+  },
+  // OFK ply 2 (after 22+b 46+f)
+  "0x2C099A58C1AF076A": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -620 },
+      { move: "32+b", score: -620 },
+      { move: "52h+g", score: -1220 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+h 73+f)
+  "0x2C1BE0423107B7B4": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+h 73+g)
+  "0x2C39326FBCE4DCBE": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 77+e 53+b 57+f)
+  "0x2C479BE5C7C8E6E5": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -120 },
+      { move: "73b+a", score: -120 },
+      { move: "53h+a", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 77+e 53+h 57+f)
+  "0x2C54227891F06603": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 73+a 57f+e)
+  "0x2C6BF88A196E4D60": {
+    depth: 8,
+    candidates: [
+      { move: "53g+h", score: -400 },
+      { move: "33a+b", score: -400 },
+      { move: "73+h", score: -520 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 73+b 37+d)
+  "0x2C725AE4A80BC5C2": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 280 },
+      { move: "73+h", score: 280 },
+      { move: "73+g", score: -188 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 33+b 57+d)
+  "0x2C8583CEC42CE1DB": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -460 },
+      { move: "53b+a", score: -460 },
+      { move: "53b-64", score: -460 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+f 33+b)
+  "0x2C9020274516DB0A": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2396 },
+      { move: "77+f", score: -2396 },
+      { move: "37+e", score: -2402 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 53a+b 77+f)
+  "0x2CAE825B13C07A3B": {
+    depth: 8,
+    candidates: [
+      { move: "53ab-64", score: -340 },
+      { move: "73+h", score: -340 },
+      { move: "33+a", score: -340 }
+    ]
+  },
+  // 4P ply 2 (after 33+b 37+c)
+  "0x2CCDF59EE7C5DF07": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 140 },
+      { move: "77+a", score: 140 },
+      { move: "77+g", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+e 73+g)
+  "0x2CD67D13775BADAE": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 57+e 53+h)
+  "0x2CE33DAEBB5C5228": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2086 },
+      { move: "37+d", score: -2086 },
+      { move: "57e+d", score: -2564 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+b 73+f)
+  "0x2CE4199DAA1DAB2D": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+b 73+g)
+  "0x2DBD8DD883C22A60": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+e 73+g)
+  "0x2DD18EBC9BD444D2": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+c 73+b)
+  "0x2DE01A8F0328D072": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2760 },
+      { move: "57g+f", score: -2760 },
+      { move: "77+f", score: -2880 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+e 73+f)
+  "0x2DF35C9116372FD8": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 4P ply 2 (after 33+b 37+g)
+  "0x2E1A63617412A7F2": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 280 },
+      { move: "77+a", score: 280 },
+      { move: "77+g", score: 160 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+f 53c+b)
+  "0x2E1FB082580479DF": {
+    depth: 8,
+    candidates: [
+      { move: "57f-46", score: -2170 },
+      { move: "77+f", score: -2290 },
+      { move: "37+d", score: -2290 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+b 73+f)
+  "0x2E338F6239CAD3D8": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // OFK ply 2 (after 32+a 26+d)
+  "0x2E471DD971F013C1": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: -620 },
+      { move: "52+h", score: -620 },
+      { move: "32+a", score: -820 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+d 53c+b)
+  "0x2E5FC7194AB957DF": {
+    depth: 8,
+    candidates: [
+      { move: "57f-46", score: -2820 },
+      { move: "37+d", score: -2950 },
+      { move: "37+e", score: -2950 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+f 77+e)
+  "0x2E7C54321E4A4C59": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -836 },
+      { move: "73+e", score: -836 },
+      { move: "73+g", score: -956 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+a 57+c)
+  "0x2E946E3FDACA4396": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 400 },
+      { move: "33+b", score: 400 },
+      { move: "53a+h", score: 400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+d 73+a 57d+e)
+  "0x2EA41FB416C1C1B5": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "53+b", score: 0 },
+      { move: "73h+a", score: 0 }
+    ]
+  },
+  // OFK ply 2 (after 22+b 46+e)
+  "0x2EAF94DB7EEA2075": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -28 },
+      { move: "32+b", score: -28 },
+      { move: "32+e", score: -698 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+d 73+f)
+  "0x2EE5B7C367BB578A": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+c 57+e)
+  "0x2EFFC03F74E03DAB": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -400 },
+      { move: "73+h", score: -400 },
+      { move: "53c+b", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+g 73+e)
+  "0x2F21B518C2D4C9D3": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 33+a 57+f)
+  "0x2F2DD3F1E9394613": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "53h+a", score: 400 },
+      { move: "33+b", score: 400 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 46+e 42+e 36+a)
+  "0x2F3F02C4201A7A4B": {
+    depth: 8,
+    candidates: [
+      { move: "42e+h", score: 0 },
+      { move: "22+b", score: 0 },
+      { move: "22+c", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+e 53+b 57+d)
+  "0x2F6453D5E249C167": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -62 },
+      { move: "53h+a", score: -62 },
+      { move: "73h+a", score: -62 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 36+d 22+c 46+e)
+  "0x2FBC49C223926C4C": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -1343 },
+      { move: "42+c", score: -2667 },
+      { move: "22c+b", score: -3107 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+h 73+e)
+  "0x2FCFAD14A761379D": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+d 73+f)
+  "0x2FE2446C8B34BEF6": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 33+a 57g+d)
+  "0x2FF8C1BB93635F0B": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "53h+a", score: 400 },
+      { move: "33+b", score: 400 }
+    ]
+  },
+  // 4P ply 1 (after 33+c)
+  "0x3050DC2FFBCC82CD": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -1236 },
+      { move: "37+d", score: -1236 },
+      { move: "37+f", score: -1236 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 53+h 37+d)
+  "0x3053AB10FB1E4244": {
+    depth: 8,
+    candidates: [
+      { move: "33", score: 550 },
+      { move: "73+a", score: 400 },
+      { move: "53h-44", score: 400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 53+h 57+d)
+  "0x30596A12E611BCE3": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+f 53b-64 57f+e)
+  "0x305DD33105874945": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "64b+a", score: 0 },
+      { move: "73+h", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+d 73+b 57d+e)
+  "0x3077F87F64D96BAF": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -120 },
+      { move: "53a+h", score: -120 },
+      { move: "53a+b", score: -1050 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+d 73+e)
+  "0x30B913952916A5B0": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+f 77+d)
+  "0x30E25660B70D4618": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+f 73+a)
+  "0x311417FB5252905F": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "37+e", score: -2024 },
+      { move: "77d+e", score: -2024 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 53+g 57d+e)
+  "0x3118F6E0C8EA63E5": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -400 },
+      { move: "53g+h", score: -400 },
+      { move: "73+h", score: -462 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 33+h 57+f)
+  "0x3134958F164CC860": {
+    depth: 8,
+    candidates: [
+      { move: "53h+a", score: -120 },
+      { move: "33+b", score: -120 },
+      { move: "53h-44", score: -510 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 33+a 77+f)
+  "0x315EADA04459F7A3": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 338 },
+      { move: "53b+a", score: 338 },
+      { move: "73+h", score: 338 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 33+b 57f+e)
+  "0x318920CD8F8BCA3D": {
+    depth: 8,
+    candidates: [
+      { move: "53c+b", score: -520 },
+      { move: "33b+a", score: -520 },
+      { move: "73+a", score: -520 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+h 73+f)
+  "0x31930942E9CCC5A7": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+f 33+h)
+  "0x3197366AD44F3342": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2024 },
+      { move: "77d+e", score: -2024 },
+      { move: "57+f", score: -2024 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 33+h 57+f)
+  "0x319D4128159F4B68": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -730 },
+      { move: "53g+h", score: -730 },
+      { move: "53g+b", score: -1970 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 26+d 52+h 36+e)
+  "0x31AD348BDFF3B884": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: -1020 },
+      { move: "42h-33", score: -1020 },
+      { move: "42h+b", score: -1020 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+d 73+e)
+  "0x31BEE03AC5994CCC": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+e 42+c 56+f)
+  "0x31DC90D8030D79E3": {
+    depth: 8,
+    candidates: [
+      { move: "32g+b", score: -2108 },
+      { move: "42+a", score: -2108 },
+      { move: "52h+e", score: -3500 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 53b+a 77+f)
+  "0x31DD8C31C24454BE": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 338 },
+      { move: "33+a", score: 338 },
+      { move: "73+a", score: 338 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+f 53+b)
+  "0x31E32E4D9492F58F": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -3090 },
+      { move: "37+d", score: -3090 },
+      { move: "57d+f", score: -3500 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 37+d 33+h)
+  "0x3201438AE8F41EE7": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -1960 },
+      { move: "57+f", score: -1960 },
+      { move: "57+d", score: -2080 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+d 77+h)
+  "0x321C01E1E1B1A626": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 73+a 37f+e)
+  "0x3270FC052528A9C9": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 62 },
+      { move: "73+h", score: 62 },
+      { move: "53a+h", score: 62 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+a 73+e)
+  "0x32A7158D7556256D": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 56+f 42+c 46+f)
+  "0x32C0EF4C0F0111EB": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: -179 },
+      { move: "42c+h", score: -179 },
+      { move: "22b+c", score: -1548 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 32b+g 36+d)
+  "0x32C90F00603C2ADA": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -3553 },
+      { move: "32+a", score: -3553 },
+      { move: "52+a", score: -3553 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+e 32b-43 26+d)
+  "0x32CBBE80263F2E3E": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: -1020 },
+      { move: "22+b", score: -1020 },
+      { move: "33h+b", score: -1020 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+e 53+h 37e+d)
+  "0x32F24E6346CACEAB": {
+    depth: 8,
+    candidates: [
+      { move: "73a+h", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 33+a 77+f)
+  "0x333AEA0C985887CA": {
+    depth: 8,
+    candidates: [
+      { move: "73a+h", score: 400 },
+      { move: "53a+b", score: 400 },
+      { move: "33+a", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+h 73+e)
+  "0x3340B7BB9325ACF2": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+e 73+a 37+d)
+  "0x3351440C3672F9F7": {
+    depth: 8,
+    candidates: [
+      { move: "53c+b", score: -400 },
+      { move: "73a+h", score: -400 },
+      { move: "33+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+d 73+f)
+  "0x336D5EC3BF702599": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+e 73+a 57e+d)
+  "0x33D711DEC745EF30": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73h+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+d 77+e)
+  "0x33F4BD32C6813E4A": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 22b+a 46+f)
+  "0x34218D96AEB15CBB": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: -3579 },
+      { move: "42+a", score: -3602 },
+      { move: "32+g", score: -3602 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 73+a 57+d)
+  "0x34337E4B0AF44FA6": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "53b+a", score: 400 },
+      { move: "73a+h", score: 400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+e 53+b 77+f)
+  "0x34404C392DE867AE": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53b+a", score: 0 },
+      { move: "73+h", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 36+e 42+c)
+  "0x344091FCCD22BC3B": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -3496 },
+      { move: "36+d", score: -3496 },
+      { move: "36+e", score: -4103 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 73+b 57+d)
+  "0x3444299DBBC7ADC9": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -730 },
+      { move: "53g+b", score: -730 },
+      { move: "53g+h", score: -1970 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+d 73+e)
+  "0x345182B930FBB37C": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 160 },
+      { move: "33a+h", score: 160 },
+      { move: "33a+c", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+a 73+g)
+  "0x345E16E0EA23D85F": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+d 33+h 57d+e)
+  "0x347237CC201ABF31": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "53a+b", score: -120 },
+      { move: "53a+h", score: -1020 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+d 73+b 57+f)
+  "0x3474A1957B7234A1": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -830 },
+      { move: "53+h", score: -830 },
+      { move: "53+b", score: -862 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+b 73+g)
+  "0x34A140330A574D84": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 33+a 57+e)
+  "0x34C2FE5F4E0A00CC": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 62 },
+      { move: "33+b", score: 62 },
+      { move: "73a+h", score: 62 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+e 73+g)
+  "0x34CD435712412336": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 77+f 73+h)
+  "0x34FBE30F632DDFC4": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2200 },
+      { move: "57+f", score: -2200 },
+      { move: "37+d", score: -2200 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+g 77+d)
+  "0x350D34E3426FB9A8": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 56+f 42+e 36+a)
+  "0x3531909D3312EFF7": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: 0 },
+      { move: "42e+h", score: 0 },
+      { move: "22b+c", score: -497 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+e 53+h 37+d)
+  "0x354D4A8992AFD249": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53h-44", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 26+d 42+h)
+  "0x3563197CF22D579A": {
+    depth: 8,
+    candidates: [
+      { move: "46+e", score: -6435 },
+      { move: "36+d", score: -6435 },
+      { move: "36+g", score: -6435 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+d 73+g)
+  "0x35708B3DB8A920AA": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -260 },
+      { move: "33g+h", score: -260 },
+      { move: "33g+a", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+c 33+b)
+  "0x357AF458BC41813E": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2480 },
+      { move: "77+f", score: -2600 },
+      { move: "57g+f", score: -2820 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 36+e 42+a)
+  "0x358B907EFD37642E": {
+    depth: 8,
+    candidates: [
+      { move: "46+f", score: -4725 },
+      { move: "26+d", score: -6570 },
+      { move: "26+a", score: -6783 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+f 73+b)
+  "0x3592F9D9908CE7DC": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "37+e", score: -2024 },
+      { move: "77d+e", score: -2024 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+b 73+g)
+  "0x35A6B39CE6D8A4F8": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 56+f 22b+c 36+d)
+  "0x35B2DB9B309AF9F0": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -3107 },
+      { move: "32+a", score: -3107 },
+      { move: "42+b", score: -3747 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+e 33b+a 57+e)
+  "0x35C7AFBB07F148CF": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 22b-33 46+f)
+  "0x35DF821DF1DC5EE9": {
+    depth: 8,
+    candidates: [
+      { move: "32+h", score: -3603 },
+      { move: "32+c", score: -3603 },
+      { move: "42+a", score: -3603 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+b 77+b)
+  "0x360B69126346AC73": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1216 },
+      { move: "73+e", score: -1216 },
+      { move: "73+g", score: -1336 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 57+e 73+h)
+  "0x362065D4F696D244": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2024 },
+      { move: "37+e", score: -2024 },
+      { move: "77+f", score: -2024 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 73+h 57c+f)
+  "0x364AD1D628E9DC20": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 400 },
+      { move: "33+a", score: 400 },
+      { move: "73h+a", score: 400 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 73+a 37+d)
+  "0x364FA5955FC369FA": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "53c+h", score: 0 },
+      { move: "53c+b", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+e 77+e)
+  "0x36676A767B50C2C1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -836 },
+      { move: "73+e", score: -836 },
+      { move: "73+g", score: -956 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+d 73+e)
+  "0x36861446A32CCB89": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 20 },
+      { move: "33a+h", score: 20 },
+      { move: "33a+c", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+d 73+h 37+d)
+  "0x368BCEA3B468211C": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 0 },
+      { move: "53+a", score: 0 },
+      { move: "53+h", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 73+b 37f+e)
+  "0x36F61227E7F6DE4A": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73b+a", score: 0 },
+      { move: "33h+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+d 73+f)
+  "0x36FE898702A1D912": {
+    depth: 8,
+    candidates: [
+      { move: "33b+h", score: -120 },
+      { move: "33b+a", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 77+e 33+a)
+  "0x3722319E01FAD5A8": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -3350 },
+      { move: "77e+f", score: -3350 },
+      { move: "57+f", score: -3990 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 36+d 42+a)
+  "0x372D9EFD42724331": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -6435 },
+      { move: "46+e", score: -6435 },
+      { move: "36d+g", score: -6435 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+d 53+b 57d-66)
+  "0x37317B4D5ACF5BDB": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -120 },
+      { move: "53b+h", score: -120 },
+      { move: "73+h", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+d 73+b 37+d)
+  "0x375769A55EF31323": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: -120 },
+      { move: "53+b", score: -120 },
+      { move: "53+a", score: -120 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 22b-33 46+e)
+  "0x37798C9E4E9979F6": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -1242 },
+      { move: "43h+a", score: -1242 },
+      { move: "32+a", score: -3891 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+d 73+g)
+  "0x37A71DC22B7E585F": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -120 },
+      { move: "33g+h", score: -120 },
+      { move: "33g+a", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+c 77+d)
+  "0x37DAA21CD1B8C15D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 53+b 77+f)
+  "0x37FBF40BF2562A64": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 280 },
+      { move: "33+a", score: 280 },
+      { move: "33+g", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+d 77+g)
+  "0x37FD85FB00F44E79": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 73+c 57+f)
+  "0x3823B10B64EC018B": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -1010 },
+      { move: "53c+h", score: -1010 },
+      { move: "53c+b", score: -2250 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+d 77+d)
+  "0x3828BCCBE6ED6731": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -836 },
+      { move: "73+e", score: -836 },
+      { move: "73+g", score: -956 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 73+a 77+f)
+  "0x3862A6D1A3B13FFB": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 400 },
+      { move: "53h+a", score: 400 },
+      { move: "33a+b", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+g 73+g)
+  "0x387224F2CD677117": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+h 73+g)
+  "0x387CC26BD94066F8": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 56+f 52+g)
+  "0x3880C675E62D8870": {
+    depth: 8,
+    candidates: [
+      { move: "36+d", score: -3980 },
+      { move: "36+f", score: -4542 },
+      { move: "46+f", score: -5281 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 53+b 57+d)
+  "0x389051A6D73DDE27": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 62 },
+      { move: "33+a", score: 62 },
+      { move: "53h+a", score: 62 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+e 73+g)
+  "0x38938D1712FF17E8": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+e 73+f)
+  "0x38B15F3A9F1C7CE2": {
+    depth: 8,
+    candidates: [
+      { move: "33b+h", score: -120 },
+      { move: "33b+a", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 53+b 57+f)
+  "0x38B9C665EB624684": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 73+h 57+f)
+  "0x38C34276E1033E9D": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "73+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+b 73+g)
+  "0x38FF8E730AE9795A": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+d 53+h)
+  "0x3903823A99E10FE8": {
+    depth: 8,
+    candidates: [
+      { move: "57f-46", score: -2980 },
+      { move: "37+d", score: -3090 },
+      { move: "77+f", score: -3090 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+d 73+h 77+f)
+  "0x391FE5700B980CA2": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "53a+b", score: -120 },
+      { move: "53a+h", score: -340 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+e 73+h 57e+f)
+  "0x3929FB2190451E5A": {
+    depth: 8,
+    candidates: [
+      { move: "53g+h", score: -400 },
+      { move: "73+a", score: -400 },
+      { move: "33b+a", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+f 33b+a 57+e)
+  "0x393E78DE2613A145": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 53b+a 57+d)
+  "0x3944A1F4CB1A11FC": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -340 },
+      { move: "53ab-64", score: -340 },
+      { move: "33+a", score: -340 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+h 73+f)
+  "0x3959E3E9B82CE48E": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: 0 },
+      { move: "33a+b", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 36+e 32b+e)
+  "0x3969EDC23A1EDBD9": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -3463 },
+      { move: "36+d", score: -3463 },
+      { move: "36+a", score: -3463 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+h 73+g)
+  "0x397B31C435CF8F84": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // 4P ply 2 (after 33+a 37+c)
+  "0x398FF6356EEE8C3D": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 140 },
+      { move: "77+a", score: 140 },
+      { move: "77+g", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+a 73+g)
+  "0x399B605D3F33EF67": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 33+a 57+d)
+  "0x39C780654D07B2E1": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -340 },
+      { move: "53b+a", score: -340 },
+      { move: "53b-64", score: -390 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 56+f 22b+c)
+  "0x39DB0AEA6AE19987": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -3463 },
+      { move: "46+f", score: -3463 },
+      { move: "46+a", score: -3463 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 33+b 57+e)
+  "0x39E3F287B5054B9C": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "53+b", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 53b+a 37c+d)
+  "0x39E8320CB56DB7C1": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 400 },
+      { move: "33+a", score: 400 },
+      { move: "33+b", score: 400 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 33+a 57+e)
+  "0x3A2D38E6C3271FAF": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -400 },
+      { move: "53g+h", score: -400 },
+      { move: "33+a", score: -400 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 26+d 42+a 46+e)
+  "0x3A397730145B1D22": {
+    depth: 8,
+    candidates: [
+      { move: "32a+b", score: -267 },
+      { move: "22+b", score: -761 },
+      { move: "52+h", score: -819 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 56+f 42+c 36+d)
+  "0x3A62E4E66A949E7F": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: -2108 },
+      { move: "42c+h", score: -2108 },
+      { move: "22b+e", score: -3500 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+d 73+g)
+  "0x3A8295EA8FFC86C6": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+d 73+b)
+  "0x3A91106E378F53E8": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -2024 },
+      { move: "57+d", score: -2024 },
+      { move: "57+e", score: -2024 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+g 73+g)
+  "0x3AA5B20D5EB009E2": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 37+c 73+a)
+  "0x3AD6CFB0460928EF": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2486 },
+      { move: "57+d", score: -2486 },
+      { move: "57+f", score: -2486 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+f 77+h)
+  "0x3AD6EB4AB051870F": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+b 73+e)
+  "0x3B091108116C9279": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 53+a 37+d)
+  "0x3B1A0BE82177D5B1": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33+b", score: 0 }
+    ]
+  },
+  // 4P ply 2 (after 33+a 37+g)
+  "0x3B5860CAFD39F4C8": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 280 },
+      { move: "77+a", score: 280 },
+      { move: "77+g", score: 160 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+e 73+e)
+  "0x3B65126C097AFCCB": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+a 37+d)
+  "0x3B992A79A76A76AC": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "53+b", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+d 73+f)
+  "0x3BA7B468EE9004B0": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+e 33h+a 37+d)
+  "0x3BC117E8E909B4F8": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "53+h", score: -62 },
+      { move: "33+b", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 0 (initial)
   "0x3BCD8E7CEAE1563E": {
     depth: 8,
     candidates: [
-      { move: "53+a", score: 45 },
-      { move: "33+b", score: 40 },
-      { move: "73+h", score: 40 }
+      { move: "33+a", score: 0 },
+      { move: "53+a", score: 0 },
+      { move: "73+a", score: 0 }
     ]
   },
-  // OFK ply 1 (after 22+b / 52+h)
+  // 4P ply 4 (after 33+h 37+e 77+g 73+g)
+  "0x3C06FE8CEDAB8D41": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 22b+c 46+e)
+  "0x3C470BCEA4CE5C5F": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: -1020 },
+      { move: "42+a", score: -1020 },
+      { move: "42+g", score: -2170 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 33+b 57+d)
+  "0x3C514FA1BD337389": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 62 },
+      { move: "33+a", score: 62 },
+      { move: "73h+a", score: 62 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+e 53+b 77+f)
+  "0x3C7141F875471A11": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "53b-64", score: -120 },
+      { move: "53b+a", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+e 73+g)
+  "0x3C7B1C3B0B120124": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 160 },
+      { move: "33b+h", score: 160 },
+      { move: "33b+c", score: 20 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+e 33+b 37+e)
+  "0x3C98E2C46429B719": {
+    depth: 8,
+    candidates: [
+      { move: "53c+h", score: -400 },
+      { move: "73+a", score: -400 },
+      { move: "33b+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+d 73+f)
+  "0x3C9F4014882583F5": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -120 },
+      { move: "33c+h", score: -120 },
+      { move: "33c+a", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+f 53 57f-46)
+  "0x3CAAAE6F8C907B08": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 150 },
+      { move: "53h-44", score: 150 },
+      { move: "33+b", score: -250 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+h 73+e)
+  "0x3CB2A96CA4700A9E": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+g 73+f)
+  "0x3CB867F359690CD1": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 33+h 57+d)
+  "0x3CE4F271A40979AE": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -730 },
+      { move: "53c+b", score: -730 },
+      { move: "53c+h", score: -1970 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 73+h 77+e)
+  "0x3CF34CC4CA03C924": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 370 },
+      { move: "33b+a", score: 370 },
+      { move: "53a+b", score: 280 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+e 73+f)
+  "0x3D22887E22CD8069": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+b 73+f)
+  "0x3D4E8B1A3ADBEEDB": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+d 53+h 57+e)
+  "0x3D7C4748CA00AFF6": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53h+a", score: 0 },
+      { move: "33a+b", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 22b-33 36e+d)
+  "0x3D7D89B79449D17D": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -3863 },
+      { move: "32+a", score: -3863 },
+      { move: "43h+g", score: -3863 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 77+f 33+b)
+  "0x3D879FE59678399C": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2080 },
+      { move: "57+f", score: -2080 },
+      { move: "77+e", score: -2080 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 57+d 73+a)
+  "0x3D901C1A202E8683": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2086 },
+      { move: "77+e", score: -2086 },
+      { move: "57d+e", score: -2086 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+h 73+g)
+  "0x3D93A0E82C229948": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+e 77+d)
+  "0x3DBB6B8F5B3C9BBA": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 37+d 33+h 77+f)
+  "0x3DF9F0801775877B": {
+    depth: 8,
+    candidates: [
+      { move: "53h+a", score: 0 },
+      { move: "33+b", score: 0 },
+      { move: "53h-44", score: -510 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+d 73+a)
+  "0x3E17FE4CF551246B": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "37+e", score: -2086 },
+      { move: "77f+e", score: -2086 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 73+a 37f+e)
+  "0x3E2C900E80E23C68": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 62 },
+      { move: "53+b", score: 62 },
+      { move: "53+h", score: 62 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+d 73+f)
+  "0x3E48D6EB1BF2FB00": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 20 },
+      { move: "33c+h", score: 20 },
+      { move: "33c+a", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+h 73+e)
+  "0x3E653F9337A7726B": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // OFK ply 1 (after 22+b)
   "0x3E7C56E08875ECA9": {
     depth: 8,
     candidates: [
-      { move: "46+e", score: 12 },
-      { move: "36+e", score: 12 },
-      { move: "56+f", score: 8 }
+      { move: "56+f", score: -4143 },
+      { move: "26+d", score: -4143 },
+      { move: "46+e", score: -4143 }
     ]
   },
-  // 2P 3-Base ply 1 (after 53+b / 53+h)
+  // 4P ply 4 (after 33+b 37+d 77+b 73+e)
+  "0x3E9AC64CACBD6EF2": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+e 73+g)
+  "0x3EAC8AC498C579D1": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 20 },
+      { move: "33b+h", score: 20 },
+      { move: "33b+c", score: -120 }
+    ]
+  },
+  // 4P ply 2 (after 33+c 37+f)
+  "0x3EB70249085B0B78": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -140 },
+      { move: "77+a", score: -140 },
+      { move: "77+g", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+f 53+h)
+  "0x3EBCDBE9AAECDBAA": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2402 },
+      { move: "57+f", score: -2402 },
+      { move: "77+f", score: -2402 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 22b+c 46+f)
+  "0x3EE1054D1B8B7B40": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: -3979 },
+      { move: "32+c", score: -3979 },
+      { move: "32+a", score: -4000 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 53+g 37+e)
+  "0x3F0A2F56BC061E87": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -400 },
+      { move: "73a+h", score: -400 },
+      { move: "53c+b", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 73+h 77+e)
+  "0x3F0F5B15CB2CAB5D": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 },
+      { move: "53a+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 77+e 53+b)
+  "0x3F133C5F5955A817": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2382 },
+      { move: "57+f", score: -2402 },
+      { move: "37+d", score: -2402 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+h 73+g)
+  "0x3F443617BFF5E1BD": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+d 73+h 77+e)
+  "0x3F8C7A844D310840": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73h+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 46+f 42+a)
+  "0x3F8F955727E7CCA5": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -4725 },
+      { move: "46f-35", score: -4725 },
+      { move: "26+d", score: -6570 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 26+d 52+h 26d+a)
+  "0x3F90B3E8A8311C5E": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: 1160 },
+      { move: "32b-43", score: 1160 },
+      { move: "32b+a", score: 1127 }
+    ]
+  },
+  // 4P ply 2 (after 33+b 37+b)
+  "0x3FB0F1E6E4D4E204": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 260 },
+      { move: "77+a", score: 260 },
+      { move: "77+g", score: 140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+e 73+b 37+d)
+  "0x3FC4D85BADCA6066": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: -120 },
+      { move: "73a+h", score: -120 },
+      { move: "53+h", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+e 53+b 77+d)
+  "0x3FC54BAC4835A419": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33h+a", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // OFK ply 2 (after 22+b 56+f)
+  "0x3FD42C77C66D18EA": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: 0 },
+      { move: "42+h", score: 0 },
+      { move: "42+e", score: -698 }
+    ]
+  },
+  // OFK ply 2 (after 32+b 46+e)
+  "0x3FDDCC3BA95023DB": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -620 },
+      { move: "32+a", score: -620 },
+      { move: "42h-33", score: -620 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 33+b 57d-66)
+  "0x3FE33B43C810AFF7": {
+    depth: 8,
+    candidates: [
+      { move: "53g+b", score: -400 },
+      { move: "33+a", score: -400 },
+      { move: "73h+a", score: -400 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 26+d 32b+a 36+c)
+  "0x3FE651FDA99863C2": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: 741 },
+      { move: "32ab-43", score: 741 },
+      { move: "52+h", score: 741 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 33+b 57+e)
+  "0x40009740CB8FB086": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 62 },
+      { move: "33+a", score: 62 },
+      { move: "73h+a", score: 62 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+f 53+b 77+f)
+  "0x4020991903FBD91E": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "53b+a", score: -120 },
+      { move: "33b+a", score: -210 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+h 73+g)
+  "0x402AE0A5BAA4ABC9": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 77+f 73+a)
+  "0x40398A10E6A86F8E": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -2200 },
+      { move: "57+e", score: -2200 },
+      { move: "37+d", score: -2200 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 33+b 37+d)
+  "0x4050DC0814955FA0": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 400 },
+      { move: "73+a", score: 400 },
+      { move: "33b+a", score: 280 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+a 73+g)
+  "0x4056FA6E897921B0": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 33+h 57+d)
+  "0x405A1D0A099AA107": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53a+b", score: 0 },
+      { move: "53a+h", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+e 33+h 57e+f)
+  "0x40748F678B52764B": {
+    depth: 8,
+    candidates: [
+      { move: "53h-44", score: -120 },
+      { move: "53h+a", score: -120 },
+      { move: "33+b", score: -120 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 46+e 42+c)
+  "0x40A9709E46569B37": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -2962 },
+      { move: "36+d", score: -2962 },
+      { move: "56+g", score: -3963 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+b 73+g)
+  "0x40A9ACBD690DB46B": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+e 73+g)
+  "0x40C5AFD9711BDAD9": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 33+b 37+e)
+  "0x40C93A2512957416": {
+    depth: 8,
+    candidates: [
+      { move: "53c+b", score: -520 },
+      { move: "73+h", score: -520 },
+      { move: "53c+h", score: -860 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 77+e 53+b 37+d)
+  "0x40CA87F94896BFC2": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -62 },
+      { move: "33h+a", score: -62 },
+      { move: "53b+a", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 33h+a 57+d)
+  "0x40D93C9B8F87021A": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: -258 },
+      { move: "53+h", score: -258 },
+      { move: "73+h", score: -258 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 46+f 22+c 26+d)
+  "0x40E14BEE08A791EB": {
+    depth: 8,
+    candidates: [
+      { move: "32a+b", score: -3795 },
+      { move: "42+h", score: -3840 },
+      { move: "22c+b", score: -4002 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+a 73+f)
+  "0x40E863113DBBA020": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+e 53+h 77+d)
+  "0x40EDD137D91D5115": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "73b+a", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+h 73+f)
+  "0x410FC127DBC829BF": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+a", score: -140 },
+      { move: "33c+h", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+d 32b-43 36d+g)
+  "0x411F69311F305B29": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: 2418 },
+      { move: "22+b", score: 2418 },
+      { move: "22+c", score: 2418 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+d 73+e)
+  "0x4122285FF79DA0D4": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 36+d 22+c 36d+a)
+  "0x418EDC73C52CD4B8": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: 0 },
+      { move: "42+e", score: 0 },
+      { move: "22c+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+f 53+b)
+  "0x419441723BC42EA6": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -2402 },
+      { move: "57+d", score: -2402 },
+      { move: "37+d", score: -2402 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+c 33+a)
+  "0x41B89D4739C43174": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2600 },
+      { move: "37+d", score: -2600 },
+      { move: "57g+f", score: -2940 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+e 73+g)
+  "0x41C25C769D9433A5": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 2 (after 33+c 37+c)
+  "0x41D9D4FB0D0A410C": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 33+a 37+f)
+  "0x41DF68DEC8308D25": {
+    depth: 8,
+    candidates: [
+      { move: "53h-44", score: 462 },
+      { move: "33+a", score: 462 },
+      { move: "53h+a", score: 462 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+d 73+h)
+  "0x41E059557B19E86B": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -3350 },
+      { move: "57d+e", score: -3350 },
+      { move: "77+e", score: -3350 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+d 53+b 37+d)
+  "0x41FC3E1FE960EB21": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53b-64", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+e 77+b)
+  "0x4203859C001C559C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+a 37+f)
+  "0x4224E476CCEBC472": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 77+e 73+h 57+e)
+  "0x4235B709F1CD5FE1": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "53+h", score: 0 },
+      { move: "53+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+d 73+a 37+d)
+  "0x4249A7BC31ED9156": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: -258 },
+      { move: "73a+h", score: -258 },
+      { move: "53+h", score: -378 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 46+e 42+a)
+  "0x4254EDCB87DC3F75": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -4483 },
+      { move: "36+d", score: -4483 },
+      { move: "36+e", score: -4706 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+b 77+e)
+  "0x426F86F8180A3B2E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+f 53 37+d)
+  "0x4287474A324C3195": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 150 },
+      { move: "53b-64", score: 150 },
+      { move: "73+h", score: 60 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 73+a 57c+f)
+  "0x4288B8C9AD6C6C6A": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 400 },
+      { move: "33+b", score: 400 },
+      { move: "53a+b", score: 400 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 73+h 37+d)
+  "0x428DCC8ADA46D9B0": {
+    depth: 8,
+    candidates: [
+      { move: "53c+b", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+d 33+h)
+  "0x42C391655E98CFE9": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2360 },
+      { move: "57f-46", score: -2360 },
+      { move: "57f+e", score: -2360 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+d 73+g)
+  "0x42D4B724EC184BF7": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 57+d 53b-64)
+  "0x42E9BA2B3FC6ED03": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -3350 },
+      { move: "57d+f", score: -3350 },
+      { move: "77+e", score: -3350 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+d 73+f)
+  "0x42F6650961FB20FD": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 1 (after 53+b)
   "0x42F7FBED36E9148F": {
     depth: 8,
     candidates: [
-      { move: "57+e", score: 12 },
-      { move: "37+d", score: 8 },
-      { move: "77+f", score: 8 }
+      { move: "37+d", score: -2424 },
+      { move: "57+c", score: -2486 },
+      { move: "57+g", score: -2486 }
     ]
   },
-  // 4P ply 0 (A to move)
+  // 4P ply 2 (after 33+c 37+g)
+  "0x430E42049EDD39F9": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 140 },
+      { move: "77+a", score: 140 },
+      { move: "77+g", score: 20 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 77+f 73+c)
+  "0x431F8776FC773BB3": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -1770 },
+      { move: "57+f", score: -1770 },
+      { move: "57+d", score: -1800 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+d 33+b)
+  "0x433D49D7B5CA6E7B": {
+    depth: 8,
+    candidates: [
+      { move: "57d-66", score: -2080 },
+      { move: "77+f", score: -2080 },
+      { move: "57d+e", score: -2080 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+e 53+b 57e+d)
+  "0x43574757AED351C9": {
+    depth: 8,
+    candidates: [
+      { move: "53h-44", score: -120 },
+      { move: "53h+a", score: -120 },
+      { move: "33+b", score: -120 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+d 22b+c 36d-45)
+  "0x437497F8C8B510FF": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -3107 },
+      { move: "32+a", score: -3107 },
+      { move: "42+e", score: -3257 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+d 73+b 57+d)
+  "0x439500BADB76A369": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -258 },
+      { move: "53+h", score: -258 },
+      { move: "53+b", score: -258 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+b 77+e)
+  "0x43A29403030D2F6C": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 0 },
+      { move: "53+h", score: 0 },
+      { move: "53+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+h 73+e)
+  "0x43DC7FDEA12140EA": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 56+f 42+e 46+e)
+  "0x43DC9C14EB2873A9": {
+    depth: 8,
+    candidates: [
+      { move: "32e+b", score: -1068 },
+      { move: "32e+h", score: -2105 },
+      { move: "42+a", score: -3107 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 53+b 57+c)
+  "0x43E4174DE4C570F7": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 400 },
+      { move: "33+a", score: 400 },
+      { move: "53h+a", score: 400 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 56+f 52+a 56f+g)
+  "0x43F160C1C2C181C2": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -180 },
+      { move: "52a+h", score: -180 },
+      { move: "32b+h", score: -1200 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+d 73+f)
+  "0x43F196A68D74C981": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+a 73+g)
+  "0x44222010A9B5DDE6": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 36+e 42+g)
+  "0x445EDAFAC854F222": {
+    depth: 8,
+    candidates: [
+      { move: "46+e", score: -4103 },
+      { move: "36e+d", score: -4103 },
+      { move: "56+f", score: -4720 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 73+c 57+e)
+  "0x447269EA1250C284": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -800 },
+      { move: "53c+h", score: -800 },
+      { move: "33+a", score: -800 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 73+h 37+d)
+  "0x44A484C60C62EF6A": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -610 },
+      { move: "53g+h", score: -650 },
+      { move: "73+h", score: -730 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+d 73+e)
+  "0x44B1FF1B4A4C5C5F": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+d 73+f)
+  "0x44C962DAEBC14EC4": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 20 },
+      { move: "33a+h", score: 20 },
+      { move: "33a+c", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 73+b 57+d)
+  "0x44DCF328CB44D684": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "53+h", score: 0 },
+      { move: "33a+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 73+a 77+e)
+  "0x4501C52655091DFA": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 62 },
+      { move: "53+h", score: 62 },
+      { move: "53+b", score: 62 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 57+f 33+a)
+  "0x45214752111745C5": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -3090 },
+      { move: "77+f", score: -3090 },
+      { move: "57d+e", score: -3260 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 36+e 42+c 26+d)
+  "0x453571BA88795EEF": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -3553 },
+      { move: "42c+h", score: -3553 },
+      { move: "52+a", score: -3553 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+d 73+b 77+f)
+  "0x4548ABC8264C443D": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "53+b", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 33+b 57+e)
+  "0x454E3D917D24CFAD": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53a+h", score: 0 },
+      { move: "33b+a", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+e 53+h)
+  "0x45525ADBEF5DCCE7": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -3230 },
+      { move: "57e+f", score: -3230 },
+      { move: "77+f", score: -3650 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 73+b 57+e)
+  "0x456C42257CED5C00": {
+    depth: 8,
+    candidates: [
+      { move: "53c+h", score: -520 },
+      { move: "33+b", score: -520 },
+      { move: "33+a", score: -520 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 33+a 77+e)
+  "0x4582E4B7D314BEE7": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 62 },
+      { move: "33+b", score: 62 },
+      { move: "73a+h", score: 62 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 33+b 57+d)
+  "0x45B22A66C3B98893": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "53+b", score: 0 },
+      { move: "53+h", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+c 77+h)
+  "0x45B83DF8B500CD7B": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+h 73+g)
+  "0x45C582264FC65479": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+g 73+g)
+  "0x45CB64BF5BE14396": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+d 73+f)
+  "0x461EF42578163631": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 160 },
+      { move: "33a+h", score: 160 },
+      { move: "33a+c", score: 20 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 77+f 53+h)
+  "0x4625849542754430": {
+    depth: 8,
+    candidates: [
+      { move: "77", score: -3030 },
+      { move: "57+d", score: -3090 },
+      { move: "37+d", score: -3090 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+d 73+b)
+  "0x46C65ED61A5B1B77": {
+    depth: 8,
+    candidates: [
+      { move: "57f-46", score: -2360 },
+      { move: "37+d", score: -2360 },
+      { move: "57f+e", score: -2360 }
+    ]
+  },
+  // 4P ply 2 (after 33+a 37+f)
+  "0x46E120876BBFC649": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+a 73+g)
+  "0x46F5B6EF3A62A513": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+h 73+g)
+  "0x471214D9DC112C8C": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+f 52+g 46f+a)
+  "0x4726DADD39EF2418": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: 0 },
+      { move: "32b-43", score: 0 },
+      { move: "52g+h", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+d 53+b)
+  "0x47288225FD32F1D7": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "77+f", score: -2086 },
+      { move: "77+e", score: -2144 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 56+f 32b-43 36+g)
+  "0x47324EFC4EA7B0A9": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: 2320 },
+      { move: "52+h", score: 2320 },
+      { move: "52+g", score: 1931 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 33+c 57+f)
+  "0x474C9CF560E7D579": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -1010 },
+      { move: "53g+h", score: -1010 },
+      { move: "53g+b", score: -2250 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 37+e 73+b)
+  "0x47607F3C6B886C6F": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "57+d", score: -2024 },
+      { move: "77+f", score: -2024 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+g 77+h)
+  "0x476FAB0726D7B58E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+d 77+b)
+  "0x479052D8BDCDA917": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 73+h 57+e)
+  "0x47932D13B3F749BD": {
+    depth: 8,
+    candidates: [
+      { move: "53c+b", score: -400 },
+      { move: "33+a", score: -400 },
+      { move: "73h+a", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+d 53a+b)
+  "0x47ABA3B47B2F52CA": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "77+f", score: -2206 },
+      { move: "37d+e", score: -2396 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 42+a 36+e)
+  "0x47C8ECEF49F3FAAD": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: -1721 },
+      { move: "52+h", score: -1721 },
+      { move: "52+g", score: -3498 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 33+b 37+e)
+  "0x47F147B00E9E0E1B": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 338 },
+      { move: "73h+a", score: 338 },
+      { move: "53h+a", score: 338 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 33+b 77+f)
+  "0x47F883131DDD3780": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 400 },
+      { move: "33+a", score: 400 },
+      { move: "73h+a", score: 400 }
+    ]
+  },
+  // 4P ply 1 (after 33+a)
+  "0x4806FEE198284FFC": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -1376 },
+      { move: "37+d", score: -1376 },
+      { move: "37+f", score: -1376 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+g 73+g)
+  "0x480E12028EF174AE": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 73+a 57+d)
+  "0x4810072FBEAB60DE": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 62 },
+      { move: "53+h", score: 62 },
+      { move: "53+b", score: 62 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+b 73+g)
+  "0x481FF3D1705E9679": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 33+h 77+e)
+  "0x4837EC4462AF0760": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 338 },
+      { move: "33h+a", score: 338 },
+      { move: "73+b", score: 338 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 73+h 77+e)
+  "0x4869E1C90D5BA071": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -520 },
+      { move: "53g+b", score: -520 },
+      { move: "53g+h", score: -730 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 42+h 46+c)
+  "0x487DE6133C2C6518": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: 1370 },
+      { move: "22b-33", score: 1370 },
+      { move: "42h+g", score: 1370 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+f 77+d)
+  "0x48B474AED4E98B29": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+d 53+h 77+f)
+  "0x48C0356E0E882379": {
+    depth: 8,
+    candidates: [
+      { move: "53", score: 60 },
+      { move: "73+a", score: 0 },
+      { move: "53h-44", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+h 73+g)
+  "0x48E00A0EEB448AE0": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+d 73+h 77+f)
+  "0x491C9268E4131146": {
+    depth: 8,
+    candidates: [
+      { move: "53h+a", score: -340 },
+      { move: "73+h", score: -460 },
+      { move: "53h-44", score: -590 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+e 73+f)
+  "0x492A64F041977986": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 56+f 52+a)
+  "0x49393E0C2BC37BD6": {
+    depth: 8,
+    candidates: [
+      { move: "46+f", score: -3323 },
+      { move: "36+e", score: -3323 },
+      { move: "26d+c", score: -3683 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+b 73+f)
+  "0x4946679459811734": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 57+d 73+h)
+  "0x49527505A5AB36C9": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2282 },
+      { move: "37+d", score: -2282 },
+      { move: "77+f", score: -2282 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+e 73+b 57+d)
+  "0x4985CEC727750B26": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -120 },
+      { move: "33b+a", score: -120 },
+      { move: "73b+a", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 37+d 33+c)
+  "0x49A92D0E2C1AB230": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -1770 },
+      { move: "57+d", score: -1770 },
+      { move: "37+d", score: -1800 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+b 77+d)
+  "0x49B3870138666255": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 46+e 42+a)
+  "0x49C0AE704C749AD3": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -6435 },
+      { move: "46+c", score: -6435 },
+      { move: "46+f", score: -6435 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 56+f 32+a)
+  "0x49C94E3C2349A1E2": {
+    depth: 8,
+    candidates: [
+      { move: "46+e", score: -6570 },
+      { move: "36+d", score: -6570 },
+      { move: "56f+a", score: -6783 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 56+f 42+e 36+d)
+  "0x49D8993D31F8DB22": {
+    depth: 8,
+    candidates: [
+      { move: "32e+b", score: -1068 },
+      { move: "32e+h", score: -1887 },
+      { move: "42+a", score: -3107 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+d 73+e)
+  "0x49E8C2F4A67D81FD": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: -120 },
+      { move: "33a+b", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+e 73+b 37+d)
+  "0x49F9DE72E755C591": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -830 },
+      { move: "53+b", score: -830 },
+      { move: "73b+h", score: -830 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+d 73+g)
+  "0x4A1E5D8FBDF86ADE": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+f 73+b)
+  "0x4A3942D387B9B1CD": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2024 },
+      { move: "37f+e", score: -2024 },
+      { move: "57+d", score: -2024 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+d 77+h)
+  "0x4A4A232F82556B17": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+d 33a+b)
+  "0x4A56B6C2F6C9373C": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "57+f", score: -2086 },
+      { move: "37+d", score: -2086 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 57+d 73+h)
+  "0x4A71BD35802A114B": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2276 },
+      { move: "37+e", score: -2276 },
+      { move: "77+f", score: -2282 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 77+e 33h+a 37+d)
+  "0x4A810D0074170AD3": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "33+b", score: -62 },
+      { move: "53+h", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+d 73+h 77+e)
+  "0x4AA606F702F42CA4": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "73h+a", score: -62 },
+      { move: "33b+a", score: -62 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+b 73+g)
+  "0x4AC8652EE389EE8C": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+e 73+e)
+  "0x4AFE29A6D7F1F9AF": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+d 73+b 57+e)
+  "0x4B06B144284FD02C": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -120 },
+      { move: "73h+a", score: -120 },
+      { move: "53+b", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 57+d 53+c)
+  "0x4B0C4416ED6513C4": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -1686 },
+      { move: "77+e", score: -1686 },
+      { move: "57d+e", score: -1686 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+h 73+e)
+  "0x4B169575F0C161C3": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 33+a 57d-66)
+  "0x4B21525C4D951FBD": {
+    depth: 8,
+    candidates: [
+      { move: "73a+h", score: -400 },
+      { move: "53g+b", score: -400 },
+      { move: "33+a", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 77+e 73+a 37+d)
+  "0x4B4E139BC8B4B80A": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "53+b", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+f 42+a 46f-35)
+  "0x4B4EC1F5161C867B": {
+    depth: 8,
+    candidates: [
+      { move: "32b-43", score: -267 },
+      { move: "32b+a", score: -688 },
+      { move: "32b+h", score: -1012 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+d 73+h)
+  "0x4B9D923BAA04BA1C": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2950 },
+      { move: "37+e", score: -2950 },
+      { move: "57f+e", score: -2950 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+d 77+a)
+  "0x4BAD81196426E288": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 2 (after 33+b 37+e)
+  "0x4BB81D68878E1BEB": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 73+a 77+e)
+  "0x4BCD320A4EA91B17": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "33+b", score: 0 },
+      { move: "53a+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+d 73+e)
+  "0x4C07A077531F7E4D": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 20 },
+      { move: "33c+h", score: 20 },
+      { move: "33c+a", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+h 73+f)
+  "0x4C2A490F7F4AF726": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 73+b 77+e)
+  "0x4C3223F7266CD3FE": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 338 },
+      { move: "53b+a", score: 338 },
+      { move: "73b+a", score: 338 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 56+f 22+c 36+a)
+  "0x4C919A6960E9AED0": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: 0 },
+      { move: "52g+h", score: 0 },
+      { move: "32+e", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+e 73+g)
+  "0x4C9B619971A5EE07": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+d 42+c 36d-45)
+  "0x4CA4A88592BB7770": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: -2108 },
+      { move: "42c+h", score: -2108 },
+      { move: "22b+e", score: -3500 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 77+e 53b+a 77e+f)
+  "0x4CBF7C31D103B2C0": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+b 73+f)
+  "0x4CD5B0D0E450EBBF": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+b 73+g)
+  "0x4CF762FD69B380B5": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+e 52+g 46+a)
+  "0x4D22DFF4E33F8C93": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: 0 },
+      { move: "32b-43", score: 0 },
+      { move: "52g+h", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+g 77+d)
+  "0x4D5B162D218B7499": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1396 },
+      { move: "73+e", score: -1396 },
+      { move: "73+g", score: -1516 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+h 73+g)
+  "0x4D73DD4A5695766B": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 42+a 46+f)
+  "0x4DCCE9C693235226": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: -1721 },
+      { move: "52+h", score: -1721 },
+      { move: "52+b", score: -3498 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 73+b 77+e)
+  "0x4DDB470F321DFFD8": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33h+a", score: 0 },
+      { move: "73b+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+d 53+b 37d+e)
+  "0x4DF3433BEBBDA304": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -62 },
+      { move: "73b+a", score: -62 },
+      { move: "53h+a", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 37+d 73+a)
+  "0x4E1489541ADA398F": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "37+d", score: -2086 },
+      { move: "57+f", score: -2264 }
+    ]
+  },
+  // 4P ply 2 (after 33+g 37+d)
+  "0x4E2BCA2C3A5FE760": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -280 },
+      { move: "77+a", score: -280 },
+      { move: "77+g", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+f 33h+a)
+  "0x4E3C8D60C37A6553": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "77+e", score: -2024 },
+      { move: "57+d", score: -2024 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 36+d 42+c 36d+a)
+  "0x4E5EE30E9F22B337": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -1040 },
+      { move: "42c+h", score: -1040 },
+      { move: "22+c", score: -1040 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 57+e 33+h)
+  "0x4E913E9CC7AF1102": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2360 },
+      { move: "57e+d", score: -2360 },
+      { move: "37+d", score: -2480 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+d 73+e)
+  "0x4ED03688C0C806B8": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -120 },
+      { move: "33c+h", score: -120 },
+      { move: "33c+a", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 33+b 57+e)
+  "0x4EEF51F946A2AFE5": {
+    depth: 8,
+    candidates: [
+      { move: "73h+a", score: -520 },
+      { move: "33+a", score: -520 },
+      { move: "53g+h", score: -520 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+g 73+e)
+  "0x4EF7116F1184899C": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+h 73+f)
+  "0x4EFDDFF0EC9D8FD3": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+b 73+e)
+  "0x4F01FD8672366B96": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+e 53+b 77+f)
+  "0x4F0C2C0D24A7B6B9": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -62 },
+      { move: "53h+a", score: -62 },
+      { move: "33+b", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 37+d 33+b)
+  "0x4F198FE4A59D8C68": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -3090 },
+      { move: "57+d", score: -3090 },
+      { move: "77+f", score: -3090 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+g 53b+a)
+  "0x4F56C8095116EA68": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2486 },
+      { move: "37+d", score: -2486 },
+      { move: "57g+f", score: -2486 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+e 73+e)
+  "0x4F6DFEE26A200524": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+c 77+d)
+  "0x4F8C80D2B25C0C6C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+g 33+a)
+  "0x4FD5E998D70B4975": {
+    depth: 8,
+    candidates: [
+      { move: "37+f", score: -2486 },
+      { move: "77+f", score: -2486 },
+      { move: "57g+d", score: -2486 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 73+a 57+e)
+  "0x4FEFAB779BE1215E": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 62 },
+      { move: "33+b", score: 62 },
+      { move: "53a+b", score: 62 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 73+h 77+e)
+  "0x5043C68DDC224EC0": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 62 },
+      { move: "53+a", score: 62 },
+      { move: "33b+a", score: 62 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+a 57+e)
+  "0x505295F2E104D553": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+e 77+d)
+  "0x50AF4AEAB1F305B1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 57+d 53+h)
+  "0x50B2E54FCDE09127": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2396 },
+      { move: "37+d", score: -2396 },
+      { move: "77+e", score: -2402 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 56+f 52+g 46+f)
+  "0x50E7CBFEBC729710": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -227 },
+      { move: "52g+h", score: -227 },
+      { move: "32b-43", score: -657 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+c 77+e)
+  "0x511282801B1B062D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+e 33+a 77+e)
+  "0x5146976995D906C3": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "33a+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+b 73+f)
+  "0x515D59D03C9B99AC": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+e 73+g)
+  "0x516F3D5EE1DD9F2F": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 20 },
+      { move: "33c+h", score: 20 },
+      { move: "33c+a", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+d 73+f)
+  "0x518B617162EA1DFE": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 20 },
+      { move: "33b+h", score: 20 },
+      { move: "33b+c", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 73+b 77+e)
+  "0x51D87F64E65C7861": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 338 },
+      { move: "53h+a", score: 338 },
+      { move: "33h+a", score: 338 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+f 33+h 57f+e)
+  "0x51E2E2C913667637": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -120 },
+      { move: "53b+a", score: -120 },
+      { move: "73+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+d 73+e)
+  "0x51F3FCB0C3670F65": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+d 73+g)
+  "0x520563CBD8E2E446": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+e 53c+b)
+  "0x520E1FF83C0594D0": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2080 },
+      { move: "37+d", score: -2200 },
+      { move: "57e+f", score: -2950 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+c 53a+h)
+  "0x5225C6638092C4ED": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2880 },
+      { move: "77+f", score: -3000 },
+      { move: "57g+f", score: -3750 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 73+h 77+f)
+  "0x5239A12912EBC7A7": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 280 },
+      { move: "53+b", score: 280 },
+      { move: "33b+a", score: 280 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 37+d 53+b)
+  "0x526A818E7419A2ED": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2382 },
+      { move: "57+f", score: -2396 },
+      { move: "77+f", score: -2402 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+d 52+a 46+e)
+  "0x5285488F6CDD3F7F": {
+    depth: 8,
+    candidates: [
+      { move: "52a+h", score: -3579 },
+      { move: "42+a", score: -3602 },
+      { move: "32b+g", score: -3782 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+e 73+b)
+  "0x52A15D0664BE9C48": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "77+e", score: -2024 },
+      { move: "57+d", score: -2024 }
+    ]
+  },
+  // 4P ply 2 (after 33+c 37+b)
+  "0x52A4D0830E1B7C0F": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 120 },
+      { move: "77+a", score: 120 },
+      { move: "77+g", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+c 57+f)
+  "0x52AE18DE025CFEA4": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -400 },
+      { move: "33+b", score: -520 },
+      { move: "53c+b", score: -1180 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 36+d 42+a)
+  "0x52B6F3B9411E31F6": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -4483 },
+      { move: "36+e", score: -4483 },
+      { move: "46f-35", score: -4483 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+d 77+b)
+  "0x52D2517334E6FA2D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+g 73+b)
+  "0x52F91EDC3B597B14": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2424 },
+      { move: "37+e", score: -2424 },
+      { move: "77+f", score: -2424 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 32b-43 56+f)
+  "0x533F399976A91E99": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -59 },
+      { move: "52+h", score: -227 },
+      { move: "52+b", score: -1020 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+d 73+f)
+  "0x535CF78EF13D650B": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 160 },
+      { move: "33b+h", score: 160 },
+      { move: "33b+c", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+a 73+e)
+  "0x5371B1FAA6066522": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+b 73+e)
+  "0x538EE7294672F0F9": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 2 (after 33+b 37+f)
+  "0x53A3232CE2949573": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+e 73+g)
+  "0x53B8ABA1720AE7DA": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -120 },
+      { move: "33c+h", score: -120 },
+      { move: "33c+a", score: -120 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 56+f 42+c)
+  "0x53BF987A8382CE08": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -2962 },
+      { move: "46+f", score: -2962 },
+      { move: "36+d", score: -4663 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+g 77+e)
+  "0x53C5147F88CC7ED8": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 57+e 53+b)
+  "0x53E230F6162B3F87": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2024 },
+      { move: "77+f", score: -2024 },
+      { move: "37+f", score: -2024 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 37+d 53a+b)
+  "0x53E4A6AF4D43B417": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2480 },
+      { move: "37+d", score: -2600 },
+      { move: "57+d", score: -2690 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+e 53c+h 57e+d)
+  "0x540B02747D8B09FE": {
+    depth: 8,
+    candidates: [
+      { move: "53bg-64", score: -400 },
+      { move: "33+a", score: -400 },
+      { move: "73+a", score: -400 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+d 73+h)
+  "0x54217B6F742F184C": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -3090 },
+      { move: "37+d", score: -3090 },
+      { move: "57d+e", score: -3230 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+e 33b+a 37+e)
+  "0x5447C50F0B5FABBF": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+h 73+g)
+  "0x546F10A1DF00118F": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+d 53+h 57+f)
+  "0x546F9C0235973FC3": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53h+a", score: 0 },
+      { move: "73+h", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 33+b 57g+d)
+  "0x54725BC812DD7D06": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 280 },
+      { move: "53b+a", score: 280 },
+      { move: "73+h", score: 280 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+e 73+g)
+  "0x54805FDD14BF609F": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 42+c 46+f)
+  "0x548597DDF2E82CCF": {
+    depth: 8,
+    candidates: [
+      { move: "32g+b", score: -3553 },
+      { move: "22+a", score: -3553 },
+      { move: "42+a", score: -3553 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 26+d 22b+a)
+  "0x54E48BB7917BCC4F": {
+    depth: 8,
+    candidates: [
+      { move: "36+d", score: -3323 },
+      { move: "46+e", score: -3323 },
+      { move: "56f-45", score: -3395 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 56+f 42+e 36+a)
+  "0x54F5043561AFF315": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: 0 },
+      { move: "32e+b", score: 0 },
+      { move: "52+g", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 37+c 33+b)
+  "0x550A0B1520419110": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2424 },
+      { move: "37+d", score: -2424 },
+      { move: "57+f", score: -2424 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 33+a 37+d)
+  "0x5512DFA39DBE0C9A": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 400 },
+      { move: "53a+b", score: 400 },
+      { move: "73+a", score: 400 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 36+e 22b-33)
+  "0x551A843CCE16CE1D": {
+    depth: 8,
+    candidates: [
+      { move: "46e+f", score: -2703 },
+      { move: "36+d", score: -3822 },
+      { move: "36+e", score: -3903 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+e 32b+e 46+a)
+  "0x554641A8E279D156": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: 0 },
+      { move: "32be-43", score: 0 },
+      { move: "52+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+h 73+g)
+  "0x5568E30E338FF8F3": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 46+e 52+g)
+  "0x557E3DF6606D5235": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -4103 },
+      { move: "46+e", score: -4103 },
+      { move: "36e+d", score: -4103 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+a 73+g)
+  "0x5588B29739739810": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+e 73+f)
+  "0x55A57E5F75D3E2E9": {
+    depth: 8,
+    candidates: [
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 },
+      { move: "33c+b", score: -260 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+f 42+h 26+d)
+  "0x55A61F5DCDE7C76E": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: 640 },
+      { move: "32b-43", score: 640 },
+      { move: "52h+b", score: -1020 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+d 53+h 77+f)
+  "0x55B33B04DF0C0DFC": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53h+a", score: 0 },
+      { move: "73+h", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+e 73+b 77+e)
+  "0x55C0794B57077140": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "33h+a", score: -62 },
+      { move: "73b+a", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 33+h 77+e)
+  "0x55DDB0D7A29FACFF": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 338 },
+      { move: "73b+a", score: 338 },
+      { move: "53h+a", score: 338 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 53a+h 57+d)
+  "0x55E1BB230CCD2939": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -120 },
+      { move: "73+h", score: -120 },
+      { move: "53ab-64", score: -470 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 42+c 46+e)
+  "0x5623995E4DAD0BD0": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -2108 },
+      { move: "32g+b", score: -2108 },
+      { move: "32g+h", score: -2108 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+d 77+g)
+  "0x562B218CD3A40E36": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 33+b 77+e)
+  "0x562B6AADFD449265": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 338 },
+      { move: "53h+a", score: 338 },
+      { move: "33+b", score: 338 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 53+a 37+e)
+  "0x5663B6390C3BDF4B": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "73+h", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+b 77+f)
+  "0x566A729A1F78E6D0": {
+    depth: 8,
+    candidates: [
+      { move: "53h-44", score: 0 },
+      { move: "33+b", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+e 73+b 37+d)
+  "0x5675BF2EF9CBFEA9": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: -120 },
+      { move: "53+a", score: -120 },
+      { move: "73h+a", score: -810 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+d 33+a)
+  "0x567F4A7C3CE13D41": {
+    depth: 8,
+    candidates: [
+      { move: "57d-66", score: -2080 },
+      { move: "77+f", score: -2080 },
+      { move: "57d+e", score: -2080 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+e 33+h)
+  "0x56A492B5207D48D6": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "77+e", score: -2024 },
+      { move: "57+d", score: -2024 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+b 77+h)
+  "0x56C53980B611F078": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1216 },
+      { move: "73+e", score: -1216 },
+      { move: "73+g", score: -1336 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+g 33+h)
+  "0x56FCD16F7F9AAF8A": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2424 },
+      { move: "37+e", score: -2424 },
+      { move: "77+f", score: -2424 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+c 53c+b)
+  "0x575089FA47092ADD": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2480 },
+      { move: "77+f", score: -2600 },
+      { move: "57c+d", score: -3350 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+e 73+e)
+  "0x5776C0A60F3A8BBC": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 77+e 73+a 57+e)
+  "0x5777B4A278E60CDB": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "53+h", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+d 73+g)
+  "0x5796B48F653318CD": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+d 73+f)
+  "0x57B466A2E8D073C7": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 46+f 52+g)
+  "0x57D83375DF28752A": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -3463 },
+      { move: "46+e", score: -3463 },
+      { move: "36d+a", score: -3463 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 57+e 53+h)
+  "0x57E7FF4552E8EB19": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2024 },
+      { move: "37+d", score: -2024 },
+      { move: "77+d", score: -2024 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 37+d 33b-44 57+d)
+  "0x57E84C8E7E5B5F66": {
+    depth: 8,
+    candidates: [
+      { move: "73", score: 270 },
+      { move: "53+a", score: -3390 },
+      { move: "64h+g", score: -3510 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+g 77+d)
+  "0x58191586A8A027A3": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1396 },
+      { move: "73+e", score: -1396 },
+      { move: "73+g", score: -1516 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 57+e 53+h)
+  "0x582154B13ED9E262": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2702 },
+      { move: "57e+f", score: -2702 },
+      { move: "77+f", score: -2702 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+h 73+g)
+  "0x5831DEE1DFBE2551": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 77+f 73+b 37+d)
+  "0x583BA5A2F7C86AB8": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "53+h", score: 0 },
+      { move: "53+c", score: -730 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 33+b 57+e)
+  "0x583D33FBACA0E128": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33b+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+e 33+h 57+d)
+  "0x5841234E6C802F9F": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: -120 },
+      { move: "73+h", score: -120 },
+      { move: "53a+b", score: -120 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 56+f 52+g 36+d)
+  "0x5845C054D9E71884": {
+    depth: 8,
+    candidates: [
+      { move: "52g+b", score: -3440 },
+      { move: "42+a", score: -3840 },
+      { move: "52g+h", score: -3979 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+a 73+g)
+  "0x584DC42AEC63AF28": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+h", score: -260 },
+      { move: "33d+b", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+f 33+a)
+  "0x58524938C0936B40": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2144 },
+      { move: "77+f", score: -2144 },
+      { move: "37+f", score: -2264 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 26+d 42+a)
+  "0x585A7F9294D4AAC9": {
+    depth: 8,
+    candidates: [
+      { move: "36+d", score: -4483 },
+      { move: "46+e", score: -4796 },
+      { move: "36+e", score: -4823 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+e 73+f)
+  "0x5880F677D1513C70": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -120 },
+      { move: "33g+h", score: -120 },
+      { move: "33g+a", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+b 73+g)
+  "0x58B292F90C173AF3": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+d 53a+h 57d-66)
+  "0x58BC0978F4C3EA24": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53ab-64", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+e 33b+a 37+d)
+  "0x58BE126A2ABD4235": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 0 },
+      { move: "53+a", score: 0 },
+      { move: "73+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+b 57+d)
+  "0x58C1240C123DA616": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+e 33h+a 57+d)
+  "0x58C202DFEA9D8C82": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: -378 },
+      { move: "53+h", score: -378 },
+      { move: "73+h", score: -378 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 33+h 57+d)
+  "0x58CC72DE493DD1DB": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 280 },
+      { move: "53h+a", score: 280 },
+      { move: "33+b", score: 280 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+d 73+b 37+e)
+  "0x58D1BB42BCA50C64": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -430 },
+      { move: "53+h", score: -430 },
+      { move: "73b+g", score: -462 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+e 53+h 77+e)
+  "0x58F6EF73BC07DF8D": {
+    depth: 8,
+    candidates: [
+      { move: "73b+a", score: -62 },
+      { move: "53b+a", score: -62 },
+      { move: "33+h", score: -62 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 37+d 53b-64 57+e)
+  "0x596E518934C94AB5": {
+    depth: 8,
+    candidates: [
+      { move: "53", score: 150 },
+      { move: "33+b", score: 0 },
+      { move: "73+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+b 73+f)
+  "0x5997B37B6D7BB885": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+g 73+g)
+  "0x59A480851E373158": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+e 32b+e 46+f)
+  "0x59ACEBE305D44B2D": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -1068 },
+      { move: "42eh-33", score: -1068 },
+      { move: "42eh+b", score: -1887 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 53c+b 57c+d)
+  "0x59B538010BF44D94": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -30 },
+      { move: "73+a", score: -30 },
+      { move: "53bc-64", score: -740 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+b 73+g)
+  "0x59B56156E098D38F": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+e 73+g)
+  "0x59D96232F88EBD3D": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 46+f 42+a)
+  "0x5A14F813248BBE62": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -3690 },
+      { move: "46+e", score: -3690 },
+      { move: "36d-45", score: -4022 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+f 77+b)
+  "0x5A18BBD86506DB04": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+e 73+f)
+  "0x5A57608842864485": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -260 },
+      { move: "33g+h", score: -260 },
+      { move: "33g+a", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 37+d 33+a)
+  "0x5A5B8C4F2CB6DF52": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2690 },
+      { move: "77+f", score: -2690 },
+      { move: "57+f", score: -3090 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+g 33+b)
+  "0x5A97EA335E201A4F": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2424 },
+      { move: "57g+d", score: -2424 },
+      { move: "77+f", score: -2424 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+c 77+d)
+  "0x5ACE83793B775F56": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 22b+a 26d-35)
+  "0x5B142BBB1512243A": {
+    depth: 8,
+    candidates: [
+      { move: "22ab+h", score: 343 },
+      { move: "22ab-23", score: -23 },
+      { move: "22ab-33", score: -820 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 77+f 53+h)
+  "0x5B568AFF93F16AB5": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2282 },
+      { move: "37+e", score: -2282 },
+      { move: "37+d", score: -2402 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+g 73+g)
+  "0x5B73167A8DE049AD": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 57+d 73+b)
+  "0x5BB550BCCBDF35F2": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2024 },
+      { move: "77+e", score: -2024 },
+      { move: "37+e", score: -2024 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+e 22b+c 56+f)
+  "0x5BB80248EA6E2E6C": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: -3107 },
+      { move: "42+a", score: -3107 },
+      { move: "32+h", score: -3747 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+h 73+e)
+  "0x5BC7419AC43BCE72": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+d 73+g 57d+e)
+  "0x5BD52BC8C025DB3B": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -400 },
+      { move: "53a+h", score: -400 },
+      { move: "73g+h", score: -462 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+d 73+f)
+  "0x5BEAA8E2E86E4719": {
+    depth: 8,
+    candidates: [
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 },
+      { move: "33c+b", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+d 73+h 77+e)
+  "0x5BF2737299242BE6": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: -120 },
+      { move: "53+h", score: -120 },
+      { move: "53+a", score: -120 }
+    ]
+  },
+  // 4P ply 0 (initial)
   "0x5C3D5244B85BC3A6": {
     depth: 8,
     candidates: [
-      { move: "33+a", score: 40 },
-      { move: "33+b", score: 35 },
-      { move: "33+c", score: 25 }
+      { move: "33+a", score: 0 },
+      { move: "33+b", score: 0 },
+      { move: "33+h", score: 0 }
     ]
   },
-  // 2P 3-Base ply 1 (after 33+a / 73+a)
+  // 2P 3-Base ply 4 (after 53+a 37+e 73+b 57+d)
+  "0x5C44ECFD2843FB01": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -120 },
+      { move: "53a+b", score: -120 },
+      { move: "53a+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+e 73+g)
+  "0x5C4AB576455F41B6": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+e 73+a 57+d)
+  "0x5C5755607E7B7BE7": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53a+h", score: 0 },
+      { move: "53a+b", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 56+f 32b+a 46+e)
+  "0x5C753B2BD92D4D52": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -1900 },
+      { move: "22+b", score: -1900 },
+      { move: "22+c", score: -3367 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+b 73+e)
+  "0x5C7CF9FE71275695": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+d 53+b 37+d)
+  "0x5C8F307538E4C5A4": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 57+d 73+h)
+  "0x5C93573FAA9DC6EE": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2396 },
+      { move: "77+f", score: -2396 },
+      { move: "57d+f", score: -2734 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+d 73+e)
+  "0x5CAAC15F2F56D2C7": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+e 53c+b 57e+d)
+  "0x5CABD9986245DD99": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -1180 },
+      { move: "73+a", score: -1180 },
+      { move: "33+a", score: -1200 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+e 73+b 57+d)
+  "0x5CC7CD6CAE5E581C": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: -120 },
+      { move: "33a+b", score: -120 },
+      { move: "53+a", score: -310 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 73+b 57+d)
+  "0x5CC9BD6D0DFE0545": {
+    depth: 8,
+    candidates: [
+      { move: "53h+a", score: 280 },
+      { move: "73+h", score: 280 },
+      { move: "73+a", score: 90 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 53+h 57+g)
+  "0x5CDA0859183D27E7": {
+    depth: 8,
+    candidates: [
+      { move: "53h-44", score: 462 },
+      { move: "73+a", score: 462 },
+      { move: "53h+a", score: 462 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+d 53a+b 77+f)
+  "0x5CDDB052EB25E161": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -340 },
+      { move: "73+h", score: -460 },
+      { move: "53ah-44", score: -470 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+b 77+d)
+  "0x5CF184AAB14D316F": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+e 53+b 57+e)
+  "0x5CF320C0F8C40B13": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -62 },
+      { move: "53b+a", score: -62 },
+      { move: "33h+a", score: -62 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 53a+b 57+f)
+  "0x5D01175401BED35E": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "53ah-44", score: 0 },
+      { move: "73+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 53+b 77+f)
+  "0x5D1B6895D5EC571D": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 62 },
+      { move: "73+a", score: 62 },
+      { move: "53b+a", score: 62 }
+    ]
+  },
+  // 4P ply 1 (after 33+b)
+  "0x5D44FD4A11031CC6": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -1376 },
+      { move: "37+d", score: -1376 },
+      { move: "37+f", score: -1376 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+f 53+b 57+f)
+  "0x5D539773D27FF79B": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53b+a", score: 0 },
+      { move: "73+b", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+b 73+g)
+  "0x5D5DF07AF975C543": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+g 73+f)
+  "0x5D6EC3848A394C9E": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+h 73+f)
+  "0x5D80DB88EF8CB2D0": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 77+e 53+h)
+  "0x5DA327462642EC03": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2144 },
+      { move: "57+d", score: -2144 },
+      { move: "57+f", score: -2396 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+d 73+e)
+  "0x5DAD32F0C3D93BBB": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+g 73+g)
+  "0x5DD05AFB3EFBCD0E": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 73+b 37+e)
+  "0x5DE80EEAD5B64F80": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 338 },
+      { move: "53b+a", score: 338 },
+      { move: "73b+a", score: 338 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+e 42+a 46+f)
+  "0x5DEC9DF5A7687B4E": {
+    depth: 8,
+    candidates: [
+      { move: "32b-43", score: -1020 },
+      { move: "32b+h", score: -1020 },
+      { move: "52+h", score: -1079 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 36+e 22b+c)
+  "0x5E24036C2441EBB4": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -3283 },
+      { move: "36+d", score: -3283 },
+      { move: "36+e", score: -4103 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+e 53+b 57e+d)
+  "0x5E24493D7F577F4C": {
+    depth: 8,
+    candidates: [
+      { move: "53h+a", score: -120 },
+      { move: "33+a", score: -120 },
+      { move: "33+b", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+e 73+a 77+e)
+  "0x5E28F9DD1B3EF30D": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -400 },
+      { move: "53c+h", score: -400 },
+      { move: "53c+b", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+h 73+e)
+  "0x5E5496DE79EA32F9": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+b 73+e)
+  "0x5EAB6F01E2F02E60": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+d 73+a)
+  "0x5EDF9190232FE926": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2830 },
+      { move: "57f+e", score: -2840 },
+      { move: "37+e", score: -2950 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+d 77+e)
+  "0x5EE09C572C4EA041": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 2 (after 33+a 37+e)
+  "0x5EFA1EC30EA548D1": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+d 53+a 77+e)
+  "0x5F6724CD0DC2DC83": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 0 },
+      { move: "73h+a", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 36+d 52+g)
+  "0x5F7A38DFBABDFABE": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -3980 },
+      { move: "46f+d", score: -4542 },
+      { move: "46f+e", score: -4843 }
+    ]
+  },
+  // 2P 1-Base ply 1 (after 53+b)
+  "0x5F84F587E76D3A0A": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -3350 },
+      { move: "57+f", score: -3350 },
+      { move: "37+d", score: -3350 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+b 73+g)
+  "0x5F8A66856AA2BDB6": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 57+d 33+h)
+  "0x5FB09F0F8F1CE16C": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2024 },
+      { move: "77+e", score: -2024 },
+      { move: "37+e", score: -2024 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+e 73+e)
+  "0x5FBC2A0D5EDAAA95": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+d 32+a 36d-45)
+  "0x5FCA047EE4ACD819": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -1079 },
+      { move: "42+b", score: -1660 },
+      { move: "52+h", score: -1721 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+h 57+d)
+  "0x5FE7238F737F550A": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: -120 },
+      { move: "53+a", score: -306 },
+      { move: "53+h", score: -342 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+d 77+a)
+  "0x602A77D796F4454D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 77+e 53b-64)
+  "0x6069F8C2344D639A": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2480 },
+      { move: "57+f", score: -2480 },
+      { move: "37+d", score: -2480 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 37+d 53c+b)
+  "0x607A9F2786E5E183": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2080 },
+      { move: "37+d", score: -2200 },
+      { move: "57+d", score: -2290 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+g 73+e)
+  "0x607F7BB767A63848": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+d 73+a 57+e)
+  "0x6081478ADA9D77E9": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73h+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+h 73+e)
+  "0x609163BB0213C606": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 2 (after 33+d 37+b)
+  "0x60A3A0F44C7D56B4": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 56+f 42+a 36+d)
+  "0x60D228AD3AC7B019": {
+    depth: 8,
+    candidates: [
+      { move: "42a+h", score: -1615 },
+      { move: "32+a", score: -2348 },
+      { move: "32+c", score: -2350 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+e 53+b 37+d)
+  "0x61410BEB2E15773B": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -62 },
+      { move: "53h+a", score: -62 },
+      { move: "33+b", score: -62 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+a 73+e)
+  "0x6176C18DE4604F99": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+b 73+e)
+  "0x6189975E0414DA42": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+e 53a+b)
+  "0x61902670F7A3C144": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2480 },
+      { move: "37+d", score: -2600 },
+      { move: "57e+f", score: -3350 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+d 53+b)
+  "0x6196B029ACCB4AD4": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "37+e", score: -2024 },
+      { move: "77f+e", score: -2024 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+c 53c+h)
+  "0x61BBFFEB4B349179": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2480 },
+      { move: "77+f", score: -2600 },
+      { move: "57g+f", score: -3350 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+e 73+g)
+  "0x61BFDBD6306CCD61": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -240 },
+      { move: "33d+b", score: -240 },
+      { move: "33d+h", score: -240 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 56+f 42+c 36+d)
+  "0x622FB5F8FB4D145B": {
+    depth: 8,
+    candidates: [
+      { move: "42c+h", score: -1287 },
+      { move: "42c+a", score: -2107 },
+      { move: "22+b", score: -2108 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 33h+a 77+e)
+  "0x62597E72840C8C83": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+d 73+e)
+  "0x626F343A54AF2638": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 33+a 77+f)
+  "0x6278BEE54EEFE9C4": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 120 },
+      { move: "53a+b", score: 120 },
+      { move: "33a+b", score: -690 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 53a+b 57c+f)
+  "0x628BDA65DF9CCC67": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 400 },
+      { move: "53ab-64", score: 400 },
+      { move: "33+a", score: 400 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+e 77+d)
+  "0x62A83A9DF3952F0A": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -856 },
+      { move: "73+e", score: -856 },
+      { move: "73+g", score: -976 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 33+h 77+e)
+  "0x62DA5FE302112F9E": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33h+a", score: 0 },
+      { move: "73+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 53a+b 37d+e)
+  "0x62F25BD7DBB17342": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "33+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 1 (after 33+a)
   "0x62F499414419B482": {
     depth: 8,
     candidates: [
-      { move: "57+e", score: 15 },
-      { move: "77+e", score: 10 },
-      { move: "37+d", score: 8 }
+      { move: "77+e", score: -2024 },
+      { move: "57+e", score: -2024 },
+      { move: "37+e", score: -2024 }
     ]
   },
-  // OFK ply 1 (after 32+a / 42+a)
+  // 2P 3-Base ply 4 (after 53+b 57+g 53b+a 77+e)
+  "0x63333B1B166003B8": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "73+a", score: 400 },
+      { move: "73+h", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+e 73+g)
+  "0x63684D29A3BBB594": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -100 },
+      { move: "33d+b", score: -100 },
+      { move: "33d+h", score: -100 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 77+f 53+b)
+  "0x6369DF1F63D15F69": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -2282 },
+      { move: "77+e", score: -2282 },
+      { move: "57+d", score: -2402 }
+    ]
+  },
+  // 4P ply 1 (after 33+h)
+  "0x6381082F6AFAE839": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -1376 },
+      { move: "37+d", score: -1376 },
+      { move: "37+f", score: -1376 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+g 73+g)
+  "0x6389E4CC7C23D36B": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 73+a 57+e)
+  "0x639207B23FA9C903": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -400 },
+      { move: "53g+b", score: -400 },
+      { move: "73+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+a 73+f)
+  "0x63A57F749E8926CC": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+g 73+f)
+  "0x63AB36E1F1C0B861": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+c 77+d)
+  "0x640B761C408EABA9": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 32b+c 36+e)
+  "0x6477F153A5376160": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -2108 },
+      { move: "32+a", score: -2108 },
+      { move: "42gh-33", score: -2108 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+d 53+b 57+e)
+  "0x64C3781C368E795A": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "53h+a", score: 0 },
+      { move: "33+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 73+a 57+e)
+  "0x64EB7C28EF2E2586": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33h+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+f 33+a)
+  "0x65385A3FB7B5618B": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "77+e", score: -2086 },
+      { move: "37f+e", score: -2086 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 77+f 53+h 77)
+  "0x6567591C117125C3": {
+    depth: 8,
+    candidates: [
+      { move: "73h-64", score: 260 },
+      { move: "73h+a", score: 260 },
+      { move: "73", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 33+a 77+e)
+  "0x658015EC441BDA95": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "73a+h", score: 0 },
+      { move: "53a+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+g 73+g)
+  "0x65B6E31FF619BD52": {
+    depth: 8,
+    candidates: [
+      { move: "33b+h", score: 140 },
+      { move: "33b+a", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 57+f 53b-64)
+  "0x65FF60ADC2D458AF": {
+    depth: 8,
+    candidates: [
+      { move: "57d-66", score: -2480 },
+      { move: "77+f", score: -2480 },
+      { move: "57d+e", score: -2480 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+d 53b-64 77+e)
+  "0x660B135F658B42C2": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -340 },
+      { move: "44h+a", score: -340 },
+      { move: "73+a", score: -390 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+g 73+f)
+  "0x6638E1A54C1144EA": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 73+b 77+e)
+  "0x665CB1C1C0CF581D": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73b+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 53+b 37+c)
+  "0x666405406EA10F99": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "73+a", score: 400 },
+      { move: "53b+a", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+h 73+g)
+  "0x666860D69D663B34": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 53c+h 37+d)
+  "0x667F82ABC76B7CAD": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -730 },
+      { move: "73+h", score: -730 },
+      { move: "53bg+h", score: -1330 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+e 33+b 57+d)
+  "0x6684D62B1779DB60": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33b+a", score: 0 },
+      { move: "53a+h", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 46+f 22b+a)
+  "0x668811A8525F85C7": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -3323 },
+      { move: "26+d", score: -3323 },
+      { move: "46f+e", score: -3903 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 37+d 33b-44 57+f)
+  "0x66D363FB47DCE5BC": {
+    depth: 8,
+    candidates: [
+      { move: "33", score: -870 },
+      { move: "44b+a", score: -3160 },
+      { move: "53+a", score: -3310 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+g 77+d)
+  "0x66DCE0E3D359D35C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1396 },
+      { move: "73+e", score: -1396 },
+      { move: "73+g", score: -1516 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 73+b 77+e)
+  "0x66DF905046D2FB00": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "73b+a", score: 0 },
+      { move: "33+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 33+h 57+e)
+  "0x66F8C69ED75915D7": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -62 },
+      { move: "33h+a", score: -62 },
+      { move: "73+h", score: -62 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 32+a 46+c)
+  "0x6702E9E7050B01A9": {
+    depth: 8,
+    candidates: [
+      { move: "52h-43", score: 1527 },
+      { move: "32+b", score: 1370 },
+      { move: "32+c", score: 1370 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+f 33+a 57f+e)
+  "0x67161A6D3030FF77": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53b-64", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+e 73+g)
+  "0x671C9757837749C2": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+d 52+g 36d+f)
+  "0x6722EBA231C876C6": {
+    depth: 8,
+    candidates: [
+      { move: "42h+f", score: -2628 },
+      { move: "32+g", score: -2628 },
+      { move: "42h+a", score: -2628 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 26+d 32b+e 36+e)
+  "0x673B9A4AAB950FF5": {
+    depth: 8,
+    candidates: [
+      { move: "32be-43", score: -1068 },
+      { move: "52+h", score: -1068 },
+      { move: "32be+h", score: -2105 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+g 73+g)
+  "0x676175E065CEC5A7": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+b 73+g)
+  "0x677094339B612770": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+d 53+h 37+d)
+  "0x6793ADA5ED45D7FA": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -120 },
+      { move: "53b+a", score: -120 },
+      { move: "33+a", score: -378 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+e 73+f)
+  "0x67A20E2837B5C852": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+b", score: -380 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+e 53+h 37e+d)
+  "0x67BBAB6EA5CCB618": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -120 },
+      { move: "33h+a", score: -120 },
+      { move: "53h+a", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+e 53+h 57e+d)
+  "0x67C7BBDB65EC78AF": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33b+a", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 73+a 37+d)
+  "0x6812F67429A404AC": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: -138 },
+      { move: "33a+b", score: -138 },
+      { move: "73a+h", score: -138 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+f 33+a 77+d)
+  "0x68136583CC5BC0D3": {
+    depth: 8,
+    candidates: [
+      { move: "53b-64", score: 62 },
+      { move: "73+a", score: 62 },
+      { move: "53b+a", score: 62 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+e 33+b)
+  "0x686167D05B84BC29": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "57+d", score: -2086 },
+      { move: "77+f", score: -2086 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+d 32b+a 46+e)
+  "0x6879C34B306F04BC": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: -1900 },
+      { move: "52+h", score: -1900 },
+      { move: "52+g", score: -3367 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 33+a 57+d)
+  "0x6891D7E5AFB9A7B1": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 62 },
+      { move: "53a+h", score: 62 },
+      { move: "53a+b", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+f 52+h 36+e)
+  "0x6898AA0550480C39": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -1721 },
+      { move: "32+b", score: -1721 },
+      { move: "42+g", score: -2961 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+e 73+h 37+d)
+  "0x68B04A4B82320A56": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: -120 },
+      { move: "53+b", score: -120 },
+      { move: "73h+a", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+f 77+a)
+  "0x68E09D7CC7146464": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+d 77+g)
+  "0x68EED4E9A85DFAC9": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 77+f 53c+h)
+  "0x69469456610D29DB": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2080 },
+      { move: "77+f", score: -2200 },
+      { move: "57+f", score: -2290 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+d 73+g)
+  "0x695341EA1ECAEC32": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 53+c 57d+e)
+  "0x697B6EB2DEFF8776": {
+    depth: 8,
+    candidates: [
+      { move: "73a+h", score: -400 },
+      { move: "53g+b", score: -400 },
+      { move: "33+b", score: -462 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+a 57+d)
+  "0x6990FABAD6347F57": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "53a+b", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+e 22b+c 36+a)
+  "0x69C5D9AAA382F0CF": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: 0 },
+      { move: "42+a", score: 0 },
+      { move: "32+e", score: -497 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+e 42+a 26+d)
+  "0x69E065954E2A32A0": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -1020 },
+      { move: "42h-33", score: -1020 },
+      { move: "42h+b", score: -1020 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+d 73+f)
+  "0x69EDD895AA086DA2": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 33+b 77+f)
+  "0x6A49B3241640947B": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 62 },
+      { move: "73+a", score: 62 },
+      { move: "73+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+a 73+g)
+  "0x6A4AB45DAE058593": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 37+d 53+h)
+  "0x6A55D46E84399731": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -2382 },
+      { move: "57+d", score: -2396 },
+      { move: "37+d", score: -2402 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 53a+h 57c+d)
+  "0x6A6B7612D2EF3600": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 400 },
+      { move: "53ah-44", score: 400 },
+      { move: "73+a", score: 400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+d 53+h 77+e)
+  "0x6A826FAC06E7AADE": {
+    depth: 8,
+    candidates: [
+      { move: "53b+a", score: -120 },
+      { move: "33+b", score: -120 },
+      { move: "33+a", score: -310 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 73+a 37+d)
+  "0x6A85D55864D65166": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 400 },
+      { move: "73+h", score: 400 },
+      { move: "53a+h", score: 400 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 56+f 42+c 46+f)
+  "0x6A8DBE529ED89BCF": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -179 },
+      { move: "42c+h", score: -179 },
+      { move: "22+a", score: -1339 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+d 53+h 57+f)
+  "0x6AAA69674E6ECB3C": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -710 },
+      { move: "53h+b", score: -710 },
+      { move: "53h+g", score: -744 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+b 73+g)
+  "0x6AB5E28E4E711048": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+h", score: -260 },
+      { move: "33d+b", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+e 33+a 77+f)
+  "0x6AEE7B58CAFC2F5B": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -400 },
+      { move: "53c+h", score: -400 },
+      { move: "73+a", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 33+h 77+e)
+  "0x6B430F60CB36DA24": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 338 },
+      { move: "73b+a", score: 338 },
+      { move: "53h+a", score: 338 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+a 73+g)
+  "0x6B4D47F2428A6CEF": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+e 32+a 36+d)
+  "0x6B4F8B5A9E522E8E": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -1079 },
+      { move: "42+b", score: -1660 },
+      { move: "52+h", score: -1721 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+a 73+f)
+  "0x6B6F95DFCF6907E5": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+d 53+h 77+f)
+  "0x6B76CE61A4F5F903": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "73+a", score: -258 },
+      { move: "53h+a", score: -710 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+c 33+b)
+  "0x6B94B4A249E8E7CB": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2424 },
+      { move: "77+f", score: -2424 },
+      { move: "77+d", score: -2424 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+d 73+h 57d+f)
+  "0x6B951422FCDBA644": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 120 },
+      { move: "53a+h", score: 0 },
+      { move: "73+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+h 73+g)
+  "0x6BAD166B48760C0C": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 37+e 73+h)
+  "0x6BD237ECAE20B850": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -2282 },
+      { move: "57+d", score: -2282 },
+      { move: "37+d", score: -2282 }
+    ]
+  },
+  // OFK ply 2 (after 32+a 36+e)
+  "0x6C04DE9EF3210C59": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: -620 },
+      { move: "32+b", score: -620 },
+      { move: "32+a", score: -820 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+a 73+e)
+  "0x6C5349A540E29100": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 26+d 32+a)
+  "0x6C7584FDEF38CC49": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -6435 },
+      { move: "46+f", score: -6435 },
+      { move: "46+c", score: -6435 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 46+e 42+e 36+d)
+  "0x6C8CDAFEF293853D": {
+    depth: 8,
+    candidates: [
+      { move: "32e+b", score: -3107 },
+      { move: "52+h", score: -3107 },
+      { move: "52+g", score: -3367 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+d 52+a 56+g)
+  "0x6C9CF09187E7BB2F": {
+    depth: 8,
+    candidates: [
+      { move: "22a+b", score: -657 },
+      { move: "42h+b", score: -1200 },
+      { move: "32+a", score: -1652 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 53b+a 57+f)
+  "0x6CD3C7889AFC0828": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "73+a", score: 400 },
+      { move: "73+h", score: 400 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+d 77+e)
+  "0x6CE7EC206E288AFA": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -856 },
+      { move: "73+e", score: -856 },
+      { move: "73+g", score: -976 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 73+b 77+f)
+  "0x6CFC544C69123358": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 280 },
+      { move: "53+b", score: 280 },
+      { move: "73h+a", score: 280 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+b 57+e)
+  "0x6D22F93442705BDB": {
+    depth: 8,
+    candidates: [
+      { move: "53b-64", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+f 32b+e 46f-35)
+  "0x6D2964C77F2ABDBA": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -1068 },
+      { move: "42eh-33", score: -1068 },
+      { move: "42eh+b", score: -1660 }
+    ]
+  },
+  // 4P ply 2 (after 33+h 37+f)
+  "0x6D66D649996D618C": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+a 73+g)
+  "0x6D724021C8B002D6": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: 140 },
+      { move: "33a+b", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+e 77+g)
+  "0x6D7D03AD158C0642": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+d 73+h 77+e)
+  "0x6D85AA473C6F01BB": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -120 },
+      { move: "53a+h", score: -120 },
+      { move: "33+b", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+d 73+f)
+  "0x6D9902EB8AC491F4": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 160 },
+      { move: "33h+b", score: 160 },
+      { move: "33h+c", score: 20 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+e 53+h 77+f)
+  "0x6DFF736DD166B102": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "53b+a", score: 0 },
+      { move: "73a+h", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 56+f 22+c 36+d)
+  "0x6DFF8A85A14373D4": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -1343 },
+      { move: "42+c", score: -2667 },
+      { move: "22c+h", score: -2667 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+a 73+e)
+  "0x6E84DF5AD335E9F5": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 53c+b 37+d)
+  "0x6E9F2EDCCA1886CA": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -610 },
+      { move: "53gh-44", score: -610 },
+      { move: "73+a", score: -610 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+d 53+b 77+f)
+  "0x6EAFA6D40AAD1FA2": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -120 },
+      { move: "53h+a", score: -120 },
+      { move: "33+a", score: -258 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 53c+b 77+f)
+  "0x6EDF5947D8A5A8CA": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -1180 },
+      { move: "33+b", score: -1320 },
+      { move: "53bc+h", score: -1330 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 73+b 77+e)
+  "0x6F46C0D38FF50EBA": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 338 },
+      { move: "53h+a", score: 338 },
+      { move: "33h+a", score: 338 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+d 73+f)
+  "0x6F4E94141913E901": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 20 },
+      { move: "33h+b", score: 20 },
+      { move: "33h+c", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 73+b 37+d)
+  "0x6F51C4E424998FE6": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 280 },
+      { move: "53+a", score: 280 },
+      { move: "33b+a", score: 270 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 73+b 57+d)
+  "0x6F5B05E639967141": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -258 },
+      { move: "53+h", score: -258 },
+      { move: "53+b", score: -310 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+a 73+g)
+  "0x6FA5D6DE5B677A23": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+d 73+e)
+  "0x6FAA428781BF1100": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+g 73+g)
+  "0x6FD72A8C7C9DE7B5": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+f 33+b)
+  "0x707A59943E9E32B1": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2206 },
+      { move: "57+d", score: -2206 },
+      { move: "77+f", score: -2206 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 53+h 57c+d)
+  "0x70E2A744D9E25460": {
+    depth: 8,
+    candidates: [
+      { move: "73", score: 550 },
+      { move: "53", score: 460 },
+      { move: "33+a", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+g 73+g)
+  "0x70F4E0B47F32EE68": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+d 73+h 77+e)
+  "0x70F6A42DEDEB2F3E": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+e 77+a)
+  "0x70FBA338A20EEAFC": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 4P ply 2 (after 33+d 37+g)
+  "0x71093273DCBB1342": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 20 },
+      { move: "77+a", score: 20 },
+      { move: "77+g", score: -100 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+c 53+h)
+  "0x714FE5D39124A16E": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -3630 },
+      { move: "57c+d", score: -3630 },
+      { move: "37+d", score: -4340 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+e 42+e 36+a)
+  "0x71A147F6A2C4AD0A": {
+    depth: 8,
+    candidates: [
+      { move: "32e+b", score: 0 },
+      { move: "42+a", score: 0 },
+      { move: "52h+g", score: -497 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+g 73+e)
+  "0x71D5E930F7607DBE": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 37+d 33+h)
+  "0x71DC7A81DE647897": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2360 },
+      { move: "57+f", score: -2360 },
+      { move: "77+f", score: -2480 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+d 73+f)
+  "0x71F6E6D1CF12E33A": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 37+d 33+h 57+f)
+  "0x72000FB831B20318": {
+    depth: 8,
+    candidates: [
+      { move: "53h-44", score: -120 },
+      { move: "53h+a", score: -120 },
+      { move: "33+b", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+b 73+f)
+  "0x721045B59FA91F40": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+g 73+g)
+  "0x7223764BECE5969D": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+a 73+g)
+  "0x72518A19CB1F0B0B": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+e 53+b 57e+f)
+  "0x725419C6B91BAC4D": {
+    depth: 8,
+    candidates: [
+      { move: "53b+a", score: -120 },
+      { move: "73+a", score: -120 },
+      { move: "73+h", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 37+d 73+a)
+  "0x7269E32206E902E0": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "57+d", score: -2086 },
+      { move: "77+f", score: -2086 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+f 33+b)
+  "0x727E60DDB0BFBDFF": {
+    depth: 8,
+    candidates: [
+      { move: "57d+e", score: -2950 },
+      { move: "77+e", score: -2950 },
+      { move: "77+f", score: -2950 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 36+e 42+a 36e+d)
+  "0x727EB15E4C5AAA31": {
+    depth: 8,
+    candidates: [
+      { move: "42a+h", score: -88 },
+      { move: "22+b", score: -640 },
+      { move: "22+c", score: -1243 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+b 73+g)
+  "0x72AEDCCA2B6B9ED0": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+e 73+g)
+  "0x72C2DFAE337DF062": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 32b+g 36+e)
+  "0x72C49F000D10778C": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: -2108 },
+      { move: "42+a", score: -2108 },
+      { move: "32bg+h", score: -2108 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 53b+a 37+e)
+  "0x72E91606E5BA9FC6": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "73+a", score: 400 },
+      { move: "73+h", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+g 73+e)
+  "0x73027FCF64B7054B": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+h 73+f)
+  "0x7308B15099AE0304": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 36+e 32b-43)
+  "0x731FF27C74F7B6EA": {
+    depth: 8,
+    candidates: [
+      { move: "46+f", score: -4725 },
+      { move: "26+d", score: -6570 },
+      { move: "26+a", score: -6783 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+d 73+a 37+e)
+  "0x73564D8C4E77ABA1": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: -120 },
+      { move: "53+b", score: -120 },
+      { move: "33a+b", score: -120 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 46+e 42+c 56+g)
+  "0x735B9DB65551AAE6": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -1040 },
+      { move: "42c+h", score: -1040 },
+      { move: "22+c", score: -1040 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+h 73+g)
+  "0x73B6282F2D6C8294": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+e 33+a 57+d)
+  "0x73C6D5809E52885A": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "33a+b", score: 0 },
+      { move: "53a+b", score: 0 }
+    ]
+  },
+  // 4P ply 2 (after 33+d 37+c)
+  "0x73DEA48C4F6C6BB7": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -120 },
+      { move: "77+a", score: -120 },
+      { move: "77+g", score: -240 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 33+a 57d+e)
+  "0x740860D80F7BA9F3": {
+    depth: 8,
+    candidates: [
+      { move: "73a+h", score: -400 },
+      { move: "53g+b", score: -400 },
+      { move: "33+b", score: -520 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+b 73+g)
+  "0x740D904B98701A73": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+e 73+e)
+  "0x743BDCC3AC080D50": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+d 73+b 77+e)
+  "0x7463F392790DD85B": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -120 },
+      { move: "73h+a", score: -120 },
+      { move: "53+h", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 33+b 77+f)
+  "0x7466BA9BD67B6214": {
+    depth: 8,
+    candidates: [
+      { move: "53g+b", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 57+d 73+b)
+  "0x74B44850FBD3E5B4": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2024 },
+      { move: "37+d", score: -2024 },
+      { move: "77+e", score: -2024 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 53+a 57+d)
+  "0x74E3F4D007B051D2": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "33+h", score: -306 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+h 73+g)
+  "0x751564AE9E770637": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 22b-33 46+e)
+  "0x753A4FD9CC48666E": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: -3045 },
+      { move: "43h+b", score: -3045 },
+      { move: "42+a", score: -3662 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 26+d 52+g 46+f)
+  "0x755B013F7003FABB": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -1343 },
+      { move: "32b-43", score: -1343 },
+      { move: "32b+h", score: -1839 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 26+d 52+g 36+e)
+  "0x755EF6136233FA46": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: -1343 },
+      { move: "42h-33", score: -1343 },
+      { move: "42h+b", score: -1839 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+f 77+g)
+  "0x75663DE9709688DA": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+d 77+a)
+  "0x7568747C1FDF1677": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 2 (after 33+h 37+e)
+  "0x757DE80DFC77EF14": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 33+a 57+d)
+  "0x75E2D98F7E3D8934": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 120 },
+      { move: "53a+h", score: 120 },
+      { move: "33+h", score: -900 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 42+g 56+f)
+  "0x7681297943A5C9B2": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -1560 },
+      { move: "52h+a", score: -1560 },
+      { move: "32c+b", score: -2108 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 53b+a 37+d)
+  "0x76BD5ECCEDDD959F": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "53ab-64", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+g 73+g)
+  "0x76CBE767F5088051": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 73+h 57+e)
+  "0x76D00419B6829A39": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -520 },
+      { move: "73+a", score: -520 },
+      { move: "53g+b", score: -520 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+b 73+g)
+  "0x76DA06B40BA76286": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+c 53+b)
+  "0x76E7BAC8986CC94E": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -3630 },
+      { move: "57g+f", score: -3630 },
+      { move: "77+f", score: -4330 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+g 73+f)
+  "0x76E9354A78EBEB5B": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 53b+a 57g+f)
+  "0x77187878036B1885": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 400 },
+      { move: "33+a", score: 400 },
+      { move: "33+b", score: 400 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 37+d 53+h)
+  "0x7726DA0455BDB9B4": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -3090 },
+      { move: "37+d", score: -3090 },
+      { move: "57+d", score: -3600 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 33+b 77+f)
+  "0x773ABD4EC7C4BAFE": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 120 },
+      { move: "73+a", score: 120 },
+      { move: "73+b", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+c 73+a)
+  "0x7753EB5635F98AD0": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2480 },
+      { move: "57c+f", score: -2480 },
+      { move: "77+e", score: -2480 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+b 77+d)
+  "0x77767264439F96AA": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+h 73+g)
+  "0x77C2F2510DA07EC2": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+g 73+g)
+  "0x77CC14C81987692D": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+e 22b+c 36+d)
+  "0x77F118DCB24BE668": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -3107 },
+      { move: "32+a", score: -3107 },
+      { move: "42+b", score: -3747 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+e 42+c 36+d)
+  "0x782127A1E84581E7": {
+    depth: 8,
+    candidates: [
+      { move: "42c+h", score: -2108 },
+      { move: "32+a", score: -2108 },
+      { move: "22b+e", score: -3500 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+a 73+g)
+  "0x7830438A419B51EC": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+d 77+h)
+  "0x784D5358C03341AC": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 36+e 42+a 46+e)
+  "0x787AB477968A02BA": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -761 },
+      { move: "52+h", score: -761 },
+      { move: "32a+b", score: -940 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 26+d 52+h 46+f)
+  "0x78B8DE3664032551": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -1020 },
+      { move: "32b-43", score: -1020 },
+      { move: "32b+h", score: -1068 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+d 77+b)
+  "0x7955A7BDC6345DE8": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+h 37+e)
+  "0x7962AED53C370F0D": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "73b+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+g 73+a)
+  "0x797EE812C98BDCD1": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2486 },
+      { move: "77+d", score: -2486 },
+      { move: "37+d", score: -2486 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 36+d 42+e)
+  "0x7985C04A68B7D86F": {
+    depth: 8,
+    candidates: [
+      { move: "46+e", score: -3463 },
+      { move: "56+f", score: -3463 },
+      { move: "36d-45", score: -3463 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+e 73+b)
+  "0x79A58A5910719890": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "77+e", score: -2024 },
+      { move: "57+d", score: -2024 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+e 33+a 37+d)
+  "0x79B07676E70A57DF": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "53h-44", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 36+d 42+e 36d-45)
+  "0x7A2E86FE43E77808": {
+    depth: 8,
+    candidates: [
+      { move: "32e+b", score: -3107 },
+      { move: "52+h", score: -3107 },
+      { move: "52+g", score: -3367 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+e 33h+a 77+e)
+  "0x7A424036E116021B": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "73+a", score: -62 },
+      { move: "53+b", score: -62 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 73+b 37+d)
+  "0x7A6171A3779B1B95": {
+    depth: 8,
+    candidates: [
+      { move: "53g+b", score: -730 },
+      { move: "73+h", score: -730 },
+      { move: "53g+h", score: -1970 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+e 53+b 57e+f)
+  "0x7A651407E1B4D1F2": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53b+a", score: 0 },
+      { move: "73+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+d 73+e)
+  "0x7A740A7E31B5A8A0": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 32b-43 36+d)
+  "0x7A8C78EE7E3E992D": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: 640 },
+      { move: "32+a", score: 640 },
+      { move: "22+h", score: -1020 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 33+h 37+e)
+  "0x7A99227D38EC465A": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 338 },
+      { move: "73b+a", score: 338 },
+      { move: "53h+a", score: 338 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+f 77+d)
+  "0x7AB304D9968FA192": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -856 },
+      { move: "73+e", score: -856 },
+      { move: "73+g", score: -976 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+e 53+h 57e+d)
+  "0x7AB4B5B1B468562A": {
+    depth: 8,
+    candidates: [
+      { move: "33", score: 150 },
+      { move: "53", score: 60 },
+      { move: "53h-44", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+e 73+b 77+e)
+  "0x7AC161A7670BA106": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -62 },
+      { move: "73+h", score: -62 },
+      { move: "53a+h", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+d 33+c 57d+e)
+  "0x7AD0EDA660A8FB40": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -400 },
+      { move: "33c+b", score: -400 },
+      { move: "53a+b", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+e 53+b)
+  "0x7AD20BD1CB18E5D9": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2382 },
+      { move: "77e+f", score: -2396 },
+      { move: "57+f", score: -2402 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 36+e 42+a 46+f)
+  "0x7ADCBAF429CF25A5": {
+    depth: 8,
+    candidates: [
+      { move: "42a+h", score: -1287 },
+      { move: "22+b", score: -2348 },
+      { move: "32a+c", score: -2371 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+f 73+h)
+  "0x7ADEBB31AF716998": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2080 },
+      { move: "57f-46", score: -2080 },
+      { move: "37+d", score: -2080 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+a 73+g)
+  "0x7AE7D575D24C2919": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 33+h 57+e)
+  "0x7B8BC8F406DD3B52": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "53a+b", score: -120 },
+      { move: "73+a", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+a 73+f)
+  "0x7BBE4130FB93A854": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+d 73+f)
+  "0x7C33906C1A02D402": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 36+e 32b+a)
+  "0x7C55F0CEDB73E521": {
+    depth: 8,
+    candidates: [
+      { move: "46+f", score: -4483 },
+      { move: "46+e", score: -4706 },
+      { move: "36e+d", score: -4706 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 73+a 57d+e)
+  "0x7CA8BB3410B57D94": {
+    depth: 8,
+    candidates: [
+      { move: "53c+h", score: -400 },
+      { move: "33+b", score: -400 },
+      { move: "73a+h", score: -520 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+d 73+e)
+  "0x7CD746FF82AE2C03": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -240 },
+      { move: "33d+b", score: -240 },
+      { move: "33d+h", score: -240 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 36+d 42+c)
+  "0x7CEFDE909A39389C": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -2962 },
+      { move: "26+d", score: -2962 },
+      { move: "46f+a", score: -3463 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+g 73+e)
+  "0x7CF0611853E2A327": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+h 77+e)
+  "0x7D67616678F4DB93": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33h+a", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+d 77+g)
+  "0x7DACD7422176A9F3": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+e 73+a 37+d)
+  "0x7DF249E00B19596C": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 0 },
+      { move: "53+a", score: 0 },
+      { move: "33a+b", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+a 73+e)
+  "0x7DF9DB22D024D4F6": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+d 73+e)
+  "0x7E00D000117954F6": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -100 },
+      { move: "33d+b", score: -100 },
+      { move: "33d+h", score: -100 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+a 73+g)
+  "0x7E0F4459CBA13FD5": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 77+f 53+b)
+  "0x7E1AD175B25571EC": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -3090 },
+      { move: "57+d", score: -3090 },
+      { move: "77+f", score: -3090 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+g 73+f)
+  "0x7E23DFE1290BCA72": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+a 73+f)
+  "0x7E2D9674464254DF": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+f 52+h 46f-35)
+  "0x7E3AF605E13CF10C": {
+    depth: 8,
+    candidates: [
+      { move: "22b+a", score: -1615 },
+      { move: "42+a", score: -1721 },
+      { move: "32+b", score: -1721 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+e 73+b 77+e)
+  "0x7E478F85A5D5D685": {
+    depth: 8,
+    candidates: [
+      { move: "73b+a", score: -62 },
+      { move: "53+h", score: -62 },
+      { move: "33a+h", score: -62 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+f 53b-64 57+e)
+  "0x7E788B0FC9DBFF19": {
+    depth: 8,
+    candidates: [
+      { move: "64b+a", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "33+b", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 77+e 73+h)
+  "0x7E903447270BEB6A": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "57+f", score: -2086 },
+      { move: "37+d", score: -2086 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 73+b 37+e)
+  "0x7E9CEDCE7C2F92C4": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 338 },
+      { move: "53h+a", score: 338 },
+      { move: "33h+a", score: 338 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 33+h 77e+f)
+  "0x7ECD6AB7308B4C03": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -460 },
+      { move: "53h+a", score: -460 },
+      { move: "33+h", score: -1140 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+d 32b+a 36d-45)
+  "0x7EDB9F4B811BF989": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: -1900 },
+      { move: "52+h", score: -1900 },
+      { move: "52+g", score: -3367 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+e 73+g)
+  "0x7F07A913E66DC75A": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 33+b 37+f)
+  "0x7F330A788F96E179": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 400 },
+      { move: "33b+a", score: 400 },
+      { move: "53b+a", score: 400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 53+h 77+f)
+  "0x7F8902E9FC89A023": {
+    depth: 8,
+    candidates: [
+      { move: "53b-64", score: 62 },
+      { move: "33+a", score: 62 },
+      { move: "53b+a", score: 62 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 33+b 57+e)
+  "0x7FAC78F343D77C61": {
+    depth: 8,
+    candidates: [
+      { move: "53c+h", score: -400 },
+      { move: "73+a", score: -400 },
+      { move: "33b+a", score: -400 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+c 73+h 37+d)
+  "0x7FC7D6F3EDFD025C": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 400 },
+      { move: "73+a", score: 400 },
+      { move: "33b+a", score: 400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+d 33+h 77+e)
+  "0x8045F92A677E9D64": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -120 },
+      { move: "53a+h", score: -120 },
+      { move: "53a+b", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+f 73+a 57+f)
+  "0x805F841422052419": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -610 },
+      { move: "33a+b", score: -610 },
+      { move: "33", score: -920 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+e 73+f)
+  "0x8086BCFD03A799A7": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+f 33+b 37+d)
+  "0x808E25A277D9A3C1": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -62 },
+      { move: "53b+a", score: -62 },
+      { move: "73+h", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 57+d 53+a)
+  "0x809242E8E5A0A08B": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2086 },
+      { move: "37+e", score: -2086 },
+      { move: "57f+e", score: -2086 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+f 42+a 26+d)
+  "0x80B37780948F1F17": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -1020 },
+      { move: "42h+b", score: -1020 },
+      { move: "42h-33", score: -1020 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+e 73+a)
+  "0x80B3DF46C82B0D6C": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -3090 },
+      { move: "77+f", score: -3090 },
+      { move: "57e+d", score: -3230 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+c 77+b)
+  "0x80C967AD24270626": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 73+a 77+e)
+  "0x812AF7B5CB4D952E": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -400 },
+      { move: "53g+b", score: -400 },
+      { move: "33a+b", score: -1010 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+d 53+b 77+f)
+  "0x815282A49D4291FE": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "73+a", score: -120 },
+      { move: "53b+a", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+d 73+a 37+d)
+  "0x81832312C89E1626": {
+    depth: 8,
+    candidates: [
+      { move: "53h-44", score: -440 },
+      { move: "33a+b", score: -610 },
+      { move: "73+h", score: -610 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+a 73+f)
+  "0x818E51B72E6B6128": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+g 73+g)
+  "0x81A2CA0FCCC1948F": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+a 73+g)
+  "0x81AC839AA3880A22": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+c 77+h)
+  "0x81D1934822201A62": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+b 77+g)
+  "0x820F1081495F9C04": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+c 73+b)
+  "0x821D68CF3DD43388": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2424 },
+      { move: "77+e", score: -2424 },
+      { move: "37+d", score: -2424 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+g 77+b)
+  "0x821EF152B7F07ED3": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+g 73+e)
+  "0x82545574D7447FAC": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+b 37+d)
+  "0x828BCB3A5D367AD2": {
+    depth: 8,
+    candidates: [
+      { move: "53b-64", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+e 53+h 57+g)
+  "0x82CAD30DBF0A0E67": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "73h+a", score: 400 },
+      { move: "53b+a", score: 400 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 22b+a 36+e)
+  "0x82E509332340E23C": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -3579 },
+      { move: "42+b", score: -3579 },
+      { move: "42+g", score: -3579 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+g 77+h)
+  "0x830605B7B1F76297": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+f 77+g)
+  "0x8308E32EA5D07578": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 46+f 32b+e)
+  "0x835682D1DA8A680E": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -3463 },
+      { move: "36+e", score: -3463 },
+      { move: "46f-35", score: -3463 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 33+a 37+d)
+  "0x839721AF03F1E0F1": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "53h+a", score: 400 },
+      { move: "33+b", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+d 73+g)
+  "0x83B28582FFC88AFF": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+d 73+h 37d+e)
+  "0x83D1A2E1E439BF6A": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33b+a", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+c 77+g)
+  "0x84301752C365F23D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+a 73+g)
+  "0x843F54DE1E59F6A9": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+d 73+b 77+e)
+  "0x8440369923BD49FA": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "53a+h", score: -120 },
+      { move: "53a+b", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+e 53+h 77+f)
+  "0x84A3ECDA7B9316BD": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53h+a", score: 0 },
+      { move: "33b+a", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 56+f 22+c 46+e)
+  "0x84AC98907BE65E63": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -1343 },
+      { move: "42+c", score: -2667 },
+      { move: "22c+h", score: -2667 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 37+d 33b-44)
+  "0x850CE8A27D9B5E4A": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2270 },
+      { move: "57+f", score: -2750 },
+      { move: "37+d", score: -2750 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 33+a 77+f)
+  "0x85474956D5BA0E52": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -610 },
+      { move: "53c+b", score: -650 },
+      { move: "33a+b", score: -1150 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+d 73+e)
+  "0x854B86EF60BD77CD": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
+  // OFK ply 2 (after 32+a 46+f)
+  "0x8557CC8B298421EE": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: -620 },
+      { move: "32+b", score: -620 },
+      { move: "32+a", score: -820 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+a 73+f)
+  "0x8566C09B378677E4": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+g 73+e)
+  "0x856CA108B1F1F8E9": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 32b+c 36+d)
+  "0x8586E8EC1A07C343": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: -3398 },
+      { move: "32+b", score: -3398 },
+      { move: "22+b", score: -3799 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 73+h 57+e)
+  "0x85E0812A0906B572": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33b+a", score: 0 },
+      { move: "53a+h", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+b 77+e)
+  "0x860628488F2AEC37": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+c 57+d)
+  "0x860FD6E552AF4CA6": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -400 },
+      { move: "33+b", score: -520 },
+      { move: "53g+h", score: -1180 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+c 33+h)
+  "0x8618A77C7917E716": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2424 },
+      { move: "37+d", score: -2424 },
+      { move: "37+f", score: -2424 }
+    ]
+  },
+  // OFK ply 2 (after 32+b 26+d)
+  "0x86428795151724B2": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: 0 },
+      { move: "42+a", score: 0 },
+      { move: "32b-43", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+e 77+b)
+  "0x866A2B2C973C8285": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+e 77+a)
+  "0x86957DFF7748175E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 73+h 37+d)
+  "0x869E9BC7B76D043E": {
+    depth: 8,
+    candidates: [
+      { move: "53", score: 150 },
+      { move: "33+a", score: 0 },
+      { move: "53b-64", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+b 73+e)
+  "0x86AD258B30068BB7": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+e 53c+h)
+  "0x86AFD1C36CF626D2": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2080 },
+      { move: "37+d", score: -2200 },
+      { move: "57e+d", score: -2950 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+c 53a+b)
+  "0x86C47FC3C2DC58EF": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2880 },
+      { move: "37+d", score: -3000 },
+      { move: "57g+d", score: -3750 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+g 77+g)
+  "0x86E781AD50B28AC8": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 37+d 53a+h)
+  "0x87051F0F0F0D2815": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2600 },
+      { move: "37+d", score: -2600 },
+      { move: "57+f", score: -2690 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 77+f 73+h 37+d)
+  "0x871978459D742B5F": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 0 },
+      { move: "53+h", score: 0 },
+      { move: "53+a", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+e 77+h)
+  "0x8772DFC9913B9EC1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 33+b 77+e)
+  "0x8793B28CD17C10F3": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 338 },
+      { move: "53b+a", score: 338 },
+      { move: "73+b", score: 338 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 77+e 53+b 57+f)
+  "0x87A72F1D28F11748": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "53h+a", score: 0 },
+      { move: "33+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+a 73+f)
+  "0x87B15664A4510F11": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+h 73+e)
+  "0x87B5D16E360197F3": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+g 73+e)
+  "0x87BB37F72226801C": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+a", score: 140 },
+      { move: "33c+h", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+a 73+e)
+  "0x87C9CBA505DC1D8A": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: 0 },
+      { move: "33a+b", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 33+b 57+d)
+  "0x87EEAF392381903C": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 338 },
+      { move: "53h+a", score: 338 },
+      { move: "33+h", score: 280 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+e 53+h 57+e)
+  "0x88129960BA8A9711": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -62 },
+      { move: "33h+a", score: -62 },
+      { move: "53h+a", score: -62 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+f 32+a 36+e)
+  "0x88189C669E27ABB2": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: 640 },
+      { move: "22b+h", score: -1020 },
+      { move: "42+b", score: -1092 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+h 73+f)
+  "0x8843E7BFE86A203F": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+g 73+f)
+  "0x884D0126FC4D37D0": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+d 53+h 37+d)
+  "0x886E89D57AAA59A6": {
+    depth: 8,
+    candidates: [
+      { move: "53h+a", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "73+h", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 57+e 73+a)
+  "0x8882D287908470D3": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2086 },
+      { move: "77+e", score: -2086 },
+      { move: "37+d", score: -2086 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+f 33+a 37+d)
+  "0x88BF28632F76DE7E": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53b-64", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 56+f 42+e)
+  "0x88E1C265838CE2C6": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -3463 },
+      { move: "46+f", score: -3463 },
+      { move: "46+a", score: -3960 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+g 73+f)
+  "0x894AF28910C2DEAC": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+b 73+f)
+  "0x895B135AEE6D3C7B": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+f 33+a 57+d)
+  "0x89638F65C5EDEC41": {
+    depth: 8,
+    candidates: [
+      { move: "53b+a", score: -470 },
+      { move: "53b-64", score: -470 },
+      { move: "73+h", score: -620 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+g 73+g)
+  "0x896820A49D21B5A6": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 56+f 42+a 46+e)
+  "0x89813AB8E0629DAE": {
+    depth: 8,
+    candidates: [
+      { move: "42a+h", score: -1615 },
+      { move: "32+a", score: -2348 },
+      { move: "42a+b", score: -2527 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+e 32b+a 46+e)
+  "0x8988DAF48F5FA69F": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: -812 },
+      { move: "32+a", score: -940 },
+      { move: "32+b", score: -940 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 37+c 33+h)
+  "0x8A28D6F24AFDD0F7": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2424 },
+      { move: "37+e", score: -2424 },
+      { move: "57+f", score: -2424 }
+    ]
+  },
+  // 4P ply 2 (after 33+d 37+d)
+  "0x8A42649CAD7F3079": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -260 },
+      { move: "77+a", score: -260 },
+      { move: "77+g", score: -380 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+h 73+e)
+  "0x8A70A7D3E311A0CB": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+a 73+e)
+  "0x8A90F64AE9EDC028": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+h 73+f)
+  "0x8A9471407BBD58CA": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+g 73+e)
+  "0x8A9EBFDF86A45E85": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 73+h 77+e)
+  "0x8ABA5DF4A73AE62D": {
+    depth: 8,
+    candidates: [
+      { move: "53c+h", score: -520 },
+      { move: "33+b", score: -520 },
+      { move: "53c+b", score: -860 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+b 77+a)
+  "0x8ACBB3BF77F62380": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+e 73+e)
+  "0x8B045052FD00D23D": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+e 33h+a 57+e)
+  "0x8B6518E861E3EA58": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "53+b", score: -62 },
+      { move: "33+h", score: -62 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+b 73+e)
+  "0x8B685336E516BC8F": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+d 53+b 77+f)
+  "0x8B6A4A1229C85853": {
+    depth: 8,
+    candidates: [
+      { move: "53h+a", score: 62 },
+      { move: "33+b", score: 62 },
+      { move: "33+a", score: -138 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 56+f 42+c 46+e)
+  "0x8B7CA7ED21E839EC": {
+    depth: 8,
+    candidates: [
+      { move: "42c+h", score: -1287 },
+      { move: "42c+a", score: -2107 },
+      { move: "22+b", score: -2108 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+b 73+f)
+  "0x8B8C85A57DBA448E": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+a 73+e)
+  "0x8B9705E505622954": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 77+f 73+b 57+e)
+  "0x8BA80DFF5C6DAAF3": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -120 },
+      { move: "53+b", score: -120 },
+      { move: "73h+a", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+f 77+e)
+  "0x8BC35EF55A3ADB0F": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 56+f 32b+a)
+  "0x8C14DBD041706347": {
+    depth: 8,
+    candidates: [
+      { move: "46+f", score: -4243 },
+      { move: "36+e", score: -4341 },
+      { move: "36+d", score: -4776 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 77+e 53+b 57+e)
+  "0x8C1756D3FE49438F": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -62 },
+      { move: "73b+a", score: -62 },
+      { move: "53h+a", score: -62 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+h 73+f)
+  "0x8C373DC1C8A6DC69": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+h 73+g)
+  "0x8C89A4BE7C645DF9": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 57+e 53+b)
+  "0x8CC0ED117C977E60": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2702 },
+      { move: "57e+f", score: -2702 },
+      { move: "77+f", score: -2702 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+c 77+a)
+  "0x8CF4B46CFDCC4DB9": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+b 73+f)
+  "0x8D2FC924CEA1C02D": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+e 73+f)
+  "0x8D43CA40D6B7AE9F": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 53c+h 57c+d)
+  "0x8D5481A149BAD196": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "53ch-44", score: 0 },
+      { move: "73+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+e 73+h)
+  "0x8D8380E10E02DDAF": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "57+f", score: -2086 },
+      { move: "37e+d", score: -2086 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+b 73+g)
+  "0x8D91505B7A6341BD": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+g 73+f)
+  "0x8DA263A5092FC860": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+e 73+e)
+  "0x8DA71CD34E1B569E": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 20 },
+      { move: "33h+b", score: 20 },
+      { move: "33h+c", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+a 73+f)
+  "0x8DD09FF72ED555F6": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+e 33+a 77+f)
+  "0x8DD18CEB51A9C8CD": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53a+b", score: 0 },
+      { move: "33a+b", score: 0 }
+    ]
+  },
+  // OFK ply 2 (after 32+a 36+d)
+  "0x8DF5C7214C11AE7A": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: -28 },
+      { move: "32+b", score: -28 },
+      { move: "32+e", score: -180 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+g 77+a)
+  "0x8E2322936E1B354C": {
+    depth: 8,
+    candidates: [
+      { move: "73+e", score: -1516 },
+      { move: "73+f", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 37+c 73+b)
+  "0x8E2D19410E3E0469": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2424 },
+      { move: "37+e", score: -2424 },
+      { move: "57+f", score: -2424 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+f 32+a 46f+c)
+  "0x8E51FBF2DFAE2C1E": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: 2418 },
+      { move: "52h+g", score: 2418 },
+      { move: "32+c", score: 1378 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+d 73+g)
+  "0x8E77F33F2AD8BDC7": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+e 73+a)
+  "0x8EB3F14C7DBB7ACB": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "37+e", score: -2086 },
+      { move: "57+f", score: -2086 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+g 73+e)
+  "0x8F0D689B3B75A20E": {
+    depth: 8,
+    candidates: [
+      { move: "33b+h", score: 0 },
+      { move: "33b+a", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+d 73+a 77+f)
+  "0x8F287584C5DB56E0": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 62 },
+      { move: "53+b", score: 62 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 53+h 77+e)
+  "0x8F47836A2582ED2F": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "53b+a", score: 0 },
+      { move: "73a+h", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+e 73+b 57+e)
+  "0x8F60D75B25203EC6": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "33h+a", score: -62 },
+      { move: "53+h", score: -62 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+e 73+e)
+  "0x8F708A2CDDCC2E6B": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 160 },
+      { move: "33h+b", score: 160 },
+      { move: "33h+c", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+g 73+f)
+  "0x8F75F55A9AF8B095": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+f 73+h)
+  "0x8FB6A0A8344032C8": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2486 },
+      { move: "37+f", score: -2486 },
+      { move: "37+d", score: -2486 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 73+h 37+d)
+  "0x8FE413F8B74D93FD": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 280 },
+      { move: "53+b", score: 280 },
+      { move: "73h+a", score: 280 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 33+b 77+f)
+  "0x90054AFD5C915D68": {
+    depth: 8,
+    candidates: [
+      { move: "53c+h", score: -610 },
+      { move: "73+a", score: -610 },
+      { move: "73+b", score: -730 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+d 53b-64 57d+f)
+  "0x900D1E073C06EC2F": {
+    depth: 8,
+    candidates: [
+      { move: "53", score: -100 },
+      { move: "33+a", score: -470 },
+      { move: "64b+a", score: -470 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+a 73+f)
+  "0x9024C330BEAD24DE": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+g 73+f)
+  "0x90563F629957B948": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+c 73+a)
+  "0x906C1CE5AEAC6D46": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -3000 },
+      { move: "77+f", score: -3000 },
+      { move: "57c+f", score: -3020 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 73+a 57+e)
+  "0x90A28281802DE648": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "53a+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+d 73+g)
+  "0x90CF81FAFCD9B7FC": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 20 },
+      { move: "33h+b", score: 20 },
+      { move: "33h+c", score: -120 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 46+e 42+e)
+  "0x90D6D25FB212F5D8": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -3463 },
+      { move: "36+d", score: -3463 },
+      { move: "36+a", score: -3463 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 36+e 52+g)
+  "0x913619A4011C9D40": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -3463 },
+      { move: "46+f", score: -3463 },
+      { move: "46+a", score: -3463 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+d 73+b)
+  "0x9171A496D8B6A245": {
+    depth: 8,
+    candidates: [
+      { move: "57+f", score: -2024 },
+      { move: "57+d", score: -2024 },
+      { move: "57+e", score: -2024 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+c 77+g)
+  "0x917214F94A4EA107": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+e 53+b)
+  "0x91B3E37BAD1350E5": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -3230 },
+      { move: "57e+f", score: -3230 },
+      { move: "57e+d", score: -3650 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 33+h 57+e)
+  "0x91CD8C1E2C1EEE02": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -520 },
+      { move: "53g+h", score: -520 },
+      { move: "33+a", score: -890 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+f 53b-64 37+d)
+  "0x91D1B901D69DDE10": {
+    depth: 8,
+    candidates: [
+      { move: "53", score: 270 },
+      { move: "73+h", score: 120 },
+      { move: "64b+a", score: 120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 73+c 57+d)
+  "0x91FB235AFFB73A9F": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -1010 },
+      { move: "53g+b", score: -1010 },
+      { move: "53g+h", score: -2250 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+d 73+g)
+  "0x921817056F0ECF09": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 160 },
+      { move: "33h+b", score: 160 },
+      { move: "33h+c", score: 20 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 77+f 73+a 37+d)
+  "0x925B7BEE145F7865": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 120 },
+      { move: "53+a", score: 120 },
+      { move: "53+h", score: -610 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+a 73+e)
+  "0x928BC80E8CF74EB0": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+b 77+h)
+  "0x92AC973021312761": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 33+a 77+e)
+  "0x92D1B127585743C9": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 400 },
+      { move: "53b+a", score: 400 },
+      { move: "73+h", score: 400 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 73+a 57+f)
+  "0x92DD2E3CE5686EA2": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -610 },
+      { move: "53c+h", score: -610 },
+      { move: "73a+h", score: -1850 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+a 73+f)
+  "0x92F355CF2D7A5C2B": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+e 73+e)
+  "0x931F6E16981A5CA5": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+b", score: -380 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 33+a 57c+d)
+  "0x935C396B3A043058": {
+    depth: 8,
+    candidates: [
+      { move: "73a+h", score: 0 },
+      { move: "53g+b", score: 0 },
+      { move: "33+b", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 53+b 57+d)
+  "0x9370E55E38042F8A": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+g 77+g)
+  "0x93A58206D999D9F2": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+b 77+b)
+  "0x93B463D527363B25": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+e 77+e)
+  "0x93D860B13F205597": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 53+b 77+f)
+  "0x9410810F1469C2C4": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53b+a", score: 0 },
+      { move: "73+a", score: -138 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+h 73+f)
+  "0x942C0385ADBC52F1": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 52+g 26+d)
+  "0x94AA1880CF335898": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -1020 },
+      { move: "32b-43", score: -1020 },
+      { move: "52g+h", score: -1020 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+d 73+h 37+d)
+  "0x94C120B941B5451C": {
+    depth: 8,
+    candidates: [
+      { move: "53h-44", score: 120 },
+      { move: "53h+a", score: 120 },
+      { move: "73+a", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+a 73+f)
+  "0x94CC521CA7403212": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+a 73+g)
+  "0x94EE80312AA35918": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 53+c 37+e)
+  "0x94F9223305076FCC": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -400 },
+      { move: "33a+b", score: -400 },
+      { move: "53c+b", score: -400 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+d 53+h 37+d)
+  "0x951D87BFAB2E7723": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "73+a", score: -120 },
+      { move: "53h+a", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+b 73+f)
+  "0x9534F760ABBB4EB5": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+c 77+e)
+  "0x957B2C308C3BD134": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -996 },
+      { move: "73+e", score: -996 },
+      { move: "73+g", score: -1116 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 33a+b 77+e)
+  "0x9597628D3E70EDA5": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+a 73+f)
+  "0x95CBA1B34BCFDB6E": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+f 73+b 37f+e)
+  "0x95CC24F66FDBCDC5": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73b+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+f 33+a 37+d)
+  "0x95CC2609FEF2F0FB": {
+    depth: 8,
+    candidates: [
+      { move: "53b+a", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "33a+b", score: -138 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+g 73+e)
+  "0x9611A570B2E0C5EA": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+f 33+a 37+d)
+  "0x96194478F84C76D6": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 120 },
+      { move: "53h+a", score: 120 },
+      { move: "53h-44", score: -390 }
+    ]
+  },
+  // OFK ply 2 (after 22+b 36+e)
+  "0x9662F3A6215C0DDA": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: -620 },
+      { move: "42+h", score: -620 },
+      { move: "22b-33", score: -620 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+d 73+g)
+  "0x966CCD7B4FC2335F": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 57+d 73+b)
+  "0x9670A8E2CF17772E": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2024 },
+      { move: "37+e", score: -2024 },
+      { move: "77+e", score: -2024 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+e 73+h 57+d)
+  "0x96A713204DC94AC1": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "33b+a", score: -62 },
+      { move: "73h+a", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 53+b 37+d)
+  "0x96C4CE216B5A9C0F": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+d 73+f)
+  "0x96D25404FB00B2CF": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+f 73+b 57+e)
+  "0x96DB03958DE98476": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "73h+a", score: -62 },
+      { move: "33h+a", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+h 37+f)
+  "0x96ECCA15B2FAC0D3": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33h+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 53+b 57+g)
+  "0x9705AEEDA68BECF5": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "73+a", score: 400 },
+      { move: "53b+a", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+g 73+e)
+  "0x971656DF5E6F2C96": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+a 73+e)
+  "0x97181F4A3126B23B": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // OFK ply 1 (after 32+a)
   "0x97220033605ECA2D": {
     depth: 8,
     candidates: [
-      { move: "46+e", score: 10 },
-      { move: "36+e", score: 10 },
-      { move: "56+f", score: 5 }
+      { move: "56+f", score: -4143 },
+      { move: "26+d", score: -4143 },
+      { move: "46+e", score: -4143 }
     ]
   },
-  // OFK ply 0 (A to move)
+  // 4P ply 3 (after 33+a 37+b 77+g)
+  "0x974D132AC074CF3E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+f 32b-43 26+d)
+  "0x9772EAE705E8D111": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -1020 },
+      { move: "52+h", score: -1020 },
+      { move: "43b+h", score: -1020 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+g 77+e)
+  "0x97ACBACF1FECA9C1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1136 },
+      { move: "73+e", score: -1136 },
+      { move: "73+g", score: -1256 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+b 73+e)
+  "0x9815574EE607818C": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+e 73+g)
+  "0x98231BC6D27F96AF": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+f 32b+a 26+d)
+  "0x9838E855AA6C82DA": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -1287 },
+      { move: "32ab-43", score: -1287 },
+      { move: "52+h", score: -1615 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+e 33+b 77+f)
+  "0x98938F40D8829BF7": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33b+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+e 73+f)
+  "0x989D82B966BD173F": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 33a+b 37+d)
+  "0x98B212EEF5093610": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: -138 },
+      { move: "33+a", score: -138 },
+      { move: "53+h", score: -138 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+e 53+b 37e+d)
+  "0x98DDE40015508DDF": {
+    depth: 8,
+    candidates: [
+      { move: "53b+a", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "53b-64", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+g 73+f)
+  "0x98E0600E80049B5A": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+a 73+e)
+  "0x98EA019D06731457": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+b 73+f)
+  "0x98F181DD7EAB798D": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+h 73+e)
+  "0x990DA3ABE0009DC8": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 33+b 57+f)
+  "0x99B33FB18C84EEF6": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 0 },
+      { move: "53+a", score: 0 },
+      { move: "53+h", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+c 77+a)
+  "0x99B6B7C774E71E83": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+g 73+g)
+  "0x99B9F44BA9DB1A17": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+h 73+f)
+  "0x99E9753878AC65C9": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+g 73+f)
+  "0x9A37F6F113D3E3AF": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+a 73+e)
+  "0x9A3D976295A46CA2": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+g 73+e)
+  "0x9A4F6B30B25EF134": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: 0 },
+      { move: "33a+b", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 33+a 37+d)
+  "0x9A7DF5D0FAA6BAC5": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -610 },
+      { move: "53g+h", score: -610 },
+      { move: "73a+h", score: -1850 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 73+a 37+d)
+  "0x9AA610533E66C0C7": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: 400 },
+      { move: "53+a", score: 400 },
+      { move: "73h+a", score: 390 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+f 52+h 36+e)
+  "0x9ABDE5D987878AAB": {
+    depth: 8,
+    candidates: [
+      { move: "42h-33", score: -1068 },
+      { move: "42h+b", score: -1068 },
+      { move: "42h+e", score: -1068 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+b 73+e)
+  "0x9AC2C1B175D0F979": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 33+a 57+f)
+  "0x9AD42177F97539CD": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "53h+a", score: 0 },
+      { move: "73a+h", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+f 73+a)
+  "0x9AF4A303BD6B61F2": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2086 },
+      { move: "77d+e", score: -2086 },
+      { move: "57+f", score: -2086 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+e 77+g)
+  "0x9B13DD6AC0CAFBE0": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 73+b 57+e)
+  "0x9B278514E5F025FF": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33h+a", score: 0 },
+      { move: "73+h", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 46+f 42+a 36+d)
+  "0x9B2DA34B96FF8786": {
+    depth: 8,
+    candidates: [
+      { move: "32a+b", score: -458 },
+      { move: "42a+h", score: -458 },
+      { move: "22+b", score: -640 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+g 77+a)
+  "0x9B612138E7306676": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 73+h 57+d)
+  "0x9B7D0F5E27E5347E": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 62 },
+      { move: "33+a", score: 62 },
+      { move: "73h+a", score: 62 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 53+h 57+f)
+  "0x9B9049293577D5ED": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 33+a 77+f)
+  "0x9BA152D6103D88FA": {
+    depth: 8,
+    candidates: [
+      { move: "73a+h", score: -1150 },
+      { move: "53g+b", score: -1150 },
+      { move: "33+b", score: -1850 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+c 53b+a)
+  "0x9BB771A91358766A": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2486 },
+      { move: "77+f", score: -2486 },
+      { move: "37+d", score: -2606 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+h 73+e)
+  "0x9BDA355473D7E53D": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+g 73+f)
+  "0x9C08F12299E98D96": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+d 53+b 77+f)
+  "0x9C218CCE4CC6BF7B": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -460 },
+      { move: "53b+a", score: -460 },
+      { move: "53b-64", score: -590 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+a 73+g)
+  "0x9C246A9A7B437831": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+g 73+g)
+  "0x9C2A230F140AE69C": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 56+f 42+a)
+  "0x9C3D4FAF1A06711E": {
+    depth: 8,
+    candidates: [
+      { move: "46+e", score: -6435 },
+      { move: "36+d", score: -6435 },
+      { move: "36+g", score: -6435 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 26+d 32b+e 46+a)
+  "0x9C8EAF00BB1EC1F6": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: 0 },
+      { move: "42eh-33", score: 0 },
+      { move: "22+b", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 36+e 52+h)
+  "0x9CD5C6AD151C42AA": {
+    depth: 8,
+    candidates: [
+      { move: "46+f", score: -4725 },
+      { move: "26+d", score: -6570 },
+      { move: "46+a", score: -6570 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+e 73+f)
+  "0x9CE958C74671EB69": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -100 },
+      { move: "33d+b", score: -100 },
+      { move: "33d+h", score: -100 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+d 73+a 57+d)
+  "0x9CF02D78191A38A3": {
+    depth: 8,
+    candidates: [
+      { move: "53h+a", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "33a+b", score: -138 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 36+e 42+c)
+  "0x9D1EC72F25099ABF": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -3423 },
+      { move: "36+d", score: -3423 },
+      { move: "36+e", score: -4103 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+f 22b+a 46f+e)
+  "0x9D9752474980498B": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: -633 },
+      { move: "42+a", score: -633 },
+      { move: "32+e", score: -1363 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+d 77+d)
+  "0x9D97B60CA29DF067": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 57+e 73+h)
+  "0x9DC0D12C19AF23E9": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2086 },
+      { move: "37+e", score: -2086 },
+      { move: "77+f", score: -2086 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+d 33+b)
+  "0x9DE14C8234248E0E": {
+    depth: 8,
+    candidates: [
+      { move: "57f-46", score: -2480 },
+      { move: "37+d", score: -2480 },
+      { move: "57f+e", score: -2480 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+f 53+b 37+d)
+  "0x9DFD2BC8A65D8D44": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "33b+a", score: -120 },
+      { move: "53b+a", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+e 73+f)
+  "0x9E3ECE38D5A6939C": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -240 },
+      { move: "33d+b", score: -240 },
+      { move: "33d+h", score: -240 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+f 77+b)
+  "0x9E711568F2260C1D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+f 77+a)
+  "0x9E8E43BB125299C6": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+b 73+e)
+  "0x9EB61BCF551C052F": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+e 73+e)
+  "0x9EDA18AB4D0A6B9D": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 56+f 32b-43)
+  "0x9EE160750F21FED6": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -6435 },
+      { move: "46+f", score: -6435 },
+      { move: "46+c", score: -6435 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+f 77+h)
+  "0x9F69E18DF4211059": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 73+a 57f-46)
+  "0x9F809C671D66ADBF": {
+    depth: 8,
+    candidates: [
+      { move: "53c+b", score: -400 },
+      { move: "73a+h", score: -400 },
+      { move: "33+a", score: -400 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+b 77+a)
+  "0x9F89B014FEDD70BA": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+h 73+e)
+  "0x9FAEEF2A531B196B": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+a 73+e)
+  "0x9FD2F5E160C69312": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+b 73+f)
+  "0xA00B736B8F68E34B": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+e 73+e)
+  "0xA01FEDCE36F39F62": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+f 77+e)
+  "0xA044A83BA8E87CCA": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 73+h 57f-46)
+  "0xA04D8C7D3CAC8FA9": {
+    depth: 8,
+    candidates: [
+      { move: "53g+h", score: -400 },
+      { move: "73+a", score: -400 },
+      { move: "33b+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+b 73+e)
+  "0xA073EEAA2EE5F1D0": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+b 77+h)
+  "0xA0ABE74763570DDA": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1356 },
+      { move: "73+e", score: -1356 },
+      { move: "73+g", score: -1476 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+e 53+h 57+f)
+  "0xA0D6038AC5AB1E92": {
+    depth: 8,
+    candidates: [
+      { move: "73a+h", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+e 73+e)
+  "0xA1181E61DA7C761E": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+b 77+a)
+  "0xA14C457185248445": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+f 77+h)
+  "0xA1AC14E88FD8E4A6": {
+    depth: 8,
+    candidates: [
+      { move: "73+e", score: -1236 },
+      { move: "73+f", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+e 73+a)
+  "0xA1B2E9A04DB7AA8D": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "37+e", score: -2024 },
+      { move: "57+f", score: -2024 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 33+b 77e+f)
+  "0xA1EFB7505A370DE4": {
+    depth: 8,
+    candidates: [
+      { move: "53h+b", score: 90 },
+      { move: "33+b", score: -460 },
+      { move: "53h+a", score: -460 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+h 73+e)
+  "0xA1F7511D11C3070E": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+h 73+g)
+  "0xA201CE660A46EC2D": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 22b-33 26d-35)
+  "0xA249F143931939FE": {
+    depth: 8,
+    candidates: [
+      { move: "43h+b", score: 1530 },
+      { move: "32+c", score: 1530 },
+      { move: "32+b", score: 1136 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+g 73+f)
+  "0xA2514F15DB3193F3": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 53+h 77+f)
+  "0xA27D27FB65706CDA": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+b 73+f)
+  "0xA2DCE5941CBF9BBE": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+g 73+g)
+  "0xA2EFD66A6FF31263": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+d 77+d)
+  "0xA3524369D9640498": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+e 73+f)
+  "0xA3CBA098A0951F4B": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // OFK ply 2 (after 32+b 56+f)
+  "0xA3FE4D54D9664919": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: -620 },
+      { move: "42+a", score: -620 },
+      { move: "32b-43", score: -620 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 53+b 57c+d)
+  "0xA4031EE49BACC862": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 280 },
+      { move: "33+a", score: 280 },
+      { move: "33+g", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+g 73+e)
+  "0xA416D507F086EF51": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+e 33+a 57+e)
+  "0xA464000451EF3A1E": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "33+b", score: 0 },
+      { move: "73a+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+d 73+g)
+  "0xA46BBD0C0DA419E4": {
+    depth: 8,
+    candidates: [
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 },
+      { move: "33c+b", score: -260 }
+    ]
+  },
+  // 4P ply 2 (after 33+g 37+b)
+  "0xA4CA0E44DB5D81AD": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -20 },
+      { move: "77+a", score: -20 },
+      { move: "77+g", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+g 73+f)
+  "0xA4F20394682A1750": {
+    depth: 8,
+    candidates: [
+      { move: "33h+b", score: 140 },
+      { move: "33h+a", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+e 73+e)
+  "0xA4F77CE22F1E89AE": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 160 },
+      { move: "33a+h", score: 160 },
+      { move: "33a+c", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+h 73+e)
+  "0xA51FC031082E11C2": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 37+c 53b+a)
+  "0xA529CE1E7AF100B1": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2588 },
+      { move: "77g+f", score: -2796 },
+      { move: "57+g", score: -2886 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+a 37+e)
+  "0xA570029F2532E98E": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+g 77+e)
+  "0xA5ABCAB85D8A837A": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 77+e 33h+a)
+  "0xA5B7261309747E13": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2024 },
+      { move: "57+e", score: -2024 },
+      { move: "37+d", score: -2024 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 73+a 57c+f)
+  "0xA5B74F7A36398BFC": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "53c+h", score: 0 },
+      { move: "53c+b", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+f 53 57f+e)
+  "0xA5CED9332079EAFB": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 60 },
+      { move: "33+b", score: 60 },
+      { move: "53h-44", score: -100 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+e 73+g)
+  "0xA5D67566A74C1A78": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -260 },
+      { move: "33g+h", score: -260 },
+      { move: "33g+a", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+b 73+e)
+  "0xA5E039EE93340D5B": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+b 73+g)
+  "0xA616A69588B1E678": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+e 73+e)
+  "0xA620EA1DBCC9F15B": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 20 },
+      { move: "33a+h", score: 20 },
+      { move: "33a+c", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+g 73+f)
+  "0xA625956BFBFD6FA5": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+b 73+f)
+  "0xA63474B805528D72": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+b 37+e)
+  "0xA6407332568B4EEA": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 0 },
+      { move: "53+b", score: 0 },
+      { move: "53+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+e 73+f)
+  "0xA65877DC1D44E3C0": {
+    depth: 8,
+    candidates: [
+      { move: "33b+h", score: -120 },
+      { move: "33b+a", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 77+e 73+b)
+  "0xA68757BE7ACDD977": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "57+f", score: -2024 },
+      { move: "37e+d", score: -2024 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 73+a 77+e)
+  "0xA68B8E3721E9A0D9": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 400 },
+      { move: "53h+a", score: 400 },
+      { move: "33a+b", score: 400 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+e 77+d)
+  "0xA6C1942D64B5F813": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -836 },
+      { move: "73+e", score: -836 },
+      { move: "73+g", score: -956 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+e 33+a)
+  "0xA6ECC4F40CBBA8DF": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2080 },
+      { move: "57e+f", score: -2080 },
+      { move: "77+e", score: -2080 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+e 73+g)
+  "0xA701E399349B628D": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -120 },
+      { move: "33g+h", score: -120 },
+      { move: "33g+a", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 37+d 33+a)
+  "0xA7067DA37DFD8818": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2600 },
+      { move: "57+f", score: -2600 },
+      { move: "37+d", score: -2600 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+b 73+f)
+  "0xA7338717E9DD640E": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 33+b 37+d)
+  "0xA76F2BBB8FC0B836": {
+    depth: 8,
+    candidates: [
+      { move: "53c+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33b+a", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+c 77+e)
+  "0xA77C5C47CE5DFB8F": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+h 73+f)
+  "0xA7B0CB0F3A747BAC": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+h 73+e)
+  "0xA7C856CE9BF96937": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+a 73+f)
+  "0xA7CCD1C409A9F1D5": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+d 73+f)
+  "0xA817A16180F94630": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+d 73+g)
+  "0xA835734C0D1A2D3A": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 53+b 37+e)
+  "0xA836AFFDC8D8E4F5": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+a 73+e)
+  "0xA83AE715D7C24619": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+f 22b+c 46f+d)
+  "0xA86D43C997A9419A": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -3020 },
+      { move: "32+a", score: -3020 },
+      { move: "42+h", score: -3020 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 57+e 53+b)
+  "0xA881B02BE274D0DE": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2086 },
+      { move: "77+f", score: -2086 },
+      { move: "57e+f", score: -2564 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+d 77+e)
+  "0xA88E4290F9085DE3": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -836 },
+      { move: "73+e", score: -836 },
+      { move: "73+g", score: -956 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+d 53+h 57d-66)
+  "0xA89FCC73AE737B85": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "53b-64", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+b 73+e)
+  "0xA8C5B1C637B6D3C2": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 46+e 22+c 36+a)
+  "0xA8DDCE661F89F90F": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: 0 },
+      { move: "42+e", score: 0 },
+      { move: "22c+b", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 42+h 46+c)
+  "0xA8F87A2D2F4C44E9": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: 2440 },
+      { move: "32b-43", score: 2320 },
+      { move: "52h+g", score: 1931 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+d 73+b 57d-66)
+  "0xA9138F23C830FA5C": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -120 },
+      { move: "53a+h", score: -120 },
+      { move: "33+a", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+e 77+g)
+  "0xA914AD1D82ACD15B": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 26+d 22b+c 26d-35)
+  "0xA9777613794E1C57": {
+    depth: 8,
+    candidates: [
+      { move: "52gh+b", score: -1374 },
+      { move: "52gh-43", score: -1494 },
+      { move: "32+a", score: -1853 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+g 77+b)
+  "0xA999079C4522D916": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 26+d 32b+a)
+  "0xA9A811118D010EEC": {
+    depth: 8,
+    candidates: [
+      { move: "36+d", score: -4483 },
+      { move: "46+e", score: -4796 },
+      { move: "46+g", score: -5033 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+g 73+e)
+  "0xA9D3A3BA2596D869": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+a 73+f)
+  "0xAA09A779DCB9C6ED": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+b 73+e)
+  "0xAA122739A461AB37": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+e 73+g)
+  "0xAA246BB19019BC14": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+h 73+f)
+  "0xAAE9F6E0D645A60E": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+a 73+e)
+  "0xAAED71EA44153EEC": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+e 73+f)
+  "0xAB014A33F1753E62": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+c 77+b)
+  "0xAB4E9163D6F5A1E3": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 37+c 73+a 57+f)
+  "0xAB4F5E74B011C4E5": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 400 },
+      { move: "53h+a", score: 400 },
+      { move: "33a+b", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+d 73+e)
+  "0xABC3EC37169FC619": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 33+a 77e+f)
+  "0xABE3CD8CCE6662D8": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -340 },
+      { move: "53b+a", score: -340 },
+      { move: "53b+h", score: -900 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+h 73+f)
+  "0xABEE054F3ACA4F72": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+e 73+f)
+  "0xAC39BE4F97C0B927": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -120 },
+      { move: "33c+h", score: -120 },
+      { move: "33c+a", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+a 73+e)
+  "0xAC4E3D6BF70EBA4F": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 57+d 73+a 37+e)
+  "0xAC74906B24CBEA46": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "73h+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+f 77+b)
+  "0xAC76651FB04026A6": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+f 77+a)
+  "0xAC8933CC5034B37D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+d 73+g)
+  "0xACDDE26014F73BF6": {
+    depth: 8,
+    candidates: [
+      { move: "33b+h", score: 160 },
+      { move: "33b+a", score: 160 },
+      { move: "33b+c", score: 20 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+e 77+h)
+  "0xACF5290763E93904": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+d 33+h 57d-66)
+  "0xAD1640908CF32EC2": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -1020 },
+      { move: "33h+b", score: -1020 },
+      { move: "53a+h", score: -1020 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+e 77+e)
+  "0xAD1D95D444D9A168": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+b 73+e)
+  "0xAD2AD345C2D42C72": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: 0 },
+      { move: "33a+b", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+g 77+g)
+  "0xAD607763A2602D0D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+b 77+b)
+  "0xAD7196B05CCFCFDA": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+d 73+f)
+  "0xAD8476253D28BABB": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+h 73+e)
+  "0xADA99F5D117D33D0": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+d 42+a 56+f)
+  "0xADADB6EB3D6BFD28": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: 640 },
+      { move: "42h+b", score: -3328 },
+      { move: "52+e", score: -3463 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+d 73+g)
+  "0xAE0A749F87204303": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 20 },
+      { move: "33b+h", score: 20 },
+      { move: "33b+c", score: -120 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+f 52+h 46f-35)
+  "0xAE386AFDFD797C3C": {
+    depth: 8,
+    candidates: [
+      { move: "42h-33", score: -1068 },
+      { move: "42h+e", score: -1068 },
+      { move: "42h+b", score: -1068 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+b 73+g)
+  "0xAEDC4C3ED951C751": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+e 73+f)
+  "0xAEEE28B00417C1D2": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 20 },
+      { move: "33c+h", score: 20 },
+      { move: "33c+a", score: 20 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 33+b 77+f)
+  "0xAFA9A54ED4C9918F": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 62 },
+      { move: "33+a", score: 62 },
+      { move: "73h+a", score: 62 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+c 77+g)
+  "0xAFB7E19C31B755F8": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+h 73+e)
+  "0xB05DC39A810542F8": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+g 77+a)
+  "0xB0E6D7F615E2C1B3": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+g 77+h)
+  "0xB10175C0F391482C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+f 77+g)
+  "0xB10F9359E7B65FC3": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+h 73+g)
+  "0xB17CCA1E0957D12E": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+e 73+e)
+  "0xB1B57F49A635DA94": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 160 },
+      { move: "33b+h", score: 160 },
+      { move: "33b+c", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+g 73+e)
+  "0xB1C89DFE408C56F1": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 56+f 32+a 56f+a)
+  "0xB229E36500A74686": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: 1160 },
+      { move: "32+a", score: 1127 },
+      { move: "32+e", score: 801 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 33+a 37+d)
+  "0xB22D281006EBEB0C": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53c+b", score: 0 },
+      { move: "73+a", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+c 77+a)
+  "0xB23141098635B946": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+h 73+e)
+  "0xB28A556512D23A0D": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 53b-64 57+f)
+  "0xB28D5CEE378D62B6": {
+    depth: 8,
+    candidates: [
+      { move: "53", score: 150 },
+      { move: "73+h", score: 0 },
+      { move: "64b+a", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 56+f 22b+c 36+a)
+  "0xB2D35C3F0C816CB3": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: 0 },
+      { move: "32+a", score: 0 },
+      { move: "42+e", score: -497 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 53c+b 77+f)
+  "0xB2DE4C909798CEAF": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -730 },
+      { move: "73+h", score: -730 },
+      { move: "53bc+h", score: -1330 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+h 73+f)
+  "0xB2F2C8A4B35F2896": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+e 73+f)
+  "0xB31A7477946FB0FA": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+b 73+g)
+  "0xB354A53E019AB542": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+e 73+e)
+  "0xB362E9B635E2A261": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 20 },
+      { move: "33b+h", score: 20 },
+      { move: "33b+c", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+d 53a+b 57d+e)
+  "0xB374825CF463C068": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "53ah-44", score: 0 },
+      { move: "73+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+b 73+f)
+  "0xB37677138C79DE48": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+h 73+g)
+  "0xB3AB5CE19A80A9DB": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 53+g 77+e)
+  "0xB3C8793FFAE04816": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -400 },
+      { move: "33a+b", score: -400 },
+      { move: "53g+b", score: -400 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+c 77+h)
+  "0xB3D6E33F604630D9": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+b 77+e)
+  "0xB401583FCD4CC68C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 57+d 73+a 77+f)
+  "0xB413E3A3669962C9": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: -138 },
+      { move: "53+h", score: -138 },
+      { move: "33a+b", score: -138 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+a 73+e)
+  "0xB455032F921434D7": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+e 77+b)
+  "0xB46D5B5BD55AA83E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+e 77+a)
+  "0xB4920D88352E3DE5": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+h 73+e)
+  "0xB4B552B698E85434": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+e 32b+g 56+f)
+  "0xB4C71F3991ACFACA": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -3553 },
+      { move: "32+a", score: -3553 },
+      { move: "52+a", score: -3553 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+f 77+h)
+  "0xB4EE174306F3B79C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+f 77+e)
+  "0xB506AB9021C32FF0": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+d 32b+a 56+f)
+  "0xB526293E038860E5": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -1900 },
+      { move: "22+b", score: -1900 },
+      { move: "22+c", score: -3367 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+b 73+e)
+  "0xB531ED01A7CEA2EA": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+b 73+f)
+  "0xB54970C00643B071": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+e 73+e)
+  "0xB55DEE65BFD8CC58": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 2 (after 33+g 37+g)
+  "0xB5609CC34B9BC45B": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+d 53+h)
+  "0xB5770989EE85D6D6": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2024 },
+      { move: "57+e", score: -2024 },
+      { move: "37+e", score: -2024 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+d 73+f)
+  "0xB59F486158323423": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+h 73+e)
+  "0xB5B2A1197467BD48": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+g 73+e)
+  "0xB5BC47806040AAA7": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 57+e 33+a)
+  "0xB5F2BE4133F0FE5B": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -3090 },
+      { move: "77+f", score: -3090 },
+      { move: "57e+f", score: -3260 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+d 77+d)
+  "0xB61040C2504F57A2": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 33+a 37f+e)
+  "0xB61271807C002B3F": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 62 },
+      { move: "33+b", score: 62 },
+      { move: "73a+h", score: 62 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+e 73+g)
+  "0xB6AB711EA45D277B": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+b 73+g)
+  "0xB6C7727ABC4B49C9": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+d 73+e)
+  "0xB74CF69822DB5D76": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 73+a 37+e)
+  "0xB751A32AD2333CA7": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 400 },
+      { move: "53h+a", score: 400 },
+      { move: "33a+b", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+h 73+f)
+  "0xB7611FE00E8ED41D": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+g 73+e)
+  "0xB76BD17FF397D252": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 46+f 22b+c)
+  "0xB7771179FEE4C603": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -3283 },
+      { move: "46+e", score: -3283 },
+      { move: "36d+f", score: -4523 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+g 73+f)
+  "0xB78F07EC6B3B2A53": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+b 73+f)
+  "0xB79EE63F9594C884": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
+  // 4P ply 2 (after 33+g 37+c)
+  "0xB7B70A3CD84CBCAE": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -140 },
+      { move: "77+a", score: -140 },
+      { move: "77+g", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+b 77+b)
+  "0xB833951BD5E49CE0": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // 4P ply 2 (after 33+c 37+d)
+  "0xB84514EBEF191AC2": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -140 },
+      { move: "77+a", score: -140 },
+      { move: "77+g", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+e 77+e)
+  "0xB85F967FCDF2F252": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+b 73+e)
+  "0xB868D0EE4BFF7F48": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+h 73+f)
+  "0xB893013739DB7271": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+d 73+e)
+  "0xB8BEE84F158EFB1A": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -260 },
+      { move: "33g+h", score: -260 },
+      { move: "33g+a", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+e 73+e)
+  "0xB9032025BF66F886": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+e 33+a 37+e)
+  "0xB9170E6E806B149B": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "53a+h", score: 0 },
+      { move: "53a+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+b 73+e)
+  "0xB96F2341A7709634": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+a 73+f)
+  "0xB974A301DFA8FBEE": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 26+d 42+a)
+  "0xB981856ED6771CB5": {
+    depth: 8,
+    candidates: [
+      { move: "36+e", score: -6570 },
+      { move: "46+f", score: -6570 },
+      { move: "26d+a", score: -6783 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+a 73+e)
+  "0xB9907592470403EF": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+d 73+g)
+  "0xB99FE1CB9DDC68CC": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 160 },
+      { move: "33a+h", score: 160 },
+      { move: "33a+c", score: 20 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+e 77+h)
+  "0xB9B72AACEAC26A3E": {
+    depth: 8,
+    candidates: [
+      { move: "73+e", score: -1236 },
+      { move: "73+f", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 53c+h 77+f)
+  "0xBA3EE0E79AEB34C8": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -610 },
+      { move: "53ch-44", score: -610 },
+      { move: "73+a", score: -610 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+h 73+f)
+  "0xBA4497C8AA0C0A84": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+g 73+f)
+  "0xBA4A7151BE2B1D6B": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+d 73+e)
+  "0xBA697EB0865983EF": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -120 },
+      { move: "33g+h", score: -120 },
+      { move: "33g+a", score: -120 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+d 32b-43 56+f)
+  "0xBA6C2B8CAC0C332E": {
+    depth: 8,
+    candidates: [
+      { move: "52+h", score: 640 },
+      { move: "52+b", score: -1020 },
+      { move: "22+c", score: -4944 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+d 33+a)
+  "0xBA7573C9AC79A69D": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2086 },
+      { move: "37+e", score: -2086 },
+      { move: "57+f", score: -2086 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 53c+h 37+d)
+  "0xBA7E977C88561AC8": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -1180 },
+      { move: "33+b", score: -1320 },
+      { move: "53bg+h", score: -1330 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+d 73+g)
+  "0xBB4877340E0B1039": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 20 },
+      { move: "33a+h", score: 20 },
+      { move: "33a+c", score: -120 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 26+d 32b-43)
+  "0xBB5DAAB4C350937D": {
+    depth: 8,
+    candidates: [
+      { move: "46+e", score: -6570 },
+      { move: "36+d", score: -6570 },
+      { move: "36+a", score: -6570 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+a 73+f)
+  "0xBBA335FE4C7F831B": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+f 33b+a 37+e)
+  "0xBBEEF70114198AB6": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 33+a 77+f)
+  "0xBC002B54FA99BD0D": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 400 },
+      { move: "53h+a", score: 400 },
+      { move: "33+b", score: 400 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 46+e 32b+c)
+  "0xBC0F3295A8D77A9E": {
+    depth: 8,
+    candidates: [
+      { move: "56+f", score: -3423 },
+      { move: "36+d", score: -3423 },
+      { move: "36+e", score: -4103 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 77+f 73+a 57+d)
+  "0xBC22EE623E361F76": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: 0 },
+      { move: "53+a", score: 0 },
+      { move: "73a+h", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+d 77+h)
+  "0xBC24FDE8571396B5": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+d 73+g)
+  "0xBC70834868BE977C": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+b 77+g)
+  "0xBCCAE5E432A668FB": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+g 77+b)
+  "0xBCDB0437CC098A2C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 42+h 26+d)
+  "0xBCF50D481742EAD9": {
+    depth: 8,
+    candidates: [
+      { move: "42+a", score: -179 },
+      { move: "32b-43", score: -227 },
+      { move: "52h-43", score: -620 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+d 73+f)
+  "0xBD55A2CA09D2150A": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+d 73+g)
+  "0xBD7770E784317E00": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 56+f 32b+a 46+f)
+  "0xBD842294661DEF71": {
+    depth: 8,
+    candidates: [
+      { move: "32ab-43", score: -267 },
+      { move: "42+a", score: -458 },
+      { move: "42+h", score: -799 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 53+a 37+f)
+  "0xBDE81D4AC635C40B": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33+b", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+c 77+b)
+  "0xBE0C92C85FDEF2D9": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+e 73+f)
+  "0xBE434998785E6D58": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+h 73+g)
+  "0xBE8ED4C93E027742": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+f 77+d)
+  "0xBEDAAA6901AF768B": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -836 },
+      { move: "73+e", score: -836 },
+      { move: "73+g", score: -956 }
+    ]
+  },
+  // OFK ply 0 (initial)
   "0xBF20205531084330": {
     depth: 8,
     candidates: [
-      { move: "32+a", score: 50 },
-      { move: "42+a", score: 50 },
-      { move: "22+b", score: 42 }
+      { move: "32+a", score: 0 },
+      { move: "22+b", score: 0 },
+      { move: "32+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+b 73+f)
+  "0xBF28B9538CC7EA96": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+e 73+f)
+  "0xBF44BA3794D18424": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+a 73+g)
+  "0xBF6976FFD871FEDD": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 53c+b 57f-46)
+  "0xBF83FECB6F960DB2": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -400 },
+      { move: "53bc-64", score: -400 },
+      { move: "33+a", score: -400 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+d 73+a 57+e)
+  "0xBFA39A6DB021360E": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "53+h", score: -62 },
+      { move: "33a+b", score: -62 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+h 73+f)
+  "0xBFABF54B5F6EF534": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+a 37+d 53+h 77+e)
+  "0xBFACC897F80A8405": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 53c+b 57d-66)
+  "0xBFC389507D2B23B2": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -1180 },
+      { move: "33+a", score: -1180 },
+      { move: "53gh+b", score: -1180 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 36+d 22b+c)
+  "0xBFD51AD39B714997": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -3463 },
+      { move: "36+e", score: -3463 },
+      { move: "46f-35", score: -3463 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+a 73+f)
+  "0xBFD7EF806CB37F4D": {
+    depth: 8,
+    candidates: [
+      { move: "33d+b", score: -260 },
+      { move: "33d+a", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+e 77+e)
+  "0xC009B4B1AE163F63": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 2 (after 33+a 37+d)
+  "0xC01336258CFDD7F3": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+e 32+a 56+f)
+  "0xC05F5A08C6261CA1": {
+    depth: 8,
+    candidates: [
+      { move: "42+h", score: -1020 },
+      { move: "42+b", score: -1660 },
+      { move: "52+h", score: -1721 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+b 77+b)
+  "0xC065B7D5B60051D1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1356 },
+      { move: "73+e", score: -1356 },
+      { move: "73+g", score: -1476 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+b 77+a)
+  "0xC09AE1065674C40A": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+h 73+e)
+  "0xC0BDBE38FBB2ADDB": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+h 73+f)
+  "0xC0C523F95A3FBF40": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+e 73+f)
+  "0xC12D9F2A7D0F272C": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 20 },
+      { move: "33b+h", score: 20 },
+      { move: "33b+c", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+b 73+e)
+  "0xC139018FC4945B05": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+e 73+e)
+  "0xC15502EBDC8235B7": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+c 37+d)
+  "0xC156F2316BA61CA2": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -400 },
+      { move: "53c+b", score: -400 },
+      { move: "33+a", score: -400 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+f 77+b)
+  "0xC162447A5A8FB8AD": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+c 77+d)
+  "0xC1B47CDB04FE3CFF": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+d 53a+h)
+  "0xC1C0EB46CE22642E": {
+    depth: 8,
+    candidates: [
+      { move: "57d-66", score: -2570 },
+      { move: "77+f", score: -2690 },
+      { move: "37+d", score: -2690 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+f 42+a 36+e)
+  "0xC1C6FCD6B8632ABD": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: -1721 },
+      { move: "52+h", score: -1721 },
+      { move: "52+g", score: -3498 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+d 73+g)
+  "0xC1C9C305FE38A5FD": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 20 },
+      { move: "33c+h", score: 20 },
+      { move: "33c+a", score: 20 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+a 37+f 53+b)
+  "0xC1DA94871A70E06D": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2486 },
+      { move: "57+g", score: -2486 },
+      { move: "57+d", score: -2502 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+f 73+a 77+e)
+  "0xC1E069328A3C3C11": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 62 },
+      { move: "73+h", score: 62 },
+      { move: "53a+h", score: 62 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+h 73+f)
+  "0xC212B506C9E8C7B5": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+e 53+b 37+d)
+  "0xC21A08267A9C9431": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -62 },
+      { move: "53b+a", score: -62 },
+      { move: "73+h", score: -62 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+e 53+b 57+d)
+  "0xC2661893BABC5A86": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -62 },
+      { move: "53b+a", score: -62 },
+      { move: "73+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+e 73+g)
+  "0xC2A39D90C707DE94": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 53c+h 37+d)
+  "0xC2AD7E996F7D55F5": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "73+b", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+d 73+b 37+d)
+  "0xC2ADC41BAA1B6423": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -120 },
+      { move: "53a+b", score: -120 },
+      { move: "53a+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+b 73+g)
+  "0xC2CF9EF4DF11B026": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+d 73+g)
+  "0xC31E55FA6DEFDD08": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -120 },
+      { move: "33c+h", score: -120 },
+      { move: "33c+a", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+g 73+g)
+  "0xC339721DBCA3522C": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 36+e 42+c 46+f)
+  "0xC33B618379E98EFF": {
+    depth: 8,
+    candidates: [
+      { move: "22+b", score: -3553 },
+      { move: "42c+h", score: -3553 },
+      { move: "52+a", score: -3553 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+g 77+d)
+  "0xC363EA249729440A": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+g 73+f)
+  "0xC387EB620861D3BC": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+e 73+f)
+  "0xC3FA09D5EED85FD9": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 160 },
+      { move: "33b+h", score: 160 },
+      { move: "33b+c", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+d 73+g)
+  "0xC426A1860B5A5A4D": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+d 42+e 36d-45)
+  "0xC4965B5AF72693BB": {
+    depth: 8,
+    candidates: [
+      { move: "42e+h", score: -1068 },
+      { move: "42e+b", score: -1660 },
+      { move: "32+a", score: -3107 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+d 73+f)
+  "0xC50380046A36D83B": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+g 73+f)
+  "0xC524A7E3BB7A571F": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+h 73+e)
+  "0xC52E697C46635150": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 73+h 77+e)
+  "0xC543A2CC81FD624E": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -520 },
+      { move: "53c+h", score: -520 },
+      { move: "33+a", score: -610 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+b 57+d)
+  "0xC5929875768204D6": {
+    depth: 8,
+    candidates: [
+      { move: "53h-44", score: 0 },
+      { move: "33+b", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+b 57+e 53b-64)
+  "0xC5AFAD9BFB55FDC5": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2480 },
+      { move: "57e+d", score: -2480 },
+      { move: "37+e", score: -2480 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+g 73+e)
+  "0xC5C0717023D6AF1E": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+b 73+e)
+  "0xC5D190A3DD794DC9": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+d 42+e 46+e)
+  "0xC5D28C2D1AB8A3B9": {
+    depth: 8,
+    candidates: [
+      { move: "32e+b", score: -1068 },
+      { move: "32e+h", score: -1887 },
+      { move: "42+a", score: -3107 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+a 73+f)
+  "0xC61A75B3DAF9B19A": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 1 (after 33+g)
+  "0xC63E02E82E8A7F6F": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -1096 },
+      { move: "37+d", score: -1096 },
+      { move: "37+f", score: -1096 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+g 33+b 77+f)
+  "0xC656162191BCAD3F": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 280 },
+      { move: "53b+a", score: 280 },
+      { move: "73+h", score: 280 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+e 33+b 37+e)
+  "0xC6D41B1D2EF87E0A": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53a+h", score: 0 },
+      { move: "33b+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+h 73+g)
+  "0xC6D8F6075DE6BA73": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+h 73+f)
+  "0xC6FA242AD005D179": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+b 73+e)
+  "0xC706065C4EAE353C": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+e 73+f)
+  "0xC71298F9F7354915": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+e 73+g)
+  "0xC7304AD47AD6221F": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+b 73+f)
+  "0xC77E9B9DEF2327A7": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+d 73+e)
+  "0xC7D03EFD10DFB16E": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+g 73+f)
+  "0xC7F3311C28AD2FEA": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+h 73+f)
+  "0xC7FDD7853C8A3805": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+a", score: -140 },
+      { move: "33c+h", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+g 73+e)
+  "0xC80507CDF6C69826": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+h 73+e)
+  "0xC80BE154E2E18FC9": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+d 73+f)
+  "0xC826082CCEB406A2": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -120 },
+      { move: "33g+h", score: -120 },
+      { move: "33g+a", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+b 77+e)
+  "0xC8835A7C9D2079F2": {
+    depth: 8,
+    candidates: [
+      { move: "53h-44", score: 0 },
+      { move: "33+b", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+g 77+e)
+  "0xC8BFEBDDB7451D71": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1396 },
+      { move: "73+e", score: -1396 },
+      { move: "73+g", score: -1516 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+e 77+g)
+  "0xC8C2096A51FC9114": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 2 (after 33+g 37+f)
+  "0xC8D9DC8EDD1DF6DA": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -280 },
+      { move: "77+a", score: -280 },
+      { move: "77+g", score: -400 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 77+f 73+h 57+d)
+  "0xC8E0877DBBB3AF3C": {
+    depth: 8,
+    candidates: [
+      { move: "53+h", score: -120 },
+      { move: "73h+a", score: -120 },
+      { move: "53+a", score: -120 }
+    ]
+  },
+  // 2P 3-Base ply 1 (after 33+h)
+  "0xC9142DB9AB20452F": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2024 },
+      { move: "57+e", score: -2024 },
+      { move: "37+e", score: -2024 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+g 77+h)
+  "0xC957570E9075851D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 73+h 57+d)
+  "0xC96764FF91AA805D": {
+    depth: 8,
+    candidates: [
+      { move: "53b-64", score: -340 },
+      { move: "53b+a", score: -340 },
+      { move: "33+a", score: -340 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+d 73+g)
+  "0xC97F9C69E76B87EF": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+f 52+h 26+d)
+  "0xC98C7E7ED2EC969D": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: -1721 },
+      { move: "42+h", score: -1721 },
+      { move: "32+c", score: -2961 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 53+a 57+e)
+  "0xC9C0378CEFB5DA3D": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "73+h", score: 0 },
+      { move: "53a+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+a 73+e)
+  "0xC9EC436204920656": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+b 73+f)
+  "0xCA27A6720312FA05": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+c 77+e)
+  "0xCA687D2224926584": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+e 53+h 57+f)
+  "0xCA86B4E4B7CFA0E1": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "53h+a", score: 0 },
+      { move: "33b+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+h 73+e)
+  "0xCADC77AB7136F73C": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+d 73+f)
+  "0xCAF19ED35D637E57": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -260 },
+      { move: "33g+h", score: -260 },
+      { move: "33g+a", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+b 73+f)
+  "0xCB2055DDEF9D1379": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+b 77+f)
+  "0xCB39CEE37BC74410": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+a 73+e)
+  "0xCB3BD59D97457EA3": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+e 73+f)
+  "0xCB4C56B9F78B7DCB": {
+    depth: 8,
+    candidates: [
+      { move: "33c+a", score: -260 },
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+c 77+h)
+  "0xCB80C1F103A2FDE8": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 53c+b 77+f)
+  "0xCB9175E888959DAD": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -30 },
+      { move: "73+a", score: -30 },
+      { move: "33+a", score: -740 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+a 73+f)
+  "0xCBDF030E0FE986A2": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+e 73+e)
+  "0xCC0C3F0430B3E815": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+e 77+b)
+  "0xCC3B7995B6BE650F": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+b 77+e)
+  "0xCC577AF1AEA80BBD": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+g 77+g)
+  "0xCCB6D31471306D42": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+f 77+h)
+  "0xCCB8358D65177AAD": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+d 73+g)
+  "0xCCEC4B2D5ABA7B64": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+e 73+e)
+  "0xCD0BCCABDC3C0169": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+f 77+a)
+  "0xCD5F97BB8364F332": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+b 73+e)
+  "0xCD67CFCFC42A6FDB": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+e 32+a 36+a)
+  "0xCD7850705FA909A1": {
+    depth: 8,
+    candidates: [
+      { move: "32+b", score: 544 },
+      { move: "32+a", score: 187 },
+      { move: "52h+g", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+a 73+e)
+  "0xCD98991C245EFA00": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+b 77+h)
+  "0xCDBFC622899893D1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 36+e 42+g 46+e)
+  "0xCDC8CECE2D3B4F61": {
+    depth: 8,
+    candidates: [
+      { move: "42g+h", score: -2108 },
+      { move: "32+a", score: -2110 },
+      { move: "42g+b", score: -2168 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+e 33+b 37+e)
+  "0xCDD5677105EEA4D1": {
+    depth: 8,
+    candidates: [
+      { move: "53a+b", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+h 73+e)
+  "0xCDE483D717837079": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+h 73+g)
+  "0xCE121CAC0C069B5A": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+d 77+d)
+  "0xCE46620C33AB9A93": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 33+h 77+e)
+  "0xCE60A114AB222B38": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: -62 },
+      { move: "73b+a", score: -62 },
+      { move: "33+b", score: -62 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+c 77+g)
+  "0xCE6145EBE2E715B7": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+d 53+b 77+f)
+  "0xCEAB7D9CBB85159D": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+a 37+d 33+b)
+  "0xCEB71AD629FC16D7": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2206 },
+      { move: "57+f", score: -2206 },
+      { move: "37+d", score: -2206 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+d 73+e)
+  "0xCF1AD456413F9047": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: -120 },
+      { move: "33a+b", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // OFK ply 3 (after 32+b 36+d 52+a)
+  "0xCF372E35DA53ABC6": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -3323 },
+      { move: "36+e", score: -3323 },
+      { move: "26+c", score: -3683 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 37+d 33+c 57+e)
+  "0xCF65EB470CBEB630": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -800 },
+      { move: "53c+b", score: -800 },
+      { move: "73+a", score: -800 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+g 73+e)
+  "0xD01E398993DC16BE": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+d 73+g)
+  "0xD06351826EFEE00B": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+b 73+e)
+  "0xD093930854521EF3": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
+  // 4P ply 2 (after 33+g 37+e)
+  "0xD0C2E2CAB8077842": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -280 },
+      { move: "77+a", score: -280 },
+      { move: "77+g", score: -400 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+f 77+g)
+  "0xD0D9372E34E61F8C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+g 77+a)
+  "0xD1307381C6B281FC": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 37+e 53+b)
+  "0xD132BF2924211474": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2024 },
+      { move: "77e+f", score: -2024 },
+      { move: "57+e", score: -2176 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+d 73+g)
+  "0xD164A22D82710977": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 73+h 57c+f)
+  "0xD1752665B3BC3BB6": {
+    depth: 8,
+    candidates: [
+      { move: "53c+b", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+e 73+e)
+  "0xD184D604E8789A06": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+b 73+g)
+  "0xD1B29A8CDC008D25": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+g 77+b)
+  "0xD1CF255226C61427": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+f 53+b 57f+d)
+  "0xD204D4F0809A0927": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -120 },
+      { move: "73+a", score: -120 },
+      { move: "53b+a", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 57+e 33+b)
+  "0xD22EADEB893E1895": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -2080 },
+      { move: "57e+f", score: -2080 },
+      { move: "77+e", score: -2080 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+b 73+f)
+  "0xD23C98366608749D": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+b 73+e)
+  "0xD24405F7C7856606": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+e 73+f)
+  "0xD2509B527E1E1A2F": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+e 33+h 37+d)
+  "0xD250C28E0833A672": {
+    depth: 8,
+    candidates: [
+      { move: "53h-44", score: -120 },
+      { move: "53h+a", score: -120 },
+      { move: "33+b", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+e 73+g)
+  "0xD272497FF3FD7125": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+b 77+d)
+  "0xD2C978A307EF01FC": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+c 77+b)
+  "0xD318B3ADB5116CD2": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+e 73+f)
+  "0xD35768FD9291F353": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+b 73+g)
+  "0xD3650C734FD7F5D0": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+h 73+g)
+  "0xD39AF5ACD4CDE949": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+h 73+f)
+  "0xD3B82781592E8243": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: 260 },
+      { move: "33a+b", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 37+d 33+b)
+  "0xD3C414BCF8783852": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2600 },
+      { move: "57+f", score: -2600 },
+      { move: "37+d", score: -2600 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 37+d 33+b 77+f)
+  "0xD3D873F66A013B18": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53b-64", score: 0 },
+      { move: "53b+a", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+c 77+a)
+  "0xD3E7E57E5565F909": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+e 73+e)
+  "0xD417014055A9668D": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+f 77+b)
+  "0xD42047D1D3A4EB97": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 37+d 73+h 57+f)
+  "0xD44F2E1180ACB386": {
+    depth: 8,
+    candidates: [
+      { move: "53+b", score: -62 },
+      { move: "53+a", score: -62 },
+      { move: "53+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+g 73+e)
+  "0xD46AE3F7B310EAE8": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+e 73+f)
+  "0xD46F9C81F4247416": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 20 },
+      { move: "33a+h", score: 20 },
+      { move: "33a+c", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+b 73+e)
+  "0xD47B02244DBF083F": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+e 77+h)
+  "0xD4A30BC9000DF435": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 53+a 57+e)
+  "0xD4B339E63E31F4B8": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33+b", score: 0 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 77+e 53+h)
+  "0xD537709A60E2C0EA": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -2024 },
+      { move: "37+d", score: -2024 },
+      { move: "57+f", score: -2024 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+e 77+a)
+  "0xD544A9FFE67E7DAA": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 2 (after 33+b 37+d)
+  "0xD551358E05D684C9": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+b 73+e)
+  "0xD57CF18BA130E143": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+a 73+e)
+  "0xD583A75841447498": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+h 73+f)
+  "0xD5872052D314EC7A": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 36+d 42+c)
+  "0xD5B1884372121E18": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -2962 },
+      { move: "36+e", score: -2962 },
+      { move: "46f-35", score: -2962 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 53+b 77+e)
+  "0xD5F054164CA45777": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+h 73+e)
+  "0xD5FFBD937299FEE1": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+h 73+g)
+  "0xD60922E8691C15C2": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 33+b 77+f)
+  "0xD64AC089AA436A95": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "53+b", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+g 73+f)
+  "0xD659A39BB86B6A1C": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 73+h 57+f)
+  "0xD680C92F8F033F53": {
+    depth: 8,
+    candidates: [
+      { move: "53g+h", score: -730 },
+      { move: "73+h", score: -730 },
+      { move: "53g+b", score: -730 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 57+d 73+h 57d+e)
+  "0xD6B6D77E14DE2DAB": {
+    depth: 8,
+    candidates: [
+      { move: "53a+h", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "53a+b", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+e 73+f)
+  "0xD6B80A7E67F30CE3": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 160 },
+      { move: "33a+h", score: 160 },
+      { move: "33a+c", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+g 73+e)
+  "0xD6BD750820C7921D": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 36+d 52+g 36d+e)
+  "0xD6EC2CEB5FD247FD": {
+    depth: 8,
+    candidates: [
+      { move: "42h-33", score: 162 },
+      { move: "32+a", score: 162 },
+      { move: "22c+b", score: -780 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+h 73+f)
+  "0xD750B6AD40C3948F": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
+  // OFK ply 4 (after 22+b 46+f 42+a 46f-35)
+  "0xD764A0D60917D788": {
+    depth: 8,
+    candidates: [
+      { move: "22b+a", score: -1584 },
+      { move: "32+b", score: -1721 },
+      { move: "52+h", score: -1721 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+d 73+g 77+e)
+  "0xD791E299B28B230E": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -400 },
+      { move: "53a+h", score: -400 },
+      { move: "53a+b", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+b 73+f)
+  "0xD7AF4F72DBD98816": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+f 77+e)
+  "0xD8128AF5CB0CB1FB": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+a 73+e)
+  "0xD846D1E5945443A0": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+b 73+f)
+  "0xD85D51A5EC8C2E7A": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+a 73+f)
+  "0xD8A207760CF8BBA1": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+h 73+e)
+  "0xD8A6807C9EA82343": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+b 77+h)
+  "0xD8FDC58900B3C0EB": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+b 77+e)
+  "0xD915795A27835887": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 2P 1-Base ply 2 (after 33+b 57+c)
+  "0xD91FF42F8932BA17": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 400 },
+      { move: "53+h", score: 400 },
+      { move: "73+a", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+e 73+e)
+  "0xD94E3CAFB998BB2F": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+e 77+b)
+  "0xD9797A3E3F953635": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+b 37+d 73+b)
+  "0xD98957DAE9D0F34D": {
+    depth: 8,
+    candidates: [
+      { move: "57+d", score: -2024 },
+      { move: "57+e", score: -2024 },
+      { move: "77+f", score: -2024 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+d 73+f)
+  "0xD98C9AAB5E724354": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+h 73+e)
+  "0xD9A173D37227CA3F": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+d 73+e)
+  "0xDA58D7FDC814C37D": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+a 73+f)
+  "0xDA7591899F2FC354": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+b 73+f)
+  "0xDA8AC75A7F5B568F": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+e 73+g)
+  "0xDAB8A3D4A21D500C": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+g 73+f)
+  "0xDB9CD5266D7B5D24": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 33+h 57+d)
+  "0xDBDB05C23F5C9E38": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53a+b", score: 0 },
+      { move: "53a+h", score: -930 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+g 77+h)
+  "0xDC1554A5195ED627": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+d 73+g)
+  "0xDC3D9FC26E40D4D5": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+e 73+e)
+  "0xDCA15E2C4CFA449F": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 20 },
+      { move: "33c+h", score: 20 },
+      { move: "33c+a", score: 20 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+d 77+b)
+  "0xDCEAAD7A8244CABE": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+b 77+g)
+  "0xDD1C4193E1F628B4": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+g 77+e)
+  "0xDDFDE8763E6E4E4B": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1396 },
+      { move: "73+e", score: -1396 },
+      { move: "73+g", score: -1516 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+a 73+f)
+  "0xDE014BF7BFE33F02": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+f 33+b 37+d)
+  "0xDE2012C390CDEB34": {
+    depth: 8,
+    candidates: [
+      { move: "53c+b", score: -730 },
+      { move: "73+h", score: -730 },
+      { move: "53c+h", score: -1180 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 57+d 53b-64 77+f)
+  "0xDE284639F05A5A73": {
+    depth: 8,
+    candidates: [
+      { move: "64b+a", score: -470 },
+      { move: "33+a", score: -470 },
+      { move: "73+h", score: -590 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+b 73+g)
+  "0xDE40845BEB552B49": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // OFK ply 4 (after 32+b 46+f 52+g 36+e)
+  "0xDE4E27413A47C869": {
+    depth: 8,
+    candidates: [
+      { move: "32+a", score: -1343 },
+      { move: "42h-33", score: -1343 },
+      { move: "42h+b", score: -1839 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+e 73+e)
+  "0xDE76C8D3DF2D3C6A": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -120 },
+      { move: "33c+h", score: -120 },
+      { move: "33c+a", score: -120 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+d 53c+b 77+e)
+  "0xDE7B5647504FF66A": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -860 },
+      { move: "33+b", score: -860 },
+      { move: "73+a", score: -1010 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+a 73+g)
+  "0xDEBFD2880B21BE92": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+c 77+h)
+  "0xDEC2C25A8A89AED2": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+c 77+e)
+  "0xDF2A7E89ADB936BE": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+b 73+f)
+  "0xDF65A5D98A39A93F": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+d 73+e)
+  "0xDFCB00B975C53FF6": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+h 73+f)
+  "0xDFE6E9C15990B69D": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 37+d 53b-64 57+f)
+  "0xDFF4E13F1AC1684C": {
+    depth: 8,
+    candidates: [
+      { move: "53", score: 150 },
+      { move: "73+h", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 33+b 57+d)
+  "0xDFFCB5C57A56D90B": {
+    depth: 8,
+    candidates: [
+      { move: "53c+h", score: -610 },
+      { move: "73+a", score: -610 },
+      { move: "73+b", score: -730 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+c 77+h)
+  "0xE007373FF1705A2D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 37+d 53a+b 57+e)
+  "0xE022D408E9BB58B1": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "33+b", score: 0 }
+    ]
+  },
+  // OFK ply 3 (after 22+b 36+e 32+a)
+  "0xE07F91EDC478B4D2": {
+    depth: 8,
+    candidates: [
+      { move: "26+d", score: -6435 },
+      { move: "46+f", score: -6435 },
+      { move: "46+c", score: -6435 }
+    ]
+  },
+  // OFK ply 4 (after 32+a 36+d 42+e 56+f)
+  "0xE086CFEED9D3FDA6": {
+    depth: 8,
+    candidates: [
+      { move: "32e+b", score: -3107 },
+      { move: "52+h", score: -3107 },
+      { move: "52+g", score: -3107 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+a 73+e)
+  "0xE0BC23536597D966": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+a 73+f)
+  "0xE0C4BE92C41ACBFD": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+c 77+b)
+  "0xE11FC3DAF7774669": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+e 73+f)
+  "0xE150188AD0F7D9E8": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+b", score: -380 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+a 73+g)
+  "0xE19D2AD7EDC54AB0": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+c 77+a)
+  "0xE1E095091703D3B2": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+g 73+e)
+  "0xE21949FED1BA3C05": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+d 73+g)
+  "0xE26421F52C98CAB0": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+a 73+e)
+  "0xE26BB5ACF640A193": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+g 77+h)
+  "0xE2D0A1C062A722D8": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+a 57+c 73+h)
+  "0xE3062AE12261B52C": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2880 },
+      { move: "57g+d", score: -2900 },
+      { move: "37+e", score: -2900 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 53+h 77+f)
+  "0xE31A4DABB018B666": {
+    depth: 8,
+    candidates: [
+      { move: "53", score: 550 },
+      { move: "33+a", score: 400 },
+      { move: "53b-64", score: 400 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+g 77+a)
+  "0xE33703F684D4AB47": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+e 77+g)
+  "0xE345FFA4A32E36D1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+a 73+g)
+  "0xE34ABC287E123245": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+g 77+b)
+  "0xE3C8552564A03E9C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+g 73+f)
+  "0xE45ED3ECFA0D40A7": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+d 73+e)
+  "0xE49D2298B3ED3782": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 33+b 57+c 53+b 37+d)
+  "0xE4B212B0B950DE46": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 280 },
+      { move: "73+a", score: 280 },
+      { move: "53b+a", score: 280 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+b 77+e 53+h 57+d)
+  "0xE517340457E6535C": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: 0 },
+      { move: "33b+a", score: 0 },
+      { move: "53h+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+a 73+f)
+  "0xE55769D679CB3776": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+g 73+f)
+  "0xE55920431682A9DB": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 1 (after 53+a)
   "0xE61535559B2C9569": {
     depth: 8,
     candidates: [
-      { move: "57+e", score: 10 },
-      { move: "37+d", score: 5 },
-      { move: "77+f", score: 5 }
+      { move: "37+e", score: -2024 },
+      { move: "57+e", score: -2024 },
+      { move: "77+e", score: -2024 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+f 73+a 77+e)
+  "0xE63BF3F7DD240E75": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: 0 },
+      { move: "33h+a", score: 0 },
+      { move: "53+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+h 73+e)
+  "0xE6637519E551D7BC": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+a 73+e)
+  "0xE6832480EFADB75F": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 53+c 77+f 73+b)
+  "0xE6A08DB1B807ACE5": {
+    depth: 8,
+    candidates: [
+      { move: "57+e", score: -1960 },
+      { move: "57+f", score: -1960 },
+      { move: "77+f", score: -2080 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+e 77+h)
+  "0xE6A47BBE426BDE8E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+f 77+a)
+  "0xE6D8617571B654F7": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+b 73+e)
+  "0xE77B81FCE356CBF8": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+a 73+e)
+  "0xE784D72F03225E23": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 57+c 33+b 57c+d)
+  "0xE79E5074BF818012": {
+    depth: 8,
+    candidates: [
+      { move: "53g+b", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "73h+a", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+e 77+b)
+  "0xE7BC8F5B446CC2CA": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+b 77+e)
+  "0xE7D08C3F5C7AAC78": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+g 73+f)
+  "0xE8001DACFAB37479": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+a 73+f)
+  "0xE872E1FEDD49E9EF": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 37+d 73+b 57+d)
+  "0xE875B442344F52C4": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -378 },
+      { move: "53+h", score: -378 },
+      { move: "73b+g", score: -558 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+g 73+e)
+  "0xE878806D5B3E66E2": {
+    depth: 8,
+    candidates: [
+      { move: "33b+h", score: 140 },
+      { move: "33b+a", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+b 73+f)
+  "0xE88DB72D3D3D7C34": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+h 73+f)
+  "0xE99543C83B3A6070": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 33+h 57+e 73+h 77+e)
+  "0xE9D503F11EF4AE4C": {
+    depth: 8,
+    candidates: [
+      { move: "53+a", score: -62 },
+      { move: "73b+a", score: -62 },
+      { move: "33b+a", score: -62 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+f 77+e)
+  "0xEA15FA82896A9B40": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -856 },
+      { move: "73+e", score: -856 },
+      { move: "73+g", score: -976 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+b 73+f)
+  "0xEA5A21D2AEEA04C1": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+a 73+f)
+  "0xEAA577014E9E911A": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+g 73+e)
+  "0xEAAF1692C8E91E17": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+b 73+e)
+  "0xEABEF7413646FCC0": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+e 73+e)
+  "0xEAD2F4252E509272": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+h 73+f)
+  "0xEB42D537A8ED1885": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+e 77+a)
+  "0xEB815C9A9D878955": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 2 (after 33+h 37+d)
+  "0xEB94C0EB7E2F7036": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+h 73+e)
+  "0xEBA603A43041E084": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+b 73+g)
+  "0xEC47F42CA93301F2": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+e 73+e)
+  "0xEC71B8A49D4B16D1": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -240 },
+      { move: "33d+b", score: -240 },
+      { move: "33d+h", score: -240 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+e 73+f)
+  "0xEC956E3705E7EED0": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+a 73+g)
+  "0xECB8A2FF49479429": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+b 73+f)
+  "0xECF96D531DF18062": {
+    depth: 8,
+    candidates: [
+      { move: "33h+b", score: 0 },
+      { move: "33h+a", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+h 73+g)
+  "0xED5F00C9AF341DB6": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+a 73+f)
+  "0xED9D837D282B165F": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+g 73+g)
+  "0xEDB118C5CA81E3F8": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+h 73+f)
+  "0xEDE199B61BF69C26": {
+    depth: 8,
+    candidates: [
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 },
+      { move: "33d+a", score: -260 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+f 33+b 77+e)
+  "0xEDF798735A95A93B": {
+    depth: 8,
+    candidates: [
+      { move: "73+a", score: -62 },
+      { move: "53b+a", score: -62 },
+      { move: "33b+a", score: -62 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+d 77+a)
+  "0xEE128BDE205675DE": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+b 77+e 33+b 57+f)
+  "0xEE1648687CF08987": {
+    depth: 8,
+    candidates: [
+      { move: "73h+a", score: -120 },
+      { move: "53h+a", score: -120 },
+      { move: "33+b", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+f 77+g)
+  "0xEE1CC24B4F1FEB73": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+g 73+e)
+  "0xEE4787BED10408DB": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+e 73+e)
+  "0xEEA62E5B0E9C6E24": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -100 },
+      { move: "33d+b", score: -100 },
+      { move: "33d+h", score: -100 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+b 77+g)
+  "0xEF1B31E4A390020F": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1356 },
+      { move: "73+e", score: -1356 },
+      { move: "73+g", score: -1476 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+d 73+g)
+  "0xEFA15748F988FD88": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+g 73+f)
+  "0xF01B23E89FA9FAE1": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: 0 },
+      { move: "33a+b", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+a 73+g)
+  "0xF037B8507D030F46": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+d 73+g)
+  "0xF119258D2F89F7B3": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -240 },
+      { move: "33d+b", score: -240 },
+      { move: "33d+h", score: -240 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+g 73+g)
+  "0xF13E026AFEC57897": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+e 77+e)
+  "0xF20EC4C6EC7015D8": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -856 },
+      { move: "73+e", score: -856 },
+      { move: "73+g", score: -976 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+b 77+b)
+  "0xF262C7A2F4667B6A": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+b 77+a)
+  "0xF29D91711412EEB1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1356 },
+      { move: "73+e", score: -1356 },
+      { move: "73+g", score: -1476 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+e 73+e)
+  "0xF2C9CA614B4A1CEA": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // OFK ply 3 (after 32+a 46+f 42+a)
+  "0xF34AAEC0CCA098E6": {
+    depth: 8,
+    candidates: [
+      { move: "46+f", score: -4263 },
+      { move: "36d+e", score: -4450 },
+      { move: "56+f", score: -4483 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+b 77+h)
+  "0xF37A3347F261672E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+d 77+g)
+  "0xF3942B4B97D49960": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+f 77+a)
+  "0xF39A62DEF89D07CD": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 53+b 57+f 33+h)
+  "0xF3B2FDC02FAA9AED": {
+    depth: 8,
+    candidates: [
+      { move: "77+e", score: -2024 },
+      { move: "37+e", score: -2024 },
+      { move: "57d+e", score: -2024 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+a 73+e)
+  "0xF3C1272B6686E465": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+d 73+g)
+  "0xF3CEB372BC5E8F46": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -100 },
+      { move: "33d+b", score: -100 },
+      { move: "33d+h", score: -100 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+a 37+d 53a+b 57+e)
+  "0xF46DD113DFD7BE6C": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: 0 },
+      { move: "53ab-64", score: 0 },
+      { move: "33+a", score: 0 }
+    ]
+  },
+  // 2P 1-Base ply 3 (after 33+b 57+e 73+h)
+  "0xF471B6594DAEBD26": {
+    depth: 8,
+    candidates: [
+      { move: "37+d", score: -3230 },
+      { move: "77+f", score: -3230 },
+      { move: "57e+d", score: -3230 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+c 77+e)
+  "0xF4AD88475F6B917B": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+b 73+f)
+  "0xF4E2531778EB0EFA": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+a 73+f)
+  "0xF586BD394D3198C7": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 2P 1-Base ply 4 (after 53+c 77+f 53c+h 37+d)
+  "0xF5876844AE919EAB": {
+    depth: 8,
+    candidates: [
+      { move: "73+h", score: -610 },
+      { move: "33+a", score: -610 },
+      { move: "33+b", score: -730 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+g 73+f)
+  "0xF5F4416B6ACB0551": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+h 73+f)
+  "0xF5FAA7F27EEC12BE": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+a 73+e)
+  "0xF5FE20F8ECBC8A5C": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+e 77+g)
+  "0xF607FC0F2A0565EB": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+g 77+e)
+  "0xF67A1EB8CCBCE98E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1396 },
+      { move: "73+e", score: -1396 },
+      { move: "73+g", score: -1516 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+a 57+d 33+c 77+e)
+  "0xF69424F712060375": {
+    depth: 8,
+    candidates: [
+      { move: "33+b", score: -400 },
+      { move: "73g+h", score: -400 },
+      { move: "53a+h", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+d 73+f)
+  "0xF704F0732850F280": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+g 73+f)
+  "0xF723D794F91C7DA4": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+a 73+e)
+  "0xF729B6077F6BF2A9": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
+  // 2P 3-Base ply 4 (after 53+b 57+c 33+b 37+d)
+  "0xF75548B0867450BB": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 338 },
+      { move: "73h+a", score: 338 },
+      { move: "53h+a", score: 338 }
+    ]
+  },
+  // 2P 3-Base ply 3 (after 33+h 57+d 53+h)
+  "0xF7B732736B694E73": {
+    depth: 8,
+    candidates: [
+      { move: "77+f", score: -2276 },
+      { move: "77+e", score: -2276 },
+      { move: "37+d", score: -2282 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+d 73+g)
+  "0xF7BA690C9C927310": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+h 73+f)
+  "0xF83FD14FABFC2586": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+g 73+f)
+  "0xF8D1C943CE49DBC8": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+h 73+e)
+  "0xF8DB07DC3350DD87": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+a 73+f)
+  "0xF8DF80D6A1004565": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+b 73+f)
+  "0xF92725AAADFB39C2": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+e 73+f)
+  "0xF94B26CEB5ED5770": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+b", score: -380 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+b 73+e)
+  "0xF9C3F3393557C1C3": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+a 73+f)
+  "0xF9D873794D8FAC19": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+e 73+g)
+  "0xF9F5BFB1012FD6E0": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+g 73+e)
+  "0xFA0277BAB4A0B29D": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+h 73+e)
+  "0xFA0C9123A087A572": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+g 73+e)
+  "0xFB058415582F5BE1": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+b 73+e)
+  "0xFB1465C6A680B936": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+f 77+g)
+  "0xFB5EC1E0C634B849": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // 2P 1-Base ply 1 (after 53+a)
   "0xFB663B3F4AA8BBEC": {
     depth: 8,
     candidates: [
-      { move: "57+e", score: 10 },
-      { move: "37+d", score: 5 },
-      { move: "77+f", score: 5 }
+      { move: "57+d", score: -3100 },
+      { move: "57+f", score: -3100 },
+      { move: "57+e", score: -3350 }
+    ]
+  },
+  // 2P 3-Base ply 2 (after 33+h 57+e)
+  "0xFBB2210A0E3D24FE": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "73b+a", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+g 73+g)
+  "0xFC1B8A425A47A60E": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+d 77+d)
+  "0xFC41127B71CDB028": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -856 },
+      { move: "73+e", score: -856 },
+      { move: "73+g", score: -976 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+c 77+g)
+  "0xFC66359CA0813F0C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+g 73+e)
+  "0xFD3A83C6D21535D8": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+e 73+f)
+  "0xFD3FFCB09521AB26": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 160 },
+      { move: "33h+b", score: 160 },
+      { move: "33h+c", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+g 73+f)
+  "0xFD421E0773982743": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+h 73+e)
+  "0xFE784B5D804B5924": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+g 77+g)
+  "0xFEB1A363335647F9": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+f 77+h)
+  "0xFEBF45FA27715016": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+e 77+a)
+  "0xFEC35F3114ACDA6F": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+g 73+g)
+  "0xFECC1CBDC990DEFB": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+e 73+e)
+  "0xFF0CBCDC9E5A2BD2": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+b 73+e)
+  "0xFF60BFB8864C4560": {
+    depth: 8,
+    candidates: [
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 },
+      { move: "33d+a", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+a 73+e)
+  "0xFF9FE96B6638D0BB": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+f 77+b)
+  "0xFFA7B11F21764C52": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+e 73+f)
+  "0xFFE86A4F06F6D3D3": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 20 },
+      { move: "33h+b", score: 20 },
+      { move: "33h+c", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+g 73+e)
+  "0xFFED153941C24D2D": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
     ]
   }
 };
@@ -9142,10 +27376,12 @@ function renderWebReserveCard(player, cardEl, state, isTurn) {
 function renderAllWebReserves() {
   var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
   if (!s) return;
-  var isA = (s.turn === "A");
-  var isB = (s.turn === "B");
-  renderWebReserveCard("A", document.getElementById("web-res-card-a"), s, isA);
-  renderWebReserveCard("B", document.getElementById("web-res-card-b"), s, isB);
+  var effRot = ((boardRotationDeg + liveRotationOffsetDeg) % 360 + 360) % 360;
+  var isFlipped = (effRot === 180 && s.mode !== "4P" && s.mode !== "4");
+  var botPlayer = isFlipped ? "B" : "A";
+  var topPlayer = isFlipped ? "A" : "B";
+  renderWebReserveCard(botPlayer, document.getElementById("web-res-card-a"), s, s.turn === botPlayer);
+  renderWebReserveCard(topPlayer, document.getElementById("web-res-card-b"), s, s.turn === topPlayer);
 
   var cardC = document.getElementById("web-res-card-c");
   var cardD = document.getElementById("web-res-card-d");
@@ -9315,20 +27551,20 @@ function renderPlayBoardCanvas() {
     }
   }
 
-  // 5. Board Pods: Sorted Fewest-Prongs-at-Bottom, Most-Prongs-on-Top
+  // 5. Board Pods: Sorted Most-Prongs-at-Bottom, Fewest-Prongs-on-Top (GDB-04.2a)
   for (var py = 1; py <= s.gh; py++) {
     for (var px = 1; px <= s.gw; px++) {
       var podStack = s.map[px + "," + py];
       if (!podStack || !podStack.length) continue;
       var baseR = geom.squareRect(px, py);
 
-      // Sort ascending by prong count so top layer (maxL - 1) has the most prongs
-      var sortedAsc = podStack.slice().sort(function (a, b) {
-        return (a.cfg ? a.cfg.count : 0) - (b.cfg ? b.cfg.count : 0);
+      // Sort descending by prong count so bottom layer (l === 0) has the most prongs protruding around upper layers
+      var sortedDesc = podStack.slice().sort(function (a, b) {
+        return (b.cfg ? b.cfg.count : 0) - (a.cfg ? a.cfg.count : 0);
       });
-      var maxL = Math.min(sortedAsc.length, 4);
+      var maxL = Math.min(sortedDesc.length, 4);
       for (var l = 0; l < maxL; l++) {
-        var pItem = (l === maxL - 1) ? sortedAsc[sortedAsc.length - 1] : sortedAsc[l];
+        var pItem = (l === maxL - 1) ? sortedDesc[sortedDesc.length - 1] : sortedDesc[l];
         var off = (maxL - 1 - l) * 2.4;
         var layerR = {
           x: baseR.x - off,
@@ -9337,7 +27573,7 @@ function renderPlayBoardCanvas() {
           h: baseR.h
         };
         var isTop = (l === maxL - 1);
-        var centerBadge = (isTop && sortedAsc.length >= 2) ? ("x" + sortedAsc.length) : "";
+        var centerBadge = (isTop && sortedDesc.length >= 2) ? ("x" + sortedDesc.length) : "";
         drawOctagonalPod(ctx, layerR, pItem.owner, pItem.cfg, pal, effectiveRot, false, centerBadge);
       }
     }
@@ -9376,35 +27612,62 @@ function renderPlayBoardCanvas() {
     ctx.restore();
   }
 
-  // 7. Pink (#FF69B4) Active-Player Board-Edge Turn Indicator
-  if (s.status === "P" && s.turn && s.turn !== "-") {
+  // 7. Pink (#FF69B4) Running Light Active-Player Board-Edge Turn Indicator (GDB-05.1: 30% segFrac, 2000ms period)
+  var isWaitingOnlineRoom = !!(activeOnlineGameId && activeOnlineRoomView &&
+    (activeOnlineRoomView.phase || "WAITING_FOR_PLAYERS") === "WAITING_FOR_PLAYERS");
+  if (!isWaitingOnlineRoom && s.status === "P" && s.turn && s.turn !== "-") {
     var edge = activeTurnScreenEdge(s.mode, s.turn, effectiveRot);
     var gr = geom.grid;
     var inset = 1.0;
     var startPt, endPt;
-    if (edge === 1) { // Left
-      startPt = [gr.x - inset, gr.y + gr.h];
-      endPt = [gr.x - inset, gr.y];
-    } else if (edge === 2) { // Top
-      startPt = [gr.x, gr.y - inset];
-      endPt = [gr.x + gr.w, gr.y - inset];
-    } else if (edge === 3) { // Right
-      startPt = [gr.x + gr.w + inset, gr.y];
-      endPt = [gr.x + gr.w + inset, gr.y + gr.h];
-    } else { // Bottom
-      startPt = [gr.x + gr.w, gr.y + gr.h + inset];
-      endPt = [gr.x, gr.y + gr.h + inset];
+    if (edge === 1) { // Left edge: top to bottom
+      startPt = [gr.x + inset, gr.y];
+      endPt = [gr.x + inset, gr.y + gr.h];
+    } else if (edge === 2) { // Top edge: right to left
+      startPt = [gr.x + gr.w, gr.y + inset];
+      endPt = [gr.x, gr.y + inset];
+    } else if (edge === 3) { // Right edge: bottom to top
+      startPt = [gr.x + gr.w - inset, gr.y + gr.h];
+      endPt = [gr.x + gr.w - inset, gr.y];
+    } else { // Bottom edge: left to right
+      startPt = [gr.x, gr.y + gr.h - inset];
+      endPt = [gr.x + gr.w, gr.y + gr.h - inset];
     }
-    var pulse = (Math.sin(nowMs * 0.00314) + 1.0) * 0.5;
-    ctx.save();
-    ctx.strokeStyle = "#FF69B4";
-    ctx.lineWidth = 3.5 + pulse * 1.5;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(startPt[0], startPt[1]);
-    ctx.lineTo(endPt[0], endPt[1]);
-    ctx.stroke();
-    ctx.restore();
+    var tPhase = (nowMs % 2000) / 2000.0;
+    var segFrac = 0.30;
+    var t0 = tPhase, t1 = tPhase + segFrac;
+    var strokeW = Math.max(3.5, geom.cell * 0.065);
+
+    function drawPlayPinkSub(a, b) {
+      if (a >= b) { return; }
+      var x0 = startPt[0] + a * (endPt[0] - startPt[0]);
+      var y0 = startPt[1] + a * (endPt[1] - startPt[1]);
+      var x1 = startPt[0] + b * (endPt[0] - startPt[0]);
+      var y1 = startPt[1] + b * (endPt[1] - startPt[1]);
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.lineWidth = strokeW + 3.0;
+      ctx.strokeStyle = "rgba(255, 105, 180, 0.28)";
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.lineWidth = strokeW;
+      ctx.strokeStyle = "#FF69B4";
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (t1 <= 1.0) {
+      drawPlayPinkSub(t0, t1);
+    } else {
+      drawPlayPinkSub(t0, 1.0);
+      drawPlayPinkSub(0.0, t1 - 1.0);
+    }
   }
 
   // 8. Dashed Origin Indicator Ring around guidedOriginSquare
@@ -10215,27 +28478,8 @@ function handlePlaySquareClick(x, y, ptX, ptY) {
   }
 
   if (bestFriendlyIdx !== -1) {
-    var topPod = stack[bestFriendlyIdx];
-    // Check if outer socket ring was clicked directly on board (only when no move is currently staged)
-    if (playBoardGeom && !moveComposer.isAwaitingConfirmation && res && res.freeProngs > 0) {
-      var sqR = playBoardGeom.squareRect(x, y);
-      var dx = ptX - sqR.cx, dy = ptY - sqR.ry;
-      var dist = Math.hypot(dx, dy);
-      var cellR = sqR.w * 0.36;
-      if (dist >= cellR * 0.92 && dist <= cellR * 1.32) {
-        var effRot = ((boardRotationDeg + liveRotationOffsetDeg) % 360 + 360) % 360;
-        var angle = Math.atan2(dy, dx) * 180 / Math.PI;
-        var dNorm = ((angle - effRot + 90) % 360 + 360) % 360;
-        var sector = Math.round(dNorm / 45) % 8;
-        if (!topPod.cfg.prongs[sector]) {
-          if (moveComposer.stageAddProng(x, y, bestFriendlyIdx, sector, false)) {
-            return;
-          }
-        }
-      }
-    }
-
-    // Begin guided move for top friendly pod
+    // GDB-07.1: Prongs are added/repositioned exclusively inside ZoomedSquareDialog.
+    // Begin guided move for top friendly pod (or open ZoomedSquareDialog if 0 legal moves).
     moveComposer.beginGuidedPodMove(x, y, bestFriendlyIdx);
     if (!moveComposer.guidedLegalDests || moveComposer.guidedLegalDests.length === 0) {
       // Unarmed pod -> open zoom modal directly!
@@ -11149,7 +29393,7 @@ function triggerAiBotTurn() {
   }
 }
 
-// Undo Move
+// Undo Move (GDB-10.1a: Strictly local games only; hidden and disabled in online games)
 var btnUndo = document.getElementById("btn-web-undo");
 if (btnUndo) {
   btnUndo.addEventListener("click", function () {
@@ -11159,21 +29403,6 @@ if (btnUndo) {
       return;
     }
     if (activeOnlineGameId) {
-      var targetRoom = activeOnlineGameId;
-      var hasPendingUndo = activeOnlineRoomView && Array.isArray(activeOnlineRoomView.proposals) &&
-        activeOnlineRoomView.proposals.some(function (p) {
-          return (p.type === "UNDO_REQUEST" || p.action === "UNDO_REQUEST" || p.proposal === "UNDO_REQUEST") &&
-            (!currentUser || !currentUser.uuid || p.by_uuid !== currentUser.uuid);
-        });
-      var undoAction = hasPendingUndo ? "accept_undo" : "request_undo";
-      api("/api/v1/games/" + encodeURIComponent(targetRoom) + "/action", {
-        method: "POST",
-        body: { action: undoAction }
-      }).then(function () {
-        pollOnlineGameEvents(targetRoom);
-      }).catch(function (e) {
-        alert((undoAction === "accept_undo" ? "Accept undo" : "Undo request") + " failed: " + e.message);
-      });
       return;
     }
     var goOverlay = document.getElementById("web-gameover-overlay");
@@ -11383,7 +29612,7 @@ function updateOnlineTableControls() {
     var showPlayerActions = isSeated && isProgress;
 
     if (drawBtn) drawBtn.style.display = showPlayerActions ? "" : "none";
-    if (undoBtn) undoBtn.style.display = showPlayerActions ? "" : "none";
+    if (undoBtn) undoBtn.style.display = "none";
     if (resignBtn) resignBtn.style.display = showPlayerActions ? "" : "none";
 
     var isHostInTable = (activeOnlineRoomView && Number(activeOnlineRoomView.host_seat || 1) === Number(activeOnlineViewerSeat || 0)) ||
@@ -11459,7 +29688,13 @@ function sitAtOnlineTable(roomId, seat) {
     body: { seat: seat, passcode: pass }
   }).then(function (data) {
     if (data && data.seat) {
-      activeOnlineViewerSeat = data.seat;
+      var joinedSeat = Number(data.seat);
+      activeOnlineViewerSeat = joinedSeat;
+      var modeForRot = (activePlayState && activePlayState.mode) ||
+        (activeOnlineRoomView && (activeOnlineRoomView.game_mode || activeOnlineRoomView.ruleset || activeOnlineRoomView.mode)) || "2";
+      boardRotationDeg = rotationForSeat(modeForRot, seatLetterOf(joinedSeat));
+      renderPlayBoardCanvas();
+      renderAllWebReserves();
     }
     syncOnlineGameRoom(roomId, true);
   }).catch(function (e) {
@@ -11815,8 +30050,9 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
     }
     var prevSeat = activeOnlineViewerSeat;
     activeOnlineViewerSeat = vSeat;
-    if (prevSeat === 0 && vSeat > 0) {
-      boardRotationDeg = (vSeat === 2) ? 180 : 0;
+    if (prevSeat !== vSeat && vSeat > 0) {
+      var modeForRot = (res.game_mode || res.ruleset || res.mode) || (activePlayState && activePlayState.mode) || "2";
+      boardRotationDeg = rotationForSeat(modeForRot, seatLetterOf(vSeat));
     }
 
     var bar = document.getElementById("web-play-online-status-bar");
@@ -13234,8 +31470,14 @@ window.loadRobotsDirectory = loadRobotsDirectory;
 window.openOnlineTableBoard = openOnlineTableBoard;
 window.enterOnlineTable = enterOnlineTable;
 window.sitAtOnlineTable = sitAtOnlineTable;
+window.syncOnlineGameRoom = syncOnlineGameRoom;
 window.purgeOnlineTable = purgeOnlineTable;
 window.pulseConfirmBar = pulseConfirmBar;
+window.OPENING_BOOK = OPENING_BOOK;
+Object.defineProperty(window, "boardRotationDeg", {
+  get: function () { return boardRotationDeg; },
+  set: function (v) { boardRotationDeg = v; }
+});
 })();
 </script>
 </body>

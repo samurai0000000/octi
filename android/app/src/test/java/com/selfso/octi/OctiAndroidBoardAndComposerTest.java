@@ -873,8 +873,38 @@ public class OctiAndroidBoardAndComposerTest {
     @Test
     public void testOctiAppVersionAndProtocolConstants() {
         assertEquals(BuildConfig.VERSION_NAME, OctiDefs.OCTI_APP_VERSION);
-        assertEquals("2.3.4", OctiDefs.OCTI_APP_VERSION);
+        assertEquals("2.3.5", OctiDefs.OCTI_APP_VERSION);
         assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
+        assertEquals(2038, OctiOpeningBookData.ENTRIES.length);
+
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        board.getGame().move("33+h");
+        board.getGame().move("57+d");
+        board.getGame().move("53+h");
+        board.getGame().move("37+d");
+        boolean[] mirrored = new boolean[1];
+        assertEquals(0x6793ADA5ED45D7FAL, OctiBotEngine.computeCanonicalOpeningHash(board, mirrored));
+        assertTrue(mirrored[0]);
+        OctiBotEngine masterBot = new OctiBotEngine(OctiBotEngine.BotDifficulty.MASTER, 42L);
+        String[] bookMove = new String[1];
+        assertTrue(masterBot.probeOpeningBook(board, bookMove));
+        assertEquals(OctiBotEngine.mirrorMoveNotation("33+b", 9), bookMove[0]);
+        assertEquals("73+h", bookMove[0]);
+        assertEquals("73+h", masterBot.probeOpeningBook(board));
+        assertEquals("73+h", masterBot.chooseMove(board, null));
+
+        // Canonical (un-mirrored) orientation of the same entry 0x6793ADA5ED45D7FA returns "33+b" directly
+        OctiBoard canonBoard = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        canonBoard.getGame().move("73+b");
+        canonBoard.getGame().move("57+f");
+        canonBoard.getGame().move("53+b");
+        canonBoard.getGame().move("77+f");
+        assertEquals(0x6793ADA5ED45D7FAL, OctiBotEngine.computeCanonicalOpeningHash(canonBoard, mirrored));
+        assertFalse(mirrored[0]);
+        assertTrue(masterBot.probeOpeningBook(canonBoard, bookMove));
+        assertEquals("33+b", bookMove[0]);
+        assertEquals("33+b", masterBot.probeOpeningBook(canonBoard));
+        assertEquals("33+b", masterBot.chooseMove(canonBoard, null));
     }
 
     @Test

@@ -179,3 +179,6 @@ opening-book-sync:
 		--out-java android/app/src/main/java/com/selfso/octi/OctiOpeningBookData.java \
 		--out-js server/src/WebUi.cxx \
 		--out-js ../www/octi/html/index.html
+	@if [ -d "../octibot/core/include" ]; then \
+		cp -f core/include/OctiOpeningBookData.hxx ../octibot/core/include/OctiOpeningBookData.hxx; \
+	fi

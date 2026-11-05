@@ -13,6 +13,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QMessageBox>
+#include <QMetaObject>
 #include <QPainter>
 #include <QPixmap>
 #include <QScrollBar>
@@ -424,6 +425,48 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
         }
     });
     _secondTimer->start(1000);
+    _aliveFlag = std::make_shared<std::atomic<bool>>(true);
+    _sseRefreshTimer = new QTimer(this);
+    _sseRefreshTimer->setSingleShot(true);
+    QObject::connect(_sseRefreshTimer, &QTimer::timeout, this, [this]() {
+        if (!_netClient) {
+            return;
+        }
+        if (_asyncRefreshInFlight.exchange(true)) {
+            _asyncRefreshPending.store(true);
+            return;
+        }
+        if (_refreshWorkerThread.joinable()) {
+            _refreshWorkerThread.join();
+        }
+        OctiNetworkClient *cli = _netClient;
+        auto alive = _aliveFlag;
+        _refreshWorkerThread = std::thread([this, cli, alive]() {
+            do {
+                _asyncRefreshPending.store(false);
+                if (!alive || !alive->load()) {
+                    break;
+                }
+                _lobbyRefreshCount.fetch_add(1);
+                auto res = cli->fetchLobbyState();
+                if (!alive || !alive->load()) {
+                    break;
+                }
+                if (res.ok) {
+                    LobbyStateData data = std::move(res.data);
+                    QMetaObject::invokeMethod(
+                        this,
+                        [this, alive, data = std::move(data)]() {
+                            if (alive && alive->load()) {
+                                refreshFromLobbyState(data);
+                            }
+                        },
+                        Qt::QueuedConnection);
+                }
+            } while (_asyncRefreshPending.load() && alive && alive->load());
+            _asyncRefreshInFlight.store(false);
+        });
+    });
     QObject::connect(_sendChatBtn, &QPushButton::clicked, [this]() {
         std::string txt = _chatInput->text().trimmed().toStdString();
         if (!txt.empty() && sendLobbyChatMessage(txt)) {
@@ -441,7 +484,18 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     updateAuthUiState();
 }
 
-LobbyView::~LobbyView() = default;
+LobbyView::~LobbyView()
+{
+    if (_aliveFlag) {
+        _aliveFlag->store(false);
+    }
+    if (_sseRefreshTimer) {
+        _sseRefreshTimer->stop();
+    }
+    if (_refreshWorkerThread.joinable()) {
+        _refreshWorkerThread.join();
+    }
+}
 
 void LobbyView::attachNetworkClient(OctiNetworkClient *netClient)
 {
@@ -864,6 +918,7 @@ bool LobbyView::refreshLobby()
     if (!_netClient) {
         return false;
     }
+    _lobbyRefreshCount.fetch_add(1);
     auto res = _netClient->fetchLobbyState();
     if (!res.ok) {
         return false;
@@ -872,8 +927,24 @@ bool LobbyView::refreshLobby()
     return true;
 }
 
+void LobbyView::scheduleCoalescedLobbyRefresh()
+{
+    if (!_netClient || !_sseRefreshTimer) {
+        return;
+    }
+    if (!_sseRefreshTimer->isActive()) {
+        _sseRefreshTimer->start(25);
+    }
+}
+
 void LobbyView::refreshFromLobbyState(const LobbyStateData &state)
 {
+    if (state.latestSeq > _latestLobbySeq) {
+        _latestLobbySeq = state.latestSeq;
+    }
+    if (state.latestSeq > _lastHandledLobbySseSeq) {
+        _lastHandledLobbySseSeq = state.latestSeq;
+    }
     _players = state.players;
     _tables = state.tables;
     _chatMessages = state.recentChat;
@@ -891,10 +962,23 @@ void LobbyView::refreshFromLobbyState(const LobbyStateData &state)
 
 void LobbyView::handleLobbySseEvent(const SseEvent &ev)
 {
+    std::int64_t evId = static_cast<std::int64_t>(ev.id);
+    if (evId > 0) {
+        if (evId <= _lastHandledLobbySseSeq) {
+            return;
+        }
+        _lastHandledLobbySseSeq = evId;
+        if (evId > _latestLobbySeq) {
+            _latestLobbySeq = evId;
+        }
+    }
     Json j = Json::parse(ev.dataJson, nullptr, false);
     if (ev.event == "LOBBY_CHAT" && j.is_object()) {
         LobbyChatEntry entry;
         entry.seq = j.value("seq", static_cast<std::int64_t>(ev.id));
+        if (entry.seq > _latestLobbySeq) {
+            _latestLobbySeq = entry.seq;
+        }
         std::int64_t ts = j.value(
             "created_at_ms",
             j.value("at_ms", static_cast<std::int64_t>(0)));
@@ -911,12 +995,12 @@ void LobbyView::handleLobbySseEvent(const SseEvent &ev)
         if (!roomId.empty() && _onMatchFoundCallback) {
             _onMatchFoundCallback(roomId);
         }
-        refreshLobby();
+        scheduleCoalescedLobbyRefresh();
         return;
     }
     if (ev.event == "PRESENCE" || ev.event == "TABLE_UPDATED" ||
         ev.event == "TABLE_CLOSED") {
-        refreshLobby();
+        scheduleCoalescedLobbyRefresh();
     }
 }
 

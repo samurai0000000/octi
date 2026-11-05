@@ -158,6 +158,9 @@ public:
     QString waitingRoomBannerText() const;
     QPushButton *leaveTableButton() const { return _leaveTableBtn; }
     QPushButton *leaveWaitingTableButton() const { return _leaveWaitingTableBtn; }
+    QPushButton *undoButton() const { return _undoRequestBtn; }
+    QPushButton *undoRequestButton() const { return _undoRequestBtn; }
+    QAction *undoAction() const { return _actUndo; }
     QLabel *matchTurnStatusLabel() const { return _matchTurnStatusLabel; }
     bool isGameOverDialogShownForCurrentMatch() const { return _gameOverDialogShownForCurrentMatch; }
     void tickLocalClock(int elapsedMs = 100);
@@ -301,10 +304,12 @@ private:
     std::string _pendingOnlinePasscode;
     int _onlineViewerSeat;
     bool _onlineAutoOriented;
+    int _lastOrientedViewerSeat = 0;
     GameViewData _onlineGameView;
     std::vector<std::string> _appliedOnlineMoves;
     std::vector<std::string> _gameChatLines;
     std::int64_t _lastGameChatSeq;
+    std::int64_t _lastAppliedGameEventSeq = 0;
     int _vcrTotalPlies;
 
     /* ---- Top Navigation Bar Widgets ---- */
@@ -349,6 +354,7 @@ private:
     QPushButton *_deleteWaitingTableBtn = nullptr;
     QPushButton *_leaveWaitingTableBtn = nullptr;
     QAction *_actNewGame = nullptr;
+    QAction *_actUndo = nullptr;
 
     QWidget *_proposalBannerWidget;
     QLabel *_proposalBannerLabel;

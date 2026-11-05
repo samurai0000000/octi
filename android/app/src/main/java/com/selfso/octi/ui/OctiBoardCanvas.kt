@@ -87,7 +87,8 @@ fun OctiBoardCanvas(
     var lastMultiTouchTimeMs by remember { mutableStateOf(0L) }
     var lastDragTimeMs by remember { mutableStateOf(0L) }
 
-    val effectiveAwaitingMatchStart = awaitingMatchStart && matchType != OctiAppViewModel.MatchType.ONLINE_ROOM
+    val isOnlineWaiting = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeGameView?.phase == "WAITING_FOR_PLAYERS"
+    val effectiveAwaitingMatchStart = (awaitingMatchStart && matchType != OctiAppViewModel.MatchType.ONLINE_ROOM) || isOnlineWaiting
     val isOnlineFinished = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeGameView?.phase == "FINISHED"
     val game = viewModel.board.game
     val effectiveGameOver = (game?.isGameOver == true) || isOnlineFinished
@@ -149,7 +150,7 @@ fun OctiBoardCanvas(
     val currentRenderedBitmap by rememberUpdatedState(renderedBitmap)
 
     fun openZoomForOffset(offset: Offset, viewportSize: IntSize) {
-        if (effectiveAwaitingMatchStart || !viewModel.isInteractiveOnlineTurn() || multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L) {
+        if (effectiveAwaitingMatchStart || multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L) {
             return
         }
         if (viewModel.isViewingHistory()) {
@@ -169,23 +170,8 @@ fun OctiBoardCanvas(
         }
         val sqX = xy[0]
         val sqY = xy[1]
-        val b = viewModel.board
-        val sq = b.squareAt(sqX - 1, sqY - 1)
-        val turn = b.game?.turn
-        val isHome = if (turn != null && b.gameMode != OctiGameMode.GAME_MODE_OFK) {
-            b.isHomeSquareOf(sqX - 1, sqY - 1, turn) && !sq.hasEnemyOf(turn)
-        } else false
-        if (!sq.isEmpty || isHome) {
-            val composer = viewModel.composer
-            val isOriginWithOther = composer.isAwaitingConfirmation &&
-                    composer.hasOtherMovablePodAtOrigin() &&
-                    composer.guidedOriginSquare().let { it[0] == sqX && it[1] == sqY }
-            if (composer.isGuidedMoveActive && !composer.isAwaitingConfirmation && !isOriginWithOther) {
-                composer.cancelAndRollback()
-            }
+        if (viewModel.handleBoardSquareZoomInspect(sqX, sqY)) {
             selectedOriginSquare = Pair(sqX, sqY)
-            viewModel.openZoomedSquare(sqX, sqY)
-            viewModel.notifyComposerUpdated()
         }
     }
 
@@ -375,8 +361,7 @@ fun OctiBoardCanvas(
                 detectTapGestures(
                     onDoubleTap = { offset ->
                         currentOnUserInteraction()
-                        if (!viewModel.isInteractiveOnlineTurn()) return@detectTapGestures
-                        if (viewModel.composer.isAwaitingConfirmation) {
+                        if (viewModel.isInteractiveOnlineTurn() && viewModel.composer.isAwaitingConfirmation) {
                             viewModel.setStatusBanner("Confirm or Cancel your staged move first")
                             return@detectTapGestures
                         }
@@ -384,8 +369,7 @@ fun OctiBoardCanvas(
                     },
                     onLongPress = { offset ->
                         currentOnUserInteraction()
-                        if (!viewModel.isInteractiveOnlineTurn()) return@detectTapGestures
-                        if (viewModel.composer.isAwaitingConfirmation) {
+                        if (viewModel.isInteractiveOnlineTurn() && viewModel.composer.isAwaitingConfirmation) {
                             viewModel.setStatusBanner("Confirm or Cancel your staged move first")
                             return@detectTapGestures
                         }
@@ -564,17 +548,22 @@ fun OctiBoardCanvas(
                             }
                         }
 
-                        // 5. Friendly pod square interaction: guided move start
+                        // 5. Empty friendly home square (single-tap reserve pod placement) or friendly pod square (guided move start)
                         val sq = b.squareAt(sqX - 1, sqY - 1)
-                        val turn = b.game?.turn
-                        if (!sq.isEmpty && turn != null && !sq.hasEnemyOf(turn)) {
-                            val pIdx = composer.selectedStackPodIndex(sqX, sqY)
-                            val resolvedIdx = if (pIdx >= 0 && pIdx < sq.numPods) pIdx else 0
-                            selectedOriginSquare = Pair(sqX, sqY)
-                            if (!composer.beginGuidedPodMove(sqX, sqY, resolvedIdx, viewModel.moveEntireMatchingStack.value)) {
-                                viewModel.openZoomedSquare(sqX, sqY)
+                        val activeTurn = b.game?.turn
+                        if (sq.numPods == 0 && activeTurn != null &&
+                            b.gameMode != OctiGameMode.GAME_MODE_OFK &&
+                            b.isHomeSquareOf(sqX - 1, sqY - 1, activeTurn) &&
+                            (b.game?.getFreePods(activeTurn) ?: 0) > 0
+                        ) {
+                            if (viewModel.handleBoardSquareSingleTap(sqX, sqY)) {
+                                selectedOriginSquare = null
+                                return@detectTapGestures
                             }
-                            viewModel.bumpRevision()
+                        }
+                        if (!sq.isEmpty && activeTurn != null && !sq.hasEnemyOf(activeTurn)) {
+                            selectedOriginSquare = Pair(sqX, sqY)
+                            viewModel.handleBoardSquareSingleTap(sqX, sqY)
                             return@detectTapGestures
                         }
                     }

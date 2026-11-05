@@ -159,6 +159,27 @@ const ReserveSeatMetadata *OctiReservePanel::seatMetadata(int seat) const
     return nullptr;
 }
 
+void OctiReservePanel::setOnlineWaitingSeatState(
+    bool waitingRoom,
+    int viewerSeat,
+    const std::array<bool, 5> &seatOccupied,
+    std::function<void(int seat)> onSitSeatRequested)
+{
+    _onlineWaitingRoom = waitingRoom;
+    _onlineViewerSeat = viewerSeat;
+    _onlineSeatOccupied = seatOccupied;
+    _onSitSeatRequested = std::move(onSitSeatRequested);
+    update();
+}
+
+QRectF OctiReservePanel::sitSeatButtonRect(int seat) const
+{
+    if (seat >= 1 && seat <= 4) {
+        return _sitSeatBtnRects[seat];
+    }
+    return QRectF();
+}
+
 QString OctiReservePanel::formatClockMs(long ms)
 {
     long clamped = std::max(0L, ms);
@@ -200,6 +221,7 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
     for (int i = 0; i < 5; ++i) {
         _playerCardRects[i] = QRectF();
         _capturedPodWellRects[i] = QRectF();
+        _sitSeatBtnRects[i] = QRectF();
     }
 
     const OctiPalette &pal = paletteForTheme(_theme);
@@ -240,12 +262,15 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
 
     if (numPlayers == 2) {
         double cardH = 132.0;
-        QRectF cardRectB(margin, topEdgeY, cardW, cardH);
-        QRectF cardRectA(margin, bottomEdgeY - cardH, cardW, cardH);
-        _playerCardRects[PLAYER_B] = cardRectB;
-        _playerCardRects[PLAYER_A] = cardRectA;
-        cardsToDraw.push_back({PLAYER_B, cardRectB});
-        cardsToDraw.push_back({PLAYER_A, cardRectA});
+        bool rot180 = (_canvas && _canvas->boardRotation() == BoardRotation::ROT_180);
+        OctiPlayer topPlayer = rot180 ? PLAYER_A : PLAYER_B;
+        OctiPlayer botPlayer = rot180 ? PLAYER_B : PLAYER_A;
+        QRectF cardRectTop(margin, topEdgeY, cardW, cardH);
+        QRectF cardRectBot(margin, bottomEdgeY - cardH, cardW, cardH);
+        _playerCardRects[topPlayer] = cardRectTop;
+        _playerCardRects[botPlayer] = cardRectBot;
+        cardsToDraw.push_back({topPlayer, cardRectTop});
+        cardsToDraw.push_back({botPlayer, cardRectBot});
     } else {
         double cardH = 94.0;
         double availH = bottomEdgeY - topEdgeY;
@@ -315,19 +340,32 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
                           cardRect.width() * 0.65, 22.0),
                    Qt::AlignVCenter | Qt::AlignLeft, pName);
 
-        long remMs = game ? game->getTimeRemaining(player) : -1L;
-        QString clockStr;
-        if (!_timeControlEnabled || remMs < 0) {
-            clockStr = "Untimed";
-        } else if (remMs == 0) {
-            clockStr = "00:00.0";
+        int seatIdx = static_cast<int>(player);
+        if (_onlineWaitingRoom && seatIdx >= 1 && seatIdx <= 4 &&
+            !_onlineSeatOccupied[seatIdx] && _onlineViewerSeat == 0) {
+            QRectF sitRect(cardRect.right() - 104.0, cardRect.top() + 5.0, 96.0, 22.0);
+            _sitSeatBtnRects[seatIdx] = sitRect;
+            p.setPen(QPen(pal.accentBrass, 1.4));
+            p.setBrush(pal.panelCardBg);
+            p.drawRoundedRect(sitRect, 5.0, 5.0);
+            p.setPen(pal.textPrimary);
+            p.drawText(sitRect, Qt::AlignCenter,
+                       QString("Sit Seat %1").arg(seatIdx));
         } else {
-            clockStr = formatClockMs(remMs);
+            long remMs = game ? game->getTimeRemaining(player) : -1L;
+            QString clockStr;
+            if (!_timeControlEnabled || remMs < 0) {
+                clockStr = "Untimed";
+            } else if (remMs == 0) {
+                clockStr = "00:00.0";
+            } else {
+                clockStr = formatClockMs(remMs);
+            }
+            p.setPen(pal.textPrimary);
+            p.drawText(QRectF(cardRect.right() - 100.0, cardRect.top() + 6.0,
+                              90.0, 22.0),
+                       Qt::AlignVCenter | Qt::AlignRight, clockStr);
         }
-        p.setPen(pal.textPrimary);
-        p.drawText(QRectF(cardRect.right() - 100.0, cardRect.top() + 6.0,
-                          90.0, 22.0),
-                   Qt::AlignVCenter | Qt::AlignRight, clockStr);
 
         // Resource wells (Free Pods, Captured, Normal Prongs, Superprongs)
         OctiPlayer opp = (player == PLAYER_A) ? PLAYER_B : PLAYER_A;
@@ -536,43 +574,6 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
 
     _pttButtonRect = QRectF();
 
-    // Quick Guide Card in 2-player mode (centered in gap between Player B and Player A)
-    if (numPlayers == 2) {
-        double gap = _playerCardRects[PLAYER_A].top() - _playerCardRects[PLAYER_B].bottom();
-        if (gap >= 110.0) {
-            double guideH = std::min(144.0, gap - 20.0);
-            double guideY = _playerCardRects[PLAYER_B].bottom() + 10.0 + (gap - 20.0 - guideH) * 0.5;
-            QRectF guideRect(margin, guideY, cardW, guideH);
-            p.setPen(QPen(pal.panelCardBorder, 1.1));
-            p.setBrush(pal.panelCardBg);
-            p.drawRoundedRect(guideRect, 8.0, 8.0);
-
-            QFont gf = p.font();
-            gf.setBold(true);
-            gf.setPixelSize(12);
-            p.setFont(gf);
-            p.setPen(pal.accentBrass);
-            p.drawText(QRectF(guideRect.left() + 10.0, guideRect.top() + 6.0,
-                              guideRect.width() - 20.0, 18.0),
-                       Qt::AlignVCenter | Qt::AlignLeft,
-                       QString::fromUtf8("Quick Guide \xE2\x80\xA2 Pod & Prong Controls"));
-
-            gf.setBold(false);
-            gf.setPixelSize(10);
-            p.setFont(gf);
-            p.setPen(pal.textSecondary);
-            QString guideText = QString::fromUtf8(
-                "\xE2\x80\xA2 Insert Prongs: Left-click unarmed pod, Right-click / Double-click any pod, or click Reserve Prong well.\n"
-                "\xE2\x80\xA2 Zoom View: Click socket (a\xE2\x80\x93h) to add prong, or click 'Move / Jump This Pod'.\n"
-                "\xE2\x80\xA2 Multi-Pod Stack: Scroll mouse wheel or click Pod tabs in Zoom View.\n"
-                "\xE2\x80\xA2 Guided Jump: Click green target dots, then Commit or Cancel.");
-            p.drawText(QRectF(guideRect.left() + 10.0, guideRect.top() + 26.0,
-                              guideRect.width() - 20.0, guideH - 30.0),
-                       Qt::AlignTop | Qt::AlignLeft | Qt::TextWordWrap,
-                       guideText);
-        }
-    }
-
     p.restore();
 }
 
@@ -631,8 +632,17 @@ void OctiReservePanel::mousePressEvent(QMouseEvent *event)
         return;
     }
 
+    if (_onlineWaitingRoom && _onlineViewerSeat == 0 && _onSitSeatRequested) {
+        for (int s = 1; s <= 4; ++s) {
+            if (!_sitSeatBtnRects[s].isEmpty() && _sitSeatBtnRects[s].contains(pos)) {
+                _onSitSeatRequested(s);
+                return;
+            }
+        }
+    }
+
     if (_canvas) {
-        if (!_canvas->isTurnIndicatorVisible()) {
+        if (!_canvas->isInteractiveEnabled()) {
             return;
         }
         OctiGame *game = _board ? _board->getGame() : nullptr;

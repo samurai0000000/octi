@@ -822,6 +822,9 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     private fun isMainThread(): Boolean {
+        if (OctiNetworkClient.isCurrentThreadUiThread()) {
+            return true
+        }
         val vmName = (System.getProperty("java.vm.name") ?: "").lowercase()
         val isAndroidVm = vmName.contains("dalvik") || vmName.contains("art")
         if (!isAndroidVm) return false
@@ -1105,6 +1108,95 @@ class OctiAppViewModel @JvmOverloads constructor(
         return currentTurn.value == gv.viewerSeat
     }
 
+    val isOnlineUndoVisible: Boolean
+        get() = false
+
+    fun isOnlineRoomActive(): Boolean {
+        return _matchType.value == MatchType.ONLINE_ROOM && _activeRoomId.value.isNotEmpty()
+    }
+
+    fun requestOrAcceptOnlineUndo(): Boolean {
+        return false
+    }
+
+    fun handleBoardSquareSingleTap(sqX: Int, sqY: Int): Boolean {
+        if (!isInteractiveOnlineTurn() || isViewingHistory() || _awaitingMatchStart.value) {
+            return false
+        }
+        return synchronized(board) {
+            val g = board.game ?: return@synchronized false
+            if (!g.isGameStarted || g.isGameOver || !board.isValidCoord(sqX - 1, sqY - 1)) {
+                return@synchronized false
+            }
+            if (composer.isGuidedMoveActive || composer.isAwaitingConfirmation) {
+                return@synchronized false
+            }
+            val sq = board.squareAt(sqX - 1, sqY - 1)
+            val activeTurn = g.turn ?: return@synchronized false
+            if (sq.numPods == 0) {
+                if (board.gameMode != OctiGameMode.GAME_MODE_OFK &&
+                    board.isHomeSquareOf(sqX - 1, sqY - 1, activeTurn) &&
+                    g.getFreePods(activeTurn) > 0
+                ) {
+                    if (composer.stageOrCommitAddPod(sqX, sqY, false)) {
+                        soundSynth.triggerCue(OctiSoundSynth.SoundCue.POD_DROP)
+                        notifyComposerUpdated()
+                        return@synchronized true
+                    }
+                }
+                return@synchronized false
+            }
+            if (!sq.isEmpty && !sq.hasEnemyOf(activeTurn)) {
+                val pIdx = composer.selectedStackPodIndex(sqX, sqY)
+                val resolvedIdx = if (pIdx >= 0 && pIdx < sq.numPods) pIdx else 0
+                if (!composer.beginGuidedPodMove(sqX, sqY, resolvedIdx, _moveEntireMatchingStack.value)) {
+                    openZoomedSquare(sqX, sqY)
+                }
+                bumpRevision()
+                return@synchronized true
+            }
+            false
+        }
+    }
+
+    fun handleBoardSquareZoomInspect(sqX: Int, sqY: Int): Boolean {
+        if (_awaitingMatchStart.value && _matchType.value != MatchType.ONLINE_ROOM) {
+            return false
+        }
+        if (isViewingHistory()) {
+            return false
+        }
+        val isOnlineFinished = _matchType.value == MatchType.ONLINE_ROOM && _activeGameView.value?.phase == "FINISHED"
+        return synchronized(board) {
+            val g = board.game
+            if ((g?.isGameOver == true) || isOnlineFinished || !board.isValidCoord(sqX - 1, sqY - 1)) {
+                return@synchronized false
+            }
+            val sq = board.squareAt(sqX - 1, sqY - 1)
+            val turn = g?.turn
+            val canEdit = isInteractiveOnlineTurn()
+            val isHome = if (canEdit && turn != null && board.gameMode != OctiGameMode.GAME_MODE_OFK) {
+                board.isHomeSquareOf(sqX - 1, sqY - 1, turn) && !sq.hasEnemyOf(turn)
+            } else {
+                false
+            }
+            if (!sq.isEmpty || isHome) {
+                if (canEdit) {
+                    val isOriginWithOther = composer.isAwaitingConfirmation &&
+                        composer.hasOtherMovablePodAtOrigin() &&
+                        composer.guidedOriginSquare().let { it[0] == sqX && it[1] == sqY }
+                    if (composer.isGuidedMoveActive && !composer.isAwaitingConfirmation && !isOriginWithOther) {
+                        composer.cancelAndRollback()
+                    }
+                }
+                openZoomedSquare(sqX, sqY)
+                notifyComposerUpdated()
+                return@synchronized true
+            }
+            false
+        }
+    }
+
     fun setOnlineMatchForTest(roomId: String, gv: OctiNetworkClient.GameViewData?) {
         _matchType.value = MatchType.ONLINE_ROOM
         _activeRoomId.value = roomId
@@ -1315,6 +1407,20 @@ class OctiAppViewModel @JvmOverloads constructor(
         composer.rollbackMove()
         displayBoard.fromPositionString(board.toPositionString())
         bumpBoardRevision()
+    }
+
+    fun undoMove(): Boolean {
+        if (_matchType.value == MatchType.ONLINE_ROOM || isOnlineRoomActive()) {
+            return false
+        }
+        return undoLocalMove()
+    }
+
+    fun resignMatch(): Boolean {
+        if (_matchType.value == MatchType.ONLINE_ROOM && _activeRoomId.value.isNotEmpty()) {
+            return resignOnlineGame().ok
+        }
+        return resignLocalGame()
     }
 
     fun undoLocalMove(): Boolean {
@@ -2384,10 +2490,13 @@ class OctiAppViewModel @JvmOverloads constructor(
             } else {
                 OctiNetworkClient.ApiResult(true)
             }
+            if (isActiveRoom) {
+                leaveVoiceChannel()
+                netClient.stopGameEventStream()
+            }
+            refreshLobbyState()
             runOnUiThreadOrSync {
                 if (isActiveRoom) {
-                    leaveVoiceChannel()
-                    netClient.stopGameEventStream()
                     _activeRoomId.value = ""
                     _activeGameView.value = null
                     _gameChatLog.value = emptyList()
@@ -2396,7 +2505,6 @@ class OctiAppViewModel @JvmOverloads constructor(
                     _currentTab.value = AppTab.ONLINE_LOBBY
                     _statusBanner.value = "Returned to lobby"
                 }
-                refreshLobbyState()
                 onDone?.onDone(res.ok)
             }
         }
@@ -2513,11 +2621,17 @@ class OctiAppViewModel @JvmOverloads constructor(
         }
         _backgroundExecutor.submit {
             val res = netClient.purgeTable(targetRoomId)
+            val isTargetActive = (targetRoomId == _activeRoomId.value)
+            if (res.ok) {
+                if (isTargetActive) {
+                    leaveVoiceChannel()
+                    netClient.stopGameEventStream()
+                }
+                refreshLobbyState()
+            }
             runOnUiThreadOrSync {
                 if (res.ok) {
-                    if (targetRoomId == _activeRoomId.value) {
-                        leaveVoiceChannel()
-                        netClient.stopGameEventStream()
+                    if (isTargetActive) {
                         _activeRoomId.value = ""
                         _activeGameView.value = null
                         _gameChatLog.value = emptyList()
@@ -2526,7 +2640,6 @@ class OctiAppViewModel @JvmOverloads constructor(
                         _currentTab.value = AppTab.ONLINE_LOBBY
                         _statusBanner.value = "Table #$targetRoomId deleted"
                     }
-                    refreshLobbyState()
                 } else {
                     _statusBanner.value = "Delete table failed: ${res.errorMessage}"
                 }
@@ -3030,7 +3143,13 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun refreshLobbyState(): OctiNetworkClient.ApiResult<OctiNetworkClient.LobbyStateData> {
-        val res = netClient.fetchLobbyState()
+        val res = if (isMainThread()) {
+            _backgroundExecutor.submit<OctiNetworkClient.ApiResult<OctiNetworkClient.LobbyStateData>> {
+                netClient.fetchLobbyState()
+            }.get()
+        } else {
+            netClient.fetchLobbyState()
+        }
         if (res.ok && res.data != null) {
             _lobbyState.value = res.data
             _lobbyChatMessages.value = res.data.recentChat.map { formatLobbyChatEntry(it) }
@@ -3113,13 +3232,32 @@ class OctiAppViewModel @JvmOverloads constructor(
             return OctiNetworkClient.ApiResult(false)
         }
         val isActiveRoom = (targetRoomId == _activeRoomId.value)
-        val viewerSeat = _activeGameView.value?.viewerSeat ?: 0
-        if (isActiveRoom) {
-            leaveVoiceChannel()
-            netClient.stopGameEventStream()
+        val res = if (isMainThread()) {
+            _backgroundExecutor.submit<OctiNetworkClient.ApiResult<Boolean>> {
+                if (isActiveRoom) {
+                    voiceEngine.leaveVoiceRoom()
+                    netClient.stopGameEventStream()
+                }
+                val r = netClient.leaveTable(targetRoomId)
+                val lobbyRes = netClient.fetchLobbyState()
+                if (lobbyRes.ok && lobbyRes.data != null) {
+                    _lobbyState.value = lobbyRes.data
+                    _lobbyChatMessages.value = lobbyRes.data.recentChat.map { formatLobbyChatEntry(it) }
+                }
+                r
+            }.get()
+        } else {
+            if (isActiveRoom) {
+                leaveVoiceChannel()
+                netClient.stopGameEventStream()
+            }
+            val r = netClient.leaveTable(targetRoomId)
+            refreshLobbyState()
+            r
         }
-        val res = netClient.leaveTable(targetRoomId)
         if (isActiveRoom) {
+            _isInVoiceRoom.value = false
+            _isPttActive.value = false
             runOnUiThreadOrSync {
                 _activeRoomId.value = ""
                 _activeGameView.value = null
@@ -3130,7 +3268,6 @@ class OctiAppViewModel @JvmOverloads constructor(
                 _statusBanner.value = "Returned to lobby"
             }
         }
-        refreshLobbyState()
         return res
     }
 
@@ -3197,7 +3334,13 @@ class OctiAppViewModel @JvmOverloads constructor(
         if (roomId.isEmpty()) {
             return OctiNetworkClient.ApiResult(OctiNetworkClient.GameViewData())
         }
-        val res = netClient.fetchGameView(roomId)
+        val res = if (isMainThread()) {
+            _backgroundExecutor.submit<OctiNetworkClient.ApiResult<OctiNetworkClient.GameViewData>> {
+                netClient.fetchGameView(roomId)
+            }.get()
+        } else {
+            netClient.fetchGameView(roomId)
+        }
         if (res.ok && res.data != null) {
             applyGameViewToBoard(res.data)
         }
@@ -3847,8 +3990,9 @@ class OctiAppViewModel @JvmOverloads constructor(
         }
 
         val eventName = if (ev.event.isNotEmpty()) ev.event else evType
+        val upperEventName = eventName.uppercase(Locale.ROOT)
 
-        if (eventName == "REMATCH_CREATED") {
+        if (upperEventName == "REMATCH_CREATED") {
             var newRoomId = ""
             if (dataObj != null) {
                 newRoomId = dataObj.optString("room_id", dataObj.optString("text", ""))
@@ -3861,7 +4005,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             }
         }
 
-        val isLifecycleEvent = when (eventName) {
+        val isLifecycleEvent = when (upperEventName) {
             "SEAT_JOINED", "SEAT_LEFT", "SEAT_KICKED", "HOST_CHANGED",
             "OBSERVER_JOINED", "OBSERVER_LEFT", "GAME_STARTED",
             "MOVE", "MOVE_APPLIED", "UNDO_APPLIED", "MOVE_UNDONE",
@@ -3870,7 +4014,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             "GAME_PAUSED", "GAME_RESUMED",
             "PLAYER_DISCONNECTED", "PLAYER_RECONNECTED",
             "GAME_OVER", "POLICY_UPDATED", "PLAYER_JOINED", "PLAYER_LEFT",
-            "reconnect", "gap" -> true
+            "RECONNECT", "GAP" -> true
             else -> false
         }
 
@@ -3889,16 +4033,28 @@ class OctiAppViewModel @JvmOverloads constructor(
         if (roomId.isEmpty() || uuid.isEmpty()) {
             return false
         }
-        val ok = voiceEngine.joinVoiceRoom(roomId, uuid)
+        val ok = if (isMainThread()) {
+            _backgroundExecutor.submit<Boolean> {
+                voiceEngine.joinVoiceRoom(roomId, uuid)
+            }.get()
+        } else {
+            voiceEngine.joinVoiceRoom(roomId, uuid)
+        }
         _isInVoiceRoom.value = voiceEngine.isInVoiceRoom()
         _isPttActive.value = voiceEngine.isPushToTalkActive()
         return ok
     }
 
     fun leaveVoiceChannel() {
-        voiceEngine.leaveVoiceRoom()
         _isInVoiceRoom.value = false
         _isPttActive.value = false
+        if (isMainThread()) {
+            _backgroundExecutor.submit {
+                voiceEngine.leaveVoiceRoom()
+            }.get()
+        } else {
+            voiceEngine.leaveVoiceRoom()
+        }
     }
 
     fun setPushToTalkPressed(pressed: Boolean): Boolean {
@@ -3981,9 +4137,20 @@ class OctiAppViewModel @JvmOverloads constructor(
     override fun close() {
         cancelBrowserAuth()
         cancelActiveBotTurn()
-        _backgroundExecutor.shutdownNow()
-        voiceEngine.close()
-        netClient.close()
+        if (isMainThread()) {
+            try {
+                _backgroundExecutor.submit {
+                    voiceEngine.close()
+                    netClient.close()
+                }.get()
+            } catch (_: Throwable) {
+            }
+            _backgroundExecutor.shutdownNow()
+        } else {
+            _backgroundExecutor.shutdownNow()
+            voiceEngine.close()
+            netClient.close()
+        }
     }
 }
 

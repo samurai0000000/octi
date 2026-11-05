@@ -970,6 +970,64 @@ public final class OctiNetworkClient implements AutoCloseable {
         Map<String, Object> json;
     }
 
+    private static final ThreadLocal<Boolean> sSimulatedUiThread =
+            ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private static volatile long sSimulatedUiThreadId = -1L;
+    private static final AtomicInteger sUiThreadViolationCount = new AtomicInteger(0);
+
+    public static void setSimulatedUiThreadForTest(boolean isUiThread) {
+        sSimulatedUiThread.set(isUiThread);
+        if (!isUiThread && sSimulatedUiThreadId == Thread.currentThread().getId()) {
+            sSimulatedUiThreadId = -1L;
+        }
+    }
+
+    public static void setSimulatedUiThreadIdForTest(long threadId) {
+        sSimulatedUiThreadId = threadId;
+    }
+
+    public static void resetUiThreadGuardForTest() {
+        sSimulatedUiThread.set(Boolean.FALSE);
+        sSimulatedUiThreadId = -1L;
+        sUiThreadViolationCount.set(0);
+    }
+
+    public static int getUiThreadViolationCountForTest() {
+        return sUiThreadViolationCount.get();
+    }
+
+    public static boolean isSimulatedUiThreadActiveForTest() {
+        if (Boolean.TRUE.equals(sSimulatedUiThread.get())) {
+            return true;
+        }
+        long targetId = sSimulatedUiThreadId;
+        return targetId >= 0L && Thread.currentThread().getId() == targetId;
+    }
+
+    private static boolean isAndroidMainLooperThread() {
+        String vmName = System.getProperty("java.vm.name", "").toLowerCase(Locale.ROOT);
+        if (!vmName.contains("dalvik") && !vmName.contains("art")) {
+            return false;
+        }
+        try {
+            android.os.Looper mainLooper = android.os.Looper.getMainLooper();
+            return mainLooper != null && mainLooper.getThread() == Thread.currentThread();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    public static boolean isCurrentThreadUiThread() {
+        return isSimulatedUiThreadActiveForTest() || isAndroidMainLooperThread();
+    }
+
+    public static void assertNotMainThread() {
+        if (isCurrentThreadUiThread()) {
+            sUiThreadViolationCount.incrementAndGet();
+            throw new IllegalStateException("Network/socket operation invoked on UI thread");
+        }
+    }
+
     private static final class SseRunner {
         final Object mutex = new Object();
         Socket activeSocket;
@@ -979,11 +1037,40 @@ public final class OctiNetworkClient implements AutoCloseable {
         final AtomicLong lastId = new AtomicLong(0);
 
         void stop() {
+            if (isSimulatedUiThreadActiveForTest()) {
+                assertNotMainThread();
+            }
             stopRequested.set(true);
-            Socket sock;
+            final Socket sock;
             synchronized (mutex) {
                 sock = activeSocket;
+                activeSocket = null;
                 mutex.notifyAll();
+            }
+            final Thread w = worker;
+            worker = null;
+            active.set(false);
+            if (isAndroidMainLooperThread()) {
+                if (sock != null || (w != null && w != Thread.currentThread())) {
+                    Thread closer = new Thread(() -> {
+                        if (sock != null) {
+                            try {
+                                sock.close();
+                            } catch (IOException ignored) {
+                            }
+                        }
+                        if (w != null && w != Thread.currentThread()) {
+                            try {
+                                w.join(500);
+                            } catch (InterruptedException ignored) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+                    }, "octi-sse-stop-closer");
+                    closer.setDaemon(true);
+                    closer.start();
+                }
+                return;
             }
             if (sock != null) {
                 try {
@@ -991,8 +1078,6 @@ public final class OctiNetworkClient implements AutoCloseable {
                 } catch (IOException ignored) {
                 }
             }
-            Thread w = worker;
-            worker = null;
             if (w != null && w != Thread.currentThread()) {
                 try {
                     w.join(500);
@@ -1000,10 +1085,6 @@ public final class OctiNetworkClient implements AutoCloseable {
                     Thread.currentThread().interrupt();
                 }
             }
-            synchronized (mutex) {
-                activeSocket = null;
-            }
-            active.set(false);
         }
     }
 
@@ -2746,6 +2827,9 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     private RawResponse doHttpRequest(String method, String path, String jsonBody) {
+        if (isSimulatedUiThreadActiveForTest()) {
+            assertNotMainThread();
+        }
         byte[] bodyBytes = jsonBody != null ? jsonBody.getBytes(StandardCharsets.UTF_8) : null;
         String token = sessionToken();
 
@@ -2783,6 +2867,9 @@ public final class OctiNetworkClient implements AutoCloseable {
     Socket createConnectedSocket(
             String targetHost, int targetPort, int connectTimeoutMs, int soTimeoutMs)
             throws Exception {
+        if (isSimulatedUiThreadActiveForTest()) {
+            assertNotMainThread();
+        }
         Socket plainSock = new Socket();
         try {
             plainSock.setSoTimeout(soTimeoutMs);
@@ -2942,6 +3029,11 @@ public final class OctiNetworkClient implements AutoCloseable {
                     }
                 }
             } catch (RuntimeException re) {
+                if (re instanceof IllegalStateException
+                        && re.getMessage() != null
+                        && re.getMessage().contains("UI thread")) {
+                    throw re;
+                }
                 r.transportOk = false;
                 r.isRuntimeException = true;
                 r.transportError = re.getClass().getSimpleName() + ": " +

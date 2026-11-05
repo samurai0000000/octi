@@ -2717,6 +2717,287 @@ public class OctiAndroidAppIntegrationTest {
             }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Envelope 3: GUI Design Book & Cross-Platform Parity (CHK-01..CHK-14)
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testChk01NoUndoInOnlineGames() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_chk01.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+                configStore.preferences().setSessionToken("sess-valid-token");
+                configStore.save();
+
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+
+                    OctiNetworkClient.GameViewData gv = new OctiNetworkClient.GameViewData();
+                    gv.roomId = "room-test-123";
+                    gv.phase = "IN_PROGRESS";
+                    gv.mode = "2P";
+                    gv.bases = 3;
+                    gv.allowTakeback = true;
+                    gv.rated = false;
+                    gv.viewerSeat = 1;
+                    gv.moves.add("33+a");
+                    vm.setOnlineMatchForTest("room-test-123", gv);
+
+                    assertTrue("Online room should be active", vm.isOnlineRoomActive());
+                    assertFalse("CHK-01: Online Undo button must be hidden", vm.isOnlineUndoVisible());
+
+                    int actionsBefore;
+                    synchronized (server.receivedGameActions) {
+                        actionsBefore = server.receivedGameActions.size();
+                    }
+                    assertFalse("CHK-01: requestOrAcceptOnlineUndo() must return false",
+                            vm.requestOrAcceptOnlineUndo());
+                    assertFalse("CHK-01: undoMove() must return false when online room is active",
+                            vm.undoMove());
+                    synchronized (server.receivedGameActions) {
+                        assertEquals("CHK-01: requestOrAcceptOnlineUndo() must make 0 HTTP requests",
+                                actionsBefore, server.receivedGameActions.size());
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testChk02AndChk03SeatPerspectiveRotationAndActiveTurnScreenEdge() {
+        // CHK-03: 2P & OFK seat rotation (A->0°, B->180°)
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_0,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_A));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_180,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_B));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_0,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_OFK, OctiPlayer.PLAYER_A));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_180,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_OFK, OctiPlayer.PLAYER_B));
+
+        // CHK-03: 4P seat rotation (A->0°, B->90°, C->180°, D->270°)
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_0,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_A));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_90,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_B));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_180,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_C));
+        assertEquals(OctiBoardGeometry.BoardRotation.ROT_270,
+                OctiBoardGeometry.rotationForSeat(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_D));
+
+        // CHK-02: Active-turn screen edge for 2P across all rotations (0=BOTTOM, 1=LEFT, 2=TOP, 3=RIGHT)
+        assertEquals(0, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_A, 0));
+        assertEquals(2, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_B, 0));
+        assertEquals(2, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_A, 180));
+        assertEquals(0, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_B, 180));
+        assertEquals(3, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_A, 90));
+        assertEquals(1, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_B, 90));
+        assertEquals(1, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_A, 270));
+        assertEquals(3, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_B, 270));
+
+        // CHK-02: Active-turn screen edge for 4P across all seats and rotations
+        // At rotation 0°: A=BOTTOM(0), B=LEFT(1), C=TOP(2), D=RIGHT(3)
+        assertEquals(0, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_A, 0));
+        assertEquals(1, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_B, 0));
+        assertEquals(2, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_C, 0));
+        assertEquals(3, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_D, 0));
+
+        // Each player at their own canonical seat rotation sees their own home edge at BOTTOM(0)
+        assertEquals(0, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_A, 0));
+        assertEquals(0, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_B, 90));
+        assertEquals(0, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_C, 180));
+        assertEquals(0, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_D, 270));
+    }
+
+    @Test
+    public void testChk04SingleTapEmptyFriendlyHomeSquareStagesReservePodPlacement() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_chk04.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+                    vm.startNewLocalGame(
+                            OctiGameMode.GAME_MODE_2,
+                            false,
+                            false,
+                            OctiGameBases.GAME_BASES_3,
+                            false,
+                            OctiBotEngine.BotDifficulty.TACTICAL,
+                            OctiPlayer.PLAYER_A);
+
+                    // Move Player A pod off (3,3) so (3,3) becomes an empty friendly home square:
+                    // Turn 1 (A): 33+a
+                    // Turn 2 (B): 37+e
+                    // Turn 3 (A): 33a-34
+                    // Turn 4 (B): 37e-36
+                    assertTrue(vm.applyMoveNotation("33+a"));
+                    assertTrue(vm.applyMoveNotation("37+e"));
+                    assertTrue(vm.applyMoveNotation("33a-34"));
+                    assertTrue(vm.applyMoveNotation("37e-36"));
+
+                    // Turn 5 (Player A): (3,3) is now an empty friendly home square
+                    assertEquals(OctiPlayer.PLAYER_A, vm.getBoard().getGame().getTurn());
+                    assertEquals(0, vm.getBoard().squareAt(2, 2).getNumPods());
+                    assertTrue("Single-tapping empty friendly home square (3,3) as Player A must stage pod placement",
+                            vm.handleBoardSquareSingleTap(3, 3));
+                    assertTrue("Composer must be awaiting confirmation after single-tap home pod drop",
+                            vm.getComposer().isAwaitingConfirmation());
+                    assertEquals("33", vm.getComposer().stagedMoveNotation());
+                    assertTrue("Committing staged '33' pod placement must succeed", vm.commitStagedMove());
+
+                    // Turn 6 (Player B): (3,7) is now an empty friendly home square
+                    assertEquals(OctiPlayer.PLAYER_B, vm.getBoard().getGame().getTurn());
+                    assertEquals(0, vm.getBoard().squareAt(2, 6).getNumPods());
+                    assertTrue("Single-tapping empty friendly home square (3,7) as Player B must stage pod placement",
+                            vm.handleBoardSquareSingleTap(3, 7));
+                    assertTrue("Composer must be awaiting confirmation after single-tap home pod drop for Player B",
+                            vm.getComposer().isAwaitingConfirmation());
+                    assertEquals("37", vm.getComposer().stagedMoveNotation());
+
+                    // Also verify off-turn / observer read-only zoom inspection works via handleBoardSquareZoomInspect
+                    vm.rollbackStagedMove();
+                    OctiNetworkClient.GameViewData gvObs = new OctiNetworkClient.GameViewData();
+                    gvObs.roomId = "room-obs-1";
+                    gvObs.phase = "IN_PROGRESS";
+                    gvObs.mode = "2P";
+                    gvObs.bases = 3;
+                    gvObs.viewerSeat = 0; // observer
+                    vm.setOnlineMatchForTest("room-obs-1", gvObs);
+                    assertFalse("Observer is not on interactive turn", vm.isInteractiveOnlineTurn());
+                    assertTrue("CHK-11: Observer double-tap/long-press on occupied square (5,3) must open ZoomedSquareDialog",
+                            vm.handleBoardSquareZoomInspect(5, 3));
+                    assertNotNull("zoomedSquare state must be populated for observer",
+                            vm.getZoomedSquare().getValue());
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testChk07PodStackSortingOrderMainBoardVsZoomPopup() {
+        OctiBoard board = new OctiBoard();
+        board.setGameMode(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+        board.getGame().start(OctiPlayer.PLAYER_A);
+
+        // Place a second pod on (3,3) and add prongs so pod 0 and pod 1 have different prong counts:
+        // Move 1 (A): 33+a
+        // Move 2 (B): 37+e
+        // Move 3 (A): 33a+b
+        // Move 4 (B): 37e+d
+        // Move 5 (A): 33 (places reserve pod on (3,3), so (3,3) now has 2 pods: one with 2 prongs (a,b) and one with 0 prongs!)
+        board.getGame().move("33+a");
+        board.getGame().move("37+e");
+        board.getGame().move("33a+b");
+        board.getGame().move("37e+d");
+        board.getGame().move("33");
+
+        OctiSquare sq = board.squareAt(2, 2);
+        assertEquals(2, sq.getNumPods());
+
+        // Main board renderer: sortedPodIndicesMostProngsAtBottom puts most prongs at layer 0 (bottom)
+        // and fewest prongs at maxLayers - 1 (top)
+        int[] mainBoardOrder = OctiBoardRenderer.sortedPodIndicesMostProngsAtBottom(sq);
+        assertEquals(2, mainBoardOrder.length);
+        int bottomProngs = OctiBoardRenderer.countPodProngs(sq.getPodAt(mainBoardOrder[0]));
+        int topProngs = OctiBoardRenderer.countPodProngs(sq.getPodAt(mainBoardOrder[1]));
+        assertTrue("CHK-07: Main board layer 0 (bottom) must have >= prongs than top layer",
+                bottomProngs > topProngs);
+        assertEquals(2, bottomProngs);
+        assertEquals(0, topProngs);
+
+        // ZoomedSquareDialog: sortedPodIndicesMostProngsFirst puts most prongs first (on top / slot 0)
+        int[] zoomOrder = OctiBoardRenderer.sortedPodIndicesMostProngsFirst(sq);
+        assertEquals(2, zoomOrder.length);
+        assertEquals(mainBoardOrder[0], zoomOrder[0]);
+        assertEquals(mainBoardOrder[1], zoomOrder[1]);
+        assertEquals(2, OctiBoardRenderer.countPodProngs(sq.getPodAt(zoomOrder[0])));
+        assertEquals(0, OctiBoardRenderer.countPodProngs(sq.getPodAt(zoomOrder[1])));
+    }
+
+    @Test
+    public void testChk14MainThreadNetworkAndSocketCloseGuardZeroViolations() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_chk14.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        OctiNetworkClient.resetUiThreadGuardForTest();
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+                configStore.preferences().setSessionToken("sess-valid-token");
+                configStore.preferences().setPlayerUuid("00000000-0000-4000-8000-000000000001");
+                configStore.save();
+
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+
+                    // Enter online room on background / setup before enabling UI-thread guard
+                    vm.enterOnlineRoom("room-test-123");
+
+                    // 1. Verify the deterministic UI-thread guard catches direct HTTP/socket calls on simulated UI thread
+                    OctiNetworkClient.setSimulatedUiThreadForTest(true);
+                    try {
+                        client.fetchHealth();
+                        fail("Direct OctiNetworkClient HTTP call on simulated UI thread must throw IllegalStateException");
+                    } catch (IllegalStateException expected) {
+                        assertEquals("Network/socket operation invoked on UI thread", expected.getMessage());
+                    }
+                    try {
+                        client.stopGameEventStream();
+                        fail("Direct OctiNetworkClient.stopGameEventStream() on simulated UI thread must throw IllegalStateException");
+                    } catch (IllegalStateException expected) {
+                        assertEquals("Network/socket operation invoked on UI thread", expected.getMessage());
+                    }
+
+                    // Reset violation counter and keep simulated UI-thread guard ACTIVE on the test thread
+                    OctiNetworkClient.resetUiThreadGuardForTest();
+                    OctiNetworkClient.setSimulatedUiThreadForTest(true);
+
+                    // 2. Calling resignMatch() while on the simulated UI thread must dispatch off-thread with 0 violations
+                    assertTrue("resignMatch() in online room must succeed via background executor",
+                            vm.resignMatch());
+                    assertEquals("Zero UI-thread violations after resignMatch()",
+                            0, OctiNetworkClient.getUiThreadViolationCountForTest());
+
+                    // 3. Handling game_over SSE event on the simulated UI thread must complete with 0 violations
+                    OctiNetworkClient.SseEvent gameOverEv = new OctiNetworkClient.SseEvent();
+                    gameOverEv.id = 77L;
+                    gameOverEv.event = "game_over";
+                    gameOverEv.dataJson = "{\"type\":\"GAME_OVER\",\"winner_seat\":2,\"termination\":\"RESIGNATION\"}";
+                    vm.handleGameSseEvent(gameOverEv);
+                    assertEquals("Zero UI-thread violations after handling game_over SSE event",
+                            0, OctiNetworkClient.getUiThreadViolationCountForTest());
+
+                    // 4. Calling leaveOnlineTable() and exitOnlineTableViewAsync() on simulated UI thread must complete with 0 violations
+                    OctiNetworkClient.ApiResult<Boolean> leaveRes = vm.leaveOnlineTable("room-test-123");
+                    assertTrue("leaveOnlineTable() must succeed", leaveRes.ok);
+                    assertEquals("Zero UI-thread violations after leaveOnlineTable()",
+                            0, OctiNetworkClient.getUiThreadViolationCountForTest());
+
+                    // Re-enter room and test exitOnlineTableViewAsync() with UI-thread guard active
+                    vm.setOnlineMatchForTest("room-test-123", null);
+                    CountDownLatch exitLatch = new CountDownLatch(1);
+                    vm.exitOnlineTableViewAsync("room-test-123", true, ok -> exitLatch.countDown());
+                    assertTrue("exitOnlineTableViewAsync timed out", exitLatch.await(5, TimeUnit.SECONDS));
+                    assertEquals("Zero UI-thread violations after exitOnlineTableViewAsync()",
+                            0, OctiNetworkClient.getUiThreadViolationCountForTest());
+                } finally {
+                    OctiNetworkClient.resetUiThreadGuardForTest();
+                }
+            }
+        } finally {
+            OctiNetworkClient.resetUiThreadGuardForTest();
+        }
+    }
 }
 
 /*

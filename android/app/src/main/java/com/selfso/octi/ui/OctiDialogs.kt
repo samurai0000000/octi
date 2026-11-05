@@ -1244,6 +1244,7 @@ fun ZoomedSquareDialog(
     squareY: Int,
     rotation: OctiBoardGeometry.BoardRotation,
     themeId: OctiThemeId,
+    canInteract: Boolean = true,
     onDismiss: () -> Unit,
     onBeginGuidedMove: (podIndex: Int, moveAllStack: Boolean) -> Unit,
     onAddProng: (podIndex: Int, dir: OctiDir, superProng: Boolean) -> Unit,
@@ -1268,7 +1269,7 @@ fun ZoomedSquareDialog(
     var selectedPodIndex by remember(squareX, squareY, defaultPodIdx) { mutableIntStateOf(defaultPodIdx) }
     val isEmptySquare = sq == null || sq.isEmpty
     val turn = displayGame?.turn ?: OctiPlayer.PLAYER_A
-    val isTurn = displayGame != null && displayGame.isGameStarted && !displayGame.isGameOver
+    val isTurn = canInteract && displayGame != null && displayGame.isGameStarted && !displayGame.isGameOver
     val hasEnemy = sq?.hasEnemyOf(turn) == true
     val isOwnOccupied = sq?.isOccupiedBy(turn) == true
     val isFriendlyTurn = isTurn && !isEmptySquare && isOwnOccupied

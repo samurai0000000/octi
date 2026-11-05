@@ -6061,7 +6061,7 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("OCTI v2.3.4") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v2.3.5") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"robot-profile-detail\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"robots-tbody\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Quick Guide") == std::string::npos);
@@ -6075,6 +6075,39 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(posChatBox != std::string::npos);
     CHECK_TRUE(posUsersSec != std::string::npos);
     CHECK_TRUE(posChatBox < posUsersSec);
+}
+
+TEST(OctiHttpServerIntegrationTest, WebUiGuiDesignBookComplianceInvariants)
+{
+    Reply rIndex = http().get("/");
+    EXPECT_STATUS(200, rIndex);
+
+    /* CHK-01 (GDB-10.1a): Undo is strictly hidden and disabled in online games */
+    CHECK_TRUE(rIndex.body.find("if (undoBtn) undoBtn.style.display = \"none\";") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("var undoAction = hasPendingUndo ? \"accept_undo\" : \"request_undo\";") == std::string::npos);
+
+    /* CHK-02 (GDB-05.1): 30%-edge Pink (#FF69B4) Running Light in renderPlayBoardCanvas */
+    CHECK_TRUE(rIndex.body.find("function drawPlayPinkSub(a, b)") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("var segFrac = 0.30;") != std::string::npos);
+
+    /* CHK-03 (GDB-06.1): Auto-rotate board immediately upon sitting at an online seat */
+    CHECK_TRUE(rIndex.body.find("boardRotationDeg = rotationForSeat(modeForRot, seatLetterOf(joinedSeat));") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("boardRotationDeg = rotationForSeat(modeForRot, seatLetterOf(vSeat));") != std::string::npos);
+
+    /* CHK-04 (GDB-07.2): Single-click empty friendly home square stages reserve pod placement */
+    CHECK_TRUE(rIndex.body.find("moveComposer.stageAddPod(x, y, false);") != std::string::npos);
+
+    /* CHK-06 (GDB-07.1): Zoom-only prong addition (no direct outer-ring prong click on main board) */
+    CHECK_TRUE(rIndex.body.find("moveComposer.stageAddProng(x, y, bestFriendlyIdx, sector, false)") == std::string::npos);
+
+    /* CHK-07 (GDB-04.2a): Main board pod stacks sorted descending (most-prongs-at-bottom) */
+    CHECK_TRUE(rIndex.body.find("var sortedDesc = podStack.slice().sort(function (a, b) {") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("return (b.cfg ? b.cfg.count : 0) - (a.cfg ? a.cfg.count : 0);") != std::string::npos);
+
+    /* Synced 2,038-entry opening book in WebUi.cxx */
+    CHECK_TRUE(rIndex.body.find("BEGIN_OPENING_BOOK_DATA") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("END_OPENING_BOOK_DATA") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("\"0x00172E8C050D20ED\"") != std::string::npos);
 }
 
 int main(int argc, char **argv)

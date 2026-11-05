@@ -687,9 +687,11 @@ fun OctiMainAppContent(
                             }
                         }
 
-                        // Proposals Banner (Draw, Undo, Pause, Rematch)
+                        // Proposals Banner (Draw, Pause, Rematch — No Undo in Online Games per GDB-10.1a)
                         if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeGameView?.proposals?.isNotEmpty() == true) {
-                            val prop = activeGameView?.proposals?.firstOrNull()
+                            val prop = activeGameView?.proposals?.firstOrNull {
+                                it.type != "UNDO_REQUEST" && it.type != "UNDO"
+                            }
                             if (prop != null) {
                                 val myUuid = currentProfile?.uuid ?: ""
                                 val viewerSeat = activeGameView?.viewerSeat ?: 0
@@ -903,6 +905,7 @@ fun OctiMainAppContent(
                 squareY = zy,
                 rotation = viewModel.boardRotation.collectAsState().value,
                 themeId = themeId,
+                canInteract = viewModel.isInteractiveOnlineTurn() && !viewModel.isViewingHistory(),
                 onDismiss = { viewModel.closeZoomedSquare() },
                 onBeginGuidedMove = { podIndex, moveAllStack ->
                     viewModel.clearLastMoveIndicators()

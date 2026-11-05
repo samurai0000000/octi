@@ -753,6 +753,14 @@ public final class OctiBoardRenderer {
         return result;
     }
 
+    public static int[] sortedPodIndicesMostProngsAtBottom(OctiSquare sq) {
+        return sortedPodIndicesMostProngsFirst(sq);
+    }
+
+    public static int countPodProngs(OctiPod pod) {
+        return pod != null ? pod.getNumProngs() : 0;
+    }
+
     public static void drawDashedLineSegment(int[] pixels, int w, int h,
                                              double x1, double y1, double x2, double y2,
                                              double thickness, int color,

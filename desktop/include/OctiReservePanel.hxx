@@ -7,6 +7,7 @@
 #ifndef OCTI_DESKTOP_OCTI_RESERVE_PANEL_HXX
 #define OCTI_DESKTOP_OCTI_RESERVE_PANEL_HXX
 
+#include <array>
 #include <functional>
 #include <map>
 #include <string>
@@ -75,6 +76,12 @@ public:
     void clearSeatMetadata();
     const ReserveSeatMetadata *seatMetadata(int seat) const;
 
+    void setOnlineWaitingSeatState(bool waitingRoom,
+                                   int viewerSeat,
+                                   const std::array<bool, 5> &seatOccupied,
+                                   std::function<void(int seat)> onSitSeatRequested);
+    QRectF sitSeatButtonRect(int seat) const;
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
@@ -101,6 +108,11 @@ private:
     QRectF _pttButtonRect;
     QRectF _playerCardRects[5];
     QRectF _capturedPodWellRects[5];
+    QRectF _sitSeatBtnRects[5];
+    bool _onlineWaitingRoom = false;
+    int _onlineViewerSeat = 0;
+    std::array<bool, 5> _onlineSeatOccupied = {false, false, false, false, false};
+    std::function<void(int seat)> _onSitSeatRequested;
     int _iconGlyphCountRendered = 0;
 };
 

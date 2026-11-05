@@ -13,6 +13,7 @@
 #include "OctiBoard.hxx"
 #include "OctiGame.hxx"
 #include "OctiBotEngine.hxx"
+#include "OctiOpeningBookData.hxx"
 #include "OctiCrypto.hxx"
 #include "OctiNetworkClient.hxx"
 #include "Version.hxx"
@@ -2389,6 +2390,33 @@ TEST(OctiBotEngineCoreTest, OpeningBookLookupNominalBoundaryAndFaultInjection)
     CHECK_FALSE(octi::OctiBotEngine::probeOpeningBookTable(
         b2p3, allIllegalTable, 1, enabledProf, rng, noMove));
     STRCMP_EQUAL("", noMove.c_str());
+
+    // 4. Verify full 2,038-entry generated playbook and ply-4 2P 3-Base entry (33+h 57+d 53+h 37+d -> 73+h mirrored / 33+b canonical)
+    LONGS_EQUAL(2038, static_cast<long>(octi::g_openingBookEntryCount));
+    octi::OctiBoard bPly4(octi::GAME_MODE_2, false, false, octi::GAME_BASES_3);
+    bPly4.getGame()->start(octi::PLAYER_A);
+    bPly4.getGame()->move("33+h");
+    bPly4.getGame()->move("57+d");
+    bPly4.getGame()->move("53+h");
+    bPly4.getGame()->move("37+d");
+    bot.setTuningProfile(enabledProf);
+    std::string ply4Move;
+    int ply4Score = 0;
+    int ply4Depth = 0;
+    CHECK_TRUE(bot.probeOpeningBook(bPly4, ply4Move, &ply4Score, &ply4Depth));
+    STRCMP_EQUAL("73+h", ply4Move.c_str());
+    LONGS_EQUAL(-120, ply4Score);
+    LONGS_EQUAL(8, ply4Depth);
+
+    octi::OctiBoard bPly4Canon(octi::GAME_MODE_2, false, false, octi::GAME_BASES_3);
+    bPly4Canon.getGame()->start(octi::PLAYER_A);
+    bPly4Canon.getGame()->move("73+b");
+    bPly4Canon.getGame()->move("57+f");
+    bPly4Canon.getGame()->move("53+b");
+    bPly4Canon.getGame()->move("77+f");
+    std::string ply4CanonMove;
+    CHECK_TRUE(bot.probeOpeningBook(bPly4Canon, ply4CanonMove, &ply4Score, &ply4Depth));
+    STRCMP_EQUAL("33+b", ply4CanonMove.c_str());
 }
 
 TEST(OctiBotEngineCoreTest, SearchTopMovesForBookAndCanonicalOrientation)

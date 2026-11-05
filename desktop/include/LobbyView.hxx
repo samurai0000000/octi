@@ -7,9 +7,12 @@
 #ifndef OCTI_DESKTOP_LOBBY_VIEW_HXX
 #define OCTI_DESKTOP_LOBBY_VIEW_HXX
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 #include <QFrame>
 #include <QGroupBox>
@@ -45,8 +48,11 @@ public:
                             const GameViewData &gameView);
 
     bool refreshLobby();
+    void scheduleCoalescedLobbyRefresh();
     void refreshFromLobbyState(const LobbyStateData &state);
     void handleLobbySseEvent(const SseEvent &ev);
+    std::int64_t latestLobbySeq() const { return _latestLobbySeq; }
+    int lobbyRefreshCount() const { return _lobbyRefreshCount.load(); }
 
     bool sendLobbyChatMessage(const std::string &text);
     void appendLobbyChatEntry(const LobbyChatEntry &entry);
@@ -153,6 +159,15 @@ private:
     QPushButton *_purgeTableBtn;
     QLabel *_statusLabel;
     QTimer *_secondTimer;
+    QTimer *_sseRefreshTimer = nullptr;
+
+    std::int64_t _latestLobbySeq = 0;
+    std::int64_t _lastHandledLobbySseSeq = 0;
+    std::atomic<int> _lobbyRefreshCount{0};
+    std::atomic<bool> _asyncRefreshInFlight{false};
+    std::atomic<bool> _asyncRefreshPending{false};
+    std::shared_ptr<std::atomic<bool>> _aliveFlag;
+    std::thread _refreshWorkerThread;
 
     std::vector<LobbyPlayerInfo> _players;
     std::vector<TableSummaryInfo> _tables;
