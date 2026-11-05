@@ -2564,7 +2564,41 @@ TEST(OctiBotEngineCoreTest, UnboundedTimeBookSearchAndBookGenMultiLangSync)
     CHECK_TRUE(syncedJs.find("\"0xBF20205531084330\": {") != std::string::npos);
     CHECK_TRUE(syncedJs.find("// Footer after book") != std::string::npos);
 
-    // 4. Fault: --out-js on a file missing markers fails with non-zero exit code
+    // 4. Resume from existing checkpoint JSON (skips Ply 0 and expands Ply 1)
+    std::string resumeLogPath = (tmpDir / "resume.log").string();
+    std::string cmdResume =
+        bookGenBin +
+        " --max-ply 2"
+        " --bot-branch 2 --opp-branch 2"
+        " --checkpoint-interval 1"
+        " --out-json \"" + jsonPath + "\""
+        " --out-header \"" + hxxPath + "\""
+        " --out-java \"" + javaPath + "\" > \"" + resumeLogPath + "\" 2>&1";
+    int rcResume = std::system(cmdResume.c_str());
+    CHECK_EQUAL(0, rcResume);
+
+    std::string resumeLog = readFileStr(resumeLogPath);
+    CHECK_TRUE(resumeLog.find("resumed 1 entries") != std::string::npos);
+    CHECK_TRUE(resumeLog.find("Mode           : OFK") != std::string::npos);
+    CHECK_TRUE(resumeLog.find("Search Depth   : 2") != std::string::npos);
+    CHECK_TRUE(resumeLog.find("[Ply 0/2] Resumed 1/1 cached position(s); 0 remaining to search.") != std::string::npos);
+    CHECK_TRUE(resumeLog.find("[Ply 1/2] Evaluating") != std::string::npos);
+
+    // 5. Boundary: --no-resume resets and starts fresh from ply 0
+    std::string freshLogPath = (tmpDir / "fresh.log").string();
+    std::string cmdFresh =
+        bookGenBin +
+        " --no-resume --mode OFK --max-ply 1 --search-depth 1"
+        " --out-json \"" + jsonPath + "\""
+        " --out-header \"" + hxxPath + "\""
+        " --out-java \"" + javaPath + "\" > \"" + freshLogPath + "\" 2>&1";
+    int rcFresh = std::system(cmdFresh.c_str());
+    CHECK_EQUAL(0, rcFresh);
+    std::string freshLog = readFileStr(freshLogPath);
+    CHECK_TRUE(freshLog.find("Resume State   : fresh start") != std::string::npos);
+    CHECK_TRUE(freshLog.find("Total Unique Canonical Entries : 1") != std::string::npos);
+
+    // 6. Fault: --out-js on a file missing markers fails with non-zero exit code
     std::string badJsPath = (tmpDir / "no_markers.cxx").string();
     {
         std::ofstream out(badJsPath);
