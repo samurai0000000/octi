@@ -508,7 +508,8 @@ public:
     std::vector<TableSummary> listTables(bool includeFinished = false) const;
 
     /* ---- tables and seats ---- */
-    RoomResult createTable(int64_t hostPlayerId, const GameTableConfig &config);
+    RoomResult createTable(int64_t hostPlayerId, const GameTableConfig &config,
+                           int initialSeat = 1);
     RoomResult joinTable(const std::string &roomId, int64_t playerId, int seat,
                          const std::string &passcode);
     RoomResult leaveTable(const std::string &roomId, int64_t playerId);

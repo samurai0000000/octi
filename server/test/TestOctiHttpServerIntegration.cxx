@@ -5906,6 +5906,88 @@ TEST(OctiHttpServerIntegrationTest, WebUiGuiDesignBookComplianceInvariants)
     CHECK_TRUE(rIndex.body.find("\"0x00172E8C050D20ED\"") != std::string::npos);
 }
 
+TEST(OctiHttpServerIntegrationTest, CreateTableWithSeatSelectionAndUnseatedHost)
+{
+    User hostA = signIn("google", "sub-polite-host-a", "PoliteHostA");
+    User humanB = signIn("google", "sub-polite-human-b", "HumanPlayerB");
+
+    /* Fault: out-of-range seat (-1, 3 in 2P, 5) rejected with 400 INVALID_ARGUMENT */
+    Reply rBadNeg = http().post(
+        "/api/v1/tables", hostA.token,
+        Json{{"mode", "2P"}, {"bases", 3}, {"seat", -1}});
+    EXPECT_ERROR(400, "INVALID_ARGUMENT", rBadNeg);
+
+    Reply rBad2P = http().post(
+        "/api/v1/tables", hostA.token,
+        Json{{"mode", "2P"}, {"bases", 3}, {"seat", 3}});
+    EXPECT_ERROR(400, "INVALID_ARGUMENT", rBad2P);
+
+    Reply rBadHigh = http().post(
+        "/api/v1/tables", hostA.token,
+        Json{{"mode", "4P"}, {"bases", 3}, {"seat", 5}});
+    EXPECT_ERROR(400, "INVALID_ARGUMENT", rBadHigh);
+
+    /* Nominal 1: Create 2P table explicitly in Seat 2 (B) */
+    Reply rSeat2 = http().post(
+        "/api/v1/tables", hostA.token,
+        Json{{"mode", "2P"}, {"bases", 3}, {"seat", 2}});
+    EXPECT_STATUS(201, rSeat2);
+    CHECK_EQUAL(2, rSeat2.json.value("seat", 0));
+    std::string roomSeat2 = rSeat2.json.value("room_id", "");
+    CHECK_FALSE(roomSeat2.empty());
+
+    Reply rViewSeat2 = http().get("/api/v1/tables/" + roomSeat2, hostA.token);
+    EXPECT_STATUS(200, rViewSeat2);
+    CHECK_EQUAL(2, rViewSeat2.json.value("viewer_seat", 0));
+    CHECK_TRUE(rViewSeat2.json["seats"][0].value("handle", "").empty());
+    STRCMP_EQUAL(hostA.handle.c_str(), rViewSeat2.json["seats"][1].value("handle", "").c_str());
+
+    /* Clean up roomSeat2 by leaving */
+    EXPECT_STATUS(200, http().post("/api/v1/tables/" + roomSeat2 + "/leave", hostA.token, Json::object()));
+    EXPECT_STATUS(404, http().get("/api/v1/tables/" + roomSeat2, hostA.token));
+
+    /* Boundary: Create unseated table (seat: 0), verify duplicate create blocked, then leave cleans up room */
+    Reply rUnseatedLeave = http().post(
+        "/api/v1/tables", hostA.token,
+        Json{{"mode", "2P"}, {"bases", 3}, {"seat", 0}});
+    EXPECT_STATUS(201, rUnseatedLeave);
+    CHECK_EQUAL(0, rUnseatedLeave.json.value("seat", -1));
+    std::string roomUnseatedLeave = rUnseatedLeave.json.value("room_id", "");
+    CHECK_FALSE(roomUnseatedLeave.empty());
+
+    /* Fault: cannot host a second table while already hosting an unseated waiting table */
+    Reply rDupHost = http().post(
+        "/api/v1/tables", hostA.token,
+        Json{{"mode", "2P"}, {"bases", 3}, {"seat", 1}});
+    EXPECT_ERROR(409, "ALREADY_SEATED", rDupHost);
+
+    /* Leaving empty unseated table deletes it */
+    EXPECT_STATUS(200, http().post("/api/v1/tables/" + roomUnseatedLeave + "/leave", hostA.token, Json::object()));
+    EXPECT_STATUS(404, http().get("/api/v1/tables/" + roomUnseatedLeave, hostA.token));
+
+    /* Nominal 2: Unseated host (seat: 0) -> human picks Seat 2 (B) -> host joins seat: 0 and gets Seat 1 (A) */
+    Reply rWait1 = http().post(
+        "/api/v1/tables", hostA.token,
+        Json{{"mode", "2P"}, {"bases", 3}, {"seat", 0}});
+    EXPECT_STATUS(201, rWait1);
+    CHECK_EQUAL(0, rWait1.json.value("seat", -1));
+    std::string roomWait1 = rWait1.json.value("room_id", "");
+
+    Reply rHumanPick2 = http().post(
+        "/api/v1/tables/" + roomWait1 + "/join", humanB.token,
+        Json{{"seat", 2}});
+    EXPECT_STATUS(200, rHumanPick2);
+    CHECK_EQUAL(2, rHumanPick2.json.value("seat", 0));
+    CHECK_FALSE(rHumanPick2.json.value("game_started", true));
+
+    Reply rHostFill1 = http().post(
+        "/api/v1/tables/" + roomWait1 + "/join", hostA.token,
+        Json{{"seat", 0}});
+    EXPECT_STATUS(200, rHostFill1);
+    CHECK_EQUAL(1, rHostFill1.json.value("seat", 0));
+    CHECK_TRUE(rHostFill1.json.value("game_started", false));
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

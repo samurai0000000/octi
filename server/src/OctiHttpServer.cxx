@@ -3899,7 +3899,16 @@ void OctiHttpServer::Impl::handleTableCreate(const Request &req,
         sendError(res, 400, "INVALID_ARGUMENT", err);
         return;
     }
-    RoomResult r = rooms.createTable(auth.playerId, cfgIn);
+    int64_t seat = 1;
+    if (!fieldInt(body, "seat", false, seat, err)) {
+        sendError(res, 400, "INVALID_ARGUMENT", err);
+        return;
+    }
+    if (seat < 0 || seat > 4) {
+        sendError(res, 400, "INVALID_ARGUMENT", "seat must be 0..4");
+        return;
+    }
+    RoomResult r = rooms.createTable(auth.playerId, cfgIn, static_cast<int>(seat));
     if (!r.ok()) {
         sendRoomError(res, r);
         return;

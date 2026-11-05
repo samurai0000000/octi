@@ -782,6 +782,10 @@ PresenceStatus GameRoomManager::presenceLocked(int64_t playerId,
                 if (roomId) {
                     *roomId = r->id;
                 }
+                if (r->phase == RoomPhase::WAITING_FOR_PLAYERS &&
+                    r->hostId == playerId) {
+                    return PresenceStatus::AT_TABLE;
+                }
                 return PresenceStatus::OBSERVING;
             }
         }
@@ -968,11 +972,32 @@ RoomResult GameRoomManager::leaveLobby(int64_t playerId)
             Room *r = findRoomLocked(ids[i]);
             if (r != nullptr) {
                 removeObserverLocked(*r, playerId);
-                RoomEvent e;
-                e.type = RoomEventType::OBSERVER_LEFT;
-                e.playerId = playerId;
-                e.detail = "left";
-                emitLocked(*r, e, now);
+                if (r->phase == RoomPhase::WAITING_FOR_PLAYERS &&
+                    r->hostId == playerId && seatOfLocked(*r, playerId) == 0) {
+                    int next = 0;
+                    for (int s = 1; s <= r->seatCount; ++s) {
+                        if (r->seatPlayer[s] != 0) {
+                            next = s;
+                            break;
+                        }
+                    }
+                    if (next == 0) {
+                        deleteRoomLocked(r->id);
+                        continue;
+                    }
+                    r->hostId = r->seatPlayer[next];
+                    RoomEvent h;
+                    h.type = RoomEventType::HOST_CHANGED;
+                    h.playerId = r->hostId;
+                    emitLocked(*r, h, now);
+                    announceTableLocked(*r, false);
+                } else {
+                    RoomEvent e;
+                    e.type = RoomEventType::OBSERVER_LEFT;
+                    e.playerId = playerId;
+                    e.detail = "left";
+                    emitLocked(*r, e, now);
+                }
             }
         }
         _observing.erase(playerId);
@@ -1387,14 +1412,23 @@ bool GameRoomManager::findActiveRoomForActor(int64_t actorId,
 {
     std::lock_guard<std::mutex> lock(_mutex);
     std::map<int64_t, std::string>::const_iterator it = _seatRoom.find(actorId);
-    if (it == _seatRoom.end()) {
-        return false;
+    if (it != _seatRoom.end()) {
+        const Room *r = findRoomLocked(it->second);
+        if (r != nullptr && (r->phase == RoomPhase::WAITING_FOR_PLAYERS ||
+                             r->phase == RoomPhase::IN_PROGRESS)) {
+            outRoomId = r->id;
+            return true;
+        }
     }
-    const Room *r = findRoomLocked(it->second);
-    if (r != nullptr && (r->phase == RoomPhase::WAITING_FOR_PLAYERS ||
-                         r->phase == RoomPhase::IN_PROGRESS)) {
-        outRoomId = r->id;
-        return true;
+    for (std::map<std::string, std::unique_ptr<Room>>::const_iterator rit =
+             _rooms.begin();
+         rit != _rooms.end(); ++rit) {
+        const Room *r = rit->second.get();
+        if (r != nullptr && r->phase == RoomPhase::WAITING_FOR_PLAYERS &&
+            r->hostId == actorId) {
+            outRoomId = r->id;
+            return true;
+        }
     }
     return false;
 }
@@ -1739,7 +1773,8 @@ void GameRoomManager::startGameLocked(Room &r, int64_t now)
 }
 
 RoomResult GameRoomManager::createTable(int64_t hostPlayerId,
-                                        const GameTableConfig &config)
+                                        const GameTableConfig &config,
+                                        int initialSeat)
 {
     std::lock_guard<std::mutex> lock(_mutex);
     if ((hostPlayerId <= 0 && !isRobotActorId(hostPlayerId)) ||
@@ -1751,8 +1786,20 @@ RoomResult GameRoomManager::createTable(int64_t hostPlayerId,
     if (!validateConfig(config, cfg, err)) {
         return fail(RoomCode::INVALID_ARGUMENT, err);
     }
+    int seatCount = seatCountOf(cfg.mode);
+    if (initialSeat < 0 || initialSeat > seatCount) {
+        return fail(RoomCode::INVALID_ARGUMENT, "seat out of range");
+    }
     if (_seatRoom.count(hostPlayerId) != 0) {
         return fail(RoomCode::ALREADY_SEATED, "already seated at a table");
+    }
+    for (std::map<std::string, std::unique_ptr<Room>>::const_iterator it =
+             _rooms.begin();
+         it != _rooms.end(); ++it) {
+        if (it->second->phase == RoomPhase::WAITING_FOR_PLAYERS &&
+            it->second->hostId == hostPlayerId) {
+            return fail(RoomCode::ALREADY_SEATED, "already hosting a table");
+        }
     }
     if (_rooms.size() >= _limits.maxRooms) {
         return fail(RoomCode::LIMIT_REACHED, "too many rooms");
@@ -1761,13 +1808,17 @@ RoomResult GameRoomManager::createTable(int64_t hostPlayerId,
     touchOnlineLocked(hostPlayerId);
     _players[hostPlayerId].lastActiveMs = now;
     Room *r = createRoomLocked(cfg, hostPlayerId, now);
-    seatPlayerLocked(*r, 1, hostPlayerId, now);
+    if (initialSeat == 0) {
+        addObserverLocked(*r, hostPlayerId);
+    } else {
+        seatPlayerLocked(*r, initialSeat, hostPlayerId, now);
+    }
     announceTableLocked(*r, false);
     saveRoomLocked(*r);
     saveLobbyMetaLocked();
     RoomResult res = success();
     res.roomId = r->id;
-    res.seat = 1;
+    res.seat = initialSeat;
     return res;
 }
 
@@ -1878,6 +1929,31 @@ RoomResult GameRoomManager::leaveTable(const std::string &roomId,
     advanceRoomLocked(*r, now);
     int seat = seatOfLocked(*r, playerId);
     if (seat == 0) {
+        if (r->phase == RoomPhase::WAITING_FOR_PLAYERS && r->hostId == playerId) {
+            _players[playerId].lastActiveMs = now;
+            if (r->observers.count(playerId) != 0) {
+                removeObserverLocked(*r, playerId);
+            }
+            int next = 0;
+            for (int s = 1; s <= r->seatCount; ++s) {
+                if (r->seatPlayer[s] != 0) {
+                    next = s;
+                    break;
+                }
+            }
+            if (next == 0) {
+                deleteRoomLocked(r->id);
+                return success();
+            }
+            r->hostId = r->seatPlayer[next];
+            RoomEvent h;
+            h.type = RoomEventType::HOST_CHANGED;
+            h.playerId = r->hostId;
+            emitLocked(*r, h, now);
+            announceTableLocked(*r, false);
+            saveRoomLocked(*r);
+            return success();
+        }
         return fail(RoomCode::FORBIDDEN_NOT_SEATED, "not seated at this table");
     }
     if (r->phase == RoomPhase::WAITING_FOR_PLAYERS) {
@@ -1945,7 +2021,7 @@ RoomResult GameRoomManager::kickSeat(const std::string &roomId,
     if (r->banned.count(hostPlayerId) != 0) {
         return fail(RoomCode::FORBIDDEN_BANNED, "banned from this room");
     }
-    if (seatOfLocked(*r, hostPlayerId) == 0) {
+    if (seatOfLocked(*r, hostPlayerId) == 0 && r->hostId != hostPlayerId) {
         return fail(RoomCode::FORBIDDEN_NOT_SEATED, "not seated at this table");
     }
     if (r->hostId != hostPlayerId) {
@@ -3437,7 +3513,8 @@ RoomResult GameRoomManager::banUser(const std::string &roomId,
     if (r->banned.count(actorPlayerId) != 0) {
         return fail(RoomCode::FORBIDDEN_BANNED, "banned from this room");
     }
-    if (seatOfLocked(*r, actorPlayerId) == 0) {
+    if (seatOfLocked(*r, actorPlayerId) == 0 &&
+        !(r->phase == RoomPhase::WAITING_FOR_PLAYERS && r->hostId == actorPlayerId)) {
         return fail(RoomCode::FORBIDDEN_NOT_SEATED,
                     "only seated players can ban");
     }
@@ -4252,7 +4329,7 @@ bool GameRoomManager::restoreFromStoreLocked()
             if (j.contains("observers") && j["observers"].is_array()) {
                 for (size_t oi = 0; oi < j["observers"].size(); ++oi) {
                     int64_t pid = j["observers"][oi].get<int64_t>();
-                    if (pid > 0) {
+                    if (pid > 0 || isRobotActorId(pid)) {
                         r->observers.insert(pid);
                     }
                 }
