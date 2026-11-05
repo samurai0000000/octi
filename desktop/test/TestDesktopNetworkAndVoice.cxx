@@ -7,7 +7,6 @@
 #include "ClientConfigStore.hxx"
 #include "OctiCrashReporter.hxx"
 #include "OctiNetworkClient.hxx"
-#include "P2pVoiceEngine.hxx"
 
 #include "AccountStore.hxx"
 #include "GameRoomManager.hxx"
@@ -364,7 +363,6 @@ TEST(ClientConfigStoreTest, SaveLoadAndPosix0600Permissions)
     prefs.theme = ThemeId::ROSEWOOD_IVORY;
     prefs.confirmAllMoves = true;
     prefs.sfxMuted = true;
-    prefs.pttKey = 86;
 
     std::string err;
     CHECK_TRUE_TEXT(store.save(err), err.c_str());
@@ -391,7 +389,6 @@ TEST(ClientConfigStoreTest, SaveLoadAndPosix0600Permissions)
                 static_cast<long>(loaded.theme));
     CHECK_TRUE(loaded.confirmAllMoves);
     CHECK_TRUE(loaded.sfxMuted);
-    LONGS_EQUAL(86, loaded.pttKey);
 
     reloadStore.clearSession();
     CHECK_TRUE_TEXT(reloadStore.save(err), err.c_str());
@@ -797,11 +794,10 @@ TEST(OctiNetworkClientTest,
     CHECK_TRUE_TEXT(decDraw.ok, decDraw.errorMessage.c_str());
 
     /* Host moderation: update settings, mute observer C, ban observer C */
-    auto settingsRes = clientA->updateRoomSettings(
-        roomId, "OPEN", "ALL_ALLOWED");
+    auto settingsRes = clientA->updateRoomSettings(roomId, "OPEN");
     CHECK_TRUE_TEXT(settingsRes.ok, settingsRes.errorMessage.c_str());
 
-    auto muteRes = clientA->muteParticipant(roomId, uuidC, true, true);
+    auto muteRes = clientA->muteParticipant(roomId, uuidC, true);
     CHECK_TRUE_TEXT(muteRes.ok, muteRes.errorMessage.c_str());
 
     auto banRes = clientA->banObserver(roomId, uuidC, "Disruptive");
@@ -1194,355 +1190,6 @@ TEST(OctiNetworkClientTest, ThreeArgumentUpdateMyProfilePreservesBioLocationAndA
     STRCMP_EQUAL(initial.data.avatarUrl.c_str(), fetched.data.avatarUrl.c_str());
 }
 
-/* ==================================================================== */
-/* Group 3: P2pVoiceEngineTest                                          */
-/* ==================================================================== */
-
-TEST_GROUP(P2pVoiceEngineTest)
-{
-};
-
-TEST(P2pVoiceEngineTest, TwoPeersSignalingAndPushToTalkSineWaveAudioTransfer)
-{
-    LiveServerEnv env;
-    auto clientA = OctiNetworkClient::forHermeticTest(env.port());
-    auto clientB = OctiNetworkClient::forHermeticTest(env.port());
-
-    auto loginA = clientA->loginWithSso(
-        "google", makeToken("google", "sub-voice-a", "VoiceA"), "VoiceA");
-    auto loginB = clientB->loginWithSso(
-        "google", makeToken("google", "sub-voice-b", "VoiceB"), "VoiceB");
-    CHECK_TRUE(loginA.ok && loginB.ok);
-
-    std::string uuidA = loginA.data.profile.uuid;
-    std::string uuidB = loginB.data.profile.uuid;
-
-    CreateTableRequest req;
-    req.mode = "2P";
-    req.voicePolicy = "PLAYERS_ONLY";
-    auto table = clientA->createTable(req);
-    CHECK_TRUE(table.ok);
-    std::string roomId = table.data.roomId;
-    CHECK_TRUE(clientB->joinTable(roomId, 2).ok);
-
-    P2pVoiceEngine voiceA(clientA.get());
-    P2pVoiceEngine voiceB(clientB.get());
-    voiceA.setHardwareAudioEnabled(false);
-    voiceB.setHardwareAudioEnabled(false);
-
-    std::string err;
-    CHECK_TRUE_TEXT(voiceA.joinVoiceRoom(roomId, uuidA, err), err.c_str());
-    CHECK_TRUE_TEXT(voiceB.joinVoiceRoom(roomId, uuidB, err), err.c_str());
-    CHECK_TRUE(voiceA.localUdpPort() > 0);
-    CHECK_TRUE(voiceB.localUdpPort() > 0);
-    CHECK_FALSE(voiceA.isPushToTalkActive());
-    CHECK_FALSE(voiceB.isPushToTalkActive());
-
-    /* Exchange SDP_OFFER -> SDP_ANSWER + ICE_CANDIDATE via server events */
-    std::uint64_t seqA = 0;
-    std::uint64_t seqB = 0;
-    CHECK_TRUE(voiceA.initiatePeerOffer(uuidB));
-
-    auto pumpSignaling = [&]() {
-        auto evsB = clientB->pollGameEvents(roomId, seqB);
-        if (evsB.ok) {
-            for (const auto &ev : evsB.data) {
-                seqB = std::max(seqB, ev.id);
-                voiceB.handleGameSseEvent(ev);
-            }
-        }
-        auto evsA = clientA->pollGameEvents(roomId, seqA);
-        if (evsA.ok) {
-            for (const auto &ev : evsA.data) {
-                seqA = std::max(seqA, ev.id);
-                voiceA.handleGameSseEvent(ev);
-            }
-        }
-    };
-
-    pumpSignaling();
-    pumpSignaling();
-
-    CHECK_TRUE(voiceA.isPeerConnected(uuidB));
-    CHECK_TRUE(voiceB.isPeerConnected(uuidA));
-
-    /* Synthesize a 440 Hz 16 kHz mono 20 ms sine wave frame (320 samples) */
-    std::vector<std::int16_t> sineFrame(VoiceUdpPacket::kPayloadSamples);
-    for (std::size_t i = 0; i < sineFrame.size(); ++i) {
-        double phase = 2.0 * M_PI * 440.0 * static_cast<double>(i) / 16000.0;
-        sineFrame[i] = static_cast<std::int16_t>(std::sin(phase) * 14000.0);
-    }
-
-    /* 1. While Push-to-Talk is INACTIVE, zero UDP packets may be transmitted */
-    for (int i = 0; i < 5; ++i) {
-        LONGS_EQUAL(0, static_cast<long>(
-                           voiceA.transmitPcmFrame20Ms(sineFrame.data())));
-    }
-    LONGS_EQUAL(0, static_cast<long>(voiceA.totalPacketsSent()));
-    LONGS_EQUAL(0, static_cast<long>(voiceB.totalPacketsReceived()));
-
-    /* 2. Press Push-to-Talk -> MIC_UNMUTED posted, UDP audio flows peer-to-peer */
-    CHECK_TRUE(voiceA.setPushToTalkActive(true));
-    CHECK_TRUE(voiceA.isPushToTalkActive());
-
-    for (int i = 0; i < 8; ++i) {
-        LONGS_EQUAL(1, static_cast<long>(
-                           voiceA.transmitPcmFrame20Ms(sineFrame.data())));
-    }
-    LONGS_EQUAL(8, static_cast<long>(voiceA.totalPacketsSent()));
-
-    for (int wait = 0; wait < 40 && voiceB.packetsReceivedFrom(uuidA) < 4;
-         ++wait) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    CHECK_TRUE(voiceB.packetsReceivedFrom(uuidA) >= 4);
-    CHECK_TRUE(voiceB.lastReceivedRmsFrom(uuidA) > 6000.0);
-
-    std::vector<std::int16_t> decoded = voiceB.popDecodedFrameFrom(uuidA);
-    LONGS_EQUAL(320, static_cast<long>(decoded.size()));
-
-    /* 3. Release Push-to-Talk -> MIC_MUTED posted, UDP transmission stops */
-    CHECK_TRUE(voiceA.setPushToTalkActive(false));
-    CHECK_FALSE(voiceA.isPushToTalkActive());
-    std::uint64_t sentBeforeReleaseCheck = voiceA.totalPacketsSent();
-    LONGS_EQUAL(0, static_cast<long>(
-                       voiceA.transmitPcmFrame20Ms(sineFrame.data())));
-    LONGS_EQUAL(static_cast<long>(sentBeforeReleaseCheck),
-                static_cast<long>(voiceA.totalPacketsSent()));
-
-    voiceA.leaveVoiceRoom();
-    voiceB.leaveVoiceRoom();
-    CHECK_FALSE(voiceA.isInVoiceRoom());
-    CHECK_FALSE(voiceB.isInVoiceRoom());
-}
-
-TEST(P2pVoiceEngineTest, ModerationMuteBanAndPolicyDisabledCutoff)
-{
-    LiveServerEnv env;
-    auto clientA = OctiNetworkClient::forHermeticTest(env.port());
-    auto clientB = OctiNetworkClient::forHermeticTest(env.port());
-
-    auto loginA = clientA->loginWithSso(
-        "google", makeToken("google", "sub-mod-a", "ModA"), "ModA");
-    auto loginB = clientB->loginWithSso(
-        "google", makeToken("google", "sub-mod-b", "ModB"), "ModB");
-    CHECK_TRUE(loginA.ok && loginB.ok);
-    std::string uuidA = loginA.data.profile.uuid;
-    std::string uuidB = loginB.data.profile.uuid;
-
-    CreateTableRequest req;
-    req.mode = "2P";
-    auto table = clientA->createTable(req);
-    std::string roomId = table.data.roomId;
-    CHECK_TRUE(clientB->joinTable(roomId, 2).ok);
-
-    P2pVoiceEngine voiceA(clientA.get());
-    P2pVoiceEngine voiceB(clientB.get());
-    std::string err;
-    CHECK_TRUE(voiceA.joinVoiceRoom(roomId, uuidA, err));
-    CHECK_TRUE(voiceB.joinVoiceRoom(roomId, uuidB, err));
-
-    std::uint64_t seqA = 0;
-    std::uint64_t seqB = 0;
-    CHECK_TRUE(voiceA.initiatePeerOffer(uuidB));
-    for (int i = 0; i < 2; ++i) {
-        auto evsB = clientB->pollGameEvents(roomId, seqB);
-        for (const auto &ev : evsB.data) {
-            seqB = std::max(seqB, ev.id);
-            voiceB.handleGameSseEvent(ev);
-        }
-        auto evsA = clientA->pollGameEvents(roomId, seqA);
-        for (const auto &ev : evsA.data) {
-            seqA = std::max(seqA, ev.id);
-            voiceA.handleGameSseEvent(ev);
-        }
-    }
-    CHECK_TRUE(voiceB.isPeerConnected(uuidA));
-
-    /* 1. Forged UDP packet with wrong session key is dropped */
-    VoiceUdpPacket forged;
-    std::memcpy(forged.magic, "OCTV", 4);
-    forged.seq = 99;
-    forged.timestampMs = 12345;
-    std::memset(forged.payload, 0x7F, sizeof(forged.payload));
-    forged.authTag = P2pVoiceEngine::computeAuthTag(
-        forged.seq, forged.timestampMs, forged.payload, "wrong_session_key");
-    std::vector<std::uint8_t> wire = P2pVoiceEngine::serializePacket(forged);
-
-    int rawSock = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    CHECK_TRUE(rawSock >= 0);
-    sockaddr_in dst;
-    std::memset(&dst, 0, sizeof(dst));
-    dst.sin_family = AF_INET;
-    dst.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    dst.sin_port = htons(static_cast<std::uint16_t>(voiceB.localUdpPort()));
-    ::sendto(rawSock, wire.data(), wire.size(), 0,
-             reinterpret_cast<const sockaddr *>(&dst), sizeof(dst));
-    ::close(rawSock);
-
-    for (int i = 0; i < 30 && voiceB.totalInvalidPacketsDropped() == 0; ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    CHECK_TRUE(voiceB.totalInvalidPacketsDropped() >= 1);
-    LONGS_EQUAL(0, static_cast<long>(voiceB.totalPacketsReceived()));
-
-    /* 2. Server USER_MUTED (mute_voice=true) forces PTT inactive */
-    CHECK_TRUE(voiceA.setPushToTalkActive(true));
-    CHECK_TRUE(voiceA.isPushToTalkActive());
-
-    SseEvent muteEv;
-    muteEv.event = "USER_MUTED";
-    muteEv.dataJson = Json({
-        {"target", uuidA},
-        {"mute_chat", false},
-        {"mute_voice", true}
-    }).dump();
-    voiceA.handleGameSseEvent(muteEv);
-
-    CHECK_TRUE(voiceA.isVoiceMutedByServer());
-    CHECK_FALSE(voiceA.isPushToTalkActive());
-    CHECK_FALSE(voiceA.setPushToTalkActive(true));
-
-    /* 3. POLICY_UPDATED (voice_policy = DISABLED) disables voice and clears peers */
-    SseEvent policyEv;
-    policyEv.event = "POLICY_UPDATED";
-    policyEv.dataJson = Json({
-        {"observer_policy", "OPEN"},
-        {"voice_policy", "DISABLED"}
-    }).dump();
-    voiceB.handleGameSseEvent(policyEv);
-    CHECK_TRUE(voiceB.isVoicePolicyDisabled());
-    LONGS_EQUAL(0, static_cast<long>(voiceB.activePeerCount()));
-
-    /* 4. OBSERVER_BANNED tears down banned participant's voice session */
-    SseEvent banEv;
-    banEv.event = "OBSERVER_BANNED";
-    banEv.dataJson = Json({{"target", uuidA}}).dump();
-    voiceA.handleGameSseEvent(banEv);
-    CHECK_FALSE(voiceA.isInVoiceRoom());
-}
-
-TEST(P2pVoiceEngineTest, JitterBufferBoundingAndWrap)
-{
-    LiveServerEnv env;
-    auto clientA = OctiNetworkClient::forHermeticTest(env.port());
-    auto clientB = OctiNetworkClient::forHermeticTest(env.port());
-
-    auto loginA = clientA->loginWithSso(
-        "google", makeToken("google", "sub-jb-a", "JitterA"), "JitterA");
-    auto loginB = clientB->loginWithSso(
-        "google", makeToken("google", "sub-jb-b", "JitterB"), "JitterB");
-    CHECK_TRUE(loginA.ok && loginB.ok);
-    std::string uuidA = loginA.data.profile.uuid;
-    std::string uuidB = loginB.data.profile.uuid;
-
-    auto table = clientA->createTable();
-    std::string roomId = table.data.roomId;
-    clientB->joinTable(roomId, 2);
-
-    P2pVoiceEngine voiceA(clientA.get());
-    P2pVoiceEngine voiceB(clientB.get());
-    std::string err;
-    voiceA.joinVoiceRoom(roomId, uuidA, err);
-    voiceB.joinVoiceRoom(roomId, uuidB, err);
-
-    std::uint64_t seqA = 0;
-    std::uint64_t seqB = 0;
-    voiceA.initiatePeerOffer(uuidB);
-    for (int i = 0; i < 2; ++i) {
-        auto evsB = clientB->pollGameEvents(roomId, seqB);
-        for (const auto &ev : evsB.data) {
-            seqB = std::max(seqB, ev.id);
-            voiceB.handleGameSseEvent(ev);
-        }
-        auto evsA = clientA->pollGameEvents(roomId, seqA);
-        for (const auto &ev : evsA.data) {
-            seqA = std::max(seqA, ev.id);
-            voiceA.handleGameSseEvent(ev);
-        }
-    }
-
-    voiceA.setPushToTalkActive(true);
-    std::vector<std::int16_t> frame(320, 4096);
-    for (int i = 0; i < 40; ++i) {
-        voiceA.injectTestPcmFrame(frame.data(), frame.size());
-    }
-    for (int w = 0; w < 50 && voiceB.packetsReceivedFrom(uuidA) < 40; ++w) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-
-    int poppedCount = 0;
-    while (!voiceB.popDecodedFrameFrom(uuidA).empty()) {
-        ++poppedCount;
-    }
-    CHECK_TRUE(poppedCount > 0 && poppedCount <= 32);
-}
-
-TEST(P2pVoiceEngineTest, RapidCheckUlawMonotonicityAndPacketFramingFuzz)
-{
-    bool prop1 = rc::check(
-        "G.711 u-law codec is strictly monotonic and has bounded quantization error",
-        [](std::int16_t a, std::int16_t b) {
-            if (a > b) {
-                std::swap(a, b);
-            }
-            std::uint8_t ua = P2pVoiceEngine::linear16ToUlaw(a);
-            std::uint8_t ub = P2pVoiceEngine::linear16ToUlaw(b);
-            std::int16_t da = P2pVoiceEngine::ulawToLinear16(ua);
-            std::int16_t db = P2pVoiceEngine::ulawToLinear16(ub);
-            RC_ASSERT(da <= db);
-            RC_ASSERT(std::abs(static_cast<int>(da) - static_cast<int>(a)) <= 1250);
-            RC_ASSERT(std::abs(static_cast<int>(db) - static_cast<int>(b)) <= 1250);
-        });
-    CHECK_TRUE(prop1);
-
-    bool prop2 = rc::check(
-        "VoiceUdpPacket serializer/parser authenticates valid packets and rejects mutations",
-        [](std::uint32_t seq,
-           std::uint32_t ts,
-           std::uint8_t fillByte,
-           std::size_t mutateOffset) {
-            std::string key = "0123456789abcdef0123456789abcdef";
-            VoiceUdpPacket pkt;
-            std::memcpy(pkt.magic, "OCTV", 4);
-            pkt.seq = seq;
-            pkt.timestampMs = ts;
-            std::memset(pkt.payload, fillByte, VoiceUdpPacket::kPayloadSamples);
-            pkt.authTag = P2pVoiceEngine::computeAuthTag(
-                pkt.seq, pkt.timestampMs, pkt.payload, key);
-
-            std::vector<std::uint8_t> wire =
-                P2pVoiceEngine::serializePacket(pkt);
-            RC_ASSERT(wire.size() == VoiceUdpPacket::kPacketBytes);
-
-            VoiceUdpPacket parsed;
-            RC_ASSERT(P2pVoiceEngine::parseAndVerifyPacket(
-                wire.data(), wire.size(), key, parsed));
-            RC_ASSERT(parsed.seq == seq);
-            RC_ASSERT(parsed.timestampMs == ts);
-            RC_ASSERT(parsed.payload[0] == fillByte);
-
-            /* Any single-byte mutation must fail authentication or header check */
-            std::size_t idx = mutateOffset % wire.size();
-            wire[idx] ^= 0x5AU;
-            VoiceUdpPacket rejected;
-            RC_ASSERT(!P2pVoiceEngine::parseAndVerifyPacket(
-                wire.data(), wire.size(), key, rejected));
-        });
-    CHECK_TRUE(prop2);
-
-    bool prop3 = rc::check(
-        "Arbitrary random byte buffers never parse as valid authenticated packets",
-        [](const std::vector<std::uint8_t> &randomBytes) {
-            VoiceUdpPacket out;
-            bool ok = P2pVoiceEngine::parseAndVerifyPacket(
-                randomBytes.data(), randomBytes.size(),
-                "session_key_secret_abc", out);
-            RC_ASSERT(!ok);
-        });
-    CHECK_TRUE(prop3);
-}
-
 TEST(OctiNetworkClientTest, TableSummarySeatsAndLobbyChatCreatedAtMsParsing)
 {
     httplib::Server mockSrv;
@@ -1558,7 +1205,6 @@ TEST(OctiNetworkClientTest, TableSummarySeatsAndLobbyChatCreatedAtMsParsing)
         table["seats_total"] = 2;
         table["observer_count"] = 2;
         table["observer_policy"] = "OPEN";
-        table["voice_policy"] = "PLAYERS_ONLY";
         table["has_passcode"] = false;
         table["host_uuid"] = "uuid-host-alice";
         table["host_handle"] = "AliceHost";

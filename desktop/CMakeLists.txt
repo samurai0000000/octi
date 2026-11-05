@@ -71,7 +71,6 @@ set(OCTI_DESKTOP_LIB_SOURCES
     src/OctiReservePanel.cxx
     src/ClientConfigStore.cxx
     src/OctiCrashReporter.cxx
-    src/P2pVoiceEngine.cxx
     src/OctiDialogs.cxx
     src/LobbyView.cxx
     src/OctiMainWindow.cxx

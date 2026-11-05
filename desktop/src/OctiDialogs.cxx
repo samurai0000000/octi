@@ -556,7 +556,7 @@ AccountLinkDialog::AccountLinkDialog(OctiNetworkClient *netClient,
     root->setSpacing(10);
 
     /* ---- Player Profile & Avatar Editor (Parity with Web & Android) ---- */
-    QGroupBox *profileGroup = new QGroupBox("Player Profile & Avatar", this);
+    QGroupBox *profileGroup = new QGroupBox("Player Profile && Avatar", this);
     QVBoxLayout *profileLayout = new QVBoxLayout(profileGroup);
     profileLayout->setSpacing(8);
 
@@ -1514,18 +1514,6 @@ std::string CreateTableDialog::normalizeObserverPolicy(const std::string &policy
     return "OPEN";
 }
 
-std::string CreateTableDialog::normalizeVoicePolicy(const std::string &policy)
-{
-    std::string u = toUpperCopy(policy);
-    if (u == "ALL_PARTICIPANTS" || u == "ALL_ALLOWED" || u == "ALL") {
-        return "ALL_ALLOWED";
-    }
-    if (u == "DISABLED" || u == "OFF") {
-        return "DISABLED";
-    }
-    return "PLAYERS_ONLY";
-}
-
 CreateTableDialog::CreateTableDialog(OctiNetworkClient *netClient,
                                      ThemeId theme,
                                      QWidget *parent)
@@ -1542,7 +1530,6 @@ CreateTableDialog::CreateTableDialog(OctiNetworkClient *netClient,
       _initialSecSpin(nullptr),
       _incrementSecSpin(nullptr),
       _observerPolicyCombo(nullptr),
-      _voicePolicyCombo(nullptr),
       _passcodeEdit(nullptr),
       _errorLabel(nullptr),
       _createBtn(nullptr)
@@ -1569,6 +1556,7 @@ CreateTableDialog::CreateTableDialog(OctiNetworkClient *netClient,
     _allowRobotsCheck = new QCheckBox("Allow Robots", this);
     _allowRobotsCheck->setChecked(true);
     _takebackCheck = new QCheckBox("Allow Undo / Takeback Requests", this);
+    _takebackCheck->setVisible(false);
 
     _timeControlCheck = new QCheckBox("Enable Fischer Clock", this);
     _initialSecSpin = new QSpinBox(this);
@@ -1583,11 +1571,6 @@ CreateTableDialog::CreateTableDialog(OctiNetworkClient *netClient,
     _observerPolicyCombo->addItem("Silent Observers", "SILENT_OBSERVERS");
     _observerPolicyCombo->addItem("No Observers (Private)", "NO_OBSERVERS");
 
-    _voicePolicyCombo = new QComboBox(this);
-    _voicePolicyCombo->addItem("Players Only", "PLAYERS_ONLY");
-    _voicePolicyCombo->addItem("All Participants", "ALL_ALLOWED");
-    _voicePolicyCombo->addItem("Voice Disabled", "DISABLED");
-
     _passcodeEdit = new QLineEdit(this);
     _passcodeEdit->setPlaceholderText("Leave empty for public table...");
 
@@ -1597,12 +1580,10 @@ CreateTableDialog::CreateTableDialog(OctiNetworkClient *netClient,
     form->addRow("", _edgelessCheck);
     form->addRow("", _ratedCheck);
     form->addRow("", _allowRobotsCheck);
-    form->addRow("", _takebackCheck);
     form->addRow("", _timeControlCheck);
     form->addRow("Initial Time (s):", _initialSecSpin);
     form->addRow("Increment (s):", _incrementSecSpin);
     form->addRow("Observer Policy:", _observerPolicyCombo);
-    form->addRow("Voice Policy:", _voicePolicyCombo);
     form->addRow("Passcode:", _passcodeEdit);
     root->addLayout(form);
 
@@ -1695,11 +1676,6 @@ void CreateTableDialog::setRequest(const CreateTableRequest &req)
     if (oIdx >= 0) {
         _observerPolicyCombo->setCurrentIndex(oIdx);
     }
-    std::string normVoice = normalizeVoicePolicy(req.voicePolicy);
-    int vIdx = _voicePolicyCombo->findData(QString::fromStdString(normVoice));
-    if (vIdx >= 0) {
-        _voicePolicyCombo->setCurrentIndex(vIdx);
-    }
     _passcodeEdit->setText(QString::fromStdString(req.passcode));
     updateOfkConstraints();
 }
@@ -1721,8 +1697,6 @@ CreateTableRequest CreateTableDialog::buildRequest() const
         static_cast<std::int64_t>(_incrementSecSpin->value()) * 1000LL;
     req.observerPolicy = normalizeObserverPolicy(
         _observerPolicyCombo->currentData().toString().toStdString());
-    req.voicePolicy = normalizeVoicePolicy(
-        _voicePolicyCombo->currentData().toString().toStdString());
     req.passcode = _passcodeEdit->text().trimmed().toStdString();
     return req;
 }
@@ -2072,13 +2046,11 @@ RoomModerationDialog::RoomModerationDialog(OctiNetworkClient *netClient,
       _roomId(roomId),
       _theme(theme),
       _observerPolicyCombo(nullptr),
-      _voicePolicyCombo(nullptr),
       _applyPoliciesBtn(nullptr),
       _participantsTable(nullptr),
       _targetUuidEdit(nullptr),
       _banReasonEdit(nullptr),
       _muteChatCheck(nullptr),
-      _muteVoiceCheck(nullptr),
       _muteBtn(nullptr),
       _banBtn(nullptr),
       _kickSeatBtn(nullptr),
@@ -2096,20 +2068,13 @@ RoomModerationDialog::RoomModerationDialog(OctiNetworkClient *netClient,
     _observerPolicyCombo->addItem("SILENT_OBSERVERS", "SILENT_OBSERVERS");
     _observerPolicyCombo->addItem("NO_OBSERVERS", "NO_OBSERVERS");
 
-    _voicePolicyCombo = new QComboBox(policyBox);
-    _voicePolicyCombo->addItem("PLAYERS_ONLY", "PLAYERS_ONLY");
-    _voicePolicyCombo->addItem("ALL_ALLOWED", "ALL_ALLOWED");
-    _voicePolicyCombo->addItem("DISABLED", "DISABLED");
-
     _applyPoliciesBtn = new QPushButton("Apply Policies", policyBox);
     QObject::connect(_applyPoliciesBtn, &QPushButton::clicked, [this]() {
         applyPolicySettings(
-            _observerPolicyCombo->currentData().toString().toStdString(),
-            _voicePolicyCombo->currentData().toString().toStdString());
+            _observerPolicyCombo->currentData().toString().toStdString());
     });
 
     pForm->addRow("Observer Policy:", _observerPolicyCombo);
-    pForm->addRow("Voice Policy:", _voicePolicyCombo);
     pForm->addRow("", _applyPoliciesBtn);
     root->addWidget(policyBox);
 
@@ -2136,11 +2101,10 @@ RoomModerationDialog::RoomModerationDialog(OctiNetworkClient *netClient,
     _banReasonEdit = new QLineEdit(actBox);
     _banReasonEdit->setPlaceholderText("Reason for kick/ban...");
     _muteChatCheck = new QCheckBox("Mute Chat", actBox);
-    _muteVoiceCheck = new QCheckBox("Mute Voice", actBox);
 
     QHBoxLayout *actBtns = new QHBoxLayout();
     _muteBtn = new QPushButton("Update Mute", actBox);
-    _banBtn = new QPushButton("Kick & Ban Observer", actBox);
+    _banBtn = new QPushButton("Kick && Ban Observer", actBox);
     _kickSeatBtn = new QPushButton("Kick Pre-Game Seat", actBox);
     actBtns->addWidget(_muteBtn);
     actBtns->addWidget(_banBtn);
@@ -2149,8 +2113,7 @@ RoomModerationDialog::RoomModerationDialog(OctiNetworkClient *netClient,
     QObject::connect(_muteBtn, &QPushButton::clicked, [this]() {
         muteParticipant(
             _targetUuidEdit->text().trimmed().toStdString(),
-            _muteChatCheck->isChecked(),
-            _muteVoiceCheck->isChecked());
+            _muteChatCheck->isChecked());
     });
     QObject::connect(_banBtn, &QPushButton::clicked, [this]() {
         kickAndBanObserver(
@@ -2165,7 +2128,6 @@ RoomModerationDialog::RoomModerationDialog(OctiNetworkClient *netClient,
     aForm->addRow("Target UUID:", _targetUuidEdit);
     aForm->addRow("Ban Reason:", _banReasonEdit);
     aForm->addRow("", _muteChatCheck);
-    aForm->addRow("", _muteVoiceCheck);
     aForm->addRow("", actBtns);
     root->addWidget(actBox);
 
@@ -2216,11 +2178,6 @@ void RoomModerationDialog::populateFromGameView(const GameViewData &view)
     if (oIdx >= 0) {
         _observerPolicyCombo->setCurrentIndex(oIdx);
     }
-    int vIdx = _voicePolicyCombo->findData(
-        QString::fromStdString(view.voicePolicy));
-    if (vIdx >= 0) {
-        _voicePolicyCombo->setCurrentIndex(vIdx);
-    }
 
     int totalRows = static_cast<int>(view.seats.size() + view.observers.size());
     _participantsTable->setRowCount(totalRows);
@@ -2250,8 +2207,7 @@ const GameViewData &RoomModerationDialog::currentGameView() const
 }
 
 ApiResult<RoomSettingsData> RoomModerationDialog::applyPolicySettings(
-    const std::string &observerPolicy,
-    const std::string &voicePolicy)
+    const std::string &observerPolicy)
 {
     ApiResult<RoomSettingsData> res;
     if (!_netClient) {
@@ -2260,12 +2216,9 @@ ApiResult<RoomSettingsData> RoomModerationDialog::applyPolicySettings(
     }
     const std::string normObs =
         CreateTableDialog::normalizeObserverPolicy(observerPolicy);
-    const std::string normVoice =
-        CreateTableDialog::normalizeVoicePolicy(voicePolicy);
-    res = _netClient->updateRoomSettings(_roomId, normObs, normVoice);
+    res = _netClient->updateRoomSettings(_roomId, normObs);
     if (res.ok) {
         _gameView.observerPolicy = res.data.observerPolicy;
-        _gameView.voicePolicy = res.data.voicePolicy;
         if (_statusLabel) {
             _statusLabel->setText("Room policies updated.");
         }
@@ -2279,15 +2232,14 @@ ApiResult<RoomSettingsData> RoomModerationDialog::applyPolicySettings(
 
 ApiResult<bool> RoomModerationDialog::muteParticipant(
     const std::string &targetUuid,
-    bool muteChat,
-    bool muteVoice)
+    bool muteChat)
 {
     ApiResult<bool> res;
     if (!_netClient) {
         res.errorMessage = "Network client is null";
         return res;
     }
-    res = _netClient->muteParticipant(_roomId, targetUuid, muteChat, muteVoice);
+    res = _netClient->muteParticipant(_roomId, targetUuid, muteChat);
     if (_statusLabel) {
         _statusLabel->setText(
             res.ok ? "Mute state updated."
@@ -2790,7 +2742,7 @@ RobotsDirectoryDialog::RobotsDirectoryDialog(OctiNetworkClient *netClient,
     _robotsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     splitter->addWidget(_robotsTable);
 
-    _profileBox = new QGroupBox("Robot Profile & Recent Matches", splitter);
+    _profileBox = new QGroupBox("Robot Profile && Recent Matches", splitter);
     QVBoxLayout *pLayout = new QVBoxLayout(_profileBox);
     pLayout->setSpacing(6);
     _profileHeaderLabel = new QLabel("Select a robot to view details", _profileBox);

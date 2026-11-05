@@ -25,9 +25,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -37,6 +41,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -64,13 +69,14 @@ import kotlin.math.sin
 
 /**
  * Tabletop reserve HUD, move confirmation dock, VCR move-history scrubber,
- * and Push-to-Talk voice controls.
+ * and expandable multi-row Table Chat surface.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OctiReserveHud(
     viewModel: OctiAppViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRequestSitSeat: ((Int) -> Unit)? = null
 ) {
     val boardRev by viewModel.boardRevision.collectAsState()
     val clockTickRevision by viewModel.clockTickRevision.collectAsState()
@@ -82,8 +88,6 @@ fun OctiReserveHud(
     val confirmAll by viewModel.confirmAllMoves.collectAsState()
     val moveStack by viewModel.moveEntireMatchingStack.collectAsState()
     val matchType by viewModel.matchType.collectAsState()
-    val inVoiceRoom by viewModel.isInVoiceRoom.collectAsState()
-    val isPttActive by viewModel.isPttActive.collectAsState()
     val activeRoomId by viewModel.activeRoomId.collectAsState()
     val activeGameView by viewModel.activeGameView.collectAsState()
     val gameChatLog by viewModel.gameChatLog.collectAsState()
@@ -108,36 +112,19 @@ fun OctiReserveHud(
     }
     val dragKind = viewModel.composer.activeDragKind()
     val totalPlies = viewModel.livePlyCount()
+    val compactBtnPad = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
         border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
     ) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (isGameOver) {
-                        if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM) {
-                            viewModel.describeOnlineGameOverBanner()
-                        } else {
-                            "Winner: ${game?.winner}"
-                        }
-                    } else {
-                        "Turn: ${turn.name} (Ply $viewingPly/$totalPlies)"
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = OctiTheme.colors.accentBrass,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             val gameMode = game?.mode ?: OctiGameMode.GAME_MODE_2
             val players = if (gameMode == OctiGameMode.GAME_MODE_4) {
                 listOf(OctiPlayer.PLAYER_A, OctiPlayer.PLAYER_B, OctiPlayer.PLAYER_C, OctiPlayer.PLAYER_D)
@@ -145,12 +132,13 @@ fun OctiReserveHud(
                 listOf(OctiPlayer.PLAYER_A, OctiPlayer.PLAYER_B)
             }
 
-            if (players.size == 2) {
+            val chunked = players.chunked(2)
+            for (rowPlayers in chunked) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    for (p in players) {
+                    for (p in rowPlayers) {
                         val oppForCap = when (p) {
                             OctiPlayer.PLAYER_A -> OctiPlayer.PLAYER_B
                             OctiPlayer.PLAYER_B -> OctiPlayer.PLAYER_A
@@ -188,7 +176,7 @@ fun OctiReserveHud(
                         } else {
                             "PLAYER $seatLetter"
                         }
-                        val clockText = if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM) {
+                        val clockText = if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && clockTickRevision >= 0L) {
                             if (activeGameView?.timeControlEnabled == true) {
                                 val clockMs = resolvedSeat?.clockMs ?: 0L
                                 val totalSec = maxOf(0L, clockMs / 1000L)
@@ -204,7 +192,13 @@ fun OctiReserveHud(
                         val isSeatOccupied = resolvedSeat != null && (resolvedSeat.playerUuid.isNotEmpty() || resolvedSeat.handle.isNotEmpty())
                         val onSit = if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM &&
                             isWaiting && viewerSeat == 0 && !isSeatOccupied) {
-                            { viewModel.joinOnlineTableAsync(activeRoomId, p.value, "") }
+                            {
+                                if (onRequestSitSeat != null) {
+                                    onRequestSitSeat(p.value)
+                                } else {
+                                    viewModel.joinOnlineTableAsync(activeRoomId, p.value, "")
+                                }
+                            }
                         } else null
                         PlayerReserveCard(
                             player = p,
@@ -220,6 +214,7 @@ fun OctiReserveHud(
                             pal = pal,
                             modifier = Modifier.weight(1f),
                             ownCapPods = ownCapPods,
+                            gameMode = game?.mode ?: OctiGameMode.GAME_MODE_2,
                             onStartPodPlacement = if (activePlayerTurn) {
                                 {
                                     viewModel.clearLastMoveIndicators()
@@ -235,172 +230,38 @@ fun OctiReserveHud(
                                         viewModel.bumpBoardRevision()
                                     }
                                 }
+                            } else null,
+                            onStartProngPlacement = if (activePlayerTurn && (game?.getFreeProngs(p) ?: 0) > 0) {
+                                {
+                                    viewModel.clearLastMoveIndicators()
+                                    viewModel.composer.beginAddProngFromReserve(false)
+                                    val orig = viewModel.composer.guidedOriginSquare()
+                                    if (orig != null && orig.size >= 2 && orig[0] >= 1 && orig[1] >= 1) {
+                                        viewModel.openZoomedSquare(orig[0], orig[1])
+                                    }
+                                    viewModel.bumpBoardRevision()
+                                }
+                            } else null,
+                            onStartSuperProngPlacement = if (activePlayerTurn && useSuperProngs && (game?.getFreeSuperProngs(p) ?: 0) > 0) {
+                                {
+                                    viewModel.clearLastMoveIndicators()
+                                    viewModel.composer.beginAddProngFromReserve(true)
+                                    val orig = viewModel.composer.guidedOriginSquare()
+                                    if (orig != null && orig.size >= 2 && orig[0] >= 1 && orig[1] >= 1) {
+                                        viewModel.openZoomedSquare(orig[0], orig[1])
+                                    }
+                                    viewModel.bumpBoardRevision()
+                                }
                             } else null
                         )
                     }
                 }
-            } else {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    val chunked = players.chunked(2)
-                    for (rowPlayers in chunked) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            for (p in rowPlayers) {
-                                val oppForCap = when (p) {
-                                    OctiPlayer.PLAYER_A -> OctiPlayer.PLAYER_B
-                                    OctiPlayer.PLAYER_B -> OctiPlayer.PLAYER_A
-                                    OctiPlayer.PLAYER_C -> OctiPlayer.PLAYER_D
-                                    OctiPlayer.PLAYER_D -> OctiPlayer.PLAYER_C
-                                    else -> OctiPlayer.PLAYER_B
-                                }
-                                val capPodsHeld = game?.getCapturedPods(oppForCap) ?: 0
-                                val ownCapPods = game?.getCapturedPods(p) ?: 0
-                                val is4P = game?.mode == OctiGameMode.GAME_MODE_4
-                                val partner = if (is4P) {
-                                    when (turn) {
-                                        OctiPlayer.PLAYER_A -> OctiPlayer.PLAYER_C
-                                        OctiPlayer.PLAYER_C -> OctiPlayer.PLAYER_A
-                                        OctiPlayer.PLAYER_B -> OctiPlayer.PLAYER_D
-                                        OctiPlayer.PLAYER_D -> OctiPlayer.PLAYER_B
-                                        else -> null
-                                    }
-                                } else null
-                                val partnerRevivable = is4P && partner != null && (p == partner) &&
-                                    (game?.isPlayerEliminated(partner) == true) &&
-                                    ((game?.getCapturedPods(partner) ?: 0) > 0)
-                                val activePlayerTurn = !isGameOver && (p == turn) && !viewModel.isViewingHistory() && isInteractiveTurn
-                                val canActiveLiberateFromThisCard = !isGameOver && !viewModel.isViewingHistory() && isInteractiveTurn &&
-                                    (((oppForCap == turn) && (capPodsHeld > 0)) ||
-                                     ((p == turn) && ((game?.getCapturedPods(turn) ?: 0) > 0)) ||
-                                     partnerRevivable)
-                                val resolvedSeat = activeGameView?.seats?.firstOrNull { it.seat == p.value }
-                                val seatLetter = p.name.removePrefix("PLAYER_")
-                                val seatLabel = if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && resolvedSeat != null && resolvedSeat.handle.isNotEmpty()) {
-                                    val cleanHandle = resolvedSeat.handle.removePrefix("@")
-                                    val isBot = resolvedSeat.isRobot || cleanHandle.equals("stock", ignoreCase = true) || resolvedSeat.playerUuid.startsWith("bot")
-                                    val tag = if (isBot) "@$cleanHandle [BOT]" else "@$cleanHandle"
-                                    "$tag ($seatLetter)"
-                                } else {
-                                    "PLAYER $seatLetter"
-                                }
-                                val clockText = if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM) {
-                                    if (activeGameView?.timeControlEnabled == true) {
-                                        val clockMs = resolvedSeat?.clockMs ?: 0L
-                                        val totalSec = maxOf(0L, clockMs / 1000L)
-                                        val mm = totalSec / 60L
-                                        val ss = totalSec % 60L
-                                        String.format(java.util.Locale.US, "%02d:%02d", mm, ss)
-                                    } else {
-                                        "Untimed"
-                                    }
-                                } else null
-                                val isWaiting = activeGameView?.phase == "WAITING_FOR_PLAYERS"
-                                val viewerSeat = activeGameView?.viewerSeat ?: 0
-                                val isSeatOccupied = resolvedSeat != null && (resolvedSeat.playerUuid.isNotEmpty() || resolvedSeat.handle.isNotEmpty())
-                                val onSit = if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM &&
-                                    isWaiting && viewerSeat == 0 && !isSeatOccupied) {
-                                    { viewModel.joinOnlineTableAsync(activeRoomId, p.value, "") }
-                                } else null
-                                PlayerReserveCard(
-                                    player = p,
-                                    displayName = seatLabel,
-                                    clockText = clockText,
-                                    onSit = onSit,
-                                    isTurn = !isGameOver && (p == turn),
-                                    freePods = game?.getFreePods(p) ?: 0,
-                                    freeProngs = game?.getFreeProngs(p) ?: 0,
-                                    freeSuper = game?.getFreeSuperProngs(p) ?: 0,
-                                    capPods = capPodsHeld,
-                                    useSuperProngs = useSuperProngs,
-                                    pal = pal,
-                                    modifier = Modifier.weight(1f),
-                                    ownCapPods = ownCapPods,
-                                    gameMode = game?.mode ?: OctiGameMode.GAME_MODE_2,
-                                    onStartPodPlacement = if (activePlayerTurn) {
-                                        {
-                                            viewModel.clearLastMoveIndicators()
-                                            if (viewModel.composer.beginAddPodFromReserve()) {
-                                                viewModel.bumpBoardRevision()
-                                            }
-                                        }
-                                    } else null,
-                                    onStartLiberatePlacement = if (canActiveLiberateFromThisCard) {
-                                        {
-                                            viewModel.clearLastMoveIndicators()
-                                            if (viewModel.composer.beginLiberatePodFromReserve()) {
-                                                viewModel.bumpBoardRevision()
-                                            }
-                                        }
-                                    } else null,
-                                    onStartProngPlacement = if (activePlayerTurn && (game?.getFreeProngs(p) ?: 0) > 0) {
-                                        {
-                                            viewModel.clearLastMoveIndicators()
-                                            viewModel.composer.beginAddProngFromReserve(false)
-                                            val orig = viewModel.composer.guidedOriginSquare()
-                                            if (orig != null && orig.size >= 2 && orig[0] >= 1 && orig[1] >= 1) {
-                                                viewModel.openZoomedSquare(orig[0], orig[1])
-                                            }
-                                            viewModel.bumpBoardRevision()
-                                        }
-                                    } else null,
-                                    onStartSuperProngPlacement = if (activePlayerTurn && useSuperProngs && (game?.getFreeSuperProngs(p) ?: 0) > 0) {
-                                        {
-                                            viewModel.clearLastMoveIndicators()
-                                            viewModel.composer.beginAddProngFromReserve(true)
-                                            val orig = viewModel.composer.guidedOriginSquare()
-                                            if (orig != null && orig.size >= 2 && orig[0] >= 1 && orig[1] >= 1) {
-                                                viewModel.openZoomedSquare(orig[0], orig[1])
-                                            }
-                                            viewModel.bumpBoardRevision()
-                                        }
-                                    } else null
-                                )
-                            }
-                        }
-                    }
-                }
             }
-
-            Spacer(modifier = Modifier.height(6.dp))
 
             val isLocalMatch = matchType == OctiAppViewModel.MatchType.LOCAL_PASS_AND_PLAY ||
                 matchType == OctiAppViewModel.MatchType.LOCAL_VS_BOT
             val canUndo = isLocalMatch && (viewModel.board.game?.canUndo() == true)
-
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                if (isLocalMatch) {
-                    OutlinedButton(
-                        onClick = { viewModel.undoLocalMove() },
-                        enabled = canUndo && !viewModel.isViewingHistory()
-                    ) {
-                        Text("Undo")
-                    }
-                    OutlinedButton(
-                        onClick = { viewModel.resignLocalGame() },
-                        enabled = !isGameOver && !viewModel.isViewingHistory()
-                    ) {
-                        Text("Resign")
-                    }
-                }
-                if (viewModel.composer.isGuidedMoveActive && boardRev >= 0L) {
-                    OutlinedButton(
-                        onClick = { viewModel.rollbackStagedMove() }
-                    ) {
-                        Text("Cancel Move")
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
+            val isGuidedCancelVisible = viewModel.composer.isGuidedMoveActive && boardRev >= 0L
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -408,24 +269,24 @@ fun OctiReserveHud(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedButton(
                         onClick = { viewModel.vcrFirst() },
                         enabled = viewingPly > 0,
-                        modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                        modifier = Modifier.height(28.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                     ) {
-                        Text("|<<")
+                        Text("|<<", style = MaterialTheme.typography.labelSmall)
                     }
                     OutlinedButton(
                         onClick = { viewModel.vcrPrev() },
                         enabled = viewingPly > 0,
-                        modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                        modifier = Modifier.height(28.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                     ) {
-                        Text("<")
+                        Text("<", style = MaterialTheme.typography.labelSmall)
                     }
                     Text(
                         text = "Ply $viewingPly/$totalPlies",
@@ -436,138 +297,204 @@ fun OctiReserveHud(
                     OutlinedButton(
                         onClick = { viewModel.vcrNext() },
                         enabled = viewingPly < totalPlies,
-                        modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                        modifier = Modifier.height(28.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                     ) {
-                        Text(">")
+                        Text(">", style = MaterialTheme.typography.labelSmall)
                     }
                     OutlinedButton(
                         onClick = { viewModel.vcrLast() },
                         enabled = viewingPly < totalPlies,
-                        modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                        modifier = Modifier.height(28.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                     ) {
-                        Text(">>|")
+                        Text(">>|", style = MaterialTheme.typography.labelSmall)
                     }
                 }
-                val context = LocalContext.current
-                OutlinedButton(
-                    onClick = {
-                        viewModel.clearLastMoveIndicators()
-                        val text = viewModel.exportMoveHistoryText()
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        val clip = ClipData.newPlainText("OCTI Transcript", text)
-                        clipboard?.setPrimaryClip(clip)
-                        viewModel.setShowExportMovesDialog(true)
-                    },
-                    modifier = Modifier.size(36.dp, 32.dp),
-                    contentPadding = PaddingValues(0.dp)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ExportMovesIcon(
-                        color = OctiTheme.colors.accentBrass,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    if (isGuidedCancelVisible) {
+                        OutlinedButton(
+                            onClick = { viewModel.rollbackStagedMove() },
+                            modifier = Modifier.height(28.dp),
+                            contentPadding = compactBtnPad
+                        ) {
+                            Text("Cancel", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    if (isLocalMatch) {
+                        OutlinedButton(
+                            onClick = { viewModel.undoLocalMove() },
+                            enabled = canUndo && !viewModel.isViewingHistory(),
+                            modifier = Modifier.height(28.dp),
+                            contentPadding = compactBtnPad
+                        ) {
+                            Text("Undo", style = MaterialTheme.typography.labelSmall)
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.resignLocalGame() },
+                            enabled = !isGameOver && !viewModel.isViewingHistory(),
+                            modifier = Modifier.height(28.dp),
+                            contentPadding = compactBtnPad
+                        ) {
+                            Text("Resign", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    val context = LocalContext.current
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.clearLastMoveIndicators()
+                            val text = viewModel.exportMoveHistoryText()
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                            val clip = ClipData.newPlainText("OCTI Transcript", text)
+                            clipboard?.setPrimaryClip(clip)
+                            viewModel.setShowExportMovesDialog(true)
+                        },
+                        modifier = Modifier.size(32.dp, 28.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        ExportMovesIcon(
+                            color = OctiTheme.colors.accentBrass,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
 
-            if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeRoomId.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(6.dp))
+            val viewerSeat = activeGameView?.viewerSeat ?: 0
+            val isOnlineSeatedPlayer = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeRoomId.isNotEmpty() && viewerSeat > 0
+            val isOnlineActivePhase = activeGameView?.phase == "IN_PROGRESS" || activeGameView?.phase == "PAUSED"
+            if (isOnlineSeatedPlayer && isOnlineActivePhase) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    if (!inVoiceRoom) {
-                        OutlinedButton(onClick = { viewModel.joinVoiceChannel() }) {
-                            Text("Join Voice")
-                        }
-                    } else {
-                        Button(
-                            onClick = { viewModel.setPushToTalkPressed(!isPttActive) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isPttActive) {
-                                    OctiTheme.colors.legalStep
-                                } else {
-                                    OctiTheme.colors.accentBrass
-                                },
-                                contentColor = OctiTheme.colors.windowBg
-                            )
+                    val anyOpponentForfeitClaimable = activeGameView?.seats?.any { it.seat != viewerSeat && it.forfeitClaimable } == true
+
+                    if (viewModel.isOnlineUndoVisible) {
+                        OutlinedButton(
+                            onClick = { viewModel.requestOrAcceptOnlineUndo() },
+                            modifier = Modifier.height(28.dp),
+                            contentPadding = compactBtnPad
                         ) {
-                            Text(if (isPttActive) "PTT: TALKING" else "PTT: Muted")
-                        }
-                        OutlinedButton(onClick = { viewModel.leaveVoiceChannel() }) {
-                            Text("Leave Voice")
+                            Text("Undo", style = MaterialTheme.typography.labelSmall)
                         }
                     }
-
-                    val viewerSeat = activeGameView?.viewerSeat ?: 0
-                    val isOnlineSeatedPlayer = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && viewerSeat > 0
-                    val isOnlineActivePhase = activeGameView?.phase == "IN_PROGRESS" || activeGameView?.phase == "PAUSED"
-                    if (isOnlineSeatedPlayer && isOnlineActivePhase) {
-                        val anyOpponentForfeitClaimable = activeGameView?.seats?.any { it.seat != viewerSeat && it.forfeitClaimable } == true
-
-                        if (viewModel.isOnlineUndoVisible) {
-                            OutlinedButton(onClick = { viewModel.requestOrAcceptOnlineUndo() }) {
-                                Text("Undo")
-                            }
-                        }
-                        OutlinedButton(onClick = { viewModel.proposeDraw() }) {
-                            Text("Draw")
-                        }
-                        OutlinedButton(onClick = { viewModel.resignOnlineGameAsync() }) {
-                            Text("Resign")
-                        }
-                        OutlinedButton(onClick = { viewModel.proposePauseOrResume() }) {
-                            Text(if (activeGameView?.paused == true) "Resume" else "Pause")
-                        }
-                        if (anyOpponentForfeitClaimable) {
-                            Button(
-                                onClick = { viewModel.claimOpponentForfeit() },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.error,
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Text("Claim Forfeit")
-                            }
+                    OutlinedButton(
+                        onClick = { viewModel.proposeDraw() },
+                        modifier = Modifier.height(28.dp),
+                        contentPadding = compactBtnPad
+                    ) {
+                        Text("Draw", style = MaterialTheme.typography.labelSmall)
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.proposePauseOrResume() },
+                        modifier = Modifier.height(28.dp),
+                        contentPadding = compactBtnPad
+                    ) {
+                        Text(
+                            text = if (activeGameView?.paused == true) "Resume" else "Pause",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.resignOnlineGameAsync() },
+                        modifier = Modifier.height(28.dp),
+                        contentPadding = compactBtnPad
+                    ) {
+                        Text("Resign", style = MaterialTheme.typography.labelSmall)
+                    }
+                    if (anyOpponentForfeitClaimable) {
+                        Button(
+                            onClick = { viewModel.claimOpponentForfeit() },
+                            modifier = Modifier.height(28.dp),
+                            contentPadding = compactBtnPad,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("Claim Forfeit", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            val chatListState = rememberLazyListState()
+            LaunchedEffect(gameChatLog.size) {
+                if (gameChatLog.isNotEmpty()) {
+                    chatListState.scrollToItem(gameChatLog.size - 1)
+                }
+            }
 
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .weight(1f)
+                    .heightIn(min = 56.dp)
                     .clickable { viewModel.setShowBoardChatZoomDialog(true) },
                 color = OctiTheme.colors.windowBg,
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(6.dp),
                 border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
             ) {
-                Row(
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .fillMaxSize()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 6.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (gameChatLog.isEmpty()) {
+                        Text(
+                            text = "Table Chat",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = OctiTheme.colors.textSecondary
+                        )
+                        Surface(
+                            color = OctiTheme.colors.panelCardBg,
+                            shape = RoundedCornerShape(4.dp),
+                            border = BorderStroke(1.dp, OctiTheme.colors.accentBrass)
+                        ) {
+                            Text(
+                                text = "Chat ⤢",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = OctiTheme.colors.accentBrass,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    if (gameChatLog.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
                             Text(
                                 text = "Table Chat • Tap to open & chat (@bot help, @bot eval)",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.labelSmall,
                                 color = OctiTheme.colors.textSecondary,
-                                maxLines = 1,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
-                        } else {
-                            val recent = gameChatLog.takeLast(2)
-                            for (msg in recent) {
+                        }
+                    } else {
+                        LazyColumn(
+                            state = chatListState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            items(gameChatLog) { msg ->
                                 val sender = if (msg.senderHandle.isNotEmpty()) {
                                     val clean = msg.senderHandle.removePrefix("@")
                                     if (clean.equals("bot", ignoreCase = true) || clean.equals("stock", ignoreCase = true)) {
@@ -581,26 +508,13 @@ fun OctiReserveHud(
                                 val scopePrefix = if (msg.scope.equals("TEAM", ignoreCase = true)) "[TEAM] " else ""
                                 Text(
                                     text = "$scopePrefix$sender: ${msg.text}",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = OctiTheme.colors.textPrimary,
-                                    maxLines = 1,
+                                    maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
-                    }
-                    Surface(
-                        color = OctiTheme.colors.panelCardBg,
-                        shape = RoundedCornerShape(4.dp),
-                        border = BorderStroke(1.dp, OctiTheme.colors.accentBrass)
-                    ) {
-                        Text(
-                            text = "Zoom ⤢",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = OctiTheme.colors.accentBrass,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
                     }
                 }
             }
@@ -651,7 +565,7 @@ fun PlayerReserveCard(
         }
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -663,10 +577,14 @@ fun PlayerReserveCard(
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = if (isTurn) OctiTheme.colors.accentBrass else OctiTheme.colors.textSecondary,
-                    modifier = Modifier.weight(1f, fill = false)
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 4.dp)
                 )
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (clockText != null) {
@@ -674,25 +592,27 @@ fun PlayerReserveCard(
                             text = clockText,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
                             color = if (isTurn) OctiTheme.colors.legalStep else OctiTheme.colors.textSecondary
                         )
                     }
                     if (onSit != null) {
                         Button(
                             onClick = onSit,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier = Modifier.height(24.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.height(22.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = OctiTheme.colors.accentBrass,
                                 contentColor = OctiTheme.colors.windowBg
                             )
                         ) {
-                            Text("Sit", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("Sit", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

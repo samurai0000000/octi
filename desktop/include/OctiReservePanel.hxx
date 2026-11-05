@@ -51,13 +51,6 @@ public:
     QImage renderToImage(int width = 340, int height = 720);
     void paintReserveScene(QPainter &p, int width, int height);
 
-    void setPushToTalkCallback(std::function<void(bool talking)> cb);
-    void setPushToTalkActive(bool talking);
-    bool isPushToTalkActive() const;
-
-    void setVoiceMutedByRoom(bool muted);
-    bool isVoiceMutedByRoom() const;
-
     static QString formatClockMs(long ms);
 
     QRectF freePodWellRect() const;
@@ -95,17 +88,13 @@ private:
     OctiSoundSynth *_soundSynth;
     ThemeId _theme;
 
-    bool _pttActive;
-    bool _voiceMutedByRoom;
     bool _timeControlEnabled;
     std::map<int, ReserveSeatMetadata> _seatMetadata;
-    std::function<void(bool talking)> _pttCallback;
 
     QRectF _freePodWellRect;
     QRectF _liberatePodWellRect;
     QRectF _normalProngWellRect;
     QRectF _superProngWellRect;
-    QRectF _pttButtonRect;
     QRectF _playerCardRects[5];
     QRectF _capturedPodWellRects[5];
     QRectF _sitSeatBtnRects[5];

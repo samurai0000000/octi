@@ -323,7 +323,6 @@ public:
     QString errorText() const;
 
     static std::string normalizeObserverPolicy(const std::string &policy);
-    static std::string normalizeVoicePolicy(const std::string &policy);
 
 private:
     OctiNetworkClient *_netClient;
@@ -340,7 +339,6 @@ private:
     QSpinBox *_initialSecSpin;
     QSpinBox *_incrementSecSpin;
     QComboBox *_observerPolicyCombo;
-    QComboBox *_voicePolicyCombo;
     QLineEdit *_passcodeEdit;
     QLabel *_errorLabel;
     QPushButton *_createBtn;
@@ -434,13 +432,11 @@ public:
     const GameViewData &currentGameView() const;
 
     ApiResult<RoomSettingsData> applyPolicySettings(
-        const std::string &observerPolicy,
-        const std::string &voicePolicy);
+        const std::string &observerPolicy);
 
     ApiResult<bool> muteParticipant(
         const std::string &targetUuid,
-        bool muteChat,
-        bool muteVoice);
+        bool muteChat);
 
     ApiResult<bool> kickAndBanObserver(
         const std::string &targetUuid,
@@ -457,13 +453,11 @@ private:
     ThemeId _theme;
 
     QComboBox *_observerPolicyCombo;
-    QComboBox *_voicePolicyCombo;
     QPushButton *_applyPoliciesBtn;
     QTableWidget *_participantsTable;
     QLineEdit *_targetUuidEdit;
     QLineEdit *_banReasonEdit;
     QCheckBox *_muteChatCheck;
-    QCheckBox *_muteVoiceCheck;
     QPushButton *_muteBtn;
     QPushButton *_banBtn;
     QPushButton *_kickSeatBtn;

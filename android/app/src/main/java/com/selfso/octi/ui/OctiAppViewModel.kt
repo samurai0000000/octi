@@ -7,7 +7,6 @@
 package com.selfso.octi.ui
 
 import android.graphics.Bitmap
-import android.view.KeyEvent
 import androidx.lifecycle.ViewModel
 import com.selfso.octi.BuildConfig
 import com.selfso.octi.ClientConfigStore
@@ -26,7 +25,6 @@ import com.selfso.octi.OctiNetworkClient
 import com.selfso.octi.OctiPlayer
 import com.selfso.octi.OctiSoundSynth
 import com.selfso.octi.OctiThemeId
-import com.selfso.octi.P2pVoiceEngine
 import com.selfso.selfupdate.ApkDownloader
 import com.selfso.selfupdate.UpdateManifest
 import java.io.File
@@ -44,10 +42,9 @@ import org.json.JSONObject
  * Central application controller and state holder for the OCTI Android client.
  *
  * Manages local Pass-and-Play / AI bot games, 4-quadrant board rotation,
- * VCR move-history scrubbing, hard-coded `trumpet.selfso.com:6874` online
+ * VCR move-history scrubbing, and hard-coded `trumpet.selfso.com:6874` online
  * play (5-provider SSO, multi-provider identity linking, lobby, custom tables,
- * Elo matchmaking, live SSE games, `ALL` / `TEAM` chat, moderation, archive),
- * and Push-to-Talk peer-to-peer UDP voice chat.
+ * Elo matchmaking, live SSE games, `ALL` / `TEAM` chat, moderation, archive).
  */
 class OctiAppViewModel @JvmOverloads constructor(
     val configStore: ClientConfigStore = ClientConfigStore(),
@@ -288,7 +285,6 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     val soundSynth: OctiSoundSynth = OctiSoundSynth.getDefaultInstance()
     val botEngine: OctiBotEngine = OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL)
-    val voiceEngine: P2pVoiceEngine = P2pVoiceEngine(netClient)
 
     val board: OctiBoard = OctiBoard()
     val displayBoard: OctiBoard = OctiBoard()
@@ -315,9 +311,6 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     private val _sfxMuted = MutableStateFlow(false)
     val sfxMuted: StateFlow<Boolean> = _sfxMuted.asStateFlow()
-
-    private val _volumeKeyPtt = MutableStateFlow(true)
-    val volumeKeyPtt: StateFlow<Boolean> = _volumeKeyPtt.asStateFlow()
 
     private val _boardRotation = MutableStateFlow(OctiBoardGeometry.BoardRotation.ROT_0)
     val boardRotation: StateFlow<OctiBoardGeometry.BoardRotation> = _boardRotation.asStateFlow()
@@ -475,12 +468,6 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     private val _gameChatLog = MutableStateFlow<List<GameChatMessage>>(emptyList())
     val gameChatLog: StateFlow<List<GameChatMessage>> = _gameChatLog.asStateFlow()
-
-    private val _isPttActive = MutableStateFlow(false)
-    val isPttActive: StateFlow<Boolean> = _isPttActive.asStateFlow()
-
-    private val _isInVoiceRoom = MutableStateFlow(false)
-    val isInVoiceRoom: StateFlow<Boolean> = _isInVoiceRoom.asStateFlow()
 
     private val _leaderboardRows =
         MutableStateFlow<List<OctiNetworkClient.LeaderboardRow>>(emptyList())
@@ -918,7 +905,6 @@ class OctiAppViewModel @JvmOverloads constructor(
         _theme.value = prefs.getTheme()
         _confirmAllMoves.value = true
         _sfxMuted.value = prefs.isSfxMuted()
-        _volumeKeyPtt.value = prefs.isVolumeKeyPtt()
         soundSynth.setMuted(_sfxMuted.value)
         composer.setConfirmAllMoves(true)
         prefs.setConfirmAllMoves(true)
@@ -1042,12 +1028,6 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     fun toggleSfxMuted() {
         setSfxMuted(!_sfxMuted.value)
-    }
-
-    fun setVolumeKeyPtt(enabled: Boolean) {
-        _volumeKeyPtt.value = enabled
-        configStore.preferences().setVolumeKeyPtt(enabled)
-        configStore.save()
     }
 
     fun setAutoRotateSeatView(enabled: Boolean) {
@@ -2491,7 +2471,6 @@ class OctiAppViewModel @JvmOverloads constructor(
                 OctiNetworkClient.ApiResult(true)
             }
             if (isActiveRoom) {
-                leaveVoiceChannel()
                 netClient.stopGameEventStream()
             }
             refreshLobbyState()
@@ -2624,7 +2603,6 @@ class OctiAppViewModel @JvmOverloads constructor(
             val isTargetActive = (targetRoomId == _activeRoomId.value)
             if (res.ok) {
                 if (isTargetActive) {
-                    leaveVoiceChannel()
                     netClient.stopGameEventStream()
                 }
                 refreshLobbyState()
@@ -2822,7 +2800,6 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     fun logoutOnline(): OctiNetworkClient.ApiResult<Boolean> {
         cancelBrowserAuth()
-        leaveVoiceChannel()
         netClient.stopEventStreams()
         val res = netClient.logout()
         configStore.clearSession()
@@ -3235,7 +3212,6 @@ class OctiAppViewModel @JvmOverloads constructor(
         val res = if (isMainThread()) {
             _backgroundExecutor.submit<OctiNetworkClient.ApiResult<Boolean>> {
                 if (isActiveRoom) {
-                    voiceEngine.leaveVoiceRoom()
                     netClient.stopGameEventStream()
                 }
                 val r = netClient.leaveTable(targetRoomId)
@@ -3248,7 +3224,6 @@ class OctiAppViewModel @JvmOverloads constructor(
             }.get()
         } else {
             if (isActiveRoom) {
-                leaveVoiceChannel()
                 netClient.stopGameEventStream()
             }
             val r = netClient.leaveTable(targetRoomId)
@@ -3256,8 +3231,6 @@ class OctiAppViewModel @JvmOverloads constructor(
             r
         }
         if (isActiveRoom) {
-            _isInVoiceRoom.value = false
-            _isPttActive.value = false
             runOnUiThreadOrSync {
                 _activeRoomId.value = ""
                 _activeGameView.value = null
@@ -3912,11 +3885,10 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     fun muteParticipant(
         targetUuid: String,
-        muteChat: Boolean,
-        muteVoice: Boolean
+        muteChat: Boolean
     ): OctiNetworkClient.ApiResult<Boolean> {
         val roomId = _activeRoomId.value
-        return netClient.muteParticipant(roomId, targetUuid, muteChat, muteVoice)
+        return netClient.muteParticipant(roomId, targetUuid, muteChat)
     }
 
     @JvmOverloads
@@ -3929,11 +3901,10 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun updateRoomSettings(
-        observerPolicy: String,
-        voicePolicy: String
+        observerPolicy: String
     ): OctiNetworkClient.ApiResult<OctiNetworkClient.RoomSettingsData> {
         val roomId = _activeRoomId.value
-        val res = netClient.updateRoomSettings(roomId, observerPolicy, voicePolicy)
+        val res = netClient.updateRoomSettings(roomId, observerPolicy)
         if (res.ok) {
             refreshActiveGameView()
         }
@@ -3951,9 +3922,6 @@ class OctiAppViewModel @JvmOverloads constructor(
         if (ev == null) {
             return
         }
-        voiceEngine.handleGameSseEvent(ev)
-        _isPttActive.value = voiceEngine.isPushToTalkActive()
-        _isInVoiceRoom.value = voiceEngine.isInVoiceRoom()
 
         if ("CHAT" == ev.event || "CHAT_MESSAGE" == ev.event || "GAME_CHAT" == ev.event) {
             try {
@@ -4024,64 +3992,6 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     /* ================================================================== */
-    /* Push-to-Talk Voice Controls & Volume Hardware Key Binding          */
-    /* ================================================================== */
-
-    fun joinVoiceChannel(): Boolean {
-        val roomId = _activeRoomId.value
-        val uuid = _currentProfile.value?.uuid ?: configStore.preferences().playerUuid
-        if (roomId.isEmpty() || uuid.isEmpty()) {
-            return false
-        }
-        val ok = if (isMainThread()) {
-            _backgroundExecutor.submit<Boolean> {
-                voiceEngine.joinVoiceRoom(roomId, uuid)
-            }.get()
-        } else {
-            voiceEngine.joinVoiceRoom(roomId, uuid)
-        }
-        _isInVoiceRoom.value = voiceEngine.isInVoiceRoom()
-        _isPttActive.value = voiceEngine.isPushToTalkActive()
-        return ok
-    }
-
-    fun leaveVoiceChannel() {
-        _isInVoiceRoom.value = false
-        _isPttActive.value = false
-        if (isMainThread()) {
-            _backgroundExecutor.submit {
-                voiceEngine.leaveVoiceRoom()
-            }.get()
-        } else {
-            voiceEngine.leaveVoiceRoom()
-        }
-    }
-
-    fun setPushToTalkPressed(pressed: Boolean): Boolean {
-        val ok = voiceEngine.setPushToTalkActive(pressed)
-        _isPttActive.value = voiceEngine.isPushToTalkActive()
-        return ok
-    }
-
-    /**
-     * Handles physical hardware key events (`KEYCODE_VOLUME_DOWN` /
-     * `KEYCODE_VOLUME_UP`) for Push-to-Talk when `volumeKeyPtt` is enabled
-     * and the player is in a voice room.
-     */
-    fun onHardwareKeyEvent(keyCode: Int, isDown: Boolean): Boolean {
-        if (!_volumeKeyPtt.value || !voiceEngine.isInVoiceRoom()) {
-            return false
-        }
-        if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN ||
-            keyCode == KeyEvent.KEYCODE_VOLUME_UP
-        ) {
-            setPushToTalkPressed(isDown)
-            return true
-        }
-        return false
-    }
-
-    /* ================================================================== */
     /* Game Archive & Elo Leaderboard                                     */
     /* ================================================================== */
 
@@ -4140,7 +4050,6 @@ class OctiAppViewModel @JvmOverloads constructor(
         if (isMainThread()) {
             try {
                 _backgroundExecutor.submit {
-                    voiceEngine.close()
                     netClient.close()
                 }.get()
             } catch (_: Throwable) {
@@ -4148,7 +4057,6 @@ class OctiAppViewModel @JvmOverloads constructor(
             _backgroundExecutor.shutdownNow()
         } else {
             _backgroundExecutor.shutdownNow()
-            voiceEngine.close()
             netClient.close()
         }
     }

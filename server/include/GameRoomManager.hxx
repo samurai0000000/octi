@@ -31,34 +31,17 @@ namespace octi {
 
 /*
  * OPEN: observers watch and chat.
- * SILENT_OBSERVERS: observers watch but can neither chat nor use voice.
+ * SILENT_OBSERVERS: observers watch but cannot chat.
  * NO_OBSERVERS: only seated players may view an in-progress room, and
- *               nobody can register as an observer until it is finished.
+ *               nobody can register as an observer while in progress.
  */
 enum class ObserverPolicy { OPEN, SILENT_OBSERVERS, NO_OBSERVERS };
-
-/*
- * DISABLED: no voice signaling or meta at all.
- * PLAYERS_ONLY: only seated players (sender and target) take part.
- * ALL_ALLOWED: seated players and registered, unmuted observers take part
- *              (observers only while observerPolicy is not SILENT).
- */
-enum class VoicePolicy { DISABLED, PLAYERS_ONLY, ALL_ALLOWED };
 
 enum class PresenceStatus { OFFLINE, IN_LOBBY, AT_TABLE, PLAYING, OBSERVING };
 
 enum class RoomPhase { WAITING_FOR_PLAYERS, IN_PROGRESS, FINISHED };
 
 enum class ChatScope { ALL, TEAM };
-
-enum class VoiceSignalType { SDP_OFFER, SDP_ANSWER, ICE_CANDIDATE };
-
-enum class VoiceMetaAction {
-    JOINED_VOICE,
-    LEFT_VOICE,
-    MIC_MUTED,
-    MIC_UNMUTED
-};
 
 enum class ProposalType {
     DRAW_OFFER,
@@ -77,7 +60,7 @@ enum class RoomCode {
     FORBIDDEN_NOT_SEATED,
     FORBIDDEN_NOT_PARTICIPANT,  // neither seated nor a registered observer
     FORBIDDEN_MUTED,
-    FORBIDDEN_POLICY,           // observer/voice policy refuses the action
+    FORBIDDEN_POLICY,           // observer policy refuses the action
     FORBIDDEN_SEATED_TARGET,    // moderation target holds a seat
     FORBIDDEN_PASSCODE,
     FORBIDDEN_NOT_HOST,
@@ -96,20 +79,14 @@ enum class RoomCode {
 };
 
 const char *toString(ObserverPolicy v);
-const char *toString(VoicePolicy v);
 const char *toString(PresenceStatus v);
 const char *toString(RoomPhase v);
 const char *toString(ChatScope v);
-const char *toString(VoiceSignalType v);
-const char *toString(VoiceMetaAction v);
 const char *toString(ProposalType v);
 const char *toString(RoomCode v);
 
 bool parseObserverPolicy(const std::string &s, ObserverPolicy &out);
-bool parseVoicePolicy(const std::string &s, VoicePolicy &out);
 bool parseChatScope(const std::string &s, ChatScope &out);
-bool parseVoiceSignalType(const std::string &s, VoiceSignalType &out);
-bool parseVoiceMetaAction(const std::string &s, VoiceMetaAction &out);
 bool parseProposalType(const std::string &s, ProposalType &out);
 
 /* ------------------------------------------------------------------ */
@@ -132,7 +109,6 @@ struct GameTableConfig {
     bool rated = true;
     bool allowTakeback = false;     // forced false on rated tables
     ObserverPolicy observerPolicy = ObserverPolicy::OPEN;
-    VoicePolicy voicePolicy = VoicePolicy::PLAYERS_ONLY;
     std::string passcode;           // empty = public table
     bool allowRobots = true;
 };
@@ -143,12 +119,10 @@ struct RoomLimits {
     size_t maxRoomEvents = 4096;
     size_t maxLobbyEvents = 1000;
     size_t maxLobbyChat = 200;
-    size_t maxPendingSignals = 256;
     int64_t finishedRetentionMs = 30LL * 60 * 1000;
     int64_t waitingTtlMs = 60LL * 60 * 1000;
     int64_t inProgressInactivityTtlMs = 60LL * 60 * 1000;
     int64_t proposalTtlMs = 60LL * 1000;
-    int64_t signalTtlMs = 60LL * 1000;
     int lobbyChatBurst = 5;
     int64_t lobbyChatWindowMs = 10000;
     int boardChatBurst = 10;
@@ -193,8 +167,6 @@ enum class RoomEventType {
     GAME_STARTED,
     MOVE,
     CHAT,
-    VOICE_SIGNAL,
-    VOICE_META,
     OBSERVER_BANNED,
     USER_MUTED,
     POLICY_UPDATED,
@@ -218,13 +190,10 @@ const char *toString(RoomEventType v);
  *   MOVE            playerId, seat, ply, text = canonical move,
  *                   clockMs = mover clock after the move, elapsedMs
  *   CHAT            playerId, seat (0 = observer), scope, text
- *   VOICE_SIGNAL    playerId = sender, targetPlayerId, detail = signal
- *                   type, text = opaque payload (relayed, never archived)
- *   VOICE_META      playerId, detail = action
  *   OBSERVER_BANNED playerId = actor, targetPlayerId, text = reason
  *   USER_MUTED      playerId = actor, targetPlayerId,
- *                   detail = "mute_chat=<0|1>;mute_voice=<0|1>"
- *   POLICY_UPDATED  playerId, detail = "observer_policy=..;voice_policy=.."
+ *                   detail = "mute_chat=<0|1>"
+ *   POLICY_UPDATED  playerId, detail = "observer_policy=.."
  *   PROPOSAL_*      playerId, detail = proposal type
  *   UNDO_APPLIED    playerId = requester, text = undone move, ply
  *   REMATCH_CREATED text = new room id
@@ -300,11 +269,6 @@ struct ProposalView {
     int64_t expiresAtMs = 0;
 };
 
-struct VoicePeerView {
-    int64_t playerId = 0;
-    bool micMuted = false;
-};
-
 struct RoomView {
     std::string roomId;
     RoomPhase phase = RoomPhase::WAITING_FOR_PLAYERS;
@@ -324,7 +288,6 @@ struct RoomView {
     std::string termination;
     int winnerSeat = 0;             // 0 = draw / none; 4P: 1 = seats 1+3
     std::vector<ProposalView> proposals;
-    std::vector<VoicePeerView> voicePeers;
     int64_t latestSeq = 0;
     bool archived = false;
     std::string archiveError;
@@ -480,12 +443,6 @@ struct TickReport {
  * UNKNOWN_PLAYER. viewerPlayerId 0 stands for an anonymous spectator in the
  * read-only calls.
  *
- * Voice: the server only relays opaque signaling blobs to the named peer
- * and records short meta events. It never receives or stores audio, and a
- * relayed signal is dropped from the buffer as soon as the target's poll
- * cursor passes it (or after RoomLimits::signalTtlMs). It is never part of
- * the transcript or the archive.
- *
  * configure setClock/setWallClock/setLimits/setMatchmakingConfig before the
  * manager is shared between threads.
  */
@@ -505,7 +462,6 @@ public:
     };
 
     static constexpr size_t kMaxChatBytes = 500;
-    static constexpr size_t kMaxVoicePayloadBytes = 4096;
     static constexpr size_t kMaxMoveBytes = 512;
     static constexpr size_t kMaxPasscodeBytes = 32;
     static constexpr size_t kMaxReasonBytes = 200;
@@ -590,32 +546,22 @@ public:
     RoomResult claimDisconnectForfeit(const std::string &roomId,
                                       int64_t claimantPlayerId);
 
-    /* ---- board chat, voice, moderation ---- */
+    /* ---- board chat, moderation ---- */
     RoomResult postBoardChat(const std::string &roomId, int64_t senderPlayerId,
                              ChatScope scope, const std::string &text);
-    RoomResult submitVoiceSignal(const std::string &roomId,
-                                 int64_t senderPlayerId, int64_t targetPlayerId,
-                                 VoiceSignalType type,
-                                 const std::string &payloadJson);
-    RoomResult submitVoiceMeta(const std::string &roomId,
-                               int64_t senderPlayerId, VoiceMetaAction action);
     RoomResult banUser(const std::string &roomId, int64_t actorPlayerId,
                        int64_t targetPlayerId, const std::string &reason);
     RoomResult muteUser(const std::string &roomId, int64_t actorPlayerId,
-                        int64_t targetPlayerId, bool muteChat, bool muteVoice);
+                        int64_t targetPlayerId, bool muteChat);
     RoomResult updateRoomPolicies(const std::string &roomId,
                                   int64_t actorPlayerId,
-                                  ObserverPolicy observerPolicy,
-                                  VoicePolicy voicePolicy);
+                                  ObserverPolicy observerPolicy);
     /*
-     * Partial update: a null field keeps the room's current value. The
-     * read and the write happen under one lock, so concurrent partial
-     * updates of different fields never overwrite each other.
+     * Partial update: a null field keeps the room's current value.
      */
     RoomResult updateRoomPolicies(const std::string &roomId,
                                   int64_t actorPlayerId,
-                                  const std::optional<ObserverPolicy> &observerPolicy,
-                                  const std::optional<VoicePolicy> &voicePolicy);
+                                  const std::optional<ObserverPolicy> &observerPolicy);
 
     /* ---- reads ---- */
     RoomResult getRoomView(const std::string &roomId, int64_t viewerPlayerId,
@@ -697,7 +643,7 @@ private:
     bool eventVisibleLocked(const Room &r, const RoomEvent &e,
                             int64_t viewerId) const;
 
-    /* observers / voice state */
+    /* observers */
     void addObserverLocked(Room &r, int64_t playerId);
     void removeObserverLocked(Room &r, int64_t playerId);
     void enforcePoliciesLocked(Room &r, int64_t now);
@@ -706,7 +652,6 @@ private:
     RoomResult checkViewLocked(const Room &r, int64_t viewerId) const;
     int seatOfLocked(const Room &r, int64_t playerId) const;
     bool isParticipantLocked(const Room &r, int64_t playerId) const;
-    bool voiceAllowedLocked(const Room &r, int64_t playerId) const;
 
     /* game flow */
     void finishGameLocked(Room &r, int64_t now, const std::string &termination,

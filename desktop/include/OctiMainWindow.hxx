@@ -40,7 +40,6 @@
 #include "OctiReservePanel.hxx"
 #include "OctiSoundSynth.hxx"
 #include "OctiTheme.hxx"
-#include "P2pVoiceEngine.hxx"
 #include "QtCompat.hxx"
 #include "selfupdate/QtSelfUpdateBridge.hxx"
 #include "selfupdate/SelfUpdateController.hxx"
@@ -78,7 +77,6 @@ public:
     OctiMoveComposer *moveComposer();
     LobbyView *lobbyView() const;
     OctiNetworkClient *netClient() const;
-    P2pVoiceEngine *voiceEngine() const;
     OctiSoundSynth *soundSynth();
     ClientConfigStore *configStore();
 
@@ -158,6 +156,7 @@ public:
     QString waitingRoomBannerText() const;
     QPushButton *leaveTableButton() const { return _leaveTableBtn; }
     QPushButton *leaveWaitingTableButton() const { return _leaveWaitingTableBtn; }
+    QPushButton *sitSeatButton() const { return _sitSeatBtn; }
     QPushButton *undoButton() const { return _undoRequestBtn; }
     QPushButton *undoRequestButton() const { return _undoRequestBtn; }
     QAction *undoAction() const { return _actUndo; }
@@ -190,15 +189,6 @@ public:
     ApiResult<bool> resignCurrentGame();
     ApiResult<GameActionData> acceptActiveProposal();
     ApiResult<GameActionData> declineActiveProposal();
-
-    /* ---- Push-to-Talk Voice Control ---- */
-    bool joinOnlineVoice();
-    void leaveOnlineVoice();
-    bool isInVoiceRoom() const;
-    bool setPushToTalkActive(bool talking);
-    bool isPushToTalkActive() const;
-    void simulatePushToTalkKeyPress();
-    void simulatePushToTalkKeyRelease();
 
     /* ---- Move History, VCR Replay & .octi Transcript ---- */
     void vcrFirst();
@@ -263,7 +253,6 @@ private:
     void updateTopBarLabels();
     void refreshMoveHistoryAndFenUi();
     void updateProposalBannerUi();
-    void updateVoiceControlUi();
     void updateMatchActionsVisibility();
     void checkAndPresentGameOver();
     void bindSelfUpdateController();
@@ -276,7 +265,6 @@ private:
 
     ClientConfigStore _configStore;
     std::unique_ptr<OctiNetworkClient> _netClient;
-    std::unique_ptr<P2pVoiceEngine> _voiceEngine;
     OctiSoundSynth _soundSynth;
     OctiBoard _board;
     OctiMoveComposer _composer;
@@ -378,10 +366,6 @@ private:
     QLineEdit *_gameChatInput;
     QPushButton *_sendGameChatBtn;
 
-    QWidget *_voiceBox;
-    QPushButton *_joinLeaveVoiceBtn;
-    QPushButton *_holdToTalkBtn;
-    QLabel *_voiceStatusLabel;
     bool _gameOverDialogShownForCurrentMatch;
 
     /* ---- Self-Update Subsystem ---- */

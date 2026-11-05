@@ -114,7 +114,6 @@ public class OctiAndroidNetworkAndVoiceTest {
         prefs.theme = OctiThemeId.ROSEWOOD_IVORY;
         prefs.confirmAllMoves = true;
         prefs.sfxMuted = false;
-        prefs.volumeKeyPtt = true;
 
         assertTrue(store.save());
         assertTrue(cfgFile.exists());
@@ -146,7 +145,6 @@ public class OctiAndroidNetworkAndVoiceTest {
                 + "  \"theme\": \"ROSEWOOD_IVORY\",\n"
                 + "  \"confirm_all_moves\": true,\n"
                 + "  \"sfx_muted\": false,\n"
-                + "  \"volume_key_ptt\": true,\n"
                 + "  \"server_url\": \"https://rogue.example.invalid:9999\",\n"
                 + "  \"server_host\": \"rogue.example.invalid\",\n"
                 + "  \"server_port\": 9999,\n"
@@ -165,7 +163,6 @@ public class OctiAndroidNetworkAndVoiceTest {
         assertEquals(OctiThemeId.ROSEWOOD_IVORY, loaded.theme);
         assertTrue(loaded.confirmAllMoves);
         assertFalse(loaded.sfxMuted);
-        assertTrue(loaded.volumeKeyPtt);
 
         // Re-save and verify all forbidden keys are stripped from disk.
         assertTrue(verifyStore.save());
@@ -387,7 +384,6 @@ public class OctiAndroidNetworkAndVoiceTest {
             req2p.incrementMs = 5000L;
             req2p.passcode = "brass42";
             req2p.observerPolicy = "OPEN";
-            req2p.voicePolicy = "PLAYERS_AND_OBSERVERS";
 
             OctiNetworkClient.ApiResult<OctiNetworkClient.CreateTableResponse> created2p =
                     clientA.createTable(req2p);
@@ -412,201 +408,79 @@ public class OctiAndroidNetworkAndVoiceTest {
             // Charlie joins as observer
             assertTrue(clientC.observeTable(roomId, "brass42").ok);
 
-            // 8. Attach Game SSE streams for Alice and Bob + P2pVoiceEngine instances
-            try (P2pVoiceEngine voiceA = new P2pVoiceEngine(clientA);
-                 P2pVoiceEngine voiceB = new P2pVoiceEngine(clientB)) {
+            // 8. Attach Game SSE streams for Alice and Bob
+            CountDownLatch moveLatchB = new CountDownLatch(1);
+            CountDownLatch gameChatLatchB = new CountDownLatch(1);
 
-                CountDownLatch moveLatchB = new CountDownLatch(1);
-                CountDownLatch gameChatLatchB = new CountDownLatch(1);
-
-                clientA.startGameEventStream(roomId, voiceA::handleGameSseEvent);
-                clientB.startGameEventStream(roomId, ev -> {
-                    voiceB.handleGameSseEvent(ev);
-                    if ("MOVE".equals(ev.event) || "MOVE_APPLIED".equals(ev.event)) {
-                        moveLatchB.countDown();
-                    } else if ("CHAT".equals(ev.event) || "CHAT_MESSAGE".equals(ev.event)) {
-                        gameChatLatchB.countDown();
-                    }
-                });
-
-                // 9. P2P Voice Join, Signaling Handshake, PTT Gating & 440 Hz Audio Streaming
-                assertTrue(voiceA.joinVoiceRoom(roomId, aliceUuid));
-                assertTrue(voiceB.joinVoiceRoom(roomId, bobUuid));
-                assertTrue(voiceA.isInVoiceRoom());
-                assertTrue(voiceB.isInVoiceRoom());
-                assertTrue(voiceA.localUdpPort() > 0);
-                assertTrue(voiceB.localUdpPort() > 0);
-                assertFalse(voiceA.isPushToTalkActive());
-                assertFalse(voiceB.isPushToTalkActive());
-
-                assertTrue(voiceA.initiatePeerOffer(bobUuid));
-
-                long deadline = System.currentTimeMillis() + 3000L;
-                while (System.currentTimeMillis() < deadline &&
-                        (!voiceA.isPeerConnected(bobUuid) || !voiceB.isPeerConnected(aliceUuid))) {
-                    Thread.sleep(25L);
+            clientA.startGameEventStream(roomId, ev -> {});
+            clientB.startGameEventStream(roomId, ev -> {
+                if ("MOVE".equals(ev.event) || "MOVE_APPLIED".equals(ev.event)) {
+                    moveLatchB.countDown();
+                } else if ("CHAT".equals(ev.event) || "CHAT_MESSAGE".equals(ev.event)) {
+                    gameChatLatchB.countDown();
                 }
-                assertTrue("Alice must complete voice handshake with Bob",
-                        voiceA.isPeerConnected(bobUuid));
-                assertTrue("Bob must complete voice handshake with Alice",
-                        voiceB.isPeerConnected(aliceUuid));
+            });
 
-                // Synthesize 440 Hz sine-wave 20 ms frame (320 samples @ 16 kHz)
-                short[] sine440 = new short[P2pVoiceEngine.PAYLOAD_SAMPLES];
-                for (int i = 0; i < sine440.length; ++i) {
-                    sine440[i] = (short) Math.round(12000.0 * Math.sin(
-                            2.0 * Math.PI * 440.0 * i / P2pVoiceEngine.SAMPLE_RATE_HZ));
-                }
+            // 9. Moderation: Server USER_MUTED, OBSERVER_BANNED, POLICY_UPDATED
+            assertTrue(clientA.muteParticipant(roomId, charlieUuid, true).ok);
+            assertTrue(clientA.banObserver(roomId, charlieUuid).ok);
+            assertTrue(clientA.updateRoomSettings(roomId, "OPEN").ok);
 
-                // PTT inactive -> ZERO UDP packets transmitted
-                for (int i = 0; i < 10; ++i) {
-                    assertEquals(0, voiceA.injectTestPcmFrame(sine440));
-                }
-                assertEquals(0L, voiceA.totalPacketsSent());
-                assertEquals(0L, voiceB.totalPacketsReceived());
+            // 10. Live Game View, Moves, Chat, Proposals, Resign & Archive
+            OctiNetworkClient.ApiResult<OctiNetworkClient.GameViewData> view0 =
+                    clientA.fetchGameView(roomId);
+            assertTrue(view0.ok);
+            assertEquals(roomId, view0.data.roomId);
 
-                // Press PTT -> MIC_UNMUTED + stream UDP audio frames
-                assertTrue(voiceA.setPushToTalkActive(true));
-                assertTrue(voiceA.isPushToTalkActive());
+            OctiNetworkClient.ApiResult<OctiNetworkClient.MoveSubmitData> move1 =
+                    clientA.submitMove(roomId, "33+a");
+            assertTrue("Move 1 failed: " + move1.errorMessage, move1.ok);
+            assertTrue("Bob should receive MOVE_APPLIED over SSE",
+                    moveLatchB.await(3, TimeUnit.SECONDS));
 
-                for (int i = 0; i < 15; ++i) {
-                    int sent = voiceA.injectTestPcmFrame(sine440);
-                    assertEquals(1, sent);
-                    Thread.sleep(5L);
-                }
+            OctiNetworkClient.ApiResult<OctiNetworkClient.MoveSubmitData> move2 =
+                    clientB.submitMove(roomId, "37+e");
+            assertTrue("Move 2 failed: " + move2.errorMessage, move2.ok);
 
-                long rxDeadline = System.currentTimeMillis() + 2000L;
-                while (System.currentTimeMillis() < rxDeadline &&
-                        voiceB.packetsReceivedFrom(aliceUuid) < 5L) {
-                    Thread.sleep(20L);
-                }
-                assertTrue("Bob should receive UDP voice frames from Alice",
-                        voiceB.packetsReceivedFrom(aliceUuid) >= 5L);
-                assertTrue("Decoded 440 Hz RMS energy must be non-zero",
-                        voiceB.receivedAudioRms(aliceUuid) > 4000.0);
+            assertTrue(clientA.postGameChat(roomId, "ALL", "Well played!").ok);
+            assertTrue("Bob should receive CHAT_MESSAGE over SSE",
+                    gameChatLatchB.await(3, TimeUnit.SECONDS));
 
-                short[] decodedFrame = voiceB.popDecodedFrameFrom(aliceUuid);
-                assertEquals(P2pVoiceEngine.PAYLOAD_SAMPLES, decodedFrame.length);
+            // Proposals: draw offer/decline, pause request/accept/resume, undo request/decline
+            assertTrue(clientA.submitAction(roomId, "offer_draw").ok);
+            assertTrue(clientB.submitAction(roomId, "decline_draw").ok);
+            assertTrue(clientA.submitAction(roomId, "request_pause").ok);
+            assertTrue(clientB.submitAction(roomId, "accept_pause").ok);
+            assertTrue(clientA.submitAction(roomId, "resume").ok);
+            assertTrue(clientB.submitAction(roomId, "request_undo").ok);
+            assertTrue(clientA.submitAction(roomId, "decline_undo").ok);
 
-                // Release PTT -> MIC_MUTED + zero packets sent afterward
-                assertTrue(voiceA.setPushToTalkActive(false));
-                assertFalse(voiceA.isPushToTalkActive());
-                long sentBefore = voiceA.totalPacketsSent();
-                assertEquals(0, voiceA.injectTestPcmFrame(sine440));
-                assertEquals(sentBefore, voiceA.totalPacketsSent());
+            // Resign game & rematch proposal
+            OctiNetworkClient.ApiResult<Boolean> resigned =
+                    clientB.resignGame(roomId);
+            assertTrue(resigned.ok);
+            assertTrue(resigned.data);
 
-                // Forged UDP packet to Bob's voice port must be dropped
-                try (DatagramSocket attackerSock = new DatagramSocket()) {
-                    byte[] forged = new byte[P2pVoiceEngine.PACKET_BYTES];
-                    forged[0] = 'O';
-                    forged[1] = 'C';
-                    forged[2] = 'T';
-                    forged[3] = 'V';
-                    forged[12] = 0x12;
-                    forged[13] = 0x34;
-                    forged[14] = 0x56;
-                    forged[15] = 0x78;
-                    DatagramPacket badDgram = new DatagramPacket(
-                            forged, forged.length,
-                            InetAddress.getByName("127.0.0.1"), voiceB.localUdpPort());
-                    attackerSock.send(badDgram);
-                }
-                long dropDeadline = System.currentTimeMillis() + 1000L;
-                while (System.currentTimeMillis() < dropDeadline &&
-                        voiceB.totalInvalidPacketsDropped() < 1L) {
-                    Thread.sleep(20L);
-                }
-                assertTrue(voiceB.totalInvalidPacketsDropped() >= 1L);
+            assertTrue(clientB.submitAction(roomId, "request_rematch").ok);
+            assertTrue(clientA.submitAction(roomId, "decline_rematch").ok);
 
-                // 10. Moderation Cutoff: Server USER_MUTED, OBSERVER_BANNED, POLICY_UPDATED(DISABLED)
-                assertTrue(voiceA.setPushToTalkActive(true));
-                assertTrue(voiceA.isPushToTalkActive());
+            // Archive list, detail, and .octi transcript download
+            OctiNetworkClient.ApiResult<OctiNetworkClient.ArchivedGamesPage> archiveList =
+                    clientA.listArchivedGames(20, 0);
+            assertTrue(archiveList.ok);
+            assertFalse(archiveList.data.games.isEmpty());
 
-                // Mute Charlie (observer) via live server REST API + simulate local mute enforcement
-                assertTrue(clientA.muteParticipant(roomId, charlieUuid, true, true).ok);
-                voiceA.handleGameSseEvent("USER_MUTED",
-                        "{\"target\":\"" + aliceUuid + "\",\"mute_voice\":true}");
-                assertTrue(voiceA.isVoiceMutedByServer());
-                assertFalse("PTT must immediately deactivate when muted by server",
-                        voiceA.isPushToTalkActive());
-                assertEquals(0, voiceA.injectTestPcmFrame(sine440));
+            OctiNetworkClient.ApiResult<OctiNetworkClient.ArchivedGameSummary> archiveDetail =
+                    clientA.fetchArchivedGame(roomId);
+            assertTrue(archiveDetail.ok);
+            assertEquals(roomId, archiveDetail.data.gameId);
+            assertEquals(2, archiveDetail.data.plyCount);
 
-                // Unmute Alice so we can test POLICY_UPDATED(DISABLED) cutoff
-                voiceA.handleGameSseEvent("USER_MUTED",
-                        "{\"target\":\"" + aliceUuid + "\",\"mute_voice\":false}");
-                assertFalse(voiceA.isVoiceMutedByServer());
-                assertTrue(voiceA.setPushToTalkActive(true));
-
-                // Ban Observer Charlie via live server
-                assertTrue(clientA.banObserver(roomId, charlieUuid).ok);
-
-                // Update room settings to disable voice -> tears down P2P voice session
-                assertTrue(clientA.updateRoomSettings(roomId, "OPEN", "DISABLED").ok);
-                long polDeadline = System.currentTimeMillis() + 2000L;
-                while (System.currentTimeMillis() < polDeadline &&
-                        !voiceA.isVoicePolicyDisabled()) {
-                    Thread.sleep(20L);
-                }
-                assertTrue(voiceA.isVoicePolicyDisabled());
-                assertFalse(voiceA.isPushToTalkActive());
-                assertEquals(0, voiceA.activePeerCount());
-
-                // 11. Live Game View, Moves, Chat, Proposals, Resign & Archive
-                OctiNetworkClient.ApiResult<OctiNetworkClient.GameViewData> view0 =
-                        clientA.fetchGameView(roomId);
-                assertTrue(view0.ok);
-                assertEquals(roomId, view0.data.roomId);
-
-                OctiNetworkClient.ApiResult<OctiNetworkClient.MoveSubmitData> move1 =
-                        clientA.submitMove(roomId, "33+a");
-                assertTrue("Move 1 failed: " + move1.errorMessage, move1.ok);
-                assertTrue("Bob should receive MOVE_APPLIED over SSE",
-                        moveLatchB.await(3, TimeUnit.SECONDS));
-
-                OctiNetworkClient.ApiResult<OctiNetworkClient.MoveSubmitData> move2 =
-                        clientB.submitMove(roomId, "37+e");
-                assertTrue("Move 2 failed: " + move2.errorMessage, move2.ok);
-
-                assertTrue(clientA.postGameChat(roomId, "ALL", "Well played!").ok);
-                assertTrue("Bob should receive CHAT_MESSAGE over SSE",
-                        gameChatLatchB.await(3, TimeUnit.SECONDS));
-
-                // Proposals: draw offer/decline, pause request/accept/resume, undo request/decline
-                assertTrue(clientA.submitAction(roomId, "offer_draw").ok);
-                assertTrue(clientB.submitAction(roomId, "decline_draw").ok);
-                assertTrue(clientA.submitAction(roomId, "request_pause").ok);
-                assertTrue(clientB.submitAction(roomId, "accept_pause").ok);
-                assertTrue(clientA.submitAction(roomId, "resume").ok);
-                assertTrue(clientB.submitAction(roomId, "request_undo").ok);
-                assertTrue(clientA.submitAction(roomId, "decline_undo").ok);
-
-                // Resign game & rematch proposal
-                OctiNetworkClient.ApiResult<Boolean> resigned =
-                        clientB.resignGame(roomId);
-                assertTrue(resigned.ok);
-                assertTrue(resigned.data);
-
-                assertTrue(clientB.submitAction(roomId, "request_rematch").ok);
-                assertTrue(clientA.submitAction(roomId, "decline_rematch").ok);
-
-                // Archive list, detail, and .octi transcript download
-                OctiNetworkClient.ApiResult<OctiNetworkClient.ArchivedGamesPage> archiveList =
-                        clientA.listArchivedGames(20, 0);
-                assertTrue(archiveList.ok);
-                assertFalse(archiveList.data.games.isEmpty());
-
-                OctiNetworkClient.ApiResult<OctiNetworkClient.ArchivedGameSummary> archiveDetail =
-                        clientA.fetchArchivedGame(roomId);
-                assertTrue(archiveDetail.ok);
-                assertEquals(roomId, archiveDetail.data.gameId);
-                assertEquals(2, archiveDetail.data.plyCount);
-
-                OctiNetworkClient.ApiResult<String> transcript =
-                        clientA.downloadOctiTranscript(roomId);
-                assertTrue(transcript.ok);
-                assertTrue(transcript.data.contains("33+a"));
-                assertTrue(transcript.data.contains("37+e"));
-            }
+            OctiNetworkClient.ApiResult<String> transcript =
+                    clientA.downloadOctiTranscript(roomId);
+            assertTrue(transcript.ok);
+            assertTrue(transcript.data.contains("33+a"));
+            assertTrue(transcript.data.contains("37+e"));
 
             // 12. Logout revokes session token
             assertTrue(clientC.logout().ok);
@@ -628,84 +502,6 @@ public class OctiAndroidNetworkAndVoiceTest {
             assertNotNull("Expected 429 Too Many Requests after burst on /api/v1/auth/sso", rateLimited);
             assertEquals(429, rateLimited.httpStatus);
             assertTrue(rateLimited.retryAfterSec > 0);
-        }
-    }
-
-    @Test
-    public void testPropertyMuLawCodecMonotonicityAndBoundedErrorAcrossAll65536PcmValues() {
-        int prevAbsDecoded = 0;
-        for (int mag = 0; mag <= 32767; ++mag) {
-            short pos = (short) mag;
-            byte uPos = P2pVoiceEngine.encodeMuLaw(pos);
-            short decPos = P2pVoiceEngine.decodeMuLaw(uPos);
-            assertTrue("Decoded positive sample must be >= 0 for input " + mag, decPos >= 0);
-            assertTrue("G.711 mu-law decoding must be monotonic non-decreasing",
-                    decPos >= prevAbsDecoded);
-            prevAbsDecoded = decPos;
-
-            int err = Math.abs(mag - decPos);
-            int maxAllowedErr = Math.max(16, (int) (mag * 0.08) + 132);
-            assertTrue("Quantization error too large at " + mag + ": decoded=" + decPos,
-                    err <= maxAllowedErr);
-
-            if (mag > 0) {
-                short neg = (short) -mag;
-                byte uNeg = P2pVoiceEngine.encodeMuLaw(neg);
-                short decNeg = P2pVoiceEngine.decodeMuLaw(uNeg);
-                assertEquals("Sign symmetry violated at " + mag, -decPos, decNeg);
-            }
-        }
-        // Check Short.MIN_VALUE (-32768)
-        byte uMin = P2pVoiceEngine.encodeMuLaw(Short.MIN_VALUE);
-        short decMin = P2pVoiceEngine.decodeMuLaw(uMin);
-        assertTrue(decMin < -31000);
-    }
-
-    @Test
-    public void testPropertyVoiceUdpPacketParserFuzzing500Trials() {
-        Random rng = new Random(0x0C712026L);
-        String key = "0123456789abcdef0123456789abcdef";
-
-        for (int trial = 0; trial < 500; ++trial) {
-            P2pVoiceEngine.VoiceUdpPacket pkt = new P2pVoiceEngine.VoiceUdpPacket();
-            pkt.seq = trial + 1;
-            pkt.timestampMs = 100000 + trial * 20;
-            rng.nextBytes(pkt.payload);
-            pkt.authTag = P2pVoiceEngine.computeAuthTag(
-                    pkt.seq, pkt.timestampMs, pkt.payload, key);
-
-            byte[] wire = P2pVoiceEngine.serializePacket(pkt);
-            assertEquals(P2pVoiceEngine.PACKET_BYTES, wire.length);
-
-            P2pVoiceEngine.VoiceUdpPacket parsed = new P2pVoiceEngine.VoiceUdpPacket();
-            assertTrue(P2pVoiceEngine.parseAndVerifyPacket(wire, wire.length, key, parsed));
-            assertEquals(pkt.seq, parsed.seq);
-            assertEquals(pkt.timestampMs, parsed.timestampMs);
-            assertEquals(pkt.authTag, parsed.authTag);
-            assertTrue(Arrays.equals(pkt.payload, parsed.payload));
-
-            // Wrong session key must fail
-            assertFalse(P2pVoiceEngine.parseAndVerifyPacket(
-                    wire, wire.length, key + "x", parsed));
-
-            // Single random bit flip anywhere in packet must fail verification
-            byte[] flipped = Arrays.copyOf(wire, wire.length);
-            int byteIdx = rng.nextInt(flipped.length);
-            int bitMask = 1 << rng.nextInt(8);
-            flipped[byteIdx] ^= (byte) bitMask;
-            assertFalse(P2pVoiceEngine.parseAndVerifyPacket(
-                    flipped, flipped.length, key, parsed));
-
-            // Random truncated or oversized garbage buffer must never throw and must return false
-            int randLen = rng.nextInt(512);
-            if (randLen == P2pVoiceEngine.PACKET_BYTES) {
-                randLen += 1;
-            }
-            byte[] garbage = new byte[randLen];
-            rng.nextBytes(garbage);
-            assertFalse(P2pVoiceEngine.parseAndVerifyPacket(
-                    garbage, garbage.length, key, parsed));
-            assertNull(P2pVoiceEngine.parseAndVerifyPacket(garbage, key));
         }
     }
 

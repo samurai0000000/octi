@@ -51,8 +51,6 @@ public final class ClientConfigStore {
         public OctiThemeId theme = OctiThemeId.OBSIDIAN_BRASS;
         public boolean confirmAllMoves = true;
         public boolean sfxMuted = false;
-        public boolean volumeKeyPtt = true;
-        public int pttKey = 'V';
 
         public static final int CURRENT_TELEMETRY_CONSENT_VERSION = 1;
         public String telemetryConsent = "unset";
@@ -150,24 +148,6 @@ public final class ClientConfigStore {
             this.sfxMuted = sfxMuted;
         }
 
-        public boolean isVolumeKeyPtt() {
-            return volumeKeyPtt;
-        }
-
-        public void setVolumeKeyPtt(boolean volumeKeyPtt) {
-            this.volumeKeyPtt = volumeKeyPtt;
-        }
-
-        public int getPttKey() {
-            return pttKey;
-        }
-
-        public void setPttKey(int pttKey) {
-            if (pttKey >= 32 && pttKey <= 126) {
-                this.pttKey = pttKey;
-            }
-        }
-
         public String getTelemetryConsent() {
             return telemetryConsent != null ? telemetryConsent : "unset";
         }
@@ -205,8 +185,6 @@ public final class ClientConfigStore {
             c.theme = this.theme;
             c.confirmAllMoves = this.confirmAllMoves;
             c.sfxMuted = this.sfxMuted;
-            c.volumeKeyPtt = this.volumeKeyPtt;
-            c.pttKey = this.pttKey;
             c.telemetryConsent = this.telemetryConsent;
             c.telemetryConsentVersion = this.telemetryConsentVersion;
             c.installId = this.installId;
@@ -453,16 +431,6 @@ public final class ClientConfigStore {
         if (doc.get("sfx_muted") instanceof Boolean b) {
             parsed.sfxMuted = b;
         }
-        if (doc.get("volume_key_ptt") instanceof Boolean b) {
-            parsed.volumeKeyPtt = b;
-        }
-        Object keyObj = doc.containsKey("ptt_keycode") ? doc.get("ptt_keycode") : doc.get("ptt_key");
-        if (keyObj instanceof Number n) {
-            int key = n.intValue();
-            if (key >= 32 && key <= 126) {
-                parsed.pttKey = key;
-            }
-        }
         if (doc.get("telemetry_consent") instanceof String s) {
             parsed.telemetryConsent = s;
         }
@@ -520,8 +488,6 @@ public final class ClientConfigStore {
         doc.put("theme", themeToString(_prefs.theme));
         doc.put("confirm_all_moves", _prefs.confirmAllMoves);
         doc.put("sfx_muted", _prefs.sfxMuted);
-        doc.put("volume_key_ptt", _prefs.volumeKeyPtt);
-        doc.put("ptt_keycode", _prefs.pttKey);
         doc.put("telemetry_consent", _prefs.telemetryConsent != null ? _prefs.telemetryConsent : "unset");
         doc.put("telemetry_consent_version", _prefs.telemetryConsentVersion);
         doc.put("install_id", _prefs.installId != null ? _prefs.installId : "");

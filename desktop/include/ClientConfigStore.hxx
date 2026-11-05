@@ -26,7 +26,6 @@ struct ClientPreferences {
     ThemeId theme = ThemeId::OBSIDIAN_BRASS;
     bool confirmAllMoves = true;
     bool sfxMuted = false;
-    int pttKey = 'V';
 
     static constexpr int CURRENT_TELEMETRY_CONSENT_VERSION = 1;
     std::string telemetryConsent = "unset"; // "unset" | "share" | "decline"

@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -354,15 +355,16 @@ fun LobbyScreen(
         val showMyActiveTable = seatedTableInLobby != null || activeRoomId.isNotEmpty()
         if (showMyActiveTable) {
             val tableRoomId = seatedTableInLobby?.roomId ?: activeRoomId
+            val shortTableRoomId = if (tableRoomId.length > 16) tableRoomId.take(16) else tableRoomId
             val tablePhase = seatedTableInLobby?.phase ?: activeGameView?.phase ?: "WAITING_FOR_PLAYERS"
             val tableMode = seatedTableInLobby?.mode ?: activeGameView?.mode ?: "2P"
             val tableBases = seatedTableInLobby?.bases ?: activeGameView?.bases ?: 3
             val tableTimeControl = seatedTableInLobby?.timeControl?.ifEmpty { "10+5" }
                 ?: activeGameView?.timeControl?.ifEmpty { "10+5" } ?: "10+5"
             val phaseLabel = if (tablePhase == "WAITING_FOR_PLAYERS") {
-                "Waiting for Players"
+                "Waiting"
             } else {
-                "Match in Progress"
+                "In Progress"
             }
 
             Card(
@@ -373,8 +375,8 @@ fun LobbyScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -382,30 +384,30 @@ fun LobbyScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "My Active Table • Table #$tableRoomId",
-                            style = MaterialTheme.typography.titleMedium,
+                            text = "My Table #$shortTableRoomId ($tableMode • ${tableBases}B • $tableTimeControl)",
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = OctiTheme.colors.accentBrass
+                            color = OctiTheme.colors.accentBrass,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 6.dp)
                         )
                         Text(
                             text = phaseLabel,
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = OctiTheme.colors.windowBg,
+                            maxLines = 1,
                             modifier = Modifier
                                 .background(
                                     color = OctiTheme.colors.accentBrass,
                                     shape = RoundedCornerShape(6.dp)
                                 )
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
-
-                    Text(
-                        text = "$tableMode • $tableBases-Base • $tableTimeControl",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = OctiTheme.colors.textSecondary
-                    )
 
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
@@ -595,18 +597,23 @@ fun LobbyScreen(
                                         Row(
                                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.weight(1f)
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .padding(end = 6.dp)
                                         ) {
+                                            val shortId = if (t.roomId.length > 16) t.roomId.take(16) else t.roomId
                                             Text(
-                                                text = "Table #${t.roomId} • Host: @${t.hostHandle}",
-                                                style = MaterialTheme.typography.titleMedium,
+                                                text = "Table #$shortId • @${t.hostHandle}",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
                                                 color = OctiTheme.colors.accentBrass,
                                                 maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
                                             )
                                             if (t.hasPasscode) {
                                                 Text(
-                                                    text = "🔒 Passcode",
+                                                    text = "🔒",
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = OctiTheme.colors.textSecondary
                                                 )
@@ -833,7 +840,7 @@ fun LobbyScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(185.dp),
+                .height(135.dp),
             colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
             border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
         ) {
@@ -979,7 +986,10 @@ fun LobbyScreen(
             textContentColor = OctiTheme.colors.textPrimary,
             title = { Text("Create Online Table") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text("Mode", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("2P", "4P", "OFK").forEach { m ->
@@ -1032,10 +1042,6 @@ fun LobbyScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = createRated, onCheckedChange = { createRated = it })
                         Text(if (createRated) "Rated" else "Casual")
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = createAllowTakeback, onCheckedChange = { createAllowTakeback = it })
-                        Text("Allow Mutual Takebacks")
                     }
                     OutlinedTextField(
                         value = createPasscode,

@@ -2013,7 +2013,6 @@ TEST(GameRoomManagerTest, RematchSwapsSeatsAndKeepsTheTable)
 {
     GameTableConfig c = cfg();
     c.observerPolicy = ObserverPolicy::SILENT_OBSERVERS;
-    c.voicePolicy = VoicePolicy::ALL_ALLOWED;
     std::string room = startTable(c, 2);
     EXPECT_CODE(INVALID_STATE, mgr->submitProposal(room, p[0], ProposalType::REMATCH_REQUEST));
     EXPECT_OK(mgr->resign(room, p[0]));
@@ -2032,7 +2031,6 @@ TEST(GameRoomManagerTest, RematchSwapsSeatsAndKeepsTheTable)
     CHECK_EQUAL(1, nv.turnSeat);
     CHECK_TRUE(nv.config.rated);
     STRCMP_EQUAL("SILENT_OBSERVERS", toString(nv.config.observerPolicy));
-    STRCMP_EQUAL("ALL_ALLOWED", toString(nv.config.voicePolicy));
     STRCMP_EQUAL(acc.roomId.c_str(), view(room).rematchRoomId.c_str());
     CHECK_EQUAL(1u, countType(events(room, 0), RoomEventType::REMATCH_CREATED));
     STRCMP_EQUAL("PLAYING", toString(mgr->presenceOf(p[0])));
@@ -2237,7 +2235,7 @@ TEST(GameRoomManagerTest, SilentObserversWatchButDoNotSpeak)
     EXPECT_CODE(FORBIDDEN_POLICY, mgr->postBoardChat(room, p[2], ChatScope::ALL, "psst"));
     EXPECT_OK(mgr->postBoardChat(room, p[1], ChatScope::ALL, "players can talk"));
     view(room, p[2]);                                   /* may still watch */
-    EXPECT_OK(mgr->updateRoomPolicies(room, p[0], ObserverPolicy::OPEN, VoicePolicy::PLAYERS_ONLY));
+    EXPECT_OK(mgr->updateRoomPolicies(room, p[0], ObserverPolicy::OPEN));
     EXPECT_OK(mgr->postBoardChat(room, p[2], ChatScope::ALL, "now I may"));
 }
 
@@ -2263,303 +2261,21 @@ TEST(GameRoomManagerTest, BoardChatIsValidatedAndRateLimited)
     EXPECT_CODE(NOT_FOUND, mgr->postBoardChat("g-none", p[0], ChatScope::ALL, "x"));
 }
 
-/* ---- P2P voice signaling and meta ------------------------------------- */
-
-TEST(GameRoomManagerTest, VoiceSignalsAreRelayedOnlyToTheNamedPeer)
-{
-    GameTableConfig c = cfg();
-    c.voicePolicy = VoicePolicy::ALL_ALLOWED;
-    std::string room = startTable(c, 2);
-    EXPECT_OK(mgr->observeRoom(room, p[2]));
-
-    const std::string offer = "{\"sdp\":\"v=0 secret-offer\",\"type\":\"offer\"}";
-    RoomResult sent = mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::SDP_OFFER, offer);
-    EXPECT_OK(sent);
-    CHECK_TRUE(sent.seq > 0);
-
-    std::vector<RoomEvent> forPeer = events(room, p[1]);
-    CHECK_EQUAL(1u, countType(forPeer, RoomEventType::VOICE_SIGNAL));
-    for (size_t i = 0; i < forPeer.size(); ++i) {
-        if (forPeer[i].type == RoomEventType::VOICE_SIGNAL) {
-            STRCMP_EQUAL("SDP_OFFER", forPeer[i].detail.c_str());
-            STRCMP_EQUAL(offer.c_str(), forPeer[i].text.c_str());
-            LONGS_EQUAL(p[0], forPeer[i].playerId);
-            LONGS_EQUAL(p[1], forPeer[i].targetPlayerId);
-        }
-    }
-    /* nobody else sees it: not the sender, not the observer, not a spectator */
-    CHECK_EQUAL(0u, countType(events(room, p[0]), RoomEventType::VOICE_SIGNAL));
-    CHECK_EQUAL(0u, countType(events(room, p[2]), RoomEventType::VOICE_SIGNAL));
-    CHECK_EQUAL(0u, countType(events(room, 0), RoomEventType::VOICE_SIGNAL));
-
-    /* answer and ICE flow back the other way, observer can be a peer too */
-    EXPECT_OK(mgr->submitVoiceSignal(room, p[1], p[0], VoiceSignalType::SDP_ANSWER,
-                                     "{\"sdp\":\"v=0 answer\"}"));
-    EXPECT_OK(mgr->submitVoiceSignal(room, p[1], p[0], VoiceSignalType::ICE_CANDIDATE,
-                                     "{\"candidate\":\"candidate:1 1 UDP 1 10.0.0.1 9 typ host\"}"));
-    EXPECT_OK(mgr->submitVoiceSignal(room, p[0], p[2], VoiceSignalType::ICE_CANDIDATE, "{}"));
-    std::vector<RoomEvent> back = events(room, p[0]);
-    CHECK_EQUAL(2u, countType(back, RoomEventType::VOICE_SIGNAL));
-    CHECK_EQUAL(1u, countType(events(room, p[2]), RoomEventType::VOICE_SIGNAL));
-}
-
-TEST(GameRoomManagerTest, DeliveredSignalsAreForgottenAndNeverArchived)
-{
-    std::string room = start2P();
-    const std::string secret = "{\"sdp\":\"never-store-this-offer\"}";
-    RoomResult sent = mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::SDP_OFFER, secret);
-    EXPECT_OK(sent);
-
-    RoomPoll first;
-    EXPECT_OK(mgr->pollRoomEvents(room, p[1], 0, 100, first));
-    CHECK_EQUAL(1u, countType(first.events, RoomEventType::VOICE_SIGNAL));
-    /* the target's cursor passing the signal acknowledges it */
-    RoomPoll second;
-    EXPECT_OK(mgr->pollRoomEvents(room, p[1], first.latestSeq, 100, second));
-    CHECK_EQUAL(0u, second.events.size());
-    CHECK_EQUAL(0u, countType(events(room, p[1], 0), RoomEventType::VOICE_SIGNAL));
-
-    /* an unacknowledged signal times out instead of piling up */
-    EXPECT_OK(mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::ICE_CANDIDATE, "{}"));
-    now += 59999;
-    CHECK_EQUAL(1u, countType(events(room, p[1]), RoomEventType::VOICE_SIGNAL));
-    now += 1;
-    CHECK_EQUAL(0u, countType(events(room, p[1]), RoomEventType::VOICE_SIGNAL));
-
-    /* the payload is nowhere in the view, the transcript or the archive */
-    EXPECT_OK(mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::SDP_OFFER, secret));
-    std::string tr;
-    EXPECT_OK(mgr->getTranscript(room, p[1], tr));
-    CHECK_TRUE(tr.find("never-store") == std::string::npos);
-    EXPECT_OK(mgr->resign(room, p[1]));
-    GameRecord rec = archived(room);
-    CHECK_TRUE(rec.octiTranscript.find("never-store") == std::string::npos);
-    CHECK_TRUE(rec.finalFen.find("never-store") == std::string::npos);
-}
-
-TEST(GameRoomManagerTest, OnlyTheTargetsOwnCursorAcknowledgesASignal)
-{
-    std::string room = start2P();
-    EXPECT_OK(mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::SDP_OFFER, "{}"));
-    RoomPoll mine;
-    EXPECT_OK(mgr->pollRoomEvents(room, p[0], 0, 100, mine));
-    RoomPoll anon;
-    EXPECT_OK(mgr->pollRoomEvents(room, 0, mine.latestSeq + 100, 100, anon));
-    /* neither the sender's nor a spectator's far-future cursor consumed it */
-    CHECK_EQUAL(1u, countType(events(room, p[1]), RoomEventType::VOICE_SIGNAL));
-}
-
-TEST(GameRoomManagerTest, VoicePendingSignalBufferIsBounded)
-{
-    RoomLimits lim;
-    lim.maxPendingSignals = 3;
-    mgr->setLimits(lim);
-    std::string room = start2P();
-    for (int i = 0; i < 5; ++i) {
-        EXPECT_OK(mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::ICE_CANDIDATE,
-                                         "{\"n\":" + std::to_string(i) + "}"));
-    }
-    std::vector<RoomEvent> ev = events(room, p[1]);
-    CHECK_EQUAL(3u, countType(ev, RoomEventType::VOICE_SIGNAL));
-    std::vector<std::string> payloads;
-    for (size_t i = 0; i < ev.size(); ++i) {
-        if (ev[i].type == RoomEventType::VOICE_SIGNAL) {
-            payloads.push_back(ev[i].text);
-        }
-    }
-    STRCMP_EQUAL("{\"n\":2}", payloads[0].c_str());
-    STRCMP_EQUAL("{\"n\":4}", payloads[2].c_str());
-}
-
-TEST(GameRoomManagerTest, VoicePayloadIsLimitedToFourKiB)
-{
-    std::string room = start2P();
-    const size_t overhead = std::string("{\"sdp\":\"\"}").size();
-    std::string atLimit = "{\"sdp\":\"" +
-                          std::string(GameRoomManager::kMaxVoicePayloadBytes - overhead, 'a') + "\"}";
-    CHECK_EQUAL(GameRoomManager::kMaxVoicePayloadBytes, atLimit.size());
-    EXPECT_OK(mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::SDP_OFFER, atLimit));
-
-    std::string over = "{\"sdp\":\"" +
-                       std::string(GameRoomManager::kMaxVoicePayloadBytes - overhead + 1, 'a') + "\"}";
-    CHECK_EQUAL(GameRoomManager::kMaxVoicePayloadBytes + 1, over.size());
-    EXPECT_CODE(PAYLOAD_TOO_LARGE,
-                mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::SDP_OFFER, over));
-    EXPECT_CODE(PAYLOAD_TOO_LARGE,
-                mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::SDP_OFFER,
-                                       std::string(1 << 20, '{')));
-
-    EXPECT_CODE(INVALID_ARGUMENT,
-                mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::SDP_OFFER, ""));
-    EXPECT_CODE(INVALID_ARGUMENT,
-                mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::SDP_OFFER, "{not json"));
-    EXPECT_CODE(INVALID_ARGUMENT,
-                mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::SDP_OFFER,
-                                       std::string(3000, '[')));
-    CHECK_EQUAL(1u, countType(events(room, p[1]), RoomEventType::VOICE_SIGNAL));
-}
-
-TEST(GameRoomManagerTest, VoiceTargetsMustBeEligibleParticipants)
-{
-    std::string room = start2P();
-    EXPECT_CODE(INVALID_ARGUMENT,
-                mgr->submitVoiceSignal(room, p[0], p[0], VoiceSignalType::SDP_OFFER, "{}"));
-    EXPECT_CODE(INVALID_ARGUMENT,
-                mgr->submitVoiceSignal(room, p[0], p[5], VoiceSignalType::SDP_OFFER, "{}"));
-    EXPECT_CODE(INVALID_ARGUMENT,
-                mgr->submitVoiceSignal(room, p[0], 0, VoiceSignalType::SDP_OFFER, "{}"));
-    EXPECT_CODE(FORBIDDEN_NOT_PARTICIPANT,
-                mgr->submitVoiceSignal(room, p[5], p[0], VoiceSignalType::SDP_OFFER, "{}"));
-    EXPECT_CODE(FORBIDDEN_NOT_PARTICIPANT,
-                mgr->submitVoiceMeta(room, p[5], VoiceMetaAction::JOINED_VOICE));
-    EXPECT_CODE(NOT_FOUND,
-                mgr->submitVoiceSignal("g-none", p[0], p[1], VoiceSignalType::SDP_OFFER, "{}"));
-}
-
-TEST(GameRoomManagerTest, DisabledVoicePolicyRefusesAllSignalingAndMeta)
-{
-    GameTableConfig c = cfg();
-    c.voicePolicy = VoicePolicy::DISABLED;
-    std::string room = startTable(c, 2);
-    EXPECT_CODE(FORBIDDEN_POLICY,
-                mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::SDP_OFFER, "{}"));
-    EXPECT_CODE(FORBIDDEN_POLICY, mgr->submitVoiceMeta(room, p[0], VoiceMetaAction::JOINED_VOICE));
-    CHECK_EQUAL(0u, view(room).voicePeers.size());
-    EXPECT_OK(mgr->updateRoomPolicies(room, p[1], ObserverPolicy::OPEN, VoicePolicy::PLAYERS_ONLY));
-    EXPECT_OK(mgr->submitVoiceMeta(room, p[0], VoiceMetaAction::JOINED_VOICE));
-}
-
-TEST(GameRoomManagerTest, PlayersOnlyVoiceExcludesObservers)
-{
-    std::string room = start2P();            /* default PLAYERS_ONLY */
-    EXPECT_OK(mgr->observeRoom(room, p[2]));
-    EXPECT_CODE(FORBIDDEN_POLICY,
-                mgr->submitVoiceSignal(room, p[2], p[0], VoiceSignalType::SDP_OFFER, "{}"));
-    EXPECT_CODE(FORBIDDEN_POLICY, mgr->submitVoiceMeta(room, p[2], VoiceMetaAction::JOINED_VOICE));
-    /* a player cannot open a link to an observer either */
-    EXPECT_CODE(INVALID_ARGUMENT,
-                mgr->submitVoiceSignal(room, p[0], p[2], VoiceSignalType::SDP_OFFER, "{}"));
-    EXPECT_OK(mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::SDP_OFFER, "{}"));
-    EXPECT_OK(mgr->submitVoiceMeta(room, p[0], VoiceMetaAction::JOINED_VOICE));
-}
-
-TEST(GameRoomManagerTest, AllAllowedVoiceLetsUnmutedObserversTalkUnlessSilenced)
-{
-    GameTableConfig c = cfg();
-    c.voicePolicy = VoicePolicy::ALL_ALLOWED;
-    std::string room = startTable(c, 2);
-    EXPECT_OK(mgr->observeRoom(room, p[2]));
-    EXPECT_OK(mgr->submitVoiceMeta(room, p[2], VoiceMetaAction::JOINED_VOICE));
-    EXPECT_OK(mgr->submitVoiceSignal(room, p[2], p[0], VoiceSignalType::SDP_OFFER, "{}"));
-
-    /* a voice mute silences signaling and meta, and drops the peer */
-    EXPECT_OK(mgr->muteUser(room, p[0], p[2], false, true));
-    EXPECT_CODE(FORBIDDEN_MUTED,
-                mgr->submitVoiceSignal(room, p[2], p[0], VoiceSignalType::SDP_OFFER, "{}"));
-    EXPECT_CODE(FORBIDDEN_MUTED, mgr->submitVoiceMeta(room, p[2], VoiceMetaAction::MIC_UNMUTED));
-    CHECK_EQUAL(0u, view(room).voicePeers.size());
-    /* text chat is a separate switch */
-    EXPECT_OK(mgr->postBoardChat(room, p[2], ChatScope::ALL, "can still type"));
-    EXPECT_OK(mgr->muteUser(room, p[1], p[2], false, false));
-    EXPECT_OK(mgr->submitVoiceMeta(room, p[2], VoiceMetaAction::JOINED_VOICE));
-
-    /* silent observers never speak, even where voice is open to all */
-    EXPECT_OK(mgr->updateRoomPolicies(room, p[0], ObserverPolicy::SILENT_OBSERVERS,
-                                      VoicePolicy::ALL_ALLOWED));
-    EXPECT_CODE(FORBIDDEN_POLICY,
-                mgr->submitVoiceSignal(room, p[2], p[0], VoiceSignalType::SDP_OFFER, "{}"));
-    EXPECT_CODE(FORBIDDEN_POLICY, mgr->submitVoiceMeta(room, p[2], VoiceMetaAction::MIC_MUTED));
-    EXPECT_OK(mgr->submitVoiceMeta(room, p[1], VoiceMetaAction::JOINED_VOICE));
-}
-
-TEST(GameRoomManagerTest, VoiceMetaIsRecordedAndTracksPeers)
-{
-    std::string room = start2P();
-    EXPECT_CODE(INVALID_STATE, mgr->submitVoiceMeta(room, p[0], VoiceMetaAction::MIC_MUTED));
-    EXPECT_CODE(INVALID_STATE, mgr->submitVoiceMeta(room, p[0], VoiceMetaAction::LEFT_VOICE));
-    EXPECT_OK(mgr->submitVoiceMeta(room, p[0], VoiceMetaAction::JOINED_VOICE));
-    EXPECT_OK(mgr->submitVoiceMeta(room, p[0], VoiceMetaAction::MIC_MUTED));
-    RoomView v = view(room);
-    CHECK_EQUAL(1u, v.voicePeers.size());
-    CHECK_TRUE(v.voicePeers[0].micMuted);
-    EXPECT_OK(mgr->submitVoiceMeta(room, p[0], VoiceMetaAction::MIC_UNMUTED));
-    CHECK_FALSE(view(room).voicePeers[0].micMuted);
-    EXPECT_OK(mgr->submitVoiceMeta(room, p[1], VoiceMetaAction::JOINED_VOICE));
-    CHECK_EQUAL(2u, view(room).voicePeers.size());
-    EXPECT_OK(mgr->submitVoiceMeta(room, p[0], VoiceMetaAction::LEFT_VOICE));
-    CHECK_EQUAL(1u, view(room).voicePeers.size());
-
-    std::vector<std::string> actions;
-    std::vector<RoomEvent> ev = events(room, 0);
-    for (size_t i = 0; i < ev.size(); ++i) {
-        if (ev[i].type == RoomEventType::VOICE_META) {
-            actions.push_back(ev[i].detail);
-            CHECK_TRUE(ev[i].text.empty());              /* no payload at all */
-        }
-    }
-    CHECK_EQUAL(5u, actions.size());
-    STRCMP_EQUAL("JOINED_VOICE", actions[0].c_str());
-    STRCMP_EQUAL("MIC_MUTED", actions[1].c_str());
-    STRCMP_EQUAL("MIC_UNMUTED", actions[2].c_str());
-    STRCMP_EQUAL("JOINED_VOICE", actions[3].c_str());
-    STRCMP_EQUAL("LEFT_VOICE", actions[4].c_str());
-}
-
-TEST(GameRoomManagerTest, ChangingPoliciesTearsDownVoiceAndDropsStaleSignals)
-{
-    GameTableConfig c = cfg();
-    c.voicePolicy = VoicePolicy::ALL_ALLOWED;
-    std::string room = startTable(c, 2);
-    EXPECT_OK(mgr->observeRoom(room, p[2]));
-    EXPECT_OK(mgr->submitVoiceMeta(room, p[0], VoiceMetaAction::JOINED_VOICE));
-    EXPECT_OK(mgr->submitVoiceMeta(room, p[2], VoiceMetaAction::JOINED_VOICE));
-    EXPECT_OK(mgr->submitVoiceSignal(room, p[0], p[2], VoiceSignalType::SDP_OFFER, "{}"));
-    EXPECT_OK(mgr->submitVoiceSignal(room, p[0], p[1], VoiceSignalType::SDP_OFFER, "{}"));
-    CHECK_EQUAL(2u, view(room).voicePeers.size());
-
-    RoomResult upd = mgr->updateRoomPolicies(room, p[1], ObserverPolicy::OPEN,
-                                             VoicePolicy::PLAYERS_ONLY);
-    EXPECT_OK(upd);
-    CHECK_TRUE(upd.seq > 0);
-    RoomView v = view(room);
-    CHECK_EQUAL(1u, v.voicePeers.size());
-    LONGS_EQUAL(p[0], v.voicePeers[0].playerId);
-    CHECK_EQUAL(0u, countType(events(room, p[2]), RoomEventType::VOICE_SIGNAL));
-    CHECK_EQUAL(1u, countType(events(room, p[1]), RoomEventType::VOICE_SIGNAL));
-    std::vector<RoomEvent> ev = events(room, 0);
-    bool sawPolicy = false;
-    for (size_t i = 0; i < ev.size(); ++i) {
-        if (ev[i].type == RoomEventType::POLICY_UPDATED) {
-            sawPolicy = true;
-            STRCMP_EQUAL("observer_policy=OPEN;voice_policy=PLAYERS_ONLY", ev[i].detail.c_str());
-        }
-    }
-    CHECK_TRUE(sawPolicy);
-
-    EXPECT_OK(mgr->updateRoomPolicies(room, p[0], ObserverPolicy::OPEN, VoicePolicy::DISABLED));
-    CHECK_EQUAL(0u, view(room).voicePeers.size());
-    CHECK_EQUAL(0u, countType(events(room, p[1]), RoomEventType::VOICE_SIGNAL));
-}
-
 /* ---- moderation: ban, mute, policies ----------------------------------- */
 
 TEST(GameRoomManagerTest, BanningAnObserverBlocksThemEverywhereAndPurgesTheirTraffic)
 {
     GameTableConfig c = cfg();
-    c.voicePolicy = VoicePolicy::ALL_ALLOWED;
     std::string room = startTable(c, 2);
     EXPECT_OK(mgr->enterLobby(p[2]));
     EXPECT_OK(mgr->observeRoom(room, p[2]));
     EXPECT_OK(mgr->observeRoom(room, p[3]));
     EXPECT_OK(mgr->postBoardChat(room, p[2], ChatScope::ALL, "spam spam spam"));
-    EXPECT_OK(mgr->submitVoiceMeta(room, p[2], VoiceMetaAction::JOINED_VOICE));
-    EXPECT_OK(mgr->submitVoiceSignal(room, p[2], p[0], VoiceSignalType::SDP_OFFER, "{}"));
     EXPECT_OK(mgr->postBoardChat(room, p[3], ChatScope::ALL, "innocent remark"));
     EXPECT_OK(mgr->postBoardChat(room, p[0], ChatScope::ALL, "hello"));
     STRCMP_EQUAL("OBSERVING", toString(mgr->presenceOf(p[2])));
 
     std::vector<RoomEvent> before = events(room, p[1]);
-    CHECK_EQUAL(1u, countType(before, RoomEventType::VOICE_META));
     CHECK_EQUAL(3u, countType(before, RoomEventType::CHAT));
     CHECK_EQUAL(2u, countType(before, RoomEventType::OBSERVER_JOINED));
 
@@ -2582,19 +2298,15 @@ TEST(GameRoomManagerTest, BanningAnObserverBlocksThemEverywhereAndPurgesTheirTra
     CHECK_EQUAL(0u, rp.events.size());
     EXPECT_CODE(FORBIDDEN_BANNED, mgr->getTranscript(room, p[2], tr));
     EXPECT_CODE(FORBIDDEN_BANNED, mgr->postBoardChat(room, p[2], ChatScope::ALL, "i'm back"));
-    EXPECT_CODE(FORBIDDEN_BANNED,
-                mgr->submitVoiceSignal(room, p[2], p[0], VoiceSignalType::SDP_OFFER, "{}"));
-    EXPECT_CODE(FORBIDDEN_BANNED, mgr->submitVoiceMeta(room, p[2], VoiceMetaAction::JOINED_VOICE));
     EXPECT_CODE(FORBIDDEN_BANNED, mgr->observeRoom(room, p[2]));
     EXPECT_CODE(FORBIDDEN_BANNED, mgr->joinTable(room, p[2], 0, ""));
     EXPECT_CODE(FORBIDDEN_BANNED, mgr->banUser(room, p[2], p[3], ""));
-    EXPECT_CODE(FORBIDDEN_BANNED, mgr->muteUser(room, p[2], p[3], true, false));
+    EXPECT_CODE(FORBIDDEN_BANNED, mgr->muteUser(room, p[2], p[3], true));
     EXPECT_CODE(FORBIDDEN_BANNED,
-                mgr->updateRoomPolicies(room, p[2], ObserverPolicy::OPEN, VoicePolicy::DISABLED));
+                mgr->updateRoomPolicies(room, p[2], ObserverPolicy::OPEN));
 
     /* the room's history lost everything the observer produced */
     std::vector<RoomEvent> after = events(room, p[1]);
-    CHECK_EQUAL(0u, countType(after, RoomEventType::VOICE_META));
     CHECK_EQUAL(2u, countType(after, RoomEventType::CHAT));
     CHECK_EQUAL(1u, countType(after, RoomEventType::OBSERVER_JOINED));
     for (size_t i = 0; i < after.size(); ++i) {
@@ -2603,7 +2315,6 @@ TEST(GameRoomManagerTest, BanningAnObserverBlocksThemEverywhereAndPurgesTheirTra
             CHECK_TRUE(after[i].text.find("spam") == std::string::npos);
         }
     }
-    CHECK_EQUAL(0u, countType(events(room, p[0]), RoomEventType::VOICE_SIGNAL));
     std::vector<RoomEvent> bans;
     for (size_t i = 0; i < after.size(); ++i) {
         if (after[i].type == RoomEventType::OBSERVER_BANNED) {
@@ -2621,7 +2332,6 @@ TEST(GameRoomManagerTest, BanningAnObserverBlocksThemEverywhereAndPurgesTheirTra
     RoomView v = view(room, p[1]);
     CHECK_EQUAL(1u, v.observerIds.size());
     LONGS_EQUAL(p[3], v.observerIds[0]);
-    CHECK_EQUAL(0u, v.voicePeers.size());
 
     /* a ban is per room: the same player can use another table */
     RoomResult other = mgr->createTable(p[4], cfg());
@@ -2742,10 +2452,13 @@ TEST(GameRoomManagerTest, NoObserversPolicyHidesAnInProgressRoom)
     RoomResult t = mgr->createTable(p[0], c);
     EXPECT_OK(t);
     view(t.roomId, p[2]);                       /* a waiting table is visible */
+    EXPECT_OK(mgr->observeRoom(t.roomId, p[2])); /* waiting room allows unseated entry before sitting */
+    CHECK_EQUAL(1u, view(t.roomId, p[0]).observerIds.size());
     EXPECT_OK(mgr->joinTable(t.roomId, p[1], 0, ""));
 
     RoomView v;
     RoomPoll rp;
+    CHECK_EQUAL(0u, view(t.roomId, p[0]).observerIds.size());
     EXPECT_CODE(FORBIDDEN_POLICY, mgr->observeRoom(t.roomId, p[2]));
     EXPECT_CODE(FORBIDDEN_POLICY, mgr->getRoomView(t.roomId, p[2], v));
     EXPECT_CODE(FORBIDDEN_POLICY, mgr->getRoomView(t.roomId, 0, v));
@@ -2766,8 +2479,7 @@ TEST(GameRoomManagerTest, SwitchingToNoObserversEvictsWithoutBanning)
     EXPECT_OK(mgr->observeRoom(room, p[2]));
     EXPECT_OK(mgr->observeRoom(room, p[3]));
     CHECK_EQUAL(2u, view(room).observerIds.size());
-    EXPECT_OK(mgr->updateRoomPolicies(room, p[1], ObserverPolicy::NO_OBSERVERS,
-                                      VoicePolicy::PLAYERS_ONLY));
+    EXPECT_OK(mgr->updateRoomPolicies(room, p[1], ObserverPolicy::NO_OBSERVERS));
     CHECK_EQUAL(0u, view(room, p[0]).observerIds.size());
     std::vector<RoomEvent> ev = events(room, p[0]);
     size_t evicted = 0;
@@ -2780,7 +2492,7 @@ TEST(GameRoomManagerTest, SwitchingToNoObserversEvictsWithoutBanning)
     CHECK_FALSE(mgr->isBanned(room, p[2]));
     EXPECT_CODE(FORBIDDEN_NOT_PARTICIPANT, mgr->postBoardChat(room, p[2], ChatScope::ALL, "hi"));
     STRCMP_EQUAL("IN_LOBBY", toString(mgr->presenceOf(p[2])));
-    EXPECT_OK(mgr->updateRoomPolicies(room, p[0], ObserverPolicy::OPEN, VoicePolicy::PLAYERS_ONLY));
+    EXPECT_OK(mgr->updateRoomPolicies(room, p[0], ObserverPolicy::OPEN));
     EXPECT_OK(mgr->observeRoom(room, p[2]));
 }
 
@@ -2788,14 +2500,14 @@ TEST(GameRoomManagerTest, MuteChatAndVoiceAreIndependentAndReversible)
 {
     std::string room = start2P();
     EXPECT_OK(mgr->observeRoom(room, p[2]));
-    RoomResult m = mgr->muteUser(room, p[0], p[2], true, false);
+    RoomResult m = mgr->muteUser(room, p[0], p[2], true);
     EXPECT_OK(m);
     CHECK_TRUE(m.seq > 0);
     EXPECT_CODE(FORBIDDEN_MUTED, mgr->postBoardChat(room, p[2], ChatScope::ALL, "hmm"));
-    RoomResult dup = mgr->muteUser(room, p[1], p[2], true, false);
+    RoomResult dup = mgr->muteUser(room, p[1], p[2], true);
     EXPECT_OK(dup);
     CHECK_EQUAL(0, static_cast<int>(dup.seq));           /* unchanged: no event */
-    EXPECT_OK(mgr->muteUser(room, p[0], p[2], false, false));
+    EXPECT_OK(mgr->muteUser(room, p[0], p[2], false));
     EXPECT_OK(mgr->postBoardChat(room, p[2], ChatScope::ALL, "unmuted"));
 
     std::vector<std::string> details;
@@ -2807,8 +2519,8 @@ TEST(GameRoomManagerTest, MuteChatAndVoiceAreIndependentAndReversible)
         }
     }
     CHECK_EQUAL(2u, details.size());
-    STRCMP_EQUAL("mute_chat=1;mute_voice=0", details[0].c_str());
-    STRCMP_EQUAL("mute_chat=0;mute_voice=0", details[1].c_str());
+    STRCMP_EQUAL("mute_chat=1", details[0].c_str());
+    STRCMP_EQUAL("mute_chat=0", details[1].c_str());
 }
 
 TEST(GameRoomManagerTest, MuteRules)
@@ -2816,16 +2528,15 @@ TEST(GameRoomManagerTest, MuteRules)
     std::string room = start2P();
     EXPECT_OK(mgr->observeRoom(room, p[2]));
     EXPECT_OK(mgr->observeRoom(room, p[3]));
-    EXPECT_CODE(FORBIDDEN_NOT_SEATED, mgr->muteUser(room, p[2], p[3], true, true));
-    EXPECT_CODE(FORBIDDEN_NOT_SEATED, mgr->muteUser(room, p[6], p[3], true, true));
-    EXPECT_CODE(INVALID_ARGUMENT, mgr->muteUser(room, p[0], p[0], true, true));
-    EXPECT_CODE(UNKNOWN_PLAYER, mgr->muteUser(room, p[0], 55555, true, true));
+    EXPECT_CODE(FORBIDDEN_NOT_SEATED, mgr->muteUser(room, p[2], p[3], true));
+    EXPECT_CODE(FORBIDDEN_NOT_SEATED, mgr->muteUser(room, p[6], p[3], true));
+    EXPECT_CODE(INVALID_ARGUMENT, mgr->muteUser(room, p[0], p[0], true));
+    EXPECT_CODE(UNKNOWN_PLAYER, mgr->muteUser(room, p[0], 55555, true));
     /* mutes are room-wide, so a seated opponent cannot be silenced */
-    EXPECT_CODE(FORBIDDEN_SEATED_TARGET, mgr->muteUser(room, p[0], p[1], true, false));
-    EXPECT_CODE(FORBIDDEN_SEATED_TARGET, mgr->muteUser(room, p[0], p[1], false, true));
-    EXPECT_OK(mgr->muteUser(room, p[0], p[1], false, false));     /* unmute is harmless */
+    EXPECT_CODE(FORBIDDEN_SEATED_TARGET, mgr->muteUser(room, p[0], p[1], true));
+    EXPECT_OK(mgr->muteUser(room, p[0], p[1], false));     /* unmute is harmless */
     EXPECT_OK(mgr->postBoardChat(room, p[1], ChatScope::ALL, "free speech"));
-    EXPECT_CODE(NOT_FOUND, mgr->muteUser("g-none", p[0], p[2], true, true));
+    EXPECT_CODE(NOT_FOUND, mgr->muteUser("g-none", p[0], p[2], true));
 }
 
 TEST(GameRoomManagerTest, PolicyUpdatesNeedASeatAndEmitOnlyOnChange)
@@ -2833,29 +2544,23 @@ TEST(GameRoomManagerTest, PolicyUpdatesNeedASeatAndEmitOnlyOnChange)
     std::string room = start2P();
     EXPECT_OK(mgr->observeRoom(room, p[2]));
     EXPECT_CODE(FORBIDDEN_NOT_SEATED,
-                mgr->updateRoomPolicies(room, p[2], ObserverPolicy::OPEN, VoicePolicy::DISABLED));
+                mgr->updateRoomPolicies(room, p[2], ObserverPolicy::OPEN));
     EXPECT_CODE(FORBIDDEN_NOT_SEATED,
-                mgr->updateRoomPolicies(room, p[6], ObserverPolicy::OPEN, VoicePolicy::DISABLED));
+                mgr->updateRoomPolicies(room, p[6], ObserverPolicy::OPEN));
     EXPECT_CODE(INVALID_ARGUMENT,
-                mgr->updateRoomPolicies(room, p[0], static_cast<ObserverPolicy>(7),
-                                        VoicePolicy::DISABLED));
+                mgr->updateRoomPolicies(room, p[0], static_cast<ObserverPolicy>(7)));
     EXPECT_CODE(INVALID_ARGUMENT,
-                mgr->updateRoomPolicies(room, p[0], ObserverPolicy::OPEN,
-                                        static_cast<VoicePolicy>(-1)));
-    RoomResult same = mgr->updateRoomPolicies(room, p[0], ObserverPolicy::OPEN,
-                                              VoicePolicy::PLAYERS_ONLY);
+                mgr->updateRoomPolicies(room, p[0], static_cast<ObserverPolicy>(-1)));
+    RoomResult same = mgr->updateRoomPolicies(room, p[0], ObserverPolicy::OPEN);
     EXPECT_OK(same);
     CHECK_EQUAL(0, static_cast<int>(same.seq));
     CHECK_EQUAL(0u, countType(events(room, 0), RoomEventType::POLICY_UPDATED));
-    RoomResult chg = mgr->updateRoomPolicies(room, p[1], ObserverPolicy::SILENT_OBSERVERS,
-                                             VoicePolicy::ALL_ALLOWED);
+    RoomResult chg = mgr->updateRoomPolicies(room, p[1], ObserverPolicy::SILENT_OBSERVERS);
     EXPECT_OK(chg);
     CHECK_TRUE(chg.seq > 0);
     RoomView v = view(room);
     STRCMP_EQUAL("SILENT_OBSERVERS", toString(v.config.observerPolicy));
-    STRCMP_EQUAL("ALL_ALLOWED", toString(v.config.voicePolicy));
-    EXPECT_CODE(NOT_FOUND, mgr->updateRoomPolicies("g-none", p[0], ObserverPolicy::OPEN,
-                                                   VoicePolicy::PLAYERS_ONLY));
+    EXPECT_CODE(NOT_FOUND, mgr->updateRoomPolicies("g-none", p[0], ObserverPolicy::OPEN));
 }
 
 /* ---- event stream ------------------------------------------------------ */
@@ -3284,7 +2989,7 @@ TEST(GameRoomManagerTest, ConcurrentCallersSeeAConsistentRoom)
 
 TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOperations)
 {
-    bool passed = rc::check("banned set and voice policy invariants", [&]() {
+    bool passed = rc::check("banned set and observer policy invariants", [&]() {
         std::vector<LiveRoomRow> existingRows;
         std::string delErr;
         if (store->listLiveRooms(existingRows, delErr)) {
@@ -3302,7 +3007,6 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
         c.mode = modeSel == 0 ? GAME_MODE_2 : modeSel == 1 ? GAME_MODE_4 : GAME_MODE_OFK;
         c.rated = *rc::gen::arbitrary<bool>();
         c.observerPolicy = static_cast<ObserverPolicy>(*rc::gen::inRange(0, 3));
-        c.voicePolicy = static_cast<VoicePolicy>(*rc::gen::inRange(0, 3));
         const int seats = c.mode == GAME_MODE_4 ? 4 : 2;
         RoomResult cr = local.createTable(p[0], c);
         RC_ASSERT(cr.ok());
@@ -3314,33 +3018,20 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
         /* independent model of the moderation state */
         std::set<int64_t> banned;
         ObserverPolicy op = c.observerPolicy;
-        VoicePolicy vp = c.voicePolicy;
-        std::map<int64_t, std::pair<bool, bool>> muted;     /* chat, voice */
+        std::set<int64_t> muted;
         std::set<int64_t> obs;                               /* current observers */
         int64_t lastSeq = 0;
         const char *chatTexts[] = {"hi", "gg", "nice move"};
         const char *moves[] = {"33+a", "37+e", "22+a", "26+e", "33a-34", "zz"};
         auto seated = [&](int i) { return i < seats; };
         auto idOf = [&](int i) { return p[static_cast<size_t>(i)]; };
-        auto isMuted = [&](int64_t id, bool voice) {
-            std::map<int64_t, std::pair<bool, bool>>::const_iterator it = muted.find(id);
-            return it != muted.end() && (voice ? it->second.second : it->second.first);
-        };
-        /* may this player take part in voice under the model's policies? */
-        auto voiceOk = [&](int i, const std::set<int64_t> &observers) {
-            if (banned.count(idOf(i)) != 0 || vp == VoicePolicy::DISABLED) {
-                return false;
-            }
-            if (seated(i)) {
-                return true;
-            }
-            return vp == VoicePolicy::ALL_ALLOWED && op == ObserverPolicy::OPEN &&
-                   observers.count(idOf(i)) != 0;
+        auto isMuted = [&](int64_t id) {
+            return muted.count(id) != 0;
         };
 
         const int steps = *rc::gen::inRange(1, 36);
         for (int s = 0; s < steps; ++s) {
-            const int op_ = *rc::gen::inRange(0, 13);
+            const int op_ = *rc::gen::inRange(0, 11);
             const int a = *rc::gen::inRange(0, 8);
             const int b = *rc::gen::inRange(0, 8);
             const std::set<int64_t> obsBefore = obs;
@@ -3384,58 +3075,14 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
                     RC_ASSERT(banned.count(idOf(a)) == 0);
                     RC_ASSERT(seated(a) || obsBefore.count(idOf(a)) != 0);
                     RC_ASSERT(seated(a) || op == ObserverPolicy::OPEN);
-                    RC_ASSERT(!isMuted(idOf(a), false));
+                    RC_ASSERT(!isMuted(idOf(a)));
                     RC_ASSERT(sc == ChatScope::ALL || (c.mode == GAME_MODE_4 && seated(a)));
                 } else if (seated(a) && sc == ChatScope::ALL) {
                     RC_ASSERT(r.code == RoomCode::RATE_LIMITED);
                 }
                 break;
             }
-            case 3: {                                             /* voice signal */
-                const std::string payload = "{\"n\":" + std::to_string(s) + "}";
-                r = local.submitVoiceSignal(room, idOf(a), idOf(b),
-                                            static_cast<VoiceSignalType>(s % 3), payload);
-                if (banned.count(idOf(a)) != 0) {
-                    RC_ASSERT(r.code == RoomCode::FORBIDDEN_BANNED);
-                }
-                if (r.ok()) {
-                    RC_ASSERT(a != b);
-                    RC_ASSERT(voiceOk(a, obsBefore));
-                    RC_ASSERT(voiceOk(b, obsBefore));
-                    RC_ASSERT(seated(a) || obsBefore.count(idOf(a)) != 0);
-                    RC_ASSERT(seated(b) || obsBefore.count(idOf(b)) != 0);
-                    RC_ASSERT(!isMuted(idOf(a), true));
-                } else if (seated(a) && seated(b) && a != b && vp != VoicePolicy::DISABLED) {
-                    RC_LOG() << "signal " << a << "->" << b << " refused: "
-                             << toString(r.code) << " " << r.message << "\n";
-                    RC_ASSERT(false);
-                }
-                if (vp == VoicePolicy::DISABLED) {
-                    RC_ASSERT(!r.ok());
-                }
-                break;
-            }
-            case 4: {                                             /* voice meta */
-                VoiceMetaAction act = static_cast<VoiceMetaAction>(s % 4);
-                r = local.submitVoiceMeta(room, idOf(a), act);
-                if (banned.count(idOf(a)) != 0) {
-                    RC_ASSERT(r.code == RoomCode::FORBIDDEN_BANNED);
-                }
-                if (r.ok()) {
-                    RC_ASSERT(voiceOk(a, obsBefore));
-                    RC_ASSERT(seated(a) || obsBefore.count(idOf(a)) != 0);
-                    RC_ASSERT(!isMuted(idOf(a), true));
-                }
-                if (vp == VoicePolicy::DISABLED) {
-                    RC_ASSERT(!r.ok());
-                }
-                if (seated(a) && vp != VoicePolicy::DISABLED &&
-                    act == VoiceMetaAction::JOINED_VOICE) {
-                    RC_ASSERT(r.ok());
-                }
-                break;
-            }
-            case 5: {                                             /* ban */
+            case 3: {                                             /* ban */
                 r = local.banUser(room, idOf(a), idOf(b), "x");
                 RoomCode want;
                 if (banned.count(idOf(a)) != 0) {
@@ -3458,10 +3105,9 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
                 }
                 break;
             }
-            case 6: {                                             /* mute */
+            case 4: {                                             /* mute */
                 const bool mc = *rc::gen::arbitrary<bool>();
-                const bool mv = *rc::gen::arbitrary<bool>();
-                r = local.muteUser(room, idOf(a), idOf(b), mc, mv);
+                r = local.muteUser(room, idOf(a), idOf(b), mc);
                 RoomCode want;
                 if (banned.count(idOf(a)) != 0) {
                     want = RoomCode::FORBIDDEN_BANNED;
@@ -3469,25 +3115,24 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
                     want = RoomCode::FORBIDDEN_NOT_SEATED;
                 } else if (a == b) {
                     want = RoomCode::INVALID_ARGUMENT;
-                } else if ((mc || mv) && seated(b)) {
+                } else if (mc && seated(b)) {
                     want = RoomCode::FORBIDDEN_SEATED_TARGET;
                 } else {
                     want = RoomCode::OK;
                 }
                 RC_ASSERT(r.code == want);
                 if (r.ok()) {
-                    if (mc || mv) {
-                        muted[idOf(b)] = std::make_pair(mc, mv);
+                    if (mc) {
+                        muted.insert(idOf(b));
                     } else {
                         muted.erase(idOf(b));
                     }
                 }
                 break;
             }
-            case 7: {                                             /* policies */
+            case 5: {                                             /* policies */
                 ObserverPolicy no = static_cast<ObserverPolicy>(*rc::gen::inRange(0, 3));
-                VoicePolicy nv = static_cast<VoicePolicy>(*rc::gen::inRange(0, 3));
-                r = local.updateRoomPolicies(room, idOf(a), no, nv);
+                r = local.updateRoomPolicies(room, idOf(a), no);
                 RoomCode want;
                 if (banned.count(idOf(a)) != 0) {
                     want = RoomCode::FORBIDDEN_BANNED;
@@ -3499,11 +3144,10 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
                 RC_ASSERT(r.code == want);
                 if (r.ok()) {
                     op = no;
-                    vp = nv;
                 }
                 break;
             }
-            case 8: {                                             /* join a seat */
+            case 6: {                                             /* join a seat */
                 r = local.joinTable(room, idOf(a), 0, "");
                 RC_ASSERT(!r.ok());                               /* game already runs */
                 if (banned.count(idOf(a)) != 0) {
@@ -3511,19 +3155,19 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
                 }
                 break;
             }
-            case 9: {                                             /* move */
+            case 7: {                                             /* move */
                 r = local.submitMove(room, idOf(a), moves[b % 6]);
                 if (r.ok()) {
                     RC_ASSERT(seated(a));
                 }
                 break;
             }
-            case 10: {                                            /* time passes */
+            case 8: {                                             /* time passes */
                 t += *rc::gen::inRange(0, 70000);
                 local.tick();
                 break;
             }
-            case 11: {                                            /* rare resignation */
+            case 9: {                                             /* rare resignation */
                 if (*rc::gen::inRange(0, 6) == 0) {
                     r = local.resign(room, idOf(a));
                     RC_ASSERT(seated(a) || !r.ok());
@@ -3548,7 +3192,6 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
             RC_ASSERT(v.latestSeq >= lastSeq);
             lastSeq = v.latestSeq;
             RC_ASSERT(v.config.observerPolicy == op);
-            RC_ASSERT(v.config.voicePolicy == vp);
 
             std::vector<int64_t> bl = local.bannedPlayers(room);
             RC_ASSERT(std::set<int64_t>(bl.begin(), bl.end()) == banned);
@@ -3557,24 +3200,8 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
             for (std::set<int64_t>::const_iterator o = obs.begin(); o != obs.end(); ++o) {
                 RC_ASSERT(banned.count(*o) == 0);
             }
-            if (op == ObserverPolicy::NO_OBSERVERS && v.phase != RoomPhase::FINISHED) {
+            if (op == ObserverPolicy::NO_OBSERVERS && v.phase == RoomPhase::IN_PROGRESS) {
                 RC_ASSERT(obs.empty());
-            }
-            for (size_t i = 0; i < v.voicePeers.size(); ++i) {
-                int64_t id = v.voicePeers[i].playerId;
-                RC_ASSERT(banned.count(id) == 0);
-                RC_ASSERT(!isMuted(id, true));
-                int idx = -1;
-                for (int k = 0; k < 8; ++k) {
-                    if (idOf(k) == id) {
-                        idx = k;
-                    }
-                }
-                RC_ASSERT(idx >= 0);
-                RC_ASSERT(voiceOk(idx, obs));
-            }
-            if (vp == VoicePolicy::DISABLED) {
-                RC_ASSERT(v.voicePeers.empty());
             }
 
             /* a banned player is locked out of every read and write */
@@ -3590,15 +3217,10 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
                 RC_ASSERT(local.getTranscript(room, id, tr).code == RoomCode::FORBIDDEN_BANNED);
                 RC_ASSERT(local.postBoardChat(room, id, ChatScope::ALL, "hi").code ==
                           RoomCode::FORBIDDEN_BANNED);
-                RC_ASSERT(local.submitVoiceSignal(room, id, p[0], VoiceSignalType::SDP_OFFER, "{}").code ==
-                          RoomCode::FORBIDDEN_BANNED);
-                RC_ASSERT(local.submitVoiceMeta(room, id, VoiceMetaAction::JOINED_VOICE).code ==
-                          RoomCode::FORBIDDEN_BANNED);
                 RC_ASSERT(local.observeRoom(room, id).code == RoomCode::FORBIDDEN_BANNED);
             }
 
-            /* the event stream carries nothing from banned players and no
-             * signal that was not addressed to the viewer */
+            /* the event stream carries nothing from banned players */
             for (int viewer = 0; viewer < seats; ++viewer) {
                 RoomPoll rp;
                 RC_ASSERT(local.pollRoomEvents(room, idOf(viewer), 0, 500, rp).ok());
@@ -3607,13 +3229,8 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
                     const RoomEvent &e = rp.events[i];
                     RC_ASSERT(e.seq > prev);
                     prev = e.seq;
-                    if (e.type == RoomEventType::CHAT || e.type == RoomEventType::VOICE_META) {
+                    if (e.type == RoomEventType::CHAT) {
                         RC_ASSERT(banned.count(e.playerId) == 0);
-                    }
-                    if (e.type == RoomEventType::VOICE_SIGNAL) {
-                        RC_ASSERT(e.targetPlayerId == idOf(viewer));
-                        RC_ASSERT(banned.count(e.playerId) == 0);
-                        RC_ASSERT(e.text.size() <= GameRoomManager::kMaxVoicePayloadBytes);
                     }
                     if (e.type == RoomEventType::CHAT && e.scope == ChatScope::TEAM) {
                         RC_ASSERT(c.mode == GAME_MODE_4);
@@ -3623,7 +3240,6 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
             RoomPoll anon;
             if (local.pollRoomEvents(room, 0, 0, 500, anon).ok()) {
                 for (size_t i = 0; i < anon.events.size(); ++i) {
-                    RC_ASSERT(anon.events[i].type != RoomEventType::VOICE_SIGNAL);
                     RC_ASSERT(!(anon.events[i].type == RoomEventType::CHAT &&
                                 anon.events[i].scope == ChatScope::TEAM));
                 }
@@ -3742,38 +3358,28 @@ TEST(GameRoomManagerTest, PartialPolicyUpdateKeepsTheOtherField)
 {
     GameTableConfig c = cfg();
     c.observerPolicy = ObserverPolicy::SILENT_OBSERVERS;
-    c.voicePolicy = VoicePolicy::ALL_ALLOWED;
     std::string room = startTable(c, 2);
     std::optional<ObserverPolicy> noObserver;
-    std::optional<VoicePolicy> noVoice;
 
-    /* Only voice changes: the observer policy must survive untouched. */
-    EXPECT_OK(mgr->updateRoomPolicies(room, p[0], noObserver,
-                                      std::optional<VoicePolicy>(VoicePolicy::DISABLED)));
-    CHECK_TRUE(view(room).config.observerPolicy == ObserverPolicy::SILENT_OBSERVERS);
-    CHECK_TRUE(view(room).config.voicePolicy == VoicePolicy::DISABLED);
-
-    /* Only the observer policy changes: voice must survive untouched. */
+    /* Observer policy changes. */
     EXPECT_OK(mgr->updateRoomPolicies(
-        room, p[1], std::optional<ObserverPolicy>(ObserverPolicy::OPEN), noVoice));
+        room, p[1], std::optional<ObserverPolicy>(ObserverPolicy::OPEN)));
     CHECK_TRUE(view(room).config.observerPolicy == ObserverPolicy::OPEN);
-    CHECK_TRUE(view(room).config.voicePolicy == VoicePolicy::DISABLED);
 
     /* An update that changes nothing emits no event. */
     int64_t before = view(room).latestSeq;
     EXPECT_OK(mgr->updateRoomPolicies(
-        room, p[0], std::optional<ObserverPolicy>(ObserverPolicy::OPEN), noVoice));
+        room, p[0], std::optional<ObserverPolicy>(ObserverPolicy::OPEN)));
     CHECK_EQUAL(before, view(room).latestSeq);
 
     /* Nothing to change, a non-seated actor and an unknown room all fail. */
-    EXPECT_CODE(INVALID_ARGUMENT, mgr->updateRoomPolicies(room, p[0], noObserver, noVoice));
+    EXPECT_CODE(INVALID_ARGUMENT, mgr->updateRoomPolicies(room, p[0], noObserver));
     EXPECT_CODE(FORBIDDEN_NOT_SEATED,
                 mgr->updateRoomPolicies(
-                    room, p[2], std::optional<ObserverPolicy>(ObserverPolicy::OPEN), noVoice));
+                    room, p[2], std::optional<ObserverPolicy>(ObserverPolicy::OPEN)));
     EXPECT_CODE(NOT_FOUND,
                 mgr->updateRoomPolicies(
-                    "no-such-room", p[0], std::optional<ObserverPolicy>(ObserverPolicy::OPEN),
-                    noVoice));
+                    "no-such-room", p[0], std::optional<ObserverPolicy>(ObserverPolicy::OPEN)));
     CHECK_TRUE(view(room).config.observerPolicy == ObserverPolicy::OPEN);
 }
 
@@ -3825,7 +3431,7 @@ TEST(GameRoomManagerTest, HotRestoreAcrossManagerRecreationWaitingAndInProgressA
     EXPECT_OK(mgr->submitMove(inProgId, p[0], "73+a"));
     EXPECT_OK(mgr->submitMove(inProgId, p[1], "77+e"));
     EXPECT_OK(mgr->observeRoom(inProgId, p[6]));
-    EXPECT_OK(mgr->muteUser(inProgId, p[0], p[6], true, false));
+    EXPECT_OK(mgr->muteUser(inProgId, p[0], p[6], true));
 
     /* 3. IN_PROGRESS 4P room with moves */
     RoomResult r4p = mgr->createTable(p[2], cfg(GAME_MODE_4));

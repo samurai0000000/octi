@@ -23,11 +23,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -229,17 +232,7 @@ class MainActivity : ComponentActivity() {
             isSplashActive = false
             return true
         }
-        if (::appViewModel.isInitialized && appViewModel.onHardwareKeyEvent(keyCode, true)) {
-            return true
-        }
         return super.onKeyDown(keyCode, event)
-    }
-
-    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        if (::appViewModel.isInitialized && appViewModel.onHardwareKeyEvent(keyCode, false)) {
-            return true
-        }
-        return super.onKeyUp(keyCode, event)
     }
 
     override fun onResume() {
@@ -518,7 +511,7 @@ fun OctiMainAppContent(
                 OctiAppViewModel.AppTab.BOARD -> {
                     Column(
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         val isOnlineRoom = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM
                         val isGameOver = viewModel.isOnlineGameOver() && boardRev >= 0L
@@ -527,14 +520,14 @@ fun OctiMainAppContent(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 8.dp, vertical = 2.dp),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(8.dp),
                                 colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
                                 border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                        .padding(horizontal = 10.dp, vertical = 4.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -545,36 +538,49 @@ fun OctiMainAppContent(
                                     }
                                     Text(
                                         text = titleText,
-                                        style = MaterialTheme.typography.titleMedium,
+                                        style = MaterialTheme.typography.labelLarge,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = OctiTheme.colors.accentBrass,
-                                        modifier = Modifier.weight(1f, fill = false)
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(end = 6.dp)
                                     )
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         if (isOnlineRoom) {
                                             Button(
                                                 onClick = { viewModel.proposeRematch() },
+                                                modifier = Modifier.height(28.dp),
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                                 colors = ButtonDefaults.buttonColors(
                                                     containerColor = OctiTheme.colors.accentBrass,
                                                     contentColor = OctiTheme.colors.windowBg
                                                 )
                                             ) {
-                                                Text("Rematch", fontWeight = FontWeight.Bold)
+                                                Text("Rematch", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                                             }
                                             OutlinedButton(
-                                                onClick = { viewModel.exitOnlineTableViewAsync() }
+                                                onClick = { viewModel.exitOnlineTableViewAsync() },
+                                                modifier = Modifier.height(28.dp),
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                                             ) {
-                                                Text("Back to Lobby", fontWeight = FontWeight.SemiBold)
+                                                Text("Lobby", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
                                             }
                                         } else {
                                             Button(
                                                 onClick = { viewModel.setShowNewGameDialog(true) },
+                                                modifier = Modifier.height(28.dp),
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                                 colors = ButtonDefaults.buttonColors(
                                                     containerColor = OctiTheme.colors.accentBrass,
                                                     contentColor = OctiTheme.colors.windowBg
                                                 )
                                             ) {
-                                                Text("New Game", fontWeight = FontWeight.Bold)
+                                                Text("New Game", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                                             }
                                         }
                                     }
@@ -602,85 +608,77 @@ fun OctiMainAppContent(
                                 val totalSec = ttlMs / 1000
                                 val mm = totalSec / 60
                                 val ss = totalSec % 60
-                                " • Idle TTL %02d:%02d".format(mm, ss)
+                                " • TTL %02d:%02d".format(mm, ss)
                             } else ""
+                            val rawRoomId = activeRoomId.ifEmpty { activeGameView?.roomId ?: "" }
+                            val shortRoomId = if (rawRoomId.length > 16) rawRoomId.take(16) else rawRoomId
+                            val modeTag = activeGameView?.mode ?: "2P"
                             val statusText = if (isWaiting) {
-                                "Waiting for Players at Table #${activeRoomId.ifEmpty { activeGameView?.roomId ?: "" }}$ttlStr"
+                                "Table #$shortRoomId ($modeTag) • Waiting$ttlStr"
                             } else {
-                                "Online Room: #${activeRoomId.ifEmpty { activeGameView?.roomId ?: "" }}$ttlStr"
+                                "Table #$shortRoomId ($modeTag)$ttlStr"
                             }
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                                shape = RoundedCornerShape(10.dp),
+                                    .padding(horizontal = 8.dp, vertical = 1.dp),
+                                shape = RoundedCornerShape(8.dp),
                                 colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
-                                border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
+                                border = BorderStroke(1.dp, OctiTheme.colors.accentBrass)
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                        .padding(horizontal = 10.dp, vertical = 4.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
                                         text = statusText,
-                                        style = MaterialTheme.typography.titleSmall,
+                                        style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = OctiTheme.colors.accentBrass,
-                                        modifier = Modifier.weight(1f)
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(end = 6.dp)
                                     )
                                     Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        val viewerSeat = activeGameView?.viewerSeat ?: 0
                                         val isHost = !currentProfile?.uuid.isNullOrBlank() && currentProfile?.uuid == activeGameView?.hostUuid
                                         val isAdmin = currentProfile?.isAdmin == true
-
-                                        if (isWaiting && viewerSeat == 0) {
-                                            val maxSeats = if (activeGameView?.mode == "4P") 4 else 2
-                                            for (s in 1..maxSeats) {
-                                                val sLetter = when (s) { 1 -> "A"; 2 -> "B"; 3 -> "C"; 4 -> "D"; else -> "$s" }
-                                                val seatObj = activeGameView?.seats?.firstOrNull { it.seat == s }
-                                                val isOccupied = seatObj != null && (seatObj.playerUuid.isNotEmpty() || seatObj.handle.isNotEmpty())
-                                                val canSit = !isOccupied && isAuthenticated
-                                                Button(
-                                                    onClick = {
-                                                        if (activeGameView?.hasPasscode == true) {
-                                                            pendingPasscodeSeat = s
-                                                        } else {
-                                                            viewModel.joinOnlineTableAsync(activeRoomId, s, "")
-                                                        }
-                                                    },
-                                                    enabled = canSit,
-                                                    colors = ButtonDefaults.buttonColors(
-                                                        containerColor = OctiTheme.colors.accentBrass,
-                                                        contentColor = OctiTheme.colors.windowBg
-                                                    )
-                                                ) {
-                                                    Text("Sit $sLetter ($s)")
-                                                }
-                                            }
-                                        }
 
                                         if (isHost || isAdmin) {
                                             Button(
                                                 onClick = { viewModel.purgeOnlineTableAsync(activeRoomId) },
+                                                modifier = Modifier.height(26.dp),
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                                                 colors = ButtonDefaults.buttonColors(
                                                     containerColor = MaterialTheme.colorScheme.error,
                                                     contentColor = Color.White
                                                 )
                                             ) {
-                                                Text(if (isAdmin && !isHost) "Purge" else "Delete")
+                                                Text(
+                                                    text = if (isAdmin && !isHost) "Purge" else "Delete",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold
+                                                )
                                             }
                                         }
 
                                         OutlinedButton(
-                                            onClick = { viewModel.exitOnlineTableViewAsync() }
+                                            onClick = { viewModel.exitOnlineTableViewAsync() },
+                                            modifier = Modifier.height(26.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                                         ) {
-                                            Text("Leave Table")
+                                            Text(
+                                                text = "Leave",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
                                         }
                                     }
                                 }
@@ -704,7 +702,6 @@ fun OctiMainAppContent(
                                 val cleanHandle = proposerHandle.removePrefix("@")
                                 val propTitle = when (prop.type) {
                                     "DRAW_OFFER" -> "Draw offer from @$cleanHandle"
-                                    "UNDO_REQUEST" -> "Undo request from @$cleanHandle"
                                     "PAUSE_REQUEST" -> "Pause request from @$cleanHandle"
                                     "REMATCH_REQUEST" -> "Rematch offer from @$cleanHandle"
                                     else -> "Proposal from @$cleanHandle"
@@ -712,49 +709,59 @@ fun OctiMainAppContent(
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 8.dp, vertical = 2.dp),
-                                    shape = RoundedCornerShape(10.dp),
+                                        .padding(horizontal = 8.dp, vertical = 1.dp),
+                                    shape = RoundedCornerShape(8.dp),
                                     colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
-                                    border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
+                                    border = BorderStroke(1.dp, OctiTheme.colors.accentBrass)
                                 ) {
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                                            .padding(horizontal = 10.dp, vertical = 4.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
                                             text = propTitle,
-                                            style = MaterialTheme.typography.titleSmall,
+                                            style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold,
                                             color = OctiTheme.colors.accentBrass,
-                                            modifier = Modifier.weight(1f)
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .padding(end = 6.dp)
                                         )
                                         Row(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             if (viewerSeat > 0 && prop.proposerUuid != myUuid) {
                                                 Button(
                                                     onClick = { viewModel.acceptActiveProposal() },
+                                                    modifier = Modifier.height(26.dp),
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                                                     colors = ButtonDefaults.buttonColors(
                                                         containerColor = OctiTheme.colors.accentBrass,
                                                         contentColor = OctiTheme.colors.windowBg
                                                     )
                                                 ) {
-                                                    Text("Accept")
+                                                    Text("Accept", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                                                 }
                                                 OutlinedButton(
-                                                    onClick = { viewModel.declineActiveProposal() }
+                                                    onClick = { viewModel.declineActiveProposal() },
+                                                    modifier = Modifier.height(26.dp),
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                                                 ) {
-                                                    Text("Decline")
+                                                    Text("Decline", style = MaterialTheme.typography.labelSmall)
                                                 }
                                             } else if (prop.proposerUuid == myUuid) {
                                                 OutlinedButton(
-                                                    onClick = { viewModel.declineActiveProposal() }
+                                                    onClick = { viewModel.declineActiveProposal() },
+                                                    modifier = Modifier.height(26.dp),
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                                                 ) {
-                                                    Text("Withdraw")
+                                                    Text("Withdraw", style = MaterialTheme.typography.labelSmall)
                                                 }
                                             }
                                         }
@@ -765,14 +772,15 @@ fun OctiMainAppContent(
 
                         Box(
                             modifier = Modifier
-                                .weight(1f, fill = false)
                                 .fillMaxWidth()
-                                .aspectRatio(aspectRatio),
+                                .wrapContentHeight(),
                             contentAlignment = Alignment.Center
                         ) {
                             OctiBoardCanvas(
                                 viewModel = viewModel,
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(aspectRatio),
                                 lastMoveModifiedSquares = lastMoveModifiedSquares,
                                 onUserInteraction = { viewModel.clearLastMoveIndicators() },
                                 awaitingMatchStart = awaitingMatchStart
@@ -795,7 +803,15 @@ fun OctiMainAppContent(
                             viewModel = viewModel,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 8.dp)
+                                .weight(1f)
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                            onRequestSitSeat = { seatNum ->
+                                if (activeGameView?.hasPasscode == true) {
+                                    pendingPasscodeSeat = seatNum
+                                } else {
+                                    viewModel.joinOnlineTableAsync(activeRoomId, seatNum, "")
+                                }
+                            }
                         )
                     }
                 }

@@ -548,7 +548,6 @@ Json configJson(const GameTableConfig &c)
     j["allow_takeback"] = c.allowTakeback;
     j["allow_robots"] = c.allowRobots;
     j["observer_policy"] = toString(c.observerPolicy);
-    j["voice_policy"] = toString(c.voicePolicy);
     return j;
 }
 
@@ -647,14 +646,6 @@ bool parseTableConfig(const Json &b, GameTableConfig &cfg, std::string &err)
     }
     if (!text.empty() && !parseObserverPolicy(text, cfg.observerPolicy)) {
         err = "observer_policy must be OPEN, SILENT_OBSERVERS or NO_OBSERVERS";
-        return false;
-    }
-    text.clear();
-    if (!fieldString(b, "voice_policy", false, text, err)) {
-        return false;
-    }
-    if (!text.empty() && !parseVoicePolicy(text, cfg.voicePolicy)) {
-        err = "voice_policy must be DISABLED, PLAYERS_ONLY or ALL_ALLOWED";
         return false;
     }
     return fieldString(b, "passcode", false, cfg.passcode, err);
@@ -879,8 +870,6 @@ struct OctiHttpServer::Impl {
     void handleResign(const Request &req, Response &res);
     void handleAction(const Request &req, Response &res);
     void handleChat(const Request &req, Response &res);
-    void handleVoiceSignal(const Request &req, Response &res);
-    void handleVoiceMeta(const Request &req, Response &res);
     void handleBan(const Request &req, Response &res);
     void handleMute(const Request &req, Response &res);
     void handleSettings(const Request &req, Response &res);
@@ -1328,11 +1317,6 @@ bool OctiHttpServer::Impl::requireAuth(const Request &req, Response &res,
                       "robots cannot update human profiles");
             return false;
         }
-        if (path.find("/voice") != std::string::npos) {
-            sendError(res, 403, "FORBIDDEN_ROBOT",
-                      "robots cannot participate in voice channels");
-            return false;
-        }
 
         auth.isRobot = true;
         auth.robotRecord = robot;
@@ -1556,14 +1540,6 @@ Json OctiHttpServer::Impl::roomViewJson(const RoomView &v)
         props.push_back(pj);
     }
     j["proposals"] = props;
-    Json peers = Json::array();
-    for (size_t i = 0; i < v.voicePeers.size(); ++i) {
-        Json pj;
-        pj["player_uuid"] = uuidOf(v.voicePeers[i].playerId);
-        pj["mic_muted"] = v.voicePeers[i].micMuted;
-        peers.push_back(pj);
-    }
-    j["voice_peers"] = peers;
     j["seq"] = v.latestSeq;
     j["archived"] = v.archived;
     j["rematch_room_id"] = v.rematchRoomId;
@@ -1611,32 +1587,19 @@ Json OctiHttpServer::Impl::roomEventJson(const RoomEvent &e)
         j["scope"] = toString(e.scope);
         j["text"] = e.text;
         break;
-    case RoomEventType::VOICE_SIGNAL: {
-        j["signal_type"] = e.detail;
-        Json payload = Json::parse(e.text, nullptr, false);
-        if (!payload.is_discarded()) {
-            j["payload"] = payload;
-        }
-        break;
-    }
-    case RoomEventType::VOICE_META:
-        j["action"] = e.detail;
-        break;
     case RoomEventType::OBSERVER_BANNED:
         j["reason"] = e.text;
         break;
     case RoomEventType::USER_MUTED:
         j["mute_chat"] = e.detail.find("mute_chat=1") != std::string::npos;
-        j["mute_voice"] = e.detail.find("mute_voice=1") != std::string::npos;
         break;
     case RoomEventType::POLICY_UPDATED: {
-        size_t sep = e.detail.find(';');
         const std::string op = "observer_policy=";
-        const std::string vp = "voice_policy=";
-        if (sep != std::string::npos && e.detail.compare(0, op.size(), op) == 0 &&
-            e.detail.compare(sep + 1, vp.size(), vp) == 0) {
-            j["observer_policy"] = e.detail.substr(op.size(), sep - op.size());
-            j["voice_policy"] = e.detail.substr(sep + 1 + vp.size());
+        if (e.detail.compare(0, op.size(), op) == 0) {
+            size_t sep = e.detail.find(';');
+            j["observer_policy"] = sep != std::string::npos
+                                       ? e.detail.substr(op.size(), sep - op.size())
+                                       : e.detail.substr(op.size());
         }
         break;
     }
@@ -4335,75 +4298,6 @@ void OctiHttpServer::Impl::handleChat(const Request &req, Response &res)
                Json::object());
 }
 
-void OctiHttpServer::Impl::handleVoiceSignal(const Request &req,
-                                             Response &res)
-{
-    Auth auth;
-    std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
-        return;
-    }
-    Json body;
-    if (!readJsonBody(req, res, body, false)) {
-        return;
-    }
-    int64_t target = 0;
-    if (!resolveTarget(body, "target", res, target)) {
-        return;
-    }
-    std::string typeText;
-    std::string err;
-    if (!fieldString(body, "type", true, typeText, err)) {
-        sendError(res, 400, "INVALID_ARGUMENT", err);
-        return;
-    }
-    VoiceSignalType type = VoiceSignalType::SDP_OFFER;
-    if (!parseVoiceSignalType(typeText, type)) {
-        sendError(res, 400, "INVALID_ARGUMENT",
-                  "type must be SDP_OFFER, SDP_ANSWER or ICE_CANDIDATE");
-        return;
-    }
-    Json::const_iterator payload = body.find("payload");
-    if (payload == body.end() || payload->is_null()) {
-        sendError(res, 400, "INVALID_ARGUMENT", "missing field 'payload'");
-        return;
-    }
-    /* Signaling only: the payload is an opaque JSON blob, at most 4 KiB. */
-    finishRoom(res,
-               rooms.submitVoiceSignal(id, auth.playerId, target, type,
-                                       payload->dump(-1, ' ', false,
-                                                     Json::error_handler_t::replace)),
-               Json::object());
-}
-
-void OctiHttpServer::Impl::handleVoiceMeta(const Request &req, Response &res)
-{
-    Auth auth;
-    std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
-        return;
-    }
-    Json body;
-    std::string actionText;
-    std::string err;
-    if (!readJsonBody(req, res, body, false)) {
-        return;
-    }
-    if (!fieldString(body, "action", true, actionText, err)) {
-        sendError(res, 400, "INVALID_ARGUMENT", err);
-        return;
-    }
-    VoiceMetaAction action = VoiceMetaAction::JOINED_VOICE;
-    if (!parseVoiceMetaAction(actionText, action)) {
-        sendError(res, 400, "INVALID_ARGUMENT",
-                  "action must be JOINED_VOICE, LEFT_VOICE, MIC_MUTED or "
-                  "MIC_UNMUTED");
-        return;
-    }
-    finishRoom(res, rooms.submitVoiceMeta(id, auth.playerId, action),
-               Json::object());
-}
-
 void OctiHttpServer::Impl::handleBan(const Request &req, Response &res)
 {
     Auth auth;
@@ -4432,8 +4326,7 @@ void OctiHttpServer::Impl::handleBan(const Request &req, Response &res)
 }
 
 /*
- * Sets the complete mute state of the target: an omitted mute_chat or
- * mute_voice means false, so {"mute_chat":false} also lifts a voice mute.
+ * Sets the chat mute state of the target.
  */
 void OctiHttpServer::Impl::handleMute(const Request &req, Response &res)
 {
@@ -4448,21 +4341,18 @@ void OctiHttpServer::Impl::handleMute(const Request &req, Response &res)
         !resolveTarget(body, "target", res, target)) {
         return;
     }
-    if (!fieldPresent(body, "mute_chat") && !fieldPresent(body, "mute_voice")) {
-        sendError(res, 400, "INVALID_ARGUMENT",
-                  "send mute_chat and/or mute_voice");
+    if (!fieldPresent(body, "mute_chat")) {
+        sendError(res, 400, "INVALID_ARGUMENT", "send mute_chat");
         return;
     }
     bool muteChat = false;
-    bool muteVoice = false;
     std::string err;
-    if (!fieldBool(body, "mute_chat", false, muteChat, err) ||
-        !fieldBool(body, "mute_voice", false, muteVoice, err)) {
+    if (!fieldBool(body, "mute_chat", false, muteChat, err)) {
         sendError(res, 400, "INVALID_ARGUMENT", err);
         return;
     }
     finishRoom(res,
-               rooms.muteUser(id, auth.playerId, target, muteChat, muteVoice),
+               rooms.muteUser(id, auth.playerId, target, muteChat),
                Json::object());
 }
 
@@ -4478,46 +4368,25 @@ void OctiHttpServer::Impl::handleSettings(const Request &req, Response &res)
         return;
     }
     std::string observerText;
-    std::string voiceText;
     std::string err;
-    if (!fieldString(body, "observer_policy", false, observerText, err) ||
-        !fieldString(body, "voice_policy", false, voiceText, err)) {
+    if (!fieldString(body, "observer_policy", false, observerText, err)) {
         sendError(res, 400, "INVALID_ARGUMENT", err);
         return;
     }
-    if (observerText.empty() && voiceText.empty()) {
-        sendError(res, 400, "INVALID_ARGUMENT",
-                  "send observer_policy and/or voice_policy");
+    if (observerText.empty()) {
+        sendError(res, 400, "INVALID_ARGUMENT", "send observer_policy");
         return;
     }
     std::optional<ObserverPolicy> op;
-    std::optional<VoicePolicy> vp;
-    if (!observerText.empty()) {
-        ObserverPolicy parsed = ObserverPolicy::OPEN;
-        if (!parseObserverPolicy(observerText, parsed)) {
-            sendError(res, 400, "INVALID_ARGUMENT",
-                      "observer_policy must be OPEN, SILENT_OBSERVERS or "
-                      "NO_OBSERVERS");
-            return;
-        }
-        op = parsed;
+    ObserverPolicy parsed = ObserverPolicy::OPEN;
+    if (!parseObserverPolicy(observerText, parsed)) {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "observer_policy must be OPEN, SILENT_OBSERVERS or "
+                  "NO_OBSERVERS");
+        return;
     }
-    if (!voiceText.empty()) {
-        VoicePolicy parsed = VoicePolicy::DISABLED;
-        if (!parseVoicePolicy(voiceText, parsed)) {
-            sendError(res, 400, "INVALID_ARGUMENT",
-                      "voice_policy must be DISABLED, PLAYERS_ONLY or "
-                      "ALL_ALLOWED");
-            return;
-        }
-        vp = parsed;
-    }
-    /*
-     * The manager merges the omitted field with the room's current value
-     * under its own lock, so two concurrent requests that each change a
-     * different policy cannot overwrite one another.
-     */
-    RoomResult r = rooms.updateRoomPolicies(id, auth.playerId, op, vp);
+    op = parsed;
+    RoomResult r = rooms.updateRoomPolicies(id, auth.playerId, op);
     if (!r.ok()) {
         sendRoomError(res, r);
         return;
@@ -4530,7 +4399,6 @@ void OctiHttpServer::Impl::handleSettings(const Request &req, Response &res)
     }
     Json j;
     j["observer_policy"] = toString(view.config.observerPolicy);
-    j["voice_policy"] = toString(view.config.voicePolicy);
     finishRoom(res, r, j);
 }
 
@@ -6286,8 +6154,6 @@ void OctiHttpServer::Impl::registerRoutes()
         {"POST", "/api/v1/games/:id/resign", &Impl::handleResign},
         {"POST", "/api/v1/games/:id/action", &Impl::handleAction},
         {"POST", "/api/v1/games/:id/chat", &Impl::handleChat},
-        {"POST", "/api/v1/games/:id/voice-signal", &Impl::handleVoiceSignal},
-        {"POST", "/api/v1/games/:id/voice-meta", &Impl::handleVoiceMeta},
         {"POST", "/api/v1/games/:id/ban", &Impl::handleBan},
         {"POST", "/api/v1/games/:id/mute", &Impl::handleMute},
         {"POST", "/api/v1/games/:id/settings", &Impl::handleSettings},
@@ -6330,9 +6196,9 @@ void OctiHttpServer::Impl::registerRoutes()
     }
 
     /*
-     * Voice stays peer-to-peer and nothing but JSON is ever read: a request
-     * that announces a body of any other type (audio, octet-stream,
-     * multipart...) is refused before a single body byte is consumed.
+     * Nothing but JSON is ever read: a request that announces a body of
+     * any other type (audio, octet-stream, multipart...) is refused before
+     * a single body byte is consumed.
      */
     server.set_pre_routing_handler(
         [this](const Request &rq, Response &rs) -> httplib::Server::HandlerResponse {

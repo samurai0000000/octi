@@ -2430,7 +2430,7 @@ tr.active-ply {
         <div id="robot-new-token-box" style="display:none;background:#eff6ff;border:1px solid #93c5fd;padding:12px;border-radius:8px;margin-top:10px;"></div>
         <div style="margin-top:14px;">
           <h4 style="margin:0 0 8px 0;">My Registered Robots</h4>
-          <table id="robots-table">
+          <table id="account-robots-table">
             <thead>
               <tr>
                 <th>Robot Name</th>
@@ -2442,7 +2442,7 @@ tr.active-ply {
                 <th>Actions</th>
               </tr>
             </thead>
-            <tbody id="robots-tbody"></tbody>
+            <tbody id="account-robots-tbody"></tbody>
           </table>
         </div>
       </div>
@@ -24800,7 +24800,7 @@ function toggleAccountRobots(forceOpen) {
   btn.setAttribute("aria-expanded", willExpand ? "true" : "false");
   btn.innerHTML = willExpand ? "Hide Robot Registration &#9652;" : "Show Robot Registration &#9662;";
   body.style.display = willExpand ? "block" : "none";
-  if (willExpand && currentUser) {
+  if (willExpand && (currentUser || localStorage.getItem("octi_jwt_token"))) {
     loadMyRobots();
   }
 }
@@ -25592,7 +25592,7 @@ $("btn-conflict-merge").addEventListener("click", function () {
  * Tab 6: Robot Registration & Token Management
  * ========================================================================= */
 function loadMyRobots() {
-  if (!currentUser) return;
+  if (!currentUser && !localStorage.getItem("octi_jwt_token")) return;
   api("/api/v1/robots").then(function (res) {
     var robots = res.robots || [];
     var activeCount = 0;
@@ -25611,7 +25611,7 @@ function loadMyRobots() {
       createBtn.title = activeCount >= maxR ? "Maximum quota of " + maxR + " active robots reached" : "";
     }
 
-    var tbody = $("robots-tbody");
+    var tbody = $("account-robots-tbody");
     if (!tbody) return;
     clear(tbody);
     if (!robots.length) {

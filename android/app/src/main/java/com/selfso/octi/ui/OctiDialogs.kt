@@ -1132,7 +1132,10 @@ fun CreateTableDialog(
         textContentColor = OctiTheme.colors.textPrimary,
         title = { Text("Create Online Table") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text("Game Mode", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("2P", "4P", "OFK").forEach { m ->
@@ -1185,10 +1188,6 @@ fun CreateTableDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = rated, onCheckedChange = { rated = it })
                     Text("Elo Rated Match")
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = allowTakeback, onCheckedChange = { allowTakeback = it })
-                    Text("Allow Mutual Takebacks")
                 }
                 OutlinedTextField(
                     value = passcode,

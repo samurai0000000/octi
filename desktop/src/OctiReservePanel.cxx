@@ -44,8 +44,6 @@ OctiReservePanel::OctiReservePanel(QWidget *parent)
     , _canvas(nullptr)
     , _soundSynth(nullptr)
     , _theme(ThemeId::OBSIDIAN_BRASS)
-    , _pttActive(false)
-    , _voiceMutedByRoom(false)
     , _timeControlEnabled(true)
 {
     setMinimumSize(280, 480);
@@ -79,45 +77,6 @@ ThemeId OctiReservePanel::theme() const
 void OctiReservePanel::refresh()
 {
     update();
-}
-
-void OctiReservePanel::setPushToTalkCallback(std::function<void(bool talking)> cb)
-{
-    _pttCallback = std::move(cb);
-}
-
-void OctiReservePanel::setPushToTalkActive(bool talking)
-{
-    bool nextState = talking && !_voiceMutedByRoom;
-    if (_pttActive != nextState) {
-        _pttActive = nextState;
-        if (_pttCallback) {
-            _pttCallback(_pttActive);
-        }
-        update();
-    }
-}
-
-bool OctiReservePanel::isPushToTalkActive() const
-{
-    return _pttActive;
-}
-
-void OctiReservePanel::setVoiceMutedByRoom(bool muted)
-{
-    _voiceMutedByRoom = muted;
-    if (_voiceMutedByRoom && _pttActive) {
-        _pttActive = false;
-        if (_pttCallback) {
-            _pttCallback(false);
-        }
-    }
-    update();
-}
-
-bool OctiReservePanel::isVoiceMutedByRoom() const
-{
-    return _voiceMutedByRoom;
 }
 
 void OctiReservePanel::setTimeControlEnabled(bool enabled)
@@ -305,46 +264,70 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
 
         // Player header & Fischer digital clock
         int pLetterIdx = player - PLAYER_A;
-        QString pName;
+        QString handlePart;
+        QString suffixPart;
         const ReserveSeatMetadata *meta = seatMetadata(static_cast<int>(player));
         if (meta && !meta->handle.empty()) {
-            pName = QString("@%1").arg(QString::fromStdString(meta->handle));
+            handlePart = QString("@%1").arg(QString::fromStdString(meta->handle));
             if (meta->rating > 0) {
-                pName += QString(" (%1)").arg(meta->rating);
+                suffixPart += QString(" (%1)").arg(meta->rating);
             }
             if (meta->isRobot) {
-                pName += " [BOT]";
+                suffixPart += " [BOT]";
             }
             if (!meta->connected) {
-                pName += " [Offline]";
+                suffixPart += " [Offline]";
             }
         } else {
-            pName = QString("Player %1").arg(QChar('A' + pLetterIdx));
+            handlePart = QString("Player %1").arg(QChar('A' + pLetterIdx));
         }
         if (mode == GAME_MODE_4) {
-            pName += (player == PLAYER_A || player == PLAYER_C)
+            suffixPart += (player == PLAYER_A || player == PLAYER_C)
                 ? " (Team A+C)" : " (Team B+D)";
         }
         if (isWinner) {
-            pName += " [WINNER]";
+            suffixPart += " [WINNER]";
         } else if (isElim) {
-            pName += " [ELIMINATED]";
+            suffixPart += " [ELIMINATED]";
         }
+        const QString pName = handlePart + suffixPart;
+
+        int seatIdx = static_cast<int>(player);
+        const bool showSitBtn = (_onlineWaitingRoom && seatIdx >= 1 && seatIdx <= 4 &&
+                                 !_onlineSeatOccupied[seatIdx] && _onlineViewerSeat == 0);
+        const qreal rightReservedW = showSitBtn ? 96.0 : 80.0;
+        const qreal availNameW = std::max(80.0, cardRect.width() - rightReservedW - 16.0);
 
         QFont hf = p.font();
         hf.setBold(true);
         hf.setPixelSize(13);
+        if (QFontMetrics(hf).horizontalAdvance(pName) > static_cast<int>(availNameW)) {
+            hf.setPixelSize(11);
+        }
         p.setFont(hf);
         p.setPen(isWinner ? pal.prongSuperGold : (isElim ? pal.legalCaptureGlow : fp.highlight));
+        QFontMetrics hfm(hf);
+        QString dispName = pName;
+        if (hfm.horizontalAdvance(pName) > static_cast<int>(availNameW)) {
+            const int suffixW = hfm.horizontalAdvance(suffixPart);
+            const int maxHandleW = static_cast<int>(availNameW) - suffixW;
+            if (maxHandleW >= 42) {
+                dispName = hfm.elidedText(handlePart, Qt::ElideRight, maxHandleW) + suffixPart;
+            } else {
+                dispName = hfm.elidedText(pName, Qt::ElideRight, static_cast<int>(availNameW));
+            }
+        }
         p.drawText(QRectF(cardRect.left() + 10.0, cardRect.top() + 6.0,
-                          cardRect.width() * 0.65, 22.0),
-                   Qt::AlignVCenter | Qt::AlignLeft, pName);
+                          availNameW, 22.0),
+                   Qt::AlignVCenter | Qt::AlignLeft, dispName);
 
-        int seatIdx = static_cast<int>(player);
-        if (_onlineWaitingRoom && seatIdx >= 1 && seatIdx <= 4 &&
-            !_onlineSeatOccupied[seatIdx] && _onlineViewerSeat == 0) {
-            QRectF sitRect(cardRect.right() - 104.0, cardRect.top() + 5.0, 96.0, 22.0);
+        if (showSitBtn) {
+            QRectF sitRect(cardRect.right() - 94.0, cardRect.top() + 5.0, 86.0, 22.0);
             _sitSeatBtnRects[seatIdx] = sitRect;
+            QFont sf = p.font();
+            sf.setBold(true);
+            sf.setPixelSize(12);
+            p.setFont(sf);
             p.setPen(QPen(pal.accentBrass, 1.4));
             p.setBrush(pal.panelCardBg);
             p.drawRoundedRect(sitRect, 5.0, 5.0);
@@ -361,9 +344,13 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
             } else {
                 clockStr = formatClockMs(remMs);
             }
+            QFont cf = p.font();
+            cf.setBold(true);
+            cf.setPixelSize(12);
+            p.setFont(cf);
             p.setPen(pal.textPrimary);
-            p.drawText(QRectF(cardRect.right() - 100.0, cardRect.top() + 6.0,
-                              90.0, 22.0),
+            p.drawText(QRectF(cardRect.right() - 82.0, cardRect.top() + 6.0,
+                              74.0, 22.0),
                        Qt::AlignVCenter | Qt::AlignRight, clockStr);
         }
 
@@ -572,8 +559,6 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
         }
     }
 
-    _pttButtonRect = QRectF();
-
     p.restore();
 }
 
@@ -626,11 +611,6 @@ void OctiReservePanel::mousePressEvent(QMouseEvent *event)
         return;
     }
     QPointF pos = mousePosF(event);
-
-    if (_pttButtonRect.contains(pos)) {
-        setPushToTalkActive(true);
-        return;
-    }
 
     if (_onlineWaitingRoom && _onlineViewerSeat == 0 && _onSitSeatRequested) {
         for (int s = 1; s <= 4; ++s) {
@@ -701,9 +681,6 @@ void OctiReservePanel::mouseMoveEvent(QMouseEvent *event)
 
 void OctiReservePanel::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (_pttActive) {
-        setPushToTalkActive(false);
-    }
     if (event && _canvas && _canvas->activeDragKind() != DragKind::NONE) {
         QPointF localPos = mousePosF(event);
         if (!rect().contains(localPos.toPoint())) {

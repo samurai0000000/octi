@@ -176,8 +176,10 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     QVBoxLayout *bannerTextCol = new QVBoxLayout();
     bannerTextCol->setSpacing(2);
     _myTableBannerLabel = new QLabel("My Active Table", _myTableBanner);
+    _myTableBannerLabel->setWordWrap(true);
     _myTableBannerLabel->setStyleSheet("font-weight: 700; border: none; background: transparent;");
     _myTableSeatsLabel = new QLabel("", _myTableBanner);
+    _myTableSeatsLabel->setWordWrap(true);
     _myTableSeatsLabel->setStyleSheet("border: none; background: transparent;");
     bannerTextCol->addWidget(_myTableBannerLabel);
     bannerTextCol->addWidget(_myTableSeatsLabel);
@@ -223,10 +225,11 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
                       << "Seats" << "Observers" << "Access" << "Host");
     _tablesTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     _tablesTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    _tablesTable->setSelectionMode(QAbstractItemView::SingleSelection);
     _tablesTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     tLayout->addWidget(_tablesTable, 2);
 
-    _inspectorBox = new QGroupBox("Table Seats & Details Inspector", tablesBox);
+    _inspectorBox = new QGroupBox("Table Seats && Details Inspector", tablesBox);
     QVBoxLayout *inspLayout = new QVBoxLayout(_inspectorBox);
     inspLayout->setContentsMargins(10, 8, 10, 8);
     inspLayout->setSpacing(4);
@@ -1179,10 +1182,16 @@ void LobbyView::rebuildTablesWidget()
     }
     _tablesTable->setRowCount(static_cast<int>(_tables.size()));
     int selectedRow = -1;
+    const OctiPalette &pal = paletteForTheme(_theme);
     for (int i = 0; i < static_cast<int>(_tables.size()); ++i) {
         const TableSummaryInfo &t = _tables[static_cast<std::size_t>(i)];
+        bool isMyActiveTable = isViewerSeatedAtTable(t) ||
+                               (!_activeRoomId.empty() && t.roomId == _activeRoomId);
         if (t.roomId == _selectedRoomId) {
             selectedRow = i;
+        } else if (_selectedRoomId.empty() && isMyActiveTable) {
+            selectedRow = i;
+            _selectedRoomId = t.roomId;
         }
         QString variant = QString("%1 • %2B%3%4")
             .arg(QString::fromStdString(t.mode))
@@ -1215,6 +1224,18 @@ void LobbyView::rebuildTablesWidget()
             i, 5, new QTableWidgetItem(access));
         _tablesTable->setItem(
             i, 6, new QTableWidgetItem(formatHandleWithAt(t.hostHandle)));
+
+        if (isMyActiveTable) {
+            for (int col = 0; col <= 6; ++col) {
+                if (QTableWidgetItem *item = _tablesTable->item(i, col)) {
+                    QFont f = item->font();
+                    f.setBold(true);
+                    item->setFont(f);
+                    item->setBackground(QBrush(QColor(200, 162, 83, 45)));
+                    item->setForeground(QBrush(pal.accentBrass));
+                }
+            }
+        }
     }
     if (selectedRow >= 0) {
         _tablesTable->selectRow(selectedRow);

@@ -427,7 +427,6 @@ public class OctiAndroidAppIntegrationTest {
             req.edgeless = false;
             req.rated = true;
             req.allowTakeback = true;
-            req.voicePolicy = "PLAYERS_ONLY";
 
             OctiNetworkClient.ApiResult<OctiNetworkClient.CreateTableResponse> created =
                     vmA.createOnlineTable(req);
@@ -467,47 +466,7 @@ public class OctiAndroidAppIntegrationTest {
             assertFalse("Bob must receive Alice's game chat via SSE",
                     vmB.getGameChatLog().getValue().isEmpty());
 
-            // 5. Push-to-Talk Voice Room & Hardware Volume Key PTT
-            assertTrue(vmA.joinVoiceChannel());
-            assertTrue(vmB.joinVoiceChannel());
-            assertTrue(vmA.isInVoiceRoom().getValue());
-            assertTrue(vmB.isInVoiceRoom().getValue());
-
-            assertTrue(vmA.getVoiceEngine().initiatePeerOffer(bobUuid));
-            long voiceDeadline = System.currentTimeMillis() + 3000L;
-            while (System.currentTimeMillis() < voiceDeadline &&
-                    (!vmA.getVoiceEngine().isPeerConnected(bobUuid) ||
-                            !vmB.getVoiceEngine().isPeerConnected(aliceUuid))) {
-                Thread.sleep(25L);
-            }
-            assertTrue(vmA.getVoiceEngine().isPeerConnected(bobUuid));
-            assertTrue(vmB.getVoiceEngine().isPeerConnected(aliceUuid));
-
-            short[] toneFrame = new short[P2pVoiceEngine.PAYLOAD_SAMPLES];
-            for (int i = 0; i < toneFrame.length; ++i) {
-                double angle = 2.0 * Math.PI * 440.0 * ((double) i / P2pVoiceEngine.SAMPLE_RATE_HZ);
-                toneFrame[i] = (short) (Math.sin(angle) * 14000.0);
-            }
-
-            // Hardware Volume Down key engages PTT
-            assertTrue(vmA.onHardwareKeyEvent(KeyEvent.KEYCODE_VOLUME_DOWN, true));
-            assertTrue(vmA.isPttActive().getValue());
-            for (int f = 0; f < 4; ++f) {
-                assertTrue(vmA.getVoiceEngine().injectTestPcmFrame(toneFrame) > 0);
-                Thread.sleep(15L);
-            }
-            assertTrue(vmA.onHardwareKeyEvent(KeyEvent.KEYCODE_VOLUME_DOWN, false));
-            assertFalse(vmA.isPttActive().getValue());
-
-            long rxDeadline = System.currentTimeMillis() + 2000L;
-            while (System.currentTimeMillis() < rxDeadline &&
-                    vmB.getVoiceEngine().packetsReceivedFrom(aliceUuid) < 2L) {
-                Thread.sleep(20L);
-            }
-            assertTrue(vmB.getVoiceEngine().packetsReceivedFrom(aliceUuid) >= 2L);
-            assertTrue(vmB.getVoiceEngine().receivedAudioRms(aliceUuid) > 0.05);
-
-            // 6. Complete game by resignation and load archived match into VCR replay
+            // 5. Complete game by resignation and load archived match into VCR replay
             assertTrue(vmB.resignOnlineGame().ok);
             assertTrue(vmA.refreshArchivedGames("2P", "", 20, 0).ok);
             assertFalse(vmA.getArchivedGamesPage().getValue().games.isEmpty());

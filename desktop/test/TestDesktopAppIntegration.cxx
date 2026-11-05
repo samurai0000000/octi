@@ -49,7 +49,6 @@
 #include "OctiMainWindow.hxx"
 #include "OctiNetworkClient.hxx"
 #include "OctiOpeningBookData.hxx"
-#include "P2pVoiceEngine.hxx"
 
 #include "selfupdate/Sha256.hxx"
 #include "selfupdate/UpdateInstaller.hxx"
@@ -447,7 +446,6 @@ TEST(DesktopAppIntegrationTest,
     }
     CHECK_TRUE(winA.isAuthenticated());
     CHECK_TRUE(winA.profileBadgeText().contains("Alice_GM"));
-    std::string uuidA = winA.currentProfile().uuid;
 
     /* 2. Player B: Manual token sign-in -> 201 Created -> Step-2 Handle */
     std::string bobAppleToken = makeToken("apple", "sub-e2e-bob", "Bob");
@@ -797,61 +795,15 @@ TEST(DesktopAppIntegrationTest,
     CHECK_TRUE(winB.declineActiveProposal().ok);
     CHECK_FALSE(winB.hasActiveProposal());
 
-    /* 8. Push-to-Talk P2P Voice Chat Flow */
-    CHECK_TRUE(winA.joinOnlineVoice());
-    CHECK_TRUE(winB.joinOnlineVoice());
-    CHECK_TRUE(winA.voiceEngine()->initiatePeerOffer(uuidB));
-
-    for (int i = 0; i < 40 && (!winA.voiceEngine()->isPeerConnected(uuidB) ||
-                               !winB.voiceEngine()->isPeerConnected(uuidA)); ++i) {
-        winA.pumpUiEvents();
-        winB.pumpUiEvents();
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
-    CHECK_TRUE(winA.voiceEngine()->isPeerConnected(uuidB));
-    CHECK_TRUE(winB.voiceEngine()->isPeerConnected(uuidA));
-
-    std::vector<std::int16_t> tone(VoiceUdpPacket::kPayloadSamples);
-    for (std::size_t i = 0; i < tone.size(); ++i) {
-        double ph = 2.0 * M_PI * 440.0 * static_cast<double>(i) / 16000.0;
-        tone[i] = static_cast<std::int16_t>(std::sin(ph) * 12000.0);
-    }
-
-    /* Zero packets while PTT is released */
-    CHECK_FALSE(winA.isPushToTalkActive());
-    LONGS_EQUAL(0, static_cast<long>(
-                       winA.voiceEngine()->transmitPcmFrame20Ms(tone.data())));
-
-    /* Press V -> PTT active -> transmit 20 ms frames -> release V */
-    winA.simulatePushToTalkKeyPress();
-    CHECK_TRUE(winA.isPushToTalkActive());
-    CHECK_TRUE(winA.reservePanel()->isPushToTalkActive());
-    for (int i = 0; i < 6; ++i) {
-        LONGS_EQUAL(1, static_cast<long>(
-                           winA.voiceEngine()->transmitPcmFrame20Ms(tone.data())));
-    }
-    for (int w = 0;
-         w < 40 && winB.voiceEngine()->packetsReceivedFrom(uuidA) < 3; ++w) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    CHECK_TRUE(winB.voiceEngine()->packetsReceivedFrom(uuidA) >= 3);
-    CHECK_TRUE(winB.voiceEngine()->receivedAudioRms(uuidA) > 5000.0);
-
-    winA.simulatePushToTalkKeyRelease();
-    CHECK_FALSE(winA.isPushToTalkActive());
-    CHECK_FALSE(winA.reservePanel()->isPushToTalkActive());
-    winA.leaveOnlineVoice();
-    winB.leaveOnlineVoice();
-
-    /* 9. Room Moderation Dialog (Policy Update, Mute, Kick & Ban Observer) */
+    /* 8. Room Moderation Dialog (Policy Update, Mute, Kick & Ban Observer) */
     {
         RoomModerationDialog modDlg(winA.netClient(), roomId);
         CHECK_TRUE(modDlg.refreshRoomView());
-        auto polRes = modDlg.applyPolicySettings("OPEN", "ALL_PARTICIPANTS");
+        auto polRes = modDlg.applyPolicySettings("OPEN");
         CHECK_TRUE_TEXT(polRes.ok, polRes.errorMessage.c_str());
-        STRCMP_EQUAL("ALL_ALLOWED", polRes.data.voicePolicy.c_str());
+        STRCMP_EQUAL("OPEN", polRes.data.observerPolicy.c_str());
 
-        auto muteRes = modDlg.muteParticipant(uuidC, true, true);
+        auto muteRes = modDlg.muteParticipant(uuidC, true);
         CHECK_TRUE_TEXT(muteRes.ok, muteRes.errorMessage.c_str());
 
         auto banRes = modDlg.kickAndBanObserver(uuidC, "Disruptive spectator");
@@ -3540,6 +3492,20 @@ TEST(DesktopAppIntegrationTest, GuiDesignBookCrossPlatformParityAndSseStormPreve
     winB.lobbyView()->selectRoomId(roomId);
     CHECK_TRUE(winB.lobbyView()->joinTableButton()->isEnabled());
     winB.lobbyView()->joinTableButton()->click();
+    winB.pumpUiEvents();
+    winB.renderWindowToImage(1440, 900);
+
+    /* Joining from Lobby enters the waiting room unseated so the player can explicitly Sit */
+    CHECK_TRUE(winB.isInOnlineGame());
+    LONGS_EQUAL(0, winB.onlineViewerSeat());
+    STRCMP_EQUAL("WAITING_FOR_PLAYERS", winB.currentOnlineGameView().phase.c_str());
+    CHECK_TRUE(winB.sitSeatButton() != nullptr);
+    CHECK_TRUE(winB.sitSeatButton()->isVisible());
+    CHECK_TRUE(winB.sitSeatButton()->isEnabled());
+    CHECK_FALSE(winB.reservePanel()->sitSeatButtonRect(2).isEmpty());
+
+    /* Clicking Sit / Join Game seats Bob as Seat 2 (B) and starts the match */
+    winB.sitSeatButton()->click();
     winB.pumpUiEvents();
     winA.refreshOnlineGameView();
     winA.pumpUiEvents();

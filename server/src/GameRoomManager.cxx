@@ -39,16 +39,6 @@ const char *toString(ObserverPolicy v)
     return "OPEN";
 }
 
-const char *toString(VoicePolicy v)
-{
-    switch (v) {
-    case VoicePolicy::DISABLED: return "DISABLED";
-    case VoicePolicy::PLAYERS_ONLY: return "PLAYERS_ONLY";
-    case VoicePolicy::ALL_ALLOWED: return "ALL_ALLOWED";
-    }
-    return "PLAYERS_ONLY";
-}
-
 const char *toString(PresenceStatus v)
 {
     switch (v) {
@@ -74,27 +64,6 @@ const char *toString(RoomPhase v)
 const char *toString(ChatScope v)
 {
     return v == ChatScope::TEAM ? "TEAM" : "ALL";
-}
-
-const char *toString(VoiceSignalType v)
-{
-    switch (v) {
-    case VoiceSignalType::SDP_OFFER: return "SDP_OFFER";
-    case VoiceSignalType::SDP_ANSWER: return "SDP_ANSWER";
-    case VoiceSignalType::ICE_CANDIDATE: return "ICE_CANDIDATE";
-    }
-    return "SDP_OFFER";
-}
-
-const char *toString(VoiceMetaAction v)
-{
-    switch (v) {
-    case VoiceMetaAction::JOINED_VOICE: return "JOINED_VOICE";
-    case VoiceMetaAction::LEFT_VOICE: return "LEFT_VOICE";
-    case VoiceMetaAction::MIC_MUTED: return "MIC_MUTED";
-    case VoiceMetaAction::MIC_UNMUTED: return "MIC_UNMUTED";
-    }
-    return "JOINED_VOICE";
 }
 
 const char *toString(ProposalType v)
@@ -153,8 +122,6 @@ const char *toString(RoomEventType v)
     case RoomEventType::GAME_STARTED: return "GAME_STARTED";
     case RoomEventType::MOVE: return "MOVE";
     case RoomEventType::CHAT: return "CHAT";
-    case RoomEventType::VOICE_SIGNAL: return "VOICE_SIGNAL";
-    case RoomEventType::VOICE_META: return "VOICE_META";
     case RoomEventType::OBSERVER_BANNED: return "OBSERVER_BANNED";
     case RoomEventType::USER_MUTED: return "USER_MUTED";
     case RoomEventType::POLICY_UPDATED: return "POLICY_UPDATED";
@@ -196,38 +163,10 @@ bool parseObserverPolicy(const std::string &s, ObserverPolicy &out)
     return false;
 }
 
-bool parseVoicePolicy(const std::string &s, VoicePolicy &out)
-{
-    if (s == "DISABLED") { out = VoicePolicy::DISABLED; return true; }
-    if (s == "PLAYERS_ONLY") { out = VoicePolicy::PLAYERS_ONLY; return true; }
-    if (s == "ALL_ALLOWED") { out = VoicePolicy::ALL_ALLOWED; return true; }
-    return false;
-}
-
 bool parseChatScope(const std::string &s, ChatScope &out)
 {
     if (s == "ALL" || s == "all") { out = ChatScope::ALL; return true; }
     if (s == "TEAM" || s == "team") { out = ChatScope::TEAM; return true; }
-    return false;
-}
-
-bool parseVoiceSignalType(const std::string &s, VoiceSignalType &out)
-{
-    if (s == "SDP_OFFER") { out = VoiceSignalType::SDP_OFFER; return true; }
-    if (s == "SDP_ANSWER") { out = VoiceSignalType::SDP_ANSWER; return true; }
-    if (s == "ICE_CANDIDATE") {
-        out = VoiceSignalType::ICE_CANDIDATE;
-        return true;
-    }
-    return false;
-}
-
-bool parseVoiceMetaAction(const std::string &s, VoiceMetaAction &out)
-{
-    if (s == "JOINED_VOICE") { out = VoiceMetaAction::JOINED_VOICE; return true; }
-    if (s == "LEFT_VOICE") { out = VoiceMetaAction::LEFT_VOICE; return true; }
-    if (s == "MIC_MUTED") { out = VoiceMetaAction::MIC_MUTED; return true; }
-    if (s == "MIC_UNMUTED") { out = VoiceMetaAction::MIC_UNMUTED; return true; }
     return false;
 }
 
@@ -472,9 +411,7 @@ bool validateConfig(const GameTableConfig &in, GameTableConfig &out,
         return false;
     }
     int op = static_cast<int>(in.observerPolicy);
-    int vp = static_cast<int>(in.voicePolicy);
-    if (op < 0 || op > static_cast<int>(ObserverPolicy::NO_OBSERVERS) ||
-        vp < 0 || vp > static_cast<int>(VoicePolicy::ALL_ALLOWED)) {
+    if (op < 0 || op > static_cast<int>(ObserverPolicy::NO_OBSERVERS)) {
         error = "invalid policy";
         return false;
     }
@@ -531,7 +468,6 @@ struct GameRoomManager::Room {
 
     struct Mute {
         bool chat = false;
-        bool voice = false;
     };
 
     struct Proposal {
@@ -563,7 +499,6 @@ struct GameRoomManager::Room {
     std::set<int64_t> observers;
     std::set<int64_t> banned;
     std::map<int64_t, Mute> muted;
-    std::map<int64_t, bool> voicePeers;     // player -> mic muted
 
     std::deque<RoomEvent> events;
     int64_t nextSeq = 1;
@@ -670,7 +605,6 @@ void GameRoomManager::setLimits(const RoomLimits &limits)
     _limits.maxRoomEvents = std::max<size_t>(1, _limits.maxRoomEvents);
     _limits.maxLobbyEvents = std::max<size_t>(1, _limits.maxLobbyEvents);
     _limits.maxLobbyChat = std::max<size_t>(1, _limits.maxLobbyChat);
-    _limits.maxPendingSignals = std::max<size_t>(1, _limits.maxPendingSignals);
     _limits.lobbyChatBurst = std::max(1, _limits.lobbyChatBurst);
     _limits.boardChatBurst = std::max(1, _limits.boardChatBurst);
     _limits.lobbyChatWindowMs = std::max<int64_t>(1, _limits.lobbyChatWindowMs);
@@ -1579,24 +1513,6 @@ int64_t GameRoomManager::emitLocked(Room &r, RoomEvent e, int64_t now)
         }
     }
     const int64_t seq = e.seq;
-    if (e.type == RoomEventType::VOICE_SIGNAL) {
-        size_t pending = 0;
-        for (size_t i = 0; i < r.events.size(); ++i) {
-            if (r.events[i].type == RoomEventType::VOICE_SIGNAL) {
-                ++pending;
-            }
-        }
-        while (pending >= _limits.maxPendingSignals) {
-            for (std::deque<RoomEvent>::iterator it = r.events.begin();
-                 it != r.events.end(); ++it) {
-                if (it->type == RoomEventType::VOICE_SIGNAL) {
-                    r.events.erase(it);
-                    --pending;
-                    break;
-                }
-            }
-        }
-    }
     r.events.push_back(std::move(e));
     while (r.events.size() > _limits.maxRoomEvents) {
         r.evictedUpToSeq = std::max(r.evictedUpToSeq, r.events.front().seq);
@@ -1613,13 +1529,8 @@ void GameRoomManager::purgeUserEventsLocked(Room &r, int64_t playerId)
         bool drop = false;
         if (e.playerId == playerId) {
             drop = e.type == RoomEventType::CHAT ||
-                   e.type == RoomEventType::VOICE_META ||
-                   e.type == RoomEventType::VOICE_SIGNAL ||
                    e.type == RoomEventType::OBSERVER_JOINED ||
                    e.type == RoomEventType::OBSERVER_LEFT;
-        }
-        if (e.type == RoomEventType::VOICE_SIGNAL && e.targetPlayerId == playerId) {
-            drop = true;
         }
         if (!drop) {
             kept.push_back(e);
@@ -1646,20 +1557,6 @@ bool GameRoomManager::isParticipantLocked(const Room &r, int64_t playerId) const
     return seatOfLocked(r, playerId) != 0 || r.observers.count(playerId) != 0;
 }
 
-bool GameRoomManager::voiceAllowedLocked(const Room &r, int64_t playerId) const
-{
-    if (r.banned.count(playerId) != 0 ||
-        r.config.voicePolicy == VoicePolicy::DISABLED) {
-        return false;
-    }
-    if (seatOfLocked(r, playerId) != 0) {
-        return true;
-    }
-    return r.config.voicePolicy == VoicePolicy::ALL_ALLOWED &&
-           r.config.observerPolicy == ObserverPolicy::OPEN &&
-           r.observers.count(playerId) != 0;
-}
-
 void GameRoomManager::addObserverLocked(Room &r, int64_t playerId)
 {
     r.observers.insert(playerId);
@@ -1670,7 +1567,6 @@ void GameRoomManager::addObserverLocked(Room &r, int64_t playerId)
 void GameRoomManager::removeObserverLocked(Room &r, int64_t playerId)
 {
     r.observers.erase(playerId);
-    r.voicePeers.erase(playerId);
     std::map<int64_t, std::set<std::string>>::iterator ob =
         _observing.find(playerId);
     if (ob != _observing.end()) {
@@ -1685,7 +1581,7 @@ void GameRoomManager::removeObserverLocked(Room &r, int64_t playerId)
 void GameRoomManager::enforcePoliciesLocked(Room &r, int64_t now)
 {
     if (r.config.observerPolicy == ObserverPolicy::NO_OBSERVERS &&
-        r.phase != RoomPhase::FINISHED) {
+        r.phase == RoomPhase::IN_PROGRESS) {
         std::vector<int64_t> evict(r.observers.begin(), r.observers.end());
         for (size_t i = 0; i < evict.size(); ++i) {
             removeObserverLocked(r, evict[i]);
@@ -1696,31 +1592,12 @@ void GameRoomManager::enforcePoliciesLocked(Room &r, int64_t now)
             emitLocked(r, e, now);
         }
     }
-    for (std::map<int64_t, bool>::iterator it = r.voicePeers.begin();
-         it != r.voicePeers.end();) {
-        it = voiceAllowedLocked(r, it->first) ? std::next(it)
-                                              : r.voicePeers.erase(it);
-    }
-    /* Relayed-but-undelivered signals involving a now-ineligible peer. */
-    std::deque<RoomEvent> kept;
-    for (size_t i = 0; i < r.events.size(); ++i) {
-        const RoomEvent &e = r.events[i];
-        if (e.type == RoomEventType::VOICE_SIGNAL &&
-            (!voiceAllowedLocked(r, e.playerId) ||
-             !voiceAllowedLocked(r, e.targetPlayerId))) {
-            continue;
-        }
-        kept.push_back(e);
-    }
-    r.events.swap(kept);
 }
 
 bool GameRoomManager::eventVisibleLocked(const Room &r, const RoomEvent &e,
                                          int64_t viewerId) const
 {
     switch (e.type) {
-    case RoomEventType::VOICE_SIGNAL:
-        return viewerId != 0 && e.targetPlayerId == viewerId;
     case RoomEventType::CHAT:
         if (e.scope == ChatScope::TEAM) {
             int vs = seatOfLocked(r, viewerId);
@@ -1848,6 +1725,8 @@ void GameRoomManager::startGameLocked(Room &r, int64_t now)
     r.startedAtSec = wallSec();
     r.lastActivityMs = now;
     r.lastMoveMs = now;
+
+    enforcePoliciesLocked(r, now);
 
     RoomEvent e;
     e.type = RoomEventType::GAME_STARTED;
@@ -2137,7 +2016,7 @@ RoomResult GameRoomManager::observeRoom(const std::string &roomId,
         return fail(RoomCode::INVALID_STATE, "seated players need not observe");
     }
     if (r->config.observerPolicy == ObserverPolicy::NO_OBSERVERS &&
-        r->phase != RoomPhase::FINISHED) {
+        r->phase == RoomPhase::IN_PROGRESS) {
         return fail(RoomCode::FORBIDDEN_POLICY, "room does not allow observers");
     }
     RoomResult res = success();
@@ -2403,16 +2282,6 @@ void GameRoomManager::advanceRoomLocked(Room &r, int64_t now)
     }
     if (proposalsExpired) {
         saveRoomLocked(r);
-    }
-
-    for (std::deque<RoomEvent>::iterator it = r.events.begin();
-         it != r.events.end();) {
-        if (it->type == RoomEventType::VOICE_SIGNAL &&
-            now - it->atMs >= _limits.signalTtlMs) {
-            it = r.events.erase(it);
-        } else {
-            ++it;
-        }
     }
 
     if (r.phase == RoomPhase::IN_PROGRESS && !r.paused &&
@@ -3546,134 +3415,6 @@ RoomResult GameRoomManager::postBoardChat(const std::string &roomId,
 }
 
 /* ------------------------------------------------------------------ */
-/* P2P voice signaling and meta                                        */
-/* ------------------------------------------------------------------ */
-
-RoomResult GameRoomManager::submitVoiceSignal(const std::string &roomId,
-                                              int64_t senderPlayerId,
-                                              int64_t targetPlayerId,
-                                              VoiceSignalType type,
-                                              const std::string &payloadJson)
-{
-    std::lock_guard<std::mutex> lock(_mutex);
-    Room *r = findRoomLocked(roomId);
-    if (r == nullptr) {
-        return fail(RoomCode::NOT_FOUND, "no such room");
-    }
-    if (senderPlayerId <= 0 || !ensurePlayerLocked(senderPlayerId)) {
-        return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
-    }
-    int64_t now = nowMs();
-    advanceRoomLocked(*r, now);
-    if (r->banned.count(senderPlayerId) != 0) {
-        return fail(RoomCode::FORBIDDEN_BANNED, "banned from this room");
-    }
-    if (!isParticipantLocked(*r, senderPlayerId)) {
-        return fail(RoomCode::FORBIDDEN_NOT_PARTICIPANT,
-                    "neither seated nor observing this room");
-    }
-    if (r->config.voicePolicy == VoicePolicy::DISABLED) {
-        return fail(RoomCode::FORBIDDEN_POLICY, "voice is disabled at this table");
-    }
-    if (!voiceAllowedLocked(*r, senderPlayerId)) {
-        return fail(RoomCode::FORBIDDEN_POLICY,
-                    "voice policy does not allow you to use voice");
-    }
-    std::map<int64_t, Room::Mute>::const_iterator mu = r->muted.find(senderPlayerId);
-    if (mu != r->muted.end() && mu->second.voice) {
-        return fail(RoomCode::FORBIDDEN_MUTED, "voice muted in this room");
-    }
-    if (targetPlayerId == senderPlayerId || targetPlayerId <= 0 ||
-        !isParticipantLocked(*r, targetPlayerId) ||
-        !voiceAllowedLocked(*r, targetPlayerId)) {
-        return fail(RoomCode::INVALID_ARGUMENT,
-                    "target is not a voice participant of this room");
-    }
-    if (payloadJson.size() > kMaxVoicePayloadBytes) {
-        return fail(RoomCode::PAYLOAD_TOO_LARGE, "signal payload exceeds 4 KiB");
-    }
-    if (payloadJson.empty() || !nlohmann::json::accept(payloadJson)) {
-        return fail(RoomCode::INVALID_ARGUMENT, "signal payload is not valid JSON");
-    }
-    touchOnlineLocked(senderPlayerId);
-    RoomEvent e;
-    e.type = RoomEventType::VOICE_SIGNAL;
-    e.playerId = senderPlayerId;
-    e.targetPlayerId = targetPlayerId;
-    e.seat = seatOfLocked(*r, senderPlayerId);
-    e.detail = toString(type);
-    e.text = payloadJson;
-    RoomResult res = success();
-    res.seq = emitLocked(*r, e, now);
-    res.roomId = r->id;
-    return res;
-}
-
-RoomResult GameRoomManager::submitVoiceMeta(const std::string &roomId,
-                                            int64_t senderPlayerId,
-                                            VoiceMetaAction action)
-{
-    std::lock_guard<std::mutex> lock(_mutex);
-    Room *r = findRoomLocked(roomId);
-    if (r == nullptr) {
-        return fail(RoomCode::NOT_FOUND, "no such room");
-    }
-    if (senderPlayerId <= 0 || !ensurePlayerLocked(senderPlayerId)) {
-        return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
-    }
-    int64_t now = nowMs();
-    advanceRoomLocked(*r, now);
-    if (r->banned.count(senderPlayerId) != 0) {
-        return fail(RoomCode::FORBIDDEN_BANNED, "banned from this room");
-    }
-    if (!isParticipantLocked(*r, senderPlayerId)) {
-        return fail(RoomCode::FORBIDDEN_NOT_PARTICIPANT,
-                    "neither seated nor observing this room");
-    }
-    if (r->config.voicePolicy == VoicePolicy::DISABLED) {
-        return fail(RoomCode::FORBIDDEN_POLICY, "voice is disabled at this table");
-    }
-    if (!voiceAllowedLocked(*r, senderPlayerId)) {
-        return fail(RoomCode::FORBIDDEN_POLICY,
-                    "voice policy does not allow you to use voice");
-    }
-    std::map<int64_t, Room::Mute>::const_iterator mu = r->muted.find(senderPlayerId);
-    if (mu != r->muted.end() && mu->second.voice) {
-        return fail(RoomCode::FORBIDDEN_MUTED, "voice muted in this room");
-    }
-    std::map<int64_t, bool>::iterator vp = r->voicePeers.find(senderPlayerId);
-    switch (action) {
-    case VoiceMetaAction::JOINED_VOICE:
-        r->voicePeers[senderPlayerId] = false;
-        break;
-    case VoiceMetaAction::LEFT_VOICE:
-        if (vp == r->voicePeers.end()) {
-            return fail(RoomCode::INVALID_STATE, "not in voice");
-        }
-        r->voicePeers.erase(vp);
-        break;
-    case VoiceMetaAction::MIC_MUTED:
-    case VoiceMetaAction::MIC_UNMUTED:
-        if (vp == r->voicePeers.end()) {
-            return fail(RoomCode::INVALID_STATE, "not in voice");
-        }
-        vp->second = (action == VoiceMetaAction::MIC_MUTED);
-        break;
-    }
-    touchOnlineLocked(senderPlayerId);
-    RoomEvent e;
-    e.type = RoomEventType::VOICE_META;
-    e.playerId = senderPlayerId;
-    e.seat = seatOfLocked(*r, senderPlayerId);
-    e.detail = toString(action);
-    RoomResult res = success();
-    res.seq = emitLocked(*r, e, now);
-    res.roomId = r->id;
-    saveRoomLocked(*r);
-    return res;
-}
-
-/* ------------------------------------------------------------------ */
 /* Moderation                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -3737,7 +3478,6 @@ RoomResult GameRoomManager::banUser(const std::string &roomId,
     if (r->observers.count(targetPlayerId) != 0) {
         removeObserverLocked(*r, targetPlayerId);
     }
-    r->voicePeers.erase(targetPlayerId);
     purgeUserEventsLocked(*r, targetPlayerId);
     r->chatTimes.erase(targetPlayerId);
 
@@ -3760,8 +3500,7 @@ RoomResult GameRoomManager::banUser(const std::string &roomId,
 
 RoomResult GameRoomManager::muteUser(const std::string &roomId,
                                      int64_t actorPlayerId,
-                                     int64_t targetPlayerId, bool muteChat,
-                                     bool muteVoice)
+                                     int64_t targetPlayerId, bool muteChat)
 {
     std::lock_guard<std::mutex> lock(_mutex);
     Room *r = findRoomLocked(roomId);
@@ -3789,20 +3528,16 @@ RoomResult GameRoomManager::muteUser(const std::string &roomId,
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown target player");
     }
     /* Mutes are room-wide, so a seated player cannot be silenced. */
-    if ((muteChat || muteVoice) && seatOfLocked(*r, targetPlayerId) != 0) {
+    if (muteChat && seatOfLocked(*r, targetPlayerId) != 0) {
         return fail(RoomCode::FORBIDDEN_SEATED_TARGET,
                     "a seated player cannot be muted");
     }
     touchOnlineLocked(actorPlayerId);
     Room::Mute &m = r->muted[targetPlayerId];
-    bool changed = m.chat != muteChat || m.voice != muteVoice;
+    bool changed = m.chat != muteChat;
     m.chat = muteChat;
-    m.voice = muteVoice;
-    if (!muteChat && !muteVoice) {
+    if (!muteChat) {
         r->muted.erase(targetPlayerId);
-    }
-    if (muteVoice) {
-        r->voicePeers.erase(targetPlayerId);
     }
     RoomResult res = success();
     res.roomId = r->id;
@@ -3811,8 +3546,7 @@ RoomResult GameRoomManager::muteUser(const std::string &roomId,
         e.type = RoomEventType::USER_MUTED;
         e.playerId = actorPlayerId;
         e.targetPlayerId = targetPlayerId;
-        e.detail = std::string("mute_chat=") + (muteChat ? "1" : "0") +
-                   ";mute_voice=" + (muteVoice ? "1" : "0");
+        e.detail = std::string("mute_chat=") + (muteChat ? "1" : "0");
         res.seq = emitLocked(*r, e, now);
     }
     saveRoomLocked(*r);
@@ -3821,18 +3555,15 @@ RoomResult GameRoomManager::muteUser(const std::string &roomId,
 
 RoomResult GameRoomManager::updateRoomPolicies(const std::string &roomId,
                                                int64_t actorPlayerId,
-                                               ObserverPolicy observerPolicy,
-                                               VoicePolicy voicePolicy)
+                                               ObserverPolicy observerPolicy)
 {
     return updateRoomPolicies(roomId, actorPlayerId,
-                              std::optional<ObserverPolicy>(observerPolicy),
-                              std::optional<VoicePolicy>(voicePolicy));
+                              std::optional<ObserverPolicy>(observerPolicy));
 }
 
 RoomResult GameRoomManager::updateRoomPolicies(
     const std::string &roomId, int64_t actorPlayerId,
-    const std::optional<ObserverPolicy> &observerPolicyIn,
-    const std::optional<VoicePolicy> &voicePolicyIn)
+    const std::optional<ObserverPolicy> &observerPolicyIn)
 {
     std::lock_guard<std::mutex> lock(_mutex);
     Room *r = findRoomLocked(roomId);
@@ -3843,20 +3574,12 @@ RoomResult GameRoomManager::updateRoomPolicies(
         !ensurePlayerLocked(actorPlayerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
-    if (!observerPolicyIn && !voicePolicyIn) {
+    if (!observerPolicyIn) {
         return fail(RoomCode::INVALID_ARGUMENT, "no policy given");
     }
-    if (observerPolicyIn) {
-        int op = static_cast<int>(*observerPolicyIn);
-        if (op < 0 || op > static_cast<int>(ObserverPolicy::NO_OBSERVERS)) {
-            return fail(RoomCode::INVALID_ARGUMENT, "invalid policy");
-        }
-    }
-    if (voicePolicyIn) {
-        int vp = static_cast<int>(*voicePolicyIn);
-        if (vp < 0 || vp > static_cast<int>(VoicePolicy::ALL_ALLOWED)) {
-            return fail(RoomCode::INVALID_ARGUMENT, "invalid policy");
-        }
+    int op = static_cast<int>(*observerPolicyIn);
+    if (op < 0 || op > static_cast<int>(ObserverPolicy::NO_OBSERVERS)) {
+        return fail(RoomCode::INVALID_ARGUMENT, "invalid policy");
     }
     int64_t now = nowMs();
     advanceRoomLocked(*r, now);
@@ -3868,23 +3591,17 @@ RoomResult GameRoomManager::updateRoomPolicies(
                     "only seated players can change policies");
     }
     touchOnlineLocked(actorPlayerId);
-    ObserverPolicy observerPolicy =
-        observerPolicyIn ? *observerPolicyIn : r->config.observerPolicy;
-    VoicePolicy voicePolicy =
-        voicePolicyIn ? *voicePolicyIn : r->config.voicePolicy;
+    ObserverPolicy observerPolicy = *observerPolicyIn;
     RoomResult res = success();
     res.roomId = r->id;
-    if (r->config.observerPolicy == observerPolicy &&
-        r->config.voicePolicy == voicePolicy) {
+    if (r->config.observerPolicy == observerPolicy) {
         return res;
     }
     r->config.observerPolicy = observerPolicy;
-    r->config.voicePolicy = voicePolicy;
     RoomEvent e;
     e.type = RoomEventType::POLICY_UPDATED;
     e.playerId = actorPlayerId;
-    e.detail = std::string("observer_policy=") + toString(observerPolicy) +
-               ";voice_policy=" + toString(voicePolicy);
+    e.detail = std::string("observer_policy=") + toString(observerPolicy);
     res.seq = emitLocked(*r, e, now);
     enforcePoliciesLocked(*r, now);
     announceTableLocked(*r, false);
@@ -3975,13 +3692,6 @@ void GameRoomManager::fillView(const Room &r, int64_t viewerId, int64_t now,
         pv.expiresAtMs = p.expiresAtMs;
         out.proposals.push_back(pv);
     }
-    for (std::map<int64_t, bool>::const_iterator it = r.voicePeers.begin();
-         it != r.voicePeers.end(); ++it) {
-        VoicePeerView v;
-        v.playerId = it->first;
-        v.micMuted = it->second;
-        out.voicePeers.push_back(v);
-    }
     out.latestSeq = r.nextSeq - 1;
     out.archived = r.archived;
     out.archiveError = r.archiveError;
@@ -4044,23 +3754,6 @@ RoomResult GameRoomManager::pollRoomEvents(const std::string &roomId,
         return chk;
     }
     limit = std::max<size_t>(1, std::min<size_t>(limit, 500));
-
-    /*
-     * The cursor acknowledges everything up to sinceSeq, so relayed voice
-     * signals addressed to this viewer at or below it are now delivered and
-     * can be dropped: signals are never retained beyond delivery.
-     */
-    if (viewerPlayerId != 0) {
-        for (std::deque<RoomEvent>::iterator it = r->events.begin();
-             it != r->events.end();) {
-            if (it->type == RoomEventType::VOICE_SIGNAL &&
-                it->targetPlayerId == viewerPlayerId && it->seq <= sinceSeq) {
-                it = r->events.erase(it);
-            } else {
-                ++it;
-            }
-        }
-    }
 
     out.latestSeq = r->nextSeq - 1;
     out.gap = sinceSeq < r->evictedUpToSeq;
@@ -4159,7 +3852,6 @@ void GameRoomManager::saveRoomLocked(const Room &r)
     cfg["allowTakeback"] = r.config.allowTakeback;
     cfg["allowRobots"] = r.config.allowRobots;
     cfg["observerPolicy"] = toString(r.config.observerPolicy);
-    cfg["voicePolicy"] = toString(r.config.voicePolicy);
     cfg["passcode"] = r.config.passcode;
     j["config"] = cfg;
 
@@ -4243,18 +3935,9 @@ void GameRoomManager::saveRoomLocked(const Room &r)
          it != r.muted.end(); ++it) {
         Json m;
         m["chat"] = it->second.chat;
-        m["voice"] = it->second.voice;
         muted[std::to_string(it->first)] = m;
     }
     j["muted"] = muted;
-
-    // voicePeers
-    Json vp = Json::object();
-    for (std::map<int64_t, bool>::const_iterator it = r.voicePeers.begin();
-         it != r.voicePeers.end(); ++it) {
-        vp[std::to_string(it->first)] = it->second;
-    }
-    j["voicePeers"] = vp;
 
     // proposals
     Json props = Json::array();
@@ -4273,15 +3956,12 @@ void GameRoomManager::saveRoomLocked(const Room &r)
     }
     j["proposals"] = props;
 
-    // events (exclude RoomEventType::VOICE_SIGNAL)
+    // events
     j["nextSeq"] = r.nextSeq;
     j["evictedUpToSeq"] = r.evictedUpToSeq;
     Json evs = Json::array();
     for (size_t i = 0; i < r.events.size(); ++i) {
         const RoomEvent &ev = r.events[i];
-        if (ev.type == RoomEventType::VOICE_SIGNAL) {
-            continue;
-        }
         Json ej;
         ej["seq"] = ev.seq;
         ej["type"] = toString(ev.type);
@@ -4461,8 +4141,6 @@ bool GameRoomManager::restoreFromStoreLocked()
                 r->config.allowRobots = cfg.value("allowRobots", true);
                 parseObserverPolicy(cfg.value("observerPolicy", "OPEN"),
                                     r->config.observerPolicy);
-                parseVoicePolicy(cfg.value("voicePolicy", "PLAYERS_ONLY"),
-                                 r->config.voicePolicy);
                 r->config.passcode = cfg.value("passcode", "");
 
             std::string phaseStr = j.value("phase", "WAITING_FOR_PLAYERS");
@@ -4597,17 +4275,7 @@ bool GameRoomManager::restoreFromStoreLocked()
                     int64_t pid = std::stoll(it.key());
                     Room::Mute m;
                     m.chat = it.value().value("chat", false);
-                    m.voice = it.value().value("voice", false);
                     r->muted[pid] = m;
-                }
-            }
-
-            // voicePeers
-            if (j.contains("voicePeers") && j["voicePeers"].is_object()) {
-                for (Json::const_iterator it = j["voicePeers"].begin();
-                     it != j["voicePeers"].end(); ++it) {
-                    int64_t pid = std::stoll(it.key());
-                    r->voicePeers[pid] = it.value().get<bool>();
                 }
             }
 

@@ -1072,45 +1072,6 @@ TEST(OctiHttpServerIntegrationTest, NominalFullScenario)
     STRCMP_EQUAL("gl hf", chats[0].value("text", "").c_str());
     STRCMP_EQUAL("spam one", chats[1].value("text", "").c_str());
 
-    /* ---- peer-to-peer voice: signaling and meta only ---- */
-    Reply sig = http().post("/api/v1/games/" + room + "/voice-signal", a.token,
-                            Json{{"target", b.uuid},
-                                 {"type", "SDP_OFFER"},
-                                 {"payload", Json{{"sdp", "v=0 offer"}}}});
-    EXPECT_STATUS(200, sig);
-    std::vector<Json> toB = ofType(events(room, b.token), "VOICE_SIGNAL");
-    CHECK_EQUAL(1, static_cast<int>(toB.size()));
-    STRCMP_EQUAL("SDP_OFFER", toB[0].value("signal_type", "").c_str());
-    STRCMP_EQUAL("v=0 offer", toB[0]["payload"].value("sdp", "").c_str());
-    STRCMP_EQUAL(a.uuid.c_str(), toB[0].value("player_uuid", "").c_str());
-    /* The relayed signal is private to its target. */
-    CHECK_EQUAL(0, static_cast<int>(ofType(events(room, c.token), "VOICE_SIGNAL").size()));
-    CHECK_EQUAL(0, static_cast<int>(ofType(events(room, ""), "VOICE_SIGNAL").size()));
-    CHECK_EQUAL(0, static_cast<int>(ofType(events(room, a.token), "VOICE_SIGNAL").size()));
-
-    EXPECT_STATUS(200, http().post("/api/v1/games/" + room + "/voice-meta",
-                                   a.token, Json{{"action", "JOINED_VOICE"}}));
-    EXPECT_STATUS(200, http().post("/api/v1/games/" + room + "/voice-meta",
-                                   b.token, Json{{"action", "JOINED_VOICE"}}));
-    EXPECT_STATUS(200, http().post("/api/v1/games/" + room + "/voice-meta",
-                                   a.token, Json{{"action", "MIC_MUTED"}}));
-    Json afterVoice = view(room);
-    CHECK_EQUAL(2, static_cast<int>(afterVoice["voice_peers"].size()));
-    bool aMuted = false;
-    for (size_t i = 0; i < afterVoice["voice_peers"].size(); ++i) {
-        if (afterVoice["voice_peers"][i].value("player_uuid", "") == a.uuid) {
-            aMuted = afterVoice["voice_peers"][i].value("mic_muted", false);
-        }
-    }
-    CHECK_TRUE(aMuted);
-    std::vector<Json> meta = ofType(events(room, ""), "VOICE_META");
-    CHECK_EQUAL(3, static_cast<int>(meta.size()));
-    STRCMP_EQUAL("MIC_MUTED", meta[2].value("action", "").c_str());
-    /* PLAYERS_ONLY: the observer may not use voice. */
-    Reply obsVoice = http().post("/api/v1/games/" + room + "/voice-meta",
-                                 c.token, Json{{"action", "JOINED_VOICE"}});
-    EXPECT_ERROR(403, "FORBIDDEN_POLICY", obsVoice);
-
     /* ---- moves ---- */
     Reply outOfTurn = http().post("/api/v1/games/" + room + "/move", b.token,
                                   Json{{"move", "37+e"}});
@@ -1681,33 +1642,6 @@ TEST(OctiHttpServerIntegrationTest, LobbyChatRateLimitReturns429)
     CHECK_FALSE(limited.header("Retry-After").empty());
 }
 
-TEST(OctiHttpServerIntegrationTest, VoiceSignalPayloadLimitIsFourKiB)
-{
-    User a = signIn("google", "sub-a", "Alice Anders");
-    User b = signIn("apple", "sub-b", "Bob Brown");
-    std::vector<User> users = {a, b};
-    std::string room = startGame(users);
-    const std::string path = "/api/v1/games/" + room + "/voice-signal";
-
-    /* {"sdp":"..."} is 10 bytes of framing around the filler. */
-    Json atLimit = Json{{"sdp", repeat('x', GameRoomManager::kMaxVoicePayloadBytes - 10)}};
-    CHECK_EQUAL(4096, static_cast<int>(atLimit.dump().size()));
-    Json overLimit = Json{{"sdp", repeat('x', GameRoomManager::kMaxVoicePayloadBytes - 9)}};
-    CHECK_EQUAL(4097, static_cast<int>(overLimit.dump().size()));
-
-    EXPECT_STATUS(200, http().post(path, a.token,
-                                   Json{{"target", b.uuid}, {"type", "SDP_OFFER"},
-                                        {"payload", atLimit}}));
-    EXPECT_ERROR(413, "PAYLOAD_TOO_LARGE",
-                 http().post(path, a.token,
-                             Json{{"target", b.uuid}, {"type", "SDP_OFFER"},
-                                  {"payload", overLimit}}));
-    /* Only the accepted signal was relayed. */
-    std::vector<Json> got = ofType(events(room, b.token), "VOICE_SIGNAL");
-    CHECK_EQUAL(1, static_cast<int>(got.size()));
-    CHECK_EQUAL(4096, static_cast<int>(got[0]["payload"].dump().size()));
-}
-
 TEST(OctiHttpServerIntegrationTest, RequestBodyLimitIsEnforcedExactly)
 {
     HttpServerConfig cfg = testConfig();
@@ -1737,43 +1671,6 @@ TEST(OctiHttpServerIntegrationTest, RequestBodyLimitIsEnforcedExactly)
                             std::string(200000, 'q'), "application/json");
     EXPECT_STATUS(413, huge);
     EXPECT_STATUS(200, http().get("/api/v1/health"));
-}
-
-TEST(OctiHttpServerIntegrationTest, AudioBodiesAreNeverAcceptedOrRelayed)
-{
-    User a = signIn("google", "sub-a", "Alice Anders");
-    User b = signIn("apple", "sub-b", "Bob Brown");
-    std::vector<User> users = {a, b};
-    std::string room = startGame(users);
-    const std::string path = "/api/v1/games/" + room + "/voice-signal";
-    std::string pcm(2000, '\x7f');
-    pcm[3] = '\0';
-
-    const char *types[] = {"audio/ogg", "audio/webm", "audio/L16",
-                           "application/octet-stream", "multipart/form-data; boundary=x",
-                           "text/plain"};
-    for (size_t i = 0; i < sizeof(types) / sizeof(types[0]); ++i) {
-        Reply r = http().raw("POST", path + "?target=" + b.uuid, a.token, pcm,
-                             types[i]);
-        EXPECT_ERROR(415, "UNSUPPORTED_MEDIA_TYPE", r);
-    }
-    /* Even a JSON-looking body with the wrong type is refused. */
-    Reply wrongType = http().raw(
-        "POST", path, a.token,
-        Json{{"target", b.uuid}, {"type", "SDP_OFFER"}, {"payload", {{"a", 1}}}}.dump(),
-        "text/plain");
-    EXPECT_ERROR(415, "UNSUPPORTED_MEDIA_TYPE", wrongType);
-    /* A JSON envelope that is not valid JSON never becomes a relayed signal. */
-    Reply garbage = http().raw("POST", path, a.token, pcm, "application/json");
-    EXPECT_ERROR(400, "MALFORMED_JSON", garbage);
-    CHECK_EQUAL(0, static_cast<int>(ofType(events(room, b.token), "VOICE_SIGNAL").size()));
-    /* The charset parameter is fine. */
-    EXPECT_STATUS(200, http().raw("POST", path, a.token,
-                                  Json{{"target", b.uuid}, {"type", "ICE_CANDIDATE"},
-                                       {"payload", {{"candidate", "candidate:1 1 UDP 1 192.0.2.1 9 typ host"}}}}
-                                      .dump(),
-                                  "application/json; charset=utf-8"));
-    CHECK_EQUAL(1, static_cast<int>(ofType(events(room, b.token), "VOICE_SIGNAL").size()));
 }
 
 TEST(OctiHttpServerIntegrationTest, IncrementalEventPollingAndPagingBoundaries)
@@ -1869,8 +1766,6 @@ TEST(OctiHttpServerIntegrationTest, MissingOrInvalidBearerIsUnauthorized)
                                     "/api/v1/games/g-1/resign",
                                     "/api/v1/games/g-1/action",
                                     "/api/v1/games/g-1/chat",
-                                    "/api/v1/games/g-1/voice-signal",
-                                    "/api/v1/games/g-1/voice-meta",
                                     "/api/v1/games/g-1/ban",
                                     "/api/v1/games/g-1/mute",
                                     "/api/v1/games/g-1/settings"};
@@ -2082,7 +1977,7 @@ TEST(OctiHttpServerIntegrationTest, ModerationRulesAndMutes)
     User c = signIn("facebook", "sub-c", "Carol Clark");
     User d = signIn("microsoft", "sub-d", "Dave Dunn");
     std::vector<User> users = {a, b};
-    std::string room = startGame(users, Json{{"voice_policy", "ALL_ALLOWED"}});
+    std::string room = startGame(users);
     const std::string base = "/api/v1/games/" + room;
     EXPECT_STATUS(200, http().post("/api/v1/tables/" + room + "/observe", c.token, Json::object()));
 
@@ -2115,53 +2010,9 @@ TEST(OctiHttpServerIntegrationTest, ModerationRulesAndMutes)
     std::vector<Json> muteEvents = ofType(events(room, ""), "USER_MUTED");
     CHECK_EQUAL(1, static_cast<int>(muteEvents.size()));
     CHECK_TRUE(muteEvents[0].value("mute_chat", false));
-    CHECK_FALSE(muteEvents[0].value("mute_voice", true));
     EXPECT_STATUS(200, http().post(base + "/mute", b.token,
                                    Json{{"target", c.uuid}, {"mute_chat", false}}));
     EXPECT_STATUS(200, http().post(base + "/chat", c.token, Json{{"text", "unmuted"}}));
-
-    /* Voice mute: an observer allowed by ALL_ALLOWED loses voice. */
-    EXPECT_STATUS(200, http().post(base + "/voice-meta", c.token,
-                                   Json{{"action", "JOINED_VOICE"}}));
-    EXPECT_STATUS(200, http().post(base + "/mute", a.token,
-                                   Json{{"target", c.uuid}, {"mute_voice", true}}));
-    EXPECT_ERROR(403, "FORBIDDEN_MUTED",
-                 http().post(base + "/voice-meta", c.token,
-                             Json{{"action", "MIC_UNMUTED"}}));
-    EXPECT_ERROR(403, "FORBIDDEN_MUTED",
-                 http().post(base + "/voice-signal", c.token,
-                             Json{{"target", a.uuid}, {"type", "SDP_OFFER"},
-                                  {"payload", {{"sdp", "x"}}}}));
-    for (size_t i = 0; i < view(room)["voice_peers"].size(); ++i) {
-        CHECK_TRUE(view(room)["voice_peers"][i].value("player_uuid", "") != c.uuid);
-    }
-
-    /* Voice signaling target rules. */
-    EXPECT_ERROR(400, "INVALID_ARGUMENT",
-                 http().post(base + "/voice-signal", a.token,
-                             Json{{"target", a.uuid}, {"type", "SDP_OFFER"},
-                                  {"payload", {{"sdp", "x"}}}}));
-    EXPECT_ERROR(400, "INVALID_ARGUMENT",
-                 http().post(base + "/voice-signal", a.token,
-                             Json{{"target", d.uuid}, {"type", "SDP_OFFER"},
-                                  {"payload", {{"sdp", "x"}}}}));
-    EXPECT_ERROR(404, "UNKNOWN_TARGET",
-                 http().post(base + "/voice-signal", a.token,
-                             Json{{"target", "nobody"}, {"type", "SDP_OFFER"},
-                                  {"payload", {{"sdp", "x"}}}}));
-    EXPECT_ERROR(400, "INVALID_ARGUMENT",
-                 http().post(base + "/voice-signal", a.token,
-                             Json{{"target", b.uuid}, {"type", "VIDEO_OFFER"},
-                                  {"payload", {{"sdp", "x"}}}}));
-    EXPECT_ERROR(400, "INVALID_ARGUMENT",
-                 http().post(base + "/voice-signal", a.token,
-                             Json{{"target", b.uuid}, {"type", "SDP_OFFER"}}));
-    EXPECT_ERROR(400, "INVALID_ARGUMENT",
-                 http().post(base + "/voice-meta", a.token,
-                             Json{{"action", "SHOUT"}}));
-    EXPECT_ERROR(409, "INVALID_STATE",
-                 http().post(base + "/voice-meta", b.token,
-                             Json{{"action", "MIC_MUTED"}}));
 }
 
 TEST(OctiHttpServerIntegrationTest, SettingsPoliciesGateObserversAndVoice)
@@ -2183,36 +2034,20 @@ TEST(OctiHttpServerIntegrationTest, SettingsPoliciesGateObserversAndVoice)
     EXPECT_ERROR(400, "INVALID_ARGUMENT",
                  http().post(base + "/settings", a.token,
                              Json{{"observer_policy", "WHATEVER"}}));
-    EXPECT_ERROR(400, "INVALID_ARGUMENT",
-                 http().post(base + "/settings", a.token,
-                             Json{{"voice_policy", "LOUD"}}));
 
     /* SILENT_OBSERVERS: the observer may watch but no longer chat. */
     Reply s = http().post(base + "/settings", a.token,
                           Json{{"observer_policy", "SILENT_OBSERVERS"}});
     EXPECT_STATUS(200, s);
     STRCMP_EQUAL("SILENT_OBSERVERS", s.json.value("observer_policy", "").c_str());
-    STRCMP_EQUAL("PLAYERS_ONLY", s.json.value("voice_policy", "").c_str());
     EXPECT_ERROR(403, "FORBIDDEN_POLICY",
                  http().post(base + "/chat", c.token, Json{{"text", "psst"}}));
     EXPECT_STATUS(200, http().get(base, c.token));
     EXPECT_STATUS(200, http().post(base + "/chat", b.token, Json{{"text", "players still chat"}}));
 
-    /* DISABLED voice: nobody, seated players included, may signal. */
-    EXPECT_STATUS(200, http().post(base + "/settings", b.token,
-                                   Json{{"voice_policy", "DISABLED"}}));
-    EXPECT_ERROR(403, "FORBIDDEN_POLICY",
-                 http().post(base + "/voice-meta", a.token,
-                             Json{{"action", "JOINED_VOICE"}}));
-    EXPECT_ERROR(403, "FORBIDDEN_POLICY",
-                 http().post(base + "/voice-signal", a.token,
-                             Json{{"target", b.uuid}, {"type", "SDP_OFFER"},
-                                  {"payload", {{"sdp", "x"}}}}));
     std::vector<Json> pol = ofType(events(room, ""), "POLICY_UPDATED");
-    CHECK_EQUAL(2, static_cast<int>(pol.size()));
+    CHECK_EQUAL(1, static_cast<int>(pol.size()));
     STRCMP_EQUAL("SILENT_OBSERVERS", pol[0].value("observer_policy", "").c_str());
-    STRCMP_EQUAL("DISABLED", pol[1].value("voice_policy", "").c_str());
-    STRCMP_EQUAL("SILENT_OBSERVERS", pol[1].value("observer_policy", "").c_str());
 
     /* NO_OBSERVERS evicts the observer and hides the in-progress game. */
     EXPECT_STATUS(200, http().post(base + "/settings", a.token,
@@ -2224,61 +2059,16 @@ TEST(OctiHttpServerIntegrationTest, SettingsPoliciesGateObserversAndVoice)
     EXPECT_STATUS(200, http().get(base + "/events", b.token));
 }
 
-TEST(OctiHttpServerIntegrationTest, ConcurrentPartialSettingsNeverOverwriteEachOther)
+TEST(OctiHttpServerIntegrationTest, SettingsResponseReportsTheMergedPolicies)
 {
     User a = signIn("google", "sub-a", "Alice Anders");
     User b = signIn("apple", "sub-b", "Bob Brown");
     std::vector<User> users = {a, b};
     std::string room = startGame(users);
     const std::string path = "/api/v1/games/" + room + "/settings";
-    const Http h = http();
-    const int rounds = 40;
-    std::atomic<int> badStatus(0);
-
-    /*
-     * Thread one only ever sends observer_policy, thread two only ever
-     * sends voice_policy. A read-modify-write in the handler would let one
-     * thread write back the stale value of the other thread's field, so the
-     * final state would not be (last observer value, last voice value).
-     */
-    std::thread observerThread([&]() {
-        for (int i = 0; i < rounds; ++i) {
-            const char *v = i % 2 == 0 ? "SILENT_OBSERVERS" : "OPEN";
-            Reply r = h.post(path, a.token, Json{{"observer_policy", v}});
-            if (r.status != 200) {
-                ++badStatus;
-            }
-        }
-    });
-    std::thread voiceThread([&]() {
-        for (int i = 0; i < rounds; ++i) {
-            const char *v = i % 2 == 0 ? "ALL_ALLOWED" : "DISABLED";
-            Reply r = h.post(path, b.token, Json{{"voice_policy", v}});
-            if (r.status != 200) {
-                ++badStatus;
-            }
-        }
-    });
-    observerThread.join();
-    voiceThread.join();
-    CHECK_EQUAL(0, badStatus.load());
-
-    Json v = view(room, a.token);
-    STRCMP_EQUAL("OPEN", v.value("observer_policy", "").c_str());
-    STRCMP_EQUAL("DISABLED", v.value("voice_policy", "").c_str());
-}
-
-TEST(OctiHttpServerIntegrationTest, SettingsResponseReportsTheMergedPolicies)
-{
-    User a = signIn("google", "sub-a", "Alice Anders");
-    User b = signIn("apple", "sub-b", "Bob Brown");
-    std::vector<User> users = {a, b};
-    std::string room = startGame(users, Json{{"voice_policy", "ALL_ALLOWED"}});
-    const std::string path = "/api/v1/games/" + room + "/settings";
     Reply r = http().post(path, a.token, Json{{"observer_policy", "NO_OBSERVERS"}});
     EXPECT_STATUS(200, r);
     STRCMP_EQUAL("NO_OBSERVERS", r.json.value("observer_policy", "").c_str());
-    STRCMP_EQUAL("ALL_ALLOWED", r.json.value("voice_policy", "").c_str());
 }
 
 TEST(OctiHttpServerIntegrationTest, LogoutKeepsPlayerOnlineWhileAnotherDeviceIsSignedIn)
@@ -2405,7 +2195,6 @@ TEST(OctiHttpServerIntegrationTest, PasscodeAndSeatRules)
     EXPECT_ERROR(400, "INVALID_ARGUMENT", http().post("/api/v1/tables", c.token, Json{{"mode", "9P"}}));
     EXPECT_ERROR(400, "INVALID_ARGUMENT", http().post("/api/v1/tables", c.token, Json{{"bases", 2}}));
     EXPECT_ERROR(400, "INVALID_ARGUMENT", http().post("/api/v1/tables", c.token, Json{{"rated", "yes"}}));
-    EXPECT_ERROR(400, "INVALID_ARGUMENT", http().post("/api/v1/tables", c.token, Json{{"voice_policy", "LOUD"}}));
     EXPECT_ERROR(400, "INVALID_ARGUMENT", http().post("/api/v1/tables", c.token, Json{{"time_control", "fast"}}));
     EXPECT_ERROR(400, "INVALID_ARGUMENT", http().post("/api/v1/tables", c.token, Json{{"time_control", {{"initial_ms", 0}}}}));
     EXPECT_ERROR(400, "INVALID_ARGUMENT", http().post("/api/v1/tables", c.token, Json{{"time_control", 5}}));
@@ -2499,14 +2288,9 @@ TEST(OctiHttpServerIntegrationTest, SseStreamDeliversRoomEventsLive)
     /* Frames carry resumable ids. */
     CHECK_TRUE(sse.data().find("id: " + std::to_string(mv[0].value("seq", 0)) + "\n") !=
                std::string::npos);
-    /* A private voice signal to somebody else never reaches this stream. */
-    EXPECT_STATUS(200, http().post("/api/v1/games/" + room + "/voice-signal", a.token,
-                                   Json{{"target", b.uuid}, {"type", "SDP_OFFER"},
-                                        {"payload", {{"sdp", "secret-offer"}}}}));
     EXPECT_STATUS(200, http().post("/api/v1/games/" + room + "/chat", a.token,
-                                   Json{{"text", "marker after signal"}}));
-    CHECK_TRUE(sse.waitFor("marker after signal", 3000));
-    CHECK_TRUE(sse.data().find("secret-offer") == std::string::npos);
+                                   Json{{"text", "marker after move"}}));
+    CHECK_TRUE(sse.waitFor("marker after move", 3000));
     CHECK_EQUAL(1, env->server->activeStreams());
 
     /* Dropping the client frees its slot. */
@@ -2521,7 +2305,7 @@ TEST(OctiHttpServerIntegrationTest, SseStreamDeliversRoomEventsLive)
     CHECK_TRUE(freed);
 }
 
-TEST(OctiHttpServerIntegrationTest, SseResumesFromLastEventIdAndTargetsVoiceSignals)
+TEST(OctiHttpServerIntegrationTest, SseResumesFromLastEventId)
 {
     User a = signIn("google", "sub-a", "Alice Anders");
     User b = signIn("apple", "sub-b", "Bob Brown");
@@ -2535,16 +2319,9 @@ TEST(OctiHttpServerIntegrationTest, SseResumesFromLastEventIdAndTargetsVoiceSign
     SseClient sse;
     sse.start(env->server->port(), "/api/v1/games/" + room + "/events", b.token, resume);
     CHECK_TRUE(sse.waitFor("retry: 3000", 3000));
-    EXPECT_STATUS(200, http().post("/api/v1/games/" + room + "/voice-signal", a.token,
-                                   Json{{"target", b.uuid}, {"type", "ICE_CANDIDATE"},
-                                        {"payload", {{"candidate", "c1"}}}}));
     EXPECT_STATUS(200, http().post("/api/v1/games/" + room + "/chat", a.token, Json{{"text", "fresh news"}}));
     CHECK_TRUE(sse.waitFor("fresh news", 3000));
     CHECK_TRUE(sse.data().find("old news") == std::string::npos);
-    std::vector<Json> sig = sse.events("VOICE_SIGNAL");
-    CHECK_EQUAL(1, static_cast<int>(sig.size()));
-    STRCMP_EQUAL("ICE_CANDIDATE", sig[0].value("signal_type", "").c_str());
-    STRCMP_EQUAL("c1", sig[0]["payload"].value("candidate", "").c_str());
     sse.stop();
 }
 
@@ -5767,11 +5544,6 @@ TEST(OctiHttpServerIntegrationTest, RobotExportConfAndForbiddenEndpoints)
         "/api/v1/profile", tok1, Json{{"display_name", "Robot Impostor"}});
     CHECK_EQUAL(403, rProfilePatch.status);
     STRCMP_EQUAL("FORBIDDEN_ROBOT", rProfilePatch.json.value("error", "").c_str());
-
-    Reply rVoice = http().post(
-        "/api/v1/games/dummy-game/voice-signal", tok1, Json::object());
-    CHECK_EQUAL(403, rVoice.status);
-    STRCMP_EQUAL("FORBIDDEN_ROBOT", rVoice.json.value("error", "").c_str());
 }
 
 TEST(OctiHttpServerIntegrationTest, RobotGamePlayAndMoveAiTelemetry)
@@ -6061,9 +5833,33 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("OCTI v2.3.5") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v2.3.6") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"robot-profile-detail\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"robots-tbody\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"account-robots-tbody\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("var tbody = $(\"account-robots-tbody\");") != std::string::npos);
+
+    /* Ensure zero duplicate HTML id="..." attributes across the entire WebUi DOM */
+    {
+        const size_t scriptPos = rIndex.body.find("<script>");
+        const std::string htmlPart = (scriptPos != std::string::npos)
+            ? rIndex.body.substr(0, scriptPos)
+            : rIndex.body;
+        std::set<std::string> seenIds;
+        size_t pos = 0;
+        while ((pos = htmlPart.find("id=\"", pos)) != std::string::npos) {
+            pos += 4;
+            const size_t endQuote = htmlPart.find('"', pos);
+            if (endQuote == std::string::npos) {
+                break;
+            }
+            const std::string idVal = htmlPart.substr(pos, endQuote - pos);
+            CHECK_FALSE_TEXT(seenIds.count(idVal) > 0,
+                             ("Duplicate HTML id attribute: " + idVal).c_str());
+            seenIds.insert(idVal);
+            pos = endQuote + 1;
+        }
+    }
     CHECK_TRUE(rIndex.body.find("Quick Guide") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"web-room-chat-log\"") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"web-table-info-card\"") != std::string::npos);

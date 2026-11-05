@@ -93,9 +93,7 @@ struct HttpServerConfig {
  * OidcVerifier and GameRoomManager, plus the embedded Web Archive,
  * Leaderboard and Live Spectator UI served at GET /.
  *
- * Voice is strictly peer-to-peer: the server only relays small signaling
- * blobs and records voice meta events. Request bodies that are not
- * application/json are refused (415), so audio can never be uploaded.
+ * Request bodies that are not application/json are refused (415).
  *
  * start() binds and launches a listener thread and a maintenance thread
  * (GameRoomManager::tick, session purge, matchmaking pump). stop() ends

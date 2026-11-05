@@ -429,7 +429,6 @@ public final class OctiNetworkClient implements AutoCloseable {
         public boolean rated = true;
         public boolean allowTakeback = false;
         public String observerPolicy = "OPEN";
-        public String voicePolicy = "PLAYERS_ONLY";
         public String phase = "WAITING_FOR_PLAYERS";
         public boolean hasPasscode = false;
         public String hostUuid = "";
@@ -468,7 +467,6 @@ public final class OctiNetworkClient implements AutoCloseable {
         public boolean rated = true;
         public boolean allowTakeback = false;
         public String observerPolicy = "OPEN";
-        public String voicePolicy = "PLAYERS_ONLY";
         public String passcode = "";
     }
 
@@ -522,11 +520,6 @@ public final class OctiNetworkClient implements AutoCloseable {
         public long expiresAtMs = 0;
     }
 
-    public static final class VoicePeerInfo {
-        public String playerUuid = "";
-        public boolean micMuted = false;
-    }
-
     public static final class GameViewData {
         public boolean live = true;
         public String roomId = "";
@@ -542,7 +535,6 @@ public final class OctiNetworkClient implements AutoCloseable {
         public boolean rated = true;
         public boolean allowTakeback = false;
         public String observerPolicy = "OPEN";
-        public String voicePolicy = "PLAYERS_ONLY";
         public String phase = "WAITING_FOR_PLAYERS";
         public boolean paused = false;
         public boolean hasPasscode = false;
@@ -560,7 +552,6 @@ public final class OctiNetworkClient implements AutoCloseable {
         public String termination = "";
         public int winnerSeat = 0;
         public List<GameProposalInfo> proposals = new ArrayList<>();
-        public List<VoicePeerInfo> voicePeers = new ArrayList<>();
         public long seq = 0;
         public boolean archived = false;
         public String rematchRoomId = "";
@@ -587,7 +578,6 @@ public final class OctiNetworkClient implements AutoCloseable {
 
     public static final class RoomSettingsData {
         public String observerPolicy = "";
-        public String voicePolicy = "";
         public long seq = 0;
     }
 
@@ -1863,7 +1853,6 @@ public final class OctiNetworkClient implements AutoCloseable {
             long initialMs,
             long incrementMs,
             String observerPolicy,
-            String voicePolicy,
             String passcode) {
         CreateTableRequest req = new CreateTableRequest();
         req.mode = mode != null && !mode.isEmpty() ? mode : "2P";
@@ -1876,7 +1865,6 @@ public final class OctiNetworkClient implements AutoCloseable {
         req.initialMs = initialMs;
         req.incrementMs = incrementMs;
         req.observerPolicy = observerPolicy != null && !observerPolicy.isEmpty() ? observerPolicy : "OPEN";
-        req.voicePolicy = voicePolicy != null && !voicePolicy.isEmpty() ? voicePolicy : "PLAYERS_ONLY";
         req.passcode = passcode != null ? passcode : "";
         return createTable(req);
     }
@@ -1892,7 +1880,6 @@ public final class OctiNetworkClient implements AutoCloseable {
         body.put("rated", r.rated);
         body.put("allow_takeback", r.allowTakeback);
         body.put("observer_policy", normalizeObserverPolicy(r.observerPolicy));
-        body.put("voice_policy", normalizeVoicePolicy(r.voicePolicy));
         if (r.passcode != null && !r.passcode.isEmpty()) {
             body.put("passcode", r.passcode);
         }
@@ -2135,7 +2122,7 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     /* ================================================================== */
-    /* 23..32: Live Game, Chat, Voice Signaling & Moderation              */
+    /* 23..32: Live Game, Chat & Moderation                               */
     /* ================================================================== */
 
     public ApiResult<GameViewData> fetchGameView(String roomId) {
@@ -2230,56 +2217,6 @@ public final class OctiNetworkClient implements AutoCloseable {
         return res;
     }
 
-    public ApiResult<Long> submitVoiceSignal(
-            String roomId, String toPlayerUuid, String signalType, String payloadJson) {
-        ApiResult<Long> res = new ApiResult<>(0L);
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("target", toPlayerUuid != null ? toPlayerUuid : "");
-        body.put("type", signalType != null ? signalType : "");
-        Object parsedPayload = null;
-        if (payloadJson != null && !payloadJson.isEmpty()) {
-            try {
-                parsedPayload = OctiMiniJson.parse(payloadJson);
-            } catch (RuntimeException ignored) {
-            }
-        }
-        body.put("payload", parsedPayload != null ? parsedPayload : (payloadJson != null ? payloadJson : ""));
-        RawResponse raw = doPost("/api/v1/games/" + urlEncode(roomId) + "/voice-signal", body);
-        if (!raw.transportOk || raw.status != 200 || raw.json == null) {
-            populateError(raw, res);
-            return res;
-        }
-        res.ok = true;
-        res.httpStatus = raw.status;
-        res.data = OctiMiniJson.getLong(raw.json, "seq", 0);
-        return res;
-    }
-
-    public ApiResult<Long> submitVoiceMeta(String roomId, String eventType) {
-        return submitVoiceMeta(roomId, eventType, "");
-    }
-
-    public ApiResult<Long> submitVoiceMeta(String roomId, String eventType, String targetPlayerUuid) {
-        ApiResult<Long> res = new ApiResult<>(0L);
-        String action = eventType != null ? eventType.toUpperCase(Locale.ROOT) : "";
-        if ("SPEAKING_START".equals(action)) {
-            action = "MIC_UNMUTED";
-        } else if ("SPEAKING_STOP".equals(action)) {
-            action = "MIC_MUTED";
-        }
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("action", action);
-        RawResponse raw = doPost("/api/v1/games/" + urlEncode(roomId) + "/voice-meta", body);
-        if (!raw.transportOk || raw.status != 200 || raw.json == null) {
-            populateError(raw, res);
-            return res;
-        }
-        res.ok = true;
-        res.httpStatus = raw.status;
-        res.data = OctiMiniJson.getLong(raw.json, "seq", 0);
-        return res;
-    }
-
     public ApiResult<Boolean> banObserver(String roomId, String targetPlayerUuid) {
         return banObserver(roomId, targetPlayerUuid, "");
     }
@@ -2303,12 +2240,11 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     public ApiResult<Boolean> muteParticipant(
-            String roomId, String targetPlayerUuid, boolean muteChat, boolean muteVoice) {
+            String roomId, String targetPlayerUuid, boolean muteChat) {
         ApiResult<Boolean> res = new ApiResult<>(Boolean.FALSE);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("target", targetPlayerUuid != null ? targetPlayerUuid : "");
         body.put("mute_chat", muteChat);
-        body.put("mute_voice", muteVoice);
         RawResponse raw = doPost("/api/v1/games/" + urlEncode(roomId) + "/mute", body);
         if (!raw.transportOk || raw.status != 200) {
             populateError(raw, res);
@@ -2321,14 +2257,11 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     public ApiResult<RoomSettingsData> updateRoomSettings(
-            String roomId, String observerPolicy, String voicePolicy) {
+            String roomId, String observerPolicy) {
         ApiResult<RoomSettingsData> res = new ApiResult<>(new RoomSettingsData());
         Map<String, Object> body = new LinkedHashMap<>();
         if (observerPolicy != null && !observerPolicy.isEmpty()) {
             body.put("observer_policy", normalizeObserverPolicy(observerPolicy));
-        }
-        if (voicePolicy != null && !voicePolicy.isEmpty()) {
-            body.put("voice_policy", normalizeVoicePolicy(voicePolicy));
         }
         RawResponse raw = doPost("/api/v1/games/" + urlEncode(roomId) + "/settings", body);
         if (!raw.transportOk || raw.status != 200 || raw.json == null) {
@@ -2339,8 +2272,6 @@ public final class OctiNetworkClient implements AutoCloseable {
         res.httpStatus = raw.status;
         res.data.observerPolicy = OctiMiniJson.getString(
                 raw.json, "observer_policy", observerPolicy != null ? observerPolicy : "");
-        res.data.voicePolicy = OctiMiniJson.getString(
-                raw.json, "voice_policy", voicePolicy != null ? voicePolicy : "");
         res.data.seq = OctiMiniJson.getLong(raw.json, "seq", 0);
         return res;
     }
@@ -2358,20 +2289,6 @@ public final class OctiNetworkClient implements AutoCloseable {
         }
         if ("PRIVATE".equals(u) || "NONE".equals(u) || "DISABLED".equals(u)) {
             return "NO_OBSERVERS";
-        }
-        return u;
-    }
-
-    private static String normalizeVoicePolicy(String policy) {
-        if (policy == null || policy.isEmpty()) {
-            return "PLAYERS_ONLY";
-        }
-        String u = policy.trim().toUpperCase(Locale.ROOT);
-        if ("PLAYERS_AND_OBSERVERS".equals(u) || "ALL".equals(u) || "OPEN".equals(u)) {
-            return "ALL_ALLOWED";
-        }
-        if ("OFF".equals(u) || "NONE".equals(u) || "MUTED".equals(u)) {
-            return "DISABLED";
         }
         return u;
     }
@@ -3520,7 +3437,6 @@ public final class OctiNetworkClient implements AutoCloseable {
         t.rated = OctiMiniJson.getBoolean(j, "rated", true);
         t.allowTakeback = OctiMiniJson.getBoolean(j, "allow_takeback", false);
         t.observerPolicy = OctiMiniJson.getString(j, "observer_policy", "OPEN");
-        t.voicePolicy = OctiMiniJson.getString(j, "voice_policy", "PLAYERS_ONLY");
         t.phase = OctiMiniJson.getString(j, "phase", "WAITING_FOR_PLAYERS");
         t.hasPasscode = OctiMiniJson.getBoolean(j, "has_passcode", false);
         t.hostUuid = OctiMiniJson.getString(j, "host_uuid", "");
@@ -3599,7 +3515,6 @@ public final class OctiNetworkClient implements AutoCloseable {
         v.rated = OctiMiniJson.getBoolean(j, "rated", true);
         v.allowTakeback = OctiMiniJson.getBoolean(j, "allow_takeback", false);
         v.observerPolicy = OctiMiniJson.getString(j, "observer_policy", "OPEN");
-        v.voicePolicy = OctiMiniJson.getString(j, "voice_policy", "PLAYERS_ONLY");
         v.phase = OctiMiniJson.getString(j, "phase", "WAITING_FOR_PLAYERS");
         v.paused = OctiMiniJson.getBoolean(j, "paused", false);
         v.hasPasscode = OctiMiniJson.getBoolean(j, "has_passcode", false);
@@ -3683,20 +3598,6 @@ public final class OctiNetworkClient implements AutoCloseable {
                 }
                 p.expiresAtMs = OctiMiniJson.getLong(pm, "expires_at_ms", 0);
                 v.proposals.add(p);
-            }
-        }
-        List<Object> vpArr = OctiMiniJson.getArray(j, "voice_peers");
-        if (vpArr != null) {
-            for (Object item : vpArr) {
-                if (!(item instanceof Map<?, ?>)) {
-                    continue;
-                }
-                @SuppressWarnings("unchecked")
-                Map<String, Object> vm = (Map<String, Object>) item;
-                VoicePeerInfo peer = new VoicePeerInfo();
-                peer.playerUuid = OctiMiniJson.getString(vm, "player_uuid", "");
-                peer.micMuted = OctiMiniJson.getBoolean(vm, "mic_muted", false);
-                v.voicePeers.add(peer);
             }
         }
         v.seq = OctiMiniJson.getLong(j, "seq", 0);

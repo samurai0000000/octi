@@ -263,17 +263,6 @@ bool ClientConfigStore::load(std::string &errorOut)
     if (doc.contains("sfx_muted") && doc["sfx_muted"].is_boolean()) {
         parsed.sfxMuted = doc["sfx_muted"].get<bool>();
     }
-    if (doc.contains("ptt_keycode") && doc["ptt_keycode"].is_number_integer()) {
-        int key = doc["ptt_keycode"].get<int>();
-        if (key >= 32 && key <= 126) {
-            parsed.pttKey = key;
-        }
-    } else if (doc.contains("ptt_key") && doc["ptt_key"].is_number_integer()) {
-        int key = doc["ptt_key"].get<int>();
-        if (key >= 32 && key <= 126) {
-            parsed.pttKey = key;
-        }
-    }
     if (doc.contains("telemetry_consent") && doc["telemetry_consent"].is_string()) {
         parsed.telemetryConsent = doc["telemetry_consent"].get<std::string>();
     }
@@ -330,7 +319,6 @@ bool ClientConfigStore::save(std::string &errorOut) const
     doc["theme"] = themeToString(_prefs.theme);
     doc["confirm_all_moves"] = _prefs.confirmAllMoves;
     doc["sfx_muted"] = _prefs.sfxMuted;
-    doc["ptt_keycode"] = _prefs.pttKey;
     doc["telemetry_consent"] = _prefs.telemetryConsent;
     doc["telemetry_consent_version"] = _prefs.telemetryConsentVersion;
     doc["install_id"] = _prefs.installId;

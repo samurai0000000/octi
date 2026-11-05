@@ -156,7 +156,6 @@ OctiMainWindow::OctiMainWindow(
                        : configPath),
       _netClient(netClient ? std::move(netClient)
                            : std::make_unique<OctiNetworkClient>()),
-      _voiceEngine(std::make_unique<P2pVoiceEngine>(_netClient.get())),
       _soundSynth(),
       _board(GAME_MODE_2, false, false, GAME_BASES_3),
       _composer(&_board),
@@ -221,10 +220,6 @@ OctiMainWindow::OctiMainWindow(
       _gameChatTranscript(nullptr),
       _gameChatInput(nullptr),
       _sendGameChatBtn(nullptr),
-      _voiceBox(nullptr),
-      _joinLeaveVoiceBtn(nullptr),
-      _holdToTalkBtn(nullptr),
-      _voiceStatusLabel(nullptr),
       _gameOverDialogShownForCurrentMatch(false),
       _updateController(nullptr),
       _currentUpdateState(),
@@ -245,8 +240,6 @@ OctiMainWindow::OctiMainWindow(
     _updateController = std::make_shared<selfupdate::SelfUpdateController>(
         defaultSelfUpdateConfig());
     bindSelfUpdateController();
-
-    _voiceEngine->setHardwareAudioEnabled(false);
 
     std::string loadErr;
     if (_configStore.load(loadErr)) {
@@ -383,11 +376,11 @@ OctiMainWindow::OctiMainWindow(
     boardLayout->setSpacing(12);
 
     _reservePanel = new OctiReservePanel(_boardPage);
-    _reservePanel->setMinimumWidth(300);
-    _reservePanel->setMaximumWidth(350);
+    _reservePanel->setMinimumWidth(260);
+    _reservePanel->setMaximumWidth(330);
 
     _boardCanvas = new OctiBoardCanvas(_boardPage);
-    _boardCanvas->setMinimumSize(620, 620);
+    _boardCanvas->setMinimumSize(500, 500);
 
     _startMatchOverlay = new OctiStartMatchDialog(_localConfig, _theme, _boardCanvas, true);
     _startMatchOverlay->setOnStartMatchCallback([this]() {
@@ -411,15 +404,12 @@ OctiMainWindow::OctiMainWindow(
         [this](const std::string &moveNotation) {
             handleLocalOrOnlineMoveCommitted(moveNotation);
         });
-    _reservePanel->setPushToTalkCallback([this](bool talking) {
-        setPushToTalkActive(talking);
-    });
 
-    /* ---- Right Side Panel (Move History / VCR, Proposals, Chat, PTT Voice) ---- */
+    /* ---- Right Side Panel (Move History / VCR, Proposals, Chat) ---- */
     QWidget *rightSide = new QWidget(_boardPage);
     _rightSide = rightSide;
-    rightSide->setMinimumWidth(340);
-    rightSide->setMaximumWidth(400);
+    rightSide->setMinimumWidth(320);
+    rightSide->setMaximumWidth(380);
     QVBoxLayout *rightLayout = new QVBoxLayout(rightSide);
     _rightLayout = rightLayout;
     rightLayout->setContentsMargins(0, 0, 0, 0);
@@ -430,15 +420,16 @@ OctiMainWindow::OctiMainWindow(
     _rightTopHalfWidget->setObjectName("rightTopHalfWidget");
     QVBoxLayout *topHalfLayout = new QVBoxLayout(_rightTopHalfWidget);
     topHalfLayout->setContentsMargins(0, 0, 0, 0);
-    topHalfLayout->setSpacing(6);
+    topHalfLayout->setSpacing(4);
 
     /* 0. Match Status Card (PCE-D06 / PCE-D09) */
     QGroupBox *statusBox = new QGroupBox("Match Status", _rightTopHalfWidget);
     _statusBox = statusBox;
     QVBoxLayout *statusLayout = new QVBoxLayout(statusBox);
-    statusLayout->setContentsMargins(8, 8, 8, 8);
-    statusLayout->setSpacing(4);
+    statusLayout->setContentsMargins(6, 4, 6, 6);
+    statusLayout->setSpacing(2);
     _matchModeLabel = new QLabel("Local vs AI Bot", statusBox);
+    _matchModeLabel->setWordWrap(true);
     _matchTurnStatusLabel = new QLabel("Active Turn: Player A", statusBox);
     _matchTurnStatusLabel->setStyleSheet("font-size: 13px; font-weight: bold;");
     _matchTurnStatusLabel->setWordWrap(true);
@@ -449,7 +440,7 @@ OctiMainWindow::OctiMainWindow(
     /* 0b. Online Waiting-Room Banner (shown when phase == WAITING_FOR_PLAYERS) */
     _waitingRoomBannerWidget = new QGroupBox("Waiting for Players", _rightTopHalfWidget);
     QVBoxLayout *waitLayout = new QVBoxLayout(_waitingRoomBannerWidget);
-    waitLayout->setContentsMargins(8, 8, 8, 8);
+    waitLayout->setContentsMargins(6, 4, 6, 6);
     waitLayout->setSpacing(4);
     _waitingRoomBannerLabel = new QLabel(
         "Waiting for opponents to join this table...",
@@ -457,11 +448,13 @@ OctiMainWindow::OctiMainWindow(
     _waitingRoomBannerLabel->setWordWrap(true);
     waitLayout->addWidget(_waitingRoomBannerLabel);
     QHBoxLayout *waitBtnRow = new QHBoxLayout();
+    waitBtnRow->setSpacing(4);
     _sitSeatBtn = new QPushButton("Sit / Join Game", _waitingRoomBannerWidget);
-    _sitSeatBtn->setStyleSheet("QPushButton { background-color: #2563eb; color: white; font-weight: bold; }");
+    _sitSeatBtn->setStyleSheet("QPushButton { background-color: #2563eb; color: white; font-weight: bold; padding: 4px 6px; font-size: 12px; }");
     _deleteWaitingTableBtn = new QPushButton("Delete Table", _waitingRoomBannerWidget);
-    _deleteWaitingTableBtn->setStyleSheet("QPushButton { background-color: #dc2626; color: white; font-weight: bold; }");
+    _deleteWaitingTableBtn->setStyleSheet("QPushButton { background-color: #dc2626; color: white; font-weight: bold; padding: 4px 6px; font-size: 12px; }");
     _leaveWaitingTableBtn = new QPushButton("Leave Table", _waitingRoomBannerWidget);
+    _leaveWaitingTableBtn->setStyleSheet("QPushButton { padding: 4px 6px; font-size: 12px; }");
     waitBtnRow->addWidget(_sitSeatBtn);
     waitBtnRow->addWidget(_deleteWaitingTableBtn);
     waitBtnRow->addWidget(_leaveWaitingTableBtn);
@@ -473,9 +466,10 @@ OctiMainWindow::OctiMainWindow(
     QGroupBox *historyBox = new QGroupBox("Move History • VCR Replay", _rightTopHalfWidget);
     _historyBox = historyBox;
     QVBoxLayout *histLayout = new QVBoxLayout(historyBox);
-    histLayout->setContentsMargins(8, 8, 8, 8);
+    histLayout->setContentsMargins(6, 4, 6, 6);
     histLayout->setSpacing(4);
     _moveHistoryList = new QListWidget(historyBox);
+    _moveHistoryList->setMinimumHeight(68);
     _moveHistoryList->setSelectionMode(QAbstractItemView::ExtendedSelection);
     histLayout->addWidget(_moveHistoryList, 1);
 
@@ -504,12 +498,24 @@ OctiMainWindow::OctiMainWindow(
         }
     });
 
+    const QString compactBtnCss = "QPushButton { padding: 4px 6px; font-size: 12px; }";
     QHBoxLayout *vcrRow = new QHBoxLayout();
-    _vcrFirstBtn = new QPushButton("|< First", historyBox);
+    vcrRow->setSpacing(4);
+    _vcrFirstBtn = new QPushButton("|<<", historyBox);
+    _vcrFirstBtn->setToolTip("Jump to First Ply");
+    _vcrFirstBtn->setStyleSheet(compactBtnCss);
     _vcrPrevBtn = new QPushButton("< Prev", historyBox);
+    _vcrPrevBtn->setToolTip("Previous Ply");
+    _vcrPrevBtn->setStyleSheet(compactBtnCss);
     _vcrNextBtn = new QPushButton("Next >", historyBox);
-    _vcrLastBtn = new QPushButton("Last >|", historyBox);
-    _exportNotationBtn = new QPushButton("Export...", historyBox);
+    _vcrNextBtn->setToolTip("Next Ply");
+    _vcrNextBtn->setStyleSheet(compactBtnCss);
+    _vcrLastBtn = new QPushButton(">>|", historyBox);
+    _vcrLastBtn->setToolTip("Return to Live / Latest Ply");
+    _vcrLastBtn->setStyleSheet(compactBtnCss);
+    _exportNotationBtn = new QPushButton("Export", historyBox);
+    _exportNotationBtn->setToolTip("Export Match Notation / FEN...");
+    _exportNotationBtn->setStyleSheet(compactBtnCss);
     vcrRow->addWidget(_vcrFirstBtn);
     vcrRow->addWidget(_vcrPrevBtn);
     vcrRow->addWidget(_vcrNextBtn);
@@ -527,14 +533,17 @@ OctiMainWindow::OctiMainWindow(
     /* 2. Active Proposal Banner & Game Action Buttons */
     _proposalBannerWidget = new QGroupBox("Pending Proposal", _rightTopHalfWidget);
     QVBoxLayout *propLayout = new QVBoxLayout(_proposalBannerWidget);
-    propLayout->setContentsMargins(8, 8, 8, 8);
+    propLayout->setContentsMargins(6, 4, 6, 6);
     propLayout->setSpacing(4);
     _proposalBannerLabel = new QLabel("No active proposal.", _proposalBannerWidget);
     _proposalBannerLabel->setWordWrap(true);
     propLayout->addWidget(_proposalBannerLabel);
     QHBoxLayout *propRespRow = new QHBoxLayout();
+    propRespRow->setSpacing(4);
     _acceptProposalBtn = new QPushButton("Accept", _proposalBannerWidget);
+    _acceptProposalBtn->setStyleSheet(compactBtnCss);
     _declineProposalBtn = new QPushButton("Decline", _proposalBannerWidget);
+    _declineProposalBtn->setStyleSheet(compactBtnCss);
     propRespRow->addWidget(_acceptProposalBtn);
     propRespRow->addWidget(_declineProposalBtn);
     propLayout->addLayout(propRespRow);
@@ -544,55 +553,55 @@ OctiMainWindow::OctiMainWindow(
     QGroupBox *actionsBox = new QGroupBox("Match Actions", _rightTopHalfWidget);
     _actionsBox = actionsBox;
     QVBoxLayout *actLayout = new QVBoxLayout(actionsBox);
-    actLayout->setContentsMargins(8, 8, 8, 8);
+    actLayout->setContentsMargins(6, 4, 6, 6);
     actLayout->setSpacing(4);
     QHBoxLayout *actRow1 = new QHBoxLayout();
+    actRow1->setSpacing(4);
     _sidebarNewGameBtn = new QPushButton("New Game...", actionsBox);
+    _sidebarNewGameBtn->setStyleSheet(compactBtnCss);
     _offerDrawBtn = new QPushButton("Offer Draw", actionsBox);
+    _offerDrawBtn->setStyleSheet(compactBtnCss);
     _pauseResumeBtn = new QPushButton("Pause", actionsBox);
+    _pauseResumeBtn->setStyleSheet(compactBtnCss);
+    _claimForfeitBtn = new QPushButton("Forfeit", actionsBox);
+    _claimForfeitBtn->setStyleSheet(compactBtnCss);
     _undoRequestBtn = new QPushButton("Undo", actionsBox);
+    _undoRequestBtn->setStyleSheet(compactBtnCss);
     actRow1->addWidget(_sidebarNewGameBtn);
     actRow1->addWidget(_offerDrawBtn);
     actRow1->addWidget(_pauseResumeBtn);
+    actRow1->addWidget(_claimForfeitBtn);
     actRow1->addWidget(_undoRequestBtn);
     actLayout->addLayout(actRow1);
 
     QHBoxLayout *actRow2 = new QHBoxLayout();
-    _claimForfeitBtn = new QPushButton("Forfeit", actionsBox);
+    actRow2->setSpacing(4);
     _resignBtn = new QPushButton("Resign", actionsBox);
+    _resignBtn->setStyleSheet(compactBtnCss);
     _leaveTableBtn = new QPushButton("Leave Table", actionsBox);
+    _leaveTableBtn->setStyleSheet(compactBtnCss);
     _moderationBtn = new QPushButton("Moderation", actionsBox);
-    actRow2->addWidget(_claimForfeitBtn);
+    _moderationBtn->setStyleSheet(compactBtnCss);
     actRow2->addWidget(_resignBtn);
     actRow2->addWidget(_leaveTableBtn);
     actRow2->addWidget(_moderationBtn);
     actLayout->addLayout(actRow2);
     topHalfLayout->addWidget(actionsBox);
 
-    rightLayout->addWidget(_rightTopHalfWidget, 1);
+    rightLayout->addWidget(_rightTopHalfWidget, 3);
 
     /* ---- Bottom Half: Table Chat (Always Visible) & Integrated Voice Strip ---- */
     QGroupBox *chatBox = new QGroupBox("Table Chat", rightSide);
     chatBox->setObjectName("chatBox");
     _chatBox = chatBox;
     QVBoxLayout *chatLayout = new QVBoxLayout(chatBox);
-    chatLayout->setContentsMargins(8, 8, 8, 8);
-    chatLayout->setSpacing(6);
+    chatLayout->setContentsMargins(6, 4, 6, 6);
+    chatLayout->setSpacing(4);
 
-    // Header row inside chatBox: P2P Voice controls + Zoom button
+    // Header row inside chatBox: Zoom button
     QHBoxLayout *chatHeaderRow = new QHBoxLayout();
-    _voiceBox = new QWidget(chatBox);
-    QHBoxLayout *vLayout = new QHBoxLayout(_voiceBox);
-    vLayout->setContentsMargins(0, 0, 0, 0);
-    vLayout->setSpacing(4);
-    _voiceStatusLabel = new QLabel("Voice: Disconnected", _voiceBox);
-    _joinLeaveVoiceBtn = new QPushButton("Join Voice", _voiceBox);
-    _holdToTalkBtn = new QPushButton("Hold to Talk [V]", _voiceBox);
-    vLayout->addWidget(_voiceStatusLabel);
-    vLayout->addWidget(_joinLeaveVoiceBtn);
-    vLayout->addWidget(_holdToTalkBtn);
-    _voiceBox->setVisible(false); // Only visible when online
-    chatHeaderRow->addWidget(_voiceBox, 1);
+    chatHeaderRow->setSpacing(4);
+    chatHeaderRow->addStretch(1);
 
     _zoomChatBtn = new QPushButton("Zoom ⤢", chatBox);
     _zoomChatBtn->setObjectName("zoomChatBtn");
@@ -605,23 +614,26 @@ OctiMainWindow::OctiMainWindow(
 
     _gameChatTranscript = new QPlainTextEdit(chatBox);
     _gameChatTranscript->setReadOnly(true);
+    _gameChatTranscript->setMinimumHeight(54);
     _gameChatTranscript->setMaximumBlockCount(200);
     _gameChatTranscript->viewport()->installEventFilter(this);
     chatLayout->addWidget(_gameChatTranscript, 1);
 
     QHBoxLayout *chatInputRow = new QHBoxLayout();
+    chatInputRow->setSpacing(4);
     _chatScopeCombo = new QComboBox(chatBox);
     _chatScopeCombo->addItem("ALL", "ALL");
     _chatScopeCombo->addItem("TEAM", "TEAM");
     _gameChatInput = new QLineEdit(chatBox);
     _gameChatInput->setPlaceholderText("Send board message (@bot help)...");
     _sendGameChatBtn = new QPushButton("Send", chatBox);
+    _sendGameChatBtn->setStyleSheet(compactBtnCss);
     chatInputRow->addWidget(_chatScopeCombo);
     chatInputRow->addWidget(_gameChatInput, 1);
     chatInputRow->addWidget(_sendGameChatBtn);
     chatLayout->addLayout(chatInputRow);
 
-    rightLayout->addWidget(chatBox, 1);
+    rightLayout->addWidget(chatBox, 2);
 
     boardLayout->addWidget(_reservePanel);
     boardLayout->addWidget(_boardCanvas, 1);
@@ -856,20 +868,6 @@ OctiMainWindow::OctiMainWindow(
         }
     });
 
-    QObject::connect(_joinLeaveVoiceBtn, &QPushButton::clicked, [this]() {
-        if (isInVoiceRoom()) {
-            leaveOnlineVoice();
-        } else {
-            joinOnlineVoice();
-        }
-    });
-    QObject::connect(_holdToTalkBtn, &QPushButton::pressed, [this]() {
-        setPushToTalkActive(true);
-    });
-    QObject::connect(_holdToTalkBtn, &QPushButton::released, [this]() {
-        setPushToTalkActive(false);
-    });
-
     _lobbyView->setViewerIdentity(_profile.uuid, _profile.handle);
     _lobbyView->setOnCreateTableRequested([this]() {
         CreateTableDialog dlg(_netClient.get(), _theme, this);
@@ -909,26 +907,7 @@ OctiMainWindow::OctiMainWindow(
                 code = pd.passcode();
                 _pendingOnlinePasscode = code;
             }
-            int preferredOpenSeat = 0;
-            int totalSeats = table.seatsTotal > 0 ? table.seatsTotal : 2;
-            for (int s = 1; s <= totalSeats; ++s) {
-                bool occupied = false;
-                for (const auto &seatInfo : table.seats) {
-                    if (seatInfo.seat == s &&
-                        (!seatInfo.playerUuid.empty() || !seatInfo.handle.empty() || seatInfo.isRobot)) {
-                        occupied = true;
-                        break;
-                    }
-                }
-                if (!occupied) {
-                    preferredOpenSeat = s;
-                    break;
-                }
-            }
-            auto res = joinAndEnterOnlineTable(table.roomId, preferredOpenSeat, code);
-            if (!res.ok && table.observerPolicy != "NO_OBSERVERS") {
-                observeOnlineTable(table.roomId, code);
-            }
+            observeOnlineTable(table.roomId, code);
         });
     _lobbyView->setOnLeaveTableRequested(
         [this](const std::string &roomId) {
@@ -1013,7 +992,6 @@ OctiMainWindow::OctiMainWindow(
     updateTopBarLabels();
     refreshMoveHistoryAndFenUi();
     updateProposalBannerUi();
-    updateVoiceControlUi();
     updateMatchActionsVisibility();
     setupMenuBar();
     updateStartMatchOverlay();
@@ -1083,11 +1061,6 @@ LobbyView *OctiMainWindow::lobbyView() const
 OctiNetworkClient *OctiMainWindow::netClient() const
 {
     return _netClient.get();
-}
-
-P2pVoiceEngine *OctiMainWindow::voiceEngine() const
-{
-    return _voiceEngine.get();
 }
 
 OctiSoundSynth *OctiMainWindow::soundSynth()
@@ -2014,8 +1987,6 @@ ApiResult<CreateTableResponse> OctiMainWindow::createAndEnterOnlineTable(
     CreateTableRequest normalized = req;
     normalized.observerPolicy =
         CreateTableDialog::normalizeObserverPolicy(req.observerPolicy);
-    normalized.voicePolicy =
-        CreateTableDialog::normalizeVoicePolicy(req.voicePolicy);
     res = _netClient->createTable(normalized);
     if (!res.ok) {
         if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
@@ -2221,9 +2192,6 @@ ApiResult<bool> OctiMainWindow::leaveActiveOnlineTable(
 
 void OctiMainWindow::leaveOnlineRoom()
 {
-    if (_voiceEngine && _voiceEngine->isInVoiceRoom()) {
-        _voiceEngine->leaveVoiceRoom();
-    }
     if (_netClient) {
         _netClient->stopGameEventStream();
     }
@@ -2255,7 +2223,6 @@ void OctiMainWindow::leaveOnlineRoom()
             _inOnlineRoom, _onlineRoomId, _onlineViewerSeat, _onlineGameView);
     }
     updateProposalBannerUi();
-    updateVoiceControlUi();
     updateMatchActionsVisibility();
     setupMenuBar();
     updateStartMatchOverlay();
@@ -2386,6 +2353,12 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
     }
 
     _awaitingMatchStart = false;
+    if (!view.roomId.empty()) {
+        _inOnlineRoom = true;
+        if (_onlineRoomId.empty()) {
+            _onlineRoomId = view.roomId;
+        }
+    }
     updateStartMatchOverlay();
     if (view.phase != "FINISHED") {
         _gameOverDialogShownForCurrentMatch = false;
@@ -2543,7 +2516,16 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
             seatOcc,
             [this](int seat) {
                 if (!_onlineRoomId.empty()) {
-                    joinAndEnterOnlineTable(_onlineRoomId, seat, _pendingOnlinePasscode);
+                    std::string code = _pendingOnlinePasscode;
+                    if (_onlineGameView.hasPasscode && code.empty()) {
+                        PasscodeDialog pd(_onlineRoomId, _theme, this);
+                        if (pd.exec() != QDialog::Accepted) {
+                            return;
+                        }
+                        code = pd.passcode();
+                        _pendingOnlinePasscode = code;
+                    }
+                    joinAndEnterOnlineTable(_onlineRoomId, seat, code);
                 }
             });
         if (boardChanged || !_composer.hasStagedMove()) {
@@ -2559,7 +2541,6 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
 
     refreshMoveHistoryAndFenUi();
     updateProposalBannerUi();
-    updateVoiceControlUi();
     updateMatchActionsVisibility();
     checkAndPresentGameOver();
     setupMenuBar();
@@ -2567,10 +2548,6 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
 
 void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
 {
-    if (_voiceEngine) {
-        _voiceEngine->handleGameSseEvent(ev);
-    }
-
     std::int64_t evId = static_cast<std::int64_t>(ev.id);
     if (evId > 0) {
         if (evId <= _lastAppliedGameEventSeq) {
@@ -2608,15 +2585,6 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
                 zt->verticalScrollBar()->setValue(zt->verticalScrollBar()->maximum());
             }
         }
-        return;
-    }
-
-    if (ev.event == "USER_MUTED") {
-        if (_reservePanel && _voiceEngine) {
-            _reservePanel->setVoiceMutedByRoom(
-                _voiceEngine->isVoiceMutedByServer());
-        }
-        updateVoiceControlUi();
         return;
     }
 
@@ -2730,7 +2698,7 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
         ev.event == "GAME_OVER" || ev.event == "POLICY_UPDATED" ||
         ev.event == "SEAT_JOINED" || ev.event == "SEAT_LEFT" ||
         ev.event == "OBSERVER_JOINED" || ev.event == "OBSERVER_LEFT" ||
-        ev.event == "OBSERVER_BANNED" || ev.event == "VOICE_META" ||
+        ev.event == "OBSERVER_BANNED" ||
         ev.event == "reconnect" || ev.event == "gap" ||
         ev.event == "PLAYER_DISCONNECTED" || ev.event == "PLAYER_RECONNECTED" ||
         type == "PLAYER_DISCONNECTED" || type == "PLAYER_RECONNECTED") {
@@ -3178,80 +3146,6 @@ ApiResult<GameActionData> OctiMainWindow::declineActiveProposal()
     return res;
 }
 
-/* ---- Push-to-Talk Voice Control ---- */
-
-bool OctiMainWindow::joinOnlineVoice()
-{
-    if (!_voiceEngine || _onlineRoomId.empty() || _profile.uuid.empty()) {
-        return false;
-    }
-    std::string err;
-    if (!_voiceEngine->joinVoiceRoom(_onlineRoomId, _profile.uuid, err)) {
-        return false;
-    }
-    for (std::size_t i = 0; i < _onlineGameView.seats.size(); ++i) {
-        const std::string &peerUuid = _onlineGameView.seats[i].playerUuid;
-        if (!peerUuid.empty() && peerUuid != _profile.uuid) {
-            _voiceEngine->initiatePeerOffer(peerUuid);
-        }
-    }
-    updateVoiceControlUi();
-    return true;
-}
-
-void OctiMainWindow::leaveOnlineVoice()
-{
-    if (_voiceEngine) {
-        _voiceEngine->leaveVoiceRoom();
-    }
-    if (_reservePanel) {
-        _reservePanel->setPushToTalkActive(false);
-    }
-    updateVoiceControlUi();
-    setupMenuBar();
-}
-
-bool OctiMainWindow::isInVoiceRoom() const
-{
-    return _voiceEngine && _voiceEngine->isInVoiceRoom();
-}
-
-bool OctiMainWindow::setPushToTalkActive(bool talking)
-{
-    bool ok = false;
-    if (_voiceEngine && _voiceEngine->isInVoiceRoom()) {
-        ok = _voiceEngine->setPushToTalkActive(talking);
-    } else {
-        ok = talking;
-    }
-    if (_reservePanel) {
-        _reservePanel->setPushToTalkActive(
-            _voiceEngine && _voiceEngine->isInVoiceRoom()
-                ? _voiceEngine->isPushToTalkActive()
-                : talking);
-    }
-    updateVoiceControlUi();
-    return ok;
-}
-
-bool OctiMainWindow::isPushToTalkActive() const
-{
-    if (_voiceEngine && _voiceEngine->isInVoiceRoom()) {
-        return _voiceEngine->isPushToTalkActive();
-    }
-    return _reservePanel ? _reservePanel->isPushToTalkActive() : false;
-}
-
-void OctiMainWindow::simulatePushToTalkKeyPress()
-{
-    setPushToTalkActive(true);
-}
-
-void OctiMainWindow::simulatePushToTalkKeyRelease()
-{
-    setPushToTalkActive(false);
-}
-
 /* ---- Move History, VCR Replay & .octi Transcript ---- */
 
 void OctiMainWindow::vcrFirst()
@@ -3630,24 +3524,11 @@ void OctiMainWindow::showEvent(QShowEvent *event)
 
 void OctiMainWindow::keyPressEvent(QKeyEvent *event)
 {
-    if (event && event->key() == Qt::Key_V && !event->isAutoRepeat()) {
-        QWidget *fw = QApplication::focusWidget();
-        if (!dynamic_cast<QLineEdit *>(fw)) {
-            setPushToTalkActive(true);
-            event->accept();
-            return;
-        }
-    }
     QMainWindow::keyPressEvent(event);
 }
 
 void OctiMainWindow::keyReleaseEvent(QKeyEvent *event)
 {
-    if (event && event->key() == Qt::Key_V && !event->isAutoRepeat()) {
-        setPushToTalkActive(false);
-        event->accept();
-        return;
-    }
     QMainWindow::keyReleaseEvent(event);
 }
 
@@ -3689,17 +3570,6 @@ bool OctiMainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
-    if (event && (event->type() == QEvent::KeyPress ||
-                  event->type() == QEvent::KeyRelease)) {
-        QKeyEvent *ke = static_cast<QKeyEvent *>(event);
-        if (ke->key() == Qt::Key_V && !ke->isAutoRepeat()) {
-            QWidget *fw = QApplication::focusWidget();
-            if (!dynamic_cast<QLineEdit *>(fw)) {
-                setPushToTalkActive(event->type() == QEvent::KeyPress);
-                return true;
-            }
-        }
-    }
     return QMainWindow::eventFilter(watched, event);
 }
 
@@ -3894,9 +3764,6 @@ void OctiMainWindow::updateMatchActionsVisibility()
     if (_chatBox) {
         _chatBox->setVisible(true);
     }
-    if (_voiceBox) {
-        _voiceBox->setVisible(online);
-    }
 
     if (_chatScopeCombo) {
         _chatScopeCombo->blockSignals(true);
@@ -3929,17 +3796,21 @@ void OctiMainWindow::updateMatchActionsVisibility()
 
     if (_matchModeLabel) {
         if (online) {
-            QString modeStr = QString("Online Room: %1")
-                .arg(QString::fromStdString(_onlineRoomId));
+            QString roomDisp = QString::fromStdString(_onlineRoomId);
+            if (roomDisp.size() > 16) {
+                roomDisp = roomDisp.left(16);
+            }
+            QString modeStr = QString("Room #%1").arg(roomDisp);
             if (_onlineGameView.ttlRemainingMs >= 0) {
                 int64_t totalSec = _onlineGameView.ttlRemainingMs / 1000;
                 int mm = static_cast<int>(totalSec / 60);
                 int ss = static_cast<int>(totalSec % 60);
-                modeStr += QString::fromUtf8(" \xE2\x80\xA2 Idle TTL %1:%2")
+                modeStr += QString::fromUtf8(" \xE2\x80\xA2 TTL %1:%2")
                     .arg(mm, 2, 10, QChar('0'))
                     .arg(ss, 2, 10, QChar('0'));
             }
             _matchModeLabel->setText(modeStr);
+            _matchModeLabel->setToolTip(QString::fromStdString(_onlineRoomId));
         } else if (_isLocalBotGame) {
             _matchModeLabel->setText(
                 QString::fromUtf8("Local vs AI Bot \xE2\x80\xA2 Offline Tabletop"));
@@ -4291,35 +4162,6 @@ void OctiMainWindow::updateProposalBannerUi()
     }
 
     _proposalBannerWidget->setVisible(true);
-}
-
-void OctiMainWindow::updateVoiceControlUi()
-{
-    if (!_voiceStatusLabel || !_joinLeaveVoiceBtn || !_holdToTalkBtn) {
-        return;
-    }
-    if (!_voiceEngine || !_voiceEngine->isInVoiceRoom()) {
-        _voiceStatusLabel->setText("Voice: Disconnected (Strict PTT)");
-        _joinLeaveVoiceBtn->setText("Join Voice");
-        _holdToTalkBtn->setText("Hold to Talk [V]");
-        return;
-    }
-    _joinLeaveVoiceBtn->setText("Leave Voice");
-    if (_voiceEngine->isVoicePolicyDisabled()) {
-        _voiceStatusLabel->setText("Voice: Disabled by Room Policy");
-    } else if (_voiceEngine->isVoiceMutedByServer()) {
-        _voiceStatusLabel->setText("Voice: Muted by Room Moderator");
-    } else if (_voiceEngine->isPushToTalkActive()) {
-        _voiceStatusLabel->setText(
-            QString("Voice: TRANSMITTING PTT (%1 peer(s))")
-                .arg(static_cast<int>(_voiceEngine->activePeerCount())));
-        _holdToTalkBtn->setText("TRANSMITTING [V]");
-    } else {
-        _voiceStatusLabel->setText(
-            QString("Voice: Connected • Mic Muted (%1 peer(s))")
-                .arg(static_cast<int>(_voiceEngine->activePeerCount())));
-        _holdToTalkBtn->setText("Hold to Talk [V]");
-    }
 }
 
 /* ---- Self-Update Control & Status ---- */
