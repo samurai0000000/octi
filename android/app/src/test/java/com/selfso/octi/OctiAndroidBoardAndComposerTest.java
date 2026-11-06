@@ -873,7 +873,7 @@ public class OctiAndroidBoardAndComposerTest {
     @Test
     public void testOctiAppVersionAndProtocolConstants() {
         assertEquals(BuildConfig.VERSION_NAME, OctiDefs.OCTI_APP_VERSION);
-        assertEquals("2.3.8", OctiDefs.OCTI_APP_VERSION);
+        assertEquals("2.4.0", OctiDefs.OCTI_APP_VERSION);
         assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
         assertEquals(2038, OctiOpeningBookData.ENTRIES.length);
 
@@ -1342,6 +1342,99 @@ public class OctiAndroidBoardAndComposerTest {
         assertEquals("36a-37,36a-37", composer.stagedMoveNotation());
         assertTrue(composer.commitStagedMove());
         assertEquals(2, board.squareAt(2, 6).getNumPods());
+    }
+
+    @Test
+    public void testSelfCaptureParityRulesAndComposerToggle() {
+        // 1. OFK double-jump self+enemy capture (33ac-35x-55x)
+        OctiBoard ofkBoard = createStartedBoard(OctiGameMode.GAME_MODE_OFK);
+        OctiGame ofkGame = ofkBoard.getGame();
+        ofkBoard.clear();
+
+        // Active Player A pod at 33 (x=2, y=2) with N (a) and E (c) prongs
+        OctiPod moverA = new OctiPod(OctiPodType.A_POD);
+        moverA.addProng(OctiDir.DIR_N);
+        moverA.addProng(OctiDir.DIR_E);
+        ofkBoard.squareAt(2, 2).addPod(moverA);
+
+        // Friendly Player A pod at 34 (x=2, y=3) with 2 prongs
+        OctiPod friendlyA = new OctiPod(OctiPodType.A_POD);
+        friendlyA.addProng(OctiDir.DIR_N);
+        friendlyA.addProng(OctiDir.DIR_S);
+        ofkBoard.squareAt(2, 3).addPod(friendlyA);
+
+        // Enemy Player B pod at 45 (x=3, y=4) with 2 prongs
+        OctiPod enemyB = new OctiPod(OctiPodType.B_POD);
+        enemyB.addProng(OctiDir.DIR_W);
+        enemyB.addProng(OctiDir.DIR_E);
+        ofkBoard.squareAt(3, 4).addPod(enemyB);
+
+        int freeBefore = ofkGame.getFreeProngs(OctiPlayer.PLAYER_A);
+        int capturedABefore = ofkGame.getCapturedPods(OctiPlayer.PLAYER_A);
+        int capturedBBefore = ofkGame.getCapturedPods(OctiPlayer.PLAYER_B);
+
+        // Execute OFK double jump: jumps friendly at 34, then enemy at 45, capturing both!
+        ofkGame.move("33ac-35x-55x");
+
+        assertEquals(0, ofkBoard.squareAt(2, 2).getNumPods());
+        assertEquals(0, ofkBoard.squareAt(2, 3).getNumPods());
+        assertEquals(0, ofkBoard.squareAt(3, 4).getNumPods());
+        assertEquals(1, ofkBoard.squareAt(4, 4).getNumPods());
+        assertEquals(capturedABefore + 1, ofkGame.getCapturedPods(OctiPlayer.PLAYER_A));
+        assertEquals(capturedBBefore + 1, ofkGame.getCapturedPods(OctiPlayer.PLAYER_B));
+        assertEquals(freeBefore + 4, ofkGame.getFreeProngs(OctiPlayer.PLAYER_A));
+
+        // 2. OctiBotEngine.filterDominatedMoves preserves friendly leapfrog
+        OctiBoard leapBoard = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        leapBoard.clear();
+        OctiPod leapMover = new OctiPod(OctiPodType.A_POD);
+        leapMover.addProng(OctiDir.DIR_N);
+        leapBoard.squareAt(2, 2).addPod(leapMover);
+
+        OctiPod leapStationary = new OctiPod(OctiPodType.A_POD);
+        leapBoard.squareAt(2, 3).addPod(leapStationary);
+
+        List<OctiMove> allMoves = leapBoard.getGame().generateLegalMoves();
+        List<OctiMove> filtered = OctiBotEngine.filterDominatedMoves(leapBoard, OctiPlayer.PLAYER_A, allMoves);
+
+        boolean hasNonCap = false;
+        boolean hasCap = false;
+        for (OctiMove m : filtered) {
+            if ("33a-35".equals(m.asString())) hasNonCap = true;
+            if ("33a-35x".equals(m.asString())) hasCap = true;
+        }
+        assertTrue("filterDominatedMoves must retain non-capturing leapfrog 33a-35", hasNonCap);
+        assertFalse("filterDominatedMoves must prune pointless self-capture 33a-35x of 0-prong pod when freeProngs > 0", hasCap);
+
+        // 3. OctiMoveComposer toggling self-capture on a jumped friendly pod
+        OctiBoard compBoard = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        compBoard.clear();
+        OctiPod compMover = new OctiPod(OctiPodType.A_POD);
+        compMover.addProng(OctiDir.DIR_N);
+        compBoard.squareAt(2, 2).addPod(compMover);
+
+        OctiPod compStationary = new OctiPod(OctiPodType.A_POD);
+        compBoard.squareAt(2, 3).addPod(compStationary);
+
+        OctiMoveComposer composer = new OctiMoveComposer(compBoard);
+        composer.setConfirmAllMoves(true);
+
+        assertTrue(composer.beginGuidedPodMove(3, 3, 0, false));
+        assertTrue(composer.selectGuidedDestination(3, 5));
+        assertTrue(composer.isAwaitingConfirmation());
+        assertEquals("33a-35", composer.stagedMoveNotation());
+        assertEquals(1, composer.captureChoices().size());
+        assertFalse(composer.captureChoices().get(0).capture);
+
+        // Toggle capture on jumped friendly square (3, 4) -> "33a-35x"
+        assertTrue(composer.toggleCaptureAtSquare(3, 4));
+        assertEquals("33a-35x", composer.stagedMoveNotation());
+        assertTrue(composer.captureChoices().get(0).capture);
+
+        // Toggle back -> "33a-35"
+        assertTrue(composer.toggleCaptureAtSquare(3, 4));
+        assertEquals("33a-35", composer.stagedMoveNotation());
+        assertFalse(composer.captureChoices().get(0).capture);
     }
 }
 

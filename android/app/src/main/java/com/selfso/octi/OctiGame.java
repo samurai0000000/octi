@@ -824,9 +824,6 @@ public class OctiGame {
                             throw new IllegalMoveException("cannot jump empty square in bonus move");
                         }
                         if (hop.capture) {
-                            if (!jumpedSq.hasEnemyOf(turn)) {
-                                throw new IllegalMoveException("cannot capture non-enemy square in bonus move");
-                            }
                             bonusCaptures.add(jCoord);
                         }
                         OctiSquare landingSq = board.squareAt(hop.x, hop.y);
@@ -842,22 +839,18 @@ public class OctiGame {
 
             for (Coord coord : bonusCaptures) {
                 OctiSquare sq = board.squareAt(coord.x, coord.y);
-                List<OctiPod> keep = new ArrayList<>();
                 for (int i = 0; i < sq.getNumPods(); i++) {
                     OctiPod sqPod = sq.getPodAt(i);
                     OctiPlayer owner = sqPod.getType().toPlayer();
-                    if (OctiPlayer.areAllied(mode, turn, owner)) {
-                        keep.add(sqPod);
-                    } else {
-                        players[turn.getValue()].freeProngs += sqPod.getNumNormalProngs();
+                    players[owner.getValue()].capturedPods++;
+                    players[turn.getValue()].freeProngs += sqPod.getNumNormalProngs();
+                    if (useSuperProngs) {
                         players[turn.getValue()].freeSuperProngs += sqPod.getNumSuperProngs();
-                        players[owner.getValue()].capturedPods++;
+                    } else {
+                        players[turn.getValue()].freeProngs += sqPod.getNumSuperProngs();
                     }
                 }
                 sq.clear();
-                for (OctiPod kp : keep) {
-                    sq.addPod(kp);
-                }
             }
         }
 
@@ -1243,9 +1236,6 @@ public class OctiGame {
                     }
 
                     if (hop.capture) {
-                        if (!jumpedSq.hasEnemyOf(turn)) {
-                            throw new IllegalMoveException("cannot capture non-enemy square");
-                        }
                         if (!capturedSquaresEndOfTurn.contains(jCoord)) {
                             capturedSquaresEndOfTurn.add(jCoord);
                         }
@@ -1274,22 +1264,18 @@ public class OctiGame {
         int turnVal = turn.getValue();
         for (Coord coord : capturedSquaresEndOfTurn) {
             OctiSquare sq = board.squareAt(coord.x, coord.y);
-            List<OctiPod> remaining = new ArrayList<>();
             for (int pIdx = 0; pIdx < sq.getNumPods(); pIdx++) {
                 OctiPod sqPod = sq.getPodAt(pIdx);
                 OctiPlayer owner = sqPod.getType().toPlayer();
-                if (OctiPlayer.areAllied(mode, turn, owner)) {
-                    remaining.add(sqPod);
-                } else {
-                    players[turnVal].freeProngs += sqPod.getNumNormalProngs();
+                players[owner.getValue()].capturedPods++;
+                players[turnVal].freeProngs += sqPod.getNumNormalProngs();
+                if (useSuperProngs) {
                     players[turnVal].freeSuperProngs += sqPod.getNumSuperProngs();
-                    players[owner.getValue()].capturedPods++;
+                } else {
+                    players[turnVal].freeProngs += sqPod.getNumSuperProngs();
                 }
             }
             sq.clear();
-            for (OctiPod rp : remaining) {
-                sq.addPod(rp);
-            }
         }
     }
 
@@ -1758,30 +1744,28 @@ public class OctiGame {
                 currentHops.remove(currentHops.size() - 1);
             }
 
-            // Branch 2: With capture (if jumped square has enemy)
-            if (jumpedSq.hasEnemyOf(turn)) {
-                OctiHop hop = new OctiHop(lx, ly, true);
-                currentHops.add(hop);
-                jumpedSquares.add(jCoord);
+            // Branch 2: With capture
+            OctiHop hop = new OctiHop(lx, ly, true);
+            currentHops.add(hop);
+            jumpedSquares.add(jCoord);
 
-                OctiMoveOp op = new OctiMoveOp();
-                op.x0 = sx;
-                op.y0 = sy;
-                op.pod = pod.copy();
-                for (OctiHop ch : currentHops) {
-                    op.hops.add(new OctiHop(ch));
-                }
-
-                List<OctiMoveOp> singleOpList = new ArrayList<>();
-                singleOpList.add(op);
-                outMoves.add(new OctiMove(singleOpList));
-
-                dfsJumpChains(board, edgeless, turn, lx, ly, pod, ghostPods,
-                        jumpedSquares, currentHops, sx, sy, outMoves);
-
-                jumpedSquares.remove(jumpedSquares.size() - 1);
-                currentHops.remove(currentHops.size() - 1);
+            OctiMoveOp op = new OctiMoveOp();
+            op.x0 = sx;
+            op.y0 = sy;
+            op.pod = pod.copy();
+            for (OctiHop ch : currentHops) {
+                op.hops.add(new OctiHop(ch));
             }
+
+            List<OctiMoveOp> singleOpList = new ArrayList<>();
+            singleOpList.add(op);
+            outMoves.add(new OctiMove(singleOpList));
+
+            dfsJumpChains(board, edgeless, turn, lx, ly, pod, ghostPods,
+                    jumpedSquares, currentHops, sx, sy, outMoves);
+
+            jumpedSquares.remove(jumpedSquares.size() - 1);
+            currentHops.remove(currentHops.size() - 1);
         }
     }
 

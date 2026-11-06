@@ -872,7 +872,8 @@ public:
     explicit CapturePromptDialog(int jumpedX, int jumpedY,
                                  OctiPlayer jumpedPlayer,
                                  ThemeId theme = ThemeId::OBSIDIAN_BRASS,
-                                 QWidget *parent = nullptr);
+                                 QWidget *parent = nullptr,
+                                 bool isEnemy = true);
     ~CapturePromptDialog() override;
 
     bool captureChosen() const;
@@ -897,6 +898,7 @@ private:
 
     bool _draggingPod;
     QPointF _dragPos;
+    bool _isEnemy;
 };
 
 /*

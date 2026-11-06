@@ -3526,6 +3526,171 @@ TEST(OctiCore_NetworkClient, FaultClosedLoopbackConnection)
     CHECK_FALSE(res.ok);
 }
 
+// ---------------------------------------------------------------------------
+// Self-Capture Rules: OFK Double Jump, 2P Superprong & AI Leapfrog Preservation
+// ---------------------------------------------------------------------------
+
+TEST_GROUP(OctiSelfCaptureRules)
+{
+};
+
+TEST(OctiSelfCaptureRules, OFKDoubleJumpSelfAndEnemyCapture)
+{
+    octi::OctiBoard board(octi::GAME_MODE_OFK);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+    board.clear();
+
+    // Player A mover at 33 (x=2, y=2) with N (a) and E (c) prongs
+    octi::OctiPod mover(octi::A_POD);
+    mover.addProng(octi::DIR_N);
+    mover.addProng(octi::DIR_E);
+    board.squareAt(2, 2).addPod(mover);
+
+    // Friendly Player A pod at 34 (x=2, y=3) with 2 prongs (a and e)
+    octi::OctiPod friendlyPod(octi::A_POD);
+    friendlyPod.addProng(octi::DIR_N);
+    friendlyPod.addProng(octi::DIR_S);
+    board.squareAt(2, 3).addPod(friendlyPod);
+
+    // Enemy Player B pod at 45 (x=3, y=4) with 2 prongs (c and g)
+    octi::OctiPod enemyPod(octi::B_POD);
+    enemyPod.addProng(octi::DIR_E);
+    enemyPod.addProng(octi::DIR_W);
+    board.squareAt(3, 4).addPod(enemyPod);
+
+    int freeProngsBefore = game->getFreeProngs(octi::PLAYER_A);
+    int capturedPodsABefore = game->getCapturedPods(octi::PLAYER_A);
+    int capturedPodsBBefore = game->getCapturedPods(octi::PLAYER_B);
+
+    // Verify 33ac-35x-55x is in generateLegalMoves()
+    std::vector<octi::OctiMove> legalMoves = game->generateLegalMoves();
+    bool foundDoubleCapture = false;
+    for (const auto &m : legalMoves) {
+        if (m.asString() == "33ac-35x-55x") {
+            foundDoubleCapture = true;
+            break;
+        }
+    }
+    CHECK_TRUE_TEXT(foundDoubleCapture, "generateLegalMoves() should include 33ac-35x-55x");
+
+    // Execute move
+    game->move("33ac-35x-55x");
+
+    // Verify both jumped pods were captured and removed
+    CHECK_EQUAL(0, board.squareAt(2, 2).getNumPods()); // vacated origin
+    CHECK_EQUAL(0, board.squareAt(2, 3).getNumPods()); // friendly captured
+    CHECK_EQUAL(0, board.squareAt(3, 4).getNumPods()); // enemy captured
+    CHECK_EQUAL(1, board.squareAt(4, 4).getNumPods()); // final landing 55
+    CHECK_EQUAL(capturedPodsABefore + 1, game->getCapturedPods(octi::PLAYER_A));
+    CHECK_EQUAL(capturedPodsBBefore + 1, game->getCapturedPods(octi::PLAYER_B));
+    CHECK_EQUAL(freeProngsBefore + 4, game->getFreeProngs(octi::PLAYER_A)); // 2 friendly + 2 enemy
+
+    // Verify undo restores exact state
+    game->undo();
+    CHECK_EQUAL(1, board.squareAt(2, 2).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(2, 3).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(3, 4).getNumPods());
+    CHECK_EQUAL(0, board.squareAt(4, 4).getNumPods());
+    CHECK_EQUAL(capturedPodsABefore, game->getCapturedPods(octi::PLAYER_A));
+    CHECK_EQUAL(capturedPodsBBefore, game->getCapturedPods(octi::PLAYER_B));
+    CHECK_EQUAL(freeProngsBefore, game->getFreeProngs(octi::PLAYER_A));
+}
+
+TEST(OctiSelfCaptureRules, Standard2PSelfCaptureWithSuperprong)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2, true); // useSuperProngs = true
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+    board.clear();
+
+    // Player A mover at 33 (x=2, y=2) with N (a) prong
+    octi::OctiPod mover(octi::A_POD);
+    mover.addProng(octi::DIR_N);
+    board.squareAt(2, 2).addPod(mover);
+
+    // Friendly Player A pod at 34 (x=2, y=3) with 1 normal prong and 1 superprong
+    octi::OctiPod friendlyPod(octi::A_POD);
+    friendlyPod.addProng(octi::DIR_E);
+    friendlyPod.addProng(octi::DIR_N, true); // superprong!
+    board.squareAt(2, 3).addPod(friendlyPod);
+
+    int freeProngsBefore = game->getFreeProngs(octi::PLAYER_A);
+    int freeSuperBefore = game->getFreeSuperProngs(octi::PLAYER_A);
+    int capturedBefore = game->getCapturedPods(octi::PLAYER_A);
+
+    // Verify move is legal
+    game->move("33a-35x");
+
+    CHECK_EQUAL(0, board.squareAt(2, 3).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(2, 4).getNumPods());
+    CHECK_EQUAL(capturedBefore + 1, game->getCapturedPods(octi::PLAYER_A));
+    CHECK_EQUAL(freeProngsBefore + 1, game->getFreeProngs(octi::PLAYER_A));
+    CHECK_EQUAL(freeSuperBefore + 1, game->getFreeSuperProngs(octi::PLAYER_A));
+
+    // Verify undo
+    game->undo();
+    CHECK_EQUAL(1, board.squareAt(2, 2).getNumPods());
+    CHECK_EQUAL(1, board.squareAt(2, 3).getNumPods());
+    CHECK_TRUE(board.squareAt(2, 3).getPodAt(0).hasSuperProng());
+    CHECK_EQUAL(capturedBefore, game->getCapturedPods(octi::PLAYER_A));
+    CHECK_EQUAL(freeProngsBefore, game->getFreeProngs(octi::PLAYER_A));
+    CHECK_EQUAL(freeSuperBefore, game->getFreeSuperProngs(octi::PLAYER_A));
+}
+
+TEST(OctiSelfCaptureRules, StepCaptureFaultInjection)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+    board.clear();
+
+    octi::OctiPod mover(octi::A_POD);
+    mover.addProng(octi::DIR_N);
+    board.squareAt(2, 2).addPod(mover);
+
+    // Distance-1 step with capture flag must be rejected
+    CHECK_THROWS(octi::IllegalMoveException, game->move("33a-34x"));
+}
+
+TEST(OctiSelfCaptureRules, BotPreservesFriendlyLeapfrog)
+{
+    octi::OctiBoard board(octi::GAME_MODE_2);
+    octi::OctiGame *game = board.getGame();
+    game->start(octi::PLAYER_A);
+    board.clear();
+
+    // Friendly mover at 33 with N prong
+    octi::OctiPod mover(octi::A_POD);
+    mover.addProng(octi::DIR_N);
+    board.squareAt(2, 2).addPod(mover);
+
+    // Friendly 0-prong pod at 34
+    octi::OctiPod friendlyStationary(octi::A_POD);
+    board.squareAt(2, 3).addPod(friendlyStationary);
+
+    // Player A has free prongs in reserve
+    CHECK_TRUE(game->getFreeProngs(octi::PLAYER_A) > 0);
+
+    // filterDominatedMoves should keep 33a-35 (leapfrog) and prune 33a-35x (pointless self-capture of 0-prong pod)
+    std::vector<octi::OctiMove> legalMoves = game->generateLegalMoves();
+    std::vector<octi::OctiMove> filtered = octi::filterDominatedMoves(board, octi::PLAYER_A, legalMoves);
+
+    bool hasNonCap = false;
+    bool hasCap = false;
+    for (const auto &m : filtered) {
+        if (m.asString() == "33a-35") hasNonCap = true;
+        if (m.asString() == "33a-35x") hasCap = true;
+    }
+    CHECK_TRUE_TEXT(hasNonCap, "filterDominatedMoves must retain non-capturing leapfrog 33a-35");
+    CHECK_FALSE_TEXT(hasCap, "filterDominatedMoves must prune pointless self-capture 33a-35x of 0-prong pod when freeProngs > 0");
+
+    // Also verify chooseMove does not choose self-capture
+    octi::OctiBotEngine bot(octi::BotDifficulty::CASUAL);
+    std::string chosen = bot.chooseMove(board);
+    CHECK_TRUE_TEXT(chosen.find('x') == std::string::npos, "Bot should not choose self-capture when leapfrog is available");
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

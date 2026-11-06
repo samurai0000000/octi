@@ -435,28 +435,32 @@ public class OctiMoveComposerAndRendererTest {
 
         // Jump over friendly pod at (2, 3) -> land on (2, 4)
         assertTrue(composer.selectGuidedDestination(2, 4));
-        // Friendly jump must NOT add a capture choice
-        assertEquals("No capture choices for friendly pod jump", 0, composer.captureChoices().size());
+        // Friendly jump adds an optional capture choice defaulted to false (self-capture optional)
+        assertEquals(1, composer.captureChoices().size());
+        assertEquals(2, composer.captureChoices().get(0).jumpedX);
+        assertEquals(3, composer.captureChoices().get(0).jumpedY);
+        assertFalse("Default capture state for friendly pod is false", composer.captureChoices().get(0).capture);
+        assertFalse("Self-capture is optional", composer.captureChoices().get(0).mandatory);
 
         // Now jump over enemy pod at (2, 5) -> land on (2, 6)
         assertTrue("Enemy jump (2, 6) must be legal", composer.isGuidedLegalDestination(2, 6));
         assertTrue(composer.selectGuidedDestination(2, 6));
 
-        // Capture choice must be present and optional (mandatory == false in OFK)
+        // Now both jumped squares are in capture choices
         List<OctiMoveComposer.CaptureChoice> choices = composer.captureChoices();
-        assertEquals(1, choices.size());
-        assertEquals(2, choices.get(0).jumpedX);
-        assertEquals(5, choices.get(0).jumpedY);
-        assertTrue("Default capture state is true", choices.get(0).capture);
-        assertFalse("Capture must be optional in OFK (mandatory == false)", choices.get(0).mandatory);
+        assertEquals(2, choices.size());
+        assertEquals(2, choices.get(1).jumpedX);
+        assertEquals(5, choices.get(1).jumpedY);
+        assertTrue("Default capture state for enemy pod is true", choices.get(1).capture);
+        assertFalse("Capture must be optional in OFK (mandatory == false)", choices.get(1).mandatory);
 
         // Toggle capture off at (2, 5)
         assertTrue(composer.toggleCaptureAtSquare(2, 5));
-        assertFalse("Capture should now be toggled off", composer.captureChoices().get(0).capture);
+        assertFalse("Capture should now be toggled off", composer.captureChoices().get(1).capture);
 
         // Toggle capture back on at (2, 5)
         assertTrue(composer.toggleCaptureAtSquare(2, 5));
-        assertTrue("Capture should now be toggled on", composer.captureChoices().get(0).capture);
+        assertTrue("Capture should now be toggled on", composer.captureChoices().get(1).capture);
 
         // Commit move
         assertTrue(composer.commitMove());

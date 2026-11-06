@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <set>
 #include <thread>
@@ -383,63 +384,183 @@ JumpMobilityThreat evaluatePodJumpThreat(const OctiBoard &board,
     return threat;
 }
 
+} // namespace
+
 // ---------------------------------------------------------------------------
 // Dominated Move Filtering
 // ---------------------------------------------------------------------------
 
-std::vector<OctiMove> filterDominatedMoves(const std::vector<OctiMove> &moves)
+std::vector<OctiMove> filterDominatedMoves(const OctiBoard &board,
+                                          OctiPlayer turn,
+                                          const std::vector<OctiMove> &moves)
 {
     if (moves.size() <= 1) {
         return moves;
     }
 
-    using HopCoordVec = std::vector<std::pair<int, int>>;
-    using PathKey = std::tuple<int, int, std::uint32_t, HopCoordVec>;
-    std::set<PathKey> hasCapturingVariant;
+    int boardW = board.getBoardWidth();
+    int boardH = board.getBoardHeight();
+    bool edgeless = board.getGame() ? board.getGame()->useEdgelessBoard() : false;
+    int freeProngs = board.getGame() ? board.getGame()->getFreeProngs(turn) : 0;
 
-    for (const auto &m : moves) {
+    using HopCoordVec = std::vector<std::pair<int, int>>;
+    // PathKey: (x0, y0, podConfig, coords, friendlyCaptureMask)
+    using PathKey = std::tuple<int, int, std::uint32_t, HopCoordVec, std::uint32_t>;
+    std::map<PathKey, std::vector<std::uint32_t>> enemyVariantsByKey;
+    std::vector<bool> pointlessSelfCapture(moves.size(), false);
+
+    for (std::size_t i = 0; i < moves.size(); ++i) {
+        const auto &m = moves[i];
         const auto &ops = m.getOps();
-        if (ops.size() != 1 || ops[0].hops.empty()) {
+
+        // Check if move contains pointless self-capture of 0-prong friendly pod when freeProngs > 0
+        bool badSelfCap = false;
+        for (const auto &op : ops) {
+            int cx = op.x0;
+            int cy = op.y0;
+            for (const auto &hop : op.hops) {
+                int dx = hop.x - cx;
+                int dy = hop.y - cy;
+                if (edgeless) {
+                    for (int d = -2; d <= 2; d++) {
+                        if (((cx + d) % boardW + boardW) % boardW == hop.x) { dx = d; break; }
+                    }
+                    for (int d = -2; d <= 2; d++) {
+                        if (((cy + d) % boardH + boardH) % boardH == hop.y) { dy = d; break; }
+                    }
+                }
+                bool isJump = (std::abs(dx) == 2 || std::abs(dy) == 2);
+                if (isJump && hop.capture) {
+                    int mx = edgeless ? (((cx + dx / 2) % boardW + boardW) % boardW) : (cx + dx / 2);
+                    int my = edgeless ? (((cy + dy / 2) % boardH + boardH) % boardH) : (cy + dy / 2);
+                    if (board.isValidCoord(mx, my)) {
+                        const OctiSquare &midSq = board.squareAt(mx, my);
+                        if (!midSq.hasEnemyOf(turn)) {
+                            int prongsOnMid = 0;
+                            for (int pi = 0; pi < midSq.getNumPods(); ++pi) {
+                                prongsOnMid += midSq.getPodAt(pi).getNumProngs();
+                            }
+                            if (prongsOnMid == 0 && freeProngs > 0) {
+                                badSelfCap = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                cx = hop.x;
+                cy = hop.y;
+            }
+            if (badSelfCap) break;
+        }
+
+        if (badSelfCap) {
+            pointlessSelfCapture[i] = true;
             continue;
         }
-        const OctiMoveOp &op = ops[0];
-        bool anyCap = false;
-        HopCoordVec coords;
-        coords.reserve(op.hops.size());
-        for (const auto &h : op.hops) {
-            coords.push_back({h.x, h.y});
-            if (h.capture) {
-                anyCap = true;
-            }
-        }
-        if (anyCap) {
-            hasCapturingVariant.insert(
-                PathKey(op.x0, op.y0, op.pod.rawConfig() & 0xFFFFu, coords));
-        }
-    }
 
-    if (hasCapturingVariant.empty()) {
-        return moves;
+        if (ops.size() == 1 && !ops[0].hops.empty()) {
+            const OctiMoveOp &op = ops[0];
+            HopCoordVec coords;
+            coords.reserve(op.hops.size());
+            std::uint32_t friendlyCapMask = 0;
+            std::uint32_t enemyCapMask = 0;
+            int cx = op.x0;
+            int cy = op.y0;
+
+            for (std::size_t hIdx = 0; hIdx < op.hops.size(); ++hIdx) {
+                const auto &hopItem = op.hops[hIdx];
+                coords.push_back({hopItem.x, hopItem.y});
+                int dx = hopItem.x - cx;
+                int dy = hopItem.y - cy;
+                if (edgeless) {
+                    for (int d = -2; d <= 2; d++) {
+                        if (((cx + d) % boardW + boardW) % boardW == hopItem.x) { dx = d; break; }
+                    }
+                    for (int d = -2; d <= 2; d++) {
+                        if (((cy + d) % boardH + boardH) % boardH == hopItem.y) { dy = d; break; }
+                    }
+                }
+                bool isJump = (std::abs(dx) == 2 || std::abs(dy) == 2);
+                if (isJump && hopItem.capture) {
+                    int mx = edgeless ? (((cx + dx / 2) % boardW + boardW) % boardW) : (cx + dx / 2);
+                    int my = edgeless ? (((cy + dy / 2) % boardH + boardH) % boardH) : (cy + dy / 2);
+                    if (board.isValidCoord(mx, my)) {
+                        const OctiSquare &midSq = board.squareAt(mx, my);
+                        if (midSq.hasEnemyOf(turn)) {
+                            enemyCapMask |= (1U << (hIdx & 31U));
+                        } else {
+                            friendlyCapMask |= (1U << (hIdx & 31U));
+                        }
+                    }
+                }
+                cx = hopItem.x;
+                cy = hopItem.y;
+            }
+
+            PathKey key(op.x0, op.y0, op.pod.rawConfig() & 0xFFFFu, coords, friendlyCapMask);
+            enemyVariantsByKey[key].push_back(enemyCapMask);
+        }
     }
 
     std::vector<OctiMove> filtered;
     filtered.reserve(moves.size());
-    for (const auto &m : moves) {
+    for (std::size_t i = 0; i < moves.size(); ++i) {
+        if (pointlessSelfCapture[i]) {
+            continue;
+        }
+        const auto &m = moves[i];
         const auto &ops = m.getOps();
         if (ops.size() == 1 && !ops[0].hops.empty()) {
             const OctiMoveOp &op = ops[0];
-            bool anyCap = false;
             HopCoordVec coords;
             coords.reserve(op.hops.size());
-            for (const auto &h : op.hops) {
-                coords.push_back({h.x, h.y});
-                if (h.capture) {
-                    anyCap = true;
+            std::uint32_t friendlyCapMask = 0;
+            std::uint32_t enemyCapMask = 0;
+            int cx = op.x0;
+            int cy = op.y0;
+
+            for (std::size_t hIdx = 0; hIdx < op.hops.size(); ++hIdx) {
+                const auto &hopItem = op.hops[hIdx];
+                coords.push_back({hopItem.x, hopItem.y});
+                int dx = hopItem.x - cx;
+                int dy = hopItem.y - cy;
+                if (edgeless) {
+                    for (int d = -2; d <= 2; d++) {
+                        if (((cx + d) % boardW + boardW) % boardW == hopItem.x) { dx = d; break; }
+                    }
+                    for (int d = -2; d <= 2; d++) {
+                        if (((cy + d) % boardH + boardH) % boardH == hopItem.y) { dy = d; break; }
+                    }
                 }
+                bool isJump = (std::abs(dx) == 2 || std::abs(dy) == 2);
+                if (isJump && hopItem.capture) {
+                    int mx = edgeless ? (((cx + dx / 2) % boardW + boardW) % boardW) : (cx + dx / 2);
+                    int my = edgeless ? (((cy + dy / 2) % boardH + boardH) % boardH) : (cy + dy / 2);
+                    if (board.isValidCoord(mx, my)) {
+                        const OctiSquare &midSq = board.squareAt(mx, my);
+                        if (midSq.hasEnemyOf(turn)) {
+                            enemyCapMask |= (1U << (hIdx & 31U));
+                        } else {
+                            friendlyCapMask |= (1U << (hIdx & 31U));
+                        }
+                    }
+                }
+                cx = hopItem.x;
+                cy = hopItem.y;
             }
-            if (!anyCap) {
-                PathKey key(op.x0, op.y0, op.pod.rawConfig() & 0xFFFFu, coords);
-                if (hasCapturingVariant.count(key) > 0) {
+
+            PathKey key(op.x0, op.y0, op.pod.rawConfig() & 0xFFFFu, coords, friendlyCapMask);
+            auto it = enemyVariantsByKey.find(key);
+            if (it != enemyVariantsByKey.end()) {
+                bool isDominated = false;
+                for (std::uint32_t otherEnemyMask : it->second) {
+                    if (otherEnemyMask != enemyCapMask &&
+                        (otherEnemyMask & enemyCapMask) == enemyCapMask) {
+                        isDominated = true;
+                        break;
+                    }
+                }
+                if (isDominated) {
                     continue;
                 }
             }
@@ -449,6 +570,20 @@ std::vector<OctiMove> filterDominatedMoves(const std::vector<OctiMove> &moves)
 
     return filtered.empty() ? moves : filtered;
 }
+
+std::vector<OctiMove> filterDominatedMoves(const OctiBoard &board,
+                                          const std::vector<OctiMove> &moves)
+{
+    OctiPlayer turn = board.getGame() ? board.getGame()->getTurn() : PLAYER_A;
+    return filterDominatedMoves(board, turn, moves);
+}
+
+std::vector<OctiMove> filterDominatedMoves(const std::vector<OctiMove> &moves)
+{
+    return moves;
+}
+
+namespace {
 
 // ---------------------------------------------------------------------------
 // Composite Multi-Pod Move Generation
@@ -723,7 +858,7 @@ int scoreMoveHeuristic(const OctiBoard &board,
 
             score += (startDist - endDist) * 550;
 
-            bool anyCapture = false;
+            bool anyEnemyCapture = false;
             bool isJump = (op.hops.size() > 1);
             int prevX = op.x0;
             int prevY = op.y0;
@@ -748,20 +883,31 @@ int scoreMoveHeuristic(const OctiBoard &board,
                             score += profile.moveOrderLeapfrogBonus;
                         }
                         if (hop.capture) {
-                            anyCapture = true;
                             int capturedPodsOnMid = midSq.getNumPods();
                             int capturedProngsOnMid = 0;
                             for (int pi = 0; pi < capturedPodsOnMid; ++pi) {
                                 capturedProngsOnMid += midSq.getPodAt(pi).getNumProngs();
                             }
-                            score += profile.moveOrderCaptureBonus * capturedPodsOnMid + 600 * capturedProngsOnMid;
+                            if (midSq.hasEnemyOf(turn)) {
+                                anyEnemyCapture = true;
+                                score += profile.moveOrderCaptureBonus * capturedPodsOnMid + 600 * capturedProngsOnMid;
+                            } else {
+                                int freeProngs = board.getGame() ? board.getGame()->getFreeProngs(turn) : 0;
+                                if (capturedProngsOnMid == 0 || mode == GAME_MODE_4) {
+                                    score -= profile.moveOrderCaptureBonus;
+                                } else if (freeProngs <= 2 && capturedProngsOnMid > 0) {
+                                    score += 300 * capturedProngsOnMid - 800;
+                                } else {
+                                    score -= (profile.moveOrderCaptureBonus / 2);
+                                }
+                            }
                         }
                     } else if (hop.capture) {
-                        anyCapture = true;
+                        anyEnemyCapture = true;
                         score += profile.moveOrderCaptureBonus;
                     }
                 } else if (hop.capture) {
-                    anyCapture = true;
+                    anyEnemyCapture = true;
                     score += profile.moveOrderCaptureBonus;
                 }
                 if (!hop.capture) {
@@ -774,7 +920,7 @@ int scoreMoveHeuristic(const OctiBoard &board,
             const OctiSquare &destSq = board.squareAt(lastHop.x, lastHop.y);
             if (isEnemyHomeSquareFor(destSq.getType(), mode, turn) &&
                 !destSq.isCapturedByTeamOf(turn)) {
-                if (anyCapture) {
+                if (anyEnemyCapture) {
                     score += profile.moveOrderBaseEntryBonus;
                 } else {
                     score += (profile.moveOrderBaseEntryBonus * baseThreatScalePct) / 100;
@@ -788,7 +934,7 @@ int scoreMoveHeuristic(const OctiBoard &board,
             int destBitIdx = lastHop.y * 9 + lastHop.x;
             int destWord = (destBitIdx >> 6) & 1;
             std::uint64_t destBit = 1ULL << (destBitIdx & 63);
-            if (!anyCapture && enemyThreatMask && (enemyThreatMask[destWord] & destBit) != 0ULL) {
+            if (!anyEnemyCapture && enemyThreatMask && (enemyThreatMask[destWord] & destBit) != 0ULL) {
                 score -= profile.moveOrderBlunderPenalty;
             }
 
@@ -807,7 +953,7 @@ int scoreMoveHeuristic(const OctiBoard &board,
             }
 
             // Penalize premature 1-prong lone-pod rushes during development
-            if (!anyCapture && !isJump && earlyDevelopment && op.pod.getNumProngs() <= 1 && endDist <= 3) {
+            if (!anyEnemyCapture && !isJump && earlyDevelopment && op.pod.getNumProngs() <= 1 && endDist <= 3) {
                 score -= 3200;
             }
         } else if (op.addProngDir != DIR_UNDEF && op.rmProngDir == DIR_UNDEF) {
@@ -887,7 +1033,7 @@ std::vector<OctiMove> orderAndCapMoves(OctiBoard &board,
     if (includeComposites && (!board.getGame() || board.getGame()->getMode() != GAME_MODE_OFK)) {
         appendCompositeMoves(board, rawMoves, turn);
     }
-    std::vector<OctiMove> moves = filterDominatedMoves(rawMoves);
+    std::vector<OctiMove> moves = filterDominatedMoves(board, turn, rawMoves);
     std::vector<std::pair<int, int>> targets = targetEnemyBases(board, turn);
 
     // Compute enemy threat mask for blunder penalty in move ordering
@@ -2123,16 +2269,41 @@ int OctiBotEngine::quiesce(OctiBoard &scratchBoard,
 
     // Filter to tactical moves only: captures and uncaptured enemy base entries
     OctiPlayer turn = game->getTurn();
+    int w = scratchBoard.getBoardWidth();
+    int h = scratchBoard.getBoardHeight();
+    bool edgeless = game->useEdgelessBoard();
     std::vector<OctiMove> tacticalMoves;
     for (const auto &m : rawMoves) {
         bool isTactical = false;
         for (const auto &op : m.getOps()) {
+            int cx = op.x0;
+            int cy = op.y0;
             for (const auto &hop : op.hops) {
-                if (hop.capture) {
-                    isTactical = true;
-                    break;
+                int dx = hop.x - cx;
+                int dy = hop.y - cy;
+                if (edgeless) {
+                    for (int d = -2; d <= 2; d++) {
+                        if (((cx + d) % w + w) % w == hop.x) { dx = d; break; }
+                    }
+                    for (int d = -2; d <= 2; d++) {
+                        if (((cy + d) % h + h) % h == hop.y) { dy = d; break; }
+                    }
                 }
+                if (hop.capture && (std::abs(dx) == 2 || std::abs(dy) == 2)) {
+                    int mx = edgeless ? (((cx + dx / 2) % w + w) % w) : (cx + dx / 2);
+                    int my = edgeless ? (((cy + dy / 2) % h + h) % h) : (cy + dy / 2);
+                    if (scratchBoard.isValidCoord(mx, my)) {
+                        const OctiSquare &midSq = scratchBoard.squareAt(mx, my);
+                        if (midSq.hasEnemyOf(turn)) {
+                            isTactical = true;
+                            break;
+                        }
+                    }
+                }
+                cx = hop.x;
+                cy = hop.y;
             }
+            if (isTactical) break;
             if (!op.hops.empty()) {
                 const OctiHop &lastHop = op.hops.back();
                 const OctiSquare &destSq = scratchBoard.squareAt(lastHop.x, lastHop.y);

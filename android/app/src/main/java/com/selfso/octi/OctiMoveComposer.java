@@ -1222,7 +1222,8 @@ public class OctiMoveComposer {
                     targetOp.hops.add(new OctiHop(extraHops.get(i)));
                     IntPair jc = nextJumped.get(prevJumpedCount + i);
                     OctiSquare jsq = board.squareAt(jc.first, jc.second);
-                    if (jsq.hasEnemyOf(turn)) {
+                    if (jsq.getNumPods() > 0) {
+                        boolean hasEnemy = jsq.hasEnemyOf(turn);
                         int jx1 = jc.first + 1;
                         int jy1 = jc.second + 1;
                         hopCaptureLinks.add(new HopCaptureLink(opIdxToExtend, hopIdx, jx1, jy1));
@@ -1234,7 +1235,7 @@ public class OctiMoveComposer {
                             }
                         }
                         if (!alreadyListed) {
-                            captureChoices.add(new CaptureChoice(jx1, jy1, true, false));
+                            captureChoices.add(new CaptureChoice(jx1, jy1, hasEnemy, false));
                         }
                     }
                 }
@@ -1392,7 +1393,8 @@ public class OctiMoveComposer {
                 for (int hi = 0; hi < chosenJumped.size(); hi++) {
                     IntPair jc = chosenJumped.get(hi);
                     OctiSquare jsq = board.squareAt(jc.first, jc.second);
-                    if (jsq.hasEnemyOf(turn)) {
+                    if (jsq.getNumPods() > 0) {
+                        boolean hasEnemy = jsq.hasEnemyOf(turn);
                         int jx1 = jc.first + 1;
                         int jy1 = jc.second + 1;
                         hopCaptureLinks.add(new HopCaptureLink(opIdx, hi, jx1, jy1));
@@ -1404,7 +1406,7 @@ public class OctiMoveComposer {
                             }
                         }
                         if (!alreadyListed) {
-                            captureChoices.add(new CaptureChoice(jx1, jy1, true, false));
+                            captureChoices.add(new CaptureChoice(jx1, jy1, hasEnemy, false));
                         }
                     }
                 }

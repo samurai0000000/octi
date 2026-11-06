@@ -2783,6 +2783,55 @@ TEST(OctiMoveComposerTest, FourPlayerPodPlacementAndEliminatedPartnerRevival)
     LONGS_EQUAL(0, board.getGame()->getCapturedPods(PLAYER_C));
 }
 
+TEST(OctiBoardCanvasIndicatorTestSuite, GuidedModeFriendlyJumpSelfCaptureToggle)
+{
+    OctiBoard board(GAME_MODE_2);
+    OctiGame *game = board.getGame();
+    game->start(PLAYER_A);
+    board.clear();
+
+    // Friendly mover at 33 (1-based: x=3, y=3) with N (a) prong
+    OctiPod mover(A_POD);
+    mover.addProng(DIR_N);
+    board.squareAt(2, 2).addPod(mover);
+
+    // Friendly stationary pod at 34 (1-based: x=3, y=4)
+    OctiPod friendly(A_POD);
+    board.squareAt(2, 3).addPod(friendly);
+
+    OctiMoveComposer composer(&board);
+    composer.setConfirmAllMoves(true);
+
+    // Begin guided move from (3, 3)
+    CHECK_TRUE(composer.beginGuidedPodMove(3, 3, 0, false));
+    CHECK_TRUE(composer.isGuidedMoveActive());
+
+    // Jump friendly pod at 34 to destination 35 (1-based: x=3, y=5)
+    CHECK_TRUE(composer.selectGuidedDestination(3, 5));
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+
+    // In Guided Mode, jump over friendly pod defaults to non-capture: "33a-35"
+    STRCMP_EQUAL("33a-35", composer.stagedMoveNotation().c_str());
+
+    // Verify captureChoices has an entry for (3, 4) with mandatory == false and capture == false
+    const auto &choices = composer.captureChoices();
+    LONGS_EQUAL(1, choices.size());
+    LONGS_EQUAL(3, choices[0].jumpedX);
+    LONGS_EQUAL(4, choices[0].jumpedY);
+    CHECK_FALSE(choices[0].mandatory);
+    CHECK_FALSE(choices[0].capture);
+
+    // Toggle capture on jumped friendly square (3, 4) -> toggles to self-capture "33a-35x"
+    CHECK_TRUE(composer.toggleCaptureAtSquare(3, 4));
+    STRCMP_EQUAL("33a-35x", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.captureChoices()[0].capture);
+
+    // Toggle capture back -> "33a-35"
+    CHECK_TRUE(composer.toggleCaptureAtSquare(3, 4));
+    STRCMP_EQUAL("33a-35", composer.stagedMoveNotation().c_str());
+    CHECK_FALSE(composer.captureChoices()[0].capture);
+}
+
 extern "C" const char *__lsan_default_suppressions()
 {
     return "leak:libqoffscreen.so\n";

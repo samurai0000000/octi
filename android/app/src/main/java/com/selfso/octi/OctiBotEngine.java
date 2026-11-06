@@ -8,8 +8,10 @@ package com.selfso.octi;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -78,12 +80,14 @@ public class OctiBotEngine {
         final int y0;
         final int podConf;
         final List<Integer> hopPackedCoords;
+        final int friendlyCaptureMask;
 
-        PathKey(int x0, int y0, int podConf, List<Integer> hopPackedCoords) {
+        PathKey(int x0, int y0, int podConf, List<Integer> hopPackedCoords, int friendlyCaptureMask) {
             this.x0 = x0;
             this.y0 = y0;
             this.podConf = podConf;
             this.hopPackedCoords = hopPackedCoords;
+            this.friendlyCaptureMask = friendlyCaptureMask;
         }
 
         @Override
@@ -98,12 +102,13 @@ public class OctiBotEngine {
             return x0 == other.x0
                     && y0 == other.y0
                     && podConf == other.podConf
+                    && friendlyCaptureMask == other.friendlyCaptureMask
                     && Objects.equals(hopPackedCoords, other.hopPackedCoords);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(x0, y0, podConf, hopPackedCoords);
+            return Objects.hash(x0, y0, podConf, hopPackedCoords, friendlyCaptureMask);
         }
     }
 
@@ -987,51 +992,172 @@ public class OctiBotEngine {
         return best;
     }
 
-    private static List<OctiMove> filterDominatedMoves(List<OctiMove> moves) {
-        if (moves.size() <= 1) {
+    public static List<OctiMove> filterDominatedMoves(OctiBoard board,
+                                                      OctiPlayer turn,
+                                                      List<OctiMove> moves) {
+        if (moves == null || moves.size() <= 1) {
+            return moves;
+        }
+        if (board == null || turn == null) {
             return moves;
         }
 
-        Set<PathKey> hasCapturingVariant = new HashSet<>();
-        for (OctiMove m : moves) {
+        int boardW = board.getBoardWidth();
+        int boardH = board.getBoardHeight();
+        boolean edgeless = board.getGame() != null && board.getGame().useEdgelessBoard();
+        int freeProngs = board.getGame() != null ? board.getGame().getFreeProngs(turn) : 0;
+
+        Map<PathKey, List<Integer>> enemyVariantsByKey = new HashMap<>();
+        boolean[] pointlessSelfCapture = new boolean[moves.size()];
+
+        for (int i = 0; i < moves.size(); i++) {
+            OctiMove m = moves.get(i);
             List<OctiMoveOp> ops = m.getOps();
-            if (ops.size() != 1 || ops.get(0).hops.isEmpty()) {
+
+            // Check if move contains pointless self-capture of 0-prong friendly pod when freeProngs > 0
+            boolean badSelfCap = false;
+            for (OctiMoveOp op : ops) {
+                int cx = op.x0;
+                int cy = op.y0;
+                for (OctiHop hop : op.hops) {
+                    int dx = hop.x - cx;
+                    int dy = hop.y - cy;
+                    if (edgeless) {
+                        for (int d = -2; d <= 2; d++) {
+                            if (((cx + d) % boardW + boardW) % boardW == hop.x) { dx = d; break; }
+                        }
+                        for (int d = -2; d <= 2; d++) {
+                            if (((cy + d) % boardH + boardH) % boardH == hop.y) { dy = d; break; }
+                        }
+                    }
+                    boolean isJump = (Math.abs(dx) == 2 || Math.abs(dy) == 2);
+                    if (isJump && hop.capture) {
+                        int mx = edgeless ? (((cx + dx / 2) % boardW + boardW) % boardW) : (cx + dx / 2);
+                        int my = edgeless ? (((cy + dy / 2) % boardH + boardH) % boardH) : (cy + dy / 2);
+                        if (board.isValidCoord(mx, my)) {
+                            OctiSquare midSq = board.squareAt(mx, my);
+                            if (!midSq.hasEnemyOf(turn)) {
+                                int prongsOnMid = 0;
+                                for (int pi = 0; pi < midSq.getNumPods(); pi++) {
+                                    prongsOnMid += midSq.getPodAt(pi).getNumProngs();
+                                }
+                                if (prongsOnMid == 0 && freeProngs > 0) {
+                                    badSelfCap = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    cx = hop.x;
+                    cy = hop.y;
+                }
+                if (badSelfCap) break;
+            }
+
+            if (badSelfCap) {
+                pointlessSelfCapture[i] = true;
                 continue;
             }
-            OctiMoveOp op = ops.get(0);
-            boolean anyCap = false;
-            List<Integer> coords = new ArrayList<>(op.hops.size());
-            for (OctiHop h : op.hops) {
-                coords.add(h.x * 16 + h.y);
-                if (h.capture) {
-                    anyCap = true;
-                }
-            }
-            if (anyCap) {
-                hasCapturingVariant.add(new PathKey(op.x0, op.y0, op.pod.rawConfig() & 0xFFFF, coords));
-            }
-        }
 
-        if (hasCapturingVariant.isEmpty()) {
-            return moves;
+            if (ops.size() == 1 && !ops.get(0).hops.isEmpty()) {
+                OctiMoveOp op = ops.get(0);
+                List<Integer> coords = new ArrayList<>(op.hops.size());
+                int friendlyCapMask = 0;
+                int enemyCapMask = 0;
+                int cx = op.x0;
+                int cy = op.y0;
+
+                for (int hIdx = 0; hIdx < op.hops.size(); hIdx++) {
+                    OctiHop hopItem = op.hops.get(hIdx);
+                    coords.add(hopItem.x * 16 + hopItem.y);
+                    int dx = hopItem.x - cx;
+                    int dy = hopItem.y - cy;
+                    if (edgeless) {
+                        for (int d = -2; d <= 2; d++) {
+                            if (((cx + d) % boardW + boardW) % boardW == hopItem.x) { dx = d; break; }
+                        }
+                        for (int d = -2; d <= 2; d++) {
+                            if (((cy + d) % boardH + boardH) % boardH == hopItem.y) { dy = d; break; }
+                        }
+                    }
+                    boolean isJump = (Math.abs(dx) == 2 || Math.abs(dy) == 2);
+                    if (isJump && hopItem.capture) {
+                        int mx = edgeless ? (((cx + dx / 2) % boardW + boardW) % boardW) : (cx + dx / 2);
+                        int my = edgeless ? (((cy + dy / 2) % boardH + boardH) % boardH) : (cy + dy / 2);
+                        if (board.isValidCoord(mx, my)) {
+                            OctiSquare midSq = board.squareAt(mx, my);
+                            if (midSq.hasEnemyOf(turn)) {
+                                enemyCapMask |= (1 << (hIdx & 31));
+                            } else {
+                                friendlyCapMask |= (1 << (hIdx & 31));
+                            }
+                        }
+                    }
+                    cx = hopItem.x;
+                    cy = hopItem.y;
+                }
+
+                PathKey key = new PathKey(op.x0, op.y0, op.pod.rawConfig() & 0xFFFF, coords, friendlyCapMask);
+                enemyVariantsByKey.computeIfAbsent(key, k -> new ArrayList<>()).add(enemyCapMask);
+            }
         }
 
         List<OctiMove> filtered = new ArrayList<>(moves.size());
-        for (OctiMove m : moves) {
+        for (int i = 0; i < moves.size(); i++) {
+            if (pointlessSelfCapture[i]) {
+                continue;
+            }
+            OctiMove m = moves.get(i);
             List<OctiMoveOp> ops = m.getOps();
             if (ops.size() == 1 && !ops.get(0).hops.isEmpty()) {
                 OctiMoveOp op = ops.get(0);
-                boolean anyCap = false;
                 List<Integer> coords = new ArrayList<>(op.hops.size());
-                for (OctiHop h : op.hops) {
-                    coords.add(h.x * 16 + h.y);
-                    if (h.capture) {
-                        anyCap = true;
+                int friendlyCapMask = 0;
+                int enemyCapMask = 0;
+                int cx = op.x0;
+                int cy = op.y0;
+
+                for (int hIdx = 0; hIdx < op.hops.size(); hIdx++) {
+                    OctiHop hopItem = op.hops.get(hIdx);
+                    coords.add(hopItem.x * 16 + hopItem.y);
+                    int dx = hopItem.x - cx;
+                    int dy = hopItem.y - cy;
+                    if (edgeless) {
+                        for (int d = -2; d <= 2; d++) {
+                            if (((cx + d) % boardW + boardW) % boardW == hopItem.x) { dx = d; break; }
+                        }
+                        for (int d = -2; d <= 2; d++) {
+                            if (((cy + d) % boardH + boardH) % boardH == hopItem.y) { dy = d; break; }
+                        }
                     }
+                    boolean isJump = (Math.abs(dx) == 2 || Math.abs(dy) == 2);
+                    if (isJump && hopItem.capture) {
+                        int mx = edgeless ? (((cx + dx / 2) % boardW + boardW) % boardW) : (cx + dx / 2);
+                        int my = edgeless ? (((cy + dy / 2) % boardH + boardH) % boardH) : (cy + dy / 2);
+                        if (board.isValidCoord(mx, my)) {
+                            OctiSquare midSq = board.squareAt(mx, my);
+                            if (midSq.hasEnemyOf(turn)) {
+                                enemyCapMask |= (1 << (hIdx & 31));
+                            } else {
+                                friendlyCapMask |= (1 << (hIdx & 31));
+                            }
+                        }
+                    }
+                    cx = hopItem.x;
+                    cy = hopItem.y;
                 }
-                if (!anyCap) {
-                    PathKey key = new PathKey(op.x0, op.y0, op.pod.rawConfig() & 0xFFFF, coords);
-                    if (hasCapturingVariant.contains(key)) {
+
+                PathKey key = new PathKey(op.x0, op.y0, op.pod.rawConfig() & 0xFFFF, coords, friendlyCapMask);
+                List<Integer> enemyMasks = enemyVariantsByKey.get(key);
+                if (enemyMasks != null) {
+                    boolean isDominated = false;
+                    for (int otherEnemyMask : enemyMasks) {
+                        if (otherEnemyMask != enemyCapMask && (otherEnemyMask & enemyCapMask) == enemyCapMask) {
+                            isDominated = true;
+                            break;
+                        }
+                    }
+                    if (isDominated) {
                         continue;
                     }
                 }
@@ -1040,6 +1166,15 @@ public class OctiBotEngine {
         }
 
         return filtered.isEmpty() ? moves : filtered;
+    }
+
+    public static List<OctiMove> filterDominatedMoves(OctiBoard board, List<OctiMove> moves) {
+        OctiPlayer turn = (board != null && board.getGame() != null) ? board.getGame().getTurn() : OctiPlayer.PLAYER_A;
+        return filterDominatedMoves(board, turn, moves);
+    }
+
+    public static List<OctiMove> filterDominatedMoves(List<OctiMove> moves) {
+        return moves;
     }
 
     /**
@@ -1426,7 +1561,6 @@ public class OctiBotEngine {
                                 score += profile.moveOrderLeapfrogBonus;
                             }
                             if (hop.capture) {
-                                anyCapture = true;
                                 int capturedPodsOnMid = midSq.getNumPods();
                                 int capturedProngsOnMid = 0;
                                 for (int pi = 0; pi < capturedPodsOnMid; ++pi) {
@@ -1435,7 +1569,19 @@ public class OctiBotEngine {
                                         capturedProngsOnMid += pMid.getNumProngs();
                                     }
                                 }
-                                score += profile.moveOrderCaptureBonus * capturedPodsOnMid + 600 * capturedProngsOnMid;
+                                if (midSq.hasEnemyOf(turn)) {
+                                    anyCapture = true;
+                                    score += profile.moveOrderCaptureBonus * capturedPodsOnMid + 600 * capturedProngsOnMid;
+                                } else {
+                                    int freeProngs = board.getGame() != null ? board.getGame().getFreeProngs(turn) : 0;
+                                    if (capturedProngsOnMid == 0 || mode == OctiGameMode.GAME_MODE_4) {
+                                        score -= profile.moveOrderCaptureBonus;
+                                    } else if (freeProngs <= 2 && capturedProngsOnMid > 0) {
+                                        score += 300 * capturedProngsOnMid - 800;
+                                    } else {
+                                        score -= (profile.moveOrderCaptureBonus / 2);
+                                    }
+                                }
                             }
                         } else if (hop.capture) {
                             anyCapture = true;
@@ -1576,7 +1722,7 @@ public class OctiBotEngine {
                                                    int maxBranch,
                                                    BotTuningProfile profile,
                                                    boolean filterDominated) {
-        List<OctiMove> moves = filterDominated ? filterDominatedMoves(rawMoves) : rawMoves;
+        List<OctiMove> moves = filterDominated ? filterDominatedMoves(board, turn, rawMoves) : rawMoves;
         List<int[]> targets = targetEnemyBases(board, turn);
         long[] enemyThreatMask = computeEnemyThreatMask(board, turn, targets);
         CoalitionPhaseContext turnPhase = analyzeCoalitionPhase(board, turn);
@@ -2243,16 +2389,41 @@ public class OctiBotEngine {
 
         // Filter to tactical moves only: captures and uncaptured enemy base entries
         OctiPlayer turn = game.getTurn();
+        int boardW = scratchBoard.getBoardWidth();
+        int boardH = scratchBoard.getBoardHeight();
+        boolean edgeless = game.useEdgelessBoard();
         List<OctiMove> tacticalMoves = new ArrayList<>();
         for (OctiMove m : rawMoves) {
             boolean isTactical = false;
             for (OctiMoveOp op : m.getOps()) {
+                int cx = op.x0;
+                int cy = op.y0;
                 for (OctiHop hop : op.hops) {
-                    if (hop.capture) {
-                        isTactical = true;
-                        break;
+                    int dx = hop.x - cx;
+                    int dy = hop.y - cy;
+                    if (edgeless) {
+                        for (int d = -2; d <= 2; d++) {
+                            if (((cx + d) % boardW + boardW) % boardW == hop.x) { dx = d; break; }
+                        }
+                        for (int d = -2; d <= 2; d++) {
+                            if (((cy + d) % boardH + boardH) % boardH == hop.y) { dy = d; break; }
+                        }
                     }
+                    if (hop.capture && (Math.abs(dx) == 2 || Math.abs(dy) == 2)) {
+                        int mx = edgeless ? (((cx + dx / 2) % boardW + boardW) % boardW) : (cx + dx / 2);
+                        int my = edgeless ? (((cy + dy / 2) % boardH + boardH) % boardH) : (cy + dy / 2);
+                        if (scratchBoard.isValidCoord(mx, my)) {
+                            OctiSquare midSq = scratchBoard.squareAt(mx, my);
+                            if (midSq.hasEnemyOf(turn)) {
+                                isTactical = true;
+                                break;
+                            }
+                        }
+                    }
+                    cx = hop.x;
+                    cy = hop.y;
                 }
+                if (isTactical) break;
                 if (!op.hops.isEmpty()) {
                     OctiHop lastHop = op.hops.get(op.hops.size() - 1);
                     OctiSquare destSq = scratchBoard.squareAt(lastHop.x, lastHop.y);

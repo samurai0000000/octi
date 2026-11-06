@@ -4996,25 +4996,27 @@ void ZoomedSquareDialog::mouseReleaseEvent(QMouseEvent *event)
 CapturePromptDialog::CapturePromptDialog(int jumpedX, int jumpedY,
                                          OctiPlayer jumpedPlayer,
                                          ThemeId theme,
-                                         QWidget *parent)
+                                         QWidget *parent,
+                                         bool isEnemy)
     : QDialog(parent)
     , _jumpedX(jumpedX)
     , _jumpedY(jumpedY)
     , _jumpedPlayer(jumpedPlayer)
     , _theme(theme)
-    , _captureChosen(true)
+    , _captureChosen(isEnemy)
     , _miniCanvasRect(100, 65, 160, 65)
     , _podIconRect(165, 82, 30, 30)
     , _captureBtnRect(35, 150, 135, 38)
     , _leaveBtnRect(190, 150, 135, 38)
     , _draggingPod(false)
     , _dragPos()
+    , _isEnemy(isEnemy)
 {
     setWindowFlags(Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
     setAttribute(Qt::WA_TranslucentBackground, true);
     setFixedSize(360, 210);
     setModal(true);
-    setWindowTitle("Capture Jumped Pod?");
+    setWindowTitle(_isEnemy ? "Capture Jumped Enemy Pod?" : "Capture Jumped Pod (Self-Capture)?");
 }
 
 CapturePromptDialog::~CapturePromptDialog() = default;
@@ -5043,14 +5045,19 @@ void CapturePromptDialog::paintEvent(QPaintEvent *event)
     p.setFont(f);
     p.setPen(pal.prongSuperGold);
     QRectF promptRect(16, 16, width() - 32, 24);
-    p.drawText(promptRect, Qt::AlignCenter,
-               QString("Capture jumped pod at Square (%1, %2)?").arg(_jumpedX).arg(_jumpedY));
+    QString promptText = _isEnemy
+        ? QString("Capture jumped enemy pod at Square (%1, %2)?").arg(_jumpedX).arg(_jumpedY)
+        : QString("Capture your own jumped pod at Square (%1, %2)?").arg(_jumpedX).arg(_jumpedY);
+    p.drawText(promptRect, Qt::AlignCenter, promptText);
 
     QFont hintF("SansSerif", 9);
     p.setFont(hintF);
     p.setPen(pal.textPrimary);
     QRectF subPrompt(16, 40, width() - 32, 18);
-    p.drawText(subPrompt, Qt::AlignCenter, "Click [Capture] or drag pod off the board area below:");
+    QString subPromptText = _isEnemy
+        ? "Click [Capture] or drag pod off the board area below:"
+        : "Click [Capture] to reclaim prongs into your reserve:";
+    p.drawText(subPrompt, Qt::AlignCenter, subPromptText);
 
     // Mini-canvas board box
     p.setPen(QPen(pal.boardOuterFrame, 1.2, Qt::DashLine));

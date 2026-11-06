@@ -1601,25 +1601,29 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
                         if (!cc.mandatory) {
                             OctiPlayer activeTurn = (_board->getGame())
                                 ? _board->getGame()->getTurn() : PLAYER_A;
-                            OctiPlayer jumpedOwner = (activeTurn == PLAYER_B)
-                                ? PLAYER_A : PLAYER_B;
+                            OctiGameMode mode = (_board)
+                                ? _board->getGameMode() : GAME_MODE_2;
+                            OctiPlayer jumpedOwner = activeTurn;
+                            bool isEnemy = false;
                             if (_board->isValidCoord(cc.jumpedX - 1, cc.jumpedY - 1)) {
                                 const OctiSquare &jsq =
                                     _board->squareAt(cc.jumpedX - 1, cc.jumpedY - 1);
-                                for (int pi = 0; pi < jsq.getNumPods(); ++pi) {
-                                    OctiPodType pt = jsq.getPodAt(pi).getType();
-                                    OctiPlayer owner = (pt == A_POD ? PLAYER_A :
-                                                        pt == B_POD ? PLAYER_B :
-                                                        pt == C_POD ? PLAYER_C : PLAYER_D);
-                                    if (owner != activeTurn) {
-                                        jumpedOwner = owner;
-                                        break;
+                                if (jsq.getNumPods() > 0) {
+                                    jumpedOwner = podTypeToPlayer(jsq.getPodAt(0).getType());
+                                    for (int pi = 0; pi < jsq.getNumPods(); ++pi) {
+                                        OctiPodType pt = jsq.getPodAt(pi).getType();
+                                        OctiPlayer owner = podTypeToPlayer(pt);
+                                        if (!areAlliedPlayers(mode, activeTurn, owner)) {
+                                            jumpedOwner = owner;
+                                            isEnemy = true;
+                                            break;
+                                        }
                                     }
                                 }
                             }
                             cancelHandRotateHold();
                             CapturePromptDialog capDlg(
-                                cc.jumpedX, cc.jumpedY, jumpedOwner, _theme, this);
+                                cc.jumpedX, cc.jumpedY, jumpedOwner, _theme, this, isEnemy);
                             if (capDlg.exec() == QDialog::Accepted) {
                                 _composer->setCaptureAtSquare(
                                     cc.jumpedX, cc.jumpedY, capDlg.captureChosen());
@@ -1877,6 +1881,12 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
     if (_dragJumpedSquareX >= 1) {
         if (!_geometry.boardOuterRect().contains(pos)) {
             _composer->setCaptureAtSquare(_dragJumpedSquareX, _dragJumpedSquareY, true);
+        } else {
+            int cx = 0, cy = 0;
+            if (_geometry.screenToSquare(pos, cx, cy) &&
+                cx == _dragJumpedSquareX && cy == _dragJumpedSquareY) {
+                _composer->toggleCaptureAtSquare(_dragJumpedSquareX, _dragJumpedSquareY);
+            }
         }
         _dragJumpedSquareX = -1;
         _dragJumpedSquareY = -1;

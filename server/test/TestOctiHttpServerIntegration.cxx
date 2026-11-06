@@ -5873,7 +5873,7 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("OCTI v2.3.8") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v2.4.0") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Official Platform") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("OFFICIAL PLATFORM") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("Lv4: Expert (40s)") != std::string::npos);

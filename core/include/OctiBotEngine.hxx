@@ -215,6 +215,13 @@ private:
     std::atomic<int> _liveBestScore{0};
 };
 
+std::vector<OctiMove> filterDominatedMoves(const OctiBoard &board,
+                                          OctiPlayer turn,
+                                          const std::vector<OctiMove> &moves);
+std::vector<OctiMove> filterDominatedMoves(const OctiBoard &board,
+                                          const std::vector<OctiMove> &moves);
+std::vector<OctiMove> filterDominatedMoves(const std::vector<OctiMove> &moves);
+
 } // namespace octi
 
 #endif // OCTI_BOT_ENGINE_HXX

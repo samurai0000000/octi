@@ -825,7 +825,8 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
                 targetOp.hops.push_back(extraHops[i]);
                 std::pair<int, int> jc = nextJumped[prevJumpedCount + i];
                 const OctiSquare &jsq = _board->squareAt(jc.first, jc.second);
-                if (jsq.hasEnemyOf(turn)) {
+                if (jsq.getNumPods() > 0) {
+                    bool hasEnemy = jsq.hasEnemyOf(turn);
                     int jx1 = jc.first + 1;
                     int jy1 = jc.second + 1;
                     _hopCaptureLinks.push_back({opIdxToExtend, hopIdx, jx1, jy1});
@@ -838,7 +839,7 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
                     }
                     if (!alreadyListed) {
                         _captureChoices.push_back({
-                            jx1, jy1, true, false
+                            jx1, jy1, hasEnemy, false
                         });
                     }
                 }
@@ -992,7 +993,8 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
             for (std::size_t hi = 0; hi < chosenJumped.size(); ++hi) {
                 std::pair<int, int> jc = chosenJumped[hi];
                 const OctiSquare &jsq = _board->squareAt(jc.first, jc.second);
-                if (jsq.hasEnemyOf(turn)) {
+                if (jsq.getNumPods() > 0) {
+                    bool hasEnemy = jsq.hasEnemyOf(turn);
                     int jx1 = jc.first + 1;
                     int jy1 = jc.second + 1;
                     _hopCaptureLinks.push_back({opIdx, hi, jx1, jy1});
@@ -1005,7 +1007,7 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
                     }
                     if (!alreadyListed) {
                         _captureChoices.push_back({
-                            jx1, jy1, true, false
+                            jx1, jy1, hasEnemy, false
                         });
                     }
                 }
