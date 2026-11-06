@@ -143,7 +143,10 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
       _myTableSeatsLabel(nullptr),
       _openActiveBoardBtn(nullptr),
       _leaveActiveTableBtn(nullptr),
+      _playersBox(nullptr),
+      _robotsBox(nullptr),
       _playersTable(nullptr),
+      _robotsTable(nullptr),
       _tablesTable(nullptr),
       _inspectorBox(nullptr),
       _inspectorTitleLabel(nullptr),
@@ -247,18 +250,32 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     tLayout->addWidget(_inspectorBox);
 
     /* Connected Users Roster directly below _tablesTable and _inspectorBox */
-    QGroupBox *playersBox = new QGroupBox("Connected Users", tablesBox);
-    QVBoxLayout *pLayout = new QVBoxLayout(playersBox);
+    _playersBox = new QGroupBox("Connected Users", tablesBox);
+    QVBoxLayout *pLayout = new QVBoxLayout(_playersBox);
     pLayout->setContentsMargins(8, 6, 8, 6);
-    _playersTable = new QTableWidget(0, 5, playersBox);
+    _playersTable = new QTableWidget(0, 5, _playersBox);
     _playersTable->setHorizontalHeaderLabels(
         QStringList() << "User" << "Clients" << "Online" << "Idle" << "Status / Room");
     _playersTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     _playersTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     _playersTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    _playersTable->setMinimumHeight(130);
+    _playersTable->setMinimumHeight(100);
     pLayout->addWidget(_playersTable);
-    tLayout->addWidget(playersBox, 2);
+    tLayout->addWidget(_playersBox, 1);
+
+    /* Connected Robots Roster */
+    _robotsBox = new QGroupBox("Connected Robots", tablesBox);
+    QVBoxLayout *rLayout = new QVBoxLayout(_robotsBox);
+    rLayout->setContentsMargins(8, 6, 8, 6);
+    _robotsTable = new QTableWidget(0, 5, _robotsBox);
+    _robotsTable->setHorizontalHeaderLabels(
+        QStringList() << "Robot" << "Clients" << "Online" << "Idle" << "Status / Room");
+    _robotsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    _robotsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    _robotsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    _robotsTable->setMinimumHeight(100);
+    rLayout->addWidget(_robotsTable);
+    tLayout->addWidget(_robotsBox, 1);
 
     _statusLabel = new QLabel("Connected to OCTI Lobby.", tablesBox);
     tLayout->addWidget(_statusLabel);
@@ -1118,17 +1135,25 @@ void LobbyView::setOnMatchFoundCallback(
 
 void LobbyView::rebuildPlayersTable()
 {
-    if (!_playersTable) {
+    if (!_playersTable || !_robotsTable) {
         return;
     }
-    _playersTable->setRowCount(static_cast<int>(_players.size()));
-    for (int i = 0; i < static_cast<int>(_players.size()); ++i) {
-        const LobbyPlayerInfo &p = _players[static_cast<std::size_t>(i)];
+
+    std::vector<LobbyPlayerInfo> humanPlayers;
+    std::vector<LobbyPlayerInfo> robotPlayers;
+    for (const auto &p : _players) {
+        if (!p.isRobot && p.robotUuid.empty()) {
+            humanPlayers.push_back(p);
+        } else {
+            robotPlayers.push_back(p);
+        }
+    }
+
+    _playersTable->setRowCount(static_cast<int>(humanPlayers.size()));
+    for (int i = 0; i < static_cast<int>(humanPlayers.size()); ++i) {
+        const LobbyPlayerInfo &p = humanPlayers[static_cast<std::size_t>(i)];
 
         QString handleText = formatHandleWithAt(p.handle);
-        if (p.isRobot) {
-            handleText += " [BOT]";
-        }
         QTableWidgetItem *userItem = new QTableWidgetItem(handleText);
         userItem->setIcon(makeAvatarIcon(p.handle, _theme));
         _playersTable->setItem(i, 0, userItem);
@@ -1148,6 +1173,42 @@ void LobbyView::rebuildPlayersTable()
             statusRoom += " #" + QString::fromStdString(p.roomId);
         }
         _playersTable->setItem(i, 4, new QTableWidgetItem(statusRoom));
+    }
+
+    _robotsTable->setRowCount(static_cast<int>(robotPlayers.size()));
+    for (int i = 0; i < static_cast<int>(robotPlayers.size()); ++i) {
+        const LobbyPlayerInfo &p = robotPlayers[static_cast<std::size_t>(i)];
+
+        QString handleText = formatHandleWithAt(p.handle);
+        if (!handleText.contains("[BOT]")) {
+            handleText += " [BOT]";
+        }
+        QTableWidgetItem *userItem = new QTableWidgetItem(handleText);
+        userItem->setIcon(makeAvatarIcon(p.handle, _theme));
+        _robotsTable->setItem(i, 0, userItem);
+
+        _robotsTable->setItem(
+            i, 1, new QTableWidgetItem(formatClientsSummary(p.clients)));
+
+        _robotsTable->setItem(
+            i, 2, new QTableWidgetItem(formatCompactDurationSec(p.onlineSec)));
+
+        QString idleStr = (p.idleSec < 10) ? QString("Active")
+                                           : formatCompactDurationSec(p.idleSec);
+        _robotsTable->setItem(i, 3, new QTableWidgetItem(idleStr));
+
+        QString statusRoom = QString::fromStdString(p.status);
+        if (!p.roomId.empty()) {
+            statusRoom += " #" + QString::fromStdString(p.roomId);
+        }
+        _robotsTable->setItem(i, 4, new QTableWidgetItem(statusRoom));
+    }
+
+    if (_playersBox) {
+        _playersBox->setTitle(QString("Connected Users (%1)").arg(humanPlayers.size()));
+    }
+    if (_robotsBox) {
+        _robotsBox->setTitle(QString("Connected Robots (%1)").arg(robotPlayers.size()));
     }
 }
 

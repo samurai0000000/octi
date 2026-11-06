@@ -394,6 +394,10 @@ public final class OctiNetworkClient implements AutoCloseable {
         public final List<String> clients = new ArrayList<>();
         public long onlineSec = 0;
         public long idleSec = 0;
+        public boolean isRobot = false;
+        public String robotUuid = "";
+        public String ownerHandle = "";
+        public String description = "";
     }
 
     public static final class LobbyChatEntry {
@@ -1753,6 +1757,10 @@ public final class OctiNetworkClient implements AutoCloseable {
                 p.roomId = OctiMiniJson.getString(m, "room_id", "");
                 p.onlineSec = OctiMiniJson.getLong(m, "online_sec", 0L);
                 p.idleSec = OctiMiniJson.getLong(m, "idle_sec", 0L);
+                p.isRobot = OctiMiniJson.getBoolean(m, "is_robot", false);
+                p.robotUuid = OctiMiniJson.getString(m, "robot_uuid", "");
+                p.ownerHandle = OctiMiniJson.getString(m, "owner_handle", "");
+                p.description = OctiMiniJson.getString(m, "description", "");
                 List<Object> cl = OctiMiniJson.getArray(m, "clients");
                 if (cl != null) {
                     for (Object c : cl) {

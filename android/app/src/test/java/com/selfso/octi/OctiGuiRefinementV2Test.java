@@ -18,6 +18,9 @@ import org.junit.Test;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 public class OctiGuiRefinementV2Test {
 
@@ -1004,6 +1007,421 @@ public class OctiGuiRefinementV2Test {
         assertTrue(vm.matchStartedEpochSec() > 0L);
 
         vm.close();
+    }
+
+    private static File resolveTenThemesArtifactsDir() {
+        File repoRoot = resolveRepoRoot();
+        File artifactsDir = new File(repoRoot, "plan/plan_gui_ten_themes.artifacts");
+        if (!artifactsDir.exists()) {
+            artifactsDir.mkdirs();
+        }
+        return artifactsDir;
+    }
+
+    private static void assertValidArtifactPng(File file) {
+        assertTrue("PNG file must exist: " + file.getPath(), file.exists());
+        assertTrue("PNG file must be non-empty: " + file.getPath(), file.length() > 1024L);
+        try {
+            byte[] head = Files.readAllBytes(file.toPath());
+            assertTrue(head.length >= 8);
+            assertEquals((byte) 0x89, head[0]);
+            assertEquals((byte) 'P', head[1]);
+            assertEquals((byte) 'N', head[2]);
+            assertEquals((byte) 'G', head[3]);
+        } catch (Exception e) {
+            fail("Failed reading PNG: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testTenThemesRoundTripAndFallback() {
+        assertEquals("Exactly 10 themes must be defined", 10, OctiThemeId.values().length);
+        ClientConfigStore store = new ClientConfigStore();
+
+        for (OctiThemeId theme : OctiThemeId.values()) {
+            assertEquals(theme.ordinal(), theme.id());
+            assertNotNull(theme.toConfigKey());
+            assertFalse(theme.toConfigKey().isEmpty());
+            assertNotNull(theme.toWebKey());
+            assertFalse(theme.toWebKey().isEmpty());
+            assertNotNull(theme.displayName());
+            assertFalse(theme.displayName().isEmpty());
+
+            store.setTheme(theme);
+            assertEquals(theme, store.getTheme());
+            assertEquals(theme.toConfigKey(), store.themeToString(theme));
+
+            // Round-trip parsing via config key, name, web key, and int id
+            assertEquals(theme, store.parseTheme(theme.toConfigKey()));
+            assertEquals(theme, store.parseTheme(theme.name()));
+            assertEquals(theme, store.parseTheme(theme.toWebKey()));
+            assertEquals(theme, store.parseTheme(theme.id()));
+
+            // OctiPalette resolution
+            OctiPalette pal = OctiPalette.forTheme(theme);
+            assertNotNull("Palette for " + theme + " must not be null", pal);
+        }
+
+        // Fallback checks
+        assertEquals(OctiThemeId.OBSIDIAN_BRASS, store.parseTheme("invalid_theme"));
+        assertEquals(OctiThemeId.OBSIDIAN_BRASS, store.parseTheme(null));
+        assertEquals(OctiThemeId.OBSIDIAN_BRASS, store.parseTheme(-1));
+        assertEquals(OctiThemeId.OBSIDIAN_BRASS, store.parseTheme(99));
+        assertEquals(OctiThemeId.OBSIDIAN_BRASS, store.parseTheme(""));
+        assertEquals(OctiPalette.OBSIDIAN_BRASS_INSTANCE, OctiPalette.forTheme(null));
+
+        // Distinct styling attributes
+        OctiPalette obs = OctiPalette.forTheme(OctiThemeId.OBSIDIAN_BRASS);
+        assertEquals(OctiPalette.PodFinish.CLASSIC, obs.podFinish);
+        assertEquals(OctiPalette.PodPattern.NONE, obs.podPattern);
+        assertEquals(OctiPalette.ProngStyle.CLASSIC, obs.prongStyle);
+        assertEquals(OctiPalette.BoardTexture.NONE, obs.boardTexture);
+        assertEquals(OctiPalette.CellShape.SQUARE, obs.cellShape);
+        assertEquals(0.0f, obs.glowStrength, 1e-4f);
+        assertEquals(0xFF0A0E16, obs.homeBadgeOuterBg);
+        assertEquals(0xFF070A10, obs.homeBadgeInnerBg);
+        assertTrue(OctiBoardRenderer.isLegacyTheme(obs));
+
+        OctiPalette rose = OctiPalette.forTheme(OctiThemeId.ROSEWOOD_IVORY);
+        assertEquals(OctiPalette.PodFinish.CLASSIC, rose.podFinish);
+        assertEquals(OctiPalette.PodPattern.NONE, rose.podPattern);
+        assertEquals(OctiPalette.ProngStyle.CLASSIC, rose.prongStyle);
+        assertEquals(OctiPalette.BoardTexture.NONE, rose.boardTexture);
+        assertEquals(OctiPalette.CellShape.SQUARE, rose.cellShape);
+        assertEquals(0.0f, rose.glowStrength, 1e-4f);
+        assertEquals(0xFF140E0B, rose.homeBadgeOuterBg);
+        assertEquals(0xFF0E0A08, rose.homeBadgeInnerBg);
+        assertTrue(OctiBoardRenderer.isLegacyTheme(rose));
+
+        OctiPalette neon = OctiPalette.forTheme(OctiThemeId.NEON_CIRCUIT);
+        assertEquals(OctiPalette.BoardTexture.PCB, neon.boardTexture);
+        assertEquals(OctiPalette.ProngStyle.NEON_TUBE, neon.prongStyle);
+        assertEquals(0.85f, neon.glowStrength, 1e-4f);
+        assertFalse(OctiBoardRenderer.isLegacyTheme(neon));
+
+        OctiPalette jade = OctiPalette.forTheme(OctiThemeId.JADE_DYNASTY);
+        assertEquals(OctiPalette.BoardTexture.LACQUER_SCROLL, jade.boardTexture);
+        assertEquals(OctiPalette.ProngStyle.FILIGREE, jade.prongStyle);
+        assertEquals(OctiPalette.PodFinish.CARVED, jade.podFinish);
+        assertFalse(OctiBoardRenderer.isLegacyTheme(jade));
+
+        OctiPalette aurora = OctiPalette.forTheme(OctiThemeId.ARCTIC_AURORA);
+        assertEquals(OctiPalette.BoardTexture.FROST, aurora.boardTexture);
+        assertEquals(OctiPalette.ProngStyle.ICICLE, aurora.prongStyle);
+        assertEquals(OctiPalette.PodFinish.GLASS, aurora.podFinish);
+        assertFalse(OctiBoardRenderer.isLegacyTheme(aurora));
+
+        OctiPalette forge = OctiPalette.forTheme(OctiThemeId.VOLCANIC_FORGE);
+        assertEquals(OctiPalette.BoardTexture.BASALT_LAVA, forge.boardTexture);
+        assertEquals(OctiPalette.ProngStyle.FORGED, forge.prongStyle);
+        assertEquals(OctiPalette.PodFinish.HAMMERED, forge.podFinish);
+        assertFalse(OctiBoardRenderer.isLegacyTheme(forge));
+
+        OctiPalette candy = OctiPalette.forTheme(OctiThemeId.CANDY_POP);
+        assertEquals(OctiPalette.BoardTexture.SPRINKLES, candy.boardTexture);
+        assertEquals(OctiPalette.ProngStyle.LOLLIPOP, candy.prongStyle);
+        assertEquals(OctiPalette.PodFinish.GLOSS, candy.podFinish);
+        assertEquals(OctiPalette.CellShape.ROUNDED, candy.cellShape);
+        assertFalse(OctiBoardRenderer.isLegacyTheme(candy));
+
+        OctiPalette pearl = OctiPalette.forTheme(OctiThemeId.OCEAN_PEARL);
+        assertEquals(OctiPalette.BoardTexture.CAUSTICS, pearl.boardTexture);
+        assertEquals(OctiPalette.ProngStyle.CORAL, pearl.prongStyle);
+        assertEquals(OctiPalette.PodFinish.NACRE, pearl.podFinish);
+        assertFalse(OctiBoardRenderer.isLegacyTheme(pearl));
+
+        OctiPalette steam = OctiPalette.forTheme(OctiThemeId.STEAMPUNK_BRASS);
+        assertEquals(OctiPalette.BoardTexture.RIVET_PLATE, steam.boardTexture);
+        assertEquals(OctiPalette.ProngStyle.PIPE, steam.prongStyle);
+        assertEquals(OctiPalette.PodFinish.BRASS, steam.podFinish);
+        assertFalse(OctiBoardRenderer.isLegacyTheme(steam));
+
+        OctiPalette nebula = OctiPalette.forTheme(OctiThemeId.COSMIC_NEBULA);
+        assertEquals(OctiPalette.BoardTexture.STARFIELD, nebula.boardTexture);
+        assertEquals(OctiPalette.ProngStyle.COMET, nebula.prongStyle);
+        assertEquals(OctiPalette.PodFinish.PLANETARY, nebula.podFinish);
+        assertFalse(OctiBoardRenderer.isLegacyTheme(nebula));
+    }
+
+    @Test
+    public void testTenThemesOffscreenRendersAndArtifactPngs() throws Exception {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, true, false, OctiGameBases.GAME_BASES_3);
+        board.getGame().start(OctiPlayer.PLAYER_A);
+        board.getGame().move("33+a");
+        board.getGame().move("37+e");
+        board.getGame().move("53+h");
+        board.getGame().move("57+d");
+        board.getGame().move("73+b!");
+        board.getGame().move("77+f");
+        board.getGame().move("33a-34");
+        board.getGame().move("37e-36");
+        board.getGame().move("34a+c");
+        board.getGame().move("36e-35");
+
+        OctiMoveComposer comp = new OctiMoveComposer(board);
+        comp.beginMoveOrJumpPod(3, 4, 0, false);
+        OctiBoardGeometry geo = new OctiBoardGeometry(960, 960, 9, 9, OctiBoardGeometry.BoardRotation.ROT_0);
+
+        File artifactsDir = resolveTenThemesArtifactsDir();
+        List<int[]> renderedPixelsList = new ArrayList<>();
+
+        for (OctiThemeId theme : OctiThemeId.values()) {
+            int[] px = OctiBoardRenderer.renderBoardPixels(board, comp, geo, theme);
+            assertNotNull("Pixels for " + theme + " must not be null", px);
+            assertEquals(960 * 960, px.length);
+
+            // Check non-blank / variation
+            int firstPx = px[0];
+            boolean hasVariation = false;
+            for (int p : px) {
+                if (p != firstPx) {
+                    hasVariation = true;
+                    break;
+                }
+            }
+            assertTrue("Render for " + theme + " must not be uniform blank color", hasVariation);
+
+            File pngFile = new File(artifactsDir, "android_theme_" + theme.toWebKey() + ".png");
+            OctiAppIconRenderer.writeArgbPng(960, 960, px, pngFile);
+            assertValidArtifactPng(pngFile);
+
+            renderedPixelsList.add(px);
+        }
+
+        // Pairwise distinctness check across all 10 themes
+        for (int i = 0; i < renderedPixelsList.size(); i++) {
+            for (int j = i + 1; j < renderedPixelsList.size(); j++) {
+                int[] a = renderedPixelsList.get(i);
+                int[] b = renderedPixelsList.get(j);
+                int diffCount = 0;
+                for (int k = 0; k < a.length; k++) {
+                    if (a[k] != b[k]) {
+                        diffCount++;
+                    }
+                }
+                assertTrue("Themes " + OctiThemeId.values()[i] + " and " + OctiThemeId.values()[j]
+                        + " must have distinct renders (diff=" + diffCount + ")", diffCount > 100);
+            }
+        }
+    }
+
+    @Test
+    public void testPinkStreakingTurnIndicatorInvariants() {
+        assertFalse("Base bitmap must not render turn indicator to prevent pink streak baking",
+                OctiBoardRenderer.shouldRenderBaseBitmapTurnIndicator());
+
+        long period = OctiBoardRenderer.INDICATOR_CYCLE_PERIOD_MS;
+        assertEquals(2000L, period);
+
+        assertEquals(0.0f, OctiBoardRenderer.computeMonotonicTurnAnimPhase(0L), 1e-5f);
+        assertEquals(0.5f, OctiBoardRenderer.computeMonotonicTurnAnimPhase(period / 2L), 1e-5f);
+        assertEquals(0.0f, OctiBoardRenderer.computeMonotonicTurnAnimPhase(period), 1e-5f);
+        assertEquals(0.25f, OctiBoardRenderer.computeMonotonicTurnAnimPhase(period * 3L + period / 4L), 1e-5f);
+
+        // Monotonic progression over one cycle
+        float prev = -1.0f;
+        for (long t = 0; t < period; t += 100) {
+            float phase = OctiBoardRenderer.computeMonotonicTurnAnimPhase(t);
+            assertTrue("Phase must be in [0.0, 1.0)", phase >= 0.0f && phase < 1.0f);
+            assertTrue("Phase must advance monotonically", phase > prev);
+            prev = phase;
+        }
+
+        // Negative timestamps wrap safely
+        float negPhase = OctiBoardRenderer.computeMonotonicTurnAnimPhase(-500L);
+        assertTrue("Negative timestamps must wrap to [0.0, 1.0)", negPhase >= 0.0f && negPhase < 1.0f);
+        assertEquals(0.75f, negPhase, 1e-5f);
+
+        // Screen edge mapping
+        assertEquals(0, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_A, 0));
+        assertEquals(2, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_B, 0));
+        assertEquals(2, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_A, 180));
+        assertEquals(0, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_B, 180));
+        assertEquals(3, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_A, 90));
+        assertEquals(1, OctiBoardRenderer.activeTurnScreenEdge(OctiGameMode.GAME_MODE_2, OctiPlayer.PLAYER_B, 90));
+    }
+
+    @Test
+    public void testVirtualScreensAndNavigationInvariants() {
+        boolean foundLobbyChat = false;
+        for (com.selfso.octi.ui.OctiAppViewModel.AppTab t : com.selfso.octi.ui.OctiAppViewModel.AppTab.values()) {
+            if (t == com.selfso.octi.ui.OctiAppViewModel.AppTab.LOBBY_CHAT) {
+                foundLobbyChat = true;
+                break;
+            }
+        }
+        assertTrue("AppTab must include LOBBY_CHAT", foundLobbyChat);
+
+        ClientConfigStore store = new ClientConfigStore();
+        com.selfso.octi.ui.OctiAppViewModel vm = new com.selfso.octi.ui.OctiAppViewModel(
+                store, new OctiNetworkClient());
+
+        // Tab to virtual screen index
+        assertEquals(0, vm.virtualScreenIndexForTab(com.selfso.octi.ui.OctiAppViewModel.AppTab.ONLINE_LOBBY));
+        assertEquals(1, vm.virtualScreenIndexForTab(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD));
+        assertEquals(2, vm.virtualScreenIndexForTab(com.selfso.octi.ui.OctiAppViewModel.AppTab.LOBBY_CHAT));
+        assertEquals(-1, vm.virtualScreenIndexForTab(com.selfso.octi.ui.OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD));
+
+        // Virtual screen index to tab
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.ONLINE_LOBBY, vm.tabForVirtualScreenIndex(0));
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD, vm.tabForVirtualScreenIndex(1));
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.LOBBY_CHAT, vm.tabForVirtualScreenIndex(2));
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD, vm.tabForVirtualScreenIndex(3));
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD, vm.tabForVirtualScreenIndex(-1));
+
+        // Swipe navigation and clamping
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD, vm.getCurrentTab().getValue());
+        vm.swipeToNextVirtualScreen();
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.LOBBY_CHAT, vm.getCurrentTab().getValue());
+        vm.swipeToNextVirtualScreen(); // clamped at index 2
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.LOBBY_CHAT, vm.getCurrentTab().getValue());
+
+        vm.swipeToPreviousVirtualScreen();
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD, vm.getCurrentTab().getValue());
+        vm.swipeToPreviousVirtualScreen();
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.ONLINE_LOBBY, vm.getCurrentTab().getValue());
+        vm.swipeToPreviousVirtualScreen(); // clamped at index 0
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.ONLINE_LOBBY, vm.getCurrentTab().getValue());
+
+        // Theme picker dialog StateFlow
+        assertFalse(vm.getShowThemePickerDialog().getValue());
+        vm.setShowThemePickerDialog(true);
+        assertTrue(vm.getShowThemePickerDialog().getValue());
+        vm.setShowThemePickerDialog(false);
+        assertFalse(vm.getShowThemePickerDialog().getValue());
+
+        // Theme toggle 10-theme cycle
+        vm.setTheme(OctiThemeId.OBSIDIAN_BRASS);
+        assertEquals(OctiThemeId.OBSIDIAN_BRASS, vm.getTheme().getValue());
+        for (int i = 1; i < 10; i++) {
+            vm.toggleTheme();
+            assertEquals(OctiThemeId.values()[i], vm.getTheme().getValue());
+        }
+        // Wrap around from 9 back to 0
+        vm.toggleTheme();
+        assertEquals(OctiThemeId.OBSIDIAN_BRASS, vm.getTheme().getValue());
+
+        vm.close();
+    }
+
+    @Test
+    public void testRobotPlayerInfoParsing() {
+        OctiNetworkClient.LobbyPlayerInfo p = new OctiNetworkClient.LobbyPlayerInfo();
+        assertFalse(p.isRobot);
+        assertEquals("", p.robotUuid);
+        assertEquals("", p.ownerHandle);
+        assertEquals("", p.description);
+
+        String json = "{\"player_uuid\":\"r-uuid-42\",\"handle\":\"DeepBot\",\"status\":\"IN_LOBBY\","
+                + "\"is_robot\":true,\"robot_uuid\":\"bot-42\",\"owner_handle\":\"samurai\","
+                + "\"description\":\"Challenging Tactical Bot\"}";
+        Object parsed = OctiMiniJson.parse(json);
+        assertTrue(parsed instanceof Map<?, ?>);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> m = (Map<String, Object>) parsed;
+
+        p.playerUuid = OctiMiniJson.getString(m, "player_uuid", "");
+        p.handle = OctiMiniJson.getString(m, "handle", "");
+        p.status = OctiMiniJson.getString(m, "status", "IN_LOBBY");
+        p.isRobot = OctiMiniJson.getBoolean(m, "is_robot", false);
+        p.robotUuid = OctiMiniJson.getString(m, "robot_uuid", "");
+        p.ownerHandle = OctiMiniJson.getString(m, "owner_handle", "");
+        p.description = OctiMiniJson.getString(m, "description", "");
+
+        assertEquals("r-uuid-42", p.playerUuid);
+        assertEquals("DeepBot", p.handle);
+        assertEquals("IN_LOBBY", p.status);
+        assertTrue(p.isRobot);
+        assertEquals("bot-42", p.robotUuid);
+        assertEquals("samurai", p.ownerHandle);
+        assertEquals("Challenging Tactical Bot", p.description);
+    }
+
+    private static void deleteRecursively(File file) {
+        if (file == null || !file.exists()) {
+            return;
+        }
+        File[] children = file.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                deleteRecursively(child);
+            }
+        }
+        file.delete();
+    }
+
+    @Test
+    public void testBotUploadDifficultyGateLevels1And2Ignored() throws Exception {
+        File tempDir = Files.createTempDirectory("octi_spool_test").toFile();
+        try {
+            ClientConfigStore store = new ClientConfigStore();
+            store.preferences().telemetryConsent = "share";
+            store.preferences().telemetryConsentVersion =
+                    ClientConfigStore.ClientPreferences.CURRENT_TELEMETRY_CONSENT_VERSION;
+            store.preferences().installId = "test-install-uuid";
+
+            com.selfso.octi.ui.OctiAppViewModel vm = new com.selfso.octi.ui.OctiAppViewModel(
+                    store, new OctiNetworkClient());
+            vm.setStorageRootDir(tempDir);
+
+            // Level 1: CASUAL must be ignored upfront
+            vm.startNewLocalGame(
+                    OctiGameMode.GAME_MODE_2,
+                    false,
+                    false,
+                    OctiGameBases.GAME_BASES_3,
+                    true,
+                    OctiBotEngine.BotDifficulty.CASUAL,
+                    OctiPlayer.PLAYER_A
+            );
+            String legalMoveCasual = vm.getBoard().getGame().generateLegalMoves().get(0).asString();
+            assertTrue(vm.applyMoveNotation(legalMoveCasual));
+            vm.getBoard().getGame().resign(OctiPlayer.PLAYER_B);
+            assertTrue(vm.getBoard().getGame().isGameOver());
+            assertFalse("CASUAL bot games must return false and be ignored from upload",
+                    vm.uploadCompletedBotGameIfEligible(false, false));
+            assertEquals(0, OctiCrashReporter.listPendingTranscriptFiles(tempDir).size());
+
+            // Level 2: TACTICAL must be ignored upfront
+            vm.startNewLocalGame(
+                    OctiGameMode.GAME_MODE_2,
+                    false,
+                    false,
+                    OctiGameBases.GAME_BASES_3,
+                    true,
+                    OctiBotEngine.BotDifficulty.TACTICAL,
+                    OctiPlayer.PLAYER_A
+            );
+            String legalMoveTactical = vm.getBoard().getGame().generateLegalMoves().get(0).asString();
+            assertTrue(vm.applyMoveNotation(legalMoveTactical));
+            vm.getBoard().getGame().resign(OctiPlayer.PLAYER_B);
+            assertTrue(vm.getBoard().getGame().isGameOver());
+            assertFalse("TACTICAL bot games must return false and be ignored from upload",
+                    vm.uploadCompletedBotGameIfEligible(false, false));
+            assertEquals(0, OctiCrashReporter.listPendingTranscriptFiles(tempDir).size());
+
+            // Level 3: MASTER is eligible
+            vm.startNewLocalGame(
+                    OctiGameMode.GAME_MODE_2,
+                    false,
+                    false,
+                    OctiGameBases.GAME_BASES_3,
+                    true,
+                    OctiBotEngine.BotDifficulty.MASTER,
+                    OctiPlayer.PLAYER_A
+            );
+            String legalMoveMaster = vm.getBoard().getGame().generateLegalMoves().get(0).asString();
+            assertTrue(vm.applyMoveNotation(legalMoveMaster));
+            vm.getBoard().getGame().resign(OctiPlayer.PLAYER_B);
+            assertTrue(vm.getBoard().getGame().isGameOver());
+            assertTrue("MASTER bot games must be eligible and attempt upload/spooling",
+                    vm.uploadCompletedBotGameIfEligible(false, false));
+            assertEquals(1, OctiCrashReporter.listPendingTranscriptFiles(tempDir).size());
+
+            vm.close();
+        } finally {
+            deleteRecursively(tempDir);
+        }
     }
 }
 

@@ -528,27 +528,25 @@ public final class ClientConfigStore {
         }
     }
 
-    private static String themeToString(OctiThemeId theme) {
-        if (theme == OctiThemeId.ROSEWOOD_IVORY) {
-            return "rosewood_ivory";
-        }
-        return "obsidian_brass";
+    public OctiThemeId getTheme() {
+        return _prefs != null ? _prefs.getTheme() : OctiThemeId.OBSIDIAN_BRASS;
     }
 
-    private static OctiThemeId parseTheme(Object val) {
-        if (val instanceof String s) {
-            String trimmed = s.trim();
-            if ("rosewood_ivory".equalsIgnoreCase(trimmed) || "1".equals(trimmed)) {
-                return OctiThemeId.ROSEWOOD_IVORY;
-            }
-            return OctiThemeId.OBSIDIAN_BRASS;
+    public void setTheme(OctiThemeId theme) {
+        if (_prefs != null) {
+            _prefs.setTheme(theme);
         }
-        if (val instanceof Number n) {
-            if (n.intValue() == 1) {
-                return OctiThemeId.ROSEWOOD_IVORY;
-            }
+    }
+
+    static String themeToString(OctiThemeId theme) {
+        if (theme == null) {
+            return OctiThemeId.OBSIDIAN_BRASS.toConfigKey();
         }
-        return OctiThemeId.OBSIDIAN_BRASS;
+        return theme.toConfigKey();
+    }
+
+    static OctiThemeId parseTheme(Object val) {
+        return OctiThemeId.fromConfigValue(val);
     }
 
     private void setError(StringBuilder errorOut, String msg) {

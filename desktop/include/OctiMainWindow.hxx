@@ -106,6 +106,7 @@ public:
     void toggleTheme();
     void setTheme(ThemeId theme);
     ThemeId theme() const;
+    QComboBox *themeSelectorCombo() const { return _themeCombo; }
 
     int menuActionCountWithIconsAndShortcuts() const;
     void showSplashAboutDialog();
@@ -312,6 +313,7 @@ private:
     QPushButton *_rotateBoardBtn;
     QCheckBox *_confirmAllCheck;
     QPushButton *_themeToggleBtn;
+    QComboBox *_themeCombo;
     QPushButton *_sfxMuteBtn;
     QPushButton *_newLocalGameBtn;
     QPushButton *_archiveBtn;

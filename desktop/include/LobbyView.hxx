@@ -109,6 +109,9 @@ public:
     QPushButton *refreshButton() const { return _refreshBtn; }
     QPushButton *purgeTableButton() const { return _purgeTableBtn; }
     QTableWidget *playersTable() const { return _playersTable; }
+    QTableWidget *robotsTable() const { return _robotsTable; }
+    QGroupBox *playersBox() const { return _playersBox; }
+    QGroupBox *robotsBox() const { return _robotsBox; }
     QTableWidget *tablesTable() const { return _tablesTable; }
     QGroupBox *inspectorBox() const { return _inspectorBox; }
     QLabel *inspectorTitleLabel() const { return _inspectorTitleLabel; }
@@ -142,7 +145,10 @@ private:
     QPushButton *_openActiveBoardBtn;
     QPushButton *_leaveActiveTableBtn;
 
-    QTableWidget *_playersTable;
+    QGroupBox *_playersBox = nullptr;
+    QGroupBox *_robotsBox = nullptr;
+    QTableWidget *_playersTable = nullptr;
+    QTableWidget *_robotsTable = nullptr;
     QTableWidget *_tablesTable;
     QGroupBox *_inspectorBox;
     QLabel *_inspectorTitleLabel;

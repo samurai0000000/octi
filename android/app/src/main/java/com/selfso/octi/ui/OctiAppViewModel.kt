@@ -54,8 +54,9 @@ class OctiAppViewModel @JvmOverloads constructor(
     fun networkClient(): OctiNetworkClient = netClient
 
     enum class AppTab {
-        BOARD,
         ONLINE_LOBBY,
+        BOARD,
+        LOBBY_CHAT,
         ARCHIVE_LEADERBOARD
     }
 
@@ -503,6 +504,9 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     private val _showBoardChatZoomDialog = MutableStateFlow(false)
     val showBoardChatZoomDialog: StateFlow<Boolean> = _showBoardChatZoomDialog.asStateFlow()
+
+    private val _showThemePickerDialog = MutableStateFlow(false)
+    val showThemePickerDialog: StateFlow<Boolean> = _showThemePickerDialog.asStateFlow()
 
     private var _lastSubmittedOnlinePly: Int = 0
     fun lastSubmittedOnlinePly(): Int = _lastSubmittedOnlinePly
@@ -952,6 +956,7 @@ class OctiAppViewModel @JvmOverloads constructor(
         val tabArg = args["tab"] ?: ""
         when (tabArg.uppercase()) {
             "LOBBY", "ONLINE" -> _currentTab.value = AppTab.ONLINE_LOBBY
+            "LOBBY_CHAT", "CHAT" -> _currentTab.value = AppTab.LOBBY_CHAT
             "ARCHIVE", "LEADERBOARD" -> _currentTab.value = AppTab.ARCHIVE_LEADERBOARD
             "BOARD" -> _currentTab.value = AppTab.BOARD
         }
@@ -960,6 +965,38 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     fun selectTab(tab: AppTab) {
         _currentTab.value = tab
+    }
+
+    fun virtualScreenIndexForTab(tab: AppTab): Int = when (tab) {
+        AppTab.ONLINE_LOBBY -> 0
+        AppTab.BOARD -> 1
+        AppTab.LOBBY_CHAT -> 2
+        AppTab.ARCHIVE_LEADERBOARD -> -1
+    }
+
+    fun tabForVirtualScreenIndex(index: Int): AppTab = when (index) {
+        0 -> AppTab.ONLINE_LOBBY
+        1 -> AppTab.BOARD
+        2 -> AppTab.LOBBY_CHAT
+        else -> AppTab.BOARD
+    }
+
+    fun swipeToNextVirtualScreen() {
+        val curr = virtualScreenIndexForTab(_currentTab.value)
+        if (curr in 0..1) {
+            selectTab(tabForVirtualScreenIndex(curr + 1))
+        }
+    }
+
+    fun swipeToPreviousVirtualScreen() {
+        val curr = virtualScreenIndexForTab(_currentTab.value)
+        if (curr in 1..2) {
+            selectTab(tabForVirtualScreenIndex(curr - 1))
+        }
+    }
+
+    fun setShowThemePickerDialog(visible: Boolean) {
+        _showThemePickerDialog.value = visible
     }
 
     fun setShowNewGameDialog(visible: Boolean) {
@@ -993,11 +1030,8 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun toggleTheme() {
-        val next = if (_theme.value == OctiThemeId.OBSIDIAN_BRASS) {
-            OctiThemeId.ROSEWOOD_IVORY
-        } else {
-            OctiThemeId.OBSIDIAN_BRASS
-        }
+        val all = OctiThemeId.values()
+        val next = all[(_theme.value.ordinal + 1) % all.size]
         setTheme(next)
     }
 
@@ -1814,6 +1848,10 @@ class OctiAppViewModel @JvmOverloads constructor(
         synchronousForTest: Boolean = false
     ): Boolean {
         if (_matchType.value != MatchType.LOCAL_VS_BOT) {
+            return false
+        }
+        if (_botDifficulty.value == OctiBotEngine.BotDifficulty.CASUAL ||
+            _botDifficulty.value == OctiBotEngine.BotDifficulty.TACTICAL) {
             return false
         }
         val g = board.game ?: return false

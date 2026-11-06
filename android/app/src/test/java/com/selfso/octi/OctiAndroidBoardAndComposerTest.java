@@ -873,7 +873,7 @@ public class OctiAndroidBoardAndComposerTest {
     @Test
     public void testOctiAppVersionAndProtocolConstants() {
         assertEquals(BuildConfig.VERSION_NAME, OctiDefs.OCTI_APP_VERSION);
-        assertEquals("2.4.0", OctiDefs.OCTI_APP_VERSION);
+        assertEquals("2.4.1", OctiDefs.OCTI_APP_VERSION);
         assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
         assertEquals(2038, OctiOpeningBookData.ENTRIES.length);
 

@@ -32,6 +32,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -40,12 +43,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.delay
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -75,6 +79,7 @@ import com.selfso.octi.ui.CompositePodMoveDialog
 import com.selfso.octi.ui.CreateTableDialog
 import com.selfso.octi.ui.ExportMovesDialog
 import com.selfso.octi.ui.GameOverDialog
+import com.selfso.octi.ui.LobbyChatScreen
 import com.selfso.octi.ui.LobbyScreen
 import com.selfso.octi.ui.NewGameSetupDialog
 import com.selfso.octi.ui.OctiAppViewModel
@@ -317,6 +322,7 @@ fun OctiMainAppContent(
     val showGameOverDialog by viewModel.showGameOverDialog.collectAsState()
     val showExportMovesDialog by viewModel.showExportMovesDialog.collectAsState()
     val showBoardChatZoomDialog by viewModel.showBoardChatZoomDialog.collectAsState()
+    val showThemePickerDialog by viewModel.showThemePickerDialog.collectAsState()
     val isBotThinking by viewModel.isBotThinking.collectAsState()
     val botDifficulty by viewModel.botDifficulty.collectAsState()
     val boardRev by viewModel.boardRevision.collectAsState()
@@ -401,6 +407,39 @@ fun OctiMainAppContent(
                                 onDismissRequest = { showTopMenu = false }
                             ) {
                                 DropdownMenuItem(
+                                    text = { Text("Online Lobby") },
+                                    onClick = {
+                                        showTopMenu = false
+                                        viewModel.selectTab(OctiAppViewModel.AppTab.ONLINE_LOBBY)
+                                        viewModel.refreshLobbyStateAsync()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Tabletop Board") },
+                                    onClick = {
+                                        showTopMenu = false
+                                        viewModel.selectTab(OctiAppViewModel.AppTab.BOARD)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Lobby Chat") },
+                                    onClick = {
+                                        showTopMenu = false
+                                        viewModel.selectTab(OctiAppViewModel.AppTab.LOBBY_CHAT)
+                                        viewModel.refreshLobbyStateAsync()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Archive & Elo") },
+                                    onClick = {
+                                        showTopMenu = false
+                                        viewModel.selectTab(OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD)
+                                        viewModel.refreshLeaderboardAsync("2P", 50)
+                                        viewModel.refreshArchivedGamesAsync("", "", 20, 0)
+                                    }
+                                )
+                                HorizontalDivider(color = OctiTheme.colors.panelCardBorder)
+                                DropdownMenuItem(
                                     text = { Text("Export Moves") },
                                     onClick = {
                                         showTopMenu = false
@@ -412,18 +451,10 @@ fun OctiMainAppContent(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            "Theme: " + if (themeId == OctiThemeId.OBSIDIAN_BRASS) {
-                                                "Obsidian"
-                                            } else {
-                                                "Rosewood"
-                                            }
-                                        )
-                                    },
+                                    text = { Text("Theme: ${themeId.displayName()}...") },
                                     onClick = {
                                         showTopMenu = false
-                                        viewModel.toggleTheme()
+                                        viewModel.setShowThemePickerDialog(true)
                                     }
                                 )
                                 DropdownMenuItem(
@@ -467,40 +498,24 @@ fun OctiMainAppContent(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = OctiTheme.colors.panelCardBg,
-                contentColor = OctiTheme.colors.textPrimary
-            ) {
-                NavigationBarItem(
-                    selected = currentTab == OctiAppViewModel.AppTab.BOARD,
-                    onClick = { viewModel.selectTab(OctiAppViewModel.AppTab.BOARD) },
-                    icon = { Text("◈", color = OctiTheme.colors.accentBrass) },
-                    label = { Text("Tabletop Board") }
-                )
-                NavigationBarItem(
-                    selected = currentTab == OctiAppViewModel.AppTab.ONLINE_LOBBY,
-                    onClick = {
-                        viewModel.selectTab(OctiAppViewModel.AppTab.ONLINE_LOBBY)
-                        viewModel.refreshLobbyStateAsync()
-                    },
-                    icon = { Text("⚡", color = OctiTheme.colors.accentBrass) },
-                    label = { Text("Online Lobby") }
-                )
-                NavigationBarItem(
-                    selected = currentTab == OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD,
-                    onClick = {
-                        viewModel.selectTab(OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD)
-                        viewModel.refreshLeaderboardAsync("2P", 50)
-                        viewModel.refreshArchivedGamesAsync("", "", 20, 0)
-                    },
-                    icon = { Text("★", color = OctiTheme.colors.accentBrass) },
-                    label = { Text("Archive & Elo") }
+        }
+    ) { innerPadding ->
+        val swipeModifier = Modifier.pointerInput(currentTab) {
+            if (currentTab != OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD) {
+                var totalDragX = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { totalDragX = 0f },
+                    onHorizontalDrag = { _, dragAmount -> totalDragX += dragAmount },
+                    onDragEnd = {
+                        if (totalDragX < -60f) {
+                            viewModel.swipeToNextVirtualScreen()
+                        } else if (totalDragX > 60f) {
+                            viewModel.swipeToPreviousVirtualScreen()
+                        }
+                    }
                 )
             }
         }
-    ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -797,7 +812,13 @@ fun OctiMainAppContent(
                 OctiAppViewModel.AppTab.ONLINE_LOBBY -> {
                     LobbyScreen(
                         viewModel = viewModel,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize().then(swipeModifier)
+                    )
+                }
+                OctiAppViewModel.AppTab.LOBBY_CHAT -> {
+                    LobbyChatScreen(
+                        viewModel = viewModel,
+                        modifier = Modifier.fillMaxSize().then(swipeModifier)
                     )
                 }
                 OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD -> {
@@ -1125,6 +1146,73 @@ fun OctiMainAppContent(
                 },
                 onDismiss = {
                     viewModel.setShowTelemetrySettingsDialog(false)
+                }
+            )
+        }
+
+        if (showThemePickerDialog) {
+            AlertDialog(
+                onDismissRequest = { viewModel.setShowThemePickerDialog(false) },
+                containerColor = OctiTheme.colors.panelCardBg,
+                title = {
+                    Text(
+                        text = "Select Board Theme",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = OctiTheme.colors.accentBrass
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        for (th in OctiThemeId.values()) {
+                            val isSelected = (th == themeId)
+                            Surface(
+                                onClick = {
+                                    viewModel.setTheme(th)
+                                    viewModel.setShowThemePickerDialog(false)
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) OctiTheme.colors.accentBrass.copy(alpha = 0.2f) else OctiTheme.colors.windowBg,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) OctiTheme.colors.accentBrass else OctiTheme.colors.panelCardBorder
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = th.displayName(),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) OctiTheme.colors.accentBrass else OctiTheme.colors.textPrimary
+                                    )
+                                    if (isSelected) {
+                                        Text(
+                                            text = "✓",
+                                            color = OctiTheme.colors.accentBrass,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.setShowThemePickerDialog(false) }) {
+                        Text("Close", color = OctiTheme.colors.accentBrass)
+                    }
                 }
             )
         }

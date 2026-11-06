@@ -334,6 +334,12 @@ fun LobbyScreen(
                             }
                         }
                         OutlinedButton(
+                            onClick = { viewModel.selectTab(OctiAppViewModel.AppTab.LOBBY_CHAT) },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text("Lobby Chat", maxLines = 1, softWrap = false)
+                        }
+                        OutlinedButton(
                             onClick = { viewModel.refreshLobbyStateAsync() },
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                         ) {
@@ -693,6 +699,13 @@ fun LobbyScreen(
             }
         }
 
+        val humanPlayers = lobbyState.players.filter {
+            it.handle != "anonymous-127.0.0.1" && it.handle != "anonymous-::1" && !it.isRobot && it.robotUuid.isEmpty()
+        }
+        val robotPlayers = lobbyState.players.filter {
+            it.handle != "anonymous-127.0.0.1" && it.handle != "anonymous-::1" && (it.isRobot || it.robotUuid.isNotEmpty())
+        }
+
         // 2b. Connected Users Card (directly below Open & Live Tables Card)
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -711,7 +724,7 @@ fun LobbyScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Connected Users (${lobbyState.players.size})",
+                        text = "Connected Users (${humanPlayers.size})",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = OctiTheme.colors.accentBrass
@@ -723,7 +736,7 @@ fun LobbyScreen(
                     )
                 }
 
-                if (lobbyState.players.isEmpty()) {
+                if (humanPlayers.isEmpty()) {
                     Text(
                         text = "No users connected right now.",
                         style = MaterialTheme.typography.bodySmall,
@@ -738,10 +751,7 @@ fun LobbyScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        for (p in lobbyState.players) {
-                            if (p.handle == "anonymous-127.0.0.1" || p.handle == "anonymous-::1") {
-                                continue
-                            }
+                        for (p in humanPlayers) {
                             val playerKey = p.playerUuid.ifEmpty { p.handle }
                             val isExpanded = expandedPlayerUuid == playerKey
                             val cleanHandle = p.handle.removePrefix("@")
@@ -816,18 +826,16 @@ fun LobbyScreen(
             }
         }
 
-        // 3. Titled Lobby Chat Card
+        // 2c. Connected Robots Card (directly below Connected Users Card)
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(135.dp),
+            modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
             border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(10.dp),
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row(
@@ -836,66 +844,94 @@ fun LobbyScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Lobby Chat",
+                        text = "Connected Robots (${robotPlayers.size})",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = OctiTheme.colors.accentBrass
                     )
                     Text(
-                        text = "6h history • Local time",
+                        text = "Automated bot instances",
                         style = MaterialTheme.typography.labelSmall,
                         color = OctiTheme.colors.textSecondary
                     )
                 }
 
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                ) {
-                    val formattedList = if (lobbyChatMessages.isNotEmpty()) {
-                        lobbyChatMessages
-                    } else {
-                        lobbyState.recentChat.map { OctiAppViewModel.formatLobbyChatEntry(it) }
-                    }
-                    items(formattedList) { line ->
-                        Text(
-                            text = line,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = OctiTheme.colors.textPrimary
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = chatDraft,
-                        onValueChange = { chatDraft = it },
-                        placeholder = {
-                            Text(if (isAuthenticated) "Lobby chat message..." else "Sign in to chat")
-                        },
-                        enabled = isAuthenticated,
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
+                if (robotPlayers.isEmpty()) {
+                    Text(
+                        text = "No robots connected right now.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = OctiTheme.colors.textSecondary,
+                        modifier = Modifier.padding(vertical = 4.dp)
                     )
-                    Button(
-                        onClick = {
-                            if (chatDraft.isNotBlank()) {
-                                viewModel.sendLobbyChatAsync(chatDraft.trim())
-                                chatDraft = ""
-                            }
-                        },
-                        enabled = isAuthenticated && chatDraft.isNotBlank(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = OctiTheme.colors.accentBrass,
-                            contentColor = OctiTheme.colors.windowBg
-                        )
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Send")
+                        for (p in robotPlayers) {
+                            val playerKey = p.playerUuid.ifEmpty { p.handle }
+                            val isExpanded = expandedPlayerUuid == playerKey
+                            val cleanHandle = p.handle.removePrefix("@")
+                            Surface(
+                                onClick = {
+                                    expandedPlayerUuid = if (isExpanded) null else playerKey
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                color = OctiTheme.colors.windowBg,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isExpanded) OctiTheme.colors.accentBrass else OctiTheme.colors.panelCardBorder
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OctiPlayerAvatar(
+                                        avatarUrl = p.avatarUrl,
+                                        handle = p.handle,
+                                        size = 22.dp,
+                                        netClient = viewModel.networkClient()
+                                    )
+
+                                    Text(
+                                        text = "@$cleanHandle",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        color = OctiTheme.colors.accentBrass
+                                    )
+
+                                    if (p.roomId.isNotBlank()) {
+                                        Text(
+                                            text = "#${p.roomId}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontSize = 10.sp,
+                                            color = OctiTheme.colors.accentBrass,
+                                            modifier = Modifier
+                                                .background(
+                                                    color = OctiTheme.colors.accentBrass.copy(alpha = 0.2f),
+                                                    shape = RoundedCornerShape(8.dp)
+                                                )
+                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
+                                    }
+
+                                    val onlineText = "On ${formatCompactDurationSec(p.onlineSec)}"
+                                    val idleText = if (p.idleSec < 10L) "Active" else "Idle ${formatCompactDurationSec(p.idleSec)}"
+                                    Text(
+                                        text = "$onlineText • $idleText",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontSize = 10.sp,
+                                        color = OctiTheme.colors.textSecondary
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1066,5 +1102,135 @@ fun LobbyScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun LobbyChatScreen(
+    viewModel: OctiAppViewModel,
+    modifier: Modifier = Modifier
+) {
+    val lobbyState by viewModel.lobbyState.collectAsState()
+    val lobbyChatMessages by viewModel.lobbyChatMessages.collectAsState()
+    val isAuthenticated by viewModel.isAuthenticated.collectAsState()
+    var chatDraft by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        viewModel.refreshLobbyStateAsync()
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(12.dp),
+        colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+        border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Lobby Chat",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = OctiTheme.colors.accentBrass
+                    )
+                    Text(
+                        text = "6h history • Local time",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = OctiTheme.colors.textSecondary
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = { viewModel.selectTab(OctiAppViewModel.AppTab.ONLINE_LOBBY) },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text("Online Lobby", maxLines = 1, softWrap = false)
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.refreshLobbyStateAsync() },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text("↻", maxLines = 1, softWrap = false)
+                    }
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val formattedList = if (lobbyChatMessages.isNotEmpty()) {
+                    lobbyChatMessages
+                } else {
+                    lobbyState.recentChat.map { OctiAppViewModel.formatLobbyChatEntry(it) }
+                }
+                if (formattedList.isEmpty()) {
+                    item {
+                        Text(
+                            text = "No messages in lobby chat yet. Say hello!",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OctiTheme.colors.textSecondary,
+                            modifier = Modifier.padding(vertical = 12.dp)
+                        )
+                    }
+                } else {
+                    items(formattedList) { line ->
+                        Text(
+                            text = line,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OctiTheme.colors.textPrimary
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = chatDraft,
+                    onValueChange = { chatDraft = it },
+                    placeholder = {
+                        Text(if (isAuthenticated) "Lobby chat message..." else "Sign in to chat")
+                    },
+                    enabled = isAuthenticated,
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = {
+                        if (chatDraft.isNotBlank()) {
+                            viewModel.sendLobbyChatAsync(chatDraft.trim())
+                            chatDraft = ""
+                        }
+                    },
+                    enabled = isAuthenticated && chatDraft.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OctiTheme.colors.accentBrass,
+                        contentColor = OctiTheme.colors.windowBg
+                    )
+                ) {
+                    Text("Send")
+                }
+            }
+        }
     }
 }

@@ -8,6 +8,8 @@
 #include "OctiDialogs.hxx"
 #include "QtCompat.hxx"
 #include <algorithm>
+#include <unordered_map>
+#include <vector>
 #include <cmath>
 #include <QApplication>
 #include <QCoreApplication>
@@ -687,11 +689,7 @@ void OctiBoardCanvas::paintHomeSquareBadge(QPainter &p,
     default:            break;
     }
 
-    bool isRosewood = (_theme == ThemeId::ROSEWOOD_IVORY);
-    QColor outerBg = isRosewood ? QColor(20, 14, 11) : QColor(10, 14, 22);
-    QColor innerBg = isRosewood ? QColor(14, 10, 8) : QColor(7, 10, 16);
-
-    p.fillRect(sqRect.adjusted(1.0, 1.0, -1.0, -1.0), outerBg);
+    p.fillRect(sqRect.adjusted(1.0, 1.0, -1.0, -1.0), pal.homeBadgeOuterBg);
 
     QRectF inner = sqRect.adjusted(3.5, 3.5, -3.5, -3.5);
     if (sq.isCaptured()) {
@@ -699,7 +697,7 @@ void OctiBoardCanvas::paintHomeSquareBadge(QPainter &p,
     } else {
         p.setPen(QPen(pal.boardBevelDark, 1.2));
     }
-    p.setBrush(innerBg);
+    p.setBrush(pal.homeBadgeInnerBg);
     p.drawRoundedRect(inner, 4.0, 4.0);
 
     if (sq.isEmpty()) {
@@ -969,6 +967,223 @@ void OctiBoardCanvas::paintCommitBanner(QPainter &p,
     p.restore();
 }
 
+// Bounded Procedural Board Texture Cache
+struct BoardTextureKey {
+    int texture = 0;
+    QRgb dark = 0;
+    QRgb light = 0;
+    QRgb accent = 0;
+
+    bool operator==(const BoardTextureKey &o) const {
+        return texture == o.texture && dark == o.dark && light == o.light && accent == o.accent;
+    }
+};
+
+struct BoardTextureKeyHash {
+    std::size_t operator()(const BoardTextureKey &k) const {
+        std::size_t h = std::hash<int>()(k.texture);
+        h ^= std::hash<unsigned int>()(k.dark) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<unsigned int>()(k.light) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<unsigned int>()(k.accent) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        return h;
+    }
+};
+
+static QPixmap renderBoardTextureTile(BoardTexture tex,
+                                     const QColor &dark,
+                                     const QColor &light,
+                                     const QColor &accent)
+{
+    const int S = 128;
+    QPixmap pix(S, S);
+    pix.fill(Qt::transparent);
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing, true);
+
+    switch (tex) {
+    case BoardTexture::PCB: {
+        QColor traceCol = accent; traceCol.setAlpha(70);
+        p.setPen(QPen(traceCol, 1.8));
+        p.drawLine(10, 20, 50, 20);
+        p.drawLine(50, 20, 80, 50);
+        p.drawLine(80, 50, 118, 50);
+
+        p.drawLine(20, 110, 60, 110);
+        p.drawLine(60, 110, 90, 80);
+        p.drawLine(90, 80, 120, 80);
+
+        p.drawLine(35, 35, 35, 95);
+
+        QColor viaCol = accent; viaCol.setAlpha(120);
+        p.setPen(Qt::NoPen);
+        p.setBrush(viaCol);
+        p.drawEllipse(QPointF(10, 20), 3.0, 3.0);
+        p.drawEllipse(QPointF(118, 50), 3.0, 3.0);
+        p.drawEllipse(QPointF(20, 110), 3.0, 3.0);
+        p.drawEllipse(QPointF(120, 80), 3.0, 3.0);
+        p.drawEllipse(QPointF(35, 35), 3.0, 3.0);
+        p.drawEllipse(QPointF(35, 95), 3.0, 3.0);
+        break;
+    }
+    case BoardTexture::LACQUER_SCROLL: {
+        QColor scrollCol = accent; scrollCol.setAlpha(45);
+        p.setPen(QPen(scrollCol, 1.4));
+        p.setBrush(Qt::NoBrush);
+        p.drawArc(QRectF(15, 15, 45, 45), 0, 270 * 16);
+        p.drawArc(QRectF(70, 70, 45, 45), 180 * 16, 270 * 16);
+        p.drawArc(QRectF(15, 75, 35, 35), 90 * 16, 270 * 16);
+        p.drawArc(QRectF(75, 15, 35, 35), 270 * 16, 270 * 16);
+        break;
+    }
+    case BoardTexture::FROST: {
+        QColor frostCol = QColor(220, 245, 255, 60);
+        p.setPen(QPen(frostCol, 1.2));
+        auto drawCrystal = [&](double cx, double cy, double r) {
+            for (int i = 0; i < 6; ++i) {
+                double a = i * M_PI / 3.0;
+                QPointF ep(cx + std::cos(a) * r, cy + std::sin(a) * r);
+                p.drawLine(QPointF(cx, cy), ep);
+                QPointF b1(cx + std::cos(a) * r * 0.6 + std::cos(a + 0.6) * r * 0.3,
+                           cy + std::sin(a) * r * 0.6 + std::sin(a + 0.6) * r * 0.3);
+                p.drawLine(QPointF(cx + std::cos(a) * r * 0.6, cy + std::sin(a) * r * 0.6), b1);
+            }
+        };
+        drawCrystal(35, 40, 18);
+        drawCrystal(95, 90, 22);
+        drawCrystal(90, 25, 12);
+        drawCrystal(30, 100, 14);
+        break;
+    }
+    case BoardTexture::BASALT_LAVA: {
+        QColor lavaCol = QColor(255, 87, 34, 75);
+        p.setPen(QPen(lavaCol, 1.6));
+        p.drawLine(10, 30, 40, 45);
+        p.drawLine(40, 45, 65, 35);
+        p.drawLine(65, 35, 95, 60);
+        p.drawLine(95, 60, 120, 50);
+
+        p.drawLine(40, 45, 55, 80);
+        p.drawLine(55, 80, 85, 115);
+        p.drawLine(55, 80, 25, 105);
+
+        QColor hotCol = QColor(255, 235, 59, 90);
+        p.setPen(QPen(hotCol, 0.8));
+        p.drawLine(40, 45, 65, 35);
+        p.drawLine(55, 80, 85, 115);
+        break;
+    }
+    case BoardTexture::SPRINKLES: {
+        QColor cPink(255, 105, 180, 95);
+        QColor cMint(52, 211, 153, 95);
+        QColor cGold(251, 191, 36, 95);
+        QColor cBlue(56, 189, 248, 95);
+        auto drawPill = [&](double x, double y, double w, double h, double deg, const QColor &col) {
+            p.save();
+            p.translate(x, y);
+            p.rotate(deg);
+            p.setPen(Qt::NoPen);
+            p.setBrush(col);
+            p.drawRoundedRect(QRectF(-w * 0.5, -h * 0.5, w, h), h * 0.5, h * 0.5);
+            p.restore();
+        };
+        drawPill(25, 30, 12, 4, 30, cPink);
+        drawPill(75, 20, 14, 4, -45, cMint);
+        drawPill(110, 45, 10, 4, 60, cGold);
+        drawPill(45, 70, 12, 4, 15, cBlue);
+        drawPill(90, 80, 13, 4, -20, cPink);
+        drawPill(20, 105, 11, 4, 75, cGold);
+        drawPill(70, 115, 12, 4, 40, cMint);
+        drawPill(115, 105, 10, 4, -60, cBlue);
+        break;
+    }
+    case BoardTexture::CAUSTICS: {
+        QColor waterCol = QColor(94, 234, 212, 50);
+        p.setPen(QPen(waterCol, 1.5));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(QPointF(35, 35), 24.0, 16.0);
+        p.drawEllipse(QPointF(90, 45), 28.0, 20.0);
+        p.drawEllipse(QPointF(60, 90), 32.0, 22.0);
+        p.drawEllipse(QPointF(110, 105), 18.0, 12.0);
+        break;
+    }
+    case BoardTexture::RIVET_PLATE: {
+        QColor seamCol = QColor(0, 0, 0, 60);
+        p.setPen(QPen(seamCol, 1.2));
+        p.drawLine(0, 64, 128, 64);
+        p.drawLine(64, 0, 64, 128);
+
+        QColor rivetCol = accent; rivetCol.setAlpha(90);
+        p.setPen(Qt::NoPen);
+        p.setBrush(rivetCol);
+        p.drawEllipse(QPointF(12, 12), 2.5, 2.5);
+        p.drawEllipse(QPointF(116, 12), 2.5, 2.5);
+        p.drawEllipse(QPointF(12, 116), 2.5, 2.5);
+        p.drawEllipse(QPointF(116, 116), 2.5, 2.5);
+        p.drawEllipse(QPointF(52, 52), 2.2, 2.2);
+        p.drawEllipse(QPointF(76, 76), 2.2, 2.2);
+
+        QColor gearCol = accent; gearCol.setAlpha(35);
+        p.setPen(QPen(gearCol, 1.4));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(QPointF(64, 64), 22.0, 22.0);
+        break;
+    }
+    case BoardTexture::STARFIELD: {
+        QRadialGradient neb(QPointF(64, 64), 55);
+        neb.setColorAt(0.0, QColor(168, 85, 247, 45));
+        neb.setColorAt(0.6, QColor(59, 130, 246, 25));
+        neb.setColorAt(1.0, QColor(0, 0, 0, 0));
+        p.setPen(Qt::NoPen);
+        p.setBrush(neb);
+        p.drawRect(0, 0, S, S);
+
+        QColor starCol = QColor(255, 255, 255, 160);
+        p.setBrush(starCol);
+        p.drawEllipse(QPointF(18, 25), 1.2, 1.2);
+        p.drawEllipse(QPointF(85, 15), 1.6, 1.6);
+        p.drawEllipse(QPointF(112, 38), 1.0, 1.0);
+        p.drawEllipse(QPointF(42, 60), 2.0, 2.0);
+        p.drawEllipse(QPointF(96, 72), 1.1, 1.1);
+        p.drawEllipse(QPointF(25, 95), 1.5, 1.5);
+        p.drawEllipse(QPointF(70, 108), 1.8, 1.8);
+        p.drawEllipse(QPointF(118, 115), 1.2, 1.2);
+        break;
+    }
+    case BoardTexture::NONE:
+    default:
+        break;
+    }
+    p.end();
+    return pix;
+}
+
+static QPixmap getCachedBoardTextureTile(BoardTexture tex,
+                                         const QColor &dark,
+                                         const QColor &light,
+                                         const QColor &accent)
+{
+    static std::unordered_map<BoardTextureKey, QPixmap, BoardTextureKeyHash> s_cache;
+    static std::vector<BoardTextureKey> s_order;
+
+    BoardTextureKey key{static_cast<int>(tex), dark.rgba(), light.rgba(), accent.rgba()};
+    auto it = s_cache.find(key);
+    if (it != s_cache.end()) {
+        return it->second;
+    }
+
+    QPixmap pix = renderBoardTextureTile(tex, dark, light, accent);
+    if (s_cache.size() >= 64) {
+        if (!s_order.empty()) {
+            s_cache.erase(s_order.front());
+            s_order.erase(s_order.begin());
+        }
+    }
+    s_cache[key] = pix;
+    s_order.push_back(key);
+    return pix;
+}
+
+
 void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
 {
     p.save();
@@ -1053,30 +1268,103 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
     }
 
     // 5. Grid squares, recessed sockets, home base shields, and neutral OCTI medallions
-    for (int y = 1; y <= gh; ++y) {
-        for (int x = 1; x <= gw; ++x) {
-            QRectF sqRect = geom.squareRect(x, y);
-            bool isDark = ((x + y) % 2 == 0);
-            p.setPen(QPen(pal.gridLine, 1.0));
-            p.setBrush(isDark ? pal.gridCellDark : pal.gridCellLight);
-            p.drawRect(sqRect);
+    bool isLegacyBoard = (pal.boardTexture == BoardTexture::NONE &&
+                          pal.cellShape == CellShape::SQUARE &&
+                          pal.glowStrength <= 0.0);
+    if (isLegacyBoard) {
+        for (int y = 1; y <= gh; ++y) {
+            for (int x = 1; x <= gw; ++x) {
+                QRectF sqRect = geom.squareRect(x, y);
+                bool isDark = ((x + y) % 2 == 0);
+                p.setPen(QPen(pal.gridLine, 1.0));
+                p.setBrush(isDark ? pal.gridCellDark : pal.gridCellLight);
+                p.drawRect(sqRect);
 
-            // Subtle recessed socket ring
-            double socketR = sqRect.width() * 0.34;
-            p.setPen(QPen(pal.gridSocketShadow, 1.1));
-            p.setBrush(Qt::NoBrush);
-            p.drawEllipse(sqRect.center(), socketR, socketR);
+                // Subtle recessed socket ring
+                double socketR = sqRect.width() * 0.34;
+                p.setPen(QPen(pal.gridSocketShadow, 1.1));
+                p.setBrush(Qt::NoBrush);
+                p.drawEllipse(sqRect.center(), socketR, socketR);
 
-            if (displayBoard && displayBoard->isValidCoord(x - 1, y - 1)) {
-                const OctiSquare &sq = displayBoard->squareAt(x - 1, y - 1);
-                OctiSquareType st = sq.getType();
-                if (st == A_HOME_SQUARE || st == B_HOME_SQUARE ||
-                    st == C_HOME_SQUARE || st == D_HOME_SQUARE) {
-                    paintHomeSquareBadge(p, sqRect, sq, pal);
-                } else if (st == NEUTRAL_OCTI_SQUARE) {
-                    paintNeutralOctiMedallion(p, sqRect, sq, pal);
+                if (displayBoard && displayBoard->isValidCoord(x - 1, y - 1)) {
+                    const OctiSquare &sq = displayBoard->squareAt(x - 1, y - 1);
+                    OctiSquareType st = sq.getType();
+                    if (st == A_HOME_SQUARE || st == B_HOME_SQUARE ||
+                        st == C_HOME_SQUARE || st == D_HOME_SQUARE) {
+                        paintHomeSquareBadge(p, sqRect, sq, pal);
+                    } else if (st == NEUTRAL_OCTI_SQUARE) {
+                        paintNeutralOctiMedallion(p, sqRect, sq, pal);
+                    }
                 }
             }
+        }
+    } else {
+        QPixmap texTile = getCachedBoardTextureTile(pal.boardTexture, pal.gridCellDark, pal.gridCellLight, pal.accentBrass);
+
+        for (int y = 1; y <= gh; ++y) {
+            for (int x = 1; x <= gw; ++x) {
+                QRectF sqRect = geom.squareRect(x, y);
+                bool isDark = ((x + y) % 2 == 0);
+                p.setPen(QPen(pal.gridLine, 1.0));
+                p.setBrush(isDark ? pal.gridCellDark : pal.gridCellLight);
+
+                if (pal.cellShape == CellShape::ROUNDED) {
+                    double r = sqRect.width() * 0.14;
+                    p.drawRoundedRect(sqRect.adjusted(0.5, 0.5, -0.5, -0.5), r, r);
+                } else {
+                    p.drawRect(sqRect);
+                }
+
+                // Overlay texture tile clipped to cell
+                if (!texTile.isNull()) {
+                    p.save();
+                    p.setClipRect(sqRect);
+                    p.setOpacity(0.35);
+                    p.drawTiledPixmap(sqRect, texTile, QPointF(x * 37, y * 37));
+                    p.restore();
+                }
+
+                // Subtle recessed socket ring
+                double socketR = sqRect.width() * 0.34;
+                p.setPen(QPen(pal.gridSocketShadow, 1.1));
+                p.setBrush(Qt::NoBrush);
+                p.drawEllipse(sqRect.center(), socketR, socketR);
+
+                if (displayBoard && displayBoard->isValidCoord(x - 1, y - 1)) {
+                    const OctiSquare &sq = displayBoard->squareAt(x - 1, y - 1);
+                    OctiSquareType st = sq.getType();
+                    if (st == A_HOME_SQUARE || st == B_HOME_SQUARE ||
+                        st == C_HOME_SQUARE || st == D_HOME_SQUARE) {
+                        paintHomeSquareBadge(p, sqRect, sq, pal);
+                    } else if (st == NEUTRAL_OCTI_SQUARE) {
+                        paintNeutralOctiMedallion(p, sqRect, sq, pal);
+                    }
+                }
+            }
+        }
+
+        // Soft glow pass along grid lines / outer bevel when pal.glowStrength > 0.0
+        if (pal.glowStrength > 0.0) {
+            p.save();
+            QColor glowCol = pal.accentBrass;
+            glowCol.setAlphaF(std::min(0.55, pal.glowStrength * 0.45));
+            p.setPen(QPen(glowCol, 3.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.setBrush(Qt::NoBrush);
+            p.drawRoundedRect(grid.adjusted(-1.0, -1.0, 1.0, 1.0), 4.0, 4.0);
+
+            glowCol.setAlphaF(std::min(0.30, pal.glowStrength * 0.25));
+            p.setPen(QPen(glowCol, 1.8));
+            for (int x = 1; x < gw; ++x) {
+                QRectF rL = geom.squareRect(x, 1);
+                QRectF rR = geom.squareRect(x, gh);
+                p.drawLine(QPointF(rL.right(), rL.bottom()), QPointF(rR.right(), rR.top()));
+            }
+            for (int y = 1; y < gh; ++y) {
+                QRectF rB = geom.squareRect(1, y);
+                QRectF rT = geom.squareRect(gw, y);
+                p.drawLine(QPointF(rB.left(), rB.bottom()), QPointF(rT.right(), rT.bottom()));
+            }
+            p.restore();
         }
     }
 

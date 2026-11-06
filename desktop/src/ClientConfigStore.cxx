@@ -8,6 +8,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <cctype>
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>
@@ -33,30 +34,61 @@ typedef nlohmann::json Json;
 
 const char *themeToString(ThemeId theme)
 {
-    switch (theme) {
-    case ThemeId::ROSEWOOD_IVORY:
-        return "rosewood_ivory";
-    case ThemeId::OBSIDIAN_BRASS:
-    default:
-        return "obsidian_brass";
-    }
+    return themeIdToConfigKey(theme);
 }
 
 ThemeId parseTheme(const Json &val)
 {
-    if (val.is_string()) {
-        std::string s = val.get<std::string>();
-        if (s == "rosewood_ivory" || s == "ROSEWOOD_IVORY" || s == "1") {
-            return ThemeId::ROSEWOOD_IVORY;
+    if (val.is_number_integer()) {
+        int v = val.get<int>();
+        if (v >= 0 && v <= 9) {
+            return static_cast<ThemeId>(v);
         }
         return ThemeId::OBSIDIAN_BRASS;
     }
-    if (val.is_number_integer()) {
-        int v = val.get<int>();
-        if (v == 1) {
+
+    if (val.is_string()) {
+        std::string raw = val.get<std::string>();
+        std::string s;
+        s.reserve(raw.size());
+        for (char c : raw) {
+            s.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+        }
+
+        if (s == "obsidian_brass" || s == "obsidian" || s == "0") {
+            return ThemeId::OBSIDIAN_BRASS;
+        }
+        if (s == "rosewood_ivory" || s == "rosewood" || s == "1") {
             return ThemeId::ROSEWOOD_IVORY;
         }
+        if (s == "neon_circuit" || s == "neon" || s == "2") {
+            return ThemeId::NEON_CIRCUIT;
+        }
+        if (s == "jade_dynasty" || s == "jade" || s == "3") {
+            return ThemeId::JADE_DYNASTY;
+        }
+        if (s == "arctic_aurora" || s == "aurora" || s == "4") {
+            return ThemeId::ARCTIC_AURORA;
+        }
+        if (s == "volcanic_forge" || s == "forge" || s == "5") {
+            return ThemeId::VOLCANIC_FORGE;
+        }
+        if (s == "candy_pop" || s == "candy" || s == "6") {
+            return ThemeId::CANDY_POP;
+        }
+        if (s == "ocean_pearl" || s == "pearl" || s == "7") {
+            return ThemeId::OCEAN_PEARL;
+        }
+        if (s == "steampunk_brass" || s == "steam" || s == "8") {
+            return ThemeId::STEAMPUNK_BRASS;
+        }
+        if (s == "cosmic_nebula" || s == "nebula" || s == "9") {
+            return ThemeId::COSMIC_NEBULA;
+        }
+
+        return ThemeId::OBSIDIAN_BRASS;
     }
+
     return ThemeId::OBSIDIAN_BRASS;
 }
 

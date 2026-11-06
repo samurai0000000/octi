@@ -19,8 +19,77 @@
 namespace octi {
 
 enum class ThemeId {
-    OBSIDIAN_BRASS = 0,
-    ROSEWOOD_IVORY = 1,
+    OBSIDIAN_BRASS  = 0,
+    ROSEWOOD_IVORY  = 1,
+    NEON_CIRCUIT    = 2,
+    JADE_DYNASTY    = 3,
+    ARCTIC_AURORA   = 4,
+    VOLCANIC_FORGE  = 5,
+    CANDY_POP       = 6,
+    OCEAN_PEARL     = 7,
+    STEAMPUNK_BRASS = 8,
+    COSMIC_NEBULA   = 9,
+};
+
+enum class PodFinish {
+    CLASSIC = 0,
+    GLASS,
+    CARVED,
+    HAMMERED,
+    GLOSS,
+    NACRE,
+    BRASS,
+    PLANETARY,
+};
+
+enum class PodPattern {
+    NONE = 0,
+    CIRCUIT,
+    CLOUD_SCROLL,
+    FACET,
+    EMBER,
+    STRIPES,
+    DOTS,
+    CHECKS,
+    SWIRL,
+    SHELL,
+    GEARS,
+    BANDS,
+    FACTION_SPECIFIC,
+};
+
+enum class ProngStyle {
+    CLASSIC = 0,
+    NEON_TUBE,
+    FILIGREE,
+    ICICLE,
+    FORGED,
+    LOLLIPOP,
+    CORAL,
+    PIPE,
+    COMET,
+};
+
+enum class BoardTexture {
+    NONE = 0,
+    PCB,
+    LACQUER_SCROLL,
+    FROST,
+    BASALT_LAVA,
+    SPRINKLES,
+    CAUSTICS,
+    RIVET_PLATE,
+    STARFIELD,
+};
+
+enum class CellShape {
+    SQUARE = 0,
+    ROUNDED,
+};
+
+struct PodStyle {
+    PodFinish finish = PodFinish::CLASSIC;
+    PodPattern pattern = PodPattern::NONE;
 };
 
 struct PodFactionPalette {
@@ -29,6 +98,7 @@ struct PodFactionPalette {
     QColor highlight;
     QColor shadow;
     QColor emblem;
+    PodPattern pattern = PodPattern::NONE;
 };
 
 struct OctiPalette {
@@ -55,10 +125,19 @@ struct OctiPalette {
     QColor legalJumpGuide;
     QColor legalCaptureGlow;
 
+    QColor homeBadgeOuterBg = QColor(10, 14, 22);
+    QColor homeBadgeInnerBg = QColor(7, 10, 16);
+
     QColor prongNormalMetal;
     QColor prongNormalTip;
     QColor prongSuperGold;
     QColor prongSuperCore;
+
+    PodStyle podStyle;
+    ProngStyle prongStyle = ProngStyle::CLASSIC;
+    BoardTexture boardTexture = BoardTexture::NONE;
+    CellShape cellShape = CellShape::SQUARE;
+    double glowStrength = 0.0;
 
     PodFactionPalette podA;
     PodFactionPalette podB;
@@ -68,6 +147,10 @@ struct OctiPalette {
     const PodFactionPalette &factionForPodType(OctiPodType type) const;
     const PodFactionPalette &factionForPlayer(OctiPlayer player) const;
 };
+
+const char *themeIdToConfigKey(ThemeId id);
+const char *themeIdToWebKey(ThemeId id);
+QString themeDisplayName(ThemeId id);
 
 const OctiPalette &paletteForTheme(ThemeId id);
 QString buildAppStyleSheet(ThemeId id);

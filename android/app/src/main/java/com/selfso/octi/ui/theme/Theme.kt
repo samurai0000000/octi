@@ -66,6 +66,21 @@ fun OctiMaterialTheme(
     val scheme = when (themeId) {
         OctiThemeId.OBSIDIAN_BRASS -> ObsidianColorScheme
         OctiThemeId.ROSEWOOD_IVORY -> RosewoodColorScheme
+        else -> darkColorScheme(
+            primary = octiColors.accentBrass,
+            onPrimary = octiColors.windowBg,
+            secondary = octiColors.podGamma,
+            onSecondary = octiColors.textPrimary,
+            tertiary = octiColors.podAlpha,
+            background = octiColors.windowBg,
+            onBackground = octiColors.textPrimary,
+            surface = octiColors.panelCardBg,
+            onSurface = octiColors.textPrimary,
+            surfaceVariant = octiColors.gridCellDark,
+            onSurfaceVariant = octiColors.textSecondary,
+            outline = octiColors.panelCardBorder,
+            error = octiColors.legalCapture
+        )
     }
     CompositionLocalProvider(LocalOctiThemeColors provides octiColors) {
         MaterialTheme(

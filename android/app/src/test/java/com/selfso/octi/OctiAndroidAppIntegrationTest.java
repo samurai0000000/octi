@@ -1410,6 +1410,7 @@ public class OctiAndroidAppIntegrationTest {
             try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
                 vm.setStorageRootDir(_tempDir);
                 vm.setAsyncBotThinkingEnabled(false);
+                // Verify CASUAL (Level 1) is ignored and returns false without spooling
                 vm.startNewLocalGame(
                         OctiGameMode.GAME_MODE_2,
                         false,
@@ -1417,6 +1418,36 @@ public class OctiAndroidAppIntegrationTest {
                         OctiGameBases.GAME_BASES_3,
                         true,
                         OctiBotEngine.BotDifficulty.CASUAL,
+                        OctiPlayer.PLAYER_A);
+                String legalCasual = vm.getBoard().getGame().generateLegalMoves().get(0).asString();
+                assertTrue(vm.applyMoveNotation(legalCasual));
+                vm.getBoard().getGame().resign(OctiPlayer.PLAYER_B);
+                assertFalse("CASUAL games must not upload", vm.uploadCompletedBotGameIfEligible(false, true));
+                assertEquals(0, OctiCrashReporter.listPendingTranscriptFiles(_tempDir).size());
+
+                // Verify TACTICAL (Level 2) is ignored and returns false without spooling
+                vm.startNewLocalGame(
+                        OctiGameMode.GAME_MODE_2,
+                        false,
+                        false,
+                        OctiGameBases.GAME_BASES_3,
+                        true,
+                        OctiBotEngine.BotDifficulty.TACTICAL,
+                        OctiPlayer.PLAYER_A);
+                String legalTactical = vm.getBoard().getGame().generateLegalMoves().get(0).asString();
+                assertTrue(vm.applyMoveNotation(legalTactical));
+                vm.getBoard().getGame().resign(OctiPlayer.PLAYER_B);
+                assertFalse("TACTICAL games must not upload", vm.uploadCompletedBotGameIfEligible(false, true));
+                assertEquals(0, OctiCrashReporter.listPendingTranscriptFiles(_tempDir).size());
+
+                // MASTER (Level 3) is eligible for upload spooling
+                vm.startNewLocalGame(
+                        OctiGameMode.GAME_MODE_2,
+                        false,
+                        false,
+                        OctiGameBases.GAME_BASES_3,
+                        true,
+                        OctiBotEngine.BotDifficulty.MASTER,
                         OctiPlayer.PLAYER_A);
 
                 String legal = vm.getBoard().getGame().generateLegalMoves().get(0).asString();
@@ -1994,7 +2025,7 @@ public class OctiAndroidAppIntegrationTest {
                             false,
                             OctiGameBases.GAME_BASES_1,
                             true,
-                            OctiBotEngine.BotDifficulty.CASUAL,
+                            OctiBotEngine.BotDifficulty.MASTER,
                             OctiPlayer.PLAYER_A);
                     vm.confirmStartMatch();
 

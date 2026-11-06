@@ -87,31 +87,32 @@ fun OctiBoardCanvas(
     var lastMultiTouchTimeMs by remember { mutableStateOf(0L) }
     var lastDragTimeMs by remember { mutableStateOf(0L) }
 
-    val isOnlineWaiting = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeGameView?.phase == "WAITING_FOR_PLAYERS"
+    val isOnlineWaiting = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM &&
+            activeGameView?.phase != "IN_PROGRESS" &&
+            activeGameView?.phase != "FINISHED"
     val effectiveAwaitingMatchStart = (awaitingMatchStart && matchType != OctiAppViewModel.MatchType.ONLINE_ROOM) || isOnlineWaiting
     val isOnlineFinished = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeGameView?.phase == "FINISHED"
     val game = viewModel.board.game
     val effectiveGameOver = (game?.isGameOver == true) || isOnlineFinished
     val isGameInProgress = game != null && game.isGameStarted && !effectiveGameOver && !viewModel.isViewingHistory() && !effectiveAwaitingMatchStart
 
+    val shouldAnimateBoard = isGameInProgress || (activeModifiedSquares.isNotEmpty() && !awaitingConfirm)
     val lastMoveAnimPhase by produceState(
         initialValue = 0f,
-        isGameInProgress,
-        activeModifiedSquares.isNotEmpty(),
-        awaitingConfirm,
-        boardRev
+        key1 = shouldAnimateBoard
     ) {
-        val shouldAnimate = (isGameInProgress || activeModifiedSquares.isNotEmpty()) && !awaitingConfirm
-        if (shouldAnimate) {
-            val startMs = SystemClock.uptimeMillis()
-            while (true) {
-                viewModel.expireLastMoveIndicatorsIfElapsed()
-                val elapsedMs = (SystemClock.uptimeMillis() - startMs) % OctiBoardRenderer.INDICATOR_CYCLE_PERIOD_MS
-                value = elapsedMs.toFloat() / OctiBoardRenderer.INDICATOR_CYCLE_PERIOD_MS.toFloat()
-                delay(16L)
-            }
-        } else {
+        if (!shouldAnimateBoard) {
             value = 0f
+            return@produceState
+        }
+        val cycleMs = OctiBoardRenderer.INDICATOR_CYCLE_PERIOD_MS
+        while (true) {
+            val nowMs = SystemClock.uptimeMillis()
+            if (activeModifiedSquares.isNotEmpty() && viewModel.expireLastMoveIndicatorsIfElapsed(System.currentTimeMillis())) {
+                // expired last move indicators
+            }
+            value = (nowMs % cycleMs).toFloat() / cycleMs.toFloat()
+            delay(33L)
         }
     }
 
@@ -134,9 +135,10 @@ fun OctiBoardCanvas(
                 rotation
             )
             val cfg = OctiBoardRenderer.RenderConfig()
-            cfg.showTurnIndicator = !effectiveAwaitingMatchStart && !effectiveGameOver
-            cfg.lastMoveAnimPhase = lastMoveAnimPhase
-            cfg.activeTurnAnimPhase = lastMoveAnimPhase
+            cfg.lastMoveModifiedSquares = emptyList()
+            cfg.lastMoveAnimPhase = 0f
+            cfg.showTurnIndicator = false
+            cfg.activeTurnAnimPhase = 0f
             OctiBoardRenderer.renderBoardPixels(
                 activeBoard,
                 viewModel.composer,
@@ -587,13 +589,15 @@ fun OctiBoardCanvas(
                 dstSize = IntSize(size.width.toInt(), size.height.toInt())
             )
             if (isGameInProgress && !effectiveAwaitingMatchStart) {
-                val scaleX = size.width / Math.max(1, currentRenderedBitmap.width).toFloat()
-                val scaleY = size.height / Math.max(1, currentRenderedBitmap.height).toFloat()
                 val geo = viewModel.geometry
+                val scaleX = size.width / Math.max(1, geo.viewportWidth()).toFloat()
+                val scaleY = size.height / Math.max(1, geo.viewportHeight()).toFloat()
                 val grid = geo.gridInnerRect()
-                val activeTurn = game?.turn
-                if (grid != null && grid.size >= 4 && grid[2] > 0.0 && grid[3] > 0.0 && activeTurn != null) {
-                    val edge = OctiBoardRenderer.activeTurnScreenEdge(game.mode, activeTurn, rotation.degrees)
+                val currentRev = boardRev
+                val liveGame = viewModel.board.game
+                val activeTurn = liveGame?.turn
+                if (grid != null && grid.size >= 4 && grid[2] > 0.0 && grid[3] > 0.0 && activeTurn != null && liveGame != null) {
+                    val edge = OctiBoardRenderer.activeTurnScreenEdge(liveGame.mode, activeTurn, rotation.degrees)
                     val inset = 1.0f
                     val left = (grid[0].toFloat() + inset) * scaleX
                     val top = (grid[1].toFloat() + inset) * scaleY
@@ -633,20 +637,28 @@ fun OctiBoardCanvas(
                         val sy = y1 + t0 * (y2 - y1)
                         val ex = x1 + t1 * (x2 - x1)
                         val ey = y1 + t1 * (y2 - y1)
-                        // Glow stroke
+                        // Outer halo
                         drawLine(
-                            color = Color(0x55FF69B4),
+                            color = Color(0x44FF69B4),
                             start = Offset(sx, sy),
                             end = Offset(ex, ey),
-                            strokeWidth = strokeW + 3.0f,
+                            strokeWidth = strokeW + 4.0f,
                             cap = StrokeCap.Round
                         )
-                        // Core stroke
+                        // Crisp core
                         drawLine(
                             color = Color(0xFFFF69B4),
                             start = Offset(sx, sy),
                             end = Offset(ex, ey),
                             strokeWidth = strokeW,
+                            cap = StrokeCap.Round
+                        )
+                        // Bright center
+                        drawLine(
+                            color = Color(0xFFFFF0F5),
+                            start = Offset(sx, sy),
+                            end = Offset(ex, ey),
+                            strokeWidth = Math.max(1.5f, strokeW * 0.35f),
                             cap = StrokeCap.Round
                         )
                     }

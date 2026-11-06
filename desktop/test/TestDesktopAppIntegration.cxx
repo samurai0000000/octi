@@ -31,9 +31,11 @@
 #include <QClipboard>
 #include <QDateTime>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QImage>
+#include <QPainter>
 
 #include "AccountStore.hxx"
 #include "GameRoomManager.hxx"
@@ -49,6 +51,8 @@
 #include "OctiMainWindow.hxx"
 #include "OctiNetworkClient.hxx"
 #include "OctiOpeningBookData.hxx"
+#include "OctiReservePanel.hxx"
+#include "OctiTheme.hxx"
 
 #include "selfupdate/Sha256.hxx"
 #include "selfupdate/UpdateInstaller.hxx"
@@ -1928,8 +1932,36 @@ TEST(DesktopAppIntegrationTest, AutomaticUploadOfCompletedBotGameLoopback)
     cfg.playType = LocalPlayType::VS_AI_BOT;
     cfg.mode = GAME_MODE_2;
     cfg.humanSeat = PLAYER_A;
-    cfg.botDifficulty = BotDifficulty::TACTICAL;
+    cfg.botDifficulty = BotDifficulty::MASTER;
     win.startNewLocalGame(cfg);
+
+    // 0. Verify Level 1 (CASUAL) and Level 2 (TACTICAL) bot games never upload
+    {
+        LocalGameConfig casualCfg = cfg;
+        casualCfg.botDifficulty = BotDifficulty::CASUAL;
+        win.startNewLocalGame(casualCfg);
+        CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+        if (win.moveComposer()->isAwaitingConfirmation()) {
+            CHECK_TRUE(win.moveComposer()->commitStagedMove());
+        }
+        win.setTelemetryConsentForTesting("share");
+        win.resignCurrentGame();
+        CHECK_FALSE(win.uploadCompletedBotGameIfEligible(true));
+
+        LocalGameConfig tacticalCfg = cfg;
+        tacticalCfg.botDifficulty = BotDifficulty::TACTICAL;
+        win.startNewLocalGame(tacticalCfg);
+        CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+        if (win.moveComposer()->isAwaitingConfirmation()) {
+            CHECK_TRUE(win.moveComposer()->commitStagedMove());
+        }
+        win.setTelemetryConsentForTesting("share");
+        win.resignCurrentGame();
+        CHECK_FALSE(win.uploadCompletedBotGameIfEligible(true));
+
+        // Restart challenging game for remaining consent tests
+        win.startNewLocalGame(cfg);
+    }
 
     // 1. In-progress game is not uploaded
     CHECK_FALSE(win.uploadCompletedBotGameIfEligible(true));
@@ -2029,8 +2061,36 @@ TEST(DesktopAppIntegrationTest, OfflineAiGameSpoolsTranscriptAndFlushesWhenReach
     cfg.playType = LocalPlayType::VS_AI_BOT;
     cfg.mode = GAME_MODE_2;
     cfg.humanSeat = PLAYER_A;
-    cfg.botDifficulty = BotDifficulty::TACTICAL;
+    cfg.botDifficulty = BotDifficulty::MASTER;
     win.startNewLocalGame(cfg);
+
+    // 0. Verify Level 1 (CASUAL) and Level 2 (TACTICAL) bot games never upload
+    {
+        LocalGameConfig casualCfg = cfg;
+        casualCfg.botDifficulty = BotDifficulty::CASUAL;
+        win.startNewLocalGame(casualCfg);
+        CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+        if (win.moveComposer()->isAwaitingConfirmation()) {
+            CHECK_TRUE(win.moveComposer()->commitStagedMove());
+        }
+        win.setTelemetryConsentForTesting("share");
+        win.resignCurrentGame();
+        CHECK_FALSE(win.uploadCompletedBotGameIfEligible(true));
+
+        LocalGameConfig tacticalCfg = cfg;
+        tacticalCfg.botDifficulty = BotDifficulty::TACTICAL;
+        win.startNewLocalGame(tacticalCfg);
+        CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+        if (win.moveComposer()->isAwaitingConfirmation()) {
+            CHECK_TRUE(win.moveComposer()->commitStagedMove());
+        }
+        win.setTelemetryConsentForTesting("share");
+        win.resignCurrentGame();
+        CHECK_FALSE(win.uploadCompletedBotGameIfEligible(true));
+
+        // Restart challenging game for remaining consent tests
+        win.startNewLocalGame(cfg);
+    }
 
     /* Set consent to "share" */
     win.setTelemetryConsentForTesting("share");
@@ -3567,6 +3627,390 @@ TEST(DesktopAppIntegrationTest, GuiDesignBookCrossPlatformParityAndSseStormPreve
     CHECK_TRUE_TEXT(leaveInProg.ok, leaveInProg.errorMessage.c_str());
     CHECK_FALSE(winB.isInOnlineGame());
     CHECK_TRUE(winB.isLobbyViewVisible());
+}
+
+static int diffImagePixels(const QImage &a, const QImage &b)
+{
+    if (a.size() != b.size()) {
+        return -1;
+    }
+    QImage aConv = a.convertToFormat(QImage::Format_ARGB32);
+    QImage bConv = b.convertToFormat(QImage::Format_ARGB32);
+    int diffs = 0;
+    for (int y = 0; y < aConv.height(); ++y) {
+        const QRgb *lineA = reinterpret_cast<const QRgb *>(aConv.constScanLine(y));
+        const QRgb *lineB = reinterpret_cast<const QRgb *>(bConv.constScanLine(y));
+        for (int x = 0; x < aConv.width(); ++x) {
+            if (lineA[x] != lineB[x]) {
+                diffs++;
+            }
+        }
+    }
+    return diffs;
+}
+
+TEST(DesktopAppIntegrationTest, TenThemesConfigRoundTripAndLegacyGoldenInvariance)
+{
+    std::string testCfgDir = "/tmp/octi_theme_test_" + std::to_string(QDateTime::currentMSecsSinceEpoch());
+    std::filesystem::create_directories(testCfgDir);
+
+    // 1. ClientConfigStore save + load round-trips all 10 ThemeId values (0..9)
+    for (int i = 0; i < 10; ++i) {
+        ThemeId id = static_cast<ThemeId>(i);
+        std::string cfgFile = testCfgDir + "/cfg_theme_" + std::to_string(i) + ".json";
+        std::string err;
+        {
+            ClientConfigStore writer(cfgFile);
+            writer.preferences().theme = id;
+            CHECK_TRUE_TEXT(writer.save(err), err.c_str());
+        }
+        {
+            ClientConfigStore reader(cfgFile);
+            CHECK_TRUE_TEXT(reader.load(err), err.c_str());
+            LONGS_EQUAL(i, static_cast<int>(reader.preferences().theme));
+        }
+    }
+
+    auto testJsonThemeParse = [&](const std::string &rawJsonVal, ThemeId expected) {
+        std::string cfgFile = testCfgDir + "/parse_test.json";
+        std::ofstream ofs(cfgFile);
+        ofs << "{\"theme\":" << rawJsonVal << "}\n";
+        ofs.close();
+
+        ClientConfigStore reader(cfgFile);
+        std::string err;
+        CHECK_TRUE(reader.load(err));
+        LONGS_EQUAL(static_cast<int>(expected), static_cast<int>(reader.preferences().theme));
+    };
+
+    // 2. Legacy integer values 0 and 1, strings "0", "1", "ROSEWOOD_IVORY", "obsidian_brass", plus short web keys
+    testJsonThemeParse("0", ThemeId::OBSIDIAN_BRASS);
+    testJsonThemeParse("1", ThemeId::ROSEWOOD_IVORY);
+    testJsonThemeParse("\"0\"", ThemeId::OBSIDIAN_BRASS);
+    testJsonThemeParse("\"1\"", ThemeId::ROSEWOOD_IVORY);
+    testJsonThemeParse("\"ROSEWOOD_IVORY\"", ThemeId::ROSEWOOD_IVORY);
+    testJsonThemeParse("\"obsidian_brass\"", ThemeId::OBSIDIAN_BRASS);
+    testJsonThemeParse("\"neon\"", ThemeId::NEON_CIRCUIT);
+    testJsonThemeParse("\"jade\"", ThemeId::JADE_DYNASTY);
+    testJsonThemeParse("\"aurora\"", ThemeId::ARCTIC_AURORA);
+    testJsonThemeParse("\"forge\"", ThemeId::VOLCANIC_FORGE);
+    testJsonThemeParse("\"candy\"", ThemeId::CANDY_POP);
+    testJsonThemeParse("\"pearl\"", ThemeId::OCEAN_PEARL);
+    testJsonThemeParse("\"steam\"", ThemeId::STEAMPUNK_BRASS);
+    testJsonThemeParse("\"nebula\"", ThemeId::COSMIC_NEBULA);
+
+    // 3. Unknown strings and out-of-range integers fall back to ThemeId::OBSIDIAN_BRASS
+    testJsonThemeParse("\"unknown_theme\"", ThemeId::OBSIDIAN_BRASS);
+    testJsonThemeParse("\"\"", ThemeId::OBSIDIAN_BRASS);
+    testJsonThemeParse("-1", ThemeId::OBSIDIAN_BRASS);
+    testJsonThemeParse("99", ThemeId::OBSIDIAN_BRASS);
+
+    // Verify metadata helper functions
+    for (int i = 0; i < 10; ++i) {
+        ThemeId id = static_cast<ThemeId>(i);
+        CHECK_TRUE(themeIdToConfigKey(id) != nullptr);
+        CHECK_TRUE(themeIdToWebKey(id) != nullptr);
+        CHECK_FALSE(themeDisplayName(id).isEmpty());
+    }
+
+    // 4. paletteForTheme returns 10 pairwise-distinct palettes
+    for (int i = 0; i < 10; ++i) {
+        const OctiPalette &palI = paletteForTheme(static_cast<ThemeId>(i));
+        for (int j = i + 1; j < 10; ++j) {
+            const OctiPalette &palJ = paletteForTheme(static_cast<ThemeId>(j));
+            bool isDistinct = (palI.windowBg != palJ.windowBg) ||
+                              (palI.gridCellDark != palJ.gridCellDark) ||
+                              (palI.podA.core != palJ.podA.core) ||
+                              (palI.podStyle.finish != palJ.podStyle.finish) ||
+                              (palI.prongStyle != palJ.prongStyle) ||
+                              (palI.boardTexture != palJ.boardTexture);
+            CHECK_TRUE_TEXT(isDistinct, ("Palettes for themes " + std::to_string(i) + " and " + std::to_string(j) + " are not distinct").c_str());
+        }
+    }
+
+    // 5. Golden image comparison for OBSIDIAN_BRASS and ROSEWOOD_IVORY
+    QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);
+    QString goldenDir = repoRootStr + "/plan/plan_gui_ten_themes.artifacts/golden";
+
+    OctiBoard board(GAME_MODE_2, false, false, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    board.getGame()->move("33+a");
+    board.getGame()->move("37+e");
+
+    OctiMoveComposer composer(&board);
+    OctiBoardCanvas canvas;
+    canvas.resize(960, 960);
+    canvas.attachBoard(&board, &composer);
+    canvas.setTurnIndicatorVisible(false);
+
+    canvas.setTheme(ThemeId::OBSIDIAN_BRASS);
+    QImage boardObsidian = canvas.renderToImageAtTime(960, 960, 0);
+
+    canvas.setTheme(ThemeId::ROSEWOOD_IVORY);
+    QImage boardRosewood = canvas.renderToImageAtTime(960, 960, 0);
+
+    OctiReservePanel reservePanel;
+    reservePanel.attach(&board, &composer, &canvas);
+
+    reservePanel.setTheme(ThemeId::OBSIDIAN_BRASS);
+    QImage reserveObsidian = reservePanel.renderToImage(340, 720);
+
+    reservePanel.setTheme(ThemeId::ROSEWOOD_IVORY);
+    QImage reserveRosewood = reservePanel.renderToImage(340, 720);
+
+    QImage splashObsidian = OctiSplashDialog::renderSplashFrame(720, 460, 0.5);
+    QImage splashRosewood = OctiSplashDialog::renderSplashFrame(720, 460, 0.5);
+
+    QString pBoardObsidian = goldenDir + "/board_obsidian_brass.png";
+    QString pBoardRosewood = goldenDir + "/board_rosewood_ivory.png";
+    QString pReserveObsidian = goldenDir + "/reserve_obsidian_brass.png";
+    QString pReserveRosewood = goldenDir + "/reserve_rosewood_ivory.png";
+    QString pSplashObsidian = goldenDir + "/splash_obsidian_brass.png";
+    QString pSplashRosewood = goldenDir + "/splash_rosewood_ivory.png";
+
+    CHECK_TRUE_TEXT(QFileInfo::exists(pBoardObsidian), "board_obsidian_brass.png must exist");
+    CHECK_TRUE_TEXT(QFileInfo::exists(pBoardRosewood), "board_rosewood_ivory.png must exist");
+    CHECK_TRUE_TEXT(QFileInfo::exists(pReserveObsidian), "reserve_obsidian_brass.png must exist");
+    CHECK_TRUE_TEXT(QFileInfo::exists(pReserveRosewood), "reserve_rosewood_ivory.png must exist");
+    CHECK_TRUE_TEXT(QFileInfo::exists(pSplashObsidian), "splash_obsidian_brass.png must exist");
+    CHECK_TRUE_TEXT(QFileInfo::exists(pSplashRosewood), "splash_rosewood_ivory.png must exist");
+
+    QImage gBoardObsidian(pBoardObsidian);
+    QImage gBoardRosewood(pBoardRosewood);
+    QImage gReserveObsidian(pReserveObsidian);
+    QImage gReserveRosewood(pReserveRosewood);
+    QImage gSplashObsidian(pSplashObsidian);
+    QImage gSplashRosewood(pSplashRosewood);
+
+    LONGS_EQUAL(0, diffImagePixels(boardObsidian, gBoardObsidian));
+    LONGS_EQUAL(0, diffImagePixels(boardRosewood, gBoardRosewood));
+    LONGS_EQUAL(0, diffImagePixels(reserveObsidian, gReserveObsidian));
+    LONGS_EQUAL(0, diffImagePixels(reserveRosewood, gReserveRosewood));
+    LONGS_EQUAL(0, diffImagePixels(splashObsidian, gSplashObsidian));
+    LONGS_EQUAL(0, diffImagePixels(splashRosewood, gSplashRosewood));
+
+    std::filesystem::remove_all(testCfgDir);
+}
+
+TEST(DesktopAppIntegrationTest, TenThemesRenderingContactSheetsLobbyRobotsAndBotUploadGate)
+{
+    // 1. Offscreen rendering of all 10 themes with all 4 factions & prongs
+    OctiBoard board(GAME_MODE_4, false, false, GAME_BASES_1);
+    board.getGame()->start(PLAYER_A);
+
+    // Ensure pods of all 4 factions with normal prongs and super prongs
+    OctiPod pA(A_POD);
+    pA.addProng(DIR_N, false);
+    pA.addProng(DIR_NE, true);
+    pA.addProng(DIR_E, false);
+    board.squareAt(2, 2).addPod(pA);
+
+    OctiPod pB(B_POD);
+    pB.addProng(DIR_E, false);
+    pB.addProng(DIR_SE, true);
+    pB.addProng(DIR_S, false);
+    board.squareAt(2, 6).addPod(pB);
+
+    OctiPod pC(C_POD);
+    pC.addProng(DIR_S, false);
+    pC.addProng(DIR_SW, true);
+    pC.addProng(DIR_W, false);
+    board.squareAt(6, 6).addPod(pC);
+
+    OctiPod pD(D_POD);
+    pD.addProng(DIR_W, false);
+    pD.addProng(DIR_NW, true);
+    pD.addProng(DIR_N, false);
+    board.squareAt(6, 2).addPod(pD);
+
+    OctiMoveComposer composer(&board);
+    OctiBoardCanvas canvas;
+    canvas.resize(960, 960);
+    canvas.attachBoard(&board, &composer);
+    canvas.setTurnIndicatorVisible(false);
+
+    OctiReservePanel reservePanel;
+    reservePanel.attach(&board, &composer, &canvas);
+
+    QString artifactDir = QString::fromUtf8(OCTI_REPO_ROOT_DIR) + "/plan/plan_gui_ten_themes.artifacts";
+    QDir().mkpath(artifactDir);
+
+    std::vector<QImage> boardRenders;
+    boardRenders.reserve(10);
+
+    for (int i = 0; i < 10; ++i) {
+        ThemeId id = static_cast<ThemeId>(i);
+        canvas.setTheme(id);
+        reservePanel.setTheme(id);
+
+        // Cold-cache budget test (< 500ms per render)
+        QElapsedTimer timer;
+        timer.start();
+        QImage b640 = canvas.renderToImageAtTime(640, 640, 0);
+        qint64 t640 = timer.elapsed();
+        CHECK_TRUE_TEXT(t640 < 500, ("640x640 render too slow: " + std::to_string(t640) + "ms").c_str());
+
+        timer.restart();
+        QImage b960 = canvas.renderToImageAtTime(960, 960, 0);
+        qint64 t960 = timer.elapsed();
+        CHECK_TRUE_TEXT(t960 < 500, ("960x960 render too slow: " + std::to_string(t960) + "ms").c_str());
+
+        timer.restart();
+        QImage b720 = canvas.renderToImageAtTime(720, 720, 0);
+        qint64 t720 = timer.elapsed();
+        CHECK_TRUE_TEXT(t720 < 500, ("720x720 render too slow: " + std::to_string(t720) + "ms").c_str());
+
+        CHECK_FALSE(b960.isNull());
+        boardRenders.push_back(b960);
+
+        QImage reserveImg = reservePanel.renderToImage(340, 960);
+        CHECK_FALSE(reserveImg.isNull());
+
+        // Compose contact sheet image (1300x960) combining board (960x960) and reserve panel (340x960)
+        QImage contactSheet(1300, 960, QImage::Format_ARGB32_Premultiplied);
+        contactSheet.fill(paletteForTheme(id).windowBg);
+        {
+            QPainter cp(&contactSheet);
+            cp.drawImage(0, 0, b960);
+            cp.drawImage(960, 0, reserveImg);
+        }
+
+        const char *webKey = themeIdToWebKey(id);
+        QString sheetPath = artifactDir + QString("/desktop_theme_%1.png").arg(webKey);
+        CHECK_TRUE_TEXT(contactSheet.save(sheetPath), ("Failed to save contact sheet to " + sheetPath.toStdString()).c_str());
+        CHECK_TRUE_TEXT(QFileInfo(sheetPath).size() > 10000, ("Contact sheet too small: " + sheetPath.toStdString()).c_str());
+    }
+
+    // 2. Assert all 10 board renders are non-blank and pairwise distinct
+    for (int i = 0; i < 10; ++i) {
+        for (int j = i + 1; j < 10; ++j) {
+            int diff = diffImagePixels(boardRenders[i], boardRenders[j]);
+            CHECK_TRUE_TEXT(diff > 0, ("Board renders for themes " + std::to_string(i) + " and " + std::to_string(j) + " are identical!").c_str());
+        }
+    }
+
+    // 3. Assert legacy golden diff == 0 for OBSIDIAN_BRASS and ROSEWOOD_IVORY
+    QString goldenDir = artifactDir + "/golden";
+    OctiBoard legacyBoard(GAME_MODE_2, false, false, GAME_BASES_3);
+    legacyBoard.getGame()->start(PLAYER_A);
+    legacyBoard.getGame()->move("33+a");
+    legacyBoard.getGame()->move("37+e");
+
+    OctiMoveComposer legacyComposer(&legacyBoard);
+    OctiBoardCanvas legacyCanvas;
+    legacyCanvas.resize(960, 960);
+    legacyCanvas.attachBoard(&legacyBoard, &legacyComposer);
+    legacyCanvas.setTurnIndicatorVisible(false);
+
+    legacyCanvas.setTheme(ThemeId::OBSIDIAN_BRASS);
+    QImage boardObsidian = legacyCanvas.renderToImageAtTime(960, 960, 0);
+
+    legacyCanvas.setTheme(ThemeId::ROSEWOOD_IVORY);
+    QImage boardRosewood = legacyCanvas.renderToImageAtTime(960, 960, 0);
+
+    QImage gBoardObsidian(goldenDir + "/board_obsidian_brass.png");
+    QImage gBoardRosewood(goldenDir + "/board_rosewood_ivory.png");
+    LONGS_EQUAL(0, diffImagePixels(boardObsidian, gBoardObsidian));
+    LONGS_EQUAL(0, diffImagePixels(boardRosewood, gBoardRosewood));
+
+    // 4. Verify LobbyView splits Connected Users and Connected Robots
+    {
+        LobbyView lobbyView(nullptr, ThemeId::OBSIDIAN_BRASS);
+        LobbyStateData state;
+
+        LobbyPlayerInfo h1;
+        h1.playerUuid = "u-1";
+        h1.handle = "Alice";
+        h1.isRobot = false;
+
+        LobbyPlayerInfo h2;
+        h2.playerUuid = "u-2";
+        h2.handle = "Bob";
+        h2.isRobot = false;
+
+        LobbyPlayerInfo r1;
+        r1.playerUuid = "u-3";
+        r1.handle = "OctiBotAlpha";
+        r1.isRobot = true;
+        r1.robotUuid = "r-1";
+
+        LobbyPlayerInfo r2;
+        r2.playerUuid = "u-4";
+        r2.handle = "OctiBotBeta";
+        r2.isRobot = true;
+        r2.robotUuid = "r-2";
+
+        state.players = {h1, h2, r1, r2};
+        lobbyView.refreshFromLobbyState(state);
+
+        CHECK_TRUE(lobbyView.playersTable() != nullptr);
+        CHECK_TRUE(lobbyView.robotsTable() != nullptr);
+        LONGS_EQUAL(2, lobbyView.playersTable()->rowCount());
+        LONGS_EQUAL(2, lobbyView.robotsTable()->rowCount());
+        CHECK_TRUE(lobbyView.playersBox()->title().contains("2"));
+        CHECK_TRUE(lobbyView.robotsBox()->title().contains("2"));
+    }
+
+    // 5. Verify uploadCompletedBotGameIfEligible gate
+    {
+        LiveServerEnv env;
+        std::string cfgPath = "/tmp/octi_upload_gate_check.json";
+        std::remove(cfgPath.c_str());
+
+        auto netCli = OctiNetworkClient::createForLoopbackTest(env.port());
+        OctiMainWindow win(std::move(netCli), cfgPath, true);
+        win.setTelemetryConsentForTesting("share");
+
+        // Level 1 CASUAL: returns false
+        LocalGameConfig cfgCas;
+        cfgCas.playType = LocalPlayType::VS_AI_BOT;
+        cfgCas.mode = GAME_MODE_2;
+        cfgCas.humanSeat = PLAYER_A;
+        cfgCas.botDifficulty = BotDifficulty::CASUAL;
+        win.startNewLocalGame(cfgCas);
+        CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+        if (win.moveComposer()->isAwaitingConfirmation()) {
+            CHECK_TRUE(win.moveComposer()->commitStagedMove());
+        }
+        win.setTelemetryConsentForTesting("unset");
+        win.resignCurrentGame();
+        win.setTelemetryConsentForTesting("share");
+        CHECK_FALSE(win.uploadCompletedBotGameIfEligible(true));
+
+        // Level 2 TACTICAL: returns false
+        LocalGameConfig cfgTac;
+        cfgTac.playType = LocalPlayType::VS_AI_BOT;
+        cfgTac.mode = GAME_MODE_2;
+        cfgTac.humanSeat = PLAYER_A;
+        cfgTac.botDifficulty = BotDifficulty::TACTICAL;
+        win.startNewLocalGame(cfgTac);
+        CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+        if (win.moveComposer()->isAwaitingConfirmation()) {
+            CHECK_TRUE(win.moveComposer()->commitStagedMove());
+        }
+        win.setTelemetryConsentForTesting("unset");
+        win.resignCurrentGame();
+        win.setTelemetryConsentForTesting("share");
+        CHECK_FALSE(win.uploadCompletedBotGameIfEligible(true));
+
+        // Level 3 MASTER: returns true
+        LocalGameConfig cfgChal;
+        cfgChal.playType = LocalPlayType::VS_AI_BOT;
+        cfgChal.mode = GAME_MODE_2;
+        cfgChal.humanSeat = PLAYER_A;
+        cfgChal.botDifficulty = BotDifficulty::MASTER;
+        win.startNewLocalGame(cfgChal);
+        CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+        if (win.moveComposer()->isAwaitingConfirmation()) {
+            CHECK_TRUE(win.moveComposer()->commitStagedMove());
+        }
+        win.setTelemetryConsentForTesting("unset");
+        win.resignCurrentGame();
+        win.setTelemetryConsentForTesting("share");
+        CHECK_TRUE(win.uploadCompletedBotGameIfEligible(true));
+
+        std::remove(cfgPath.c_str());
+    }
 }
 
 extern "C" const char *__lsan_default_suppressions()

@@ -2785,7 +2785,7 @@ TEST(OctiHttpServerIntegrationTest, ArchiveUploadNominalWonAndResigned)
     STRCMP_EQUAL(rTr.body.c_str(), rOcti.body.c_str());
 
     /* Upload resigned game */
-    std::string resTr = makeResignedTranscript({"33+a", "37+e"}, "inst-res-02", 1, "android-arm64");
+    std::string resTr = makeResignedTranscript({"33+a", "37+e"}, "inst-res-02", 4, "android-arm64");
     Reply rRes = http().post("/api/v1/archive/upload", "", Json{{"transcript", resTr}});
     EXPECT_STATUS(200, rRes);
     std::string resId = rRes.json.value("game_id", "");
@@ -2796,7 +2796,7 @@ TEST(OctiHttpServerIntegrationTest, ArchiveUploadNominalWonAndResigned)
     EXPECT_STATUS(200, rGetRes);
     STRCMP_EQUAL("RESIGNED", rGetRes.json.value("status", "").c_str());
     STRCMP_EQUAL("B", rGetRes.json.value("winner", "").c_str());
-    CHECK_EQUAL(1, rGetRes.json.value("ai_difficulty", 0));
+    CHECK_EQUAL(4, rGetRes.json.value("ai_difficulty", 0));
     STRCMP_EQUAL("android-arm64", rGetRes.json.value("platform", "").c_str());
     CHECK_TRUE(rGetRes.body.find("inst-res-02") == std::string::npos);
 
@@ -2995,7 +2995,7 @@ TEST(OctiHttpServerIntegrationTest, ArchiveFilteringSortingStatsAndNdjsonExport)
 {
     /* Upload two distinct games with different properties */
     std::string wonTr = makeWonTranscript("inst-filt-1", 3, "linux-x86_64");
-    std::string resTr = makeResignedTranscript({"33+a", "37+e"}, "inst-filt-2", 1, "android-arm64");
+    std::string resTr = makeResignedTranscript({"33+a", "37+e"}, "inst-filt-2", 4, "android-arm64");
     Reply r1 = http().post("/api/v1/archive/upload", "", Json{{"transcript", wonTr}});
     Reply r2 = http().post("/api/v1/archive/upload", "", Json{{"transcript", resTr}});
     EXPECT_STATUS(200, r1);
@@ -3033,9 +3033,13 @@ TEST(OctiHttpServerIntegrationTest, ArchiveFilteringSortingStatsAndNdjsonExport)
     EXPECT_STATUS(200, rAi3);
     CHECK_EQUAL(1, rAi3.json.value("total", 0));
 
+    Reply rAi4 = http().get("/api/v1/archive/games?aiDifficulty=4");
+    EXPECT_STATUS(200, rAi4);
+    CHECK_EQUAL(1, rAi4.json.value("total", 0));
+
     Reply rAi1 = http().get("/api/v1/archive/games?aiDifficulty=1");
     EXPECT_STATUS(200, rAi1);
-    CHECK_EQUAL(1, rAi1.json.value("total", 0));
+    CHECK_EQUAL(0, rAi1.json.value("total", 0));
 
     Reply rAi5 = http().get("/api/v1/archive/games?aiDifficulty=5");
     EXPECT_STATUS(200, rAi5);
@@ -4394,7 +4398,7 @@ TEST(OctiHttpServerIntegrationTest, AuthenticatedGameArchiveAndInstallAttributio
     EXPECT_STATUS(200, rHandle);
 
     // 1. Upload game with Authorization header and installId
-    std::string tr1 = makeResignedTranscript({"33+b", "37+f"}, "dev-bound-01", 1);
+    std::string tr1 = makeResignedTranscript({"33+b", "37+f"}, "dev-bound-01", 3);
     Reply rUp1 = http().post("/api/v1/archive/upload", a.token,
                              Json{{"transcript", tr1}});
     EXPECT_STATUS(200, rUp1);
@@ -4408,7 +4412,7 @@ TEST(OctiHttpServerIntegrationTest, AuthenticatedGameArchiveAndInstallAttributio
     STRCMP_EQUAL(a.uuid.c_str(), rGet1.json["players"][0].value("player_uuid", "").c_str());
 
     // 2. Upload game from same device WITHOUT Authorization header -> attributed via bound install_id!
-    std::string tr2 = makeResignedTranscript({"33+c", "37+g"}, "dev-bound-01", 2);
+    std::string tr2 = makeResignedTranscript({"33+c", "37+g"}, "dev-bound-01", 4);
     Reply rUp2 = http().post("/api/v1/archive/upload", "",
                              Json{{"transcript", tr2}});
     EXPECT_STATUS(200, rUp2);
@@ -4422,7 +4426,7 @@ TEST(OctiHttpServerIntegrationTest, AuthenticatedGameArchiveAndInstallAttributio
     STRCMP_EQUAL(a.uuid.c_str(), rGet2.json["players"][0].value("player_uuid", "").c_str());
 
     // 3. Upload from unknown device without auth -> remains anonymous Player
-    std::string tr3 = makeResignedTranscript({"33+d", "37+h"}, "dev-unknown-99", 1);
+    std::string tr3 = makeResignedTranscript({"33+d", "37+h"}, "dev-unknown-99", 5);
     Reply rUp3 = http().post("/api/v1/archive/upload", "",
                              Json{{"transcript", tr3}});
     EXPECT_STATUS(200, rUp3);
@@ -5018,7 +5022,7 @@ var tr2p = {
   final_fen: serializeOctiFen(s2p),
   players: [
     { seat: 1, player: "A", handle: "Player_A", type: "HUMAN" },
-    { seat: 2, player: "B", handle: "AI_Tactical", type: "AI", aiDifficulty: 2, aiTimeBudgetMs: 3000 }
+    { seat: 2, player: "B", handle: "AI_Tactical", type: "AI", aiDifficulty: 3, aiTimeBudgetMs: 3000 }
   ],
   moves: moves2p,
   plies: plies2p,
@@ -5060,9 +5064,9 @@ var tr4p = {
   final_fen: serializeOctiFen(s4p),
   players: [
     { seat: 1, player: "A", handle: "Player_A", type: "HUMAN" },
-    { seat: 2, player: "B", handle: "AI_Tactical", type: "AI", aiDifficulty: 2, aiTimeBudgetMs: 3000 },
-    { seat: 3, player: "C", handle: "AI_Master", type: "AI", aiDifficulty: 2, aiTimeBudgetMs: 3000 },
-    { seat: 4, player: "D", handle: "AI_Tactical", type: "AI", aiDifficulty: 2, aiTimeBudgetMs: 3000 }
+    { seat: 2, player: "B", handle: "AI_Tactical", type: "AI", aiDifficulty: 3, aiTimeBudgetMs: 3000 },
+    { seat: 3, player: "C", handle: "AI_Master", type: "AI", aiDifficulty: 3, aiTimeBudgetMs: 3000 },
+    { seat: 4, player: "D", handle: "AI_Tactical", type: "AI", aiDifficulty: 3, aiTimeBudgetMs: 3000 }
   ],
   moves: moves4p,
   plies: plies4p,
@@ -5119,12 +5123,17 @@ TEST(OctiHttpServerIntegrationTest, DatabaseArchiveCorpusReplayAndInvalidGameRej
         EXPECT_STATUS(200, rUp);
         STRCMP_EQUAL(entry.gameId, rUp.json.value("game_id", "").c_str());
 
+        bool isIgnored = rUp.json.value("ignored", false);
         Reply rGet = http().get(std::string("/api/v1/archive/games/") + entry.gameId);
-        EXPECT_STATUS(200, rGet);
-        STRCMP_EQUAL(entry.expectedWinner, rGet.json.value("winner", "").c_str());
-        STRCMP_EQUAL(entry.finalFen, rGet.json.value("final_fen", "").c_str());
-        if (std::string(entry.expectedRuleTermination) == "TOTAL_CAPTURE") {
-            STRCMP_EQUAL("TOTAL_CAPTURE", rGet.json.value("termination", "").c_str());
+        if (isIgnored) {
+            EXPECT_STATUS(404, rGet);
+        } else {
+            EXPECT_STATUS(200, rGet);
+            STRCMP_EQUAL(entry.expectedWinner, rGet.json.value("winner", "").c_str());
+            STRCMP_EQUAL(entry.finalFen, rGet.json.value("final_fen", "").c_str());
+            if (std::string(entry.expectedRuleTermination) == "TOTAL_CAPTURE") {
+                STRCMP_EQUAL("TOTAL_CAPTURE", rGet.json.value("termination", "").c_str());
+            }
         }
     }
 
@@ -5873,7 +5882,7 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("OCTI v2.4.0") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v2.4.1") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Official Platform") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("OFFICIAL PLATFORM") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("Lv4: Expert (40s)") != std::string::npos);
@@ -6070,6 +6079,116 @@ TEST(OctiHttpServerIntegrationTest, CreateTableWithSeatSelectionAndUnseatedHost)
     EXPECT_STATUS(200, rHostFill1);
     CHECK_EQUAL(1, rHostFill1.json.value("seat", 0));
     CHECK_TRUE(rHostFill1.json.value("game_started", false));
+}
+
+TEST(OctiHttpServerIntegrationTest, WebUiTenThemesTabletopLobbyRefinementsAndLevelOneTwoAiIgnore)
+{
+    Reply rIndex = http().get("/");
+    EXPECT_STATUS(200, rIndex);
+
+    // 1. All 10 themes in PALETTES and selector options
+    const std::vector<std::string> kThemes = {
+        "obsidian", "rosewood", "neon", "jade", "aurora",
+        "forge", "candy", "pearl", "steam", "nebula"
+    };
+    for (const auto &th : kThemes) {
+        CHECK_TRUE(rIndex.body.find(th + ": {") != std::string::npos);
+        CHECK_TRUE(rIndex.body.find("<option value=\"" + th + "\"") != std::string::npos);
+    }
+    CHECK_TRUE(rIndex.body.find("id=\"btn-theme\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"web-play-theme-select\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"replay-theme-select\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("applyTheme(t") != std::string::npos ||
+               rIndex.body.find("function applyTheme(") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("getBoardTexturePattern") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("drawPodPatternAndFinish") != std::string::npos);
+
+    // 2. isGameActiveForPinkLine pre-game running light gate
+    CHECK_TRUE(rIndex.body.find("isGameActiveForPinkLine") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("activeOnlineRoomView.phase === \"IN_PROGRESS\"") != std::string::npos);
+
+    // 3. Match actions card in #web-side-top-half without Sit/Sit buttons & Leave Table in Table Chat
+    CHECK_TRUE(rIndex.body.find("id=\"web-online-seat-actions\"") == std::string::npos);
+    size_t posSideTopHalf = rIndex.body.find("id=\"web-side-top-half\"");
+    size_t posBoardLobbyChat = rIndex.body.find("id=\"web-board-lobby-chat-panel\"");
+    size_t posMatchActionsCard = rIndex.body.find("id=\"web-match-actions-card\"");
+    size_t posBoardChatPanel = rIndex.body.find("id=\"web-board-chat-panel\"");
+    size_t posLeaveTableBtn = rIndex.body.find("id=\"btn-web-leave-table\"");
+
+    CHECK_TRUE(posSideTopHalf != std::string::npos);
+    CHECK_TRUE(posBoardLobbyChat != std::string::npos);
+    CHECK_TRUE(posMatchActionsCard != std::string::npos);
+    CHECK_TRUE(posBoardChatPanel != std::string::npos);
+    CHECK_TRUE(posLeaveTableBtn != std::string::npos);
+
+    CHECK_TRUE(posSideTopHalf < posBoardLobbyChat);
+    CHECK_TRUE(posBoardLobbyChat < posMatchActionsCard);
+    CHECK_TRUE(posMatchActionsCard < posBoardChatPanel);
+    CHECK_TRUE(posBoardChatPanel < posLeaveTableBtn);
+
+    // 4. Connected Users (humans) followed by Connected Robots
+    size_t posUsersSec = rIndex.body.find("id=\"web-online-users-section\"");
+    size_t posRobotsSec = rIndex.body.find("id=\"web-online-robots-section\"");
+    CHECK_TRUE(posUsersSec != std::string::npos);
+    CHECK_TRUE(posRobotsSec != std::string::npos);
+    CHECK_TRUE(posUsersSec < posRobotsSec);
+    CHECK_TRUE(rIndex.body.find("id=\"web-online-robots-count\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"web-online-robots-list\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Connected Robots") != std::string::npos);
+
+    // 5. Roster filtering logic
+    CHECK_TRUE(rIndex.body.find("!p.is_robot && !p.robot_uuid") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Boolean(p.is_robot || p.robot_uuid)") != std::string::npos);
+
+    // 6. Client auto-upload skip for level 1 and 2
+    CHECK_TRUE(rIndex.body.find("localMatchConfig.botDifficulty === 1 || localMatchConfig.botDifficulty === 2") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("res.ignored") != std::string::npos);
+
+    // 7. Server level 1 & 2 AI upload ignore behavior (HTTP 200 with ignored: true; total count unchanged)
+    Reply rList0 = http().get("/api/v1/archive/games");
+    EXPECT_STATUS(200, rList0);
+    int total0 = rList0.json.value("total", 0);
+
+    // Upload Level 1 AI transcript -> HTTP 200 with ignored: true, total count unchanged
+    std::string trAi1 = makeResignedTranscript({"33+a", "37+e"}, "inst-ign-01", 1);
+    Reply rUpAi1 = http().post("/api/v1/archive/upload", "", Json{{"transcript", trAi1}});
+    EXPECT_STATUS(200, rUpAi1);
+    CHECK_TRUE(rUpAi1.json.value("ok", false));
+    CHECK_TRUE(rUpAi1.json.value("ignored", false));
+    std::string ignId1 = rUpAi1.json.value("game_id", "");
+    CHECK_FALSE(ignId1.empty());
+
+    Reply rList1 = http().get("/api/v1/archive/games");
+    EXPECT_STATUS(200, rList1);
+    CHECK_EQUAL(total0, rList1.json.value("total", 0));
+
+    // Upload Level 2 AI transcript -> HTTP 200 with ignored: true, total count unchanged
+    std::string trAi2 = makeResignedTranscript({"33+a", "37+e"}, "inst-ign-02", 2);
+    Reply rUpAi2 = http().post("/api/v1/archive/upload", "", Json{{"transcript", trAi2}});
+    EXPECT_STATUS(200, rUpAi2);
+    CHECK_TRUE(rUpAi2.json.value("ok", false));
+    CHECK_TRUE(rUpAi2.json.value("ignored", false));
+
+    Reply rList2 = http().get("/api/v1/archive/games");
+    EXPECT_STATUS(200, rList2);
+    CHECK_EQUAL(total0, rList2.json.value("total", 0));
+
+    // Upload Level 3 AI transcript -> HTTP 200 without ignored flag, stored in games table
+    std::string trAi3 = makeResignedTranscript({"33+a", "37+e"}, "inst-stored-03", 3);
+    Reply rUpAi3 = http().post("/api/v1/archive/upload", "", Json{{"transcript", trAi3}});
+    EXPECT_STATUS(200, rUpAi3);
+    CHECK_TRUE(rUpAi3.json.value("ok", false));
+    CHECK_FALSE(rUpAi3.json.value("ignored", false));
+    std::string storedId3 = rUpAi3.json.value("game_id", "");
+    CHECK_FALSE(storedId3.empty());
+
+    Reply rList3 = http().get("/api/v1/archive/games");
+    EXPECT_STATUS(200, rList3);
+    CHECK_EQUAL(total0 + 1, rList3.json.value("total", 0));
+
+    Reply rGet3 = http().get("/api/v1/archive/games/" + storedId3);
+    EXPECT_STATUS(200, rGet3);
+    CHECK_EQUAL(3, rGet3.json.value("ai_difficulty", 0));
 }
 
 int main(int argc, char **argv)

@@ -5238,6 +5238,17 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
         rec.octiTranscript = storedJson.dump();
     }
 
+    if (detectedAiDifficulty == 1 || detectedAiDifficulty == 2) {
+        Json resp = {
+            {"ok", true},
+            {"ignored", true},
+            {"game_id", rec.gameId},
+            {"ply_count", rec.plyCount}
+        };
+        sendJson(res, 200, resp);
+        return;
+    }
+
     std::string archiveErr;
     ArchiveStatus st = store.archiveGame(rec, archiveErr);
     if (st == ArchiveStatus::DUPLICATE_ID) {

@@ -1106,7 +1106,7 @@ tr.active-ply {
 }
 
 /* Connected Users Roster */
-#web-online-users-section {
+#web-online-users-section, #web-online-robots-section {
   margin-top: 12px;
   padding: 12px;
 }
@@ -1119,7 +1119,7 @@ tr.active-ply {
 .web-online-users-mobile-hint {
   display: none;
 }
-#web-online-users-list {
+#web-online-users-list, #web-online-robots-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -1308,6 +1308,18 @@ tr.active-ply {
   </nav>
   <div class="header-right">
     <span id="health" class="dim"></span>
+    <select id="btn-theme" class="btn" style="padding:4px 8px;font-size:12px;cursor:pointer;" title="Switch Theme">
+      <option value="obsidian" selected>Obsidian Brass</option>
+      <option value="rosewood">Rosewood Ivory</option>
+      <option value="neon">Neon Circuit</option>
+      <option value="jade">Jade Dynasty</option>
+      <option value="aurora">Arctic Aurora</option>
+      <option value="forge">Volcanic Forge</option>
+      <option value="candy">Candy Pop</option>
+      <option value="pearl">Ocean Pearl</option>
+      <option value="steam">Steampunk Brass</option>
+      <option value="nebula">Cosmic Nebula</option>
+    </select>
     <button type="button" class="btn" id="nav-auth-pill" title="Click to view Account">Guest (Not Signed In)</button>
   </div>
 </header>
@@ -1792,6 +1804,14 @@ tr.active-ply {
           <select id="web-play-theme-select">
             <option value="obsidian" selected>Obsidian Brass</option>
             <option value="rosewood">Rosewood Ivory</option>
+            <option value="neon">Neon Circuit</option>
+            <option value="jade">Jade Dynasty</option>
+            <option value="aurora">Arctic Aurora</option>
+            <option value="forge">Volcanic Forge</option>
+            <option value="candy">Candy Pop</option>
+            <option value="pearl">Ocean Pearl</option>
+            <option value="steam">Steampunk Brass</option>
+            <option value="nebula">Cosmic Nebula</option>
           </select>
         </label>
         <button type="button" class="btn" id="btn-web-rotate" title="Rotate Board 90&deg; CW">Rotate 90&deg;</button>
@@ -1937,17 +1957,12 @@ tr.active-ply {
             </div>
 
             <!-- Compact Match Actions -->
-            <div class="panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;">
-              <div id="web-online-seat-actions" style="display:none;margin-bottom:6px;gap:6px;" class="row"></div>
+            <div id="web-match-actions-card" class="panel" style="padding:5px 8px;flex:0 0 auto;margin:0;background:#101622;border:1px solid #1E293B;">
               <div class="row" style="gap:6px;margin:0;">
-                <button type="button" class="btn btn-primary" id="btn-web-new-game-setup" style="flex:1;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;padding:6px 8px;font-size:12px;">New Game...</button>
-                <button type="button" class="btn" id="btn-web-draw" style="padding:6px 8px;font-size:12px;">Draw</button>
-                <button type="button" class="btn" id="btn-web-undo" style="padding:6px 8px;font-size:12px;">Undo</button>
-                <button type="button" class="btn" id="btn-web-resign" style="border-color:#dc2626;color:#dc2626;padding:6px 8px;font-size:12px;">Resign</button>
-              </div>
-              <div id="web-online-table-actions" style="display:none;margin-top:6px;" class="row">
-                <button type="button" class="btn" id="btn-web-leave-table" style="flex:1;border-color:#dc2626;color:#dc2626;padding:6px 8px;font-size:12px;">Leave Table</button>
-                <button type="button" class="btn" id="btn-web-purge-table" style="display:none;flex:1;background:#dc2626;border-color:#b91c1c;color:#ffffff;padding:6px 8px;font-size:12px;">Purge Table</button>
+                <button type="button" class="btn btn-primary" id="btn-web-new-game-setup" style="flex:1;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;padding:4px 8px;font-size:12px;">New Game...</button>
+                <button type="button" class="btn" id="btn-web-draw" style="padding:4px 8px;font-size:12px;">Draw</button>
+                <button type="button" class="btn" id="btn-web-undo" style="padding:4px 8px;font-size:12px;">Undo</button>
+                <button type="button" class="btn" id="btn-web-resign" style="border-color:#dc2626;color:#dc2626;padding:4px 8px;font-size:12px;">Resign</button>
               </div>
             </div>
           </div>
@@ -1958,7 +1973,13 @@ tr.active-ply {
               <div style="display:flex;align-items:center;gap:6px;">
                 <strong style="color:#C8A253;font-size:13px;">Table Chat</strong>
               </div>
-              <button type="button" class="btn" id="btn-web-board-chat-zoom" title="Zoom Table Chat" style="padding:2px 7px;font-size:11px;background:#161D26;border:1px solid #C8A253;color:#C8A253;cursor:pointer;">Zoom &#x2922;</button>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div id="web-online-table-actions" style="display:none;gap:6px;align-items:center;">
+                  <button type="button" class="btn" id="btn-web-leave-table" style="border-color:#dc2626;color:#dc2626;padding:2px 7px;font-size:11px;">Leave Table</button>
+                  <button type="button" class="btn" id="btn-web-purge-table" style="display:none;background:#dc2626;border-color:#b91c1c;color:#ffffff;padding:2px 7px;font-size:11px;">Purge Table</button>
+                </div>
+                <button type="button" class="btn" id="btn-web-board-chat-zoom" title="Zoom Table Chat" style="padding:2px 7px;font-size:11px;background:#161D26;border:1px solid #C8A253;color:#C8A253;cursor:pointer;">Zoom &#x2922;</button>
+              </div>
             </div>
             <div id="web-board-chat-log" style="flex:1;min-height:0;overflow-y:auto;cursor:pointer;background:#0B0F17;border:1px solid #1E293B;border-radius:6px;padding:6px;font-size:12.5px;color:#E2E8F0;margin-bottom:6px;">
               <div class="dim">Connected to room chat.</div>
@@ -2068,6 +2089,16 @@ tr.active-ply {
           </div>
           <div id="web-online-users-list">
             <div class="dim" style="font-size:12.5px;">No connected users right now.</div>
+          </div>
+        </div>
+
+        <div id="web-online-robots-section" class="panel" style="margin-top:12px;padding:12px;">
+          <div class="web-online-users-header">
+            <h4 style="margin:0;font-size:14px;">Connected Robots (<span id="web-online-robots-count">0</span>)</h4>
+            <span class="web-online-users-mobile-hint dim">Tap avatar to show @handle</span>
+          </div>
+          <div id="web-online-robots-list">
+            <div class="dim" style="font-size:12.5px;">No connected robots right now.</div>
           </div>
         </div>
       </div>
@@ -2214,6 +2245,14 @@ tr.active-ply {
         <select class="btn" id="replay-theme-select" title="Switch Replay Board Palette">
           <option value="obsidian">Obsidian Brass</option>
           <option value="rosewood">Rosewood Ivory</option>
+          <option value="neon">Neon Circuit</option>
+          <option value="jade">Jade Dynasty</option>
+          <option value="aurora">Arctic Aurora</option>
+          <option value="forge">Volcanic Forge</option>
+          <option value="candy">Candy Pop</option>
+          <option value="pearl">Ocean Pearl</option>
+          <option value="steam">Steampunk Brass</option>
+          <option value="nebula">Cosmic Nebula</option>
         </select>
         <button type="button" class="btn" id="btn-replay-rotate" title="Rotate Board 90 degrees CW">Rotate 90&deg;</button>
         <button type="button" class="btn" id="ar-copy-json">Copy JSON</button>
@@ -2931,7 +2970,18 @@ function createAvatarEl(url, nameOrHandle, sizePx) {
 var PALETTES = {
   obsidian: {
     name: "Obsidian Brass",
+    podFinish: "CLASSIC",
+    podPattern: "NONE",
+    prongStyle: "CLASSIC",
+    boardTexture: "NONE",
+    cellShape: "SQUARE",
+    glowStrength: 0.0,
     windowBg: "#0B0F17",
+    panelCardBg: "#141B29",
+    panelCardBorder: "#B49148",
+    textPrimary: "#F2ECE0",
+    textSecondary: "#A8B2C6",
+    accentBrass: "#C8A253",
     boardOuterTop: "#182133",
     boardOuterMid: "#101622",
     boardOuterBot: "#0B0F18",
@@ -2944,25 +2994,37 @@ var PALETTES = {
     coordLabel: "#D8B66C",
     homeOuter: "#0A0E16",
     homeInner: "#070A10",
+    homeBadgeOuterBg: "#0A0E16",
+    homeBadgeInnerBg: "#070A10",
     neutralFill: "#2D3A54",
     neutralRim: "#DCB869",
     portalGlow: "#38BDF8",
     captureGlow: "#F43F5E",
-    accentBrass: "#C8A253",
     prongMetal: "#D6DCE8",
     prongTip: "#F8FAFC",
     prongSuperGold: "#FDE047",
     prongSuperCore: "#FFFBEB",
     pods: {
-      A: { core: "#10B981", rim: "#059669", hi: "#6EE7B7", sh: "#064E3B", txt: "#ECFDF5" },
-      B: { core: "#F43F5E", rim: "#BE123C", hi: "#FDA4AF", sh: "#881337", txt: "#FFF1F2" },
-      C: { core: "#3B82F6", rim: "#1D4ED8", hi: "#93C5FD", sh: "#1E3A8A", txt: "#EFF6FF" },
-      D: { core: "#F59E0B", rim: "#B45309", hi: "#FDE68A", sh: "#78350F", txt: "#FFFBEB" }
+      A: { name: "Emerald Jade", core: "#10B981", rim: "#059669", hi: "#6EE7B7", sh: "#064E3B", txt: "#ECFDF5", pattern: "NONE" },
+      B: { name: "Crimson Ruby", core: "#F43F5E", rim: "#BE123C", hi: "#FDA4AF", sh: "#881337", txt: "#FFF1F2", pattern: "NONE" },
+      C: { name: "Royal Sapphire", core: "#3B82F6", rim: "#1D4ED8", hi: "#93C5FD", sh: "#1E3A8A", txt: "#EFF6FF", pattern: "NONE" },
+      D: { name: "Imperial Gold", core: "#F59E0B", rim: "#B45309", hi: "#FDE68A", sh: "#78350F", txt: "#FFFBEB", pattern: "NONE" }
     }
   },
   rosewood: {
     name: "Rosewood Ivory",
+    podFinish: "CLASSIC",
+    podPattern: "NONE",
+    prongStyle: "CLASSIC",
+    boardTexture: "NONE",
+    cellShape: "SQUARE",
+    glowStrength: 0.0,
     windowBg: "#2A1812",
+    panelCardBg: "#3E241B",
+    panelCardBorder: "#CEA660",
+    textPrimary: "#FBF5E8",
+    textSecondary: "#D6C2A8",
+    accentBrass: "#D6AC5C",
     boardOuterTop: "#5C3021",
     boardOuterMid: "#4A261A",
     boardOuterBot: "#361B12",
@@ -2975,25 +3037,677 @@ var PALETTES = {
     coordLabel: "#F4DEB0",
     homeOuter: "#140E0B",
     homeInner: "#0E0A08",
+    homeBadgeOuterBg: "#140E0B",
+    homeBadgeInnerBg: "#0E0A08",
     neutralFill: "#92603E",
     neutralRim: "#F0CE84",
     portalGlow: "#2DD4BF",
     captureGlow: "#FB7185",
-    accentBrass: "#D6AC5C",
     prongMetal: "#E8E0D0",
     prongTip: "#FFFCF5",
     prongSuperGold: "#FDE047",
     prongSuperCore: "#FFFFF0",
     pods: {
-      A: { core: "#0D9468", rim: "#EEE4CC", hi: "#6EE7B7", sh: "#064431", txt: "#FCF8EC" },
-      B: { core: "#D82E4E", rim: "#EEE4CC", hi: "#FDA4AF", sh: "#76102A", txt: "#FCF8EC" },
-      C: { core: "#2563EB", rim: "#EEE4CC", hi: "#93C5FD", sh: "#183076", txt: "#FCF8EC" },
-      D: { core: "#D97706", rim: "#EEE4CC", hi: "#FDE68A", sh: "#6C300C", txt: "#FCF8EC" }
+      A: { name: "Imperial Jade on Ivory", core: "#0D9468", rim: "#EEE4CC", hi: "#6EE7B7", sh: "#064431", txt: "#FCF8EC", pattern: "NONE" },
+      B: { name: "Garnet Ruby on Ivory", core: "#D82E4E", rim: "#EEE4CC", hi: "#FDA4AF", sh: "#76102A", txt: "#FCF8EC", pattern: "NONE" },
+      C: { name: "Cobalt Sapphire on Ivory", core: "#2563EB", rim: "#EEE4CC", hi: "#93C5FD", sh: "#183076", txt: "#FCF8EC", pattern: "NONE" },
+      D: { name: "Amber Citrine on Ivory", core: "#D97706", rim: "#EEE4CC", hi: "#FDE68A", sh: "#6C300C", txt: "#FCF8EC", pattern: "NONE" }
+    }
+  },
+  neon: {
+    name: "Neon Circuit",
+    podFinish: "GLASS",
+    podPattern: "CIRCUIT",
+    prongStyle: "NEON_TUBE",
+    boardTexture: "PCB",
+    cellShape: "SQUARE",
+    glowStrength: 0.85,
+    windowBg: "#080B10",
+    panelCardBg: "#0E1420",
+    panelCardBorder: "#00E5FF",
+    textPrimary: "#F0FDFE",
+    textSecondary: "#7DD3FC",
+    accentBrass: "#00E5FF",
+    boardOuterTop: "#0E1524",
+    boardOuterMid: "#0A0F1A",
+    boardOuterBot: "#070A12",
+    bevelLight: "#00E5FF",
+    bevelDark: "#063248",
+    cellDark: "#0B101D",
+    cellLight: "#121A2E",
+    socketShadow: "rgba(3, 6, 12, 0.72)",
+    gridLine: "rgba(0, 229, 255, 0.4)",
+    coordLabel: "#38BDF8",
+    homeOuter: "#070A12",
+    homeInner: "#04060B",
+    homeBadgeOuterBg: "#070A12",
+    homeBadgeInnerBg: "#04060B",
+    neutralFill: "#1E293B",
+    neutralRim: "#00E5FF",
+    portalGlow: "#00F0FF",
+    captureGlow: "#FF0055",
+    prongMetal: "#E0F2FE",
+    prongTip: "#FFFFFF",
+    prongSuperGold: "#FFD700",
+    prongSuperCore: "#FFFFEE",
+    pods: {
+      A: { name: "Neon Cyan", core: "#007A87", rim: "#00E5FF", hi: "#80F2FF", sh: "#00363D", txt: "#FFFFFF", pattern: "CIRCUIT" },
+      B: { name: "Neon Magenta", core: "#B81446", rim: "#FF007F", hi: "#FF80BF", sh: "#4D001A", txt: "#FFFFFF", pattern: "CIRCUIT" },
+      C: { name: "Electric Lime", core: "#4D7C0F", rim: "#76FF03", hi: "#BFFF80", sh: "#1B3300", txt: "#FFFFFF", pattern: "CIRCUIT" },
+      D: { name: "Neon Amber", core: "#A15C07", rim: "#FFB300", hi: "#FFD980", sh: "#402200", txt: "#FFFFFF", pattern: "CIRCUIT" }
+    }
+  },
+  jade: {
+    name: "Jade Dynasty",
+    podFinish: "CARVED",
+    podPattern: "CLOUD_SCROLL",
+    prongStyle: "FILIGREE",
+    boardTexture: "LACQUER_SCROLL",
+    cellShape: "SQUARE",
+    glowStrength: 0.25,
+    windowBg: "#0B130E",
+    panelCardBg: "#121F17",
+    panelCardBorder: "#C5A059",
+    textPrimary: "#F7F4EB",
+    textSecondary: "#A3B899",
+    accentBrass: "#D4AF37",
+    boardOuterTop: "#1A2F23",
+    boardOuterMid: "#132219",
+    boardOuterBot: "#0D1711",
+    bevelLight: "#DFBA5C",
+    bevelDark: "#5C4418",
+    cellDark: "#16291E",
+    cellLight: "#1F382A",
+    socketShadow: "rgba(9, 17, 12, 0.71)",
+    gridLine: "rgba(197, 160, 89, 0.38)",
+    coordLabel: "#E5C678",
+    homeOuter: "#0F1D14",
+    homeInner: "#0A140E",
+    homeBadgeOuterBg: "#0F1D14",
+    homeBadgeInnerBg: "#0A140E",
+    neutralFill: "#384D3E",
+    neutralRim: "#D4AF37",
+    portalGlow: "#5EEAD4",
+    captureGlow: "#F43F5E",
+    prongMetal: "#E6D7B8",
+    prongTip: "#FFFDF5",
+    prongSuperGold: "#F59E0B",
+    prongSuperCore: "#FFFBEB",
+    pods: {
+      A: { name: "Imperial Jade", core: "#086944", rim: "#10B981", hi: "#6EE7B7", sh: "#033321", txt: "#FFFFFF", pattern: "CLOUD_SCROLL" },
+      B: { name: "Cinnabar Vermilion", core: "#B31B2C", rim: "#EF4444", hi: "#FCA5A5", sh: "#540B13", txt: "#FFFFFF", pattern: "CLOUD_SCROLL" },
+      C: { name: "Lapis Lazuli", core: "#1E40AF", rim: "#3B82F6", hi: "#93C5FD", sh: "#0E1F59", txt: "#FFFFFF", pattern: "CLOUD_SCROLL" },
+      D: { name: "Imperial Saffron Gold", core: "#A26505", rim: "#F59E0B", hi: "#FDE68A", sh: "#4A2E00", txt: "#FFFFFF", pattern: "CLOUD_SCROLL" }
+    }
+  },
+  aurora: {
+    name: "Arctic Aurora",
+    podFinish: "GLASS",
+    podPattern: "FACET",
+    prongStyle: "ICICLE",
+    boardTexture: "FROST",
+    cellShape: "ROUNDED",
+    glowStrength: 0.6,
+    windowBg: "#0B111A",
+    panelCardBg: "#121C2B",
+    panelCardBorder: "#5EEAD4",
+    textPrimary: "#F0FDF4",
+    textSecondary: "#94A3B8",
+    accentBrass: "#38BDF8",
+    boardOuterTop: "#132032",
+    boardOuterMid: "#0E1724",
+    boardOuterBot: "#091019",
+    bevelLight: "#7DD3FC",
+    bevelDark: "#0C2540",
+    cellDark: "#111C2D",
+    cellLight: "#1A2942",
+    socketShadow: "rgba(5, 10, 18, 0.75)",
+    gridLine: "rgba(125, 211, 252, 0.31)",
+    coordLabel: "#93C5FD",
+    homeOuter: "#0C1420",
+    homeInner: "#080D15",
+    homeBadgeOuterBg: "#0C1420",
+    homeBadgeInnerBg: "#080D15",
+    neutralFill: "#2A3B54",
+    neutralRim: "#7DD3FC",
+    portalGlow: "#38BDF8",
+    captureGlow: "#F43F5E",
+    prongMetal: "#E0F2FE",
+    prongTip: "#FFFFFF",
+    prongSuperGold: "#FDE047",
+    prongSuperCore: "#FFFBEB",
+    pods: {
+      A: { name: "Aurora Teal-Green", core: "#0F766E", rim: "#2DD4BF", hi: "#99F6E4", sh: "#053733", txt: "#FFFFFF", pattern: "FACET" },
+      B: { name: "Arctic Rose-Crimson", core: "#9D174D", rim: "#F43F5E", hi: "#FECDD3", sh: "#4C0523", txt: "#FFFFFF", pattern: "FACET" },
+      C: { name: "Glacier Cobalt-Violet", core: "#3730A3", rim: "#6366F1", hi: "#C7D2FE", sh: "#181552", txt: "#FFFFFF", pattern: "FACET" },
+      D: { name: "Solar Gold-Amber", core: "#9A6006", rim: "#FBBF24", hi: "#FEF08A", sh: "#462B01", txt: "#FFFFFF", pattern: "FACET" }
+    }
+  },
+  forge: {
+    name: "Volcanic Forge",
+    podFinish: "HAMMERED",
+    podPattern: "EMBER",
+    prongStyle: "FORGED",
+    boardTexture: "BASALT_LAVA",
+    cellShape: "SQUARE",
+    glowStrength: 0.7,
+    windowBg: "#0F0C0B",
+    panelCardBg: "#1C1614",
+    panelCardBorder: "#D97706",
+    textPrimary: "#FFF7ED",
+    textSecondary: "#A89A95",
+    accentBrass: "#F59E0B",
+    boardOuterTop: "#1E1715",
+    boardOuterMid: "#16110F",
+    boardOuterBot: "#0F0B0A",
+    bevelLight: "#F97316",
+    bevelDark: "#3A190C",
+    cellDark: "#171210",
+    cellLight: "#221B17",
+    socketShadow: "rgba(10, 7, 6, 0.72)",
+    gridLine: "rgba(255, 87, 34, 0.5)",
+    coordLabel: "#FB923C",
+    homeOuter: "#110C0A",
+    homeInner: "#0B0806",
+    homeBadgeOuterBg: "#110C0A",
+    homeBadgeInnerBg: "#0B0806",
+    neutralFill: "#382A24",
+    neutralRim: "#FB923C",
+    portalGlow: "#F97316",
+    captureGlow: "#FF1744",
+    prongMetal: "#D1C7BD",
+    prongTip: "#FFE4D6",
+    prongSuperGold: "#F59E0B",
+    prongSuperCore: "#FFF7ED",
+    pods: {
+      A: { name: "Verdigris Malachite", core: "#066B4E", rim: "#059669", hi: "#6EE7B7", sh: "#023325", txt: "#FFFFFF", pattern: "EMBER" },
+      B: { name: "Molten Crimson-Orange", core: "#A81520", rim: "#DC2626", hi: "#FCA5A5", sh: "#4E050B", txt: "#FFFFFF", pattern: "EMBER" },
+      C: { name: "Cobalt Tempered Steel", core: "#1E3A8A", rim: "#2563EB", hi: "#93C5FD", sh: "#0E1B42", txt: "#FFFFFF", pattern: "EMBER" },
+      D: { name: "Sulphur Yellow-Gold", core: "#9E6800", rim: "#EAB308", hi: "#FEF08A", sh: "#472F00", txt: "#FFFFFF", pattern: "EMBER" }
+    }
+  },
+  candy: {
+    name: "Candy Pop",
+    podFinish: "GLOSS",
+    podPattern: "FACTION_SPECIFIC",
+    prongStyle: "LOLLIPOP",
+    boardTexture: "SPRINKLES",
+    cellShape: "ROUNDED",
+    glowStrength: 0.2,
+    windowBg: "#1A101C",
+    panelCardBg: "#261729",
+    panelCardBorder: "#FF69B4",
+    textPrimary: "#FFF5F9",
+    textSecondary: "#E2B8D6",
+    accentBrass: "#FF69B4",
+    boardOuterTop: "#2F1935",
+    boardOuterMid: "#221226",
+    boardOuterBot: "#170C1A",
+    bevelLight: "#FFB6C1",
+    bevelDark: "#4A154B",
+    cellDark: "#24142B",
+    cellLight: "#331E3D",
+    socketShadow: "rgba(18, 7, 22, 0.66)",
+    gridLine: "rgba(255, 182, 193, 0.33)",
+    coordLabel: "#FBCFE8",
+    homeOuter: "#1B0D21",
+    homeInner: "#130917",
+    homeBadgeOuterBg: "#1B0D21",
+    homeBadgeInnerBg: "#130917",
+    neutralFill: "#4D2C54",
+    neutralRim: "#FF80BF",
+    portalGlow: "#38BDF8",
+    captureGlow: "#FF1493",
+    prongMetal: "#FDE2E4",
+    prongTip: "#FFFFFF",
+    prongSuperGold: "#FDE047",
+    prongSuperCore: "#FFFBEB",
+    pods: {
+      A: { name: "Mint-Apple Green", core: "#057A55", rim: "#10B981", hi: "#A7F3D0", sh: "#023827", txt: "#FFFFFF", pattern: "STRIPES" },
+      B: { name: "Strawberry-Cherry Red", core: "#B91C47", rim: "#F43F5E", hi: "#FECDD3", sh: "#560B1F", txt: "#FFFFFF", pattern: "DOTS" },
+      C: { name: "Blueberry-Razz Blue", core: "#1D4ED8", rim: "#3B82F6", hi: "#BFDBFE", sh: "#0C2570", txt: "#FFFFFF", pattern: "CHECKS" },
+      D: { name: "Lemon-Tangerine Gold", core: "#A16207", rim: "#F59E0B", hi: "#FDE68A", sh: "#472B02", txt: "#FFFFFF", pattern: "SWIRL" }
+    }
+  },
+  pearl: {
+    name: "Ocean Pearl",
+    podFinish: "NACRE",
+    podPattern: "SHELL",
+    prongStyle: "CORAL",
+    boardTexture: "CAUSTICS",
+    cellShape: "ROUNDED",
+    glowStrength: 0.45,
+    windowBg: "#071018",
+    panelCardBg: "#0D1C2A",
+    panelCardBorder: "#38BDF8",
+    textPrimary: "#F0FDF4",
+    textSecondary: "#7DD3FC",
+    accentBrass: "#2DD4BF",
+    boardOuterTop: "#0E1E32",
+    boardOuterMid: "#0A1624",
+    boardOuterBot: "#070F19",
+    bevelLight: "#5EEAD4",
+    bevelDark: "#06283D",
+    cellDark: "#0D1E2D",
+    cellLight: "#132B40",
+    socketShadow: "rgba(4, 10, 18, 0.74)",
+    gridLine: "rgba(56, 189, 248, 0.31)",
+    coordLabel: "#67E8F9",
+    homeOuter: "#08141F",
+    homeInner: "#050D15",
+    homeBadgeOuterBg: "#08141F",
+    homeBadgeInnerBg: "#050D15",
+    neutralFill: "#1F3A4D",
+    neutralRim: "#2DD4BF",
+    portalGlow: "#22D3EE",
+    captureGlow: "#F43F5E",
+    prongMetal: "#E0F2FE",
+    prongTip: "#FFFFFF",
+    prongSuperGold: "#FDE047",
+    prongSuperCore: "#FFFBEB",
+    pods: {
+      A: { name: "Seafoam Emerald", core: "#057A5F", rim: "#14B8A6", hi: "#99F6E4", sh: "#02382C", txt: "#FFFFFF", pattern: "SHELL" },
+      B: { name: "Living Coral Crimson", core: "#B81938", rim: "#F43F5E", hi: "#FECDD3", sh: "#540A18", txt: "#FFFFFF", pattern: "SHELL" },
+      C: { name: "Abyssal Sapphire", core: "#1743A3", rim: "#3B82F6", hi: "#BFDBFE", sh: "#091F52", txt: "#FFFFFF", pattern: "SHELL" },
+      D: { name: "Sunlit Amber-Pearl", core: "#9E6505", rim: "#F59E0B", hi: "#FEF08A", sh: "#472E01", txt: "#FFFFFF", pattern: "SHELL" }
+    }
+  },
+  steam: {
+    name: "Steampunk Brass",
+    podFinish: "BRASS",
+    podPattern: "GEARS",
+    prongStyle: "PIPE",
+    boardTexture: "RIVET_PLATE",
+    cellShape: "SQUARE",
+    glowStrength: 0.3,
+    windowBg: "#140F0A",
+    panelCardBg: "#221810",
+    panelCardBorder: "#C88A3A",
+    textPrimary: "#FBF4E6",
+    textSecondary: "#BF9F80",
+    accentBrass: "#DDA15E",
+    boardOuterTop: "#2B1C10",
+    boardOuterMid: "#1F140C",
+    boardOuterBot: "#150E08",
+    bevelLight: "#E09F3E",
+    bevelDark: "#522B08",
+    cellDark: "#241810",
+    cellLight: "#332216",
+    socketShadow: "rgba(16, 9, 5, 0.71)",
+    gridLine: "rgba(221, 161, 94, 0.38)",
+    coordLabel: "#F2BE74",
+    homeOuter: "#18100A",
+    homeInner: "#100A06",
+    homeBadgeOuterBg: "#18100A",
+    homeBadgeInnerBg: "#100A06",
+    neutralFill: "#473223",
+    neutralRim: "#DDA15E",
+    portalGlow: "#38BDF8",
+    captureGlow: "#F43F5E",
+    prongMetal: "#E6CCB2",
+    prongTip: "#FFF1E6",
+    prongSuperGold: "#F59E0B",
+    prongSuperCore: "#FFFBEB",
+    pods: {
+      A: { name: "Patina Verdigris Green", core: "#0E7462", rim: "#10B981", hi: "#A7F3D0", sh: "#053B32", txt: "#FFFFFF", pattern: "GEARS" },
+      B: { name: "Oxblood Furnace Red", core: "#A31828", rim: "#EF4444", hi: "#FCA5A5", sh: "#470811", txt: "#FFFFFF", pattern: "GEARS" },
+      C: { name: "Aether Prussian Blue", core: "#193D87", rim: "#3B82F6", hi: "#BFDBFE", sh: "#0B1B3D", txt: "#FFFFFF", pattern: "GEARS" },
+      D: { name: "Burnished Clockwork Gold", core: "#9C6304", rim: "#D97706", hi: "#FDE68A", sh: "#452C01", txt: "#FFFFFF", pattern: "GEARS" }
+    }
+  },
+  nebula: {
+    name: "Cosmic Nebula",
+    podFinish: "PLANETARY",
+    podPattern: "BANDS",
+    prongStyle: "COMET",
+    boardTexture: "STARFIELD",
+    cellShape: "ROUNDED",
+    glowStrength: 0.8,
+    windowBg: "#080712",
+    panelCardBg: "#110E24",
+    panelCardBorder: "#8B5CF6",
+    textPrimary: "#F8FAFC",
+    textSecondary: "#A5B4FC",
+    accentBrass: "#C084FC",
+    boardOuterTop: "#13102E",
+    boardOuterMid: "#0E0C21",
+    boardOuterBot: "#090817",
+    bevelLight: "#A855F7",
+    bevelDark: "#2E1065",
+    cellDark: "#100D26",
+    cellLight: "#1A163B",
+    socketShadow: "rgba(5, 3, 15, 0.66)",
+    gridLine: "rgba(139, 92, 246, 0.33)",
+    coordLabel: "#C4B5FD",
+    homeOuter: "#0B081A",
+    homeInner: "#060410",
+    homeBadgeOuterBg: "#0B081A",
+    homeBadgeInnerBg: "#060410",
+    neutralFill: "#2B2456",
+    neutralRim: "#C084FC",
+    portalGlow: "#38BDF8",
+    captureGlow: "#F43F5E",
+    prongMetal: "#E0E7FF",
+    prongTip: "#FFFFFF",
+    prongSuperGold: "#FDE047",
+    prongSuperCore: "#FFFBEB",
+    pods: {
+      A: { name: "Exoplanet Emerald", core: "#057A55", rim: "#10B981", hi: "#6EE7B7", sh: "#023827", txt: "#FFFFFF", pattern: "BANDS" },
+      B: { name: "Red-Dwarf Nova Crimson", core: "#B5173F", rim: "#F43F5E", hi: "#FDA4AF", sh: "#54091C", txt: "#FFFFFF", pattern: "BANDS" },
+      C: { name: "Pulsar Azure-Violet", core: "#4338CA", rim: "#6366F1", hi: "#C7D2FE", sh: "#1E1961", txt: "#FFFFFF", pattern: "BANDS" },
+      D: { name: "Helios Corona Gold", core: "#9E6404", rim: "#F59E0B", hi: "#FDE68A", sh: "#472C00", txt: "#FFFFFF", pattern: "BANDS" }
     }
   }
 };
 
-var currentTheme = "obsidian";
+var patternTileCache = {};
+function getBoardTexturePattern(ctx, themeKey, textureName, pal) {
+  if (!textureName || textureName === "NONE" || typeof document === "undefined") return null;
+  var cacheKey = themeKey + "_board_" + textureName;
+  if (patternTileCache[cacheKey]) return patternTileCache[cacheKey];
+
+  var tile = document.createElement("canvas");
+  var size = 64;
+  tile.width = size;
+  tile.height = size;
+  var tctx = tile.getContext("2d");
+
+  if (textureName === "PCB") {
+    tctx.strokeStyle = "rgba(0, 229, 255, 0.22)";
+    tctx.fillStyle = "rgba(0, 229, 255, 0.35)";
+    tctx.lineWidth = 1.5;
+    tctx.beginPath();
+    tctx.moveTo(0, 16); tctx.lineTo(24, 16); tctx.lineTo(36, 28); tctx.lineTo(64, 28);
+    tctx.moveTo(12, 64); tctx.lineTo(12, 48); tctx.lineTo(28, 32); tctx.lineTo(48, 32);
+    tctx.stroke();
+    tctx.beginPath();
+    tctx.arc(24, 16, 2.5, 0, Math.PI * 2);
+    tctx.arc(48, 32, 2.5, 0, Math.PI * 2);
+    tctx.arc(12, 48, 2.0, 0, Math.PI * 2);
+    tctx.fill();
+  } else if (textureName === "LACQUER_SCROLL") {
+    tctx.strokeStyle = "rgba(212, 175, 55, 0.16)";
+    tctx.lineWidth = 1.2;
+    tctx.beginPath();
+    tctx.arc(16, 16, 12, 0, Math.PI);
+    tctx.arc(40, 16, 12, Math.PI, 0);
+    tctx.arc(32, 48, 14, 0, Math.PI);
+    tctx.stroke();
+  } else if (textureName === "FROST") {
+    tctx.strokeStyle = "rgba(125, 211, 252, 0.22)";
+    tctx.lineWidth = 1.0;
+    tctx.beginPath();
+    tctx.moveTo(8, 8); tctx.lineTo(28, 28); tctx.lineTo(36, 18);
+    tctx.moveTo(28, 28); tctx.lineTo(48, 48); tctx.lineTo(58, 40);
+    tctx.moveTo(28, 28); tctx.lineTo(20, 48);
+    tctx.moveTo(48, 8); tctx.lineTo(40, 24);
+    tctx.stroke();
+  } else if (textureName === "BASALT_LAVA") {
+    tctx.strokeStyle = "rgba(249, 115, 22, 0.26)";
+    tctx.lineWidth = 1.8;
+    tctx.beginPath();
+    tctx.moveTo(0, 32); tctx.lineTo(18, 24); tctx.lineTo(32, 40); tctx.lineTo(50, 30); tctx.lineTo(64, 38);
+    tctx.moveTo(32, 40); tctx.lineTo(38, 64);
+    tctx.stroke();
+  } else if (textureName === "SPRINKLES") {
+    var colors = ["rgba(255, 105, 180, 0.35)", "rgba(56, 189, 248, 0.32)", "rgba(253, 224, 71, 0.35)", "rgba(52, 211, 153, 0.32)"];
+    tctx.lineWidth = 2.5;
+    tctx.lineCap = "round";
+    var spr = [[12, 14, 20, 18, 0], [44, 18, 52, 12, 1], [24, 42, 32, 48, 2], [48, 50, 54, 58, 3]];
+    for (var si = 0; si < spr.length; si++) {
+      tctx.strokeStyle = colors[spr[si][4]];
+      tctx.beginPath();
+      tctx.moveTo(spr[si][0], spr[si][1]);
+      tctx.lineTo(spr[si][2], spr[si][3]);
+      tctx.stroke();
+    }
+  } else if (textureName === "CAUSTICS") {
+    tctx.strokeStyle = "rgba(45, 212, 191, 0.20)";
+    tctx.lineWidth = 1.4;
+    tctx.beginPath();
+    tctx.arc(20, 20, 16, 0.4, 2.4);
+    tctx.arc(48, 36, 18, 2.0, 4.2);
+    tctx.arc(30, 52, 14, 3.5, 5.8);
+    tctx.stroke();
+  } else if (textureName === "RIVET_PLATE") {
+    tctx.strokeStyle = "rgba(221, 161, 94, 0.18)";
+    tctx.lineWidth = 1.0;
+    tctx.strokeRect(4, 4, 56, 56);
+    tctx.fillStyle = "rgba(221, 161, 94, 0.35)";
+    var rivets = [[8, 8], [56, 8], [8, 56], [56, 56], [32, 32]];
+    for (var ri = 0; ri < rivets.length; ri++) {
+      tctx.beginPath();
+      tctx.arc(rivets[ri][0], rivets[ri][1], 1.8, 0, Math.PI * 2);
+      tctx.fill();
+    }
+  } else if (textureName === "STARFIELD") {
+    tctx.fillStyle = "rgba(192, 132, 252, 0.45)";
+    var stars = [[10, 12, 1.2], [42, 8, 1.6], [24, 34, 1.0], [54, 38, 2.0], [18, 54, 1.4], [46, 56, 1.0], [32, 20, 0.8]];
+    for (var sti = 0; sti < stars.length; sti++) {
+      tctx.beginPath();
+      tctx.arc(stars[sti][0], stars[sti][1], stars[sti][2], 0, Math.PI * 2);
+      tctx.fill();
+    }
+  }
+
+  var pat = ctx.createPattern(tile, "repeat");
+  patternTileCache[cacheKey] = pat;
+  return pat;
+}
+
+function drawPodPatternAndFinish(ctx, cx, cy, radius, finish, pattern, fp, pal) {
+  if (finish === "CLASSIC" && (!pattern || pattern === "NONE")) return;
+
+  var r = radius * 0.78;
+  ctx.save();
+  drawOctagonPath(ctx, cx, cy, r);
+  ctx.clip();
+
+  if (pattern && pattern !== "NONE") {
+    ctx.save();
+    if (pattern === "CIRCUIT") {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.60)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.6, cy); ctx.lineTo(cx - r * 0.2, cy); ctx.lineTo(cx, cy + r * 0.3); ctx.lineTo(cx + r * 0.6, cy + r * 0.3);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx - r * 0.6, cy, 2, 0, Math.PI * 2);
+      ctx.arc(cx + r * 0.6, cy + r * 0.3, 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (pattern === "CLOUD_SCROLL") {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(cx - r * 0.25, cy, r * 0.3, 0, Math.PI);
+      ctx.arc(cx + r * 0.25, cy, r * 0.3, Math.PI, 0);
+      ctx.stroke();
+    } else if (pattern === "FACET") {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.40)";
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      for (var fi = 0; fi < 8; fi += 2) {
+        var a = (fi * 45 + 22.5) * Math.PI / 180;
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+      }
+      ctx.stroke();
+    } else if (pattern === "EMBER") {
+      ctx.fillStyle = "rgba(255, 200, 100, 0.60)";
+      var embers = [[cx - r * 0.3, cy - r * 0.2], [cx + r * 0.35, cy - r * 0.1], [cx - r * 0.1, cy + r * 0.4], [cx + r * 0.2, cy + r * 0.3]];
+      for (var ei = 0; ei < embers.length; ei++) {
+        ctx.beginPath();
+        ctx.arc(embers[ei][0], embers[ei][1], 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (pattern === "STRIPES") {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      for (var si = -2; si <= 2; si++) {
+        ctx.moveTo(cx - r + si * (r * 0.4), cy - r);
+        ctx.lineTo(cx + r + si * (r * 0.4), cy + r);
+      }
+      ctx.stroke();
+    } else if (pattern === "DOTS") {
+      ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+      for (var dx = -1; dx <= 1; dx++) {
+        for (var dy = -1; dy <= 1; dy++) {
+          ctx.beginPath();
+          ctx.arc(cx + dx * r * 0.4, cy + dy * r * 0.4, 2.0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    } else if (pattern === "CHECKS") {
+      ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+      var cs = r * 0.35;
+      ctx.fillRect(cx - cs, cy - cs, cs, cs);
+      ctx.fillRect(cx, cy, cs, cs);
+    } else if (pattern === "SWIRL") {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.40)";
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.25, 0, Math.PI * 1.5);
+      ctx.arc(cx, cy, r * 0.55, Math.PI * 0.5, Math.PI * 2);
+      ctx.stroke();
+    } else if (pattern === "SHELL") {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      for (var shi = 1; shi <= 3; shi++) {
+        ctx.arc(cx, cy + r * 0.4, shi * (r * 0.3), Math.PI * 1.1, Math.PI * 1.9);
+      }
+      ctx.stroke();
+    } else if (pattern === "GEARS") {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.42, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+      for (var gi = 0; gi < 6; gi++) {
+        var ga = gi * Math.PI / 3;
+        ctx.beginPath();
+        ctx.arc(cx + r * 0.42 * Math.cos(ga), cy + r * 0.42 * Math.sin(ga), 1.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (pattern === "BANDS") {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.8, cy - r * 0.25); ctx.lineTo(cx + r * 0.8, cy - r * 0.25);
+      ctx.moveTo(cx - r * 0.85, cy + r * 0.25); ctx.lineTo(cx + r * 0.85, cy + r * 0.25);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  if (finish === "GLASS") {
+    ctx.beginPath();
+    ctx.arc(cx, cy - r * 0.2, r * 0.65, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
+    ctx.fill();
+  } else if (finish === "CARVED") {
+    ctx.lineWidth = 1.0;
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
+    drawOctagonPath(ctx, cx, cy, r * 0.90);
+    ctx.stroke();
+  } else if (finish === "HAMMERED") {
+    ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+    var hm = [[cx - r * 0.2, cy - r * 0.3], [cx + r * 0.3, cy + r * 0.1], [cx - r * 0.1, cy + r * 0.25]];
+    for (var hmi = 0; hmi < hm.length; hmi++) {
+      ctx.beginPath();
+      ctx.arc(hm[hmi][0], hm[hmi][1], r * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (finish === "GLOSS") {
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.18, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+    ctx.fill();
+  } else if (finish === "NACRE") {
+    var nacreGrad = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+    nacreGrad.addColorStop(0, "rgba(255, 180, 220, 0.20)");
+    nacreGrad.addColorStop(0.5, "rgba(180, 255, 240, 0.22)");
+    nacreGrad.addColorStop(1, "rgba(255, 240, 180, 0.20)");
+    ctx.fillStyle = nacreGrad;
+    ctx.fill();
+  } else if (finish === "BRASS") {
+    var brassGrad = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+    brassGrad.addColorStop(0, "rgba(255, 255, 255, 0.35)");
+    brassGrad.addColorStop(0.5, "rgba(255, 215, 0, 0.10)");
+    brassGrad.addColorStop(1, "rgba(180, 120, 40, 0.25)");
+    ctx.fillStyle = brassGrad;
+    ctx.fill();
+  } else if (finish === "PLANETARY") {
+    ctx.beginPath();
+    ctx.arc(cx, cy + r * 0.3, r * 0.7, Math.PI * 1.1, Math.PI * 1.9);
+    ctx.lineWidth = 2.0;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.40)";
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function applyTheme(themeKey) {
+  if (!PALETTES[themeKey]) themeKey = "obsidian";
+  currentTheme = themeKey;
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("octi_theme", currentTheme);
+    }
+  } catch (e) {}
+
+  var pal = PALETTES[currentTheme];
+  var btnTheme = document.getElementById("btn-theme");
+  if (btnTheme) {
+    if (btnTheme.tagName === "SELECT") {
+      btnTheme.value = currentTheme;
+    } else {
+      btnTheme.textContent = "Theme: " + pal.name;
+    }
+  }
+  var playSel = document.getElementById("web-play-theme-select");
+  if (playSel) playSel.value = currentTheme;
+  var replaySel = document.getElementById("replay-theme-select");
+  if (replaySel) replaySel.value = currentTheme;
+  var globalSel = document.getElementById("theme-select");
+  if (globalSel) globalSel.value = currentTheme;
+
+  if (typeof document !== "undefined" && document.documentElement && pal.accentBrass) {
+    document.documentElement.style.setProperty("--acc-bright", pal.accentBrass);
+  }
+
+  Object.keys(boardStates).forEach(function (k) {
+    if (boardStates[k]) drawBoardState(boardStates[k]);
+  });
+  if (typeof renderPlayBoardCanvas === "function") {
+    renderPlayBoardCanvas();
+  }
+  if (typeof renderAllWebReserves === "function") {
+    renderAllWebReserves();
+  }
+  if (typeof renderZoomCanvas === "function" && typeof zoomSq !== "undefined" && zoomSq) {
+    renderZoomCanvas();
+  }
+}
+
+var savedTheme = "obsidian";
+try {
+  if (typeof localStorage !== "undefined") {
+    savedTheme = localStorage.getItem("octi_theme") || "obsidian";
+  }
+} catch (e) {}
+try {
+  if (typeof URLSearchParams !== "undefined" && typeof window !== "undefined" && window.location && window.location.search) {
+    var qTheme = new URLSearchParams(window.location.search).get("theme");
+    if (qTheme && PALETTES[qTheme]) savedTheme = qTheme;
+  }
+} catch (e) {}
+if (!PALETTES[savedTheme]) savedTheme = "obsidian";
+var currentTheme = savedTheme;
 var THEME_PALETTES = PALETTES;
 var LAST_MOVE_DISPLAY_DURATION_MS = 5000;
 var boardRotationDeg = 0;
@@ -3275,6 +3989,7 @@ function drawProngs(ctx, cx, cy, radius, cfg, pal, rotDeg) {
   var prongInnerR = radius * 0.65;
   var prongOuterR = radius * 1.46;
   var superOuterR = radius * 1.56;
+  var pStyle = (pal && pal.prongStyle) ? pal.prongStyle : "CLASSIC";
 
   /* 1. Prongs & Superprongs */
   for (var d = 0; d < 8; d++) {
@@ -3284,30 +3999,160 @@ function drawProngs(ctx, cx, cy, radius, cfg, pal, rotDeg) {
     var ux = u[0], uy = u[1];
     var px = -uy, py = ux;
     if (pt === 1) {
-      var hw = Math.max(2.4, radius * 0.20);
-      ctx.beginPath();
-      ctx.moveTo(cx + ux * prongInnerR - px * hw, cy + uy * prongInnerR - py * hw);
-      ctx.lineTo(cx + ux * (prongOuterR * 0.86) - px * (hw * 0.85), cy + uy * (prongOuterR * 0.86) - py * (hw * 0.85));
-      ctx.lineTo(cx + ux * prongOuterR, cy + uy * prongOuterR);
-      ctx.lineTo(cx + ux * (prongOuterR * 0.86) + px * (hw * 0.85), cy + uy * (prongOuterR * 0.86) + py * (hw * 0.85));
-      ctx.lineTo(cx + ux * prongInnerR + px * hw, cy + uy * prongInnerR + py * hw);
-      ctx.closePath();
-      var gProng = ctx.createLinearGradient(cx + ux * prongOuterR, cy + uy * prongOuterR, cx + ux * prongInnerR, cy + uy * prongInnerR);
-      gProng.addColorStop(0, "#FFFFFF");
-      gProng.addColorStop(0.45, pal.prongTip);
-      gProng.addColorStop(1, pal.prongMetal);
-      ctx.fillStyle = gProng;
-      ctx.fill();
-      ctx.lineWidth = Math.max(1.1, radius * 0.055);
-      ctx.strokeStyle = "rgba(15, 20, 28, 0.92)";
-      ctx.stroke();
+      if (pStyle === "CLASSIC") {
+        var hw = Math.max(2.4, radius * 0.20);
+        ctx.beginPath();
+        ctx.moveTo(cx + ux * prongInnerR - px * hw, cy + uy * prongInnerR - py * hw);
+        ctx.lineTo(cx + ux * (prongOuterR * 0.86) - px * (hw * 0.85), cy + uy * (prongOuterR * 0.86) - py * (hw * 0.85));
+        ctx.lineTo(cx + ux * prongOuterR, cy + uy * prongOuterR);
+        ctx.lineTo(cx + ux * (prongOuterR * 0.86) + px * (hw * 0.85), cy + uy * (prongOuterR * 0.86) + py * (hw * 0.85));
+        ctx.lineTo(cx + ux * prongInnerR + px * hw, cy + uy * prongInnerR + py * hw);
+        ctx.closePath();
+        var gProng = ctx.createLinearGradient(cx + ux * prongOuterR, cy + uy * prongOuterR, cx + ux * prongInnerR, cy + uy * prongInnerR);
+        gProng.addColorStop(0, "#FFFFFF");
+        gProng.addColorStop(0.45, pal.prongTip);
+        gProng.addColorStop(1, pal.prongMetal);
+        ctx.fillStyle = gProng;
+        ctx.fill();
+        ctx.lineWidth = Math.max(1.1, radius * 0.055);
+        ctx.strokeStyle = "rgba(15, 20, 28, 0.92)";
+        ctx.stroke();
 
-      ctx.beginPath();
-      ctx.moveTo(cx + ux * (prongInnerR + radius * 0.08), cy + uy * (prongInnerR + radius * 0.08));
-      ctx.lineTo(cx + ux * (prongOuterR * 0.92), cy + uy * (prongOuterR * 0.92));
-      ctx.lineWidth = Math.max(0.9, radius * 0.04);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
-      ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + ux * (prongInnerR + radius * 0.08), cy + uy * (prongInnerR + radius * 0.08));
+        ctx.lineTo(cx + ux * (prongOuterR * 0.92), cy + uy * (prongOuterR * 0.92));
+        ctx.lineWidth = Math.max(0.9, radius * 0.04);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
+        ctx.stroke();
+      } else if (pStyle === "NEON_TUBE") {
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.shadowColor = pal.portalGlow || pal.accentBrass;
+        ctx.shadowBlur = 8;
+        ctx.strokeStyle = pal.portalGlow || pal.accentBrass;
+        ctx.lineWidth = Math.max(3.0, radius * 0.16);
+        ctx.beginPath();
+        ctx.moveTo(cx + ux * prongInnerR, cy + uy * prongInnerR);
+        ctx.lineTo(cx + ux * prongOuterR, cy + uy * prongOuterR);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = "#FFFFFF";
+        ctx.lineWidth = Math.max(1.2, radius * 0.06);
+        ctx.beginPath();
+        ctx.moveTo(cx + ux * (prongInnerR + 2), cy + uy * (prongInnerR + 2));
+        ctx.lineTo(cx + ux * (prongOuterR - 1), cy + uy * (prongOuterR - 1));
+        ctx.stroke();
+        ctx.restore();
+      } else if (pStyle === "FILIGREE") {
+        var fhw = Math.max(2.0, radius * 0.16);
+        ctx.beginPath();
+        ctx.moveTo(cx + ux * prongInnerR - px * fhw, cy + uy * prongInnerR - py * fhw);
+        ctx.quadraticCurveTo(cx + ux * (prongOuterR * 0.7) - px * (fhw * 1.3), cy + uy * (prongOuterR * 0.7) - py * (fhw * 1.3), cx + ux * prongOuterR, cy + uy * prongOuterR);
+        ctx.quadraticCurveTo(cx + ux * (prongOuterR * 0.7) + px * (fhw * 1.3), cy + uy * (prongOuterR * 0.7) + py * (fhw * 1.3), cx + ux * prongInnerR + px * fhw, cy + uy * prongInnerR + py * fhw);
+        ctx.closePath();
+        ctx.fillStyle = pal.prongMetal;
+        ctx.fill();
+        ctx.lineWidth = 1.0;
+        ctx.strokeStyle = pal.accentBrass;
+        ctx.stroke();
+      } else if (pStyle === "ICICLE") {
+        var ihw = Math.max(2.0, radius * 0.18);
+        ctx.beginPath();
+        ctx.moveTo(cx + ux * prongInnerR - px * ihw, cy + uy * prongInnerR - py * ihw);
+        ctx.lineTo(cx + ux * prongOuterR, cy + uy * prongOuterR);
+        ctx.lineTo(cx + ux * prongInnerR + px * ihw, cy + uy * prongInnerR + py * ihw);
+        ctx.closePath();
+        var gIce = ctx.createLinearGradient(cx + ux * prongOuterR, cy + uy * prongOuterR, cx + ux * prongInnerR, cy + uy * prongInnerR);
+        gIce.addColorStop(0, "#FFFFFF");
+        gIce.addColorStop(0.5, pal.prongTip);
+        gIce.addColorStop(1, pal.prongMetal);
+        ctx.fillStyle = gIce;
+        ctx.fill();
+        ctx.lineWidth = 1.0;
+        ctx.strokeStyle = "rgba(125, 211, 252, 0.7)";
+        ctx.stroke();
+      } else if (pStyle === "FORGED") {
+        var ghw = Math.max(2.6, radius * 0.22);
+        ctx.beginPath();
+        ctx.moveTo(cx + ux * prongInnerR - px * ghw, cy + uy * prongInnerR - py * ghw);
+        ctx.lineTo(cx + ux * (prongOuterR * 0.9) - px * (ghw * 0.9), cy + uy * (prongOuterR * 0.9) - py * (ghw * 0.9));
+        ctx.lineTo(cx + ux * prongOuterR - px * (ghw * 0.4), cy + uy * prongOuterR - py * (ghw * 0.4));
+        ctx.lineTo(cx + ux * prongOuterR + px * (ghw * 0.4), cy + uy * prongOuterR - py * (ghw * 0.4));
+        ctx.lineTo(cx + ux * (prongOuterR * 0.9) + px * (ghw * 0.9), cy + uy * (prongOuterR * 0.9) + py * (ghw * 0.9));
+        ctx.lineTo(cx + ux * prongInnerR + px * ghw, cy + uy * prongInnerR + py * ghw);
+        ctx.closePath();
+        ctx.fillStyle = pal.prongMetal;
+        ctx.fill();
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = pal.bevelLight;
+        ctx.stroke();
+      } else if (pStyle === "LOLLIPOP") {
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.lineWidth = Math.max(2.5, radius * 0.12);
+        ctx.strokeStyle = pal.prongMetal;
+        ctx.beginPath();
+        ctx.moveTo(cx + ux * prongInnerR, cy + uy * prongInnerR);
+        ctx.lineTo(cx + ux * (prongOuterR * 0.88), cy + uy * (prongOuterR * 0.88));
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx + ux * (prongOuterR * 0.92), cy + uy * (prongOuterR * 0.92), Math.max(3.2, radius * 0.14), 0, Math.PI * 2);
+        ctx.fillStyle = pal.prongTip;
+        ctx.fill();
+        ctx.lineWidth = 1.0;
+        ctx.strokeStyle = pal.accentBrass;
+        ctx.stroke();
+        ctx.restore();
+      } else if (pStyle === "CORAL") {
+        var chw = Math.max(2.0, radius * 0.15);
+        ctx.beginPath();
+        ctx.moveTo(cx + ux * prongInnerR - px * chw, cy + uy * prongInnerR - py * chw);
+        ctx.lineTo(cx + ux * (prongOuterR * 0.7) - px * (chw * 1.2), cy + uy * (prongOuterR * 0.7) - py * (chw * 1.2));
+        ctx.lineTo(cx + ux * prongOuterR - px * (chw * 0.8), cy + uy * prongOuterR - py * (chw * 0.8));
+        ctx.lineTo(cx + ux * (prongOuterR * 0.85), cy + uy * (prongOuterR * 0.85));
+        ctx.lineTo(cx + ux * prongOuterR + px * (chw * 0.8), cy + uy * prongOuterR - py * (chw * 0.8));
+        ctx.lineTo(cx + ux * (prongOuterR * 0.7) + px * (chw * 1.2), cy + uy * (prongOuterR * 0.7) + py * (chw * 1.2));
+        ctx.lineTo(cx + ux * prongInnerR + px * chw, cy + uy * prongInnerR + py * chw);
+        ctx.closePath();
+        ctx.fillStyle = pal.prongMetal;
+        ctx.fill();
+        ctx.lineWidth = 1.0;
+        ctx.strokeStyle = pal.accentBrass;
+        ctx.stroke();
+      } else if (pStyle === "PIPE") {
+        var phw = Math.max(2.4, radius * 0.18);
+        ctx.beginPath();
+        ctx.moveTo(cx + ux * prongInnerR - px * phw, cy + uy * prongInnerR - py * phw);
+        ctx.lineTo(cx + ux * (prongOuterR * 0.82) - px * phw, cy + uy * (prongOuterR * 0.82) - py * phw);
+        ctx.lineTo(cx + ux * (prongOuterR * 0.82) - px * (phw * 1.4), cy + uy * (prongOuterR * 0.82) - py * (phw * 1.4));
+        ctx.lineTo(cx + ux * prongOuterR - px * (phw * 1.4), cy + uy * prongOuterR - py * (phw * 1.4));
+        ctx.lineTo(cx + ux * prongOuterR + px * (phw * 1.4), cy + uy * prongOuterR + py * (phw * 1.4));
+        ctx.lineTo(cx + ux * (prongOuterR * 0.82) + px * (phw * 1.4), cy + uy * (prongOuterR * 0.82) + py * (phw * 1.4));
+        ctx.lineTo(cx + ux * (prongOuterR * 0.82) + px * phw, cy + uy * (prongOuterR * 0.82) + py * phw);
+        ctx.lineTo(cx + ux * prongInnerR + px * phw, cy + uy * prongInnerR + py * phw);
+        ctx.closePath();
+        ctx.fillStyle = pal.prongMetal;
+        ctx.fill();
+        ctx.lineWidth = 1.1;
+        ctx.strokeStyle = pal.bevelLight;
+        ctx.stroke();
+      } else if (pStyle === "COMET") {
+        ctx.save();
+        ctx.shadowColor = pal.accentBrass;
+        ctx.shadowBlur = 6;
+        var mhw = Math.max(2.0, radius * 0.15);
+        ctx.beginPath();
+        ctx.moveTo(cx + ux * prongInnerR - px * (mhw * 0.5), cy + uy * prongInnerR - py * (mhw * 0.5));
+        ctx.lineTo(cx + ux * prongOuterR, cy + uy * prongOuterR);
+        ctx.lineTo(cx + ux * prongInnerR + px * (mhw * 0.5), cy + uy * prongInnerR - py * (mhw * 0.5));
+        ctx.closePath();
+        var gCom = ctx.createLinearGradient(cx + ux * prongInnerR, cy + uy * prongInnerR, cx + ux * prongOuterR, cy + uy * prongOuterR);
+        gCom.addColorStop(0, pal.prongMetal);
+        gCom.addColorStop(1, "#FFFFFF");
+        ctx.fillStyle = gCom;
+        ctx.fill();
+        ctx.restore();
+      }
     } else {
       var shw = Math.max(3.2, radius * 0.26);
       ctx.beginPath();
@@ -3366,6 +4211,11 @@ function drawOctagonalPod(ctx, sqRect, owner, cfg, pal, rotDeg, highlighted, cen
   ctx.lineWidth = Math.max(0.8, radius * 0.04);
   ctx.strokeStyle = fp.hi;
   ctx.stroke();
+
+  /* 4b. Custom Pod Pattern & Finish */
+  var finish = (pal && pal.podFinish) ? pal.podFinish : "CLASSIC";
+  var pattern = (fp && fp.pattern) ? fp.pattern : ((pal && pal.podPattern) ? pal.podPattern : "NONE");
+  drawPodPatternAndFinish(ctx, cx, cy, radius, finish, pattern, fp, pal);
 
   /* 5. Recessed 8-direction prong sockets */
   var socketDist = radius * 0.86;
@@ -3484,15 +4334,41 @@ function drawBoardState(state) {
   }
 
   /* 4. Grid squares, recessed socket rings, home OCTI shields & neutral medallions */
+  if (pal.boardTexture && pal.boardTexture !== "NONE") {
+    var bPat = getBoardTexturePattern(ctx, currentTheme, pal.boardTexture, pal);
+    if (bPat) {
+      ctx.save();
+      ctx.fillStyle = bPat;
+      ctx.fillRect(geom.grid.x, geom.grid.y, geom.grid.w, geom.grid.h);
+      ctx.restore();
+    }
+  }
   for (var sy = 1; sy <= parsed.gh; sy++) {
     for (var sx = 1; sx <= parsed.gw; sx++) {
       var sqRect = geom.squareRect(sx, sy);
       var isDark = ((sx + sy) % 2 === 0);
       ctx.fillStyle = isDark ? pal.cellDark : pal.cellLight;
-      ctx.fillRect(sqRect.x, sqRect.y, sqRect.w, sqRect.h);
+      if (pal.cellShape === "ROUNDED") {
+        roundRectPath(ctx, sqRect.x + 0.8, sqRect.y + 0.8, sqRect.w - 1.6, sqRect.h - 1.6, Math.max(3, sqRect.w * 0.14));
+        ctx.fill();
+      } else {
+        ctx.fillRect(sqRect.x, sqRect.y, sqRect.w, sqRect.h);
+      }
       ctx.lineWidth = 1.0;
       ctx.strokeStyle = pal.gridLine;
-      ctx.strokeRect(sqRect.x, sqRect.y, sqRect.w, sqRect.h);
+      if (pal.glowStrength > 0) {
+        ctx.save();
+        ctx.shadowColor = pal.accentBrass;
+        ctx.shadowBlur = Math.round(pal.glowStrength * 6);
+      }
+      if (pal.cellShape === "ROUNDED") {
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(sqRect.x, sqRect.y, sqRect.w, sqRect.h);
+      }
+      if (pal.glowStrength > 0) {
+        ctx.restore();
+      }
 
       /* Recessed socket ring */
       ctx.beginPath();
@@ -3830,7 +4706,10 @@ function animationTick() {
     /*WebPlayBoard*/
     if ($("tab-play") && $("tab-play").classList.contains("on") && activePlayState) {
       var hasPlayMoveInd = lastMoveHighlightSquares && lastMoveHighlightSquares.length > 0 && (now - lastMoveSetAtMs) <= 5200;
-      var hasPlayTurnInd = activePlayState.status === "P";
+      var isGameActiveForPinkLine = activeOnlineGameId
+        ? !!(activeOnlineRoomView && activeOnlineRoomView.phase === "IN_PROGRESS")
+        : !!matchStarted;
+      var hasPlayTurnInd = isGameActiveForPinkLine && activePlayState.status === "P" && activePlayState.turn && activePlayState.turn !== "-";
       if (hasPlayMoveInd || hasPlayTurnInd) {
         renderPlayBoardCanvas();
       }
@@ -3882,12 +4761,17 @@ window.addEventListener("resize", function () {
 });
 
 if ($("btn-theme")) {
+  $("btn-theme").value = currentTheme;
+  $("btn-theme").addEventListener("change", function () {
+    applyTheme(this.value);
+  });
   $("btn-theme").addEventListener("click", function () {
-    currentTheme = (currentTheme === "obsidian") ? "rosewood" : "obsidian";
-    $("btn-theme").textContent = "Theme: " + PALETTES[currentTheme].name;
-    Object.keys(boardStates).forEach(function (k) {
-      drawBoardState(boardStates[k]);
-    });
+    if (this.tagName !== "SELECT") {
+      var keys = Object.keys(PALETTES);
+      var idx = keys.indexOf(currentTheme);
+      var next = keys[(idx + 1) % keys.length];
+      applyTheme(next);
+    }
   });
 }
 
@@ -3903,10 +4787,7 @@ if ($("btn-rotate")) {
 if ($("replay-theme-select")) {
   $("replay-theme-select").value = currentTheme;
   $("replay-theme-select").addEventListener("change", function () {
-    currentTheme = $("replay-theme-select").value;
-    Object.keys(boardStates).forEach(function (k) {
-      drawBoardState(boardStates[k]);
-    });
+    applyTheme(this.value);
   });
 }
 
@@ -28473,15 +29354,41 @@ function renderPlayBoardCanvas() {
   }
 
   // 4. Grid Squares, Sockets, Home Bases
+  if (pal.boardTexture && pal.boardTexture !== "NONE") {
+    var bPatPlay = getBoardTexturePattern(ctx, currentTheme, pal.boardTexture, pal);
+    if (bPatPlay) {
+      ctx.save();
+      ctx.fillStyle = bPatPlay;
+      ctx.fillRect(geom.grid.x, geom.grid.y, geom.grid.w, geom.grid.h);
+      ctx.restore();
+    }
+  }
   for (var sy = 1; sy <= s.gh; sy++) {
     for (var sx = 1; sx <= s.gw; sx++) {
       var sqRect = geom.squareRect(sx, sy);
       var isDark = ((sx + sy) % 2 === 0);
       ctx.fillStyle = isDark ? pal.cellDark : pal.cellLight;
-      ctx.fillRect(sqRect.x, sqRect.y, sqRect.w, sqRect.h);
+      if (pal.cellShape === "ROUNDED") {
+        roundRectPath(ctx, sqRect.x + 0.8, sqRect.y + 0.8, sqRect.w - 1.6, sqRect.h - 1.6, Math.max(3, sqRect.w * 0.14));
+        ctx.fill();
+      } else {
+        ctx.fillRect(sqRect.x, sqRect.y, sqRect.w, sqRect.h);
+      }
       ctx.lineWidth = 1.0;
       ctx.strokeStyle = pal.gridLine;
-      ctx.strokeRect(sqRect.x, sqRect.y, sqRect.w, sqRect.h);
+      if (pal.glowStrength > 0) {
+        ctx.save();
+        ctx.shadowColor = pal.accentBrass;
+        ctx.shadowBlur = Math.round(pal.glowStrength * 6);
+      }
+      if (pal.cellShape === "ROUNDED") {
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(sqRect.x, sqRect.y, sqRect.w, sqRect.h);
+      }
+      if (pal.glowStrength > 0) {
+        ctx.restore();
+      }
 
       // Recessed socket ring
       ctx.beginPath();
@@ -28600,9 +29507,10 @@ function renderPlayBoardCanvas() {
   }
 
   // 7. Pink (#FF69B4) Running Light Active-Player Board-Edge Turn Indicator (GDB-05.1: 30% segFrac, 2000ms period)
-  var isWaitingOnlineRoom = !!(activeOnlineGameId && activeOnlineRoomView &&
-    (activeOnlineRoomView.phase || "WAITING_FOR_PLAYERS") === "WAITING_FOR_PLAYERS");
-  if (!isWaitingOnlineRoom && s.status === "P" && s.turn && s.turn !== "-") {
+  var isGameActiveForPinkLine = activeOnlineGameId
+    ? !!(activeOnlineRoomView && activeOnlineRoomView.phase === "IN_PROGRESS")
+    : !!matchStarted;
+  if (isGameActiveForPinkLine && s.status === "P" && s.turn && s.turn !== "-") {
     var edge = activeTurnScreenEdge(s.mode, s.turn, effectiveRot);
     var gr = geom.grid;
     var inset = 1.0;
@@ -29720,12 +30628,9 @@ if (btnWebRotate) {
 // Theme Selectors
 var webThemeSelect = document.getElementById("web-play-theme-select");
 if (webThemeSelect) {
+  webThemeSelect.value = currentTheme;
   webThemeSelect.addEventListener("change", function () {
-    currentTheme = webThemeSelect.value || "obsidian";
-    var globalThemeSelect = document.getElementById("theme-select");
-    if (globalThemeSelect) globalThemeSelect.value = currentTheme;
-    renderPlayBoardCanvas();
-    renderAllWebReserves();
+    applyTheme(this.value);
   });
 }
 
@@ -30278,6 +31183,9 @@ function generateOctiTranscriptV3() {
 function autoUploadCompletedLocalMatch() {
   if (activeOnlineGameId || !activePlayState || playMatchPlies.length <= 1) return;
   if (activePlayState.status !== "O" && activePlayState.status !== "R") return;
+  if (localMatchConfig.playMode === "bot" && (localMatchConfig.botDifficulty === 1 || localMatchConfig.botDifficulty === 2)) {
+    return;
+  }
   var trObj = generateOctiTranscriptV3();
   var archSt = document.getElementById("web-play-archive-status");
   if (archSt) archSt.textContent = "Uploading transcript to archive...";
@@ -30285,6 +31193,10 @@ function autoUploadCompletedLocalMatch() {
     method: "POST",
     body: { transcript: JSON.stringify(trObj) }
   }).then(function (res) {
+    if (res && res.ignored) {
+      if (archSt) archSt.textContent = "";
+      return;
+    }
     if (archSt && res && res.game_id) {
       archSt.textContent = "Archived (#" + res.game_id.slice(0, 8) + ")";
     }
@@ -30697,73 +31609,50 @@ function updateOnlineTableControls() {
   var leaveTableBtn = document.getElementById("btn-web-leave-table");
   var purgeBtn = document.getElementById("btn-web-purge-table");
   var actRow = document.getElementById("web-online-table-actions");
-  var seatActionsEl = document.getElementById("web-online-seat-actions");
 
   if (activeOnlineGameId) {
     if (newGameBtn) newGameBtn.style.display = "none";
-    if (actRow) actRow.style.display = "flex";
-    if (leaveTableBtn) leaveTableBtn.style.display = "block";
+    if (undoBtn) undoBtn.style.display = "none";
 
     var isSeated = (activeOnlineViewerSeat > 0);
-    var isProgress = (activeOnlineRoomView && activeOnlineRoomView.phase === "IN_PROGRESS");
+    var isProgress = !!(activeOnlineRoomView && activeOnlineRoomView.phase === "IN_PROGRESS");
     var showPlayerActions = isSeated && isProgress;
 
-    if (drawBtn) drawBtn.style.display = showPlayerActions ? "" : "none";
-    if (undoBtn) undoBtn.style.display = "none";
-    if (resignBtn) resignBtn.style.display = showPlayerActions ? "" : "none";
+    if (drawBtn) {
+      drawBtn.style.display = "";
+      drawBtn.disabled = !showPlayerActions;
+    }
+    if (resignBtn) {
+      resignBtn.style.display = "";
+      resignBtn.disabled = !showPlayerActions;
+    }
+
+    if (actRow) actRow.style.display = "flex";
+    if (leaveTableBtn) leaveTableBtn.style.display = "inline-block";
 
     var isAdmin = isWebAdminPurgeActive();
     if (purgeBtn) {
       if (isAdmin) {
         purgeBtn.textContent = "Purge Table";
-        purgeBtn.style.display = "block";
+        purgeBtn.style.display = "inline-block";
       } else {
         purgeBtn.style.display = "none";
       }
     }
-
-    if (seatActionsEl) {
-      clear(seatActionsEl);
-      if (activeOnlineGameId && (!activeOnlineRoomView || (activeOnlineRoomView.phase || "WAITING_FOR_PLAYERS") === "WAITING_FOR_PLAYERS") && activeOnlineViewerSeat === 0) {
-        var seatsTotal = 2;
-        if (activeOnlineRoomView && Array.isArray(activeOnlineRoomView.seats) && activeOnlineRoomView.seats.length > 0) {
-          seatsTotal = activeOnlineRoomView.seats.length;
-        } else if (activeOnlineRoomView && (activeOnlineRoomView.game_mode === "4P" || activeOnlineRoomView.ruleset === "4P" || activeOnlineRoomView.mode === "4P")) {
-          seatsTotal = 4;
-        }
-        seatActionsEl.style.display = "flex";
-        for (var sNum = 1; sNum <= seatsTotal; sNum++) {
-          var sLet = seatLetterOf(sNum);
-          var canSit = canViewerSitAtSeat(activeOnlineRoomView, sNum);
-          var sitBtn = el("button", "Sit Seat " + sNum + " (" + sLet + ")", "btn btn-primary btn-seat-action");
-          sitBtn.style.flex = "1";
-          sitBtn.style.fontWeight = "700";
-          sitBtn.style.fontSize = "12px";
-          sitBtn.style.padding = "6px 8px";
-          sitBtn.disabled = !canSit;
-          sitBtn.title = canSit ? ("Take Seat " + sNum + " (" + sLet + ")") : seatDisabledReason(activeOnlineRoomView, sNum);
-          (function (targetSeatNum, isEligible) {
-            if (isEligible) {
-              sitBtn.addEventListener("click", function () {
-                sitAtOnlineTable(activeOnlineGameId, targetSeatNum);
-              });
-            }
-          })(sNum, canSit);
-          seatActionsEl.appendChild(sitBtn);
-        }
-      } else {
-        seatActionsEl.style.display = "none";
-      }
-    }
   } else {
     if (newGameBtn) newGameBtn.style.display = "";
+    if (undoBtn) undoBtn.style.display = "";
+    if (drawBtn) {
+      drawBtn.style.display = "";
+      drawBtn.disabled = false;
+    }
+    if (resignBtn) {
+      resignBtn.style.display = "";
+      resignBtn.disabled = false;
+    }
     if (actRow) actRow.style.display = "none";
     if (leaveTableBtn) leaveTableBtn.style.display = "none";
     if (purgeBtn) purgeBtn.style.display = "none";
-    if (seatActionsEl) seatActionsEl.style.display = "none";
-    if (drawBtn) drawBtn.style.display = "";
-    if (undoBtn) undoBtn.style.display = "";
-    if (resignBtn) resignBtn.style.display = "";
   }
 }
 
@@ -31852,19 +32741,17 @@ function formatCompactDuration(sec) {
 function renderOnlineUsersRoster(players) {
   var countEl = $("web-online-users-count");
   var listEl = $("web-online-users-list");
-  if (!listEl) return;
+  var robotsCountEl = $("web-online-robots-count");
+  var robotsListEl = $("web-online-robots-list");
+
   var pl = (Array.isArray(players) ? players : []).filter(function (p) {
     return p && p.handle !== "anonymous-127.0.0.1" && p.handle !== "anonymous-::1";
   });
-  if (countEl) countEl.textContent = String(pl.length);
-  clear(listEl);
-  if (!pl.length) {
-    var emptyDiv = el("div", "No connected users right now.", "dim");
-    emptyDiv.style.fontSize = "12.5px";
-    listEl.appendChild(emptyDiv);
-    return;
-  }
-  pl.forEach(function (p) {
+
+  var humanPlayers = pl.filter(function (p) { return !p.is_robot && !p.robot_uuid; });
+  var robotPlayers = pl.filter(function (p) { return Boolean(p.is_robot || p.robot_uuid); });
+
+  function renderChipInto(p, container) {
     var playerKey = p.player_uuid || p.handle || "";
     var chip = el("div", null, "web-user-chip" + (expandedOnlineUserUuid === playerKey ? " expanded" : ""));
     chip.setAttribute("data-player-uuid", playerKey);
@@ -31885,7 +32772,7 @@ function renderOnlineUsersRoster(players) {
     var handleSpan = el("span", handleText, "web-user-handle");
     chip.appendChild(handleSpan);
 
-    if (p.is_robot) {
+    if (p.is_robot || p.robot_uuid) {
       var botBadge = el("span", "BOT", "badge badge-active");
       botBadge.style.fontSize = "10px";
       botBadge.style.padding = "1px 5px";
@@ -31921,8 +32808,32 @@ function renderOnlineUsersRoster(players) {
       renderOnlineUsersRoster(pl);
     });
 
-    listEl.appendChild(chip);
-  });
+    container.appendChild(chip);
+  }
+
+  if (countEl) countEl.textContent = String(humanPlayers.length);
+  if (listEl) {
+    clear(listEl);
+    if (!humanPlayers.length) {
+      var emptyDiv = el("div", "No connected users right now.", "dim");
+      emptyDiv.style.fontSize = "12.5px";
+      listEl.appendChild(emptyDiv);
+    } else {
+      humanPlayers.forEach(function (p) { renderChipInto(p, listEl); });
+    }
+  }
+
+  if (robotsCountEl) robotsCountEl.textContent = String(robotPlayers.length);
+  if (robotsListEl) {
+    clear(robotsListEl);
+    if (!robotPlayers.length) {
+      var emptyRobotsDiv = el("div", "No connected robots right now.", "dim");
+      emptyRobotsDiv.style.fontSize = "12.5px";
+      robotsListEl.appendChild(emptyRobotsDiv);
+    } else {
+      robotPlayers.forEach(function (p) { renderChipInto(p, robotsListEl); });
+    }
+  }
 }
 
 function refreshLobbyTables() {
@@ -32737,6 +33648,7 @@ async function loadHealth() {
   }
 }
 
+applyTheme(currentTheme);
 loadHealth();
 loadArchiveStats();
 checkHash();
@@ -32747,6 +33659,8 @@ if (typeof window !== "undefined") {
 }
 setInterval(loadHealth, 15000);
 
+window.applyTheme = applyTheme;
+window.PALETTES = PALETTES;
 window.openZoomedSquare = openZoomedSquare;
 window.closeZoomedSquare = closeZoomedSquare;
 window.handlePlaySquareClick = handlePlaySquareClick;

@@ -540,12 +540,16 @@ public final class OctiBoardRenderer {
             for (int x = 1; x <= gw; x++) {
                 double[] sqRect = g.squareRect(x, y);
                 boolean isDark = ((x + y) % 2 == 0);
-                fillRectSolid(pixels, w, h,
-                        sqRect[0], sqRect[1], sqRect[2], sqRect[3],
-                        isDark ? pal.gridCellDark : pal.gridCellLight);
-                drawRectOutline(pixels, w, h,
-                        sqRect[0], sqRect[1], sqRect[2], sqRect[3],
-                        1.0, pal.gridLine);
+                if (isLegacyTheme(pal)) {
+                    fillRectSolid(pixels, w, h,
+                            sqRect[0], sqRect[1], sqRect[2], sqRect[3],
+                            isDark ? pal.gridCellDark : pal.gridCellLight);
+                    drawRectOutline(pixels, w, h,
+                            sqRect[0], sqRect[1], sqRect[2], sqRect[3],
+                            1.0, pal.gridLine);
+                } else {
+                    paintThemedBoardCell(pixels, w, h, sqRect, isDark, pal, x, y);
+                }
 
                 double cx = sqRect[0] + sqRect[2] * 0.5;
                 double cy = sqRect[1] + sqRect[3] * 0.5;
@@ -819,8 +823,8 @@ public final class OctiBoardRenderer {
                 break;
         }
 
-        int darkBg = (pal.themeId == OctiThemeId.ROSEWOOD_IVORY) ? 0xFF140E0B : 0xFF0A0E16;
-        int innerBg = 0xFF070A10;
+        int darkBg = pal.homeBadgeOuterBg;
+        int innerBg = pal.homeBadgeInnerBg;
         fillRectSolid(pixels, w, h, sqRect[0] + 1.0, sqRect[1] + 1.0, sqRect[2] - 2.0, sqRect[3] - 2.0, darkBg);
 
         double ix = sqRect[0] + 3.5;
@@ -882,81 +886,104 @@ public final class OctiBoardRenderer {
         double superOuterR = radius * 1.56;
 
         // 1. Prongs
-        for (int d = 0; d < OctiDir.DIR_MAX; d++) {
-            OctiDir dir = OctiDir.fromIndex(d);
-            OctiProngType pt = pod.prongAt(dir);
-            if (pt == OctiProngType.NO_PRONG) {
-                continue;
-            }
-            double[] u = geo.dirUnitVectorScreen(dir);
-            double px = -u[1];
-            double py = u[0];
+        if (isLegacyTheme(pal)) {
+            for (int d = 0; d < OctiDir.DIR_MAX; d++) {
+                OctiDir dir = OctiDir.fromIndex(d);
+                OctiProngType pt = pod.prongAt(dir);
+                if (pt == OctiProngType.NO_PRONG) {
+                    continue;
+                }
+                double[] u = geo.dirUnitVectorScreen(dir);
+                double px = -u[1];
+                double py = u[0];
 
-            if (pt == OctiProngType.NORMAL_PRONG) {
-                double halfW = Math.max(2.8, radius * 0.20);
-                double[] vx = {
-                    cx + u[0] * prongInnerR - px * halfW,
-                    cx + u[0] * (prongOuterR * 0.86) - px * (halfW * 0.85),
-                    cx + u[0] * prongOuterR,
-                    cx + u[0] * (prongOuterR * 0.86) + px * (halfW * 0.85),
-                    cx + u[0] * prongInnerR + px * halfW
-                };
-                double[] vy = {
-                    cy + u[1] * prongInnerR - py * halfW,
-                    cy + u[1] * (prongOuterR * 0.86) - py * (halfW * 0.85),
-                    cy + u[1] * prongOuterR,
-                    cy + u[1] * (prongOuterR * 0.86) + py * (halfW * 0.85),
-                    cy + u[1] * prongInnerR + py * halfW
-                };
-                OctiAppIconRenderer.fillPolygonShaded(pixels, w, h, vx, vy,
-                        0xFFFFFFFF, pal.prongNormalTip, pal.prongNormalMetal);
-                OctiAppIconRenderer.drawPolygonOutline(pixels, w, h, vx, vy, 1.4, 0xFF0A0F18);
-                OctiAppIconRenderer.drawLineSegment(pixels, w, h,
-                        cx + u[0] * (prongInnerR * 1.05), cy + u[1] * (prongInnerR * 1.05),
-                        cx + u[0] * (prongOuterR * 0.88), cy + u[1] * (prongOuterR * 0.88),
-                        1.2, 0xCCFFFFFF);
-            } else if (pt == OctiProngType.SUPER_PRONG) {
-                double halfW = Math.max(3.6, radius * 0.26);
-                double[] vx = {
-                    cx + u[0] * prongInnerR - px * (halfW * 0.75),
-                    cx + u[0] * (superOuterR * 0.72) - px * (halfW * 1.25),
-                    cx + u[0] * superOuterR,
-                    cx + u[0] * (superOuterR * 0.72) + px * (halfW * 1.25),
-                    cx + u[0] * prongInnerR + px * (halfW * 0.75)
-                };
-                double[] vy = {
-                    cy + u[1] * prongInnerR - py * (halfW * 0.75),
-                    cy + u[1] * (superOuterR * 0.72) - py * (halfW * 1.25),
-                    cy + u[1] * superOuterR,
-                    cy + u[1] * (superOuterR * 0.72) + py * (halfW * 1.25),
-                    cy + u[1] * prongInnerR + py * (halfW * 0.75)
-                };
-                OctiAppIconRenderer.fillPolygonShaded(pixels, w, h, vx, vy,
-                        0xFFFEF08A, pal.prongSuperGold, 0xFFD97706);
-                OctiAppIconRenderer.drawPolygonOutline(pixels, w, h, vx, vy, 1.6, pal.prongSuperCore);
-                OctiAppIconRenderer.drawLineSegment(pixels, w, h,
-                        cx + u[0] * (prongInnerR * 1.05), cy + u[1] * (prongInnerR * 1.05),
-                        cx + u[0] * (superOuterR * 0.90), cy + u[1] * (superOuterR * 0.90),
-                        1.4, 0xFFFEF08A);
+                if (pt == OctiProngType.NORMAL_PRONG) {
+                    double halfW = Math.max(2.8, radius * 0.20);
+                    double[] vx = {
+                        cx + u[0] * prongInnerR - px * halfW,
+                        cx + u[0] * (prongOuterR * 0.86) - px * (halfW * 0.85),
+                        cx + u[0] * prongOuterR,
+                        cx + u[0] * (prongOuterR * 0.86) + px * (halfW * 0.85),
+                        cx + u[0] * prongInnerR + px * halfW
+                    };
+                    double[] vy = {
+                        cy + u[1] * prongInnerR - py * halfW,
+                        cy + u[1] * (prongOuterR * 0.86) - py * (halfW * 0.85),
+                        cy + u[1] * prongOuterR,
+                        cy + u[1] * (prongOuterR * 0.86) + py * (halfW * 0.85),
+                        cy + u[1] * prongInnerR + py * halfW
+                    };
+                    OctiAppIconRenderer.fillPolygonShaded(pixels, w, h, vx, vy,
+                            0xFFFFFFFF, pal.prongNormalTip, pal.prongNormalMetal);
+                    OctiAppIconRenderer.drawPolygonOutline(pixels, w, h, vx, vy, 1.4, 0xFF0A0F18);
+                    OctiAppIconRenderer.drawLineSegment(pixels, w, h,
+                            cx + u[0] * (prongInnerR * 1.05), cy + u[1] * (prongInnerR * 1.05),
+                            cx + u[0] * (prongOuterR * 0.88), cy + u[1] * (prongOuterR * 0.88),
+                            1.2, 0xCCFFFFFF);
+                } else if (pt == OctiProngType.SUPER_PRONG) {
+                    double halfW = Math.max(3.6, radius * 0.26);
+                    double[] vx = {
+                        cx + u[0] * prongInnerR - px * (halfW * 0.75),
+                        cx + u[0] * (superOuterR * 0.72) - px * (halfW * 1.25),
+                        cx + u[0] * superOuterR,
+                        cx + u[0] * (superOuterR * 0.72) + px * (halfW * 1.25),
+                        cx + u[0] * prongInnerR + px * (halfW * 0.75)
+                    };
+                    double[] vy = {
+                        cy + u[1] * prongInnerR - py * (halfW * 0.75),
+                        cy + u[1] * (superOuterR * 0.72) - py * (halfW * 1.25),
+                        cy + u[1] * superOuterR,
+                        cy + u[1] * (superOuterR * 0.72) + py * (halfW * 1.25),
+                        cy + u[1] * prongInnerR + py * (halfW * 0.75)
+                    };
+                    OctiAppIconRenderer.fillPolygonShaded(pixels, w, h, vx, vy,
+                            0xFFFEF08A, pal.prongSuperGold, 0xFFD97706);
+                    OctiAppIconRenderer.drawPolygonOutline(pixels, w, h, vx, vy, 1.6, pal.prongSuperCore);
+                    OctiAppIconRenderer.drawLineSegment(pixels, w, h,
+                            cx + u[0] * (prongInnerR * 1.05), cy + u[1] * (prongInnerR * 1.05),
+                            cx + u[0] * (superOuterR * 0.90), cy + u[1] * (superOuterR * 0.90),
+                            1.4, 0xFFFEF08A);
+                }
             }
+
+            // 2. Drop shadow
+            OctiAppIconRenderer.fillOctagonFlat(pixels, w, h,
+                    cx + radius * 0.07, cy + radius * 0.10, radius * 1.02, 0x7D000000);
+
+            // 3. Outer bevel octagon
+            OctiAppIconRenderer.fillOctagonGradient(pixels, w, h,
+                    cx, cy, radius, fp.highlight, fp.rim, fp.shadow);
+            OctiAppIconRenderer.drawOctagonStroke(pixels, w, h,
+                    cx, cy, radius, highlighted ? 2.2 : 1.2,
+                    highlighted ? pal.prongSuperGold : pal.accentBrass);
+
+            // 4. Inner gem dome octagon
+            OctiAppIconRenderer.fillOctagonGradient(pixels, w, h,
+                    cx, cy, radius * 0.78, fp.highlight, fp.core, fp.shadow);
+            OctiAppIconRenderer.drawOctagonStroke(pixels, w, h,
+                    cx, cy, radius * 0.78, 0.9, fp.highlight);
+        } else {
+            for (int d = 0; d < OctiDir.DIR_MAX; d++) {
+                OctiDir dir = OctiDir.fromIndex(d);
+                OctiProngType pt = pod.prongAt(dir);
+                if (pt == OctiProngType.NO_PRONG) {
+                    continue;
+                }
+                double[] u = geo.dirUnitVectorScreen(dir);
+                double px = -u[1];
+                double py = u[0];
+                paintThemedProng(pixels, w, h, cx, cy, radius, prongInnerR,
+                        (pt == OctiProngType.SUPER_PRONG ? superOuterR : prongOuterR),
+                        u, px, py, pt, pal);
+            }
+
+            // 2. Drop shadow
+            OctiAppIconRenderer.fillOctagonFlat(pixels, w, h,
+                    cx + radius * 0.07, cy + radius * 0.10, radius * 1.02, 0x7D000000);
+
+            // 3 & 4. Themed pod dome & finish
+            paintThemedPodDome(pixels, w, h, cx, cy, radius, fp, pal, highlighted);
         }
-
-        // 2. Drop shadow
-        OctiAppIconRenderer.fillOctagonFlat(pixels, w, h,
-                cx + radius * 0.07, cy + radius * 0.10, radius * 1.02, 0x7D000000);
-
-        // 3. Outer bevel octagon
-        OctiAppIconRenderer.fillOctagonGradient(pixels, w, h,
-                cx, cy, radius, fp.highlight, fp.rim, fp.shadow);
-        OctiAppIconRenderer.drawOctagonStroke(pixels, w, h,
-                cx, cy, radius, highlighted ? 2.2 : 1.2,
-                highlighted ? pal.prongSuperGold : pal.accentBrass);
-
-        // 4. Inner gem dome octagon
-        OctiAppIconRenderer.fillOctagonGradient(pixels, w, h,
-                cx, cy, radius * 0.78, fp.highlight, fp.core, fp.shadow);
-        OctiAppIconRenderer.drawOctagonStroke(pixels, w, h,
-                cx, cy, radius * 0.78, 0.9, fp.highlight);
 
         // 5. Recessed 8-direction prong sockets
         double socketDist = radius * 0.86;
@@ -1024,6 +1051,508 @@ public final class OctiBoardRenderer {
         if (val % 2 == 0) {
             OctiAppIconRenderer.drawCircleStroke(pixels, w, h, cx, cy,
                     Math.max(2.2, r * 1.4), 0.9, color);
+        }
+    }
+
+    public static boolean shouldRenderBaseBitmapTurnIndicator() {
+        return false;
+    }
+
+    public static float computeMonotonicTurnAnimPhase(long uptimeMillis) {
+        long cycle = INDICATOR_CYCLE_PERIOD_MS;
+        long mod = ((uptimeMillis % cycle) + cycle) % cycle;
+        return (float) mod / (float) cycle;
+    }
+
+    static boolean isLegacyTheme(OctiPalette pal) {
+        if (pal == null) {
+            return true;
+        }
+        return (pal.podFinish == OctiPalette.PodFinish.CLASSIC
+                && pal.podPattern == OctiPalette.PodPattern.NONE
+                && pal.prongStyle == OctiPalette.ProngStyle.CLASSIC
+                && pal.boardTexture == OctiPalette.BoardTexture.NONE);
+    }
+
+    private static void fillRoundedRectSolid(int[] pixels, int w, int h,
+                                             double left, double top, double rw, double rh,
+                                             double rad, int color) {
+        int x0 = Math.max(0, (int) Math.floor(left));
+        int x1 = Math.min(w - 1, (int) Math.ceil(left + rw) - 1);
+        int y0 = Math.max(0, (int) Math.floor(top));
+        int y1 = Math.min(h - 1, (int) Math.ceil(top + rh) - 1);
+        int solid = color | 0xFF000000;
+        double r2 = rad * rad;
+        double right = left + rw;
+        double bottom = top + rh;
+        for (int y = y0; y <= y1; y++) {
+            int row = y * w;
+            for (int x = x0; x <= x1; x++) {
+                boolean inCorner = false;
+                double dx = 0.0, dy = 0.0;
+                if (x < left + rad && y < top + rad) {
+                    dx = x - (left + rad); dy = y - (top + rad); inCorner = true;
+                } else if (x > right - rad && y < top + rad) {
+                    dx = x - (right - rad); dy = y - (top + rad); inCorner = true;
+                } else if (x < left + rad && y > bottom - rad) {
+                    dx = x - (left + rad); dy = y - (bottom - rad); inCorner = true;
+                } else if (x > right - rad && y > bottom - rad) {
+                    dx = x - (right - rad); dy = y - (bottom - rad); inCorner = true;
+                }
+                if (!inCorner || (dx * dx + dy * dy <= r2)) {
+                    pixels[row + x] = solid;
+                }
+            }
+        }
+    }
+
+    private static void drawRoundedRectOutline(int[] pixels, int w, int h,
+                                               double left, double top, double rw, double rh,
+                                               double rad, double thickness, int color) {
+        double right = left + rw;
+        double bottom = top + rh;
+        OctiAppIconRenderer.drawLineSegment(pixels, w, h, left + rad, top, right - rad, top, thickness, color);
+        OctiAppIconRenderer.drawLineSegment(pixels, w, h, left + rad, bottom, right - rad, bottom, thickness, color);
+        OctiAppIconRenderer.drawLineSegment(pixels, w, h, left, top + rad, left, bottom - rad, thickness, color);
+        OctiAppIconRenderer.drawLineSegment(pixels, w, h, right, top + rad, right, bottom - rad, thickness, color);
+        int steps = 5;
+        for (int i = 0; i < steps; i++) {
+            double a0 = (Math.PI * 0.5) * (i / (double) steps);
+            double a1 = (Math.PI * 0.5) * ((i + 1) / (double) steps);
+            OctiAppIconRenderer.drawLineSegment(pixels, w, h,
+                    left + rad - Math.cos(a0) * rad, top + rad - Math.sin(a0) * rad,
+                    left + rad - Math.cos(a1) * rad, top + rad - Math.sin(a1) * rad,
+                    thickness, color);
+            OctiAppIconRenderer.drawLineSegment(pixels, w, h,
+                    right - rad + Math.sin(a0) * rad, top + rad - Math.cos(a0) * rad,
+                    right - rad + Math.sin(a1) * rad, top + rad - Math.cos(a1) * rad,
+                    thickness, color);
+            OctiAppIconRenderer.drawLineSegment(pixels, w, h,
+                    right - rad + Math.cos(a0) * rad, bottom - rad + Math.sin(a0) * rad,
+                    right - rad + Math.cos(a1) * rad, bottom - rad + Math.sin(a1) * rad,
+                    thickness, color);
+            OctiAppIconRenderer.drawLineSegment(pixels, w, h,
+                    left + rad - Math.sin(a0) * rad, bottom - rad + Math.cos(a0) * rad,
+                    left + rad - Math.sin(a1) * rad, bottom - rad + Math.cos(a1) * rad,
+                    thickness, color);
+        }
+    }
+
+    private static void paintThemedBoardCell(int[] pixels, int w, int h,
+                                             double[] sqRect, boolean isDark,
+                                             OctiPalette pal, int cellX, int cellY) {
+        int cellBg = isDark ? pal.gridCellDark : pal.gridCellLight;
+        double x = sqRect[0];
+        double y = sqRect[1];
+        double rw = sqRect[2];
+        double rh = sqRect[3];
+        if (pal.cellShape == OctiPalette.CellShape.ROUNDED) {
+            double rad = Math.min(rw, rh) * 0.12;
+            fillRoundedRectSolid(pixels, w, h, x + 0.5, y + 0.5, rw - 1.0, rh - 1.0, rad, cellBg);
+            drawRoundedRectOutline(pixels, w, h, x + 0.5, y + 0.5, rw - 1.0, rh - 1.0, rad, 1.0, pal.gridLine);
+        } else {
+            fillRectSolid(pixels, w, h, x, y, rw, rh, cellBg);
+            drawRectOutline(pixels, w, h, x, y, rw, rh, 1.0, pal.gridLine);
+        }
+
+        if (pal.glowStrength > 0f) {
+            int glowAlpha = (int) (Math.min(1.0f, pal.glowStrength) * 45.0f);
+            int glowCol = (glowAlpha << 24) | (pal.accentBrass & 0x00FFFFFF);
+            drawRectOutline(pixels, w, h, x + 1.5, y + 1.5, rw - 3.0, rh - 3.0, 1.2, glowCol);
+        }
+
+        switch (pal.boardTexture) {
+            case PCB: {
+                int traceCol = 0x3300E5FF;
+                int padCol = 0x7700E5FF;
+                double midY = y + rh * ((cellX % 2 == 0) ? 0.35 : 0.65);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + rw * 0.15, midY, x + rw * 0.85, midY, 1.2, traceCol);
+                double padX = x + rw * ((cellY % 2 == 0) ? 0.30 : 0.70);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, padX, y + rh * 0.15, padX, y + rh * 0.85, 1.0, traceCol);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, padX, midY, 2.2, padCol);
+                break;
+            }
+            case LACQUER_SCROLL: {
+                int goldCol = 0x2BDFBA5C;
+                double arcR = rw * 0.22;
+                OctiAppIconRenderer.drawCircleStroke(pixels, w, h, x + rw * 0.25, y + rh * 0.25, arcR, 1.2, goldCol);
+                OctiAppIconRenderer.drawCircleStroke(pixels, w, h, x + rw * 0.75, y + rh * 0.75, arcR * 0.7, 1.0, goldCol);
+                break;
+            }
+            case FROST: {
+                int frostCol = 0x2F7DD3FC;
+                double fcx = x + rw * 0.5;
+                double fcy = y + rh * 0.5;
+                double fl = rw * 0.28;
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, fcx - fl, fcy - fl, fcx + fl, fcy + fl, 1.1, frostCol);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, fcx - fl, fcy + fl, fcx + fl, fcy - fl, 1.1, frostCol);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, fcx, fcy - fl * 0.6, fcx, fcy + fl * 0.6, 1.0, frostCol);
+                break;
+            }
+            case BASALT_LAVA: {
+                int lavaCol = 0x3DFF5722;
+                double lx1 = x + rw * 0.15;
+                double ly1 = y + rh * 0.25;
+                double lx2 = x + rw * 0.55;
+                double ly2 = y + rh * 0.50;
+                double lx3 = x + rw * 0.85;
+                double ly3 = y + rh * 0.80;
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, lx1, ly1, lx2, ly2, 1.3, lavaCol);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, lx2, ly2, lx3, ly3, 1.3, lavaCol);
+                break;
+            }
+            case SPRINKLES: {
+                int[] sCols = {0x66FFB6C1, 0x666EE7B7, 0x66FDE68A, 0x6693C5FD};
+                int cIdx = Math.abs((cellX * 3 + cellY * 7)) % sCols.length;
+                double sx = x + rw * 0.30;
+                double sy = y + rh * 0.40;
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx, sy, sx + rw * 0.16, sy + rh * 0.08, 2.0, sCols[cIdx]);
+                double sx2 = x + rw * 0.65;
+                double sy2 = y + rh * 0.70;
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx2, sy2, sx2 + rw * 0.08, sy2 - rh * 0.14, 2.0, sCols[(cIdx + 1) % sCols.length]);
+                break;
+            }
+            case CAUSTICS: {
+                int aquaCol = 0x2A5EEAD4;
+                double yMid1 = y + rh * 0.35;
+                double yMid2 = y + rh * 0.68;
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + rw * 0.1, yMid1 - 2, x + rw * 0.5, yMid1 + 2, 1.2, aquaCol);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + rw * 0.5, yMid1 + 2, x + rw * 0.9, yMid1 - 2, 1.2, aquaCol);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + rw * 0.1, yMid2 + 2, x + rw * 0.5, yMid2 - 2, 1.2, aquaCol);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, x + rw * 0.5, yMid2 - 2, x + rw * 0.9, yMid2 + 2, 1.2, aquaCol);
+                break;
+            }
+            case RIVET_PLATE: {
+                int rivetCol = 0x66DDA15E;
+                double off = rw * 0.12;
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, x + off, y + off, 1.6, rivetCol);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, x + rw - off, y + off, 1.6, rivetCol);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, x + off, y + rh - off, 1.6, rivetCol);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, x + rw - off, y + rh - off, 1.6, rivetCol);
+                break;
+            }
+            case STARFIELD: {
+                int starCol1 = 0x77F8FAFC;
+                int starCol2 = 0x66C4B5FD;
+                int hash = (cellX * 37 + cellY * 17) & 0x7FFFFFFF;
+                double p1x = x + rw * (0.20 + 0.60 * ((hash % 100) / 100.0));
+                double p1y = y + rh * (0.20 + 0.60 * (((hash / 100) % 100) / 100.0));
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, p1x, p1y, 1.5, starCol1);
+                double p2x = x + rw * (0.20 + 0.60 * (((hash / 10000) % 100) / 100.0));
+                double p2y = y + rh * (0.20 + 0.60 * (((hash / 1000000) % 100) / 100.0));
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, p2x, p2y, 1.2, starCol2);
+                break;
+            }
+            case NONE:
+            default:
+                break;
+        }
+    }
+
+    private static void paintThemedProng(int[] pixels, int w, int h,
+                                         double cx, double cy, double radius,
+                                         double prongInnerR, double prongOuterR,
+                                         double[] u, double px, double py,
+                                         OctiProngType pt, OctiPalette pal) {
+        boolean isSuper = (pt == OctiProngType.SUPER_PRONG);
+        double outerR = isSuper ? prongOuterR * 1.08 : prongOuterR;
+        int tipCol = isSuper ? pal.prongSuperGold : pal.prongNormalTip;
+        int metalCol = isSuper ? pal.prongSuperGold : pal.prongNormalMetal;
+        int coreCol = isSuper ? pal.prongSuperCore : 0xFFFFFFFF;
+
+        switch (pal.prongStyle) {
+            case NEON_TUBE: {
+                double tubeW = Math.max(3.0, radius * (isSuper ? 0.28 : 0.20));
+                double sx = cx + u[0] * prongInnerR;
+                double sy = cy + u[1] * prongInnerR;
+                double ex = cx + u[0] * outerR;
+                double ey = cy + u[1] * outerR;
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx, sy, ex, ey, tubeW + 2.0, (0x66 << 24) | (metalCol & 0x00FFFFFF));
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx, sy, ex, ey, tubeW, metalCol);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx, sy, ex, ey, Math.max(1.2, tubeW * 0.4), coreCol);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, ex, ey, tubeW * 0.65, coreCol);
+                break;
+            }
+            case FILIGREE: {
+                double halfW = Math.max(3.2, radius * (isSuper ? 0.26 : 0.20));
+                double midR = outerR * 0.70;
+                double[] vx = {
+                    cx + u[0] * prongInnerR - px * (halfW * 0.6),
+                    cx + u[0] * midR - px * (halfW * 1.2),
+                    cx + u[0] * outerR,
+                    cx + u[0] * midR + px * (halfW * 1.2),
+                    cx + u[0] * prongInnerR + px * (halfW * 0.6)
+                };
+                double[] vy = {
+                    cy + u[1] * prongInnerR - py * (halfW * 0.6),
+                    cy + u[1] * midR - py * (halfW * 1.2),
+                    cy + u[1] * outerR,
+                    cy + u[1] * midR + py * (halfW * 1.2),
+                    cy + u[1] * prongInnerR + py * (halfW * 0.6)
+                };
+                OctiAppIconRenderer.fillPolygonShaded(pixels, w, h, vx, vy, tipCol, metalCol, isSuper ? 0xFF854D0E : 0xFF5C4418);
+                OctiAppIconRenderer.drawPolygonOutline(pixels, w, h, vx, vy, 1.4, coreCol);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx + u[0] * prongInnerR, cy + u[1] * prongInnerR, cx + u[0] * (outerR * 0.90), cy + u[1] * (outerR * 0.90), 1.3, coreCol);
+                break;
+            }
+            case ICICLE: {
+                double halfW = Math.max(2.4, radius * (isSuper ? 0.22 : 0.16));
+                double[] vx = {
+                    cx + u[0] * prongInnerR - px * halfW,
+                    cx + u[0] * (outerR * 0.5) - px * (halfW * 0.7),
+                    cx + u[0] * outerR,
+                    cx + u[0] * (outerR * 0.5) + px * (halfW * 0.7),
+                    cx + u[0] * prongInnerR + px * halfW
+                };
+                double[] vy = {
+                    cy + u[1] * prongInnerR - py * halfW,
+                    cy + u[1] * (outerR * 0.5) - py * (halfW * 0.7),
+                    cy + u[1] * outerR,
+                    cy + u[1] * (outerR * 0.5) + py * (halfW * 0.7),
+                    cy + u[1] * prongInnerR + py * halfW
+                };
+                OctiAppIconRenderer.fillPolygonShaded(pixels, w, h, vx, vy, 0xFFFFFFFF, tipCol, metalCol);
+                OctiAppIconRenderer.drawPolygonOutline(pixels, w, h, vx, vy, 1.2, 0xFF7DD3FC);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx + u[0] * prongInnerR, cy + u[1] * prongInnerR, cx + u[0] * outerR, cy + u[1] * outerR, 1.2, 0xFFFFFFFF);
+                break;
+            }
+            case FORGED: {
+                double halfW = Math.max(3.8, radius * (isSuper ? 0.30 : 0.24));
+                double[] vx = {
+                    cx + u[0] * prongInnerR - px * halfW,
+                    cx + u[0] * (outerR * 0.88) - px * (halfW * 1.1),
+                    cx + u[0] * outerR,
+                    cx + u[0] * (outerR * 0.88) + px * (halfW * 1.1),
+                    cx + u[0] * prongInnerR + px * halfW
+                };
+                double[] vy = {
+                    cy + u[1] * prongInnerR - py * halfW,
+                    cy + u[1] * (outerR * 0.88) - py * (halfW * 1.1),
+                    cy + u[1] * outerR,
+                    cy + u[1] * (outerR * 0.88) + py * (halfW * 1.1),
+                    cy + u[1] * prongInnerR + py * halfW
+                };
+                OctiAppIconRenderer.fillPolygonShaded(pixels, w, h, vx, vy, tipCol, metalCol, 0xFF2A150C);
+                OctiAppIconRenderer.drawPolygonOutline(pixels, w, h, vx, vy, 1.6, isSuper ? pal.prongSuperCore : 0xFFF97316);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx + u[0] * prongInnerR, cy + u[1] * prongInnerR, cx + u[0] * (outerR * 0.88), cy + u[1] * (outerR * 0.88), 1.4, coreCol);
+                break;
+            }
+            case LOLLIPOP: {
+                double shaftW = Math.max(2.4, radius * (isSuper ? 0.16 : 0.12));
+                double bulbR = Math.max(4.0, radius * (isSuper ? 0.28 : 0.22));
+                double sx = cx + u[0] * prongInnerR;
+                double sy = cy + u[1] * prongInnerR;
+                double bx = cx + u[0] * (outerR - bulbR);
+                double by = cy + u[1] * (outerR - bulbR);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx, sy, bx, by, shaftW, 0xFFFFFFFF);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx, sy, bx, by, Math.max(1.0, shaftW - 1.0), metalCol);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, bx, by, bulbR, tipCol);
+                OctiAppIconRenderer.drawCircleStroke(pixels, w, h, bx, by, bulbR, 1.2, 0xFFFFFFFF);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, bx - u[1] * bulbR * 0.25, by + u[0] * bulbR * 0.25, bulbR * 0.35, 0xAAFFFFFF);
+                break;
+            }
+            case CORAL: {
+                double halfW = Math.max(2.8, radius * (isSuper ? 0.22 : 0.16));
+                double midR = outerR * 0.65;
+                double[] vx = {
+                    cx + u[0] * prongInnerR - px * halfW,
+                    cx + u[0] * midR - px * (halfW * 1.3),
+                    cx + u[0] * outerR - px * (halfW * 0.6),
+                    cx + u[0] * (outerR * 0.9),
+                    cx + u[0] * outerR + px * (halfW * 0.6),
+                    cx + u[0] * midR + px * (halfW * 1.3),
+                    cx + u[0] * prongInnerR + px * halfW
+                };
+                double[] vy = {
+                    cy + u[1] * prongInnerR - py * halfW,
+                    cy + u[1] * midR - py * (halfW * 1.3),
+                    cy + u[1] * outerR - py * (halfW * 0.6),
+                    cy + u[1] * (outerR * 0.9),
+                    cy + u[1] * outerR + py * (halfW * 0.6),
+                    cy + u[1] * midR + py * (halfW * 1.3),
+                    cy + u[1] * prongInnerR + py * halfW
+                };
+                OctiAppIconRenderer.fillPolygonShaded(pixels, w, h, vx, vy, tipCol, metalCol, 0xFF05382C);
+                OctiAppIconRenderer.drawPolygonOutline(pixels, w, h, vx, vy, 1.2, coreCol);
+                break;
+            }
+            case PIPE: {
+                double pipeW = Math.max(3.2, radius * (isSuper ? 0.24 : 0.18));
+                double sx = cx + u[0] * prongInnerR;
+                double sy = cy + u[1] * prongInnerR;
+                double ex = cx + u[0] * outerR;
+                double ey = cy + u[1] * outerR;
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx, sy, ex, ey, pipeW, metalCol);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx, sy, ex, ey, Math.max(1.0, pipeW * 0.35), tipCol);
+                double fx = cx + u[0] * (outerR * 0.82);
+                double fy = cy + u[1] * (outerR * 0.82);
+                double fHalf = pipeW * 0.75;
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, fx - px * fHalf, fy - py * fHalf, fx + px * fHalf, fy + py * fHalf, 2.0, pal.accentBrass);
+                break;
+            }
+            case COMET: {
+                double tailW = Math.max(3.2, radius * (isSuper ? 0.26 : 0.18));
+                double sx = cx + u[0] * prongInnerR;
+                double sy = cy + u[1] * prongInnerR;
+                double ex = cx + u[0] * outerR;
+                double ey = cy + u[1] * outerR;
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx, sy, ex, ey, tailW + 3.0, (0x44 << 24) | (metalCol & 0x00FFFFFF));
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx, sy, ex, ey, tailW, metalCol);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, sx, sy, ex, ey, Math.max(1.2, tailW * 0.35), coreCol);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, ex, ey, tailW * 0.6, tipCol);
+                break;
+            }
+            case CLASSIC:
+            default: {
+                double halfW = Math.max(2.8, radius * 0.20);
+                double[] vx = {
+                    cx + u[0] * prongInnerR - px * halfW,
+                    cx + u[0] * (outerR * 0.86) - px * (halfW * 0.85),
+                    cx + u[0] * outerR,
+                    cx + u[0] * (outerR * 0.86) + px * (halfW * 0.85),
+                    cx + u[0] * prongInnerR + px * halfW
+                };
+                double[] vy = {
+                    cy + u[1] * prongInnerR - py * halfW,
+                    cy + u[1] * (prongOuterR * 0.86) - py * (halfW * 0.85),
+                    cy + u[1] * prongOuterR,
+                    cy + u[1] * (prongOuterR * 0.86) + py * (halfW * 0.85),
+                    cy + u[1] * prongInnerR + py * halfW
+                };
+                OctiAppIconRenderer.fillPolygonShaded(pixels, w, h, vx, vy, tipCol, metalCol, 0xFF0A0F18);
+                OctiAppIconRenderer.drawPolygonOutline(pixels, w, h, vx, vy, 1.4, coreCol);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx + u[0] * (prongInnerR * 1.05), cy + u[1] * (prongInnerR * 1.05), cx + u[0] * (outerR * 0.88), cy + u[1] * (outerR * 0.88), 1.2, coreCol);
+                break;
+            }
+        }
+    }
+
+    private static void paintThemedPodDome(int[] pixels, int w, int h,
+                                           double cx, double cy, double radius,
+                                           OctiPalette.PodFactionPalette fp,
+                                           OctiPalette pal, boolean highlighted) {
+        OctiAppIconRenderer.fillOctagonGradient(pixels, w, h,
+                cx, cy, radius, fp.highlight, fp.rim, fp.shadow);
+        OctiAppIconRenderer.drawOctagonStroke(pixels, w, h,
+                cx, cy, radius, highlighted ? 2.2 : 1.2,
+                highlighted ? pal.prongSuperGold : pal.accentBrass);
+
+        double innerR = radius * 0.78;
+        OctiAppIconRenderer.fillOctagonGradient(pixels, w, h,
+                cx, cy, innerR, fp.highlight, fp.core, fp.shadow);
+        OctiAppIconRenderer.drawOctagonStroke(pixels, w, h,
+                cx, cy, innerR, 0.9, fp.highlight);
+
+        switch (pal.podFinish) {
+            case GLASS:
+                OctiAppIconRenderer.drawCircleStroke(pixels, w, h, cx, cy - innerR * 0.1, innerR * 0.65, 1.3, 0x66FFFFFF);
+                break;
+            case CARVED:
+                OctiAppIconRenderer.drawOctagonStroke(pixels, w, h, cx, cy, innerR * 0.85, 1.1, 0x55000000);
+                OctiAppIconRenderer.drawOctagonStroke(pixels, w, h, cx, cy, innerR * 0.82, 0.9, 0x66FFFFFF);
+                break;
+            case HAMMERED: {
+                double dimpleR = innerR * 0.15;
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, cx - innerR * 0.35, cy - innerR * 0.35, dimpleR, 0x44FFFFFF);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, cx + innerR * 0.35, cy - innerR * 0.25, dimpleR, 0x33000000);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, cx - innerR * 0.25, cy + innerR * 0.35, dimpleR, 0x33000000);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, cx + innerR * 0.35, cy + innerR * 0.35, dimpleR, 0x44FFFFFF);
+                break;
+            }
+            case GLOSS:
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, cx - innerR * 0.28, cy - innerR * 0.30, innerR * 0.22, 0x88FFFFFF);
+                break;
+            case NACRE:
+                OctiAppIconRenderer.drawCircleStroke(pixels, w, h, cx, cy, innerR * 0.50, 1.8, 0x4099F6E4);
+                break;
+            case BRASS:
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx - innerR * 0.6, cy - innerR * 0.3, cx + innerR * 0.6, cy + innerR * 0.3, 1.6, 0x55FEF08A);
+                break;
+            case PLANETARY:
+                OctiAppIconRenderer.drawOctagonStroke(pixels, w, h, cx, cy, innerR * 0.92, 1.4, 0x66C084FC);
+                break;
+            case CLASSIC:
+            default:
+                break;
+        }
+
+        OctiPalette.PodPattern pat = (fp.pattern != OctiPalette.PodPattern.NONE) ? fp.pattern : pal.podPattern;
+        switch (pat) {
+            case CIRCUIT:
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx - innerR * 0.45, cy, cx + innerR * 0.45, cy, 1.2, 0x6600E5FF);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx, cy - innerR * 0.45, cx, cy + innerR * 0.45, 1.2, 0x6600E5FF);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, cx, cy, 2.0, 0x99FFFFFF);
+                break;
+            case CLOUD_SCROLL:
+                OctiAppIconRenderer.drawCircleStroke(pixels, w, h, cx - innerR * 0.20, cy - innerR * 0.15, innerR * 0.28, 1.1, 0x55DFBA5C);
+                OctiAppIconRenderer.drawCircleStroke(pixels, w, h, cx + innerR * 0.20, cy + innerR * 0.15, innerR * 0.28, 1.1, 0x55DFBA5C);
+                break;
+            case FACET:
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx - innerR * 0.5, cy, cx, cy - innerR * 0.5, 1.0, 0x55FFFFFF);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx, cy - innerR * 0.5, cx + innerR * 0.5, cy, 1.0, 0x55FFFFFF);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx + innerR * 0.5, cy, cx, cy + innerR * 0.5, 1.0, 0x55FFFFFF);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx, cy + innerR * 0.5, cx - innerR * 0.5, cy, 1.0, 0x55FFFFFF);
+                break;
+            case EMBER:
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, cx - innerR * 0.22, cy - innerR * 0.18, 1.6, 0x88FFD700);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, cx + innerR * 0.25, cy - innerR * 0.20, 1.3, 0x88FFD700);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, cx + innerR * 0.10, cy + innerR * 0.25, 1.8, 0x88FFD700);
+                break;
+            case STRIPES: {
+                double off = innerR * 0.32;
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx - innerR * 0.45, cy - off, cx + innerR * 0.45, cy - off, 1.4, 0x44FFFFFF);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx - innerR * 0.55, cy, cx + innerR * 0.55, cy, 1.4, 0x44FFFFFF);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx - innerR * 0.45, cy + off, cx + innerR * 0.45, cy + off, 1.4, 0x44FFFFFF);
+                break;
+            }
+            case DOTS: {
+                double doff = innerR * 0.30;
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, cx - doff, cy - doff, 1.8, 0x55FFFFFF);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, cx + doff, cy - doff, 1.8, 0x55FFFFFF);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, cx - doff, cy + doff, 1.8, 0x55FFFFFF);
+                OctiAppIconRenderer.fillCircleAlpha(pixels, w, h, cx + doff, cy + doff, 1.8, 0x55FFFFFF);
+                break;
+            }
+            case CHECKS: {
+                double coff = innerR * 0.28;
+                fillRectAlpha(pixels, w, h, cx - coff, cy - coff, coff, coff, 0x33FFFFFF, 0.4);
+                fillRectAlpha(pixels, w, h, cx, cy, coff, coff, 0x33FFFFFF, 0.4);
+                break;
+            }
+            case SWIRL:
+                OctiAppIconRenderer.drawCircleStroke(pixels, w, h, cx, cy, innerR * 0.35, 1.3, 0x55FFFFFF);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx - innerR * 0.35, cy, cx, cy - innerR * 0.35, 1.2, 0x55FFFFFF);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx + innerR * 0.35, cy, cx, cy + innerR * 0.35, 1.2, 0x55FFFFFF);
+                break;
+            case SHELL: {
+                double baseCy = cy + innerR * 0.45;
+                for (int i = -2; i <= 2; i++) {
+                    double topX = cx + i * (innerR * 0.22);
+                    double topY = cy - innerR * 0.40;
+                    OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx, baseCy, topX, topY, 1.1, 0x44FFFFFF);
+                }
+                break;
+            }
+            case GEARS: {
+                for (int d = 0; d < 8; d++) {
+                    double ga = Math.toRadians(d * 45.0);
+                    double gx1 = cx + Math.cos(ga) * (innerR * 0.70);
+                    double gy1 = cy + Math.sin(ga) * (innerR * 0.70);
+                    double gx2 = cx + Math.cos(ga) * (innerR * 0.90);
+                    double gy2 = cy + Math.sin(ga) * (innerR * 0.90);
+                    OctiAppIconRenderer.drawLineSegment(pixels, w, h, gx1, gy1, gx2, gy2, 1.4, 0x55FEF08A);
+                }
+                break;
+            }
+            case BANDS: {
+                double boff = innerR * 0.26;
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx - innerR * 0.50, cy - boff, cx + innerR * 0.50, cy - boff, 1.6, 0x44FFFFFF);
+                OctiAppIconRenderer.drawLineSegment(pixels, w, h, cx - innerR * 0.50, cy + boff, cx + innerR * 0.50, cy + boff, 1.6, 0x44FFFFFF);
+                break;
+            }
+            case NONE:
+            default:
+                break;
         }
     }
 
@@ -1435,82 +1964,104 @@ public final class OctiBoardRenderer {
         double prongOuterR = podR * 1.48;
         double superOuterR = podR * 1.55;
 
-        for (int d = 0; d < OctiDir.DIR_MAX; d++) {
-            OctiDir dir = OctiDir.fromIndex(d);
-            OctiProngType pt = pod.prongAt(dir);
-            if (pt == OctiProngType.NO_PRONG) {
-                continue;
-            }
-            double[] u = geo.dirUnitVectorScreen(dir);
-            double u0 = u[0];
-            double u1 = u[1];
-            double px = -u1;
-            double py = u0;
+        if (isLegacyTheme(pal)) {
+            for (int d = 0; d < OctiDir.DIR_MAX; d++) {
+                OctiDir dir = OctiDir.fromIndex(d);
+                OctiProngType pt = pod.prongAt(dir);
+                if (pt == OctiProngType.NO_PRONG) {
+                    continue;
+                }
+                double[] u = geo.dirUnitVectorScreen(dir);
+                double u0 = u[0];
+                double u1 = u[1];
+                double px = -u1;
+                double py = u0;
 
-            if (pt == OctiProngType.NORMAL_PRONG) {
-                double halfW = Math.max(8.0, podR * 0.145);
-                double[] vx = {
-                    podCx + u0 * prongInnerR - px * halfW,
-                    podCx + u0 * (prongOuterR * 0.86) - px * (halfW * 0.85),
-                    podCx + u0 * prongOuterR,
-                    podCx + u0 * (prongOuterR * 0.86) + px * (halfW * 0.85),
-                    podCx + u0 * prongInnerR + px * halfW
-                };
-                double[] vy = {
-                    podCy + u1 * prongInnerR - py * halfW,
-                    podCy + u1 * (prongOuterR * 0.86) - py * (halfW * 0.85),
-                    podCy + u1 * prongOuterR,
-                    podCy + u1 * (prongOuterR * 0.86) + py * (halfW * 0.85),
-                    podCy + u1 * prongInnerR + py * halfW
-                };
-                OctiAppIconRenderer.fillPolygonShaded(targetPixels, s, s, vx, vy,
-                        0xFFFFFFFF, pal.prongNormalTip, pal.prongNormalMetal);
-                OctiAppIconRenderer.drawPolygonOutline(targetPixels, s, s, vx, vy, 1.4, 0xFF05070B);
-                OctiAppIconRenderer.drawLineSegment(targetPixels, s, s,
-                        podCx + u0 * (prongInnerR * 1.05), podCy + u1 * (prongInnerR * 1.05),
-                        podCx + u0 * (prongOuterR * 0.88), podCy + u1 * (prongOuterR * 0.88),
-                        1.4, 0xCCFFFFFF);
-            } else if (pt == OctiProngType.SUPER_PRONG) {
-                double halfW = Math.max(10.0, podR * 0.185);
-                double[] vx = {
-                    podCx + u0 * prongInnerR - px * (halfW * 0.75),
-                    podCx + u0 * (superOuterR * 0.72) - px * (halfW * 1.25),
-                    podCx + u0 * superOuterR,
-                    podCx + u0 * (superOuterR * 0.72) + px * (halfW * 1.25),
-                    podCx + u0 * prongInnerR + px * (halfW * 0.75)
-                };
-                double[] vy = {
-                    podCy + u1 * prongInnerR - py * (halfW * 0.75),
-                    podCy + u1 * (superOuterR * 0.72) - py * (halfW * 1.25),
-                    podCy + u1 * superOuterR,
-                    podCy + u1 * (superOuterR * 0.72) + py * (halfW * 1.25),
-                    podCy + u1 * prongInnerR + py * (halfW * 0.75)
-                };
-                OctiAppIconRenderer.fillPolygonShaded(targetPixels, s, s, vx, vy,
-                        0xFFFEF08A, pal.prongSuperGold, 0xFFD97706);
-                OctiAppIconRenderer.drawPolygonOutline(targetPixels, s, s, vx, vy, 1.8, pal.prongSuperCore);
-                OctiAppIconRenderer.drawLineSegment(targetPixels, s, s,
-                        podCx + u0 * (prongInnerR * 1.05), podCy + u1 * (prongInnerR * 1.05),
-                        podCx + u0 * (superOuterR * 0.90), podCy + u1 * (superOuterR * 0.90),
-                        1.6, 0xFFFEF08A);
+                if (pt == OctiProngType.NORMAL_PRONG) {
+                    double halfW = Math.max(8.0, podR * 0.145);
+                    double[] vx = {
+                        podCx + u0 * prongInnerR - px * halfW,
+                        podCx + u0 * (prongOuterR * 0.86) - px * (halfW * 0.85),
+                        podCx + u0 * prongOuterR,
+                        podCx + u0 * (prongOuterR * 0.86) + px * (halfW * 0.85),
+                        podCx + u0 * prongInnerR + px * halfW
+                    };
+                    double[] vy = {
+                        podCy + u1 * prongInnerR - py * halfW,
+                        podCy + u1 * (prongOuterR * 0.86) - py * (halfW * 0.85),
+                        podCy + u1 * prongOuterR,
+                        podCy + u1 * (prongOuterR * 0.86) + py * (halfW * 0.85),
+                        podCy + u1 * prongInnerR + py * halfW
+                    };
+                    OctiAppIconRenderer.fillPolygonShaded(targetPixels, s, s, vx, vy,
+                            0xFFFFFFFF, pal.prongNormalTip, pal.prongNormalMetal);
+                    OctiAppIconRenderer.drawPolygonOutline(targetPixels, s, s, vx, vy, 1.4, 0xFF05070B);
+                    OctiAppIconRenderer.drawLineSegment(targetPixels, s, s,
+                            podCx + u0 * (prongInnerR * 1.05), podCy + u1 * (prongInnerR * 1.05),
+                            podCx + u0 * (prongOuterR * 0.88), podCy + u1 * (prongOuterR * 0.88),
+                            1.4, 0xCCFFFFFF);
+                } else if (pt == OctiProngType.SUPER_PRONG) {
+                    double halfW = Math.max(10.0, podR * 0.185);
+                    double[] vx = {
+                        podCx + u0 * prongInnerR - px * (halfW * 0.75),
+                        podCx + u0 * (superOuterR * 0.72) - px * (halfW * 1.25),
+                        podCx + u0 * superOuterR,
+                        podCx + u0 * (superOuterR * 0.72) + px * (halfW * 1.25),
+                        podCx + u0 * prongInnerR + px * (halfW * 0.75)
+                    };
+                    double[] vy = {
+                        podCy + u1 * prongInnerR - py * (halfW * 0.75),
+                        podCy + u1 * (superOuterR * 0.72) - py * (halfW * 1.25),
+                        podCy + u1 * superOuterR,
+                        podCy + u1 * (superOuterR * 0.72) + py * (halfW * 1.25),
+                        podCy + u1 * prongInnerR + py * (halfW * 0.75)
+                    };
+                    OctiAppIconRenderer.fillPolygonShaded(targetPixels, s, s, vx, vy,
+                            0xFFFEF08A, pal.prongSuperGold, 0xFFD97706);
+                    OctiAppIconRenderer.drawPolygonOutline(targetPixels, s, s, vx, vy, 1.8, pal.prongSuperCore);
+                    OctiAppIconRenderer.drawLineSegment(targetPixels, s, s,
+                            podCx + u0 * (prongInnerR * 1.05), podCy + u1 * (prongInnerR * 1.05),
+                            podCx + u0 * (superOuterR * 0.90), podCy + u1 * (superOuterR * 0.90),
+                            1.6, 0xFFFEF08A);
+                }
             }
+
+            OctiAppIconRenderer.fillOctagonFlat(targetPixels, s, s,
+                    podCx + podR * 0.05, podCy + podR * 0.08, podR * 1.02, 0x7D000000);
+            OctiAppIconRenderer.fillOctagonGradient(targetPixels, s, s,
+                    podCx, podCy, podR, fp.highlight, fp.rim, fp.shadow);
+            OctiAppIconRenderer.drawOctagonStroke(targetPixels, s, s,
+                    podCx, podCy, podR, drawHighlightRim ? 2.4 : 1.6,
+                    drawHighlightRim ? pal.prongSuperGold : fp.rim);
+
+            OctiAppIconRenderer.fillOctagonGradient(targetPixels, s, s,
+                    podCx, podCy, podR * 0.78, fp.highlight, fp.core, fp.shadow);
+            OctiAppIconRenderer.drawOctagonStroke(targetPixels, s, s,
+                    podCx, podCy, podR * 0.78, 1.2, fp.highlight);
+
+            OctiAppIconRenderer.fillCircleAlpha(targetPixels, s, s, podCx, podCy, podR * 0.18, fp.emblem);
+            OctiAppIconRenderer.drawCircleStroke(targetPixels, s, s, podCx, podCy, podR * 0.18, 1.4, pal.accentBrass);
+        } else {
+            for (int d = 0; d < OctiDir.DIR_MAX; d++) {
+                OctiDir dir = OctiDir.fromIndex(d);
+                OctiProngType pt = pod.prongAt(dir);
+                if (pt == OctiProngType.NO_PRONG) {
+                    continue;
+                }
+                double[] u = geo.dirUnitVectorScreen(dir);
+                double px = -u[1];
+                double py = u[0];
+                paintThemedProng(targetPixels, s, s, podCx, podCy, podR, prongInnerR,
+                        (pt == OctiProngType.SUPER_PRONG ? superOuterR : prongOuterR),
+                        u, px, py, pt, pal);
+            }
+
+            OctiAppIconRenderer.fillOctagonFlat(targetPixels, s, s,
+                    podCx + podR * 0.05, podCy + podR * 0.08, podR * 1.02, 0x7D000000);
+            paintThemedPodDome(targetPixels, s, s, podCx, podCy, podR, fp, pal, drawHighlightRim);
+            OctiAppIconRenderer.fillCircleAlpha(targetPixels, s, s, podCx, podCy, podR * 0.18, fp.emblem);
+            OctiAppIconRenderer.drawCircleStroke(targetPixels, s, s, podCx, podCy, podR * 0.18, 1.4, pal.accentBrass);
         }
-
-        OctiAppIconRenderer.fillOctagonFlat(targetPixels, s, s,
-                podCx + podR * 0.05, podCy + podR * 0.08, podR * 1.02, 0x7D000000);
-        OctiAppIconRenderer.fillOctagonGradient(targetPixels, s, s,
-                podCx, podCy, podR, fp.highlight, fp.rim, fp.shadow);
-        OctiAppIconRenderer.drawOctagonStroke(targetPixels, s, s,
-                podCx, podCy, podR, drawHighlightRim ? 2.4 : 1.6,
-                drawHighlightRim ? pal.prongSuperGold : fp.rim);
-
-        OctiAppIconRenderer.fillOctagonGradient(targetPixels, s, s,
-                podCx, podCy, podR * 0.78, fp.highlight, fp.core, fp.shadow);
-        OctiAppIconRenderer.drawOctagonStroke(targetPixels, s, s,
-                podCx, podCy, podR * 0.78, 1.2, fp.highlight);
-
-        OctiAppIconRenderer.fillCircleAlpha(targetPixels, s, s, podCx, podCy, podR * 0.18, fp.emblem);
-        OctiAppIconRenderer.drawCircleStroke(targetPixels, s, s, podCx, podCy, podR * 0.18, 1.4, pal.accentBrass);
     }
 
     public static int[] renderZoomedPodPixels(OctiBoard board,
@@ -1725,14 +2276,26 @@ public final class OctiBoardRenderer {
         double cy = h * 0.40;
 
         double maxR = Math.hypot(w, h) * 0.65;
+        boolean legacySplash = (pal.themeId == OctiThemeId.OBSIDIAN_BRASS || pal.themeId == OctiThemeId.ROSEWOOD_IVORY);
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
                 double dist = Math.hypot(x - cx, y - cy) / maxR;
                 int col;
-                if (dist < 0.55) {
-                    col = OctiAppIconRenderer.lerpColor(0xFF182234, 0xFF0D121B, dist / 0.55);
+                if (legacySplash) {
+                    if (dist < 0.55) {
+                        col = OctiAppIconRenderer.lerpColor(0xFF182234, 0xFF0D121B, dist / 0.55);
+                    } else {
+                        col = OctiAppIconRenderer.lerpColor(0xFF0D121B, 0xFF05070B, Math.min(1.0, (dist - 0.55) / 0.45));
+                    }
                 } else {
-                    col = OctiAppIconRenderer.lerpColor(0xFF0D121B, 0xFF05070B, Math.min(1.0, (dist - 0.55) / 0.45));
+                    int c0 = pal.panelCardBg;
+                    int c1 = pal.windowBg;
+                    int c2 = 0xFF000000 | ((pal.windowBg >> 1) & 0x7F7F7F);
+                    if (dist < 0.55) {
+                        col = OctiAppIconRenderer.lerpColor(c0, c1, dist / 0.55);
+                    } else {
+                        col = OctiAppIconRenderer.lerpColor(c1, c2, Math.min(1.0, (dist - 0.55) / 0.45));
+                    }
                 }
                 pixels[y * w + x] = col;
             }
@@ -1741,22 +2304,25 @@ public final class OctiBoardRenderer {
         double vpX = w * 0.5;
         double vpY = h * 0.12;
         int numLines = 14;
+        int rayCol = legacySplash ? 0x22C8A253 : ((0x22 << 24) | (pal.accentBrass & 0x00FFFFFF));
         for (int i = -numLines; i <= numLines; i++) {
             double botX = w * 0.5 + i * (w * 0.065);
-            OctiAppIconRenderer.drawLineSegment(pixels, w, h, vpX, vpY, botX, h, 1.0, 0x22C8A253);
+            OctiAppIconRenderer.drawLineSegment(pixels, w, h, vpX, vpY, botX, h, 1.0, rayCol);
         }
         double scrollY = (progress * 180.0) % 36.0;
+        int lineBaseCol = legacySplash ? 0x00C8A253 : (pal.accentBrass & 0x00FFFFFF);
         for (double y = h * 0.35 + scrollY; y < h; y += 36.0) {
             double factor = (y - vpY) / Math.max(1.0, h - vpY);
             int alpha = (int) (0x35 * factor);
-            int lineColor = (alpha << 24) | 0x00C8A253;
+            int lineColor = (alpha << 24) | lineBaseCol;
             OctiAppIconRenderer.drawLineSegment(pixels, w, h, 0, y, w, y, 1.0, lineColor);
         }
 
         double outerR = Math.min(w, h) * 0.28;
         double ringAngleDeg = progress * 360.0 * 0.4;
         OctiAppIconRenderer.drawCircleStroke(pixels, w, h, cx, cy, outerR, 2.2, pal.boardOuterFrame);
-        OctiAppIconRenderer.drawCircleStroke(pixels, w, h, cx, cy, outerR * 0.85, 1.2, 0x66C8A253);
+        int ringInnerCol = legacySplash ? 0x66C8A253 : ((0x66 << 24) | (pal.accentBrass & 0x00FFFFFF));
+        OctiAppIconRenderer.drawCircleStroke(pixels, w, h, cx, cy, outerR * 0.85, 1.2, ringInnerCol);
 
         for (int deg = 0; deg < 360; deg += 15) {
             double r = Math.toRadians(deg + ringAngleDeg);
@@ -1766,7 +2332,7 @@ public final class OctiBoardRenderer {
             double p1y = cy + Math.sin(r) * r1;
             double p2x = cx + Math.cos(r) * r2;
             double p2y = cy + Math.sin(r) * r2;
-            int tickColor = (deg % 90 == 0) ? pal.accentBrass : 0x88C8A253;
+            int tickColor = (deg % 90 == 0) ? pal.accentBrass : (legacySplash ? 0x88C8A253 : ((0x88 << 24) | (pal.accentBrass & 0x00FFFFFF)));
             OctiAppIconRenderer.drawLineSegment(pixels, w, h, p1x, p1y, p2x, p2y, 1.2, tickColor);
         }
 

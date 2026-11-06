@@ -434,7 +434,7 @@ fun OctiReserveHud(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .heightIn(min = 56.dp)
+                    .heightIn(min = 96.dp)
                     .clickable { viewModel.setShowBoardChatZoomDialog(true) },
                 color = OctiTheme.colors.windowBg,
                 shape = RoundedCornerShape(6.dp),

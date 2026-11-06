@@ -11,6 +11,7 @@
 #include <thread>
 #include <nlohmann/json.hpp>
 #include <QAction>
+#include <QActionGroup>
 #include <QApplication>
 #include <QClipboard>
 #include <QDateTime>
@@ -141,6 +142,24 @@ bool DesktopCliArgs::parse(int argc,
     return true;
 }
 
+static QIcon makeThemeSwatchIcon(ThemeId id)
+{
+    const OctiPalette &pal = paletteForTheme(id);
+    QPixmap px(16, 16);
+    px.fill(Qt::transparent);
+    QPainter p(&px);
+    p.setRenderHint(QPainter::Antialiasing, false);
+    p.fillRect(0, 0, 8, 8, pal.windowBg);
+    p.fillRect(8, 0, 8, 8, pal.accentBrass);
+    p.fillRect(0, 8, 8, 8, pal.podA.core);
+    p.fillRect(8, 8, 8, 8, pal.podB.core);
+    p.setPen(pal.accentBrass);
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(0, 0, 15, 15);
+    p.end();
+    return QIcon(px);
+}
+
 /* ==================================================================== */
 /* OctiMainWindow                                                       */
 /* ==================================================================== */
@@ -186,6 +205,7 @@ OctiMainWindow::OctiMainWindow(
       _rotateBoardBtn(nullptr),
       _confirmAllCheck(nullptr),
       _themeToggleBtn(nullptr),
+      _themeCombo(nullptr),
       _sfxMuteBtn(nullptr),
       _newLocalGameBtn(nullptr),
       _archiveBtn(nullptr),
@@ -330,8 +350,20 @@ OctiMainWindow::OctiMainWindow(
     _confirmAllCheck = new QCheckBox("Confirm All Moves", topBar);
     _confirmAllCheck->setChecked(true);
     _confirmAllCheck->setVisible(false);
-    _themeToggleBtn = new QPushButton("Theme: Obsidian", topBar);
+    _themeToggleBtn = new QPushButton("Theme: " + themeDisplayName(_theme), topBar);
     _themeToggleBtn->setVisible(false);
+    _themeCombo = new QComboBox(topBar);
+    _themeCombo->setVisible(false);
+    for (int i = 0; i < 10; ++i) {
+        ThemeId tid = static_cast<ThemeId>(i);
+        _themeCombo->addItem(makeThemeSwatchIcon(tid), themeDisplayName(tid), i);
+    }
+    _themeCombo->setCurrentIndex(static_cast<int>(_theme));
+    QObject::connect(_themeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        if (idx >= 0 && idx < 10 && static_cast<ThemeId>(idx) != _theme) {
+            setTheme(static_cast<ThemeId>(idx));
+        }
+    });
     _sfxMuteBtn = new QPushButton("SFX: On", topBar);
     _sfxMuteBtn->setVisible(false);
     _archiveBtn = new QPushButton("Archive", topBar);
@@ -1276,9 +1308,8 @@ bool OctiMainWindow::confirmAllMoves() const
 
 void OctiMainWindow::toggleTheme()
 {
-    setTheme(_theme == ThemeId::OBSIDIAN_BRASS
-                 ? ThemeId::ROSEWOOD_IVORY
-                 : ThemeId::OBSIDIAN_BRASS);
+    int nextIdx = (static_cast<int>(_theme) + 1) % 10;
+    setTheme(static_cast<ThemeId>(nextIdx));
 }
 
 void OctiMainWindow::setTheme(ThemeId theme)
@@ -1295,9 +1326,12 @@ void OctiMainWindow::setTheme(ThemeId theme)
         _lobbyView->setTheme(_theme);
     }
     if (_themeToggleBtn) {
-        _themeToggleBtn->setText(
-            _theme == ThemeId::OBSIDIAN_BRASS ? "Theme: Obsidian"
-                                              : "Theme: Rosewood");
+        _themeToggleBtn->setText("Theme: " + themeDisplayName(_theme));
+    }
+    if (_themeCombo) {
+        _themeCombo->blockSignals(true);
+        _themeCombo->setCurrentIndex(static_cast<int>(_theme));
+        _themeCombo->blockSignals(false);
     }
     _configStore.preferences().theme = _theme;
     std::string ignoredErr;
@@ -1445,11 +1479,24 @@ void OctiMainWindow::setupMenuBar()
         rotateBoardClockwise();
     });
 
-    QAction *actTheme = viewMenu->addAction(createMenuIcon(MenuIconKind::SWITCH_THEME, _theme), "Switch Tabletop Theme");
+    QAction *actTheme = viewMenu->addAction(createMenuIcon(MenuIconKind::SWITCH_THEME, _theme), "Next Tabletop Theme");
     actTheme->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
     QObject::connect(actTheme, &QAction::triggered, this, [this]() {
         toggleTheme();
     });
+
+    QMenu *themeSelectMenu = viewMenu->addMenu("Select Tabletop Theme");
+    QActionGroup *themeGroup = new QActionGroup(themeSelectMenu);
+    for (int i = 0; i < 10; ++i) {
+        ThemeId tid = static_cast<ThemeId>(i);
+        QAction *actT = themeSelectMenu->addAction(makeThemeSwatchIcon(tid), themeDisplayName(tid));
+        actT->setCheckable(true);
+        actT->setChecked(_theme == tid);
+        themeGroup->addAction(actT);
+        QObject::connect(actT, &QAction::triggered, this, [this, tid]() {
+            setTheme(tid);
+        });
+    }
 
     QAction *actSfx = viewMenu->addAction(createMenuIcon(MenuIconKind::TOGGLE_SFX, _theme), "Toggle Sound Effects (SFX)");
     actSfx->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_M));
@@ -3913,6 +3960,10 @@ void OctiMainWindow::setTelemetryConsentForTesting(const std::string &choice)
 bool OctiMainWindow::uploadCompletedBotGameIfEligible(bool synchronousForTest)
 {
     if (!_isLocalBotGame || _inOnlineRoom) {
+        return false;
+    }
+    if (_localConfig.botDifficulty == BotDifficulty::CASUAL ||
+        _localConfig.botDifficulty == BotDifficulty::TACTICAL) {
         return false;
     }
     OctiGame *game = _board.getGame();

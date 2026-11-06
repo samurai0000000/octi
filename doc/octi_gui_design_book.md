@@ -23,27 +23,50 @@ This document is the **single authoritative source of truth** for the visual app
 
 ## 2. Color Palette, Faction Identity & Luxury Obsidian Theme (`GDB-02`)
 
-All three platforms share a unified dark-luxury obsidian, walnut, and brushed-brass visual palette:
+All three platforms share a unified dark-luxury obsidian, walnut, and brushed-brass visual palette by default, expanded into a full ten-theme catalogue with dedicated style layers:
 
 | Semantic Token | Hex / RGBA | Usage Across Web, Desktop, and Android |
 |---|---|---|
-| **App Background** | `#0B101E` | Root window / viewport background |
-| **Card / Panel Surface** | `#111A2E` | Sidebar cards, reserve HUD cards, lobby cards |
-| **Card Border (Default)** | `#1E2E4A` | Standard structural border (`1px solid`) |
-| **Metallic Brass Accent** | `#D4AF37` / `#F3E5AB` | Active headers, primary outlines, coordinate labels, own chat text |
-| **Board Outer Frame** | `#151B26` $\rightarrow$ `#0A0E16` | Beveled dark frame surrounding the playable grid |
-| **Normal Board Square** | `#131C30` (alt `#101829`) | Standard non-home grid cell fill with `#263554` grid hairlines |
-| **Home Square (`OCTI` Base)** | `#0A0E16` (`rgb(10,14,22)`) | Deep recessed dark slate fill with `#3C485C` inner bevel |
-| **Player A Faction (Red)** | `#E63946` (Border `#FF758F`) | Seat 1 / South in 2P & OFK; SW Corner (`33`) in 4P |
-| **Player B Faction (Green)** | `#2EA043` (Border `#56D364`) | Seat 2 / North in 2P & OFK; NW Corner (`37`) in 4P |
-| **Player C Faction (Blue)** | `#3B82F6` (Border `#93C5FD`) | Seat 3 / NE Corner (`77`) in 4P |
-| **Player D Faction (Amber)** | `#F59E0B` (Border `#FCD34D`) | Seat 4 / SE Corner (`73`) in 4P |
-| **Standard Prong Blade** | `#F2D272` $\rightarrow$ `#C89D32` | Brushed metallic gold prong protruding from octagon facet |
-| **Superprong Blade** | `#E0F2FE` $\rightarrow$ `#38BDF8` | Diamond cyan-white fluted prong blade |
+| **App Background** | `#0B0F17` | Root window / viewport background |
+| **Card / Panel Surface** | `#141B29` | Sidebar cards, reserve HUD cards, lobby cards |
+| **Card Border (Default)** | `#B49148` | Standard structural border (`1px solid`) |
+| **Metallic Brass Accent** | `#C8A253` / `#F2ECE0` | Active headers, primary outlines, coordinate labels, own chat text |
+| **Board Outer Frame** | `#101622` | Beveled dark frame surrounding the playable grid |
+| **Normal Board Square** | `#151E30` (alt `#1D2940`) | Standard non-home grid cell fill with `#B8944C73` grid hairlines |
+| **Home Square (`OCTI` Base)** | `#0A0E16` (`rgb(10,14,22)`) | Deep recessed dark slate fill with `#070A10` inner well |
+| **Player A Faction (Emerald)** | `#10B981` (Border `#059669`) | Seat 1 / South in 2P & OFK; SW Corner (`33`) in 4P |
+| **Player B Faction (Ruby)** | `#F43F5E` (Border `#BE123C`) | Seat 2 / North in 2P & OFK; NW Corner (`37`) in 4P |
+| **Player C Faction (Sapphire)** | `#3B82F6` (Border `#1D4ED8`) | Seat 3 / NE Corner (`77`) in 4P |
+| **Player D Faction (Gold)** | `#F59E0B` (Border `#B45309`) | Seat 4 / SE Corner (`73`) in 4P |
+| **Standard Prong Blade** | `#D6DCE8` $\rightarrow$ `#F8FAFC` | Brushed metallic silver prong protruding from octagon facet |
+| **Superprong Blade** | `#FDE047` $\rightarrow$ `#FFFBEB` | Gold and incandescent core fluted prong blade |
 | **Active Turn Running Light** | `#FF69B4` (Hot Pink) | Animated 30%-edge sweeping line segment on active player's board edge |
 | **Last-Move Square Orbit** | `#FF8C00` (Dark Orange) | Animated 30%-perimeter clockwise orbit around squares modified by last ply |
-| **Guided Destination Ring** | `#10B981` (Emerald Green) | Legal hop/move target square highlight & 1 Hz Commit button pulse |
-| **Danger / Capture / Resign** | `#EF4444` (Crimson Red) | Capture ring indicator, Resign button, Delete/Purge confirmation |
+| **Guided Destination Ring** | `#34D399` (Step) / `#FBBF24` (Jump) | Legal step/jump target square highlight & 1 Hz Commit button pulse |
+| **Danger / Capture / Resign** | `#F43F5E` (Capture Glow) | Capture glow indicator, Resign button, Delete/Purge confirmation |
+
+### `GDB-02.1` Ten-Theme Cross-Platform Palette Catalogue
+OCTI defines exactly 10 first-class visual themes maintained in full cross-platform parity across Desktop (Qt6/C++), Android (Java/Jetpack Compose/Views), and Web (HTML5 Canvas/CSS):
+
+1. **`OBSIDIAN_BRASS` (`obsidian`) — "Obsidian & Brass"**: Legacy flagship luxury dark obsidian stone, deep charcoal panels, brushed warm brass borders, and classic emerald/ruby/sapphire/gold factions.
+2. **`ROSEWOOD_IVORY` (`rosewood`) — "Rosewood & Ivory"**: Warm dark walnut and rosewood grains, polished ivory faction pods with carved bezels, amber citrine accents, and warm parchment highlights.
+3. **`NEON_CIRCUIT` (`neon`) — "Neon Circuit"**: Cyberpunk command deck with dark phosphor slate surfaces, printed circuit board (PCB) traces, luminous neon tube prongs, and vibrant cyan/magenta/lime/amber factions with intense edge glow (`glowStrength = 0.85`).
+4. **`JADE_DYNASTY` (`jade`) — "Jade Dynasty"**: Imperial lacquerware with cloud-scroll lacquer board textures, carved nephrite and jadeite pods, gold filigree prongs, and cinnabar/lapis/saffron faction tones.
+5. **`ARCTIC_AURORA` (`aurora`) — "Arctic Aurora"**: Glacial crystalline ice sheets with frosted board textures, rounded cell corners, faceted glass pods, icicle-styled prongs, and polar teal/crimson/cobalt/solar factions (`glowStrength = 0.60`).
+6. **`VOLCANIC_FORGE` (`forge`) — "Volcanic Forge"**: Smoldering basalt rock, cooled magma fissures, hammered cast-iron pods with ember patterns, heavy forged industrial prongs, and verdigris/molten/tempered-steel factions (`glowStrength = 0.70`).
+7. **`CANDY_POP` (`candy`) — "Candy Pop"**: Pastel confectionary arcade with rounded candy cells, sugar-sprinkle board texture, glossy glazed pods with faction-specific patterns (`STRIPES`, `DOTS`, `CHECKS`, `SWIRL`), and lollipop prongs.
+8. **`OCEAN_PEARL` (`pearl`) — "Ocean Pearl"**: Deep abyssal trench with underwater caustics, iridescent nacre shell pods, branching organic coral prongs, and seafoam/coral/sapphire/amber-pearl factions.
+9. **`STEAMPUNK_BRASS` (`steam`) — "Steampunk Brass"**: Victorian industrial workshop with riveted iron boiler plates, interlocking clockwork brass gear pods, copper pipe prongs, and patina/oxblood/aether factions.
+10. **`COSMIC_NEBULA` (`nebula`) — "Cosmic Nebula"**: Deep space observatory with distant starfield textures, planetary banded gas-giant pods, high-energy ionized comet prongs, and luminous exoplanet/pulsar/helios factions (`glowStrength = 0.80`).
+
+### `GDB-02.2` Style Layer Architecture
+In addition to 46 semantic color tokens per theme, each palette includes a 6-attribute physical rendering style layer:
+- **`PodFinish`**: Defines surface lighting model (`CLASSIC`, `GLASS`, `CARVED`, `HAMMERED`, `GLOSS`, `NACRE`, `BRASS`, `PLANETARY`).
+- **`PodPattern`**: Micro-texture rendered across pod domes (`NONE`, `CIRCUIT`, `CLOUD_SCROLL`, `FACET`, `EMBER`, `STRIPES`, `DOTS`, `CHECKS`, `SWIRL`, `SHELL`, `GEARS`, `BANDS`, `FACTION_SPECIFIC`).
+- **`ProngStyle`**: Geometric shape profile of protruding prong blades (`CLASSIC`, `NEON_TUBE`, `FILIGREE`, `ICICLE`, `FORGED`, `LOLLIPOP`, `CORAL`, `PIPE`, `COMET`).
+- **`BoardTexture`**: Procedural or cached canvas background texture (`NONE`, `PCB`, `LACQUER_SCROLL`, `FROST`, `BASALT_LAVA`, `SPRINKLES`, `CAUSTICS`, `RIVET_PLATE`, `STARFIELD`).
+- **`CellShape`**: Grid geometry (`SQUARE` sharp corners vs. `ROUNDED` radiused tiles).
+- **`glowStrength`**: Scalar float $\in [0.0, 1.0]$ governing outer luminescence, neon glow falloff, and portal aura intensity.
 
 ---
 
@@ -75,6 +98,13 @@ When viewing a match on Desktop (`OctiMainWindow`) or Desktop Web (`> 980px`), t
 - **Edge-to-Edge Full-Width Square Board**: On Android portrait (and narrow mobile viewports), the 9×9 (or 6×7) grid renders **edge-to-edge across 100% of the available width** (`outerFramePad = 0`, `coordGutter = 0`) to maximize touch target size.
 - **In-Cell Corner Coordinate Digits**: Because outer gutters are omitted on mobile portrait, subtle brass coordinate digits (`1..9`) are drawn inside the outer corners of column `1` and row `1` squares.
 - **Top & Bottom Reserve HUD Strips**: Compact horizontal Reserve HUD cards sit immediately above and below the square board, dynamically swapped with `boardRotationDeg` so the bottom HUD always belongs to the player whose home edge is at the bottom of the screen.
+- **Bottom Navigation Bar Removal & Top `Menu ▾` Relocation**: The legacy bottom navigation bar is completely removed from mobile portrait layouts. Global navigation items (Theme Selector, Account Settings, Sound, Voice Settings, About/Updates) are consolidated into a top-right `Menu ▾` overflow dropdown.
+- **Reclaimed Space for Expanded Table Chat**: The space previously occupied by the bottom bar is reclaimed to expand the docked `Table Chat` and event log, ensuring messages, room status transitions, and keyboard-friendly chat inputs have ample vertical clearance without obscuring the board.
+- **Three Swipeable Virtual Screens (Horizontal Pager)**: On mobile portrait, the main interface is organized as a smooth 3-page horizontal swipeable layout ordered strictly left-to-right:
+  1. **Left Screen (`0`) — `Online Lobby`**: Room browser, table cards, seating slots, and split rosters for `Connected Users` and `Connected Robots`.
+  2. **Center Screen (`1`) — `Board` (Default View)**: 1:1 square playable board, top/bottom Reserve HUDs, turn clock, AI progress bar, and expanded table chat.
+  3. **Right Screen (`2`) — `Lobby Chat`**: Full-screen global community chat feed and player presence list.
+- **Quick-Switch Navigation Buttons**: Quick-switch shortcuts (`To Lobby` and `To Chat`) are docked in the app header and sidebar, allowing instantaneous jumping directly between `Online Lobby` and `Lobby Chat` without requiring repetitive horizontal swipes across the center `Board` screen.
 
 ---
 
@@ -114,6 +144,9 @@ When multiple pods occupy the same square, the visual stacking order is intentio
    - It must **never** be hidden simply because the local player is waiting for an online opponent's move.
 3. **Board-Edge Exclusivity**:
    - The pink running light is drawn **only** along the edge of the board canvas—never around the Reserve HUD cards.
+4. **Pre-Game Suppression & Monotonic Turn Streak Rendering**:
+   - **Pre-Game Suppression**: Before a match begins—locally when `!matchStarted` (awaiting "Start Match" card confirmation) and online when room phase is not active (`phase !== "IN_PROGRESS"` / `WAITING_FOR_PLAYERS`)—the animated pink running line must be **strictly suppressed** across Web, Desktop, and Android. No ghost turn streak or premature turn indicator may be drawn while players are waiting or configuring game options.
+   - **Android Monotonic Turn Streak Rendering**: To eliminate bitmap cache ghosting, tearing, or double-rendering in Android, `showTurnIndicator = false` is strictly enforced when rendering the cached off-screen board bitmap. The dynamic pink turn streak is composited live during view `onDraw()` driven by monotonic system uptime (`SystemClock.uptimeMillis()`).
 
 ### `GDB-05.2` Orange (`#FF8C00`) Last-Move Square Perimeter Indicator
 1. **Visual Specification**:
@@ -273,16 +306,38 @@ Each player's Reserve HUD card displays:
    - **Superprongs (`0..2`)**: Vector cyan-white diamond prong icon + remaining count. **Completely hidden** whenever `!useSuperProngs` (Standard 2P without superprongs, and OFK).
    - **Captured (`0..N`)**: Displays **opponent pods captured by this player**, rendered in the **opponent's pod color** with a crimson capture ring + count. **Completely hidden** whenever `captured == 0` or in OFK.
 
+### `GDB-10.3` Web UI Compact Match Actions Card & Leave Table Location
+1. **Compact Actions Card Placement**:
+   - In the Web client (`WebUi.cxx`), the match actions card is positioned inside `#web-side-top-half` directly below `Lobby Chat`.
+   - Displays contextual game controls (`Undo`, `Draw`, `Resign`, `Rotate 90°`) without redundant or duplicate `Sit/Sit` buttons (seating actions remain exclusively on Reserve HUD cards and Lobby table cards).
+2. **`Leave Table` Docked Inside Table Chat Card**:
+   - The primary **`Leave Table`** button (`#btn-web-leave-table`) is located directly inside the `Table Chat` card header (`#web-board-chat-panel`).
+   - Ensures room departure is always immediately accessible in online play without cluttering the match action card or requiring scrolling.
+
+### `GDB-10.4` Archive Upload Policy (Ignoring Level 1 & Level 2 AI Matches)
+1. **Low-Difficulty Bot Upload Filtering**:
+   - Matches played against Level 1 (`CASUAL`) and Level 2 (`TACTICAL`) AI bots are strictly ignored for online archive database storage across Web, Android, Desktop, and `octi-server`.
+   - Prevents database bloating while reserving global match archives for human-vs-human online play and Level 3 (`MASTER`) AI games.
+2. **Server API Response Contract**:
+   - When a client sends `POST /api/v1/archive/upload` for a Level 1 or Level 2 match, `octi-server` returns HTTP `200 OK` with JSON:
+     `{"ok": true, "ignored": true, "reason": "ai_level_below_threshold"}`
+   - Clients treat this response as an immediate success without alerting the user or retrying, while existing database records and indexes remain intact.
+
 ---
 
 ## 11. Online Lobby, Table Chat & Borderless Chat Zoom Modal (`GDB-11`)
 
-### `GDB-11.1` Online Lobby Table Cards
-- Active online rooms are displayed as visual table cards showing:
+### `GDB-11.1` Online Lobby Table Cards & Segregated Participant Rosters
+- **Active Table Cards**: Active online rooms are displayed as visual table cards showing:
   - Room ID (`g-YYYYMMDD-NNNN`), Game Mode badge (`2P`, `4P`, `OFK`), Time Control (`10+5`, etc.), and Room Status (`Waiting for Players` or `In Progress • Move N`).
   - Seat slots (`Seat 1 (A)` .. `Seat N`) listing the seated player's name and rating or `[Open]`.
   - Action buttons: **`Join Table`** (opens the room view and sits if an open seat was clicked), **`Observe`**, and **`Delete/Purge Table`** (for table creator when no opponent is seated, or admin `@samurai`, always guarded by a confirmation dialog).
-- Leaving an `IN_PROGRESS` table as an observer or player via **`Leave Table`** returns cleanly to the Lobby view without hanging or blocking UI threads.
+- **Clean Lobby Return**: Leaving an `IN_PROGRESS` table as an observer or player via **`Leave Table`** returns cleanly to the Lobby view without hanging or blocking UI threads.
+- **Segregated `Connected Users` and `Connected Robots` Rosters**:
+  - Across Web, Android, and Desktop lobbies, connected clients are partitioned into two strictly separate, non-overlapping rosters:
+    1. **`Connected Users`**: Displays registered human players currently connected to the server.
+    2. **`Connected Robots`**: Displays autonomous robot engine clients connected via the bot API.
+  - Human and robot accounts must **never** be mingled into a single undifferentiated list or count.
 
 ### `GDB-11.2` 3-Color Table Chat, `@bot` Support & Borderless `BoardChatZoomDialog`
 1. **Complete Room Event & Chat Stream**:
@@ -328,3 +383,7 @@ Every release and GUI modification must pass automated end-to-end verification a
 | `CHK-12` | **No Legacy `"Quick Guide"` Card**; Reserve cards show Superprongs only when enabled and Captured pods in opponent's color only when `> 0` (`GDB-03.2`, `GDB-10.2`) | Required | Required | Required |
 | `CHK-13` | **3-Color Auto-Scrolling Table Chat** with borderless click-to-zoom `BoardChatZoomDialog` (`GDB-11.2`) | Required | Required | Required |
 | `CHK-14` | **Cursor-Advancing SSE (`since_seq > 0`) & Zero UI-Thread Socket Calls** (`GDB-12.1`) | Required | Required | Required |
+| `CHK-15` | **Ten-Theme Cross-Platform Parity & Style Layer Invariants** (`GDB-02.1`, `GDB-02.2`) | Required | Required | Required |
+| `CHK-16` | **Segregated `Connected Users` and `Connected Robots` Rosters** (`GDB-11.1`) | Required | Required | Required |
+| `CHK-17` | **Pre-Game Pink Running Light Suppression** (`!matchStarted` / `WAITING_FOR_PLAYERS`) (`GDB-05.1`) | Required | Required | Required |
+| `CHK-18` | **Casual & Tactical AI Archive Upload Ignoring** (`HTTP 200 {"ok":true,"ignored":true}`) (`GDB-10.4`) | Required | Required | Required |

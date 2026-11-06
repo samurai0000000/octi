@@ -119,6 +119,79 @@ public class OctiDesktopParityTest {
         assertTrue("android_splash_sha256.png artifact must exist", splashFile.isFile());
         assertTrue("android_splash_sha256.png must be non-empty", splashFile.length() > 4096);
     }
+
+    @Test
+    public void testAllTenThemePalettesParityAndCompleteness() {
+        OctiThemeId[] themes = OctiThemeId.values();
+        assertEquals("Must support exactly 10 themes", 10, themes.length);
+
+        for (OctiThemeId themeId : themes) {
+            OctiPalette pal = OctiPalette.paletteForTheme(themeId);
+            assertNotNull("Palette for " + themeId + " must not be null", pal);
+            assertEquals("ThemeId must match", themeId, pal.themeId);
+
+            // Verify chrome colors are non-zero
+            assertTrue("windowBg non-zero", pal.windowBg != 0);
+            assertTrue("panelCardBg non-zero", pal.panelCardBg != 0);
+            assertTrue("panelCardBorder non-zero", pal.panelCardBorder != 0);
+            assertTrue("textPrimary non-zero", pal.textPrimary != 0);
+            assertTrue("textSecondary non-zero", pal.textSecondary != 0);
+            assertTrue("accentBrass non-zero", pal.accentBrass != 0);
+
+            // Verify board colors
+            assertTrue("boardOuterFrame non-zero", pal.boardOuterFrame != 0);
+            assertTrue("gridCellDark non-zero", pal.gridCellDark != 0);
+            assertTrue("gridCellLight non-zero", pal.gridCellLight != 0);
+            assertTrue("coordLabel non-zero", pal.coordLabel != 0);
+
+            // Verify guide colors
+            assertTrue("neutralOctiFill non-zero", pal.neutralOctiFill != 0);
+            assertTrue("neutralOctiRim non-zero", pal.neutralOctiRim != 0);
+            assertTrue("edgelessPortalGlow non-zero", pal.edgelessPortalGlow != 0);
+            assertTrue("legalStepGuide non-zero", pal.legalStepGuide != 0);
+            assertTrue("legalJumpGuide non-zero", pal.legalJumpGuide != 0);
+            assertTrue("legalCaptureGlow non-zero", pal.legalCaptureGlow != 0);
+
+            // Verify prongs
+            assertTrue("prongNormalMetal non-zero", pal.prongNormalMetal != 0);
+            assertTrue("prongNormalTip non-zero", pal.prongNormalTip != 0);
+            assertTrue("prongSuperGold non-zero", pal.prongSuperGold != 0);
+            assertTrue("prongSuperCore non-zero", pal.prongSuperCore != 0);
+
+            // Verify style layers
+            assertNotNull("podFinish non-null", pal.podFinish);
+            assertNotNull("podPattern non-null", pal.podPattern);
+            assertNotNull("prongStyle non-null", pal.prongStyle);
+            assertNotNull("boardTexture non-null", pal.boardTexture);
+            assertNotNull("cellShape non-null", pal.cellShape);
+            assertTrue("glowStrength in [0.0, 1.0]", pal.glowStrength >= 0.0f && pal.glowStrength <= 1.0f);
+
+            // Verify faction palettes
+            OctiPalette.PodFactionPalette[] factions = new OctiPalette.PodFactionPalette[] {
+                pal.podA, pal.podB, pal.podC, pal.podD
+            };
+            for (int f = 0; f < factions.length; f++) {
+                OctiPalette.PodFactionPalette fp = factions[f];
+                assertNotNull("PodFactionPalette for faction " + f + " non-null", fp);
+                assertTrue("core non-zero", fp.core != 0);
+                assertTrue("rim non-zero", fp.rim != 0);
+                assertTrue("highlight non-zero", fp.highlight != 0);
+                assertTrue("shadow non-zero", fp.shadow != 0);
+                assertTrue("emblem non-zero", fp.emblem != 0);
+                assertNotNull("pattern non-null", fp.pattern);
+            }
+
+            // Verify faction mapping helpers
+            assertNotNull("factionForPodType A_POD", pal.factionForPodType(OctiPodType.A_POD));
+            assertNotNull("factionForPodType B_POD", pal.factionForPodType(OctiPodType.B_POD));
+            assertNotNull("factionForPodType C_POD", pal.factionForPodType(OctiPodType.C_POD));
+            assertNotNull("factionForPodType D_POD", pal.factionForPodType(OctiPodType.D_POD));
+            assertNotNull("factionForPlayer PLAYER_A", pal.factionForPlayer(OctiPlayer.PLAYER_A));
+            assertNotNull("factionForPlayer PLAYER_B", pal.factionForPlayer(OctiPlayer.PLAYER_B));
+            assertNotNull("factionForPlayer PLAYER_C", pal.factionForPlayer(OctiPlayer.PLAYER_C));
+            assertNotNull("factionForPlayer PLAYER_D", pal.factionForPlayer(OctiPlayer.PLAYER_D));
+        }
+    }
 }
 
 /*
