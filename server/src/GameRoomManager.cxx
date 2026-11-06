@@ -1158,7 +1158,7 @@ RoomResult GameRoomManager::postLobbyChat(int64_t playerId,
                                           const std::string &text)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    if (playerId <= 0 || !ensurePlayerLocked(playerId)) {
+    if ((playerId <= 0 && !isRobotActorId(playerId)) || !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
     std::string clean;
