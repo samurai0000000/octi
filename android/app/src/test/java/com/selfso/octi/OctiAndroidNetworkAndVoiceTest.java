@@ -1165,7 +1165,7 @@ public class OctiAndroidNetworkAndVoiceTest {
     }
 
     @Test
-    public void testLocalBotChatCommandsHelpEvalStats() {
+    public void testLocalGameChatDoesNotEmitCannedBotReplies() {
         try (OctiAppViewModel vm = new OctiAppViewModel()) {
             vm.startNewLocalGame(
                     OctiGameMode.GAME_MODE_2,
@@ -1177,26 +1177,15 @@ public class OctiAndroidNetworkAndVoiceTest {
                     OctiPlayer.PLAYER_A);
             assertEquals(0, vm.getGameChatLog().getValue().size());
 
-            // 1. Send @bot help
-            vm.sendGameChat("ALL", "@bot help");
+            vm.sendGameChat("ALL", "Hello table!");
             List<OctiAppViewModel.GameChatMessage> log = vm.getGameChatLog().getValue();
+            assertEquals(1, log.size());
+            assertEquals("Hello table!", log.get(0).getText());
+
+            vm.sendGameChat("ALL", "@bot help");
+            log = vm.getGameChatLog().getValue();
             assertEquals(2, log.size());
-            assertEquals("@bot help", log.get(0).getText());
-            assertTrue(log.get(1).getText().contains("Bot commands: @bot help, @bot eval, @bot stats"));
-
-            // 2. Send @bot eval
-            vm.sendGameChat("ALL", "@bot eval");
-            log = vm.getGameChatLog().getValue();
-            assertEquals(4, log.size());
-            assertEquals("@bot eval", log.get(2).getText());
-            assertTrue(log.get(3).getText().contains("Position eval score"));
-
-            // 3. Send @bot stats
-            vm.sendGameChat("ALL", "@bot stats");
-            log = vm.getGameChatLog().getValue();
-            assertEquals(6, log.size());
-            assertEquals("@bot stats", log.get(4).getText());
-            assertTrue(log.get(5).getText().contains("Local AI Bot"));
+            assertEquals("@bot help", log.get(1).getText());
         }
     }
 

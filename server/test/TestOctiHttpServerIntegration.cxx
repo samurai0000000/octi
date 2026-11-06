@@ -5873,7 +5873,7 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("OCTI v2.3.7") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v2.3.8") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Official Platform") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("OFFICIAL PLATFORM") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("Lv4: Expert (40s)") != std::string::npos);
@@ -5920,6 +5920,41 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(posChatBox != std::string::npos);
     CHECK_TRUE(posUsersSec != std::string::npos);
     CHECK_TRUE(posChatBox < posUsersSec);
+
+    /* Move History moved to left column (#web-play-reserves-col); Lobby Chat in right column (#web-side-top-half) */
+    size_t posReservesCol = rIndex.body.find("id=\"web-play-reserves-col\"");
+    size_t posMoveHistory = rIndex.body.find("id=\"web-move-history-panel\"");
+    size_t posResCardA = rIndex.body.find("id=\"web-res-card-a\"");
+    size_t posSideTopHalf = rIndex.body.find("id=\"web-side-top-half\"");
+    size_t posBoardLobbyChat = rIndex.body.find("id=\"web-board-lobby-chat-panel\"");
+    size_t posBoardChatPanel = rIndex.body.find("id=\"web-board-chat-panel\"");
+    CHECK_TRUE(posReservesCol != std::string::npos);
+    CHECK_TRUE(posMoveHistory != std::string::npos);
+    CHECK_TRUE(posResCardA != std::string::npos);
+    CHECK_TRUE(posSideTopHalf != std::string::npos);
+    CHECK_TRUE(posBoardLobbyChat != std::string::npos);
+    CHECK_TRUE(posBoardChatPanel != std::string::npos);
+    CHECK_TRUE(posReservesCol < posMoveHistory);
+    CHECK_TRUE(posMoveHistory < posResCardA);
+    CHECK_TRUE(posSideTopHalf < posBoardLobbyChat);
+    CHECK_TRUE(posBoardLobbyChat < posBoardChatPanel);
+
+    /* Account tab admin purge toggle (default off), context isolation, @bot removal, and realtime lobby sync */
+    CHECK_TRUE(rIndex.body.find("id=\"account-admin-controls\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"web-admin-purge-toggle\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("var webAdminPurgeEnabled = false;") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("function isWebAdminPurgeActive()") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("function saveLocalPlayContext()") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("function restoreLocalPlayContext()") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("function saveOnlinePlayContext()") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("function restoreOnlinePlayContext()") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("function startLobbyRealtimeSync()") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("function stopLobbyRealtimeSync()") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("function appendLobbyChatEvent(ev)") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("/api/v1/lobby/events?stream=1&since_seq=") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("@bot help") == std::string::npos);
+    CHECK_TRUE(rIndex.body.find("@bot eval") == std::string::npos);
+    CHECK_TRUE(rIndex.body.find("@bot stats") == std::string::npos);
 }
 
 TEST(OctiHttpServerIntegrationTest, WebUiGuiDesignBookComplianceInvariants)

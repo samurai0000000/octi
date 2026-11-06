@@ -479,7 +479,7 @@ fun OctiReserveHud(
                             contentAlignment = Alignment.CenterStart
                         ) {
                             Text(
-                                text = "Table Chat • Tap to open & chat (@bot help, @bot eval)",
+                                text = "Table Chat • Tap to open & chat",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = OctiTheme.colors.textSecondary,
                                 maxLines = 2,

@@ -66,34 +66,9 @@ fun ArchiveScreen(
 
     var selectedMode by remember { mutableStateOf("2P") }
     var currentSubTab by remember { mutableStateOf(ArchiveSubTab.LEADERBOARD) }
-    var purgeConfirmGameId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshRobotsDirectoryAsync()
-    }
-
-    purgeConfirmGameId?.let { gameId ->
-        AlertDialog(
-            onDismissRequest = { purgeConfirmGameId = null },
-            title = { Text("Purge Archived Game") },
-            text = { Text("Are you sure you want to permanently purge archived game $gameId? This cannot be undone.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.purgeArchivedGame(gameId)
-                        purgeConfirmGameId = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Purge")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { purgeConfirmGameId = null }) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 
     Column(
@@ -277,17 +252,6 @@ fun ArchiveScreen(
                                             )
                                         ) {
                                             Text("Replay in VCR")
-                                        }
-                                        if (currentProfile?.isAdmin == true) {
-                                            Button(
-                                                onClick = { purgeConfirmGameId = game.gameId },
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = MaterialTheme.colorScheme.error,
-                                                    contentColor = Color.White
-                                                )
-                                            ) {
-                                                Text("Purge")
-                                            }
                                         }
                                     }
                                 }

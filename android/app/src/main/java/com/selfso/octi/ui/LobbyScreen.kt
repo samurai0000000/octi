@@ -242,16 +242,9 @@ fun LobbyScreen(
     }
 
     purgeConfirmTableId?.let { roomId ->
-        val targetT = lobbyState.tables.firstOrNull { it.roomId == roomId }
-        val isHost = (!profile?.uuid.isNullOrBlank() && profile?.uuid == targetT?.hostUuid)
-        val isAdmin = profile?.isAdmin == true
-        val titleText = if (isAdmin && !isHost) "Purge Table" else "Delete Table"
-        val bodyText = if (isAdmin && !isHost) {
-            "Are you sure you want to permanently purge table #$roomId? All players will be disconnected and the table removed immediately."
-        } else {
-            "Are you sure you want to delete table #$roomId? All players will be disconnected and the table removed."
-        }
-        val btnText = if (isAdmin && !isHost) "Purge" else "Delete"
+        val titleText = "Delete Table"
+        val bodyText = "Are you sure you want to delete table #$roomId? All players will be disconnected and the table removed."
+        val btnText = "Delete"
         AlertDialog(
             onDismissRequest = { purgeConfirmTableId = null },
             containerColor = OctiTheme.colors.panelCardBg,
@@ -690,19 +683,6 @@ fun LobbyScreen(
                                             )
                                         ) {
                                             Text("Join")
-                                        }
-                                        val isHost = !profile?.uuid.isNullOrBlank() && profile?.uuid == t.hostUuid
-                                        val isAdmin = profile?.isAdmin == true
-                                        if (isAdmin || isHost) {
-                                            Button(
-                                                onClick = { purgeConfirmTableId = t.roomId },
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = MaterialTheme.colorScheme.error,
-                                                    contentColor = Color.White
-                                                )
-                                            ) {
-                                                Text(if (isAdmin && !isHost) "Purge" else "Delete")
-                                            }
                                         }
                                     }
                                 }

@@ -3500,28 +3500,6 @@ class OctiAppViewModel @JvmOverloads constructor(
             )
             val updated = ArrayList(_gameChatLog.value)
             updated.add(userMsg)
-            val lower = trimmed.lowercase(Locale.ROOT)
-            if (lower.startsWith("@bot") || lower.startsWith("@stock")) {
-                val botReplyText = when {
-                    lower.contains("help") -> "Bot commands: @bot help, @bot eval, @bot stats"
-                    lower.contains("eval") -> {
-                        val evalScore = OctiBotEngine.evaluatePosition(board, board.game?.turn ?: OctiPlayer.PLAYER_A)
-                        "Position eval score: $evalScore"
-                    }
-                    lower.contains("stats") -> "Local AI Bot (mode=${_botPlayStyle.value}, timeBudget=${_botTimeBudgetMs.value}ms)"
-                    else -> "Bot commands: @bot help, @bot eval, @bot stats"
-                }
-                val botMsg = GameChatMessage(
-                    seq = System.currentTimeMillis() + 1,
-                    scope = scope,
-                    senderUuid = "bot",
-                    senderHandle = "bot",
-                    seat = 2,
-                    text = botReplyText,
-                    atMs = System.currentTimeMillis()
-                )
-                updated.add(botMsg)
-            }
             _gameChatLog.value = updated
             val res = OctiNetworkClient.ApiResult(1L)
             res.ok = true

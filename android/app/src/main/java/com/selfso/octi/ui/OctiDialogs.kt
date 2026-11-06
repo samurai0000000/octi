@@ -3035,38 +3035,6 @@ fun BoardChatZoomDialog(
                     }
                 }
 
-                // Quick command chips row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val quickCommands = listOf("@bot help", "@bot eval", "@bot stats")
-                    for (cmd in quickCommands) {
-                        Surface(
-                            modifier = Modifier.clickable {
-                                viewModel.sendGameChatAsync(currentScope, cmd) { res ->
-                                    if (!res.ok) {
-                                        chatErrorText = res.errorMessage.ifEmpty { "Failed to send chat" }
-                                    } else {
-                                        chatErrorText = ""
-                                    }
-                                }
-                            },
-                            color = OctiTheme.colors.windowBg,
-                            shape = RoundedCornerShape(6.dp),
-                            border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
-                        ) {
-                            Text(
-                                text = cmd,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = OctiTheme.colors.accentBrass,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                }
-
                 // Scrollable LazyColumn displaying gameChatLog entries
                 Surface(
                     modifier = Modifier
@@ -3084,7 +3052,7 @@ fun BoardChatZoomDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "No messages yet. Chat with players or try @bot help.",
+                                text = "No messages yet. Chat with players at the table.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = OctiTheme.colors.textSecondary
                             )
@@ -3177,7 +3145,7 @@ fun BoardChatZoomDialog(
                         },
                         modifier = Modifier.weight(1f),
                         placeholder = {
-                            Text("Type a message or @bot ...", style = MaterialTheme.typography.bodySmall)
+                            Text("Type a table message...", style = MaterialTheme.typography.bodySmall)
                         },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),

@@ -208,7 +208,7 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     _observeSelectedBtn = new QPushButton("Observe Selected Table", tablesBox);
     _observeSelectedBtn->setVisible(false);
     _refreshBtn = new QPushButton("Refresh", tablesBox);
-    _purgeTableBtn = new QPushButton("Purge Table...", tablesBox);
+    _purgeTableBtn = new QPushButton("Delete Table...", tablesBox);
     _purgeTableBtn->setStyleSheet("QPushButton { background-color: #dc2626; color: white; font-weight: bold; }");
     _purgeTableBtn->setVisible(false);
     toolbar->addWidget(_createTableBtn);
@@ -383,13 +383,9 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
         if (_selectedRoomId.empty() || !_netClient) {
             return;
         }
-        bool isAdmin = _netClient->currentProfile().isAdmin;
-        QString actionTitle = isAdmin ? "Purge Table" : "Delete Table";
-        QString confirmMsg = isAdmin
-            ? QString("Are you sure you want to immediately destroy table #%1 without archiving?\n\nThis action cannot be undone.")
-                .arg(QString::fromStdString(_selectedRoomId))
-            : QString("Are you sure you want to delete table #%1?\n\nThis will remove your waiting table.")
-                .arg(QString::fromStdString(_selectedRoomId));
+        QString actionTitle = "Delete Table";
+        QString confirmMsg = QString("Are you sure you want to delete table #%1?\n\nThis will remove your waiting table.")
+            .arg(QString::fromStdString(_selectedRoomId));
         auto reply = QMessageBox::warning(
             this,
             actionTitle,
@@ -840,19 +836,9 @@ void LobbyView::updateInspectorAndSelectionControls()
         _observeSelectedBtn->setVisible(false);
     }
 
-    if (_purgeTableBtn && _netClient) {
-        bool isAdmin = _netClient->currentProfile().isAdmin;
-        std::string myUuid = _netClient->currentProfile().uuid;
-        const TableSummaryInfo *selected = findTable(_selectedRoomId);
-        bool isHost = (!myUuid.empty() && selected && selected->hostUuid == myUuid);
-        bool canPurge = (isAdmin || isHost) && !_selectedRoomId.empty();
-        _purgeTableBtn->setVisible(canPurge);
-        _purgeTableBtn->setEnabled(canPurge);
-        if (isHost && !isAdmin) {
-            _purgeTableBtn->setText("Delete Table...");
-        } else {
-            _purgeTableBtn->setText("Purge Table...");
-        }
+    if (_purgeTableBtn) {
+        _purgeTableBtn->setVisible(false);
+        _purgeTableBtn->setEnabled(false);
     }
 }
 
@@ -862,19 +848,9 @@ void LobbyView::updateAuthUiState()
     if (_observeSelectedBtn) {
         _observeSelectedBtn->setVisible(false);
     }
-    if (_purgeTableBtn && _netClient) {
-        bool isAdmin = _netClient->currentProfile().isAdmin;
-        std::string myUuid = _netClient->currentProfile().uuid;
-        const TableSummaryInfo *selected = findTable(_selectedRoomId);
-        bool isHost = (!myUuid.empty() && selected && selected->hostUuid == myUuid);
-        bool canPurge = (isAdmin || isHost) && !_selectedRoomId.empty();
-        _purgeTableBtn->setVisible(canPurge);
-        _purgeTableBtn->setEnabled(canPurge);
-        if (isHost && !isAdmin) {
-            _purgeTableBtn->setText("Delete Table...");
-        } else {
-            _purgeTableBtn->setText("Purge Table...");
-        }
+    if (_purgeTableBtn) {
+        _purgeTableBtn->setVisible(false);
+        _purgeTableBtn->setEnabled(false);
     }
     if (_refreshBtn) {
         _refreshBtn->setEnabled(true);

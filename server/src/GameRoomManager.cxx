@@ -1876,6 +1876,7 @@ RoomResult GameRoomManager::joinTable(const std::string &roomId,
             RoomResult res = success();
             res.seq = emitLocked(*r, e, now);
             refreshPresenceLocked(playerId);
+            announceTableLocked(*r, false);
             saveRoomLocked(*r);
             res.roomId = r->id;
             res.seat = existingSeat;
@@ -2101,6 +2102,7 @@ RoomResult GameRoomManager::observeRoom(const std::string &roomId,
             RoomResult res = success();
             res.seq = emitLocked(*r, e, now);
             refreshPresenceLocked(playerId);
+            announceTableLocked(*r, false);
             saveRoomLocked(*r);
             res.roomId = r->id;
             res.seat = existingSeat;
@@ -2126,6 +2128,7 @@ RoomResult GameRoomManager::observeRoom(const std::string &roomId,
     e.playerId = playerId;
     e.handle = handleOf(playerId);
     res.seq = emitLocked(*r, e, now);
+    announceTableLocked(*r, false);
     saveRoomLocked(*r);
     return res;
 }
@@ -2154,6 +2157,7 @@ RoomResult GameRoomManager::stopObserving(const std::string &roomId,
     e.detail = "left";
     RoomResult res = success();
     res.seq = emitLocked(*r, e, now);
+    announceTableLocked(*r, false);
     saveRoomLocked(*r);
     return res;
 }
@@ -2615,6 +2619,7 @@ RoomResult GameRoomManager::submitMove(const std::string &roomId,
     } else {
         r->turnStartedMs = now;
         r->turnCarryMs = 0;
+        announceTableLocked(*r, false);
     }
     saveRoomLocked(*r);
     return res;
@@ -2704,6 +2709,7 @@ RoomResult GameRoomManager::markDisconnected(const std::string &roomId,
     e.seat = seat;
     RoomResult res = success();
     res.seq = emitLocked(*r, e, now);
+    announceTableLocked(*r, false);
     saveRoomLocked(*r);
     return res;
 }
@@ -2736,6 +2742,7 @@ RoomResult GameRoomManager::markReconnected(const std::string &roomId,
     e.seat = seat;
     RoomResult res = success();
     res.seq = emitLocked(*r, e, now);
+    announceTableLocked(*r, false);
     saveRoomLocked(*r);
     return res;
 }
@@ -3024,6 +3031,7 @@ RoomResult GameRoomManager::completeProposalLocked(Room &r, ProposalType type,
         e.type = RoomEventType::GAME_PAUSED;
         e.playerId = proposerId;
         res.seq = emitLocked(r, e, now);
+        announceTableLocked(r, false);
         saveRoomLocked(r);
         return res;
     }
@@ -3054,6 +3062,7 @@ RoomResult GameRoomManager::completeProposalLocked(Room &r, ProposalType type,
         e.ply = static_cast<int>(r.plies.size());
         e.text = p.move;
         res.seq = emitLocked(r, e, now);
+        announceTableLocked(r, false);
         saveRoomLocked(r);
         return res;
     }
@@ -3094,6 +3103,7 @@ RoomResult GameRoomManager::resumeGame(const std::string &roomId,
     RoomResult res = success();
     res.seq = emitLocked(*r, e, now);
     res.roomId = r->id;
+    announceTableLocked(*r, false);
     saveRoomLocked(*r);
     return res;
 }

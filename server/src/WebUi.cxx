@@ -611,7 +611,7 @@ tr.active-ply {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
 }
 #web-play-board-wrap {
   flex: 0 0 auto;
@@ -684,7 +684,7 @@ tr.active-ply {
     flex: none !important;
     margin: 0 auto !important;
   }
-  #web-table-info-card {
+  #web-table-info-card, #web-move-history-panel {
     grid-column: 1 / -1 !important;
   }
   .web-res-card {
@@ -732,7 +732,7 @@ tr.active-ply {
     flex: none !important;
     height: auto !important;
   }
-  #web-play-moves {
+  #web-play-moves, #web-board-lobby-chat-log {
     max-height: 90px !important;
     min-height: 60px !important;
   }
@@ -1828,6 +1828,31 @@ tr.active-ply {
             </div>
             <div id="web-play-archive-status" class="dim" style="margin-top:4px;font-size:11px;"></div>
           </div>
+
+          <!-- Color-Coded Move History & VCR Replay (Left Column) -->
+          <div id="web-move-history-panel" class="panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;flex:1;min-height:0;display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <strong style="color:#C8A253;font-size:13px;">Move History</strong>
+              <button type="button" class="btn" id="btn-web-export-moves" title="Export Move History (JSON v3.0)" style="width:32px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;background:#161D26;border:1px solid #C8A253;border-radius:6px;cursor:pointer;">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M2.5 9.5V13.5H13.5V9.5" stroke="#C8A253" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M8 10.5V2.5M8 2.5L4.5 6M8 2.5L11.5 6" stroke="#C8A253" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+            <div id="web-play-moves" style="flex:1;min-height:60px;overflow-y:auto;background:#0B0F17;border:1px solid #1E293B;border-radius:6px;padding:6px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px;">
+              <div class="dim" style="padding:4px;">No moves recorded yet.</div>
+            </div>
+            <!-- VCR Replay Bar -->
+            <div id="web-vcr-bar" style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;gap:4px;">
+              <button type="button" class="btn" id="web-vcr-first" style="padding:3px 6px;font-size:11px;" title="First Move">|&lt;&lt;</button>
+              <button type="button" class="btn" id="web-vcr-prev" style="padding:3px 6px;font-size:11px;" title="Previous Move">&lt;</button>
+              <span id="web-vcr-label" style="font-size:11px;color:#94A3B8;font-family:ui-monospace,SFMono-Regular,monospace;flex:1;text-align:center;">Ply 0/0</span>
+              <button type="button" class="btn" id="web-vcr-next" style="padding:3px 6px;font-size:11px;" title="Next Move">&gt;</button>
+              <button type="button" class="btn" id="web-vcr-last" style="padding:3px 6px;font-size:11px;" title="Latest Move">&gt;&gt;|</button>
+            </div>
+          </div>
+
           <div id="web-res-card-a" class="web-res-card"></div>
         </div>
 
@@ -1892,31 +1917,22 @@ tr.active-ply {
           </div>
         </div>
 
-        <!-- Right Column: Sidebar (50/50 Desktop Split: Top Half Status/History/Actions, Bottom Half Table Chat) -->
+        <!-- Right Column: Sidebar (Top Half Lobby Chat + Match Actions, Bottom Half Table Chat in Online Mode) -->
         <div id="web-play-side-col">
-          <!-- Top Half (50%): Move History + VCR, Match Actions -->
+          <!-- Top Half: Lobby Chat + Match Actions -->
           <div id="web-side-top-half" style="flex:1 1 50%;min-height:0;display:flex;flex-direction:column;gap:8px;">
-            <!-- Color-Coded Move History & VCR Replay -->
-            <div class="panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;flex:1;min-height:0;display:flex;flex-direction:column;">
+            <!-- Live Lobby Chat -->
+            <div id="web-board-lobby-chat-panel" class="panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;flex:1;min-height:0;display:flex;flex-direction:column;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                <strong style="color:#C8A253;font-size:13px;">Move History</strong>
-                <button type="button" class="btn" id="btn-web-export-moves" title="Export Move History (JSON v3.0)" style="width:32px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;background:#161D26;border:1px solid #C8A253;border-radius:6px;cursor:pointer;">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M2.5 9.5V13.5H13.5V9.5" stroke="#C8A253" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M8 10.5V2.5M8 2.5L4.5 6M8 2.5L11.5 6" stroke="#C8A253" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
+                <strong style="color:#C8A253;font-size:13px;">Lobby Chat</strong>
+                <span class="dim" style="font-size:11px;color:#94A3B8;">Global</span>
               </div>
-              <div id="web-play-moves" style="flex:1;min-height:60px;overflow-y:auto;background:#0B0F17;border:1px solid #1E293B;border-radius:6px;padding:6px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px;">
-                <div class="dim" style="padding:4px;">No moves recorded yet.</div>
+              <div id="web-board-lobby-chat-log" style="flex:1;min-height:60px;overflow-y:auto;background:#0B0F17;border:1px solid #1E293B;border-radius:6px;padding:6px;font-size:12.5px;color:#E2E8F0;margin-bottom:6px;">
+                <div class="dim">Connected to lobby chat.</div>
               </div>
-              <!-- VCR Replay Bar -->
-              <div id="web-vcr-bar" style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;gap:4px;">
-                <button type="button" class="btn" id="web-vcr-first" style="padding:3px 6px;font-size:11px;" title="First Move">|&lt;&lt;</button>
-                <button type="button" class="btn" id="web-vcr-prev" style="padding:3px 6px;font-size:11px;" title="Previous Move">&lt;</button>
-                <span id="web-vcr-label" style="font-size:11px;color:#94A3B8;font-family:ui-monospace,SFMono-Regular,monospace;flex:1;text-align:center;">Ply 0/0</span>
-                <button type="button" class="btn" id="web-vcr-next" style="padding:3px 6px;font-size:11px;" title="Next Move">&gt;</button>
-                <button type="button" class="btn" id="web-vcr-last" style="padding:3px 6px;font-size:11px;" title="Latest Move">&gt;&gt;|</button>
+              <div id="web-board-lobby-chat-input-row" class="row" style="gap:6px;margin:0;">
+                <input id="web-board-lobby-chat-input" placeholder="Sign in to chat in lobby..." style="flex:1;background:#0B0F17;color:#F8FAFC;border:1px solid #334155;border-radius:4px;padding:6px 8px;font-size:12px;" disabled>
+                <button type="button" class="btn btn-primary" id="btn-web-board-lobby-chat-send" style="padding:6px 12px;font-size:12px;" disabled>Send</button>
               </div>
             </div>
 
@@ -1931,17 +1947,16 @@ tr.active-ply {
               </div>
               <div id="web-online-table-actions" style="display:none;margin-top:6px;" class="row">
                 <button type="button" class="btn" id="btn-web-leave-table" style="flex:1;border-color:#dc2626;color:#dc2626;padding:6px 8px;font-size:12px;">Leave Table</button>
-                <button type="button" class="btn" id="btn-web-purge-table" style="display:none;flex:1;background:#dc2626;border-color:#b91c1c;color:#ffffff;padding:6px 8px;font-size:12px;">Delete Table</button>
+                <button type="button" class="btn" id="btn-web-purge-table" style="display:none;flex:1;background:#dc2626;border-color:#b91c1c;color:#ffffff;padding:6px 8px;font-size:12px;">Purge Table</button>
               </div>
             </div>
           </div>
 
-          <!-- Bottom Half (50%): Table Chat Panel (Always visible, 50% flex share on desktop) -->
-          <div id="web-board-chat-panel" class="panel" style="flex:1 1 50%;min-height:0;margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;display:flex;flex-direction:column;">
+          <!-- Bottom Half (50%): Table Chat Panel (Visible in Online Table mode, hidden in Play in Browser) -->
+          <div id="web-board-chat-panel" class="panel" style="flex:1 1 50%;min-height:0;margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;display:none;flex-direction:column;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
               <div style="display:flex;align-items:center;gap:6px;">
                 <strong style="color:#C8A253;font-size:13px;">Table Chat</strong>
-                <span class="dim" style="font-size:11px;">@bot help &bull; @bot eval</span>
               </div>
               <button type="button" class="btn" id="btn-web-board-chat-zoom" title="Zoom Table Chat" style="padding:2px 7px;font-size:11px;background:#161D26;border:1px solid #C8A253;color:#C8A253;cursor:pointer;">Zoom &#x2922;</button>
             </div>
@@ -1953,7 +1968,7 @@ tr.active-ply {
                 <option value="ALL">ALL</option>
                 <option value="TEAM">TEAM</option>
               </select>
-              <input id="web-board-chat-input" placeholder="Chat in table (e.g. @bot help)..." style="flex:1;background:#0B0F17;color:#F8FAFC;border:1px solid #334155;border-radius:4px;padding:6px 8px;font-size:12px;">
+              <input id="web-board-chat-input" placeholder="Send table message..." style="flex:1;background:#0B0F17;color:#F8FAFC;border:1px solid #334155;border-radius:4px;padding:6px 8px;font-size:12px;">
               <button type="button" class="btn btn-primary" id="btn-web-board-chat-send" style="padding:6px 12px;font-size:12px;">Send</button>
             </div>
           </div>
@@ -2606,6 +2621,19 @@ tr.active-ply {
         </div>
       </div>
     </div>
+
+    <div class="panel" id="account-admin-controls" style="display:none;margin-top:16px;border-color:#fca5a5;background:#fffafa;">
+      <div class="row" style="align-items:center;justify-content:space-between;margin:0;">
+        <div>
+          <h3 style="margin:0 0 4px 0;color:#991b1b;font-size:15px;">Administrator Controls</h3>
+          <div class="dim" style="font-size:12.5px;">Enable administrative Purge buttons in the Online Lobby, Table Room, and Game Archive. Disabled by default to prevent visual clutter.</div>
+        </div>
+        <label style="display:inline-flex;align-items:center;gap:8px;font-weight:700;color:#991b1b;cursor:pointer;user-select:none;white-space:nowrap;">
+          <input type="checkbox" id="web-admin-purge-toggle">
+          <span>Show Purge Buttons</span>
+        </label>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -2677,11 +2705,6 @@ tr.active-ply {
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
       <div style="display:flex;align-items:center;gap:8px;">
         <strong style="color:#C8A253;font-size:14px;letter-spacing:0.5px;">TABLE CHAT</strong>
-        <div style="display:flex;gap:4px;">
-          <button type="button" class="btn" id="btn-web-board-chat-zoom-help" style="padding:2px 7px;font-size:11px;background:#101622;border:1px solid #334155;color:#94A3B8;">@bot help</button>
-          <button type="button" class="btn" id="btn-web-board-chat-zoom-eval" style="padding:2px 7px;font-size:11px;background:#101622;border:1px solid #334155;color:#94A3B8;">@bot eval</button>
-          <button type="button" class="btn" id="btn-web-board-chat-zoom-stats" style="padding:2px 7px;font-size:11px;background:#101622;border:1px solid #334155;color:#94A3B8;">@bot stats</button>
-        </div>
       </div>
       <button type="button" class="btn" id="btn-web-board-chat-zoom-close" title="Close [Esc]" style="padding:3px 8px;font-size:14px;line-height:1;background:transparent;border:none;color:#94A3B8;cursor:pointer;">&#x2715;</button>
     </div>
@@ -25085,18 +25108,28 @@ function switchTab(name) {
         tabs[k].classList.toggle("on", k === "play");
       }
     });
+    startLobbyRealtimeSync();
     if (name === "play") {
-      if (activeOnlineGameId) {
-        stopOnlineGameSync();
-        activeOnlineGameId = "";
-        activeOnlineTableRoomId = "";
+      if (activeBoardContextMode === "online" || activeOnlineGameId) {
+        saveOnlinePlayContext();
+        stopOnlineGameSync(false);
       }
+      activeBoardContextMode = "local";
+      var chatPanel = document.getElementById("web-board-chat-panel");
+      if (chatPanel) chatPanel.style.display = "none";
+      var topHalf = document.getElementById("web-side-top-half");
+      if (topHalf) {
+        topHalf.style.flex = "1 1 100%";
+        topHalf.style.maxHeight = "none";
+      }
+      closeBoardChatZoomModal();
       var pLocal = document.getElementById("play-local-panel");
       var pOnline = document.getElementById("play-online-panel");
       if (pLocal) pLocal.style.display = "block";
       if (pOnline) pOnline.style.display = "none";
       var tbRow = document.getElementById("web-play-toolbar-row");
       if (tbRow) tbRow.style.display = "flex";
+      restoreLocalPlayContext();
       updateOnlineTableControls();
       syncWebPlayBoardSquareSize();
       if (activePlayState) {
@@ -25104,28 +25137,43 @@ function switchTab(name) {
         renderAllWebReserves();
         updatePlaySidebar();
       }
+      renderLobbyChatMessages(lobbyChatMessages);
+      scrollAllVisibleChatsToBottom();
     } else { // online
-      if (activeOnlineGameId) {
-        var pLocal = document.getElementById("play-local-panel");
-        var pOnline = document.getElementById("play-online-panel");
-        if (pLocal) pLocal.style.display = "block";
-        if (pOnline) pOnline.style.display = "none";
-        var tbRow = document.getElementById("web-play-toolbar-row");
-        if (tbRow) tbRow.style.display = "flex";
-        updateOnlineTableControls();
+      if (activeBoardContextMode === "local") {
+        saveLocalPlayContext();
+        if (clockInterval) {
+          clearInterval(clockInterval);
+          clockInterval = null;
+        }
+      }
+      if (activeOnlineGameId || (onlinePlayContext && onlinePlayContext.viewingBoard && onlinePlayContext.roomId)) {
+        var resumeRoomId = activeOnlineGameId || onlinePlayContext.roomId;
+        restoreOnlinePlayContext();
+        openOnlineTableBoard(resumeRoomId);
         syncWebPlayBoardSquareSize();
       } else {
+        activeBoardContextMode = "online";
         var pLocal = document.getElementById("play-local-panel");
         var pOnline = document.getElementById("play-online-panel");
         if (pLocal) pLocal.style.display = "none";
         if (pOnline) pOnline.style.display = "block";
         var tbRow = document.getElementById("web-play-toolbar-row");
         if (tbRow) tbRow.style.display = "none";
+        renderLobbyChatMessages(lobbyChatMessages);
         refreshLobbyTables();
+        scrollAllVisibleChatsToBottom();
       }
     }
     return;
   }
+
+  if (activeBoardContextMode === "local") {
+    saveLocalPlayContext();
+  } else if (activeBoardContextMode === "online" && activeOnlineGameId) {
+    saveOnlinePlayContext();
+  }
+  stopLobbyRealtimeSync();
 
   if (!tabs[name]) { name = "home"; }
   Array.prototype.forEach.call($("nav").querySelectorAll("button"), function (b) {
@@ -25259,8 +25307,15 @@ function checkHash() {
     switchTab("online");
   } else if (h.indexOf("#online/") === 0) {
     var roomId = decodeURIComponent(h.substring(8));
-    switchTab("online");
-    if (roomId) { openOnlineTableBoard(roomId); }
+    if (roomId) {
+      if (onlinePlayContext) {
+        onlinePlayContext.viewingBoard = true;
+        onlinePlayContext.roomId = roomId;
+      }
+      openOnlineTableBoard(roomId);
+    } else {
+      switchTab("online");
+    }
   } else if (h === "#play") {
     switchTab("play");
   } else if (h.indexOf("#users/") === 0) {
@@ -25290,6 +25345,11 @@ $("home-cta-account").addEventListener("click", function () { switchTab("account
  * Tab 7: Account & Authentication
  * ========================================================================= */
 var currentUser = null;
+var webAdminPurgeEnabled = false;
+
+function isWebAdminPurgeActive() {
+  return Boolean(currentUser && currentUser.is_admin && webAdminPurgeEnabled);
+}
 
 function updateAuthPill() {
   var pill = $("nav-auth-pill");
@@ -25309,8 +25369,11 @@ function updateAuthPill() {
 }
 
 function renderGuestState() {
+  webAdminPurgeEnabled = false;
   if ($("account-guest-card")) $("account-guest-card").style.display = "block";
   if ($("account-profile-card")) $("account-profile-card").style.display = "none";
+  if ($("account-admin-controls")) $("account-admin-controls").style.display = "none";
+  if ($("web-admin-purge-toggle")) $("web-admin-purge-toggle").checked = false;
   if ($("robots-guest-card")) $("robots-guest-card").style.display = "block";
   if ($("robots-owner-card")) $("robots-owner-card").style.display = "none";
 
@@ -25329,27 +25392,22 @@ function renderGuestState() {
   if ($("btn-web-chat-send")) {
     $("btn-web-chat-send").disabled = true;
   }
+  if ($("web-board-lobby-chat-input")) {
+    $("web-board-lobby-chat-input").disabled = true;
+    $("web-board-lobby-chat-input").placeholder = "Sign in to chat in lobby...";
+  }
+  if ($("btn-web-board-lobby-chat-send")) {
+    $("btn-web-board-lobby-chat-send").disabled = true;
+  }
   if ($("web-board-chat-input")) {
-    if (activeOnlineGameId) {
-      $("web-board-chat-input").disabled = true;
-      $("web-board-chat-input").placeholder = "Sign in to chat in room...";
-      if ($("btn-web-board-chat-send")) $("btn-web-board-chat-send").disabled = true;
-    } else {
-      $("web-board-chat-input").disabled = false;
-      $("web-board-chat-input").placeholder = "Chat in table (e.g. @bot help)...";
-      if ($("btn-web-board-chat-send")) $("btn-web-board-chat-send").disabled = false;
-    }
+    $("web-board-chat-input").disabled = true;
+    $("web-board-chat-input").placeholder = "Sign in to chat in room...";
+    if ($("btn-web-board-chat-send")) $("btn-web-board-chat-send").disabled = true;
   }
   if ($("web-board-chat-zoom-input")) {
-    if (activeOnlineGameId) {
-      $("web-board-chat-zoom-input").disabled = true;
-      $("web-board-chat-zoom-input").placeholder = "Sign in to chat in room...";
-      if ($("btn-web-board-chat-zoom-send")) $("btn-web-board-chat-zoom-send").disabled = true;
-    } else {
-      $("web-board-chat-zoom-input").disabled = false;
-      $("web-board-chat-zoom-input").placeholder = "Type message in table... (Enter to send)";
-      if ($("btn-web-board-chat-zoom-send")) $("btn-web-board-chat-zoom-send").disabled = false;
-    }
+    $("web-board-chat-zoom-input").disabled = true;
+    $("web-board-chat-zoom-input").placeholder = "Sign in to chat in room...";
+    if ($("btn-web-board-chat-zoom-send")) $("btn-web-board-chat-zoom-send").disabled = true;
   }
 }
 
@@ -25357,6 +25415,12 @@ function renderAuthState() {
   if (!currentUser) return;
   if ($("account-guest-card")) $("account-guest-card").style.display = "none";
   if ($("account-profile-card")) $("account-profile-card").style.display = "block";
+  if ($("account-admin-controls")) {
+    $("account-admin-controls").style.display = currentUser.is_admin ? "block" : "none";
+  }
+  if ($("web-admin-purge-toggle")) {
+    $("web-admin-purge-toggle").checked = Boolean(currentUser.is_admin && webAdminPurgeEnabled);
+  }
   if ($("robots-guest-card")) $("robots-guest-card").style.display = "none";
   if ($("robots-owner-card")) $("robots-owner-card").style.display = "block";
 
@@ -25385,20 +25449,38 @@ function renderAuthState() {
   if ($("btn-web-chat-send")) {
     $("btn-web-chat-send").disabled = false;
   }
+  if ($("web-board-lobby-chat-input")) {
+    $("web-board-lobby-chat-input").disabled = false;
+    $("web-board-lobby-chat-input").placeholder = "Type message in lobby...";
+  }
+  if ($("btn-web-board-lobby-chat-send")) {
+    $("btn-web-board-lobby-chat-send").disabled = false;
+  }
   if ($("web-board-chat-input")) {
     $("web-board-chat-input").disabled = false;
-    $("web-board-chat-input").placeholder = activeOnlineGameId ? "Chat in room (e.g. @stock help)..." : "Chat in table (e.g. @bot help)...";
+    $("web-board-chat-input").placeholder = "Send table message...";
   }
   if ($("btn-web-board-chat-send")) {
     $("btn-web-board-chat-send").disabled = false;
   }
   if ($("web-board-chat-zoom-input")) {
     $("web-board-chat-zoom-input").disabled = false;
-    $("web-board-chat-zoom-input").placeholder = activeOnlineGameId ? "Type message in room... (Enter to send)" : "Type message in table... (Enter to send)";
+    $("web-board-chat-zoom-input").placeholder = "Send table message...";
   }
   if ($("btn-web-board-chat-zoom-send")) {
     $("btn-web-board-chat-zoom-send").disabled = false;
   }
+}
+
+if ($("web-admin-purge-toggle")) {
+  $("web-admin-purge-toggle").addEventListener("change", function () {
+    webAdminPurgeEnabled = Boolean($("web-admin-purge-toggle").checked);
+    updateOnlineTableControls();
+    refreshLobbyTables();
+    if (arLoaded) {
+      arSearch(arOffset);
+    }
+  });
 }
 
 function loadMyProfile() {
@@ -25414,6 +25496,10 @@ function loadMyProfile() {
     currentUser = res.user || res;
     updateAuthPill();
     renderAuthState();
+    if (activeOnlineGameId) {
+      updateOnlineTableControls();
+    }
+    scrollAllVisibleChatsToBottom();
     loadIdentities();
     loadMyRobots();
     return currentUser;
@@ -26720,6 +26806,154 @@ var activeOnlineEventSeq = 0;
 var activeOnlineChatMessages = [];
 var activeOnlineLastSyncedPlyCount = -1;
 var activeOnlineLastSyncedFen = "";
+var activeBoardContextMode = "local";
+var localPlayContext = null;
+var onlinePlayContext = {
+  viewingBoard: false,
+  roomId: "",
+  roomView: null,
+  viewerSeat: 0,
+  eventSeq: 0,
+  chatMessages: [],
+  lastSyncedPlyCount: -1,
+  lastSyncedFen: "",
+  state: null,
+  plies: [],
+  vcrIndex: 0,
+  lastMoveHighlightSquares: [],
+  lastMoveSetAtMs: 0,
+  clockTimers: { A: 0, B: 0, C: 0, D: 0 },
+  boardRotationDeg: 0,
+  gameoverVisible: false,
+  gameoverTitle: "",
+  gameoverSubtitle: ""
+};
+
+function saveLocalPlayContext() {
+  var startOverlay = document.getElementById("web-start-match-overlay");
+  var goOverlay = document.getElementById("web-gameover-overlay");
+  var goTitle = document.getElementById("web-gameover-title");
+  var goSub = document.getElementById("web-gameover-subtitle");
+  var archSt = document.getElementById("web-play-archive-status");
+  localPlayContext = {
+    state: activePlayState ? cloneState(activePlayState) : null,
+    plies: Array.isArray(playMatchPlies) ? playMatchPlies.slice() : [],
+    vcrIndex: playVcrIndex,
+    matchStarted: Boolean(matchStarted),
+    lastMoveHighlightSquares: Array.isArray(lastMoveHighlightSquares) ? lastMoveHighlightSquares.slice() : [],
+    lastMoveSetAtMs: lastMoveSetAtMs,
+    clockTimers: {
+      A: clockTimers.A || 0,
+      B: clockTimers.B || 0,
+      C: clockTimers.C || 0,
+      D: clockTimers.D || 0
+    },
+    boardRotationDeg: boardRotationDeg,
+    startOverlayVisible: startOverlay ? (startOverlay.style.display !== "none") : !matchStarted,
+    gameoverVisible: goOverlay ? (goOverlay.style.display === "flex") : false,
+    gameoverTitle: goTitle ? goTitle.textContent : "",
+    gameoverSubtitle: goSub ? goSub.textContent : "",
+    archiveStatusText: archSt ? archSt.textContent : ""
+  };
+}
+
+function restoreLocalPlayContext() {
+  if (!localPlayContext || !localPlayContext.state) {
+    prepareLocalMatchInitialState();
+    return;
+  }
+  activePlayState = cloneState(localPlayContext.state);
+  playMatchPlies = Array.isArray(localPlayContext.plies) ? localPlayContext.plies.slice() : [];
+  playVcrIndex = localPlayContext.vcrIndex || 0;
+  matchStarted = Boolean(localPlayContext.matchStarted);
+  lastMoveHighlightSquares = Array.isArray(localPlayContext.lastMoveHighlightSquares) ? localPlayContext.lastMoveHighlightSquares.slice() : [];
+  lastMoveSetAtMs = localPlayContext.lastMoveSetAtMs || 0;
+  clockTimers.A = localPlayContext.clockTimers.A || 0;
+  clockTimers.B = localPlayContext.clockTimers.B || 0;
+  clockTimers.C = localPlayContext.clockTimers.C || 0;
+  clockTimers.D = localPlayContext.clockTimers.D || 0;
+  boardRotationDeg = localPlayContext.boardRotationDeg || 0;
+
+  var startOverlay = document.getElementById("web-start-match-overlay");
+  if (startOverlay) {
+    startOverlay.style.display = localPlayContext.startOverlayVisible ? "flex" : "none";
+  }
+  var goOverlay = document.getElementById("web-gameover-overlay");
+  var goTitle = document.getElementById("web-gameover-title");
+  var goSub = document.getElementById("web-gameover-subtitle");
+  if (goOverlay) {
+    if (localPlayContext.gameoverVisible) {
+      if (goTitle && localPlayContext.gameoverTitle) goTitle.textContent = localPlayContext.gameoverTitle;
+      if (goSub && localPlayContext.gameoverSubtitle) goSub.textContent = localPlayContext.gameoverSubtitle;
+      goOverlay.style.display = "flex";
+    } else {
+      goOverlay.style.display = "none";
+    }
+  }
+  var thinkOverlay = document.getElementById("web-thinking-overlay");
+  if (thinkOverlay) thinkOverlay.style.display = "none";
+  var archSt = document.getElementById("web-play-archive-status");
+  if (archSt) archSt.textContent = localPlayContext.archiveStatusText || "";
+
+  updateStartMatchSummary();
+  updatePlaySidebar();
+  renderPlayBoardCanvas();
+  renderAllWebReserves();
+}
+
+function saveOnlinePlayContext() {
+  if (!activeOnlineGameId && (!onlinePlayContext || !onlinePlayContext.roomId)) return;
+  var goOverlay = document.getElementById("web-gameover-overlay");
+  var goTitle = document.getElementById("web-gameover-title");
+  var goSub = document.getElementById("web-gameover-subtitle");
+  onlinePlayContext.viewingBoard = true;
+  onlinePlayContext.roomId = activeOnlineGameId || activeOnlineTableRoomId || onlinePlayContext.roomId;
+  onlinePlayContext.roomView = activeOnlineRoomView;
+  onlinePlayContext.viewerSeat = activeOnlineViewerSeat;
+  onlinePlayContext.eventSeq = activeOnlineEventSeq;
+  onlinePlayContext.chatMessages = Array.isArray(activeOnlineChatMessages) ? activeOnlineChatMessages.slice() : [];
+  onlinePlayContext.lastSyncedPlyCount = activeOnlineLastSyncedPlyCount;
+  onlinePlayContext.lastSyncedFen = activeOnlineLastSyncedFen;
+  onlinePlayContext.state = activePlayState ? cloneState(activePlayState) : null;
+  onlinePlayContext.plies = Array.isArray(playMatchPlies) ? playMatchPlies.slice() : [];
+  onlinePlayContext.vcrIndex = playVcrIndex;
+  onlinePlayContext.lastMoveHighlightSquares = Array.isArray(lastMoveHighlightSquares) ? lastMoveHighlightSquares.slice() : [];
+  onlinePlayContext.lastMoveSetAtMs = lastMoveSetAtMs;
+  onlinePlayContext.clockTimers = {
+    A: clockTimers.A || 0,
+    B: clockTimers.B || 0,
+    C: clockTimers.C || 0,
+    D: clockTimers.D || 0
+  };
+  onlinePlayContext.boardRotationDeg = boardRotationDeg;
+  onlinePlayContext.gameoverVisible = goOverlay ? (goOverlay.style.display === "flex") : false;
+  onlinePlayContext.gameoverTitle = goTitle ? goTitle.textContent : "";
+  onlinePlayContext.gameoverSubtitle = goSub ? goSub.textContent : "";
+}
+
+function restoreOnlinePlayContext() {
+  if (!onlinePlayContext || !onlinePlayContext.roomId) return;
+  activeOnlineGameId = onlinePlayContext.roomId;
+  activeOnlineTableRoomId = onlinePlayContext.roomId;
+  activeOnlineRoomView = onlinePlayContext.roomView;
+  activeOnlineViewerSeat = onlinePlayContext.viewerSeat || 0;
+  activeOnlineEventSeq = onlinePlayContext.eventSeq || 0;
+  activeOnlineChatMessages = Array.isArray(onlinePlayContext.chatMessages) ? onlinePlayContext.chatMessages.slice() : [];
+  activeOnlineLastSyncedPlyCount = onlinePlayContext.lastSyncedPlyCount;
+  activeOnlineLastSyncedFen = onlinePlayContext.lastSyncedFen || "";
+  if (onlinePlayContext.state) {
+    activePlayState = cloneState(onlinePlayContext.state);
+  }
+  playMatchPlies = Array.isArray(onlinePlayContext.plies) ? onlinePlayContext.plies.slice() : [];
+  playVcrIndex = onlinePlayContext.vcrIndex !== undefined ? onlinePlayContext.vcrIndex : Math.max(0, playMatchPlies.length - 1);
+  lastMoveHighlightSquares = Array.isArray(onlinePlayContext.lastMoveHighlightSquares) ? onlinePlayContext.lastMoveHighlightSquares.slice() : [];
+  lastMoveSetAtMs = onlinePlayContext.lastMoveSetAtMs || 0;
+  clockTimers.A = (onlinePlayContext.clockTimers && onlinePlayContext.clockTimers.A) || 0;
+  clockTimers.B = (onlinePlayContext.clockTimers && onlinePlayContext.clockTimers.B) || 0;
+  clockTimers.C = (onlinePlayContext.clockTimers && onlinePlayContext.clockTimers.C) || 0;
+  clockTimers.D = (onlinePlayContext.clockTimers && onlinePlayContext.clockTimers.D) || 0;
+  boardRotationDeg = onlinePlayContext.boardRotationDeg || 0;
+}
 
 function isInteractiveBoardTurn(s) {
   if (!s || s.status !== "P") return false;
@@ -29455,7 +29689,7 @@ if (btnSetupApply) {
 }
 
 function prepareLocalMatchInitialState() {
-  stopOnlineGameSync();
+  stopOnlineGameSync(true);
   if (clockInterval) {
     clearInterval(clockInterval);
     clockInterval = null;
@@ -29507,9 +29741,6 @@ function prepareLocalMatchInitialState() {
   playVcrIndex = 0;
   lastMoveHighlightSquares = [];
 
-  activeOnlineChatMessages = [{ handle: "bot", is_robot: true, text: "Table ready. Click Start Match or type @bot help for commands.", at_ms: Date.now(), scope: "ALL" }];
-  renderRoomChatLogs();
-
   var startOverlay = document.getElementById("web-start-match-overlay");
   if (startOverlay) startOverlay.style.display = "flex";
 
@@ -29517,6 +29748,7 @@ function prepareLocalMatchInitialState() {
   updatePlaySidebar();
   renderPlayBoardCanvas();
   renderAllWebReserves();
+  saveLocalPlayContext();
 }
 
 function updateClockDisplay() {
@@ -29545,14 +29777,6 @@ if (btnStartMatch) {
     var startOverlay = document.getElementById("web-start-match-overlay");
     if (startOverlay) startOverlay.style.display = "none";
     matchStarted = true;
-
-    activeOnlineChatMessages.push({
-      handle: (currentUser && currentUser.handle) ? currentUser.handle : "You",
-      is_event: true,
-      text: "started the match",
-      at_ms: Date.now()
-    });
-    renderRoomChatLogs();
 
     // Reset clocks
     var initialSec = 0;
@@ -29604,6 +29828,7 @@ if (btnStartMatch) {
             updatePlaySidebar();
             renderPlayBoardCanvas();
             renderAllWebReserves();
+            if (activeBoardContextMode === "local") saveLocalPlayContext();
             autoUploadCompletedLocalMatch();
           }
         }
@@ -29613,6 +29838,7 @@ if (btnStartMatch) {
     updatePlaySidebar();
     renderPlayBoardCanvas();
     renderAllWebReserves();
+    if (activeBoardContextMode === "local") saveLocalPlayContext();
 
     checkMatchTurn();
   });
@@ -29983,10 +30209,12 @@ function onLocalMoveCommitted(notation, newState, aiMeta) {
       goSub.textContent = (activePlayState.termination || "VICTORY BY BASE OCCUPATION");
       goOverlay.style.display = "flex";
     }
+    if (activeBoardContextMode === "local") saveLocalPlayContext();
     autoUploadCompletedLocalMatch();
     return;
   }
 
+  if (activeBoardContextMode === "local") saveLocalPlayContext();
   checkMatchTurn();
 }
 
@@ -30111,14 +30339,6 @@ if (btnUndo) {
     var thinkOverlay = document.getElementById("web-thinking-overlay");
     if (thinkOverlay) thinkOverlay.style.display = "none";
 
-    activeOnlineChatMessages.push({
-      handle: (currentUser && currentUser.handle) ? currentUser.handle : "You",
-      is_event: true,
-      text: "undid the last move",
-      at_ms: Date.now()
-    });
-    renderRoomChatLogs();
-
     if (localMatchConfig.playMode === "bot") {
       while (playMatchPlies.length > 1) {
         playMatchPlies.pop();
@@ -30141,6 +30361,7 @@ if (btnUndo) {
       updatePlaySidebar();
       renderPlayBoardCanvas();
       renderAllWebReserves();
+      if (activeBoardContextMode === "local") saveLocalPlayContext();
       checkMatchTurn();
       return;
     }
@@ -30155,6 +30376,7 @@ if (btnUndo) {
     updatePlaySidebar();
     renderPlayBoardCanvas();
     renderAllWebReserves();
+    if (activeBoardContextMode === "local") saveLocalPlayContext();
   });
 }
 
@@ -30199,14 +30421,8 @@ if (btnDraw) {
       goSub.textContent = "MUTUAL AGREEMENT";
       goOverlay.style.display = "flex";
     }
-    activeOnlineChatMessages.push({
-      handle: (currentUser && currentUser.handle) ? currentUser.handle : "You",
-      is_event: true,
-      text: "declared the game a draw",
-      at_ms: Date.now()
-    });
-    renderRoomChatLogs();
     updatePlaySidebar();
+    if (activeBoardContextMode === "local") saveLocalPlayContext();
   });
 }
 
@@ -30256,17 +30472,10 @@ if (btnResign) {
       goOverlay.style.display = "flex";
     }
 
-    activeOnlineChatMessages.push({
-      handle: (currentUser && currentUser.handle) ? currentUser.handle : "You",
-      is_event: true,
-      text: "has resigned the game",
-      at_ms: Date.now()
-    });
-    renderRoomChatLogs();
-
     updatePlaySidebar();
     renderPlayBoardCanvas();
     renderAllWebReserves();
+    if (activeBoardContextMode === "local") saveLocalPlayContext();
     autoUploadCompletedLocalMatch();
   });
 }
@@ -30276,7 +30485,7 @@ moveComposer = new WebMoveComposer(function () {
   return activePlayState;
 }, onLocalMoveCommitted);
 
-function stopOnlineGameSync() {
+function stopOnlineGameSync(preserveOnlineContext) {
   if (activeOnlinePollTimer) {
     clearInterval(activeOnlinePollTimer);
     activeOnlinePollTimer = null;
@@ -30286,8 +30495,20 @@ function stopOnlineGameSync() {
   activeOnlineViewerSeat = 0;
   activeOnlineLastSyncedPlyCount = -1;
   activeOnlineLastSyncedFen = "";
+  if (!preserveOnlineContext) {
+    activeOnlineTableRoomId = "";
+    if (onlinePlayContext) {
+      onlinePlayContext.viewingBoard = false;
+      onlinePlayContext.roomId = "";
+      onlinePlayContext.roomView = null;
+      onlinePlayContext.state = null;
+      onlinePlayContext.plies = [];
+    }
+  }
   var bar = document.getElementById("web-play-online-status-bar");
   if (bar) bar.style.display = "none";
+  var onlineMetaEl = document.getElementById("web-play-online-table-meta");
+  if (onlineMetaEl) onlineMetaEl.style.display = "none";
   var actRow = document.getElementById("web-online-table-actions");
   if (actRow) actRow.style.display = "none";
   updateOnlineTableControls();
@@ -30316,15 +30537,10 @@ function updateOnlineTableControls() {
     if (undoBtn) undoBtn.style.display = "none";
     if (resignBtn) resignBtn.style.display = showPlayerActions ? "" : "none";
 
-    var isHostInTable = (activeOnlineRoomView && Number(activeOnlineRoomView.host_seat || 1) === Number(activeOnlineViewerSeat || 0)) ||
-      (currentUser && activeOnlineRoomView && (
-        (activeOnlineRoomView.host_player_uuid && (currentUser.uuid === activeOnlineRoomView.host_player_uuid || currentUser.user_id === activeOnlineRoomView.host_player_uuid)) ||
-        (activeOnlineRoomView.host_handle && currentUser.handle === activeOnlineRoomView.host_handle)
-      ));
-    var isAdmin = !!(currentUser && currentUser.is_admin);
+    var isAdmin = isWebAdminPurgeActive();
     if (purgeBtn) {
-      if (isHostInTable || isAdmin) {
-        purgeBtn.textContent = isHostInTable ? "Delete Table" : "Purge Table";
+      if (isAdmin) {
+        purgeBtn.textContent = "Purge Table";
         purgeBtn.style.display = "block";
       } else {
         purgeBtn.style.display = "none";
@@ -30418,7 +30634,7 @@ function enterOnlineTable(roomId) {
 
 function purgeOnlineTable(roomId) {
   if (!roomId) return;
-  openPurgeConfirmModal("Are you sure you want to delete table #" + roomId + "?", function () {
+  openPurgeConfirmModal("Are you sure you want to permanently purge table #" + roomId + "?", function () {
     api("/api/v1/tables/" + encodeURIComponent(roomId), { method: "DELETE" }).then(function () {
       if (activeOnlineGameId === roomId) {
         stopOnlineGameSync();
@@ -30426,7 +30642,7 @@ function purgeOnlineTable(roomId) {
       }
       refreshLobbyTables();
     }).catch(function (e) {
-      alert("Failed to delete table: " + e.message);
+      alert("Failed to purge table: " + e.message);
     });
   });
 }
@@ -30468,18 +30684,32 @@ function buildInitialFenForRules(modeStr, basesNum, superProngsBool, edgelessBoo
 
 function scrollChatLogsToBottom(els) {
   var list = Array.isArray(els) ? els : [els];
-  list.forEach(function (el) {
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  });
-  if (typeof window.requestAnimationFrame === "function") {
-    window.requestAnimationFrame(function () {
-      list.forEach(function (el) {
-        if (!el) return;
+  function doScroll() {
+    list.forEach(function (el) {
+      if (!el) return;
+      if (el.scrollHeight > 0) {
         el.scrollTop = el.scrollHeight;
-      });
+      }
     });
   }
+  doScroll();
+  if (typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(function () {
+      doScroll();
+      window.requestAnimationFrame(doScroll);
+    });
+  }
+  setTimeout(doScroll, 60);
+  setTimeout(doScroll, 180);
+}
+
+function scrollAllVisibleChatsToBottom() {
+  scrollChatLogsToBottom([
+    $("web-lobby-chat-log"),
+    $("web-board-lobby-chat-log"),
+    $("web-board-chat-log"),
+    $("web-board-chat-zoom-log")
+  ]);
 }
 
 function proposalLabel(p) {
@@ -30642,8 +30872,8 @@ function renderRoomChatLogs() {
     clear(logEl);
     if (!activeOnlineChatMessages.length) {
       var emptyMsg = activeOnlineTableRoomId
-        ? ("Connected to room #" + activeOnlineTableRoomId + " chat. Try @bot help or @bot eval.")
-        : "Table Chat ready. Type @bot help for commands.";
+        ? ("Connected to room #" + activeOnlineTableRoomId + " chat.")
+        : "Connected to room chat.";
       logEl.appendChild(el("div", emptyMsg, "dim"));
       return;
     }
@@ -30870,11 +31100,18 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
     renderPlayBoardCanvas();
     renderAllWebReserves();
     updateOnlineTableControls();
+    if (forceRebuild) {
+      scrollAllVisibleChatsToBottom();
+    }
   }).catch(function () {});
 }
 
 function openOnlineTableBoard(roomId) {
   if (!roomId) return;
+  if (activeBoardContextMode === "local") {
+    saveLocalPlayContext();
+  }
+  activeBoardContextMode = "online";
   if (clockInterval) {
     clearInterval(clockInterval);
     clockInterval = null;
@@ -30890,6 +31127,10 @@ function openOnlineTableBoard(roomId) {
   var switchedRoom = (activeOnlineTableRoomId !== roomId);
   activeOnlineGameId = roomId;
   activeOnlineTableRoomId = roomId;
+  if (onlinePlayContext) {
+    onlinePlayContext.viewingBoard = true;
+    onlinePlayContext.roomId = roomId;
+  }
   activeOnlineLastSyncedPlyCount = -1;
   activeOnlineLastSyncedFen = "";
   if (switchedRoom) {
@@ -30926,11 +31167,20 @@ function openOnlineTableBoard(roomId) {
   }
   var actRow = document.getElementById("web-online-table-actions");
   if (actRow) actRow.style.display = "flex";
+  var topHalf = document.getElementById("web-side-top-half");
+  if (topHalf) {
+    topHalf.style.flex = "1 1 50%";
+    topHalf.style.maxHeight = "";
+  }
   var chatPanel = document.getElementById("web-board-chat-panel");
   if (chatPanel) chatPanel.style.display = "flex";
 
+  syncWebPlayBoardSquareSize();
+  startLobbyRealtimeSync();
   updateOnlineTableControls();
+  renderLobbyChatMessages(lobbyChatMessages);
   renderRoomChatLogs();
+  scrollAllVisibleChatsToBottom();
   syncOnlineGameRoom(roomId, true);
   pollOnlineGameEvents(roomId);
 
@@ -30947,40 +31197,6 @@ function sendOnlineRoomChatMessage(rawText, scope) {
   var targetScope = (scope || "ALL").toUpperCase();
   var targetRoom = activeOnlineGameId || activeOnlineTableRoomId || currentMyTableRoomId;
   if (!targetRoom) {
-    var senderHandle = (currentUser && currentUser.handle) ? currentUser.handle : "You";
-    var userEntry = {
-      handle: senderHandle,
-      text: msg,
-      at_ms: Date.now(),
-      scope: targetScope
-    };
-    activeOnlineChatMessages.push(userEntry);
-    renderRoomChatLogs();
-
-    var lower = msg.toLowerCase();
-    if (lower.indexOf("@bot") !== -1 || lower.indexOf("@stock") !== -1) {
-      setTimeout(function () {
-        var replyText = "";
-        if (lower.indexOf("help") !== -1) {
-          replyText = "Commands: @bot help, @bot eval (board score & best move), @bot stats (engine search stats).";
-        } else if (lower.indexOf("eval") !== -1) {
-          replyText = "Position eval: " + (activePlayState ? ("Turn " + activePlayState.turn + ", status " + activePlayState.status) : "Ready") + ". Good luck!";
-        } else if (lower.indexOf("stats") !== -1) {
-          var stProf = getBotProfile(localMatchConfig.botDifficulty);
-          replyText = "Engine: Browser JS Robot | Difficulty: Level " + localMatchConfig.botDifficulty + " (" + (stProf.name || "Balanced") + ") | Search time: " + Math.round((stProf.timeBudgetMs || 10000) / 1000) + "s.";
-        } else {
-          replyText = "Hello! I am the OCTI bot. Type @bot help for commands.";
-        }
-        activeOnlineChatMessages.push({
-          handle: "bot",
-          is_robot: true,
-          text: replyText,
-          at_ms: Date.now(),
-          scope: targetScope
-        });
-        renderRoomChatLogs();
-      }, 200);
-    }
     return;
   }
   if (!currentUser) {
@@ -31056,21 +31272,6 @@ window.addEventListener("keydown", function (ev) {
     }
   }
 });
-if ($("btn-web-board-chat-zoom-help")) {
-  $("btn-web-board-chat-zoom-help").addEventListener("click", function () {
-    sendOnlineRoomChatMessage("@bot help", "ALL");
-  });
-}
-if ($("btn-web-board-chat-zoom-eval")) {
-  $("btn-web-board-chat-zoom-eval").addEventListener("click", function () {
-    sendOnlineRoomChatMessage("@bot eval", "ALL");
-  });
-}
-if ($("btn-web-board-chat-zoom-stats")) {
-  $("btn-web-board-chat-zoom-stats").addEventListener("click", function () {
-    sendOnlineRoomChatMessage("@bot stats", "ALL");
-  });
-}
 if ($("btn-web-board-chat-zoom-send")) {
   $("btn-web-board-chat-zoom-send").addEventListener("click", function () {
     var inp = $("web-board-chat-zoom-input");
@@ -31124,7 +31325,7 @@ if ($("btn-web-leave-table")) {
     var isSeated = (activeOnlineViewerSeat > 0);
     var isProgress = (activeOnlineRoomView && activeOnlineRoomView.phase === "IN_PROGRESS");
     if (isSeated && isProgress) {
-      if (!window.confirm("Are you sure you want to leave? If you forfeit, your game may be conceded.")) {
+      if (!window.confirm("Are you sure you want to leave the table? You may rejoin this table to resume this game before the timer expires!")) {
         return;
       }
     }
@@ -31162,6 +31363,15 @@ prepareLocalMatchInitialState();
 
 /* Online Lobby & Tables */
 var currentMyTableRoomId = "";
+var lobbyChatMessages = [];
+var latestLobbySeq = 0;
+var lobbyEventSource = null;
+var lobbyEventsPollTimer = null;
+var lobbyFullReconcileTimer = null;
+var lobbyRefreshDebounceTimer = null;
+var lobbyRefreshInFlight = false;
+var lobbyRefreshPending = false;
+var lobbyRealtimeActive = false;
 
 function seatLetterOf(seat) {
   return seat === 1 ? "A" : (seat === 2 ? "B" : (seat === 3 ? "C" : (seat === 4 ? "D" : String(seat))));
@@ -31176,31 +31386,206 @@ function formatLobbyChatTime(ms) {
 }
 
 function renderLobbyChatMessages(chatList) {
-  var log = $("web-lobby-chat-log");
-  if (!log) return;
-  clear(log);
   var arr = Array.isArray(chatList) ? chatList : [];
-  if (!arr.length) {
-    log.appendChild(el("div", "Connected to lobby chat. (Messages older than 6 hours are automatically purged.)", "dim"));
+  var targets = [
+    $("web-lobby-chat-log"),
+    $("web-board-lobby-chat-log")
+  ];
+  var lastItem = arr.length ? arr[arr.length - 1] : null;
+  var sig = arr.length
+    ? (arr.length + ":" + (lastItem.seq || lastItem.created_at_ms || lastItem.at_ms || "") + ":" + (lastItem.text || ""))
+    : "0";
+  targets.forEach(function (log) {
+    if (!log) return;
+    if (log.getAttribute("data-chat-sig") === sig && log.childNodes.length > 0) {
+      if (log.clientHeight > 0 && log.getAttribute("data-chat-scrolled-sig") !== sig) {
+        scrollChatLogsToBottom([log]);
+        log.setAttribute("data-chat-scrolled-sig", sig);
+      }
+      return;
+    }
+    log.setAttribute("data-chat-sig", sig);
+    clear(log);
+    if (!arr.length) {
+      log.appendChild(el("div", "Connected to lobby chat. (Messages older than 6 hours are automatically purged.)", "dim"));
+      return;
+    }
+    arr.forEach(function (m) {
+      var ts = formatLobbyChatTime(m.created_at_ms || m.at_ms);
+      var rawHandle = (m.handle || "player").replace(/^@/, "");
+      var isSelf = Boolean(currentUser && currentUser.handle && rawHandle === currentUser.handle) || rawHandle === "You";
+      var isBot = Boolean(m.is_robot || rawHandle === "bot");
+      var row = el("div", null, "chat-msg-row");
+      row.appendChild(el("span", "[" + ts + "]", "chat-msg-ts"));
+      if (m.scope && m.scope.toUpperCase() === "TEAM") {
+        row.appendChild(el("span", "[TEAM]", "chat-msg-scope"));
+      }
+      var uSpan = el("span", "@" + rawHandle + (m.is_robot ? " [BOT]" : "") + ":", "chat-msg-user" + (isSelf ? " is-self" : (isBot ? " is-bot" : "")));
+      var tSpan = el("span", m.text || "", "chat-msg-text");
+      row.appendChild(uSpan);
+      row.appendChild(tSpan);
+      log.appendChild(row);
+    });
+    if (log.clientHeight > 0) {
+      log.setAttribute("data-chat-scrolled-sig", sig);
+    } else {
+      log.removeAttribute("data-chat-scrolled-sig");
+    }
+    scrollChatLogsToBottom([log]);
+  });
+}
+
+function appendLobbyChatEvent(ev) {
+  if (!ev || !ev.text) return;
+  if (ev.seq && ev.seq > latestLobbySeq) {
+    latestLobbySeq = ev.seq;
+  }
+  for (var i = 0; i < lobbyChatMessages.length; i++) {
+    if (ev.seq && lobbyChatMessages[i].seq === ev.seq) {
+      return;
+    }
+  }
+  lobbyChatMessages.push(ev);
+  if (lobbyChatMessages.length > 200) {
+    lobbyChatMessages.splice(0, lobbyChatMessages.length - 200);
+  }
+  renderLobbyChatMessages(lobbyChatMessages);
+}
+
+function scheduleLobbyTablesRefresh() {
+  if (lobbyRefreshDebounceTimer) {
     return;
   }
-  arr.forEach(function (m) {
-    var ts = formatLobbyChatTime(m.created_at_ms || m.at_ms);
-    var rawHandle = (m.handle || "player").replace(/^@/, "");
-    var isSelf = Boolean(currentUser && currentUser.handle && rawHandle === currentUser.handle) || rawHandle === "You";
-    var isBot = Boolean(m.is_robot || rawHandle === "bot");
-    var row = el("div", null, "chat-msg-row");
-    row.appendChild(el("span", "[" + ts + "]", "chat-msg-ts"));
-    if (m.scope && m.scope.toUpperCase() === "TEAM") {
-      row.appendChild(el("span", "[TEAM]", "chat-msg-scope"));
+  lobbyRefreshDebounceTimer = setTimeout(function () {
+    lobbyRefreshDebounceTimer = null;
+    refreshLobbyTables();
+  }, 150);
+}
+
+function handleLobbyRealtimeEvent(ev) {
+  if (!ev) return;
+  if (ev.seq && ev.seq > latestLobbySeq) {
+    latestLobbySeq = ev.seq;
+  }
+  var t = ev.type || "";
+  if (t === "LOBBY_CHAT") {
+    appendLobbyChatEvent(ev);
+  } else if (t === "TABLE_UPDATED" || t === "TABLE_CLOSED" || t === "PRESENCE" || t === "MATCH_FOUND") {
+    scheduleLobbyTablesRefresh();
+    if (activeOnlineGameId && ev.room_id && ev.room_id === activeOnlineGameId) {
+      syncOnlineGameRoom(activeOnlineGameId, false);
     }
-    var uSpan = el("span", "@" + rawHandle + (m.is_robot ? " [BOT]" : "") + ":", "chat-msg-user" + (isSelf ? " is-self" : (isBot ? " is-bot" : "")));
-    var tSpan = el("span", m.text || "", "chat-msg-text");
-    row.appendChild(uSpan);
-    row.appendChild(tSpan);
-    log.appendChild(row);
+  }
+}
+
+function pollLobbyEventsIncremental() {
+  if (!lobbyRealtimeActive) return;
+  api("/api/v1/lobby/events?since_seq=" + encodeURIComponent(String(latestLobbySeq || 0))).then(function (res) {
+    if (!res || !lobbyRealtimeActive) return;
+    if (res.gap) {
+      scheduleLobbyTablesRefresh();
+      return;
+    }
+    var evs = Array.isArray(res.events) ? res.events : [];
+    for (var i = 0; i < evs.length; i++) {
+      handleLobbyRealtimeEvent(evs[i]);
+    }
+    if (res.next_seq && res.next_seq > latestLobbySeq) {
+      latestLobbySeq = res.next_seq;
+    }
+  }).catch(function () {});
+}
+
+function startLobbyRealtimeSync() {
+  var wasActive = lobbyRealtimeActive;
+  lobbyRealtimeActive = true;
+  if (!wasActive && !lobbyChatMessages.length) {
+    refreshLobbyTables();
+  }
+  if (!lobbyEventSource && typeof window !== "undefined" && typeof window.EventSource === "function") {
+    try {
+      var sseUrl = "/api/v1/lobby/events?stream=1&since_seq=" + encodeURIComponent(String(latestLobbySeq || 0));
+      lobbyEventSource = new window.EventSource(sseUrl);
+      ["LOBBY_CHAT", "TABLE_UPDATED", "TABLE_CLOSED", "PRESENCE", "MATCH_FOUND"].forEach(function (evName) {
+        lobbyEventSource.addEventListener(evName, function (msgEv) {
+          if (!msgEv || !msgEv.data) return;
+          try {
+            var parsed = JSON.parse(msgEv.data);
+            if (!parsed.type) parsed.type = evName;
+            handleLobbyRealtimeEvent(parsed);
+          } catch (e) {}
+        });
+      });
+      lobbyEventSource.addEventListener("gap", function () {
+        scheduleLobbyTablesRefresh();
+      });
+      lobbyEventSource.onmessage = function (msgEv) {
+        if (!msgEv || !msgEv.data) return;
+        try {
+          var parsed = JSON.parse(msgEv.data);
+          handleLobbyRealtimeEvent(parsed);
+        } catch (e) {}
+      };
+      lobbyEventSource.onerror = function () {
+        if (lobbyEventSource) {
+          try { lobbyEventSource.close(); } catch (e) {}
+          lobbyEventSource = null;
+        }
+      };
+    } catch (e) {
+      lobbyEventSource = null;
+    }
+  }
+  if (!lobbyEventsPollTimer) {
+    lobbyEventsPollTimer = setInterval(function () {
+      if (!lobbyRealtimeActive) return;
+      pollLobbyEventsIncremental();
+    }, 1500);
+  }
+  if (!lobbyFullReconcileTimer) {
+    lobbyFullReconcileTimer = setInterval(function () {
+      if (!lobbyRealtimeActive) return;
+      if (typeof document !== "undefined" && document.hidden) return;
+      refreshLobbyTables();
+    }, 5000);
+  }
+}
+
+function stopLobbyRealtimeSync() {
+  lobbyRealtimeActive = false;
+  if (lobbyEventSource) {
+    try { lobbyEventSource.close(); } catch (e) {}
+    lobbyEventSource = null;
+  }
+  if (lobbyEventsPollTimer) {
+    clearInterval(lobbyEventsPollTimer);
+    lobbyEventsPollTimer = null;
+  }
+  if (lobbyFullReconcileTimer) {
+    clearInterval(lobbyFullReconcileTimer);
+    lobbyFullReconcileTimer = null;
+  }
+  if (lobbyRefreshDebounceTimer) {
+    clearTimeout(lobbyRefreshDebounceTimer);
+    lobbyRefreshDebounceTimer = null;
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("focus", function () {
+    if (lobbyRealtimeActive) {
+      pollLobbyEventsIncremental();
+      scheduleLobbyTablesRefresh();
+    }
   });
-  scrollChatLogsToBottom([log]);
+}
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && lobbyRealtimeActive) {
+      pollLobbyEventsIncremental();
+      scheduleLobbyTablesRefresh();
+    }
+  });
 }
 
 function formatTableRulesetSummary(t) {
@@ -31366,9 +31751,24 @@ function renderOnlineUsersRoster(players) {
 }
 
 function refreshLobbyTables() {
+  if (lobbyRefreshInFlight) {
+    lobbyRefreshPending = true;
+    return;
+  }
+  lobbyRefreshInFlight = true;
   api("/api/v1/lobby/state").then(function (res) {
+    lobbyRefreshInFlight = false;
+    if (res && res.latest_seq !== undefined && res.latest_seq > latestLobbySeq) {
+      latestLobbySeq = res.latest_seq;
+    }
     if (res && Array.isArray(res.recent_chat)) {
-      renderLobbyChatMessages(res.recent_chat);
+      lobbyChatMessages = res.recent_chat.slice();
+      for (var ci = 0; ci < lobbyChatMessages.length; ci++) {
+        if (lobbyChatMessages[ci].seq && lobbyChatMessages[ci].seq > latestLobbySeq) {
+          latestLobbySeq = lobbyChatMessages[ci].seq;
+        }
+      }
+      renderLobbyChatMessages(lobbyChatMessages);
     }
     renderOnlineUsersRoster(res && Array.isArray(res.players) ? res.players : []);
     var tables = (res && Array.isArray(res.tables)) ? res.tables : [];
@@ -31494,16 +31894,10 @@ function refreshLobbyTables() {
       });
       tdAct.appendChild(joinBtn);
 
-      var myUuid = currentUser ? (currentUser.uuid || currentUser.user_id || "") : "";
-      var isHost = currentUser && myUuid && (
-        (t.host_uuid && String(t.host_uuid) === String(myUuid)) ||
-        (t.host_player_uuid && String(t.host_player_uuid) === String(myUuid)) ||
-        (t.host_handle && currentUser.handle && t.host_handle === currentUser.handle)
-      );
-      var isAdmin = !!(currentUser && currentUser.is_admin);
+      var isAdmin = isWebAdminPurgeActive();
 
-      if (isHost || isAdmin) {
-        var delBtn = el("button", isHost ? "Delete" : "Purge", "btn");
+      if (isAdmin) {
+        var delBtn = el("button", "Purge", "btn");
         delBtn.style.background = "#dc2626";
         delBtn.style.borderColor = "#b91c1c";
         delBtn.style.color = "#ffffff";
@@ -31516,7 +31910,14 @@ function refreshLobbyTables() {
       tr.appendChild(tdAct);
       tbody.appendChild(tr);
     });
-  }).catch(function () {});
+    if (lobbyRefreshPending) {
+      lobbyRefreshPending = false;
+      scheduleLobbyTablesRefresh();
+    }
+  }).catch(function () {
+    lobbyRefreshInFlight = false;
+    lobbyRefreshPending = false;
+  });
 }
 
 
@@ -31604,19 +32005,49 @@ if ($("btn-web-create-table-submit")) {
   $("btn-web-create-table-submit").addEventListener("click", submitCreateOnlineTable);
 }
 
+function sendLobbyChatMessage(rawText) {
+  var msg = (rawText || "").trim();
+  if (!msg || !currentUser) return;
+  api("/api/v1/lobby/chat", { method: "POST", body: { text: msg } }).then(function () {
+    pollLobbyEventsIncremental();
+    scheduleLobbyTablesRefresh();
+    setTimeout(function () { pollLobbyEventsIncremental(); }, 500);
+  }).catch(function (e) { alert("Chat failed: " + e.message); });
+}
+
 $("btn-web-chat-send").addEventListener("click", function () {
   var input = $("web-chat-input");
+  if (!input) return;
   var msg = input.value.trim();
   if (!msg || !currentUser) return;
   input.value = "";
-  api("/api/v1/lobby/chat", { method: "POST", body: { text: msg } }).then(function () {
-    refreshLobbyTables();
-  }).catch(function (e) { alert("Chat failed: " + e.message); });
+  sendLobbyChatMessage(msg);
 });
 
 $("web-chat-input").addEventListener("keydown", function (ev) {
   if (ev.key === "Enter") { $("btn-web-chat-send").click(); }
 });
+
+if ($("btn-web-board-lobby-chat-send")) {
+  $("btn-web-board-lobby-chat-send").addEventListener("click", function () {
+    var input = $("web-board-lobby-chat-input");
+    if (!input) return;
+    var msg = input.value.trim();
+    if (!msg || !currentUser) return;
+    input.value = "";
+    sendLobbyChatMessage(msg);
+  });
+}
+
+if ($("web-board-lobby-chat-input")) {
+  $("web-board-lobby-chat-input").addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if ($("btn-web-board-lobby-chat-send")) $("btn-web-board-lobby-chat-send").click();
+    }
+  });
+}
 
 
 /* ---- archive ---- */
@@ -31717,7 +32148,7 @@ function arSearch(offset) {
     clear(body);
     var adminCols = $("ar-table").querySelectorAll(".web-ar-admin-col");
     for (var aci = 0; aci < adminCols.length; aci++) {
-      adminCols[aci].style.display = (currentUser && currentUser.is_admin) ? "" : "none";
+      adminCols[aci].style.display = isWebAdminPurgeActive() ? "" : "none";
     }
     $("ar-msg").textContent = j.games.length ? "" : "No archived games.";
     j.games.forEach(function (g) {
@@ -31782,7 +32213,7 @@ function arSearch(offset) {
       [tdGame, tdMode, tdSrc, tdPl, tdWin, tdRes, tdPlies, tdDate].forEach(function (td) {
         tr.appendChild(td);
       });
-      if (currentUser && currentUser.is_admin) {
+      if (isWebAdminPurgeActive()) {
         var tdAct = el("td", null, "web-ar-admin-col");
         var purgeBtn = el("button", "Purge", "btn");
         purgeBtn.style.background = "#dc2626";
@@ -32136,6 +32567,9 @@ loadArchiveStats();
 checkHash();
 loadMyProfile();
 loadAuthProviders();
+if (typeof window !== "undefined") {
+  window.addEventListener("load", scrollAllVisibleChatsToBottom);
+}
 setInterval(loadHealth, 15000);
 
 window.openZoomedSquare = openZoomedSquare;
@@ -32150,11 +32584,17 @@ Object.defineProperty(window, "localMatchConfig", {
 });
 Object.defineProperty(window, "playMatchPlies", {
   get: function () { return playMatchPlies; },
-  set: function (v) { playMatchPlies = v; }
+  set: function (v) {
+    playMatchPlies = v;
+    if (activeBoardContextMode === "local") saveLocalPlayContext();
+  }
 });
 Object.defineProperty(window, "matchStarted", {
   get: function () { return matchStarted; },
-  set: function (v) { matchStarted = v; }
+  set: function (v) {
+    matchStarted = v;
+    if (activeBoardContextMode === "local") saveLocalPlayContext();
+  }
 });
 Object.defineProperty(window, "zoomHoverDir", {
   get: function () { return zoomHoverDir; },
@@ -32162,7 +32602,10 @@ Object.defineProperty(window, "zoomHoverDir", {
 });
 Object.defineProperty(window, "activePlayState", {
   get: function () { return activePlayState; },
-  set: function (v) { activePlayState = v; }
+  set: function (v) {
+    activePlayState = v;
+    if (activeBoardContextMode === "local") saveLocalPlayContext();
+  }
 });
 window.switchTab = switchTab;
 window.triggerAiBotTurn = triggerAiBotTurn;
@@ -32175,6 +32618,15 @@ window.sitAtOnlineTable = sitAtOnlineTable;
 window.syncOnlineGameRoom = syncOnlineGameRoom;
 window.purgeOnlineTable = purgeOnlineTable;
 window.pulseConfirmBar = pulseConfirmBar;
+window.isWebAdminPurgeActive = isWebAdminPurgeActive;
+window.saveLocalPlayContext = saveLocalPlayContext;
+window.restoreLocalPlayContext = restoreLocalPlayContext;
+window.saveOnlinePlayContext = saveOnlinePlayContext;
+window.restoreOnlinePlayContext = restoreOnlinePlayContext;
+window.startLobbyRealtimeSync = startLobbyRealtimeSync;
+window.stopLobbyRealtimeSync = stopLobbyRealtimeSync;
+window.appendLobbyChatEvent = appendLobbyChatEvent;
+window.sendLobbyChatMessage = sendLobbyChatMessage;
 window.OPENING_BOOK = OPENING_BOOK;
 Object.defineProperty(window, "boardRotationDeg", {
   get: function () { return boardRotationDeg; },

@@ -648,27 +648,6 @@ fun OctiMainAppContent(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        val isHost = !currentProfile?.uuid.isNullOrBlank() && currentProfile?.uuid == activeGameView?.hostUuid
-                                        val isAdmin = currentProfile?.isAdmin == true
-
-                                        if (isHost || isAdmin) {
-                                            Button(
-                                                onClick = { viewModel.purgeOnlineTableAsync(activeRoomId) },
-                                                modifier = Modifier.height(26.dp),
-                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = MaterialTheme.colorScheme.error,
-                                                    contentColor = Color.White
-                                                )
-                                            ) {
-                                                Text(
-                                                    text = if (isAdmin && !isHost) "Purge" else "Delete",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                        }
-
                                         OutlinedButton(
                                             onClick = { viewModel.exitOnlineTableViewAsync() },
                                             modifier = Modifier.height(26.dp),

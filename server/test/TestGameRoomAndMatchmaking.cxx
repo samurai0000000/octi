@@ -4316,6 +4316,71 @@ TEST(GameRoomManagerTest, SeatedPlayerLeavesAndResumesViaObserveOrJoin)
     EXPECT_OK(mgr->submitMove(room, p[0], "33+a"));
 }
 
+TEST(GameRoomManagerTest, RealtimeLobbyTableUpdatedEventsOnObserveMoveAndDisconnect)
+{
+    std::string room = start2P();
+
+    LobbyPoll lp = mgr->pollLobbyEvents(p[0], 0, 100);
+    int64_t seqAfterStart = lp.latestSeq;
+
+    // 1. Observer join emits TABLE_UPDATED
+    EXPECT_OK(mgr->observeRoom(room, p[2]));
+    lp = mgr->pollLobbyEvents(p[0], seqAfterStart, 100);
+    CHECK_TRUE(lp.events.size() >= 1u);
+    CHECK_EQUAL(static_cast<int>(LobbyEventType::TABLE_UPDATED),
+                static_cast<int>(lp.events.back().type));
+    STRCMP_EQUAL(room.c_str(), lp.events.back().roomId.c_str());
+    seqAfterStart = lp.latestSeq;
+
+    // 2. Observer leave emits TABLE_UPDATED
+    EXPECT_OK(mgr->stopObserving(room, p[2]));
+    lp = mgr->pollLobbyEvents(p[0], seqAfterStart, 100);
+    CHECK_TRUE(lp.events.size() >= 1u);
+    CHECK_EQUAL(static_cast<int>(LobbyEventType::TABLE_UPDATED),
+                static_cast<int>(lp.events.back().type));
+    STRCMP_EQUAL(room.c_str(), lp.events.back().roomId.c_str());
+    seqAfterStart = lp.latestSeq;
+
+    // 3. Non-terminal move emits TABLE_UPDATED
+    EXPECT_OK(mgr->submitMove(room, p[0], "33+a"));
+    lp = mgr->pollLobbyEvents(p[0], seqAfterStart, 100);
+    CHECK_TRUE(lp.events.size() >= 1u);
+    CHECK_EQUAL(static_cast<int>(LobbyEventType::TABLE_UPDATED),
+                static_cast<int>(lp.events.back().type));
+    STRCMP_EQUAL(room.c_str(), lp.events.back().roomId.c_str());
+    seqAfterStart = lp.latestSeq;
+
+    // 4. Disconnect and Reconnect emit TABLE_UPDATED
+    EXPECT_OK(mgr->markDisconnected(room, p[1]));
+    lp = mgr->pollLobbyEvents(p[0], seqAfterStart, 100);
+    CHECK_TRUE(lp.events.size() >= 1u);
+    CHECK_EQUAL(static_cast<int>(LobbyEventType::TABLE_UPDATED),
+                static_cast<int>(lp.events.back().type));
+    seqAfterStart = lp.latestSeq;
+
+    EXPECT_OK(mgr->markReconnected(room, p[1]));
+    lp = mgr->pollLobbyEvents(p[0], seqAfterStart, 100);
+    CHECK_TRUE(lp.events.size() >= 1u);
+    CHECK_EQUAL(static_cast<int>(LobbyEventType::TABLE_UPDATED),
+                static_cast<int>(lp.events.back().type));
+    seqAfterStart = lp.latestSeq;
+
+    // 5. Pause and Resume emit TABLE_UPDATED
+    EXPECT_OK(mgr->submitProposal(room, p[0], ProposalType::PAUSE_REQUEST));
+    EXPECT_OK(mgr->respondProposal(room, p[1], ProposalType::PAUSE_REQUEST, true));
+    lp = mgr->pollLobbyEvents(p[0], seqAfterStart, 100);
+    CHECK_TRUE(lp.events.size() >= 1u);
+    CHECK_EQUAL(static_cast<int>(LobbyEventType::TABLE_UPDATED),
+                static_cast<int>(lp.events.back().type));
+    seqAfterStart = lp.latestSeq;
+
+    EXPECT_OK(mgr->resumeGame(room, p[0]));
+    lp = mgr->pollLobbyEvents(p[0], seqAfterStart, 100);
+    CHECK_TRUE(lp.events.size() >= 1u);
+    CHECK_EQUAL(static_cast<int>(LobbyEventType::TABLE_UPDATED),
+                static_cast<int>(lp.events.back().type));
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

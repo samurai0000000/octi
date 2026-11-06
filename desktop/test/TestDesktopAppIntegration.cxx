@@ -2873,9 +2873,10 @@ TEST(DesktopAppIntegrationTest, RightSidebarFiftyFiftyLayoutAndZoomChatDialog)
     QPushButton *sendBtn = zoomDlg->findChild<QPushButton *>("boardChatZoomSendBtn");
     CHECK_TRUE(sendBtn != nullptr);
 
-    input->setText("@bot help");
+    input->setText("Good game!");
     sendBtn->click();
-    CHECK_TRUE(transcript->toPlainText().contains("@bot help"));
+    CHECK_TRUE(transcript->toPlainText().contains("Good game!"));
+    CHECK_FALSE(transcript->toPlainText().contains("@stock"));
 
     zoomDlg->close();
 }

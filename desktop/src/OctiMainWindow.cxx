@@ -625,7 +625,7 @@ OctiMainWindow::OctiMainWindow(
     _chatScopeCombo->addItem("ALL", "ALL");
     _chatScopeCombo->addItem("TEAM", "TEAM");
     _gameChatInput = new QLineEdit(chatBox);
-    _gameChatInput->setPlaceholderText("Send board message (@bot help)...");
+    _gameChatInput->setPlaceholderText("Send table message...");
     _sendGameChatBtn = new QPushButton("Send", chatBox);
     _sendGameChatBtn->setStyleSheet(compactBtnCss);
     chatInputRow->addWidget(_chatScopeCombo);
@@ -820,8 +820,7 @@ OctiMainWindow::OctiMainWindow(
         if (_onlineRoomId.empty() || !_netClient) {
             return;
         }
-        bool isAdmin = _netClient->currentProfile().isAdmin;
-        QString title = isAdmin ? "Purge Table" : "Delete Table";
+        QString title = "Delete Table";
         auto reply = QMessageBox::warning(
             this,
             title,
@@ -2817,23 +2816,10 @@ void OctiMainWindow::openBoardChatZoomDialog()
 
     headerRow->addStretch();
 
-    // Quick bot command buttons
-    QPushButton *btnBotHelp = new QPushButton("@bot help", dlg);
-    QPushButton *btnBotEval = new QPushButton("@bot eval", dlg);
-    QPushButton *btnBotStats = new QPushButton("@bot stats", dlg);
     QPushButton *btnClose = new QPushButton("Close [Esc]", dlg);
-
-    QString pillStyle = "QPushButton { background: #21262D; color: #C8A253; border: 1px solid #30363D; border-radius: 4px; padding: 2px 8px; font-size: 11px; }"
-                        "QPushButton:hover { background: #30363D; color: #F0F6FC; }";
-    btnBotHelp->setStyleSheet(pillStyle);
-    btnBotEval->setStyleSheet(pillStyle);
-    btnBotStats->setStyleSheet(pillStyle);
     btnClose->setStyleSheet("QPushButton { background: #30363D; color: #F0F6FC; border-radius: 4px; padding: 2px 8px; font-size: 11px; }"
                             "QPushButton:hover { background: #8B0000; }");
 
-    headerRow->addWidget(btnBotHelp);
-    headerRow->addWidget(btnBotEval);
-    headerRow->addWidget(btnBotStats);
     headerRow->addWidget(btnClose);
     layout->addLayout(headerRow);
 
@@ -2857,7 +2843,7 @@ void OctiMainWindow::openBoardChatZoomDialog()
 
     QLineEdit *inputEdit = new QLineEdit(dlg);
     inputEdit->setObjectName("boardChatZoomInput");
-    inputEdit->setPlaceholderText("Type a message or command (@bot help, @bot eval)...");
+    inputEdit->setPlaceholderText("Type a table message...");
 
     QPushButton *sendBtn = new QPushButton("Send", dlg);
     sendBtn->setObjectName("boardChatZoomSendBtn");
@@ -2884,19 +2870,6 @@ void OctiMainWindow::openBoardChatZoomDialog()
 
     QObject::connect(sendBtn, &QPushButton::clicked, dlg, doSend);
     QObject::connect(inputEdit, &QLineEdit::returnPressed, dlg, doSend);
-
-    QObject::connect(btnBotHelp, &QPushButton::clicked, dlg, [inputEdit, doSend]() {
-        inputEdit->setText("@bot help");
-        doSend();
-    });
-    QObject::connect(btnBotEval, &QPushButton::clicked, dlg, [inputEdit, doSend]() {
-        inputEdit->setText("@bot eval");
-        doSend();
-    });
-    QObject::connect(btnBotStats, &QPushButton::clicked, dlg, [inputEdit, doSend]() {
-        inputEdit->setText("@bot stats");
-        doSend();
-    });
     QObject::connect(btnClose, &QPushButton::clicked, dlg, &QDialog::close);
 
     _boardChatZoomDialog = dlg;
@@ -2949,32 +2922,6 @@ bool OctiMainWindow::sendGameChatMessage(const std::string &scope,
         _gameChatTranscript->appendPlainText(QString::fromStdString(line));
         _gameChatTranscript->verticalScrollBar()->setValue(
             _gameChatTranscript->verticalScrollBar()->maximum());
-    }
-
-    // Local bot replies for @bot commands in local mode
-    std::string lowerText = text;
-    for (char &c : lowerText) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-    if (lowerText.rfind("@bot", 0) == 0 || lowerText.rfind("@stock", 0) == 0) {
-        std::string botReply;
-        if (lowerText.find("help") != std::string::npos) {
-            botReply = "[BOT] @stock: Available commands: @bot eval (evaluate position), @bot stats (robot record & tuning), @bot help";
-        } else if (lowerText.find("eval") != std::string::npos) {
-            OctiPlayer turn = _board.getGame() ? _board.getGame()->getTurn() : PLAYER_A;
-            int score = OctiBotEngine::evaluatePosition(_board, turn);
-            botReply = "[BOT] @stock: Position eval score = " + std::to_string(score) + " cp";
-        } else if (lowerText.find("stats") != std::string::npos) {
-            botReply = "[BOT] @stock: Record: 0W / 0L / 0D (Local AI Bot). Tuning: alpha-beta search, depth=6, time=1500ms.";
-        } else {
-            botReply = "[BOT] @stock: Unknown command. Type @bot help for list of commands.";
-        }
-        _gameChatLines.push_back(botReply);
-        if (_gameChatTranscript) {
-            _gameChatTranscript->appendPlainText(QString::fromStdString(botReply));
-            _gameChatTranscript->verticalScrollBar()->setValue(
-                _gameChatTranscript->verticalScrollBar()->maximum());
-        }
     }
 
     if (_boardChatZoomDialog) {
@@ -3703,13 +3650,8 @@ void OctiMainWindow::updateMatchActionsVisibility()
         _sitSeatBtn->setEnabled(canSit);
     }
     if (_deleteWaitingTableBtn) {
-        bool isAdmin = (_netClient && _netClient->currentProfile().isAdmin);
-        std::string myUuid = (_netClient ? _netClient->currentProfile().uuid : "");
-        bool isHost = (!myUuid.empty() && _onlineGameView.hostUuid == myUuid);
-        bool canDelete = waitingForPlayers && (isAdmin || isHost);
-        _deleteWaitingTableBtn->setVisible(canDelete);
-        _deleteWaitingTableBtn->setEnabled(canDelete);
-        _deleteWaitingTableBtn->setText(isAdmin ? "Purge Table" : "Delete Table");
+        _deleteWaitingTableBtn->setVisible(false);
+        _deleteWaitingTableBtn->setEnabled(false);
     }
     if (_leaveWaitingTableBtn) {
         _leaveWaitingTableBtn->setEnabled(waitingForPlayers);
