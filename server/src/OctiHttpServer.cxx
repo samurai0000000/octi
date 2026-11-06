@@ -5803,8 +5803,28 @@ void OctiHttpServer::Impl::handleArchiveExport(const Request &req, Response &res
 
 void OctiHttpServer::Impl::handleFavicon(const Request &, Response &res)
 {
-    res.status = 204;
+    static const char kFaviconSvg[] =
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 128 128\">"
+        "<rect x=\"2\" y=\"2\" width=\"124\" height=\"124\" rx=\"24\" fill=\"#0B0F17\" stroke=\"#C8A253\" stroke-width=\"2\"/>"
+        "<polygon points=\"45,16 83,16 112,45 112,83 83,112 45,112 16,83 16,45\" fill=\"#E4C070\" stroke=\"#FEF08A\" stroke-width=\"1.5\"/>"
+        "<polygon points=\"48,23 80,23 105,48 105,80 80,105 48,105 23,80 23,48\" fill=\"#0F172A\" stroke=\"#D97706\" stroke-width=\"1.5\"/>"
+        "<g stroke=\"#0F172A\" stroke-width=\"1.2\" fill=\"#CBD5E1\" stroke-linejoin=\"round\">"
+        "<polygon points=\"82,60 98,58 106,64 98,70 82,68\"/>"
+        "<polygon points=\"46,60 30,58 22,64 30,70 46,68\"/>"
+        "<polygon points=\"75,47 89,33 97,31 95,39 81,53\"/>"
+        "<polygon points=\"53,47 39,33 31,31 33,39 47,53\"/>"
+        "<polygon points=\"81,75 95,89 97,97 89,95 75,81\"/>"
+        "<polygon points=\"47,75 33,89 31,97 39,95 53,81\"/>"
+        "</g>"
+        "<polygon points=\"59,44 55,28 59,25 56,19 64,9 72,19 69,25 73,28 69,44\" fill=\"#FDE047\" stroke=\"#FFFBEB\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/>"
+        "<polygon points=\"52,36 76,36 92,52 92,76 76,92 52,92 36,76 36,52\" fill=\"#E4C070\" stroke=\"#FDE047\" stroke-width=\"1.5\"/>"
+        "<polygon points=\"54,40 74,40 88,54 88,74 74,88 54,88 40,74 40,54\" fill=\"#10B981\" stroke=\"#6EE7B7\" stroke-width=\"1.2\"/>"
+        "<polygon points=\"64,49 67,61 79,64 67,67 64,79 61,67 49,64 61,61\" fill=\"#FDE047\" stroke=\"#78350F\" stroke-width=\"1\"/>"
+        "<circle cx=\"64\" cy=\"64\" r=\"3\" fill=\"#FFFBEB\"/>"
+        "</svg>";
+    res.status = 200;
     res.set_header("Cache-Control", "public, max-age=86400");
+    res.set_content(kFaviconSvg, "image/svg+xml; charset=utf-8");
 }
 
 void OctiHttpServer::Impl::handleIndex(const Request &, Response &res)
@@ -6105,6 +6125,7 @@ void OctiHttpServer::Impl::registerRoutes()
     static const Route routes[] = {
         {"GET", "/", &Impl::handleIndex},
         {"GET", "/favicon.ico", &Impl::handleFavicon},
+        {"GET", "/favicon.svg", &Impl::handleFavicon},
         {"GET", "/health", &Impl::handleHealth},
         {"GET", "/privacy", &Impl::handlePrivacy},
         {"POST", "/privacy", &Impl::handleDataDeletion},

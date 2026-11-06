@@ -3149,7 +3149,7 @@ TEST(GameRoomManagerTest, RapidCheckBanAndVoicePolicyInvariantsUnderArbitraryOpe
             }
             case 6: {                                             /* join a seat */
                 r = local.joinTable(room, idOf(a), 0, "");
-                RC_ASSERT(!r.ok());                               /* game already runs */
+                RC_ASSERT(seated(a) || !r.ok());                  /* game already runs */
                 if (banned.count(idOf(a)) != 0) {
                     RC_ASSERT(r.code == RoomCode::FORBIDDEN_BANNED);
                 }

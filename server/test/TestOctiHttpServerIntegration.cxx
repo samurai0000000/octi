@@ -1236,11 +1236,28 @@ TEST(OctiHttpServerIntegrationTest, NominalFullScenario)
     CHECK_TRUE(ui.body.find("/api/v1/leaderboard") != std::string::npos);
     CHECK_TRUE(ui.body.find("/api/v1/archive/games") != std::string::npos);
     CHECK_FALSE(ui.header("Content-Security-Policy").empty());
-    /* Self-contained: no external resource of any kind (allow w3.org svg namespace). */
+    /* Self-contained: no third-party external resource (allow w3.org svg namespace,
+     * first-party selfso.com software download links, and local favicon <link> tags). */
+    CHECK_TRUE(ui.body.find("https://www.selfso.com/software/windows/octi/") != std::string::npos);
+    CHECK_TRUE(ui.body.find("https://www.selfso.com/software/android/octi/") != std::string::npos);
+    CHECK_TRUE(ui.body.find("home-native-apps-promo") != std::string::npos);
+    Reply favReply = http().get("/favicon.svg");
+    EXPECT_STATUS(200, favReply);
+    CHECK_TRUE(favReply.body.find("<svg") != std::string::npos);
     std::string strippedUi = ui.body;
-    size_t svgNs = 0;
-    while ((svgNs = strippedUi.find("http://www.w3.org/2000/svg")) != std::string::npos) {
-        strippedUi.replace(svgNs, 26, "");
+    const char *kAllowedTokens[] = {
+        "http://www.w3.org/2000/svg",
+        "https://www.selfso.com/software/windows/octi/",
+        "https://www.selfso.com/software/android/octi/",
+        "<link rel=\"icon\"",
+        "<link rel=\"apple-touch-icon\""
+    };
+    for (size_t ti = 0; ti < sizeof(kAllowedTokens) / sizeof(kAllowedTokens[0]); ++ti) {
+        const std::string tok(kAllowedTokens[ti]);
+        size_t pos = 0;
+        while ((pos = strippedUi.find(tok)) != std::string::npos) {
+            strippedUi.replace(pos, tok.size(), "");
+        }
     }
     CHECK_TRUE(strippedUi.find("http://") == std::string::npos);
     CHECK_TRUE(strippedUi.find("https://") == std::string::npos);
@@ -4718,11 +4735,21 @@ TEST(OctiHttpServerIntegrationTest, WebPlayerDesktopAndroidParityElements)
     CHECK_TRUE(rUi.body.find("Save Handle") == std::string::npos);
     CHECK_TRUE(rUi.body.find("btn-web-quick-match") == std::string::npos);
 
-    // 6. Strict self-contained CSP: zero external URLs
+    // 6. Strict self-contained CSP: zero third-party external URLs
     std::string strippedUi = rUi.body;
-    size_t svgNs = 0;
-    while ((svgNs = strippedUi.find("http://www.w3.org/2000/svg")) != std::string::npos) {
-        strippedUi.replace(svgNs, 26, "");
+    const char *kAllowedTokens[] = {
+        "http://www.w3.org/2000/svg",
+        "https://www.selfso.com/software/windows/octi/",
+        "https://www.selfso.com/software/android/octi/",
+        "<link rel=\"icon\"",
+        "<link rel=\"apple-touch-icon\""
+    };
+    for (size_t ti = 0; ti < sizeof(kAllowedTokens) / sizeof(kAllowedTokens[0]); ++ti) {
+        const std::string tok(kAllowedTokens[ti]);
+        size_t pos = 0;
+        while ((pos = strippedUi.find(tok)) != std::string::npos) {
+            strippedUi.replace(pos, tok.size(), "");
+        }
     }
     CHECK_TRUE(strippedUi.find("http://") == std::string::npos);
     CHECK_TRUE(strippedUi.find("https://") == std::string::npos);

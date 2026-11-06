@@ -20,6 +20,11 @@ const char kIndexHtml[] = R"OCTIUI(<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OCTI &mdash; Web Player, Archive &amp; Leaderboard</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <style>
 :root {
   --bg: #fbfbfa;
@@ -1276,7 +1281,16 @@ tr.active-ply {
 <body>
 <header>
   <div class="brand">
-    <span class="brand-badge">OCTI</span>
+    <span class="brand-badge" style="display:inline-flex;align-items:center;gap:6px;">
+      <svg width="18" height="18" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+        <polygon points="45,16 83,16 112,45 112,83 83,112 45,112 16,83 16,45" fill="#E4C070" stroke="#FEF08A" stroke-width="4"/>
+        <polygon points="48,23 80,23 105,48 105,80 80,105 48,105 23,80 23,48" fill="#0F172A" stroke="#D97706" stroke-width="3"/>
+        <polygon points="59,44 55,24 64,6 73,24 69,44" fill="#FDE047"/>
+        <polygon points="54,40 74,40 88,54 88,74 74,88 54,88 40,74 40,54" fill="#10B981" stroke="#6EE7B7" stroke-width="3"/>
+        <circle cx="64" cy="64" r="7" fill="#FFFBEB"/>
+      </svg>
+      OCTI
+    </span>
     <div class="brand-text">
       <span class="brand-name" id="brand-version-title">OCTI v)OCTIUI" OCTI_APP_VERSION R"OCTIUI(</span>
       <span class="brand-sub">octi.selfso.com</span>
@@ -1310,11 +1324,21 @@ tr.active-ply {
           The timeless strategy game of tactical growth, prong directional control, multi-hop chain jumping, and home base infiltration.
           Compete directly in your browser against client-side minimax JS robots, join real-time multiplayer tables, explore grandmaster replays, or register automated bots.
         </p>
-        <div class="row" style="gap:10px;margin-bottom:12px;">
+        <div class="row" style="gap:10px;margin-bottom:10px;flex-wrap:wrap;">
           <button type="button" class="btn btn-primary" id="home-cta-play" style="padding:10px 18px;font-size:14px;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Play in Browser</button>
           <button type="button" class="btn" id="home-cta-online" style="padding:10px 18px;font-size:14px;">Play Online</button>
           <button type="button" class="btn" id="home-cta-users" style="padding:10px 18px;font-size:14px;">Browse Players</button>
           <button type="button" class="btn" id="home-cta-account" style="padding:10px 18px;font-size:14px;">Sign In with Google</button>
+        </div>
+        <div class="row" style="gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+          <a href="https://www.selfso.com/software/windows/octi/" target="_blank" class="btn" style="padding:8px 14px;font-size:13px;background:rgba(37,99,235,0.22);border:1px solid #60A5FA;color:#E0F2FE;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5L10.5 4.5V11.5H3V5.5ZM11.5 4.35L21 3V11.5H11.5V4.35ZM3 12.5H10.5V19.5L3 18.5V12.5ZM11.5 12.5H21V21L11.5 19.65V12.5Z"/></svg>
+            Download Windows 11/10 App &nearr;
+          </a>
+          <a href="https://www.selfso.com/software/android/octi/" target="_blank" class="btn" style="padding:8px 14px;font-size:13px;background:rgba(16,185,129,0.22);border:1px solid #34D399;color:#D1FAE5;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="3" width="12" height="18" rx="2"/><circle cx="12" cy="18" r="1"/></svg>
+            Download Android APK &nearr;
+          </a>
         </div>
         <div class="home-highlights-strip">
           <span class="home-highlight-pill"><strong>9&times;9 &amp; 6&times;7</strong> Boards</span>
@@ -1440,6 +1464,140 @@ tr.active-ply {
     </div>
   </div>
 
+  <!-- Native Desktop & Android Promotional Banners -->
+  <div id="home-native-apps-promo" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:18px;margin-bottom:20px;">
+    <!-- Banner 1: OCTI for Windows 11 / 10 Desktop -->
+    <div style="background:linear-gradient(135deg,#091224 0%,#102347 55%,#1E3A8A 100%);border:1px solid #3B82F6;border-radius:12px;padding:22px 24px;color:#F8FAFC;box-shadow:0 6px 24px rgba(15,23,42,0.28);display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;">
+      <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:16px;align-items:center;">
+        <div>
+          <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(59,130,246,0.25);border:1px solid #60A5FA;color:#BAE6FD;font-size:11px;font-weight:800;letter-spacing:0.05em;padding:3px 10px;border-radius:999px;margin-bottom:10px;text-transform:uppercase;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5L10.5 4.5V11.5H3V5.5ZM11.5 4.35L21 3V11.5H11.5V4.35ZM3 12.5H10.5V19.5L3 18.5V12.5ZM11.5 12.5H21V21L11.5 19.65V12.5Z"/></svg>
+            WINDOWS 11 / 10 &bull; 64-BIT QT6 CLIENT
+          </div>
+          <h2 style="margin:0 0 8px 0;font-size:22px;line-height:1.25;color:#FFFFFF;font-weight:800;">
+            Play With Full Native Power on Windows Desktop
+          </h2>
+          <p style="margin:0 0 14px 0;font-size:13.5px;line-height:1.55;color:#DBEAFE;">
+            Hardware-accelerated 64-bit C++17 &amp; Qt6 studio with multi-threaded minimax AI opponents, live P2P Opus/PCM voice chat, one-click Google SSO, and automatic cryptographic self-updates.
+          </p>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
+            <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(15,23,42,0.55);border:1px solid rgba(147,197,253,0.35);color:#E0F2FE;">&#10003; Multi-Core AI Engine</span>
+            <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(15,23,42,0.55);border:1px solid rgba(147,197,253,0.35);color:#E0F2FE;">&#10003; P2P Table Voice Chat</span>
+            <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(15,23,42,0.55);border:1px solid rgba(147,197,253,0.35);color:#E0F2FE;">&#10003; SmartScreen Guide Included</span>
+          </div>
+        </div>
+        <!-- Custom Windows Desktop SVG Graphic -->
+        <a href="https://www.selfso.com/software/windows/octi/" target="_blank" title="Download OCTI Desktop Player for Windows 11/10" style="display:block;text-decoration:none;">
+          <svg viewBox="0 0 230 165" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OCTI Windows Desktop Player Preview">
+            <!-- Monitor Bezel & Stand -->
+            <rect x="10" y="8" width="210" height="126" rx="8" fill="#0B0F17" stroke="#60A5FA" stroke-width="2"/>
+            <rect x="14" y="12" width="202" height="14" rx="4" fill="#1E293B"/>
+            <circle cx="22" cy="19" r="3" fill="#EF4444"/>
+            <circle cx="31" cy="19" r="3" fill="#F59E0B"/>
+            <circle cx="40" cy="19" r="3" fill="#10B981"/>
+            <text x="52" y="22" fill="#93C5FD" font-family="ui-monospace,monospace" font-size="8" font-weight="700">OCTI Desktop v2.3 &bull; x86_64</text>
+            <!-- Mini Board Inside Monitor -->
+            <rect x="20" y="32" width="114" height="94" rx="4" fill="#111827" stroke="#334155" stroke-width="1"/>
+            <g stroke="#1E293B" stroke-width="1">
+              <line x1="48" y1="32" x2="48" y2="126"/>
+              <line x1="77" y1="32" x2="77" y2="126"/>
+              <line x1="105" y1="32" x2="105" y2="126"/>
+              <line x1="20" y1="63" x2="134" y2="63"/>
+              <line x1="20" y1="95" x2="134" y2="95"/>
+            </g>
+            <!-- Jumping Emerald Pod -->
+            <path d="M 48 108 Q 77 52 105 78" fill="none" stroke="#FDE047" stroke-width="2" stroke-dasharray="3 2"/>
+            <polygon points="42,100 54,100 59,105 59,113 54,118 42,118 37,113 37,105" fill="#10B981" stroke="#6EE7B7" stroke-width="1.2"/>
+            <polygon points="99,70 111,70 116,75 116,83 111,88 99,88 94,83 94,75" fill="#F43F5E" stroke="#FDA4AF" stroke-width="1.2"/>
+            <!-- Right Side Telemetry & Voice Panel -->
+            <rect x="140" y="32" width="70" height="44" rx="4" fill="#1E293B" stroke="#475569" stroke-width="1"/>
+            <text x="146" y="45" fill="#FDE047" font-family="sans-serif" font-size="7.5" font-weight="700">AI ENGINE</text>
+            <text x="146" y="57" fill="#86EFAC" font-family="ui-monospace,monospace" font-size="7">Depth 8 &bull; +1.4</text>
+            <rect x="146" y="63" width="58" height="5" rx="2.5" fill="#0F172A"/>
+            <rect x="146" y="63" width="44" height="5" rx="2.5" fill="#3B82F6"/>
+            <rect x="140" y="82" width="70" height="44" rx="4" fill="#1E293B" stroke="#475569" stroke-width="1"/>
+            <text x="146" y="95" fill="#93C5FD" font-family="sans-serif" font-size="7.5" font-weight="700">P2P VOICE</text>
+            <text x="146" y="107" fill="#E2E8F0" font-family="sans-serif" font-size="7">Google SSO</text>
+            <rect x="146" y="113" width="58" height="8" rx="4" fill="#16A34A"/>
+            <text x="155" y="119" fill="#FFFFFF" font-family="sans-serif" font-size="6.5" font-weight="700">CONNECTED</text>
+            <!-- Monitor Stand -->
+            <path d="M 95 134 L 85 152 L 145 152 L 135 134 Z" fill="#334155"/>
+            <rect x="70" y="152" width="90" height="5" rx="2.5" fill="#60A5FA"/>
+          </svg>
+        </a>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;">
+        <a href="https://www.selfso.com/software/windows/octi/" target="_blank" class="btn" style="padding:10px 18px;font-size:13.5px;background:linear-gradient(135deg,#FDE047 0%,#EAB308 100%);border:1px solid #FEF08A;color:#0B0F17;font-weight:800;text-decoration:none;box-shadow:0 4px 14px rgba(234,179,8,0.35);">
+          Download Windows Installer (octi-setup.exe) &rarr;
+        </a>
+        <a href="https://www.selfso.com/software/windows/octi/#windows-install-guide" target="_blank" class="btn" style="padding:10px 14px;font-size:12.5px;background:rgba(15,23,42,0.65);border:1px solid #93C5FD;color:#E0F2FE;font-weight:700;text-decoration:none;">
+          Windows 11 SmartScreen &amp; Google Sign-In Guide &nearr;
+        </a>
+      </div>
+    </div>
+
+    <!-- Banner 2: OCTI Strategy Game for Android -->
+    <div style="background:linear-gradient(135deg,#051B14 0%,#063729 55%,#047857 100%);border:1px solid #10B981;border-radius:12px;padding:22px 24px;color:#F8FAFC;box-shadow:0 6px 24px rgba(15,23,42,0.28);display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;">
+      <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:16px;align-items:center;">
+        <div>
+          <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,0.25);border:1px solid #34D399;color:#A7F3D0;font-size:11px;font-weight:800;letter-spacing:0.05em;padding:3px 10px;border-radius:999px;margin-bottom:10px;text-transform:uppercase;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="2" width="12" height="20" rx="2"/><circle cx="12" cy="18" r="1"/></svg>
+            ANDROID 7.0+ &bull; DIRECT OTA APK
+          </div>
+          <h2 style="margin:0 0 8px 0;font-size:22px;line-height:1.25;color:#FFFFFF;font-weight:800;">
+            Take OCTI Anywhere on Android Mobile
+          </h2>
+          <p style="margin:0 0 14px 0;font-size:13.5px;line-height:1.55;color:#D1FAE5;">
+            Engineered for touch with a zoomed 8-direction prong-socket selector, offline minimax AI bots, live online voice tables, one-tap Google SSO, and seamless in-app OTA updates.
+          </p>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
+            <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(6,24,18,0.6);border:1px solid rgba(110,231,183,0.35);color:#ECFDF5;">&#10003; Zoomed Socket Touch Dial</span>
+            <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(6,24,18,0.6);border:1px solid rgba(110,231,183,0.35);color:#ECFDF5;">&#10003; In-App OTA Self-Update</span>
+            <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(6,24,18,0.6);border:1px solid rgba(110,231,183,0.35);color:#ECFDF5;">&#10003; Sideload &amp; Play Protect Guide</span>
+          </div>
+        </div>
+        <!-- Custom Android Phone SVG Graphic -->
+        <a href="https://www.selfso.com/software/android/octi/" target="_blank" title="Download OCTI Strategy Game APK for Android" style="display:block;text-decoration:none;">
+          <svg viewBox="0 0 230 165" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OCTI Android Mobile App Preview">
+            <!-- Phone Body -->
+            <rect x="52" y="6" width="126" height="153" rx="16" fill="#0B0F17" stroke="#34D399" stroke-width="2"/>
+            <rect x="96" y="12" width="38" height="4" rx="2" fill="#334155"/>
+            <!-- Top App Bar -->
+            <rect x="60" y="22" width="110" height="16" rx="3" fill="#1E293B"/>
+            <text x="66" y="33" fill="#FDE047" font-family="sans-serif" font-size="7.5" font-weight="800">OCTI Android</text>
+            <text x="132" y="33" fill="#6EE7B7" font-family="ui-monospace,monospace" font-size="7" font-weight="700">1500 ELO</text>
+            <!-- Board & Zoomed Prong Dial -->
+            <rect x="60" y="42" width="110" height="82" rx="5" fill="#111827" stroke="#1E293B" stroke-width="1"/>
+            <!-- Zoomed Octagonal Pod with 8 Sockets -->
+            <g transform="translate(115, 83)">
+              <circle cx="0" cy="0" r="32" fill="none" stroke="#34D399" stroke-width="1" stroke-dasharray="3 2"/>
+              <line x1="0" y1="-16" x2="0" y2="-30" stroke="#FDE047" stroke-width="3.5" stroke-linecap="round"/>
+              <line x1="12" y1="-12" x2="22" y2="-22" stroke="#E2E8F0" stroke-width="3" stroke-linecap="round"/>
+              <line x1="16" y1="0" x2="28" y2="0" stroke="#E2E8F0" stroke-width="3" stroke-linecap="round"/>
+              <polygon points="-8,-18 8,-18 18,-8 18,8 8,18 -8,18 -18,8 -18,-8" fill="#10B981" stroke="#6EE7B7" stroke-width="1.5"/>
+              <circle cx="0" cy="-13" r="2.5" fill="#FDE047"/>
+              <circle cx="9" cy="-9" r="2.2" fill="#E2E8F0"/>
+              <circle cx="13" cy="0" r="2.2" fill="#E2E8F0"/>
+              <circle cx="-9" cy="-9" r="2.2" fill="#064E3B" stroke="#6EE7B7" stroke-width="0.8"/>
+              <circle cx="0" cy="0" r="5" fill="#064E3B"/>
+            </g>
+            <!-- Bottom Confirm Move Bar -->
+            <rect x="60" y="128" width="110" height="20" rx="5" fill="#D97706"/>
+            <text x="115" y="141" text-anchor="middle" fill="#0B0F17" font-family="sans-serif" font-size="6.8" font-weight="800">CONFIRM MOVE &bull; GOOGLE SSO</text>
+          </svg>
+        </a>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;">
+        <a href="https://www.selfso.com/software/android/octi/" target="_blank" class="btn" style="padding:10px 18px;font-size:13.5px;background:linear-gradient(135deg,#FDE047 0%,#EAB308 100%);border:1px solid #FEF08A;color:#0B0F17;font-weight:800;text-decoration:none;box-shadow:0 4px 14px rgba(234,179,8,0.35);">
+          Download Android APK (octi.apk) &rarr;
+        </a>
+        <a href="https://www.selfso.com/software/android/octi/#android-install-guide" target="_blank" class="btn" style="padding:10px 14px;font-size:12.5px;background:rgba(6,24,18,0.7);border:1px solid #6EE7B7;color:#ECFDF5;font-weight:700;text-decoration:none;">
+          Android Unknown Apps, Play Protect &amp; Google Guide &nearr;
+        </a>
+      </div>
+    </div>
+  </div>
+
   <div class="panel">
     <h2>Platform Features</h2>
     <div class="features-grid">
@@ -1508,7 +1666,7 @@ tr.active-ply {
           </svg>
         </div>
         <h3>Desktop &amp; Android Apps</h3>
-        <p>Native client applications featuring hardware-accelerated 3D boards, AI engine analysis, and offline matches. Download: <a href="/software/windows/" target="_blank">Windows Desktop</a> | <a href="/software/android/" target="_blank">Android APK</a></p>
+        <p>Native client applications featuring hardware-accelerated 3D boards, AI engine analysis, and offline matches. Download: <a href="https://www.selfso.com/software/windows/octi/" target="_blank">Windows Desktop</a> | <a href="https://www.selfso.com/software/android/octi/" target="_blank">Android APK</a></p>
       </div>
     </div>
   </div>
