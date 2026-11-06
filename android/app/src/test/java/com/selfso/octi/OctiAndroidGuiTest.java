@@ -49,7 +49,7 @@ public class OctiAndroidGuiTest {
         assertTrue(composer.beginGuidedPodMove(3, 3, 1, false));
         assertTrue(composer.isGuidedMoveActive());
         assertTrue(composer.selectGuidedDestination(3, 4));
-        assertFalse(composer.isGuidedMoveActive());
+        assertTrue(composer.isGuidedMoveActive());
         assertTrue(composer.isAwaitingConfirmation());
 
         // guidedOriginSquare() MUST still return [3, 3] even after guidedMoveActive is false!

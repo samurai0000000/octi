@@ -298,6 +298,8 @@ fun NewGameSetupDialog(
                                 OctiBotEngine.BotDifficulty.CASUAL -> "Lv1 (5s)"
                                 OctiBotEngine.BotDifficulty.TACTICAL -> "Lv2 (10s)"
                                 OctiBotEngine.BotDifficulty.MASTER -> "Lv3 (20s)"
+                                OctiBotEngine.BotDifficulty.EXPERT -> "Lv4 (40s)"
+                                OctiBotEngine.BotDifficulty.GRANDMASTER -> "Lv5 (60s)"
                             }
                             FilterChip(
                                 selected = difficulty == diff,

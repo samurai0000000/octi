@@ -5833,7 +5833,16 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("OCTI v2.3.6") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v2.3.7") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Official Platform") == std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OFFICIAL PLATFORM") == std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Lv4: Expert (40s)") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Lv5: Grandmaster (60s)") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("timeBudgetMs: 40000") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("timeBudgetMs: 60000") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("hasOtherMovablePodAtOrigin") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("unclaimedMovablePodIndicesAtOrigin") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("_claimedStartPods") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"robot-profile-detail\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"robots-tbody\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"account-robots-tbody\"") != std::string::npos);

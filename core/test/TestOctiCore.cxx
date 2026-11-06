@@ -1975,18 +1975,26 @@ TEST(OctiBotEngineCoreTest, DefaultBudgetAndDepthPerDifficultyLevel)
     CHECK_EQUAL(5000, octi::OctiBotEngine::defaultBudgetForDifficulty(octi::BotDifficulty::CASUAL));
     CHECK_EQUAL(10000, octi::OctiBotEngine::defaultBudgetForDifficulty(octi::BotDifficulty::TACTICAL));
     CHECK_EQUAL(20000, octi::OctiBotEngine::defaultBudgetForDifficulty(octi::BotDifficulty::MASTER));
+    CHECK_EQUAL(40000, octi::OctiBotEngine::defaultBudgetForDifficulty(octi::BotDifficulty::EXPERT));
+    CHECK_EQUAL(60000, octi::OctiBotEngine::defaultBudgetForDifficulty(octi::BotDifficulty::GRANDMASTER));
 
     CHECK_EQUAL(3, octi::OctiBotEngine::maxDepthForDifficulty(octi::BotDifficulty::CASUAL));
     CHECK_EQUAL(64, octi::OctiBotEngine::maxDepthForDifficulty(octi::BotDifficulty::TACTICAL));
     CHECK_EQUAL(64, octi::OctiBotEngine::maxDepthForDifficulty(octi::BotDifficulty::MASTER));
+    CHECK_EQUAL(64, octi::OctiBotEngine::maxDepthForDifficulty(octi::BotDifficulty::EXPERT));
+    CHECK_EQUAL(64, octi::OctiBotEngine::maxDepthForDifficulty(octi::BotDifficulty::GRANDMASTER));
 
     CHECK_EQUAL(24, octi::OctiBotEngine::rootCapForDifficulty(octi::BotDifficulty::CASUAL));
     CHECK_EQUAL(40, octi::OctiBotEngine::rootCapForDifficulty(octi::BotDifficulty::TACTICAL));
     CHECK_EQUAL(56, octi::OctiBotEngine::rootCapForDifficulty(octi::BotDifficulty::MASTER));
+    CHECK_EQUAL(64, octi::OctiBotEngine::rootCapForDifficulty(octi::BotDifficulty::EXPERT));
+    CHECK_EQUAL(72, octi::OctiBotEngine::rootCapForDifficulty(octi::BotDifficulty::GRANDMASTER));
 
     CHECK_EQUAL(16, octi::OctiBotEngine::branchCapForDifficulty(octi::BotDifficulty::CASUAL));
     CHECK_EQUAL(24, octi::OctiBotEngine::branchCapForDifficulty(octi::BotDifficulty::TACTICAL));
     CHECK_EQUAL(32, octi::OctiBotEngine::branchCapForDifficulty(octi::BotDifficulty::MASTER));
+    CHECK_EQUAL(36, octi::OctiBotEngine::branchCapForDifficulty(octi::BotDifficulty::EXPERT));
+    CHECK_EQUAL(40, octi::OctiBotEngine::branchCapForDifficulty(octi::BotDifficulty::GRANDMASTER));
 }
 
 TEST(OctiBotEngineCoreTest, ImmediateOnePlyWinningBaseCaptureAllDifficulties)

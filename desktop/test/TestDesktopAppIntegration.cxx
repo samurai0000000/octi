@@ -2188,6 +2188,16 @@ TEST(DesktopAppIntegrationTest, CenteredStartMatchPromptAndPreStartGatingForPlay
     QString s4 = OctiStartMatchDialog::formatConfigSummary(c4);
     STRCMP_EQUAL("vs AI Bot (Lv3 \xE2\x80\xA2 20s) \xE2\x80\xA2 Seat A (Red)\n2P (9x9) \xE2\x80\xA2 3 Bases \xE2\x80\xA2 Edgeless \xE2\x80\xA2 Clock", s4.toUtf8().constData());
 
+    LocalGameConfig c5 = c1;
+    c5.botDifficulty = BotDifficulty::EXPERT;
+    QString s5 = OctiStartMatchDialog::formatConfigSummary(c5);
+    STRCMP_EQUAL("vs AI Bot (Lv4 \xE2\x80\xA2 40s) \xE2\x80\xA2 Seat A (Red)\n2P (9x9) \xE2\x80\xA2 3 Bases \xE2\x80\xA2 Standard", s5.toUtf8().constData());
+
+    LocalGameConfig c6 = c1;
+    c6.botDifficulty = BotDifficulty::GRANDMASTER;
+    QString s6 = OctiStartMatchDialog::formatConfigSummary(c6);
+    STRCMP_EQUAL("vs AI Bot (Lv5 \xE2\x80\xA2 60s) \xE2\x80\xA2 Seat A (Red)\n2P (9x9) \xE2\x80\xA2 3 Bases \xE2\x80\xA2 Standard", s6.toUtf8().constData());
+
     OctiStartMatchDialog dlgConfig(c1, ThemeId::OBSIDIAN_BRASS, &win);
     STRCMP_EQUAL(s1.toUtf8().constData(), dlgConfig.configSummaryText().toUtf8().constData());
     CHECK_FALSE(dlgConfig.changeTypeRequested());

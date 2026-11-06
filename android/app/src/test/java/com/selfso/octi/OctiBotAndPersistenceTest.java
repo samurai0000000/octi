@@ -39,6 +39,25 @@ public class OctiBotAndPersistenceTest {
         assertEquals(56, OctiBotEngine.rootCapForDifficulty(OctiBotEngine.BotDifficulty.MASTER));
         assertEquals(32, OctiBotEngine.branchCapForDifficulty(OctiBotEngine.BotDifficulty.MASTER));
 
+        // EXPERT: 40000ms (40s), depth 64, root cap 64, branch cap 36
+        assertEquals(40000, OctiBotEngine.defaultBudgetForDifficulty(OctiBotEngine.BotDifficulty.EXPERT));
+        assertEquals(64, OctiBotEngine.maxDepthForDifficulty(OctiBotEngine.BotDifficulty.EXPERT));
+        assertEquals(64, OctiBotEngine.rootCapForDifficulty(OctiBotEngine.BotDifficulty.EXPERT));
+        assertEquals(36, OctiBotEngine.branchCapForDifficulty(OctiBotEngine.BotDifficulty.EXPERT));
+
+        // GRANDMASTER: 60000ms (60s), depth 64, root cap 72, branch cap 40
+        assertEquals(60000, OctiBotEngine.defaultBudgetForDifficulty(OctiBotEngine.BotDifficulty.GRANDMASTER));
+        assertEquals(64, OctiBotEngine.maxDepthForDifficulty(OctiBotEngine.BotDifficulty.GRANDMASTER));
+        assertEquals(72, OctiBotEngine.rootCapForDifficulty(OctiBotEngine.BotDifficulty.GRANDMASTER));
+        assertEquals(40, OctiBotEngine.branchCapForDifficulty(OctiBotEngine.BotDifficulty.GRANDMASTER));
+
+        assertTrue(OctiBoardRenderer.formatStartMatchConfigSummary(
+                OctiGameMode.GAME_MODE_2, OctiGameBases.GAME_BASES_3, false, false,
+                true, OctiBotEngine.BotDifficulty.EXPERT, OctiPlayer.PLAYER_A).contains("Lv4 \u2022 40s"));
+        assertTrue(OctiBoardRenderer.formatStartMatchConfigSummary(
+                OctiGameMode.GAME_MODE_2, OctiGameBases.GAME_BASES_3, false, false,
+                true, OctiBotEngine.BotDifficulty.GRANDMASTER, OctiPlayer.PLAYER_A).contains("Lv5 \u2022 60s"));
+
         // TT_SIZE must be 262,144 (256K entries)
         assertEquals(262144, OctiBotEngine.TT_SIZE);
 

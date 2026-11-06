@@ -19,7 +19,7 @@ const char kIndexHtml[] = R"OCTIUI(<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OCTI &mdash; Official Platform, Web Player, Archive &amp; Leaderboard</title>
+<title>OCTI &mdash; Web Player, Archive &amp; Leaderboard</title>
 <style>
 :root {
   --bg: #fbfbfa;
@@ -1279,7 +1279,7 @@ tr.active-ply {
     <span class="brand-badge">OCTI</span>
     <div class="brand-text">
       <span class="brand-name" id="brand-version-title">OCTI v)OCTIUI" OCTI_APP_VERSION R"OCTIUI(</span>
-      <span class="brand-sub">octi.selfso.com &mdash; Official Platform</span>
+      <span class="brand-sub">octi.selfso.com</span>
     </div>
   </div>
   <nav id="nav">
@@ -1304,7 +1304,7 @@ tr.active-ply {
   <div class="home-hero-panel">
     <div class="home-hero-grid">
       <div class="home-hero-copy">
-        <div class="home-pill-badge">OFFICIAL PLATFORM &bull; 2P / 4P / OFK</div>
+        <div class="home-pill-badge">WEB PLAYER &bull; 2P / 4P / OFK</div>
         <h1>OCTI &amp; OCTI for Kids (OFK)</h1>
         <p>
           The timeless strategy game of tactical growth, prong directional control, multi-hop chain jumping, and home base infiltration.
@@ -1701,6 +1701,7 @@ tr.active-ply {
             <div>
               <span class="dim" style="font-size:12px;margin-right:6px;">Confirm Move:</span>
               <span id="web-staged-notation">-</span>
+              <span id="web-ply-confirm-hint" class="dim" style="display:none;font-size:11px;margin-left:8px;color:#38BDF8;"></span>
             </div>
             <div class="row" style="gap:8px;margin:0;">
               <button type="button" class="btn" id="btn-web-cancel-ply" style="padding:6px 14px;">Cancel [Esc]</button>
@@ -2467,6 +2468,8 @@ tr.active-ply {
           <option value="1">Lv1: Fast (5s)</option>
           <option value="2" selected>Lv2: Balanced (10s)</option>
           <option value="3">Lv3: Deep (20s)</option>
+          <option value="4">Lv4: Expert (40s)</option>
+          <option value="5">Lv5: Grandmaster (60s)</option>
         </select>
       </label>
       <label style="display:flex;justify-content:space-between;align-items:center;">Human Seat:
@@ -2553,6 +2556,12 @@ tr.active-ply {
         <svg width="16" height="18" viewBox="0 0 16 18"><path d="M8 1L15 13L8 17L1 13Z" fill="#FDE047" stroke="#78350F" stroke-width="1"/></svg>
         <span id="zoom-super-count">0</span>
       </div>
+    </div>
+    <div id="web-zoom-MatchStack" style="display:none;margin:4px 0 6px 0;font-size:12px;color:#E2E8F0;align-items:center;justify-content:center;gap:6px;">
+      <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="zoom-move-stack-cb">
+        <span>Move Matching Stack</span>
+      </label>
     </div>
     <div id="web-zoom-actions">
       <button type="button" class="btn btn-primary" id="btn-zoom-move-pod" style="background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Move / Jump This Pod</button>
@@ -4061,6 +4070,12 @@ function getOpponentBases(mode, player, bases) {
 
 function dfsJumpChains(s, startX, startY, curX, curY, pod, jumpedSquares, currentMoveStr, results, seenMap, onlyTactical, isFirstHop) {
   if (jumpedSquares.length >= 16) return;
+  var startKey = startX + "," + startY;
+  var savedOriginPods = null;
+  if (jumpedSquares.length === 0 && s.map[startKey]) {
+    savedOriginPods = s.map[startKey];
+    delete s.map[startKey];
+  }
   var oppBases = getOpponentBases(s.mode, pod.owner, s.bases);
 
   for (var d = 0; d < 8; d++) {
@@ -4081,14 +4096,11 @@ function dfsJumpChains(s, startX, startY, curX, curY, pod, jumpedSquares, curren
     if (alreadyJumped) continue;
 
     var jStack = s.map[jx + "," + jy];
-    var jCount = jStack ? ((jx === startX && jy === startY) ? (jStack.length - 1) : jStack.length) : 0;
-    if (jCount <= 0) continue;
+    if (!jStack || !jStack.length) continue;
 
     var landK = landX + "," + landY;
     var landStack = s.map[landK];
-    var canLand = (!landStack || !landStack.length) ||
-      (landX === startX && landY === startY && s.map[startX + "," + startY] && s.map[startX + "," + startY].length === 1);
-    if (!canLand) continue;
+    if (landStack && landStack.length) continue;
 
     var hasEnemy = squareHasEnemyOf(s, jx, jy, pod.owner);
     var cfgStr = (pod.cfg && pod.cfg.prongs) ? formatProngConfig(pod.cfg.prongs) : (pod.cfg.text || "");
@@ -4118,6 +4130,9 @@ function dfsJumpChains(s, startX, startY, curX, curY, pod, jumpedSquares, curren
       dfsJumpChains(s, startX, startY, landX, landY, pod,
         jumpedSquares.concat([{ x: jx, y: jy }]), opt.moveStr, results, seenMap, onlyTactical, false);
     }
+  }
+  if (savedOriginPods) {
+    s.map[startKey] = savedOriginPods;
   }
 }
 
@@ -4242,11 +4257,11 @@ function generateMoves(s, player, onlyTactical) {
   return moves;
 }
 
-function applySingleHopChain(s, move, player, deferCapturesList) {
+function applySingleHopChain(s, move, player, deferCapturesList, deferLandingsList) {
   var pIdx = playerIndex(player);
   var res = s.reserves[pIdx];
   var hops = move.split("-");
-  var origM = /^([1-9])([1-9])([a-hA-H!]*)/.exec(hops[0]);
+  var origM = /^([1-9])([1-9])([a-zA-Z!]*)/.exec(hops[0]);
   if (!origM) return;
   var curX = parseInt(origM[1], 10);
   var curY = parseInt(origM[2], 10);
@@ -4330,8 +4345,12 @@ function applySingleHopChain(s, move, player, deferCapturesList) {
   }
 
   var toK = curX + "," + curY;
-  if (!s.map[toK]) s.map[toK] = [];
-  s.map[toK].push(movingPod);
+  if (deferLandingsList) {
+    deferLandingsList.push({ toK: toK, pod: movingPod });
+  } else {
+    if (!s.map[toK]) s.map[toK] = [];
+    s.map[toK].push(movingPod);
+  }
 }
 
 function check4PlayerElimination(s, player) {
@@ -4553,9 +4572,15 @@ function applyMoveToState(s, move, player) {
   if (move.indexOf(",") !== -1 && move.indexOf("-") !== -1) {
     var subMoves = move.split(",");
     var deferredCaps = [];
+    var deferredLandings = [];
     for (var sm = 0; sm < subMoves.length; sm++) {
       var singleMove = subMoves[sm].trim();
-      if (singleMove) applySingleHopChain(s, singleMove, player, deferredCaps);
+      if (singleMove) applySingleHopChain(s, singleMove, player, deferredCaps, deferredLandings);
+    }
+    for (var dl = 0; dl < deferredLandings.length; dl++) {
+      var land = deferredLandings[dl];
+      if (!s.map[land.toK]) s.map[land.toK] = [];
+      s.map[land.toK].push(land.pod);
     }
     for (var dc = 0; dc < deferredCaps.length; dc++) {
       var midK = deferredCaps[dc];
@@ -4783,6 +4808,7 @@ var DEFAULT_BOT_TUNING = {
 
 var BOT_PROFILES = {
   1: Object.assign({}, DEFAULT_BOT_TUNING, {
+    name: "Fast",
     timeBudgetMs: 5000,
     maxSearchDepth: 3,
     useOpeningBook: false,
@@ -4790,6 +4816,7 @@ var BOT_PROFILES = {
     quiesceBranchCap: 0,
     rootBranchCap: 24,
     treeBranchCap: 16,
+    compositeMoveMaxPly: 1,
     rootScoreJitter: 160,
     closestPodDistWeight: 280,
     secondClosestPodDistWeight: 0,
@@ -4812,6 +4839,7 @@ var BOT_PROFILES = {
     moveOrderBlunderPenalty: 2000
   }),
   2: Object.assign({}, DEFAULT_BOT_TUNING, {
+    name: "Balanced",
     timeBudgetMs: 10000,
     maxSearchDepth: 64,
     useOpeningBook: true,
@@ -4819,9 +4847,11 @@ var BOT_PROFILES = {
     quiesceBranchCap: 6,
     rootBranchCap: 40,
     treeBranchCap: 24,
+    compositeMoveMaxPly: 1,
     rootScoreJitter: 0
   }),
   3: Object.assign({}, DEFAULT_BOT_TUNING, {
+    name: "Deep",
     timeBudgetMs: 20000,
     maxSearchDepth: 64,
     useOpeningBook: true,
@@ -4829,6 +4859,69 @@ var BOT_PROFILES = {
     quiesceBranchCap: 10,
     rootBranchCap: 56,
     treeBranchCap: 32,
+    compositeMoveMaxPly: 2,
+    rootScoreJitter: 0,
+    closestPodDistWeight: 350,
+    secondClosestPodDistWeight: 220,
+    oneStepBaseThreatBonus: 9500,
+    oneJumpBaseThreatBonus: 14000,
+    twoPlyBaseThreatWeight: 4200,
+    firstArmedPodBonus: 700,
+    secondArmedPodBonus: 1500,
+    thirdArmedPodBonus: 900,
+    singlePodMonopolyPenalty: 1400,
+    leapfrogBatteryWeight: 800,
+    leapfrogForwardBonus: 600,
+    jumpReachableSquareWeight: 180,
+    jumpReachStepWeight: 650,
+    hangingPodBasePenalty: 1600,
+    hangingProngWeight: 260,
+    ofkProngSeizureWeight: 550,
+    opponentTurnHangingPct: 140,
+    soleArmedPodDangerPenalty: 6000,
+    moveOrderBlunderPenalty: 11000
+  }),
+  4: Object.assign({}, DEFAULT_BOT_TUNING, {
+    name: "Expert",
+    timeBudgetMs: 40000,
+    maxSearchDepth: 64,
+    useOpeningBook: true,
+    maxQuiesceDepth: 5,
+    quiesceBranchCap: 12,
+    rootBranchCap: 64,
+    treeBranchCap: 36,
+    compositeMoveMaxPly: 2,
+    rootScoreJitter: 0,
+    closestPodDistWeight: 350,
+    secondClosestPodDistWeight: 220,
+    oneStepBaseThreatBonus: 9500,
+    oneJumpBaseThreatBonus: 14000,
+    twoPlyBaseThreatWeight: 4200,
+    firstArmedPodBonus: 700,
+    secondArmedPodBonus: 1500,
+    thirdArmedPodBonus: 900,
+    singlePodMonopolyPenalty: 1400,
+    leapfrogBatteryWeight: 800,
+    leapfrogForwardBonus: 600,
+    jumpReachableSquareWeight: 180,
+    jumpReachStepWeight: 650,
+    hangingPodBasePenalty: 1600,
+    hangingProngWeight: 260,
+    ofkProngSeizureWeight: 550,
+    opponentTurnHangingPct: 140,
+    soleArmedPodDangerPenalty: 6000,
+    moveOrderBlunderPenalty: 11000
+  }),
+  5: Object.assign({}, DEFAULT_BOT_TUNING, {
+    name: "Grandmaster",
+    timeBudgetMs: 60000,
+    maxSearchDepth: 64,
+    useOpeningBook: true,
+    maxQuiesceDepth: 6,
+    quiesceBranchCap: 14,
+    rootBranchCap: 72,
+    treeBranchCap: 40,
+    compositeMoveMaxPly: 3,
     rootScoreJitter: 0,
     closestPodDistWeight: 350,
     secondClosestPodDistWeight: 220,
@@ -4851,6 +4944,13 @@ var BOT_PROFILES = {
     moveOrderBlunderPenalty: 11000
   })
 };
+
+function getBotProfile(level) {
+  var lv = parseInt(level, 10) || 2;
+  if (lv < 1) lv = 1;
+  if (lv > 5) lv = 5;
+  return BOT_PROFILES[lv] || BOT_PROFILES[2];
+}
 
 function torusDist(a, b, dim, edgeless) {
   var d = Math.abs(a - b);
@@ -4963,7 +5063,12 @@ function evaluateJumpThreatDfs(s, curX, curY, startX, startY, depth, podOwner, p
   if (depth > 4) return;
   var prongs = (pod.cfg && pod.cfg.prongs) ? pod.cfg.prongs : null;
   if (!prongs) return;
-  var startStackLen = (s.map[startX + "," + startY] || []).length;
+  var startKey = startX + "," + startY;
+  var savedOriginPods = null;
+  if (depth === 0 && s.map[startKey]) {
+    savedOriginPods = s.map[startKey];
+    delete s.map[startKey];
+  }
 
   for (var d = 0; d < 8; d++) {
     if (!prongs[d]) continue;
@@ -4982,14 +5087,11 @@ function evaluateJumpThreatDfs(s, curX, curY, startX, startY, depth, podOwner, p
     if (jumpedMap[jKey]) continue;
 
     var midStack = s.map[jKey];
-    var midCount = midStack ? ((jx === startX && jy === startY) ? (midStack.length - 1) : midStack.length) : 0;
-    if (midCount <= 0) continue;
+    if (!midStack || !midStack.length) continue;
 
     var destKey = destX + "," + destY;
     var destStack = s.map[destKey];
-    var canLand = (!destStack || !destStack.length) ||
-                  (destX === startX && destY === startY && startStackLen === 1);
-    if (!canLand) continue;
+    if (destStack && destStack.length) continue;
 
     if (visitedDest[destKey]) continue;
     visitedDest[destKey] = true;
@@ -5013,6 +5115,9 @@ function evaluateJumpThreatDfs(s, curX, curY, startX, startY, depth, podOwner, p
     jumpedMap[jKey] = true;
     evaluateJumpThreatDfs(s, destX, destY, startX, startY, depth + 1, podOwner, pod, targets, visitedDest, jumpedMap, threat);
     jumpedMap[jKey] = false;
+  }
+  if (savedOriginPods) {
+    s.map[startKey] = savedOriginPods;
   }
 }
 
@@ -24526,7 +24631,7 @@ function botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs) {
   var s = parseOctiFen(fen);
   if (!s) return { bestMove: null, score: 0, nodes: 0, depth: 0 };
   var diff = parseInt(difficulty, 10) || 2;
-  var prof = BOT_PROFILES[diff] || BOT_PROFILES[2];
+  var prof = getBotProfile(diff);
 
   var moves = generateMoves(s, botSide);
   if (!moves.length) return { bestMove: null, score: -1000000, nodes: 1, depth: 0 };
@@ -24719,6 +24824,7 @@ try {
     "var DIR_CHARS = " + JSON.stringify(DIR_CHARS) + ";",
     "var DEFAULT_BOT_TUNING = " + JSON.stringify(DEFAULT_BOT_TUNING) + ";",
     "var BOT_PROFILES = " + JSON.stringify(BOT_PROFILES) + ";",
+    getBotProfile.toString(),
     wrapCoord.toString(),
     playerIndex.toString(),
     partnerOf.toString(),
@@ -26481,7 +26587,9 @@ var clockInterval = null;
 function WebMoveComposer(stateGetter, onCommitCb) {
   this.getState = stateGetter;
   this.onCommit = onCommitCb;
-  this.stagedOps = [];
+  this._preTurnSnap = "";
+  this._stagedOps = [];
+  this.stagedOps = this._stagedOps;
   this.stagedNotation = "";
   this.completedSubMoves = [];
   this.currentChainNotation = "";
@@ -26495,17 +26603,37 @@ function WebMoveComposer(stateGetter, onCommitCb) {
   this.guidedOriginSquare = null;
   this.guidedCurrentSquare = null;
   this.guidedPodIndex = -1;
+  this._guidedOriginPodIndex = -1;
   this.guidedPodConfig = "";
   this.guidedLegalDests = [];
   this.guidedHops = [];
+  this._claimedStartPods = [];
   this.claimedPodsAtOrigin = {}; // map of podIdx -> true
+  this._moveEntireMatchingStack = false;
+  this._guidedMoveAllStack = false;
+  this._guidedMidHop = false;
+  this._guidedActiveOpIndices = [];
+  this._currentChainJumped = [];
   this.jumpedSquaresChain = [];
+  this._hopCaptureLinks = [];
   this.captureChoices = []; // { jumpedX, jumpedY, capture, mandatory }
 }
 
 Object.defineProperty(WebMoveComposer.prototype, "isGuidedMoveActive", {
   get: function () { return this.guidedMoveActive; }
 });
+
+WebMoveComposer.prototype.currentNotation = function () {
+  return this.stagedNotation || "";
+};
+
+WebMoveComposer.prototype.setMoveEntireMatchingStack = function (val) {
+  this._moveEntireMatchingStack = !!val;
+};
+
+WebMoveComposer.prototype.moveEntireMatchingStack = function () {
+  return !!this._moveEntireMatchingStack;
+};
 
 WebMoveComposer.prototype.cancel = function () {
   this.reset();
@@ -26514,7 +26642,9 @@ WebMoveComposer.prototype.cancel = function () {
 };
 
 WebMoveComposer.prototype.reset = function () {
-  this.stagedOps = [];
+  this._preTurnSnap = "";
+  this._stagedOps = [];
+  this.stagedOps = this._stagedOps;
   this.stagedNotation = "";
   this.completedSubMoves = [];
   this.currentChainNotation = "";
@@ -26527,88 +26657,271 @@ WebMoveComposer.prototype.reset = function () {
   this.guidedOriginSquare = null;
   this.guidedCurrentSquare = null;
   this.guidedPodIndex = -1;
+  this._guidedOriginPodIndex = -1;
   this.guidedPodConfig = "";
   this.guidedLegalDests = [];
   this.guidedHops = [];
+  this._claimedStartPods = [];
   this.claimedPodsAtOrigin = {};
+  this._moveEntireMatchingStack = false;
+  this._guidedMoveAllStack = false;
+  this._guidedMidHop = false;
+  this._guidedActiveOpIndices = [];
+  this._currentChainJumped = [];
   this.jumpedSquaresChain = [];
+  this._hopCaptureLinks = [];
   this.captureChoices = [];
   var capOv = document.getElementById("web-capture-overlay");
   if (capOv) capOv.style.display = "none";
   this.updateUi();
 };
 
+WebMoveComposer.prototype._ensurePreTurnSnap = function () {
+  if (!this._preTurnSnap || (this._stagedOps.length === 0 && !this.isAwaitingConfirmation)) {
+    var base = this.getState ? this.getState() : null;
+    if (base) {
+      this._preTurnSnap = serializeOctiFen(base);
+    }
+  }
+};
+
+WebMoveComposer.prototype._getPreTurnBoard = function () {
+  this._ensurePreTurnSnap();
+  if (this._preTurnSnap) {
+    return parseOctiFen(this._preTurnSnap);
+  }
+  var base = this.getState ? this.getState() : null;
+  return base ? cloneState(base) : null;
+};
+
+WebMoveComposer.prototype.populatePreviewBoard = function () {
+  var s = this._getPreTurnBoard();
+  if (!s) {
+    this.previewState = null;
+    return null;
+  }
+  if (this._stagedOps.length === 0) {
+    this.previewState = s;
+    return s;
+  }
+
+  var moveOps = [];
+  for (var i = 0; i < this._stagedOps.length; i++) {
+    if (this._stagedOps[i].type === "move") {
+      moveOps.push(this._stagedOps[i]);
+    }
+  }
+
+  if (moveOps.length > 0 && this.guidedOriginSquare) {
+    var ox = this.guidedOriginSquare.x, oy = this.guidedOriginSquare.y;
+    var origK = ox + "," + oy;
+    var origStack = s.map[origK] || [];
+    var remainingOrig = [];
+    for (var oi = 0; oi < origStack.length; oi++) {
+      if (this._claimedStartPods.indexOf(oi) === -1) {
+        remainingOrig.push(origStack[oi]);
+      }
+    }
+    if (remainingOrig.length > 0) {
+      s.map[origK] = remainingOrig;
+    } else {
+      delete s.map[origK];
+    }
+
+    var capturedKeys = [];
+    var subNotations = [];
+    for (var mi = 0; mi < moveOps.length; mi++) {
+      var op = moveOps[mi];
+      if (!op.hops || !op.hops.length) continue;
+      var subNot = op.x0 + "" + op.y0 + (op.podConfig || "");
+      for (var hi = 0; hi < op.hops.length; hi++) {
+        var hop = op.hops[hi];
+        subNot += "-" + hop.x + "" + hop.y + (hop.isJump && hop.capture ? "x" : "");
+        if (hop.isJump && hop.capture) {
+          var capK = hop.jumpedX + "," + hop.jumpedY;
+          if (capturedKeys.indexOf(capK) === -1) {
+            capturedKeys.push(capK);
+          }
+        }
+      }
+      subNotations.push(subNot);
+
+      var lastHop = op.hops[op.hops.length - 1];
+      var toK = lastHop.x + "," + lastHop.y;
+      if (!s.map[toK]) s.map[toK] = [];
+      s.map[toK].push({
+        owner: op.pod.owner,
+        cfg: {
+          prongs: op.pod.cfg.prongs.slice(),
+          count: op.pod.cfg.count,
+          text: op.pod.cfg.text
+        }
+      });
+    }
+
+    var capturerIdx = playerIndex(s.turn);
+    var res = s.reserves[capturerIdx];
+    for (var ci = 0; ci < capturedKeys.length; ci++) {
+      var jK = capturedKeys[ci];
+      var jStack = s.map[jK];
+      if (jStack && jStack.length) {
+        var remPods = [];
+        for (var v = 0; v < jStack.length; v++) {
+          var vPod = jStack[v];
+          if (!areAllied(s.mode, vPod.owner, s.turn)) {
+            var vIdx = playerIndex(vPod.owner);
+            if (s.reserves[vIdx]) s.reserves[vIdx].capturedPods++;
+            for (var pi = 0; pi < 8; pi++) {
+              if (vPod.cfg.prongs[pi] === 1) {
+                if (res) res.freeProngs++;
+              } else if (vPod.cfg.prongs[pi] === 2) {
+                if (s.superProngs) {
+                  if (res) res.freeSuper++;
+                } else {
+                  if (res) res.freeProngs++;
+                }
+              }
+            }
+          } else {
+            remPods.push(vPod);
+          }
+        }
+        if (remPods.length > 0) {
+          s.map[jK] = remPods;
+        } else {
+          delete s.map[jK];
+        }
+      }
+    }
+
+    this.completedSubMoves = subNotations.slice();
+    this.stagedNotation = subNotations.join(",");
+  }
+
+  this.previewState = s;
+  return s;
+};
+
+WebMoveComposer.prototype._rebuildPreviewBoard = WebMoveComposer.prototype.populatePreviewBoard;
+
 WebMoveComposer.prototype.updateUi = function () {
   var bar = document.getElementById("web-ply-confirm-bar");
   var notEl = document.getElementById("web-staged-notation");
+  var hintEl = document.getElementById("web-ply-confirm-hint");
   if (!bar || !notEl) return;
   if (this.isAwaitingConfirmation && this.stagedNotation) {
     notEl.textContent = this.stagedNotation;
+    if (hintEl) {
+      if (this.hasOtherMovablePodAtOrigin()) {
+        hintEl.textContent = this.guidedMoveActive
+          ? "(Click destination for next pod, or tap origin square)"
+          : "(Tap origin square to move another pod)";
+        hintEl.style.display = "inline";
+      } else {
+        hintEl.textContent = "";
+        hintEl.style.display = "none";
+      }
+    }
     bar.style.display = "flex";
   } else {
+    if (hintEl) {
+      hintEl.textContent = "";
+      hintEl.style.display = "none";
+    }
     bar.style.display = "none";
   }
 };
 
 WebMoveComposer.prototype.getWorkingState = function () {
   if (this.previewState) return this.previewState;
-  var s = this.getState();
-  this.previewState = cloneState(s);
+  var s = this._getPreTurnBoard();
+  this.previewState = s;
   return this.previewState;
 };
 
-WebMoveComposer.prototype.hasOtherMovablePodAtOrigin = function () {
-  if (!this.guidedOriginSquare) return false;
-  var s = this.previewState || this.getState();
-  if (!s || !s.map) return false;
-  var ox = this.guidedOriginSquare.x, oy = this.guidedOriginSquare.y;
-  var k = ox + "," + oy;
-  var stack = s.map[k] || [];
-  var turn = s.turn;
-  for (var i = 0; i < stack.length; i++) {
-    if (stack[i].owner === turn && !this.claimedPodsAtOrigin[i]) {
-      var dests = this.computeLegalDestsForPod(s, ox, oy, stack[i], []);
-      if (dests.length > 0) return true;
-    }
+WebMoveComposer.prototype.isSquarePodClaimed = function (x, y, podIndex) {
+  if (typeof x === "object" && x !== null) {
+    podIndex = y;
+    y = x.y;
+    x = x.x;
   }
-  return false;
+  if (!this.guidedOriginSquare) return false;
+  if (this.guidedOriginSquare.x !== x || this.guidedOriginSquare.y !== y) return false;
+  return this._claimedStartPods.indexOf(podIndex) !== -1;
 };
 
 WebMoveComposer.prototype.unclaimedMovablePodIndicesAtOrigin = function () {
   if (!this.guidedOriginSquare) return [];
-  var s = this.previewState || this.getState();
+  var s = this._getPreTurnBoard();
   if (!s || !s.map) return [];
   var ox = this.guidedOriginSquare.x, oy = this.guidedOriginSquare.y;
-  var k = ox + "," + oy;
-  var stack = s.map[k] || [];
+  var stack = s.map[ox + "," + oy] || [];
   var turn = s.turn;
   var out = [];
   for (var i = 0; i < stack.length; i++) {
-    if (stack[i].owner === turn && !this.claimedPodsAtOrigin[i]) {
-      var dests = this.computeLegalDestsForPod(s, ox, oy, stack[i], []);
+    if (stack[i].owner === turn && !this.isSquarePodClaimed(ox, oy, i)) {
+      var dests = this.legalDestinationsFrom(ox, oy, i);
       if (dests.length > 0) out.push(i);
     }
   }
   return out;
 };
 
+WebMoveComposer.prototype.hasOtherMovablePodAtOrigin = function () {
+  return this.unclaimedMovablePodIndicesAtOrigin().length > 0;
+};
+
 WebMoveComposer.prototype.hasDistinctUnclaimedPodsAtOrigin = function () {
   var unclaimed = this.unclaimedMovablePodIndicesAtOrigin();
   if (unclaimed.length <= 1) return false;
-  var s = this.previewState || this.getState();
+  var s = this._getPreTurnBoard();
+  if (!s || !s.map) return false;
   var stack = s.map[this.guidedOriginSquare.x + "," + this.guidedOriginSquare.y] || [];
-  var firstCfg = formatProngConfig(stack[unclaimed[0]].cfg.prongs);
+  var firstPod = stack[unclaimed[0]];
+  var firstCfg = (firstPod && firstPod.cfg && firstPod.cfg.prongs && firstPod.cfg.count > 0)
+    ? formatProngConfig(firstPod.cfg.prongs)
+    : (firstPod && firstPod.cfg ? (firstPod.cfg.text || "") : "");
   for (var i = 1; i < unclaimed.length; i++) {
-    if (formatProngConfig(stack[unclaimed[i]].cfg.prongs) !== firstCfg) return true;
+    var p = stack[unclaimed[i]];
+    var cfg = (p && p.cfg && p.cfg.prongs && p.cfg.count > 0)
+      ? formatProngConfig(p.cfg.prongs)
+      : (p && p.cfg ? (p.cfg.text || "") : "");
+    if (cfg !== firstCfg) return true;
   }
   return false;
+};
+
+WebMoveComposer.prototype.firstUnclaimedFriendlyPodIndex = function (x, y) {
+  if (typeof x === "object" && x !== null) {
+    y = x.y;
+    x = x.x;
+  }
+  var s = this._getPreTurnBoard();
+  if (!s || !s.map) return -1;
+  var stack = s.map[x + "," + y] || [];
+  var sorted = sortedPodIndicesMostProngsFirst(stack);
+  for (var si = 0; si < sorted.length; si++) {
+    var idx = sorted[si];
+    if (stack[idx].owner === s.turn && !this.isSquarePodClaimed(x, y, idx)) {
+      var dests = this.legalDestinationsFrom(x, y, idx);
+      if (dests.length > 0) return idx;
+    }
+  }
+  for (var i = 0; i < stack.length; i++) {
+    if (stack[i].owner === s.turn && !this.isSquarePodClaimed(x, y, i)) {
+      return i;
+    }
+  }
+  return -1;
 };
 
 WebMoveComposer.prototype.stageAddPod = function (x, y, forceLiberate) {
   if (!this.awaitingSuperProngBonusMove) {
     this.reset();
   }
-  var s = this.getWorkingState();
+  var s = this._getPreTurnBoard();
+  if (!s) return false;
+  this.previewState = s;
   var turn = s.turn;
   var pIdx = playerIndex(turn);
   var res = s.reserves[pIdx];
@@ -26663,6 +26976,7 @@ WebMoveComposer.prototype.stageAddPod = function (x, y, forceLiberate) {
     this.stagedNotation = x + "" + y;
   }
 
+  this._stagedOps.push({ type: "add_pod", notation: this.stagedNotation });
   OctiWebSoundSynth.play("POD_PLACE");
   this.isAwaitingConfirmation = true;
   this.updateUi();
@@ -26675,7 +26989,9 @@ WebMoveComposer.prototype.stageAddProng = function (x, y, podIdx, dirIdx, isSupe
   if (!this.awaitingSuperProngBonusMove) {
     this.reset();
   }
-  var s = this.getWorkingState();
+  var s = this._getPreTurnBoard();
+  if (!s) return false;
+  this.previewState = s;
   var turn = s.turn;
   var pIdx = (turn === "A") ? 0 : ((turn === "B") ? 1 : ((turn === "C") ? 2 : 3));
   var res = s.reserves[pIdx];
@@ -26702,6 +27018,7 @@ WebMoveComposer.prototype.stageAddProng = function (x, y, podIdx, dirIdx, isSupe
 
   var not = x + "" + y + prevCfg + "+" + dirChar + (isSuper ? "!" : "");
   this.stagedNotation = not;
+  this._stagedOps.push({ type: "add_prong", notation: not });
 
   OctiWebSoundSynth.play("PRONG_SNAP");
   this.isAwaitingConfirmation = true;
@@ -26727,7 +27044,9 @@ WebMoveComposer.prototype.stageRepositionProng = function (x, y, podIdx, srcDirI
   if (!this.awaitingSuperProngBonusMove) {
     this.reset();
   }
-  var s = this.getWorkingState();
+  var s = this._getPreTurnBoard();
+  if (!s) return false;
+  this.previewState = s;
   if (s.mode === "OFK") return false;
   var turn = s.turn;
   var k = x + "," + y;
@@ -26744,6 +27063,7 @@ WebMoveComposer.prototype.stageRepositionProng = function (x, y, podIdx, srcDirI
   var srcCh = DIR_CHARS[srcDirIdx];
   var dstCh = DIR_CHARS[dstDirIdx];
   this.stagedNotation = x + "" + y + prevCfg + "+" + dstCh + "-" + srcCh;
+  this._stagedOps.push({ type: "reposition_prong", notation: this.stagedNotation });
 
   OctiWebSoundSynth.play("PRONG_SNAP");
   this.isAwaitingConfirmation = true;
@@ -26753,11 +27073,17 @@ WebMoveComposer.prototype.stageRepositionProng = function (x, y, podIdx, srcDirI
   return true;
 };
 
-WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, chainJumped) {
+WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, chainJumped, originSq) {
   var dests = [];
-  if (!pod || !pod.cfg) return dests;
+  if (!state || !state.map || !pod || !pod.cfg) return dests;
   var gw = state.gw, gh = state.gh;
   var edgeless = !!state.edgeless;
+  var orig = originSq || this.guidedOriginSquare || { x: x, y: y };
+  var origK = orig.x + "," + orig.y;
+  var savedOriginPods = state.map[origK];
+  if (savedOriginPods) {
+    delete state.map[origK];
+  }
 
   for (var d = 0; d < 8; d++) {
     var ptype = pod.cfg.prongs[d];
@@ -26777,7 +27103,7 @@ WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, 
         var stepStack = state.map[stepK];
         var canLandStep = (!stepStack || !stepStack.length) || (state.mode !== "OFK" && !squareHasEnemyOf(state, sx, sy, pod.owner));
         if (canLandStep) {
-          dests.push({ x: sx, y: sy, dist: 1, isJump: false });
+          dests.push({ x: sx, y: sy, dist: 1, isJump: false, dir: d });
         }
       }
     }
@@ -26798,167 +27124,267 @@ WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, 
         var landK = landX + "," + landY;
         var landStack = state.map[landK];
         var canLandJump = (!landStack || !landStack.length);
-        if (this.guidedOriginSquare && landX === this.guidedOriginSquare.x && landY === this.guidedOriginSquare.y) {
-          var origStack = state.map[landK];
-          if (!origStack || origStack.length === 0) {
-            canLandJump = true;
-          }
-        }
         if (canLandJump) {
-          dests.push({ x: landX, y: landY, dist: 2, isJump: true, jumpedX: jx, jumpedY: jy });
+          dests.push({ x: landX, y: landY, dist: 2, isJump: true, jumpedX: jx, jumpedY: jy, dir: d });
         }
       }
     }
   }
+
+  if (savedOriginPods) {
+    state.map[origK] = savedOriginPods;
+  }
   return dests;
 };
 
-WebMoveComposer.prototype.beginGuidedPodMove = function (x, y, podIdx) {
+WebMoveComposer.prototype.legalDestinationsFrom = function (x, y, podIdx) {
+  if (typeof x === "object" && x !== null) {
+    podIdx = y;
+    y = x.y;
+    x = x.x;
+  }
+  var s = this._getPreTurnBoard();
+  if (!s || !s.map) return [];
+  var stack = s.map[x + "," + y] || [];
+  if (podIdx === undefined || podIdx === null || podIdx < 0) {
+    podIdx = this.firstUnclaimedFriendlyPodIndex(x, y);
+  }
+  if (podIdx < 0 || podIdx >= stack.length) return [];
+  var pod = stack[podIdx];
+  if (!pod || pod.owner !== s.turn) return [];
+  return this.computeLegalDestsForPod(s, x, y, pod, [], { x: x, y: y });
+};
+
+WebMoveComposer.prototype.guidedNextSquares = function () {
+  if (!this.guidedMoveActive || !this.guidedCurrentSquare) return [];
+  var s = this._getPreTurnBoard();
+  if (!s || !s.map) return [];
+  var ox = this.guidedOriginSquare ? this.guidedOriginSquare.x : this.guidedCurrentSquare.x;
+  var oy = this.guidedOriginSquare ? this.guidedOriginSquare.y : this.guidedCurrentSquare.y;
+  var origStack = s.map[ox + "," + oy] || [];
+  var origPodIdx = this._guidedMidHop ? this._guidedOriginPodIndex : this.guidedPodIndex;
+  var pod = (origPodIdx >= 0 && origPodIdx < origStack.length) ? origStack[origPodIdx] : null;
+  if (!pod) return [];
+  if (!this._guidedMidHop) {
+    return this.computeLegalDestsForPod(s, ox, oy, pod, [], { x: ox, y: oy });
+  }
+  return this.computeLegalDestsForPod(
+    s,
+    this.guidedCurrentSquare.x,
+    this.guidedCurrentSquare.y,
+    pod,
+    this._currentChainJumped,
+    { x: ox, y: oy }
+  ).filter(function (d) { return d.isJump; });
+};
+
+WebMoveComposer.prototype.finishGuidedMoveHere = function () {
+  if (!this.guidedMoveActive) return;
+  this.guidedMoveActive = false;
+  this._guidedMidHop = false;
+  this._guidedMoveAllStack = false;
+  this._guidedActiveOpIndices = [];
+  this._currentChainJumped = [];
+  this.guidedLegalDests = [];
+  this.currentChainNotation = "";
+  this.updateUi();
+  renderPlayBoardCanvas();
+};
+
+WebMoveComposer.prototype.beginGuidedPodMove = function (x, y, podIdx, moveAllMatchingStack) {
+  if (typeof x === "object" && x !== null) {
+    moveAllMatchingStack = podIdx;
+    podIdx = y;
+    y = x.y;
+    x = x.x;
+  }
   var isContinuingComposite = this.guidedOriginSquare &&
     this.guidedOriginSquare.x === x && this.guidedOriginSquare.y === y &&
-    this.completedSubMoves && this.completedSubMoves.length > 0;
+    this._stagedOps.length > 0 && this._stagedOps[0].type === "move";
 
   if (!isContinuingComposite && !this.awaitingSuperProngBonusMove) {
     this.reset();
-  } else if (isContinuingComposite && this.currentChainNotation) {
-    // Save previous chain if it wasn't pushed yet
-    if (this.completedSubMoves.indexOf(this.currentChainNotation) === -1) {
-      this.completedSubMoves.push(this.currentChainNotation);
-    }
-    this.currentChainNotation = "";
+  } else if (isContinuingComposite && this._guidedMidHop) {
+    this.finishGuidedMoveHere();
   }
 
-  var s = this.getWorkingState();
+  var s = this._getPreTurnBoard();
+  if (!s || !s.map) return false;
   var k = x + "," + y;
   var stack = s.map[k] || [];
-  if (podIdx < 0 || podIdx >= stack.length) {
-    var sorted = sortedPodIndicesMostProngsFirst(stack);
-    podIdx = -1;
-    for (var si = 0; si < sorted.length; si++) {
-      if (stack[sorted[si]].owner === s.turn) { podIdx = sorted[si]; break; }
-    }
-    if (podIdx === -1) podIdx = stack.length - 1;
+  if (podIdx === undefined || podIdx === null || podIdx < 0 || podIdx >= stack.length || this.isSquarePodClaimed(x, y, podIdx)) {
+    podIdx = this.firstUnclaimedFriendlyPodIndex(x, y);
   }
+  if (podIdx < 0 || podIdx >= stack.length) return false;
   var pod = stack[podIdx];
-  if (!pod || pod.owner !== s.turn) return false;
+  if (!pod || pod.owner !== s.turn || this.isSquarePodClaimed(x, y, podIdx)) return false;
 
   this.guidedMoveActive = true;
   this.guidedOriginSquare = { x: x, y: y };
   this.guidedCurrentSquare = { x: x, y: y };
   this.guidedPodIndex = podIdx;
-  this.guidedPodConfig = formatProngConfig(pod.cfg.prongs);
-  this.jumpedSquaresChain = [];
+  this._guidedOriginPodIndex = podIdx;
+  this.guidedPodConfig = (pod.cfg && pod.cfg.prongs && pod.cfg.count > 0) ? formatProngConfig(pod.cfg.prongs) : (pod.cfg.text || "");
+  this._guidedMidHop = false;
+  this._guidedMoveAllStack = (moveAllMatchingStack !== undefined) ? !!moveAllMatchingStack : !!this._moveEntireMatchingStack;
+  this._guidedActiveOpIndices = [];
+  this._currentChainJumped = [];
   this.guidedHops = [];
   this.currentChainNotation = "";
-  this.guidedLegalDests = this.computeLegalDestsForPod(s, x, y, pod, this.jumpedSquaresChain);
+  this.guidedLegalDests = this.guidedNextSquares();
 
+  if (!this.previewState) {
+    this.populatePreviewBoard();
+  }
   renderPlayBoardCanvas();
   return true;
 };
 
+WebMoveComposer.prototype.startGuidedMove = WebMoveComposer.prototype.beginGuidedPodMove;
+
 WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
-  if (!this.guidedMoveActive || !this.guidedCurrentSquare) return false;
+  if (typeof toX === "object" && toX !== null) {
+    toY = toX.y;
+    toX = toX.x;
+  }
+  if (!this.guidedMoveActive || !this.guidedCurrentSquare || !this.guidedOriginSquare) return false;
   var matchDest = this.guidedLegalDests.find(function (d) { return d.x === toX && d.y === toY; });
   if (!matchDest) return false;
 
-  var s = this.getWorkingState();
-  var curX = this.guidedCurrentSquare.x, curY = this.guidedCurrentSquare.y;
-  var curK = curX + "," + curY;
-  var toK = toX + "," + toY;
-  var stack = s.map[curK];
-  if (!stack || this.guidedPodIndex < 0 || this.guidedPodIndex >= stack.length) return false;
-  var pod = stack.splice(this.guidedPodIndex, 1)[0];
-  if (!stack.length) delete s.map[curK];
+  var s = this._getPreTurnBoard();
+  if (!s || !s.map) return false;
+  var ox = this.guidedOriginSquare.x, oy = this.guidedOriginSquare.y;
+  var origStack = s.map[ox + "," + oy] || [];
+  var isJump = !!matchDest.isJump;
+  var jx = isJump ? matchDest.jumpedX : 0;
+  var jy = isJump ? matchDest.jumpedY : 0;
+  var hasEnemy = isJump && squareHasEnemyOf(s, jx, jy, s.turn);
+  var doCap = hasEnemy;
 
-  if (matchDest.isJump) {
-    var jx = matchDest.jumpedX, jy = matchDest.jumpedY;
-    var jK = jx + "," + jy;
-    var jStack = s.map[jK];
-    var isEnemy = squareHasEnemyOf(s, jx, jy, s.turn);
-    var doCap = isEnemy;
+  if (!this._guidedMidHop) {
+    var movingPodIndices = [this.guidedPodIndex];
+    var moveAll = this._guidedMoveAllStack || this._moveEntireMatchingStack;
+    this._guidedMoveAllStack = false;
+    this._moveEntireMatchingStack = false;
 
-    var capSnapshot = [];
-    var capturerIdx = playerIndex(s.turn);
-    var seizedNormal = 0;
-    var seizedSuper = 0;
-    var remainingPods = [];
-
-    if (doCap && jStack && jStack.length) {
-      for (var v = 0; v < jStack.length; v++) {
-        var vPod = jStack[v];
-        if (!areAllied(s.mode, vPod.owner, s.turn)) {
-          capSnapshot.push(vPod);
-          var vIdx = playerIndex(vPod.owner);
-          s.reserves[vIdx].capturedPods++;
-          for (var pi = 0; pi < 8; pi++) {
-            if (vPod.cfg.prongs[pi] === 1) seizedNormal++;
-            else if (vPod.cfg.prongs[pi] === 2) seizedSuper++;
-          }
-        } else {
-          remainingPods.push(vPod);
+    if (moveAll) {
+      for (var i = 0; i < origStack.length; i++) {
+        if (i === this.guidedPodIndex) continue;
+        if (this.isSquarePodClaimed(ox, oy, i)) continue;
+        var cand = origStack[i];
+        if (!cand || cand.owner !== s.turn || !cand.cfg || !cand.cfg.prongs) continue;
+        if (cand.cfg.prongs[matchDest.dir] > 0) {
+          movingPodIndices.push(i);
         }
       }
-      if (remainingPods.length > 0) {
-        s.map[jK] = remainingPods;
-      } else {
-        delete s.map[jK];
-      }
-      s.reserves[capturerIdx].freeProngs += (seizedNormal + (s.superProngs ? 0 : seizedSuper));
-      if (s.superProngs) s.reserves[capturerIdx].freeSuper += seizedSuper;
-      OctiWebSoundSynth.play("POD_CAPTURE");
-    } else {
-      OctiWebSoundSynth.play("POD_JUMP");
     }
 
+    this._guidedActiveOpIndices = [];
+    for (var mi = 0; mi < movingPodIndices.length; mi++) {
+      var pIdx = movingPodIndices[mi];
+      if (this._claimedStartPods.indexOf(pIdx) === -1) {
+        this._claimedStartPods.push(pIdx);
+      }
+      this.claimedPodsAtOrigin[pIdx] = true;
+      var pObj = origStack[pIdx];
+      var pCfg = (pObj.cfg && pObj.cfg.prongs && pObj.cfg.count > 0) ? formatProngConfig(pObj.cfg.prongs) : (pObj.cfg.text || "");
+      var op = {
+        type: "move",
+        x0: ox,
+        y0: oy,
+        podIndex: pIdx,
+        pod: {
+          owner: pObj.owner,
+          cfg: {
+            prongs: pObj.cfg.prongs.slice(),
+            count: pObj.cfg.count,
+            text: pCfg
+          }
+        },
+        podConfig: pCfg,
+        hops: [{
+          x: toX,
+          y: toY,
+          dir: matchDest.dir,
+          isJump: isJump,
+          jumpedX: jx,
+          jumpedY: jy,
+          capture: doCap,
+          canToggleCapture: hasEnemy
+        }]
+      };
+      this._stagedOps.push(op);
+      this._guidedActiveOpIndices.push(this._stagedOps.length - 1);
+    }
+  } else {
+    var continuingOps = [];
+    for (var ai = 0; ai < this._guidedActiveOpIndices.length; ai++) {
+      var opIdx = this._guidedActiveOpIndices[ai];
+      var activeOp = this._stagedOps[opIdx];
+      if (activeOp && activeOp.pod && activeOp.pod.cfg.prongs[matchDest.dir] > 0) {
+        activeOp.hops.push({
+          x: toX,
+          y: toY,
+          dir: matchDest.dir,
+          isJump: true,
+          jumpedX: jx,
+          jumpedY: jy,
+          capture: doCap,
+          canToggleCapture: hasEnemy
+        });
+        continuingOps.push(opIdx);
+      }
+    }
+    this._guidedActiveOpIndices = continuingOps;
+  }
+
+  if (isJump) {
+    var jStack = s.map[jx + "," + jy] || [];
+    var enemyCount = 0;
+    for (var v = 0; v < jStack.length; v++) {
+      if (!areAllied(s.mode, jStack[v].owner, s.turn)) enemyCount++;
+    }
+    this._currentChainJumped.push({ x: jx, y: jy });
     this.jumpedSquaresChain.push({
       x: jx,
       y: jy,
       toX: toX,
       toY: toY,
-      capturedPodsSnapshot: capSnapshot,
-      capturerIdx: capturerIdx,
-      seizedNormal: seizedNormal,
-      seizedSuper: seizedSuper,
-      capture: (capSnapshot.length > 0)
+      capture: doCap,
+      canToggleCapture: hasEnemy,
+      enemyCount: enemyCount
+    });
+    this._hopCaptureLinks.push({
+      jumpedX: jx,
+      jumpedY: jy,
+      opIndices: this._guidedActiveOpIndices.slice()
     });
 
-    if (!this.currentChainNotation) {
-      this.currentChainNotation = this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + this.guidedPodConfig + "-" + toX + "" + toY + (doCap ? "x" : "");
-    } else {
-      this.currentChainNotation += "-" + toX + "" + toY + (doCap ? "x" : "");
-    }
-
-    if (doCap && capSnapshot.length > 0) {
+    if (doCap && enemyCount > 0) {
+      OctiWebSoundSynth.play("POD_CAPTURE");
       var capPromptEl = document.getElementById("web-capture-prompt-text");
       if (capPromptEl) {
-        capPromptEl.textContent = "Capture jumped enemy pod" + (capSnapshot.length > 1 ? "s" : "") + " at Square (" + jx + ", " + jy + ")?";
+        capPromptEl.textContent = "Capture jumped enemy pod" + (enemyCount > 1 ? "s" : "") + " at Square (" + jx + ", " + jy + ")?";
       }
       var capOverlay = document.getElementById("web-capture-overlay");
       if (capOverlay) capOverlay.style.display = "flex";
+    } else {
+      OctiWebSoundSynth.play("POD_JUMP");
     }
   } else {
-    // Step
     OctiWebSoundSynth.play("POD_STEP");
-    if (!this.currentChainNotation) {
-      this.currentChainNotation = this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + this.guidedPodConfig + "-" + toX + "" + toY;
-    } else {
-      this.currentChainNotation += "-" + toX + "" + toY;
-    }
   }
 
-  this.guidedHops.push({ toX: toX, toY: toY, isJump: !!matchDest.isJump });
-  this.stagedNotation = this.completedSubMoves.concat([this.currentChainNotation]).join(",");
-
-  if (!s.map[toK]) s.map[toK] = [];
-  s.map[toK].push(pod);
-  this.guidedPodIndex = s.map[toK].length - 1;
+  this.guidedHops.push({ toX: toX, toY: toY, isJump: isJump });
   this.guidedCurrentSquare = { x: toX, y: toY };
+  this.isAwaitingConfirmation = true;
+  this.populatePreviewBoard();
 
-  if (matchDest.isJump) {
-    var nextJumps = this.computeLegalDestsForPod(s, toX, toY, pod, this.jumpedSquaresChain).filter(function (d) { return d.isJump; });
+  if (isJump) {
+    this._guidedMidHop = true;
+    var nextJumps = this.guidedNextSquares();
     if (nextJumps.length > 0) {
       this.guidedLegalDests = nextJumps;
-      this.isAwaitingConfirmation = true;
       this.updateUi();
       renderPlayBoardCanvas();
       renderAllWebReserves();
@@ -26966,12 +27392,24 @@ WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
     }
   }
 
-  this.completedSubMoves.push(this.currentChainNotation);
+  this._guidedMidHop = false;
+  this._guidedActiveOpIndices = [];
+  this._currentChainJumped = [];
   this.currentChainNotation = "";
-  this.isAwaitingConfirmation = true;
 
-  if (this.hasOtherMovablePodAtOrigin()) {
-    this.guidedLegalDests = [];
+  var unclaimed = this.unclaimedMovablePodIndicesAtOrigin();
+  if (unclaimed.length > 0 && !this.hasDistinctUnclaimedPodsAtOrigin()) {
+    this.guidedCurrentSquare = { x: ox, y: oy };
+    this.guidedPodIndex = unclaimed[0];
+    this._guidedOriginPodIndex = unclaimed[0];
+    var nextPod = origStack[unclaimed[0]];
+    this.guidedPodConfig = (nextPod && nextPod.cfg && nextPod.cfg.prongs && nextPod.cfg.count > 0)
+      ? formatProngConfig(nextPod.cfg.prongs)
+      : (nextPod && nextPod.cfg ? (nextPod.cfg.text || "") : "");
+    this._guidedMoveAllStack = false;
+    this.guidedHops = [];
+    this.guidedMoveActive = true;
+    this.guidedLegalDests = this.guidedNextSquares();
   } else {
     this.guidedMoveActive = false;
     this.guidedLegalDests = [];
@@ -26983,65 +27421,60 @@ WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
   return true;
 };
 
-WebMoveComposer.prototype.toggleCaptureAtSquare = function (jx, jy) {
-  var hop = this.jumpedSquaresChain.find(function (h) { return h.x === jx && h.y === jy; });
-  if (!hop || !hop.capturedPodsSnapshot || !hop.capturedPodsSnapshot.length) return false;
-  var s = this.getWorkingState();
-  var jK = jx + "," + jy;
-
-  if (hop.capture) {
-    if (!s.map[jK]) s.map[jK] = [];
-    for (var i = 0; i < hop.capturedPodsSnapshot.length; i++) {
-      var pod = hop.capturedPodsSnapshot[i];
-      s.map[jK].push(pod);
-      var vIdx = playerIndex(pod.owner);
-      s.reserves[vIdx].capturedPods = Math.max(0, s.reserves[vIdx].capturedPods - 1);
+WebMoveComposer.prototype.stageMoveOrJump = function (fromX, fromY, toX, toY, podIdx, moveAllMatchingStack) {
+  if (typeof fromX === "object" && fromX !== null) {
+    moveAllMatchingStack = toY;
+    podIdx = toX;
+    toY = fromY.y;
+    toX = fromY.x;
+    fromY = fromX.y;
+    fromX = fromX.x;
+  }
+  if (this.guidedMoveActive && this.guidedCurrentSquare &&
+      this.guidedCurrentSquare.x === fromX && this.guidedCurrentSquare.y === fromY) {
+    if (moveAllMatchingStack !== undefined) {
+      this._guidedMoveAllStack = !!moveAllMatchingStack;
     }
-    s.reserves[hop.capturerIdx].freeProngs -= (hop.seizedNormal + (s.superProngs ? 0 : hop.seizedSuper));
-    if (s.superProngs) s.reserves[hop.capturerIdx].freeSuper -= hop.seizedSuper;
-    hop.capture = false;
-  } else {
-    var rem = [];
-    for (var k = 0; k < (s.map[jK] || []).length; k++) {
-      var cp = s.map[jK][k];
-      if (!areAllied(s.mode, cp.owner, s.turn)) {
-        var vIdx2 = playerIndex(cp.owner);
-        s.reserves[vIdx2].capturedPods++;
-      } else {
-        rem.push(cp);
+    if (!this._guidedMidHop && podIdx !== undefined && podIdx !== null && podIdx >= 0 && podIdx !== this.guidedPodIndex) {
+      if (!this.beginGuidedPodMove(fromX, fromY, podIdx, moveAllMatchingStack)) return false;
+    }
+    return this.selectGuidedDestination(toX, toY);
+  }
+  if (!this.beginGuidedPodMove(fromX, fromY, podIdx, moveAllMatchingStack)) return false;
+  return this.selectGuidedDestination(toX, toY);
+};
+
+WebMoveComposer.prototype.toggleCaptureAtSquare = function (jx, jy) {
+  if (typeof jx === "object" && jx !== null) {
+    jy = jx.y;
+    jx = jx.x;
+  }
+  var toggledAny = false;
+  var newCapVal = null;
+  for (var i = 0; i < this._stagedOps.length; i++) {
+    var op = this._stagedOps[i];
+    if (op.type !== "move" || !op.hops) continue;
+    for (var h = 0; h < op.hops.length; h++) {
+      var hop = op.hops[h];
+      if (hop.isJump && hop.jumpedX === jx && hop.jumpedY === jy && hop.canToggleCapture) {
+        if (newCapVal === null) newCapVal = !hop.capture;
+        hop.capture = newCapVal;
+        toggledAny = true;
       }
     }
-    if (rem.length) s.map[jK] = rem; else delete s.map[jK];
-    s.reserves[hop.capturerIdx].freeProngs += (hop.seizedNormal + (s.superProngs ? 0 : hop.seizedSuper));
-    if (s.superProngs) s.reserves[hop.capturerIdx].freeSuper += hop.seizedSuper;
-    hop.capture = true;
   }
+  if (!toggledAny) return false;
 
-  var not = this.guidedOriginSquare.x + "" + this.guidedOriginSquare.y + this.guidedPodConfig;
-  for (var h = 0; h < this.jumpedSquaresChain.length; h++) {
-    var item = this.jumpedSquaresChain[h];
-    not += "-" + item.toX + "" + item.toY + (item.capture ? "x" : "");
-  }
-  if (this.currentChainNotation) {
-    this.currentChainNotation = not;
-    this.stagedNotation = this.completedSubMoves.concat([this.currentChainNotation]).join(",");
-  } else if (this.completedSubMoves.length > 0) {
-    this.completedSubMoves[this.completedSubMoves.length - 1] = not;
-    this.stagedNotation = this.completedSubMoves.join(",");
-  } else {
-    this.stagedNotation = not;
-  }
-
-  if (this.guidedMoveActive && this.guidedCurrentSquare) {
-    var curK2 = this.guidedCurrentSquare.x + "," + this.guidedCurrentSquare.y;
-    var curStk = s.map[curK2] || [];
-    var activePod = (this.guidedPodIndex >= 0 && this.guidedPodIndex < curStk.length) ? curStk[this.guidedPodIndex] : curStk[curStk.length - 1];
-    if (activePod) {
-      var nextJumps = this.computeLegalDestsForPod(s, this.guidedCurrentSquare.x, this.guidedCurrentSquare.y, activePod, this.jumpedSquaresChain).filter(function (d) { return d.isJump; });
-      this.guidedLegalDests = nextJumps;
+  for (var c = 0; c < this.jumpedSquaresChain.length; c++) {
+    if (this.jumpedSquaresChain[c].x === jx && this.jumpedSquaresChain[c].y === jy) {
+      this.jumpedSquaresChain[c].capture = newCapVal;
     }
   }
 
+  this.populatePreviewBoard();
+  if (this.guidedMoveActive) {
+    this.guidedLegalDests = this.guidedNextSquares();
+  }
   this.updateUi();
   renderPlayBoardCanvas();
   renderAllWebReserves();
@@ -27051,7 +27484,7 @@ WebMoveComposer.prototype.toggleCaptureAtSquare = function (jx, jy) {
 WebMoveComposer.prototype.commitStagedMove = function () {
   if (!this.isAwaitingConfirmation || !this.stagedNotation) return false;
   var not = this.stagedNotation;
-  var baseState = this.getState();
+  var baseState = this._getPreTurnBoard() || this.getState();
   var prevTurn = baseState.turn;
   var finalState = applyMoveToState(cloneState(baseState), not, prevTurn);
   this.reset();
@@ -27060,6 +27493,8 @@ WebMoveComposer.prototype.commitStagedMove = function () {
   }
   return true;
 };
+
+WebMoveComposer.prototype.commit = WebMoveComposer.prototype.commitStagedMove;
 
 WebMoveComposer.prototype.cancelAndRollback = function () {
   this.reset();
@@ -27737,26 +28172,54 @@ var zoomSelectedPodIdx = 0;
 var zoomHoverDir = null;
 var zoomSelectedRepositionDir = null;
 
+function getZoomSquareStateAndStack(x, y) {
+  var preview = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
+  if (!preview) return { state: null, stack: [], isOriginComposite: false };
+  var isOriginComposite = !!(moveComposer && moveComposer.guidedOriginSquare &&
+    moveComposer.guidedOriginSquare.x === x && moveComposer.guidedOriginSquare.y === y &&
+    moveComposer._stagedOps && moveComposer._stagedOps.length > 0 && moveComposer._stagedOps[0].type === "move");
+  if (isOriginComposite) {
+    var preBoard = moveComposer._getPreTurnBoard();
+    var origStack = (preBoard && preBoard.map) ? (preBoard.map[x + "," + y] || []) : [];
+    return { state: preview, stack: origStack, isOriginComposite: true };
+  }
+  return { state: preview, stack: preview.map[x + "," + y] || [], isOriginComposite: false };
+}
+
 function openZoomedSquare(x, y) {
   if (typeof x === "object" && x !== null) {
     y = x.y;
     x = x.x;
   }
-  var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
+  var info = getZoomSquareStateAndStack(x, y);
+  var s = info.state;
   if (!s) return;
   zoomSq = { x: x, y: y };
-  var k = x + "," + y;
-  var stack = s.map[k] || [];
+  var stack = info.stack;
   var sortedIndices = sortedPodIndicesMostProngsFirst(stack);
   zoomSelectedPodIdx = sortedIndices.length ? sortedIndices[0] : 0;
+  var foundUnclaimedFriendly = false;
   for (var si = 0; si < sortedIndices.length; si++) {
-    if (stack[sortedIndices[si]].owner === s.turn) {
-      zoomSelectedPodIdx = sortedIndices[si];
+    var idx = sortedIndices[si];
+    var isClaimed = moveComposer && moveComposer.isSquarePodClaimed(x, y, idx);
+    if (stack[idx].owner === s.turn && !isClaimed) {
+      zoomSelectedPodIdx = idx;
+      foundUnclaimedFriendly = true;
       break;
+    }
+  }
+  if (!foundUnclaimedFriendly) {
+    for (var si2 = 0; si2 < sortedIndices.length; si2++) {
+      if (stack[sortedIndices[si2]].owner === s.turn) {
+        zoomSelectedPodIdx = sortedIndices[si2];
+        break;
+      }
     }
   }
   zoomHoverDir = null;
   zoomSelectedRepositionDir = null;
+  var stackCb = document.getElementById("zoom-move-stack-cb");
+  if (stackCb) stackCb.checked = false;
 
   var overlay = document.getElementById("web-zoom-overlay");
   var titleEl = document.getElementById("web-zoom-sq-title");
@@ -27767,6 +28230,8 @@ function openZoomedSquare(x, y) {
   if (overlay) overlay.style.display = "flex";
 }
 
+var openZoomModal = openZoomedSquare;
+
 function closeZoomedSquare() {
   var overlay = document.getElementById("web-zoom-overlay");
   if (overlay) overlay.style.display = "none";
@@ -27775,10 +28240,11 @@ function closeZoomedSquare() {
 }
 
 function updateZoomOverlayControls() {
-  var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
-  if (!s || !zoomSq) return;
-  var k = zoomSq.x + "," + zoomSq.y;
-  var stack = s.map[k] || [];
+  if (!zoomSq) return;
+  var info = getZoomSquareStateAndStack(zoomSq.x, zoomSq.y);
+  var s = info.state;
+  if (!s) return;
+  var stack = info.stack;
   var turn = s.turn;
   var isTurn = isInteractiveBoardTurn(s);
 
@@ -27789,7 +28255,7 @@ function updateZoomOverlayControls() {
     sortedIndices.forEach(function (pIdx, rank) {
       var btn = document.createElement("button");
       btn.type = "button";
-      var isMoved = moveComposer && moveComposer.claimedPodsAtOrigin[pIdx];
+      var isMoved = moveComposer && moveComposer.isSquarePodClaimed(zoomSq.x, zoomSq.y, pIdx);
       btn.className = "zoom-pod-tab-btn" + (pIdx === zoomSelectedPodIdx ? " active" : "");
       btn.textContent = "Pod " + (rank + 1) + " (" + stack[pIdx].owner + ")" + (isMoved ? " (Moved)" : "");
       btn.addEventListener("click", function () {
@@ -27823,28 +28289,67 @@ function updateZoomOverlayControls() {
   var movePodBtn = document.getElementById("btn-zoom-move-pod");
   var placePodBtn = document.getElementById("btn-zoom-place-pod");
   var liberatePodBtn = document.getElementById("btn-zoom-liberate-pod");
+  var stackWrap = document.getElementById("web-zoom-MatchStack");
+  var stackCb = document.getElementById("zoom-move-stack-cb");
 
   var curPod = (stack && stack[zoomSelectedPodIdx]) ? stack[zoomSelectedPodIdx] : null;
-  var canMove = isTurn && curPod && curPod.owner === turn && !(moveComposer && moveComposer.claimedPodsAtOrigin[zoomSelectedPodIdx]);
-  if (movePodBtn) {
-    movePodBtn.style.display = canMove ? "inline-block" : "none";
+  var isCurClaimed = moveComposer && moveComposer.isSquarePodClaimed(zoomSq.x, zoomSq.y, zoomSelectedPodIdx);
+  var canMove = isTurn && curPod && curPod.owner === turn && !isCurClaimed;
+
+  var hasMatchingStackPods = false;
+  if (canMove && curPod && curPod.cfg && curPod.cfg.prongs) {
+    for (var mi = 0; mi < stack.length; mi++) {
+      if (mi === zoomSelectedPodIdx) continue;
+      if (moveComposer && moveComposer.isSquarePodClaimed(zoomSq.x, zoomSq.y, mi)) continue;
+      var mPod = stack[mi];
+      if (!mPod || mPod.owner !== turn || !mPod.cfg || !mPod.cfg.prongs) continue;
+      for (var md = 0; md < 8; md++) {
+        if (curPod.cfg.prongs[md] > 0 && mPod.cfg.prongs[md] > 0) {
+          hasMatchingStackPods = true;
+          break;
+        }
+      }
+      if (hasMatchingStackPods) break;
+    }
   }
 
-  var canPlaceReserve = isTurn && canPlaceReservePodOnSquare(s, zoomSq.x, zoomSq.y, turn);
+  if (stackWrap) {
+    stackWrap.style.display = (canMove && hasMatchingStackPods) ? "flex" : "none";
+    if (!hasMatchingStackPods && stackCb) {
+      stackCb.checked = false;
+    }
+  }
+
+  if (movePodBtn) {
+    movePodBtn.style.display = canMove ? "inline-block" : "none";
+    movePodBtn.textContent = (stackCb && stackCb.checked && hasMatchingStackPods)
+      ? "Move / Jump Matching Stack"
+      : "Move / Jump This Pod";
+  }
+
+  var canPlaceReserve = isTurn && !info.isOriginComposite && canPlaceReservePodOnSquare(s, zoomSq.x, zoomSq.y, turn);
   if (placePodBtn) {
     placePodBtn.style.display = canPlaceReserve ? "inline-block" : "none";
   }
 
-  var canLiberateHere = isTurn && canLiberateOnSquare(s, zoomSq.x, zoomSq.y, turn);
+  var canLiberateHere = isTurn && !info.isOriginComposite && canLiberateOnSquare(s, zoomSq.x, zoomSq.y, turn);
   if (liberatePodBtn) {
     liberatePodBtn.style.display = canLiberateHere ? "inline-block" : "none";
   }
 }
 
+var zoomStackCbEl = document.getElementById("zoom-move-stack-cb");
+if (zoomStackCbEl) {
+  zoomStackCbEl.addEventListener("change", function () {
+    updateZoomOverlayControls();
+  });
+}
+
 function renderZoomCanvas() {
   var canvas = document.getElementById("web-zoom-canvas");
   if (!canvas || !zoomSq) return;
-  var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
+  var info = getZoomSquareStateAndStack(zoomSq.x, zoomSq.y);
+  var s = info.state;
   if (!s) return;
   var pal = PALETTES[currentTheme] || PALETTES.obsidian;
 
@@ -27854,8 +28359,7 @@ function renderZoomCanvas() {
   ctx.fillStyle = pal.windowBg;
   ctx.fillRect(0, 0, 320, 320);
 
-  var k = zoomSq.x + "," + zoomSq.y;
-  var stack = s.map[k] || [];
+  var stack = info.stack;
   var sortedIndices = sortedPodIndicesMostProngsFirst(stack);
   var podR = 68;
   var cx = 160, cy = 160;
@@ -27903,7 +28407,7 @@ function renderZoomCanvas() {
     }
 
     // 3. Draw hover preview blade if hovering empty socket on own pod during turn
-    if (isTurn && activePod.owner === s.turn && zoomHoverDir !== null && !activePod.cfg.prongs[zoomHoverDir]) {
+    if (isTurn && !info.isOriginComposite && activePod.owner === s.turn && zoomHoverDir !== null && !activePod.cfg.prongs[zoomHoverDir]) {
       var pIdxTurn = playerIndex(s.turn);
       var resTurn = s.reserves[pIdxTurn];
       var isSuperSelected = s.superProngs && document.getElementById("zoom-well-super") &&
@@ -27929,14 +28433,20 @@ function renderZoomCanvas() {
   }
 }
 
+var renderZoomModal = renderZoomCanvas;
+
 // Wire Zoom Card Action Buttons
 var btnZoomMove = document.getElementById("btn-zoom-move-pod");
 if (btnZoomMove) {
   btnZoomMove.addEventListener("click", function () {
     if (!zoomSq || !moveComposer) return;
     var x = zoomSq.x, y = zoomSq.y, idx = zoomSelectedPodIdx;
+    var stackCb = document.getElementById("zoom-move-stack-cb");
+    var stackWrap = document.getElementById("web-zoom-MatchStack");
+    var moveAll = !!(stackCb && stackCb.checked && stackWrap && stackWrap.style.display !== "none");
+    moveComposer.setMoveEntireMatchingStack(moveAll);
     closeZoomedSquare();
-    moveComposer.beginGuidedPodMove(x, y, idx);
+    moveComposer.beginGuidedPodMove(x, y, idx, moveAll);
   });
 }
 var btnZoomPlace = document.getElementById("btn-zoom-place-pod");
@@ -28062,9 +28572,9 @@ if (zoomCanvas) {
   zoomCanvas.addEventListener("wheel", function (e) {
     e.preventDefault();
     if (!zoomSq) return;
-    var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
-    if (!s) return;
-    var stack = s.map[zoomSq.x + "," + zoomSq.y] || [];
+    var info = getZoomSquareStateAndStack(zoomSq.x, zoomSq.y);
+    if (!info.state) return;
+    var stack = info.stack;
     var sorted = sortedPodIndicesMostProngsFirst(stack);
     if (sorted.length <= 1) return;
     var curRank = sorted.indexOf(zoomSelectedPodIdx);
@@ -28289,11 +28799,24 @@ if (playCanvas) {
     var dragDist = Math.hypot(raw.x - boardPressRawPos.x, raw.y - boardPressRawPos.y);
 
     if (dragDist > 14 && pressSq && releaseSq && (pressSq.x !== releaseSq.x || pressSq.y !== releaseSq.y)) {
+      var shiftMoveAll = !!e.shiftKey;
       if (moveComposer && moveComposer.isAwaitingConfirmation) {
         if (moveComposer.isGuidedMoveActive) {
+          if (shiftMoveAll && !moveComposer._guidedMidHop) {
+            moveComposer._guidedMoveAllStack = true;
+          }
           var matchD = moveComposer.guidedLegalDests.find(function (d) { return d.x === releaseSq.x && d.y === releaseSq.y; });
           if (matchD) {
             moveComposer.selectGuidedDestination(releaseSq.x, releaseSq.y);
+            return;
+          }
+        }
+        if (moveComposer.guidedOriginSquare &&
+            pressSq.x === moveComposer.guidedOriginSquare.x &&
+            pressSq.y === moveComposer.guidedOriginSquare.y &&
+            moveComposer.hasOtherMovablePodAtOrigin()) {
+          var nextIdxDrag = moveComposer.firstUnclaimedFriendlyPodIndex(pressSq.x, pressSq.y);
+          if (nextIdxDrag >= 0 && moveComposer.stageMoveOrJump(pressSq.x, pressSq.y, releaseSq.x, releaseSq.y, nextIdxDrag, shiftMoveAll)) {
             return;
           }
         }
@@ -28301,6 +28824,9 @@ if (playCanvas) {
         return;
       }
       if (moveComposer && moveComposer.isGuidedMoveActive) {
+        if (shiftMoveAll && !moveComposer._guidedMidHop) {
+          moveComposer._guidedMoveAllStack = true;
+        }
         var matchD = moveComposer.guidedLegalDests.find(function (d) { return d.x === releaseSq.x && d.y === releaseSq.y; });
         if (matchD) {
           moveComposer.selectGuidedDestination(releaseSq.x, releaseSq.y);
@@ -28318,7 +28844,7 @@ if (playCanvas) {
             if (stackSt[sortedSt[si]].owner === stCur.turn) { bestIdxSt = sortedSt[si]; break; }
           }
           if (bestIdxSt !== -1) {
-            moveComposer.beginGuidedPodMove(pressSq.x, pressSq.y, bestIdxSt);
+            moveComposer.beginGuidedPodMove(pressSq.x, pressSq.y, bestIdxSt, shiftMoveAll);
             var matchD = moveComposer.guidedLegalDests.find(function (d) { return d.x === releaseSq.x && d.y === releaseSq.y; });
             if (matchD) {
               moveComposer.selectGuidedDestination(releaseSq.x, releaseSq.y);
@@ -28341,7 +28867,7 @@ if (playCanvas) {
       var bPt = getBoardPos(raw);
       var sq = playBoardGeom.screenToSquare(bPt.x, bPt.y);
       if (sq) {
-        handlePlaySquareClick(sq.x, sq.y, bPt.x, bPt.y);
+        handlePlaySquareClick(sq.x, sq.y, bPt.x, bPt.y, !!e.shiftKey);
       }
     }
   });
@@ -28412,11 +28938,15 @@ function pulseConfirmBar() {
 }
 
 // Square Click Logic: Guided Move / Prong Addition / Zoom View
-function handlePlaySquareClick(x, y, ptX, ptY) {
+function handlePlaySquareClick(x, y, ptX, ptY, shiftKey) {
   if (!moveComposer) return;
+  var moveAll = !!shiftKey;
 
   if (moveComposer.isAwaitingConfirmation) {
     if (moveComposer.isGuidedMoveActive) {
+      if (moveAll && !moveComposer._guidedMidHop) {
+        moveComposer._guidedMoveAllStack = true;
+      }
       var matchDest = moveComposer.guidedLegalDests.find(function (d) { return d.x === x && d.y === y; });
       if (matchDest) {
         moveComposer.selectGuidedDestination(x, y);
@@ -28425,6 +28955,16 @@ function handlePlaySquareClick(x, y, ptX, ptY) {
     }
     var isOrigin = moveComposer.guidedOriginSquare && moveComposer.guidedOriginSquare.x === x && moveComposer.guidedOriginSquare.y === y;
     if (isOrigin && moveComposer.hasOtherMovablePodAtOrigin()) {
+      if (moveComposer._guidedMidHop) {
+        moveComposer.finishGuidedMoveHere();
+        if (!moveComposer.hasDistinctUnclaimedPodsAtOrigin()) {
+          var nextIdx = moveComposer.firstUnclaimedFriendlyPodIndex(x, y);
+          if (nextIdx >= 0) {
+            moveComposer.beginGuidedPodMove(x, y, nextIdx, moveAll);
+            return;
+          }
+        }
+      }
       openZoomedSquare(x, y);
       return;
     }
@@ -28441,6 +28981,9 @@ function handlePlaySquareClick(x, y, ptX, ptY) {
 
   // 1. If guided move active and clicked a destination
   if (moveComposer.isGuidedMoveActive) {
+    if (moveAll && !moveComposer._guidedMidHop) {
+      moveComposer._guidedMoveAllStack = true;
+    }
     var matchDest = moveComposer.guidedLegalDests.find(function (d) { return d.x === x && d.y === y; });
     if (matchDest) {
       moveComposer.selectGuidedDestination(x, y);
@@ -28480,7 +29023,7 @@ function handlePlaySquareClick(x, y, ptX, ptY) {
   if (bestFriendlyIdx !== -1) {
     // GDB-07.1: Prongs are added/repositioned exclusively inside ZoomedSquareDialog.
     // Begin guided move for top friendly pod (or open ZoomedSquareDialog if 0 legal moves).
-    moveComposer.beginGuidedPodMove(x, y, bestFriendlyIdx);
+    moveComposer.beginGuidedPodMove(x, y, bestFriendlyIdx, moveAll);
     if (!moveComposer.guidedLegalDests || moveComposer.guidedLegalDests.length === 0) {
       // Unarmed pod -> open zoom modal directly!
       moveComposer.cancel();
@@ -29105,7 +29648,7 @@ function generateOctiTranscriptV3() {
 
   var isPass = (localMatchConfig.playMode === "pass");
   var diff = localMatchConfig.botDifficulty || 2;
-  var prof = BOT_PROFILES[diff] || BOT_PROFILES[2];
+  var prof = getBotProfile(diff);
   var budgetMs = prof.timeBudgetMs || 10000;
   var humanHandle = (currentUser && currentUser.handle) ? currentUser.handle : null;
 
@@ -29138,7 +29681,7 @@ function generateOctiTranscriptV3() {
       makeSeatMeta(4, "D", "AI_Tactical")
     ];
   } else {
-    var botName2P = (diff === 1) ? "AI_Casual" : ((diff === 3) ? "AI_Master" : "AI_Tactical");
+    var botName2P = (diff === 1) ? "AI_Casual" : ((diff === 2) ? "AI_Tactical" : ((diff === 3) ? "AI_Master" : ((diff === 4) ? "AI_Expert" : "AI_Grandmaster")));
     playersArr = [
       makeSeatMeta(1, "A", botName2P),
       makeSeatMeta(2, "B", botName2P)
@@ -29226,7 +29769,7 @@ function onLocalMoveCommitted(notation, newState, aiMeta) {
   };
   if (aiMeta) {
     var diff = localMatchConfig.botDifficulty || 2;
-    var prof = BOT_PROFILES[diff] || BOT_PROFILES[2];
+    var prof = getBotProfile(diff);
     plyObj.ai = {
       difficulty: diff,
       budgetMs: prof.timeBudgetMs || 10000,
@@ -29312,7 +29855,7 @@ function triggerAiBotTurn() {
   var titleEl = document.getElementById("web-thinking-title");
   var fillEl = document.getElementById("web-thinking-progress-fill");
   var txtEl = document.getElementById("web-thinking-progress-text");
-  var defaultBudgetMs = (diff === 1) ? 5000 : ((diff === 3) ? 20000 : 10000);
+  var defaultBudgetMs = getBotProfile(diff).timeBudgetMs || 10000;
 
   if (thinkOverlay) thinkOverlay.style.display = "flex";
   if (titleEl) {
@@ -30265,7 +30808,8 @@ function sendOnlineRoomChatMessage(rawText, scope) {
         } else if (lower.indexOf("eval") !== -1) {
           replyText = "Position eval: " + (activePlayState ? ("Turn " + activePlayState.turn + ", status " + activePlayState.status) : "Ready") + ". Good luck!";
         } else if (lower.indexOf("stats") !== -1) {
-          replyText = "Engine: Browser JS Robot | Difficulty: Level " + localMatchConfig.botDifficulty + " | Search time: " + (localMatchConfig.botDifficulty * 4) + "s.";
+          var stProf = getBotProfile(localMatchConfig.botDifficulty);
+          replyText = "Engine: Browser JS Robot | Difficulty: Level " + localMatchConfig.botDifficulty + " (" + (stProf.name || "Balanced") + ") | Search time: " + Math.round((stProf.timeBudgetMs || 10000) / 1000) + "s.";
         } else {
           replyText = "Hello! I am the OCTI bot. Type @bot help for commands.";
         }

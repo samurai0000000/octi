@@ -1252,8 +1252,18 @@ public class OctiMoveComposer {
                 guidedMidHop = true;
                 guidedMoveActive = true;
             } else {
-                guidedMidHop = false;
-                guidedMoveActive = false;
+                List<Integer> unclaimed = unclaimedMovablePodIndicesAtOrigin();
+                if (!unclaimed.isEmpty() && !hasDistinctUnclaimedPodsAtOrigin()) {
+                    guidedCurBx = guidedOriginBx;
+                    guidedCurBy = guidedOriginBy;
+                    guidedPodIndex = unclaimed.get(0);
+                    guidedMoveAllStack = false;
+                    guidedMidHop = false;
+                    guidedMoveActive = true;
+                } else {
+                    guidedMidHop = false;
+                    guidedMoveActive = false;
+                }
             }
             awaitingConfirmation = true;
             syncPreparedStateToGame();
@@ -1420,8 +1430,18 @@ public class OctiMoveComposer {
             guidedCurBy = tby;
             guidedPodIndex = resolvedIdx;
         } else {
-            guidedMidHop = false;
-            guidedMoveActive = false;
+            List<Integer> unclaimed = unclaimedMovablePodIndicesAtOrigin();
+            if (!unclaimed.isEmpty() && !hasDistinctUnclaimedPodsAtOrigin()) {
+                guidedCurBx = guidedOriginBx;
+                guidedCurBy = guidedOriginBy;
+                guidedPodIndex = unclaimed.get(0);
+                guidedMoveAllStack = false;
+                guidedMidHop = false;
+                guidedMoveActive = true;
+            } else {
+                guidedMidHop = false;
+                guidedMoveActive = false;
+            }
         }
         boolean hasOptionalCapture = false;
         for (CaptureChoice cc : captureChoices) {
@@ -1878,37 +1898,28 @@ public class OctiMoveComposer {
             return false;
         }
 
-        int tbx = toX - 1;
-        int tby = toY - 1;
         int fromBx = guidedMidHop ? guidedCurBx : guidedOriginBx;
         int fromBy = guidedMidHop ? guidedCurBy : guidedOriginBy;
 
-        int w = board.getBoardWidth();
-        int h = board.getBoardHeight();
-        boolean edgeless = board.getGame().useEdgelessBoard();
-        int[] dxy = new int[2];
-        computeDisplacement(fromBx, fromBy, tbx, tby, edgeless, w, h, dxy);
-        boolean isStep = (Math.max(Math.abs(dxy[0]), Math.abs(dxy[1])) == 1);
-
-        if (!guidedMidHop) {
-            if (!stageOrCommitPodMoveOrJump(fromBx + 1, fromBy + 1, guidedPodIndex,
-                    toX, toY, guidedMoveAllStack)) {
-                return false;
-            }
-            if (guidedMoveActive && guidedMidHop && guidedNextSquares().isEmpty()) {
-                guidedMoveActive = false;
-            }
-            return true;
-        } else {
-            if (!stageOrCommitPodMoveOrJump(fromBx + 1, fromBy + 1, guidedPodIndex,
-                    toX, toY, guidedMoveAllStack)) {
-                return false;
-            }
-            if (guidedMoveActive && guidedMidHop && guidedNextSquares().isEmpty()) {
-                guidedMoveActive = false;
-            }
-            return true;
+        if (!stageOrCommitPodMoveOrJump(fromBx + 1, fromBy + 1, guidedPodIndex,
+                toX, toY, guidedMoveAllStack)) {
+            return false;
         }
+        if (guidedMoveActive && guidedMidHop && guidedNextSquares().isEmpty()) {
+            List<Integer> unclaimed = unclaimedMovablePodIndicesAtOrigin();
+            if (!unclaimed.isEmpty() && !hasDistinctUnclaimedPodsAtOrigin()) {
+                guidedCurBx = guidedOriginBx;
+                guidedCurBy = guidedOriginBy;
+                guidedPodIndex = unclaimed.get(0);
+                guidedMoveAllStack = false;
+                guidedMidHop = false;
+                guidedMoveActive = true;
+            } else {
+                guidedMidHop = false;
+                guidedMoveActive = false;
+            }
+        }
+        return true;
     }
 
     public boolean finishGuidedMoveHere() {

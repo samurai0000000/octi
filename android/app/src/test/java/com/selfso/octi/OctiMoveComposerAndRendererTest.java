@@ -99,7 +99,7 @@ public class OctiMoveComposerAndRendererTest {
         assertTrue(composer.beginGuidedPodMove(3, 3, 1, false));
         assertTrue(composer.isGuidedMoveActive());
         assertTrue(composer.selectGuidedDestination(3, 4));
-        assertFalse(composer.isGuidedMoveActive());
+        assertTrue(composer.isGuidedMoveActive());
         assertTrue(composer.isAwaitingConfirmation());
 
         List<Integer> unclaimed = composer.unclaimedMovablePodIndicesAtOrigin();

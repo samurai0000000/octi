@@ -873,7 +873,7 @@ public class OctiAndroidBoardAndComposerTest {
     @Test
     public void testOctiAppVersionAndProtocolConstants() {
         assertEquals(BuildConfig.VERSION_NAME, OctiDefs.OCTI_APP_VERSION);
-        assertEquals("2.3.6", OctiDefs.OCTI_APP_VERSION);
+        assertEquals("2.3.7", OctiDefs.OCTI_APP_VERSION);
         assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
         assertEquals(2038, OctiOpeningBookData.ENTRIES.length);
 
@@ -1271,6 +1271,77 @@ public class OctiAndroidBoardAndComposerTest {
         assertEquals(2, p.clients.size());
         assertEquals("android", p.clients.get(0));
         assertEquals("web", p.clients.get(1));
+    }
+
+    @Test
+    public void testStackedPodsCompositeStepAndJumpToSameSquare() {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        OctiGame game = board.getGame();
+        game.move("33");
+        game.move("37+e");
+        game.move("33+a");
+        game.move("57+e");
+        game.move("33+a");
+        game.move("37e-36");
+
+        // Square (3,3) now has 2 A pods, both with N ('a') prong.
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+
+        // 1. Sequential guided step of two stacked pods from (3,3) to (3,4):
+        assertTrue(composer.beginGuidedPodMove(3, 3, 0, false));
+        assertTrue(composer.isGuidedMoveActive());
+        assertTrue(composer.isGuidedLegalDestination(3, 4));
+        assertFalse(composer.isGuidedLegalDestination(3, 5));
+
+        // Step first pod to (3,4): second identical pod at (3,3) is auto-activated for guided move
+        assertTrue(composer.selectGuidedDestination(3, 4));
+        assertTrue(composer.isAwaitingConfirmation());
+        assertTrue(composer.isGuidedMoveActive());
+        assertEquals(3, composer.guidedCurrentSquare()[0]);
+        assertEquals(3, composer.guidedCurrentSquare()[1]);
+        // Second pod can step to (3,4), and CANNOT jump over first pod at (3,4) to (3,5)
+        assertTrue(composer.isGuidedLegalDestination(3, 4));
+        assertFalse(composer.isGuidedLegalDestination(3, 5));
+
+        // Step second pod to (3,4) as well
+        assertTrue(composer.selectGuidedDestination(3, 4));
+        assertFalse(composer.isGuidedMoveActive());
+        assertTrue(composer.isAwaitingConfirmation());
+        assertEquals("33a-34,33a-34", composer.stagedMoveNotation());
+        assertTrue(composer.commitStagedMove());
+        assertEquals(2, board.squareAt(2, 3).getNumPods());
+
+        // B steps from (3,6) to (3,5), placing an enemy pod directly in front of A's 2 stacked pods at (3,4)
+        game.move("36e-35");
+
+        // 2. Sequential guided jump of two stacked pods from (3,4) over (3,5) to both land on (3,6):
+        assertTrue(composer.beginGuidedPodMove(3, 4, 0, false));
+        assertTrue(composer.isGuidedMoveActive());
+        assertTrue(composer.isGuidedLegalDestination(3, 6));
+
+        assertTrue(composer.selectGuidedDestination(3, 6));
+        assertTrue(composer.isAwaitingConfirmation());
+        assertTrue(composer.isGuidedMoveActive());
+        assertEquals(3, composer.guidedCurrentSquare()[0]);
+        assertEquals(4, composer.guidedCurrentSquare()[1]);
+        assertTrue(composer.isGuidedLegalDestination(3, 6));
+
+        assertTrue(composer.selectGuidedDestination(3, 6));
+        assertFalse(composer.isGuidedMoveActive());
+        assertEquals("34a-36x,34a-36x", composer.stagedMoveNotation());
+        composer.setCaptureAtSquare(3, 5, false);
+        assertEquals("34a-36,34a-36", composer.stagedMoveNotation());
+        composer.setCaptureAtSquare(3, 5, true);
+        assertEquals("34a-36x,34a-36x", composer.stagedMoveNotation());
+        assertTrue(composer.commitStagedMove());
+        assertEquals(2, board.squareAt(2, 5).getNumPods());
+
+        // 3. Also verify moveAllMatchingStack moves both pods together in a single call
+        game.move("57e-56");
+        assertTrue(composer.stageOrCommitPodMoveOrJump(3, 6, 0, 3, 7, true));
+        assertEquals("36a-37,36a-37", composer.stagedMoveNotation());
+        assertTrue(composer.commitStagedMove());
+        assertEquals(2, board.squareAt(2, 6).getNumPods());
     }
 }
 

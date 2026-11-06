@@ -21,7 +21,9 @@ public class OctiBotEngine {
     public enum BotDifficulty {
         CASUAL(1),
         TACTICAL(2),
-        MASTER(3);
+        MASTER(3),
+        EXPERT(4),
+        GRANDMASTER(5);
 
         private final int level;
 
@@ -319,6 +321,64 @@ public class OctiBotEngine {
             p.opponentTurnHangingPct = 125;
             p.soleArmedPodDangerPenalty = 3500;
             p.moveOrderBlunderPenalty = 7000;
+        } else if (diffLevel == 4) { // EXPERT (Level 4)
+            p.timeBudgetMs = 40000;
+            p.maxSearchDepth = 64;
+            p.maxQuiesceDepth = 5;
+            p.quiesceBranchCap = 12;
+            p.rootBranchCap = 64;
+            p.treeBranchCap = 36;
+            p.lazySmpThreads = 4;
+            p.compositeMoveMaxPly = 2;
+            p.rootScoreJitter = 0;
+            p.closestPodDistWeight = 350;
+            p.secondClosestPodDistWeight = 220;
+            p.oneStepBaseThreatBonus = 9500;
+            p.oneJumpBaseThreatBonus = 14000;
+            p.twoPlyBaseThreatWeight = 4200;
+            p.firstArmedPodBonus = 700;
+            p.secondArmedPodBonus = 1500;
+            p.thirdArmedPodBonus = 900;
+            p.singlePodMonopolyPenalty = 1400;
+            p.leapfrogBatteryWeight = 800;
+            p.leapfrogForwardBonus = 600;
+            p.jumpReachableSquareWeight = 180;
+            p.jumpReachStepWeight = 650;
+            p.hangingPodBasePenalty = 1600;
+            p.hangingProngWeight = 260;
+            p.ofkProngSeizureWeight = 550;
+            p.opponentTurnHangingPct = 140;
+            p.soleArmedPodDangerPenalty = 6000;
+            p.moveOrderBlunderPenalty = 11000;
+        } else if (diffLevel >= 5) { // GRANDMASTER (Level 5)
+            p.timeBudgetMs = 60000;
+            p.maxSearchDepth = 64;
+            p.maxQuiesceDepth = 6;
+            p.quiesceBranchCap = 14;
+            p.rootBranchCap = 72;
+            p.treeBranchCap = 40;
+            p.lazySmpThreads = 4;
+            p.compositeMoveMaxPly = 3;
+            p.rootScoreJitter = 0;
+            p.closestPodDistWeight = 350;
+            p.secondClosestPodDistWeight = 220;
+            p.oneStepBaseThreatBonus = 9500;
+            p.oneJumpBaseThreatBonus = 14000;
+            p.twoPlyBaseThreatWeight = 4200;
+            p.firstArmedPodBonus = 700;
+            p.secondArmedPodBonus = 1500;
+            p.thirdArmedPodBonus = 900;
+            p.singlePodMonopolyPenalty = 1400;
+            p.leapfrogBatteryWeight = 800;
+            p.leapfrogForwardBonus = 600;
+            p.jumpReachableSquareWeight = 180;
+            p.jumpReachStepWeight = 650;
+            p.hangingPodBasePenalty = 1600;
+            p.hangingProngWeight = 260;
+            p.ofkProngSeizureWeight = 550;
+            p.opponentTurnHangingPct = 140;
+            p.soleArmedPodDangerPenalty = 6000;
+            p.moveOrderBlunderPenalty = 11000;
         } else { // MASTER (Level 3)
             p.timeBudgetMs = 20000;
             p.maxSearchDepth = 64;
@@ -389,6 +449,10 @@ public class OctiBotEngine {
                 return 10000;
             case MASTER:
                 return 20000;
+            case EXPERT:
+                return 40000;
+            case GRANDMASTER:
+                return 60000;
             default:
                 return 10000;
         }
@@ -402,8 +466,9 @@ public class OctiBotEngine {
             case CASUAL:
                 return 3;
             case TACTICAL:
-                return 64;
             case MASTER:
+            case EXPERT:
+            case GRANDMASTER:
                 return 64;
             default:
                 return 64;
@@ -421,6 +486,10 @@ public class OctiBotEngine {
                 return 40;
             case MASTER:
                 return 56;
+            case EXPERT:
+                return 64;
+            case GRANDMASTER:
+                return 72;
             default:
                 return 40;
         }
@@ -437,6 +506,10 @@ public class OctiBotEngine {
                 return 24;
             case MASTER:
                 return 32;
+            case EXPERT:
+                return 36;
+            case GRANDMASTER:
+                return 40;
             default:
                 return 24;
         }

@@ -303,6 +303,10 @@ public final class OctiBoardRenderer {
                     botLabel = "Lv2 • 10s";
                 } else if ("STRATEGIC".equalsIgnoreCase(name) || difficulty == OctiBotEngine.BotDifficulty.MASTER) {
                     botLabel = "Lv3 • 20s";
+                } else if (difficulty == OctiBotEngine.BotDifficulty.EXPERT) {
+                    botLabel = "Lv4 • 40s";
+                } else if (difficulty == OctiBotEngine.BotDifficulty.GRANDMASTER) {
+                    botLabel = "Lv5 • 60s";
                 } else if ("DEEP".equalsIgnoreCase(name)) {
                     botLabel = "Lv4 • 45s";
                 }

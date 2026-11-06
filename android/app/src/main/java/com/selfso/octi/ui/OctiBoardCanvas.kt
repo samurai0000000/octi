@@ -272,7 +272,7 @@ fun OctiBoardCanvas(
                                 val startSq = b.squareAt(startX - 1, startY - 1)
                                 val hasFriendlyPod = !startSq.isEmpty && turn != null && !startSq.hasEnemyOf(turn)
                                 if (composer.isAwaitingConfirmation) {
-                                    if (composer.isGuidedMoveActive && composer.hasContinuationJump() && composer.isGuidedLegalDestination(endX, endY)) {
+                                    if (composer.isGuidedMoveActive && composer.isGuidedLegalDestination(endX, endY)) {
                                         val prevCapCount = composer.captureChoices().size
                                         val curSq = composer.guidedCurrentSquare()
                                         if (composer.clickBoardSquareForGuidedMove(endX, endY)) {

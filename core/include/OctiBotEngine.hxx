@@ -20,9 +20,11 @@
 namespace octi {
 
 enum class BotDifficulty {
-    CASUAL   = 1,
-    TACTICAL = 2,
-    MASTER   = 3,
+    CASUAL      = 1, // ~5000ms budget, shallow tactical horizon, slight randomness
+    TACTICAL    = 2, // ~10000ms budget, full iterative deepening + threat penalties
+    MASTER      = 3, // ~20000ms budget, deep principal variation + capture quiescence
+    EXPERT      = 4, // ~40000ms budget, extended search horizon + wider branch caps
+    GRANDMASTER = 5  // ~60000ms budget, maximum search horizon + deepest quiescence
 };
 
 struct BotSearchStats {

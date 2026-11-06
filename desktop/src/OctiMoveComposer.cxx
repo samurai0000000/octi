@@ -1322,71 +1322,28 @@ bool OctiMoveComposer::selectGuidedDestination(int toX, int toY)
         return false;
     }
 
-    int tbx = toX - 1;
-    int tby = toY - 1;
     int fromBx = _guidedMidHop ? _guidedCurBx : _guidedOriginBx;
     int fromBy = _guidedMidHop ? _guidedCurBy : _guidedOriginBy;
 
-    int w = _board->getBoardWidth();
-    int h = _board->getBoardHeight();
-    bool edgeless = _board->getGame()->useEdgelessBoard();
-    int dx = 0, dy = 0;
-    computeDisplacement(fromBx, fromBy, tbx, tby, edgeless, w, h, dx, dy);
-    bool isStep = (std::max(std::abs(dx), std::abs(dy)) == 1);
-
-    if (!_guidedMidHop) {
-        if (!stageOrCommitPodMoveOrJump(fromBx + 1, fromBy + 1, _guidedPodIndex,
-                                        toX, toY, _guidedMoveAllStack)) {
-            return false;
-        }
-        _guidedCurBx = tbx;
-        _guidedCurBy = tby;
-        bool hasContinuation = !isStep && !guidedNextSquares().empty();
-        if (hasContinuation) {
-            _guidedMidHop = true;
-            _guidedMoveActive = true;
-        } else {
-            auto unclaimed = unclaimedMovablePodIndicesAtOrigin();
-            if (!unclaimed.empty() && !hasDistinctUnclaimedPodsAtOrigin()) {
-                _guidedCurBx = _guidedOriginBx;
-                _guidedCurBy = _guidedOriginBy;
-                _guidedPodIndex = unclaimed.front();
-                _guidedMoveAllStack = false;
-                _guidedMidHop = false;
-                _guidedMoveActive = true;
-            } else {
-                _guidedMidHop = false;
-                _guidedMoveActive = false;
-            }
-        }
-        return true;
-    } else {
-        if (!stageOrCommitPodMoveOrJump(fromBx + 1, fromBy + 1, _guidedPodIndex,
-                                        toX, toY, _guidedMoveAllStack)) {
-            return false;
-        }
-        _guidedCurBx = tbx;
-        _guidedCurBy = tby;
-        bool hasContinuation = !guidedNextSquares().empty();
-        if (hasContinuation) {
-            _guidedMidHop = true;
-            _guidedMoveActive = true;
-        } else {
-            auto unclaimed = unclaimedMovablePodIndicesAtOrigin();
-            if (!unclaimed.empty() && !hasDistinctUnclaimedPodsAtOrigin()) {
-                _guidedCurBx = _guidedOriginBx;
-                _guidedCurBy = _guidedOriginBy;
-                _guidedPodIndex = unclaimed.front();
-                _guidedMoveAllStack = false;
-                _guidedMidHop = false;
-                _guidedMoveActive = true;
-            } else {
-                _guidedMidHop = false;
-                _guidedMoveActive = false;
-            }
-        }
-        return true;
+    if (!stageOrCommitPodMoveOrJump(fromBx + 1, fromBy + 1, _guidedPodIndex,
+                                    toX, toY, _guidedMoveAllStack)) {
+        return false;
     }
+    if (_guidedMoveActive && _guidedMidHop && guidedNextSquares().empty()) {
+        auto unclaimed = unclaimedMovablePodIndicesAtOrigin();
+        if (!unclaimed.empty() && !hasDistinctUnclaimedPodsAtOrigin()) {
+            _guidedCurBx = _guidedOriginBx;
+            _guidedCurBy = _guidedOriginBy;
+            _guidedPodIndex = unclaimed.front();
+            _guidedMoveAllStack = false;
+            _guidedMidHop = false;
+            _guidedMoveActive = true;
+        } else {
+            _guidedMidHop = false;
+            _guidedMoveActive = false;
+        }
+    }
+    return true;
 }
 
 bool OctiMoveComposer::finishGuidedMoveHere()

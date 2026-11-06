@@ -425,6 +425,85 @@ TEST(OctiMoveComposerTest, StackFanSelectionShiftStackAndCompositeMove)
     CHECK_FALSE(committed.empty());
 }
 
+TEST(OctiMoveComposerTest, StackedPodsSequentialGuidedStepAndJumpToSameSquare)
+{
+    OctiBoard board(GAME_MODE_2);
+    board.getGame()->start(PLAYER_A);
+    board.getGame()->move("33");
+    board.getGame()->move("37+e");
+    board.getGame()->move("33+a");
+    board.getGame()->move("57+e");
+    board.getGame()->move("33+a");
+    board.getGame()->move("37e-36");
+
+    // Square (3,3) has 2 A pods, both with N ('a') prong.
+    OctiMoveComposer composer(&board);
+    std::string committed;
+    composer.setMoveCommittedCallback([&](const std::string &m) { committed = m; });
+
+    auto hasGuidedNext = [&](int x, int y) {
+        for (const auto &sq : composer.guidedNextSquares()) {
+            if (sq.first == x && sq.second == y) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // 1. Sequential guided step of two stacked pods from (3,3) to (3,4):
+    CHECK_TRUE(composer.beginGuidedPodMove(3, 3, 0, false));
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    CHECK_TRUE(hasGuidedNext(3, 4));
+    CHECK_FALSE(hasGuidedNext(3, 5));
+
+    // Step first pod to (3,4): second identical pod at (3,3) is auto-activated for guided move
+    CHECK_TRUE(composer.selectGuidedDestination(3, 4));
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    LONGS_EQUAL(3, composer.guidedCurrentSquare().first);
+    LONGS_EQUAL(3, composer.guidedCurrentSquare().second);
+    // Second pod can step to (3,4), and CANNOT jump over first pod at (3,4) to (3,5)
+    CHECK_TRUE(hasGuidedNext(3, 4));
+    CHECK_FALSE(hasGuidedNext(3, 5));
+
+    // Step second pod to (3,4) as well
+    CHECK_TRUE(composer.selectGuidedDestination(3, 4));
+    CHECK_FALSE(composer.isGuidedMoveActive());
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    STRCMP_EQUAL("33a-34,33a-34", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.commitStagedMove());
+    STRCMP_EQUAL("33a-34,33a-34", committed.c_str());
+    LONGS_EQUAL(2, board.squareAt(2, 3).getNumPods());
+
+    // B steps from (3,6) to (3,5), placing an enemy pod directly in front of A's 2 stacked pods at (3,4)
+    board.getGame()->move("36e-35");
+
+    // 2. Sequential guided jump of two stacked pods from (3,4) over (3,5) to both land on (3,6):
+    CHECK_TRUE(composer.beginGuidedPodMove(3, 4, 0, false));
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    CHECK_TRUE(hasGuidedNext(3, 6));
+
+    // First pod jumps to (3,6); no continuation jump from (3,6), so second pod at (3,4) is auto-guided
+    CHECK_TRUE(composer.selectGuidedDestination(3, 6));
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    LONGS_EQUAL(3, composer.guidedCurrentSquare().first);
+    LONGS_EQUAL(4, composer.guidedCurrentSquare().second);
+    CHECK_TRUE(hasGuidedNext(3, 6));
+
+    // Second pod also jumps over (3,5) onto the same landing square (3,6)
+    CHECK_TRUE(composer.selectGuidedDestination(3, 6));
+    CHECK_FALSE(composer.isGuidedMoveActive());
+    STRCMP_EQUAL("34a-36x,34a-36x", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.setCaptureAtSquare(3, 5, false));
+    STRCMP_EQUAL("34a-36,34a-36", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.setCaptureAtSquare(3, 5, true));
+    STRCMP_EQUAL("34a-36x,34a-36x", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.commitStagedMove());
+    STRCMP_EQUAL("34a-36x,34a-36x", committed.c_str());
+    LONGS_EQUAL(2, board.squareAt(2, 5).getNumPods());
+}
+
 TEST(OctiMoveComposerTest, SuperprongEighthProngBonusMoveAndEdgelessWrap)
 {
     // Test edgeless wrap-around step from x=1 to x=9
@@ -864,6 +943,8 @@ TEST(OctiBotEngineTest, DefaultBudgetAndDepthPerDifficultyLevel)
     CHECK_EQUAL(5000, OctiBotEngine::defaultBudgetForDifficulty(BotDifficulty::CASUAL));
     CHECK_EQUAL(10000, OctiBotEngine::defaultBudgetForDifficulty(BotDifficulty::TACTICAL));
     CHECK_EQUAL(20000, OctiBotEngine::defaultBudgetForDifficulty(BotDifficulty::MASTER));
+    CHECK_EQUAL(40000, OctiBotEngine::defaultBudgetForDifficulty(BotDifficulty::EXPERT));
+    CHECK_EQUAL(60000, OctiBotEngine::defaultBudgetForDifficulty(BotDifficulty::GRANDMASTER));
 }
 
 TEST(OctiBotEngineTest, BotPlaysAcrossVariantsAndFindsWinningAndBlockingMoves)
