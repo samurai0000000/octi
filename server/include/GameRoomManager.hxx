@@ -579,6 +579,7 @@ public:
     size_t onlinePlayerCount() const;
 
     bool findActiveRoomForActor(int64_t actorId, std::string &outRoomId) const;
+    void refreshCachedPlayerStats();
 
     int64_t ensureAnonymousObserver(const std::string &ipAddress);
 

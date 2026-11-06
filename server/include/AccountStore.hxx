@@ -457,6 +457,7 @@ public:
     bool getRobotByUuid(const std::string &robotUuid, RobotRecord &out);
     bool getRobotByName(const std::string &robotName, RobotRecord &out);
     bool recordRobotGameOutcome(int64_t robotId, GameOutcome outcome);
+    bool reconcileRobotStats();
 
     /* mode: '2P' | '4P' | 'OFK'; limit clamped to 1..kMaxLeaderboardLimit. */
     bool leaderboard(const std::string &mode, int limit,

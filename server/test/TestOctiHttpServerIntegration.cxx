@@ -5786,6 +5786,19 @@ TEST(OctiHttpServerIntegrationTest, RobotsDirectoryAndProfileEndpoints)
     CHECK_TRUE(rDel0.json.value("deleted", false));
     Reply rProf0 = http().get("/api/v1/robots/profile/" + bot0Uuid);
     EXPECT_STATUS(404, rProf0);
+
+    /* Purging the archived robot game recalculates robot W/L/D statistics */
+    env->store.setAdminGoogleIdentities({"sub-robot-dir-owner"});
+    Reply rPurgeGame = http().del("/api/v1/archive/games/" + roomId, u.token);
+    EXPECT_STATUS(200, rPurgeGame);
+    STRCMP_EQUAL("purged", rPurgeGame.json.value("status", "").c_str());
+
+    octi::RobotRecord afterPurgeRec;
+    CHECK_TRUE(env->store.getRobotByUuid(botUuid, afterPurgeRec));
+    CHECK_EQUAL(0, afterPurgeRec.gamesPlayed);
+    CHECK_EQUAL(0, afterPurgeRec.wins);
+    CHECK_EQUAL(0, afterPurgeRec.losses);
+    CHECK_EQUAL(0, afterPurgeRec.draws);
 }
 
 TEST(OctiHttpServerIntegrationTest, TableHostDeleteEndpoint)

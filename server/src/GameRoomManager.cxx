@@ -737,6 +737,24 @@ const std::string &GameRoomManager::handleOf(int64_t playerId) const
     return it == _players.end() ? kEmptyString : it->second.handle;
 }
 
+void GameRoomManager::refreshCachedPlayerStats()
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    for (std::map<int64_t, PlayerInfo>::iterator it = _players.begin();
+         it != _players.end(); ++it) {
+        if (isRobotActorId(it->first)) {
+            int64_t robotId = robotIdFromActorId(it->first);
+            RobotRecord robotRec;
+            if (_store.getRobotById(robotId, robotRec)) {
+                it->second.robotGamesPlayed = robotRec.gamesPlayed;
+                it->second.robotWins = robotRec.wins;
+                it->second.robotLosses = robotRec.losses;
+                it->second.robotDraws = robotRec.draws;
+            }
+        }
+    }
+}
+
 void GameRoomManager::touchOnlineLocked(int64_t playerId)
 {
     int64_t now = nowMs();

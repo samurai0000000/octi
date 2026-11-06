@@ -5297,6 +5297,7 @@ void OctiHttpServer::Impl::handleArchivePurgeGame(const Request &req, Response &
         }
         return;
     }
+    rooms.refreshCachedPlayerStats();
     Json j;
     j["ok"] = true;
     j["status"] = "purged";

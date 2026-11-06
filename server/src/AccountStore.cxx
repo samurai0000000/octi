@@ -1334,6 +1334,72 @@ void repairInvertedArchiveRecordsLocked(sqlite3 *db)
     }
 }
 
+void reconcileRobotStatsLocked(sqlite3 *db)
+{
+    if (!db) {
+        return;
+    }
+    // Backfill robot attribution and clean player IDs in games for seats 1..4
+    execSql(db, "UPDATE games SET"
+                " p1_robot_id = (SELECT r.robot_id FROM robots r WHERE r.robot_name = games.p1_handle COLLATE NOCASE LIMIT 1)"
+                " WHERE p1_robot_id = 0 AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p1_handle COLLATE NOCASE);");
+    execSql(db, "UPDATE games SET"
+                " p1_player_id = NULL"
+                " WHERE p1_robot_id > 0 AND p1_player_id IS NOT NULL AND EXISTS ("
+                "   SELECT 1 FROM players p WHERE p.player_id = games.p1_player_id AND LOWER(games.p1_handle) != LOWER(p.handle)"
+                " );");
+
+    execSql(db, "UPDATE games SET"
+                " p2_robot_id = (SELECT r.robot_id FROM robots r WHERE r.robot_name = games.p2_handle COLLATE NOCASE LIMIT 1)"
+                " WHERE p2_robot_id = 0 AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p2_handle COLLATE NOCASE);");
+    execSql(db, "UPDATE games SET"
+                " p2_player_id = NULL"
+                " WHERE p2_robot_id > 0 AND p2_player_id IS NOT NULL AND EXISTS ("
+                "   SELECT 1 FROM players p WHERE p.player_id = games.p2_player_id AND LOWER(games.p2_handle) != LOWER(p.handle)"
+                " );");
+
+    execSql(db, "UPDATE games SET"
+                " p3_robot_id = (SELECT r.robot_id FROM robots r WHERE r.robot_name = games.p3_handle COLLATE NOCASE LIMIT 1)"
+                " WHERE p3_robot_id = 0 AND games.p3_handle != '' AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p3_handle COLLATE NOCASE);");
+    execSql(db, "UPDATE games SET"
+                " p3_player_id = NULL"
+                " WHERE p3_robot_id > 0 AND p3_player_id IS NOT NULL AND EXISTS ("
+                "   SELECT 1 FROM players p WHERE p.player_id = games.p3_player_id AND LOWER(games.p3_handle) != LOWER(p.handle)"
+                " );");
+
+    execSql(db, "UPDATE games SET"
+                " p4_robot_id = (SELECT r.robot_id FROM robots r WHERE r.robot_name = games.p4_handle COLLATE NOCASE LIMIT 1)"
+                " WHERE p4_robot_id = 0 AND games.p4_handle != '' AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p4_handle COLLATE NOCASE);");
+    execSql(db, "UPDATE games SET"
+                " p4_player_id = NULL"
+                " WHERE p4_robot_id > 0 AND p4_player_id IS NOT NULL AND EXISTS ("
+                "   SELECT 1 FROM players p WHERE p.player_id = games.p4_player_id AND LOWER(games.p4_handle) != LOWER(p.handle)"
+                " );");
+
+    // Recompute games_played, wins, losses, and draws for all robots from archived games
+    execSql(db, "UPDATE robots SET"
+                " games_played = ("
+                "   SELECT COUNT(*) FROM games g"
+                "   WHERE g.p1_robot_id = robots.robot_id"
+                "      OR g.p2_robot_id = robots.robot_id"
+                "      OR g.p3_robot_id = robots.robot_id"
+                "      OR g.p4_robot_id = robots.robot_id"
+                " ),"
+                " wins = ("
+                "   SELECT COUNT(*) FROM games g"
+                "   WHERE (g.p1_robot_id = robots.robot_id AND (g.result IN ('P1_WIN', 'TEAM_13_WIN') OR (g.result NOT IN ('DRAW', 'TEAM_13_WIN', 'TEAM_24_WIN') AND (g.winner_seat = 1 OR g.winner = 'A'))))"
+                "      OR (g.p2_robot_id = robots.robot_id AND (g.result IN ('P2_WIN', 'TEAM_24_WIN') OR (g.result NOT IN ('DRAW', 'TEAM_13_WIN', 'TEAM_24_WIN') AND (g.winner_seat = 2 OR g.winner = 'B'))))"
+                "      OR (g.p3_robot_id = robots.robot_id AND (g.result = 'TEAM_13_WIN' OR (g.result NOT IN ('DRAW', 'TEAM_13_WIN', 'TEAM_24_WIN') AND (g.winner_seat = 3 OR g.winner = 'C'))))"
+                "      OR (g.p4_robot_id = robots.robot_id AND (g.result = 'TEAM_24_WIN' OR (g.result NOT IN ('DRAW', 'TEAM_13_WIN', 'TEAM_24_WIN') AND (g.winner_seat = 4 OR g.winner = 'D'))))"
+                " ),"
+                " draws = ("
+                "   SELECT COUNT(*) FROM games g"
+                "   WHERE (g.p1_robot_id = robots.robot_id OR g.p2_robot_id = robots.robot_id OR g.p3_robot_id = robots.robot_id OR g.p4_robot_id = robots.robot_id)"
+                "     AND (g.result = 'DRAW' OR (g.winner_seat = 0 AND g.winner = 'NONE'))"
+                " );");
+    execSql(db, "UPDATE robots SET losses = CASE WHEN games_played >= wins + draws THEN games_played - wins - draws ELSE 0 END;");
+}
+
 } // namespace
 
 /* ------------------------------------------------------------------ */
@@ -1898,55 +1964,7 @@ bool AccountStore::openOrCreate(const std::string &path, std::string &error)
                         " owner_avatar_snapshot = COALESCE((SELECT avatar_url FROM players WHERE player_id = robots.owner_player_id), '')"
                         " WHERE owner_uuid_snapshot = '' OR owner_handle_snapshot = '';");
 
-            // Backfill robot attribution and clean player IDs in games for seats 1..4
-            execSql(db, "UPDATE games SET"
-                        " p1_robot_id = (SELECT r.robot_id FROM robots r WHERE r.robot_name = games.p1_handle COLLATE NOCASE LIMIT 1)"
-                        " WHERE p1_robot_id = 0 AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p1_handle COLLATE NOCASE);");
-            execSql(db, "UPDATE games SET"
-                        " p1_player_id = NULL"
-                        " WHERE p1_robot_id > 0 AND p1_player_id IS NOT NULL AND EXISTS ("
-                        "   SELECT 1 FROM players p WHERE p.player_id = games.p1_player_id AND LOWER(games.p1_handle) != LOWER(p.handle)"
-                        " );");
-
-            execSql(db, "UPDATE games SET"
-                        " p2_robot_id = (SELECT r.robot_id FROM robots r WHERE r.robot_name = games.p2_handle COLLATE NOCASE LIMIT 1)"
-                        " WHERE p2_robot_id = 0 AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p2_handle COLLATE NOCASE);");
-            execSql(db, "UPDATE games SET"
-                        " p2_player_id = NULL"
-                        " WHERE p2_robot_id > 0 AND p2_player_id IS NOT NULL AND EXISTS ("
-                        "   SELECT 1 FROM players p WHERE p.player_id = games.p2_player_id AND LOWER(games.p2_handle) != LOWER(p.handle)"
-                        " );");
-
-            execSql(db, "UPDATE games SET"
-                        " p3_robot_id = (SELECT r.robot_id FROM robots r WHERE r.robot_name = games.p3_handle COLLATE NOCASE LIMIT 1)"
-                        " WHERE p3_robot_id = 0 AND games.p3_handle != '' AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p3_handle COLLATE NOCASE);");
-            execSql(db, "UPDATE games SET"
-                        " p3_player_id = NULL"
-                        " WHERE p3_robot_id > 0 AND p3_player_id IS NOT NULL AND EXISTS ("
-                        "   SELECT 1 FROM players p WHERE p.player_id = games.p3_player_id AND LOWER(games.p3_handle) != LOWER(p.handle)"
-                        " );");
-
-            execSql(db, "UPDATE games SET"
-                        " p4_robot_id = (SELECT r.robot_id FROM robots r WHERE r.robot_name = games.p4_handle COLLATE NOCASE LIMIT 1)"
-                        " WHERE p4_robot_id = 0 AND games.p4_handle != '' AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p4_handle COLLATE NOCASE);");
-            execSql(db, "UPDATE games SET"
-                        " p4_player_id = NULL"
-                        " WHERE p4_robot_id > 0 AND p4_player_id IS NOT NULL AND EXISTS ("
-                        "   SELECT 1 FROM players p WHERE p.player_id = games.p4_player_id AND LOWER(games.p4_handle) != LOWER(p.handle)"
-                        " );");
-
-            // Reconcile robot games_played count against archived games if undercounted
-            execSql(db, "UPDATE robots SET games_played = ("
-                        "   SELECT COUNT(*) FROM games WHERE p1_robot_id = robots.robot_id"
-                        "     OR p2_robot_id = robots.robot_id"
-                        "     OR p3_robot_id = robots.robot_id"
-                        "     OR p4_robot_id = robots.robot_id"
-                        " ) WHERE games_played < ("
-                        "   SELECT COUNT(*) FROM games WHERE p1_robot_id = robots.robot_id"
-                        "     OR p2_robot_id = robots.robot_id"
-                        "     OR p3_robot_id = robots.robot_id"
-                        "     OR p4_robot_id = robots.robot_id"
-                        " );");
+            reconcileRobotStatsLocked(db);
             execSql(db, "CREATE TABLE IF NOT EXISTS lobby_chat_logs ("
                         " seq INTEGER PRIMARY KEY,"
                         " sender_uuid TEXT NOT NULL,"
@@ -3701,6 +3719,20 @@ bool AccountStore::recordRobotGameOutcome(int64_t robotId, GameOutcome outcome)
     return sqlite3_changes(_db) > 0;
 }
 
+bool AccountStore::reconcileRobotStats()
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        return false;
+    }
+    reconcileRobotStatsLocked(_db);
+    return tx.commit();
+}
+
 bool AccountStore::leaderboard(const std::string &mode, int limit,
                                std::vector<LeaderboardEntry> &out)
 {
@@ -3849,13 +3881,37 @@ bool AccountStore::purgeArchivedGame(const std::string &gameId,
         errorOut = "tx_begin_failed";
         return false;
     }
+    int64_t pIds[5] = {0, 0, 0, 0, 0};
+    int64_t rIds[5] = {0, 0, 0, 0, 0};
+    std::string result;
+    int winnerSeat = 0;
+    std::string winner;
+    std::string source;
     {
-        Stmt checkStmt(_db, "SELECT game_id FROM games WHERE game_id = ?1");
+        Stmt checkStmt(_db,
+            "SELECT COALESCE(p1_player_id, 0), COALESCE(p2_player_id, 0),"
+            " COALESCE(p3_player_id, 0), COALESCE(p4_player_id, 0),"
+            " COALESCE(p1_robot_id, 0), COALESCE(p2_robot_id, 0),"
+            " COALESCE(p3_robot_id, 0), COALESCE(p4_robot_id, 0),"
+            " result, winner_seat, winner, source"
+            " FROM games WHERE game_id = ?1");
         checkStmt.bindText(1, gameId);
         if (checkStmt.step() != SQLITE_ROW) {
             errorOut = "game_not_found";
             return false;
         }
+        pIds[1] = checkStmt.colInt(0);
+        pIds[2] = checkStmt.colInt(1);
+        pIds[3] = checkStmt.colInt(2);
+        pIds[4] = checkStmt.colInt(3);
+        rIds[1] = checkStmt.colInt(4);
+        rIds[2] = checkStmt.colInt(5);
+        rIds[3] = checkStmt.colInt(6);
+        rIds[4] = checkStmt.colInt(7);
+        result = checkStmt.colText(8);
+        winnerSeat = static_cast<int>(checkStmt.colInt(9));
+        winner = checkStmt.colText(10);
+        source = checkStmt.colText(11);
     }
     {
         Stmt delStmt(_db, "DELETE FROM games WHERE game_id = ?1");
@@ -3865,6 +3921,53 @@ bool AccountStore::purgeArchivedGame(const std::string &gameId,
             return false;
         }
     }
+    reconcileRobotStatsLocked(_db);
+
+    bool hasRobot = (rIds[1] > 0 || rIds[2] > 0 || rIds[3] > 0 || rIds[4] > 0);
+    if (!hasRobot && source == "online") {
+        for (int seat = 1; seat <= 4; ++seat) {
+            int64_t pid = pIds[seat];
+            if (pid <= 0) {
+                continue;
+            }
+            bool isDraw = (result == "DRAW" || (winnerSeat == 0 && winner == "NONE"));
+            bool isWin = false;
+            if (!isDraw) {
+                if (result == "TEAM_13_WIN") {
+                    isWin = (seat == 1 || seat == 3);
+                } else if (result == "TEAM_24_WIN") {
+                    isWin = (seat == 2 || seat == 4);
+                } else if (result == "P1_WIN") {
+                    isWin = (seat == 1);
+                } else if (result == "P2_WIN") {
+                    isWin = (seat == 2);
+                } else if (winnerSeat > 0) {
+                    isWin = (seat == winnerSeat);
+                } else if (winner == "A") {
+                    isWin = (seat == 1);
+                } else if (winner == "B") {
+                    isWin = (seat == 2);
+                } else if (winner == "C") {
+                    isWin = (seat == 3);
+                } else if (winner == "D") {
+                    isWin = (seat == 4);
+                }
+            }
+            Stmt updPlayer(_db,
+                "UPDATE players SET"
+                " games_played = MAX(0, games_played - 1),"
+                " wins = MAX(0, wins - ?1),"
+                " losses = MAX(0, losses - ?2),"
+                " draws = MAX(0, draws - ?3)"
+                " WHERE player_id = ?4");
+            updPlayer.bindInt(1, (!isDraw && isWin) ? 1 : 0);
+            updPlayer.bindInt(2, (!isDraw && !isWin) ? 1 : 0);
+            updPlayer.bindInt(3, isDraw ? 1 : 0);
+            updPlayer.bindInt(4, pid);
+            updPlayer.step();
+        }
+    }
+
     if (!tx.commit()) {
         errorOut = "tx_commit_failed";
         return false;
