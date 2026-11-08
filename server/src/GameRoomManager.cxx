@@ -1853,7 +1853,8 @@ RoomResult GameRoomManager::joinTable(const std::string &roomId,
         !ensurePlayerLocked(playerId)) {
         return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
     }
-    if (!r->config.allowRobots && isRobotActorId(playerId)) {
+    if (!r->config.allowRobots && isRobotActorId(playerId) &&
+        r->hostId != playerId) {
         return fail(RoomCode::ROBOTS_NOT_ALLOWED, "This table does not allow robots");
     }
     int64_t now = nowMs();

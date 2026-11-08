@@ -87,6 +87,14 @@ public:
     void setOnMatchmakingRequested(std::function<void()> cb);
     void setOnMatchFoundCallback(
         std::function<void(const std::string &roomId)> cb);
+    void setOnChatAppendedCallback(
+        std::function<void(const LobbyChatEntry &)> cb) {
+        _onChatAppendedCallback = std::move(cb);
+    }
+    void setOnChatTranscriptRebuiltCallback(
+        std::function<void()> cb) {
+        _onChatTranscriptRebuiltCallback = std::move(cb);
+    }
 
     void updateAuthUiState();
 
@@ -187,6 +195,8 @@ private:
     std::function<void()> _onOpenActiveBoardRequested;
     std::function<void()> _onMatchmakingRequested;
     std::function<void(const std::string &roomId)> _onMatchFoundCallback;
+    std::function<void(const LobbyChatEntry &)> _onChatAppendedCallback;
+    std::function<void()> _onChatTranscriptRebuiltCallback;
 };
 
 } // namespace octi

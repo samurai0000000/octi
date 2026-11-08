@@ -100,7 +100,9 @@ const char kSchemaSql[] =
     " token_deleted INTEGER NOT NULL DEFAULT 0,"
     " owner_uuid_snapshot TEXT NOT NULL DEFAULT '',"
     " owner_handle_snapshot TEXT NOT NULL DEFAULT '',"
-    " owner_avatar_snapshot TEXT NOT NULL DEFAULT ''"
+    " owner_avatar_snapshot TEXT NOT NULL DEFAULT '',"
+    " name_changed_at INTEGER NOT NULL DEFAULT 0,"
+    " robot_url TEXT NOT NULL DEFAULT ''"
     ");"
     "CREATE INDEX IF NOT EXISTS idx_robots_owner ON robots(owner_player_id);"
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_robots_active_name"
@@ -1586,6 +1588,98 @@ bool AccountStore::validRobotDescription(const std::string &desc)
     return true;
 }
 
+bool AccountStore::validRobotUrlSyntax(const std::string &url)
+{
+    if (url.empty()) {
+        return true;
+    }
+    if (url.size() > 256) {
+        return false;
+    }
+    // Scheme check: case-insensitive http:// or https://
+    std::string lower;
+    lower.reserve(url.size());
+    for (char c : url) {
+        lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    }
+    bool isHttp = (lower.rfind("http://", 0) == 0);
+    bool isHttps = (lower.rfind("https://", 0) == 0);
+    if (!isHttp && !isHttps) {
+        return false;
+    }
+    // No query string ('?') or fragment ('#') or userinfo ('@')
+    if (url.find('?') != std::string::npos ||
+        url.find('#') != std::string::npos ||
+        url.find('@') != std::string::npos) {
+        return false;
+    }
+    // No whitespace, control, or non-ASCII characters
+    for (size_t i = 0; i < url.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(url[i]);
+        if (c <= 0x20 || c >= 0x7F) {
+            return false;
+        }
+    }
+    // No HTML/XSS/injection characters
+    static const char kBannedChars[] = "<>\"'`\\";
+    if (url.find_first_of(kBannedChars) != std::string::npos) {
+        return false;
+    }
+    // No percent-encoded trick sequences
+    static const char *kBannedHex[] = {
+        "%00", "%0a", "%0d", "%20", "%3c", "%3e", "%22", "%27", "%23", "%3f"
+    };
+    for (const char *hex : kBannedHex) {
+        if (lower.find(hex) != std::string::npos) {
+            return false;
+        }
+    }
+
+    // Parse authority: host[:port]
+    size_t schemeEnd = isHttps ? 8 : 7;
+    size_t pathStart = url.find('/', schemeEnd);
+    std::string auth = (pathStart == std::string::npos)
+        ? url.substr(schemeEnd)
+        : url.substr(schemeEnd, pathStart - schemeEnd);
+    if (auth.empty()) {
+        return false;
+    }
+    size_t colon = auth.find(':');
+    std::string host = (colon == std::string::npos) ? auth : auth.substr(0, colon);
+    if (host.empty() || host.size() > 253) {
+        return false;
+    }
+    if (colon != std::string::npos) {
+        std::string portStr = auth.substr(colon + 1);
+        if (portStr.empty() || portStr.size() > 5) {
+            return false;
+        }
+        for (char pc : portStr) {
+            if (pc < '0' || pc > '9') return false;
+        }
+        long pVal = std::strtol(portStr.c_str(), nullptr, 10);
+        if (pVal <= 0 || pVal > 65535) {
+            return false;
+        }
+    }
+    // Hostname character syntax: letters, digits, dots, dashes
+    if (host.front() == '.' || host.front() == '-' ||
+        host.back() == '.' || host.back() == '-') {
+        return false;
+    }
+    if (host.find("..") != std::string::npos) {
+        return false;
+    }
+    for (char hc : host) {
+        bool hok = (hc >= 'A' && hc <= 'Z') || (hc >= 'a' && hc <= 'z') ||
+                   (hc >= '0' && hc <= '9') || hc == '.' || hc == '-';
+        if (!hok) {
+            return false;
+        }
+    }
+    return true;
+}
+
 int64_t AccountStore::nowSec() const
 {
     return _clock();
@@ -1893,6 +1987,12 @@ bool AccountStore::openOrCreate(const std::string &path, std::string &error)
                 }
                 if (rcols.find("owner_avatar_snapshot") == rcols.end()) {
                     execSql(db, "ALTER TABLE robots ADD COLUMN owner_avatar_snapshot TEXT NOT NULL DEFAULT '';");
+                }
+                if (rcols.find("name_changed_at") == rcols.end()) {
+                    execSql(db, "ALTER TABLE robots ADD COLUMN name_changed_at INTEGER NOT NULL DEFAULT 0;");
+                }
+                if (rcols.find("robot_url") == rcols.end()) {
+                    execSql(db, "ALTER TABLE robots ADD COLUMN robot_url TEXT NOT NULL DEFAULT '';");
                 }
             }
 
@@ -3060,7 +3160,8 @@ bool AccountStore::listUsers(const UserDirectoryFilter &filter,
 
 CreateRobotResult AccountStore::createRobot(int64_t ownerPlayerId,
                                             const std::string &robotName,
-                                            const std::string &description)
+                                            const std::string &description,
+                                            const std::string &robotUrl)
 {
     CreateRobotResult res;
     if (!validRobotName(robotName)) {
@@ -3071,6 +3172,11 @@ CreateRobotResult AccountStore::createRobot(int64_t ownerPlayerId,
     if (!validRobotDescription(description)) {
         res.status = RobotStatus::INVALID_ROBOT_DESCRIPTION;
         res.errorMessage = "invalid robot description";
+        return res;
+    }
+    if (!robotUrl.empty() && !validRobotUrlSyntax(robotUrl)) {
+        res.status = RobotStatus::INVALID_ROBOT_URL;
+        res.errorMessage = "invalid robot URL";
         return res;
     }
 
@@ -3142,8 +3248,9 @@ CreateRobotResult AccountStore::createRobot(int64_t ownerPlayerId,
 
     Stmt ins(_db, "INSERT INTO robots(robot_uuid, owner_player_id, robot_name, description,"
                   " token, token_hash, token_prefix, created_at, revoked, revoked_at,"
-                  " token_deleted, owner_uuid_snapshot, owner_handle_snapshot, owner_avatar_snapshot)"
-                  " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, 0, 0, ?9, ?10, ?11)");
+                  " token_deleted, owner_uuid_snapshot, owner_handle_snapshot, owner_avatar_snapshot,"
+                  " name_changed_at, robot_url)"
+                  " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, 0, 0, ?9, ?10, ?11, 0, ?12)");
     ins.bindText(1, rUuid);
     ins.bindInt(2, ownerPlayerId);
     ins.bindText(3, robotName);
@@ -3155,6 +3262,7 @@ CreateRobotResult AccountStore::createRobot(int64_t ownerPlayerId,
     ins.bindText(9, owner.uuid);
     ins.bindText(10, owner.handle);
     ins.bindText(11, owner.avatarUrl);
+    ins.bindText(12, robotUrl);
 
     if (ins.step() != SQLITE_DONE || !tx.commit()) {
         res.status = RobotStatus::DB_ERROR;
@@ -3183,16 +3291,74 @@ CreateRobotResult AccountStore::createRobot(int64_t ownerPlayerId,
     res.robot.revoked = false;
     res.robot.revokedAt = 0;
     res.robot.tokenDeleted = false;
+    res.robot.nameChangedAt = 0;
+    res.robot.robotUrl = robotUrl;
     return res;
+}
+
+static bool loadRobotByIdLocked(sqlite3 *db, int64_t robotId, RobotRecord &out)
+{
+    if (!db || robotId <= 0) return false;
+    Stmt s(db, "SELECT r.robot_id, r.robot_uuid, r.owner_player_id,"
+               " COALESCE(NULLIF(p.uuid, ''), r.owner_uuid_snapshot),"
+               " COALESCE(NULLIF(p.handle, ''), r.owner_handle_snapshot),"
+               " COALESCE(NULLIF(p.avatar_url, ''), r.owner_avatar_snapshot),"
+               " r.robot_name, r.description, r.token, r.token_prefix, r.games_played, r.wins, r.losses, r.draws, r.created_at,"
+               " r.revoked, r.revoked_at, r.token_deleted, r.name_changed_at, r.robot_url FROM robots r"
+               " LEFT JOIN players p ON p.player_id = r.owner_player_id"
+               " WHERE r.robot_id = ?1");
+    s.bindInt(1, robotId);
+    if (s.step() != SQLITE_ROW) return false;
+    out.robotId = s.colInt(0);
+    out.robotUuid = s.colText(1);
+    out.ownerPlayerId = s.colInt(2);
+    out.ownerUuid = s.colText(3);
+    out.ownerHandle = s.colText(4);
+    out.ownerAvatarUrl = s.colText(5);
+    out.robotName = s.colText(6);
+    out.description = s.colText(7);
+    out.token = s.colText(8);
+    out.tokenPrefix = s.colText(9);
+    out.gamesPlayed = s.colInt(10);
+    out.wins = s.colInt(11);
+    out.losses = s.colInt(12);
+    out.draws = s.colInt(13);
+    out.createdAt = s.colInt(14);
+    out.revoked = s.colInt(15) != 0;
+    out.revokedAt = s.colInt(16);
+    out.tokenDeleted = s.colInt(17) != 0;
+    out.nameChangedAt = s.colInt(18);
+    out.robotUrl = s.colText(19);
+    return true;
 }
 
 RobotStatus AccountStore::updateRobotDescription(int64_t ownerPlayerId,
                                                  const std::string &robotUuidOrName,
                                                  const std::string &description)
 {
-    if (!validRobotDescription(description)) {
+    return updateRobot(ownerPlayerId, robotUuidOrName, false, "", true, description, false, "", nullptr);
+}
+
+RobotStatus AccountStore::updateRobot(int64_t ownerPlayerId,
+                                      const std::string &robotUuidOrName,
+                                      bool setRobotName,
+                                      const std::string &robotName,
+                                      bool setDescription,
+                                      const std::string &description,
+                                      bool setRobotUrl,
+                                      const std::string &robotUrl,
+                                      RobotRecord *updated)
+{
+    if (setRobotName && !validRobotName(robotName)) {
+        return RobotStatus::INVALID_ROBOT_NAME;
+    }
+    if (setDescription && !validRobotDescription(description)) {
         return RobotStatus::INVALID_ROBOT_DESCRIPTION;
     }
+    if (setRobotUrl && !validRobotUrlSyntax(robotUrl)) {
+        return RobotStatus::INVALID_ROBOT_URL;
+    }
+
     std::lock_guard<std::mutex> lock(_mutex);
     if (!_db) {
         return RobotStatus::DB_ERROR;
@@ -3204,8 +3370,10 @@ RobotStatus AccountStore::updateRobotDescription(int64_t ownerPlayerId,
 
     int64_t robotId = 0;
     bool revoked = false;
+    std::string currentName;
+    int64_t currentNameChangedAt = 0;
     {
-        Stmt find(_db, "SELECT robot_id, revoked FROM robots WHERE owner_player_id = ?1"
+        Stmt find(_db, "SELECT robot_id, revoked, robot_name, name_changed_at FROM robots WHERE owner_player_id = ?1"
                        " AND (robot_uuid = ?2 OR robot_name = ?2 COLLATE NOCASE)");
         find.bindInt(1, ownerPlayerId);
         find.bindText(2, robotUuidOrName);
@@ -3214,17 +3382,148 @@ RobotStatus AccountStore::updateRobotDescription(int64_t ownerPlayerId,
         }
         robotId = find.colInt(0);
         revoked = find.colInt(1) != 0;
+        currentName = find.colText(2);
+        currentNameChangedAt = find.colInt(3);
     }
 
     if (revoked) {
         return RobotStatus::ALREADY_REVOKED;
     }
 
-    Stmt upd(_db, "UPDATE robots SET description = ?1 WHERE robot_id = ?2");
-    upd.bindText(1, description);
-    upd.bindInt(2, robotId);
-    if (upd.step() != SQLITE_DONE || !tx.commit()) {
+    int64_t now = nowSec();
+    bool nameActuallyChanged = setRobotName && (robotName != currentName);
+    int64_t newNameChangedAt = currentNameChangedAt;
+
+    if (nameActuallyChanged) {
+        if (currentNameChangedAt > 0 &&
+            (now - currentNameChangedAt) < kHandleChangeCooldownSec) {
+            return RobotStatus::ROBOT_NAME_RATE_LIMITED;
+        }
+        Stmt chk(_db, "SELECT 1 FROM robots WHERE robot_name = ?1 COLLATE NOCASE AND revoked = 0 AND robot_id != ?2");
+        chk.bindText(1, robotName);
+        chk.bindInt(2, robotId);
+        if (chk.step() == SQLITE_ROW) {
+            return RobotStatus::ROBOT_NAME_TAKEN;
+        }
+        newNameChangedAt = now;
+    }
+
+    std::string sql = "UPDATE robots SET ";
+    std::vector<std::string> sets;
+    if (setRobotName) {
+        sets.push_back("robot_name = ?1, name_changed_at = ?2");
+    }
+    if (setDescription) {
+        sets.push_back("description = ?3");
+    }
+    if (setRobotUrl) {
+        sets.push_back("robot_url = ?4");
+    }
+    if (sets.empty()) {
+        return RobotStatus::OK;
+    }
+    for (size_t i = 0; i < sets.size(); ++i) {
+        if (i > 0) sql += ", ";
+        sql += sets[i];
+    }
+    sql += " WHERE robot_id = ?5";
+    Stmt upd(_db, sql.c_str());
+    if (setRobotName) {
+        upd.bindText(1, robotName);
+        upd.bindInt(2, newNameChangedAt);
+    }
+    if (setDescription) {
+        upd.bindText(3, description);
+    }
+    if (setRobotUrl) {
+        upd.bindText(4, robotUrl);
+    }
+    upd.bindInt(5, robotId);
+    if (upd.step() != SQLITE_DONE) {
         return RobotStatus::DB_ERROR;
+    }
+
+    if (nameActuallyChanged) {
+        Stmt selG(_db,
+            "SELECT game_id, p1_robot_id, p2_robot_id, p3_robot_id, p4_robot_id, "
+            "p1_handle, p2_handle, p3_handle, p4_handle, octi_transcript, transcript_json "
+            "FROM games WHERE p1_robot_id = ?1 OR p2_robot_id = ?1 OR p3_robot_id = ?1 OR p4_robot_id = ?1");
+        selG.bindInt(1, robotId);
+        struct GameUpdate {
+            std::string gameId;
+            std::string p1Handle, p2Handle, p3Handle, p4Handle;
+            std::string octiTranscript, transcriptJson;
+        };
+        std::vector<GameUpdate> toUpdate;
+        while (selG.step() == SQLITE_ROW) {
+            GameUpdate gu;
+            gu.gameId = selG.colText(0);
+            int64_t r1 = selG.colInt(1);
+            int64_t r2 = selG.colInt(2);
+            int64_t r3 = selG.colInt(3);
+            int64_t r4 = selG.colInt(4);
+            gu.p1Handle = selG.colText(5);
+            gu.p2Handle = selG.colText(6);
+            gu.p3Handle = selG.colText(7);
+            gu.p4Handle = selG.colText(8);
+            gu.octiTranscript = selG.colText(9);
+            gu.transcriptJson = selG.colText(10);
+            if (r1 == robotId) gu.p1Handle = robotName;
+            if (r2 == robotId) gu.p2Handle = robotName;
+            if (r3 == robotId) gu.p3Handle = robotName;
+            if (r4 == robotId) gu.p4Handle = robotName;
+
+            auto updateJson = [&](std::string &s) {
+                if (s.empty()) return;
+                try {
+                    auto j = nlohmann::json::parse(s);
+                    if (j.is_object()) {
+                        auto updatePlayers = [&](nlohmann::json &arr) {
+                            if (!arr.is_array()) return;
+                            for (auto &p : arr) {
+                                if (!p.is_object()) continue;
+                                int seat = p.value("seat", 0);
+                                if ((seat == 1 && r1 == robotId) ||
+                                    (seat == 2 && r2 == robotId) ||
+                                    (seat == 3 && r3 == robotId) ||
+                                    (seat == 4 && r4 == robotId)) {
+                                    p["handle"] = robotName;
+                                }
+                            }
+                        };
+                        if (j.contains("players")) updatePlayers(j["players"]);
+                        if (j.contains("game") && j["game"].is_object() && j["game"].contains("players")) {
+                            updatePlayers(j["game"]["players"]);
+                        }
+                        s = j.dump();
+                    }
+                } catch (...) {}
+            };
+            updateJson(gu.octiTranscript);
+            updateJson(gu.transcriptJson);
+            toUpdate.push_back(std::move(gu));
+        }
+        for (const auto &gu : toUpdate) {
+            Stmt updG(_db,
+                "UPDATE games SET p1_handle = ?1, p2_handle = ?2, p3_handle = ?3, p4_handle = ?4, "
+                "octi_transcript = ?5, transcript_json = ?6 WHERE game_id = ?7");
+            updG.bindText(1, gu.p1Handle);
+            updG.bindText(2, gu.p2Handle);
+            updG.bindText(3, gu.p3Handle);
+            updG.bindText(4, gu.p4Handle);
+            updG.bindText(5, gu.octiTranscript);
+            updG.bindText(6, gu.transcriptJson);
+            updG.bindText(7, gu.gameId);
+            updG.step();
+        }
+    }
+
+    if (!tx.commit()) {
+        return RobotStatus::DB_ERROR;
+    }
+
+    if (updated != nullptr) {
+        loadRobotByIdLocked(_db, robotId, *updated);
     }
     return RobotStatus::OK;
 }
@@ -3241,7 +3540,7 @@ bool AccountStore::listRobots(int64_t ownerPlayerId, std::vector<RobotRecord> &o
                 " COALESCE(NULLIF(p.handle, ''), r.owner_handle_snapshot),"
                 " COALESCE(NULLIF(p.avatar_url, ''), r.owner_avatar_snapshot),"
                 " r.robot_name, r.description, r.token, r.token_prefix, r.games_played, r.wins, r.losses, r.draws, r.created_at,"
-                " r.revoked, r.revoked_at, r.token_deleted FROM robots r"
+                " r.revoked, r.revoked_at, r.token_deleted, r.name_changed_at, r.robot_url FROM robots r"
                 " LEFT JOIN players p ON p.player_id = r.owner_player_id"
                 " WHERE r.owner_player_id = ?1 AND r.token_deleted = 0"
                 " ORDER BY r.revoked ASC, r.created_at DESC, r.robot_id DESC");
@@ -3267,6 +3566,8 @@ bool AccountStore::listRobots(int64_t ownerPlayerId, std::vector<RobotRecord> &o
         r.revoked = s.colInt(15) != 0;
         r.revokedAt = s.colInt(16);
         r.tokenDeleted = s.colInt(17) != 0;
+        r.nameChangedAt = s.colInt(18);
+        r.robotUrl = s.colText(19);
         out.push_back(r);
     }
     return rc == SQLITE_DONE;
@@ -3284,7 +3585,7 @@ bool AccountStore::listPublicRobotsByOwner(int64_t ownerPlayerId, std::vector<Ro
                 " COALESCE(NULLIF(p.handle, ''), r.owner_handle_snapshot),"
                 " COALESCE(NULLIF(p.avatar_url, ''), r.owner_avatar_snapshot),"
                 " r.robot_name, r.description, r.games_played, r.wins, r.losses, r.draws, r.created_at, r.revoked, r.revoked_at,"
-                " r.token_deleted"
+                " r.token_deleted, r.name_changed_at, r.robot_url"
                 " FROM robots r"
                 " LEFT JOIN players p ON p.player_id = r.owner_player_id"
                 " WHERE r.owner_player_id = ?1 AND (r.revoked = 0 OR r.games_played > 0)"
@@ -3311,6 +3612,8 @@ bool AccountStore::listPublicRobotsByOwner(int64_t ownerPlayerId, std::vector<Ro
         r.revoked = s.colInt(13) != 0;
         r.revokedAt = s.colInt(14);
         r.tokenDeleted = s.colInt(15) != 0;
+        r.nameChangedAt = s.colInt(16);
+        r.robotUrl = s.colText(17);
         out.push_back(r);
     }
     return rc == SQLITE_DONE;
@@ -3440,7 +3743,7 @@ RobotTokenValidation AccountStore::validateRobotToken(const std::string &rawToke
                 " COALESCE(NULLIF(p.handle, ''), r.owner_handle_snapshot),"
                 " COALESCE(NULLIF(p.avatar_url, ''), r.owner_avatar_snapshot),"
                 " r.robot_name, r.description, r.token, r.token_prefix, r.games_played, r.wins, r.losses, r.draws, r.created_at,"
-                " r.revoked, r.revoked_at, r.token_deleted FROM robots r"
+                " r.revoked, r.revoked_at, r.token_deleted, r.name_changed_at, r.robot_url FROM robots r"
                 " LEFT JOIN players p ON p.player_id = r.owner_player_id"
                 " WHERE r.token_hash = ?1 AND r.revoked = 0 AND r.token_deleted = 0");
     s.bindText(1, tokenHash);
@@ -3466,6 +3769,8 @@ RobotTokenValidation AccountStore::validateRobotToken(const std::string &rawToke
     res.robot.revoked = s.colInt(15) != 0;
     res.robot.revokedAt = s.colInt(16);
     res.robot.tokenDeleted = s.colInt(17) != 0;
+    res.robot.nameChangedAt = s.colInt(18);
+    res.robot.robotUrl = s.colText(19);
 
     if (!loadProfileById(_db, res.robot.ownerPlayerId, res.owner)) {
         return res;
@@ -3481,40 +3786,7 @@ RobotTokenValidation AccountStore::validateRobotToken(const std::string &rawToke
 bool AccountStore::getRobotById(int64_t robotId, RobotRecord &out)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    if (!_db || robotId <= 0) {
-        return false;
-    }
-    Stmt s(_db, "SELECT r.robot_id, r.robot_uuid, r.owner_player_id,"
-                " COALESCE(NULLIF(p.uuid, ''), r.owner_uuid_snapshot),"
-                " COALESCE(NULLIF(p.handle, ''), r.owner_handle_snapshot),"
-                " COALESCE(NULLIF(p.avatar_url, ''), r.owner_avatar_snapshot),"
-                " r.robot_name, r.description, r.token, r.token_prefix, r.games_played, r.wins, r.losses, r.draws, r.created_at,"
-                " r.revoked, r.revoked_at, r.token_deleted FROM robots r"
-                " LEFT JOIN players p ON p.player_id = r.owner_player_id"
-                " WHERE r.robot_id = ?1");
-    s.bindInt(1, robotId);
-    if (s.step() != SQLITE_ROW) {
-        return false;
-    }
-    out.robotId = s.colInt(0);
-    out.robotUuid = s.colText(1);
-    out.ownerPlayerId = s.colInt(2);
-    out.ownerUuid = s.colText(3);
-    out.ownerHandle = s.colText(4);
-    out.ownerAvatarUrl = s.colText(5);
-    out.robotName = s.colText(6);
-    out.description = s.colText(7);
-    out.token = s.colText(8);
-    out.tokenPrefix = s.colText(9);
-    out.gamesPlayed = s.colInt(10);
-    out.wins = s.colInt(11);
-    out.losses = s.colInt(12);
-    out.draws = s.colInt(13);
-    out.createdAt = s.colInt(14);
-    out.revoked = s.colInt(15) != 0;
-    out.revokedAt = s.colInt(16);
-    out.tokenDeleted = s.colInt(17) != 0;
-    return true;
+    return loadRobotByIdLocked(_db, robotId, out);
 }
 
 bool AccountStore::getRobotByUuid(const std::string &robotUuid, RobotRecord &out)
@@ -3528,7 +3800,7 @@ bool AccountStore::getRobotByUuid(const std::string &robotUuid, RobotRecord &out
                 " COALESCE(NULLIF(p.handle, ''), r.owner_handle_snapshot),"
                 " COALESCE(NULLIF(p.avatar_url, ''), r.owner_avatar_snapshot),"
                 " r.robot_name, r.description, r.token, r.token_prefix, r.games_played, r.wins, r.losses, r.draws, r.created_at,"
-                " r.revoked, r.revoked_at, r.token_deleted FROM robots r"
+                " r.revoked, r.revoked_at, r.token_deleted, r.name_changed_at, r.robot_url FROM robots r"
                 " LEFT JOIN players p ON p.player_id = r.owner_player_id"
                 " WHERE r.robot_uuid = ?1");
     s.bindText(1, robotUuid);
@@ -3553,6 +3825,8 @@ bool AccountStore::getRobotByUuid(const std::string &robotUuid, RobotRecord &out
     out.revoked = s.colInt(15) != 0;
     out.revokedAt = s.colInt(16);
     out.tokenDeleted = s.colInt(17) != 0;
+    out.nameChangedAt = s.colInt(18);
+    out.robotUrl = s.colText(19);
     return true;
 }
 
@@ -3567,7 +3841,7 @@ bool AccountStore::getRobotByName(const std::string &robotName, RobotRecord &out
                 " COALESCE(NULLIF(p.handle, ''), r.owner_handle_snapshot),"
                 " COALESCE(NULLIF(p.avatar_url, ''), r.owner_avatar_snapshot),"
                 " r.robot_name, r.description, r.games_played, r.wins, r.losses, r.draws, r.created_at,"
-                " r.revoked, r.revoked_at, r.token_deleted FROM robots r"
+                " r.revoked, r.revoked_at, r.token_deleted, r.name_changed_at, r.robot_url FROM robots r"
                 " LEFT JOIN players p ON p.player_id = r.owner_player_id"
                 " WHERE r.robot_name = ?1 COLLATE NOCASE"
                 " ORDER BY r.games_played DESC, r.revoked ASC, r.robot_id DESC LIMIT 1");
@@ -3593,6 +3867,8 @@ bool AccountStore::getRobotByName(const std::string &robotName, RobotRecord &out
     out.revoked = s.colInt(13) != 0;
     out.revokedAt = s.colInt(14);
     out.tokenDeleted = s.colInt(15) != 0;
+    out.nameChangedAt = s.colInt(16);
+    out.robotUrl = s.colText(17);
     return true;
 }
 
@@ -3656,7 +3932,7 @@ bool AccountStore::listPublicRobotsDirectory(const RobotDirectoryFilter &filter,
                       " COALESCE(NULLIF(p.handle, ''), r.owner_handle_snapshot),"
                       " COALESCE(NULLIF(p.avatar_url, ''), r.owner_avatar_snapshot),"
                       " r.robot_name, r.description, r.games_played, r.wins, r.losses, r.draws, r.created_at,"
-                      " r.revoked, r.revoked_at, r.token_deleted"
+                      " r.revoked, r.revoked_at, r.token_deleted, r.name_changed_at, r.robot_url"
                       " FROM robots r"
                       " LEFT JOIN players p ON p.player_id = r.owner_player_id" + whereClause +
                       orderBy +
@@ -3692,6 +3968,8 @@ bool AccountStore::listPublicRobotsDirectory(const RobotDirectoryFilter &filter,
         r.revoked = s.colInt(13) != 0;
         r.revokedAt = s.colInt(14);
         r.tokenDeleted = s.colInt(15) != 0;
+        r.nameChangedAt = s.colInt(16);
+        r.robotUrl = s.colText(17);
         out.push_back(r);
     }
     return rc == SQLITE_DONE;
@@ -4073,7 +4351,7 @@ bool AccountStore::listArchivedGames(const ArchiveFilter &filter,
     }
     int64_t playerId = 0;
     if (!filter.playerUuid.empty()) {
-        Stmt p(_db, "SELECT player_id FROM players WHERE uuid = ?1");
+        Stmt p(_db, "SELECT player_id FROM players WHERE uuid = ?1 OR handle = ?1 COLLATE NOCASE LIMIT 1");
         p.bindText(1, filter.playerUuid);
         int rc = p.step();
         if (rc == SQLITE_DONE) {
@@ -4087,7 +4365,7 @@ bool AccountStore::listArchivedGames(const ArchiveFilter &filter,
 
     int64_t robotId = filter.robotId;
     if (robotId <= 0 && !filter.robotUuid.empty()) {
-        Stmt r(_db, "SELECT robot_id FROM robots WHERE robot_uuid = ?1");
+        Stmt r(_db, "SELECT robot_id FROM robots WHERE robot_uuid = ?1 OR robot_name = ?1 COLLATE NOCASE LIMIT 1");
         r.bindText(1, filter.robotUuid);
         int rc = r.step();
         if (rc == SQLITE_DONE) {

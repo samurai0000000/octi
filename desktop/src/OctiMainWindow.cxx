@@ -411,6 +411,13 @@ OctiMainWindow::OctiMainWindow(
     _reservePanel->setMinimumWidth(260);
     _reservePanel->setMaximumWidth(330);
 
+    /* ---- Left Column Middle Container (Match Status, Proposals, Move History) ---- */
+    _leftMiddleContainer = new QWidget(_reservePanel);
+    _reservePanel->setMiddleOverlayWidget(_leftMiddleContainer);
+    QVBoxLayout *leftMiddleLayout = new QVBoxLayout(_leftMiddleContainer);
+    leftMiddleLayout->setContentsMargins(0, 0, 0, 0);
+    leftMiddleLayout->setSpacing(4);
+
     _boardCanvas = new OctiBoardCanvas(_boardPage);
     _boardCanvas->setMinimumSize(500, 500);
 
@@ -437,25 +444,10 @@ OctiMainWindow::OctiMainWindow(
             handleLocalOrOnlineMoveCommitted(moveNotation);
         });
 
-    /* ---- Right Side Panel (Move History / VCR, Proposals, Chat) ---- */
-    QWidget *rightSide = new QWidget(_boardPage);
-    _rightSide = rightSide;
-    rightSide->setMinimumWidth(320);
-    rightSide->setMaximumWidth(380);
-    QVBoxLayout *rightLayout = new QVBoxLayout(rightSide);
-    _rightLayout = rightLayout;
-    rightLayout->setContentsMargins(0, 0, 0, 0);
-    rightLayout->setSpacing(6);
+    const QString compactBtnCss = "QPushButton { padding: 4px 6px; font-size: 12px; }";
 
-    /* ---- Top Half: Status, Proposals, Move History, Actions ---- */
-    _rightTopHalfWidget = new QWidget(rightSide);
-    _rightTopHalfWidget->setObjectName("rightTopHalfWidget");
-    QVBoxLayout *topHalfLayout = new QVBoxLayout(_rightTopHalfWidget);
-    topHalfLayout->setContentsMargins(0, 0, 0, 0);
-    topHalfLayout->setSpacing(4);
-
-    /* 0. Match Status Card (PCE-D06 / PCE-D09) */
-    QGroupBox *statusBox = new QGroupBox("Match Status", _rightTopHalfWidget);
+    /* 0. Match Status Card inside Left Middle Container */
+    QGroupBox *statusBox = new QGroupBox("Match Status", _leftMiddleContainer);
     _statusBox = statusBox;
     QVBoxLayout *statusLayout = new QVBoxLayout(statusBox);
     statusLayout->setContentsMargins(6, 4, 6, 6);
@@ -467,10 +459,10 @@ OctiMainWindow::OctiMainWindow(
     _matchTurnStatusLabel->setWordWrap(true);
     statusLayout->addWidget(_matchModeLabel);
     statusLayout->addWidget(_matchTurnStatusLabel);
-    topHalfLayout->addWidget(statusBox);
+    leftMiddleLayout->addWidget(statusBox);
 
-    /* 0b. Online Waiting-Room Banner (shown when phase == WAITING_FOR_PLAYERS) */
-    _waitingRoomBannerWidget = new QGroupBox("Waiting for Players", _rightTopHalfWidget);
+    /* 0b. Online Waiting-Room Banner inside Left Middle Container */
+    _waitingRoomBannerWidget = new QGroupBox("Waiting for Players", _leftMiddleContainer);
     QVBoxLayout *waitLayout = new QVBoxLayout(_waitingRoomBannerWidget);
     waitLayout->setContentsMargins(6, 4, 6, 6);
     waitLayout->setSpacing(4);
@@ -492,14 +484,46 @@ OctiMainWindow::OctiMainWindow(
     waitBtnRow->addWidget(_leaveWaitingTableBtn);
     waitLayout->addLayout(waitBtnRow);
     _waitingRoomBannerWidget->setVisible(false);
-    topHalfLayout->addWidget(_waitingRoomBannerWidget);
+    leftMiddleLayout->addWidget(_waitingRoomBannerWidget);
 
-    /* 1. Move History & VCR Replay */
-    QGroupBox *historyBox = new QGroupBox("Move History • VCR Replay", _rightTopHalfWidget);
+    /* 0c. Active Proposal Banner inside Left Middle Container */
+    _proposalBannerWidget = new QGroupBox("Pending Proposal", _leftMiddleContainer);
+    QVBoxLayout *propLayout = new QVBoxLayout(_proposalBannerWidget);
+    propLayout->setContentsMargins(6, 4, 6, 6);
+    propLayout->setSpacing(4);
+    _proposalBannerLabel = new QLabel("No active proposal.", _proposalBannerWidget);
+    _proposalBannerLabel->setWordWrap(true);
+    propLayout->addWidget(_proposalBannerLabel);
+    QHBoxLayout *propRespRow = new QHBoxLayout();
+    propRespRow->setSpacing(4);
+    _acceptProposalBtn = new QPushButton("Accept", _proposalBannerWidget);
+    _acceptProposalBtn->setStyleSheet(compactBtnCss);
+    _declineProposalBtn = new QPushButton("Decline", _proposalBannerWidget);
+    _declineProposalBtn->setStyleSheet(compactBtnCss);
+    propRespRow->addWidget(_acceptProposalBtn);
+    propRespRow->addWidget(_declineProposalBtn);
+    propLayout->addLayout(propRespRow);
+    _proposalBannerWidget->setVisible(false);
+    leftMiddleLayout->addWidget(_proposalBannerWidget);
+
+    /* 1. Move History & VCR Replay Card inside Left Middle Container */
+    QGroupBox *historyBox = new QGroupBox("Move History", _leftMiddleContainer);
     _historyBox = historyBox;
     QVBoxLayout *histLayout = new QVBoxLayout(historyBox);
     histLayout->setContentsMargins(6, 4, 6, 6);
     histLayout->setSpacing(4);
+
+    QHBoxLayout *histHeaderRow = new QHBoxLayout();
+    QLabel *histTitle = new QLabel("Move History", historyBox);
+    histTitle->setStyleSheet("font-weight: bold; font-size: 12px;");
+    _exportNotationBtn = new QPushButton("Export", historyBox);
+    _exportNotationBtn->setToolTip("Export Match Notation / FEN...");
+    _exportNotationBtn->setStyleSheet(compactBtnCss);
+    histHeaderRow->addWidget(histTitle);
+    histHeaderRow->addStretch(1);
+    histHeaderRow->addWidget(_exportNotationBtn);
+    histLayout->addLayout(histHeaderRow);
+
     _moveHistoryList = new QListWidget(historyBox);
     _moveHistoryList->setMinimumHeight(68);
     _moveHistoryList->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -530,7 +554,6 @@ OctiMainWindow::OctiMainWindow(
         }
     });
 
-    const QString compactBtnCss = "QPushButton { padding: 4px 6px; font-size: 12px; }";
     QHBoxLayout *vcrRow = new QHBoxLayout();
     vcrRow->setSpacing(4);
     _vcrFirstBtn = new QPushButton("|<<", historyBox);
@@ -539,20 +562,20 @@ OctiMainWindow::OctiMainWindow(
     _vcrPrevBtn = new QPushButton("< Prev", historyBox);
     _vcrPrevBtn->setToolTip("Previous Ply");
     _vcrPrevBtn->setStyleSheet(compactBtnCss);
+    _vcrPlyLabel = new QLabel("Ply 0/0", historyBox);
+    _vcrPlyLabel->setStyleSheet("font-size: 11px; font-weight: bold; padding: 0 4px;");
+    _vcrPlyLabel->setAlignment(Qt::AlignCenter);
     _vcrNextBtn = new QPushButton("Next >", historyBox);
     _vcrNextBtn->setToolTip("Next Ply");
     _vcrNextBtn->setStyleSheet(compactBtnCss);
     _vcrLastBtn = new QPushButton(">>|", historyBox);
     _vcrLastBtn->setToolTip("Return to Live / Latest Ply");
     _vcrLastBtn->setStyleSheet(compactBtnCss);
-    _exportNotationBtn = new QPushButton("Export", historyBox);
-    _exportNotationBtn->setToolTip("Export Match Notation / FEN...");
-    _exportNotationBtn->setStyleSheet(compactBtnCss);
     vcrRow->addWidget(_vcrFirstBtn);
     vcrRow->addWidget(_vcrPrevBtn);
+    vcrRow->addWidget(_vcrPlyLabel);
     vcrRow->addWidget(_vcrNextBtn);
     vcrRow->addWidget(_vcrLastBtn);
-    vcrRow->addWidget(_exportNotationBtn);
     histLayout->addLayout(vcrRow);
 
     _fenStatusLabel = new QLabel(historyBox);
@@ -560,91 +583,100 @@ OctiMainWindow::OctiMainWindow(
     _fenStatusLabel->setTextInteractionFlags(
         Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
     _fenStatusLabel->setVisible(false);
-    topHalfLayout->addWidget(historyBox, 1);
+    histLayout->addWidget(_fenStatusLabel);
 
-    /* 2. Active Proposal Banner & Game Action Buttons */
-    _proposalBannerWidget = new QGroupBox("Pending Proposal", _rightTopHalfWidget);
-    QVBoxLayout *propLayout = new QVBoxLayout(_proposalBannerWidget);
-    propLayout->setContentsMargins(6, 4, 6, 6);
-    propLayout->setSpacing(4);
-    _proposalBannerLabel = new QLabel("No active proposal.", _proposalBannerWidget);
-    _proposalBannerLabel->setWordWrap(true);
-    propLayout->addWidget(_proposalBannerLabel);
-    QHBoxLayout *propRespRow = new QHBoxLayout();
-    propRespRow->setSpacing(4);
-    _acceptProposalBtn = new QPushButton("Accept", _proposalBannerWidget);
-    _acceptProposalBtn->setStyleSheet(compactBtnCss);
-    _declineProposalBtn = new QPushButton("Decline", _proposalBannerWidget);
-    _declineProposalBtn->setStyleSheet(compactBtnCss);
-    propRespRow->addWidget(_acceptProposalBtn);
-    propRespRow->addWidget(_declineProposalBtn);
-    propLayout->addLayout(propRespRow);
-    _proposalBannerWidget->setVisible(false);
-    topHalfLayout->addWidget(_proposalBannerWidget);
+    leftMiddleLayout->addWidget(historyBox, 1);
 
-    QGroupBox *actionsBox = new QGroupBox("Match Actions", _rightTopHalfWidget);
-    _actionsBox = actionsBox;
-    QVBoxLayout *actLayout = new QVBoxLayout(actionsBox);
-    actLayout->setContentsMargins(6, 4, 6, 6);
-    actLayout->setSpacing(4);
-    QHBoxLayout *actRow1 = new QHBoxLayout();
-    actRow1->setSpacing(4);
-    _sidebarNewGameBtn = new QPushButton("New Game...", actionsBox);
-    _sidebarNewGameBtn->setStyleSheet(compactBtnCss);
-    _offerDrawBtn = new QPushButton("Offer Draw", actionsBox);
-    _offerDrawBtn->setStyleSheet(compactBtnCss);
-    _pauseResumeBtn = new QPushButton("Pause", actionsBox);
-    _pauseResumeBtn->setStyleSheet(compactBtnCss);
-    _claimForfeitBtn = new QPushButton("Forfeit", actionsBox);
-    _claimForfeitBtn->setStyleSheet(compactBtnCss);
-    _undoRequestBtn = new QPushButton("Undo", actionsBox);
-    _undoRequestBtn->setStyleSheet(compactBtnCss);
-    actRow1->addWidget(_sidebarNewGameBtn);
-    actRow1->addWidget(_offerDrawBtn);
-    actRow1->addWidget(_pauseResumeBtn);
-    actRow1->addWidget(_claimForfeitBtn);
-    actRow1->addWidget(_undoRequestBtn);
-    actLayout->addLayout(actRow1);
+    /* ---- Right Side Panel (Lobby Chat, Table Chat, Compact Match Actions) ---- */
+    QWidget *rightSide = new QWidget(_boardPage);
+    _rightSide = rightSide;
+    rightSide->setMinimumWidth(320);
+    rightSide->setMaximumWidth(380);
+    QVBoxLayout *rightLayout = new QVBoxLayout(rightSide);
+    _rightLayout = rightLayout;
+    rightLayout->setContentsMargins(0, 0, 0, 0);
+    rightLayout->setSpacing(6);
 
-    QHBoxLayout *actRow2 = new QHBoxLayout();
-    actRow2->setSpacing(4);
-    _resignBtn = new QPushButton("Resign", actionsBox);
-    _resignBtn->setStyleSheet(compactBtnCss);
-    _leaveTableBtn = new QPushButton("Leave Table", actionsBox);
-    _leaveTableBtn->setStyleSheet(compactBtnCss);
-    _moderationBtn = new QPushButton("Moderation", actionsBox);
-    _moderationBtn->setStyleSheet(compactBtnCss);
-    actRow2->addWidget(_resignBtn);
-    actRow2->addWidget(_leaveTableBtn);
-    actRow2->addWidget(_moderationBtn);
-    actLayout->addLayout(actRow2);
-    topHalfLayout->addWidget(actionsBox);
+    /* 1. Top Half: Lobby Chat • Global (Always visible on Board view) */
+    _boardLobbyChatBox = new QGroupBox("Lobby Chat • Global", rightSide);
+    _boardLobbyChatBox->setObjectName("boardLobbyChatBox");
+    _rightTopHalfWidget = _boardLobbyChatBox;
+    QVBoxLayout *lobbyChatLayout = new QVBoxLayout(_boardLobbyChatBox);
+    lobbyChatLayout->setContentsMargins(6, 4, 6, 6);
+    lobbyChatLayout->setSpacing(4);
 
-    rightLayout->addWidget(_rightTopHalfWidget, 3);
+    QHBoxLayout *lobbyHeader = new QHBoxLayout();
+    QLabel *lobbyTitle = new QLabel("Lobby Chat", _boardLobbyChatBox);
+    lobbyTitle->setStyleSheet("font-weight: bold; font-size: 12px;");
+    QLabel *lobbySub = new QLabel("Global", _boardLobbyChatBox);
+    lobbySub->setStyleSheet("font-size: 11px; color: #8b949e;");
+    lobbyHeader->addWidget(lobbyTitle);
+    lobbyHeader->addSpacing(6);
+    lobbyHeader->addWidget(lobbySub);
+    lobbyHeader->addStretch(1);
+    lobbyChatLayout->addLayout(lobbyHeader);
 
-    /* ---- Bottom Half: Table Chat (Always Visible) & Integrated Voice Strip ---- */
-    QGroupBox *chatBox = new QGroupBox("Table Chat", rightSide);
-    chatBox->setObjectName("chatBox");
-    _chatBox = chatBox;
-    QVBoxLayout *chatLayout = new QVBoxLayout(chatBox);
+    _boardLobbyChatTranscript = new QPlainTextEdit(_boardLobbyChatBox);
+    _boardLobbyChatTranscript->setReadOnly(true);
+    _boardLobbyChatTranscript->setMinimumHeight(54);
+    _boardLobbyChatTranscript->setMaximumBlockCount(200);
+    lobbyChatLayout->addWidget(_boardLobbyChatTranscript, 1);
+
+    QHBoxLayout *lobbyInputRow = new QHBoxLayout();
+    lobbyInputRow->setSpacing(4);
+    _boardLobbyChatInput = new QLineEdit(_boardLobbyChatBox);
+    _boardLobbyChatInput->setPlaceholderText("Sign in to chat in lobby...");
+    _boardLobbyChatInput->setEnabled(false);
+    _boardLobbyChatSendBtn = new QPushButton("Send", _boardLobbyChatBox);
+    _boardLobbyChatSendBtn->setStyleSheet(compactBtnCss);
+    _boardLobbyChatSendBtn->setEnabled(false);
+    lobbyInputRow->addWidget(_boardLobbyChatInput, 1);
+    lobbyInputRow->addWidget(_boardLobbyChatSendBtn);
+    lobbyChatLayout->addLayout(lobbyInputRow);
+
+    _rightLayout->addWidget(_boardLobbyChatBox, 1);
+
+    /* 2. Middle Half: Table Chat (Visible only in Online Room) */
+    _chatBox = new QGroupBox("Table Chat", rightSide);
+    _chatBox->setObjectName("chatBox");
+    QVBoxLayout *chatLayout = new QVBoxLayout(_chatBox);
     chatLayout->setContentsMargins(6, 4, 6, 6);
     chatLayout->setSpacing(4);
 
-    // Header row inside chatBox: Zoom button
     QHBoxLayout *chatHeaderRow = new QHBoxLayout();
     chatHeaderRow->setSpacing(4);
+    QLabel *chatTitle = new QLabel("Table Chat", _chatBox);
+    chatTitle->setStyleSheet("font-weight: bold; font-size: 12px;");
+    chatHeaderRow->addWidget(chatTitle);
     chatHeaderRow->addStretch(1);
 
-    _zoomChatBtn = new QPushButton("Zoom ⤢", chatBox);
+    _tableChatLeaveBtn = new QPushButton("Leave Table", _chatBox);
+    _tableChatLeaveBtn->setObjectName("tableChatLeaveBtn");
+    _tableChatLeaveBtn->setStyleSheet(
+        "QPushButton { border: 1px solid #dc2626; color: #f87171; padding: 2px 6px; font-size: 11px; font-weight: bold; }"
+        "QPushButton:hover { background: #dc2626; color: white; }"
+    );
+    _leaveTableBtn = _tableChatLeaveBtn;
+
+    _tableChatPurgeBtn = new QPushButton("Purge Table", _chatBox);
+    _tableChatPurgeBtn->setObjectName("tableChatPurgeBtn");
+    _tableChatPurgeBtn->setStyleSheet(
+        "QPushButton { background-color: #dc2626; color: white; padding: 2px 6px; font-size: 11px; font-weight: bold; }"
+    );
+    _tableChatPurgeBtn->setVisible(false);
+
+    _zoomChatBtn = new QPushButton("Zoom ⤢", _chatBox);
     _zoomChatBtn->setObjectName("zoomChatBtn");
     _zoomChatBtn->setStyleSheet(
         "QPushButton { background: #21262D; color: #C8A253; border: 1px solid #30363D; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: bold; }"
         "QPushButton:hover { background: #30363D; color: #F0F6FC; }"
     );
-    chatHeaderRow->addWidget(_zoomChatBtn, 0, Qt::AlignRight);
+    chatHeaderRow->addWidget(_tableChatLeaveBtn);
+    chatHeaderRow->addWidget(_tableChatPurgeBtn);
+    chatHeaderRow->addWidget(_zoomChatBtn);
     chatLayout->addLayout(chatHeaderRow);
 
-    _gameChatTranscript = new QPlainTextEdit(chatBox);
+    _gameChatTranscript = new QPlainTextEdit(_chatBox);
     _gameChatTranscript->setReadOnly(true);
     _gameChatTranscript->setMinimumHeight(54);
     _gameChatTranscript->setMaximumBlockCount(200);
@@ -653,25 +685,73 @@ OctiMainWindow::OctiMainWindow(
 
     QHBoxLayout *chatInputRow = new QHBoxLayout();
     chatInputRow->setSpacing(4);
-    _chatScopeCombo = new QComboBox(chatBox);
+    _chatScopeCombo = new QComboBox(_chatBox);
     _chatScopeCombo->addItem("ALL", "ALL");
     _chatScopeCombo->addItem("TEAM", "TEAM");
-    _gameChatInput = new QLineEdit(chatBox);
+    _gameChatInput = new QLineEdit(_chatBox);
     _gameChatInput->setPlaceholderText("Send table message...");
-    _sendGameChatBtn = new QPushButton("Send", chatBox);
+    _sendGameChatBtn = new QPushButton("Send", _chatBox);
     _sendGameChatBtn->setStyleSheet(compactBtnCss);
     chatInputRow->addWidget(_chatScopeCombo);
     chatInputRow->addWidget(_gameChatInput, 1);
     chatInputRow->addWidget(_sendGameChatBtn);
     chatLayout->addLayout(chatInputRow);
 
-    rightLayout->addWidget(chatBox, 2);
+    _chatBox->setVisible(false);
+    _rightLayout->addWidget(_chatBox, 1);
+
+    /* 3. Bottom Card: Compact Match Actions (stretch = 0) */
+    _actionsBox = new QGroupBox("Match Actions", rightSide);
+    _actionsBox->setObjectName("actionsBox");
+    QVBoxLayout *actLayout = new QVBoxLayout(_actionsBox);
+    actLayout->setContentsMargins(6, 4, 6, 6);
+    actLayout->setSpacing(4);
+
+    QHBoxLayout *actRow = new QHBoxLayout();
+    actRow->setSpacing(4);
+    _sidebarNewGameBtn = new QPushButton("New Game...", _actionsBox);
+    _sidebarNewGameBtn->setStyleSheet(compactBtnCss);
+    _offerDrawBtn = new QPushButton("Draw", _actionsBox);
+    _offerDrawBtn->setStyleSheet(compactBtnCss);
+    _pauseResumeBtn = new QPushButton("Pause", _actionsBox);
+    _pauseResumeBtn->setStyleSheet(compactBtnCss);
+    _undoRequestBtn = new QPushButton("Undo", _actionsBox);
+    _undoRequestBtn->setStyleSheet(compactBtnCss);
+    _claimForfeitBtn = new QPushButton("Forfeit", _actionsBox);
+    _claimForfeitBtn->setStyleSheet(compactBtnCss);
+    _resignBtn = new QPushButton("Resign", _actionsBox);
+    _resignBtn->setStyleSheet(compactBtnCss);
+    _moderationBtn = new QPushButton("Moderation", _actionsBox);
+    _moderationBtn->setStyleSheet(compactBtnCss);
+    _moderationBtn->setVisible(false);
+    actRow->addWidget(_sidebarNewGameBtn);
+    actRow->addWidget(_offerDrawBtn);
+    actRow->addWidget(_pauseResumeBtn);
+    actRow->addWidget(_undoRequestBtn);
+    actRow->addWidget(_claimForfeitBtn);
+    actRow->addWidget(_resignBtn);
+    actRow->addWidget(_moderationBtn);
+    actLayout->addLayout(actRow);
+
+    _rightLayout->addWidget(_actionsBox, 0);
 
     boardLayout->addWidget(_reservePanel);
     boardLayout->addWidget(_boardCanvas, 1);
     boardLayout->addWidget(rightSide);
 
     _lobbyView = new LobbyView(_netClient.get(), _theme, _viewStack);
+    _lobbyView->setOnChatAppendedCallback([this](const LobbyChatEntry &entry) {
+        if (_boardLobbyChatTranscript) {
+            _boardLobbyChatTranscript->appendPlainText(LobbyView::formatChatMessageLine(entry));
+            if (_boardLobbyChatTranscript->verticalScrollBar()) {
+                _boardLobbyChatTranscript->verticalScrollBar()->setValue(
+                    _boardLobbyChatTranscript->verticalScrollBar()->maximum());
+            }
+        }
+    });
+    _lobbyView->setOnChatTranscriptRebuiltCallback([this]() {
+        syncBoardLobbyChatTranscript();
+    });
 
     _viewStack->addWidget(_boardPage);
     _viewStack->addWidget(_lobbyView);
@@ -896,6 +976,34 @@ OctiMainWindow::OctiMainWindow(
             _chatScopeCombo->currentData().toString().toStdString();
         if (!txt.empty() && sendGameChatMessage(scope, txt)) {
             _gameChatInput->clear();
+        }
+    });
+
+    QObject::connect(_boardLobbyChatSendBtn, &QPushButton::clicked, [this]() {
+        sendBoardLobbyChatMessage();
+    });
+    QObject::connect(_boardLobbyChatInput, &QLineEdit::returnPressed, [this]() {
+        sendBoardLobbyChatMessage();
+    });
+    QObject::connect(_tableChatPurgeBtn, &QPushButton::clicked, [this]() {
+        if (_onlineRoomId.empty() || !_netClient) {
+            return;
+        }
+        QString title = "Purge Table";
+        auto reply = QMessageBox::warning(
+            this,
+            title,
+            QString("Are you sure you want to purge table #%1?").arg(QString::fromStdString(_onlineRoomId)),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+        if (reply == QMessageBox::Yes) {
+            auto res = _netClient->purgeTable(_onlineRoomId);
+            if (!res.ok) {
+                QMessageBox::critical(this, QString("%1 Failed").arg(title), QString::fromStdString(res.errorMessage));
+            } else {
+                leaveOnlineRoom();
+                showLobbyView();
+            }
         }
     });
 
@@ -1221,6 +1329,8 @@ void OctiMainWindow::showBoardView()
         _viewStack->setCurrentWidget(_boardPage);
     }
     updateStartMatchOverlay();
+    syncSidePanelsToBoardEdges();
+    updateMenuActionsState();
 }
 
 void OctiMainWindow::showLobbyView()
@@ -1243,6 +1353,7 @@ void OctiMainWindow::showLobbyView()
         }
     }
     updateStartMatchOverlay();
+    updateMenuActionsState();
 }
 
 bool OctiMainWindow::isBoardViewVisible() const
@@ -1267,6 +1378,7 @@ void OctiMainWindow::rotateBoardClockwise()
                 .arg(_boardCanvas->geometry().rotationDegrees()));
     }
     syncSidePanelsToBoardEdges();
+    updateMenuActionsState();
 }
 
 void OctiMainWindow::setBoardRotation(BoardRotation rot)
@@ -1281,6 +1393,7 @@ void OctiMainWindow::setBoardRotation(BoardRotation rot)
                 .arg(_boardCanvas->geometry().rotationDegrees()));
     }
     syncSidePanelsToBoardEdges();
+    updateMenuActionsState();
 }
 
 BoardRotation OctiMainWindow::boardRotation() const
@@ -1392,29 +1505,29 @@ void OctiMainWindow::setupMenuBar()
         }
     });
 
-    QAction *actBoardView = gameMenu->addAction(createMenuIcon(MenuIconKind::BOARD_VIEW, _theme), "Tabletop Board View");
-    actBoardView->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_1));
-    QObject::connect(actBoardView, &QAction::triggered, this, [this]() {
+    _actBoardView = gameMenu->addAction(createMenuIcon(MenuIconKind::BOARD_VIEW, _theme), "Tabletop Board View");
+    _actBoardView->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_1));
+    QObject::connect(_actBoardView, &QAction::triggered, this, [this]() {
         showBoardView();
     });
 
-    QAction *actLobbyView = gameMenu->addAction(createMenuIcon(MenuIconKind::LOBBY_VIEW, _theme), "Online Lobby & Matchmaking");
-    actLobbyView->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_2));
-    QObject::connect(actLobbyView, &QAction::triggered, this, [this]() {
+    _actLobbyView = gameMenu->addAction(createMenuIcon(MenuIconKind::LOBBY_VIEW, _theme), "Online Lobby & Matchmaking");
+    _actLobbyView->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_2));
+    QObject::connect(_actLobbyView, &QAction::triggered, this, [this]() {
         showLobbyView();
     });
 
     gameMenu->addSeparator();
 
-    QAction *actOfferDraw = gameMenu->addAction(createMenuIcon(MenuIconKind::OFFER_DRAW, _theme), "Offer Draw");
-    actOfferDraw->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
-    QObject::connect(actOfferDraw, &QAction::triggered, this, [this]() {
+    _actOfferDraw = gameMenu->addAction(createMenuIcon(MenuIconKind::OFFER_DRAW, _theme), "Offer Draw");
+    _actOfferDraw->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
+    QObject::connect(_actOfferDraw, &QAction::triggered, this, [this]() {
         proposeDraw();
     });
 
-    QAction *actPauseResume = gameMenu->addAction(createMenuIcon(MenuIconKind::PAUSE_RESUME, _theme), "Pause / Resume Game");
-    actPauseResume->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_P));
-    QObject::connect(actPauseResume, &QAction::triggered, this, [this]() {
+    _actPauseResume = gameMenu->addAction(createMenuIcon(MenuIconKind::PAUSE_RESUME, _theme), "Pause / Resume Game");
+    _actPauseResume->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_P));
+    QObject::connect(_actPauseResume, &QAction::triggered, this, [this]() {
         proposePauseOrResume();
     });
 
@@ -1450,38 +1563,69 @@ void OctiMainWindow::setupMenuBar()
         }
     });
 
-    QAction *actClaimForfeit = gameMenu->addAction(createMenuIcon(MenuIconKind::CLAIM_FORFEIT, _theme), "Claim Opponent Forfeit");
-    actClaimForfeit->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_F));
-    QObject::connect(actClaimForfeit, &QAction::triggered, this, [this]() {
+    _actClaimForfeit = gameMenu->addAction(createMenuIcon(MenuIconKind::CLAIM_FORFEIT, _theme), "Claim Opponent Forfeit");
+    _actClaimForfeit->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_F));
+    QObject::connect(_actClaimForfeit, &QAction::triggered, this, [this]() {
         claimOpponentForfeit();
     });
 
-    QAction *actResign = gameMenu->addAction(createMenuIcon(MenuIconKind::RESIGN, _theme), "Resign Game");
-    actResign->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R));
-    QObject::connect(actResign, &QAction::triggered, this, [this]() {
+    _actResign = gameMenu->addAction(createMenuIcon(MenuIconKind::RESIGN, _theme), "Resign Game");
+    _actResign->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R));
+    QObject::connect(_actResign, &QAction::triggered, this, [this]() {
         resignCurrentGame();
+    });
+
+    _actExportMoves = gameMenu->addAction("Export Move History (JSON v3.0)");
+    _actExportMoves->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C));
+    QObject::connect(_actExportMoves, &QAction::triggered, this, [this]() {
+        showExportNotationDialog();
     });
 
     gameMenu->addSeparator();
 
-    QAction *actQuit = gameMenu->addAction(createMenuIcon(MenuIconKind::QUIT, _theme), "Quit OCTI");
-    actQuit->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
-    QObject::connect(actQuit, &QAction::triggered, this, [this]() {
+    _actQuit = gameMenu->addAction(createMenuIcon(MenuIconKind::QUIT, _theme), "Quit OCTI");
+    _actQuit->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
+    QObject::connect(_actQuit, &QAction::triggered, this, [this]() {
         close();
     });
 
     // 2. &View Menu
     QMenu *viewMenu = mb->addMenu("&View");
 
-    QAction *actRotate = viewMenu->addAction(createMenuIcon(MenuIconKind::ROTATE_BOARD, _theme), "Rotate Board 90° Clockwise");
-    actRotate->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
-    QObject::connect(actRotate, &QAction::triggered, this, [this]() {
+    _actRotate = viewMenu->addAction(createMenuIcon(MenuIconKind::ROTATE_BOARD, _theme), "Rotate Board 90° Clockwise");
+    _actRotate->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
+    QObject::connect(_actRotate, &QAction::triggered, this, [this]() {
         rotateBoardClockwise();
     });
 
-    QAction *actTheme = viewMenu->addAction(createMenuIcon(MenuIconKind::SWITCH_THEME, _theme), "Next Tabletop Theme");
-    actTheme->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
-    QObject::connect(actTheme, &QAction::triggered, this, [this]() {
+    _actFlipPerspective = viewMenu->addAction("Flip Perspective (Player A / Player B)");
+    QObject::connect(_actFlipPerspective, &QAction::triggered, this, [this]() {
+        if (_boardCanvas) {
+            BoardRotation cur = _boardCanvas->boardRotation();
+            BoardRotation next = (cur == BoardRotation::ROT_0) ? BoardRotation::ROT_180 :
+                                 (cur == BoardRotation::ROT_180) ? BoardRotation::ROT_0 :
+                                 (cur == BoardRotation::ROT_90) ? BoardRotation::ROT_270 : BoardRotation::ROT_90;
+            _boardCanvas->setBoardRotation(next);
+            _boardCanvas->update();
+            if (_reservePanel) {
+                _reservePanel->update();
+            }
+            syncSidePanelsToBoardEdges();
+        }
+    });
+
+    _actToggleCoords = viewMenu->addAction("Show Coordinate Labels");
+    _actToggleCoords->setCheckable(true);
+    _actToggleCoords->setChecked(true);
+    QObject::connect(_actToggleCoords, &QAction::triggered, this, [this](bool checked) {
+        if (_boardCanvas) {
+            _boardCanvas->update();
+        }
+    });
+
+    _actTheme = viewMenu->addAction(createMenuIcon(MenuIconKind::SWITCH_THEME, _theme), "Next Tabletop Theme");
+    _actTheme->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
+    QObject::connect(_actTheme, &QAction::triggered, this, [this]() {
         toggleTheme();
     });
 
@@ -1498,44 +1642,44 @@ void OctiMainWindow::setupMenuBar()
         });
     }
 
-    QAction *actSfx = viewMenu->addAction(createMenuIcon(MenuIconKind::TOGGLE_SFX, _theme), "Toggle Sound Effects (SFX)");
-    actSfx->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_M));
-    QObject::connect(actSfx, &QAction::triggered, this, [this]() {
+    _actSfx = viewMenu->addAction(createMenuIcon(MenuIconKind::TOGGLE_SFX, _theme), "Toggle Sound Effects (SFX)");
+    _actSfx->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_M));
+    QObject::connect(_actSfx, &QAction::triggered, this, [this]() {
         setSfxMuted(!isSfxMuted());
     });
 
     viewMenu->addSeparator();
 
-    QAction *actVcrFirst = viewMenu->addAction(createMenuIcon(MenuIconKind::VCR_FIRST, _theme), "First Ply (|<)");
-    actVcrFirst->setShortcut(QKeySequence(Qt::Key_Home));
-    QObject::connect(actVcrFirst, &QAction::triggered, this, [this]() {
+    _actVcrFirst = viewMenu->addAction(createMenuIcon(MenuIconKind::VCR_FIRST, _theme), "First Ply (|<)");
+    _actVcrFirst->setShortcut(QKeySequence(Qt::Key_Home));
+    QObject::connect(_actVcrFirst, &QAction::triggered, this, [this]() {
         vcrFirst();
     });
 
-    QAction *actVcrPrev = viewMenu->addAction(createMenuIcon(MenuIconKind::VCR_PREV, _theme), "Previous Ply (<)");
-    actVcrPrev->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Left));
-    QObject::connect(actVcrPrev, &QAction::triggered, this, [this]() {
+    _actVcrPrev = viewMenu->addAction(createMenuIcon(MenuIconKind::VCR_PREV, _theme), "Previous Ply (<)");
+    _actVcrPrev->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Left));
+    QObject::connect(_actVcrPrev, &QAction::triggered, this, [this]() {
         vcrPrev();
     });
 
-    QAction *actVcrNext = viewMenu->addAction(createMenuIcon(MenuIconKind::VCR_NEXT, _theme), "Next Ply (>)");
-    actVcrNext->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Right));
-    QObject::connect(actVcrNext, &QAction::triggered, this, [this]() {
+    _actVcrNext = viewMenu->addAction(createMenuIcon(MenuIconKind::VCR_NEXT, _theme), "Next Ply (>)");
+    _actVcrNext->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Right));
+    QObject::connect(_actVcrNext, &QAction::triggered, this, [this]() {
         vcrNext();
     });
 
-    QAction *actVcrLast = viewMenu->addAction(createMenuIcon(MenuIconKind::VCR_LAST, _theme), "Latest Ply (>|)");
-    actVcrLast->setShortcut(QKeySequence(Qt::Key_End));
-    QObject::connect(actVcrLast, &QAction::triggered, this, [this]() {
+    _actVcrLast = viewMenu->addAction(createMenuIcon(MenuIconKind::VCR_LAST, _theme), "Latest Ply (>|)");
+    _actVcrLast->setShortcut(QKeySequence(Qt::Key_End));
+    QObject::connect(_actVcrLast, &QAction::triggered, this, [this]() {
         vcrLast();
     });
 
     // 3. &Online Menu
     QMenu *onlineMenu = mb->addMenu("&Online");
 
-    QAction *actSignIn = onlineMenu->addAction(createMenuIcon(MenuIconKind::SIGN_IN, _theme), "Sign In / SSO Onboarding...");
-    actSignIn->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_I));
-    QObject::connect(actSignIn, &QAction::triggered, this, [this]() {
+    _actSignIn = onlineMenu->addAction(createMenuIcon(MenuIconKind::SIGN_IN, _theme), "Sign In / SSO Onboarding...");
+    _actSignIn->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_I));
+    QObject::connect(_actSignIn, &QAction::triggered, this, [this]() {
         SsoOnboardingDialog dlg(_netClient.get(), &_configStore, _theme, this);
         dlg.setOnSignedInCallback([this](const PlayerProfileInfo &prof) {
             applyAuthenticatedProfile(prof);
@@ -1546,12 +1690,13 @@ void OctiMainWindow::setupMenuBar()
                 applyAuthenticatedProfile(dlg.loggedInProfile());
             }
             updateTopBarLabels();
+            updateMatchActionsVisibility();
         }
     });
 
-    QAction *actAccount = onlineMenu->addAction(createMenuIcon(MenuIconKind::ACCOUNT_LINK, _theme), "Account & Linked Identities...");
-    actAccount->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_L));
-    QObject::connect(actAccount, &QAction::triggered, this, [this]() {
+    _actAccount = onlineMenu->addAction(createMenuIcon(MenuIconKind::ACCOUNT_LINK, _theme), "Account & Linked Identities...");
+    _actAccount->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_L));
+    QObject::connect(_actAccount, &QAction::triggered, this, [this]() {
         AccountLinkDialog dlg(_netClient.get(), &_configStore, _theme, this);
         dlg.setOnAccountSwitchedCallback([this](const PlayerProfileInfo &prof) {
             applyAuthenticatedProfile(prof);
@@ -1562,9 +1707,9 @@ void OctiMainWindow::setupMenuBar()
         }
     });
 
-    QAction *actArchive = onlineMenu->addAction(createMenuIcon(MenuIconKind::GAME_ARCHIVE, _theme), "Game Archive & Replay Browser...");
-    actArchive->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_A));
-    QObject::connect(actArchive, &QAction::triggered, this, [this]() {
+    _actArchive = onlineMenu->addAction(createMenuIcon(MenuIconKind::GAME_ARCHIVE, _theme), "Game Archive & Replay Browser...");
+    _actArchive->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_A));
+    QObject::connect(_actArchive, &QAction::triggered, this, [this]() {
         ArchiveBrowserDialog dlg(_netClient.get(), _theme, this);
         dlg.setOnLoadReplayCallback(
             [this](const std::string &, const std::string &transcript, const ArchivedGameSummary &) {
@@ -1575,17 +1720,17 @@ void OctiMainWindow::setupMenuBar()
         dlg.exec();
     });
 
-    QAction *actLeaderboard = onlineMenu->addAction(createMenuIcon(MenuIconKind::LEADERBOARD, _theme), "Elo Leaderboard...");
-    actLeaderboard->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
-    QObject::connect(actLeaderboard, &QAction::triggered, this, [this]() {
+    _actLeaderboard = onlineMenu->addAction(createMenuIcon(MenuIconKind::LEADERBOARD, _theme), "Elo Leaderboard...");
+    _actLeaderboard->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
+    QObject::connect(_actLeaderboard, &QAction::triggered, this, [this]() {
         LeaderboardDialog dlg(_netClient.get(), _theme, this);
         dlg.refreshLeaderboard("2P");
         dlg.exec();
     });
 
-    QAction *actRobots = onlineMenu->addAction("Robots Directory & Profiles...");
-    actRobots->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
-    QObject::connect(actRobots, &QAction::triggered, this, [this]() {
+    _actRobots = onlineMenu->addAction("Robots Directory & Profiles...");
+    _actRobots->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
+    QObject::connect(_actRobots, &QAction::triggered, this, [this]() {
         RobotsDirectoryDialog dlg(_netClient.get(), _theme, this);
         dlg.setOnLoadReplayCallback(
             [this](const std::string &, const std::string &transcript, const ArchivedGameSummary &) {
@@ -1596,9 +1741,9 @@ void OctiMainWindow::setupMenuBar()
         dlg.exec();
     });
 
-    QAction *actModeration = onlineMenu->addAction(createMenuIcon(MenuIconKind::MODERATION, _theme), "Table Moderation & Policies...");
-    actModeration->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M));
-    QObject::connect(actModeration, &QAction::triggered, this, [this]() {
+    _actModeration = onlineMenu->addAction(createMenuIcon(MenuIconKind::MODERATION, _theme), "Table Moderation & Policies...");
+    _actModeration->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M));
+    QObject::connect(_actModeration, &QAction::triggered, this, [this]() {
         RoomModerationDialog dlg(_netClient.get(), _onlineRoomId, _theme, this);
         dlg.exec();
     });
@@ -1606,24 +1751,26 @@ void OctiMainWindow::setupMenuBar()
     // 4. &Help Menu
     QMenu *helpMenu = mb->addMenu("&Help");
 
-    QAction *actUpdate = helpMenu->addAction(createMenuIcon(MenuIconKind::CHECK_UPDATE, _theme), "Check for Updates...");
-    actUpdate->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_U));
-    QObject::connect(actUpdate, &QAction::triggered, this, [this]() {
+    _actUpdate = helpMenu->addAction(createMenuIcon(MenuIconKind::CHECK_UPDATE, _theme), "Check for Updates...");
+    _actUpdate->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_U));
+    QObject::connect(_actUpdate, &QAction::triggered, this, [this]() {
         checkForAppUpdates(true);
         SelfUpdateDialog dlg(_updateController, _theme, this);
         dlg.exec();
     });
 
-    QAction *actSplash = helpMenu->addAction(createMenuIcon(MenuIconKind::SHOW_SPLASH, _theme), "Show Splash / About OCTI");
-    actSplash->setShortcut(QKeySequence(Qt::Key_F1));
-    QObject::connect(actSplash, &QAction::triggered, this, [this]() {
+    _actSplash = helpMenu->addAction(createMenuIcon(MenuIconKind::SHOW_SPLASH, _theme), "Show Splash / About OCTI");
+    _actSplash->setShortcut(QKeySequence(Qt::Key_F1));
+    QObject::connect(_actSplash, &QAction::triggered, this, [this]() {
         showSplashAboutDialog();
     });
 
-    QAction *actTelemetry = helpMenu->addAction(createMenuIcon(MenuIconKind::MODERATION, _theme), "Telemetry & Privacy Preferences...");
-    QObject::connect(actTelemetry, &QAction::triggered, this, [this]() {
+    _actTelemetry = helpMenu->addAction(createMenuIcon(MenuIconKind::MODERATION, _theme), "Telemetry & Privacy Preferences...");
+    QObject::connect(_actTelemetry, &QAction::triggered, this, [this]() {
         showTelemetrySettingsDialog();
     });
+
+    updateMenuActionsState();
 }
 
 void OctiMainWindow::setSfxMuted(bool muted)
@@ -1798,22 +1945,163 @@ void OctiMainWindow::updateStartMatchOverlay()
 
 QRect OctiMainWindow::rightPanelTopWidgetGeometry() const
 {
-    if (_rightSide && _statusBox) {
-        QPoint pt = _statusBox->mapTo(_rightSide, QPoint(0, 0));
-        return QRect(pt, _statusBox->size());
+    if (_rightSide && _boardLobbyChatBox) {
+        QPoint pt = _boardLobbyChatBox->mapTo(_rightSide, QPoint(0, 0));
+        return QRect(pt, _boardLobbyChatBox->size());
     }
-    return _statusBox ? _statusBox->geometry() : QRect();
+    return _boardLobbyChatBox ? _boardLobbyChatBox->geometry() : QRect();
 }
 
 QRect OctiMainWindow::rightPanelBottomWidgetGeometry() const
 {
-    if (_chatBox && !_chatBox->isHidden()) {
-        return _chatBox->geometry();
+    if (_rightSide && _actionsBox) {
+        QPoint pt = _actionsBox->mapTo(_rightSide, QPoint(0, 0));
+        return QRect(pt, _actionsBox->size());
     }
-    if (_actionsBox) {
-        return _actionsBox->geometry();
+    return _actionsBox ? _actionsBox->geometry() : QRect();
+}
+
+void OctiMainWindow::syncBoardLobbyChatTranscript()
+{
+    if (!_boardLobbyChatTranscript || !_lobbyView) {
+        return;
     }
-    return QRect();
+    _boardLobbyChatTranscript->clear();
+    for (const auto &c : _lobbyView->chatMessages()) {
+        _boardLobbyChatTranscript->appendPlainText(LobbyView::formatChatMessageLine(c));
+    }
+    if (_boardLobbyChatTranscript->verticalScrollBar()) {
+        _boardLobbyChatTranscript->verticalScrollBar()->setValue(
+            _boardLobbyChatTranscript->verticalScrollBar()->maximum());
+    }
+}
+
+void OctiMainWindow::sendBoardLobbyChatMessage()
+{
+    if (!_boardLobbyChatInput || !_lobbyView) {
+        return;
+    }
+    QString text = _boardLobbyChatInput->text().trimmed();
+    if (text.isEmpty()) {
+        return;
+    }
+    if (_lobbyView->sendLobbyChatMessage(text.toStdString())) {
+        _boardLobbyChatInput->clear();
+        syncBoardLobbyChatTranscript();
+    }
+}
+
+void OctiMainWindow::updateMenuActionsState()
+{
+    bool boardVisible = isBoardViewVisible();
+    bool lobbyVisible = isLobbyViewVisible();
+    bool online = (_inOnlineRoom && !_onlineRoomId.empty());
+    bool onlineInProgress = (online && _onlineGameView.phase == "IN_PROGRESS");
+    bool seatedPlayer = (online && _onlineViewerSeat > 0);
+    bool gameOver = (online ? (_onlineGameView.phase == "FINISHED" || !_onlineGameView.result.empty())
+                            : (_board.getGame() && _board.getGame()->isGameOver()));
+    bool localGameActive = (!online && _board.getGame() && _board.getGame()->isGameStarted());
+    bool canActInMatch = (seatedPlayer && onlineInProgress && !gameOver);
+
+    // 1. &Game Menu
+    if (_actNewGame) {
+        _actNewGame->setEnabled(true);
+    }
+    if (_actBoardView) {
+        _actBoardView->setEnabled(!boardVisible);
+    }
+    if (_actLobbyView) {
+        _actLobbyView->setEnabled(!lobbyVisible && !_offlineMode);
+    }
+    if (_actOfferDraw) {
+        _actOfferDraw->setEnabled(canActInMatch);
+    }
+    if (_actPauseResume) {
+        _actPauseResume->setEnabled(canActInMatch);
+    }
+    if (_actUndo) {
+        bool canUndoMove = (!online && localGameActive && !_awaitingMatchStart &&
+            (_composer.isAwaitingConfirmation() || _composer.isGuidedMoveActive() ||
+             (_board.getGame() && _board.getGame()->canUndo())));
+        _actUndo->setEnabled(canUndoMove);
+    }
+    if (_actClaimForfeit) {
+        bool forfeitEnabled = (canActInMatch && _claimForfeitBtn && _claimForfeitBtn->isEnabled());
+        _actClaimForfeit->setEnabled(forfeitEnabled);
+    }
+    if (_actResign) {
+        bool resignEnabled = online ? canActInMatch : (localGameActive && !_awaitingMatchStart && !gameOver);
+        _actResign->setEnabled(resignEnabled);
+    }
+    if (_actExportMoves) {
+        _actExportMoves->setEnabled(vcrTotalPlies() > 0);
+    }
+    if (_actQuit) {
+        _actQuit->setEnabled(true);
+    }
+
+    // 2. &View Menu
+    if (_actRotate) {
+        _actRotate->setEnabled(boardVisible);
+    }
+    if (_actFlipPerspective) {
+        _actFlipPerspective->setEnabled(boardVisible);
+    }
+    if (_actToggleCoords) {
+        _actToggleCoords->setEnabled(boardVisible);
+    }
+    if (_actTheme) {
+        _actTheme->setEnabled(true);
+    }
+    if (_actSfx) {
+        _actSfx->setEnabled(true);
+    }
+    if (_actVcrFirst) {
+        _actVcrFirst->setEnabled(boardVisible && vcrCurrentPly() > 0);
+    }
+    if (_actVcrPrev) {
+        _actVcrPrev->setEnabled(boardVisible && vcrCurrentPly() > 0);
+    }
+    if (_actVcrNext) {
+        _actVcrNext->setEnabled(boardVisible && vcrCurrentPly() < vcrTotalPlies());
+    }
+    if (_actVcrLast) {
+        _actVcrLast->setEnabled(boardVisible && vcrCurrentPly() < vcrTotalPlies());
+    }
+
+    // 3. &Online Menu
+    if (_actSignIn) {
+        _actSignIn->setEnabled(!_offlineMode && !_authenticated);
+    }
+    if (_actAccount) {
+        _actAccount->setEnabled(!_offlineMode && _authenticated);
+    }
+    if (_actLeaderboard) {
+        _actLeaderboard->setEnabled(!_offlineMode);
+    }
+    if (_actArchive) {
+        _actArchive->setEnabled(!_offlineMode);
+    }
+    if (_actRobots) {
+        _actRobots->setEnabled(!_offlineMode);
+    }
+    if (_actModeration) {
+        bool canModerate = online && !_onlineRoomId.empty() &&
+            (_onlineViewerSeat == 1 || _profile.isAdmin ||
+             (!_profile.uuid.empty() && _onlineGameView.hostUuid == _profile.uuid));
+        _actModeration->setEnabled(canModerate);
+    }
+
+    // 4. &Help Menu
+    if (_actUpdate) {
+        _actUpdate->setEnabled(true);
+    }
+    if (_actSplash) {
+        _actSplash->setEnabled(true);
+    }
+    if (_actTelemetry) {
+        _actTelemetry->setEnabled(true);
+    }
 }
 
 bool OctiMainWindow::isLocalBotGame() const
@@ -3508,12 +3796,14 @@ void OctiMainWindow::resizeEvent(QResizeEvent *event)
 {
     QMainWindow::resizeEvent(event);
     syncSidePanelsToBoardEdges();
+    updateMenuActionsState();
 }
 
 void OctiMainWindow::showEvent(QShowEvent *event)
 {
     QMainWindow::showEvent(event);
     syncSidePanelsToBoardEdges();
+    updateMenuActionsState();
 }
 
 void OctiMainWindow::keyPressEvent(QKeyEvent *event)
@@ -3644,6 +3934,10 @@ void OctiMainWindow::refreshMoveHistoryAndFenUi()
                 .arg(QString::fromStdString(_board.toPositionString())));
         _fenStatusLabel->setVisible(false);
     }
+    if (_vcrPlyLabel) {
+        _vcrPlyLabel->setText(
+            QString("Ply %1/%2").arg(vcrCurrentPly()).arg(vcrTotalPlies()));
+    }
     updateMatchActionsVisibility();
 }
 
@@ -3751,7 +4045,28 @@ void OctiMainWindow::updateMatchActionsVisibility()
         _moderationBtn->setVisible(online);
     }
     if (_chatBox) {
-        _chatBox->setVisible(true);
+        _chatBox->setVisible(online);
+    }
+    if (_tableChatLeaveBtn) {
+        _tableChatLeaveBtn->setVisible(online);
+        _tableChatLeaveBtn->setEnabled(online);
+    }
+    if (_tableChatPurgeBtn) {
+        bool isHostOrAdmin = online && (_onlineViewerSeat == 1 || _profile.isAdmin ||
+                                       (!_profile.uuid.empty() && _onlineGameView.hostUuid == _profile.uuid));
+        _tableChatPurgeBtn->setVisible(isHostOrAdmin);
+        _tableChatPurgeBtn->setEnabled(isHostOrAdmin);
+    }
+    if (_boardLobbyChatInput && _boardLobbyChatSendBtn) {
+        if (_authenticated) {
+            _boardLobbyChatInput->setEnabled(true);
+            _boardLobbyChatInput->setPlaceholderText("Send global lobby message...");
+            _boardLobbyChatSendBtn->setEnabled(true);
+        } else {
+            _boardLobbyChatInput->setEnabled(false);
+            _boardLobbyChatInput->setPlaceholderText("Sign in to chat in lobby...");
+            _boardLobbyChatSendBtn->setEnabled(false);
+        }
     }
 
     if (_chatScopeCombo) {
@@ -3841,6 +4156,7 @@ void OctiMainWindow::updateMatchActionsVisibility()
     }
 
     syncSidePanelsToBoardEdges();
+    updateMenuActionsState();
 }
 
 void OctiMainWindow::checkAndPresentGameOver()
@@ -3884,25 +4200,9 @@ void OctiMainWindow::checkAndPresentGameOver()
                                static_cast<int>(_appliedOnlineMoves.size()),
                                exportCurrentOctiTranscript(), _theme, this);
             dlg.exec();
-            if (dlg.newGameRequested()) {
-                proposeRematch();
-            }
         } else {
             GameOverDialog dlg(&_board, _theme, this);
             dlg.exec();
-            if (dlg.newGameRequested()) {
-                if (_inOnlineRoom && !_onlineRoomId.empty()) {
-                    proposeRematch();
-                } else {
-                    NewLocalGameDialog newDlg(_theme, this);
-                    newDlg.setConfig(_localConfig);
-                    if (newDlg.exec() == QDialog::Accepted) {
-                        startNewLocalGame(newDlg.config());
-                        beginAwaitingMatchStart();
-                        promptStartMatchIfVisible();
-                    }
-                }
-            }
         }
     }
 }

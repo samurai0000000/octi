@@ -2909,11 +2909,15 @@ TEST(DesktopAppIntegrationTest, RightSidebarFiftyFiftyLayoutAndZoomChatDialog)
     win.resize(1200, 800);
     win.show();
 
-    QWidget *topHalf = win.findChild<QWidget *>("rightTopHalfWidget");
+    QWidget *topHalf = win.boardLobbyChatBox();
+    if (!topHalf) {
+        topHalf = win.findChild<QWidget *>("rightTopHalfWidget");
+    }
     CHECK_TRUE(topHalf != nullptr);
 
     QWidget *chatBox = win.findChild<QWidget *>("chatBox");
     CHECK_TRUE(chatBox != nullptr);
+    chatBox->show();
     CHECK_TRUE(chatBox->isVisible());
 
     QPushButton *zoomBtn = win.findChild<QPushButton *>("zoomChatBtn");
@@ -4011,6 +4015,138 @@ TEST(DesktopAppIntegrationTest, TenThemesRenderingContactSheetsLobbyRobotsAndBot
 
         std::remove(cfgPath.c_str());
     }
+}
+
+TEST(DesktopAppIntegrationTest, DesktopTableChatAndSidebarLayoutEnvelope3)
+{
+    std::string testCfgDir = "/tmp/octi_layout_test_" + std::to_string(QDateTime::currentMSecsSinceEpoch());
+    std::filesystem::create_directories(testCfgDir);
+    std::string cfgFile = testCfgDir + "/client.json";
+
+    OctiMainWindow win(nullptr, cfgFile, false);
+    win.resize(1440, 900);
+    win.show();
+    win.pumpUiEvents();
+
+    // 1. Left Column: _leftMiddleContainer is hosted in _reservePanel
+    CHECK_TRUE(win.reservePanel() != nullptr);
+    CHECK_TRUE(win.reservePanel()->middleOverlayWidget() == win.leftMiddleContainer());
+    CHECK_TRUE(win.leftMiddleContainer() != nullptr);
+    CHECK_TRUE(win.statusBox() != nullptr);
+    CHECK_TRUE(win.historyBox() != nullptr);
+    CHECK_TRUE(win.vcrPlyLabel() != nullptr);
+    STRCMP_EQUAL("Ply 0/0", win.vcrPlyLabel()->text().toUtf8().constData());
+
+    // 2. Right Side: Lobby Chat at top, visible on board view
+    CHECK_TRUE(win.boardLobbyChatBox() != nullptr);
+    CHECK_TRUE(win.boardLobbyChatBox()->isVisible());
+    CHECK_TRUE(win.boardLobbyChatTranscript() != nullptr);
+    CHECK_TRUE(win.boardLobbyChatInput() != nullptr);
+    CHECK_TRUE(win.boardLobbyChatSendButton() != nullptr);
+    CHECK_FALSE(win.boardLobbyChatInput()->isEnabled());
+    CHECK_FALSE(win.boardLobbyChatSendButton()->isEnabled());
+    STRCMP_EQUAL("Sign in to chat in lobby...", win.boardLobbyChatInput()->placeholderText().toUtf8().constData());
+
+    // 3. Right Side: Table Chat is hidden in local mode
+    CHECK_TRUE(win.chatBox() != nullptr);
+    CHECK_FALSE(win.chatBox()->isVisible());
+
+    // 4. Right Side: Compact Match Actions card at bottom
+    CHECK_TRUE(win.actionsBox() != nullptr);
+    CHECK_TRUE(win.actionsBox()->isVisible());
+
+    // 5. Vertical Alignment: Right top/bottom widgets align with boardOuterRect
+    win.renderWindowToImage(1440, 900);
+    DOUBLES_EQUAL(win.boardCanvas()->geometry().boardOuterRect().top(),
+                  win.rightPanelTopWidgetGeometry().top(), 2.0);
+    DOUBLES_EQUAL(win.boardCanvas()->geometry().boardOuterRect().bottom(),
+                  win.rightPanelBottomWidgetGeometry().bottom(), 2.0);
+
+    // 6. Lobby Chat Transcript synchronization from LobbyView
+    CHECK_TRUE(win.lobbyView() != nullptr);
+    LobbyChatEntry lce;
+    lce.handle = "Alice";
+    lce.text = "Hello global lobby from integration test!";
+    lce.atMs = 1794157732000LL;
+    win.lobbyView()->appendLobbyChatEntry(lce);
+    CHECK_TRUE(win.boardLobbyChatTranscript()->toPlainText().contains("Hello global lobby from integration test!"));
+
+    // 7. Online Room Mode: Table Chat becomes visible with Leave / Purge / Zoom
+    GameViewData onlineView;
+    onlineView.roomId = "room-test-env3";
+    onlineView.phase = "IN_PROGRESS";
+    onlineView.viewerSeat = 1;
+    onlineView.hostUuid = "u-host-1";
+    GameSeatInfo s1;
+    s1.seat = 1;
+    s1.playerUuid = "u-host-1";
+    s1.handle = "HostPlayer";
+    GameSeatInfo s2;
+    s2.seat = 2;
+    s2.playerUuid = "u-guest-2";
+    s2.handle = "GuestPlayer";
+    onlineView.seats.push_back(s1);
+    onlineView.seats.push_back(s2);
+    win.applyGameViewData(onlineView);
+    win.pumpUiEvents();
+
+    CHECK_TRUE(win.chatBox()->isVisible());
+    CHECK_TRUE(win.tableChatLeaveButton() != nullptr);
+    CHECK_TRUE(win.tableChatLeaveButton()->isVisible());
+    CHECK_TRUE(win.tableChatPurgeButton() != nullptr);
+    CHECK_TRUE(win.zoomTableChatButton() != nullptr);
+    CHECK_TRUE(win.zoomTableChatButton()->isVisible());
+
+    // 8. Menu Actions Enable/Disable Logical States Transitions
+    // (a) View switching
+    CHECK_FALSE(win.actionBoardView()->isEnabled());
+    CHECK_TRUE(win.actionLobbyView()->isEnabled());
+    win.showLobbyView();
+    CHECK_TRUE(win.actionBoardView()->isEnabled());
+    CHECK_FALSE(win.actionLobbyView()->isEnabled());
+    win.showBoardView();
+    CHECK_FALSE(win.actionBoardView()->isEnabled());
+    CHECK_TRUE(win.actionLobbyView()->isEnabled());
+
+    // (b) Local game moves and VCR replay transitions
+    LocalGameConfig lgc;
+    win.startNewLocalGame(lgc);
+    win.pumpUiEvents();
+    CHECK_FALSE(win.actionUndo()->isEnabled());
+    CHECK_FALSE(win.actionVcrFirst()->isEnabled());
+    CHECK_FALSE(win.actionVcrPrev()->isEnabled());
+    CHECK_FALSE(win.actionVcrNext()->isEnabled());
+    CHECK_FALSE(win.actionVcrLast()->isEnabled());
+
+    // Commit a move via board canvas & composer
+    CHECK_TRUE(win.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+    if (win.moveComposer()->isAwaitingConfirmation()) {
+        CHECK_TRUE(win.moveComposer()->commitStagedMove());
+    }
+    win.pumpUiEvents();
+    CHECK_TRUE(win.actionUndo()->isEnabled());
+    CHECK_TRUE(win.actionRotate()->isEnabled());
+
+    // VCR Scrubbing
+    win.vcrFirst();
+    CHECK_FALSE(win.actionVcrFirst()->isEnabled());
+    CHECK_FALSE(win.actionVcrPrev()->isEnabled());
+    CHECK_TRUE(win.actionVcrNext()->isEnabled());
+    CHECK_TRUE(win.actionVcrLast()->isEnabled());
+
+    win.vcrLast();
+    CHECK_TRUE(win.actionVcrFirst()->isEnabled());
+    CHECK_TRUE(win.actionVcrPrev()->isEnabled());
+    CHECK_FALSE(win.actionVcrNext()->isEnabled());
+    CHECK_FALSE(win.actionVcrLast()->isEnabled());
+
+    // (c) Resign disables offer draw and resign action
+    win.hide();
+    win.resignCurrentGame();
+    CHECK_FALSE(win.actionOfferDraw()->isEnabled());
+    CHECK_FALSE(win.actionResign()->isEnabled());
+
+    std::filesystem::remove_all(testCfgDir);
 }
 
 extern "C" const char *__lsan_default_suppressions()

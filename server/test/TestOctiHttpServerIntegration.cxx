@@ -1249,6 +1249,7 @@ TEST(OctiHttpServerIntegrationTest, NominalFullScenario)
         "http://www.w3.org/2000/svg",
         "https://www.selfso.com/software/windows/octi/",
         "https://www.selfso.com/software/android/octi/",
+        "placeholder=\"Robot URL (optional http:// or https://, no '?')\"",
         "<link rel=\"icon\"",
         "<link rel=\"apple-touch-icon\""
     };
@@ -4745,6 +4746,7 @@ TEST(OctiHttpServerIntegrationTest, WebPlayerDesktopAndroidParityElements)
         "http://www.w3.org/2000/svg",
         "https://www.selfso.com/software/windows/octi/",
         "https://www.selfso.com/software/android/octi/",
+        "placeholder=\"Robot URL (optional http:// or https://, no '?')\"",
         "<link rel=\"icon\"",
         "<link rel=\"apple-touch-icon\""
     };
@@ -5882,7 +5884,7 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("OCTI v2.4.1") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v2.4.2") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Official Platform") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("OFFICIAL PLATFORM") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("Lv4: Expert (40s)") != std::string::npos);
@@ -6122,9 +6124,26 @@ TEST(OctiHttpServerIntegrationTest, WebUiTenThemesTabletopLobbyRefinementsAndLev
     CHECK_TRUE(posLeaveTableBtn != std::string::npos);
 
     CHECK_TRUE(posSideTopHalf < posBoardLobbyChat);
-    CHECK_TRUE(posBoardLobbyChat < posMatchActionsCard);
-    CHECK_TRUE(posMatchActionsCard < posBoardChatPanel);
+    CHECK_TRUE(posBoardLobbyChat < posBoardChatPanel);
     CHECK_TRUE(posBoardChatPanel < posLeaveTableBtn);
+    CHECK_TRUE(posLeaveTableBtn < posMatchActionsCard);
+
+    // Zoom modal suppression guards
+    CHECK_TRUE(rIndex.body.find("var tableActions = document.getElementById(\"web-online-table-actions\");") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("if (tableActions && tableActions.contains(ev.target)) return;") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("closeBoardChatZoomModal();") != std::string::npos);
+
+    // Review-Board-only game over dialog (#btn-gameover-review only, no #btn-gameover-new)
+    CHECK_TRUE(rIndex.body.find("id=\"btn-gameover-review\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"btn-gameover-new\"") == std::string::npos);
+
+    // Footnote in start match overlay
+    CHECK_TRUE(rIndex.body.find("id=\"web-start-ai-footnote\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Browser AI runs on your PC/laptop in JavaScript.") != std::string::npos);
+
+    // Local timezone formatting (no hardcoded UTC/toISOString)
+    CHECK_TRUE(rIndex.body.find("<th>Date (UTC)</th>") == std::string::npos);
+    CHECK_TRUE(rIndex.body.find("<th>Date</th>") != std::string::npos);
 
     // 4. Connected Users (humans) followed by Connected Robots
     size_t posUsersSec = rIndex.body.find("id=\"web-online-users-section\"");
@@ -6295,6 +6314,137 @@ TEST(OctiHttpServerIntegrationTest, ArchiveListFilterByRobotUuid)
     /* 4. Invalid robot id -> 400 INVALID_ARGUMENT */
     Reply rBadRobot = http().get("/api/v1/archive/games?robot=bad!id");
     EXPECT_ERROR(400, "INVALID_ARGUMENT", rBadRobot);
+}
+
+TEST(OctiHttpServerIntegrationTest, RobotRenameRateLimitArchiveAndUrlValidation)
+{
+    User u1 = signIn("google", "sub-url-test-1", "UrlTestUser1");
+    User u2 = signIn("google", "sub-url-test-2", "UrlTestUser2");
+
+    // 1. Invalid robot URLs rejected upon creation
+    Reply rQuery = http().post(
+        "/api/v1/robots", u1.token,
+        Json{{"robot_name", "bot-url-q"},
+             {"robot_url", "https://octi.selfso.com/bot?track=1"}});
+    EXPECT_ERROR(400, "INVALID_ROBOT_URL", rQuery);
+
+    Reply rUserinfo = http().post(
+        "/api/v1/robots", u1.token,
+        Json{{"robot_name", "bot-url-u"},
+             {"robot_url", "https://user@octi.selfso.com/"}});
+    EXPECT_ERROR(400, "INVALID_ROBOT_URL", rUserinfo);
+
+    Reply rSsrfMeta = http().post(
+        "/api/v1/robots", u1.token,
+        Json{{"robot_name", "bot-url-meta"},
+             {"robot_url", "http://169.254.169.254/latest/meta-data"}});
+    EXPECT_ERROR(400, "INVALID_ROBOT_URL", rSsrfMeta);
+
+    Reply rSsrfPriv = http().post(
+        "/api/v1/robots", u1.token,
+        Json{{"robot_name", "bot-url-priv"},
+             {"robot_url", "http://10.0.0.1/secret"}});
+    EXPECT_ERROR(400, "INVALID_ROBOT_URL", rSsrfPriv);
+
+    // Loopback strictly rejected when OCTI_ALLOW_LOOPBACK_ROBOT_URL_FOR_TEST is unset
+    unsetenv("OCTI_ALLOW_LOOPBACK_ROBOT_URL_FOR_TEST");
+    Reply rLoopbackDefault = http().post(
+        "/api/v1/robots", u1.token,
+        Json{{"robot_name", "bot-url-loop"},
+             {"robot_url", "http://127.0.0.1:" + std::to_string(http().port()) + "/"}});
+    EXPECT_ERROR(400, "INVALID_ROBOT_URL", rLoopbackDefault);
+
+    // With loopback test override: 404 is rejected, 200 is accepted
+    setenv("OCTI_ALLOW_LOOPBACK_ROBOT_URL_FOR_TEST", "1", 1);
+    Reply rNotFound = http().post(
+        "/api/v1/robots", u1.token,
+        Json{{"robot_name", "bot-url-404"},
+             {"robot_url", "http://127.0.0.1:" + std::to_string(http().port()) + "/api/v1/nonexistent-route-for-test"}});
+    EXPECT_ERROR(400, "INVALID_ROBOT_URL", rNotFound);
+
+    std::string validUrl = "http://127.0.0.1:" + std::to_string(http().port()) + "/api/v1/archive/games";
+    Reply rCreateOk = http().post(
+        "/api/v1/robots", u1.token,
+        Json{{"robot_name", "bot-url-ok"},
+             {"description", "Bot with valid URL"},
+             {"robot_url", validUrl}});
+    EXPECT_STATUS(201, rCreateOk);
+    std::string bot1Uuid = rCreateOk.json.value("robot_uuid", "");
+    std::string bot1Token = rCreateOk.json.value("robot_token", "");
+    CHECK_FALSE(bot1Uuid.empty());
+    CHECK_FALSE(bot1Token.empty());
+    STRCMP_EQUAL(validUrl.c_str(), rCreateOk.json.value("robot_url", "").c_str());
+
+    Reply rGetRobots = http().get("/api/v1/robots", u1.token);
+    EXPECT_STATUS(200, rGetRobots);
+    CHECK_TRUE(rGetRobots.json.is_object());
+    CHECK_TRUE(rGetRobots.json["robots"].is_array());
+    CHECK_TRUE(rGetRobots.json["robots"].size() >= 1);
+    STRCMP_EQUAL(validUrl.c_str(), rGetRobots.json["robots"][0].value("robot_url", "").c_str());
+
+    // 2. Editable robot name with 24-hour cooldown
+    Reply rRenameOk = http().patch(
+        "/api/v1/robots/" + bot1Uuid, u1.token,
+        Json{{"robot_name", "bot-renamed-1"}});
+    EXPECT_STATUS(200, rRenameOk);
+    STRCMP_EQUAL("bot-renamed-1", rRenameOk.json.value("robot_name", "").c_str());
+    CHECK_TRUE(rRenameOk.json.value("name_changed_at", 0) > 0);
+
+    // Immediate second rename returns 429 ROBOT_NAME_RATE_LIMITED
+    Reply rRenameRateLimited = http().patch(
+        "/api/v1/robots/" + bot1Uuid, u1.token,
+        Json{{"robot_name", "bot-renamed-2"}});
+    EXPECT_ERROR(429, "ROBOT_NAME_RATE_LIMITED", rRenameRateLimited);
+
+    // u2 creates another robot
+    Reply rBot2 = http().post(
+        "/api/v1/robots", u2.token,
+        Json{{"robot_name", "bot-u2-orig"}, {"description", "u2 bot"}});
+    EXPECT_STATUS(201, rBot2);
+    std::string bot2Uuid = rBot2.json.value("robot_uuid", "");
+
+    // Renaming to already taken name returns 409 ROBOT_NAME_TAKEN
+    Reply rRenameTaken = http().patch(
+        "/api/v1/robots/" + bot2Uuid, u2.token,
+        Json{{"robot_name", "bot-renamed-1"}});
+    EXPECT_ERROR(409, "ROBOT_NAME_TAKEN", rRenameTaken);
+
+    // Clearing robot_url by passing empty string is accepted immediately
+    Reply rClearUrl = http().patch(
+        "/api/v1/robots/" + bot1Uuid, u1.token,
+        Json{{"robot_url", ""}});
+    EXPECT_STATUS(200, rClearUrl);
+    STRCMP_EQUAL("", rClearUrl.json.value("robot_url", "NON_EMPTY").c_str());
+
+    unsetenv("OCTI_ALLOW_LOOPBACK_ROBOT_URL_FOR_TEST");
+
+    // 3. Play a match with bot-renamed-1 and verify archive query reflection by name
+    Reply rTab = http().post(
+        "/api/v1/tables", u1.token,
+        Json{{"mode", "2P"}, {"bases", 3}, {"allow_robots", true}});
+    EXPECT_STATUS(201, rTab);
+    std::string roomId = rTab.json.value("room_id", "");
+    CHECK_FALSE(roomId.empty());
+
+    Reply rJoin = http().post(
+        "/api/v1/tables/" + roomId + "/join", bot1Token, Json{{"seat", 2}});
+    EXPECT_STATUS(200, rJoin);
+
+    Reply rResign = http().post(
+        "/api/v1/games/" + roomId + "/resign", u1.token, Json::object());
+    EXPECT_STATUS(200, rResign);
+
+    Reply rArchByName = http().get("/api/v1/archive/games?robot=bot-renamed-1");
+    EXPECT_STATUS(200, rArchByName);
+    CHECK_EQUAL(1, rArchByName.json.value("total", 0));
+    CHECK_TRUE(rArchByName.json["games"].is_array());
+    CHECK_EQUAL(1, static_cast<int>(rArchByName.json["games"].size()));
+    STRCMP_EQUAL(roomId.c_str(), rArchByName.json["games"][0].value("game_id", "").c_str());
+
+    const Json &players = rArchByName.json["games"][0]["players"];
+    CHECK_EQUAL(2, static_cast<int>(players.size()));
+    STRCMP_EQUAL("bot-renamed-1", players[1].value("handle", "").c_str());
+    STRCMP_EQUAL(bot1Uuid.c_str(), players[1].value("robot_uuid", "").c_str());
 }
 
 int main(int argc, char **argv)

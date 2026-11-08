@@ -1034,6 +1034,9 @@ void LobbyView::appendLobbyChatEntry(const LobbyChatEntry &entry)
                 _chatTranscript->verticalScrollBar()->maximum());
         }
     }
+    if (_onChatAppendedCallback) {
+        _onChatAppendedCallback(normalized);
+    }
 }
 
 const std::vector<TableSummaryInfo> &LobbyView::tables() const
@@ -1294,6 +1297,9 @@ void LobbyView::rebuildChatTranscript()
     if (_chatTranscript->verticalScrollBar()) {
         _chatTranscript->verticalScrollBar()->setValue(
             _chatTranscript->verticalScrollBar()->maximum());
+    }
+    if (_onChatTranscriptRebuiltCallback) {
+        _onChatTranscriptRebuiltCallback();
     }
 }
 

@@ -306,6 +306,8 @@ struct RobotRecord {
     bool revoked = false;
     int64_t revokedAt = 0;
     bool tokenDeleted = false;
+    int64_t nameChangedAt = 0;
+    std::string robotUrl;
 };
 
 struct RobotDirectoryFilter {
@@ -321,6 +323,8 @@ enum class RobotStatus {
     INVALID_ROBOT_NAME,
     INVALID_ROBOT_DESCRIPTION,
     ROBOT_NAME_TAKEN,
+    ROBOT_NAME_RATE_LIMITED,
+    INVALID_ROBOT_URL,
     ROBOT_LIMIT_REACHED,
     NOT_FOUND,
     ALREADY_REVOKED,
@@ -436,12 +440,24 @@ public:
                    std::vector<UserDirectoryEntry> &out,
                    int64_t *total = nullptr);
 
+    static bool validRobotUrlSyntax(const std::string &url);
+
     CreateRobotResult createRobot(int64_t ownerPlayerId,
                                   const std::string &robotName,
-                                  const std::string &description = "");
+                                  const std::string &description = "",
+                                  const std::string &robotUrl = "");
     RobotStatus updateRobotDescription(int64_t ownerPlayerId,
                                        const std::string &robotUuidOrName,
                                        const std::string &description);
+    RobotStatus updateRobot(int64_t ownerPlayerId,
+                            const std::string &robotUuidOrName,
+                            bool setRobotName,
+                            const std::string &robotName,
+                            bool setDescription,
+                            const std::string &description,
+                            bool setRobotUrl = false,
+                            const std::string &robotUrl = "",
+                            RobotRecord *updated = nullptr);
     bool listRobots(int64_t ownerPlayerId, std::vector<RobotRecord> &out);
     bool listPublicRobotsByOwner(int64_t ownerPlayerId,
                                  std::vector<RobotRecord> &out);

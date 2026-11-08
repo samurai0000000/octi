@@ -21,6 +21,15 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
+#include <openssl/ssl.h>
+
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <poll.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <atomic>
@@ -149,6 +158,300 @@ bool isSafeId(const std::string &s)
         }
     }
     return true;
+}
+
+bool isPrivateOrLoopbackIp(const struct sockaddr *sa, socklen_t /*saLen*/, std::string &errReason)
+{
+    const char *allowLoopbackEnv = std::getenv("OCTI_ALLOW_LOOPBACK_ROBOT_URL_FOR_TEST");
+    bool loopbackAllowed = (allowLoopbackEnv && std::string(allowLoopbackEnv) == "1");
+
+    if (sa->sa_family == AF_INET) {
+        const auto *sin = reinterpret_cast<const struct sockaddr_in *>(sa);
+        uint32_t ip = ntohl(sin->sin_addr.s_addr);
+
+        // Loopback: 127.0.0.0/8
+        if ((ip >> 24) == 127) {
+            if (!loopbackAllowed) {
+                errReason = "loopback IP addresses are not permitted";
+                return true;
+            }
+            return false;
+        }
+        // Private RFC1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+        if ((ip >> 24) == 10 ||
+            (ip >= 0xAC100000 && ip <= 0xAC1FFFFF) ||
+            ((ip >> 16) == 0xC0A8)) {
+            errReason = "private network IP addresses are not permitted";
+            return true;
+        }
+        // Link-local / Cloud metadata: 169.254.0.0/16
+        if ((ip >> 16) == 0xA9FE) {
+            errReason = "link-local / cloud metadata IP addresses are not permitted";
+            return true;
+        }
+        // Unspecified / broadcast: 0.0.0.0/8, 255.255.255.255
+        if ((ip >> 24) == 0 || ip == 0xFFFFFFFF) {
+            errReason = "unspecified or broadcast IP addresses are not permitted";
+            return true;
+        }
+    } else if (sa->sa_family == AF_INET6) {
+        const auto *sin6 = reinterpret_cast<const struct sockaddr_in6 *>(sa);
+        const unsigned char *b = sin6->sin6_addr.s6_addr;
+        // ::1 loopback
+        bool isLoopback6 = true;
+        for (int i = 0; i < 15; ++i) {
+            if (b[i] != 0) { isLoopback6 = false; break; }
+        }
+        if (isLoopback6 && b[15] == 1) {
+            if (!loopbackAllowed) {
+                errReason = "IPv6 loopback address is not permitted";
+                return true;
+            }
+            return false;
+        }
+        // fe80::/10 link local
+        if (b[0] == 0xFE && (b[1] & 0xC0) == 0x80) {
+            errReason = "IPv6 link-local address is not permitted";
+            return true;
+        }
+        // fc00::/7 unique local
+        if ((b[0] & 0xFE) == 0xFC) {
+            errReason = "IPv6 unique local address is not permitted";
+            return true;
+        }
+        // :: unspecified
+        bool isZero = true;
+        for (int i = 0; i < 16; ++i) {
+            if (b[i] != 0) { isZero = false; break; }
+        }
+        if (isZero) {
+            errReason = "IPv6 unspecified address is not permitted";
+            return true;
+        }
+    }
+    return false;
+}
+
+bool probeSingleHttpOrHttpsWithMethod(const std::string &url,
+                                      const std::string &method,
+                                      int &statusCodeOut,
+                                      std::string &redirectLocationOut,
+                                      std::string &errReason)
+{
+    std::string lower;
+    lower.reserve(url.size());
+    for (char c : url) {
+        lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    }
+
+    bool isHttps = (lower.rfind("https://", 0) == 0);
+    bool isHttp = (lower.rfind("http://", 0) == 0);
+    if (!isHttp && !isHttps) {
+        errReason = "scheme must be http:// or https://";
+        return false;
+    }
+    size_t schemeEnd = isHttps ? 8 : 7;
+    size_t pathStart = url.find('/', schemeEnd);
+    std::string auth = (pathStart == std::string::npos) ? url.substr(schemeEnd) : url.substr(schemeEnd, pathStart - schemeEnd);
+    std::string path = (pathStart == std::string::npos) ? "/" : url.substr(pathStart);
+    if (path.empty()) path = "/";
+
+    size_t colon = auth.find(':');
+    std::string host = (colon == std::string::npos) ? auth : auth.substr(0, colon);
+    int port = isHttps ? 443 : 80;
+    if (colon != std::string::npos) {
+        port = std::atoi(auth.substr(colon + 1).c_str());
+    }
+
+    struct addrinfo hints;
+    std::memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    struct addrinfo *resList = nullptr;
+    std::string portStr = std::to_string(port);
+    int gaErr = getaddrinfo(host.c_str(), portStr.c_str(), &hints, &resList);
+    if (gaErr != 0 || !resList) {
+        errReason = "hostname could not be resolved: " + host;
+        return false;
+    }
+
+    for (struct addrinfo *p = resList; p != nullptr; p = p->ai_next) {
+        if (isPrivateOrLoopbackIp(p->ai_addr, p->ai_addrlen, errReason)) {
+            freeaddrinfo(resList);
+            return false;
+        }
+    }
+
+    int sock = -1;
+    for (struct addrinfo *p = resList; p != nullptr; p = p->ai_next) {
+        sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if (sock < 0) continue;
+
+        int flags = fcntl(sock, F_GETFL, 0);
+        fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+
+        int rc = connect(sock, p->ai_addr, p->ai_addrlen);
+        if (rc < 0 && errno == EINPROGRESS) {
+            struct pollfd pfd;
+            pfd.fd = sock;
+            pfd.events = POLLOUT;
+            int prc = poll(&pfd, 1, 3000);
+            if (prc > 0 && (pfd.revents & POLLOUT)) {
+                int sockErr = 0;
+                socklen_t errLen = sizeof(sockErr);
+                getsockopt(sock, SOL_SOCKET, SO_ERROR, &sockErr, &errLen);
+                if (sockErr == 0) {
+                    break;
+                }
+            }
+        } else if (rc == 0) {
+            break;
+        }
+        close(sock);
+        sock = -1;
+    }
+    freeaddrinfo(resList);
+
+    if (sock < 0) {
+        errReason = "could not connect to target within 3 seconds: " + host;
+        return false;
+    }
+
+    int flags = fcntl(sock, F_GETFL, 0);
+    fcntl(sock, F_SETFL, flags & ~O_NONBLOCK);
+    struct timeval tv;
+    tv.tv_sec = 3;
+    tv.tv_usec = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+
+    std::string req = method + " " + path + " HTTP/1.1\r\n" +
+                      "Host: " + host + "\r\n" +
+                      "User-Agent: OctiBot-UrlVerifier/1.0\r\n" +
+                      "Connection: close\r\n" +
+                      "Accept: */*\r\n\r\n";
+
+    char respBuf[4096];
+    int bytesRead = 0;
+
+    if (isHttps) {
+        SSL_CTX *sslCtx = SSL_CTX_new(TLS_client_method());
+        if (!sslCtx) {
+            close(sock);
+            errReason = "failed to initialize TLS context";
+            return false;
+        }
+        SSL *ssl = SSL_new(sslCtx);
+        SSL_set_tlsext_host_name(ssl, host.c_str());
+        SSL_set_fd(ssl, sock);
+        if (SSL_connect(ssl) <= 0) {
+            SSL_free(ssl);
+            SSL_CTX_free(sslCtx);
+            close(sock);
+            errReason = "TLS handshake failed with " + host;
+            return false;
+        }
+        SSL_write(ssl, req.data(), static_cast<int>(req.size()));
+        bytesRead = SSL_read(ssl, respBuf, sizeof(respBuf) - 1);
+        SSL_shutdown(ssl);
+        SSL_free(ssl);
+        SSL_CTX_free(sslCtx);
+    } else {
+        send(sock, req.data(), req.size(), 0);
+        bytesRead = recv(sock, respBuf, sizeof(respBuf) - 1, 0);
+    }
+    close(sock);
+
+    if (bytesRead <= 0) {
+        errReason = "no HTTP response received from " + host;
+        return false;
+    }
+    respBuf[bytesRead] = '\0';
+    std::string respStr(respBuf, bytesRead);
+
+    size_t sp1 = respStr.find(' ');
+    if (sp1 == std::string::npos) {
+        errReason = "malformed HTTP status line";
+        return false;
+    }
+    size_t sp2 = respStr.find(' ', sp1 + 1);
+    size_t crlf = respStr.find("\r\n");
+    size_t endCode = (sp2 != std::string::npos && (crlf == std::string::npos || sp2 < crlf)) ? sp2 : crlf;
+    if (endCode == std::string::npos) {
+        errReason = "malformed HTTP status line";
+        return false;
+    }
+    std::string codeStr = respStr.substr(sp1 + 1, endCode - (sp1 + 1));
+    int code = std::atoi(codeStr.c_str());
+    if (code <= 0) {
+        errReason = "invalid HTTP status code";
+        return false;
+    }
+    statusCodeOut = code;
+
+    redirectLocationOut.clear();
+    if (code >= 300 && code < 400) {
+        size_t locPos = respStr.find("\r\nLocation:");
+        if (locPos == std::string::npos) locPos = respStr.find("\r\nlocation:");
+        if (locPos != std::string::npos) {
+            size_t valStart = locPos + 11;
+            while (valStart < respStr.size() && respStr[valStart] == ' ') valStart++;
+            size_t valEnd = respStr.find("\r\n", valStart);
+            if (valEnd != std::string::npos) {
+                redirectLocationOut = respStr.substr(valStart, valEnd - valStart);
+            }
+        }
+    }
+    return true;
+}
+
+bool verifyRobotUrlReachable(const std::string &initialUrl, std::string &errReason)
+{
+    std::string currentUrl = initialUrl;
+    for (int hop = 0; hop < 4; ++hop) {
+        if (!AccountStore::validRobotUrlSyntax(currentUrl)) {
+            errReason = "invalid URL syntax or rejected tracking query parameter: " + currentUrl;
+            return false;
+        }
+
+        int statusCode = 0;
+        std::string redirectLoc;
+        bool ok = probeSingleHttpOrHttpsWithMethod(currentUrl, "HEAD", statusCode, redirectLoc, errReason);
+        if (!ok || statusCode == 405 || statusCode == 403 || statusCode == 501) {
+            ok = probeSingleHttpOrHttpsWithMethod(currentUrl, "GET", statusCode, redirectLoc, errReason);
+        }
+        if (!ok) {
+            return false;
+        }
+
+        if (statusCode >= 200 && statusCode <= 299) {
+            return true;
+        }
+
+        if (statusCode >= 300 && statusCode < 400 && !redirectLoc.empty()) {
+            if (redirectLoc.rfind("http://", 0) != 0 && redirectLoc.rfind("https://", 0) != 0) {
+                size_t schemeEnd = currentUrl.find("://");
+                if (schemeEnd != std::string::npos) {
+                    schemeEnd += 3;
+                    size_t slash = currentUrl.find('/', schemeEnd);
+                    std::string origin = currentUrl.substr(0, slash);
+                    if (redirectLoc.front() != '/') redirectLoc = "/" + redirectLoc;
+                    currentUrl = origin + redirectLoc;
+                } else {
+                    errReason = "invalid redirect location";
+                    return false;
+                }
+            } else {
+                currentUrl = redirectLoc;
+            }
+            continue;
+        }
+
+        errReason = "target returned HTTP " + std::to_string(statusCode);
+        return false;
+    }
+    errReason = "too many redirects";
+    return false;
 }
 
 const std::string kOauthStateSecret = "octi_oauth_state_hmac_secret_2026";
@@ -1758,10 +2061,16 @@ Json OctiHttpServer::Impl::gameSummaryJson(const GameRecord &g)
             p["is_robot"] = true;
             RobotRecord rRec;
             if (store.getRobotById(robotIds[i], rRec)) {
-                p["robot_uuid"] = rRec.robotUuid;
+                p["handle"] = rRec.robotName;
+                if (rRec.gamesPlayed > 0) {
+                    p["robot_uuid"] = rRec.robotUuid;
+                }
             }
         } else if (ids[i] != 0) {
-            p["player_uuid"] = uuidOf(ids[i]);
+            std::string u = uuidOf(ids[i]);
+            if (!u.empty()) {
+                p["player_uuid"] = u;
+            }
         }
         players.push_back(p);
     }
@@ -2986,6 +3295,8 @@ Json OctiHttpServer::Impl::buildRobotProfilePayload(const RobotRecord &r)
     rj["display_name"] = r.robotName;
     rj["description"] = r.description;
     rj["bio"] = r.description;
+    rj["robot_url"] = r.robotUrl;
+    rj["name_changed_at"] = r.nameChangedAt;
     rj["avatar_url"] = r.ownerAvatarUrl;
     rj["owner_uuid"] = r.ownerUuid;
     rj["owner_handle"] = r.ownerHandle;
@@ -3026,6 +3337,16 @@ Json OctiHttpServer::Impl::buildRobotProfilePayload(const RobotRecord &r)
         gj["p2_handle"] = g.p2Handle;
         gj["p3_handle"] = g.p3Handle;
         gj["p4_handle"] = g.p4Handle;
+        if (gj.contains("players") && gj["players"].is_array()) {
+            for (const auto &pl : gj["players"]) {
+                int seat = pl.value("seat", 0);
+                std::string h = pl.value("handle", "");
+                if (seat == 1) gj["p1_handle"] = h;
+                else if (seat == 2) gj["p2_handle"] = h;
+                else if (seat == 3) gj["p3_handle"] = h;
+                else if (seat == 4) gj["p4_handle"] = h;
+            }
+        }
 
         int mySeat = 0;
         if (r.robotId > 0) {
@@ -3119,6 +3440,8 @@ void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
         rj["robot_uuid"] = r.robotUuid;
         rj["robot_name"] = r.robotName;
         rj["description"] = r.description;
+        rj["robot_url"] = r.robotUrl;
+        rj["name_changed_at"] = r.nameChangedAt;
         rj["games_played"] = r.gamesPlayed;
         rj["wins"] = r.wins;
         rj["losses"] = r.losses;
@@ -3141,6 +3464,16 @@ void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
         gj["p2_handle"] = g.p2Handle;
         gj["p3_handle"] = g.p3Handle;
         gj["p4_handle"] = g.p4Handle;
+        if (gj.contains("players") && gj["players"].is_array()) {
+            for (const auto &pl : gj["players"]) {
+                int seat = pl.value("seat", 0);
+                std::string h = pl.value("handle", "");
+                if (seat == 1) gj["p1_handle"] = h;
+                else if (seat == 2) gj["p2_handle"] = h;
+                else if (seat == 3) gj["p3_handle"] = h;
+                else if (seat == 4) gj["p4_handle"] = h;
+            }
+        }
 
         int mySeat = 0;
         if (prof.playerId > 0 && prof.playerId == g.p1PlayerId) mySeat = 1;
@@ -3238,6 +3571,8 @@ void OctiHttpServer::Impl::handleRobotsDirectory(const Request &req, Response &r
         rj["display_name"] = r.robotName;
         rj["description"] = r.description;
         rj["bio"] = r.description;
+        rj["robot_url"] = r.robotUrl;
+        rj["name_changed_at"] = r.nameChangedAt;
         rj["is_robot"] = true;
         rj["elo"] = 1200;
         rj["games_played"] = r.gamesPlayed;
@@ -3325,6 +3660,8 @@ void OctiHttpServer::Impl::handleRobotsList(const Request &req, Response &res)
         rj["robot_uuid"] = r.robotUuid;
         rj["robot_name"] = r.robotName;
         rj["description"] = r.description;
+        rj["robot_url"] = r.robotUrl;
+        rj["name_changed_at"] = r.nameChangedAt;
         rj["owner_uuid"] = r.ownerUuid;
         rj["owner_handle"] = r.ownerHandle;
         rj["robot_token"] = r.token;
@@ -3369,13 +3706,37 @@ void OctiHttpServer::Impl::handleRobotCreate(const Request &req, Response &res)
     std::string desc;
     fieldString(body, "description", false, desc, err);
 
-    CreateRobotResult cr = store.createRobot(auth.playerId, name, desc);
+    std::string robotUrl;
+    if (fieldPresent(body, "robot_url")) {
+        fieldString(body, "robot_url", false, robotUrl, err);
+        while (!robotUrl.empty() && std::isspace(static_cast<unsigned char>(robotUrl.front()))) {
+            robotUrl.erase(robotUrl.begin());
+        }
+        while (!robotUrl.empty() && std::isspace(static_cast<unsigned char>(robotUrl.back()))) {
+            robotUrl.pop_back();
+        }
+        if (!robotUrl.empty()) {
+            if (!AccountStore::validRobotUrlSyntax(robotUrl)) {
+                sendError(res, 400, "INVALID_ROBOT_URL", "invalid robot URL");
+                return;
+            }
+            std::string reachErr;
+            if (!verifyRobotUrlReachable(robotUrl, reachErr)) {
+                sendError(res, 400, "INVALID_ROBOT_URL", reachErr);
+                return;
+            }
+        }
+    }
+
+    CreateRobotResult cr = store.createRobot(auth.playerId, name, desc, robotUrl);
     switch (cr.status) {
     case RobotStatus::OK: {
         Json j;
         j["robot_uuid"] = cr.robot.robotUuid;
         j["robot_name"] = cr.robot.robotName;
         j["description"] = cr.robot.description;
+        j["robot_url"] = cr.robot.robotUrl;
+        j["name_changed_at"] = cr.robot.nameChangedAt;
         j["owner_uuid"] = cr.robot.ownerUuid;
         j["owner_handle"] = cr.robot.ownerHandle;
         j["robot_token"] = cr.rawToken;
@@ -3392,6 +3753,10 @@ void OctiHttpServer::Impl::handleRobotCreate(const Request &req, Response &res)
     case RobotStatus::INVALID_ROBOT_DESCRIPTION:
         sendError(res, 400, "INVALID_ROBOT_DESCRIPTION",
                   cr.errorMessage.empty() ? "invalid robot description" : cr.errorMessage);
+        return;
+    case RobotStatus::INVALID_ROBOT_URL:
+        sendError(res, 400, "INVALID_ROBOT_URL",
+                  cr.errorMessage.empty() ? "invalid robot URL" : cr.errorMessage);
         return;
     case RobotStatus::ROBOT_NAME_TAKEN:
         sendError(res, 409, "ROBOT_NAME_TAKEN", "robot name already taken");
@@ -3417,27 +3782,101 @@ void OctiHttpServer::Impl::handleRobotPatch(const Request &req, Response &res)
     if (!readJsonBody(req, res, body, false)) {
         return;
     }
+
+    bool hasDesc = false;
     std::string desc;
     std::string err;
-    if (!fieldString(body, "description", true, desc, err)) {
-        sendError(res, 400, "INVALID_ARGUMENT", err);
+    if (fieldPresent(body, "description")) {
+        hasDesc = true;
+        if (!fieldString(body, "description", false, desc, err)) {
+            sendError(res, 400, "INVALID_ARGUMENT", err);
+            return;
+        }
+    }
+
+    bool hasName = false;
+    std::string name;
+    if (fieldPresent(body, "robot_name")) {
+        hasName = true;
+        if (!fieldString(body, "robot_name", false, name, err)) {
+            sendError(res, 400, "INVALID_ARGUMENT", err);
+            return;
+        }
+    } else if (fieldPresent(body, "name")) {
+        hasName = true;
+        if (!fieldString(body, "name", false, name, err)) {
+            sendError(res, 400, "INVALID_ARGUMENT", err);
+            return;
+        }
+    }
+
+    bool hasUrl = false;
+    std::string robotUrl;
+    if (fieldPresent(body, "robot_url")) {
+        hasUrl = true;
+        if (!fieldString(body, "robot_url", false, robotUrl, err)) {
+            sendError(res, 400, "INVALID_ARGUMENT", err);
+            return;
+        }
+        while (!robotUrl.empty() && std::isspace(static_cast<unsigned char>(robotUrl.front()))) {
+            robotUrl.erase(robotUrl.begin());
+        }
+        while (!robotUrl.empty() && std::isspace(static_cast<unsigned char>(robotUrl.back()))) {
+            robotUrl.pop_back();
+        }
+        if (!robotUrl.empty()) {
+            if (!AccountStore::validRobotUrlSyntax(robotUrl)) {
+                sendError(res, 400, "INVALID_ROBOT_URL", "invalid robot URL");
+                return;
+            }
+            std::string reachErr;
+            if (!verifyRobotUrlReachable(robotUrl, reachErr)) {
+                sendError(res, 400, "INVALID_ROBOT_URL", reachErr);
+                return;
+            }
+        }
+    }
+
+    if (!hasDesc && !hasName && !hasUrl) {
+        sendError(res, 400, "INVALID_ARGUMENT", "no update fields provided");
         return;
     }
-    RobotStatus st = store.updateRobotDescription(auth.playerId, id, desc);
+
+    RobotRecord updated;
+    RobotStatus st = store.updateRobot(auth.playerId, id, hasName, name, hasDesc, desc, hasUrl, robotUrl, &updated);
     switch (st) {
     case RobotStatus::OK: {
+        rooms.refreshCachedPlayerStats();
         Json j;
         j["updated"] = true;
-        j["robot_uuid"] = id;
-        j["description"] = desc;
+        j["robot_uuid"] = updated.robotUuid;
+        j["robot_name"] = updated.robotName;
+        j["description"] = updated.description;
+        j["robot_url"] = updated.robotUrl;
+        j["name_changed_at"] = updated.nameChangedAt;
         sendJson(res, 200, j);
         return;
     }
+    case RobotStatus::INVALID_ROBOT_NAME:
+        sendError(res, 400, "INVALID_ROBOT_NAME", "invalid robot name");
+        return;
     case RobotStatus::INVALID_ROBOT_DESCRIPTION:
         sendError(res, 400, "INVALID_ROBOT_DESCRIPTION", "invalid robot description");
         return;
+    case RobotStatus::INVALID_ROBOT_URL:
+        sendError(res, 400, "INVALID_ROBOT_URL", "invalid robot URL");
+        return;
+    case RobotStatus::ROBOT_NAME_TAKEN:
+        sendError(res, 409, "ROBOT_NAME_TAKEN", "robot name already taken");
+        return;
+    case RobotStatus::ROBOT_NAME_RATE_LIMITED:
+        sendError(res, 429, "ROBOT_NAME_RATE_LIMITED", "Robot name can only be changed once every 24 hours.");
+        return;
     case RobotStatus::NOT_FOUND:
         sendError(res, 404, "NOT_FOUND", "robot not found");
+        return;
+    case RobotStatus::ALREADY_REVOKED:
+        sendError(res, 409, "ALREADY_REVOKED", "robot is revoked");
         return;
     default:
         break;

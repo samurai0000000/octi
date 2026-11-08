@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -91,6 +92,7 @@ fun OctiReserveHud(
     val activeRoomId by viewModel.activeRoomId.collectAsState()
     val activeGameView by viewModel.activeGameView.collectAsState()
     val gameChatLog by viewModel.gameChatLog.collectAsState()
+    val lobbyChatMessages by viewModel.lobbyChatMessages.collectAsState()
     val themeId by viewModel.theme.collectAsState()
     val pal = OctiPalette.forTheme(themeId)
     val isInteractiveTurn = viewModel.isInteractiveOnlineTurn()
@@ -423,96 +425,272 @@ fun OctiReserveHud(
                 }
             }
 
-            val chatListState = rememberLazyListState()
-            LaunchedEffect(gameChatLog.size) {
-                if (gameChatLog.isNotEmpty()) {
-                    chatListState.scrollToItem(gameChatLog.size - 1)
-                }
-            }
+            val isOnlineRoom = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM
 
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .heightIn(min = 96.dp)
-                    .clickable { viewModel.setShowBoardChatZoomDialog(true) },
-                color = OctiTheme.colors.windowBg,
-                shape = RoundedCornerShape(6.dp),
-                border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
-            ) {
-                Column(
+            if (isOnlineRoom) {
+                Row(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .heightIn(min = 96.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    // 1. Table Chat Card
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clickable { viewModel.openBoardChatZoomDialog() },
+                        color = OctiTheme.colors.windowBg,
+                        shape = RoundedCornerShape(6.dp),
+                        border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
                     ) {
-                        Text(
-                            text = "Table Chat",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = OctiTheme.colors.textSecondary
-                        )
-                        Surface(
-                            color = OctiTheme.colors.panelCardBg,
-                            shape = RoundedCornerShape(4.dp),
-                            border = BorderStroke(1.dp, OctiTheme.colors.accentBrass)
-                        ) {
-                            Text(
-                                text = "Chat ⤢",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = OctiTheme.colors.accentBrass,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
-                            )
-                        }
-                    }
-                    if (gameChatLog.isEmpty()) {
-                        Box(
+                        Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            Text(
-                                text = "Table Chat • Tap to open & chat",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = OctiTheme.colors.textSecondary,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    } else {
-                        LazyColumn(
-                            state = chatListState,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
+                                .fillMaxSize()
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
-                            items(gameChatLog) { msg ->
-                                val sender = if (msg.senderHandle.isNotEmpty()) {
-                                    val clean = msg.senderHandle.removePrefix("@")
-                                    if (clean.equals("bot", ignoreCase = true) || clean.equals("stock", ignoreCase = true)) {
-                                        "@$clean [BOT]"
-                                    } else {
-                                        "@$clean"
-                                    }
-                                } else {
-                                    "You"
-                                }
-                                val scopePrefix = if (msg.scope.equals("TEAM", ignoreCase = true)) "[TEAM] " else ""
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    text = "$scopePrefix$sender: ${msg.text}",
+                                    text = "Table Chat",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = OctiTheme.colors.textPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    color = OctiTheme.colors.textSecondary
+                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (activeRoomId.isNotEmpty()) {
+                                        OutlinedButton(
+                                            onClick = { viewModel.leaveOnlineTableAsync(activeRoomId) },
+                                            modifier = Modifier.height(22.dp),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                                        ) {
+                                            Text("Leave", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+                                        }
+                                    }
+                                    Surface(
+                                        color = OctiTheme.colors.panelCardBg,
+                                        shape = RoundedCornerShape(4.dp),
+                                        border = BorderStroke(1.dp, OctiTheme.colors.accentBrass)
+                                    ) {
+                                        Text(
+                                            text = "⤢",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = OctiTheme.colors.accentBrass,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            val recentTableMessages = gameChatLog.takeLast(4)
+                            if (recentTableMessages.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Text(
+                                        text = "Table Chat • Tap to open",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = OctiTheme.colors.textSecondary,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            } else {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                                ) {
+                                    for (msg in recentTableMessages) {
+                                        val sender = if (msg.senderHandle.isNotEmpty()) {
+                                            val clean = msg.senderHandle.removePrefix("@")
+                                            if (clean.equals("bot", ignoreCase = true) || clean.equals("stock", ignoreCase = true)) {
+                                                "@$clean [BOT]"
+                                            } else {
+                                                "@$clean"
+                                            }
+                                        } else {
+                                            "You"
+                                        }
+                                        val scopePrefix = if (msg.scope.equals("TEAM", ignoreCase = true)) "[TEAM] " else ""
+                                        Text(
+                                            text = "$scopePrefix$sender: ${msg.text}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = OctiTheme.colors.textPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Lobby Chat Card
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clickable { viewModel.openLobbyChatZoomDialog() },
+                        color = OctiTheme.colors.windowBg,
+                        shape = RoundedCornerShape(6.dp),
+                        border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Lobby Chat",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = OctiTheme.colors.textSecondary
+                                )
+                                Surface(
+                                    color = OctiTheme.colors.panelCardBg,
+                                    shape = RoundedCornerShape(4.dp),
+                                    border = BorderStroke(1.dp, OctiTheme.colors.accentBrass)
+                                ) {
+                                    Text(
+                                        text = "⤢",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = OctiTheme.colors.accentBrass,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                            val recentLobbyMessages = lobbyChatMessages.takeLast(4)
+                            if (recentLobbyMessages.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Text(
+                                        text = "Global Lobby • Tap to chat",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = OctiTheme.colors.textSecondary,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            } else {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                                ) {
+                                    for (msgLine in recentLobbyMessages) {
+                                        Text(
+                                            text = msgLine,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = OctiTheme.colors.textPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Local AI / local game: only Lobby Chat in non-board chat area
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .heightIn(min = 96.dp)
+                        .clickable { viewModel.openLobbyChatZoomDialog() },
+                    color = OctiTheme.colors.windowBg,
+                    shape = RoundedCornerShape(6.dp),
+                    border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Lobby Chat (Global)",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = OctiTheme.colors.textSecondary
+                            )
+                            Surface(
+                                color = OctiTheme.colors.panelCardBg,
+                                shape = RoundedCornerShape(4.dp),
+                                border = BorderStroke(1.dp, OctiTheme.colors.accentBrass)
+                            ) {
+                                Text(
+                                    text = "Chat ⤢",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = OctiTheme.colors.accentBrass,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                        val recentLobbyMessages = lobbyChatMessages.takeLast(4)
+                        if (recentLobbyMessages.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = "Global Lobby Chat • Tap to open & chat",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = OctiTheme.colors.textSecondary,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                for (msgLine in recentLobbyMessages) {
+                                    Text(
+                                        text = msgLine,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = OctiTheme.colors.textPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
                     }

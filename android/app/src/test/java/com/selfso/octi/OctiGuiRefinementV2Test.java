@@ -1256,32 +1256,50 @@ public class OctiGuiRefinementV2Test {
         com.selfso.octi.ui.OctiAppViewModel vm = new com.selfso.octi.ui.OctiAppViewModel(
                 store, new OctiNetworkClient());
 
-        // Tab to virtual screen index
+        // Tab to virtual screen index (2-view consolidation: 0 = ONLINE_LOBBY, 1 = BOARD, -1 = else)
         assertEquals(0, vm.virtualScreenIndexForTab(com.selfso.octi.ui.OctiAppViewModel.AppTab.ONLINE_LOBBY));
         assertEquals(1, vm.virtualScreenIndexForTab(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD));
-        assertEquals(2, vm.virtualScreenIndexForTab(com.selfso.octi.ui.OctiAppViewModel.AppTab.LOBBY_CHAT));
+        assertEquals(-1, vm.virtualScreenIndexForTab(com.selfso.octi.ui.OctiAppViewModel.AppTab.LOBBY_CHAT));
         assertEquals(-1, vm.virtualScreenIndexForTab(com.selfso.octi.ui.OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD));
 
         // Virtual screen index to tab
         assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.ONLINE_LOBBY, vm.tabForVirtualScreenIndex(0));
         assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD, vm.tabForVirtualScreenIndex(1));
-        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.LOBBY_CHAT, vm.tabForVirtualScreenIndex(2));
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD, vm.tabForVirtualScreenIndex(2));
         assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD, vm.tabForVirtualScreenIndex(3));
         assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD, vm.tabForVirtualScreenIndex(-1));
 
-        // Swipe navigation and clamping
-        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD, vm.getCurrentTab().getValue());
-        vm.swipeToNextVirtualScreen();
-        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.LOBBY_CHAT, vm.getCurrentTab().getValue());
-        vm.swipeToNextVirtualScreen(); // clamped at index 2
-        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.LOBBY_CHAT, vm.getCurrentTab().getValue());
+        // Startup default tab must be ONLINE_LOBBY
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.ONLINE_LOBBY, vm.getCurrentTab().getValue());
 
-        vm.swipeToPreviousVirtualScreen();
+        // 2-view swipe navigation and clamping (0: ONLINE_LOBBY <-> 1: BOARD)
+        vm.swipeToNextVirtualScreen();
         assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD, vm.getCurrentTab().getValue());
+        vm.swipeToNextVirtualScreen(); // clamped at index 1
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD, vm.getCurrentTab().getValue());
+
         vm.swipeToPreviousVirtualScreen();
         assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.ONLINE_LOBBY, vm.getCurrentTab().getValue());
         vm.swipeToPreviousVirtualScreen(); // clamped at index 0
         assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.ONLINE_LOBBY, vm.getCurrentTab().getValue());
+
+        // Starting a new local game automatically selects the Board view
+        vm.selectTab(com.selfso.octi.ui.OctiAppViewModel.AppTab.ONLINE_LOBBY);
+        vm.startNewLocalGame();
+        assertEquals(com.selfso.octi.ui.OctiAppViewModel.AppTab.BOARD, vm.getCurrentTab().getValue());
+
+        // Connected Users & Robots and Lobby Chat Zoom dialog StateFlows
+        assertFalse(vm.getShowConnectedUsersDialog().getValue());
+        vm.openConnectedUsersDialog();
+        assertTrue(vm.getShowConnectedUsersDialog().getValue());
+        vm.dismissConnectedUsersDialog();
+        assertFalse(vm.getShowConnectedUsersDialog().getValue());
+
+        assertFalse(vm.getShowLobbyChatZoomDialog().getValue());
+        vm.openLobbyChatZoomDialog();
+        assertTrue(vm.getShowLobbyChatZoomDialog().getValue());
+        vm.dismissLobbyChatZoomDialog();
+        assertFalse(vm.getShowLobbyChatZoomDialog().getValue());
 
         // Theme picker dialog StateFlow
         assertFalse(vm.getShowThemePickerDialog().getValue());

@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -49,6 +51,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.delay
 import androidx.compose.material3.Text
@@ -76,10 +79,12 @@ import com.selfso.octi.ui.ArchiveScreen
 import com.selfso.octi.ui.BoardChatZoomDialog
 import com.selfso.octi.ui.CapturePromptDialog
 import com.selfso.octi.ui.CompositePodMoveDialog
+import com.selfso.octi.ui.ConnectedUsersAndRobotsDialog
 import com.selfso.octi.ui.CreateTableDialog
 import com.selfso.octi.ui.ExportMovesDialog
 import com.selfso.octi.ui.GameOverDialog
 import com.selfso.octi.ui.LobbyChatScreen
+import com.selfso.octi.ui.LobbyChatZoomDialog
 import com.selfso.octi.ui.LobbyScreen
 import com.selfso.octi.ui.NewGameSetupDialog
 import com.selfso.octi.ui.OctiAppViewModel
@@ -322,6 +327,8 @@ fun OctiMainAppContent(
     val showGameOverDialog by viewModel.showGameOverDialog.collectAsState()
     val showExportMovesDialog by viewModel.showExportMovesDialog.collectAsState()
     val showBoardChatZoomDialog by viewModel.showBoardChatZoomDialog.collectAsState()
+    val showConnectedUsersDialog by viewModel.showConnectedUsersDialog.collectAsState()
+    val showLobbyChatZoomDialog by viewModel.showLobbyChatZoomDialog.collectAsState()
     val showThemePickerDialog by viewModel.showThemePickerDialog.collectAsState()
     val isBotThinking by viewModel.isBotThinking.collectAsState()
     val botDifficulty by viewModel.botDifficulty.collectAsState()
@@ -350,47 +357,37 @@ fun OctiMainAppContent(
                         titleContentColor = OctiTheme.colors.accentBrass
                     ),
                     title = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = "OCTI",
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = OctiTheme.colors.accentBrass,
-                                maxLines = 1
-                            )
-                            if (statusBanner.isNotEmpty()) {
-                                Text(
-                                    text = statusBanner,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = OctiTheme.colors.textSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
+                        Text(
+                            text = "OCTI",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = OctiTheme.colors.accentBrass,
+                            maxLines = 1
+                        )
                     },
                     actions = {
-                        val prof = currentProfile
-                        if (isAuthenticated && prof != null) {
-                            OctiPlayerAvatar(
-                                avatarUrl = prof.avatarUrl,
-                                handle = prof.handle,
-                                size = 28.dp,
-                                viewModel = viewModel,
-                                modifier = Modifier
-                                    .padding(end = 6.dp)
-                                    .clickable { viewModel.setShowAccountDialog(true) }
-                            )
-                        }
-                        if (matchType != OctiAppViewModel.MatchType.ONLINE_ROOM) {
-                            OutlinedButton(
-                                onClick = { viewModel.setShowNewGameDialog(true) },
+                        if (!isAuthenticated) {
+                            TextButton(
+                                onClick = { viewModel.setShowSsoDialog(true) },
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = OctiTheme.colors.accentBrass
+                                ),
                                 modifier = Modifier.padding(end = 4.dp)
                             ) {
-                                Text("New Game", maxLines = 1)
+                                Text("Sign In", fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+                        } else {
+                            val prof = currentProfile
+                            if (prof != null) {
+                                OctiPlayerAvatar(
+                                    avatarUrl = prof.avatarUrl,
+                                    handle = prof.handle,
+                                    size = 28.dp,
+                                    viewModel = viewModel,
+                                    modifier = Modifier
+                                        .padding(end = 6.dp)
+                                        .clickable { viewModel.setShowAccountDialog(true) }
+                                )
                             }
                         }
                         Box {
@@ -407,7 +404,13 @@ fun OctiMainAppContent(
                                 onDismissRequest = { showTopMenu = false }
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Online Lobby") },
+                                    text = {
+                                        Text(
+                                            "Online",
+                                            fontWeight = if (currentTab == OctiAppViewModel.AppTab.ONLINE_LOBBY) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (currentTab == OctiAppViewModel.AppTab.ONLINE_LOBBY) OctiTheme.colors.accentBrass else Color.Unspecified
+                                        )
+                                    },
                                     onClick = {
                                         showTopMenu = false
                                         viewModel.selectTab(OctiAppViewModel.AppTab.ONLINE_LOBBY)
@@ -415,22 +418,41 @@ fun OctiMainAppContent(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Tabletop Board") },
+                                    text = {
+                                        Text(
+                                            "Board",
+                                            fontWeight = if (currentTab == OctiAppViewModel.AppTab.BOARD) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (currentTab == OctiAppViewModel.AppTab.BOARD) OctiTheme.colors.accentBrass else Color.Unspecified
+                                        )
+                                    },
                                     onClick = {
                                         showTopMenu = false
                                         viewModel.selectTab(OctiAppViewModel.AppTab.BOARD)
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Lobby Chat") },
+                                    text = { Text("New Game") },
                                     onClick = {
                                         showTopMenu = false
-                                        viewModel.selectTab(OctiAppViewModel.AppTab.LOBBY_CHAT)
+                                        viewModel.openNewGameDialog()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Connected Users & Robots") },
+                                    onClick = {
+                                        showTopMenu = false
+                                        viewModel.openConnectedUsersDialog()
                                         viewModel.refreshLobbyStateAsync()
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Archive & Elo") },
+                                    text = {
+                                        Text(
+                                            "Archive & Elo",
+                                            fontWeight = if (currentTab == OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (currentTab == OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD) OctiTheme.colors.accentBrass else Color.Unspecified
+                                        )
+                                    },
                                     onClick = {
                                         showTopMenu = false
                                         viewModel.selectTab(OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD)
@@ -501,19 +523,36 @@ fun OctiMainAppContent(
         }
     ) { innerPadding ->
         val swipeModifier = Modifier.pointerInput(currentTab) {
-            if (currentTab != OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD) {
-                var totalDragX = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { totalDragX = 0f },
-                    onHorizontalDrag = { _, dragAmount -> totalDragX += dragAmount },
-                    onDragEnd = {
-                        if (totalDragX < -60f) {
+            if (currentTab == OctiAppViewModel.AppTab.ONLINE_LOBBY || currentTab == OctiAppViewModel.AppTab.BOARD) {
+                val thresholdPx = 60.dp.toPx()
+                awaitEachGesture {
+                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                    var totalDx = 0f
+                    var totalDy = 0f
+                    var gestureDecided = false
+                    var isHorizontalSwipe = false
+                    while (true) {
+                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+                        val dragAmount = change.position - change.previousPosition
+                        totalDx += dragAmount.x
+                        totalDy += dragAmount.y
+                        if (!gestureDecided) {
+                            if (kotlin.math.abs(totalDx) > thresholdPx / 3 || kotlin.math.abs(totalDy) > thresholdPx / 3) {
+                                gestureDecided = true
+                                isHorizontalSwipe = kotlin.math.abs(totalDx) > kotlin.math.abs(totalDy) * 1.2f
+                            }
+                        }
+                    }
+                    if (gestureDecided && isHorizontalSwipe) {
+                        if (totalDx < -thresholdPx) {
                             viewModel.swipeToNextVirtualScreen()
-                        } else if (totalDragX > 60f) {
+                        } else if (totalDx > thresholdPx) {
                             viewModel.swipeToPreviousVirtualScreen()
                         }
                     }
-                )
+                }
             }
         }
         Box(
@@ -521,6 +560,7 @@ fun OctiMainAppContent(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(OctiTheme.colors.windowBg)
+                .then(swipeModifier)
         ) {
             when (currentTab) {
                 OctiAppViewModel.AppTab.BOARD -> {
@@ -566,37 +606,12 @@ fun OctiMainAppContent(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        if (isOnlineRoom) {
-                                            Button(
-                                                onClick = { viewModel.proposeRematch() },
-                                                modifier = Modifier.height(28.dp),
-                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = OctiTheme.colors.accentBrass,
-                                                    contentColor = OctiTheme.colors.windowBg
-                                                )
-                                            ) {
-                                                Text("Rematch", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                            }
-                                            OutlinedButton(
-                                                onClick = { viewModel.exitOnlineTableViewAsync() },
-                                                modifier = Modifier.height(28.dp),
-                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
-                                            ) {
-                                                Text("Lobby", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
-                                            }
-                                        } else {
-                                            Button(
-                                                onClick = { viewModel.setShowNewGameDialog(true) },
-                                                modifier = Modifier.height(28.dp),
-                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = OctiTheme.colors.accentBrass,
-                                                    contentColor = OctiTheme.colors.windowBg
-                                                )
-                                            ) {
-                                                Text("New Game", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                            }
+                                        OutlinedButton(
+                                            onClick = { viewModel.openGameOverDialog() },
+                                            modifier = Modifier.height(28.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                                        ) {
+                                            Text("Score Sheet", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
                                         }
                                     }
                                 }
@@ -679,10 +694,11 @@ fun OctiMainAppContent(
                             }
                         }
 
-                        // Proposals Banner (Draw, Pause, Rematch — No Undo in Online Games per GDB-10.1a)
+                        // Proposals Banner (Draw, Pause — No Undo or Rematch in Online Games per GDB-10.1a)
                         if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeGameView?.proposals?.isNotEmpty() == true) {
                             val prop = activeGameView?.proposals?.firstOrNull {
-                                it.type != "UNDO_REQUEST" && it.type != "UNDO"
+                                it.type != "UNDO_REQUEST" && it.type != "UNDO" &&
+                                it.type != "REMATCH_REQUEST" && it.type != "REMATCH"
                             }
                             if (prop != null) {
                                 val myUuid = currentProfile?.uuid ?: ""
@@ -697,7 +713,6 @@ fun OctiMainAppContent(
                                 val propTitle = when (prop.type) {
                                     "DRAW_OFFER" -> "Draw offer from @$cleanHandle"
                                     "PAUSE_REQUEST" -> "Pause request from @$cleanHandle"
-                                    "REMATCH_REQUEST" -> "Rematch offer from @$cleanHandle"
                                     else -> "Proposal from @$cleanHandle"
                                 }
                                 Card(
@@ -912,6 +927,18 @@ fun OctiMainAppContent(
                 onDismiss = { viewModel.setShowBoardChatZoomDialog(false) }
             )
         }
+        if (showConnectedUsersDialog) {
+            ConnectedUsersAndRobotsDialog(
+                viewModel = viewModel,
+                onDismiss = { viewModel.dismissConnectedUsersDialog() }
+            )
+        }
+        if (showLobbyChatZoomDialog) {
+            LobbyChatZoomDialog(
+                viewModel = viewModel,
+                onDismiss = { viewModel.dismissLobbyChatZoomDialog() }
+            )
+        }
 
         zoomedSquare?.let { (zx, zy) ->
             ZoomedSquareDialog(
@@ -1010,8 +1037,6 @@ fun OctiMainAppContent(
                 com.selfso.octi.ui.OctiDialogs.describeTerminationReason(viewModel.board)
             }
             val customTitle = if (isOnline) viewModel.describeOnlineGameOverBanner() else null
-            val newGameBtn = if (isOnline) "Rematch" else "New Game"
-            val reviewBtn = if (isOnline) "Back to Lobby" else "Review Board"
             GameOverDialog(
                 winner = game?.winner ?: OctiPlayer.PLAYER_A,
                 matchLabel = if (isOnline) "" else statusBanner,
@@ -1020,21 +1045,9 @@ fun OctiMainAppContent(
                 gameMode = viewModel.board.gameMode,
                 terminationReason = termReason,
                 customTitle = customTitle,
-                newGameButtonText = newGameBtn,
-                reviewBoardButtonText = reviewBtn,
-                onNewGame = {
-                    viewModel.dismissGameOverDialog()
-                    if (isOnline) {
-                        viewModel.proposeRematch()
-                    } else {
-                        viewModel.setShowNewGameDialog(true)
-                    }
-                },
+                reviewBoardButtonText = "Review Board",
                 onReviewBoard = {
                     viewModel.dismissGameOverDialog()
-                    if (isOnline) {
-                        viewModel.exitOnlineTableViewAsync()
-                    }
                 }
             )
         }

@@ -75,13 +75,19 @@ public:
                                    std::function<void(int seat)> onSitSeatRequested);
     QRectF sitSeatButtonRect(int seat) const;
 
+    void setMiddleOverlayWidget(QWidget *w);
+    QWidget *middleOverlayWidget() const { return _middleOverlayWidget; }
+    void updateMiddleOverlayGeometry();
+
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
+    QWidget *_middleOverlayWidget = nullptr;
     OctiBoard *_board;
     OctiMoveComposer *_composer;
     OctiBoardCanvas *_canvas;

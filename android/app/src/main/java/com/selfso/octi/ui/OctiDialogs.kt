@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -1940,7 +1941,7 @@ fun GameOverDialog(
     customTitle: String? = null,
     newGameButtonText: String = "New Game",
     reviewBoardButtonText: String = "Review Board",
-    onNewGame: () -> Unit,
+    onNewGame: (() -> Unit)? = null,
     onReviewBoard: () -> Unit
 ) {
     Dialog(
@@ -2003,26 +2004,15 @@ fun GameOverDialog(
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                Row(
+                Button(
+                    onClick = onReviewBoard,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OctiTheme.colors.accentBrass,
+                        contentColor = OctiTheme.colors.windowBg
+                    )
                 ) {
-                    OutlinedButton(
-                        onClick = onReviewBoard,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(reviewBoardButtonText, fontWeight = FontWeight.SemiBold)
-                    }
-                    Button(
-                        onClick = onNewGame,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = OctiTheme.colors.accentBrass,
-                            contentColor = OctiTheme.colors.windowBg
-                        )
-                    ) {
-                        Text(newGameButtonText, fontWeight = FontWeight.Bold)
-                    }
+                    Text(reviewBoardButtonText, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -3077,7 +3067,11 @@ fun BoardChatZoomDialog(
                                     "You"
                                 }
                                 val scopePrefix = if (msg.scope.equals("TEAM", ignoreCase = true)) "[TEAM] " else ""
-                                val sdf = remember { java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()) }
+                                val sdf = remember {
+                                    java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).apply {
+                                        timeZone = java.util.TimeZone.getDefault()
+                                    }
+                                }
                                 val timeStr = sdf.format(java.util.Date(msg.atMs))
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -3180,6 +3174,190 @@ fun BoardChatZoomDialog(
                                 }
                             }
                         },
+                        colors = ButtonDefaults.buttonColors(containerColor = OctiTheme.colors.accentBrass),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        modifier = Modifier.height(48.dp)
+                    ) {
+                        Text("Send", color = OctiTheme.colors.windowBg, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LobbyChatZoomDialog(
+    viewModel: OctiAppViewModel,
+    onDismiss: () -> Unit
+) {
+    val lobbyChatMessages by viewModel.lobbyChatMessages.collectAsState()
+    val lobbyState by viewModel.lobbyState.collectAsState()
+    val isAuthenticated by viewModel.isAuthenticated.collectAsState()
+    var inputText by remember { mutableStateOf("") }
+    var chatErrorText by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    val formattedMessages: List<String> = remember(lobbyChatMessages, lobbyState.recentChat) {
+        if (lobbyChatMessages.isNotEmpty()) {
+            lobbyChatMessages
+        } else {
+            val sdf = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).apply {
+                timeZone = java.util.TimeZone.getDefault()
+            }
+            lobbyState.recentChat.map { entry ->
+                val timeStr = sdf.format(java.util.Date(if (entry.atMs > 0L) entry.atMs else System.currentTimeMillis()))
+                val handleStr = entry.handle.ifEmpty { "anon" }
+                "[$timeStr] $handleStr: ${entry.text}"
+            }
+        }
+    }
+
+    LaunchedEffect(formattedMessages.size) {
+        if (formattedMessages.isNotEmpty()) {
+            listState.animateScrollToItem(formattedMessages.size - 1)
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .fillMaxHeight(0.70f)
+                .padding(8.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+            border = BorderStroke(2.dp, OctiTheme.colors.accentBrass)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Lobby Chat",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = OctiTheme.colors.accentBrass
+                        )
+                        Text(
+                            text = "Global • Local time",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = OctiTheme.colors.textSecondary
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Text(
+                            text = "✕",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = OctiTheme.colors.textSecondary
+                        )
+                    }
+                }
+
+                // Chat Messages Log
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    color = OctiTheme.colors.windowBg,
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+                ) {
+                    if (formattedMessages.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No messages in lobby chat yet. Say hello!",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OctiTheme.colors.textSecondary
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(formattedMessages) { line ->
+                                Text(
+                                    text = line,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = OctiTheme.colors.textPrimary
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (chatErrorText.isNotEmpty()) {
+                    Text(
+                        text = chatErrorText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                }
+
+                // Input Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = inputText,
+                        onValueChange = {
+                            inputText = it
+                            if (chatErrorText.isNotEmpty()) chatErrorText = ""
+                        },
+                        modifier = Modifier.weight(1f),
+                        placeholder = {
+                            Text(
+                                if (isAuthenticated) "Message lobby..." else "Sign in to chat...",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        },
+                        enabled = isAuthenticated,
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(
+                            onSend = {
+                                val t = inputText.trim()
+                                if (t.isNotEmpty()) {
+                                    viewModel.sendLobbyChatMessage(t)
+                                    inputText = ""
+                                }
+                            }
+                        )
+                    )
+
+                    Button(
+                        onClick = {
+                            val t = inputText.trim()
+                            if (t.isNotEmpty()) {
+                                viewModel.sendLobbyChatMessage(t)
+                                inputText = ""
+                            }
+                        },
+                        enabled = isAuthenticated && inputText.isNotBlank(),
                         colors = ButtonDefaults.buttonColors(containerColor = OctiTheme.colors.accentBrass),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                         modifier = Modifier.height(48.dp)

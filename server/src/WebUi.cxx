@@ -1888,6 +1888,7 @@ tr.active-ply {
               <button type="button" class="btn" id="btn-web-change-type" style="padding:10px 18px;font-size:14px;">Change Type</button>
               <button type="button" class="btn btn-primary" id="btn-web-start-match" style="padding:10px 22px;font-size:14px;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Start Match</button>
             </div>
+            <div id="web-start-ai-footnote" style="margin-top:14px;font-size:11.5px;line-height:1.35;color:#94A3B8;">Browser AI runs on your PC/laptop in JavaScript. Stronger AI robots are available to match against in <a href="#play-online" style="color:#C8A253;text-decoration:underline;">Online Play</a>.</div>
           </div>
 
           <!-- 100% Opaque Non-Blocking Bottom-Docked AI Thinking Bar -->
@@ -1930,16 +1931,15 @@ tr.active-ply {
               <div id="web-gameover-title">PLAYER A WINS</div>
               <div id="web-gameover-subtitle">VICTORY BY BASE OCCUPATION</div>
               <div class="row" style="gap:10px;justify-content:center;margin:0;">
-                <button type="button" class="btn btn-primary" id="btn-gameover-new" style="padding:8px 18px;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">New Game</button>
                 <button type="button" class="btn" id="btn-gameover-review" style="padding:8px 18px;">Review Board</button>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Right Column: Sidebar (Top Half Lobby Chat + Match Actions, Bottom Half Table Chat in Online Mode) -->
+        <!-- Right Column: Sidebar (Top Half Lobby Chat, Bottom Half Table Chat in Online Mode, Match Actions at Bottom) -->
         <div id="web-play-side-col">
-          <!-- Top Half: Lobby Chat + Match Actions -->
+          <!-- Top Half: Lobby Chat -->
           <div id="web-side-top-half" style="flex:1 1 50%;min-height:0;display:flex;flex-direction:column;gap:8px;">
             <!-- Live Lobby Chat -->
             <div id="web-board-lobby-chat-panel" class="panel" style="margin:0;padding:8px 10px;background:#101622;border:1px solid #1E293B;flex:1;min-height:0;display:flex;flex-direction:column;">
@@ -1953,16 +1953,6 @@ tr.active-ply {
               <div id="web-board-lobby-chat-input-row" class="row" style="gap:6px;margin:0;">
                 <input id="web-board-lobby-chat-input" placeholder="Sign in to chat in lobby..." style="flex:1;background:#0B0F17;color:#F8FAFC;border:1px solid #334155;border-radius:4px;padding:6px 8px;font-size:12px;" disabled>
                 <button type="button" class="btn btn-primary" id="btn-web-board-lobby-chat-send" style="padding:6px 12px;font-size:12px;" disabled>Send</button>
-              </div>
-            </div>
-
-            <!-- Compact Match Actions -->
-            <div id="web-match-actions-card" class="panel" style="padding:5px 8px;flex:0 0 auto;margin:0;background:#101622;border:1px solid #1E293B;">
-              <div class="row" style="gap:6px;margin:0;">
-                <button type="button" class="btn btn-primary" id="btn-web-new-game-setup" style="flex:1;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;padding:4px 8px;font-size:12px;">New Game...</button>
-                <button type="button" class="btn" id="btn-web-draw" style="padding:4px 8px;font-size:12px;">Draw</button>
-                <button type="button" class="btn" id="btn-web-undo" style="padding:4px 8px;font-size:12px;">Undo</button>
-                <button type="button" class="btn" id="btn-web-resign" style="border-color:#dc2626;color:#dc2626;padding:4px 8px;font-size:12px;">Resign</button>
               </div>
             </div>
           </div>
@@ -1991,6 +1981,16 @@ tr.active-ply {
               </select>
               <input id="web-board-chat-input" placeholder="Send table message..." style="flex:1;background:#0B0F17;color:#F8FAFC;border:1px solid #334155;border-radius:4px;padding:6px 8px;font-size:12px;">
               <button type="button" class="btn btn-primary" id="btn-web-board-chat-send" style="padding:6px 12px;font-size:12px;">Send</button>
+            </div>
+          </div>
+
+          <!-- Compact Match Actions -->
+          <div id="web-match-actions-card" class="panel" style="padding:5px 8px;flex:0 0 auto;margin:0;background:#101622;border:1px solid #1E293B;">
+            <div class="row" style="gap:6px;margin:0;">
+              <button type="button" class="btn btn-primary" id="btn-web-new-game-setup" style="flex:1;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;padding:4px 8px;font-size:12px;">New Game...</button>
+              <button type="button" class="btn" id="btn-web-draw" style="padding:4px 8px;font-size:12px;">Draw</button>
+              <button type="button" class="btn" id="btn-web-undo" style="padding:4px 8px;font-size:12px;">Undo</button>
+              <button type="button" class="btn" id="btn-web-resign" style="border-color:#dc2626;color:#dc2626;padding:4px 8px;font-size:12px;">Resign</button>
             </div>
           </div>
         </div>
@@ -2226,7 +2226,7 @@ tr.active-ply {
     </div>
     <div id="ar-msg" class="dim"></div>
     <table id="ar-table"><thead><tr><th>Game ID</th><th>Mode</th><th>Source</th>
-      <th>Players</th><th>Winner</th><th>Outcome</th><th>Plies</th><th>Date (UTC)</th><th class="web-ar-admin-col" style="display:none;">Actions</th></tr></thead>
+      <th>Players</th><th>Winner</th><th>Outcome</th><th>Plies</th><th>Date</th><th class="web-ar-admin-col" style="display:none;">Actions</th></tr></thead>
       <tbody></tbody></table>
     <div class="row" style="margin-top:10px">
       <button type="button" class="btn" id="ar-prev">Previous</button>
@@ -2481,6 +2481,7 @@ tr.active-ply {
           <th>Robot</th>
           <th>Owner</th>
           <th>Description</th>
+          <th>URL</th>
           <th>Status</th>
           <th>Games Played</th>
           <th>Record (W-L-D)</th>
@@ -2515,6 +2516,10 @@ tr.active-ply {
     </div>
 
     <p id="robot-detail-bio" class="dim" style="margin:12px 0;"></p>
+    <div id="robot-detail-url-row" style="margin:6px 0 12px 0;display:none;">
+      <span class="dim" style="font-size:13px;">URL: </span>
+      <a id="robot-detail-url-link" href="#" target="_blank" rel="nofollow ugc noopener noreferrer" style="color:#38BDF8;word-break:break-all;font-size:13px;"></a>
+    </div>
 
     <div class="cols" style="margin:16px 0;">
       <div class="col-side" style="flex:1;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
@@ -2637,6 +2642,7 @@ tr.active-ply {
         <div class="row" style="margin-top:10px;">
           <input id="robot-name-input" placeholder="Robot Name (3..24 chars [A-Za-z0-9_-])" maxlength="24" style="flex:1;">
           <input id="robot-desc-input" placeholder="Robot Description (optional, max 256 chars)" maxlength="256" style="flex:2;">
+          <input id="robot-url-input" placeholder="Robot URL (optional http:// or https://, no '?')" maxlength="256" style="flex:2;">
           <button type="button" class="btn btn-primary" id="btn-create-robot">Create Robot &amp; Generate Token</button>
           <button type="button" class="btn" id="btn-export-robots-conf" style="margin-left:8px;">Export tokens.conf</button>
         </div>
@@ -2648,6 +2654,7 @@ tr.active-ply {
               <tr>
                 <th>Robot Name</th>
                 <th>Description</th>
+                <th>URL</th>
                 <th>Record</th>
                 <th>Secret Token</th>
                 <th>Status</th>
@@ -2907,8 +2914,12 @@ function api(path, opts) {
 }
 
 function fmtTime(sec) {
-  if (!sec) { return ""; }
-  return new Date(sec * 1000).toISOString().replace("T", " ").slice(0, 16);
+  if (!sec) { return "-"; }
+  var d = new Date(sec * 1000);
+  if (isNaN(d.getTime())) { return "-"; }
+  function pad2(n) { return n < 10 ? "0" + n : "" + n; }
+  return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) +
+         " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
 }
 
 function cellRow(tr, values) {
@@ -27003,7 +27014,7 @@ function loadMyRobots() {
     if (!robots.length) {
       var trEmpty = el("tr");
       var tdEmpty = el("td", "No robots registered yet.", "dim");
-      tdEmpty.colSpan = 7;
+      tdEmpty.colSpan = 8;
       trEmpty.appendChild(tdEmpty);
       tbody.appendChild(trEmpty);
       return;
@@ -27011,8 +27022,58 @@ function loadMyRobots() {
 
     robots.forEach(function (r) {
       var tr = el("tr");
-      var tdName = el("td", r.robot_name);
-      tdName.style.fontWeight = "700";
+
+      /* Robot Name with inline editing (24h cooldown enforced by server) */
+      var tdName = el("td");
+      var nameSpan = el("span", r.robot_name);
+      nameSpan.style.fontWeight = "700";
+      var nameInput = el("input");
+      nameInput.value = r.robot_name || "";
+      nameInput.maxLength = 24;
+      nameInput.style.display = "none";
+      nameInput.style.width = "130px";
+      var editNameBtn = el("button", "Edit", "btn");
+      editNameBtn.style.marginLeft = "6px";
+      editNameBtn.style.padding = "2px 8px";
+      editNameBtn.style.fontSize = "12px";
+      var saveNameBtn = el("button", "Save", "btn btn-primary");
+      saveNameBtn.style.marginLeft = "6px";
+      saveNameBtn.style.padding = "2px 8px";
+      saveNameBtn.style.fontSize = "12px";
+      saveNameBtn.style.display = "none";
+
+      editNameBtn.addEventListener("click", function () {
+        nameSpan.style.display = "none";
+        editNameBtn.style.display = "none";
+        nameInput.style.display = "inline-block";
+        saveNameBtn.style.display = "inline-block";
+        nameInput.focus();
+      });
+
+      saveNameBtn.addEventListener("click", function () {
+        var newName = nameInput.value.trim();
+        if (!newName || newName.length < 3 || newName.length > 24) {
+          alert("Robot name must be between 3 and 24 characters [A-Za-z0-9_-].");
+          return;
+        }
+        var rid = r.robot_uuid || r.robot_id || r.robot_name;
+        api("/api/v1/robots/" + encodeURIComponent(rid), {
+          method: "PATCH",
+          body: { robot_name: newName }
+        }).then(function () {
+          r.robot_name = newName;
+          nameSpan.textContent = newName;
+          nameSpan.style.display = "inline";
+          editNameBtn.style.display = "inline-block";
+          nameInput.style.display = "none";
+          saveNameBtn.style.display = "none";
+        }).catch(function (e) { alert("Rename failed: " + e.message); });
+      });
+
+      tdName.appendChild(nameSpan);
+      tdName.appendChild(nameInput);
+      tdName.appendChild(editNameBtn);
+      tdName.appendChild(saveNameBtn);
 
       /* Description with inline editing */
       var tdDesc = el("td");
@@ -27059,6 +27120,69 @@ function loadMyRobots() {
       tdDesc.appendChild(descInput);
       tdDesc.appendChild(editBtn);
       tdDesc.appendChild(saveBtn);
+
+      /* Robot URL with inline editing */
+      var tdUrl = el("td");
+      var urlSpan = el("span");
+      function renderUrlSpan(u) {
+        clear(urlSpan);
+        if (u) {
+          var a = el("a", u);
+          a.href = u;
+          a.target = "_blank";
+          a.rel = "nofollow ugc noopener noreferrer";
+          a.style.color = "#38BDF8";
+          a.style.wordBreak = "break-all";
+          urlSpan.appendChild(a);
+        } else {
+          urlSpan.appendChild(el("span", "(no url)", "dim"));
+        }
+      }
+      renderUrlSpan(r.robot_url);
+      var urlInput = el("input");
+      urlInput.value = r.robot_url || "";
+      urlInput.placeholder = "URL (no '?')";
+      urlInput.maxLength = 256;
+      urlInput.style.display = "none";
+      urlInput.style.width = "160px";
+      var editUrlBtn = el("button", "Edit", "btn");
+      editUrlBtn.style.marginLeft = "6px";
+      editUrlBtn.style.padding = "2px 8px";
+      editUrlBtn.style.fontSize = "12px";
+      var saveUrlBtn = el("button", "Save", "btn btn-primary");
+      saveUrlBtn.style.marginLeft = "6px";
+      saveUrlBtn.style.padding = "2px 8px";
+      saveUrlBtn.style.fontSize = "12px";
+      saveUrlBtn.style.display = "none";
+
+      editUrlBtn.addEventListener("click", function () {
+        urlSpan.style.display = "none";
+        editUrlBtn.style.display = "none";
+        urlInput.style.display = "inline-block";
+        saveUrlBtn.style.display = "inline-block";
+        urlInput.focus();
+      });
+
+      saveUrlBtn.addEventListener("click", function () {
+        var newUrl = urlInput.value.trim();
+        var rid = r.robot_uuid || r.robot_id || r.robot_name;
+        api("/api/v1/robots/" + encodeURIComponent(rid), {
+          method: "PATCH",
+          body: { robot_url: newUrl }
+        }).then(function () {
+          r.robot_url = newUrl;
+          renderUrlSpan(newUrl);
+          urlSpan.style.display = "inline";
+          editUrlBtn.style.display = "inline-block";
+          urlInput.style.display = "none";
+          saveUrlBtn.style.display = "none";
+        }).catch(function (e) { alert("Save URL failed: " + e.message); });
+      });
+
+      tdUrl.appendChild(urlSpan);
+      tdUrl.appendChild(urlInput);
+      tdUrl.appendChild(editUrlBtn);
+      tdUrl.appendChild(saveUrlBtn);
 
       /* Record */
       var w = r.wins || 0;
@@ -27144,7 +27268,7 @@ function loadMyRobots() {
       });
       tdAct.appendChild(delBtn);
 
-      [tdName, tdDesc, tdRecord, tdTok, tdStat, tdCreated, tdAct].forEach(function (td) { tr.appendChild(td); });
+      [tdName, tdDesc, tdUrl, tdRecord, tdTok, tdStat, tdCreated, tdAct].forEach(function (td) { tr.appendChild(td); });
       tbody.appendChild(tr);
     });
   }).catch(function () {});
@@ -27176,6 +27300,7 @@ if ($("btn-export-robots-conf")) {
 $("btn-create-robot").addEventListener("click", function () {
   var name = $("robot-name-input").value.trim();
   var desc = $("robot-desc-input").value.trim();
+  var url = $("robot-url-input") ? $("robot-url-input").value.trim() : "";
   if (!name || name.length < 3 || name.length > 24) {
     alert("Robot name must be between 3 and 24 characters.");
     return;
@@ -27186,10 +27311,11 @@ $("btn-create-robot").addEventListener("click", function () {
   }
   api("/api/v1/robots", {
     method: "POST",
-    body: { robot_name: name, description: desc }
+    body: { robot_name: name, description: desc, robot_url: url }
   }).then(function (res) {
     $("robot-name-input").value = "";
     $("robot-desc-input").value = "";
+    if ($("robot-url-input")) $("robot-url-input").value = "";
     var box = $("robot-new-token-box");
     if (box) {
       clear(box);
@@ -27286,6 +27412,8 @@ $("users-search-input").addEventListener("keydown", function (ev) {
 });
 
 function openUserProfile(id) {
+  if (!id) return;
+  switchTab("users");
   location.hash = "#users/" + encodeURIComponent(id);
   api("/api/v1/users/" + encodeURIComponent(id)).then(function (u) {
     var panel = $("user-profile-detail");
@@ -27332,7 +27460,7 @@ function openUserProfile(id) {
       rBox.textContent = "No active public robots.";
     } else {
       var rTable = el("table");
-      rTable.innerHTML = "<thead><tr><th>Robot Name</th><th>Description</th><th>Created</th></tr></thead>";
+      rTable.innerHTML = "<thead><tr><th>Robot Name</th><th>Description</th><th>URL</th><th>Created</th></tr></thead>";
       var rTbody = el("tbody");
       rList.forEach(function (rb) {
         var rtr = el("tr");
@@ -27353,6 +27481,19 @@ function openUserProfile(id) {
         }
         rtr.appendChild(tdName);
         rtr.appendChild(el("td", rb.description || "-"));
+        var tdUrl = el("td");
+        if (rb.robot_url) {
+          var aUrl = el("a", rb.robot_url);
+          aUrl.href = rb.robot_url;
+          aUrl.target = "_blank";
+          aUrl.rel = "nofollow ugc noopener noreferrer";
+          aUrl.style.color = "#38BDF8";
+          aUrl.style.wordBreak = "break-all";
+          tdUrl.appendChild(aUrl);
+        } else {
+          tdUrl.appendChild(el("span", "-", "dim"));
+        }
+        rtr.appendChild(tdUrl);
         rtr.appendChild(el("td", fmtTime(rb.created_at)));
         rTbody.appendChild(rtr);
       });
@@ -27382,24 +27523,33 @@ function openUserProfile(id) {
         if (gm.players && gm.players.length) {
           gm.players.forEach(function (p, pIdx) {
             if (pIdx > 0) tdPl.appendChild(document.createTextNode(" vs "));
-            if (p.is_robot || p.robot_uuid) {
-              var a = el("a", "@" + p.handle);
-              a.href = "#robots/" + encodeURIComponent(p.robot_uuid || p.handle);
+            var pHandle = p.handle || ("Seat " + p.seat);
+            if (p.robot_uuid) {
+              var a = el("a", "@" + pHandle);
+              a.href = "#robots/" + encodeURIComponent(p.robot_uuid);
               a.style.cursor = "pointer";
               a.addEventListener("click", function (ev) {
                 ev.preventDefault();
-                viewRobotProfile(p.robot_uuid || p.handle);
+                switchTab("robots");
+                viewRobotProfile(p.robot_uuid);
               });
               tdPl.appendChild(a);
-            } else {
-              var aUser = el("a", "@" + p.handle);
-              aUser.href = "#users/" + encodeURIComponent(p.player_uuid || p.handle);
+            } else if (p.player_uuid) {
+              var aUser = el("a", "@" + pHandle);
+              aUser.href = "#users/" + encodeURIComponent(p.player_uuid);
               aUser.style.cursor = "pointer";
               aUser.addEventListener("click", function (ev) {
                 ev.preventDefault();
-                openUserProfile(p.player_uuid || p.handle);
+                switchTab("users");
+                openUserProfile(p.player_uuid);
               });
               tdPl.appendChild(aUser);
+            } else {
+              if (/^(AI_|Player_)/i.test(pHandle)) {
+                tdPl.appendChild(document.createTextNode(pHandle));
+              } else {
+                tdPl.appendChild(document.createTextNode("@" + pHandle));
+              }
             }
           });
         } else {
@@ -27504,6 +27654,25 @@ function loadRobotsDirectory(offset) {
         tdDesc.style.textOverflow = "ellipsis";
         tdDesc.style.whiteSpace = "nowrap";
 
+        // URL
+        var tdUrl = el("td");
+        if (r.robot_url) {
+          var urlA = el("a", r.robot_url, "");
+          urlA.href = r.robot_url;
+          urlA.target = "_blank";
+          urlA.rel = "nofollow ugc noopener noreferrer";
+          urlA.style.color = "#38BDF8";
+          urlA.style.wordBreak = "break-all";
+          urlA.style.maxWidth = "160px";
+          urlA.style.display = "inline-block";
+          urlA.style.overflow = "hidden";
+          urlA.style.textOverflow = "ellipsis";
+          urlA.style.whiteSpace = "nowrap";
+          tdUrl.appendChild(urlA);
+        } else {
+          tdUrl.appendChild(el("span", "-", "dim"));
+        }
+
         // Status Badge
         var tdStatus = el("td");
         var isRetired = (r.retired || r.status === "retired" || r.revoked || r.token_deleted);
@@ -27523,7 +27692,7 @@ function loadRobotsDirectory(offset) {
         // Created
         var tdDate = el("td", fmtTime(r.created_at));
 
-        [tdName, tdOwner, tdDesc, tdStatus, tdGames, tdRec, tdWr, tdDate].forEach(function (td) {
+        [tdName, tdOwner, tdDesc, tdUrl, tdStatus, tdGames, tdRec, tdWr, tdDate].forEach(function (td) {
           tr.appendChild(td);
         });
         tbody.appendChild(tr);
@@ -27547,6 +27716,7 @@ function loadRobotsDirectory(offset) {
 
 function viewRobotProfile(id) {
   if (!id) return;
+  switchTab("robots");
   api("/api/v1/robots/profile/" + encodeURIComponent(id)).then(function (r) {
     var detailCard = $("robot-profile-detail");
     if (!detailCard) return;
@@ -27579,6 +27749,17 @@ function viewRobotProfile(id) {
       }
     }
     if ($("robot-detail-bio")) $("robot-detail-bio").textContent = r.description || "No description provided.";
+    var urlRow = $("robot-detail-url-row");
+    var urlLink = $("robot-detail-url-link");
+    if (urlRow && urlLink) {
+      if (r.robot_url) {
+        urlLink.href = r.robot_url;
+        urlLink.textContent = r.robot_url;
+        urlRow.style.display = "block";
+      } else {
+        urlRow.style.display = "none";
+      }
+    }
     if ($("robot-kpi-games")) $("robot-kpi-games").textContent = String(r.games_played || 0);
     if ($("robot-kpi-record")) $("robot-kpi-record").textContent = (r.wins || 0) + " - " + (r.losses || 0) + " - " + (r.draws || 0);
     if ($("robot-kpi-winrate")) $("robot-kpi-winrate").textContent = (r.win_rate !== undefined ? r.win_rate : 0) + "%";
@@ -27614,28 +27795,33 @@ function viewRobotProfile(id) {
             playersArr.forEach(function (p, idx) {
               if (idx > 0) tdPl.appendChild(document.createTextNode(" vs "));
               var pName = p.handle || ("Seat " + p.seat);
-              if (p.is_robot || p.robot_uuid) {
-                var a = el("a", pName, "");
+              if (p.robot_uuid) {
+                var a = el("a", "@" + pName, "");
                 a.style.cursor = "pointer";
                 a.style.color = "#38BDF8";
-                a.href = "#robots/" + encodeURIComponent(p.robot_uuid || p.handle);
+                a.href = "#robots/" + encodeURIComponent(p.robot_uuid);
                 a.addEventListener("click", function (e) {
                   e.preventDefault();
-                  viewRobotProfile(p.robot_uuid || p.handle);
+                  switchTab("robots");
+                  viewRobotProfile(p.robot_uuid);
                 });
                 tdPl.appendChild(a);
-              } else if (p.player_uuid || p.handle) {
-                var a = el("a", pName, "");
+              } else if (p.player_uuid) {
+                var a = el("a", "@" + pName, "");
                 a.style.cursor = "pointer";
-                a.href = "#users/" + encodeURIComponent(p.player_uuid || p.handle);
+                a.href = "#users/" + encodeURIComponent(p.player_uuid);
                 a.addEventListener("click", function (e) {
                   e.preventDefault();
                   switchTab("users");
-                  openUserProfile(p.player_uuid || p.handle);
+                  openUserProfile(p.player_uuid);
                 });
                 tdPl.appendChild(a);
               } else {
-                tdPl.appendChild(document.createTextNode(pName));
+                if (/^(AI_|Player_)/i.test(pName)) {
+                  tdPl.appendChild(document.createTextNode(pName));
+                } else {
+                  tdPl.appendChild(document.createTextNode("@" + pName));
+                }
               }
             });
           } else {
@@ -30604,12 +30790,14 @@ if (btnCapYes && btnCapNo) {
 // Game Over Dialog Buttons
 var btnGoNew = document.getElementById("btn-gameover-new");
 var btnGoReview = document.getElementById("btn-gameover-review");
-if (btnGoNew && btnGoReview) {
+if (btnGoNew) {
   btnGoNew.addEventListener("click", function () {
     var goOverlay = document.getElementById("web-gameover-overlay");
     if (goOverlay) goOverlay.style.display = "none";
     showMatchSetupModal();
   });
+}
+if (btnGoReview) {
   btnGoReview.addEventListener("click", function () {
     var goOverlay = document.getElementById("web-gameover-overlay");
     if (goOverlay) goOverlay.style.display = "none";
@@ -30693,6 +30881,21 @@ function updateStartMatchSummary() {
   if (localMatchConfig.timeControl !== "untimed") extras.push(localMatchConfig.timeControl);
   var extraStr = extras.length ? (" • " + extras.join(", ")) : " • Standard";
   line2.textContent = modeStr + " • " + basesStr + extraStr;
+
+  var footnote = document.getElementById("web-start-ai-footnote");
+  if (footnote) {
+    footnote.style.display = (localMatchConfig.playMode === "bot") ? "block" : "none";
+  }
+}
+
+var aiFootLink = document.querySelector("#web-start-ai-footnote a");
+if (aiFootLink) {
+  aiFootLink.addEventListener("click", function (ev) {
+    ev.preventDefault();
+    var overlay = document.getElementById("web-start-match-overlay");
+    if (overlay) overlay.style.display = "none";
+    switchTab("play-online");
+  });
 }
 
 function showMatchSetupModal() {
@@ -31598,6 +31801,7 @@ function stopOnlineGameSync(preserveOnlineContext) {
   if (onlineMetaEl) onlineMetaEl.style.display = "none";
   var actRow = document.getElementById("web-online-table-actions");
   if (actRow) actRow.style.display = "none";
+  closeBoardChatZoomModal();
   updateOnlineTableControls();
 }
 
@@ -32310,6 +32514,8 @@ if ($("web-board-chat-log")) {
 }
 if ($("web-board-chat-panel")) {
   $("web-board-chat-panel").addEventListener("click", function (ev) {
+    var tableActions = document.getElementById("web-online-table-actions");
+    if (tableActions && tableActions.contains(ev.target)) return;
     var inputRow = document.getElementById("web-board-chat-input-row");
     if (inputRow && inputRow.contains(ev.target)) return;
     openBoardChatZoomModal();
@@ -32378,7 +32584,9 @@ if ($("web-board-chat-input")) {
   });
 }
 if ($("btn-web-leave-table")) {
-  $("btn-web-leave-table").addEventListener("click", function () {
+  $("btn-web-leave-table").addEventListener("click", function (ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    closeBoardChatZoomModal();
     var rid = activeOnlineGameId || currentMyTableRoomId;
     if (!rid) {
       stopOnlineGameSync();
@@ -32414,7 +32622,9 @@ if ($("btn-web-leave-table")) {
   });
 }
 if ($("btn-web-purge-table")) {
-  $("btn-web-purge-table").addEventListener("click", function () {
+  $("btn-web-purge-table").addEventListener("click", function (ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    closeBoardChatZoomModal();
     var rid = activeOnlineGameId || currentMyTableRoomId;
     if (!rid) return;
     purgeOnlineTable(rid);
@@ -33267,26 +33477,35 @@ function arSearch(offset) {
           var sNum = p.seat || (idx + 1);
           var side = p.player || seatLetterOf(sNum);
           tdPl.appendChild(document.createTextNode(side + ": "));
-          if (p.is_robot || p.robot_uuid) {
+          if (p.robot_uuid) {
             var a = el("a", "@" + p.handle);
-            a.href = "#robots/" + encodeURIComponent(p.robot_uuid || p.handle);
+            a.href = "#robots/" + encodeURIComponent(p.robot_uuid);
             a.style.cursor = "pointer";
             a.addEventListener("click", function (ev) {
               ev.stopPropagation();
               ev.preventDefault();
-              viewRobotProfile(p.robot_uuid || p.handle);
+              switchTab("robots");
+              viewRobotProfile(p.robot_uuid);
             });
             tdPl.appendChild(a);
-          } else {
+          } else if (p.player_uuid) {
             var aU = el("a", "@" + p.handle);
-            aU.href = "#users/" + encodeURIComponent(p.player_uuid || p.handle);
+            aU.href = "#users/" + encodeURIComponent(p.player_uuid);
             aU.style.cursor = "pointer";
             aU.addEventListener("click", function (ev) {
               ev.stopPropagation();
               ev.preventDefault();
-              openUserProfile(p.player_uuid || p.handle);
+              switchTab("users");
+              openUserProfile(p.player_uuid);
             });
             tdPl.appendChild(aU);
+          } else {
+            var h = p.handle || "-";
+            if (/^(AI_|Player_)/i.test(h)) {
+              tdPl.appendChild(document.createTextNode(h));
+            } else {
+              tdPl.appendChild(document.createTextNode("@" + h));
+            }
           }
         });
       } else {
@@ -33395,24 +33614,33 @@ function arOpen(id) {
         var sNum = p.seat || (idx + 1);
         var side = p.player || seatLetterOf(sNum);
         arInfoEl.appendChild(document.createTextNode("Seat " + sNum + " (" + side + "): "));
-        if (p.is_robot || p.robot_uuid) {
+        if (p.robot_uuid) {
           var a = el("a", "@" + p.handle);
-          a.href = "#robots/" + encodeURIComponent(p.robot_uuid || p.handle);
+          a.href = "#robots/" + encodeURIComponent(p.robot_uuid);
           a.style.cursor = "pointer";
           a.addEventListener("click", function (ev) {
             ev.preventDefault();
-            viewRobotProfile(p.robot_uuid || p.handle);
+            switchTab("robots");
+            viewRobotProfile(p.robot_uuid);
           });
           arInfoEl.appendChild(a);
-        } else {
+        } else if (p.player_uuid) {
           var aU = el("a", "@" + p.handle);
-          aU.href = "#users/" + encodeURIComponent(p.player_uuid || p.handle);
+          aU.href = "#users/" + encodeURIComponent(p.player_uuid);
           aU.style.cursor = "pointer";
           aU.addEventListener("click", function (ev) {
             ev.preventDefault();
-            openUserProfile(p.player_uuid || p.handle);
+            switchTab("users");
+            openUserProfile(p.player_uuid);
           });
           arInfoEl.appendChild(aU);
+        } else {
+          var h = p.handle || "-";
+          if (/^(AI_|Player_)/i.test(h)) {
+            arInfoEl.appendChild(document.createTextNode(h));
+          } else {
+            arInfoEl.appendChild(document.createTextNode("@" + h));
+          }
         }
       });
       arInfoEl.appendChild(document.createTextNode("  |  " + resultText(g)));

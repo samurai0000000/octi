@@ -1541,7 +1541,7 @@ TEST(AccountStoreTest, SchemaMatchesPlanAndHasNoGuestSupport)
                        "SELECT COUNT(*) FROM pragma_table_info('linked_identities')"));
     CHECK_EQUAL(7, countRows("SELECT COUNT(*) FROM pragma_table_info('sessions')"));
     CHECK_EQUAL(35, countRows("SELECT COUNT(*) FROM pragma_table_info('games')"));
-    CHECK_EQUAL(19, countRows("SELECT COUNT(*) FROM pragma_table_info('robots')"));
+    CHECK_EQUAL(21, countRows("SELECT COUNT(*) FROM pragma_table_info('robots')"));
     CHECK_TRUE(countRows("SELECT COUNT(*) FROM sqlite_master WHERE type='index'"
                          " AND name='idx_games_ended_at'") == 1);
 

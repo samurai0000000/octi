@@ -295,7 +295,7 @@ class OctiAppViewModel @JvmOverloads constructor(
     private val _fenHistory = CopyOnWriteArrayList<String>()
     private val _moveHistory = CopyOnWriteArrayList<String>()
 
-    private val _currentTab = MutableStateFlow(AppTab.BOARD)
+    private val _currentTab = MutableStateFlow(AppTab.ONLINE_LOBBY)
     val currentTab: StateFlow<AppTab> = _currentTab.asStateFlow()
 
     private val _matchType = MutableStateFlow(MatchType.LOCAL_VS_BOT)
@@ -504,6 +504,14 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     private val _showBoardChatZoomDialog = MutableStateFlow(false)
     val showBoardChatZoomDialog: StateFlow<Boolean> = _showBoardChatZoomDialog.asStateFlow()
+
+    private val _showConnectedUsersDialog = MutableStateFlow(false)
+    val showConnectedUsersDialog: StateFlow<Boolean> = _showConnectedUsersDialog.asStateFlow()
+
+    private val _showLobbyChatZoomDialog = MutableStateFlow(false)
+    val showLobbyChatZoomDialog: StateFlow<Boolean> = _showLobbyChatZoomDialog.asStateFlow()
+
+    val currentRoomId: String get() = _activeRoomId.value
 
     private val _showThemePickerDialog = MutableStateFlow(false)
     val showThemePickerDialog: StateFlow<Boolean> = _showThemePickerDialog.asStateFlow()
@@ -867,6 +875,10 @@ class OctiAppViewModel @JvmOverloads constructor(
         bumpBoardRevision()
     }
 
+    fun openGameOverDialog() {
+        _showGameOverDialog.value = true
+    }
+
     fun dismissGameOverDialog() {
         _showGameOverDialog.value = false
     }
@@ -942,6 +954,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             OctiBotEngine.BotDifficulty.TACTICAL,
             OctiPlayer.PLAYER_A
         )
+        _currentTab.value = AppTab.ONLINE_LOBBY
     }
 
     /**
@@ -970,29 +983,64 @@ class OctiAppViewModel @JvmOverloads constructor(
     fun virtualScreenIndexForTab(tab: AppTab): Int = when (tab) {
         AppTab.ONLINE_LOBBY -> 0
         AppTab.BOARD -> 1
-        AppTab.LOBBY_CHAT -> 2
-        AppTab.ARCHIVE_LEADERBOARD -> -1
+        else -> -1
     }
 
     fun tabForVirtualScreenIndex(index: Int): AppTab = when (index) {
         0 -> AppTab.ONLINE_LOBBY
-        1 -> AppTab.BOARD
-        2 -> AppTab.LOBBY_CHAT
         else -> AppTab.BOARD
     }
 
     fun swipeToNextVirtualScreen() {
         val curr = virtualScreenIndexForTab(_currentTab.value)
-        if (curr in 0..1) {
-            selectTab(tabForVirtualScreenIndex(curr + 1))
+        if (curr >= 0) {
+            val next = (curr + 1).coerceAtMost(1)
+            selectTab(tabForVirtualScreenIndex(next))
         }
     }
 
     fun swipeToPreviousVirtualScreen() {
         val curr = virtualScreenIndexForTab(_currentTab.value)
-        if (curr in 1..2) {
-            selectTab(tabForVirtualScreenIndex(curr - 1))
+        if (curr >= 0) {
+            val prev = (curr - 1).coerceAtLeast(0)
+            selectTab(tabForVirtualScreenIndex(prev))
         }
+    }
+
+    fun openConnectedUsersDialog() {
+        _showConnectedUsersDialog.value = true
+    }
+
+    fun dismissConnectedUsersDialog() {
+        _showConnectedUsersDialog.value = false
+    }
+
+    fun openLobbyChatZoomDialog() {
+        _showLobbyChatZoomDialog.value = true
+    }
+
+    fun dismissLobbyChatZoomDialog() {
+        _showLobbyChatZoomDialog.value = false
+    }
+
+    fun openNewGameDialog() {
+        _showNewGameDialog.value = true
+    }
+
+    fun dismissNewGameDialog() {
+        _showNewGameDialog.value = false
+    }
+
+    fun openBoardChatZoomDialog() {
+        _showBoardChatZoomDialog.value = true
+    }
+
+    fun dismissBoardChatZoomDialog() {
+        _showBoardChatZoomDialog.value = false
+    }
+
+    fun sendLobbyChatMessage(text: String) {
+        sendLobbyChatAsync(text)
     }
 
     fun setShowThemePickerDialog(visible: Boolean) {
@@ -1287,6 +1335,7 @@ class OctiAppViewModel @JvmOverloads constructor(
         } else {
             "Pass & Play (${modeToWireCode(mode)})"
         }
+        _currentTab.value = AppTab.BOARD
         bumpBoardRevision()
         OctiCrashReporter.updateGameContext(_matchType.value.name, livePlyCount(), board.toPositionString())
         if (_requireStartMatchPrompt) {

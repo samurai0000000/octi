@@ -102,6 +102,19 @@ public class OctiAndroidAppIntegrationTest {
             assertEquals(443, vm.getNetClient().serverPort());
             assertEquals("octi.selfso.com:443", OctiAppViewModel.canonicalServerEndpoint());
             assertEquals(OctiThemeId.ROSEWOOD_IVORY, vm.getTheme().getValue());
+            assertEquals(OctiAppViewModel.AppTab.ONLINE_LOBBY, vm.getCurrentTab().getValue());
+
+            assertFalse(vm.getShowConnectedUsersDialog().getValue());
+            vm.openConnectedUsersDialog();
+            assertTrue(vm.getShowConnectedUsersDialog().getValue());
+            vm.dismissConnectedUsersDialog();
+            assertFalse(vm.getShowConnectedUsersDialog().getValue());
+
+            assertFalse(vm.getShowLobbyChatZoomDialog().getValue());
+            vm.openLobbyChatZoomDialog();
+            assertTrue(vm.getShowLobbyChatZoomDialog().getValue());
+            vm.dismissLobbyChatZoomDialog();
+            assertFalse(vm.getShowLobbyChatZoomDialog().getValue());
 
             Map<String, String> rogueExtras = new HashMap<>();
             rogueExtras.put("server_url", "http://127.0.0.1:1111");

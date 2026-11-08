@@ -1608,6 +1608,12 @@ TEST(OctiDialogsRefinementTest, PlyConfirmMultiMoveAndGameOverEndgameV3)
 
     QImage goImg = goDlg.renderToImage(480, 280);
     CHECK_FALSE(goImg.isNull());
+    CHECK_TRUE(goDlg.newGameBtnRect().isEmpty());
+    CHECK_FALSE(goDlg.reviewBoardBtnRect().isEmpty());
+    QKeyEvent goEnterEv(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+    QCoreApplication::sendEvent(&goDlg, &goEnterEv);
+    CHECK_FALSE(goDlg.wasRematchRequested());
+    CHECK_FALSE(goDlg.newGameRequested());
     QString goPath = artifactDir + "/desktop_gameover_dialog_v3.png";
     CHECK_TRUE(goImg.save(goPath));
     CHECK_TRUE(QFileInfo(goPath).size() > 10000);
@@ -2830,6 +2836,23 @@ TEST(OctiBoardCanvasIndicatorTestSuite, GuidedModeFriendlyJumpSelfCaptureToggle)
     CHECK_TRUE(composer.toggleCaptureAtSquare(3, 4));
     STRCMP_EQUAL("33a-35", composer.stagedMoveNotation().c_str());
     CHECK_FALSE(composer.captureChoices()[0].capture);
+}
+
+TEST(OctiOfkUsabilityTestSuite, GameOverDialogSingleReviewBoardButtonAndKeyAccept)
+{
+    OctiBoard board(GAME_MODE_2, false, false, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    board.getGame()->resign(PLAYER_B);
+
+    GameOverDialog goDlg(&board, ThemeId::OBSIDIAN_BRASS);
+    goDlg.renderToImage(480, 280);
+    CHECK_TRUE(goDlg.newGameBtnRect().isEmpty());
+    CHECK_FALSE(goDlg.reviewBoardBtnRect().isEmpty());
+
+    QKeyEvent enterEv(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+    QCoreApplication::sendEvent(&goDlg, &enterEv);
+    CHECK_FALSE(goDlg.wasRematchRequested());
+    CHECK_FALSE(goDlg.newGameRequested());
 }
 
 extern "C" const char *__lsan_default_suppressions()

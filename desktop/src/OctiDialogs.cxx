@@ -3429,26 +3429,18 @@ QImage GameOverDialog::renderToImage(int width, int height)
                Qt::AlignCenter,
                QString("Total Plies / Moves: %1").arg(_moveCount));
 
-    double btnW = 176.0;
+    double btnW = 220.0;
     double btnH = 42.0;
-    double gap = 24.0;
-    double startX = (width - (2.0 * btnW + gap)) * 0.5;
     double btnY = height - btnH - 26.0;
 
-    _newGameBtnRect = QRectF(startX, btnY, btnW, btnH);
-    _reviewBoardBtnRect = QRectF(startX + btnW + gap, btnY, btnW, btnH);
+    _newGameBtnRect = QRectF();
+    _reviewBoardBtnRect = QRectF((width - btnW) * 0.5, btnY, btnW, btnH);
 
     p.setPen(QPen(pal.prongSuperGold, 1.6));
     p.setBrush(pal.podA.core);
-    p.drawRoundedRect(_newGameBtnRect, 7.0, 7.0);
+    p.drawRoundedRect(_reviewBoardBtnRect, 7.0, 7.0);
     p.setFont(QFont("SansSerif", 11, QFont::Bold));
     p.setPen(Qt::white);
-    p.drawText(_newGameBtnRect, Qt::AlignCenter, QStringLiteral("New Game"));
-
-    p.setPen(QPen(pal.accentBrass, 1.4));
-    p.setBrush(pal.panelCardBg.darker(130));
-    p.drawRoundedRect(_reviewBoardBtnRect, 7.0, 7.0);
-    p.setPen(pal.textPrimary);
     p.drawText(_reviewBoardBtnRect, Qt::AlignCenter, QStringLiteral("Review Board"));
 
     p.end();
@@ -3468,10 +3460,6 @@ void GameOverDialog::mousePressEvent(QMouseEvent *event)
         return;
     }
     QPointF pos = mousePosF(event);
-    if (_newGameBtnRect.contains(pos)) {
-        triggerRematch();
-        return;
-    }
     if (_reviewBoardBtnRect.contains(pos)) {
         _newGameRequested = false;
         accept();
@@ -3484,13 +3472,10 @@ void GameOverDialog::keyPressEvent(QKeyEvent *event)
     if (!event) {
         return;
     }
-    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
-        triggerRematch();
-        return;
-    }
-    if (event->key() == Qt::Key_Escape) {
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter ||
+        event->key() == Qt::Key_Escape) {
         _newGameRequested = false;
-        reject();
+        accept();
         return;
     }
     QDialog::keyPressEvent(event);

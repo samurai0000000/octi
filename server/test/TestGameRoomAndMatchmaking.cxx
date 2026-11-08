@@ -4381,6 +4381,46 @@ TEST(GameRoomManagerTest, RealtimeLobbyTableUpdatedEventsOnObserveMoveAndDisconn
                 static_cast<int>(lp.events.back().type));
 }
 
+TEST(GameRoomManagerTest, UnseatedRobotHostWithAllowRobotsFalseCanSitInOwnTable)
+{
+    CreateRobotResult cr1 = store->createRobot(p[0], "bot-host-test", "Unseated host bot");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)cr1.status);
+    int64_t hostRobotActor = makeRobotActorId(cr1.robot.robotId);
+
+    CreateRobotResult cr2 = store->createRobot(p[0], "bot-other-test", "Second bot");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)cr2.status);
+    int64_t otherRobotActor = makeRobotActorId(cr2.robot.robotId);
+
+    GameTableConfig c = cfg();
+    c.mode = GAME_MODE_2;
+    c.bases = GAME_BASES_1;
+    c.rated = false;
+    c.allowRobots = false; // humans_only mode: blocks other robots from joining
+    c.timeControl.enabled = false;
+
+    // Robot hosts unseated (initialSeat = 0) so human can choose Seat 1 or Seat 2
+    RoomResult crTable = mgr->createTable(hostRobotActor, c, 0);
+    EXPECT_OK(crTable);
+    std::string roomId = crTable.roomId;
+
+    // Another robot is rejected with ROBOTS_NOT_ALLOWED
+    RoomResult jOtherBot = mgr->joinTable(roomId, otherRobotActor, 1, "");
+    CHECK_FALSE(jOtherBot.ok());
+    CHECK_EQUAL(static_cast<int>(RoomCode::ROBOTS_NOT_ALLOWED),
+                static_cast<int>(jOtherBot.code));
+
+    // Human joins Seat 1
+    RoomResult jHuman = mgr->joinTable(roomId, p[1], 1, "");
+    EXPECT_OK(jHuman);
+    CHECK_FALSE(jHuman.gameStarted);
+
+    // Hosting robot sits in the remaining seat and starts the match
+    RoomResult jHostBot = mgr->joinTable(roomId, hostRobotActor, 0, "");
+    EXPECT_OK(jHostBot);
+    CHECK_EQUAL(2, jHostBot.seat);
+    CHECK_TRUE(jHostBot.gameStarted);
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

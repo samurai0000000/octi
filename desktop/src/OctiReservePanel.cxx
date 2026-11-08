@@ -76,7 +76,81 @@ ThemeId OctiReservePanel::theme() const
 
 void OctiReservePanel::refresh()
 {
+    updateMiddleOverlayGeometry();
     update();
+}
+
+void OctiReservePanel::setMiddleOverlayWidget(QWidget *w)
+{
+    _middleOverlayWidget = w;
+    if (_middleOverlayWidget) {
+        _middleOverlayWidget->setParent(this);
+        updateMiddleOverlayGeometry();
+        _middleOverlayWidget->show();
+    }
+    update();
+}
+
+void OctiReservePanel::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    updateMiddleOverlayGeometry();
+}
+
+void OctiReservePanel::updateMiddleOverlayGeometry()
+{
+    if (!_middleOverlayWidget) {
+        return;
+    }
+    double topEdgeY = 10.0;
+    double bottomEdgeY = static_cast<double>(height()) - 10.0;
+    if (_canvas != nullptr) {
+        QRectF boardOuter = _canvas->geometry().boardOuterRect();
+        if (_canvas->height() > 0 && std::abs(height() - _canvas->height()) <= 8 &&
+            boardOuter.height() > 100.0 && boardOuter.bottom() <= height()) {
+            topEdgeY = boardOuter.top();
+            bottomEdgeY = boardOuter.bottom();
+        } else {
+            int bw = _board ? _board->getBoardWidth() : 9;
+            int bh = _board ? _board->getBoardHeight() : 9;
+            OctiBoardGeometry geom(height(), height(), bw, bh, _canvas->boardRotation());
+            QRectF geomOuter = geom.boardOuterRect();
+            if (geomOuter.height() > 100.0 && geomOuter.bottom() <= height()) {
+                topEdgeY = geomOuter.top();
+                bottomEdgeY = geomOuter.bottom();
+            }
+        }
+    }
+    topEdgeY = std::max(4.0, topEdgeY);
+    bottomEdgeY = std::min(static_cast<double>(height()) - 4.0, bottomEdgeY);
+
+    OctiGameMode mode = _board ? _board->getGameMode() : GAME_MODE_2;
+    int numPlayers = (mode == GAME_MODE_4) ? 4 : 2;
+    double margin = 10.0;
+    double midW = std::max(100.0, static_cast<double>(width()) - 2.0 * margin);
+
+    double midY = 0.0;
+    double midH = 0.0;
+    if (numPlayers == 2) {
+        double cardH = 132.0;
+        midY = topEdgeY + cardH + 6.0;
+        midH = (bottomEdgeY - cardH - 6.0) - midY;
+    } else {
+        double cardH = 80.0;
+        midY = topEdgeY + 2.0 * cardH + 6.0;
+        midH = (bottomEdgeY - 2.0 * cardH - 6.0) - midY;
+    }
+
+    if (midH > 40.0) {
+        _middleOverlayWidget->setGeometry(
+            static_cast<int>(margin),
+            static_cast<int>(midY),
+            static_cast<int>(midW),
+            static_cast<int>(midH));
+        _middleOverlayWidget->setVisible(true);
+    } else {
+        _middleOverlayWidget->setVisible(false);
+    }
 }
 
 void OctiReservePanel::setTimeControlEnabled(bool enabled)
@@ -231,17 +305,34 @@ void OctiReservePanel::paintReserveScene(QPainter &p, int width, int height)
         cardsToDraw.push_back({topPlayer, cardRectTop});
         cardsToDraw.push_back({botPlayer, cardRectBot});
     } else {
-        double cardH = 94.0;
-        double availH = bottomEdgeY - topEdgeY;
-        double totalCardsH = 4.0 * cardH;
-        double spacing = (availH > totalCardsH) ? (availH - totalCardsH) / 3.0 : 6.0;
-        OctiPlayer pOrder[4] = {PLAYER_B, PLAYER_C, PLAYER_D, PLAYER_A};
-        for (int k = 0; k < 4; ++k) {
-            OctiPlayer pl = pOrder[k];
-            double y = topEdgeY + k * (cardH + spacing);
-            QRectF cRect(margin, y, cardW, cardH);
-            _playerCardRects[pl] = cRect;
-            cardsToDraw.push_back({pl, cRect});
+        if (_middleOverlayWidget != nullptr) {
+            double cardH = 80.0;
+            OctiPlayer pOrder[4] = {PLAYER_B, PLAYER_C, PLAYER_D, PLAYER_A};
+            QRectF c0(margin, topEdgeY, cardW, cardH);
+            QRectF c1(margin, topEdgeY + cardH + 4.0, cardW, cardH);
+            QRectF c2(margin, bottomEdgeY - 2.0 * cardH - 4.0, cardW, cardH);
+            QRectF c3(margin, bottomEdgeY - cardH, cardW, cardH);
+            _playerCardRects[pOrder[0]] = c0;
+            _playerCardRects[pOrder[1]] = c1;
+            _playerCardRects[pOrder[2]] = c2;
+            _playerCardRects[pOrder[3]] = c3;
+            cardsToDraw.push_back({pOrder[0], c0});
+            cardsToDraw.push_back({pOrder[1], c1});
+            cardsToDraw.push_back({pOrder[2], c2});
+            cardsToDraw.push_back({pOrder[3], c3});
+        } else {
+            double cardH = 94.0;
+            double availH = bottomEdgeY - topEdgeY;
+            double totalCardsH = 4.0 * cardH;
+            double spacing = (availH > totalCardsH) ? (availH - totalCardsH) / 3.0 : 6.0;
+            OctiPlayer pOrder[4] = {PLAYER_B, PLAYER_C, PLAYER_D, PLAYER_A};
+            for (int k = 0; k < 4; ++k) {
+                OctiPlayer pl = pOrder[k];
+                double y = topEdgeY + k * (cardH + spacing);
+                QRectF cRect(margin, y, cardW, cardH);
+                _playerCardRects[pl] = cRect;
+                cardsToDraw.push_back({pl, cRect});
+            }
         }
     }
 

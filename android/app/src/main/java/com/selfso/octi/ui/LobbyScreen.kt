@@ -9,6 +9,7 @@ package com.selfso.octi.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -35,6 +38,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -58,6 +62,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.selfso.octi.OctiBotEngine
+import com.selfso.octi.OctiGameMode
 import com.selfso.octi.OctiNetworkClient
 import com.selfso.octi.ui.theme.OctiTheme
 
@@ -276,215 +284,7 @@ fun LobbyScreen(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Header Row
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
-            border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "OCTI Online Arena",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = OctiTheme.colors.accentBrass,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (!isAuthenticated) {
-                            Button(
-                                onClick = { viewModel.setShowSsoDialog(true) },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = OctiTheme.colors.accentBrass,
-                                    contentColor = OctiTheme.colors.windowBg
-                                )
-                            ) {
-                                Text("Sign In (SSO)", maxLines = 1, softWrap = false)
-                            }
-                        } else {
-                            OutlinedButton(onClick = { viewModel.setShowAccountDialog(true) }) {
-                                val prof = profile
-                                if (prof != null) {
-                                    OctiPlayerAvatar(
-                                        avatarUrl = prof.avatarUrl,
-                                        label = prof.handle,
-                                        netClient = viewModel.networkClient(),
-                                        size = 20.dp,
-                                        modifier = Modifier.padding(end = 6.dp)
-                                    )
-                                    val handleText = if (prof.handle.isNotEmpty()) "@${prof.handle}" else "Account"
-                                    Text(
-                                        text = handleText,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                } else {
-                                    Text("Account", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                            }
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.selectTab(OctiAppViewModel.AppTab.LOBBY_CHAT) },
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text("Lobby Chat", maxLines = 1, softWrap = false)
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.refreshLobbyStateAsync() },
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text("↻", maxLines = 1, softWrap = false)
-                        }
-                    }
-                }
-            }
-        }
-
-        // 1. My Active Table Card
-        val showMyActiveTable = seatedTableInLobby != null || activeRoomId.isNotEmpty()
-        if (showMyActiveTable) {
-            val tableRoomId = seatedTableInLobby?.roomId ?: activeRoomId
-            val shortTableRoomId = if (tableRoomId.length > 16) tableRoomId.take(16) else tableRoomId
-            val tablePhase = seatedTableInLobby?.phase ?: activeGameView?.phase ?: "WAITING_FOR_PLAYERS"
-            val tableMode = seatedTableInLobby?.mode ?: activeGameView?.mode ?: "2P"
-            val tableBases = seatedTableInLobby?.bases ?: activeGameView?.bases ?: 3
-            val tableTimeControl = seatedTableInLobby?.timeControl?.ifEmpty { "10+5" }
-                ?: activeGameView?.timeControl?.ifEmpty { "10+5" } ?: "10+5"
-            val phaseLabel = if (tablePhase == "WAITING_FOR_PLAYERS") {
-                "Waiting"
-            } else {
-                "In Progress"
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
-                border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "My Table #$shortTableRoomId ($tableMode • ${tableBases}B • $tableTimeControl)",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = OctiTheme.colors.accentBrass,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(end = 6.dp)
-                        )
-                        Text(
-                            text = phaseLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = OctiTheme.colors.windowBg,
-                            maxLines = 1,
-                            modifier = Modifier
-                                .background(
-                                    color = OctiTheme.colors.accentBrass,
-                                    shape = RoundedCornerShape(6.dp)
-                                )
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        val seats = seatedTableInLobby?.seats ?: emptyList()
-                        val seatsTotal = seatedTableInLobby?.seatsTotal
-                            ?: if (tableMode.equals("4P", ignoreCase = true)) 4 else 2
-                        if (seats.isNotEmpty()) {
-                            for (seatIdx in 1..seatsTotal) {
-                                val s = seats.firstOrNull { it.seat == seatIdx }
-                                val seatLabel = if (s != null && s.handle.isNotEmpty()) {
-                                    "Seat $seatIdx (${seatLetterForIndex(seatIdx)}): @${s.handle}"
-                                } else {
-                                    "Seat $seatIdx (${seatLetterForIndex(seatIdx)}): Waiting..."
-                                }
-                                Text(
-                                    text = seatLabel,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = OctiTheme.colors.textPrimary,
-                                    modifier = Modifier
-                                        .background(
-                                            color = OctiTheme.colors.windowBg,
-                                            shape = RoundedCornerShape(6.dp)
-                                        )
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        } else {
-                            val players = seatedTableInLobby?.players ?: activeGameView?.players ?: emptyList()
-                            for (seatIdx in 1..seatsTotal) {
-                                val handle = players.getOrNull(seatIdx - 1) ?: ""
-                                val seatLabel = if (handle.isNotEmpty()) {
-                                    "Seat $seatIdx (${seatLetterForIndex(seatIdx)}): @$handle"
-                                } else {
-                                    "Seat $seatIdx (${seatLetterForIndex(seatIdx)}): Waiting..."
-                                }
-                                Text(
-                                    text = seatLabel,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = OctiTheme.colors.textPrimary,
-                                    modifier = Modifier
-                                        .background(
-                                            color = OctiTheme.colors.windowBg,
-                                            shape = RoundedCornerShape(6.dp)
-                                        )
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Button(
-                            onClick = { viewModel.selectTab(OctiAppViewModel.AppTab.BOARD) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = OctiTheme.colors.accentBrass,
-                                contentColor = OctiTheme.colors.windowBg
-                            )
-                        ) {
-                            Text("Open Board")
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.leaveOnlineTableAsync(tableRoomId) }
-                        ) {
-                            Text("Leave Table")
-                        }
-                    }
-                }
-            }
-        }
-
-        // 2. Open & Live Tables Card
+        // 1. Open & Live Tables Card (weight 1f)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -497,6 +297,7 @@ fun LobbyScreen(
                     .fillMaxSize()
                     .padding(12.dp)
             ) {
+                // Header row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -508,18 +309,92 @@ fun LobbyScreen(
                         color = OctiTheme.colors.textPrimary,
                         fontWeight = FontWeight.Bold
                     )
-                    Button(
-                        onClick = {
-                            onCreateTableClick()
-                            showInlineCreateTableDialog = true
-                        },
-                        enabled = isAuthenticated,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = OctiTheme.colors.accentBrass,
-                            contentColor = OctiTheme.colors.windowBg
-                        )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("+ Create Table", maxLines = 1, softWrap = false)
+                        OutlinedButton(
+                            onClick = { viewModel.refreshLobbyStateAsync() },
+                            modifier = Modifier.height(32.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                        ) {
+                            Text("↻", fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = {
+                                onCreateTableClick()
+                                showInlineCreateTableDialog = true
+                            },
+                            enabled = isAuthenticated,
+                            modifier = Modifier.height(32.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = OctiTheme.colors.accentBrass,
+                                contentColor = OctiTheme.colors.windowBg
+                            )
+                        ) {
+                            Text("+ Create Table", maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Compact active-table banner if seated or activeRoomId is not empty
+                val showMyActiveTable = seatedTableInLobby != null || activeRoomId.isNotEmpty()
+                if (showMyActiveTable) {
+                    val tableRoomId = seatedTableInLobby?.roomId ?: activeRoomId
+                    val shortTableRoomId = if (tableRoomId.length > 16) tableRoomId.take(16) else tableRoomId
+                    val tablePhase = seatedTableInLobby?.phase ?: activeGameView?.phase ?: "WAITING_FOR_PLAYERS"
+                    val tableMode = seatedTableInLobby?.mode ?: activeGameView?.mode ?: "2P"
+                    val phaseLabel = if (tablePhase == "WAITING_FOR_PLAYERS") "Waiting" else "In Progress"
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        color = OctiTheme.colors.windowBg,
+                        border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Active Table #$shortTableRoomId ($tableMode • $phaseLabel)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = OctiTheme.colors.accentBrass,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    onClick = { viewModel.selectTab(OctiAppViewModel.AppTab.BOARD) },
+                                    modifier = Modifier.height(28.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = OctiTheme.colors.accentBrass,
+                                        contentColor = OctiTheme.colors.windowBg
+                                    )
+                                ) {
+                                    Text("Open Board", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                }
+                                OutlinedButton(
+                                    onClick = { viewModel.leaveOnlineTableAsync(tableRoomId) },
+                                    modifier = Modifier.height(28.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                ) {
+                                    Text("Leave", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -699,239 +574,131 @@ fun LobbyScreen(
             }
         }
 
-        val humanPlayers = lobbyState.players.filter {
-            it.handle != "anonymous-127.0.0.1" && it.handle != "anonymous-::1" && !it.isRobot && it.robotUuid.isEmpty()
-        }
-        val robotPlayers = lobbyState.players.filter {
-            it.handle != "anonymous-127.0.0.1" && it.handle != "anonymous-::1" && (it.isRobot || it.robotUuid.isNotEmpty())
-        }
-
-        // 2b. Connected Users Card (directly below Open & Live Tables Card)
+        // 2. Lobby Chat Card (weight 1f)
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
             colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
             border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                    .fillMaxSize()
+                    .padding(10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                // Header row
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { viewModel.openLobbyChatZoomDialog() },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Connected Users (${humanPlayers.size})",
-                        style = MaterialTheme.typography.titleSmall,
+                        text = "Lobby Chat",
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = OctiTheme.colors.accentBrass
                     )
                     Text(
-                        text = "Tap user to show @handle",
+                        text = "Global • Tap to zoom ⤢",
                         style = MaterialTheme.typography.labelSmall,
-                        color = OctiTheme.colors.textSecondary
+                        color = OctiTheme.colors.accentBrass,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
-                if (humanPlayers.isEmpty()) {
-                    Text(
-                        text = "No users connected right now.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = OctiTheme.colors.textSecondary,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
+                // Chat Messages Log
+                val lobbyChatMessages by viewModel.lobbyChatMessages.collectAsState()
+                val formattedChatList = if (lobbyChatMessages.isNotEmpty()) {
+                    lobbyChatMessages
                 } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        for (p in humanPlayers) {
-                            val playerKey = p.playerUuid.ifEmpty { p.handle }
-                            val isExpanded = expandedPlayerUuid == playerKey
-                            val cleanHandle = p.handle.removePrefix("@")
-                            Surface(
-                                onClick = {
-                                    expandedPlayerUuid = if (isExpanded) null else playerKey
-                                },
-                                shape = RoundedCornerShape(16.dp),
-                                color = OctiTheme.colors.windowBg,
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isExpanded) OctiTheme.colors.accentBrass else OctiTheme.colors.panelCardBorder
+                    lobbyState.recentChat.map { OctiAppViewModel.formatLobbyChatEntry(it) }
+                }
+                val lobbyChatListState = rememberLazyListState()
+                LaunchedEffect(formattedChatList.size) {
+                    if (formattedChatList.isNotEmpty()) {
+                        lobbyChatListState.scrollToItem(formattedChatList.size - 1)
+                    }
+                }
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .clickable { viewModel.openLobbyChatZoomDialog() },
+                    color = OctiTheme.colors.windowBg,
+                    shape = RoundedCornerShape(6.dp),
+                    border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+                ) {
+                    if (formattedChatList.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No messages in lobby chat yet. Say hello!",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OctiTheme.colors.textSecondary
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            state = lobbyChatListState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            items(formattedChatList) { line ->
+                                Text(
+                                    text = line,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = OctiTheme.colors.textPrimary
                                 )
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    OctiPlayerAvatar(
-                                        avatarUrl = p.avatarUrl,
-                                        handle = p.handle,
-                                        size = 22.dp,
-                                        netClient = viewModel.networkClient()
-                                    )
-
-                                    if (isExpanded) {
-                                        Text(
-                                            text = "@$cleanHandle",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp,
-                                            color = OctiTheme.colors.accentBrass
-                                        )
-                                        if (p.roomId.isNotBlank()) {
-                                            Text(
-                                                text = "#${p.roomId}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontSize = 10.sp,
-                                                color = OctiTheme.colors.accentBrass,
-                                                modifier = Modifier
-                                                    .background(
-                                                        color = OctiTheme.colors.accentBrass.copy(alpha = 0.2f),
-                                                        shape = RoundedCornerShape(8.dp)
-                                                    )
-                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
-                                            )
-                                        }
-                                    }
-
-                                    if (p.clients.isNotEmpty()) {
-                                        ClientTypeSmallIcons(
-                                            clients = p.clients,
-                                            accentColor = OctiTheme.colors.accentBrass,
-                                            textSec = OctiTheme.colors.textSecondary
-                                        )
-                                    }
-
-                                    val onlineText = "On ${formatCompactDurationSec(p.onlineSec)}"
-                                    val idleText = if (p.idleSec < 10L) "Active" else "Idle ${formatCompactDurationSec(p.idleSec)}"
-                                    Text(
-                                        text = "$onlineText • $idleText",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontSize = 10.sp,
-                                        color = OctiTheme.colors.textSecondary
-                                    )
-                                }
                             }
                         }
                     }
                 }
-            }
-        }
 
-        // 2c. Connected Robots Card (directly below Connected Users Card)
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
-            border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
+                // Input Row
+                var chatInputText by remember { mutableStateOf("") }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Connected Robots (${robotPlayers.size})",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = OctiTheme.colors.accentBrass
+                    OutlinedTextField(
+                        value = chatInputText,
+                        onValueChange = { chatInputText = it },
+                        placeholder = {
+                            Text(
+                                if (isAuthenticated) "Message lobby..." else "Sign in to chat...",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        },
+                        enabled = isAuthenticated,
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
                     )
-                    Text(
-                        text = "Automated bot instances",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = OctiTheme.colors.textSecondary
-                    )
-                }
-
-                if (robotPlayers.isEmpty()) {
-                    Text(
-                        text = "No robots connected right now.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = OctiTheme.colors.textSecondary,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        for (p in robotPlayers) {
-                            val playerKey = p.playerUuid.ifEmpty { p.handle }
-                            val isExpanded = expandedPlayerUuid == playerKey
-                            val cleanHandle = p.handle.removePrefix("@")
-                            Surface(
-                                onClick = {
-                                    expandedPlayerUuid = if (isExpanded) null else playerKey
-                                },
-                                shape = RoundedCornerShape(16.dp),
-                                color = OctiTheme.colors.windowBg,
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isExpanded) OctiTheme.colors.accentBrass else OctiTheme.colors.panelCardBorder
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    OctiPlayerAvatar(
-                                        avatarUrl = p.avatarUrl,
-                                        handle = p.handle,
-                                        size = 22.dp,
-                                        netClient = viewModel.networkClient()
-                                    )
-
-                                    Text(
-                                        text = "@$cleanHandle",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp,
-                                        color = OctiTheme.colors.accentBrass
-                                    )
-
-                                    if (p.roomId.isNotBlank()) {
-                                        Text(
-                                            text = "#${p.roomId}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontSize = 10.sp,
-                                            color = OctiTheme.colors.accentBrass,
-                                            modifier = Modifier
-                                                .background(
-                                                    color = OctiTheme.colors.accentBrass.copy(alpha = 0.2f),
-                                                    shape = RoundedCornerShape(8.dp)
-                                                )
-                                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                                        )
-                                    }
-
-                                    val onlineText = "On ${formatCompactDurationSec(p.onlineSec)}"
-                                    val idleText = if (p.idleSec < 10L) "Active" else "Idle ${formatCompactDurationSec(p.idleSec)}"
-                                    Text(
-                                        text = "$onlineText • $idleText",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontSize = 10.sp,
-                                        color = OctiTheme.colors.textSecondary
-                                    )
-                                }
+                    Button(
+                        onClick = {
+                            if (chatInputText.isNotBlank()) {
+                                viewModel.sendLobbyChatMessage(chatInputText.trim())
+                                chatInputText = ""
                             }
-                        }
+                        },
+                        enabled = isAuthenticated && chatInputText.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OctiTheme.colors.accentBrass,
+                            contentColor = OctiTheme.colors.windowBg
+                        )
+                    ) {
+                        Text("Send", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1229,6 +996,253 @@ fun LobbyChatScreen(
                     )
                 ) {
                     Text("Send")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ConnectedUsersAndRobotsDialog(
+    viewModel: OctiAppViewModel,
+    onDismiss: () -> Unit
+) {
+    val lobbyState by viewModel.lobbyState.collectAsState()
+    val humanPlayers = remember(lobbyState.players) {
+        lobbyState.players.filter {
+            it.handle != "anonymous-127.0.0.1" && it.handle != "anonymous-::1" && !it.isRobot && it.robotUuid.isEmpty()
+        }
+    }
+    val robotPlayers = remember(lobbyState.players) {
+        lobbyState.players.filter {
+            it.handle != "anonymous-127.0.0.1" && it.handle != "anonymous-::1" && (it.isRobot || it.robotUuid.isNotEmpty())
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .fillMaxHeight(0.85f)
+                .padding(8.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+            border = BorderStroke(2.dp, OctiTheme.colors.accentBrass)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Connected Users & Robots",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = OctiTheme.colors.accentBrass
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Text(
+                            text = "✕",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = OctiTheme.colors.textSecondary
+                        )
+                    }
+                }
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Connected Users Section
+                    item {
+                        Text(
+                            text = "Connected Users (${humanPlayers.size})",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = OctiTheme.colors.accentBrass
+                        )
+                    }
+                    if (humanPlayers.isEmpty()) {
+                        item {
+                            Text(
+                                text = "No other users connected right now.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OctiTheme.colors.textSecondary,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                    } else {
+                        items(humanPlayers) { p ->
+                            val cleanHandle = p.handle.removePrefix("@")
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                color = OctiTheme.colors.windowBg,
+                                border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        OctiPlayerAvatar(
+                                            avatarUrl = p.avatarUrl,
+                                            handle = p.handle,
+                                            size = 28.dp,
+                                            netClient = viewModel.networkClient()
+                                        )
+                                        Column {
+                                            Text(
+                                                text = "@$cleanHandle",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = OctiTheme.colors.accentBrass
+                                            )
+                                            val onlineText = "On ${formatCompactDurationSec(p.onlineSec)}"
+                                            val idleText = if (p.idleSec < 10L) "Active" else "Idle ${formatCompactDurationSec(p.idleSec)}"
+                                            Text(
+                                                text = "$onlineText • $idleText",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = OctiTheme.colors.textSecondary
+                                            )
+                                        }
+                                    }
+                                    Button(
+                                        onClick = {
+                                            onDismiss()
+                                            if (p.roomId.isNotEmpty()) {
+                                                viewModel.observeOnlineTableAsync(p.roomId, "")
+                                            } else {
+                                                viewModel.setShowCreateTableDialog(true)
+                                            }
+                                        },
+                                        modifier = Modifier.height(30.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = OctiTheme.colors.accentBrass,
+                                            contentColor = OctiTheme.colors.windowBg
+                                        )
+                                    ) {
+                                        Text("Challenge", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Connected Robots Section
+                    item {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Connected Robots (${robotPlayers.size})",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = OctiTheme.colors.accentBrass
+                        )
+                    }
+                    if (robotPlayers.isEmpty()) {
+                        item {
+                            Text(
+                                text = "No automated robots connected right now.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OctiTheme.colors.textSecondary,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                    } else {
+                        items(robotPlayers) { p ->
+                            val cleanHandle = p.handle.removePrefix("@")
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                color = OctiTheme.colors.windowBg,
+                                border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        OctiPlayerAvatar(
+                                            avatarUrl = p.avatarUrl,
+                                            handle = p.handle,
+                                            size = 28.dp,
+                                            netClient = viewModel.networkClient()
+                                        )
+                                        Column {
+                                            Text(
+                                                text = "@$cleanHandle",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = OctiTheme.colors.accentBrass
+                                            )
+                                            Text(
+                                                text = "Automated bot instance",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = OctiTheme.colors.textSecondary
+                                            )
+                                        }
+                                    }
+                                    Button(
+                                        onClick = {
+                                            onDismiss()
+                                            viewModel.startNewLocalGame(
+                                                mode = OctiGameMode.GAME_MODE_2,
+                                                vsBot = true,
+                                                difficulty = OctiBotEngine.BotDifficulty.TACTICAL
+                                            )
+                                        },
+                                        modifier = Modifier.height(30.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = OctiTheme.colors.accentBrass,
+                                            contentColor = OctiTheme.colors.windowBg
+                                        )
+                                    ) {
+                                        Text("Play vs Bot", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Close Button
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OctiTheme.colors.accentBrass,
+                        contentColor = OctiTheme.colors.windowBg
+                    )
+                ) {
+                    Text("Close", fontWeight = FontWeight.Bold)
                 }
             }
         }

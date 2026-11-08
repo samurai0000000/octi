@@ -165,6 +165,48 @@ public:
     bool isGameOverDialogShownForCurrentMatch() const { return _gameOverDialogShownForCurrentMatch; }
     void tickLocalClock(int elapsedMs = 100);
 
+    void updateMenuActionsState();
+    void syncBoardLobbyChatTranscript();
+    void sendBoardLobbyChatMessage();
+
+    QWidget *leftMiddleContainer() const { return _leftMiddleContainer; }
+    QGroupBox *statusBox() const { return _statusBox; }
+    QGroupBox *historyBox() const { return _historyBox; }
+    QGroupBox *boardLobbyChatBox() const { return _boardLobbyChatBox; }
+    QPlainTextEdit *boardLobbyChatTranscript() const { return _boardLobbyChatTranscript; }
+    QLineEdit *boardLobbyChatInput() const { return _boardLobbyChatInput; }
+    QPushButton *boardLobbyChatSendButton() const { return _boardLobbyChatSendBtn; }
+    QGroupBox *chatBox() const { return qobject_cast<QGroupBox *>(_chatBox); }
+    QGroupBox *actionsBox() const { return _actionsBox; }
+    QPushButton *tableChatLeaveButton() const { return _tableChatLeaveBtn; }
+    QPushButton *tableChatPurgeButton() const { return _tableChatPurgeBtn; }
+    QPushButton *zoomTableChatButton() const { return _zoomChatBtn; }
+    QLabel *vcrPlyLabel() const { return _vcrPlyLabel; }
+
+    QAction *actionNewLocal() const { return _actNewGame; }
+    QAction *actionBoardView() const { return _actBoardView; }
+    QAction *actionLobbyView() const { return _actLobbyView; }
+    QAction *actionOfferDraw() const { return _actOfferDraw; }
+    QAction *actionPauseResume() const { return _actPauseResume; }
+    QAction *actionUndo() const { return _actUndo; }
+    QAction *actionClaimForfeit() const { return _actClaimForfeit; }
+    QAction *actionResign() const { return _actResign; }
+    QAction *actionExportMoves() const { return _actExportMoves; }
+    QAction *actionQuit() const { return _actQuit; }
+    QAction *actionRotate() const { return _actRotate; }
+    QAction *actionFlipPerspective() const { return _actFlipPerspective; }
+    QAction *actionToggleCoords() const { return _actToggleCoords; }
+    QAction *actionVcrFirst() const { return _actVcrFirst; }
+    QAction *actionVcrPrev() const { return _actVcrPrev; }
+    QAction *actionVcrNext() const { return _actVcrNext; }
+    QAction *actionVcrLast() const { return _actVcrLast; }
+    QAction *actionSignIn() const { return _actSignIn; }
+    QAction *actionAccount() const { return _actAccount; }
+    QAction *actionArchive() const { return _actArchive; }
+    QAction *actionLeaderboard() const { return _actLeaderboard; }
+    QAction *actionRobots() const { return _actRobots; }
+    QAction *actionModeration() const { return _actModeration; }
+
     bool refreshOnlineGameView();
     void applyGameViewData(const GameViewData &view);
     void handleGameSseEvent(const SseEvent &ev);
@@ -345,6 +387,32 @@ private:
     QPushButton *_leaveWaitingTableBtn = nullptr;
     QAction *_actNewGame = nullptr;
     QAction *_actUndo = nullptr;
+    QAction *_actBoardView = nullptr;
+    QAction *_actLobbyView = nullptr;
+    QAction *_actOfferDraw = nullptr;
+    QAction *_actPauseResume = nullptr;
+    QAction *_actClaimForfeit = nullptr;
+    QAction *_actResign = nullptr;
+    QAction *_actExportMoves = nullptr;
+    QAction *_actQuit = nullptr;
+    QAction *_actRotate = nullptr;
+    QAction *_actFlipPerspective = nullptr;
+    QAction *_actToggleCoords = nullptr;
+    QAction *_actTheme = nullptr;
+    QAction *_actSfx = nullptr;
+    QAction *_actVcrFirst = nullptr;
+    QAction *_actVcrPrev = nullptr;
+    QAction *_actVcrNext = nullptr;
+    QAction *_actVcrLast = nullptr;
+    QAction *_actSignIn = nullptr;
+    QAction *_actAccount = nullptr;
+    QAction *_actArchive = nullptr;
+    QAction *_actLeaderboard = nullptr;
+    QAction *_actRobots = nullptr;
+    QAction *_actModeration = nullptr;
+    QAction *_actUpdate = nullptr;
+    QAction *_actSplash = nullptr;
+    QAction *_actTelemetry = nullptr;
 
     QWidget *_proposalBannerWidget;
     QLabel *_proposalBannerLabel;
@@ -390,6 +458,14 @@ private:
     class QGroupBox *_statusBox = nullptr;
     class QGroupBox *_historyBox = nullptr;
     class QGroupBox *_actionsBox = nullptr;
+    class QGroupBox *_boardLobbyChatBox = nullptr;
+    QPlainTextEdit *_boardLobbyChatTranscript = nullptr;
+    QLineEdit *_boardLobbyChatInput = nullptr;
+    QPushButton *_boardLobbyChatSendBtn = nullptr;
+    QPushButton *_tableChatLeaveBtn = nullptr;
+    QPushButton *_tableChatPurgeBtn = nullptr;
+    QLabel *_vcrPlyLabel = nullptr;
+    QWidget *_leftMiddleContainer = nullptr;
     OctiStartMatchDialog *_startMatchOverlay = nullptr;
     QTimer *_onlineTtlTimer = nullptr;
 };

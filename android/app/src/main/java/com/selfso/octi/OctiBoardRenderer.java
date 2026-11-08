@@ -2640,12 +2640,13 @@ public final class OctiBoardRenderer {
         drawVectorString(pixels, w, h, mx + 120, my + 140, 24, "MATCH CONCLUDED BY RESIGNATION", pal.textPrimary, 2.2);
         drawVectorString(pixels, w, h, mx + 250, my + 200, 22, "LOCAL VS BOT TACTICAL", pal.textSecondary, 2.0);
 
-        // Review Board & New Game buttons
-        drawRectOutline(pixels, w, h, mx + 56, my + 294, 380, 92, 2.6, pal.accentBrass);
-        drawVectorString(pixels, w, h, mx + 104, my + 328, 24, "REVIEW BOARD", pal.accentBrass, 2.4);
-
-        fillRectSolid(pixels, w, h, mx + 476, my + 294, 380, 92, pal.accentBrass);
-        drawVectorString(pixels, w, h, mx + 566, my + 328, 24, "NEW GAME", pal.windowBg, 2.8);
+        // Single centered Review Board button
+        int btnW = 460;
+        int btnH = 92;
+        int btnX = mx + (mw - btnW) / 2;
+        int btnY = my + 294;
+        fillRectSolid(pixels, w, h, btnX, btnY, btnW, btnH, pal.accentBrass);
+        drawVectorString(pixels, w, h, btnX + 96, btnY + 32, 24, "REVIEW BOARD", pal.windowBg, 2.8);
 
         return pixels;
     }
