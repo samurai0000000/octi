@@ -5337,6 +5337,13 @@ void OctiHttpServer::Impl::handleArchiveList(const Request &req,
             return;
         }
     }
+    if (req.has_param("robot")) {
+        f.robotUuid = req.get_param_value("robot");
+        if (!isSafeId(f.robotUuid)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "invalid robot id");
+            return;
+        }
+    }
     if (req.has_param("source")) {
         std::string src = lower(req.get_param_value("source"));
         if (src != "online" && src != "client_upload") {

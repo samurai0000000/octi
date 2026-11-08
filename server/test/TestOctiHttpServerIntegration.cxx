@@ -6191,6 +6191,112 @@ TEST(OctiHttpServerIntegrationTest, WebUiTenThemesTabletopLobbyRefinementsAndLev
     CHECK_EQUAL(3, rGet3.json.value("ai_difficulty", 0));
 }
 
+TEST(OctiHttpServerIntegrationTest, ArchiveListFilterByRobotUuid)
+{
+    User humanA = signIn("google", "sub-arch-robot-a", "ArchHumanA");
+    User humanB = signIn("google", "sub-arch-robot-b", "ArchHumanB");
+
+    Reply rBot1 = http().post(
+        "/api/v1/robots", humanA.token,
+        Json{{"robot_name", "arch-filter-bot-1"}, {"description", "Archive filter test bot 1"}});
+    EXPECT_STATUS(201, rBot1);
+    std::string bot1Uuid = rBot1.json.value("robot_uuid", "");
+    std::string bot1Token = rBot1.json.value("robot_token", "");
+    CHECK_FALSE(bot1Uuid.empty());
+    CHECK_FALSE(bot1Token.empty());
+
+    Reply rBot2 = http().post(
+        "/api/v1/robots", humanB.token,
+        Json{{"robot_name", "arch-filter-bot-2"}, {"description", "Archive filter test bot 2"}});
+    EXPECT_STATUS(201, rBot2);
+    std::string bot2Uuid = rBot2.json.value("robot_uuid", "");
+    std::string bot2Token = rBot2.json.value("robot_token", "");
+    CHECK_FALSE(bot2Uuid.empty());
+    CHECK_FALSE(bot2Token.empty());
+
+    /* Game 1: humanA (seat 1) vs bot1 (seat 2) */
+    Reply rTab1 = http().post(
+        "/api/v1/tables", humanA.token,
+        Json{{"mode", "2P"}, {"bases", 3}, {"allow_robots", true}});
+    EXPECT_STATUS(201, rTab1);
+    std::string roomBot1 = rTab1.json.value("room_id", "");
+    CHECK_FALSE(roomBot1.empty());
+
+    Reply rJoin1 = http().post(
+        "/api/v1/tables/" + roomBot1 + "/join", bot1Token, Json{{"seat", 2}});
+    EXPECT_STATUS(200, rJoin1);
+    CHECK_TRUE(rJoin1.json.value("game_started", false));
+
+    Reply rResign1 = http().post(
+        "/api/v1/games/" + roomBot1 + "/resign", humanA.token, Json::object());
+    EXPECT_STATUS(200, rResign1);
+    CHECK_TRUE(rResign1.json.value("game_over", false));
+
+    /* Game 2: humanB (seat 1) vs bot2 (seat 2) */
+    Reply rTab2 = http().post(
+        "/api/v1/tables", humanB.token,
+        Json{{"mode", "2P"}, {"bases", 3}, {"allow_robots", true}});
+    EXPECT_STATUS(201, rTab2);
+    std::string roomBot2 = rTab2.json.value("room_id", "");
+    CHECK_FALSE(roomBot2.empty());
+
+    Reply rJoin2 = http().post(
+        "/api/v1/tables/" + roomBot2 + "/join", bot2Token, Json{{"seat", 2}});
+    EXPECT_STATUS(200, rJoin2);
+    CHECK_TRUE(rJoin2.json.value("game_started", false));
+
+    Reply rResign2 = http().post(
+        "/api/v1/games/" + roomBot2 + "/resign", bot2Token, Json::object());
+    EXPECT_STATUS(200, rResign2);
+    CHECK_TRUE(rResign2.json.value("game_over", false));
+
+    /* Game 3: humanA vs humanB (no robot) */
+    std::string roomHumans = playDrawGame(humanA, humanB);
+    CHECK_FALSE(roomHumans.empty());
+
+    /* 1. Filter by bot1 UUID -> only roomBot1 */
+    Reply rListBot1 = http().get("/api/v1/archive/games?robot=" + bot1Uuid);
+    EXPECT_STATUS(200, rListBot1);
+    CHECK_EQUAL(1, rListBot1.json.value("total", -1));
+    CHECK_TRUE(rListBot1.json["games"].is_array());
+    CHECK_EQUAL(1, static_cast<int>(rListBot1.json["games"].size()));
+    STRCMP_EQUAL(roomBot1.c_str(), rListBot1.json["games"][0].value("game_id", "").c_str());
+
+    const Json &pl = rListBot1.json["games"][0]["players"];
+    CHECK_TRUE(pl.is_array());
+    CHECK_EQUAL(2, static_cast<int>(pl.size()));
+    CHECK_FALSE(pl[0].value("is_robot", false));
+    STRCMP_EQUAL(humanA.uuid.c_str(), pl[0].value("player_uuid", "").c_str());
+    CHECK_TRUE(pl[1].value("is_robot", false));
+    STRCMP_EQUAL(bot1Uuid.c_str(), pl[1].value("robot_uuid", "").c_str());
+
+    /* 2. Filter by unknown robot UUID -> empty page */
+    Reply rListUnknown = http().get(
+        "/api/v1/archive/games?robot=00000000-0000-0000-0000-000000000000");
+    EXPECT_STATUS(200, rListUnknown);
+    CHECK_EQUAL(0, rListUnknown.json.value("total", -1));
+    CHECK_TRUE(rListUnknown.json["games"].is_array());
+    CHECK_EQUAL(0, static_cast<int>(rListUnknown.json["games"].size()));
+
+    /* 3. Filter by player + robot seated together -> roomBot1; non-matching pair -> empty page */
+    Reply rPlayerAndBot1 = http().get(
+        "/api/v1/archive/games?player=" + humanA.uuid + "&robot=" + bot1Uuid);
+    EXPECT_STATUS(200, rPlayerAndBot1);
+    CHECK_EQUAL(1, rPlayerAndBot1.json.value("total", -1));
+    CHECK_EQUAL(1, static_cast<int>(rPlayerAndBot1.json["games"].size()));
+    STRCMP_EQUAL(roomBot1.c_str(), rPlayerAndBot1.json["games"][0].value("game_id", "").c_str());
+
+    Reply rOtherPlayerAndBot1 = http().get(
+        "/api/v1/archive/games?player=" + humanB.uuid + "&robot=" + bot1Uuid);
+    EXPECT_STATUS(200, rOtherPlayerAndBot1);
+    CHECK_EQUAL(0, rOtherPlayerAndBot1.json.value("total", -1));
+    CHECK_EQUAL(0, static_cast<int>(rOtherPlayerAndBot1.json["games"].size()));
+
+    /* 4. Invalid robot id -> 400 INVALID_ARGUMENT */
+    Reply rBadRobot = http().get("/api/v1/archive/games?robot=bad!id");
+    EXPECT_ERROR(400, "INVALID_ARGUMENT", rBadRobot);
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();
