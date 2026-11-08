@@ -696,17 +696,109 @@ struct OctiNetworkClient::Impl {
         Json json;
     };
 
+    struct AuthState {
+        mutable std::mutex mutex;
+        std::string host;
+        int port = 0;
+        std::string sessionToken;
+        std::string installId;
+        std::string clientType{"desktop"};
+        bool explicitClientType = false;
+        std::string robotLeaseId;
+
+        AuthState(const std::string &h, int p)
+            : host(h), port(p)
+        {
+        }
+
+        void setEndpoint(const std::string &h, int p)
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            host = h;
+            port = p;
+        }
+
+        void getEndpoint(std::string &outHost, int &outPort) const
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            outHost = host;
+            outPort = port;
+        }
+
+        std::string currentToken() const
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            return sessionToken;
+        }
+
+        std::string currentInstallId() const
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            return installId;
+        }
+
+        void setInstallId(const std::string &id)
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            installId = id;
+        }
+
+        std::string currentClientType() const
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            return clientType.empty() ? "desktop" : clientType;
+        }
+
+        std::string currentRobotLeaseId() const
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            return robotLeaseId;
+        }
+
+        httplib::Headers authHeaders(
+            const httplib::Headers &extra = httplib::Headers()) const
+        {
+            httplib::Headers h = extra;
+            h.emplace("X-Octi-Protocol-Version",
+                      std::to_string(OCTI_PROTOCOL_VERSION));
+            std::string cType = currentClientType();
+            h.emplace("X-Octi-Client-Type", cType);
+            h.emplace("User-Agent",
+                      std::string("octi-") + cType + "/" + OCTI_APP_VERSION);
+            std::string tok = currentToken();
+            if (!tok.empty()) {
+                h.emplace("Authorization", "Bearer " + tok);
+            }
+            std::string inst = currentInstallId();
+            if (!inst.empty()) {
+                h.emplace("X-Octi-Install-Id", inst);
+            }
+            std::string lease = currentRobotLeaseId();
+            if (!lease.empty()) {
+                h.emplace("X-Octi-Robot-Lease", lease);
+            }
+            return h;
+        }
+    };
+
     struct SseRunner {
-        std::mutex mutex;
-        std::condition_variable cv;
-        std::shared_ptr<httplib::Client> activeClient;
+        struct State {
+            std::mutex mutex;
+            std::condition_variable cv;
+            std::shared_ptr<httplib::Client> activeClient;
 #ifdef _WIN32
-        HINTERNET activeRequest = nullptr;
+            HINTERNET activeRequest = nullptr;
 #endif
-        std::thread worker;
-        std::atomic<bool> stopRequested{false};
-        std::atomic<bool> active{false};
-        std::atomic<std::uint64_t> lastId{0};
+            std::thread worker;
+            std::thread::id workerThreadId;
+            int runningWorkers = 0;
+            std::atomic<bool> stopRequested{false};
+            std::atomic<bool> active{false};
+            std::atomic<std::uint64_t> lastId{0};
+            std::atomic<std::uint64_t> generation{0};
+        };
+
+        std::shared_ptr<State> state{std::make_shared<State>()};
 
         ~SseRunner()
         {
@@ -715,17 +807,19 @@ struct OctiNetworkClient::Impl {
 
         void stop()
         {
-            stopRequested.store(true);
+            std::shared_ptr<State> st = state;
+            st->generation.fetch_add(1);
+            st->stopRequested.store(true);
             std::shared_ptr<httplib::Client> cli;
 #ifdef _WIN32
             HINTERNET req = nullptr;
 #endif
             {
-                std::lock_guard<std::mutex> lock(mutex);
-                cli = activeClient;
+                std::lock_guard<std::mutex> lock(st->mutex);
+                cli = st->activeClient;
 #ifdef _WIN32
-                req = activeRequest;
-                activeRequest = nullptr;
+                req = st->activeRequest;
+                st->activeRequest = nullptr;
 #endif
             }
             if (cli) {
@@ -736,18 +830,40 @@ struct OctiNetworkClient::Impl {
                 WinHttpCloseHandle(req);
             }
 #endif
-            cv.notify_all();
-            if (worker.joinable()) {
-                worker.join();
+            st->cv.notify_all();
+            bool isSelf = false;
+            std::thread toFinish;
+            {
+                std::lock_guard<std::mutex> lock(st->mutex);
+                if (st->worker.joinable()) {
+                    if (st->worker.get_id() == std::this_thread::get_id()) {
+                        isSelf = true;
+                    }
+                    toFinish = std::move(st->worker);
+                } else if (st->workerThreadId == std::this_thread::get_id()) {
+                    isSelf = true;
+                }
+            }
+            if (toFinish.joinable()) {
+                if (isSelf) {
+                    toFinish.detach();
+                } else {
+                    toFinish.join();
+                }
+            }
+            if (!isSelf) {
+                std::unique_lock<std::mutex> lock(st->mutex);
+                st->cv.wait(lock, [&st]() { return st->runningWorkers == 0; });
             }
             {
-                std::lock_guard<std::mutex> lock(mutex);
-                activeClient.reset();
+                std::lock_guard<std::mutex> lock(st->mutex);
+                st->activeClient.reset();
             }
-            active.store(false);
+            st->active.store(false);
         }
     };
 
+    std::shared_ptr<AuthState> auth;
     std::string host;
     int port;
     mutable std::mutex tokenMutex;
@@ -762,7 +878,11 @@ struct OctiNetworkClient::Impl {
     SseRunner gameStream;
 
     Impl(const std::string &h, int p)
-        : host(h), port(p), clientType("desktop"), explicitClientType(false)
+        : auth(std::make_shared<AuthState>(h, p)),
+          host(h),
+          port(p),
+          clientType("desktop"),
+          explicitClientType(false)
     {
 #ifndef _WIN32
         ::signal(SIGPIPE, SIG_IGN);
@@ -773,6 +893,18 @@ struct OctiNetworkClient::Impl {
     {
         lobbyStream.stop();
         gameStream.stop();
+    }
+
+    void syncAuthStateLocked()
+    {
+        std::lock_guard<std::mutex> authLock(auth->mutex);
+        auth->host = host;
+        auth->port = port;
+        auth->sessionToken = sessionToken;
+        auth->installId = installId;
+        auth->clientType = clientType;
+        auth->explicitClientType = explicitClientType;
+        auth->robotLeaseId = robotLeaseId;
     }
 
     std::string currentToken() const
@@ -791,6 +923,7 @@ struct OctiNetworkClient::Impl {
     {
         std::lock_guard<std::mutex> lock(tokenMutex);
         installId = id;
+        syncAuthStateLocked();
     }
 
     std::string currentClientType() const
@@ -808,25 +941,7 @@ struct OctiNetworkClient::Impl {
     httplib::Headers authHeaders(
         const httplib::Headers &extra = httplib::Headers()) const
     {
-        httplib::Headers h = extra;
-        h.emplace("X-Octi-Protocol-Version",
-                  std::to_string(OCTI_PROTOCOL_VERSION));
-        std::string cType = currentClientType();
-        h.emplace("X-Octi-Client-Type", cType);
-        h.emplace("User-Agent", std::string("octi-") + cType + "/" + OCTI_APP_VERSION);
-        std::string tok = currentToken();
-        if (!tok.empty()) {
-            h.emplace("Authorization", "Bearer " + tok);
-        }
-        std::string inst = currentInstallId();
-        if (!inst.empty()) {
-            h.emplace("X-Octi-Install-Id", inst);
-        }
-        std::string lease = currentRobotLeaseId();
-        if (!lease.empty()) {
-            h.emplace("X-Octi-Robot-Lease", lease);
-        }
-        return h;
+        return auth->authHeaders(extra);
     }
 
     std::unique_ptr<httplib::Client> makeClient(int readTimeoutSec = 10) const
@@ -1248,11 +1363,15 @@ struct OctiNetworkClient::Impl {
     }
 
 #ifdef _WIN32
-    bool streamWinHttpSse(
-        SseRunner &runner,
+    static bool streamWinHttpSse(
+        const std::shared_ptr<AuthState> &auth,
+        const std::shared_ptr<SseRunner::State> &runnerState,
+        std::uint64_t myGen,
+        const std::string &targetHost,
+        int targetPort,
         const std::string &path,
         std::uint64_t curSeq,
-        const std::function<void(const SseEvent &)> &onEvent) const
+        const std::function<void(const SseEvent &)> &onEvent)
     {
         try {
             HINTERNET hSession = WinHttpOpen(
@@ -1265,11 +1384,11 @@ struct OctiNetworkClient::Impl {
                 return false;
             }
 
-            WinHttpSetTimeouts(hSession, 5000, 5000, 30000, 30000);
+            WinHttpSetTimeouts(hSession, 5000, 5000, 30000, 120000);
 
-            std::wstring wideHost = toWide(host);
+            std::wstring wideHost = toWide(targetHost);
             HINTERNET hConnect = WinHttpConnect(
-                hSession, wideHost.c_str(), static_cast<INTERNET_PORT>(port), 0);
+                hSession, wideHost.c_str(), static_cast<INTERNET_PORT>(targetPort), 0);
             if (!hConnect) {
                 WinHttpCloseHandle(hSession);
                 return false;
@@ -1291,18 +1410,19 @@ struct OctiNetworkClient::Impl {
             }
 
             {
-                std::lock_guard<std::mutex> lock(runner.mutex);
-                if (runner.stopRequested.load()) {
+                std::lock_guard<std::mutex> lock(runnerState->mutex);
+                if (runnerState->stopRequested.load() ||
+                    runnerState->generation.load() != myGen) {
                     WinHttpCloseHandle(hRequest);
                     WinHttpCloseHandle(hConnect);
                     WinHttpCloseHandle(hSession);
                     return false;
                 }
-                runner.activeRequest = hRequest;
+                runnerState->activeRequest = hRequest;
             }
 
             std::string headerStr;
-            httplib::Headers hdrs = authHeaders();
+            httplib::Headers hdrs = auth->authHeaders();
             for (const auto &kv : hdrs) {
                 headerStr += kv.first + ": " + kv.second + "\r\n";
             }
@@ -1327,8 +1447,8 @@ struct OctiNetworkClient::Impl {
                 0);
             if (!sent) {
                 {
-                    std::lock_guard<std::mutex> lock(runner.mutex);
-                    runner.activeRequest = nullptr;
+                    std::lock_guard<std::mutex> lock(runnerState->mutex);
+                    runnerState->activeRequest = nullptr;
                 }
                 WinHttpCloseHandle(hRequest);
                 WinHttpCloseHandle(hConnect);
@@ -1339,8 +1459,8 @@ struct OctiNetworkClient::Impl {
             BOOL received = WinHttpReceiveResponse(hRequest, nullptr);
             if (!received) {
                 {
-                    std::lock_guard<std::mutex> lock(runner.mutex);
-                    runner.activeRequest = nullptr;
+                    std::lock_guard<std::mutex> lock(runnerState->mutex);
+                    runnerState->activeRequest = nullptr;
                 }
                 WinHttpCloseHandle(hRequest);
                 WinHttpCloseHandle(hConnect);
@@ -1360,11 +1480,11 @@ struct OctiNetworkClient::Impl {
 
             if (statusCode != 200) {
                 if (statusCode >= 400 && statusCode < 500 && statusCode != 429) {
-                    runner.stopRequested.store(true);
+                    runnerState->stopRequested.store(true);
                 }
                 {
-                    std::lock_guard<std::mutex> lock(runner.mutex);
-                    runner.activeRequest = nullptr;
+                    std::lock_guard<std::mutex> lock(runnerState->mutex);
+                    runnerState->activeRequest = nullptr;
                 }
                 WinHttpCloseHandle(hRequest);
                 WinHttpCloseHandle(hConnect);
@@ -1374,7 +1494,8 @@ struct OctiNetworkClient::Impl {
 
             std::string sseBuffer;
             bool terminalEventSeen = false;
-            while (!runner.stopRequested.load()) {
+            while (!runnerState->stopRequested.load() &&
+                   runnerState->generation.load() == myGen) {
                 DWORD bytesAvail = 0;
                 if (!WinHttpQueryDataAvailable(hRequest, &bytesAvail) || bytesAvail == 0) {
                     break;
@@ -1388,14 +1509,18 @@ struct OctiNetworkClient::Impl {
                 std::vector<SseEvent> parsed =
                     OctiNetworkClient::parseSseBuffer(sseBuffer);
                 for (std::size_t i = 0; i < parsed.size(); ++i) {
-                    if (parsed[i].id > runner.lastId.load()) {
-                        runner.lastId.store(parsed[i].id);
+                    if (parsed[i].id > runnerState->lastId.load()) {
+                        runnerState->lastId.store(parsed[i].id);
                     }
                     if (parsed[i].event == "closed") {
                         terminalEventSeen = true;
                     }
                     if (onEvent) {
                         onEvent(parsed[i]);
+                    }
+                    if (runnerState->stopRequested.load() ||
+                        runnerState->generation.load() != myGen) {
+                        break;
                     }
                 }
                 if (terminalEventSeen) {
@@ -1404,8 +1529,8 @@ struct OctiNetworkClient::Impl {
             }
 
             {
-                std::lock_guard<std::mutex> lock(runner.mutex);
-                runner.activeRequest = nullptr;
+                std::lock_guard<std::mutex> lock(runnerState->mutex);
+                runnerState->activeRequest = nullptr;
             }
             WinHttpCloseHandle(hRequest);
             WinHttpCloseHandle(hConnect);
@@ -1413,21 +1538,23 @@ struct OctiNetworkClient::Impl {
             return true;
         } catch (...) {
             {
-                std::lock_guard<std::mutex> lock(runner.mutex);
-                runner.activeRequest = nullptr;
+                std::lock_guard<std::mutex> lock(runnerState->mutex);
+                runnerState->activeRequest = nullptr;
             }
             return false;
         }
     }
 #endif
 
-    bool streamHttplibSse(
-        SseRunner &runner,
+    static bool streamHttplibSse(
+        const std::shared_ptr<AuthState> &auth,
+        const std::shared_ptr<SseRunner::State> &runnerState,
+        std::uint64_t myGen,
         const std::string &targetHost,
         int targetPort,
         const std::string &path,
         std::uint64_t curSeq,
-        const std::function<void(const SseEvent &)> &onEvent) const
+        const std::function<void(const SseEvent &)> &onEvent)
     {
         try {
             std::shared_ptr<httplib::Client> cli;
@@ -1456,14 +1583,15 @@ struct OctiNetworkClient::Impl {
             cli->set_write_timeout(5, 0);
 
             {
-                std::lock_guard<std::mutex> lock(runner.mutex);
-                if (runner.stopRequested.load()) {
+                std::lock_guard<std::mutex> lock(runnerState->mutex);
+                if (runnerState->stopRequested.load() ||
+                    runnerState->generation.load() != myGen) {
                     return false;
                 }
-                runner.activeClient = cli;
+                runnerState->activeClient = cli;
             }
 
-            httplib::Headers hdrs = authHeaders();
+            httplib::Headers hdrs = auth->authHeaders();
             hdrs.emplace("Accept", "text/event-stream");
             if (curSeq > 0) {
                 hdrs.emplace("Last-Event-ID", std::to_string(curSeq));
@@ -1475,22 +1603,24 @@ struct OctiNetworkClient::Impl {
 
             httplib::Result res = cli->Get(
                 path, hdrs,
-                [&runner, &httpStatus](const httplib::Response &resp) {
+                [&runnerState, myGen, &httpStatus](const httplib::Response &resp) {
                     httpStatus = resp.status;
-                    return !runner.stopRequested.load() &&
+                    return !runnerState->stopRequested.load() &&
+                           runnerState->generation.load() == myGen &&
                            resp.status == 200;
                 },
-                [&runner, &chunkBuffer, &terminalEventSeen, &onEvent](
+                [&runnerState, myGen, &chunkBuffer, &terminalEventSeen, &onEvent](
                     const char *data, std::size_t len) {
-                    if (runner.stopRequested.load()) {
+                    if (runnerState->stopRequested.load() ||
+                        runnerState->generation.load() != myGen) {
                         return false;
                     }
                     chunkBuffer.append(data, len);
                     std::vector<SseEvent> parsed =
                         OctiNetworkClient::parseSseBuffer(chunkBuffer);
                     for (std::size_t i = 0; i < parsed.size(); ++i) {
-                        if (parsed[i].id > runner.lastId.load()) {
-                            runner.lastId.store(parsed[i].id);
+                        if (parsed[i].id > runnerState->lastId.load()) {
+                            runnerState->lastId.store(parsed[i].id);
                         }
                         if (parsed[i].event == "closed") {
                             terminalEventSeen = true;
@@ -1498,23 +1628,28 @@ struct OctiNetworkClient::Impl {
                         if (onEvent) {
                             onEvent(parsed[i]);
                         }
+                        if (runnerState->stopRequested.load() ||
+                            runnerState->generation.load() != myGen) {
+                            break;
+                        }
                     }
-                    return !runner.stopRequested.load();
+                    return !runnerState->stopRequested.load() &&
+                           runnerState->generation.load() == myGen;
                 });
 
             {
-                std::lock_guard<std::mutex> lock(runner.mutex);
-                runner.activeClient.reset();
+                std::lock_guard<std::mutex> lock(runnerState->mutex);
+                runnerState->activeClient.reset();
             }
 
             if (terminalEventSeen || (httpStatus >= 400 && httpStatus < 500 && httpStatus != 429)) {
-                runner.stopRequested.store(true);
+                runnerState->stopRequested.store(true);
             }
             return (httpStatus == 200);
         } catch (...) {
             {
-                std::lock_guard<std::mutex> lock(runner.mutex);
-                runner.activeClient.reset();
+                std::lock_guard<std::mutex> lock(runnerState->mutex);
+                runnerState->activeClient.reset();
             }
             return false;
         }
@@ -1527,75 +1662,114 @@ struct OctiNetworkClient::Impl {
         std::function<void(const SseEvent &)> onEvent)
     {
         runner.stop();
-        runner.stopRequested.store(false);
-        runner.lastId.store(sinceSeq);
-        runner.active.store(true);
+        std::shared_ptr<SseRunner::State> runnerState = runner.state;
+        std::shared_ptr<AuthState> authState = auth;
+        std::uint64_t myGen = runnerState->generation.fetch_add(1) + 1;
+        runnerState->stopRequested.store(false);
+        runnerState->lastId.store(sinceSeq);
+        runnerState->active.store(true);
 
-        runner.worker = std::thread(
-            [this, &runner, basePath, onEvent]() {
-                try {
-                    while (!runner.stopRequested.load()) {
-                        std::uint64_t curSeq = runner.lastId.load();
-                        std::string path = basePath +
-                                           (basePath.find('?') == std::string::npos
-                                                ? "?stream=1&since_seq="
-                                                : "&stream=1&since_seq=") +
-                                           std::to_string(curSeq);
-                        std::string lease = currentRobotLeaseId();
-                        if (!lease.empty()) {
-                            path += "&lease_id=" + urlEncode(lease);
-                        }
+        std::lock_guard<std::mutex> startLock(runnerState->mutex);
+        runnerState->runningWorkers++;
+        try {
+            runnerState->worker = std::thread(
+                [authState, runnerState, basePath, onEvent, myGen]() mutable {
+                    try {
+                        while (!runnerState->stopRequested.load() &&
+                               runnerState->generation.load() == myGen) {
+                            std::uint64_t curSeq = runnerState->lastId.load();
+                            std::string path = basePath +
+                                               (basePath.find('?') == std::string::npos
+                                                    ? "?stream=1&since_seq="
+                                                    : "&stream=1&since_seq=") +
+                                               std::to_string(curSeq);
+                            std::string lease = authState->currentRobotLeaseId();
+                            if (!lease.empty()) {
+                                path += "&lease_id=" + urlEncode(lease);
+                            }
+
+                            std::string curHost;
+                            int curPort = 0;
+                            authState->getEndpoint(curHost, curPort);
 
 #ifdef _WIN32
-                        if (port == 443) {
-                            bool winHttpOk = streamWinHttpSse(
-                                runner, path, curSeq, onEvent);
-                            if (runner.stopRequested.load()) {
-                                break;
-                            }
-                            if (!winHttpOk && host == OCTI_SERVER_HOST && port == OCTI_SERVER_PORT) {
+                            if (curPort == 443) {
+                                bool winHttpOk = streamWinHttpSse(
+                                    authState, runnerState, myGen,
+                                    curHost, curPort, path, curSeq, onEvent);
+                                if (runnerState->stopRequested.load() ||
+                                    runnerState->generation.load() != myGen) {
+                                    break;
+                                }
+                                if (!winHttpOk && curHost == OCTI_SERVER_HOST && curPort == OCTI_SERVER_PORT) {
+                                    streamHttplibSse(
+                                        authState, runnerState, myGen,
+                                        OCTI_SERVER_FALLBACK_HOST,
+                                        OCTI_SERVER_FALLBACK_PORT, path, curSeq, onEvent);
+                                }
+                            } else {
                                 streamHttplibSse(
-                                    runner, OCTI_SERVER_FALLBACK_HOST,
+                                    authState, runnerState, myGen,
+                                    curHost, curPort, path, curSeq, onEvent);
+                            }
+#else
+                            bool clientConstructed = false;
+                            if (curPort == 443) {
+#ifdef CPPHTTPLIB_SSL_ENABLED
+                                clientConstructed = true;
+                                streamHttplibSse(
+                                    authState, runnerState, myGen,
+                                    curHost, curPort, path, curSeq, onEvent);
+#else
+                                clientConstructed = false;
+#endif
+                            } else {
+                                clientConstructed = true;
+                                streamHttplibSse(
+                                    authState, runnerState, myGen,
+                                    curHost, curPort, path, curSeq, onEvent);
+                            }
+                            if (!clientConstructed && curHost == OCTI_SERVER_HOST && curPort == OCTI_SERVER_PORT) {
+                                streamHttplibSse(
+                                    authState, runnerState, myGen,
+                                    OCTI_SERVER_FALLBACK_HOST,
                                     OCTI_SERVER_FALLBACK_PORT, path, curSeq, onEvent);
                             }
-                        } else {
-                            streamHttplibSse(
-                                runner, host, port, path, curSeq, onEvent);
-                        }
-#else
-                        bool clientConstructed = false;
-                        if (port == 443) {
-#ifdef CPPHTTPLIB_SSL_ENABLED
-                            clientConstructed = true;
-                            streamHttplibSse(runner, host, port, path, curSeq, onEvent);
-#else
-                            clientConstructed = false;
-#endif
-                        } else {
-                            clientConstructed = true;
-                            streamHttplibSse(runner, host, port, path, curSeq, onEvent);
-                        }
-                        if (!clientConstructed && host == OCTI_SERVER_HOST && port == OCTI_SERVER_PORT) {
-                            streamHttplibSse(
-                                runner, OCTI_SERVER_FALLBACK_HOST,
-                                OCTI_SERVER_FALLBACK_PORT, path, curSeq, onEvent);
-                        }
 #endif
 
-                        if (runner.stopRequested.load()) {
-                            break;
-                        }
+                            if (runnerState->stopRequested.load() ||
+                                runnerState->generation.load() != myGen) {
+                                break;
+                            }
 
-                        std::unique_lock<std::mutex> lock(runner.mutex);
-                        runner.cv.wait_for(
-                            lock, std::chrono::milliseconds(150),
-                            [&runner]() { return runner.stopRequested.load(); });
+                            std::unique_lock<std::mutex> lock(runnerState->mutex);
+                            runnerState->cv.wait_for(
+                                lock, std::chrono::milliseconds(150),
+                                [&runnerState, myGen]() {
+                                    return runnerState->stopRequested.load() ||
+                                           runnerState->generation.load() != myGen;
+                                });
+                        }
+                    } catch (const std::exception &) {
+                    } catch (...) {
                     }
-                } catch (const std::exception &) {
-                } catch (...) {
-                }
-                runner.active.store(false);
-            });
+                    onEvent = nullptr;
+                    {
+                        std::lock_guard<std::mutex> lock(runnerState->mutex);
+                        if (runnerState->generation.load() == myGen) {
+                            runnerState->active.store(false);
+                            runnerState->workerThreadId = std::thread::id();
+                        }
+                        runnerState->runningWorkers--;
+                    }
+                    runnerState->cv.notify_all();
+                });
+            runnerState->workerThreadId = runnerState->worker.get_id();
+        } catch (...) {
+            runnerState->runningWorkers--;
+            runnerState->active.store(false);
+            throw;
+        }
     }
 };
 
@@ -1643,8 +1817,10 @@ void OctiNetworkClient::setEndpoint(const std::string &host, int port)
 {
     _host = host;
     _port = port;
+    std::lock_guard<std::mutex> lock(_impl->tokenMutex);
     _impl->host = host;
     _impl->port = port;
+    _impl->syncAuthStateLocked();
 }
 
 std::string OctiNetworkClient::buildUrl(const std::string &path) const
@@ -1675,6 +1851,7 @@ void OctiNetworkClient::setSessionToken(const std::string &token)
             _impl->clientType = "desktop";
         }
     }
+    _impl->syncAuthStateLocked();
 }
 
 std::string OctiNetworkClient::sessionToken() const
@@ -1690,6 +1867,7 @@ void OctiNetworkClient::clearSessionToken()
     if (!_impl->explicitClientType) {
         _impl->clientType = "desktop";
     }
+    _impl->syncAuthStateLocked();
 }
 
 PlayerProfileInfo OctiNetworkClient::currentProfile() const
@@ -1711,6 +1889,7 @@ void OctiNetworkClient::setBotToken(const std::string &token)
     if (!_impl->explicitClientType) {
         _impl->clientType = "robot";
     }
+    _impl->syncAuthStateLocked();
 }
 
 bool OctiNetworkClient::isRobotToken() const
@@ -1724,6 +1903,7 @@ void OctiNetworkClient::setClientType(const std::string &clientType)
     std::lock_guard<std::mutex> lock(_impl->tokenMutex);
     _impl->clientType = clientType;
     _impl->explicitClientType = true;
+    _impl->syncAuthStateLocked();
 }
 
 std::string OctiNetworkClient::clientType() const
@@ -1735,6 +1915,7 @@ void OctiNetworkClient::setRobotLeaseId(const std::string &leaseId)
 {
     std::lock_guard<std::mutex> lock(_impl->tokenMutex);
     _impl->robotLeaseId = leaseId;
+    _impl->syncAuthStateLocked();
 }
 
 std::string OctiNetworkClient::robotLeaseId() const
@@ -1746,6 +1927,7 @@ void OctiNetworkClient::clearRobotLeaseId()
 {
     std::lock_guard<std::mutex> lock(_impl->tokenMutex);
     _impl->robotLeaseId.clear();
+    _impl->syncAuthStateLocked();
 }
 
 void OctiNetworkClient::setInstallId(const std::string &installId)
@@ -2270,6 +2452,7 @@ ApiResult<CreateTableResponse> OctiNetworkClient::createTable(
     body["rated"] = req.rated;
     body["allow_takeback"] = req.allowTakeback;
     body["observer_policy"] = req.observerPolicy;
+    body["seat"] = req.seat;
     if (!req.passcode.empty()) {
         body["passcode"] = req.passcode;
     }
@@ -3074,12 +3257,12 @@ void OctiNetworkClient::stopLobbyEventStream()
 
 bool OctiNetworkClient::isLobbyEventStreamActive() const
 {
-    return _impl->lobbyStream.active.load();
+    return _impl->lobbyStream.state->active.load();
 }
 
 std::uint64_t OctiNetworkClient::lastLobbyEventId() const
 {
-    return _impl->lobbyStream.lastId.load();
+    return _impl->lobbyStream.state->lastId.load();
 }
 
 void OctiNetworkClient::startGameEventStream(
@@ -3101,12 +3284,12 @@ void OctiNetworkClient::stopGameEventStream()
 
 bool OctiNetworkClient::isGameEventStreamActive() const
 {
-    return _impl->gameStream.active.load();
+    return _impl->gameStream.state->active.load();
 }
 
 std::uint64_t OctiNetworkClient::lastGameEventId() const
 {
-    return _impl->gameStream.lastId.load();
+    return _impl->gameStream.state->lastId.load();
 }
 
 void OctiNetworkClient::stopEventStreams()

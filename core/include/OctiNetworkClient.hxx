@@ -282,6 +282,7 @@ struct CreateTableRequest {
     std::string observerPolicy = "OPEN";
     std::string passcode;
     bool allowRobots = true;
+    int seat = 1;
 };
 
 struct CreateTableResponse {
