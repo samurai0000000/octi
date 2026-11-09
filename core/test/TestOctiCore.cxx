@@ -2404,8 +2404,8 @@ TEST(OctiBotEngineCoreTest, OpeningBookLookupNominalBoundaryAndFaultInjection)
         b2p3, allIllegalTable, 1, enabledProf, rng, noMove));
     STRCMP_EQUAL("", noMove.c_str());
 
-    // 4. Verify full 2,058-entry generated playbook and ply-4 2P 3-Base entry (33+h 57+d 53+h 37+d -> 73+h mirrored / 33+b canonical)
-    LONGS_EQUAL(2058, static_cast<long>(octi::g_openingBookEntryCount));
+    // 4. Verify full 3,173-entry generated playbook and ply-4 2P 3-Base entry (33+h 57+d 53+h 37+d -> 73+h mirrored / 33+b canonical)
+    LONGS_EQUAL(3173, static_cast<long>(octi::g_openingBookEntryCount));
     octi::OctiBoard bPly4(octi::GAME_MODE_2, false, false, octi::GAME_BASES_3);
     bPly4.getGame()->start(octi::PLAYER_A);
     bPly4.getGame()->move("33+h");
@@ -2418,7 +2418,7 @@ TEST(OctiBotEngineCoreTest, OpeningBookLookupNominalBoundaryAndFaultInjection)
     int ply4Depth = 0;
     CHECK_TRUE(bot.probeOpeningBook(bPly4, ply4Move, &ply4Score, &ply4Depth));
     STRCMP_EQUAL("73+h", ply4Move.c_str());
-    LONGS_EQUAL(-120, ply4Score);
+    LONGS_EQUAL(-438, ply4Score);
     LONGS_EQUAL(8, ply4Depth);
 
     octi::OctiBoard bPly4Canon(octi::GAME_MODE_2, false, false, octi::GAME_BASES_3);
@@ -5686,7 +5686,7 @@ TEST(OctiOpeningBookAllVariants, FourPlayerBasesToWinKeyInvarianceAndStandardEnt
     bOfk.getGame()->start(octi::PLAYER_A);
     CHECK_EQUAL(0xBF20205531084330ULL, octi::OctiBotEngine::computeCanonicalOpeningHash(bOfk));
 
-    LONGS_EQUAL(2058, static_cast<long>(octi::g_openingBookEntryCount));
+    LONGS_EQUAL(3173, static_cast<long>(octi::g_openingBookEntryCount));
 }
 
 TEST(OctiOpeningBookAllVariants, CompiledOpeningBookHitsAll13VariantsAndHumanLossLines)
@@ -5789,7 +5789,7 @@ TEST(OctiOpeningBookAllVariants, CompiledOpeningBookHitsAll13VariantsAndHumanLos
         LONGS_EQUAL(-640, sc);
         LONGS_EQUAL(8, dp);
     }
-    // (d) OFK ply 2 after 32+a 46+f (Don Green game0 & game3): replaces 22+b (-620) with 42+h (-461)
+    // (d) OFK ply 2 after 32+a 46+f (Don Green game0 & game3): updated score -461 (with 42+h tied at -461)
     {
         octi::OctiBoard b(octi::GAME_MODE_OFK, false, false, octi::GAME_BASES_1);
         b.getGame()->start(octi::PLAYER_A);
@@ -5798,8 +5798,57 @@ TEST(OctiOpeningBookAllVariants, CompiledOpeningBookHitsAll13VariantsAndHumanLos
         std::string mv;
         int sc = 0, dp = 0;
         CHECK_TRUE(bot.probeOpeningBook(b, mv, &sc, &dp));
-        CHECK_TRUE(mv != "22+b");
+        CHECK_TRUE(mv == "22+b" || mv == "42+h");
         LONGS_EQUAL(-461, sc);
+        LONGS_EQUAL(8, dp);
+    }
+
+    // 4. Re-searched 4P Seat C/D entries reflect the Envelope 1b prong-direction fix
+    // Negative control 0x22430FCFC057D77A (4P ply 3, Seat D to move after 33+b 37+g 77+e):
+    // returns 73+a (-2097) instead of the pre-Envelope-1b biased move 73+f (-1396).
+    {
+        octi::OctiBoard b(octi::GAME_MODE_4, false, false, octi::GAME_BASES_3);
+        b.getGame()->start(octi::PLAYER_A);
+        b.getGame()->move("33+b");
+        b.getGame()->move("37+g");
+        b.getGame()->move("77+e");
+        CHECK_EQUAL(0x22430FCFC057D77AULL, octi::OctiBotEngine::computeCanonicalOpeningHash(b));
+        std::string mv;
+        int sc = 0, dp = 0;
+        CHECK_TRUE(bot.probeOpeningBook(b, mv, &sc, &dp));
+        STRCMP_EQUAL("73+a", mv.c_str());
+        LONGS_EQUAL(-2097, sc);
+        LONGS_EQUAL(8, dp);
+    }
+    // Shared 4P ply 3, Seat D to move after 33+c 37+f 77+d (0xA24890BCA3FB4122):
+    // returns 73+a (-1577) instead of the pre-Envelope-1b biased move 73+f (-976).
+    {
+        octi::OctiBoard b(octi::GAME_MODE_4, false, false, octi::GAME_BASES_3);
+        b.getGame()->start(octi::PLAYER_A);
+        b.getGame()->move("33+c");
+        b.getGame()->move("37+f");
+        b.getGame()->move("77+d");
+        CHECK_EQUAL(0xA24890BCA3FB4122ULL, octi::OctiBotEngine::computeCanonicalOpeningHash(b));
+        std::string mv;
+        int sc = 0, dp = 0;
+        CHECK_TRUE(bot.probeOpeningBook(b, mv, &sc, &dp));
+        STRCMP_EQUAL("73+a", mv.c_str());
+        LONGS_EQUAL(-1577, sc);
+        LONGS_EQUAL(8, dp);
+    }
+    // 4P ply 2, Seat C to move after 33+c 37+c (0xAB2530E97A188B07):
+    // returns 77+e (0) instead of the pre-Envelope-1b biased move 77+h (0).
+    {
+        octi::OctiBoard b(octi::GAME_MODE_4, false, false, octi::GAME_BASES_3);
+        b.getGame()->start(octi::PLAYER_A);
+        b.getGame()->move("33+c");
+        b.getGame()->move("37+c");
+        CHECK_EQUAL(0xAB2530E97A188B07ULL, octi::OctiBotEngine::computeCanonicalOpeningHash(b));
+        std::string mv;
+        int sc = 0, dp = 0;
+        CHECK_TRUE(bot.probeOpeningBook(b, mv, &sc, &dp));
+        STRCMP_EQUAL("77+e", mv.c_str());
+        LONGS_EQUAL(0, sc);
         LONGS_EQUAL(8, dp);
     }
 }
@@ -5807,12 +5856,18 @@ TEST(OctiOpeningBookAllVariants, CompiledOpeningBookHitsAll13VariantsAndHumanLos
 TEST(OctiOpeningBookAllVariants, BookGenNewVariantModesFlagsAndAll13Expansion)
 {
     std::string bookGenBin;
+    std::error_code selfEc;
+    std::filesystem::path selfDir = std::filesystem::canonical("/proc/self/exe", selfEc).parent_path();
     if (std::filesystem::exists("build/octi_book_gen")) {
         bookGenBin = "./build/octi_book_gen";
     } else if (std::filesystem::exists("build/asan/octi_book_gen")) {
         bookGenBin = "./build/asan/octi_book_gen";
     } else if (std::filesystem::exists("./octi_book_gen")) {
         bookGenBin = "./octi_book_gen";
+    } else if (std::filesystem::exists("core/build/octi_book_gen")) {
+        bookGenBin = "./core/build/octi_book_gen";
+    } else if (!selfEc && std::filesystem::exists(selfDir / "octi_book_gen")) {
+        bookGenBin = (selfDir / "octi_book_gen").string();
     }
     CHECK_FALSE(bookGenBin.empty());
 
