@@ -5930,6 +5930,128 @@ TEST(OctiOpeningBookAllVariants, BookGenNewVariantModesFlagsAndAll13Expansion)
     std::filesystem::remove_all(tmpDir, ec);
 }
 
+TEST(OctiOpeningBookAllVariants, BookGenFreshEnginePerPositionOrderIndependence)
+{
+    std::string bookGenBin;
+    std::error_code selfEc;
+    std::filesystem::path selfDir = std::filesystem::canonical("/proc/self/exe", selfEc).parent_path();
+    if (std::filesystem::exists("build/octi_book_gen")) {
+        bookGenBin = "./build/octi_book_gen";
+    } else if (std::filesystem::exists("build/asan/octi_book_gen")) {
+        bookGenBin = "./build/asan/octi_book_gen";
+    } else if (std::filesystem::exists("./octi_book_gen")) {
+        bookGenBin = "./octi_book_gen";
+    } else if (std::filesystem::exists("core/build/octi_book_gen")) {
+        bookGenBin = "./core/build/octi_book_gen";
+    } else if (!selfEc && std::filesystem::exists(selfDir / "octi_book_gen")) {
+        bookGenBin = (selfDir / "octi_book_gen").string();
+    }
+    CHECK_FALSE(bookGenBin.empty());
+
+    std::filesystem::path tmpDir =
+        std::filesystem::temp_directory_path() / "octi_book_gen_order_indep_test";
+    std::error_code ec;
+    std::filesystem::remove_all(tmpDir, ec);
+    std::filesystem::create_directories(tmpDir, ec);
+
+    auto makeBoardStr = [](const std::vector<std::string> &moves, std::string &outKeyHex) -> std::string {
+        octi::OctiBoard b(octi::GAME_MODE_2, false, false, octi::GAME_BASES_3);
+        b.getGame()->start(octi::PLAYER_A);
+        for (const auto &m : moves) {
+            b.getGame()->move(m);
+        }
+        std::uint64_t k = octi::OctiBotEngine::computeCanonicalOpeningHash(b);
+        std::ostringstream oss;
+        oss << "0x" << std::uppercase << std::hex
+            << std::setw(16) << std::setfill('0') << k;
+        outKeyHex = oss.str();
+        return b.toPositionString();
+    };
+
+    std::string k0, k1, p1Key, p2Key, p3Key;
+    std::string pos0 = makeBoardStr({}, k0);
+    std::string pos1 = makeBoardStr({"33+h"}, k1);
+    std::string posP1 = makeBoardStr({"33+h", "37+d"}, p1Key);
+    std::string posP2 = makeBoardStr({"33+b", "37+d"}, p2Key);
+    std::string posP3 = makeBoardStr({"53+a", "37+d"}, p3Key);
+
+    STRCMP_EQUAL("0x101EDCB755B8D169", p1Key.c_str());
+    STRCMP_EQUAL("0x16E47C32DE61104A", p2Key.c_str());
+    STRCMP_EQUAL("0x3B1A0BE82177D5B1", p3Key.c_str());
+
+    auto makeEntryJson = [](const std::string &key, int ply, const std::string &hist, const std::string &pos) {
+        nlohmann::json e;
+        e["canonicalKey"] = key;
+        e["depth"] = 1;
+        e["ply"] = ply;
+        e["variant"] = "2P 3-Base";
+        e["history"] = hist;
+        e["position"] = pos;
+        e["candidates"] = nlohmann::json::array({{{"move", "33+a"}, {"score", 0}}});
+        return e;
+    };
+
+    nlohmann::json templateBook;
+    templateBook["generator"] = "octi_book_gen";
+    templateBook["mode"] = "2P_3B";
+    templateBook["maxPly"] = 3;
+    templateBook["searchDepth"] = 4;
+    templateBook["timeBudgetMs"] = 0;
+    templateBook["botBranch"] = 3;
+    templateBook["oppBranch"] = 6;
+    templateBook["threads"] = 1;
+    templateBook["elapsedMs"] = 0;
+    templateBook["entries"] = nlohmann::json::array({
+        makeEntryJson(k0, 0, "initial", pos0),
+        makeEntryJson(k1, 1, "after 33+h", pos1),
+        makeEntryJson(p1Key, 2, "after 33+h 37+d", posP1),
+        makeEntryJson(p2Key, 2, "after 33+b 37+d", posP2),
+        makeEntryJson(p3Key, 2, "after 53+a 37+d", posP3)
+    });
+    templateBook["entryCount"] = 5;
+
+    auto runKeysOrder = [&](const std::vector<std::string> &keys, const std::string &tag) -> nlohmann::json {
+        std::string jsonPath = (tmpDir / (tag + ".json")).string();
+        {
+            std::ofstream out(jsonPath);
+            out << templateBook.dump(2) << "\n";
+        }
+        std::string cmd = bookGenBin +
+            " --re-search-only --mode 2P_3B --max-ply 3 --search-depth 4"
+            " --bot-branch 3 --opp-branch 6 --threads 1 --threads-per-worker 1"
+            " --out-json \"" + jsonPath + "\" --out-header \"\" --out-java \"\"";
+        for (const auto &k : keys) {
+            cmd += " --re-search-key " + k;
+        }
+        cmd += " > /dev/null 2>&1";
+        CHECK_EQUAL(0, std::system(cmd.c_str()));
+
+        std::ifstream in(jsonPath);
+        nlohmann::json res;
+        in >> res;
+        nlohmann::json byKey = nlohmann::json::object();
+        for (const auto &item : res["entries"]) {
+            byKey[item["canonicalKey"].get<std::string>()] = item["candidates"];
+        }
+        return byKey;
+    };
+
+    nlohmann::json freshP1 = runKeysOrder({p1Key}, "fresh_p1");
+    nlohmann::json freshP2 = runKeysOrder({p2Key}, "fresh_p2");
+    nlohmann::json freshP3 = runKeysOrder({p3Key}, "fresh_p3");
+    nlohmann::json batchFwd = runKeysOrder({p1Key, p2Key, p3Key}, "batch_fwd");
+    nlohmann::json batchRev = runKeysOrder({p3Key, p2Key, p1Key}, "batch_rev");
+
+    STRCMP_EQUAL(freshP1[p1Key].dump().c_str(), batchFwd[p1Key].dump().c_str());
+    STRCMP_EQUAL(freshP1[p1Key].dump().c_str(), batchRev[p1Key].dump().c_str());
+    STRCMP_EQUAL(freshP2[p2Key].dump().c_str(), batchFwd[p2Key].dump().c_str());
+    STRCMP_EQUAL(freshP2[p2Key].dump().c_str(), batchRev[p2Key].dump().c_str());
+    STRCMP_EQUAL(freshP3[p3Key].dump().c_str(), batchFwd[p3Key].dump().c_str());
+    STRCMP_EQUAL(freshP3[p3Key].dump().c_str(), batchRev[p3Key].dump().c_str());
+
+    std::filesystem::remove_all(tmpDir, ec);
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();
