@@ -4146,6 +4146,202 @@ TEST(OctiCore_NetworkClient, ArchiveRobotPlayerFieldsAndFilterOverload)
     CHECK_FALSE(legacyHadRobot);
 }
 
+TEST(OctiCore_NetworkClient, KeepAliveClientPoolReusesSingleSocketAcrossSequentialRequests)
+{
+    struct LoopbackKeepAliveServer {
+        int listenFd = -1;
+        int boundPort = 0;
+        std::atomic<bool> stopRequested{false};
+        std::atomic<bool> closeAfterFirstResponse{false};
+        std::atomic<int> acceptCount{0};
+        std::atomic<int> requestCount{0};
+        std::thread worker;
+
+        explicit LoopbackKeepAliveServer(bool closeAfterFirst = false)
+        {
+            closeAfterFirstResponse.store(closeAfterFirst);
+            listenFd = ::socket(AF_INET, SOCK_STREAM, 0);
+            if (listenFd < 0) {
+                return;
+            }
+            int opt = 1;
+            ::setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR,
+                         reinterpret_cast<const char *>(&opt), sizeof(opt));
+
+            sockaddr_in addr{};
+            addr.sin_family = AF_INET;
+            addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            addr.sin_port = 0;
+            if (::bind(listenFd, reinterpret_cast<sockaddr *>(&addr),
+                       sizeof(addr)) < 0) {
+                ::close(listenFd);
+                listenFd = -1;
+                return;
+            }
+            socklen_t addrLen = sizeof(addr);
+            if (::getsockname(listenFd, reinterpret_cast<sockaddr *>(&addr),
+                              &addrLen) < 0) {
+                ::close(listenFd);
+                listenFd = -1;
+                return;
+            }
+            boundPort = ntohs(addr.sin_port);
+            if (::listen(listenFd, 16) < 0) {
+                ::close(listenFd);
+                listenFd = -1;
+                return;
+            }
+
+            worker = std::thread([this]() { runLoop(); });
+        }
+
+        ~LoopbackKeepAliveServer()
+        {
+            stop();
+        }
+
+        void stop()
+        {
+            stopRequested.store(true);
+            if (listenFd >= 0) {
+                ::shutdown(listenFd, SHUT_RDWR);
+            }
+            if (worker.joinable()) {
+                worker.join();
+            }
+            if (listenFd >= 0) {
+                ::close(listenFd);
+                listenFd = -1;
+            }
+        }
+
+        void runLoop()
+        {
+            static const char kResponse[] =
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: application/json\r\n"
+                "Content-Length: 15\r\n"
+                "Connection: keep-alive\r\n"
+                "\r\n"
+                "{\"status\":\"ok\"}";
+            const std::size_t kResponseLen = sizeof(kResponse) - 1;
+
+            while (!stopRequested.load()) {
+                pollfd pfd{};
+                pfd.fd = listenFd;
+                pfd.events = POLLIN;
+                int pr = ::poll(&pfd, 1, 25);
+                if (pr <= 0 || !(pfd.revents & POLLIN)) {
+                    continue;
+                }
+                sockaddr_in cliAddr{};
+                socklen_t cliLen = sizeof(cliAddr);
+                int clientFd = ::accept(
+                    listenFd, reinterpret_cast<sockaddr *>(&cliAddr), &cliLen);
+                if (clientFd < 0) {
+                    continue;
+                }
+                acceptCount.fetch_add(1);
+
+                std::string reqBuf;
+                while (!stopRequested.load()) {
+                    pollfd cpfd{};
+                    cpfd.fd = clientFd;
+                    cpfd.events = POLLIN;
+                    int cpr = ::poll(&cpfd, 1, 25);
+                    if (cpr < 0) {
+                        break;
+                    }
+                    if (cpr == 0) {
+                        continue;
+                    }
+                    char buf[1024];
+                    ssize_t n = ::recv(clientFd, buf, sizeof(buf), 0);
+                    if (n <= 0) {
+                        break;
+                    }
+                    reqBuf.append(buf, static_cast<std::size_t>(n));
+                    std::size_t headerEnd = reqBuf.find("\r\n\r\n");
+                    if (headerEnd == std::string::npos) {
+                        continue;
+                    }
+                    reqBuf.erase(0, headerEnd + 4);
+                    requestCount.fetch_add(1);
+
+                    std::size_t sentTotal = 0;
+                    bool sendOk = true;
+                    while (sentTotal < kResponseLen) {
+                        ssize_t s = ::send(
+                            clientFd, kResponse + sentTotal,
+                            kResponseLen - sentTotal, 0);
+                        if (s <= 0) {
+                            sendOk = false;
+                            break;
+                        }
+                        sentTotal += static_cast<std::size_t>(s);
+                    }
+                    if (!sendOk || closeAfterFirstResponse.load()) {
+                        ::shutdown(clientFd, SHUT_WR);
+                        break;
+                    }
+                }
+                ::close(clientFd);
+            }
+        }
+    };
+
+    /* 1. Nominal socket reuse: 10 sequential fetchHealth() calls reuse 1 socket */
+    LoopbackKeepAliveServer server1(false);
+    CHECK_TRUE(server1.boundPort > 0);
+
+    std::unique_ptr<octi::OctiNetworkClient> client =
+        octi::OctiNetworkClient::createForLoopbackTest(server1.boundPort);
+    CHECK_TRUE(client != nullptr);
+
+    for (int i = 0; i < 10; ++i) {
+        octi::ApiResult<octi::HealthInfo> res = client->fetchHealth();
+        CHECK_TRUE(res.ok);
+        CHECK_EQUAL(200, res.httpStatus);
+        STRCMP_EQUAL("ok", res.data.status.c_str());
+    }
+    CHECK_EQUAL(1, server1.acceptCount.load());
+    CHECK_EQUAL(10, server1.requestCount.load());
+
+    /* 2. Boundary: setEndpoint() invalidates pooled client and connects to new port */
+    LoopbackKeepAliveServer server2(false);
+    CHECK_TRUE(server2.boundPort > 0);
+    CHECK_TRUE(server2.boundPort != server1.boundPort);
+
+    client->setEndpoint("127.0.0.1", server2.boundPort);
+    octi::ApiResult<octi::HealthInfo> switchRes = client->fetchHealth();
+    CHECK_TRUE(switchRes.ok);
+    CHECK_EQUAL(200, switchRes.httpStatus);
+    STRCMP_EQUAL("ok", switchRes.data.status.c_str());
+    CHECK_EQUAL(1, server2.acceptCount.load());
+    CHECK_EQUAL(1, server2.requestCount.load());
+    CHECK_EQUAL(1, server1.acceptCount.load());
+
+    /* 3. Fault injection: server closes keep-alive socket mid-idle after 1st response */
+    LoopbackKeepAliveServer server3(true);
+    CHECK_TRUE(server3.boundPort > 0);
+
+    client->setEndpoint("127.0.0.1", server3.boundPort);
+    octi::ApiResult<octi::HealthInfo> faultFirst = client->fetchHealth();
+    CHECK_TRUE(faultFirst.ok);
+    CHECK_EQUAL(200, faultFirst.httpStatus);
+    STRCMP_EQUAL("ok", faultFirst.data.status.c_str());
+    CHECK_EQUAL(1, server3.acceptCount.load());
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+
+    octi::ApiResult<octi::HealthInfo> faultSecond = client->fetchHealth();
+    CHECK_TRUE(faultSecond.ok);
+    CHECK_EQUAL(200, faultSecond.httpStatus);
+    STRCMP_EQUAL("ok", faultSecond.data.status.c_str());
+    CHECK_EQUAL(2, server3.acceptCount.load());
+    CHECK_EQUAL(2, server3.requestCount.load());
+}
+
 // ---------------------------------------------------------------------------
 // Self-Capture Rules: OFK Double Jump, 2P Superprong & AI Leapfrog Preservation
 // ---------------------------------------------------------------------------
