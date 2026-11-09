@@ -47,6 +47,10 @@ OctiBoardCanvas::OctiBoardCanvas(QWidget *parent)
     , _selectedPodIndex(-1)
     , _stackFanX(-1)
     , _stackFanY(-1)
+    , _commitBannerCustomPos(0.0, 0.0)
+    , _hasCommitBannerCustomPos(false)
+    , _draggingCommitBanner(false)
+    , _commitBannerDragOffset(0.0, 0.0)
     , _dragJumpedSquareX(-1)
     , _dragJumpedSquareY(-1)
     , _animActive(false)
@@ -890,20 +894,91 @@ void OctiBoardCanvas::paintCommitBanner(QPainter &p,
     _rollbackBtnRect = QRectF();
     _finishBtnRect = QRectF();
     if (!_composer || !_composer->isAwaitingConfirmation()) {
+        _commitBannerRect = QRectF();
+        _hasCommitBannerCustomPos = false;
+        _draggingCommitBanner = false;
         return;
     }
 
     p.save();
     QRectF outer = geom.boardOuterRect();
+    QRectF grid = geom.gridInnerRect();
+    double cell = geom.cellSize();
     double barW = std::min(outer.width() * 0.92, 580.0);
     double barH = 38.0;
-    QRectF barRect(outer.center().x() - barW * 0.5,
-                   outer.bottom() - barH - 6.0,
-                   barW, barH);
+
+    QRectF barRect;
+    if (_hasCommitBannerCustomPos) {
+        double maxX = std::max(4.0, static_cast<double>(geom.viewportWidth()) - barW - 4.0);
+        double maxY = std::max(4.0, static_cast<double>(geom.viewportHeight()) - barH - 4.0);
+        double cx = std::clamp(_commitBannerCustomPos.x(), 4.0, maxX);
+        double cy = std::clamp(_commitBannerCustomPos.y(), 4.0, maxY);
+        barRect = QRectF(cx, cy, barW, barH);
+    } else {
+        QRectF bottomCandidate(outer.center().x() - barW * 0.5,
+                               outer.bottom() - barH - 6.0,
+                               barW, barH);
+        QRectF topCandidate(outer.center().x() - barW * 0.5,
+                            outer.top() + 6.0,
+                            barW, barH);
+        QRectF bottomDanger = bottomCandidate.adjusted(-4.0, -cell * 0.70, 4.0, 4.0);
+        QRectF topDanger = topCandidate.adjusted(-4.0, -4.0, 4.0, cell * 0.70);
+
+        int bottomScore = 0;
+        int topScore = 0;
+        auto scoreSquare = [&](int sx, int sy, int weight) {
+            if (sx < 1 || sy < 1) {
+                return;
+            }
+            QRectF sqR = geom.squareRect(sx, sy);
+            if (sqR.isEmpty()) {
+                return;
+            }
+            if (bottomDanger.intersects(sqR) || sqR.center().y() >= grid.bottom() - cell * 1.05) {
+                bottomScore += weight;
+            }
+            if (topDanger.intersects(sqR) || sqR.center().y() <= grid.top() + cell * 1.05) {
+                topScore += weight;
+            }
+        };
+
+        if (_composer->isGuidedMoveActive()) {
+            for (const auto &sq : _composer->guidedNextSquares()) {
+                scoreSquare(sq.first, sq.second, 10);
+            }
+            std::pair<int, int> curSq = _composer->guidedCurrentSquare();
+            scoreSquare(curSq.first, curSq.second, 3);
+        }
+        for (const auto &cc : _composer->captureChoices()) {
+            scoreSquare(cc.jumpedX, cc.jumpedY, 4);
+        }
+        if (_composer->hasOtherMovablePodAtOrigin()) {
+            std::pair<int, int> origSq = _composer->guidedOriginSquare();
+            scoreSquare(origSq.first, origSq.second, 5);
+        }
+
+        if (bottomScore > 0 && bottomScore >= topScore) {
+            barRect = topCandidate;
+        } else {
+            barRect = bottomCandidate;
+        }
+    }
+    _commitBannerRect = barRect;
 
     p.setPen(QPen(pal.accentBrass, 1.8));
     p.setBrush(QColor(14, 20, 32, 238));
     p.drawRoundedRect(barRect, 7.0, 7.0);
+
+    // Subtle 6-dot drag grip on the left side of the banner
+    p.setPen(Qt::NoPen);
+    p.setBrush(pal.accentBrass);
+    for (int r = 0; r < 3; ++r) {
+        for (int c = 0; c < 2; ++c) {
+            double gx = barRect.left() + 8.0 + c * 4.5;
+            double gy = barRect.center().y() - 5.0 + r * 5.0;
+            p.drawEllipse(QPointF(gx, gy), 1.3, 1.3);
+        }
+    }
 
     QString staged = QString::fromStdString(_composer->stagedMoveNotation());
     if (_composer->isAwaitingSuperProngBonusMove()) {
@@ -919,8 +994,8 @@ void OctiBoardCanvas::paintCommitBanner(QPainter &p,
     f.setPixelSize(11);
     p.setFont(f);
     p.setPen(pal.textPrimary);
-    double textW = barRect.width() * 0.48;
-    QRectF textRect(barRect.left() + 10.0, barRect.top(),
+    double textW = barRect.width() * 0.46;
+    QRectF textRect(barRect.left() + 20.0, barRect.top(),
                     textW, barRect.height());
     p.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft,
                QString("Staged: %1").arg(staged));
@@ -1744,7 +1819,7 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
         return;
     }
 
-    // 1. Check Commit / Rollback buttons on bottom banner
+    // 1. Check Commit / Rollback buttons and drag grip on commit banner
     if (_composer->isAwaitingConfirmation()) {
         if (_commitBtnRect.contains(pos)) {
             cancelHandRotateHold();
@@ -1764,6 +1839,16 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
         if (_rollbackBtnRect.contains(pos)) {
             cancelHandRotateHold();
             _composer->cancelAndRollback();
+            update();
+            return;
+        }
+        if (_commitBannerRect.contains(pos)) {
+            cancelHandRotateHold();
+            _draggingCommitBanner = true;
+            _commitBannerDragOffset = pos - _commitBannerRect.topLeft();
+            _hasCommitBannerCustomPos = true;
+            _commitBannerCustomPos = _commitBannerRect.topLeft();
+            setCursor(Qt::ClosedHandCursor);
             update();
             return;
         }
@@ -1828,6 +1913,15 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
                     isContinuationHop = true;
                     break;
                 }
+            }
+            if (!isContinuationHop && std::make_pair(gx, gy) == _composer->guidedCurrentSquare()) {
+                cancelHandRotateHold();
+                _dragKind = DragKind::MOVE_OR_JUMP_POD;
+                _dragStartX = gx;
+                _dragStartY = gy;
+                _dragPodIndex = -1;
+                update();
+                return;
             }
         }
         if (!isContinuationHop) {
@@ -1912,6 +2006,22 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
                             cancelHandRotateHold();
                             CapturePromptDialog capDlg(
                                 cc.jumpedX, cc.jumpedY, jumpedOwner, _theme, this, isEnemy);
+                            {
+                                QRectF outer = _geometry.boardOuterRect();
+                                double sumY = _geometry.squareCenter(cc.jumpedX, cc.jumpedY).y() * 2.0 +
+                                              _geometry.squareCenter(gx, gy).y() * 2.0;
+                                double weightY = 4.0;
+                                for (const auto &nsq : _composer->guidedNextSquares()) {
+                                    sumY += _geometry.squareCenter(nsq.first, nsq.second).y() * 3.0;
+                                    weightY += 3.0;
+                                }
+                                double avgY = sumY / weightY;
+                                int dlgX = static_cast<int>(outer.center().x() - capDlg.width() * 0.5);
+                                int dlgY = (avgY > outer.center().y())
+                                    ? static_cast<int>(outer.top() + 50.0)
+                                    : static_cast<int>(outer.bottom() - capDlg.height() - 50.0);
+                                capDlg.move(mapToGlobal(QPoint(dlgX, dlgY)));
+                            }
                             if (capDlg.exec() == QDialog::Accepted) {
                                 _composer->setCaptureAtSquare(
                                     cc.jumpedX, cc.jumpedY, capDlg.captureChosen());
@@ -2049,6 +2159,18 @@ void OctiBoardCanvas::mouseMoveEvent(QMouseEvent *event)
     if (!event || !_board) {
         return;
     }
+    if (_draggingCommitBanner) {
+        QPointF pos = mousePosF(event);
+        QPointF newTopLeft = pos - _commitBannerDragOffset;
+        double maxX = std::max(4.0, static_cast<double>(width()) - _commitBannerRect.width() - 4.0);
+        double maxY = std::max(4.0, static_cast<double>(height()) - _commitBannerRect.height() - 4.0);
+        newTopLeft.rx() = std::clamp(newTopLeft.x(), 4.0, maxX);
+        newTopLeft.ry() = std::clamp(newTopLeft.y(), 4.0, maxY);
+        _commitBannerCustomPos = newTopLeft;
+        _hasCommitBannerCustomPos = true;
+        update();
+        return;
+    }
     QPointF curRaw = rawMousePosF(event);
 
     if (_leftMouseHeld && _boardZoomScale > 1.001 &&
@@ -2132,6 +2254,13 @@ void OctiBoardCanvas::mouseMoveEvent(QMouseEvent *event)
 
 void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
 {
+    if (_draggingCommitBanner) {
+        _draggingCommitBanner = false;
+        _leftMouseHeld = false;
+        unsetCursor();
+        update();
+        return;
+    }
     if (_handRotateActive) {
         auto norm360 = [](double a) {
             while (a < 0.0) a += 360.0;

@@ -5884,7 +5884,7 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("OCTI v2.4.2") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v2.4.3") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Official Platform") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("OFFICIAL PLATFORM") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("Lv4: Expert (40s)") != std::string::npos);
@@ -6445,6 +6445,18 @@ TEST(OctiHttpServerIntegrationTest, RobotRenameRateLimitArchiveAndUrlValidation)
     CHECK_EQUAL(2, static_cast<int>(players.size()));
     STRCMP_EQUAL("bot-renamed-1", players[1].value("handle", "").c_str());
     STRCMP_EQUAL(bot1Uuid.c_str(), players[1].value("robot_uuid", "").c_str());
+}
+
+TEST(OctiHttpServerIntegrationTest, WebUiJumpConfirmAndCaptureOverlaysDodgeTargetSquaresAndAreDraggable)
+{
+    Reply rPlay = http().get("/");
+    EXPECT_STATUS(200, rPlay);
+    CHECK_TRUE(rPlay.body.find("autoPositionConfirmBar") != std::string::npos);
+    CHECK_TRUE(rPlay.body.find("autoPositionCaptureCard") != std::string::npos);
+    CHECK_TRUE(rPlay.body.find("makeWebOverlayDraggable") != std::string::npos);
+    CHECK_TRUE(rPlay.body.find("web-drag-grip") != std::string::npos);
+    CHECK_TRUE(rPlay.body.find("_confirmBarUserDragged") != std::string::npos);
+    CHECK_TRUE(rPlay.body.find("_captureCardUserDragged") != std::string::npos);
 }
 
 int main(int argc, char **argv)

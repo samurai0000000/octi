@@ -5105,6 +5105,12 @@ void CapturePromptDialog::mousePressEvent(QMouseEvent *event)
         update();
         return;
     }
+
+    if (event->button() == Qt::LeftButton) {
+        _draggingWindow = true;
+        _windowDragOffset = pos.toPoint();
+        setCursor(Qt::ClosedHandCursor);
+    }
 }
 
 void CapturePromptDialog::mouseMoveEvent(QMouseEvent *event)
@@ -5113,12 +5119,20 @@ void CapturePromptDialog::mouseMoveEvent(QMouseEvent *event)
     if (_draggingPod) {
         _dragPos = mousePosF(event);
         update();
+        return;
+    }
+    if (_draggingWindow) {
+        move(mapToGlobal(mousePosF(event).toPoint() - _windowDragOffset));
     }
 }
 
 void CapturePromptDialog::mouseReleaseEvent(QMouseEvent *event)
 {
     if (!event) return;
+    if (_draggingWindow) {
+        _draggingWindow = false;
+        unsetCursor();
+    }
     if (_draggingPod) {
         QPointF pos = mousePosF(event);
         _draggingPod = false;
@@ -5438,6 +5452,29 @@ void PlyConfirmDialog::mousePressEvent(QMouseEvent *event)
         }
         reject();
         return;
+    }
+
+    if (event->button() == Qt::LeftButton) {
+        _draggingWindow = true;
+        _windowDragOffset = pos.toPoint();
+        setCursor(Qt::ClosedHandCursor);
+    }
+}
+
+void PlyConfirmDialog::mouseMoveEvent(QMouseEvent *event)
+{
+    if (!event) return;
+    if (_draggingWindow) {
+        move(mapToGlobal(mousePosF(event).toPoint() - _windowDragOffset));
+    }
+}
+
+void PlyConfirmDialog::mouseReleaseEvent(QMouseEvent *event)
+{
+    (void)event;
+    if (_draggingWindow) {
+        _draggingWindow = false;
+        unsetCursor();
     }
 }
 

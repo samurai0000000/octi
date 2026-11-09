@@ -2855,6 +2855,84 @@ TEST(OctiOfkUsabilityTestSuite, GameOverDialogSingleReviewBoardButtonAndKeyAccep
     CHECK_FALSE(goDlg.newGameRequested());
 }
 
+TEST(OctiOfkUsabilityTestSuite, CommitBannerAutoDodgesBottomRowJumpTargetsAndIsDraggable)
+{
+    OctiBoard board(GAME_MODE_2, false, false, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+
+    // Clear default starting pods and set up the exact jump chain from user screenshot:
+    // Player A at (5, 5) with prongs f (SW) and d (SE), friendly A pod at (4, 4),
+    // enemy B pods at (2, 2) and (4, 2).
+    for (int x = 0; x < 9; ++x) {
+        for (int y = 0; y < 9; ++y) {
+            board.squareAt(x, y).clear();
+        }
+    }
+    OctiPod jumper(A_POD);
+    jumper.addProng(DIR_SW); // f
+    jumper.addProng(DIR_SE); // d
+    board.squareAt(4, 4).addPod(jumper); // (5, 5)
+
+    OctiPod friendlyMid(A_POD);
+    board.squareAt(3, 3).addPod(friendlyMid); // (4, 4)
+
+    OctiPod enemyLeft(B_POD);
+    board.squareAt(1, 1).addPod(enemyLeft); // (2, 2)
+
+    OctiPod enemyRight(B_POD);
+    board.squareAt(3, 1).addPod(enemyRight); // (4, 2)
+
+    OctiMoveComposer composer(&board);
+    composer.setConfirmAllMoves(true);
+
+    OctiBoardCanvas canvas;
+    canvas.resize(800, 800);
+    canvas.attachBoard(&board, &composer);
+
+    // Begin guided move from (5, 5) and jump over (4, 4) to (3, 3)
+    CHECK_TRUE(composer.beginGuidedPodMove(5, 5, 0, false));
+    CHECK_TRUE(composer.selectGuidedDestination(3, 3));
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    STRCMP_EQUAL("55df-33", composer.stagedMoveNotation().c_str());
+
+    // Render scene at 800x800 and verify commitBannerRect automatically dodged to the top
+    // so that Row 1 landing targets (1, 1) and (5, 1) have zero intersection with the banner.
+    canvas.renderToImage(800, 800);
+    QRectF bannerRect = canvas.commitBannerRect();
+    CHECK_FALSE(bannerRect.isEmpty());
+    QRectF sq11 = canvas.geometry().squareRect(1, 1);
+    QRectF sq51 = canvas.geometry().squareRect(5, 1);
+    CHECK_FALSE(bannerRect.intersects(sq11));
+    CHECK_FALSE(bannerRect.intersects(sq51));
+    CHECK_TRUE(bannerRect.center().y() < canvas.geometry().boardOuterRect().center().y());
+
+    // Drag the commit banner to a custom position and verify it moves
+    QPointF dragStart(bannerRect.left() + 12.0, bannerRect.center().y());
+    QPointF dragEnd(dragStart.x() + 20.0, dragStart.y() + 180.0);
+    QMouseEvent pressBanner(QEvent::MouseButtonPress, dragStart, dragStart, dragStart,
+                            Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent moveBanner(QEvent::MouseMove, dragEnd, dragEnd, dragEnd,
+                           Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent relBanner(QEvent::MouseButtonRelease, dragEnd, dragEnd, dragEnd,
+                          Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(&canvas, &pressBanner);
+    QCoreApplication::sendEvent(&canvas, &moveBanner);
+    QCoreApplication::sendEvent(&canvas, &relBanner);
+    canvas.renderToImage(800, 800);
+    CHECK_TRUE(std::abs(canvas.commitBannerRect().top() - (bannerRect.top() + 180.0)) < 2.0);
+
+    // Click on Row 1 destination square (1, 1) and verify the continuation jump completes!
+    QPointF pt11 = sq11.center();
+    QMouseEvent press11(QEvent::MouseButtonPress, pt11, pt11, pt11,
+                        Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent rel11(QEvent::MouseButtonRelease, pt11, pt11, pt11,
+                      Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(&canvas, &press11);
+    QCoreApplication::sendEvent(&canvas, &rel11);
+    STRCMP_EQUAL("55df-33-11x", composer.stagedMoveNotation().c_str());
+}
+
 extern "C" const char *__lsan_default_suppressions()
 {
     return "leak:libqoffscreen.so\n";

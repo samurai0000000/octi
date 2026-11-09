@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -94,6 +95,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -120,6 +122,7 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 object OctiDialogs {
@@ -1736,40 +1739,88 @@ fun CapturePromptDialog(
     onChoice: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    var dragOffsetX by remember(jumpedX, jumpedY) { mutableFloatStateOf(0f) }
+    var dragOffsetY by remember(jumpedX, jumpedY) { mutableFloatStateOf(0f) }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        containerColor = OctiTheme.colors.panelCardBg,
-        titleContentColor = OctiTheme.colors.accentBrass,
-        textContentColor = OctiTheme.colors.textPrimary,
-        title = { Text("Capture Jumped Pod?") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("You jumped over a pod at ($jumpedX, $jumpedY).")
-                Text("Would you like to capture this pod or leave it on the board?")
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Card(
+            modifier = Modifier
+                .offset { IntOffset(dragOffsetX.roundToInt(), dragOffsetY.roundToInt()) }
+                .fillMaxWidth(0.90f)
+                .padding(12.dp)
+                .pointerInput(jumpedX, jumpedY) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        dragOffsetX += dragAmount.x
+                        dragOffsetY += dragAmount.y
+                    }
+                },
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
+            border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(36.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(OctiTheme.colors.accentBrass.copy(alpha = 0.55f))
+                        .align(Alignment.CenterHorizontally)
+                )
                 Text(
-                    "You can also drag a jumped pod off the board canvas to signal capture.",
+                    text = "Capture Jumped Pod?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = OctiTheme.colors.accentBrass
+                )
+                Text(
+                    text = "You jumped over a pod at ($jumpedX, $jumpedY). Capture or leave it on the board?",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OctiTheme.colors.textPrimary
+                )
+                Text(
+                    text = "Tip: Drag this dialog to move it, or tap a jumped pod on the board to toggle capture.",
                     style = MaterialTheme.typography.bodySmall,
                     color = OctiTheme.colors.textSecondary
                 )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onChoice(true) },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = OctiTheme.colors.legalCapture,
-                    contentColor = OctiTheme.colors.windowBg
-                )
-            ) {
-                Text("Capture (Remove from Board)")
-            }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = { onChoice(false) }) {
-                Text("Leave on Board")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = { onChoice(false) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Leave on Board")
+                    }
+                    Button(
+                        onClick = { onChoice(true) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OctiTheme.colors.legalCapture,
+                            contentColor = OctiTheme.colors.windowBg
+                        )
+                    ) {
+                        Text("Capture")
+                    }
+                }
             }
         }
-    )
+    }
 }
 
 @Composable
@@ -1854,6 +1905,8 @@ fun PlyConfirmDialog(
     subtitleHint: String? = null,
     modifier: Modifier = Modifier
 ) {
+    var dragOffsetX by remember { mutableFloatStateOf(0f) }
+    var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var flashBright by remember {
         mutableStateOf(OctiBoardRenderer.isCommitButtonFlashBright(System.currentTimeMillis()))
     }
@@ -1871,8 +1924,16 @@ fun PlyConfirmDialog(
 
     Card(
         modifier = modifier
+            .offset { IntOffset(dragOffsetX.roundToInt(), dragOffsetY.roundToInt()) }
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .pointerInput(Unit) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    dragOffsetX += dragAmount.x
+                    dragOffsetY += dragAmount.y
+                }
+            },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
         border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)
@@ -1880,9 +1941,17 @@ fun PlyConfirmDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .width(36.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(OctiTheme.colors.accentBrass.copy(alpha = 0.55f))
+                    .align(Alignment.CenterHorizontally)
+            )
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "Staged Ply: $stagedNotation",

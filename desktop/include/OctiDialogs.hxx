@@ -899,6 +899,8 @@ private:
     bool _draggingPod;
     QPointF _dragPos;
     bool _isEnemy;
+    bool _draggingWindow = false;
+    QPoint _windowDragOffset;
 };
 
 /*
@@ -976,6 +978,8 @@ public:
 protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
 
 private:
@@ -987,6 +991,8 @@ private:
 
     QRectF _commitBtnRect;
     QRectF _cancelBtnRect;
+    bool _draggingWindow = false;
+    QPoint _windowDragOffset;
 };
 
 /*

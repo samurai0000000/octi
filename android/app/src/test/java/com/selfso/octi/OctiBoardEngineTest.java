@@ -1956,7 +1956,7 @@ public class OctiBoardEngineTest {
         OctiBoard b4p = new OctiBoard(OctiGameMode.GAME_MODE_4);
         b4p.getGame().start(OctiPlayer.PLAYER_A);
         assertEquals(0x5C3D5244B85BC3A6L, OctiBotEngine.computePositionHashStatic(b4p));
-        assertEquals(0x5C3D5244B85BC3A6L, OctiBotEngine.computeCanonicalOpeningHash(b4p));
+        assertEquals(0xB6C1B656CF4909ADL, OctiBotEngine.computeCanonicalOpeningHash(b4p));
 
         // 2. Commuting prong additions produce identical hashes
         OctiBoard bComm1 = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);

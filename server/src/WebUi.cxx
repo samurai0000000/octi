@@ -852,20 +852,37 @@ tr.active-ply {
 }
 #web-ply-confirm-bar {
   position: absolute;
-  bottom: 12px;
-  left: 12px;
-  right: 12px;
-  background: rgba(16, 22, 34, 0.95);
+  bottom: 6px;
+  left: 10px;
+  right: 10px;
+  background: rgba(16, 22, 34, 0.94);
   border: 2px solid #C8A253;
   border-radius: 10px;
-  padding: 10px 16px;
+  padding: 6px 12px;
   display: none;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: nowrap;
+  gap: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
   z-index: 40;
   pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#web-ply-confirm-bar.is-dragging, #web-capture-card.is-dragging {
+  cursor: grabbing;
+}
+.web-drag-grip {
+  color: #C8A253;
+  font-size: 14px;
+  line-height: 1;
+  margin-right: 6px;
+  opacity: 0.85;
+  cursor: grab;
+  user-select: none;
 }
 @keyframes barPulseAnim {
   0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(200, 162, 83, 0.7); }
@@ -976,21 +993,28 @@ tr.active-ply {
 #web-capture-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(6, 9, 14, 0.7);
+  background: rgba(6, 9, 14, 0.25);
   display: none;
   align-items: center;
   justify-content: center;
   z-index: 60;
+  pointer-events: none;
 }
 #web-capture-card {
-  background: #101622;
+  position: relative;
+  background: rgba(16, 22, 34, 0.95);
   border: 2px solid #C8A253;
   border-radius: 14px;
-  padding: 20px 24px;
-  max-width: 380px;
-  width: 90%;
+  padding: 14px 18px;
+  max-width: 360px;
+  width: 88%;
   text-align: center;
   box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 #web-gameover-overlay {
   position: absolute;
@@ -1901,26 +1925,30 @@ tr.active-ply {
           </div>
 
           <!-- Non-Blocking Staged Ply Confirmation Bar -->
-          <div id="web-ply-confirm-bar">
-            <div>
-              <span class="dim" style="font-size:12px;margin-right:6px;">Confirm Move:</span>
-              <span id="web-staged-notation">-</span>
+          <div id="web-ply-confirm-bar" title="Drag to reposition">
+            <div style="display:flex;align-items:center;flex-wrap:wrap;min-width:0;flex:1;">
+              <span class="web-drag-grip" title="Drag to move">&#x283F;</span>
+              <span class="dim" style="font-size:12px;margin-right:6px;white-space:nowrap;">Confirm Move:</span>
+              <span id="web-staged-notation" style="white-space:nowrap;">-</span>
               <span id="web-ply-confirm-hint" class="dim" style="display:none;font-size:11px;margin-left:8px;color:#38BDF8;"></span>
             </div>
-            <div class="row" style="gap:8px;margin:0;">
-              <button type="button" class="btn" id="btn-web-cancel-ply" style="padding:6px 14px;">Cancel [Esc]</button>
-              <button type="button" class="btn btn-primary commit-pulse" id="btn-web-commit-ply" style="padding:6px 18px;font-weight:700;">Commit [Enter]</button>
+            <div class="row" style="gap:6px;margin:0;flex-wrap:nowrap;flex-shrink:0;">
+              <button type="button" class="btn" id="btn-web-cancel-ply" style="padding:5px 12px;white-space:nowrap;">Cancel [Esc]</button>
+              <button type="button" class="btn btn-primary commit-pulse" id="btn-web-commit-ply" style="padding:5px 14px;font-weight:700;white-space:nowrap;">Commit [Enter]</button>
             </div>
           </div>
 
           <!-- Borderless Capture Prompt Dialog -->
           <div id="web-capture-overlay">
-            <div id="web-capture-card">
-              <h4 id="web-capture-prompt-text" style="margin:0 0 10px 0;font-size:16px;color:#F8FAFC;">Capture jumped pod(s)?</h4>
-              <p class="dim" style="font-size:12px;margin:0 0 16px 0;">You may also drag the jumped pod off the board edge to toggle capture.</p>
-              <div class="row" style="gap:10px;justify-content:center;margin:0;">
-                <button type="button" class="btn btn-primary" id="btn-capture-yes" style="background:#dc2626;border-color:#dc2626;padding:8px 18px;">Capture</button>
-                <button type="button" class="btn" id="btn-capture-no" style="padding:8px 18px;">Leave on Board</button>
+            <div id="web-capture-card" title="Drag to reposition">
+              <div style="display:flex;align-items:center;justify-content:center;margin-bottom:6px;">
+                <span class="web-drag-grip" title="Drag to move">&#x283F;</span>
+                <h4 id="web-capture-prompt-text" style="margin:0;font-size:15px;color:#F8FAFC;">Capture jumped pod(s)?</h4>
+              </div>
+              <p class="dim" style="font-size:11.5px;margin:0 0 12px 0;">You may also drag the jumped pod off the board edge or click it to toggle capture.</p>
+              <div class="row" style="gap:10px;justify-content:center;margin:0;flex-wrap:nowrap;">
+                <button type="button" class="btn btn-primary" id="btn-capture-yes" style="background:#dc2626;border-color:#dc2626;padding:6px 16px;white-space:nowrap;">Capture</button>
+                <button type="button" class="btn" id="btn-capture-no" style="padding:6px 16px;white-space:nowrap;">Leave on Board</button>
               </div>
             </div>
           </div>
@@ -7344,7 +7372,7 @@ function initZobristTables() {
 
 var ZOBRIST_TABLES = initZobristTables();
 
-function computePositionHashBigInt(s, mirrorHorizontal) {
+function computePositionHashBigInt(s, mirrorHorizontal, exclude4PBases) {
   var h = 0n;
   if (!s || typeof ZOBRIST_TABLES === "undefined" || !ZOBRIST_TABLES) return h;
   var ZOB = ZOBRIST_TABLES;
@@ -7353,8 +7381,10 @@ function computePositionHashBigInt(s, mirrorHorizontal) {
   var playerLetters = { A: 1, B: 2, C: 3, D: 4 };
   var turnVal = playerLetters[s.turn] || 0;
   h ^= ZOB.turn[turnVal % 5];
-  var btw = Math.min(4, Math.max(0, s.bases || (s.mode === "OFK" ? 1 : 3)));
-  h ^= ZOB.basesToWin[btw];
+  if (!exclude4PBases || modeIdx !== 2) {
+    var btw = Math.min(4, Math.max(0, s.bases || (s.mode === "OFK" ? 1 : 3)));
+    h ^= ZOB.basesToWin[btw];
+  }
   h ^= ZOB.edgeless[s.edgeless ? 1 : 0];
   h ^= ZOB.superProngs[s.superProngs ? 1 : 0];
 
@@ -7432,7 +7462,7 @@ function computePositionHashBigInt(s, mirrorHorizontal) {
 }
 
 function computeCanonicalOpeningHash(s) {
-  var hDirect = computePositionHashBigInt(s, false);
+  var hDirect = computePositionHashBigInt(s, false, true);
   function toHex(val) {
     var hex = val.toString(16).toUpperCase();
     while (hex.length < 16) hex = "0" + hex;
@@ -7441,7 +7471,7 @@ function computeCanonicalOpeningHash(s) {
   if (!s || s.mode === "4" || s.mode === "4P") {
     return { hash: hDirect, key: toHex(hDirect), mirrored: false };
   }
-  var hMirror = computePositionHashBigInt(s, true);
+  var hMirror = computePositionHashBigInt(s, true, true);
   if (hMirror < hDirect) {
     return { hash: hMirror, key: toHex(hMirror), mirrored: true };
   }
@@ -7468,6 +7498,24 @@ var OPENING_BOOK = {
       { move: "32+a", score: -980 }
     ]
   },
+  // 4P ply 4 (after 33+h 37+e 77+e 73+e)
+  "0x002E103759425879": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+b 73+e)
+  "0x00421353415436CB": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
   // OFK ply 2 (after 32+b 46+f)
   "0x004C97ACE487F4A2": {
     depth: 8,
@@ -7477,22 +7525,22 @@ var OPENING_BOOK = {
       { move: "32b+e", score: -180 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+b 73+e)
-  "0x005F3329D7449A0D": {
+  // 4P ply 4 (after 33+b 37+g 77+g 73+e)
+  "0x0053F280BFFBD41C": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+c 77+e 73+g)
-  "0x00697FA1E33C8D2E": {
+  // 4P ply 4 (after 33+c 37+c 77+a 73+f)
+  "0x00599313398C5B11": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 20 },
-      { move: "33h+b", score: 20 },
-      { move: "33h+c", score: -120 }
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 77+f 73+a 57+f)
@@ -7522,6 +7570,15 @@ var OPENING_BOOK = {
       { move: "33+a", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+c 77+b 73+f)
+  "0x00A6C5C0D9F8CECA": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+c 57+d 33+b 57d+e)
   "0x00CA09C78AFE19B9": {
     depth: 8,
@@ -7538,6 +7595,15 @@ var OPENING_BOOK = {
       { move: "57d-66", score: -2980 },
       { move: "77+f", score: -3090 },
       { move: "37+d", score: -3090 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+f 77+e)
+  "0x00E91E90FE78514B": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -856 },
+      { move: "73+e", score: -856 },
+      { move: "73+g", score: -976 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 37+e 53+b 57+f)
@@ -7585,15 +7651,6 @@ var OPENING_BOOK = {
       { move: "42a+h", score: 39 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+d 77+h 73+e)
-  "0x0147C7CCD1438649": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
   // 2P 1-Base ply 3 (after 53+a 57+c 33+b)
   "0x014C92CB7EAFBC8A": {
     depth: 8,
@@ -7603,22 +7660,31 @@ var OPENING_BOOK = {
       { move: "37+d", score: -3000 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+c 77+g 73+f)
-  "0x014D09532C5A8006": {
+  // 4P ply 4 (after 33+d 37+b 77+h 73+e)
+  "0x015AE7B647532A8F": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
     ]
   },
-  // 4P ply 2 (after 33+h 37+b)
-  "0x017504839F2D16FB": {
+  // 4P ply 2 (after 33+h 37+d)
+  "0x016824F9093DBA3D": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: 260 },
-      { move: "77+a", score: 260 },
-      { move: "77+g", score: 140 }
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+e 77+a)
+  "0x017DB888EA95435E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // OFK ply 4 (after 32+b 56+f 42+a 36+g)
@@ -7628,6 +7694,15 @@ var OPENING_BOOK = {
       { move: "52+h", score: 2440 },
       { move: "32b-43", score: 2320 },
       { move: "52+g", score: 1931 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+h 73+f)
+  "0x01BE3125DFFFD28E": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+h 77+e 53+b)
@@ -7666,15 +7741,6 @@ var OPENING_BOOK = {
       { move: "33+a", score: -470 }
     ]
   },
-  // 4P ply 1 (after 33+d)
-  "0x0257AC58B9AAA876": {
-    depth: 8,
-    candidates: [
-      { move: "37+e", score: -1116 },
-      { move: "37+d", score: -1116 },
-      { move: "37+f", score: -1116 }
-    ]
-  },
   // OFK ply 3 (after 22+b 46+f 52+h)
   "0x0259A90DB5523446": {
     depth: 8,
@@ -7693,6 +7759,15 @@ var OPENING_BOOK = {
       { move: "22+b", score: 260 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+g 77+b 73+f)
+  "0x0271533F4A2FB63F": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 53+b 37+c 33+a 77+d)
   "0x02774F7C47B2791B": {
     depth: 8,
@@ -7700,6 +7775,24 @@ var OPENING_BOOK = {
       { move: "53b-64", score: 462 },
       { move: "73+a", score: 462 },
       { move: "53b+a", score: 462 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+g 73+e)
+  "0x0284647F2C2CACE9": {
+    depth: 8,
+    candidates: [
+      { move: "33b+h", score: 140 },
+      { move: "33b+a", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+a 73+f)
+  "0x028E05ECAA5B23E4": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
     ]
   },
   // OFK ply 4 (after 32+b 46+f 32b+a 46f-35)
@@ -7729,24 +7822,6 @@ var OPENING_BOOK = {
       { move: "36d-45", score: -4483 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+e 73+g)
-  "0x02BEE95E70EBF5DB": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 160 },
-      { move: "33h+b", score: 160 },
-      { move: "33h+c", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+e 77+g 73+g)
-  "0x02C30BE9965279BE": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
-    ]
-  },
   // OFK ply 3 (after 32+a 56+f 42+c)
   "0x02EAB3D9C48784AF": {
     depth: 8,
@@ -7754,6 +7829,15 @@ var OPENING_BOOK = {
       { move: "46+e", score: -2962 },
       { move: "36+d", score: -2962 },
       { move: "46+f", score: -4663 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+g 73+f)
+  "0x02FCF9BE8DA1BE72": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 77+e 53b+a 57+f)
@@ -7783,13 +7867,13 @@ var OPENING_BOOK = {
       { move: "37+e", score: -2024 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+e 77+d)
-  "0x037E9EEA20C56F45": {
+  // 4P ply 4 (after 33+h 37+g 77+h 73+f)
+  "0x0369A7DA4C28AA7B": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
     ]
   },
   // OFK ply 4 (after 32+b 46+e 32b+c 56+f)
@@ -7810,15 +7894,6 @@ var OPENING_BOOK = {
       { move: "77+e", score: -2480 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+g 77+g 73+f)
-  "0x039A9FACBF8DF8F3": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: 0 },
-      { move: "33g+h", score: 0 },
-      { move: "33g+a", score: 0 }
-    ]
-  },
   // 2P 1-Base ply 3 (after 53+b 57+f 53)
   "0x039B09895876D2BF": {
     depth: 8,
@@ -7826,15 +7901,6 @@ var OPENING_BOOK = {
       { move: "57f-46", score: -2630 },
       { move: "37+d", score: -2630 },
       { move: "57f+e", score: -2630 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+f 77+d 73+e)
-  "0x03B9904D87FF6677": {
-    depth: 8,
-    candidates: [
-      { move: "33d+b", score: -380 },
-      { move: "33d+h", score: -380 },
-      { move: "33d+a", score: -380 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+e 53+h 57+d)
@@ -7927,6 +7993,15 @@ var OPENING_BOOK = {
       { move: "77f+e", score: -2024 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+g 77+e 73+e)
+  "0x045ACA49798EA42F": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -100 },
+      { move: "33d+b", score: -100 },
+      { move: "33d+h", score: -100 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 33+a 57+d 33a+b)
   "0x0473EEFC3A958160": {
     depth: 8,
@@ -7945,15 +8020,6 @@ var OPENING_BOOK = {
       { move: "73h+a", score: -62 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+g 73+e)
-  "0x04A643D630066E16": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+a 77+e 73+a 57+d)
   "0x04B7ECA3EE733C69": {
     depth: 8,
@@ -7961,6 +8027,24 @@ var OPENING_BOOK = {
       { move: "53+b", score: 0 },
       { move: "53+h", score: 0 },
       { move: "33a+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+g 73+e)
+  "0x04BB63ACA616C2D0": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+f 77+g)
+  "0x04E02659380D2178": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // 2P 3-Base ply 2 (after 53+b 57+f)
@@ -7990,13 +8074,13 @@ var OPENING_BOOK = {
       { move: "46+a", score: -3463 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+b 77+a)
-  "0x04F34FB6C1541313": {
+  // 4P ply 3 (after 33+g 37+d 77+a)
+  "0x04EE6FCC5744BFD5": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1216 },
-      { move: "73+e", score: -1216 },
-      { move: "73+g", score: -1336 }
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 57+d 33+c 37+e)
@@ -8017,6 +8101,15 @@ var OPENING_BOOK = {
       { move: "57+f", score: -3930 }
     ]
   },
+  // 2P_3B_ED ply 0 (initial)
+  "0x052A15A7EB3794E9": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "53+a", score: 0 },
+      { move: "73+a", score: 0 }
+    ]
+  },
   // OFK ply 3 (after 32+b 26+d 32b+e)
   "0x055892E82B1AB81E": {
     depth: 8,
@@ -8024,6 +8117,15 @@ var OPENING_BOOK = {
       { move: "36+e", score: -3463 },
       { move: "46+f", score: -3463 },
       { move: "46+a", score: -3463 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+d 73+g)
+  "0x055DB35A8E9A3783": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
     ]
   },
   // OFK ply 4 (after 32+b 46+e 32b-43 36+g)
@@ -8062,15 +8164,6 @@ var OPENING_BOOK = {
       { move: "57+e", score: -2176 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+c 77+d)
-  "0x05DDD26B93DEEBE6": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -996 },
-      { move: "73+e", score: -996 },
-      { move: "73+g", score: -1116 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+b 57+d 33+a 37+d)
   "0x05E1AE9791B694D0": {
     depth: 8,
@@ -8080,22 +8173,31 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 120 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+d 77+g)
-  "0x05FAF58C429264C2": {
+  // 4P ply 3 (after 33+c 37+b 77+g)
+  "0x05E7D5F6D482C804": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
+      { move: "73+f", score: -1356 },
+      { move: "73+e", score: -1356 },
+      { move: "73+g", score: -1476 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+b 77+a 73+g)
-  "0x06596697A845F2E4": {
+  // 4P ply 4 (after 33+h 37+e 77+b 73+f)
+  "0x060589416AE34A69": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 120 },
-      { move: "33c+h", score: 120 },
-      { move: "33c+a", score: 120 }
+      { move: "33h+b", score: 0 },
+      { move: "33h+a", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+a 73+g)
+  "0x064446ED3E555E22": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 1-Base ply 3 (after 33+b 57+c 73+a)
@@ -8107,13 +8209,22 @@ var OPENING_BOOK = {
       { move: "57g+d", score: -3750 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+e 73+f)
-  "0x0674AA5FE4E5881D": {
+  // 4P ply 4 (after 33+h 37+b 77+e 73+f)
+  "0x06698A2572F524DB": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+e 73+e)
+  "0x068D5CB6EA59DCDA": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -240 },
+      { move: "33d+b", score: -240 },
+      { move: "33d+h", score: -240 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+c 57+e 73+h)
@@ -8125,15 +8236,6 @@ var OPENING_BOOK = {
       { move: "77+e", score: -2080 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+b 73+g)
-  "0x06A630444831673F": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: 0 },
-      { move: "33d+b", score: 0 },
-      { move: "33d+h", score: 0 }
-    ]
-  },
   // 2P 3-Base ply 3 (after 33+b 37+d 73+h)
   "0x06AB8A3D836CB2AA": {
     depth: 8,
@@ -8141,6 +8243,15 @@ var OPENING_BOOK = {
       { move: "77+e", score: -2282 },
       { move: "57+d", score: -2282 },
       { move: "57+f", score: -2282 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+b 73+g)
+  "0x06BB103EDE21CBF9": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+c 57+f 33+a)
@@ -8152,15 +8263,6 @@ var OPENING_BOOK = {
       { move: "77+e", score: -2950 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+e 77+e 73+g)
-  "0x06CA33205027098D": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+b", score: -380 },
-      { move: "33d+h", score: -380 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+b 57+d 73+h 57d+f)
   "0x06E56D50C2D49525": {
     depth: 8,
@@ -8170,13 +8272,13 @@ var OPENING_BOOK = {
       { move: "73+a", score: -120 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+g 77+d)
-  "0x070A449400099313": {
+  // 4P ply 4 (after 33+d 37+e 77+h 73+f)
+  "0x071D7DA46CE4562D": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1136 },
-      { move: "73+e", score: -1136 },
-      { move: "73+g", score: -1256 }
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 },
+      { move: "33d+a", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+d 73+h 37d+e)
@@ -8197,22 +8299,22 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+g 73+g)
-  "0x0750DCAD2B838535": {
+  // 4P ply 4 (after 33+g 37+b 77+g 73+g)
+  "0x074DFCD7BD9329F3": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+a 73+g)
-  "0x075E953844CA1B98": {
+  // 4P ply 4 (after 33+a 37+f 77+a 73+f)
+  "0x0761676F5F39DC54": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+c 53b+a 37+d)
@@ -8224,6 +8326,15 @@ var OPENING_BOOK = {
       { move: "33+b", score: 400 }
     ]
   },
+  // 4P ply 4 (after 33+h 37+d 77+h 73+g)
+  "0x07A3E4DBD826D7BD": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+b 77+e 33b+a 77e+f)
   "0x07B32F64BD113D9C": {
     depth: 8,
@@ -8231,15 +8342,6 @@ var OPENING_BOOK = {
       { move: "53+a", score: 0 },
       { move: "73+a", score: 0 },
       { move: "53+h", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+b 77+h 73+g)
-  "0x07BEC4A14E367B7B": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 260 },
-      { move: "33h+b", score: 260 },
-      { move: "33h+c", score: 120 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 77+e 53+h 57+f)
@@ -8269,6 +8371,15 @@ var OPENING_BOOK = {
       { move: "53b+a", score: 0 }
     ]
   },
+  // 4P ply 3 (after 33+h 37+g 77+h)
+  "0x082C45D215B5E8D3": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+h 57+e 73+h 37+e)
   "0x08322B730FB11B54": {
     depth: 8,
@@ -8276,15 +8387,6 @@ var OPENING_BOOK = {
       { move: "53+a", score: -62 },
       { move: "33h+a", score: -62 },
       { move: "73h+a", score: -62 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+e 77+d 73+f)
-  "0x083B7CE279582DED": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 37+d 73+h 57+d)
@@ -8332,22 +8434,22 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 390 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+d 77+d 73+g)
-  "0x0885E59DCD9AAC7D": {
+  // 4P ply 4 (after 33+a 37+g 77+a 73+e)
+  "0x089751BE81526B98": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+h", score: -380 },
-      { move: "33d+b", score: -380 }
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+g 73+g)
-  "0x08A2C27A1CD62359": {
+  // 4P ply 4 (after 33+d 37+b 77+d 73+g)
+  "0x0898C5E75B8A00BB": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 37+d 33+c 77+f)
@@ -8377,15 +8479,6 @@ var OPENING_BOOK = {
       { move: "37+e", score: -2402 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+g 77+g)
-  "0x08DF7DA4E610BA5B": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
-    ]
-  },
   // 2P 3-Base ply 3 (after 33+h 57+e 73+b)
   "0x08E590B18D6F26BB": {
     depth: 8,
@@ -8395,6 +8488,15 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2024 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+e 77+g 73+e)
+  "0x08E5ADECA6A8F60E": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
   // OFK ply 2 (after 32+b 36+d)
   "0x08EE9C0681127B36": {
     depth: 8,
@@ -8402,6 +8504,15 @@ var OPENING_BOOK = {
       { move: "52+h", score: -620 },
       { move: "42+a", score: -620 },
       { move: "32b-43", score: -620 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+g 77+b)
+  "0x0934B13713B2F497": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+b 77+e 33b+a)
@@ -8422,6 +8533,33 @@ var OPENING_BOOK = {
       { move: "33+a", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+c 77+a 73+g)
+  "0x09B6583A0900F84E": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+e 77+g)
+  "0x09B91BB6D43CFCDA": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+g 77+a)
+  "0x09CBE7E4F3C6614C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+a 37+f 73+h 77+f)
   "0x09DA63262299475A": {
     depth: 8,
@@ -8431,33 +8569,6 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 62 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+e 77+a 73+e)
-  "0x09F137ACB37E2D19": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+e 77+a 73+g)
-  "0x0A07A8D7A8FBC63A": {
-    depth: 8,
-    candidates: [
-      { move: "33a+h", score: 0 },
-      { move: "33a+b", score: 0 },
-      { move: "33a+c", score: -140 }
-    ]
-  },
-  // 4P ply 3 (after 33+g 37+c 77+g)
-  "0x0A08EB5B75C7C2AE": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
-    ]
-  },
   // OFK ply 3 (after 32+b 36+d 32b+a)
   "0x0A1ACBE9B0E0B357": {
     depth: 8,
@@ -8465,6 +8576,24 @@ var OPENING_BOOK = {
       { move: "36+e", score: -3801 },
       { move: "46f-35", score: -3801 },
       { move: "26+d", score: -4243 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+a 73+f)
+  "0x0A385A80B30801F6": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+a 73+e)
+  "0x0A40C7411285136D": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
     ]
   },
   // OFK ply 2 (after 32+b 36+e)
@@ -8483,24 +8612,6 @@ var OPENING_BOOK = {
       { move: "57+e", score: -2086 },
       { move: "37+d", score: -2086 },
       { move: "57+d", score: -2086 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+g 77+g 73+g)
-  "0x0A7554858F015BAC": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 140 },
-      { move: "33c+h", score: 140 },
-      { move: "33c+a", score: 140 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+f 77+h 73+g)
-  "0x0A7BB21C9B264C43": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+d 73+h 77+f)
@@ -8548,6 +8659,15 @@ var OPENING_BOOK = {
       { move: "73+a", score: -1010 }
     ]
   },
+  // 4P ply 3 (after 33+h 37+c 77+h)
+  "0x0AFBD32D86629026": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+h 57+e 33h+a 77+e)
   "0x0B025ADE7C08BC30": {
     depth: 8,
@@ -8555,6 +8675,15 @@ var OPENING_BOOK = {
       { move: "53+a", score: -62 },
       { move: "73+a", score: -62 },
       { move: "53+b", score: -62 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+c 77+a)
+  "0x0B1C711B601119B9": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+e 53+b 57+f)
@@ -8579,9 +8708,9 @@ var OPENING_BOOK = {
   "0x0B45FE3410182A4D": {
     depth: 8,
     candidates: [
+      { move: "77+e", score: -3100 },
       { move: "57+f", score: -3100 },
-      { move: "57+d", score: -3350 },
-      { move: "57+e", score: -3350 }
+      { move: "37+d", score: -3100 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+d 33a+b 77+f)
@@ -8611,13 +8740,13 @@ var OPENING_BOOK = {
       { move: "73+h", score: -730 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+f 77+b 73+g)
-  "0x0B6346F99D215007": {
+  // 4P ply 4 (after 33+g 37+g 77+a 73+g)
+  "0x0B61CEC59AD780BB": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 57+d 73+h 77+f)
@@ -8656,6 +8785,24 @@ var OPENING_BOOK = {
       { move: "53+h", score: -120 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+f 77+e 73+f)
+  "0x0BACFC98A7E513E3": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+b", score: -380 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+c 77+b)
+  "0x0BE327C880658C62": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+b 77+e 73+h 57+f)
   "0x0BF4AF592976E801": {
     depth: 8,
@@ -8671,16 +8818,25 @@ var OPENING_BOOK = {
     candidates: [
       { move: "52+h", score: 0 },
       { move: "32+b", score: 0 },
-      { move: "32+e", score: -578 }
+      { move: "32+a", score: -59 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+g 77+d 73+f)
-  "0x0C4FA69C5994D1BB": {
+  // 4P ply 3 (after 33+a 37+f 77+a)
+  "0x0C24856706A49EFC": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -100 },
-      { move: "33d+b", score: -100 },
-      { move: "33d+h", score: -100 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+e 77+h)
+  "0x0C589FAC35791485": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+g 73+a 37+f)
@@ -8692,15 +8848,6 @@ var OPENING_BOOK = {
       { move: "53b+a", score: 462 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+a 73+e)
-  "0x0C62E0E80EAFD192": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
-    ]
-  },
   // 2P 3-Base ply 3 (after 53+a 57+e 33+a)
   "0x0C637E934FB15138": {
     depth: 8,
@@ -8708,15 +8855,6 @@ var OPENING_BOOK = {
       { move: "37+e", score: -2086 },
       { move: "77+e", score: -2086 },
       { move: "37+d", score: -2086 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+f 77+g 73+e)
-  "0x0C6CA97D61E64F3F": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 57+d 33+b 57d-66)
@@ -8728,6 +8866,24 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+b 37+b 77+a 73+e)
+  "0x0C7FC09298BF7D54": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+h 73+e)
+  "0x0C9F910B92431DB7": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+a 57+c 73+a 77+f)
   "0x0CADE0F76130DA36": {
     depth: 8,
@@ -8735,15 +8891,6 @@ var OPENING_BOOK = {
       { move: "33+b", score: 400 },
       { move: "53a+h", score: 400 },
       { move: "33+a", score: 400 }
-    ]
-  },
-  // 4P ply 2 (after 33+d 37+f)
-  "0x0CB0723E4A3D21C3": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: -260 },
-      { move: "77+a", score: -260 },
-      { move: "77+g", score: -380 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+c 37+d 33+b)
@@ -8791,13 +8938,13 @@ var OPENING_BOOK = {
       { move: "57+d", score: -2402 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+d 77+e)
-  "0x0D314857BD78CAB5": {
+  // 4P ply 3 (after 33+h 37+b 77+e)
+  "0x0D2C682D2B686673": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
     ]
   },
   // OFK ply 3 (after 32+a 56+f 22+c)
@@ -8807,6 +8954,33 @@ var OPENING_BOOK = {
       { move: "46+e", score: -3463 },
       { move: "36+d", score: -3463 },
       { move: "36+a", score: -3463 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+e 77+b)
+  "0x0D406B49337E08C1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+a 73+e)
+  "0x0D78333D74309428": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+b 73+e)
+  "0x0D8765EE944401F3": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+b 77+e 53b+a)
@@ -8872,22 +9046,13 @@ var OPENING_BOOK = {
       { move: "73+h", score: 400 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+d 73+e)
-  "0x0E7CE6F052EF514F": {
+  // 4P ply 4 (after 33+h 37+d 77+d 73+e)
+  "0x0E61C68AC4FFFD89": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+c 77+d 73+f)
-  "0x0E983063CA43A94E": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -240 },
-      { move: "33d+b", score: -240 },
-      { move: "33d+h", score: -240 }
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
     ]
   },
   // 2P 1-Base ply 3 (after 33+b 77+f 73+a)
@@ -8899,13 +9064,13 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2970 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+g 73+f)
-  "0x0EBF17841B0F266A": {
+  // 4P ply 4 (after 33+c 37+b 77+g 73+f)
+  "0x0EA237FE8D1F8AAC": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 77+f 33+b 37+e)
@@ -8989,13 +9154,13 @@ var OPENING_BOOK = {
       { move: "33+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+f 77+g 73+g)
-  "0x0F9A36067A63A41C": {
+  // 4P ply 4 (after 33+b 37+f 77+g 73+f)
+  "0x0FA5C451619063D0": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 57+c 33+b 57c+d)
@@ -9007,13 +9172,13 @@ var OPENING_BOOK = {
       { move: "33b+a", score: 400 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+a 73+f)
-  "0x0FB6ADBE98C951BB": {
+  // 4P ply 4 (after 33+g 37+d 77+a 73+f)
+  "0x0FAB8DC40ED9FD7D": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -20 },
-      { move: "33g+h", score: -20 },
-      { move: "33g+a", score: -20 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 57+e 53+b 37+d)
@@ -9032,15 +9197,6 @@ var OPENING_BOOK = {
       { move: "53+a", score: 0 },
       { move: "53+b", score: 0 },
       { move: "73+h", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+f 77+d 73+f)
-  "0x102042A61C42A375": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
     ]
   },
   // OFK ply 4 (after 32+b 46+e 42+a 36+g)
@@ -9097,15 +9253,6 @@ var OPENING_BOOK = {
       { move: "52+h", score: -1733 }
     ]
   },
-  // 4P ply 2 (after 33+h 37+g)
-  "0x10DF96040FEB530D": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: 280 },
-      { move: "77+a", score: 280 },
-      { move: "77+g", score: 160 }
-    ]
-  },
   // OFK ply 3 (after 32+b 26+d 52+h)
   "0x10DFD3BD3E5C3A31": {
     depth: 8,
@@ -9113,6 +9260,24 @@ var OPENING_BOOK = {
       { move: "46+f", score: -6570 },
       { move: "36+e", score: -6570 },
       { move: "26d+a", score: -6783 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+h 73+e)
+  "0x10F07531D7956F79": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+g 73+e)
+  "0x10FE93A8C3B27896": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+a 57+e 33+a)
@@ -9187,6 +9352,15 @@ var OPENING_BOOK = {
       { move: "77f+e", score: -2024 }
     ]
   },
+  // 4P ply 3 (after 33+a 37+f 77+g)
+  "0x11A225F2B1267242": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+a 57+d 53+h 77+f)
   "0x11AEAB8CA7DA720D": {
     depth: 8,
@@ -9196,22 +9370,13 @@ var OPENING_BOOK = {
       { move: "73a+h", score: -138 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+g 73+e)
-  "0x11E4407DB92D3D2C": {
+  // 4P ply 4 (after 33+h 37+g 77+b 73+e)
+  "0x11E881D4D192733D": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+f 77+a 73+e)
-  "0x11EA09E8D664A381": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+e 73+h 57+f)
@@ -9223,31 +9388,40 @@ var OPENING_BOOK = {
       { move: "53+h", score: 0 }
     ]
   },
-  // 4P ply 2 (after 33+h 37+c)
-  "0x120800FB9C3C2BF8": {
+  // 4P ply 4 (after 33+b 37+b 77+g 73+e)
+  "0x11F960072F3D91EA": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: 140 },
-      { move: "77+a", score: 140 },
-      { move: "77+g", score: 20 }
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+f 77+a 73+g)
-  "0x121C9693CDE148A2": {
+  // 4P ply 4 (after 33+b 37+f 77+a 73+f)
+  "0x122364C4D6128F6E": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+g 73+f)
-  "0x12300D2B2F4BBD05": {
+  // 4P ply 4 (after 33+d 37+c 77+h 73+e)
+  "0x1227E3CE4442178C": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -20 },
-      { move: "33g+h", score: -20 },
-      { move: "33g+a", score: -20 }
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+g 73+f)
+  "0x122D2D51B95B11C3": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 77+e 33+h 57+d)
@@ -9257,15 +9431,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: -460 },
       { move: "53b+a", score: -460 },
       { move: "53b-64", score: -510 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+e 77+h 73+g)
-  "0x12608C58FE3CC2DB": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+d 73+a 37d+e)
@@ -9304,13 +9469,13 @@ var OPENING_BOOK = {
       { move: "42+a", score: -4000 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+h 73+f)
-  "0x12DE15274AFE434B": {
+  // 4P ply 4 (after 33+h 37+b 77+h 73+f)
+  "0x12C3355DDCEEEF8D": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
     ]
   },
   // OFK ply 3 (after 32+b 46+e 32b-43)
@@ -9331,6 +9496,15 @@ var OPENING_BOOK = {
       { move: "73+a", score: 120 }
     ]
   },
+  // 4P ply 4 (after 33+h 37+d 77+e 73+g)
+  "0x13095BA3763D1CEB": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+c 57+e 53c+b 77+f)
   "0x1312513B563F77FA": {
     depth: 8,
@@ -9340,13 +9514,13 @@ var OPENING_BOOK = {
       { move: "73+a", score: -1200 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+e 73+g)
-  "0x13147BD9E02DB02D": {
+  // 4P ply 4 (after 33+c 37+b 77+a 73+f)
+  "0x1324976B3A9D6612": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
     ]
   },
   // 2P 1-Base ply 3 (after 33+b 57+c 73+h)
@@ -9376,13 +9550,13 @@ var OPENING_BOOK = {
       { move: "33+a", score: 400 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+a 73+f)
-  "0x1339B711AC8DCAD4": {
+  // 4P ply 4 (after 33+h 37+c 77+b 73+e)
+  "0x133F172B42450BC8": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+e 53c+b 37+d)
@@ -9412,15 +9586,6 @@ var OPENING_BOOK = {
       { move: "57f+e", score: -1686 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+b 73+g)
-  "0x137878BDF83BDE9F": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+b 57+d 73+a 57d+f)
   "0x13A76EFB4BFFC61F": {
     depth: 8,
@@ -9430,13 +9595,13 @@ var OPENING_BOOK = {
       { move: "33a+b", score: -210 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+d 77+b 73+f)
-  "0x13C6E1C24CF95F0F": {
+  // 4P ply 4 (after 33+d 37+e 77+e 73+f)
+  "0x13B7C2DCC2FF9D7B": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
+      { move: "33d+a", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+b", score: -380 }
     ]
   },
   // OFK ply 3 (after 22+b 46+f 32+a)
@@ -9446,6 +9611,15 @@ var OPENING_BOOK = {
       { move: "56+f", score: -6435 },
       { move: "36d+g", score: -6435 },
       { move: "46+e", score: -6435 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+b 73+f)
+  "0x13DBC1B8DAE9F3C9": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+a 37+d 73+h)
@@ -9484,6 +9658,15 @@ var OPENING_BOOK = {
       { move: "33+h", score: 280 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+c 77+g 73+g)
+  "0x1430F8AFBE8214F0": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
   // OFK ply 4 (after 32+b 46+f 32b+a 36+e)
   "0x1432FD45812CFA41": {
     depth: 8,
@@ -9491,6 +9674,15 @@ var OPENING_BOOK = {
       { move: "42+a", score: -1287 },
       { move: "32ab-43", score: -1287 },
       { move: "52+h", score: -1747 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+e 77+a)
+  "0x143FBB2363BE1064": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 57+e 73+a 37+d)
@@ -9502,22 +9694,31 @@ var OPENING_BOOK = {
       { move: "53+b", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+e 77+g 73+e)
-  "0x1477973904FCC1A7": {
+  // 4P ply 3 (after 33+d 37+f 77+h)
+  "0x1443A1E850639A1D": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
     ]
   },
-  // 4P ply 2 (after 33+d 37+e)
-  "0x14AB4C7A2F27AF5B": {
+  // 4P ply 3 (after 33+c 37+g 77+g)
+  "0x144D477144448DF2": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: -260 },
-      { move: "77+a", score: -260 },
-      { move: "77+g", score: -380 }
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+h 73+e)
+  "0x1484AF4FF759932F": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 57+e 33+a 37+d)
@@ -9529,15 +9730,6 @@ var OPENING_BOOK = {
       { move: "73a+h", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+c 77+h 73+g)
-  "0x14C3C0D94D274678": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 33+b 77+f 73+h 57+f)
   "0x14E192AAF48EC959": {
     depth: 8,
@@ -9545,6 +9737,24 @@ var OPENING_BOOK = {
       { move: "53+h", score: 0 },
       { move: "53+a", score: 0 },
       { move: "53+b", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+g 73+e)
+  "0x1511F12B36D08726": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+e 73+f)
+  "0x15148E5D71E419D8": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 20 },
+      { move: "33h+b", score: 20 },
+      { move: "33h+c", score: -120 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+a 57+d 53a+b)
@@ -9556,15 +9766,6 @@ var OPENING_BOOK = {
       { move: "57d+e", score: -3350 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+a 73+g)
-  "0x152462EFAB54CFE7": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
-    ]
-  },
   // 2P 3-Base ply 3 (after 33+a 37+f 53+h)
   "0x153B2D27583E7C6F": {
     depth: 8,
@@ -9574,13 +9775,22 @@ var OPENING_BOOK = {
       { move: "57+d", score: -2502 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+g 77+a)
-  "0x1559DD31519256E5": {
+  // 4P ply 3 (after 33+h 37+f 77+b)
+  "0x155B550D56648659": {
     depth: 8,
     candidates: [
       { move: "73+f", score: -1236 },
       { move: "73+e", score: -1236 },
       { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+a 73+e)
+  "0x15630D79112A1AB0": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // OFK ply 4 (after 32+a 26+d 42+a 46+f)
@@ -9599,6 +9809,15 @@ var OPENING_BOOK = {
       { move: "33+a", score: 0 },
       { move: "53h+a", score: 0 },
       { move: "33+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+b 73+e)
+  "0x159C5BAAF15E8F6B": {
+    depth: 8,
+    candidates: [
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 },
+      { move: "33d+a", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 37+c 53b+a 57+c)
@@ -9637,22 +9856,13 @@ var OPENING_BOOK = {
       { move: "53+b", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+b 73+g)
-  "0x15DB343C4B205A3C": {
+  // 4P ply 4 (after 33+d 37+b 77+e 73+e)
+  "0x15F058CEE948E1D9": {
     depth: 8,
     candidates: [
       { move: "33d+a", score: -120 },
       { move: "33d+b", score: -120 },
       { move: "33d+h", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+d 77+e 73+e)
-  "0x15ED78B47F584D1F": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+b", score: -380 },
-      { move: "33d+h", score: -380 }
     ]
   },
   // 2P 1-Base ply 2 (after 53+c 77+f)
@@ -9662,15 +9872,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: -400 },
       { move: "53g+b", score: -400 },
       { move: "33+a", score: -400 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+g 77+h 73+g)
-  "0x16145626DEF03E8D": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 280 },
-      { move: "33h+b", score: 280 },
-      { move: "33h+c", score: 140 }
     ]
   },
   // OFK ply 4 (after 22+b 36+d 42+a 36d-45)
@@ -9709,6 +9910,15 @@ var OPENING_BOOK = {
       { move: "46f+a", score: -3463 }
     ]
   },
+  // 4P ply 3 (after 33+c 37+c 77+g)
+  "0x169AD18ED793F507": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
   // OFK ply 4 (after 22+b 26+d 42+a 46+a)
   "0x16A0A8C47F2E89FA": {
     depth: 8,
@@ -9716,15 +9926,6 @@ var OPENING_BOOK = {
       { move: "32a+b", score: -580 },
       { move: "42+a", score: -580 },
       { move: "52h-43", score: -580 }
-    ]
-  },
-  // 4P ply 3 (after 33+d 37+b 77+d)
-  "0x16A0D61390CFD6E5": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 37+c 73+a 77+e)
@@ -9736,6 +9937,15 @@ var OPENING_BOOK = {
       { move: "73a+h", score: 400 }
     ]
   },
+  // 4P ply 3 (after 33+d 37+d 77+d)
+  "0x16BDF66906DF7A23": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -856 },
+      { move: "73+e", score: -856 },
+      { move: "73+g", score: -976 }
+    ]
+  },
   // 2P 3-Base ply 2 (after 33+b 37+d)
   "0x16E47C32DE61104A": {
     depth: 8,
@@ -9745,6 +9955,15 @@ var OPENING_BOOK = {
       { move: "53+a", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+g 77+g 73+g)
+  "0x16E76E502D556C05": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+h 57+e 53+h 37+d)
   "0x16FBB18638D20833": {
     depth: 8,
@@ -9752,15 +9971,6 @@ var OPENING_BOOK = {
       { move: "33h+a", score: -710 },
       { move: "53h+b", score: -710 },
       { move: "73+a", score: -744 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+g 77+b 73+g)
-  "0x170CA2C3D8F722C9": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: 20 },
-      { move: "33d+b", score: 20 },
-      { move: "33d+h", score: 20 }
     ]
   },
   // OFK ply 3 (after 22+b 46+e 22b+c)
@@ -9790,24 +10000,6 @@ var OPENING_BOOK = {
       { move: "33a+b", score: -1850 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+e 77+g 73+g)
-  "0x178108421F792A84": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
-    ]
-  },
-  // 4P ply 3 (after 33+g 37+c 77+a)
-  "0x178E4BCEC2452E10": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 53+a 37+d 33+h 37d+e)
   "0x17B8DC764A47ABFC": {
     depth: 8,
@@ -9815,6 +10007,15 @@ var OPENING_BOOK = {
       { move: "73+a", score: -62 },
       { move: "73+h", score: -62 },
       { move: "53a+b", score: -62 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+g 73+f)
+  "0x17BEFA15048AED48": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 77+f 73+b 57+d)
@@ -9826,6 +10027,15 @@ var OPENING_BOOK = {
       { move: "53+c", score: -730 }
     ]
   },
+  // 4P ply 4 (after 33+h 37+g 77+e 73+f)
+  "0x17C318A2E233612D": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 160 },
+      { move: "33h+b", score: 160 },
+      { move: "33h+c", score: 20 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+b 57+d 53+a 57d+e)
   "0x17C4CCC38A67654B": {
     depth: 8,
@@ -9833,6 +10043,15 @@ var OPENING_BOOK = {
       { move: "73+a", score: 0 },
       { move: "53a+h", score: 0 },
       { move: "33b+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+g 73+e)
+  "0x17C667D4A507FFD3": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
     ]
   },
   // OFK ply 4 (after 22+b 36+e 42+h 46+f)
@@ -9844,13 +10063,13 @@ var OPENING_BOOK = {
       { move: "52h+b", score: -1020 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+g 77+a 73+g)
-  "0x17F3F4103883B712": {
+  // 4P ply 4 (after 33+h 37+f 77+e 73+e)
+  "0x18352E733C58D6E1": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 140 },
-      { move: "33c+h", score: 140 },
-      { move: "33c+a", score: 140 }
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 57+d 53+c 77+e)
@@ -9871,6 +10090,24 @@ var OPENING_BOOK = {
       { move: "73h+a", score: -120 }
     ]
   },
+  // 2P_1B_ED ply 0 (initial)
+  "0x18591BCD3AB3BA6C": {
+    depth: 8,
+    candidates: [
+      { move: "33+a", score: 0 },
+      { move: "73+a", score: 0 },
+      { move: "33+b", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+b 77+a)
+  "0x18617563630024BA": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1356 },
+      { move: "73+e", score: -1356 },
+      { move: "73+g", score: -1476 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 33+b 37+e 53+h)
   "0x186210C8B40FA1CD": {
     depth: 8,
@@ -9880,22 +10117,13 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2396 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+d 77+a)
-  "0x187C5519F510887C": {
+  // 4P ply 3 (after 33+d 37+b 77+b)
+  "0x189E23B08374B161": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
-    ]
-  },
-  // 4P ply 3 (after 33+d 37+d 77+b)
-  "0x188303CA15641DA7": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // OFK ply 4 (after 32+b 46+e 52+g 36+e)
@@ -9934,13 +10162,13 @@ var OPENING_BOOK = {
       { move: "46f+c", score: -6435 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+a 73+e)
-  "0x1920E343878482A8": {
+  // 4P ply 3 (after 33+d 37+e 77+e)
+  "0x18F220D49B62DFD3": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "73+f", score: -856 },
+      { move: "73+e", score: -856 },
+      { move: "73+g", score: -976 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+a 57+e 33+b)
@@ -9961,6 +10189,15 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2480 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+g 77+d 73+g)
+  "0x19325760CB4C454D": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -100 },
+      { move: "33d+b", score: -100 },
+      { move: "33d+h", score: -100 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+b 57+e 53+h 77+f)
   "0x193D1A7254E30148": {
     depth: 8,
@@ -9968,6 +10205,33 @@ var OPENING_BOOK = {
       { move: "33+a", score: 0 },
       { move: "73h+a", score: 0 },
       { move: "53b+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+a 73+e)
+  "0x193DC33911942E6E": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+f 77+a)
+  "0x196686CC8F8FCDC6": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+d 77+g)
+  "0x1968CF59E0C6536B": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+c 73+a 77+f)
@@ -9979,15 +10243,6 @@ var OPENING_BOOK = {
       { move: "33b+a", score: 400 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+b 77+g)
-  "0x1975EF2376D6FFAD": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1216 },
-      { move: "73+e", score: -1216 },
-      { move: "73+g", score: -1336 }
-    ]
-  },
   // 2P 1-Base ply 3 (after 53+c 37+d 33+a)
   "0x1986B5441A26B922": {
     depth: 8,
@@ -9997,13 +10252,13 @@ var OPENING_BOOK = {
       { move: "57+e", score: -2200 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+d 77+h)
-  "0x199BF72F136301E3": {
+  // 4P ply 3 (after 33+h 37+b 77+h)
+  "0x1986D7558573AD25": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+b 57+e 33b+a)
@@ -10127,9 +10382,9 @@ var OPENING_BOOK = {
   "0x1A9B50BEC8C890F5": {
     depth: 8,
     candidates: [
-      { move: "26+d", score: -4143 },
-      { move: "56+f", score: -4143 },
-      { move: "36+e", score: -4143 }
+      { move: "46+e", score: -3343 },
+      { move: "36+d", score: -3343 },
+      { move: "56+f", score: -3343 }
     ]
   },
   // OFK ply 4 (after 32+b 36+e 42+a 26+a)
@@ -10141,22 +10396,22 @@ var OPENING_BOOK = {
       { move: "52+h", score: 260 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+a 73+g)
-  "0x1AD67C389C01698B": {
+  // 4P ply 4 (after 33+g 37+b 77+a 73+g)
+  "0x1ACB5C420A11C54D": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+g 73+g)
-  "0x1AD835ADF348F726": {
+  // 4P ply 4 (after 33+a 37+f 77+g 73+f)
+  "0x1AE7C7FAE8BB30EA": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33a+h", score: 0 },
+      { move: "33a+b", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 57+c 33+a 57c+d)
@@ -10175,15 +10430,6 @@ var OPENING_BOOK = {
       { move: "42h-33", score: 1160 },
       { move: "22+b", score: 1160 },
       { move: "42h+a", score: 1127 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+f 77+d)
-  "0x1B65A0AE45DFE1DD": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
     ]
   },
   // OFK ply 3 (after 22+b 36+d 32+a)
@@ -10231,13 +10477,13 @@ var OPENING_BOOK = {
       { move: "46f+c", score: -6435 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+e 77+d 73+e)
-  "0x1BA2AE09E2E5E8EF": {
+  // 4P ply 4 (after 33+c 37+d 77+g 73+g)
+  "0x1BC2E67889D7B29C": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+h", score: -380 },
-      { move: "33d+b", score: -380 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 37+f 33h+a 57+e)
@@ -10267,13 +10513,13 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 62 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+b 77+g 73+g)
-  "0x1BDFC6021FC71E5A": {
+  // 4P ply 4 (after 33+d 37+c 77+d 73+g)
+  "0x1BE5C19F589B3DB8": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 120 },
-      { move: "33c+h", score: 120 },
-      { move: "33c+a", score: 120 }
+      { move: "33d+a", score: -240 },
+      { move: "33d+b", score: -240 },
+      { move: "33d+h", score: -240 }
     ]
   },
   // OFK ply 4 (after 32+b 26+d 32b+e 46+f)
@@ -10321,6 +10567,15 @@ var OPENING_BOOK = {
       { move: "33b+a", score: 0 }
     ]
   },
+  // 4P ply 3 (after 33+h 37+g 77+e)
+  "0x1C86FAAABBAE2385": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1396 },
+      { move: "73+e", score: -1396 },
+      { move: "73+g", score: -1516 }
+    ]
+  },
   // OFK ply 3 (after 32+a 46+e 22+c)
   "0x1C8F4929A98AC798": {
     depth: 8,
@@ -10348,15 +10603,6 @@ var OPENING_BOOK = {
       { move: "77e+f", score: -3230 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+c 77+a 73+f)
-  "0x1CCBA9C69BD86CB8": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+b 37+d 73+a 57+d)
   "0x1CD09F6BAC21B4E6": {
     depth: 8,
@@ -10366,13 +10612,13 @@ var OPENING_BOOK = {
       { move: "53+h", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+c 77+d 73+e)
-  "0x1D01E28851FE6C4C": {
+  // 4P ply 3 (after 33+b 37+e 77+g)
+  "0x1CFB181D5D17AFE0": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 20 },
-      { move: "33h+b", score: 20 },
-      { move: "33h+c", score: -120 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // 2P 1-Base ply 2 (after 53+c 57+c)
@@ -10402,6 +10648,15 @@ var OPENING_BOOK = {
       { move: "37+d", score: -3600 }
     ]
   },
+  // 4P ply 4 (after 33+h 37+e 77+d 73+g)
+  "0x1D468D1EEB80B91B": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
   // OFK ply 4 (after 22+b 36+e 42+c 26+d)
   "0x1D7820A419A0D4CB": {
     depth: 8,
@@ -10429,6 +10684,15 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 280 }
     ]
   },
+  // 4P ply 4 (after 33+b 37+g 77+a 73+e)
+  "0x1DD55215087938A2": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
   // OFK ply 4 (after 32+b 36+e 52+h 46+a)
   "0x1DDC627DBB9C1FE8": {
     depth: 8,
@@ -10438,13 +10702,13 @@ var OPENING_BOOK = {
       { move: "42h+a", score: 187 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+d 73+f)
-  "0x1DE5341BC952944D": {
+  // 4P ply 4 (after 33+c 37+c 77+g 73+f)
+  "0x1DDF33868E0EB7AF": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+f 33+h 37f+e)
@@ -10456,6 +10720,15 @@ var OPENING_BOOK = {
       { move: "33+h", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+d 77+d 73+f)
+  "0x1DF814615F42388B": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 53+a 37+f 73+a)
   "0x1E150F17625E4019": {
     depth: 8,
@@ -10465,13 +10738,13 @@ var OPENING_BOOK = {
       { move: "77d+e", score: -2086 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+g 77+a 73+f)
-  "0x1E1C3F39080F144D": {
+  // 4P ply 4 (after 33+h 37+f 77+b 73+f)
+  "0x1E1EB7050FF9C4F1": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: 0 },
-      { move: "33g+h", score: 0 },
-      { move: "33g+a", score: 0 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
   // OFK ply 3 (after 32+a 46+f 22+c)
@@ -10501,6 +10774,15 @@ var OPENING_BOOK = {
       { move: "73+a", score: 0 }
     ]
   },
+  // 4P ply 3 (after 33+h 37+c 77+e)
+  "0x1E516C5528795B70": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
   // OFK ply 4 (after 32+a 46+e 42+c 36+d)
   "0x1E8CD6321AB68F77": {
     depth: 8,
@@ -10519,13 +10801,31 @@ var OPENING_BOOK = {
       { move: "37+e", score: -2144 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+f 77+e 73+g)
-  "0x1ED10D64353D8715": {
+  // 4P ply 4 (after 33+b 37+c 77+a 73+e)
+  "0x1F02C4EA9BAE4057": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+b", score: -380 },
-      { move: "33d+h", score: -380 }
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+h 73+f)
+  "0x1F0643E009FED8B5": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+g 73+f)
+  "0x1F08A5791DD9CF5A": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
     ]
   },
   // OFK ply 4 (after 22+b 56+f 42+a 36+f)
@@ -10546,15 +10846,6 @@ var OPENING_BOOK = {
       { move: "77e+f", score: -2086 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+a 73+g)
-  "0x1F45AB7C21D09500": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
-    ]
-  },
   // 2P 3-Base ply 3 (after 53+b 57+c 33+a)
   "0x1F56DDBDCC6D5781": {
     depth: 8,
@@ -10573,6 +10864,15 @@ var OPENING_BOOK = {
       { move: "73+a", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+a 37+e 77+a 73+f)
+  "0x1F7A592B3A2352CC": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
   // OFK ply 4 (after 32+a 26+d 42+a 36+e)
   "0x1F85BDF1D82A7089": {
     depth: 8,
@@ -10589,15 +10889,6 @@ var OPENING_BOOK = {
       { move: "53g+b", score: -610 },
       { move: "73+h", score: -610 },
       { move: "33a+b", score: -1850 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+g 77+d 73+e)
-  "0x1FD67477C22914B9": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 160 },
-      { move: "33h+b", score: 160 },
-      { move: "33h+c", score: 20 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 37+d 73+a 57+f)
@@ -10627,6 +10918,15 @@ var OPENING_BOOK = {
       { move: "33a+b", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+c 77+d 73+f)
+  "0x200D7AC12A71B45C": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -260 },
+      { move: "33g+h", score: -260 },
+      { move: "33g+a", score: -260 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+b 77+f 73+a 57+e)
   "0x200F49221B848173": {
     depth: 8,
@@ -10634,6 +10934,15 @@ var OPENING_BOOK = {
       { move: "73+a", score: -690 },
       { move: "33a+b", score: -690 },
       { move: "73+h", score: -740 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+h 73+e)
+  "0x202093B906243D37": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
     ]
   },
   // OFK ply 4 (after 22+b 46+e 42+a 36+e)
@@ -10654,15 +10963,6 @@ var OPENING_BOOK = {
       { move: "22+b", score: -1615 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+e 77+h 73+g)
-  "0x2067FC2FBC5AE860": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+a 57+e 53a+b 77+f)
   "0x208C68B39D99226E": {
     depth: 8,
@@ -10670,6 +10970,15 @@ var OPENING_BOOK = {
       { move: "33+b", score: 0 },
       { move: "73+a", score: 0 },
       { move: "53ah-44", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+c 77+e)
+  "0x209499305380AF8F": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 37+c 73+b 57+e)
@@ -10699,13 +11008,13 @@ var OPENING_BOOK = {
       { move: "33b+a", score: 280 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+f 77+b 73+g)
-  "0x20E4B0376FF3F7C2": {
+  // 4P ply 4 (after 33+b 37+f 77+b 73+f)
+  "0x20DB42607400300E": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 57+e 53+b 77+f)
@@ -10726,13 +11035,13 @@ var OPENING_BOOK = {
       { move: "53+h", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+g 77+d 73+e)
-  "0x21138112B9D0E046": {
+  // 4P ply 4 (after 33+d 37+b 77+a 73+f)
+  "0x2123E71C78FB4CA9": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 160 },
-      { move: "33b+h", score: 160 },
-      { move: "33b+c", score: 20 }
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 37+d 53c+b 77+f)
@@ -10742,15 +11051,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: -650 },
       { move: "33+a", score: -650 },
       { move: "33+b", score: -730 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+d 77+a 73+f)
-  "0x213EC766EEEBE06F": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+g 73+b 37+d)
@@ -10771,13 +11071,13 @@ var OPENING_BOOK = {
       { move: "64b+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+a 73+g)
-  "0x21805E195A2961FF": {
+  // 4P ply 3 (after 33+a 37+c 77+h)
+  "0x217C25E374B037E3": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
     ]
   },
   // OFK ply 4 (after 32+b 36+d 42+a 46+e)
@@ -10789,6 +11089,15 @@ var OPENING_BOOK = {
       { move: "22+h", score: -1020 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+e 77+e 73+f)
+  "0x21B0B2AB8099B7C0": {
+    depth: 8,
+    candidates: [
+      { move: "33c+a", score: -260 },
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 }
+    ]
+  },
   // OFK ply 3 (after 22+b 56+f 42+e)
   "0x21BF94B66BA7C442": {
     depth: 8,
@@ -10798,13 +11107,13 @@ var OPENING_BOOK = {
       { move: "46+a", score: -3960 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+b 73+f)
-  "0x21C191B50E9F75B4": {
+  // 4P ply 4 (after 33+h 37+c 77+a 73+e)
+  "0x21C7318FE057B4A8": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+b 37+c 33+a)
@@ -10825,6 +11134,15 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2024 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+b 77+b 73+f)
+  "0x21DCB1CF988FD972": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+a 57+e 53+h 57e+f)
   "0x22068C55F7A13561": {
     depth: 8,
@@ -10832,6 +11150,33 @@ var OPENING_BOOK = {
       { move: "73a+h", score: 0 },
       { move: "33+a", score: 0 },
       { move: "53b+a", score: 0 }
+    ]
+  },
+  // 4P ply 2 (after 33+g 37+f)
+  "0x2225389CAA0F3CD1": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -280 },
+      { move: "77+a", score: -280 },
+      { move: "77+g", score: -400 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+e 77+g)
+  "0x223EED7826EE5B1F": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+g 77+e)
+  "0x22430FCFC057D77A": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1396 },
+      { move: "73+e", score: -1396 },
+      { move: "73+g", score: -1516 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+b 77+e 33+b)
@@ -10888,13 +11233,13 @@ var OPENING_BOOK = {
       { move: "42c+b", score: -2108 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+e 77+h)
-  "0x22CDD50ED54B0997": {
+  // 4P ply 4 (after 33+g 37+g 77+d 73+f)
+  "0x22DAEC3EB9A6CCA9": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -956 },
-      { move: "73+e", score: -956 },
-      { move: "73+g", score: -1076 }
+      { move: "33g+b", score: -120 },
+      { move: "33g+h", score: -120 },
+      { move: "33g+a", score: -120 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 57+d 53a+b 57d-66)
@@ -10906,6 +11251,24 @@ var OPENING_BOOK = {
       { move: "73+a", score: -780 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+g 77+h 73+e)
+  "0x22F7054695F345C2": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+g 73+e)
+  "0x22F9E3DF81D4522D": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
   // OFK ply 4 (after 32+b 26+d 32b-43 46+a)
   "0x2301213CBD94DFA2": {
     depth: 8,
@@ -10915,13 +11278,13 @@ var OPENING_BOOK = {
       { move: "43b+a", score: 187 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+f 77+b 73+e)
-  "0x23122F4C74761CE1": {
+  // 4P ply 4 (after 33+h 37+g 77+a 73+e)
+  "0x2310A7707380CC5D": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 57+e 33+b 77+e)
@@ -10951,6 +11314,24 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2024 }
     ]
   },
+  // 4P ply 4 (after 33+b 37+e 77+d 73+g)
+  "0x2383787B90794DE4": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+g 77+h)
+  "0x23ABB31CE7674F16": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+a 37+e 73+h 57+e)
   "0x23B5DDBDFD63BC91": {
     depth: 8,
@@ -10958,24 +11339,6 @@ var OPENING_BOOK = {
       { move: "53+a", score: 0 },
       { move: "73h+a", score: 0 },
       { move: "53+b", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+e 77+d 73+f)
-  "0x23BC8A2C8B8A8A28": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+c 77+d 73+e)
-  "0x23C417ED2A0798B3": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 20 },
-      { move: "33b+h", score: 20 },
-      { move: "33b+c", score: -120 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+a 57+e 33+h)
@@ -10994,15 +11357,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: -400 },
       { move: "53a+h", score: -400 },
       { move: "53a+b", score: -400 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+f 77+g 73+g)
-  "0x241DC0C888B103D9": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 77+e 53b+a 57+d)
@@ -11059,6 +11413,15 @@ var OPENING_BOOK = {
       { move: "42g+b", score: -2168 }
     ]
   },
+  // 4P ply 3 (after 33+d 37+c 77+g)
+  "0x249DA1F995F5DFBC": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 53+b 37+c 33+h 57+e)
   "0x249DAA3F3F8112D4": {
     depth: 8,
@@ -11075,15 +11438,6 @@ var OPENING_BOOK = {
       { move: "53b+a", score: -120 },
       { move: "33+b", score: -120 },
       { move: "33+a", score: -310 }
-    ]
-  },
-  // 4P ply 3 (after 33+c 37+b 77+d)
-  "0x24A7A664D2A9FC5E": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
     ]
   },
   // OFK ply 2 (after 22+b 36+d)
@@ -11104,6 +11458,15 @@ var OPENING_BOOK = {
       { move: "53b+a", score: 0 }
     ]
   },
+  // 4P ply 3 (after 33+c 37+d 77+d)
+  "0x24BA861E44B95098": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+c 57+f 33+a 57f+e)
   "0x24CB236606A09907": {
     depth: 8,
@@ -11113,22 +11476,13 @@ var OPENING_BOOK = {
       { move: "33a+b", score: -520 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+g 77+b 73+g)
-  "0x250BD2B49A910872": {
+  // 4P ply 4 (after 33+g 37+f 77+h 73+g)
+  "0x24EEF8BE7B145151": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 140 },
-      { move: "33c+a", score: 140 },
-      { move: "33c+h", score: 140 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+f 77+e 73+f)
-  "0x2539B63A47D70EF1": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
   // OFK ply 4 (after 22+b 26+d 32+a 46+c)
@@ -11149,15 +11503,6 @@ var OPENING_BOOK = {
       { move: "53b+a", score: 338 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+c 77+b)
-  "0x25766D6A60579170": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+a 57+c 53a+h 37+d)
   "0x2592892AF428B263": {
     depth: 8,
@@ -11165,15 +11510,6 @@ var OPENING_BOOK = {
       { move: "33+b", score: 400 },
       { move: "53ah-44", score: 400 },
       { move: "73+a", score: 400 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+f 77+d)
-  "0x25A055CB3E261522": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
     ]
   },
   // OFK ply 3 (after 22+b 26+d 42+a)
@@ -11203,31 +11539,40 @@ var OPENING_BOOK = {
       { move: "42+e", score: -578 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+g 77+a 73+g)
-  "0x25F484677AE59DA9": {
+  // 4P ply 4 (after 33+a 37+d 77+d 73+e)
+  "0x25E63044362D5A4C": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: 20 },
-      { move: "33d+b", score: 20 },
-      { move: "33d+h", score: 20 }
+      { move: "33a+h", score: -120 },
+      { move: "33a+b", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+b 77+d 73+e)
-  "0x25FB103EA03DF68A": {
+  // 4P ply 4 (after 33+g 37+d 77+d 73+g)
+  "0x2610AF3F2DA8B16F": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+d 73+g)
-  "0x260D8F45BBB81DA9": {
+  // 4P ply 3 (after 33+c 37+f 77+h)
+  "0x2644D19F1205B0A6": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+g 77+g)
+  "0x264A37060622A749": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
     ]
   },
   // 2P 1-Base ply 2 (after 53+a 37+d)
@@ -11248,22 +11593,13 @@ var OPENING_BOOK = {
       { move: "33b+a", score: -120 }
     ]
   },
-  // 4P ply 2 (after 33+c 37+e)
-  "0x26AC3C0D6D4185E0": {
+  // 4P ply 3 (after 33+a 37+b 77+e)
+  "0x26AB9EE3D9BAC1B6": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: -140 },
-      { move: "77+a", score: -140 },
-      { move: "77+g", score: -260 }
-    ]
-  },
-  // 4P ply 3 (after 33+a 37+d 77+e)
-  "0x26B6BE994FAA6D70": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
     ]
   },
   // 2P 1-Base ply 0 (initial)
@@ -11284,6 +11620,24 @@ var OPENING_BOOK = {
       { move: "77+e", score: -2950 }
     ]
   },
+  // 4P ply 3 (after 33+a 37+e 77+b)
+  "0x26C79D87C1ACAF04": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+e 73+e)
+  "0x26F0DB1647A1221E": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
   // 2P 1-Base ply 3 (after 53+c 57+d 53c+h)
   "0x26FF1CF5557783B8": {
     depth: 8,
@@ -11291,6 +11645,15 @@ var OPENING_BOOK = {
       { move: "57d-66", score: -2170 },
       { move: "37+d", score: -2290 },
       { move: "77+f", score: -2290 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+h 73+e)
+  "0x271867C56091BA72": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // OFK ply 4 (after 32+a 46+f 22+c 46f+e)
@@ -11302,22 +11665,22 @@ var OPENING_BOOK = {
       { move: "42+a", score: -1243 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+a 73+g)
-  "0x27231298E932E55C": {
+  // 4P ply 3 (after 33+b 37+b 77+h)
+  "0x27432230FE8A59DA": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+d 77+h)
-  "0x275E024A689AF51C": {
+  // 4P ply 4 (after 33+d 37+e 77+a 73+e)
+  "0x27647D0E534C300B": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+h 57+e 33h+a)
@@ -11347,8 +11710,17 @@ var OPENING_BOOK = {
       { move: "42+c", score: -2843 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+g 77+b)
-  "0x27A1FB95F380E985": {
+  // 4P ply 4 (after 33+c 37+e 77+b 73+e)
+  "0x279B2BDDB338A5D0": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+f 77+a)
+  "0x27A373A9F4763939": {
     depth: 8,
     candidates: [
       { move: "73+f", score: -1236 },
@@ -11356,22 +11728,13 @@ var OPENING_BOOK = {
       { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+b 73+g)
-  "0x27DC444B09467087": {
+  // 4P ply 4 (after 33+c 37+b 77+e 73+e)
+  "0x27F728B9AB2ECB62": {
     depth: 8,
     candidates: [
       { move: "33c+b", score: 0 },
       { move: "33c+h", score: 0 },
       { move: "33c+a", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+d 77+e 73+e)
-  "0x27EA08C33D3E67A4": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+c 73+a 37+f)
@@ -11392,24 +11755,6 @@ var OPENING_BOOK = {
       { move: "53+b", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+c 77+e 73+e)
-  "0x281816140A6BC1C8": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -260 },
-      { move: "33g+h", score: -260 },
-      { move: "33g+a", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+d 77+b 73+g)
-  "0x282E5A9C3E13D6EB": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+a", score: -280 },
-      { move: "33g+h", score: -280 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+b 77+f 73+b 77f+e)
   "0x283116190B004EC7": {
     depth: 8,
@@ -11419,6 +11764,15 @@ var OPENING_BOOK = {
       { move: "73b+a", score: -62 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+b 77+b 73+g)
+  "0x28337AE6A8037A2D": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+b 57+e 53+h 37+d)
   "0x283E44E3432BFCCC": {
     depth: 8,
@@ -11426,6 +11780,15 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 0 },
       { move: "73+a", score: 0 },
       { move: "33b+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+e 73+g)
+  "0x285F7982B015149F": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+c 33+h 37+d)
@@ -11446,13 +11809,13 @@ var OPENING_BOOK = {
       { move: "46+d", score: -4523 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+g 77+h 73+g)
-  "0x28D1A343A509CA72": {
+  // 2P_3B_ED ply 1 (after 33+b)
+  "0x28D16B85C04AC61F": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 280 },
-      { move: "33b+h", score: 280 },
-      { move: "33b+c", score: 140 }
+      { move: "77+e", score: -2752 },
+      { move: "37+d", score: -2752 },
+      { move: "57+f", score: -2752 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+a 57+d 73+a)
@@ -11464,6 +11827,15 @@ var OPENING_BOOK = {
       { move: "77+e", score: -2086 }
     ]
   },
+  // 4P ply 4 (after 33+a 37+g 77+h 73+f)
+  "0x28EE5114BEFA0DBE": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 33+b 37+d 33b-44 77+f)
   "0x28F63BC58B8053E0": {
     depth: 8,
@@ -11473,13 +11845,13 @@ var OPENING_BOOK = {
       { move: "44b+c", score: -3390 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+e 77+d)
-  "0x28F96824D217C880": {
+  // 4P ply 4 (after 33+b 37+g 77+e 73+f)
+  "0x2906EDC799CA95D2": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "33b+a", score: 160 },
+      { move: "33b+h", score: 160 },
+      { move: "33b+c", score: 20 }
     ]
   },
   // OFK ply 4 (after 22+b 36+d 32+a 56+f)
@@ -11498,15 +11870,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: 0 },
       { move: "53b+a", score: 0 },
       { move: "53b-64", score: -510 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+g 77+e 73+g)
-  "0x29391F908239521E": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 160 },
-      { move: "33a+h", score: 160 },
-      { move: "33a+c", score: 20 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+f 73+h 77+d)
@@ -11536,22 +11899,31 @@ var OPENING_BOOK = {
       { move: "57+d", score: -2768 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+e 77+h 73+f)
-  "0x298837068CD64B3F": {
+  // 4P ply 4 (after 33+h 37+e 77+g 73+f)
+  "0x297B0F707F7319B7": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+e 77+d 73+e)
-  "0x29A5DE7EA083C254": {
+  // 4P ply 3 (after 33+g 37+g 77+d)
+  "0x299F0E36E03B8E01": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+g 73+g)
+  "0x29C5960FCBB19827": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+f 73+h 77+d)
@@ -11563,15 +11935,6 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 62 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+g 73+g)
-  "0x29D8B6755DA134E1": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: 0 },
-      { move: "33d+b", score: 0 },
-      { move: "33d+h", score: 0 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+c 57+e 33+a 37+e)
   "0x29DAE16FED02E423": {
     depth: 8,
@@ -11579,6 +11942,15 @@ var OPENING_BOOK = {
       { move: "73+a", score: -400 },
       { move: "73+h", score: -400 },
       { move: "33a+b", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+d 73+g)
+  "0x29E2B1E81AFD1703": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -120 },
+      { move: "33c+h", score: -120 },
+      { move: "33c+a", score: -120 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+b 57+c 73+a)
@@ -11590,15 +11962,6 @@ var OPENING_BOOK = {
       { move: "77+d", score: -2486 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+c 77+h 73+g)
-  "0x2A0635BC36DEB287": {
-    depth: 8,
-    candidates: [
-      { move: "33b+h", score: 140 },
-      { move: "33b+a", score: 140 },
-      { move: "33b+c", score: 0 }
-    ]
-  },
   // 2P 1-Base ply 3 (after 53+b 77+f 53b-64)
   "0x2A069F95E413DCCC": {
     depth: 8,
@@ -11606,6 +11969,24 @@ var OPENING_BOOK = {
       { move: "57+d", score: -2600 },
       { move: "57+e", score: -2600 },
       { move: "77+f", score: -2600 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+h 73+f)
+  "0x2A39C7EB2D2D754B": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+h 73+e)
+  "0x2A415A2A8CA067D0": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+a 77+e 53+b)
@@ -11617,31 +11998,22 @@ var OPENING_BOOK = {
       { move: "57+d", score: -2396 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+d 77+a)
-  "0x2A7B256EB776A2C7": {
+  // 4P ply 3 (after 33+d 37+b 77+a)
+  "0x2A66051421660E01": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+d 77+b)
-  "0x2A8473BD5702371C": {
+  // 4P ply 3 (after 33+c 37+b 77+b)
+  "0x2A9953C7C1129BDA": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+g 77+e 73+e)
-  "0x2ACF80EB99BCB93D": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -120 },
-      { move: "33g+h", score: -120 },
-      { move: "33g+a", score: -120 }
+      { move: "73+f", score: -1356 },
+      { move: "73+e", score: -1356 },
+      { move: "73+g", score: -1476 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+f 33+a 37+e)
@@ -11662,13 +12034,22 @@ var OPENING_BOOK = {
       { move: "73h+a", score: -400 }
     ]
   },
-  // 4P ply 2 (after 33+a 37+b)
-  "0x2AF2F24D6DFFB13E": {
+  // 4P ply 2 (after 33+a 37+d)
+  "0x2AEFD237FBEF1DF8": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: 260 },
-      { move: "77+a", score: 260 },
-      { move: "77+g", score: 140 }
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+e 77+e)
+  "0x2AF550A3D904F568": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
     ]
   },
   // OFK ply 4 (after 22+b 46+e 42+c 56+g)
@@ -11678,6 +12059,24 @@ var OPENING_BOOK = {
       { move: "32+a", score: -1040 },
       { move: "42c+h", score: -1040 },
       { move: "22b+c", score: -1040 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+d 73+g)
+  "0x2B352717892A6FF6": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 20 },
+      { move: "33c+h", score: 20 },
+      { move: "33c+a", score: 20 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+c 77+d)
+  "0x2B4898C973ECF6F4": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
     ]
   },
   // 2P 1-Base ply 3 (after 33+b 57+e 73+b)
@@ -11698,6 +12097,42 @@ var OPENING_BOOK = {
       { move: "42h+g", score: -3782 }
     ]
   },
+  // 4P ply 3 (after 33+b 37+f 77+b)
+  "0x2B9EA0682D9D72A6": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+e 73+e)
+  "0x2BA9E6F9AB90FFBC": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+b 73+e)
+  "0x2BC5E59DB386910E": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+e 73+f)
+  "0x2BD17B380A1DED27": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 20 },
+      { move: "33b+h", score: 20 },
+      { move: "33b+c", score: -120 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 33+b 77+f 33b+a)
   "0x2BD6DC76FA67D44C": {
     depth: 8,
@@ -11705,24 +12140,6 @@ var OPENING_BOOK = {
       { move: "37+e", score: -2086 },
       { move: "57+e", score: -2086 },
       { move: "77f+e", score: -2086 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+d 77+b 73+e)
-  "0x2BD8C5E725963DC8": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+c 77+e 73+g)
-  "0x2BEE896F11EE2AEB": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 20 },
-      { move: "33a+h", score: 20 },
-      { move: "33a+c", score: -120 }
     ]
   },
   // 2P 3-Base ply 2 (after 33+a 57+d)
@@ -11734,6 +12151,15 @@ var OPENING_BOOK = {
       { move: "73a+h", score: -252 }
     ]
   },
+  // 4P ply 4 (after 33+b 37+b 77+h 73+f)
+  "0x2C06C038A7171B72": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
   // OFK ply 2 (after 22+b 46+f)
   "0x2C099A58C1AF076A": {
     depth: 8,
@@ -11743,22 +12169,13 @@ var OPENING_BOOK = {
       { move: "52h+g", score: -1220 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+h 73+f)
-  "0x2C1BE0423107B7B4": {
+  // 4P ply 4 (after 33+a 37+d 77+h 73+g)
+  "0x2C2412152AF47078": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+b 77+h 73+g)
-  "0x2C39326FBCE4DCBE": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 260 },
-      { move: "33a+h", score: 260 },
-      { move: "33a+c", score: 120 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 77+e 53+b 57+f)
@@ -11824,22 +12241,13 @@ var OPENING_BOOK = {
       { move: "33+a", score: -340 }
     ]
   },
-  // 4P ply 2 (after 33+b 37+c)
-  "0x2CCDF59EE7C5DF07": {
+  // 4P ply 1 (after 33+g)
+  "0x2CC2E6FA5998B564": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: 140 },
-      { move: "77+a", score: 140 },
-      { move: "77+g", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+f 77+e 73+g)
-  "0x2CD67D13775BADAE": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
+      { move: "37+e", score: -1096 },
+      { move: "37+d", score: -1096 },
+      { move: "37+f", score: -1096 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+a 57+e 53+h)
@@ -11851,31 +12259,58 @@ var OPENING_BOOK = {
       { move: "57e+d", score: -2564 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+g 77+b 73+f)
-  "0x2CE4199DAA1DAB2D": {
+  // 4P ply 4 (after 33+h 37+f 77+a 73+f)
+  "0x2CE691A1ADEB7B91": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: 0 },
-      { move: "33g+h", score: 0 },
-      { move: "33g+a", score: 0 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+b 73+g)
-  "0x2DBD8DD883C22A60": {
+  // 4P ply 4 (after 33+c 37+f 77+h 73+f)
+  "0x2D0133974B98F20E": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+a", score: -140 },
+      { move: "33c+h", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+e 73+g)
-  "0x2DD18EBC9BD444D2": {
+  // 4P ply 4 (after 33+d 37+g 77+g 73+f)
+  "0x2D0FD50E5FBFE5E1": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 140 },
-      { move: "33b+h", score: 140 },
-      { move: "33b+c", score: 0 }
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+d 73+e)
+  "0x2D2CDAEF67CD7B65": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+b 73+f)
+  "0x2D827F8F9831EDAC": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+e 73+g)
+  "0x2DCCAEC60DC4E814": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
     ]
   },
   // 2P 1-Base ply 3 (after 33+b 57+c 73+b)
@@ -11887,22 +12322,22 @@ var OPENING_BOOK = {
       { move: "77+f", score: -2880 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+e 73+f)
-  "0x2DF35C9116372FD8": {
+  // 4P ply 4 (after 33+a 37+b 77+e 73+f)
+  "0x2DEE7CEB8027831E": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
     ]
   },
-  // 4P ply 2 (after 33+b 37+g)
-  "0x2E1A63617412A7F2": {
+  // 4P ply 4 (after 33+b 37+c 77+b 73+e)
+  "0x2DFAE24E39BCFF37": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: 280 },
-      { move: "77+a", score: 280 },
-      { move: "77+g", score: 160 }
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+c 57+f 53c+b)
@@ -11912,15 +12347,6 @@ var OPENING_BOOK = {
       { move: "57f-46", score: -2170 },
       { move: "77+f", score: -2290 },
       { move: "37+d", score: -2290 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+c 77+b 73+f)
-  "0x2E338F6239CAD3D8": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
     ]
   },
   // OFK ply 2 (after 32+a 26+d)
@@ -11939,15 +12365,6 @@ var OPENING_BOOK = {
       { move: "57f-46", score: -2820 },
       { move: "37+d", score: -2950 },
       { move: "37+e", score: -2950 }
-    ]
-  },
-  // 4P ply 3 (after 33+g 37+f 77+e)
-  "0x2E7C54321E4A4C59": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -836 },
-      { move: "73+e", score: -836 },
-      { move: "73+g", score: -956 }
     ]
   },
   // 2P 1-Base ply 2 (after 53+a 57+c)
@@ -11977,13 +12394,13 @@ var OPENING_BOOK = {
       { move: "32+e", score: -698 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+d 73+f)
-  "0x2EE5B7C367BB578A": {
+  // 4P ply 4 (after 33+a 37+f 77+d 73+g)
+  "0x2EDA45947C489046": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
   // 2P 1-Base ply 2 (after 53+c 57+e)
@@ -11995,13 +12412,13 @@ var OPENING_BOOK = {
       { move: "53c+b", score: -400 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+g 73+e)
-  "0x2F21B518C2D4C9D3": {
+  // 4P ply 4 (after 33+b 37+g 77+b 73+e)
+  "0x2F2D74B1AA6B87C2": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 37+c 33+a 57+f)
@@ -12011,6 +12428,15 @@ var OPENING_BOOK = {
       { move: "33+a", score: 400 },
       { move: "53h+a", score: 400 },
       { move: "33+b", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+g 73+e)
+  "0x2F3C956254C46515": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
     ]
   },
   // OFK ply 4 (after 32+a 46+e 42+e 36+a)
@@ -12040,22 +12466,22 @@ var OPENING_BOOK = {
       { move: "22c+b", score: -3107 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+h 73+e)
-  "0x2FCFAD14A761379D": {
+  // 4P ply 4 (after 33+g 37+d 77+h 73+e)
+  "0x2FD28D6E31719B5B": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -20 },
-      { move: "33g+h", score: -20 },
-      { move: "33g+a", score: -20 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+b 77+d 73+f)
-  "0x2FE2446C8B34BEF6": {
+  // 4P ply 4 (after 33+d 37+c 77+g 73+f)
+  "0x2FD843F1CC689D14": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+g 33+a 57g+d)
@@ -12067,13 +12493,22 @@ var OPENING_BOOK = {
       { move: "33+b", score: 400 }
     ]
   },
-  // 4P ply 1 (after 33+c)
-  "0x3050DC2FFBCC82CD": {
+  // 4P ply 4 (after 33+c 37+d 77+d 73+f)
+  "0x2FFF64161D241230": {
     depth: 8,
     candidates: [
-      { move: "37+e", score: -1236 },
-      { move: "37+d", score: -1236 },
-      { move: "37+f", score: -1236 }
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+e 73+g)
+  "0x304447C6D50F9A07": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+c 53+h 37+d)
@@ -12103,6 +12538,15 @@ var OPENING_BOOK = {
       { move: "73+h", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+g 77+b 73+f)
+  "0x3076234808499C84": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+a 57+d 73+b 57d+e)
   "0x3077F87F64D96BAF": {
     depth: 8,
@@ -12112,22 +12556,22 @@ var OPENING_BOOK = {
       { move: "53a+b", score: -1050 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+d 73+e)
-  "0x30B913952916A5B0": {
+  // 4P ply 4 (after 33+d 37+g 77+a 73+f)
+  "0x3089759BE83D095F": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 140 },
-      { move: "33b+h", score: 140 },
-      { move: "33b+c", score: 0 }
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+f 77+d)
-  "0x30E25660B70D4618": {
+  // 4P ply 4 (after 33+b 37+d 77+d 73+e)
+  "0x30A433EFBF060976": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+h 37+f 73+a)
@@ -12166,6 +12610,15 @@ var OPENING_BOOK = {
       { move: "73+h", score: 338 }
     ]
   },
+  // 4P ply 4 (after 33+h 37+f 77+g 73+f)
+  "0x316031341A69972F": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+c 57+f 33+b 57f+e)
   "0x318920CD8F8BCA3D": {
     depth: 8,
@@ -12173,15 +12626,6 @@ var OPENING_BOOK = {
       { move: "53c+b", score: -520 },
       { move: "33b+a", score: -520 },
       { move: "73+a", score: -520 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+f 77+h 73+f)
-  "0x31930942E9CCC5A7": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+a 37+f 33+h)
@@ -12211,15 +12655,6 @@ var OPENING_BOOK = {
       { move: "42h+b", score: -1020 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+f 77+d 73+e)
-  "0x31BEE03AC5994CCC": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
-    ]
-  },
   // OFK ply 4 (after 22+b 46+e 42+c 56+f)
   "0x31DC90D8030D79E3": {
     depth: 8,
@@ -12247,6 +12682,15 @@ var OPENING_BOOK = {
       { move: "57d+f", score: -3500 }
     ]
   },
+  // 4P ply 3 (after 33+a 37+b 77+h)
+  "0x3201219B77A10AE0": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
   // 2P 1-Base ply 3 (after 53+c 37+d 33+h)
   "0x3201438AE8F41EE7": {
     depth: 8,
@@ -12256,13 +12700,22 @@ var OPENING_BOOK = {
       { move: "57+d", score: -2080 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+d 77+h)
-  "0x321C01E1E1B1A626": {
+  // 4P ply 4 (after 33+b 37+f 77+h 73+e)
+  "0x325A646EE9BAE948": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+a 73+f)
+  "0x325EE3647BEA71AA": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+f 73+a 37f+e)
@@ -12274,13 +12727,22 @@ var OPENING_BOOK = {
       { move: "53a+h", score: 62 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+a 73+e)
-  "0x32A7158D7556256D": {
+  // 4P ply 4 (after 33+c 37+c 77+b 73+f)
+  "0x32A1B5B79B9EE471": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+a 73+e)
+  "0x32BA35F7E34689AB": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
     ]
   },
   // OFK ply 4 (after 22+b 56+f 42+c 46+f)
@@ -12310,6 +12772,15 @@ var OPENING_BOOK = {
       { move: "33h+b", score: -1020 }
     ]
   },
+  // 4P ply 3 (after 33+c 37+f 77+e)
+  "0x32EE6EE7BC1E7BF0": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+a 37+e 53+h 37e+d)
   "0x32F24E6346CACEAB": {
     depth: 8,
@@ -12328,15 +12799,6 @@ var OPENING_BOOK = {
       { move: "33+a", score: 400 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+h 73+e)
-  "0x3340B7BB9325ACF2": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+c 57+e 73+a 37+d)
   "0x3351440C3672F9F7": {
     depth: 8,
@@ -12346,13 +12808,40 @@ var OPENING_BOOK = {
       { move: "33+a", score: -400 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+d 73+f)
-  "0x336D5EC3BF702599": {
+  // 4P ply 4 (after 33+c 37+b 77+h 73+e)
+  "0x335D97C105350034": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+d 73+f)
+  "0x33707EB92960895F": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+e 77+b)
+  "0x33859E2C4887FC3E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+f 77+e 73+e)
+  "0x33B2D8BDCE8A7124": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+e 73+a 57e+d)
@@ -12364,13 +12853,13 @@ var OPENING_BOOK = {
       { move: "53+b", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+d 77+e)
-  "0x33F4BD32C6813E4A": {
+  // 4P ply 3 (after 33+b 37+b 77+e)
+  "0x33E99D485091928C": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
     ]
   },
   // OFK ply 4 (after 22+b 26+d 22b+a 46+f)
@@ -12391,6 +12880,15 @@ var OPENING_BOOK = {
       { move: "73a+h", score: 400 }
     ]
   },
+  // 4P ply 3 (after 33+b 37+c 77+h)
+  "0x343E2648FD9B64D9": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+a 57+e 53+b 77+f)
   "0x34404C392DE867AE": {
     depth: 8,
@@ -12409,6 +12907,15 @@ var OPENING_BOOK = {
       { move: "36+e", score: -4103 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+d 77+a 73+g)
+  "0x3443369A7C337499": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+c 77+f 73+b 57+d)
   "0x3444299DBBC7ADC9": {
     depth: 8,
@@ -12416,24 +12923,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: -730 },
       { move: "53g+b", score: -730 },
       { move: "53g+h", score: -1970 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+g 77+d 73+e)
-  "0x345182B930FBB37C": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 160 },
-      { move: "33a+h", score: 160 },
-      { move: "33a+c", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+b 77+a 73+g)
-  "0x345E16E0EA23D85F": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: 0 },
-      { move: "33d+b", score: 0 },
-      { move: "33d+h", score: 0 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 57+d 33+h 57d+e)
@@ -12454,13 +12943,22 @@ var OPENING_BOOK = {
       { move: "53+b", score: -862 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+b 77+b 73+g)
-  "0x34A140330A574D84": {
+  // 4P ply 4 (after 33+c 37+c 77+e 73+e)
+  "0x348A2CC1A83FF661": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 120 },
-      { move: "33c+h", score: 120 },
-      { move: "33c+a", score: 120 }
+      { move: "33c+b", score: -120 },
+      { move: "33c+h", score: -120 },
+      { move: "33c+a", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+b 73+g)
+  "0x34BC60499C47E142": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+f 33+a 57+e)
@@ -12472,15 +12970,6 @@ var OPENING_BOOK = {
       { move: "73a+h", score: 62 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+e 77+e 73+g)
-  "0x34CD435712412336": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
-    ]
-  },
   // 2P 1-Base ply 3 (after 53+c 77+f 73+h)
   "0x34FBE30F632DDFC4": {
     depth: 8,
@@ -12490,13 +12979,22 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2200 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+g 77+d)
-  "0x350D34E3426FB9A8": {
+  // 4P ply 4 (after 33+h 37+e 77+a 73+f)
+  "0x34FDAFE5C8F1F509": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1256 },
-      { move: "73+e", score: -1256 },
-      { move: "73+g", score: -1376 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+h 73+f)
+  "0x351A0DD32E827C96": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // OFK ply 4 (after 22+b 56+f 42+e 36+a)
@@ -12506,6 +13004,15 @@ var OPENING_BOOK = {
       { move: "32+a", score: 0 },
       { move: "42e+h", score: 0 },
       { move: "22b+c", score: -497 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+d 73+e)
+  "0x3537E4AB02D7F5FD": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+e 53+h 37+d)
@@ -12524,15 +13031,6 @@ var OPENING_BOOK = {
       { move: "46+e", score: -6435 },
       { move: "36+d", score: -6435 },
       { move: "36+g", score: -6435 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+c 77+d 73+g)
-  "0x35708B3DB8A920AA": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -260 },
-      { move: "33g+h", score: -260 },
-      { move: "33g+a", score: -260 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+c 57+c 33+b)
@@ -12562,13 +13060,13 @@ var OPENING_BOOK = {
       { move: "77d+e", score: -2024 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+b 73+g)
-  "0x35A6B39CE6D8A4F8": {
+  // 4P ply 4 (after 33+a 37+f 77+b 73+f)
+  "0x359941CBFD2B6334": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // OFK ply 4 (after 22+b 56+f 22b+c 36+d)
@@ -12589,6 +13087,15 @@ var OPENING_BOOK = {
       { move: "53+h", score: 0 }
     ]
   },
+  // 4P ply 3 (after 33+a 37+c 77+e)
+  "0x35D69A9BDAABFCB5": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
   // OFK ply 4 (after 22+b 36+e 22b-33 46+f)
   "0x35DF821DF1DC5EE9": {
     depth: 8,
@@ -12598,13 +13105,13 @@ var OPENING_BOOK = {
       { move: "42+a", score: -3603 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+b 77+b)
-  "0x360B69126346AC73": {
+  // 4P ply 3 (after 33+g 37+d 77+b)
+  "0x36164968F55600B5": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1216 },
-      { move: "73+e", score: -1216 },
-      { move: "73+g", score: -1336 }
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+h 57+e 73+h)
@@ -12634,22 +13141,13 @@ var OPENING_BOOK = {
       { move: "53c+b", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+e 77+e)
-  "0x36676A767B50C2C1": {
+  // 4P ply 4 (after 33+c 37+g 77+e 73+e)
+  "0x365DBA3E3BE88E94": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -836 },
-      { move: "73+e", score: -836 },
-      { move: "73+g", score: -956 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+c 77+d 73+e)
-  "0x36861446A32CCB89": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 20 },
-      { move: "33a+h", score: 20 },
-      { move: "33a+c", score: -120 }
+      { move: "33c+b", score: 20 },
+      { move: "33c+h", score: 20 },
+      { move: "33c+a", score: 20 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 57+d 73+h 37+d)
@@ -12661,6 +13159,24 @@ var OPENING_BOOK = {
       { move: "53+h", score: -120 }
     ]
   },
+  // 4P ply 4 (after 33+a 37+e 77+d 73+g)
+  "0x36C17BD019521EDE": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+g 77+h)
+  "0x36E9B0B76E4C1C2C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+h 37+f 73+b 37f+e)
   "0x36F61227E7F6DE4A": {
     depth: 8,
@@ -12670,13 +13186,13 @@ var OPENING_BOOK = {
       { move: "33h+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+d 73+f)
-  "0x36FE898702A1D912": {
+  // 4P ply 3 (after 33+a 37+g 77+e)
+  "0x37010C64497C8440": {
     depth: 8,
     candidates: [
-      { move: "33b+h", score: -120 },
-      { move: "33b+a", score: -120 },
-      { move: "33b+c", score: -260 }
+      { move: "73+f", score: -1396 },
+      { move: "73+e", score: -1396 },
+      { move: "73+g", score: -1516 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+b 77+e 33+a)
@@ -12724,22 +13240,13 @@ var OPENING_BOOK = {
       { move: "32+a", score: -3891 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+g 77+d 73+g)
-  "0x37A71DC22B7E585F": {
+  // 4P ply 3 (after 33+d 37+b 77+g)
+  "0x37E0A58196E4E2BF": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -120 },
-      { move: "33g+h", score: -120 },
-      { move: "33g+a", score: -120 }
-    ]
-  },
-  // 4P ply 3 (after 33+c 37+c 77+d)
-  "0x37DAA21CD1B8C15D": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+c 53+b 77+f)
@@ -12751,15 +13258,6 @@ var OPENING_BOOK = {
       { move: "33+g", score: -120 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+d 77+g)
-  "0x37FD85FB00F44E79": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+c 77+f 73+c 57+f)
   "0x3823B10B64EC018B": {
     depth: 8,
@@ -12769,13 +13267,13 @@ var OPENING_BOOK = {
       { move: "53c+b", score: -2250 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+d 77+d)
-  "0x3828BCCBE6ED6731": {
+  // 4P ply 3 (after 33+g 37+b 77+d)
+  "0x38359CB170FDCBF7": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -836 },
-      { move: "73+e", score: -836 },
-      { move: "73+g", score: -956 }
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+g 73+a 77+f)
@@ -12787,24 +13285,6 @@ var OPENING_BOOK = {
       { move: "33a+b", score: 400 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+g 77+g 73+g)
-  "0x387224F2CD677117": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: 20 },
-      { move: "33d+b", score: 20 },
-      { move: "33d+h", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+f 77+h 73+g)
-  "0x387CC26BD94066F8": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
-    ]
-  },
   // OFK ply 3 (after 32+b 56+f 52+g)
   "0x3880C675E62D8870": {
     depth: 8,
@@ -12812,6 +13292,15 @@ var OPENING_BOOK = {
       { move: "36+d", score: -3980 },
       { move: "36+f", score: -4542 },
       { move: "46+f", score: -5281 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+e 73+g)
+  "0x388EAD6D84EFBB2E": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+f 53+b 57+d)
@@ -12823,22 +13312,22 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 62 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+b 77+e 73+g)
-  "0x38938D1712FF17E8": {
+  // 4P ply 4 (after 33+b 37+b 77+e 73+f)
+  "0x38AC7F40090CD024": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+b 73+e)
+  "0x38B8E1E5B097AC0D": {
     depth: 8,
     candidates: [
       { move: "33a+b", score: 140 },
       { move: "33a+h", score: 140 },
       { move: "33a+c", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+d 77+e 73+f)
-  "0x38B15F3A9F1C7CE2": {
-    depth: 8,
-    candidates: [
-      { move: "33b+h", score: -120 },
-      { move: "33b+a", score: -120 },
-      { move: "33b+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 37+f 53+b 57+f)
@@ -12850,6 +13339,15 @@ var OPENING_BOOK = {
       { move: "53b+a", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+b 37+e 77+b 73+f)
+  "0x38C07C24111ABE96": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+a 37+d 73+h 57+f)
   "0x38C34276E1033E9D": {
     depth: 8,
@@ -12859,15 +13357,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+e 77+b 73+g)
-  "0x38FF8E730AE9795A": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
-    ]
-  },
   // 2P 1-Base ply 3 (after 33+b 57+d 53+h)
   "0x3903823A99E10FE8": {
     depth: 8,
@@ -12875,6 +13364,15 @@ var OPENING_BOOK = {
       { move: "57f-46", score: -2980 },
       { move: "37+d", score: -3090 },
       { move: "77+f", score: -3090 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+c 77+a)
+  "0x391B016C22773302": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 57+d 73+h 77+f)
@@ -12913,13 +13411,22 @@ var OPENING_BOOK = {
       { move: "33+a", score: -340 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+h 73+f)
-  "0x3959E3E9B82CE48E": {
+  // 4P ply 4 (after 33+a 37+b 77+h 73+f)
+  "0x3944C3932E3C4848": {
     depth: 8,
     candidates: [
-      { move: "33a+h", score: 0 },
-      { move: "33a+b", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33a+h", score: 260 },
+      { move: "33a+b", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+h 73+g)
+  "0x396611BEA3DF2342": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // OFK ply 3 (after 32+b 36+e 32b+e)
@@ -12931,31 +13438,22 @@ var OPENING_BOOK = {
       { move: "36+a", score: -3463 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+h 73+g)
-  "0x397B31C435CF8F84": {
+  // 4P ply 4 (after 33+g 37+g 77+b 73+g)
+  "0x3999E86138C53FDB": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 260 },
-      { move: "33b+h", score: 260 },
-      { move: "33b+c", score: 120 }
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
     ]
   },
-  // 4P ply 2 (after 33+a 37+c)
-  "0x398FF6356EEE8C3D": {
+  // 4P ply 4 (after 33+c 37+f 77+e 73+f)
+  "0x39AB8CEFE5833958": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: 140 },
-      { move: "77+a", score: 140 },
-      { move: "77+g", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+f 77+a 73+g)
-  "0x399B605D3F33EF67": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 77+e 33+a 57+d)
@@ -12985,6 +13483,15 @@ var OPENING_BOOK = {
       { move: "33+a", score: 0 }
     ]
   },
+  // 4P ply 3 (after 33+c 37+c 77+b)
+  "0x39E457BFC203A6D9": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 53+b 37+c 53b+a 37c+d)
   "0x39E8320CB56DB7C1": {
     depth: 8,
@@ -12992,6 +13499,15 @@ var OPENING_BOOK = {
       { move: "73+a", score: 400 },
       { move: "33+a", score: 400 },
       { move: "33+b", score: 400 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+f 77+g)
+  "0x3A25D33C43F4D587": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 37+d 33+a 57+e)
@@ -13012,6 +13528,15 @@ var OPENING_BOOK = {
       { move: "52+h", score: -819 }
     ]
   },
+  // 4P ply 2 (after 33+g 37+e)
+  "0x3A3E06D8CF15B249": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: -280 },
+      { move: "77+a", score: -280 },
+      { move: "77+g", score: -400 }
+    ]
+  },
   // OFK ply 4 (after 22+b 56+f 42+c 36+d)
   "0x3A62E4E66A949E7F": {
     depth: 8,
@@ -13021,13 +13546,13 @@ var OPENING_BOOK = {
       { move: "22b+e", score: -3500 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+d 73+g)
-  "0x3A8295EA8FFC86C6": {
+  // 4P ply 4 (after 33+a 37+g 77+b 73+e)
+  "0x3A6F771A2340D4F8": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+h 37+d 73+b)
@@ -13039,13 +13564,13 @@ var OPENING_BOOK = {
       { move: "57+e", score: -2024 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+g 73+g)
-  "0x3AA5B20D5EB009E2": {
+  // 4P ply 4 (after 33+c 37+b 77+d 73+g)
+  "0x3A9FB59019EC2A00": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+b 37+c 73+a)
@@ -13057,22 +13582,13 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2486 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+f 77+h)
-  "0x3AD6EB4AB051870F": {
+  // 4P ply 4 (after 33+d 37+e 77+g 73+e)
+  "0x3AE2DD9BE4CEDCB5": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -956 },
-      { move: "73+e", score: -956 },
-      { move: "73+g", score: -1076 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+e 77+b 73+e)
-  "0x3B091108116C9279": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 3-Base ply 2 (after 53+a 37+d)
@@ -13084,22 +13600,40 @@ var OPENING_BOOK = {
       { move: "33+b", score: 0 }
     ]
   },
-  // 4P ply 2 (after 33+a 37+g)
-  "0x3B5860CAFD39F4C8": {
+  // 4P ply 3 (after 33+c 37+g 77+b)
+  "0x3B33C14051D4DE2C": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: 280 },
-      { move: "77+a", score: 280 },
-      { move: "77+g", score: 160 }
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+e 73+e)
-  "0x3B65126C097AFCCB": {
+  // 4P ply 4 (after 33+g 37+c 77+b 73+g)
+  "0x3B4E7E9EAB12472E": {
     depth: 8,
     candidates: [
       { move: "33g+b", score: -140 },
       { move: "33g+h", score: -140 },
       { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+e 73+e)
+  "0x3B7832169F6A500D": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+d 73+g)
+  "0x3B98463FF563C37C": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 2 (after 33+a 37+d)
@@ -13111,15 +13645,6 @@ var OPENING_BOOK = {
       { move: "53+h", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+f 77+d 73+f)
-  "0x3BA7B468EE9004B0": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+h 57+e 33h+a 37+d)
   "0x3BC117E8E909B4F8": {
     depth: 8,
@@ -13129,22 +13654,40 @@ var OPENING_BOOK = {
       { move: "33+b", score: -62 }
     ]
   },
+  // 4P ply 3 (after 33+d 37+g 77+a)
+  "0x3BCC9793B1A04BF7": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
   // 2P 3-Base ply 0 (initial)
   "0x3BCD8E7CEAE1563E": {
     depth: 8,
     candidates: [
-      { move: "33+a", score: 0 },
       { move: "53+a", score: 0 },
-      { move: "73+a", score: 0 }
+      { move: "73+a", score: 0 },
+      { move: "33+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+g 73+g)
-  "0x3C06FE8CEDAB8D41": {
+  // 4P ply 4 (after 33+h 37+c 77+g 73+e)
+  "0x3C41911A57D55816": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+e 73+f)
+  "0x3C44EE6C10E1C6E8": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 160 },
+      { move: "33a+h", score: 160 },
+      { move: "33a+c", score: 20 }
     ]
   },
   // OFK ply 4 (after 22+b 36+e 22b+c 46+e)
@@ -13174,15 +13717,6 @@ var OPENING_BOOK = {
       { move: "53b+a", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+g 77+e 73+g)
-  "0x3C7B1C3B0B120124": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 160 },
-      { move: "33b+h", score: 160 },
-      { move: "33b+c", score: 20 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+c 57+e 33+b 37+e)
   "0x3C98E2C46429B719": {
     depth: 8,
@@ -13192,13 +13726,13 @@ var OPENING_BOOK = {
       { move: "33b+a", score: -400 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+d 73+f)
-  "0x3C9F4014882583F5": {
+  // 4P ply 4 (after 33+d 37+b 77+g 73+f)
+  "0x3CA54789CF79A017": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -120 },
-      { move: "33c+h", score: -120 },
-      { move: "33c+a", score: -120 }
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 57+f 53 57f-46)
@@ -13208,24 +13742,6 @@ var OPENING_BOOK = {
       { move: "53+h", score: 150 },
       { move: "53h-44", score: 150 },
       { move: "33+b", score: -250 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+c 77+h 73+e)
-  "0x3CB2A96CA4700A9E": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+d 77+g 73+f)
-  "0x3CB867F359690CD1": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 37+d 33+h 57+d)
@@ -13246,22 +13762,22 @@ var OPENING_BOOK = {
       { move: "53a+b", score: 280 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+e 77+e 73+f)
-  "0x3D22887E22CD8069": {
+  // 4P ply 4 (after 33+g 37+e 77+h 73+g)
+  "0x3CF5C6FA1E0EDFC9": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+b 73+f)
-  "0x3D4E8B1A3ADBEEDB": {
+  // 4P ply 4 (after 33+g 37+d 77+b 73+f)
+  "0x3D53AB60ACCB421D": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -20 },
-      { move: "33g+h", score: -20 },
-      { move: "33g+a", score: -20 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+d 53+h 57+e)
@@ -13300,22 +13816,13 @@ var OPENING_BOOK = {
       { move: "57d+e", score: -2086 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+g 77+h 73+g)
-  "0x3D93A0E82C229948": {
+  // 4P ply 4 (after 33+b 37+g 77+h 73+f)
+  "0x3DAC52BF37D15E84": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 280 },
-      { move: "33a+h", score: 280 },
-      { move: "33a+c", score: 140 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+e 77+d)
-  "0x3DBB6B8F5B3C9BBA": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 37+d 33+h 77+f)
@@ -13345,22 +13852,13 @@ var OPENING_BOOK = {
       { move: "53+h", score: 62 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+g 77+d 73+f)
-  "0x3E48D6EB1BF2FB00": {
+  // 4P ply 3 (after 33+c 37+e 77+h)
+  "0x3E5FEFDB771F3E3E": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 20 },
-      { move: "33c+h", score: 20 },
-      { move: "33c+a", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+g 77+h 73+e)
-  "0x3E653F9337A7726B": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: 0 },
-      { move: "33g+h", score: 0 },
-      { move: "33g+a", score: 0 }
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
     ]
   },
   // OFK ply 1 (after 22+b)
@@ -13372,31 +13870,31 @@ var OPENING_BOOK = {
       { move: "46+e", score: -4143 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+b 73+e)
-  "0x3E9AC64CACBD6EF2": {
+  // 4P ply 4 (after 33+b 37+b 77+b 73+e)
+  "0x3E87E6363AADC234": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+c 77+e 73+g)
-  "0x3EAC8AC498C579D1": {
+  // 4P ply 4 (after 33+a 37+c 77+e 73+f)
+  "0x3E9378938336BE1D": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 20 },
-      { move: "33b+h", score: 20 },
-      { move: "33b+c", score: -120 }
+      { move: "33a+b", score: 20 },
+      { move: "33a+h", score: 20 },
+      { move: "33a+c", score: -120 }
     ]
   },
-  // 4P ply 2 (after 33+c 37+f)
-  "0x3EB70249085B0B78": {
+  // 4P ply 4 (after 33+h 37+g 77+g 73+e)
+  "0x3E9607E5C40220E3": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: -140 },
-      { move: "77+a", score: -140 },
-      { move: "77+g", score: -260 }
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+h 37+f 53+h)
@@ -13408,6 +13906,15 @@ var OPENING_BOOK = {
       { move: "77+f", score: -2402 }
     ]
   },
+  // 4P ply 3 (after 33+a 37+f 77+b)
+  "0x3EDCA3C3A4B6219C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
   // OFK ply 4 (after 22+b 36+e 22b+c 46+f)
   "0x3EE1054D1B8B7B40": {
     depth: 8,
@@ -13415,6 +13922,24 @@ var OPENING_BOOK = {
       { move: "32+b", score: -3979 },
       { move: "32+c", score: -3979 },
       { move: "32+a", score: -4000 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+e 73+e)
+  "0x3EEBE55222BBAC86": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+h 73+e)
+  "0x3F035981058B34EA": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 57+d 53+g 37+e)
@@ -13444,13 +13969,31 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2402 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+c 77+h 73+g)
-  "0x3F443617BFF5E1BD": {
+  // 4P ply 4 (after 33+b 37+c 77+h 73+f)
+  "0x3F7BC440A4062671": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+a 73+e)
+  "0x3F7F434A3656BE93": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+b 73+e)
+  "0x3F801599D6222B48": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+d 73+h 77+e)
@@ -13480,13 +14023,22 @@ var OPENING_BOOK = {
       { move: "32b+a", score: 1127 }
     ]
   },
-  // 4P ply 2 (after 33+b 37+b)
-  "0x3FB0F1E6E4D4E204": {
+  // 4P ply 2 (after 33+b 37+d)
+  "0x3FADD19C72C44EC2": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: 260 },
-      { move: "77+a", score: 260 },
-      { move: "77+g", score: 140 }
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+e 77+a)
+  "0x3FB84DED916CB7A1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 57+e 73+b 37+d)
@@ -13552,6 +14104,24 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 62 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+c 77+a 73+e)
+  "0x401195F83307F4E7": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+h 73+f)
+  "0x401512F2A1576C05": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 33+b 57+f 53+b 77+f)
   "0x4020991903FBD91E": {
     depth: 8,
@@ -13559,15 +14129,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: -120 },
       { move: "53b+a", score: -120 },
       { move: "33b+a", score: -210 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+f 77+h 73+g)
-  "0x402AE0A5BAA4ABC9": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+c 77+f 73+a)
@@ -13586,15 +14147,6 @@ var OPENING_BOOK = {
       { move: "53a+h", score: 400 },
       { move: "73+a", score: 400 },
       { move: "33b+a", score: 280 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+e 77+a 73+g)
-  "0x4056FA6E897921B0": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+f 33+h 57+d)
@@ -13624,24 +14176,6 @@ var OPENING_BOOK = {
       { move: "56+g", score: -3963 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+e 77+b 73+g)
-  "0x40A9ACBD690DB46B": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+b 77+e 73+g)
-  "0x40C5AFD9711BDAD9": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+c 57+f 33+b 37+e)
   "0x40C93A2512957416": {
     depth: 8,
@@ -13658,6 +14192,15 @@ var OPENING_BOOK = {
       { move: "73+a", score: -62 },
       { move: "33h+a", score: -62 },
       { move: "53b+a", score: -62 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+e 73+g)
+  "0x40D88FA3E70B761F": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 37+f 33h+a 57+d)
@@ -13678,15 +14221,6 @@ var OPENING_BOOK = {
       { move: "22c+b", score: -4002 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+a 73+f)
-  "0x40E863113DBBA020": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+h 57+e 53+h 77+d)
   "0x40EDD137D91D5115": {
     depth: 8,
@@ -13696,13 +14230,31 @@ var OPENING_BOOK = {
       { move: "53b+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+h 73+f)
-  "0x410FC127DBC829BF": {
+  // 4P ply 4 (after 33+c 37+c 77+b 73+e)
+  "0x40EEC32BD373613C": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+a", score: -140 },
-      { move: "33c+h", score: -140 }
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+b 77+a 73+f)
+  "0x40F5436BABAB0CE6": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+b 77+h 73+f)
+  "0x4112E15D4DD88579": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
     ]
   },
   // OFK ply 4 (after 32+b 36+d 32b-43 36d+g)
@@ -13714,13 +14266,13 @@ var OPENING_BOOK = {
       { move: "22+c", score: 2418 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+d 73+e)
-  "0x4122285FF79DA0D4": {
+  // 4P ply 4 (after 33+g 37+b 77+d 73+e)
+  "0x413F0825618D0C12": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
     ]
   },
   // OFK ply 4 (after 32+a 36+d 22+c 36d+a)
@@ -13741,6 +14293,15 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2402 }
     ]
   },
+  // 4P ply 3 (after 33+a 37+c 77+b)
+  "0x41B27571A1E76BE8": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
   // 2P 1-Base ply 3 (after 53+c 57+c 33+a)
   "0x41B89D4739C43174": {
     depth: 8,
@@ -13748,24 +14309,6 @@ var OPENING_BOOK = {
       { move: "77+f", score: -2600 },
       { move: "37+d", score: -2600 },
       { move: "57g+f", score: -2940 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+f 77+e 73+g)
-  "0x41C25C769D9433A5": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
-    ]
-  },
-  // 4P ply 2 (after 33+c 37+c)
-  "0x41D9D4FB0D0A410C": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: 0 },
-      { move: "77+a", score: 0 },
-      { move: "77+g", score: -120 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+g 33+a 37+f)
@@ -13795,13 +14338,13 @@ var OPENING_BOOK = {
       { move: "53b+a", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+e 77+b)
-  "0x4203859C001C559C": {
+  // 4P ply 4 (after 33+a 37+f 77+e 73+f)
+  "0x41FDAE218667F469": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -956 },
-      { move: "73+e", score: -956 },
-      { move: "73+g", score: -1076 }
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 2 (after 33+a 37+f)
@@ -13822,6 +14365,15 @@ var OPENING_BOOK = {
       { move: "53+a", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+g 77+b 73+e)
+  "0x423955D440A419C9": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+h 57+d 73+a 37+d)
   "0x4249A7BC31ED9156": {
     depth: 8,
@@ -13840,13 +14392,13 @@ var OPENING_BOOK = {
       { move: "36+e", score: -4706 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+b 77+e)
-  "0x426F86F8180A3B2E": {
+  // 4P ply 3 (after 33+g 37+d 77+e)
+  "0x4272A6828E1A97E8": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
+      { move: "73+f", score: -836 },
+      { move: "73+e", score: -836 },
+      { move: "73+g", score: -956 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 57+f 53 37+d)
@@ -13885,13 +14437,22 @@ var OPENING_BOOK = {
       { move: "57f+e", score: -2360 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+d 73+g)
-  "0x42D4B724EC184BF7": {
+  // 4P ply 4 (after 33+d 37+g 77+a 73+e)
+  "0x42C60307A0D08C12": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+d 73+g)
+  "0x42C9975E7A08E731": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+b 57+d 53b-64)
@@ -13903,13 +14464,13 @@ var OPENING_BOOK = {
       { move: "77+e", score: -3350 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+d 73+f)
-  "0x42F6650961FB20FD": {
+  // 4P ply 4 (after 33+b 37+d 77+d 73+f)
+  "0x42EB4573F7EB8C3B": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 140 },
-      { move: "33b+h", score: 140 },
-      { move: "33b+c", score: 0 }
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 1 (after 53+b)
@@ -13921,15 +14482,6 @@ var OPENING_BOOK = {
       { move: "57+g", score: -2486 }
     ]
   },
-  // 4P ply 2 (after 33+c 37+g)
-  "0x430E42049EDD39F9": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: 140 },
-      { move: "77+a", score: 140 },
-      { move: "77+g", score: 20 }
-    ]
-  },
   // 2P 1-Base ply 3 (after 53+c 77+f 73+c)
   "0x431F8776FC773BB3": {
     depth: 8,
@@ -13937,6 +14489,15 @@ var OPENING_BOOK = {
       { move: "57+e", score: -1770 },
       { move: "57+f", score: -1770 },
       { move: "57+d", score: -1800 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+g 73+e)
+  "0x432F47A852841262": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+c 57+d 33+b)
@@ -13955,6 +14516,15 @@ var OPENING_BOOK = {
       { move: "53h-44", score: -120 },
       { move: "53h+a", score: -120 },
       { move: "33+b", score: -120 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+g 77+b)
+  "0x4365E38E3230131D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
     ]
   },
   // OFK ply 4 (after 22+b 36+d 22b+c 36d-45)
@@ -13984,15 +14554,6 @@ var OPENING_BOOK = {
       { move: "53+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+f 77+h 73+e)
-  "0x43DC7FDEA12140EA": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
-    ]
-  },
   // OFK ply 4 (after 22+b 56+f 42+e 46+e)
   "0x43DC9C14EB2873A9": {
     depth: 8,
@@ -14011,6 +14572,15 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 400 }
     ]
   },
+  // 4P ply 3 (after 33+d 37+e 77+g)
+  "0x43E8490FF5BE1B50": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
   // OFK ply 4 (after 32+b 56+f 52+a 56f+g)
   "0x43F160C1C2C181C2": {
     depth: 8,
@@ -14020,22 +14590,22 @@ var OPENING_BOOK = {
       { move: "32b+h", score: -1200 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+f 77+d 73+f)
-  "0x43F196A68D74C981": {
+  // 4P ply 4 (after 33+c 37+g 77+e 73+f)
+  "0x4412CCA273050BD9": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
+      { move: "33c+b", score: 20 },
+      { move: "33c+h", score: 20 },
+      { move: "33c+a", score: 20 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+a 73+g)
-  "0x44222010A9B5DDE6": {
+  // 4P ply 4 (after 33+g 37+f 77+b 73+g)
+  "0x4420A82CAE430D5A": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 280 },
-      { move: "33h+b", score: 280 },
-      { move: "33h+c", score: 140 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
   // OFK ply 3 (after 22+b 36+e 42+g)
@@ -14065,24 +14635,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: -730 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+d 73+e)
-  "0x44B1FF1B4A4C5C5F": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+c 77+d 73+f)
-  "0x44C962DAEBC14EC4": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 20 },
-      { move: "33a+h", score: 20 },
-      { move: "33a+c", score: -120 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+a 37+f 73+b 57+d)
   "0x44DCF328CB44D684": {
     depth: 8,
@@ -14090,6 +14642,15 @@ var OPENING_BOOK = {
       { move: "53+a", score: 0 },
       { move: "53+h", score: 0 },
       { move: "33a+b", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+d 73+g)
+  "0x44F6908DF0328908": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 20 },
+      { move: "33b+h", score: 20 },
+      { move: "33b+c", score: -120 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+f 73+a 77+e)
@@ -14126,6 +14687,15 @@ var OPENING_BOOK = {
       { move: "53+a", score: 0 },
       { move: "53+b", score: 0 },
       { move: "53+h", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+c 77+g)
+  "0x454B058E46A59FF3": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 37+d 33+b 57+e)
@@ -14173,40 +14743,22 @@ var OPENING_BOOK = {
       { move: "53+h", score: -120 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+c 77+h)
-  "0x45B83DF8B500CD7B": {
+  // 4P ply 3 (after 33+a 37+e 77+h)
+  "0x4609CD1514FBF30F": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+g 77+h 73+g)
-  "0x45C582264FC65479": {
+  // 4P ply 4 (after 33+b 37+g 77+d 73+g)
+  "0x4621067263E5F1FD": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 140 },
-      { move: "33c+h", score: 140 },
-      { move: "33c+a", score: 140 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+f 77+g 73+g)
-  "0x45CB64BF5BE14396": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+g 77+d 73+f)
-  "0x461EF42578163631": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 160 },
-      { move: "33a+h", score: 160 },
-      { move: "33a+c", score: 20 }
+      { move: "33b+h", score: 160 },
+      { move: "33b+a", score: 160 },
+      { move: "33b+c", score: 20 }
     ]
   },
   // 2P 1-Base ply 3 (after 33+b 77+f 53+h)
@@ -14218,6 +14770,42 @@ var OPENING_BOOK = {
       { move: "37+d", score: -3090 }
     ]
   },
+  // 4P ply 3 (after 33+d 37+f 77+a)
+  "0x4675D7DE27267976": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+f 77+b)
+  "0x468A810DC752ECAD": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+a 73+e)
+  "0x46B2D979801C7044": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+e 73+f)
+  "0x46C55A5DE0D2732C": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -120 },
+      { move: "33c+h", score: -120 },
+      { move: "33c+a", score: -120 }
+    ]
+  },
   // 2P 1-Base ply 3 (after 53+a 57+d 73+b)
   "0x46C65ED61A5B1B77": {
     depth: 8,
@@ -14225,33 +14813,6 @@ var OPENING_BOOK = {
       { move: "57f-46", score: -2360 },
       { move: "37+d", score: -2360 },
       { move: "57f+e", score: -2360 }
-    ]
-  },
-  // 4P ply 2 (after 33+a 37+f)
-  "0x46E120876BBFC649": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: 0 },
-      { move: "77+a", score: 0 },
-      { move: "77+g", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+c 77+a 73+g)
-  "0x46F5B6EF3A62A513": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+c 77+h 73+g)
-  "0x471214D9DC112C8C": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
     ]
   },
   // OFK ply 4 (after 32+b 46+f 52+g 46f+a)
@@ -14290,6 +14851,15 @@ var OPENING_BOOK = {
       { move: "53g+b", score: -2250 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+e 77+h 73+e)
+  "0x47557B4F666FF9DB": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 33+b 37+e 73+b)
   "0x47607F3C6B886C6F": {
     depth: 8,
@@ -14299,22 +14869,22 @@ var OPENING_BOOK = {
       { move: "77+f", score: -2024 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+g 77+h)
-  "0x476FAB0726D7B58E": {
+  // 4P ply 4 (after 33+g 37+e 77+d 73+f)
+  "0x477892374A3A70B0": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+d 77+b)
-  "0x479052D8BDCDA917": {
+  // 4P ply 3 (after 33+b 37+b 77+b)
+  "0x478D72A22BDD05D1": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 37+d 73+h 57+e)
@@ -14324,6 +14894,15 @@ var OPENING_BOOK = {
       { move: "53c+b", score: -400 },
       { move: "33+a", score: -400 },
       { move: "73h+a", score: -400 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+g 77+g)
+  "0x479C9371D572E706": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+a 37+d 53a+b)
@@ -14344,6 +14923,24 @@ var OPENING_BOOK = {
       { move: "52+g", score: -3498 }
     ]
   },
+  // 4P ply 4 (after 33+a 37+f 77+b 73+e)
+  "0x47D63757B5C6E679": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: 0 },
+      { move: "33a+b", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+e 77+e)
+  "0x47E171C633CB6B63": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 53+b 57+c 33+b 37+e)
   "0x47F147B00E9E0E1B": {
     depth: 8,
@@ -14362,24 +14959,6 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 400 }
     ]
   },
-  // 4P ply 1 (after 33+a)
-  "0x4806FEE198284FFC": {
-    depth: 8,
-    candidates: [
-      { move: "37+e", score: -1376 },
-      { move: "37+d", score: -1376 },
-      { move: "37+f", score: -1376 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+b 77+g 73+g)
-  "0x480E12028EF174AE": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 260 },
-      { move: "33h+b", score: 260 },
-      { move: "33h+c", score: 120 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+a 37+f 73+a 57+d)
   "0x4810072FBEAB60DE": {
     depth: 8,
@@ -14389,13 +14968,22 @@ var OPENING_BOOK = {
       { move: "53+b", score: 62 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+g 77+b 73+g)
-  "0x481FF3D1705E9679": {
+  // 4P ply 4 (after 33+h 37+d 77+g 73+g)
+  "0x4813327818E1D868": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 280 },
-      { move: "33b+h", score: 280 },
-      { move: "33b+c", score: 140 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+b 73+f)
+  "0x482001866BAD51B5": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+g 33+h 77+e)
@@ -14425,13 +15013,13 @@ var OPENING_BOOK = {
       { move: "42h+g", score: 1370 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+f 77+d)
-  "0x48B474AED4E98B29": {
+  // 4P ply 4 (after 33+d 37+e 77+g 73+f)
+  "0x48ADAB07AC2359F8": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+d 53+h 77+f)
@@ -14443,13 +15031,13 @@ var OPENING_BOOK = {
       { move: "53h-44", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+h 73+g)
-  "0x48E00A0EEB448AE0": {
+  // 4P ply 4 (after 33+g 37+b 77+h 73+g)
+  "0x48FD2A747D542626": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 57+d 73+h 77+f)
@@ -14461,13 +15049,13 @@ var OPENING_BOOK = {
       { move: "53h-44", score: -590 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+e 73+f)
-  "0x492A64F041977986": {
+  // 4P ply 4 (after 33+g 37+d 77+e 73+f)
+  "0x4937448AD787D540": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
   // OFK ply 3 (after 32+b 56+f 52+a)
@@ -14477,15 +15065,6 @@ var OPENING_BOOK = {
       { move: "46+f", score: -3323 },
       { move: "36+e", score: -3323 },
       { move: "26d+c", score: -3683 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+e 77+b 73+f)
-  "0x4946679459811734": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+b 57+d 73+h)
@@ -14515,13 +15094,13 @@ var OPENING_BOOK = {
       { move: "37+d", score: -1800 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+b 77+d)
-  "0x49B3870138666255": {
+  // 4P ply 3 (after 33+b 37+d 77+d)
+  "0x49AEA77BAE76CE93": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
   // OFK ply 3 (after 32+b 46+e 42+a)
@@ -14551,15 +15130,6 @@ var OPENING_BOOK = {
       { move: "42+a", score: -3107 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+f 77+d 73+e)
-  "0x49E8C2F4A67D81FD": {
-    depth: 8,
-    candidates: [
-      { move: "33a+h", score: -120 },
-      { move: "33a+b", score: -120 },
-      { move: "33a+c", score: -260 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+h 57+e 73+b 37+d)
   "0x49F9DE72E755C591": {
     depth: 8,
@@ -14567,15 +15137,6 @@ var OPENING_BOOK = {
       { move: "53+a", score: -830 },
       { move: "53+b", score: -830 },
       { move: "73b+h", score: -830 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+f 77+d 73+g)
-  "0x4A1E5D8FBDF86ADE": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+a 37+f 73+b)
@@ -14587,15 +15148,6 @@ var OPENING_BOOK = {
       { move: "57+d", score: -2024 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+d 77+h)
-  "0x4A4A232F82556B17": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
-    ]
-  },
   // 2P 3-Base ply 3 (after 33+a 37+d 33a+b)
   "0x4A56B6C2F6C9373C": {
     depth: 8,
@@ -14603,6 +15155,15 @@ var OPENING_BOOK = {
       { move: "57+e", score: -2086 },
       { move: "57+f", score: -2086 },
       { move: "37+d", score: -2086 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+b 77+h)
+  "0x4A5703551445C7D1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1356 },
+      { move: "73+e", score: -1356 },
+      { move: "73+g", score: -1476 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+h 57+d 73+h)
@@ -14623,6 +15184,15 @@ var OPENING_BOOK = {
       { move: "53+h", score: -62 }
     ]
   },
+  // 4P ply 4 (after 33+b 37+e 77+b 73+e)
+  "0x4A8F0AB859F73BDB": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+b 57+d 73+h 77+e)
   "0x4AA606F702F42CA4": {
     depth: 8,
@@ -14632,8 +15202,17 @@ var OPENING_BOOK = {
       { move: "33b+a", score: -62 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+c 77+b 73+g)
-  "0x4AC8652EE389EE8C": {
+  // 4P ply 3 (after 33+a 37+f 77+e)
+  "0x4AB84C29DFFAB6C1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+e 73+e)
+  "0x4AE309DC41E15569": {
     depth: 8,
     candidates: [
       { move: "33b+a", score: 140 },
@@ -14641,13 +15220,13 @@ var OPENING_BOOK = {
       { move: "33b+c", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+e 73+e)
-  "0x4AFE29A6D7F1F9AF": {
+  // 4P ply 4 (after 33+a 37+c 77+b 73+f)
+  "0x4AF79779F87A2940": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 37+d 73+b 57+e)
@@ -14659,6 +15238,15 @@ var OPENING_BOOK = {
       { move: "53+b", score: -120 }
     ]
   },
+  // 4P ply 4 (after 33+a 37+b 77+h 73+e)
+  "0x4B0BB50F66D1CD05": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 33+a 57+d 53+c)
   "0x4B0C4416ED6513C4": {
     depth: 8,
@@ -14666,15 +15254,6 @@ var OPENING_BOOK = {
       { move: "37+e", score: -1686 },
       { move: "77+e", score: -1686 },
       { move: "57d+e", score: -1686 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+d 77+h 73+e)
-  "0x4B169575F0C161C3": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+d 33+a 57d-66)
@@ -14704,6 +15283,15 @@ var OPENING_BOOK = {
       { move: "32b+h", score: -1012 }
     ]
   },
+  // 4P ply 3 (after 33+b 37+f 77+h)
+  "0x4B50F0FAF8CA2EAD": {
+    depth: 8,
+    candidates: [
+      { move: "73+e", score: -1236 },
+      { move: "73+f", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
   // 2P 1-Base ply 3 (after 53+c 57+d 73+h)
   "0x4B9D923BAA04BA1C": {
     depth: 8,
@@ -14713,22 +15301,13 @@ var OPENING_BOOK = {
       { move: "57f+e", score: -2950 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+d 77+a)
-  "0x4BAD81196426E288": {
+  // 4P ply 3 (after 33+h 37+b 77+a)
+  "0x4BB0A163F2364E4E": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
-    ]
-  },
-  // 4P ply 2 (after 33+b 37+e)
-  "0x4BB81D68878E1BEB": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: 0 },
-      { move: "77+a", score: 0 },
-      { move: "77+g", score: -120 }
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+d 73+a 77+e)
@@ -14740,22 +15319,13 @@ var OPENING_BOOK = {
       { move: "53a+b", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+g 77+d 73+e)
-  "0x4C07A077531F7E4D": {
+  // 4P ply 4 (after 33+c 37+f 77+e 73+e)
+  "0x4BE4FA73AD6EBC15": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 20 },
-      { move: "33c+h", score: 20 },
-      { move: "33c+a", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+g 77+h 73+f)
-  "0x4C2A490F7F4AF726": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: 0 },
-      { move: "33g+h", score: 0 },
-      { move: "33g+a", score: 0 }
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+g 73+b 77+e)
@@ -14767,6 +15337,15 @@ var OPENING_BOOK = {
       { move: "73b+a", score: 338 }
     ]
   },
+  // 4P ply 3 (after 33+g 37+e 77+d)
+  "0x4C3D703F13A73218": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -836 },
+      { move: "73+e", score: -836 },
+      { move: "73+g", score: -956 }
+    ]
+  },
   // OFK ply 4 (after 32+a 56+f 22+c 36+a)
   "0x4C919A6960E9AED0": {
     depth: 8,
@@ -14776,13 +15355,13 @@ var OPENING_BOOK = {
       { move: "32+e", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+e 77+e 73+g)
-  "0x4C9B619971A5EE07": {
+  // 4P ply 4 (after 33+b 37+e 77+e 73+f)
+  "0x4CA493CE6A5629CB": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
+      { move: "33b+h", score: -120 },
+      { move: "33b+a", score: -120 },
+      { move: "33b+c", score: -260 }
     ]
   },
   // OFK ply 4 (after 22+b 36+d 42+c 36d-45)
@@ -14803,22 +15382,40 @@ var OPENING_BOOK = {
       { move: "33+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+b 73+f)
-  "0x4CD5B0D0E450EBBF": {
+  // 4P ply 4 (after 33+b 37+b 77+b 73+f)
+  "0x4CC890AA72404779": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+b 77+b 73+g)
-  "0x4CF762FD69B380B5": {
+  // 4P ply 4 (after 33+h 37+g 77+g 73+f)
+  "0x4CD971798CEFA5AE": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 260 },
-      { move: "33a+h", score: 260 },
-      { move: "33a+c", score: 120 }
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+e 73+e)
+  "0x4CDC0E0FCBDB3B50": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 20 },
+      { move: "33a+h", score: 20 },
+      { move: "33a+c", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+b 73+g)
+  "0x4CEA4287FFA32C73": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // OFK ply 4 (after 32+b 36+e 52+g 46+a)
@@ -14830,22 +15427,40 @@ var OPENING_BOOK = {
       { move: "52g+h", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+g 77+d)
-  "0x4D5B162D218B7499": {
+  // 4P ply 4 (after 33+d 37+f 77+a 73+f)
+  "0x4D3035D67EBB3BDE": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1396 },
-      { move: "73+e", score: -1396 },
-      { move: "73+g", score: -1516 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+h 73+g)
-  "0x4D73DD4A5695766B": {
+  // 4P ply 4 (after 33+b 37+c 77+h 73+e)
+  "0x4D34B2DCECEBA33C": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+h 73+f)
+  "0x4D4C2F1D4D66B1A7": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+c 77+e)
+  "0x4D80B855B94F3184": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
   // OFK ply 4 (after 22+b 26+d 42+a 46+f)
@@ -14855,6 +15470,15 @@ var OPENING_BOOK = {
       { move: "32+b", score: -1721 },
       { move: "52+h", score: -1721 },
       { move: "52+b", score: -3498 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+b 73+f)
+  "0x4DCF63059ECFAE05": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 37+f 73+b 77+e)
@@ -14875,6 +15499,33 @@ var OPENING_BOOK = {
       { move: "53h+a", score: -62 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+g 77+e 73+g)
+  "0x4DFD078B4389A886": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -120 },
+      { move: "33g+h", score: -120 },
+      { move: "33g+a", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+g 77+e 73+e)
+  "0x4E0B98F0580C43A5": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 160 },
+      { move: "33a+h", score: 160 },
+      { move: "33a+c", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+g 73+f)
+  "0x4E0EE7861F38DD5B": {
+    depth: 8,
+    candidates: [
+      { move: "33h+b", score: 140 },
+      { move: "33h+a", score: 140 },
+      { move: "33h+c", score: 0 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 53+b 37+d 73+a)
   "0x4E1489541ADA398F": {
     depth: 8,
@@ -14884,13 +15535,13 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2264 }
     ]
   },
-  // 4P ply 2 (after 33+g 37+d)
-  "0x4E2BCA2C3A5FE760": {
+  // 4P ply 2 (after 33+g 37+b)
+  "0x4E36EA56AC4F4BA6": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: -280 },
-      { move: "77+a", score: -280 },
-      { move: "77+g", score: -400 }
+      { move: "77+h", score: -20 },
+      { move: "77+a", score: -20 },
+      { move: "77+g", score: -140 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+h 37+f 33h+a)
@@ -14920,13 +15571,22 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2480 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+d 73+e)
-  "0x4ED03688C0C806B8": {
+  // 4P ply 4 (after 33+c 37+e 77+d 73+g)
+  "0x4E97591E7AB6D3EF": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -120 },
-      { move: "33c+h", score: -120 },
-      { move: "33c+a", score: -120 }
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 },
+      { move: "33c+b", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+g 73+e)
+  "0x4EEA31158794255A": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 37+d 33+b 57+e)
@@ -14938,31 +15598,13 @@ var OPENING_BOOK = {
       { move: "53g+h", score: -520 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+d 77+g 73+e)
-  "0x4EF7116F1184899C": {
+  // 4P_ED ply 1 (after 33+f)
+  "0x4F03223E9DC27F4E": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+c 77+h 73+f)
-  "0x4EFDDFF0EC9D8FD3": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+b 77+b 73+e)
-  "0x4F01FD8672366B96": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -20 },
-      { move: "33g+h", score: -20 },
-      { move: "33g+a", score: -20 }
+      { move: "37+c", score: -1177 },
+      { move: "37+e", score: -1177 },
+      { move: "37+d", score: -1177 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 37+e 53+b 77+f)
@@ -14983,6 +15625,24 @@ var OPENING_BOOK = {
       { move: "77+f", score: -3090 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+d 77+b 73+e)
+  "0x4F1CDDFCE426C750": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+e 73+g)
+  "0x4F2A9174D05ED073": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -260 },
+      { move: "33g+h", score: -260 },
+      { move: "33g+a", score: -260 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 53+b 57+g 53b+a)
   "0x4F56C8095116EA68": {
     depth: 8,
@@ -14992,17 +15652,8 @@ var OPENING_BOOK = {
       { move: "57g+f", score: -2486 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+e 77+e 73+e)
-  "0x4F6DFEE26A200524": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
-    ]
-  },
-  // 4P ply 3 (after 33+a 37+c 77+d)
-  "0x4F8C80D2B25C0C6C": {
+  // 4P ply 3 (after 33+c 37+g 77+e)
+  "0x4F572EAA2A984971": {
     depth: 8,
     candidates: [
       { move: "73+f", score: -1256 },
@@ -15017,6 +15668,15 @@ var OPENING_BOOK = {
       { move: "37+f", score: -2486 },
       { move: "77+f", score: -2486 },
       { move: "57g+d", score: -2486 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+h 73+e)
+  "0x4FE324237F3CDBC9": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+f 73+a 57+e)
@@ -15046,13 +15706,13 @@ var OPENING_BOOK = {
       { move: "53+h", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+e 77+d)
-  "0x50AF4AEAB1F305B1": {
+  // 4P ply 4 (after 33+g 37+g 77+d 73+e)
+  "0x50959AA2F14B49E4": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
+      { move: "33g+b", score: -120 },
+      { move: "33g+h", score: -120 },
+      { move: "33g+a", score: -120 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+a 57+d 53+h)
@@ -15064,6 +15724,24 @@ var OPENING_BOOK = {
       { move: "77+e", score: -2402 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+f 77+g 73+f)
+  "0x50B69543C939D760": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+h 73+f)
+  "0x50B873DADD1EC08F": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
   // OFK ply 4 (after 32+b 56+f 52+g 46+f)
   "0x50E7CBFEBC729710": {
     depth: 8,
@@ -15071,15 +15749,6 @@ var OPENING_BOOK = {
       { move: "42+a", score: -227 },
       { move: "52g+h", score: -227 },
       { move: "32b-43", score: -657 }
-    ]
-  },
-  // 4P ply 3 (after 33+g 37+c 77+e)
-  "0x511282801B1B062D": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+e 33+a 77+e)
@@ -15091,31 +15760,22 @@ var OPENING_BOOK = {
       { move: "33a+b", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+f 77+b 73+f)
-  "0x515D59D03C9B99AC": {
+  // 4P ply 4 (after 33+h 37+g 77+a 73+f)
+  "0x515FD1EC3B6D4910": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+g 77+e 73+g)
-  "0x516F3D5EE1DD9F2F": {
+  // 4P ply 4 (after 33+a 37+c 77+d 73+g)
+  "0x51B493267919DA32": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 20 },
-      { move: "33c+h", score: 20 },
-      { move: "33c+a", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+c 77+d 73+f)
-  "0x518B617162EA1DFE": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 20 },
-      { move: "33b+h", score: 20 },
-      { move: "33b+c", score: -120 }
+      { move: "33a+b", score: 20 },
+      { move: "33a+h", score: 20 },
+      { move: "33a+c", score: -120 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 37+c 73+b 77+e)
@@ -15134,24 +15794,6 @@ var OPENING_BOOK = {
       { move: "73+a", score: -120 },
       { move: "53b+a", score: -120 },
       { move: "73+h", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+e 77+d 73+e)
-  "0x51F3FCB0C3670F65": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+e 77+d 73+g)
-  "0x520563CBD8E2E446": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+c 57+e 53c+b)
@@ -15181,6 +15823,15 @@ var OPENING_BOOK = {
       { move: "33b+a", score: 280 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+c 77+d 73+e)
+  "0x52420C5D629C3111": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -260 },
+      { move: "33g+h", score: -260 },
+      { move: "33g+a", score: -260 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 33+b 37+d 53+b)
   "0x526A818E7419A2ED": {
     depth: 8,
@@ -15188,6 +15839,15 @@ var OPENING_BOOK = {
       { move: "57+d", score: -2382 },
       { move: "57+f", score: -2396 },
       { move: "77+f", score: -2402 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+h 73+f)
+  "0x526FE5254EC9B87A": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
     ]
   },
   // OFK ply 4 (after 32+b 36+d 52+a 46+e)
@@ -15199,6 +15859,15 @@ var OPENING_BOOK = {
       { move: "32b+g", score: -3782 }
     ]
   },
+  // 4P ply 4 (after 33+b 37+f 77+b 73+e)
+  "0x529434FC3CEDB543": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 53+a 37+e 73+b)
   "0x52A15D0664BE9C48": {
     depth: 8,
@@ -15208,13 +15877,13 @@ var OPENING_BOOK = {
       { move: "57+d", score: -2024 }
     ]
   },
-  // 4P ply 2 (after 33+c 37+b)
-  "0x52A4D0830E1B7C0F": {
+  // 4P ply 3 (after 33+a 37+e 77+e)
+  "0x52A3726DBAE03859": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: 120 },
-      { move: "77+a", score: 120 },
-      { move: "77+g", score: 0 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 1-Base ply 2 (after 53+c 57+f)
@@ -15235,13 +15904,22 @@ var OPENING_BOOK = {
       { move: "46f-35", score: -4483 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+d 77+b)
-  "0x52D2517334E6FA2D": {
+  // 4P ply 2 (after 33+c 37+d)
+  "0x52B9F0F9980BD0C9": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "77+h", score: -140 },
+      { move: "77+a", score: -140 },
+      { move: "77+g", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+b 77+b)
+  "0x52CF7109A2F656EB": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+b 57+g 73+b)
@@ -15262,49 +15940,49 @@ var OPENING_BOOK = {
       { move: "52+b", score: -1020 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+g 77+d 73+f)
-  "0x535CF78EF13D650B": {
+  // 4P ply 3 (after 33+b 37+e 77+h)
+  "0x534BCEBE9DD0A035": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 160 },
-      { move: "33b+h", score: 160 },
-      { move: "33b+c", score: 20 }
+      { move: "73+e", score: -1236 },
+      { move: "73+f", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+d 77+a 73+e)
-  "0x5371B1FAA6066522": {
+  // 4P ply 4 (after 33+a 37+g 77+d 73+g)
+  "0x536305D9EACEA2C7": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
+      { move: "33a+b", score: 160 },
+      { move: "33a+h", score: 160 },
+      { move: "33a+c", score: 20 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+b 73+e)
-  "0x538EE7294672F0F9": {
+  // 4P ply 4 (after 33+d 37+b 77+a 73+e)
+  "0x536C91803016C9E4": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
     ]
   },
-  // 4P ply 2 (after 33+b 37+f)
-  "0x53A3232CE2949573": {
+  // 4P ply 4 (after 33+h 37+c 77+a 73+f)
+  "0x53884713A8BA31E5": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: 0 },
-      { move: "77+a", score: 0 },
-      { move: "77+g", score: -120 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+e 73+g)
-  "0x53B8ABA1720AE7DA": {
+  // 4P ply 4 (after 33+c 37+b 77+b 73+e)
+  "0x5393C753D0625C3F": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -120 },
-      { move: "33c+h", score: -120 },
-      { move: "33c+a", score: -120 }
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
     ]
   },
   // OFK ply 3 (after 22+b 56+f 42+c)
@@ -15314,15 +15992,6 @@ var OPENING_BOOK = {
       { move: "36+e", score: -2962 },
       { move: "46+f", score: -2962 },
       { move: "36+d", score: -4663 }
-    ]
-  },
-  // 4P ply 3 (after 33+g 37+g 77+e)
-  "0x53C5147F88CC7ED8": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+h 57+e 53+b)
@@ -15343,6 +16012,15 @@ var OPENING_BOOK = {
       { move: "57+d", score: -2690 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+e 77+e 73+e)
+  "0x53FFC437C874328D": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+c 57+e 53c+h 57e+d)
   "0x540B02747D8B09FE": {
     depth: 8,
@@ -15361,6 +16039,15 @@ var OPENING_BOOK = {
       { move: "57d+e", score: -3230 }
     ]
   },
+  // 4P ply 3 (after 33+g 37+f 77+d)
+  "0x54264E7B76BDBC80": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -836 },
+      { move: "73+e", score: -836 },
+      { move: "73+g", score: -956 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+b 57+e 33b+a 37+e)
   "0x5447C50F0B5FABBF": {
     depth: 8,
@@ -15368,15 +16055,6 @@ var OPENING_BOOK = {
       { move: "53+a", score: 0 },
       { move: "33+a", score: 0 },
       { move: "53+b", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+b 77+h 73+g)
-  "0x546F10A1DF00118F": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 120 },
-      { move: "33c+h", score: 120 },
-      { move: "33c+a", score: 120 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 37+d 53+h 57+f)
@@ -15388,6 +16066,15 @@ var OPENING_BOOK = {
       { move: "73+h", score: -120 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+d 77+h 73+g)
+  "0x547230DB4910BD49": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 53+b 57+g 33+b 57g+d)
   "0x54725BC812DD7D06": {
     depth: 8,
@@ -15395,15 +16082,6 @@ var OPENING_BOOK = {
       { move: "73+a", score: 280 },
       { move: "53b+a", score: 280 },
       { move: "73+h", score: 280 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+f 77+e 73+g)
-  "0x54805FDD14BF609F": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
     ]
   },
   // OFK ply 4 (after 22+b 36+e 42+c 46+f)
@@ -15415,6 +16093,15 @@ var OPENING_BOOK = {
       { move: "42+a", score: -3553 }
     ]
   },
+  // 4P ply 4 (after 33+b 37+f 77+e 73+f)
+  "0x54BFAD8A0F4CA753": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
   // OFK ply 3 (after 22+b 26+d 22b+a)
   "0x54E48BB7917BCC4F": {
     depth: 8,
@@ -15422,6 +16109,15 @@ var OPENING_BOOK = {
       { move: "36+d", score: -3323 },
       { move: "46+e", score: -3323 },
       { move: "56f-45", score: -3395 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+c 77+b)
+  "0x54F076DA28CC38D2": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
     ]
   },
   // OFK ply 4 (after 32+a 56+f 42+e 36+a)
@@ -15460,6 +16156,15 @@ var OPENING_BOOK = {
       { move: "36+e", score: -3903 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+e 77+a 73+f)
+  "0x552B0B921BA1B546": {
+    depth: 8,
+    candidates: [
+      { move: "33d+b", score: -260 },
+      { move: "33d+a", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
   // OFK ply 4 (after 32+b 36+e 32b+e 46+a)
   "0x554641A8E279D156": {
     depth: 8,
@@ -15469,13 +16174,13 @@ var OPENING_BOOK = {
       { move: "52+h", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+h 73+g)
-  "0x5568E30E338FF8F3": {
+  // 4P ply 4 (after 33+a 37+f 77+h 73+f)
+  "0x55571159287C3F3F": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // OFK ply 3 (after 32+b 46+e 52+g)
@@ -15487,22 +16192,13 @@ var OPENING_BOOK = {
       { move: "36e+d", score: -4103 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+a 73+g)
-  "0x5588B29739739810": {
+  // 4P ply 4 (after 33+h 37+d 77+a 73+g)
+  "0x559592EDAF6334D6": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 260 },
-      { move: "33h+b", score: 260 },
-      { move: "33h+c", score: 120 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+d 77+e 73+f)
-  "0x55A57E5F75D3E2E9": {
-    depth: 8,
-    candidates: [
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 },
-      { move: "33c+b", score: -260 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
   // OFK ply 4 (after 22+b 46+f 42+h 26+d)
@@ -15523,6 +16219,15 @@ var OPENING_BOOK = {
       { move: "73+h", score: -62 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+b 77+e 73+f)
+  "0x55B85E25E3C34E2F": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+h 37+e 73+b 77+e)
   "0x55C0794B57077140": {
     depth: 8,
@@ -15530,6 +16235,15 @@ var OPENING_BOOK = {
       { move: "53+a", score: -62 },
       { move: "33h+a", score: -62 },
       { move: "73b+a", score: -62 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+b 73+f)
+  "0x55D45D41FBD5209D": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 37+c 33+h 77+e)
@@ -15559,13 +16273,13 @@ var OPENING_BOOK = {
       { move: "32g+h", score: -2108 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+d 77+g)
-  "0x562B218CD3A40E36": {
+  // 4P ply 3 (after 33+b 37+g 77+b)
+  "0x5627E025BB1B4027": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+g 33+b 77+e)
@@ -15575,6 +16289,15 @@ var OPENING_BOOK = {
       { move: "33+a", score: 338 },
       { move: "53h+a", score: 338 },
       { move: "33+b", score: 338 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+b 77+g)
+  "0x563601F645B4A2F0": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
     ]
   },
   // 2P 3-Base ply 2 (after 53+a 37+e)
@@ -15613,6 +16336,15 @@ var OPENING_BOOK = {
       { move: "57d+e", score: -2080 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+f 77+d 73+g)
+  "0x568C675A1FAC5D77": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 53+a 37+e 33+h)
   "0x56A492B5207D48D6": {
     depth: 8,
@@ -15622,13 +16354,13 @@ var OPENING_BOOK = {
       { move: "57+d", score: -2024 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+b 77+h)
-  "0x56C53980B611F078": {
+  // 4P ply 3 (after 33+g 37+d 77+h)
+  "0x56D819FA20015CBE": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1216 },
-      { move: "73+e", score: -1216 },
-      { move: "73+g", score: -1336 }
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+b 57+g 33+h)
@@ -15649,15 +16381,6 @@ var OPENING_BOOK = {
       { move: "57c+d", score: -3350 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+f 77+e 73+e)
-  "0x5776C0A60F3A8BBC": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+a 77+e 73+a 57+e)
   "0x5777B4A278E60CDB": {
     depth: 8,
@@ -15667,22 +16390,22 @@ var OPENING_BOOK = {
       { move: "53+b", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+d 73+g)
-  "0x5796B48F653318CD": {
+  // 4P ply 4 (after 33+b 37+b 77+d 73+g)
+  "0x578B94F5F323B40B": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+b 77+d 73+f)
-  "0x57B466A2E8D073C7": {
+  // 4P ply 4 (after 33+a 37+d 77+d 73+f)
+  "0x57A946D87EC0DF01": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
   // OFK ply 3 (after 32+b 46+f 52+g)
@@ -15712,13 +16435,13 @@ var OPENING_BOOK = {
       { move: "64h+g", score: -3510 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+g 77+d)
-  "0x58191586A8A027A3": {
+  // 4P ply 4 (after 33+b 37+e 77+h 73+f)
+  "0x580E2CB6C44DE29D": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1396 },
-      { move: "73+e", score: -1396 },
-      { move: "73+g", score: -1516 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+b 57+e 53+h)
@@ -15728,15 +16451,6 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2702 },
       { move: "57e+f", score: -2702 },
       { move: "77+f", score: -2702 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+e 77+h 73+g)
-  "0x5831DEE1DFBE2551": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 77+f 73+b 37+d)
@@ -15775,15 +16489,6 @@ var OPENING_BOOK = {
       { move: "52g+h", score: -3979 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+f 77+a 73+g)
-  "0x584DC42AEC63AF28": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+h", score: -260 },
-      { move: "33d+b", score: -260 }
-    ]
-  },
   // 2P 3-Base ply 3 (after 53+b 57+f 33+a)
   "0x58524938C0936B40": {
     depth: 8,
@@ -15802,22 +16507,13 @@ var OPENING_BOOK = {
       { move: "36+e", score: -4823 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+g 77+e 73+f)
-  "0x5880F677D1513C70": {
+  // 4P ply 4 (after 33+a 37+c 77+h 73+e)
+  "0x5876B17765C0F006": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -120 },
-      { move: "33g+h", score: -120 },
-      { move: "33g+a", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+f 77+b 73+g)
-  "0x58B292F90C173AF3": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 57+d 53a+h 57d-66)
@@ -15865,6 +16561,15 @@ var OPENING_BOOK = {
       { move: "33+b", score: 280 }
     ]
   },
+  // 4P ply 3 (after 33+h 37+c 77+a)
+  "0x58CDA51BF127734D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+h 57+d 73+b 37+e)
   "0x58D1BB42BCA50C64": {
     depth: 8,
@@ -15883,6 +16588,24 @@ var OPENING_BOOK = {
       { move: "33+h", score: -62 }
     ]
   },
+  // 4P ply 3 (after 33+c 37+c 77+h)
+  "0x592A072D1754FAD2": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+g 77+h 73+g)
+  "0x5957B8F3ED9263D0": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+b 37+d 53b-64 57+e)
   "0x596E518934C94AB5": {
     depth: 8,
@@ -15892,22 +16615,31 @@ var OPENING_BOOK = {
       { move: "73+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+b 73+f)
-  "0x5997B37B6D7BB885": {
+  // 4P ply 4 (after 33+a 37+b 77+b 73+f)
+  "0x598A9301FB6B1443": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+g 73+g)
-  "0x59A480851E373158": {
+  // 4P ply 4 (after 33+b 37+c 77+e 73+e)
+  "0x599E0DA442F0686A": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 280 },
-      { move: "33h+b", score: 280 },
-      { move: "33h+c", score: 140 }
+      { move: "33b+a", score: 20 },
+      { move: "33b+h", score: 20 },
+      { move: "33b+c", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+b 73+g)
+  "0x59A8412C76887F49": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // OFK ply 4 (after 32+b 36+e 32b+e 46+f)
@@ -15928,22 +16660,13 @@ var OPENING_BOOK = {
       { move: "53bc-64", score: -740 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+b 73+g)
-  "0x59B56156E098D38F": {
+  // 4P ply 4 (after 33+a 37+e 77+e 73+f)
+  "0x59E69065E37D7AF1": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 260 },
-      { move: "33b+h", score: 260 },
-      { move: "33b+c", score: 120 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+e 77+e 73+g)
-  "0x59D96232F88EBD3D": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
   // OFK ply 3 (after 22+b 46+f 42+a)
@@ -15955,22 +16678,13 @@ var OPENING_BOOK = {
       { move: "36d-45", score: -4022 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+f 77+b)
-  "0x5A18BBD86506DB04": {
+  // 4P ply 3 (after 33+h 37+g 77+a)
+  "0x5A1A33E462F00BB8": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -956 },
-      { move: "73+e", score: -956 },
-      { move: "73+g", score: -1076 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+c 77+e 73+f)
-  "0x5A57608842864485": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -260 },
-      { move: "33g+h", score: -260 },
-      { move: "33g+a", score: -260 }
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+b 37+d 33+a)
@@ -15991,13 +16705,13 @@ var OPENING_BOOK = {
       { move: "77+f", score: -2424 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+c 77+d)
-  "0x5ACE83793B775F56": {
+  // 4P ply 4 (after 33+a 37+g 77+h 73+e)
+  "0x5AA12788F61788F3": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1256 },
-      { move: "73+e", score: -1256 },
-      { move: "73+g", score: -1376 }
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
     ]
   },
   // OFK ply 4 (after 22+b 26+d 22b+a 26d-35)
@@ -16009,6 +16723,24 @@ var OPENING_BOOK = {
       { move: "22ab-33", score: -820 }
     ]
   },
+  // 4P ply 4 (after 33+h 37+e 77+g 73+e)
+  "0x5B3479EC379E9CFA": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+g 77+e 73+e)
+  "0x5B499B5BD127109F": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 160 },
+      { move: "33b+h", score: 160 },
+      { move: "33b+c", score: 20 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 33+b 77+f 53+h)
   "0x5B568AFF93F16AB5": {
     depth: 8,
@@ -16018,13 +16750,13 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2402 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+c 77+g 73+g)
-  "0x5B73167A8DE049AD": {
+  // 4P ply 4 (after 33+g 37+c 77+h 73+g)
+  "0x5B802E0C7E451B25": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+a 57+d 73+b)
@@ -16045,15 +16777,6 @@ var OPENING_BOOK = {
       { move: "32+h", score: -3747 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+e 77+h 73+e)
-  "0x5BC7419AC43BCE72": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 53+a 57+d 73+g 57d+e)
   "0x5BD52BC8C025DB3B": {
     depth: 8,
@@ -16061,15 +16784,6 @@ var OPENING_BOOK = {
       { move: "33+b", score: -400 },
       { move: "53a+h", score: -400 },
       { move: "73g+h", score: -462 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+e 77+d 73+f)
-  "0x5BEAA8E2E86E4719": {
-    depth: 8,
-    candidates: [
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 },
-      { move: "33c+b", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 57+d 73+h 77+e)
@@ -16081,13 +16795,40 @@ var OPENING_BOOK = {
       { move: "53+a", score: -120 }
     ]
   },
-  // 4P ply 0 (initial)
-  "0x5C3D5244B85BC3A6": {
+  // 4P ply 3 (after 33+d 37+f 77+g)
+  "0x5BF3774B90A495C8": {
     depth: 8,
     candidates: [
-      { move: "33+a", score: 0 },
-      { move: "33+b", score: 0 },
-      { move: "33+h", score: 0 }
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+g 77+h)
+  "0x5BFD91D284838227": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 2P_3B_ED ply 1 (after 33+a)
+  "0x5C13029A45CF7655": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -2632 },
+      { move: "77+e", score: -2632 },
+      { move: "57+e", score: -2632 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+b 73+g)
+  "0x5C3B9668CB5983C2": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+e 73+b 57+d)
@@ -16099,15 +16840,6 @@ var OPENING_BOOK = {
       { move: "53a+h", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+e 73+g)
-  "0x5C4AB576455F41B6": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 53+a 37+e 73+a 57+d)
   "0x5C5755607E7B7BE7": {
     depth: 8,
@@ -16117,6 +16849,15 @@ var OPENING_BOOK = {
       { move: "53a+b", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+b 77+e 73+g)
+  "0x5C57950CD34FED70": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
   // OFK ply 4 (after 32+b 56+f 32b+a 46+e)
   "0x5C753B2BD92D4D52": {
     depth: 8,
@@ -16124,15 +16865,6 @@ var OPENING_BOOK = {
       { move: "42+h", score: -1900 },
       { move: "22+b", score: -1900 },
       { move: "22+c", score: -3367 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+c 77+b 73+e)
-  "0x5C7CF9FE71275695": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 57+d 53+b 37+d)
@@ -16151,15 +16883,6 @@ var OPENING_BOOK = {
       { move: "77+e", score: -2396 },
       { move: "77+f", score: -2396 },
       { move: "57d+f", score: -2734 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+f 77+d 73+e)
-  "0x5CAAC15F2F56D2C7": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+e 53c+b 57e+d)
@@ -16207,13 +16930,13 @@ var OPENING_BOOK = {
       { move: "53ah-44", score: -470 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+b 77+d)
-  "0x5CF184AAB14D316F": {
+  // 4P ply 3 (after 33+a 37+d 77+d)
+  "0x5CECA4D0275D9DA9": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 37+e 53+b 57+e)
@@ -16243,13 +16966,13 @@ var OPENING_BOOK = {
       { move: "53b+a", score: 62 }
     ]
   },
-  // 4P ply 1 (after 33+b)
-  "0x5D44FD4A11031CC6": {
+  // 4P ply 2 (after 33+g 37+c)
+  "0x5D4BEE2EAF5E76A5": {
     depth: 8,
     candidates: [
-      { move: "37+e", score: -1376 },
-      { move: "37+d", score: -1376 },
-      { move: "37+f", score: -1376 }
+      { move: "77+h", score: -140 },
+      { move: "77+a", score: -140 },
+      { move: "77+g", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 77+f 53+b 57+f)
@@ -16261,31 +16984,40 @@ var OPENING_BOOK = {
       { move: "73+b", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+g 77+b 73+g)
-  "0x5D5DF07AF975C543": {
+  // 4P ply 4 (after 33+b 37+g 77+b 73+f)
+  "0x5D62022DE286028F": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 280 },
-      { move: "33a+h", score: 280 },
-      { move: "33a+c", score: 140 }
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+g 73+f)
-  "0x5D6EC3848A394C9E": {
+  // 4P ply 4 (after 33+h 37+b 77+g 73+f)
+  "0x5D73E3FE1C29E058": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+h 73+f)
-  "0x5D80DB88EF8CB2D0": {
+  // 4P ply 4 (after 33+d 37+c 77+g 73+e)
+  "0x5D97356D84851859": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -20 },
-      { move: "33g+h", score: -20 },
-      { move: "33g+a", score: -20 }
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+h 73+f)
+  "0x5D9DFBF2799C1E16": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+a 77+e 53+h)
@@ -16297,22 +17029,13 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2396 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+b 77+d 73+e)
-  "0x5DAD32F0C3D93BBB": {
+  // 4P ply 4 (after 33+c 37+d 77+d 73+e)
+  "0x5DB0128A55C9977D": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+e 77+g 73+g)
-  "0x5DD05AFB3EFBCD0E": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+c 73+b 37+e)
@@ -16331,6 +17054,15 @@ var OPENING_BOOK = {
       { move: "32b-43", score: -1020 },
       { move: "32b+h", score: -1020 },
       { move: "52+h", score: -1079 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+f 77+h)
+  "0x5E12F35171E17D97": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // OFK ply 3 (after 22+b 36+e 22b+c)
@@ -16360,22 +17092,40 @@ var OPENING_BOOK = {
       { move: "53c+b", score: -400 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+h 73+e)
-  "0x5E5496DE79EA32F9": {
+  // 4P ply 4 (after 33+b 37+b 77+h 73+e)
+  "0x5E49B6A4EFFA9E3F": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+g 77+b 73+e)
-  "0x5EAB6F01E2F02E60": {
+  // 4P ply 3 (after 33+d 37+e 77+a)
+  "0x5E6EE99A423CF7EE": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: 0 },
-      { move: "33g+h", score: 0 },
-      { move: "33g+a", score: 0 }
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+e 77+b)
+  "0x5E91BF49A2486235": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+a 73+e)
+  "0x5EA9E73DE506FEDC": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+c 57+d 73+a)
@@ -16387,22 +17137,40 @@ var OPENING_BOOK = {
       { move: "37+e", score: -2950 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+d 77+e)
-  "0x5EE09C572C4EA041": {
+  // 4P ply 3 (after 33+c 37+b 77+e)
+  "0x5EFDBC2DBA5E0C87": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 2 (after 33+a 37+e)
-  "0x5EFA1EC30EA548D1": {
+  // 4P ply 4 (after 33+d 37+g 77+g 73+e)
+  "0x5F40A392175260AC": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: 0 },
-      { move: "77+a", score: 0 },
-      { move: "77+g", score: -120 }
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+h 73+e)
+  "0x5F4E450B03757743": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+d 73+f)
+  "0x5F63AC732F20FE28": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 57+d 53+a 77+e)
@@ -16432,8 +17200,17 @@ var OPENING_BOOK = {
       { move: "37+d", score: -3350 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+c 77+b 73+g)
-  "0x5F8A66856AA2BDB6": {
+  // 4P ply 2 (after 33+g 37+g)
+  "0x5F9C78D13C890E50": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+e 73+e)
+  "0x5FA10A77C8CA0653": {
     depth: 8,
     candidates: [
       { move: "33a+b", score: 140 },
@@ -16450,22 +17227,31 @@ var OPENING_BOOK = {
       { move: "37+e", score: -2024 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+e 73+e)
-  "0x5FBC2A0D5EDAAA95": {
+  // 4P ply 4 (after 33+b 37+c 77+b 73+f)
+  "0x5FB594D271517A7A": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
     ]
   },
   // OFK ply 4 (after 22+b 36+d 32+a 36d-45)
   "0x5FCA047EE4ACD819": {
     depth: 8,
     candidates: [
-      { move: "42+h", score: -1079 },
-      { move: "42+b", score: -1660 },
-      { move: "52+h", score: -1721 }
+      { move: "42+h", score: -1020 },
+      { move: "42+a", score: -1127 },
+      { move: "42+b", score: -1127 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+b 73+e)
+  "0x5FCD0913D0DC68E1": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 2 (after 33+h 57+d)
@@ -16477,13 +17263,40 @@ var OPENING_BOOK = {
       { move: "53+h", score: -342 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+d 77+a)
-  "0x602A77D796F4454D": {
+  // 4P ply 3 (after 33+b 37+f 77+e)
+  "0x5FFA4F8256D1E5FB": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+b 77+a)
+  "0x603757AD00E4E98B": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+g 73+e)
+  "0x60625BCDF1B6948E": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+h 73+f)
+  "0x606895520CAF92C1": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+b 77+e 53b-64)
@@ -16495,6 +17308,15 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2480 }
     ]
   },
+  // 4P ply 4 (after 33+b 37+f 77+a 73+e)
+  "0x606C12589EFF0A23": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
   // 2P 1-Base ply 3 (after 53+c 37+d 53c+b)
   "0x607A9F2786E5E183": {
     depth: 8,
@@ -16502,15 +17324,6 @@ var OPENING_BOOK = {
       { move: "57+e", score: -2080 },
       { move: "37+d", score: -2200 },
       { move: "57+d", score: -2290 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+b 77+g 73+e)
-  "0x607F7BB767A63848": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -20 },
-      { move: "33g+h", score: -20 },
-      { move: "33g+a", score: -20 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 37+d 73+a 57+e)
@@ -16522,22 +17335,22 @@ var OPENING_BOOK = {
       { move: "53+b", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+h 73+e)
-  "0x609163BB0213C606": {
+  // 4P ply 4 (after 33+h 37+b 77+h 73+e)
+  "0x608C43C194036AC0": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
     ]
   },
-  // 4P ply 2 (after 33+d 37+b)
-  "0x60A3A0F44C7D56B4": {
+  // 4P ply 2 (after 33+d 37+d)
+  "0x60BE808EDA6DFA72": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: 0 },
-      { move: "77+a", score: 0 },
-      { move: "77+g", score: -120 }
+      { move: "77+h", score: -260 },
+      { move: "77+a", score: -260 },
+      { move: "77+g", score: -380 }
     ]
   },
   // OFK ply 4 (after 22+b 56+f 42+a 36+d)
@@ -16549,6 +17362,15 @@ var OPENING_BOOK = {
       { move: "32+c", score: -2350 }
     ]
   },
+  // 4P ply 3 (after 33+h 37+f 77+e)
+  "0x613FBAE72D281104": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+b 77+e 53+b 37+d)
   "0x61410BEB2E15773B": {
     depth: 8,
@@ -16558,22 +17380,22 @@ var OPENING_BOOK = {
       { move: "33+b", score: -62 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+a 73+e)
-  "0x6176C18DE4604F99": {
+  // 4P ply 4 (after 33+c 37+b 77+a 73+e)
+  "0x616BE1F77270E35F": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+d 77+b 73+e)
-  "0x6189975E0414DA42": {
+  // 4P ply 4 (after 33+h 37+c 77+b 73+f)
+  "0x617061B70AA88E85": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+a 57+e 53a+b)
@@ -16583,6 +17405,15 @@ var OPENING_BOOK = {
       { move: "77+f", score: -2480 },
       { move: "37+d", score: -2600 },
       { move: "57e+f", score: -3350 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+b 73+e)
+  "0x6194B72492047684": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+h 37+d 53+b)
@@ -16603,13 +17434,13 @@ var OPENING_BOOK = {
       { move: "57g+f", score: -3350 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+e 73+g)
-  "0x61BFDBD6306CCD61": {
+  // 4P ply 4 (after 33+d 37+e 77+e 73+e)
+  "0x61F8B4408A121836": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -240 },
-      { move: "33d+b", score: -240 },
-      { move: "33d+h", score: -240 }
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
     ]
   },
   // OFK ply 4 (after 32+a 56+f 42+c 36+d)
@@ -16630,15 +17461,6 @@ var OPENING_BOOK = {
       { move: "53+b", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+f 77+d 73+e)
-  "0x626F343A54AF2638": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+a 37+d 33+a 77+f)
   "0x6278BEE54EEFE9C4": {
     depth: 8,
@@ -16657,13 +17479,22 @@ var OPENING_BOOK = {
       { move: "33+a", score: 400 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+e 77+d)
-  "0x62A83A9DF3952F0A": {
+  // 4P ply 4 (after 33+c 37+f 77+g 73+f)
+  "0x62B1E5348B5FFDDB": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -856 },
-      { move: "73+e", score: -856 },
-      { move: "73+g", score: -976 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+h 73+f)
+  "0x62BF03AD9F78EA34": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+f 33+h 77+e)
@@ -16702,15 +17533,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: 400 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+g 77+e 73+g)
-  "0x63684D29A3BBB594": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -100 },
-      { move: "33d+b", score: -100 },
-      { move: "33d+h", score: -100 }
-    ]
-  },
   // 2P 3-Base ply 3 (after 33+b 77+f 53+b)
   "0x6369DF1F63D15F69": {
     depth: 8,
@@ -16718,24 +17540,6 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2282 },
       { move: "77+e", score: -2282 },
       { move: "57+d", score: -2402 }
-    ]
-  },
-  // 4P ply 1 (after 33+h)
-  "0x6381082F6AFAE839": {
-    depth: 8,
-    candidates: [
-      { move: "37+e", score: -1376 },
-      { move: "37+d", score: -1376 },
-      { move: "37+f", score: -1376 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+b 77+g 73+g)
-  "0x6389E4CC7C23D36B": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 260 },
-      { move: "33a+h", score: 260 },
-      { move: "33a+c", score: 120 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 77+f 73+a 57+e)
@@ -16747,31 +17551,31 @@ var OPENING_BOOK = {
       { move: "73+a", score: -400 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+f 77+a 73+f)
-  "0x63A57F749E8926CC": {
+  // 4P ply 4 (after 33+a 37+d 77+g 73+g)
+  "0x6394C4B6EA337FAD": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+g 73+f)
-  "0x63AB36E1F1C0B861": {
+  // 4P ply 4 (after 33+h 37+g 77+b 73+f)
+  "0x63A7F748997FF670": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+c 77+d)
-  "0x640B761C408EABA9": {
+  // 4P ply 4 (after 33+b 37+b 77+g 73+f)
+  "0x63B6169B67D014A7": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1256 },
-      { move: "73+e", score: -1256 },
-      { move: "73+g", score: -1376 }
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
     ]
   },
   // OFK ply 4 (after 32+b 46+e 32b+c 36+e)
@@ -16783,6 +17587,15 @@ var OPENING_BOOK = {
       { move: "42gh-33", score: -2108 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+f 77+d 73+g)
+  "0x648B172D5DCA77CC": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+a 37+d 53+b 57+e)
   "0x64C3781C368E795A": {
     depth: 8,
@@ -16790,6 +17603,15 @@ var OPENING_BOOK = {
       { move: "33+a", score: 0 },
       { move: "53h+a", score: 0 },
       { move: "33+b", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+g 77+a)
+  "0x64DFC6811909FF47": {
+    depth: 8,
+    candidates: [
+      { move: "73+e", score: -1516 },
+      { move: "73+f", score: -1516 },
+      { move: "73+g", score: -1636 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 37+f 73+a 57+e)
@@ -16828,13 +17650,31 @@ var OPENING_BOOK = {
       { move: "53a+h", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+c 77+g 73+g)
-  "0x65B6E31FF619BD52": {
+  // 4P ply 4 (after 33+a 37+c 77+g 73+f)
+  "0x65891148EDEA7A9E": {
     depth: 8,
     candidates: [
-      { move: "33b+h", score: 140 },
-      { move: "33b+a", score: 140 },
-      { move: "33b+c", score: 0 }
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+g 77+e 73+e)
+  "0x658C6E3EAADEE460": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 160 },
+      { move: "33h+b", score: 160 },
+      { move: "33h+c", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+e 77+g 73+e)
+  "0x65F18C894C676805": {
+    depth: 8,
+    candidates: [
+      { move: "33b+h", score: 0 },
+      { move: "33b+a", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+b 57+f 53b-64)
@@ -16846,6 +17686,15 @@ var OPENING_BOOK = {
       { move: "57d+e", score: -2480 }
     ]
   },
+  // 4P ply 3 (after 33+b 37+c 77+a)
+  "0x6608507E8ADE87B2": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+b 57+d 53b-64 77+e)
   "0x660B135F658B42C2": {
     depth: 8,
@@ -16853,15 +17702,6 @@ var OPENING_BOOK = {
       { move: "33+b", score: -340 },
       { move: "44h+a", score: -340 },
       { move: "73+a", score: -390 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+e 77+g 73+f)
-  "0x6638E1A54C1144EA": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+f 73+b 77+e)
@@ -16882,13 +17722,13 @@ var OPENING_BOOK = {
       { move: "53b+a", score: 400 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+h 73+g)
-  "0x666860D69D663B34": {
+  // 4P ply 4 (after 33+d 37+d 77+h 73+g)
+  "0x667540AC0B7697F2": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: 0 },
-      { move: "33d+b", score: 0 },
-      { move: "33d+h", score: 0 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+d 53c+h 37+d)
@@ -16918,6 +17758,15 @@ var OPENING_BOOK = {
       { move: "46f+e", score: -3903 }
     ]
   },
+  // 4P ply 4 (after 33+h 37+e 77+h 73+f)
+  "0x66CBD9D3BFB41662": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 33+b 37+d 33b-44 57+f)
   "0x66D363FB47DCE5BC": {
     depth: 8,
@@ -16925,15 +17774,6 @@ var OPENING_BOOK = {
       { move: "33", score: -870 },
       { move: "44b+a", score: -3160 },
       { move: "53+a", score: -3310 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+g 77+d)
-  "0x66DCE0E3D359D35C": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1396 },
-      { move: "73+e", score: -1396 },
-      { move: "73+g", score: -1516 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+f 73+b 77+e)
@@ -16972,15 +17812,6 @@ var OPENING_BOOK = {
       { move: "53b+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+e 73+g)
-  "0x671C9757837749C2": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
-    ]
-  },
   // OFK ply 4 (after 32+b 36+d 52+g 36d+f)
   "0x6722EBA231C876C6": {
     depth: 8,
@@ -16988,6 +17819,15 @@ var OPENING_BOOK = {
       { move: "42h+f", score: -2628 },
       { move: "32+g", score: -2628 },
       { move: "42h+a", score: -2628 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+e 77+a 73+f)
+  "0x672C7BE559C79FFD": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // OFK ply 4 (after 32+b 26+d 32b+e 36+e)
@@ -16999,22 +17839,31 @@ var OPENING_BOOK = {
       { move: "32be+h", score: -2105 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+g 77+g 73+g)
-  "0x676175E065CEC5A7": {
+  // 4P ply 4 (after 33+h 37+c 77+e 73+e)
+  "0x675BF8C139099C95": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 280 },
-      { move: "33b+h", score: 280 },
-      { move: "33b+c", score: 140 }
+      { move: "33h+a", score: 20 },
+      { move: "33h+b", score: 20 },
+      { move: "33h+c", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+b 73+g)
-  "0x677094339B612770": {
+  // 4P ply 4 (after 33+a 37+g 77+g 73+f)
+  "0x675E87B77E3D026B": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 260 },
-      { move: "33h+b", score: 260 },
-      { move: "33h+c", score: 120 }
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+b 73+g)
+  "0x676DB4490D718BB6": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 57+d 53+h 37+d)
@@ -17026,15 +17875,6 @@ var OPENING_BOOK = {
       { move: "33+a", score: -378 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+d 77+e 73+f)
-  "0x67A20E2837B5C852": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+h", score: -380 },
-      { move: "33d+b", score: -380 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+h 37+e 53+h 37e+d)
   "0x67BBAB6EA5CCB618": {
     depth: 8,
@@ -17044,6 +17884,15 @@ var OPENING_BOOK = {
       { move: "53h+a", score: -120 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+b 77+e 73+f)
+  "0x67BF2E52A1A56494": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+b 57+e 53+h 57e+d)
   "0x67C7BBDB65EC78AF": {
     depth: 8,
@@ -17051,6 +17900,15 @@ var OPENING_BOOK = {
       { move: "73+a", score: 0 },
       { move: "33b+a", score: 0 },
       { move: "53h+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+b 73+f)
+  "0x67D32D36B9B30A26": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 57+d 73+a 37+d)
@@ -17107,6 +17965,15 @@ var OPENING_BOOK = {
       { move: "42+g", score: -2961 }
     ]
   },
+  // 4P ply 4 (after 33+a 37+f 77+g 73+e)
+  "0x68A8B166A056B5A7": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 33+b 57+e 73+h 37+d)
   "0x68B04A4B82320A56": {
     depth: 8,
@@ -17116,22 +17983,22 @@ var OPENING_BOOK = {
       { move: "73h+a", score: -120 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+f 77+a)
-  "0x68E09D7CC7146464": {
+  // 4P ply 3 (after 33+h 37+g 77+b)
+  "0x68E21540C0E2B4D8": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -956 },
-      { move: "73+e", score: -956 },
-      { move: "73+g", score: -1076 }
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+d 77+g)
-  "0x68EED4E9A85DFAC9": {
+  // 4P ply 3 (after 33+b 37+b 77+g)
+  "0x68F3F4933E4D560F": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+c 77+f 53c+h)
@@ -17143,13 +18010,13 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2290 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+d 73+g)
-  "0x695341EA1ECAEC32": {
+  // 4P ply 4 (after 33+h 37+b 77+d 73+g)
+  "0x694E619088DA40F4": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 57+d 53+c 57d+e)
@@ -17188,13 +18055,31 @@ var OPENING_BOOK = {
       { move: "42h+b", score: -1020 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+e 77+d 73+f)
-  "0x69EDD895AA086DA2": {
+  // 4P ply 3 (after 33+c 37+f 77+g)
+  "0x69F4073CD2C2BF73": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+b", score: -380 },
-      { move: "33d+h", score: -380 }
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+g 77+h)
+  "0x69FAE1A5C6E5A89C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+c 77+b)
+  "0x6A3583BF5335CC2D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+d 33+b 77+f)
@@ -17204,15 +18089,6 @@ var OPENING_BOOK = {
       { move: "53a+h", score: 62 },
       { move: "73+a", score: 62 },
       { move: "73+b", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+f 77+a 73+g)
-  "0x6A4AB45DAE058593": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+b 37+d 53+h)
@@ -17231,6 +18107,15 @@ var OPENING_BOOK = {
       { move: "33+b", score: 400 },
       { move: "53ah-44", score: 400 },
       { move: "73+a", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+e 73+f)
+  "0x6A7A58EF74B553AC": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 37+d 53+h 77+e)
@@ -17269,15 +18154,6 @@ var OPENING_BOOK = {
       { move: "53h+g", score: -744 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+f 77+b 73+g)
-  "0x6AB5E28E4E711048": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+h", score: -260 },
-      { move: "33d+b", score: -260 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+c 57+e 33+a 77+f)
   "0x6AEE7B58CAFC2F5B": {
     depth: 8,
@@ -17285,6 +18161,15 @@ var OPENING_BOOK = {
       { move: "33a+b", score: -400 },
       { move: "53c+h", score: -400 },
       { move: "73+a", score: -400 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+c 77+h)
+  "0x6B2D775A5532D069": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+c 33+h 77+e)
@@ -17296,15 +18181,6 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 338 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+a 73+g)
-  "0x6B4D47F2428A6CEF": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 260 },
-      { move: "33b+h", score: 260 },
-      { move: "33b+c", score: 120 }
-    ]
-  },
   // OFK ply 4 (after 22+b 46+e 32+a 36+d)
   "0x6B4F8B5A9E522E8E": {
     depth: 8,
@@ -17314,13 +18190,31 @@ var OPENING_BOOK = {
       { move: "52+h", score: -1721 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+a 73+f)
-  "0x6B6F95DFCF6907E5": {
+  // 4P ply 4 (after 33+b 37+d 77+a 73+g)
+  "0x6B506788D49AC029": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+g 73+g)
+  "0x6B5E2E1DBBD35E84": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+a 73+f)
+  "0x6B72B5A55979AB23": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 57+d 53+h 77+f)
@@ -17350,15 +18244,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+f 77+h 73+g)
-  "0x6BAD166B48760C0C": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
-    ]
-  },
   // 2P 3-Base ply 3 (after 33+b 37+e 73+h)
   "0x6BD237ECAE20B850": {
     depth: 8,
@@ -17377,13 +18262,31 @@ var OPENING_BOOK = {
       { move: "32+a", score: -820 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+g 77+a 73+e)
-  "0x6C5349A540E29100": {
+  // 4P ply 3 (after 33+a 37+g 77+g)
+  "0x6C1B65BF27A040C3": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: 0 },
-      { move: "33g+h", score: 0 },
-      { move: "33g+a", score: 0 }
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+b 73+e)
+  "0x6C51C199471441BC": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+e 77+a)
+  "0x6C6999ED005ADD55": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
     ]
   },
   // OFK ply 3 (after 22+b 26+d 32+a)
@@ -17404,6 +18307,15 @@ var OPENING_BOOK = {
       { move: "52+g", score: -3367 }
     ]
   },
+  // 4P ply 3 (after 33+d 37+e 77+b)
+  "0x6C96CF3EE02E488E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
   // OFK ply 4 (after 32+b 36+d 52+a 56+g)
   "0x6C9CF09187E7BB2F": {
     depth: 8,
@@ -17422,13 +18334,13 @@ var OPENING_BOOK = {
       { move: "73+h", score: 400 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+d 77+e)
-  "0x6CE7EC206E288AFA": {
+  // 4P ply 3 (after 33+d 37+b 77+e)
+  "0x6CFACC5AF838263C": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -856 },
-      { move: "73+e", score: -856 },
-      { move: "73+g", score: -976 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+c 73+b 77+f)
@@ -17458,31 +18370,40 @@ var OPENING_BOOK = {
       { move: "42eh+b", score: -1660 }
     ]
   },
-  // 4P ply 2 (after 33+h 37+f)
-  "0x6D66D649996D618C": {
+  // 4P ply 4 (after 33+a 37+e 77+a 73+e)
+  "0x6D352FB772CED781": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: 0 },
-      { move: "77+a", score: 0 },
-      { move: "77+g", score: -120 }
+      { move: "33a+h", score: 0 },
+      { move: "33a+b", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+c 77+a 73+g)
-  "0x6D724021C8B002D6": {
+  // 4P ply 4 (after 33+c 37+g 77+g 73+e)
+  "0x6D47D3E555344A17": {
     depth: 8,
     candidates: [
-      { move: "33a+h", score: 140 },
-      { move: "33a+b", score: 140 },
-      { move: "33a+c", score: 0 }
+      { move: "33c+b", score: 140 },
+      { move: "33c+a", score: 140 },
+      { move: "33c+h", score: 140 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+e 77+g)
-  "0x6D7D03AD158C0642": {
+  // 4P ply 4 (after 33+d 37+f 77+h 73+e)
+  "0x6D49357C41135DF8": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -956 },
-      { move: "73+e", score: -956 },
-      { move: "73+g", score: -1076 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+a 73+f)
+  "0x6D4DB276D343C51A": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 57+d 73+h 77+e)
@@ -17494,13 +18415,13 @@ var OPENING_BOOK = {
       { move: "33+b", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+d 73+f)
-  "0x6D9902EB8AC491F4": {
+  // 4P ply 3 (after 33+h 37+e 77+h)
+  "0x6D8E3BDBE62954CA": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 160 },
-      { move: "33h+b", score: 160 },
-      { move: "33h+c", score: 20 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 57+e 53+h 77+f)
@@ -17521,15 +18442,6 @@ var OPENING_BOOK = {
       { move: "22c+h", score: -2667 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+c 77+a 73+e)
-  "0x6E84DF5AD335E9F5": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+c 57+f 53c+b 37+d)
   "0x6E9F2EDCCA1886CA": {
     depth: 8,
@@ -17546,6 +18458,24 @@ var OPENING_BOOK = {
       { move: "33+b", score: -120 },
       { move: "53h+a", score: -120 },
       { move: "33+a", score: -258 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+a 73+g)
+  "0x6EC3B0CC694B3CA2": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+c 77+g)
+  "0x6ECCF340B4773836": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+d 53c+b 77+f)
@@ -17566,15 +18496,6 @@ var OPENING_BOOK = {
       { move: "33h+a", score: 338 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+c 77+d 73+f)
-  "0x6F4E94141913E901": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 20 },
-      { move: "33h+b", score: 20 },
-      { move: "33h+c", score: -120 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 33+b 57+c 73+b 37+d)
   "0x6F51C4E424998FE6": {
     depth: 8,
@@ -17593,31 +18514,40 @@ var OPENING_BOOK = {
       { move: "53+b", score: -310 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+g 77+a 73+g)
-  "0x6FA5D6DE5B677A23": {
+  // 4P ply 4 (after 33+c 37+c 77+g 73+e)
+  "0x6F90451AC6E332E2": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 280 },
-      { move: "33a+h", score: 280 },
-      { move: "33a+c", score: 140 }
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+d 73+e)
-  "0x6FAA428781BF1100": {
+  // 4P ply 4 (after 33+b 37+g 77+a 73+f)
+  "0x6F9A24894094BDEF": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+e 77+g 73+g)
-  "0x6FD72A8C7C9DE7B5": {
+  // 4P ply 4 (after 33+d 37+d 77+d 73+e)
+  "0x6FB762FD17AFBDC6": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+b 73+e)
+  "0x703E25A302C23372": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+a 37+f 33+b)
@@ -17629,6 +18559,33 @@ var OPENING_BOOK = {
       { move: "77+f", score: -2206 }
     ]
   },
+  // 4P ply 4 (after 33+a 37+e 77+g 73+e)
+  "0x70B38F22C54C3B3F": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: 0 },
+      { move: "33a+b", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+a 73+e)
+  "0x70C17370E2B6A6A9": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+g 73+f)
+  "0x70CB12E364C129A4": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 33+b 57+c 53+h 57c+d)
   "0x70E2A744D9E25460": {
     depth: 8,
@@ -17636,15 +18593,6 @@ var OPENING_BOOK = {
       { move: "73", score: 550 },
       { move: "53", score: 460 },
       { move: "33+a", score: 400 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+c 77+g 73+g)
-  "0x70F4E0B47F32EE68": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 57+d 73+h 77+e)
@@ -17656,22 +18604,13 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+e 77+a)
-  "0x70FBA338A20EEAFC": {
+  // 4P ply 4 (after 33+h 37+g 77+h 73+e)
+  "0x7126D14604C52F36": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -956 },
-      { move: "73+e", score: -956 },
-      { move: "73+g", score: -1076 }
-    ]
-  },
-  // 4P ply 2 (after 33+d 37+g)
-  "0x71093273DCBB1342": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: 20 },
-      { move: "77+a", score: 20 },
-      { move: "77+g", score: -100 }
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
     ]
   },
   // 2P 1-Base ply 3 (after 33+b 57+c 53+h)
@@ -17683,6 +18622,15 @@ var OPENING_BOOK = {
       { move: "37+d", score: -4340 }
     ]
   },
+  // 4P ply 3 (after 33+a 37+g 77+a)
+  "0x719DC52A9022AC7D": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
+    ]
+  },
   // OFK ply 4 (after 22+b 46+e 42+e 36+a)
   "0x71A147F6A2C4AD0A": {
     depth: 8,
@@ -17690,15 +18638,6 @@ var OPENING_BOOK = {
       { move: "32e+b", score: 0 },
       { move: "42+a", score: 0 },
       { move: "52h+g", score: -497 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+g 77+g 73+e)
-  "0x71D5E930F7607DBE": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: 0 },
-      { move: "33g+h", score: 0 },
-      { move: "33g+a", score: 0 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+b 37+d 33+h)
@@ -17710,13 +18649,13 @@ var OPENING_BOOK = {
       { move: "77+f", score: -2480 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+f 77+d 73+f)
-  "0x71F6E6D1CF12E33A": {
+  // 4P ply 3 (after 33+c 37+e 77+g)
+  "0x71EF3978B7D831EB": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+b", score: -380 },
-      { move: "33d+h", score: -380 }
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 37+d 33+h 57+f)
@@ -17728,31 +18667,31 @@ var OPENING_BOOK = {
       { move: "33+b", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+b 73+f)
-  "0x721045B59FA91F40": {
+  // 4P ply 4 (after 33+h 37+b 77+b 73+f)
+  "0x720D65CF09B9B386": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+g 77+g 73+g)
-  "0x7223764BECE5969D": {
+  // 4P ply 4 (after 33+c 37+c 77+a 73+e)
+  "0x7216E58F7161DE5C": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 280 },
-      { move: "33a+h", score: 280 },
-      { move: "33a+c", score: 140 }
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+e 77+a 73+g)
-  "0x72518A19CB1F0B0B": {
+  // 4P ply 4 (after 33+b 37+g 77+g 73+f)
+  "0x721C841CF7165151": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+e 53+b 57e+f)
@@ -17762,6 +18701,15 @@ var OPENING_BOOK = {
       { move: "53b+a", score: -120 },
       { move: "73+a", score: -120 },
       { move: "73+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+e 77+e 73+f)
+  "0x726166AB11AFDD34": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+b 37+d 73+a)
@@ -17791,24 +18739,6 @@ var OPENING_BOOK = {
       { move: "22+c", score: -1243 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+e 77+b 73+g)
-  "0x72AEDCCA2B6B9ED0": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+b 77+e 73+g)
-  "0x72C2DFAE337DF062": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
-    ]
-  },
   // OFK ply 4 (after 32+b 46+e 32b+g 36+e)
   "0x72C49F000D10778C": {
     depth: 8,
@@ -17816,6 +18746,15 @@ var OPENING_BOOK = {
       { move: "52+h", score: -2108 },
       { move: "42+a", score: -2108 },
       { move: "32bg+h", score: -2108 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+e 73+g)
+  "0x72DFFFD4A56D5CA4": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+c 53b+a 37+e)
@@ -17827,22 +18766,22 @@ var OPENING_BOOK = {
       { move: "73+h", score: 400 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+c 77+g 73+e)
-  "0x73027FCF64B7054B": {
+  // 4P ply 4 (after 33+d 37+c 77+b 73+e)
+  "0x72E9B35C91154B87": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+d 77+h 73+f)
-  "0x7308B15099AE0304": {
+  // 4P ply 4 (after 33+d 37+b 77+h 73+f)
+  "0x7315912A0FBEAFC2": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
     ]
   },
   // OFK ply 3 (after 32+b 36+e 32b-43)
@@ -17852,6 +18791,24 @@ var OPENING_BOOK = {
       { move: "46+f", score: -4725 },
       { move: "26+d", score: -6570 },
       { move: "26+a", score: -6783 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+g 73+g)
+  "0x73451059DEC9D01C": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+c 77+a)
+  "0x734A53D503F5D488": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 57+d 73+a 37+e)
@@ -17872,15 +18829,6 @@ var OPENING_BOOK = {
       { move: "22+c", score: -1040 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+h 73+g)
-  "0x73B6282F2D6C8294": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 53+a 37+e 33+a 57+d)
   "0x73C6D5809E52885A": {
     depth: 8,
@@ -17890,13 +18838,13 @@ var OPENING_BOOK = {
       { move: "53a+b", score: 0 }
     ]
   },
-  // 4P ply 2 (after 33+d 37+c)
-  "0x73DEA48C4F6C6BB7": {
+  // 4P ply 4 (after 33+h 37+c 77+h 73+e)
+  "0x73F147B9971257C3": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: -120 },
-      { move: "77+a", score: -120 },
-      { move: "77+g", score: -240 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+d 33+a 57d+e)
@@ -17908,8 +18856,8 @@ var OPENING_BOOK = {
       { move: "33+b", score: -520 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+c 77+b 73+g)
-  "0x740D904B98701A73": {
+  // 4P ply 4 (after 33+h 37+b 77+e 73+e)
+  "0x7426FCB93A18A196": {
     depth: 8,
     candidates: [
       { move: "33h+a", score: 140 },
@@ -17917,13 +18865,13 @@ var OPENING_BOOK = {
       { move: "33h+c", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+e 73+e)
-  "0x743BDCC3AC080D50": {
+  // 4P ply 4 (after 33+h 37+e 77+b 73+e)
+  "0x744AFFDD220ECF24": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 57+d 73+b 77+e)
@@ -17944,6 +18892,24 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 0 }
     ]
   },
+  // 4P ply 3 (after 33+c 37+f 77+a)
+  "0x7472A7A9654053CD": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+f 77+b)
+  "0x748DF17A8534C616": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 33+h 57+d 73+b)
   "0x74B44850FBD3E5B4": {
     depth: 8,
@@ -17951,6 +18917,15 @@ var OPENING_BOOK = {
       { move: "77+f", score: -2024 },
       { move: "37+d", score: -2024 },
       { move: "77+e", score: -2024 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+c 77+e 73+f)
+  "0x74C22A2AA2B45997": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -240 },
+      { move: "33d+b", score: -240 },
+      { move: "33d+h", score: -240 }
     ]
   },
   // 2P 3-Base ply 2 (after 53+a 57+d)
@@ -17962,13 +18937,13 @@ var OPENING_BOOK = {
       { move: "33+h", score: -306 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+h 73+g)
-  "0x751564AE9E770637": {
+  // 4P ply 4 (after 33+a 37+f 77+a 73+e)
+  "0x752E11F317D45919": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // OFK ply 4 (after 22+b 26+d 22b-33 46+e)
@@ -17978,6 +18953,15 @@ var OPENING_BOOK = {
       { move: "32+b", score: -3045 },
       { move: "43h+b", score: -3045 },
       { move: "42+a", score: -3662 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+h 73+e)
+  "0x75520B382409D360": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
   // OFK ply 4 (after 32+b 26+d 52+g 46+f)
@@ -17998,31 +18982,22 @@ var OPENING_BOOK = {
       { move: "42h+b", score: -1839 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+f 77+g)
-  "0x75663DE9709688DA": {
+  // 4P ply 3 (after 33+b 37+b 77+a)
+  "0x7575540689CFBAB1": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -956 },
-      { move: "73+e", score: -956 },
-      { move: "73+g", score: -1076 }
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+d 77+a)
-  "0x7568747C1FDF1677": {
+  // 4P ply 3 (after 33+h 37+f 77+h)
+  "0x7595059F8333DA52": {
     depth: 8,
     candidates: [
       { move: "73+f", score: -1236 },
       { move: "73+e", score: -1236 },
       { move: "73+g", score: -1356 }
-    ]
-  },
-  // 4P ply 2 (after 33+h 37+e)
-  "0x757DE80DFC77EF14": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: 0 },
-      { move: "77+a", score: 0 },
-      { move: "77+g", score: -120 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 37+d 33+a 57+d)
@@ -18032,6 +19007,15 @@ var OPENING_BOOK = {
       { move: "33+b", score: 120 },
       { move: "53a+h", score: 120 },
       { move: "33+h", score: -900 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+e 73+f)
+  "0x7615BCD531632162": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -100 },
+      { move: "33d+b", score: -100 },
+      { move: "33d+h", score: -100 }
     ]
   },
   // OFK ply 4 (after 22+b 36+e 42+g 56+f)
@@ -18052,15 +19036,6 @@ var OPENING_BOOK = {
       { move: "53ab-64", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+g 73+g)
-  "0x76CBE767F5088051": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 260 },
-      { move: "33b+h", score: 260 },
-      { move: "33b+c", score: 120 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+c 77+f 73+h 57+e)
   "0x76D00419B6829A39": {
     depth: 8,
@@ -18070,13 +19045,22 @@ var OPENING_BOOK = {
       { move: "53g+b", score: -520 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+b 73+g)
-  "0x76DA06B40BA76286": {
+  // 4P ply 4 (after 33+b 37+d 77+g 73+g)
+  "0x76D6C71D63182C97": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 280 },
-      { move: "33h+b", score: 280 },
-      { move: "33h+c", score: 140 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+a 73+g)
+  "0x76D88E880C51B23A": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
   // 2P 1-Base ply 3 (after 33+b 57+c 53+b)
@@ -18088,13 +19072,13 @@ var OPENING_BOOK = {
       { move: "77+f", score: -4330 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+g 73+f)
-  "0x76E9354A78EBEB5B": {
+  // 4P ply 4 (after 33+a 37+b 77+g 73+f)
+  "0x76F41530EEFB479D": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+g 53b+a 57g+f)
@@ -18133,31 +19117,13 @@ var OPENING_BOOK = {
       { move: "77+e", score: -2480 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+b 77+d)
-  "0x77767264439F96AA": {
+  // 4P ply 3 (after 33+h 37+d 77+d)
+  "0x776B521ED58F3A6C": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+g 77+h 73+g)
-  "0x77C2F2510DA07EC2": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: 20 },
-      { move: "33d+b", score: 20 },
-      { move: "33d+h", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+f 77+g 73+g)
-  "0x77CC14C81987692D": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
   // OFK ply 4 (after 22+b 46+e 22b+c 36+d)
@@ -18169,6 +19135,15 @@ var OPENING_BOOK = {
       { move: "42+b", score: -3747 }
     ]
   },
+  // 4P ply 4 (after 33+a 37+c 77+a 73+f)
+  "0x780FB1DD5A689620": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
   // OFK ply 4 (after 22+b 46+e 42+c 36+d)
   "0x782127A1E84581E7": {
     depth: 8,
@@ -18178,22 +19153,22 @@ var OPENING_BOOK = {
       { move: "22b+e", score: -3500 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+c 77+a 73+g)
-  "0x7830438A419B51EC": {
+  // 4P ply 3 (after 33+d 37+b 77+h)
+  "0x785073225623ED6A": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 140 },
-      { move: "33b+h", score: 140 },
-      { move: "33b+c", score: 0 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+d 77+h)
-  "0x784D5358C03341AC": {
+  // 4P ply 4 (after 33+b 37+e 77+a 73+e)
+  "0x78772C1CFBE584BB": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // OFK ply 4 (after 32+a 36+e 42+a 46+e)
@@ -18214,13 +19189,40 @@ var OPENING_BOOK = {
       { move: "32b+h", score: -1068 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+d 77+b)
-  "0x7955A7BDC6345DE8": {
+  // 4P ply 4 (after 33+h 37+g 77+d 73+g)
+  "0x78E4F317181C0502": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33h+a", score: 160 },
+      { move: "33h+b", score: 160 },
+      { move: "33h+c", score: 20 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+e 77+e)
+  "0x792484A348329F9C": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+b 77+b)
+  "0x794887C75024F12E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+g 77+g)
+  "0x79596614AE8B13F9": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1516 },
+      { move: "73+e", score: -1516 },
+      { move: "73+g", score: -1636 }
     ]
   },
   // 2P 3-Base ply 2 (after 33+h 37+e)
@@ -18268,6 +19270,15 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+f 77+e 73+e)
+  "0x79E38A04EF0896AE": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+b", score: -380 }
+    ]
+  },
   // OFK ply 4 (after 32+a 36+d 42+e 36d-45)
   "0x7A2E86FE43E77808": {
     depth: 8,
@@ -18275,6 +19286,15 @@ var OPENING_BOOK = {
       { move: "32e+b", score: -3107 },
       { move: "52+h", score: -3107 },
       { move: "52+g", score: -3367 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+c 77+d 73+g)
+  "0x7A3365E88BCB7DF7": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 20 },
+      { move: "33h+b", score: 20 },
+      { move: "33h+c", score: -120 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 37+e 33h+a 77+e)
@@ -18304,15 +19324,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+d 73+e)
-  "0x7A740A7E31B5A8A0": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
-    ]
-  },
   // OFK ply 4 (after 32+b 46+e 32b-43 36+d)
   "0x7A8C78EE7E3E992D": {
     depth: 8,
@@ -18331,13 +19342,13 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 338 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+f 77+d)
-  "0x7AB304D9968FA192": {
+  // 4P ply 4 (after 33+c 37+e 77+g 73+f)
+  "0x7AAADB70EE457343": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -856 },
-      { move: "73+e", score: -856 },
-      { move: "73+g", score: -976 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+e 53+h 57e+d)
@@ -18376,6 +19387,15 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2402 }
     ]
   },
+  // 4P ply 4 (after 33+a 37+g 77+a 73+f)
+  "0x7AD82722C9BFEED5": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
   // OFK ply 4 (after 32+a 36+e 42+a 46+f)
   "0x7ADCBAF429CF25A5": {
     depth: 8,
@@ -18394,15 +19414,6 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2080 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+g 77+a 73+g)
-  "0x7AE7D575D24C2919": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 280 },
-      { move: "33b+h", score: 280 },
-      { move: "33b+c", score: 140 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+a 37+d 33+h 57+e)
   "0x7B8BC8F406DD3B52": {
     depth: 8,
@@ -18412,22 +19423,31 @@ var OPENING_BOOK = {
       { move: "73+a", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+e 77+a 73+f)
-  "0x7BBE4130FB93A854": {
+  // 4P ply 3 (after 33+b 37+c 77+g)
+  "0x7B8EF0EB3D5C6B0C": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+d 73+f)
-  "0x7C33906C1A02D402": {
+  // 2P_3B_ED ply 1 (after 53+b)
+  "0x7C106036373FD658": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
+      { move: "37+d", score: -2752 },
+      { move: "57+f", score: -2752 },
+      { move: "77+e", score: -2808 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+d 73+f)
+  "0x7C2EB0168C1278C4": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
     ]
   },
   // OFK ply 3 (after 32+b 36+e 32b+a)
@@ -18439,6 +19459,15 @@ var OPENING_BOOK = {
       { move: "36e+d", score: -4706 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+e 77+d 73+g)
+  "0x7C90296938D0F954": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+c 57+d 73+a 57d+e)
   "0x7CA8BB3410B57D94": {
     depth: 8,
@@ -18448,13 +19477,13 @@ var OPENING_BOOK = {
       { move: "73a+h", score: -520 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+d 73+e)
-  "0x7CD746FF82AE2C03": {
+  // 4P ply 4 (after 33+c 37+b 77+g 73+e)
+  "0x7CED4162C5F20FE1": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -240 },
-      { move: "33d+b", score: -240 },
-      { move: "33d+h", score: -240 }
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
     ]
   },
   // OFK ply 3 (after 32+a 36+d 42+c)
@@ -18466,13 +19495,13 @@ var OPENING_BOOK = {
       { move: "46f+a", score: -3463 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+g 73+e)
-  "0x7CF0611853E2A327": {
+  // 4P ply 3 (after 33+d 37+g 77+e)
+  "0x7D505EDD68FE63CA": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "73+f", score: -1136 },
+      { move: "73+e", score: -1136 },
+      { move: "73+g", score: -1256 }
     ]
   },
   // 2P 3-Base ply 2 (after 33+h 77+e)
@@ -18484,13 +19513,31 @@ var OPENING_BOOK = {
       { move: "33h+a", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+d 77+g)
-  "0x7DACD7422176A9F3": {
+  // 4P ply 3 (after 33+a 37+b 77+g)
+  "0x7DB1F738B7660535": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "73+f", score: -1496 },
+      { move: "73+e", score: -1496 },
+      { move: "73+g", score: -1616 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+d 77+a 73+e)
+  "0x7DE4FB5846347830": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+g 73+e)
+  "0x7DEAB2CD297DE69D": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+e 73+a 37+d)
@@ -18502,31 +19549,13 @@ var OPENING_BOOK = {
       { move: "33a+b", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+a 73+e)
-  "0x7DF9DB22D024D4F6": {
+  // 4P ply 4 (after 33+a 37+d 77+a 73+g)
+  "0x7E1264235DB19313": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -20 },
-      { move: "33g+h", score: -20 },
-      { move: "33g+a", score: -20 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+g 77+d 73+e)
-  "0x7E00D000117954F6": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -100 },
-      { move: "33d+b", score: -100 },
-      { move: "33d+h", score: -100 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+b 77+a 73+g)
-  "0x7E0F4459CBA13FD5": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 260 },
-      { move: "33a+h", score: 260 },
-      { move: "33a+c", score: 120 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 3 (after 33+b 77+f 53+b)
@@ -18538,22 +19567,13 @@ var OPENING_BOOK = {
       { move: "77+f", score: -3090 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+f 77+g 73+f)
-  "0x7E23DFE1290BCA72": {
+  // 4P ply 4 (after 33+b 37+b 77+a 73+f)
+  "0x7E30B60ED052F819": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+d 77+a 73+f)
-  "0x7E2D9674464254DF": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
     ]
   },
   // OFK ply 4 (after 22+b 46+f 52+h 46f-35)
@@ -18610,6 +19630,15 @@ var OPENING_BOOK = {
       { move: "33+h", score: -1140 }
     ]
   },
+  // 4P ply 4 (after 33+h 37+f 77+h 73+f)
+  "0x7ED0E797DAAE98FA": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
   // OFK ply 4 (after 32+b 36+d 32b+a 36d-45)
   "0x7EDB9F4B811BF989": {
     depth: 8,
@@ -18619,15 +19648,6 @@ var OPENING_BOOK = {
       { move: "52+g", score: -3367 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+f 77+e 73+g)
-  "0x7F07A913E66DC75A": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 53+b 57+c 33+b 37+f)
   "0x7F330A788F96E179": {
     depth: 8,
@@ -18635,6 +19655,24 @@ var OPENING_BOOK = {
       { move: "73+a", score: 400 },
       { move: "33b+a", score: 400 },
       { move: "53b+a", score: 400 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+a 73+f)
+  "0x7F3745A13CDD1165": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+c 77+e)
+  "0x7F87C822FB291B3F": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -996 },
+      { move: "73+e", score: -996 },
+      { move: "73+g", score: -1116 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+f 53+h 77+f)
@@ -18664,6 +19702,15 @@ var OPENING_BOOK = {
       { move: "33b+a", score: 400 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+f 77+b 73+f)
+  "0x7FC81372DCA984BE": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 53+a 57+d 33+h 77+e)
   "0x8045F92A677E9D64": {
     depth: 8,
@@ -18673,6 +19720,15 @@ var OPENING_BOOK = {
       { move: "53a+b", score: -120 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+f 77+b 73+g)
+  "0x8049069C3963DA43": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+h", score: -260 },
+      { move: "33d+b", score: -260 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+b 77+f 73+a 57+f)
   "0x805F841422052419": {
     depth: 8,
@@ -18680,15 +19736,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: -610 },
       { move: "33a+b", score: -610 },
       { move: "33", score: -920 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+f 77+e 73+f)
-  "0x8086BCFD03A799A7": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+f 33+b 37+d)
@@ -18727,13 +19774,13 @@ var OPENING_BOOK = {
       { move: "57e+d", score: -3230 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+c 77+b)
-  "0x80C967AD24270626": {
+  // 4P ply 4 (after 33+c 37+f 77+a 73+g)
+  "0x80B6504FD9174F98": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+d 73+a 77+e)
@@ -18743,6 +19790,15 @@ var OPENING_BOOK = {
       { move: "73+h", score: -400 },
       { move: "53g+b", score: -400 },
       { move: "33a+b", score: -1010 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+f 77+h 73+g)
+  "0x8151F2793F64C607": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 57+d 53+b 77+f)
@@ -18763,49 +19819,40 @@ var OPENING_BOOK = {
       { move: "73+h", score: -610 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+b 77+a 73+f)
-  "0x818E51B72E6B6128": {
+  // 4P ply 4 (after 33+a 37+d 77+a 73+f)
+  "0x819371CDB87BCDEE": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 260 },
-      { move: "33a+h", score: 260 },
-      { move: "33a+c", score: 120 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+f 77+g 73+g)
-  "0x81A2CA0FCCC1948F": {
+  // 4P ply 4 (after 33+b 37+b 77+a 73+g)
+  "0x81B1A3E03598A6E4": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+a 73+g)
-  "0x81AC839AA3880A22": {
+  // 4P ply 3 (after 33+b 37+d 77+g)
+  "0x821230FBDF4F30C2": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+c 77+h)
-  "0x81D1934822201A62": {
+  // 4P ply 3 (after 33+g 37+f 77+a)
+  "0x821C796EB006AE6F": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+b 77+g)
-  "0x820F1081495F9C04": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1496 },
-      { move: "73+e", score: -1496 },
-      { move: "73+g", score: -1616 }
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+b 57+c 73+b)
@@ -18815,24 +19862,6 @@ var OPENING_BOOK = {
       { move: "37+e", score: -2424 },
       { move: "77+e", score: -2424 },
       { move: "37+d", score: -2424 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+g 77+b)
-  "0x821EF152B7F07ED3": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1516 },
-      { move: "73+e", score: -1516 },
-      { move: "73+g", score: -1636 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+f 77+g 73+e)
-  "0x82545574D7447FAC": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 2 (after 53+b 37+d)
@@ -18862,22 +19891,13 @@ var OPENING_BOOK = {
       { move: "42+g", score: -3579 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+g 77+h)
-  "0x830605B7B1F76297": {
+  // 4P ply 4 (after 33+d 37+e 77+d 73+f)
+  "0x83113C87DD1AA7A9": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1256 },
-      { move: "73+e", score: -1256 },
-      { move: "73+g", score: -1376 }
-    ]
-  },
-  // 4P ply 3 (after 33+c 37+f 77+g)
-  "0x8308E32EA5D07578": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
     ]
   },
   // OFK ply 3 (after 32+b 46+f 32b+e)
@@ -18898,13 +19918,13 @@ var OPENING_BOOK = {
       { move: "33+b", score: 400 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+d 73+g)
-  "0x83B28582FFC88AFF": {
+  // 4P ply 4 (after 33+h 37+d 77+d 73+g)
+  "0x83AFA5F869D82639": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+d 73+h 37d+e)
@@ -18916,24 +19936,6 @@ var OPENING_BOOK = {
       { move: "53+h", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+c 77+g)
-  "0x84301752C365F23D": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+e 77+a 73+g)
-  "0x843F54DE1E59F6A9": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 53+a 57+d 73+b 77+e)
   "0x8440369923BD49FA": {
     depth: 8,
@@ -18941,6 +19943,15 @@ var OPENING_BOOK = {
       { move: "73+h", score: -120 },
       { move: "53a+h", score: -120 },
       { move: "53a+b", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+a 73+e)
+  "0x84783B48A42723FE": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 37+e 53+h 77+f)
@@ -18970,6 +19981,15 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2750 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+e 77+g 73+g)
+  "0x852BCE9E0B8F2DBE": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+c 37+d 33+a 77+f)
   "0x85474956D5BA0E52": {
     depth: 8,
@@ -18979,40 +19999,31 @@ var OPENING_BOOK = {
       { move: "33a+b", score: -1150 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+d 77+d 73+e)
-  "0x854B86EF60BD77CD": {
+  // 4P ply 4 (after 33+d 37+b 77+d 73+e)
+  "0x8556A695F6ADDB0B": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+b", score: -380 },
-      { move: "33d+h", score: -380 }
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
     ]
   },
   // OFK ply 2 (after 32+a 46+f)
   "0x8557CC8B298421EE": {
     depth: 8,
     candidates: [
-      { move: "52+h", score: -620 },
-      { move: "32+b", score: -620 },
-      { move: "32+a", score: -820 }
+      { move: "32+b", score: -461 },
+      { move: "52+h", score: -461 },
+      { move: "52+a", score: -620 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+g 77+a 73+f)
-  "0x8566C09B378677E4": {
+  // 4P ply 4 (after 33+a 37+g 77+a 73+g)
+  "0x855932CC2C75B028": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 280 },
-      { move: "33b+h", score: 280 },
-      { move: "33b+c", score: 140 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+c 77+g 73+e)
-  "0x856CA108B1F1F8E9": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
     ]
   },
   // OFK ply 4 (after 32+b 46+e 32b+c 36+d)
@@ -19024,6 +20035,15 @@ var OPENING_BOOK = {
       { move: "22+b", score: -3799 }
     ]
   },
+  // 4P ply 4 (after 33+h 37+c 77+d 73+f)
+  "0x85B270066E01230A": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: 20 },
+      { move: "33h+b", score: 20 },
+      { move: "33h+c", score: -120 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 53+a 37+d 73+h 57+e)
   "0x85E0812A0906B572": {
     depth: 8,
@@ -19031,15 +20051,6 @@ var OPENING_BOOK = {
       { move: "73+a", score: 0 },
       { move: "33b+a", score: 0 },
       { move: "53a+h", score: 0 }
-    ]
-  },
-  // 4P ply 3 (after 33+d 37+b 77+e)
-  "0x860628488F2AEC37": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 1-Base ply 2 (after 53+c 57+d)
@@ -19060,6 +20071,15 @@ var OPENING_BOOK = {
       { move: "37+f", score: -2424 }
     ]
   },
+  // 4P ply 3 (after 33+d 37+d 77+e)
+  "0x861B0832193A40F1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -856 },
+      { move: "73+e", score: -856 },
+      { move: "73+g", score: -976 }
+    ]
+  },
   // OFK ply 2 (after 32+b 26+d)
   "0x86428795151724B2": {
     depth: 8,
@@ -19067,24 +20087,6 @@ var OPENING_BOOK = {
       { move: "52+h", score: 0 },
       { move: "42+a", score: 0 },
       { move: "32b-43", score: 0 }
-    ]
-  },
-  // 4P ply 3 (after 33+d 37+e 77+b)
-  "0x866A2B2C973C8285": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
-    ]
-  },
-  // 4P ply 3 (after 33+c 37+e 77+a)
-  "0x86957DFF7748175E": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 77+e 73+h 37+d)
@@ -19096,13 +20098,13 @@ var OPENING_BOOK = {
       { move: "53b-64", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+f 77+b 73+e)
-  "0x86AD258B30068BB7": {
+  // 4P ply 4 (after 33+g 37+g 77+a 73+e)
+  "0x86AFADB737F05B0B": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+c 57+e 53c+h)
@@ -19123,15 +20125,6 @@ var OPENING_BOOK = {
       { move: "57g+d", score: -3750 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+g 77+g)
-  "0x86E781AD50B28AC8": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1516 },
-      { move: "73+e", score: -1516 },
-      { move: "73+g", score: -1636 }
-    ]
-  },
   // 2P 1-Base ply 3 (after 53+a 37+d 53a+h)
   "0x87051F0F0F0D2815": {
     depth: 8,
@@ -19150,13 +20143,31 @@ var OPENING_BOOK = {
       { move: "53+a", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+e 77+h)
-  "0x8772DFC9913B9EC1": {
+  // 4P ply 4 (after 33+h 37+g 77+d 73+f)
+  "0x8765E6F9FDD65BFF": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33h+a", score: 160 },
+      { move: "33h+b", score: 160 },
+      { move: "33h+c", score: 20 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+e 77+g)
+  "0x8781E7BF629ECC49": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+a 73+g)
+  "0x878EA433BFA2C8DD": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: 140 },
+      { move: "33a+b", score: 140 },
+      { move: "33a+c", score: 0 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 37+c 33+b 77+e)
@@ -19168,6 +20179,15 @@ var OPENING_BOOK = {
       { move: "73+b", score: 338 }
     ]
   },
+  // 4P ply 2 (after 33+h 37+f)
+  "0x879A325BEE7FAB87": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+a 77+e 53+b 57+f)
   "0x87A72F1D28F11748": {
     depth: 8,
@@ -19175,42 +20195,6 @@ var OPENING_BOOK = {
       { move: "33+a", score: 0 },
       { move: "53h+a", score: 0 },
       { move: "33+b", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+c 77+a 73+f)
-  "0x87B15664A4510F11": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 140 },
-      { move: "33b+h", score: 140 },
-      { move: "33b+c", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+f 77+h 73+e)
-  "0x87B5D16E360197F3": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+g 77+g 73+e)
-  "0x87BB37F72226801C": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 140 },
-      { move: "33c+a", score: 140 },
-      { move: "33c+h", score: 140 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+e 77+a 73+e)
-  "0x87C9CBA505DC1D8A": {
-    depth: 8,
-    candidates: [
-      { move: "33a+h", score: 0 },
-      { move: "33a+b", score: 0 },
-      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 37+c 33+b 57+d)
@@ -19240,22 +20224,22 @@ var OPENING_BOOK = {
       { move: "42+b", score: -1092 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+g 77+h 73+f)
-  "0x8843E7BFE86A203F": {
+  // 4P_ED ply 0 (initial)
+  "0x88262D8DCE9FCB7A": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: 20 },
-      { move: "33d+b", score: 20 },
-      { move: "33d+h", score: 20 }
+      { move: "33+c", score: 0 },
+      { move: "33+a", score: 0 },
+      { move: "33+b", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+f 77+g 73+f)
-  "0x884D0126FC4D37D0": {
+  // 4P ply 3 (after 33+d 37+e 77+d)
+  "0x8854DE8F8487E501": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "73+f", score: -856 },
+      { move: "73+e", score: -856 },
+      { move: "73+g", score: -976 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 57+d 53+h 37+d)
@@ -19276,6 +20260,15 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2086 }
     ]
   },
+  // 4P ply 4 (after 33+h 37+f 77+d 73+e)
+  "0x8893D02823BDEC33": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+b 57+f 33+a 37+d)
   "0x88BF28632F76DE7E": {
     depth: 8,
@@ -19294,22 +20287,31 @@ var OPENING_BOOK = {
       { move: "46+a", score: -3960 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+g 73+f)
-  "0x894AF28910C2DEAC": {
+  // 4P ply 4 (after 33+b 37+d 77+g 73+f)
+  "0x8957D2F386D2726A": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 260 },
-      { move: "33b+h", score: 260 },
-      { move: "33b+c", score: 120 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+b 73+f)
-  "0x895B135AEE6D3C7B": {
+  // 4P ply 4 (after 33+g 37+f 77+a 73+f)
+  "0x89599B66E99BECC7": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 280 },
-      { move: "33h+b", score: 280 },
-      { move: "33h+c", score: 140 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P_ED ply 1 (after 33+b)
+  "0x895F828367C7141A": {
+    depth: 8,
+    candidates: [
+      { move: "37+c", score: -1577 },
+      { move: "37+e", score: -1577 },
+      { move: "37+d", score: -1577 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 77+f 33+a 57+d)
@@ -19321,13 +20323,22 @@ var OPENING_BOOK = {
       { move: "73+h", score: -620 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+g 73+g)
-  "0x896820A49D21B5A6": {
+  // 4P ply 4 (after 33+a 37+b 77+g 73+g)
+  "0x897500DE0B311960": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
+  // 4P ply 1 (after 33+h)
+  "0x897DEC3D1DE82232": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -1376 },
+      { move: "37+d", score: -1376 },
+      { move: "37+f", score: -1376 }
     ]
   },
   // OFK ply 4 (after 22+b 56+f 42+a 46+e)
@@ -19348,6 +20359,15 @@ var OPENING_BOOK = {
       { move: "32+b", score: -940 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+g 77+e 73+g)
+  "0x8994A93BD4A97F9F": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -100 },
+      { move: "33d+b", score: -100 },
+      { move: "33d+h", score: -100 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 53+b 37+c 33+h)
   "0x8A28D6F24AFDD0F7": {
     depth: 8,
@@ -19357,49 +20377,31 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2424 }
     ]
   },
-  // 4P ply 2 (after 33+d 37+d)
-  "0x8A42649CAD7F3079": {
+  // 4P ply 2 (after 33+d 37+b)
+  "0x8A5F44E63B6F9CBF": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: -260 },
-      { move: "77+a", score: -260 },
-      { move: "77+g", score: -380 }
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+h 73+e)
-  "0x8A70A7D3E311A0CB": {
+  // 4P ply 4 (after 33+h 37+d 77+h 73+e)
+  "0x8A6D87A975010C0D": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 260 },
-      { move: "33h+b", score: 260 },
-      { move: "33h+c", score: 120 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+a 73+e)
-  "0x8A90F64AE9EDC028": {
+  // 4P ply 4 (after 33+g 37+b 77+g 73+e)
+  "0x8A839FA510B4F243": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+c 77+h 73+f)
-  "0x8A9471407BBD58CA": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+d 77+g 73+e)
-  "0x8A9EBFDF86A45E85": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+d 73+h 77+e)
@@ -19411,22 +20413,22 @@ var OPENING_BOOK = {
       { move: "53c+b", score: -860 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+b 77+a)
-  "0x8ACBB3BF77F62380": {
+  // 4P ply 3 (after 33+a 37+d 77+a)
+  "0x8AD693C5E1E68F46": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1496 },
-      { move: "73+e", score: -1496 },
-      { move: "73+g", score: -1616 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+e 77+e 73+e)
-  "0x8B045052FD00D23D": {
+  // 4P ply 4 (after 33+d 37+c 77+e 73+g)
+  "0x8B433FC4477E076A": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+b", score: -380 },
-      { move: "33d+h", score: -380 }
+      { move: "33d+a", score: -240 },
+      { move: "33d+b", score: -240 },
+      { move: "33d+h", score: -240 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 37+e 33h+a 57+e)
@@ -19438,15 +20440,6 @@ var OPENING_BOOK = {
       { move: "33+h", score: -62 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+b 73+e)
-  "0x8B685336E516BC8F": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: 0 },
-      { move: "33d+b", score: 0 },
-      { move: "33d+h", score: 0 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+a 37+d 53+b 77+f)
   "0x8B6A4A1229C85853": {
     depth: 8,
@@ -19454,6 +20447,15 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 62 },
       { move: "33+b", score: 62 },
       { move: "33+a", score: -138 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+d 77+b 73+e)
+  "0x8B75734C73061049": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
   // OFK ply 4 (after 32+a 56+f 42+c 46+e)
@@ -19465,22 +20467,13 @@ var OPENING_BOOK = {
       { move: "22+b", score: -2108 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+c 77+b 73+f)
-  "0x8B8C85A57DBA448E": {
+  // 4P ply 4 (after 33+c 37+d 77+a 73+e)
+  "0x8B8A259F93728592": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+b 77+a 73+e)
-  "0x8B9705E505622954": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 120 },
-      { move: "33c+h", score: 120 },
-      { move: "33c+a", score: 120 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 77+f 73+b 57+e)
@@ -19490,15 +20483,6 @@ var OPENING_BOOK = {
       { move: "53+a", score: -120 },
       { move: "53+b", score: -120 },
       { move: "73h+a", score: -120 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+f 77+e)
-  "0x8BC35EF55A3ADB0F": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
     ]
   },
   // OFK ply 3 (after 32+b 56+f 32b+a)
@@ -19519,22 +20503,22 @@ var OPENING_BOOK = {
       { move: "53h+a", score: -62 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+h 73+f)
-  "0x8C373DC1C8A6DC69": {
+  // 4P ply 3 (after 33+h 37+g 77+d)
+  "0x8C2004F1A44B1957": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "73+f", score: -1396 },
+      { move: "73+e", score: -1396 },
+      { move: "73+g", score: -1516 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+d 77+h 73+g)
-  "0x8C89A4BE7C645DF9": {
+  // 4P ply 4 (after 33+d 37+b 77+h 73+g)
+  "0x8C9484C4EA74F13F": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+b 57+e 53+b)
@@ -19546,31 +20530,13 @@ var OPENING_BOOK = {
       { move: "77+f", score: -2702 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+c 77+a)
-  "0x8CF4B46CFDCC4DB9": {
+  // 4P ply 4 (after 33+g 37+e 77+g 73+f)
+  "0x8CC405B73B038EE1": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+e 77+b 73+f)
-  "0x8D2FC924CEA1C02D": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+b 77+e 73+f)
-  "0x8D43CA40D6B7AE9F": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+c 53c+h 57c+d)
@@ -19582,6 +20548,15 @@ var OPENING_BOOK = {
       { move: "73+a", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+d 77+e 73+f)
+  "0x8D5EEA3A40A70259": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+b", score: -380 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 53+a 37+e 73+h)
   "0x8D8380E10E02DDAF": {
     depth: 8,
@@ -19591,40 +20566,22 @@ var OPENING_BOOK = {
       { move: "37e+d", score: -2086 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+b 73+g)
-  "0x8D91505B7A6341BD": {
+  // 4P ply 4 (after 33+h 37+b 77+b 73+g)
+  "0x8D8C7021EC73ED7B": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+g 77+g 73+f)
-  "0x8DA263A5092FC860": {
+  // 4P ply 4 (after 33+b 37+g 77+g 73+g)
+  "0x8D9D91F212DC0FAC": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 280 },
-      { move: "33a+h", score: 280 },
-      { move: "33a+c", score: 140 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+c 77+e 73+e)
-  "0x8DA71CD34E1B569E": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 20 },
-      { move: "33h+b", score: 20 },
-      { move: "33h+c", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+e 77+a 73+f)
-  "0x8DD09FF72ED555F6": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 57+e 33+a 77+f)
@@ -19636,22 +20593,22 @@ var OPENING_BOOK = {
       { move: "33a+b", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+h 37+e 77+e 73+g)
+  "0x8DE07345F46583C9": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
   // OFK ply 2 (after 32+a 36+d)
   "0x8DF5C7214C11AE7A": {
     depth: 8,
     candidates: [
-      { move: "52+h", score: -28 },
-      { move: "32+b", score: -28 },
-      { move: "32+e", score: -180 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+g 77+a)
-  "0x8E2322936E1B354C": {
-    depth: 8,
-    candidates: [
-      { move: "73+e", score: -1516 },
-      { move: "73+f", score: -1516 },
-      { move: "73+g", score: -1636 }
+      { move: "32+a", score: -640 },
+      { move: "22+b", score: -640 },
+      { move: "42a+h", score: -640 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+b 37+c 73+b)
@@ -19672,15 +20629,6 @@ var OPENING_BOOK = {
       { move: "32+c", score: 1378 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+f 77+d 73+g)
-  "0x8E77F33F2AD8BDC7": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+b", score: -380 },
-      { move: "33d+h", score: -380 }
-    ]
-  },
   // 2P 3-Base ply 3 (after 53+a 37+e 73+a)
   "0x8EB3F14C7DBB7ACB": {
     depth: 8,
@@ -19690,13 +20638,13 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2086 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+g 73+e)
-  "0x8F0D689B3B75A20E": {
+  // 4P ply 3 (after 33+h 37+c 77+d)
+  "0x8EF7920E379C61A2": {
     depth: 8,
     candidates: [
-      { move: "33b+h", score: 0 },
-      { move: "33b+a", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 37+d 73+a 77+f)
@@ -19717,6 +20665,15 @@ var OPENING_BOOK = {
       { move: "73a+h", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+b 37+c 77+g 73+g)
+  "0x8F4A070D810B7759": {
+    depth: 8,
+    candidates: [
+      { move: "33b+h", score: 140 },
+      { move: "33b+a", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+a 37+e 73+b 57+e)
   "0x8F60D75B25203EC6": {
     depth: 8,
@@ -19724,24 +20681,6 @@ var OPENING_BOOK = {
       { move: "53+a", score: -62 },
       { move: "33h+a", score: -62 },
       { move: "53+h", score: -62 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+g 77+e 73+e)
-  "0x8F708A2CDDCC2E6B": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 160 },
-      { move: "33h+b", score: 160 },
-      { move: "33h+c", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+c 77+g 73+f)
-  "0x8F75F55A9AF8B095": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+a 37+f 73+h)
@@ -19780,22 +20719,22 @@ var OPENING_BOOK = {
       { move: "64b+a", score: -470 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+g 77+a 73+f)
-  "0x9024C330BEAD24DE": {
+  // 4P ply 4 (after 33+b 37+g 77+a 73+g)
+  "0x901B3167A55EE312": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 280 },
-      { move: "33a+h", score: 280 },
-      { move: "33a+c", score: 140 }
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+e 77+g 73+f)
-  "0x90563F629957B948": {
+  // 4P ply 3 (after 33+d 37+f 77+d)
+  "0x904FE0CBE19D6B99": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "73+f", score: -856 },
+      { move: "73+e", score: -856 },
+      { move: "73+g", score: -976 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+a 57+c 73+a)
@@ -19807,6 +20746,15 @@ var OPENING_BOOK = {
       { move: "57c+f", score: -3020 }
     ]
   },
+  // 4P ply 4 (after 33+h 37+e 77+d 73+e)
+  "0x9088EE6C46A762AB": {
+    depth: 8,
+    candidates: [
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 53+a 37+d 73+a 57+e)
   "0x90A28281802DE648": {
     depth: 8,
@@ -19814,15 +20762,6 @@ var OPENING_BOOK = {
       { move: "73+a", score: 0 },
       { move: "73+h", score: 0 },
       { move: "53a+h", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+c 77+d 73+g)
-  "0x90CF81FAFCD9B7FC": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 20 },
-      { move: "33h+b", score: 20 },
-      { move: "33h+c", score: -120 }
     ]
   },
   // OFK ply 3 (after 22+b 46+e 42+e)
@@ -19843,6 +20782,15 @@ var OPENING_BOOK = {
       { move: "46+a", score: -3463 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+e 77+a 73+f)
+  "0x9142A5228C81625F": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 33+a 37+d 73+b)
   "0x9171A496D8B6A245": {
     depth: 8,
@@ -19850,15 +20798,6 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2024 },
       { move: "57+d", score: -2024 },
       { move: "57+e", score: -2024 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+c 77+g)
-  "0x917214F94A4EA107": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
     ]
   },
   // 2P 1-Base ply 3 (after 33+b 57+e 53+b)
@@ -19897,15 +20836,6 @@ var OPENING_BOOK = {
       { move: "53g+h", score: -2250 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+d 73+g)
-  "0x921817056F0ECF09": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 160 },
-      { move: "33h+b", score: 160 },
-      { move: "33h+c", score: 20 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 33+b 77+f 73+a 37+d)
   "0x925B7BEE145F7865": {
     depth: 8,
@@ -19915,22 +20845,22 @@ var OPENING_BOOK = {
       { move: "53+h", score: -610 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+a 73+e)
-  "0x928BC80E8CF74EB0": {
+  // 4P ply 3 (after 33+d 37+d 77+h)
+  "0x92B1B74AB7218BA7": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+b 77+h)
-  "0x92AC973021312761": {
+  // 4P ply 4 (after 33+b 37+c 77+a 73+g)
+  "0x92CCA79836899BE7": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 37+c 33+a 77+e)
@@ -19951,24 +20881,6 @@ var OPENING_BOOK = {
       { move: "73a+h", score: -1850 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+c 77+a 73+f)
-  "0x92F355CF2D7A5C2B": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+f 77+e 73+e)
-  "0x931F6E16981A5CA5": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+h", score: -380 },
-      { move: "33d+b", score: -380 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+c 57+c 33+a 57c+d)
   "0x935C396B3A043058": {
     depth: 8,
@@ -19987,31 +20899,13 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+g 77+g)
-  "0x93A58206D999D9F2": {
+  // 4P ply 3 (after 33+h 37+d 77+b)
+  "0x93A943AFB12697E3": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1516 },
-      { move: "73+e", score: -1516 },
-      { move: "73+g", score: -1636 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+b 77+b)
-  "0x93B463D527363B25": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1496 },
-      { move: "73+e", score: -1496 },
-      { move: "73+g", score: -1616 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+e 77+e)
-  "0x93D860B13F205597": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 57+d 53+b 77+f)
@@ -20021,15 +20915,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: 0 },
       { move: "53b+a", score: 0 },
       { move: "73+a", score: -138 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+f 77+h 73+f)
-  "0x942C0385ADBC52F1": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
     ]
   },
   // OFK ply 4 (after 32+b 46+e 52+g 26+d)
@@ -20050,22 +20935,31 @@ var OPENING_BOOK = {
       { move: "73+a", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+a 73+f)
-  "0x94CC521CA7403212": {
+  // 4P ply 4 (after 33+b 37+d 77+a 73+f)
+  "0x94D1726631509ED4": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 260 },
-      { move: "33b+h", score: 260 },
-      { move: "33b+c", score: 120 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+a 73+g)
-  "0x94EE80312AA35918": {
+  // 4P ply 4 (after 33+g 37+f 77+g 73+f)
+  "0x94DF3BF35E190079": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+a 73+g)
+  "0x94F3A04BBCB3F5DE": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 57+d 53+c 37+e)
@@ -20077,6 +20971,15 @@ var OPENING_BOOK = {
       { move: "53c+b", score: -400 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+g 77+d 73+e)
+  "0x94FC3412666B9EFD": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -100 },
+      { move: "33d+b", score: -100 },
+      { move: "33d+h", score: -100 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 33+b 57+d 53+h 37+d)
   "0x951D87BFAB2E7723": {
     depth: 8,
@@ -20086,24 +20989,6 @@ var OPENING_BOOK = {
       { move: "53h+a", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+f 77+b 73+f)
-  "0x9534F760ABBB4EB5": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
-  // 4P ply 3 (after 33+d 37+c 77+e)
-  "0x957B2C308C3BD134": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -996 },
-      { move: "73+e", score: -996 },
-      { move: "73+g", score: -1116 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+a 57+d 33a+b 77+e)
   "0x9597628D3E70EDA5": {
     depth: 8,
@@ -20111,15 +20996,6 @@ var OPENING_BOOK = {
       { move: "53+a", score: 0 },
       { move: "73+a", score: 0 },
       { move: "53+h", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+f 77+a 73+f)
-  "0x95CBA1B34BCFDB6E": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+f 73+b 37f+e)
@@ -20140,13 +21016,22 @@ var OPENING_BOOK = {
       { move: "33a+b", score: -138 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+b 77+g 73+e)
-  "0x9611A570B2E0C5EA": {
+  // 4P ply 4 (after 33+h 37+f 77+e 73+g)
+  "0x95FB4D01917F0D51": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 120 },
-      { move: "33c+h", score: 120 },
-      { move: "33c+a", score: 120 }
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+g 73+e)
+  "0x960C850A24F0692C": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 77+f 33+a 37+d)
@@ -20158,6 +21043,15 @@ var OPENING_BOOK = {
       { move: "53h-44", score: -390 }
     ]
   },
+  // 4P ply 4 (after 33+d 37+c 77+d 73+e)
+  "0x962BA2EDF5BCE608": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -240 },
+      { move: "33d+b", score: -240 },
+      { move: "33d+h", score: -240 }
+    ]
+  },
   // OFK ply 2 (after 22+b 36+e)
   "0x9662F3A6215C0DDA": {
     depth: 8,
@@ -20165,15 +21059,6 @@ var OPENING_BOOK = {
       { move: "32+a", score: -620 },
       { move: "42+h", score: -620 },
       { move: "22b-33", score: -620 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+e 77+d 73+g)
-  "0x966CCD7B4FC2335F": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+b", score: -380 },
-      { move: "33d+h", score: -380 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+b 57+d 73+b)
@@ -20203,13 +21088,13 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+d 73+f)
-  "0x96D25404FB00B2CF": {
+  // 4P ply 4 (after 33+h 37+b 77+d 73+f)
+  "0x96CF747E6D101E09": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 77+f 73+b 57+e)
@@ -20230,6 +21115,15 @@ var OPENING_BOOK = {
       { move: "33h+a", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+b 77+a 73+e)
+  "0x97053F30A7361EFD": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
+    ]
+  },
   // 2P 3-Base ply 2 (after 53+b 57+g)
   "0x9705AEEDA68BECF5": {
     depth: 8,
@@ -20237,24 +21131,6 @@ var OPENING_BOOK = {
       { move: "33+a", score: 400 },
       { move: "73+a", score: 400 },
       { move: "53b+a", score: 400 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+f 77+g 73+e)
-  "0x971656DF5E6F2C96": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+d 77+a 73+e)
-  "0x97181F4A3126B23B": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
     ]
   },
   // OFK ply 1 (after 32+a)
@@ -20266,13 +21142,13 @@ var OPENING_BOOK = {
       { move: "46+e", score: -4143 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+b 77+g)
-  "0x974D132AC074CF3E": {
+  // 4P ply 3 (after 33+a 37+d 77+g)
+  "0x97503350566463F8": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1496 },
-      { move: "73+e", score: -1496 },
-      { move: "73+g", score: -1616 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // OFK ply 4 (after 32+b 46+f 32b-43 26+d)
@@ -20284,33 +21160,6 @@ var OPENING_BOOK = {
       { move: "43b+h", score: -1020 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+g 77+e)
-  "0x97ACBACF1FECA9C1": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1136 },
-      { move: "73+e", score: -1136 },
-      { move: "73+g", score: -1256 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+c 77+b 73+e)
-  "0x9815574EE607818C": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+d 77+e 73+g)
-  "0x98231BC6D27F96AF": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+b", score: -380 },
-      { move: "33d+h", score: -380 }
-    ]
-  },
   // OFK ply 4 (after 32+b 46+f 32b+a 26+d)
   "0x9838E855AA6C82DA": {
     depth: 8,
@@ -20318,6 +21167,24 @@ var OPENING_BOOK = {
       { move: "42+a", score: -1287 },
       { move: "32ab-43", score: -1287 },
       { move: "52+h", score: -1615 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+b 77+e 73+g)
+  "0x983E3BBC446F3A69": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+b 73+g)
+  "0x985238D85C7954DB": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 57+e 33+b 77+f)
@@ -20329,13 +21196,13 @@ var OPENING_BOOK = {
       { move: "33b+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+e 73+f)
-  "0x989D82B966BD173F": {
+  // 4P ply 4 (after 33+c 37+e 77+a 73+g)
+  "0x98AD6E0BBC0DC100": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 57+d 33a+b 37+d)
@@ -20356,40 +21223,40 @@ var OPENING_BOOK = {
       { move: "53b-64", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+g 77+g 73+f)
-  "0x98E0600E80049B5A": {
+  // 4P ply 4 (after 33+a 37+g 77+g 73+g)
+  "0x98DF92599BF75C96": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 280 },
-      { move: "33b+h", score: 280 },
-      { move: "33b+c", score: 140 }
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+a 73+e)
-  "0x98EA019D06731457": {
+  // 4P ply 4 (after 33+h 37+d 77+b 73+f)
+  "0x98ECA1A7E8BBD54B": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+b 73+f)
-  "0x98F181DD7EAB798D": {
+  // 4P ply 2 (after 33+d 37+c)
+  "0x9922409E387EA1BC": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 260 },
-      { move: "33h+b", score: 260 },
-      { move: "33h+c", score: 120 }
+      { move: "77+h", score: -120 },
+      { move: "77+a", score: -120 },
+      { move: "77+g", score: -240 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+c 77+h 73+e)
-  "0x990DA3ABE0009DC8": {
+  // 4P ply 4 (after 33+h 37+e 77+h 73+g)
+  "0x994ACC3D5A7E489F": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 2 (after 33+b 57+f)
@@ -20401,58 +21268,40 @@ var OPENING_BOOK = {
       { move: "53+h", score: -120 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+c 77+a)
-  "0x99B6B7C774E71E83": {
+  // 4P ply 4 (after 33+d 37+d 77+h 73+f)
+  "0x99F45542EEBCC90F": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+e 77+g 73+g)
-  "0x99B9F44BA9DB1A17": {
+  // 4P ply 4 (after 33+g 37+c 77+g 73+e)
+  "0x99FE9BDD13A5CF40": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+h 73+f)
-  "0x99E9753878AC65C9": {
+  // 4P ply 3 (after 33+g 37+e 77+a)
+  "0x9A07472AD51C20F7": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: 0 },
-      { move: "33d+b", score: 0 },
-      { move: "33d+h", score: 0 }
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+c 77+g 73+f)
-  "0x9A37F6F113D3E3AF": {
+  // 4P ply 4 (after 33+a 37+c 77+g 73+g)
+  "0x9A0804A608202463": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 140 },
-      { move: "33b+h", score: 140 },
-      { move: "33b+c", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+g 77+a 73+e)
-  "0x9A3D976295A46CA2": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 140 },
-      { move: "33c+h", score: 140 },
-      { move: "33c+a", score: 140 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+e 77+g 73+e)
-  "0x9A4F6B30B25EF134": {
-    depth: 8,
-    candidates: [
-      { move: "33a+h", score: 0 },
-      { move: "33a+b", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+f 33+a 37+d)
@@ -20482,15 +21331,6 @@ var OPENING_BOOK = {
       { move: "42h+e", score: -1068 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+g 77+b 73+e)
-  "0x9AC2C1B175D0F979": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: 20 },
-      { move: "33d+b", score: 20 },
-      { move: "33d+h", score: 20 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+b 77+e 33+a 57+f)
   "0x9AD42177F97539CD": {
     depth: 8,
@@ -20509,13 +21349,13 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2086 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+e 77+g)
-  "0x9B13DD6AC0CAFBE0": {
+  // 4P ply 4 (after 33+d 37+f 77+d 73+f)
+  "0x9B0A02C3B8002931": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+f 73+b 57+e)
@@ -20527,6 +21367,15 @@ var OPENING_BOOK = {
       { move: "73+h", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+g 77+g 73+e)
+  "0x9B290D228072B7B5": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
   // OFK ply 4 (after 32+a 46+f 42+a 36+d)
   "0x9B2DA34B96FF8786": {
     depth: 8,
@@ -20534,15 +21383,6 @@ var OPENING_BOOK = {
       { move: "32a+b", score: -458 },
       { move: "42a+h", score: -458 },
       { move: "22+b", score: -640 }
-    ]
-  },
-  // 4P ply 3 (after 33+a 37+g 77+a)
-  "0x9B612138E7306676": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1516 },
-      { move: "73+e", score: -1516 },
-      { move: "73+g", score: -1636 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+f 73+h 57+d)
@@ -20581,22 +21421,31 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2606 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+h 73+e)
-  "0x9BDA355473D7E53D": {
+  // 4P ply 2 (after 33+d 37+g)
+  "0x9BF5D661ABA9D949": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 280 },
-      { move: "33h+b", score: 280 },
-      { move: "33h+c", score: 140 }
+      { move: "77+h", score: 20 },
+      { move: "77+a", score: 20 },
+      { move: "77+g", score: -100 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+b 77+g 73+f)
-  "0x9C08F12299E98D96": {
+  // 4P ply 4 (after 33+a 37+d 77+g 73+f)
+  "0x9C15D1580FF92150": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 260 },
-      { move: "33a+h", score: 260 },
-      { move: "33a+c", score: 120 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
+  // 4P_ED ply 1 (after 33+a)
+  "0x9C1D8128EEEC4720": {
+    depth: 8,
+    candidates: [
+      { move: "37+c", score: -1577 },
+      { move: "37+e", score: -1577 },
+      { move: "37+d", score: -1577 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+d 53+b 77+f)
@@ -20608,22 +21457,22 @@ var OPENING_BOOK = {
       { move: "53b-64", score: -590 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+f 77+a 73+g)
-  "0x9C246A9A7B437831": {
+  // 4P ply 4 (after 33+h 37+g 77+b 73+g)
+  "0x9C26E2A67CB5A88D": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+g 73+g)
-  "0x9C2A230F140AE69C": {
+  // 4P ply 4 (after 33+b 37+b 77+g 73+g)
+  "0x9C370375821A4A5A": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
     ]
   },
   // OFK ply 3 (after 32+b 56+f 42+a)
@@ -20653,15 +21502,6 @@ var OPENING_BOOK = {
       { move: "46+a", score: -6570 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+g 77+e 73+f)
-  "0x9CE958C74671EB69": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -100 },
-      { move: "33d+b", score: -100 },
-      { move: "33d+h", score: -100 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 53+b 37+d 73+a 57+d)
   "0x9CF02D78191A38A3": {
     depth: 8,
@@ -20680,6 +21520,33 @@ var OPENING_BOOK = {
       { move: "36+e", score: -4103 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+f 77+g 73+g)
+  "0x9D30F0DA6E95A326": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+h 73+g)
+  "0x9D3E16437AB2B4C9": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+b 77+d)
+  "0x9D8A9676348D5CA1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
   // OFK ply 4 (after 22+b 46+f 22b+a 46f+e)
   "0x9D9752474980498B": {
     depth: 8,
@@ -20687,15 +21554,6 @@ var OPENING_BOOK = {
       { move: "32+b", score: -633 },
       { move: "42+a", score: -633 },
       { move: "32+e", score: -1363 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+d 77+d)
-  "0x9D97B60CA29DF067": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+a 57+e 73+h)
@@ -20725,49 +21583,13 @@ var OPENING_BOOK = {
       { move: "53b+a", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+e 73+f)
-  "0x9E3ECE38D5A6939C": {
+  // 4P ply 4 (after 33+h 37+d 77+e 73+e)
+  "0x9EC738D1DB1AC75B": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -240 },
-      { move: "33d+b", score: -240 },
-      { move: "33d+h", score: -240 }
-    ]
-  },
-  // 4P ply 3 (after 33+d 37+f 77+b)
-  "0x9E711568F2260C1D": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
-    ]
-  },
-  // 4P ply 3 (after 33+c 37+f 77+a)
-  "0x9E8E43BB125299C6": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+e 77+b 73+e)
-  "0x9EB61BCF551C052F": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+b 77+e 73+e)
-  "0x9EDA18AB4D0A6B9D": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
     ]
   },
   // OFK ply 3 (after 32+b 56+f 32b-43)
@@ -20779,13 +21601,13 @@ var OPENING_BOOK = {
       { move: "46+c", score: -6435 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+f 77+h)
-  "0x9F69E18DF4211059": {
+  // 4P ply 4 (after 33+h 37+c 77+b 73+g)
+  "0x9EF17459EF62D078": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+f 73+a 57f-46)
@@ -20797,58 +21619,58 @@ var OPENING_BOOK = {
       { move: "33+a", score: -400 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+b 77+a)
-  "0x9F89B014FEDD70BA": {
+  // 4P ply 2 (after 33+h 37+e)
+  "0x9F810C1F8B65251F": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1496 },
-      { move: "73+e", score: -1496 },
-      { move: "73+g", score: -1616 }
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+e 77+h 73+e)
-  "0x9FAEEF2A531B196B": {
+  // 4P ply 3 (after 33+b 37+d 77+a)
+  "0x9F94906E68CDDC7C": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+f 77+a 73+e)
-  "0x9FD2F5E160C69312": {
+  // 4P ply 3 (after 33+g 37+f 77+g)
+  "0x9F9AD9FB078442D1": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+c 77+b 73+f)
-  "0xA00B736B8F68E34B": {
+  // 4P ply 4 (after 33+d 37+c 77+h 73+g)
+  "0x9FE980BCE965CC3C": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+e 73+e)
-  "0xA01FEDCE36F39F62": {
+  // 4P ply 4 (after 33+b 37+d 77+e 73+e)
+  "0xA002CDB4A0E333A4": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+c 77+b 73+g)
+  "0xA034813C949B2487": {
     depth: 8,
     candidates: [
       { move: "33b+a", score: 140 },
       { move: "33b+h", score: 140 },
       { move: "33b+c", score: 0 }
-    ]
-  },
-  // 4P ply 3 (after 33+a 37+f 77+e)
-  "0xA044A83BA8E87CCA": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+f 73+h 57f-46)
@@ -20860,22 +21682,13 @@ var OPENING_BOOK = {
       { move: "33b+a", score: -400 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+b 73+e)
-  "0xA073EEAA2EE5F1D0": {
+  // 4P ply 3 (after 33+c 37+d 77+h)
+  "0xA0B6C73DF547A11C": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
-    ]
-  },
-  // 4P ply 3 (after 33+c 37+b 77+h)
-  "0xA0ABE74763570DDA": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1356 },
-      { move: "73+e", score: -1356 },
-      { move: "73+g", score: -1476 }
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+e 53+h 57+f)
@@ -20887,30 +21700,30 @@ var OPENING_BOOK = {
       { move: "53b+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+f 77+e 73+e)
-  "0xA1181E61DA7C761E": {
+  // 4P ply 4 (after 33+g 37+f 77+d 73+g)
+  "0xA0E2B99DCAEAA0D5": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+b 77+a)
-  "0xA14C457185248445": {
+  // 4P ply 2 (after 33+b 37+e)
+  "0xA144F97AF09CD1E0": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1496 },
-      { move: "73+e", score: -1496 },
-      { move: "73+g", score: -1616 }
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+f 77+h)
-  "0xA1AC14E88FD8E4A6": {
+  // 4P ply 3 (after 33+h 37+d 77+a)
+  "0xA151650B13342883": {
     depth: 8,
     candidates: [
-      { move: "73+e", score: -1236 },
       { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
       { move: "73+g", score: -1356 }
     ]
   },
@@ -20923,6 +21736,15 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2024 }
     ]
   },
+  // 4P ply 4 (after 33+a 37+d 77+h 73+e)
+  "0xA1EA716787D3ABC8": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+b 77+e 33+b 77e+f)
   "0xA1EFB7505A370DE4": {
     depth: 8,
@@ -20932,22 +21754,22 @@ var OPENING_BOOK = {
       { move: "53h+a", score: -460 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+b 77+h 73+e)
-  "0xA1F7511D11C3070E": {
+  // 4P ply 4 (after 33+g 37+d 77+h 73+g)
+  "0xA21CEE1C9C5640EB": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 260 },
-      { move: "33a+h", score: 260 },
-      { move: "33a+c", score: 120 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+h 73+g)
-  "0xA201CE660A46EC2D": {
+  // 4P ply 3 (after 33+c 37+f 77+d)
+  "0xA24890BCA3FB4122": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -20 },
-      { move: "33g+h", score: -20 },
-      { move: "33g+a", score: -20 }
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
     ]
   },
   // OFK ply 4 (after 22+b 26+d 22b-33 26d-35)
@@ -20959,15 +21781,6 @@ var OPENING_BOOK = {
       { move: "32+b", score: 1136 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+e 77+g 73+f)
-  "0xA2514F15DB3193F3": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+h 37+f 53+h 77+f)
   "0xA27D27FB65706CDA": {
     depth: 8,
@@ -20977,40 +21790,67 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+g 77+b 73+f)
-  "0xA2DCE5941CBF9BBE": {
+  // 4P ply 4 (after 33+b 37+g 77+b 73+g)
+  "0xA2E317C3074C5C72": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 280 },
-      { move: "33a+h", score: 280 },
-      { move: "33a+c", score: 140 }
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+g 73+g)
-  "0xA2EFD66A6FF31263": {
+  // 4P ply 4 (after 33+h 37+b 77+g 73+g)
+  "0xA2F2F610F9E3BEA5": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+d 77+d)
-  "0xA3524369D9640498": {
+  // 4P ply 1 (after 33+a)
+  "0xA2FA1AF3EF3A85F7": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "37+e", score: -1376 },
+      { move: "37+d", score: -1376 },
+      { move: "37+f", score: -1376 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+e 73+f)
-  "0xA3CBA098A0951F4B": {
+  // 4P ply 4 (after 33+a 37+f 77+d 73+e)
+  "0xA31426E6D16F4BF6": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
+      { move: "33a+h", score: -120 },
+      { move: "33a+b", score: -120 },
+      { move: "33a+c", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+b 77+d)
+  "0xA34F63134F74A85E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+b 73+f)
+  "0xA3BA83862E93DD3F": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+e 73+f)
+  "0xA3D680E23685B38D": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
     ]
   },
   // OFK ply 2 (after 32+b 56+f)
@@ -21022,6 +21862,15 @@ var OPENING_BOOK = {
       { move: "32b-43", score: -620 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+c 77+h 73+f)
+  "0xA4013BE29B8F45D8": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 33+b 57+c 53+b 57c+d)
   "0xA4031EE49BACC862": {
     depth: 8,
@@ -21031,13 +21880,22 @@ var OPENING_BOOK = {
       { move: "33+g", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+g 73+e)
-  "0xA416D507F086EF51": {
+  // 4P ply 4 (after 33+d 37+d 77+g 73+e)
+  "0xA40BF57D66964397": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: 0 },
-      { move: "33d+b", score: 0 },
-      { move: "33d+h", score: 0 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+d 73+e)
+  "0xA42CD29AB7DACCB3": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -120 },
+      { move: "33c+h", score: -120 },
+      { move: "33c+a", score: -120 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+e 33+a 57+e)
@@ -21049,49 +21907,13 @@ var OPENING_BOOK = {
       { move: "73a+h", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+e 77+d 73+g)
-  "0xA46BBD0C0DA419E4": {
+  // 4P ply 2 (after 33+g 37+d)
+  "0xA4D72E3E4D4D2D6B": {
     depth: 8,
     candidates: [
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 },
-      { move: "33c+b", score: -260 }
-    ]
-  },
-  // 4P ply 2 (after 33+g 37+b)
-  "0xA4CA0E44DB5D81AD": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: -20 },
-      { move: "77+a", score: -20 },
-      { move: "77+g", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+c 77+g 73+f)
-  "0xA4F20394682A1750": {
-    depth: 8,
-    candidates: [
-      { move: "33h+b", score: 140 },
-      { move: "33h+a", score: 140 },
-      { move: "33h+c", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+g 77+e 73+e)
-  "0xA4F77CE22F1E89AE": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 160 },
-      { move: "33a+h", score: 160 },
-      { move: "33a+c", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+g 77+h 73+e)
-  "0xA51FC031082E11C2": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 280 },
-      { move: "33b+h", score: 280 },
-      { move: "33b+c", score: 140 }
+      { move: "77+h", score: -280 },
+      { move: "77+a", score: -280 },
+      { move: "77+g", score: -400 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+b 37+c 53b+a)
@@ -21112,13 +21934,22 @@ var OPENING_BOOK = {
       { move: "53+b", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+g 77+e)
-  "0xA5ABCAB85D8A837A": {
+  // 4P ply 3 (after 33+a 37+c 77+d)
+  "0xA57064C0C54EC667": {
     depth: 8,
     candidates: [
       { move: "73+f", score: -1256 },
       { move: "73+e", score: -1256 },
       { move: "73+g", score: -1376 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+e 73+e)
+  "0xA5911AF01D32CF2F": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+h 77+e 33h+a)
@@ -21148,58 +21979,31 @@ var OPENING_BOOK = {
       { move: "53h-44", score: -100 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+c 77+e 73+g)
-  "0xA5D67566A74C1A78": {
+  // 4P ply 4 (after 33+g 37+b 77+b 73+e)
+  "0xA5FD19940524A19D": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -260 },
-      { move: "33g+h", score: -260 },
-      { move: "33g+a", score: -260 }
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+b 73+e)
-  "0xA5E039EE93340D5B": {
+  // 4P ply 4 (after 33+a 37+b 77+b 73+g)
+  "0xA60B86EF1EA14ABE": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+b 73+g)
-  "0xA616A69588B1E678": {
+  // 4P ply 4 (after 33+b 37+d 77+b 73+f)
+  "0xA62954C2934221B4": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+c 77+e 73+e)
-  "0xA620EA1DBCC9F15B": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 20 },
-      { move: "33a+h", score: 20 },
-      { move: "33a+c", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+g 77+g 73+f)
-  "0xA625956BFBFD6FA5": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 280 },
-      { move: "33h+b", score: 280 },
-      { move: "33h+c", score: 140 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+b 77+b 73+f)
-  "0xA63474B805528D72": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 260 },
-      { move: "33b+h", score: 260 },
-      { move: "33b+c", score: 120 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 2 (after 33+b 37+e)
@@ -21211,13 +22015,13 @@ var OPENING_BOOK = {
       { move: "53+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+e 73+f)
-  "0xA65877DC1D44E3C0": {
+  // 4P ply 4 (after 33+a 37+e 77+e 73+g)
+  "0xA667858B06B7240C": {
     depth: 8,
     candidates: [
-      { move: "33b+h", score: -120 },
-      { move: "33b+a", score: -120 },
-      { move: "33b+c", score: -260 }
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+b 77+e 73+b)
@@ -21238,13 +22042,13 @@ var OPENING_BOOK = {
       { move: "33a+b", score: 400 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+e 77+d)
-  "0xA6C1942D64B5F813": {
+  // 4P ply 4 (after 33+g 37+g 77+h 73+f)
+  "0xA6D6AD1D08583D2D": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -836 },
-      { move: "73+e", score: -836 },
-      { move: "73+g", score: -956 }
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+c 57+e 33+a)
@@ -21256,13 +22060,13 @@ var OPENING_BOOK = {
       { move: "77+e", score: -2080 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+g 77+e 73+g)
-  "0xA701E399349B628D": {
+  // 4P ply 4 (after 33+c 37+g 77+d 73+e)
+  "0xA6FB4465240DB446": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -120 },
-      { move: "33g+h", score: -120 },
-      { move: "33g+a", score: -120 }
+      { move: "33c+b", score: 20 },
+      { move: "33c+h", score: 20 },
+      { move: "33c+a", score: 20 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+a 37+d 33+a)
@@ -21274,15 +22078,6 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2600 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+f 77+b 73+f)
-  "0xA7338717E9DD640E": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
-    ]
-  },
   // 2P 1-Base ply 4 (after 53+c 57+c 33+b 37+d)
   "0xA76F2BBB8FC0B836": {
     depth: 8,
@@ -21292,26 +22087,26 @@ var OPENING_BOOK = {
       { move: "33b+a", score: -120 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+c 77+e)
-  "0xA77C5C47CE5DFB8F": {
+  // 4P ply 4 (after 33+b 37+e 77+h 73+g)
+  "0xA78F39582187BC60": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+e 77+h 73+f)
-  "0xA7B0CB0F3A747BAC": {
+  // 4P ply 3 (after 33+a 37+g 77+d)
+  "0xA7A7F23F5699BE92": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "73+f", score: -1396 },
+      { move: "73+e", score: -1396 },
+      { move: "73+g", score: -1516 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+c 77+h 73+e)
-  "0xA7C856CE9BF96937": {
+  // 4P ply 4 (after 33+b 37+b 77+d 73+f)
+  "0xA80A811B16E9EAF6": {
     depth: 8,
     candidates: [
       { move: "33b+a", score: 140 },
@@ -21319,31 +22114,13 @@ var OPENING_BOOK = {
       { move: "33b+c", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+f 77+a 73+f)
-  "0xA7CCD1C409A9F1D5": {
+  // 4P ply 4 (after 33+a 37+d 77+d 73+g)
+  "0xA82853369B0A81FC": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+d 77+d 73+f)
-  "0xA817A16180F94630": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+b 77+d 73+g)
-  "0xA835734C0D1A2D3A": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 57+d 53+b 37+e)
@@ -21353,15 +22130,6 @@ var OPENING_BOOK = {
       { move: "33+b", score: 0 },
       { move: "33+a", score: 0 },
       { move: "53h+a", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+g 77+a 73+e)
-  "0xA83AE715D7C24619": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: 20 },
-      { move: "33d+b", score: 20 },
-      { move: "33d+h", score: 20 }
     ]
   },
   // OFK ply 4 (after 22+b 46+f 22b+c 46f+d)
@@ -21382,13 +22150,13 @@ var OPENING_BOOK = {
       { move: "57e+f", score: -2564 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+d 77+e)
-  "0xA88E4290F9085DE3": {
+  // 4P ply 3 (after 33+g 37+b 77+e)
+  "0xA89362EA6F18F125": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -836 },
-      { move: "73+e", score: -836 },
-      { move: "73+g", score: -956 }
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+d 53+h 57d-66)
@@ -21398,15 +22166,6 @@ var OPENING_BOOK = {
       { move: "33+a", score: 0 },
       { move: "53b-64", score: 0 },
       { move: "53b+a", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+g 77+b 73+e)
-  "0xA8C5B1C637B6D3C2": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 140 },
-      { move: "33c+h", score: 140 },
-      { move: "33c+a", score: 140 }
     ]
   },
   // OFK ply 4 (after 32+a 46+e 22+c 36+a)
@@ -21427,6 +22186,24 @@ var OPENING_BOOK = {
       { move: "52h+g", score: 1931 }
     ]
   },
+  // 4P ply 3 (after 33+g 37+e 77+b)
+  "0xA8FF618E770E9F97": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+d 73+f)
+  "0xA90D72B4FA66038A": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+a 57+d 73+b 57d-66)
   "0xA9138F23C830FA5C": {
     depth: 8,
@@ -21436,13 +22213,13 @@ var OPENING_BOOK = {
       { move: "33+a", score: -120 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+e 77+g)
-  "0xA914AD1D82ACD15B": {
+  // 4P ply 4 (after 33+g 37+f 77+h 73+e)
+  "0xA9209BCCD6338AE1": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
   // OFK ply 4 (after 22+b 26+d 22b+c 26d-35)
@@ -21454,15 +22231,6 @@ var OPENING_BOOK = {
       { move: "32+a", score: -1853 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+g 77+b)
-  "0xA999079C4522D916": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1516 },
-      { move: "73+e", score: -1516 },
-      { move: "73+g", score: -1636 }
-    ]
-  },
   // OFK ply 3 (after 32+b 26+d 32b+a)
   "0xA9A811118D010EEC": {
     depth: 8,
@@ -21472,8 +22240,17 @@ var OPENING_BOOK = {
       { move: "46+g", score: -5033 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+f 77+g 73+e)
-  "0xA9D3A3BA2596D869": {
+  // 4P ply 2 (after 33+c 37+g)
+  "0xA9F2A616E9CFF3F2": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 140 },
+      { move: "77+a", score: 140 },
+      { move: "77+g", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+h 37+d 77+a 73+f)
+  "0xAA1487034AA96A2B": {
     depth: 8,
     candidates: [
       { move: "33h+a", score: 0 },
@@ -21481,17 +22258,8 @@ var OPENING_BOOK = {
       { move: "33h+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+a 73+f)
-  "0xAA09A779DCB9C6ED": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 260 },
-      { move: "33h+b", score: 260 },
-      { move: "33h+c", score: 120 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+c 77+b 73+e)
-  "0xAA122739A461AB37": {
+  // 4P ply 4 (after 33+c 37+b 77+e 73+g)
+  "0xAA394BCB060910D2": {
     depth: 8,
     candidates: [
       { move: "33c+b", score: 0 },
@@ -21499,49 +22267,49 @@ var OPENING_BOOK = {
       { move: "33c+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+e 73+g)
-  "0xAA246BB19019BC14": {
+  // 4P ply 4 (after 33+c 37+e 77+b 73+g)
+  "0xAA5548AF1E1F7E60": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+h 73+f)
-  "0xAAE9F6E0D645A60E": {
+  // 4P ply 4 (after 33+d 37+e 77+a 73+g)
+  "0xAAAA1E7CFE6BEBBB": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+a 73+e)
-  "0xAAED71EA44153EEC": {
+  // 4P ply 4 (after 33+a 37+f 77+h 73+g)
+  "0xAAD604B7CDB661C2": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+f 77+e 73+f)
-  "0xAB014A33F1753E62": {
+  // 4P ply 2 (after 33+c 37+c)
+  "0xAB2530E97A188B07": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+c 77+b)
-  "0xAB4E9163D6F5A1E3": {
+  // 4P ply 4 (after 33+b 37+f 77+e 73+g)
+  "0xAB3EB864EA86F9AE": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 37+c 73+a 57+f)
@@ -21553,13 +22321,13 @@ var OPENING_BOOK = {
       { move: "33a+b", score: 400 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+d 73+e)
-  "0xABC3EC37169FC619": {
+  // 4P ply 4 (after 33+g 37+d 77+d 73+e)
+  "0xABDECC4D808F6ADF": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 77+e 33+a 77e+f)
@@ -21571,31 +22339,31 @@ var OPENING_BOOK = {
       { move: "53b+h", score: -900 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+b 77+h 73+f)
-  "0xABEE054F3ACA4F72": {
+  // 4P ply 4 (after 33+c 37+d 77+h 73+f)
+  "0xABF32535ACDAE3B4": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 120 },
-      { move: "33c+h", score: 120 },
-      { move: "33c+a", score: 120 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+a", score: -140 },
+      { move: "33c+h", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+e 73+f)
-  "0xAC39BE4F97C0B927": {
+  // 4P ply 4 (after 33+h 37+c 77+a 73+g)
+  "0xAC0952FD4D706F18": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -120 },
-      { move: "33c+h", score: -120 },
-      { move: "33c+a", score: -120 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+a 73+e)
-  "0xAC4E3D6BF70EBA4F": {
+  // 4P ply 2 (after 33+a 37+f)
+  "0xAC1DC4951CAD0C42": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 57+d 73+a 37+e)
@@ -21607,40 +22375,13 @@ var OPENING_BOOK = {
       { move: "53+b", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+f 77+b)
-  "0xAC76651FB04026A6": {
+  // 4P ply 4 (after 33+a 37+g 77+d 73+f)
+  "0xACE210370F04FC3A": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
-    ]
-  },
-  // 4P ply 3 (after 33+d 37+f 77+a)
-  "0xAC8933CC5034B37D": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+g 77+d 73+g)
-  "0xACDDE26014F73BF6": {
-    depth: 8,
-    candidates: [
-      { move: "33b+h", score: 160 },
-      { move: "33b+a", score: 160 },
-      { move: "33b+c", score: 20 }
-    ]
-  },
-  // 4P ply 3 (after 33+a 37+e 77+h)
-  "0xACF5290763E93904": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33a+b", score: 160 },
+      { move: "33a+h", score: 160 },
+      { move: "33a+c", score: 20 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 57+d 33+h 57d-66)
@@ -21652,58 +22393,22 @@ var OPENING_BOOK = {
       { move: "53a+h", score: -1020 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+e 77+e)
-  "0xAD1D95D444D9A168": {
+  // 4P ply 3 (after 33+b 37+d 77+b)
+  "0xAD6CB6CACADF631C": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+f 77+b 73+e)
-  "0xAD2AD345C2D42C72": {
+  // 4P ply 3 (after 33+g 37+g 77+h)
+  "0xAD934F1551C57F85": {
     depth: 8,
     candidates: [
-      { move: "33a+h", score: 0 },
-      { move: "33a+b", score: 0 },
-      { move: "33a+c", score: -140 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+g 77+g)
-  "0xAD607763A2602D0D": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1516 },
-      { move: "73+e", score: -1516 },
-      { move: "73+g", score: -1636 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+b 77+b)
-  "0xAD7196B05CCFCFDA": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1496 },
-      { move: "73+e", score: -1496 },
-      { move: "73+g", score: -1616 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+e 77+d 73+f)
-  "0xAD8476253D28BABB": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+e 77+h 73+e)
-  "0xADA99F5D117D33D0": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // OFK ply 4 (after 32+b 36+d 42+a 56+f)
@@ -21715,13 +22420,22 @@ var OPENING_BOOK = {
       { move: "52+e", score: -3463 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+c 77+d 73+g)
-  "0xAE0A749F87204303": {
+  // 4P ply 4 (after 33+c 37+c 77+h 73+g)
+  "0xADEEF0CBAB03E687": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 20 },
-      { move: "33b+h", score: 20 },
-      { move: "33b+c", score: -120 }
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+c 77+d 73+f)
+  "0xAE3586C89CD384CF": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 20 },
+      { move: "33a+h", score: 20 },
+      { move: "33a+c", score: -120 }
     ]
   },
   // OFK ply 4 (after 32+b 46+f 52+h 46f-35)
@@ -21733,22 +22447,49 @@ var OPENING_BOOK = {
       { move: "42h+b", score: -1068 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+f 77+b 73+g)
-  "0xAEDC4C3ED951C751": {
+  // 4P ply 4 (after 33+b 37+e 77+d 73+e)
+  "0xAE4D1B093D5E9654": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+g 77+e 73+f)
-  "0xAEEE28B00417C1D2": {
+  // 4P ply 4 (after 33+h 37+g 77+a 73+g)
+  "0xAEDEC402DEA717ED": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 20 },
-      { move: "33c+h", score: 20 },
-      { move: "33c+a", score: 20 }
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+g 73+g)
+  "0xAF3780AD2CF3899D": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+h 73+g)
+  "0xAF39663438D49E72": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+c 77+h)
+  "0xAF44D9EAC2120770": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+f 33+b 77+f)
@@ -21760,76 +22501,58 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 62 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+c 77+g)
-  "0xAFB7E19C31B755F8": {
+  // 4P ply 3 (after 33+b 37+c 77+d)
+  "0xB032676B4C65955D": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "73+f", score: -1256 },
+      { move: "73+e", score: -1256 },
+      { move: "73+g", score: -1376 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+g 77+h 73+e)
-  "0xB05DC39A810542F8": {
+  // 4P ply 4 (after 33+g 37+c 77+e 73+f)
+  "0xB0AB849A35948E8E": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 280 },
-      { move: "33a+h", score: 280 },
-      { move: "33a+c", score: 140 }
+      { move: "33g+b", score: -260 },
+      { move: "33g+h", score: -260 },
+      { move: "33g+a", score: -260 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+g 77+a)
-  "0xB0E6D7F615E2C1B3": {
+  // 4P ply 3 (after 33+g 37+f 77+b)
+  "0xB0E45FCA1214110F": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1516 },
-      { move: "73+e", score: -1516 },
-      { move: "73+g", score: -1636 }
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+g 77+h)
-  "0xB10175C0F391482C": {
+  // 4P ply 4 (after 33+c 37+e 77+d 73+f)
+  "0xB1164CF09F7C8D12": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 },
+      { move: "33c+b", score: -260 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+f 77+g)
-  "0xB10F9359E7B65FC3": {
+  // 4P ply 4 (after 33+g 37+e 77+h 73+e)
+  "0xB13BA588B3290479": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+c 77+h 73+g)
-  "0xB17CCA1E0957D12E": {
+  // 4P ply 4 (after 33+h 37+c 77+g 73+g)
+  "0xB18FF268FAF283A6": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+g 77+e 73+e)
-  "0xB1B57F49A635DA94": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 160 },
-      { move: "33b+h", score: 160 },
-      { move: "33b+c", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+e 77+g 73+e)
-  "0xB1C89DFE408C56F1": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
   // OFK ply 4 (after 22+b 56+f 32+a 56f+a)
@@ -21850,22 +22573,22 @@ var OPENING_BOOK = {
       { move: "73+a", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+c 77+a)
-  "0xB23141098635B946": {
+  // 4P ply 4 (after 33+c 37+f 77+b 73+g)
+  "0xB24E76EB7B05F0F8": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+c 77+h 73+e)
-  "0xB28A556512D23A0D": {
+  // 4P ply 4 (after 33+g 37+g 77+e 73+f)
+  "0xB27C1265A643F67B": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
+      { move: "33g+b", score: -120 },
+      { move: "33g+h", score: -120 },
+      { move: "33g+a", score: -120 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 77+e 53b-64 57+f)
@@ -21875,6 +22598,24 @@ var OPENING_BOOK = {
       { move: "53", score: 150 },
       { move: "73+h", score: 0 },
       { move: "64b+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+a 73+g)
+  "0xB2B120389B716523": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+h", score: -260 },
+      { move: "33d+b", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+h 73+g)
+  "0xB2CD3AF3A8ACEF5A": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // OFK ply 4 (after 22+b 56+f 22b+c 36+a)
@@ -21895,40 +22636,49 @@ var OPENING_BOOK = {
       { move: "53bc+h", score: -1330 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+h 73+f)
-  "0xB2F2C8A4B35F2896": {
+  // 4P ply 3 (after 33+b 37+g 77+d)
+  "0xB2E5F194DFB2EDA8": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "73+f", score: -1396 },
+      { move: "73+e", score: -1396 },
+      { move: "73+g", score: -1516 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+e 77+e 73+f)
-  "0xB31A7477946FB0FA": {
+  // 4P ply 4 (after 33+b 37+e 77+e 73+g)
+  "0xB32586208F9C7736": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+b 73+g)
-  "0xB354A53E019AB542": {
+  // 4P ply 4 (after 33+b 37+b 77+b 73+g)
+  "0xB3498544978A1984": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+c 77+e 73+e)
-  "0xB362E9B635E2A261": {
+  // 4P ply 4 (after 33+h 37+g 77+g 73+g)
+  "0xB35864976925FB53": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 20 },
-      { move: "33b+h", score: 20 },
-      { move: "33b+c", score: -120 }
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+b 73+f)
+  "0xB36B57691A69728E": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 57+d 53a+b 57d+e)
@@ -21940,24 +22690,6 @@ var OPENING_BOOK = {
       { move: "73+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+b 77+b 73+f)
-  "0xB37677138C79DE48": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 260 },
-      { move: "33a+h", score: 260 },
-      { move: "33a+c", score: 120 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+g 77+h 73+g)
-  "0xB3AB5CE19A80A9DB": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: 0 },
-      { move: "33g+h", score: 0 },
-      { move: "33g+a", score: 0 }
-    ]
-  },
   // 2P 3-Base ply 4 (after 33+a 57+d 53+g 77+e)
   "0xB3C8793FFAE04816": {
     depth: 8,
@@ -21967,22 +22699,13 @@ var OPENING_BOOK = {
       { move: "53g+b", score: -400 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+c 77+h)
-  "0xB3D6E33F604630D9": {
+  // 4P ply 2 (after 33+a 37+e)
+  "0xB406FAD179B782DA": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
-    ]
-  },
-  // 4P ply 3 (after 33+c 37+b 77+e)
-  "0xB401583FCD4CC68C": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 57+d 73+a 77+f)
@@ -21994,26 +22717,8 @@ var OPENING_BOOK = {
       { move: "33a+b", score: -138 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+f 77+a 73+e)
-  "0xB455032F921434D7": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
-    ]
-  },
-  // 4P ply 3 (after 33+c 37+e 77+b)
-  "0xB46D5B5BD55AA83E": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
-    ]
-  },
-  // 4P ply 3 (after 33+d 37+e 77+a)
-  "0xB4920D88352E3DE5": {
+  // 4P ply 3 (after 33+c 37+d 77+e)
+  "0xB41C78455B5C6A4A": {
     depth: 8,
     candidates: [
       { move: "73+f", score: -976 },
@@ -22021,13 +22726,22 @@ var OPENING_BOOK = {
       { move: "73+g", score: -1096 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+h 73+e)
-  "0xB4B552B698E85434": {
+  // 4P ply 4 (after 33+g 37+g 77+b 73+e)
+  "0xB4578B1395E2E46B": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 260 },
-      { move: "33b+h", score: 260 },
-      { move: "33b+c", score: 120 }
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+h 73+e)
+  "0xB4A872CC0EF8F8F2": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // OFK ply 4 (after 32+b 46+e 32b+g 56+f)
@@ -22039,24 +22753,6 @@ var OPENING_BOOK = {
       { move: "52+a", score: -3553 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+f 77+h)
-  "0xB4EE174306F3B79C": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+f 77+e)
-  "0xB506AB9021C32FF0": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
-    ]
-  },
   // OFK ply 4 (after 32+b 36+d 32b+a 56+f)
   "0xB526293E038860E5": {
     depth: 8,
@@ -22066,40 +22762,22 @@ var OPENING_BOOK = {
       { move: "22+c", score: -3367 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+e 77+b 73+e)
-  "0xB531ED01A7CEA2EA": {
+  // 4P ply 4 (after 33+a 37+d 77+e 73+e)
+  "0xB540CE1F29C8609E": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+c 77+b 73+f)
-  "0xB54970C00643B071": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 140 },
-      { move: "33b+h", score: 140 },
-      { move: "33b+c", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+b 77+e 73+e)
-  "0xB55DEE65BFD8CC58": {
+  // 4P ply 4 (after 33+a 37+c 77+b 73+g)
+  "0xB57682971DB077BD": {
     depth: 8,
     candidates: [
       { move: "33a+b", score: 140 },
       { move: "33a+h", score: 140 },
       { move: "33a+c", score: 0 }
-    ]
-  },
-  // 4P ply 2 (after 33+g 37+g)
-  "0xB5609CC34B9BC45B": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: 0 },
-      { move: "77+a", score: 0 },
-      { move: "77+g", score: -120 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+h 37+d 53+h)
@@ -22111,33 +22789,6 @@ var OPENING_BOOK = {
       { move: "37+e", score: -2024 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+f 77+d 73+f)
-  "0xB59F486158323423": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+f 77+h 73+e)
-  "0xB5B2A1197467BD48": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+g 77+g 73+e)
-  "0xB5BC47806040AAA7": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: 20 },
-      { move: "33d+b", score: 20 },
-      { move: "33d+h", score: 20 }
-    ]
-  },
   // 2P 1-Base ply 3 (after 53+b 57+e 33+a)
   "0xB5F2BE4133F0FE5B": {
     depth: 8,
@@ -22147,13 +22798,13 @@ var OPENING_BOOK = {
       { move: "57e+f", score: -3260 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+d 77+d)
-  "0xB61040C2504F57A2": {
+  // 4P ply 3 (after 33+a 37+b 77+d)
+  "0xB60D60B8C65FFB64": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "73+f", score: -1376 },
+      { move: "73+e", score: -1376 },
+      { move: "73+g", score: -1496 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+f 33+a 37f+e)
@@ -22165,8 +22816,17 @@ var OPENING_BOOK = {
       { move: "73a+h", score: 62 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+e 73+g)
-  "0xB6AB711EA45D277B": {
+  // 4P ply 4 (after 33+b 37+f 77+d 73+e)
+  "0xB656254D584418CC": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+b 73+e)
+  "0xB6801DEC06359C9E": {
     depth: 8,
     candidates: [
       { move: "33g+b", score: -140 },
@@ -22174,22 +22834,31 @@ var OPENING_BOOK = {
       { move: "33g+a", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+e 77+b 73+g)
-  "0xB6C7727ABC4B49C9": {
+  // 4P ply 4 (after 33+g 37+d 77+e 73+g)
+  "0xB6B65164324D8BBD": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+d 73+e)
-  "0xB74CF69822DB5D76": {
+  // 4P ply 0 (initial)
+  "0xB6C1B656CF4909AD": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
+      { move: "33+a", score: 0 },
+      { move: "33+b", score: 0 },
+      { move: "33+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+e 77+g 73+g)
+  "0xB72CBEE949E90705": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+c 73+a 37+e)
@@ -22201,22 +22870,13 @@ var OPENING_BOOK = {
       { move: "33a+b", score: 400 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+h 73+f)
-  "0xB7611FE00E8ED41D": {
+  // 4P ply 4 (after 33+c 37+b 77+d 73+e)
+  "0xB751D6E2B4CBF1B0": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+c 77+g 73+e)
-  "0xB76BD17FF397D252": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
     ]
   },
   // OFK ply 3 (after 22+b 46+f 22b+c)
@@ -22228,94 +22888,76 @@ var OPENING_BOOK = {
       { move: "36d+f", score: -4523 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+g 73+f)
-  "0xB78F07EC6B3B2A53": {
+  // 4P ply 4 (after 33+g 37+b 77+h 73+f)
+  "0xB77C3F9A989E78DB": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 260 },
-      { move: "33h+b", score: 260 },
-      { move: "33h+c", score: 120 }
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+g 77+b 73+f)
-  "0xB79EE63F9594C884": {
+  // 4P ply 4 (after 33+h 37+d 77+g 73+f)
+  "0xB7922796FD2B8695": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 280 },
-      { move: "33b+h", score: 280 },
-      { move: "33b+c", score: 140 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
-  // 4P ply 2 (after 33+g 37+c)
-  "0xB7B70A3CD84CBCAE": {
+  // 4P_ED ply 1 (after 33+h)
+  "0xB79A77E61C3EE0E5": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: -140 },
-      { move: "77+a", score: -140 },
-      { move: "77+g", score: -260 }
+      { move: "37+e", score: -1437 },
+      { move: "37+c", score: -1437 },
+      { move: "37+d", score: -1437 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+b 77+b)
-  "0xB833951BD5E49CE0": {
+  // 4P ply 4 (after 33+a 37+g 77+b 73+g)
+  "0xB7A114688E670F48": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1496 },
-      { move: "73+e", score: -1496 },
-      { move: "73+g", score: -1616 }
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
     ]
   },
-  // 4P ply 2 (after 33+c 37+d)
-  "0xB84514EBEF191AC2": {
+  // 4P ply 1 (after 33+b)
+  "0xB7B819586611D6CD": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: -140 },
-      { move: "77+a", score: -140 },
-      { move: "77+g", score: -260 }
+      { move: "37+e", score: -1376 },
+      { move: "37+d", score: -1376 },
+      { move: "37+f", score: -1376 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+e 77+e)
-  "0xB85F967FCDF2F252": {
+  // 4P ply 3 (after 33+a 37+d 77+b)
+  "0xB82EB56143F43026": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+b 73+e)
-  "0xB868D0EE4BFF7F48": {
+  // 4P ply 2 (after 33+c 37+b)
+  "0xB85834917909B604": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "77+h", score: 120 },
+      { move: "77+a", score: 120 },
+      { move: "77+g", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+h 73+f)
-  "0xB893013739DB7271": {
+  // 4P ply 4 (after 33+g 37+e 77+d 73+g)
+  "0xB8F987D9AFF02E4D": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+c 77+d 73+e)
-  "0xB8BEE84F158EFB1A": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -260 },
-      { move: "33g+h", score: -260 },
-      { move: "33g+a", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+e 77+e 73+e)
-  "0xB9032025BF66F886": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 57+e 33+a 37+e)
@@ -22327,22 +22969,40 @@ var OPENING_BOOK = {
       { move: "53a+b", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+b 77+b 73+e)
-  "0xB96F2341A7709634": {
+  // 4P ply 3 (after 33+g 37+g 77+e)
+  "0xB939F06DFFDEB4D3": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 120 },
-      { move: "33c+h", score: 120 },
-      { move: "33c+a", score: 120 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+c 77+a 73+f)
-  "0xB974A301DFA8FBEE": {
+  // 4P ply 4 (after 33+c 37+c 77+e 73+g)
+  "0xB9444FB305182DD1": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
+      { move: "33c+b", score: -120 },
+      { move: "33c+h", score: -120 },
+      { move: "33c+a", score: -120 }
+    ]
+  },
+  // 4P ply 2 (after 33+b 37+f)
+  "0xB95FC73E95865F78": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 0 },
+      { move: "77+a", score: 0 },
+      { move: "77+g", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+d 77+b 73+e)
+  "0xB972033B31603AF2": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // OFK ply 3 (after 32+b 26+d 42+a)
@@ -22354,31 +23014,22 @@ var OPENING_BOOK = {
       { move: "26d+a", score: -6783 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+a 73+e)
-  "0xB9907592470403EF": {
+  // 4P ply 4 (after 33+d 37+d 77+a 73+e)
+  "0xB98D55E8D114AF29": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: 0 },
-      { move: "33d+b", score: 0 },
-      { move: "33d+h", score: 0 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+g 77+d 73+g)
-  "0xB99FE1CB9DDC68CC": {
+  // 4P ply 4 (after 33+b 37+g 77+d 73+f)
+  "0xB9A0139C862FAF00": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 160 },
-      { move: "33a+h", score: 160 },
-      { move: "33a+c", score: 20 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+e 77+h)
-  "0xB9B72AACEAC26A3E": {
-    depth: 8,
-    candidates: [
-      { move: "73+e", score: -1236 },
-      { move: "73+f", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33b+a", score: 160 },
+      { move: "33b+h", score: 160 },
+      { move: "33b+c", score: 20 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+d 53c+h 77+f)
@@ -22390,31 +23041,13 @@ var OPENING_BOOK = {
       { move: "73+a", score: -610 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+g 77+h 73+f)
-  "0xBA4497C8AA0C0A84": {
+  // 4P ply 3 (after 33+c 37+e 77+d)
+  "0xBA53AEF8C6E1CFBA": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 140 },
-      { move: "33c+h", score: 140 },
-      { move: "33c+a", score: 140 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+f 77+g 73+f)
-  "0xBA4A7151BE2B1D6B": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+g 77+d 73+e)
-  "0xBA697EB0865983EF": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -120 },
-      { move: "33g+h", score: -120 },
-      { move: "33g+a", score: -120 }
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
     ]
   },
   // OFK ply 4 (after 32+b 36+d 32b-43 56+f)
@@ -22444,13 +23077,13 @@ var OPENING_BOOK = {
       { move: "53bg+h", score: -1330 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+c 77+d 73+g)
-  "0xBB4877340E0B1039": {
+  // 4P ply 4 (after 33+a 37+e 77+d 73+e)
+  "0xBB0F18A2B475C56E": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 20 },
-      { move: "33a+h", score: 20 },
-      { move: "33a+c", score: -120 }
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
   // OFK ply 3 (after 32+b 26+d 32b-43)
@@ -22462,13 +23095,40 @@ var OPENING_BOOK = {
       { move: "36+a", score: -6570 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+a 73+f)
-  "0xBBA335FE4C7F831B": {
+  // 4P ply 4 (after 33+b 37+c 77+d 73+f)
+  "0xBB77856315F8D7F5": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 280 },
-      { move: "33h+b", score: 280 },
-      { move: "33h+c", score: 140 }
+      { move: "33b+a", score: 20 },
+      { move: "33b+h", score: 20 },
+      { move: "33b+c", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+g 77+e 73+g)
+  "0xBB93D94C96CF5524": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 20 },
+      { move: "33c+h", score: 20 },
+      { move: "33c+a", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+b 73+f)
+  "0xBBA1BDC24B8953A7": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+c 77+e)
+  "0xBBEE66926C09CC26": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 77+f 33b+a 37+e)
@@ -22507,40 +23167,22 @@ var OPENING_BOOK = {
       { move: "73a+h", score: -120 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+d 77+h)
-  "0xBC24FDE8571396B5": {
+  // 4P ply 3 (after 33+g 37+b 77+h)
+  "0xBC39DD92C1033A73": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -956 },
-      { move: "73+e", score: -956 },
-      { move: "73+g", score: -1076 }
+      { move: "73+f", score: -1216 },
+      { move: "73+e", score: -1216 },
+      { move: "73+g", score: -1336 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+f 77+d 73+g)
-  "0xBC70834868BE977C": {
+  // 4P ply 3 (after 33+h 37+d 77+g)
+  "0xBCD7C59EA4B6C43D": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+b 77+g)
-  "0xBCCAE5E432A668FB": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1496 },
-      { move: "73+e", score: -1496 },
-      { move: "73+g", score: -1616 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+g 77+b)
-  "0xBCDB0437CC098A2C": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1516 },
-      { move: "73+e", score: -1516 },
-      { move: "73+g", score: -1636 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // OFK ply 4 (after 22+b 36+e 42+h 26+d)
@@ -22552,22 +23194,22 @@ var OPENING_BOOK = {
       { move: "52h-43", score: -620 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+d 73+f)
-  "0xBD55A2CA09D2150A": {
+  // 4P ply 4 (after 33+a 37+b 77+d 73+f)
+  "0xBD4882B09FC2B9CC": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+d 73+g)
-  "0xBD7770E784317E00": {
+  // 4P ply 4 (after 33+b 37+d 77+d 73+g)
+  "0xBD6A509D1221D2C6": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 140 },
-      { move: "33b+h", score: 140 },
-      { move: "33b+c", score: 0 }
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
     ]
   },
   // OFK ply 4 (after 32+b 56+f 32b+a 46+f)
@@ -22579,6 +23221,15 @@ var OPENING_BOOK = {
       { move: "42+h", score: -799 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+f 77+e 73+e)
+  "0xBD8A24B4782841B7": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
+    ]
+  },
   // 2P 3-Base ply 2 (after 53+a 37+f)
   "0xBDE81D4AC635C40B": {
     depth: 8,
@@ -22588,40 +23239,22 @@ var OPENING_BOOK = {
       { move: "33+b", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+c 77+b)
-  "0xBE0C92C85FDEF2D9": {
+  // 4P ply 4 (after 33+a 37+f 77+e 73+g)
+  "0xBE7CBBCF63ADAA94": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+e 73+f)
-  "0xBE434998785E6D58": {
+  // 4P ply 4 (after 33+c 37+b 77+h 73+g)
+  "0xBE93F4B3A812DB84": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+d 77+h 73+g)
-  "0xBE8ED4C93E027742": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
-    ]
-  },
-  // 4P ply 3 (after 33+g 37+f 77+d)
-  "0xBEDAAA6901AF768B": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -836 },
-      { move: "73+e", score: -836 },
-      { move: "73+g", score: -956 }
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
     ]
   },
   // OFK ply 0 (initial)
@@ -22629,35 +23262,26 @@ var OPENING_BOOK = {
     depth: 8,
     candidates: [
       { move: "32+a", score: 0 },
-      { move: "22+b", score: 0 },
-      { move: "32+b", score: 0 }
+      { move: "42+a", score: 0 },
+      { move: "22+b", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+e 77+b 73+f)
-  "0xBF28B9538CC7EA96": {
+  // 4P ply 4 (after 33+c 37+d 77+e 73+f)
+  "0xBF599A4D02C128E2": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 },
+      { move: "33c+b", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+b 77+e 73+f)
-  "0xBF44BA3794D18424": {
+  // 4P ply 4 (after 33+h 37+b 77+a 73+g)
+  "0xBF7456854E61521B": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+d 77+a 73+g)
-  "0xBF6976FFD871FEDD": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+f 53c+b 57f-46)
@@ -22669,6 +23293,15 @@ var OPENING_BOOK = {
       { move: "33+a", score: -400 }
     ]
   },
+  // 4P ply 4 (after 33+b 37+f 77+h 73+g)
+  "0xBF94071C449D32F8": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+h 37+d 73+a 57+e)
   "0xBFA39A6DB021360E": {
     depth: 8,
@@ -22676,15 +23309,6 @@ var OPENING_BOOK = {
       { move: "53+a", score: -62 },
       { move: "53+h", score: -62 },
       { move: "33a+b", score: -62 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+f 77+h 73+f)
-  "0xBFABF54B5F6EF534": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+a 37+d 53+h 77+e)
@@ -22714,31 +23338,22 @@ var OPENING_BOOK = {
       { move: "46f-35", score: -3463 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+e 77+a 73+f)
-  "0xBFD7EF806CB37F4D": {
+  // 4P ply 2 (after 33+a 37+b)
+  "0xC00E165F1AED7B35": {
     depth: 8,
     candidates: [
-      { move: "33d+b", score: -260 },
-      { move: "33d+a", score: -260 },
-      { move: "33d+h", score: -260 }
+      { move: "77+h", score: 260 },
+      { move: "77+a", score: 260 },
+      { move: "77+g", score: 140 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+e 77+e)
-  "0xC009B4B1AE163F63": {
+  // 4P ply 4 (after 33+g 37+g 77+e 73+e)
+  "0xC03364F9EEAE7336": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
-    ]
-  },
-  // 4P ply 2 (after 33+a 37+d)
-  "0xC01336258CFDD7F3": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: 0 },
-      { move: "77+a", score: 0 },
-      { move: "77+g", score: -120 }
+      { move: "33g+b", score: -120 },
+      { move: "33g+h", score: -120 },
+      { move: "33g+a", score: -120 }
     ]
   },
   // OFK ply 4 (after 22+b 46+e 32+a 56+f)
@@ -22750,67 +23365,49 @@ var OPENING_BOOK = {
       { move: "52+h", score: -1721 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+b 77+b)
-  "0xC065B7D5B60051D1": {
+  // 4P ply 3 (after 33+c 37+d 77+b)
+  "0xC07897AF2010FD17": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1356 },
-      { move: "73+e", score: -1356 },
-      { move: "73+g", score: -1476 }
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+b 77+a)
-  "0xC09AE1065674C40A": {
+  // 4P ply 3 (after 33+d 37+d 77+a)
+  "0xC087C17CC06468CC": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+h 73+e)
-  "0xC0BDBE38FBB2ADDB": {
+  // 4P ply 4 (after 33+b 37+c 77+h 73+g)
+  "0xC0FAD1AE41CC788C": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33b+h", score: 140 },
+      { move: "33b+a", score: 140 },
+      { move: "33b+c", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+c 77+h 73+f)
-  "0xC0C523F95A3FBF40": {
+  // 4P ply 4 (after 33+a 37+c 77+e 73+g)
+  "0xC1126D7D66FCE0E0": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
+      { move: "33a+b", score: 20 },
+      { move: "33a+h", score: 20 },
+      { move: "33a+c", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+c 77+e 73+f)
-  "0xC12D9F2A7D0F272C": {
+  // 4P ply 4 (after 33+a 37+d 77+b 73+e)
+  "0xC12421F55284F7C3": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 20 },
-      { move: "33b+h", score: 20 },
-      { move: "33b+c", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+b 77+b 73+e)
-  "0xC139018FC4945B05": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 260 },
-      { move: "33a+h", score: 260 },
-      { move: "33a+c", score: 120 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+e 77+e 73+e)
-  "0xC15502EBDC8235B7": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 2 (after 53+c 37+d)
@@ -22820,24 +23417,6 @@ var OPENING_BOOK = {
       { move: "73+h", score: -400 },
       { move: "53c+b", score: -400 },
       { move: "33+a", score: -400 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+f 77+b)
-  "0xC162447A5A8FB8AD": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
-    ]
-  },
-  // 4P ply 3 (after 33+g 37+c 77+d)
-  "0xC1B47CDB04FE3CFF": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+a 57+d 53a+h)
@@ -22858,15 +23437,6 @@ var OPENING_BOOK = {
       { move: "52+g", score: -3498 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+g 77+d 73+g)
-  "0xC1C9C305FE38A5FD": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 20 },
-      { move: "33c+h", score: 20 },
-      { move: "33c+a", score: 20 }
-    ]
-  },
   // 2P 3-Base ply 3 (after 33+a 37+f 53+b)
   "0xC1DA94871A70E06D": {
     depth: 8,
@@ -22885,13 +23455,13 @@ var OPENING_BOOK = {
       { move: "53a+h", score: 62 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+g 77+h 73+f)
-  "0xC212B506C9E8C7B5": {
+  // 4P ply 3 (after 33+a 37+e 77+d)
+  "0xC2058C36A505028B": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 280 },
-      { move: "33a+h", score: 280 },
-      { move: "33a+c", score: 140 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 57+e 53+b 37+d)
@@ -22903,6 +23473,15 @@ var OPENING_BOOK = {
       { move: "73+h", score: -62 }
     ]
   },
+  // 4P ply 4 (after 33+b 37+g 77+h 73+g)
+  "0xC22D4751D21B0079": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 280 },
+      { move: "33b+h", score: 280 },
+      { move: "33b+c", score: 140 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 33+b 37+e 53+b 57+d)
   "0xC2661893BABC5A86": {
     depth: 8,
@@ -22910,15 +23489,6 @@ var OPENING_BOOK = {
       { move: "73+a", score: -62 },
       { move: "53b+a", score: -62 },
       { move: "73+h", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+e 77+e 73+g)
-  "0xC2A39D90C707DE94": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+c 53c+h 37+d)
@@ -22939,31 +23509,31 @@ var OPENING_BOOK = {
       { move: "53a+h", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+b 73+g)
-  "0xC2CF9EF4DF11B026": {
+  // 4P ply 4 (after 33+g 37+d 77+b 73+g)
+  "0xC2D2BE8E49011CE0": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -20 },
-      { move: "33g+h", score: -20 },
-      { move: "33g+a", score: -20 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+a", score: -280 },
+      { move: "33g+h", score: -280 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+d 73+g)
-  "0xC31E55FA6DEFDD08": {
+  // 4P ply 4 (after 33+g 37+c 77+e 73+e)
+  "0xC2E4F2067D790BC3": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -120 },
-      { move: "33c+h", score: -120 },
-      { move: "33c+a", score: -120 }
+      { move: "33g+b", score: -260 },
+      { move: "33g+h", score: -260 },
+      { move: "33g+a", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+d 77+g 73+g)
-  "0xC339721DBCA3522C": {
+  // 4P ply 4 (after 33+d 37+b 77+g 73+g)
+  "0xC32452672AB3FEEA": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
     ]
   },
   // OFK ply 4 (after 32+a 36+e 42+c 46+f)
@@ -22975,40 +23545,58 @@ var OPENING_BOOK = {
       { move: "52+a", score: -3553 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+g 77+d)
-  "0xC363EA249729440A": {
+  // 4P ply 4 (after 33+c 37+e 77+d 73+e)
+  "0xC3593A6CD791085F": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+g 73+f)
-  "0xC387EB620861D3BC": {
+  // 4P ply 4 (after 33+g 37+e 77+h 73+f)
+  "0xC374D314FBC48134": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+g 77+e 73+f)
-  "0xC3FA09D5EED85FD9": {
+  // 4P_SPED ply 0 (initial)
+  "0xC3BB37EE45A91717": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 160 },
-      { move: "33b+h", score: 160 },
-      { move: "33b+c", score: 20 }
+      { move: "33+a!", score: 640 },
+      { move: "33+g!", score: 327 },
+      { move: "33+e!", score: 103 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+f 77+d 73+g)
-  "0xC426A1860B5A5A4D": {
+  // 4P ply 4 (after 33+a 37+g 77+e 73+g)
+  "0xC3C5FB82F52B9815": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
+      { move: "33a+b", score: 160 },
+      { move: "33a+h", score: 160 },
+      { move: "33a+c", score: 20 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+f 77+d 73+f)
+  "0xC41953D110A99D81": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: -120 },
+      { move: "33b+h", score: -120 },
+      { move: "33b+c", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+f 77+e)
+  "0xC480B02069588652": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -836 },
+      { move: "73+e", score: -836 },
+      { move: "73+g", score: -956 }
     ]
   },
   // OFK ply 4 (after 22+b 36+d 42+e 36d-45)
@@ -23020,31 +23608,40 @@ var OPENING_BOOK = {
       { move: "32+a", score: -3107 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+d 73+f)
-  "0xC50380046A36D83B": {
+  // 4P ply 4 (after 33+g 37+c 77+b 73+f)
+  "0xC4CF6B704ED819D3": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+g 73+f)
-  "0xC524A7E3BB7A571F": {
+  // 4P ply 2 (after 33+b 37+g)
+  "0xC4E6877303006DF9": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
+      { move: "77+h", score: 280 },
+      { move: "77+a", score: 280 },
+      { move: "77+g", score: 160 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+h 73+e)
-  "0xC52E697C46635150": {
+  // 4P ply 4 (after 33+c 37+b 77+d 73+f)
+  "0xC51EA07EFC2674FD": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+b 77+h 73+e)
+  "0xC5334906D073FD96": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 37+d 73+h 77+e)
@@ -23074,24 +23671,6 @@ var OPENING_BOOK = {
       { move: "37+e", score: -2480 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+g 73+e)
-  "0xC5C0717023D6AF1E": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 260 },
-      { move: "33h+b", score: 260 },
-      { move: "33h+c", score: 120 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+g 77+b 73+e)
-  "0xC5D190A3DD794DC9": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 280 },
-      { move: "33b+h", score: 280 },
-      { move: "33b+c", score: 140 }
-    ]
-  },
   // OFK ply 4 (after 22+b 36+d 42+e 46+e)
   "0xC5D28C2D1AB8A3B9": {
     depth: 8,
@@ -23101,8 +23680,8 @@ var OPENING_BOOK = {
       { move: "42+a", score: -3107 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+f 77+a 73+f)
-  "0xC61A75B3DAF9B19A": {
+  // 4P ply 4 (after 33+h 37+d 77+g 73+e)
+  "0xC5DD510AB5C603D8": {
     depth: 8,
     candidates: [
       { move: "33h+a", score: 0 },
@@ -23110,13 +23689,31 @@ var OPENING_BOOK = {
       { move: "33h+c", score: -140 }
     ]
   },
-  // 4P ply 1 (after 33+g)
-  "0xC63E02E82E8A7F6F": {
+  // 4P ply 4 (after 33+g 37+g 77+b 73+f)
+  "0xC618FD8FDD0F6126": {
     depth: 8,
     candidates: [
-      { move: "37+e", score: -1096 },
-      { move: "37+d", score: -1096 },
-      { move: "37+f", score: -1096 }
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+e 73+g)
+  "0xC62A9901004967A5": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 4P ply 2 (after 33+b 37+c)
+  "0xC631118C90D7150C": {
+    depth: 8,
+    candidates: [
+      { move: "77+h", score: 140 },
+      { move: "77+a", score: 140 },
+      { move: "77+g", score: 20 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+g 33+b 77+f)
@@ -23128,6 +23725,15 @@ var OPENING_BOOK = {
       { move: "73+h", score: 280 }
     ]
   },
+  // 4P ply 4 (after 33+a 37+b 77+h 73+g)
+  "0xC6C5D67DCBF616B5": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 260 },
+      { move: "33a+h", score: 260 },
+      { move: "33a+c", score: 120 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 53+a 57+e 33+b 37+e)
   "0xC6D41B1D2EF87E0A": {
     depth: 8,
@@ -23137,26 +23743,26 @@ var OPENING_BOOK = {
       { move: "33b+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+h 73+g)
-  "0xC6D8F6075DE6BA73": {
+  // 4P ply 4 (after 33+b 37+d 77+h 73+f)
+  "0xC6E7045046157DBF": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+h 73+f)
-  "0xC6FA242AD005D179": {
+  // 4P ply 4 (after 33+a 37+d 77+e 73+f)
+  "0xC70FB8836125E5D3": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 260 },
-      { move: "33b+h", score: 260 },
-      { move: "33b+c", score: 120 }
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+c 77+b 73+e)
-  "0xC706065C4EAE353C": {
+  // 4P ply 4 (after 33+b 37+b 77+e 73+g)
+  "0xC72D6AAEECC68ED9": {
     depth: 8,
     candidates: [
       { move: "33b+a", score: 140 },
@@ -23164,85 +23770,22 @@ var OPENING_BOOK = {
       { move: "33b+c", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+b 77+e 73+f)
-  "0xC71298F9F7354915": {
+  // 4P ply 4 (after 33+b 37+e 77+b 73+g)
+  "0xC74169CAF4D0E06B": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+e 73+g)
-  "0xC7304AD47AD6221F": {
+  // 4P ply 3 (after 33+g 37+e 77+h)
+  "0xC831311CA259C39C": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+e 77+b 73+f)
-  "0xC77E9B9DEF2327A7": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+f 77+d 73+e)
-  "0xC7D03EFD10DFB16E": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+g 77+g 73+f)
-  "0xC7F3311C28AD2FEA": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: 20 },
-      { move: "33d+b", score: 20 },
-      { move: "33d+h", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+f 77+h 73+f)
-  "0xC7FDD7853C8A3805": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+a", score: -140 },
-      { move: "33c+h", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+f 77+g 73+e)
-  "0xC80507CDF6C69826": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+g 77+h 73+e)
-  "0xC80BE154E2E18FC9": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 140 },
-      { move: "33c+h", score: 140 },
-      { move: "33c+a", score: 140 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+g 77+d 73+f)
-  "0xC826082CCEB406A2": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -120 },
-      { move: "33g+h", score: -120 },
-      { move: "33g+a", score: -120 }
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
     ]
   },
   // 2P 1-Base ply 2 (after 53+b 77+e)
@@ -23252,33 +23795,6 @@ var OPENING_BOOK = {
       { move: "53h-44", score: 0 },
       { move: "33+b", score: 0 },
       { move: "53h+a", score: 0 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+g 77+e)
-  "0xC8BFEBDDB7451D71": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1396 },
-      { move: "73+e", score: -1396 },
-      { move: "73+g", score: -1516 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+e 77+g)
-  "0xC8C2096A51FC9114": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
-    ]
-  },
-  // 4P ply 2 (after 33+g 37+f)
-  "0xC8D9DC8EDD1DF6DA": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: -280 },
-      { move: "77+a", score: -280 },
-      { move: "77+g", score: -400 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 77+f 73+h 57+d)
@@ -23299,13 +23815,22 @@ var OPENING_BOOK = {
       { move: "37+e", score: -2024 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+g 77+h)
-  "0xC957570E9075851D": {
+  // 4P ply 4 (after 33+b 37+c 77+d 73+e)
+  "0xC938F3FF5D1552B8": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1516 },
-      { move: "73+e", score: -1516 },
-      { move: "73+g", score: -1636 }
+      { move: "33b+a", score: 20 },
+      { move: "33b+h", score: 20 },
+      { move: "33b+c", score: -120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+d 73+f)
+  "0xC9406E3EFC984023": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 77+e 73+h 57+d)
@@ -23315,15 +23840,6 @@ var OPENING_BOOK = {
       { move: "53b-64", score: -340 },
       { move: "53b+a", score: -340 },
       { move: "33+a", score: -340 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+e 77+d 73+g)
-  "0xC97F9C69E76B87EF": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
     ]
   },
   // OFK ply 4 (after 22+b 46+f 52+h 26+d)
@@ -23344,31 +23860,22 @@ var OPENING_BOOK = {
       { move: "53a+b", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+a 73+e)
-  "0xC9EC436204920656": {
+  // 4P ply 4 (after 33+g 37+f 77+b 73+e)
+  "0xC9EECB5E0364D6EA": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 280 },
-      { move: "33h+b", score: 280 },
-      { move: "33h+c", score: 140 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+b 73+f)
-  "0xCA27A6720312FA05": {
+  // 4P ply 4 (after 33+a 37+f 77+b 73+g)
+  "0xCA18542518E13DC9": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+c 77+e)
-  "0xCA687D2224926584": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1256 },
-      { move: "73+e", score: -1256 },
-      { move: "73+g", score: -1376 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 37+e 53+h 57+f)
@@ -23380,31 +23887,13 @@ var OPENING_BOOK = {
       { move: "33b+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+h 73+e)
-  "0xCADC77AB7136F73C": {
+  // 4P ply 4 (after 33+c 37+e 77+h 73+g)
+  "0xCA9B183DCB48226B": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+c 77+d 73+f)
-  "0xCAF19ED35D637E57": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -260 },
-      { move: "33g+h", score: -260 },
-      { move: "33g+a", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+b 77+b 73+f)
-  "0xCB2055DDEF9D1379": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 120 },
-      { move: "33c+h", score: 120 },
-      { move: "33c+a", score: 120 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 3-Base ply 2 (after 33+b 77+f)
@@ -23416,31 +23905,22 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+c 77+a 73+e)
-  "0xCB3BD59D97457EA3": {
+  // 4P ply 4 (after 33+c 37+d 77+b 73+f)
+  "0xCB3D75A7798DBFBF": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+e 77+e 73+f)
-  "0xCB4C56B9F78B7DCB": {
+  // 4P ply 4 (after 33+h 37+e 77+a 73+g)
+  "0xCB7CBA0B2D3BABF4": {
     depth: 8,
     candidates: [
-      { move: "33c+a", score: -260 },
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 }
-    ]
-  },
-  // 4P ply 3 (after 33+a 37+c 77+h)
-  "0xCB80C1F103A2FDE8": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+c 53c+b 77+f)
@@ -23452,71 +23932,62 @@ var OPENING_BOOK = {
       { move: "33+a", score: -740 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+a 73+f)
-  "0xCBDF030E0FE986A2": {
+  // 4P ply 4 (after 33+d 37+d 77+a 73+f)
+  "0xCBC2237499F92A64": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: 0 },
-      { move: "33d+b", score: 0 },
-      { move: "33d+h", score: 0 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+e 73+e)
-  "0xCC0C3F0430B3E815": {
+  // 4P ply 4 (after 33+b 37+g 77+d 73+e)
+  "0xCBEF6500CEC22A4D": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
+      { move: "33b+a", score: 160 },
+      { move: "33b+h", score: 160 },
+      { move: "33b+c", score: 20 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+e 77+b)
-  "0xCC3B7995B6BE650F": {
+  // 4P ply 3 (after 33+a 37+d 77+e)
+  "0xCC4A5A8B38B8A77B": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+b 77+e)
-  "0xCC577AF1AEA80BBD": {
+  // 4P ply 2 (after 33+c 37+e)
+  "0xCC50D81F1A534FEB": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "77+h", score: -140 },
+      { move: "77+a", score: -140 },
+      { move: "77+g", score: -260 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+g 77+g)
-  "0xCCB6D31471306D42": {
+  // 4P ply 4 (after 33+g 37+b 77+d 73+g)
+  "0xCCF16B57CCAAD7A2": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1256 },
-      { move: "73+e", score: -1256 },
-      { move: "73+g", score: -1376 }
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+f 77+h)
-  "0xCCB8358D65177AAD": {
+  // 4P ply 4 (after 33+c 37+d 77+e 73+e)
+  "0xCD16ECD14A2CADAF": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+d 73+g)
-  "0xCCEC4B2D5ABA7B64": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+b 77+e 73+e)
-  "0xCD0BCCABDC3C0169": {
+  // 4P ply 4 (after 33+c 37+c 77+b 73+g)
+  "0xCD20A0597E54BA8C": {
     depth: 8,
     candidates: [
       { move: "33c+b", score: 0 },
@@ -23524,22 +23995,13 @@ var OPENING_BOOK = {
       { move: "33c+a", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+f 77+a)
-  "0xCD5F97BB8364F332": {
+  // 4P ply 3 (after 33+g 37+g 77+b)
+  "0xCD5D1F878492238E": {
     depth: 8,
     candidates: [
       { move: "73+f", score: -1236 },
       { move: "73+e", score: -1236 },
       { move: "73+g", score: -1356 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+e 77+b 73+e)
-  "0xCD67CFCFC42A6FDB": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
     ]
   },
   // OFK ply 4 (after 22+b 46+e 32+a 36+a)
@@ -23551,22 +24013,13 @@ var OPENING_BOOK = {
       { move: "52h+g", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+e 77+a 73+e)
-  "0xCD98991C245EFA00": {
+  // 4P ply 3 (after 33+b 37+d 77+h)
+  "0xCDA2E6581F883F17": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+b 77+h)
-  "0xCDBFC622899893D1": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1496 },
-      { move: "73+e", score: -1496 },
-      { move: "73+g", score: -1616 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // OFK ply 4 (after 22+b 36+e 42+g 46+e)
@@ -23587,31 +24040,31 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+f 77+h 73+e)
-  "0xCDE483D717837079": {
+  // 4P ply 4 (after 33+d 37+c 77+a 73+g)
+  "0xCDDFF68A9E202F57": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+f 77+h 73+g)
-  "0xCE121CAC0C069B5A": {
+  // 2P_3B_SP ply 0 (initial)
+  "0xCE0042FEA3C2985C": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33+a!", score: 0 },
+      { move: "53+a!", score: 0 },
+      { move: "33+b", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+d 77+d)
-  "0xCE46620C33AB9A93": {
+  // 4P ply 3 (after 33+c 37+b 77+d)
+  "0xCE5B4276A5BB3655": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+d 33+h 77+e)
@@ -23621,15 +24074,6 @@ var OPENING_BOOK = {
       { move: "33+a", score: -62 },
       { move: "73b+a", score: -62 },
       { move: "33+b", score: -62 }
-    ]
-  },
-  // 4P ply 3 (after 33+d 37+c 77+g)
-  "0xCE6145EBE2E715B7": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 37+d 53+b 77+f)
@@ -23650,13 +24094,31 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2206 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+d 73+e)
-  "0xCF1AD456413F9047": {
+  // 4P ply 4 (after 33+h 37+f 77+g 73+g)
+  "0xCEE124DAFFA3C9D2": {
     depth: 8,
     candidates: [
-      { move: "33a+h", score: -120 },
-      { move: "33a+b", score: -120 },
-      { move: "33a+c", score: -260 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+b 77+d 73+e)
+  "0xCF07F42CD72F3C81": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+g 77+a 73+g)
+  "0xCF0860750DF757A2": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
     ]
   },
   // OFK ply 3 (after 32+b 36+d 52+a)
@@ -23668,6 +24130,15 @@ var OPENING_BOOK = {
       { move: "26+c", score: -3683 }
     ]
   },
+  // 4P ply 3 (after 33+b 37+f 77+d)
+  "0xCF5CB1D94934DF29": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+c 37+d 33+c 57+e)
   "0xCF65EB470CBEB630": {
     depth: 8,
@@ -23677,58 +24148,58 @@ var OPENING_BOOK = {
       { move: "73+a", score: -800 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+e 77+g 73+e)
-  "0xD01E398993DC16BE": {
+  // 4P ply 3 (after 33+g 37+c 77+b)
+  "0xCF8A897817455B7B": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+b 77+d 73+g)
-  "0xD06351826EFEE00B": {
+  // 4P ply 4 (after 33+g 37+f 77+e 73+f)
+  "0xCFC5522830C5C4FA": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+g 77+b 73+e)
-  "0xD093930854521EF3": {
+  // 4P ply 4 (after 33+c 37+g 77+b 73+g)
+  "0xCFF736A6ED83C279": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 280 },
-      { move: "33a+h", score: 280 },
-      { move: "33a+c", score: 140 }
+      { move: "33c+b", score: 140 },
+      { move: "33c+a", score: 140 },
+      { move: "33c+h", score: 140 }
     ]
   },
-  // 4P ply 2 (after 33+g 37+e)
-  "0xD0C2E2CAB8077842": {
+  // 4P ply 3 (after 33+g 37+f 77+h)
+  "0xD02A0F58C7434D04": {
     depth: 8,
     candidates: [
-      { move: "77+h", score: -280 },
-      { move: "77+a", score: -280 },
-      { move: "77+g", score: -400 }
+      { move: "73+f", score: -956 },
+      { move: "73+e", score: -956 },
+      { move: "73+g", score: -1076 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+f 77+g)
-  "0xD0D9372E34E61F8C": {
+  // 4P ply 4 (after 33+d 37+c 77+g 73+g)
+  "0xD059561F29A2C3E9": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+g 77+a)
-  "0xD1307381C6B281FC": {
+  // 4P ply 4 (after 33+c 37+d 77+d 73+g)
+  "0xD07E71F8F8EE4CCD": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1256 },
-      { move: "73+e", score: -1256 },
-      { move: "73+g", score: -1376 }
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
     ]
   },
   // 2P 3-Base ply 3 (after 33+h 37+e 53+b)
@@ -23740,13 +24211,13 @@ var OPENING_BOOK = {
       { move: "57+e", score: -2176 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+d 73+g)
-  "0xD164A22D82710977": {
+  // 4P ply 4 (after 33+a 37+f 77+d 73+f)
+  "0xD15B507A9982CEBB": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
+      { move: "33a+b", score: -120 },
+      { move: "33a+h", score: -120 },
+      { move: "33a+c", score: -260 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+c 73+h 57c+f)
@@ -23758,17 +24229,8 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+e 73+e)
-  "0xD184D604E8789A06": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+c 77+b 73+g)
-  "0xD1B29A8CDC008D25": {
+  // 4P ply 4 (after 33+g 37+b 77+e 73+e)
+  "0xD199F67E7E6836C0": {
     depth: 8,
     candidates: [
       { move: "33g+b", score: -140 },
@@ -23776,13 +24238,31 @@ var OPENING_BOOK = {
       { move: "33g+a", score: -140 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+g 77+b)
-  "0xD1CF255226C61427": {
+  // 4P ply 2 (after 33+a 37+g)
+  "0xD1A484D88A2B3EC3": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "77+h", score: 280 },
+      { move: "77+a", score: 280 },
+      { move: "77+g", score: 160 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+e 77+b 73+e)
+  "0xD1F5F51A667E5872": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+e 77+b 73+g)
+  "0xD2036A617DFBB351": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+f 53+b 57f+d)
@@ -23803,31 +24283,13 @@ var OPENING_BOOK = {
       { move: "77+e", score: -2080 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+b 73+f)
-  "0xD23C98366608749D": {
+  // 4P ply 4 (after 33+b 37+d 77+e 73+f)
+  "0xD24DBB28E80EB6E9": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+c 77+b 73+e)
-  "0xD24405F7C7856606": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+b 77+e 73+f)
-  "0xD2509B527E1E1A2F": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 140 },
-      { move: "33b+h", score: 140 },
-      { move: "33b+c", score: 0 }
+      { move: "33b+h", score: -120 },
+      { move: "33b+a", score: -120 },
+      { move: "33b+c", score: -260 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 57+e 33+h 37+d)
@@ -23839,67 +24301,85 @@ var OPENING_BOOK = {
       { move: "33+b", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+d 77+e 73+g)
-  "0xD272497FF3FD7125": {
+  // 4P ply 4 (after 33+a 37+b 77+e 73+g)
+  "0xD26F690565EDDDE3": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+b 77+d)
-  "0xD2C978A307EF01FC": {
+  // 4P ply 4 (after 33+c 37+f 77+h 73+g)
+  "0xD2802679AE52ACF3": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+c 77+b)
-  "0xD318B3ADB5116CD2": {
+  // 4P ply 4 (after 33+d 37+g 77+g 73+g)
+  "0xD28EC0E0BA75BB1C": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+f 77+e 73+f)
-  "0xD35768FD9291F353": {
+  // 4P ply 3 (after 33+g 37+d 77+d)
+  "0xD2D458D991FFAD3A": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -260 },
-      { move: "33c+h", score: -260 },
-      { move: "33c+a", score: -260 }
+      { move: "73+f", score: -836 },
+      { move: "73+e", score: -836 },
+      { move: "73+g", score: -956 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+g 77+b 73+g)
-  "0xD3650C734FD7F5D0": {
+  // 4P ply 4 (after 33+h 37+f 77+a 73+g)
+  "0xD367844F4821256C": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: 0 },
-      { move: "33g+h", score: 0 },
-      { move: "33g+a", score: 0 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+d 77+h 73+g)
-  "0xD39AF5ACD4CDE949": {
+  // 4P ply 2 (after 33+a 37+c)
+  "0xD373122719FC4636": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "77+h", score: 140 },
+      { move: "77+a", score: 140 },
+      { move: "77+g", score: 20 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+b 77+h 73+f)
-  "0xD3B82781592E8243": {
+  // 2P_1B_SP ply 0 (initial)
+  "0xD3734C947246B6D9": {
     depth: 8,
     candidates: [
-      { move: "33a+h", score: 260 },
-      { move: "33a+b", score: 260 },
-      { move: "33a+c", score: 120 }
+      { move: "53+a!", score: 0 },
+      { move: "53+b", score: 0 },
+      { move: "53+h", score: 0 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+h 73+g)
+  "0xD387D5D642DD458F": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 260 },
+      { move: "33b+h", score: 260 },
+      { move: "33b+c", score: 120 }
+    ]
+  },
+  // 4P ply 4 (after 33+a 37+d 77+h 73+f)
+  "0xD3A507FBCF3E2E85": {
+    depth: 8,
+    candidates: [
+      { move: "33a+h", score: 0 },
+      { move: "33a+b", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+a 37+d 33+b)
@@ -23920,31 +24400,13 @@ var OPENING_BOOK = {
       { move: "53b+a", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+c 77+a)
-  "0xD3E7E57E5565F909": {
+  // 4P ply 2 (after 33+c 37+f)
+  "0xD44BE65B7F49C173": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+e 77+e 73+e)
-  "0xD417014055A9668D": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
-    ]
-  },
-  // 4P ply 3 (after 33+a 37+f 77+b)
-  "0xD42047D1D3A4EB97": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "77+h", score: -140 },
+      { move: "77+a", score: -140 },
+      { move: "77+g", score: -260 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+b 37+d 73+h 57+f)
@@ -23956,40 +24418,31 @@ var OPENING_BOOK = {
       { move: "53+h", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+g 73+e)
-  "0xD46AE3F7B310EAE8": {
+  // 4P ply 4 (after 33+b 37+c 77+e 73+g)
+  "0xD4506ED6EFD7B3DA": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 280 },
-      { move: "33h+b", score: 280 },
-      { move: "33h+c", score: 140 }
+      { move: "33b+a", score: 20 },
+      { move: "33b+h", score: 20 },
+      { move: "33b+c", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+c 77+e 73+f)
-  "0xD46F9C81F4247416": {
+  // 4P ply 4 (after 33+b 37+d 77+b 73+e)
+  "0xD466225EDBAFA4F9": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 20 },
-      { move: "33a+h", score: 20 },
-      { move: "33a+c", score: -120 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+b 73+e)
-  "0xD47B02244DBF083F": {
+  // 4P ply 4 (after 33+g 37+g 77+h 73+e)
+  "0xD499DB8140B5B860": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 260 },
-      { move: "33b+h", score: 260 },
-      { move: "33b+c", score: 120 }
-    ]
-  },
-  // 4P ply 3 (after 33+c 37+e 77+h)
-  "0xD4A30BC9000DF435": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1096 },
-      { move: "73+e", score: -1096 },
-      { move: "73+g", score: -1216 }
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
     ]
   },
   // 2P 3-Base ply 2 (after 53+a 57+e)
@@ -24001,6 +24454,15 @@ var OPENING_BOOK = {
       { move: "33+b", score: 0 }
     ]
   },
+  // 4P ply 4 (after 33+c 37+g 77+d 73+f)
+  "0xD4B432F96CE0310B": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: 20 },
+      { move: "33c+h", score: 20 },
+      { move: "33c+a", score: 20 }
+    ]
+  },
   // 2P 3-Base ply 3 (after 33+h 77+e 53+h)
   "0xD537709A60E2C0EA": {
     depth: 8,
@@ -24010,49 +24472,13 @@ var OPENING_BOOK = {
       { move: "57+f", score: -2024 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+e 77+a)
-  "0xD544A9FFE67E7DAA": {
+  // 4P ply 2 (after 33+b 37+b)
+  "0xD54C15F493C6280F": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
-    ]
-  },
-  // 4P ply 2 (after 33+b 37+d)
-  "0xD551358E05D684C9": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: 0 },
-      { move: "77+a", score: 0 },
-      { move: "77+g", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+f 77+b 73+e)
-  "0xD57CF18BA130E143": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+f 77+a 73+e)
-  "0xD583A75841447498": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+c 77+h 73+f)
-  "0xD5872052D314EC7A": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 140 },
-      { move: "33b+h", score: 140 },
-      { move: "33b+c", score: 0 }
+      { move: "77+h", score: 260 },
+      { move: "77+a", score: 260 },
+      { move: "77+g", score: 140 }
     ]
   },
   // OFK ply 3 (after 22+b 36+d 42+c)
@@ -24064,6 +24490,15 @@ var OPENING_BOOK = {
       { move: "46f-35", score: -2962 }
     ]
   },
+  // 4P ply 4 (after 33+a 37+c 77+h 73+g)
+  "0xD5B8D205C8E72BB6": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 140 },
+      { move: "33a+h", score: 140 },
+      { move: "33a+c", score: 0 }
+    ]
+  },
   // 2P 3-Base ply 2 (after 53+b 77+e)
   "0xD5F054164CA45777": {
     depth: 8,
@@ -24073,22 +24508,13 @@ var OPENING_BOOK = {
       { move: "33+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+e 77+h 73+e)
-  "0xD5FFBD937299FEE1": {
+  // 4P ply 4 (after 33+d 37+d 77+g 73+f)
+  "0xD64483E12E7BC6DA": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+e 77+h 73+g)
-  "0xD60922E8691C15C2": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
   // 2P 1-Base ply 2 (after 33+b 77+f)
@@ -24100,13 +24526,31 @@ var OPENING_BOOK = {
       { move: "33+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+g 73+f)
-  "0xD659A39BB86B6A1C": {
+  // 4P_ED ply 1 (after 33+d)
+  "0xD64CD391CF6EA0AA": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: 0 },
-      { move: "33d+b", score: 0 },
-      { move: "33d+h", score: 0 }
+      { move: "37+c", score: -1437 },
+      { move: "37+e", score: -1437 },
+      { move: "37+d", score: -1437 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+h 73+e)
+  "0xD64E4D7ED362C095": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+c 77+d 73+f)
+  "0xD663A406FF3749FE": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -120 },
+      { move: "33c+h", score: -120 },
+      { move: "33c+a", score: -120 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 77+f 73+h 57+f)
@@ -24118,6 +24562,15 @@ var OPENING_BOOK = {
       { move: "53g+b", score: -730 }
     ]
   },
+  // 4P ply 4 (after 33+b 37+g 77+e 73+g)
+  "0xD687F8297C00CB2F": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 160 },
+      { move: "33b+h", score: 160 },
+      { move: "33b+c", score: 20 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 53+a 57+d 73+h 57d+e)
   "0xD6B6D77E14DE2DAB": {
     depth: 8,
@@ -24125,24 +24578,6 @@ var OPENING_BOOK = {
       { move: "53a+h", score: 0 },
       { move: "73+a", score: 0 },
       { move: "53a+b", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+g 77+e 73+f)
-  "0xD6B80A7E67F30CE3": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 160 },
-      { move: "33a+h", score: 160 },
-      { move: "33a+c", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+c 77+g 73+e)
-  "0xD6BD750820C7921D": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
     ]
   },
   // OFK ply 4 (after 32+b 36+d 52+g 36d+e)
@@ -24154,13 +24589,22 @@ var OPENING_BOOK = {
       { move: "22c+b", score: -780 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+g 77+h 73+f)
-  "0xD750B6AD40C3948F": {
+  // 4P ply 4 (after 33+h 37+e 77+g 73+g)
+  "0xD6FA1A9E9AB9474A": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 280 },
-      { move: "33b+h", score: 280 },
-      { move: "33b+c", score: 140 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+b 37+e 77+d)
+  "0xD7478F9D2C2E51B1": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
   // OFK ply 4 (after 22+b 46+f 42+a 46f-35)
@@ -24172,6 +24616,15 @@ var OPENING_BOOK = {
       { move: "52+h", score: -1721 }
     ]
   },
+  // 4P ply 4 (after 33+a 37+g 77+h 73+g)
+  "0xD76F44FA5B305343": {
+    depth: 8,
+    candidates: [
+      { move: "33a+b", score: 280 },
+      { move: "33a+h", score: 280 },
+      { move: "33a+c", score: 140 }
+    ]
+  },
   // 2P 3-Base ply 4 (after 53+a 57+d 73+g 77+e)
   "0xD791E299B28B230E": {
     depth: 8,
@@ -24181,76 +24634,58 @@ var OPENING_BOOK = {
       { move: "53a+b", score: -400 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+b 73+f)
-  "0xD7AF4F72DBD98816": {
+  // 4P ply 4 (after 33+g 37+b 77+b 73+f)
+  "0xD7B26F084DC924D0": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+f 77+e)
-  "0xD8128AF5CB0CB1FB": {
+  // 4P ply 4 (after 33+g 37+e 77+e 73+f)
+  "0xD7DE6C6C55DF4A62": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
+      { move: "33g+b", score: -400 },
+      { move: "33g+h", score: -400 },
+      { move: "33g+a", score: -400 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+a 73+e)
-  "0xD846D1E5945443A0": {
+  // 4P ply 4 (after 33+h 37+d 77+a 73+e)
+  "0xD85BF19F0244EF66": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 260 },
-      { move: "33h+b", score: 260 },
-      { move: "33h+c", score: 120 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+b 73+f)
-  "0xD85D51A5EC8C2E7A": {
+  // 4P ply 3 (after 33+a 37+d 77+h)
+  "0xD8E0E5F396A36C2D": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
+      { move: "73+f", score: -1236 },
+      { move: "73+e", score: -1236 },
+      { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+a 73+f)
-  "0xD8A207760CF8BBA1": {
+  // 2P_3B_ED ply 1 (after 53+a)
+  "0xD8F2AE8E9AFA57BE": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
+      { move: "77+e", score: -2632 },
+      { move: "37+e", score: -2632 },
+      { move: "57+e", score: -2632 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+h 73+e)
-  "0xD8A6807C9EA82343": {
+  // 4P ply 3 (after 33+b 37+d 77+e)
+  "0xD9085920B193F441": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
-    ]
-  },
-  // 4P ply 3 (after 33+a 37+b 77+h)
-  "0xD8FDC58900B3C0EB": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1496 },
-      { move: "73+e", score: -1496 },
-      { move: "73+g", score: -1616 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+b 77+e)
-  "0xD915795A27835887": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 1-Base ply 2 (after 33+b 57+c)
@@ -24262,24 +24697,6 @@ var OPENING_BOOK = {
       { move: "73+a", score: 400 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+f 77+e 73+e)
-  "0xD94E3CAFB998BB2F": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+e 77+b)
-  "0xD9797A3E3F953635": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
-    ]
-  },
   // 2P 3-Base ply 3 (after 33+b 37+d 73+b)
   "0xD98957DAE9D0F34D": {
     depth: 8,
@@ -24289,53 +24706,8 @@ var OPENING_BOOK = {
       { move: "77+f", score: -2024 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+d 73+f)
-  "0xD98C9AAB5E724354": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+b 77+h 73+e)
-  "0xD9A173D37227CA3F": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 120 },
-      { move: "33c+h", score: 120 },
-      { move: "33c+a", score: 120 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+d 77+d 73+e)
-  "0xDA58D7FDC814C37D": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: -120 },
-      { move: "33b+h", score: -120 },
-      { move: "33b+c", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+g 77+a 73+f)
-  "0xDA7591899F2FC354": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: 20 },
-      { move: "33d+b", score: 20 },
-      { move: "33d+h", score: 20 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+g 77+b 73+f)
-  "0xDA8AC75A7F5B568F": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 140 },
-      { move: "33c+h", score: 140 },
-      { move: "33c+a", score: 140 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+f 77+e 73+g)
-  "0xDAB8A3D4A21D500C": {
+  // 4P ply 4 (after 33+g 37+d 77+d 73+f)
+  "0xD991BAD1C862EF92": {
     depth: 8,
     candidates: [
       { move: "33g+b", score: -400 },
@@ -24343,13 +24715,58 @@ var OPENING_BOOK = {
       { move: "33g+a", score: -400 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+f 77+g 73+f)
-  "0xDB9CD5266D7B5D24": {
+  // 4P ply 4 (after 33+c 37+d 77+h 73+e)
+  "0xD9BC53A9E43766F9": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
+    ]
+  },
+  // 4P ply 3 (after 33+a 37+f 77+d)
+  "0xDA1EB272C01F8C13": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+b 77+d 73+e)
+  "0xDA45F7875E046FBB": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 140 },
+      { move: "33b+h", score: 140 },
+      { move: "33b+c", score: 0 }
+    ]
+  },
+  // 4P ply 1 (after 33+c)
+  "0xDAAC383D8CDE48C6": {
+    depth: 8,
+    candidates: [
+      { move: "37+e", score: -1236 },
+      { move: "37+d", score: -1236 },
+      { move: "37+f", score: -1236 }
+    ]
+  },
+  // 4P ply 4 (after 33+c 37+f 77+d 73+e)
+  "0xDB420428B28B86C7": {
+    depth: 8,
+    candidates: [
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+f 77+h 73+f)
+  "0xDB6FED509EDE0FAC": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 37+d 33+h 57+d)
@@ -24361,67 +24778,67 @@ var OPENING_BOOK = {
       { move: "53a+h", score: -930 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+g 77+h)
-  "0xDC1554A5195ED627": {
+  // 4P ply 4 (after 33+b 37+e 77+d 73+f)
+  "0xDC026D9575B31319": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1516 },
-      { move: "73+e", score: -1516 },
-      { move: "73+g", score: -1636 }
+      { move: "33b+h", score: -120 },
+      { move: "33b+a", score: -120 },
+      { move: "33b+c", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+e 77+d 73+g)
-  "0xDC3D9FC26E40D4D5": {
+  // 4P ply 4 (after 33+a 37+c 77+d 73+e)
+  "0xDC7AF054D43E0182": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: -120 },
-      { move: "33a+h", score: -120 },
-      { move: "33a+c", score: -260 }
+      { move: "33a+b", score: 20 },
+      { move: "33a+h", score: 20 },
+      { move: "33a+c", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+g 77+e 73+e)
-  "0xDCA15E2C4CFA449F": {
+  // 4P ply 3 (after 33+g 37+e 77+e)
+  "0xDC9B8E640C4208CA": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 20 },
-      { move: "33c+h", score: 20 },
-      { move: "33c+a", score: 20 }
+      { move: "73+f", score: -836 },
+      { move: "73+e", score: -836 },
+      { move: "73+g", score: -956 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+d 77+b)
-  "0xDCEAAD7A8244CABE": {
+  // 4P ply 3 (after 33+g 37+b 77+b)
+  "0xDCF78D0014546678": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -956 },
-      { move: "73+e", score: -956 },
-      { move: "73+g", score: -1076 }
+      { move: "73+f", score: -1216 },
+      { move: "73+e", score: -1216 },
+      { move: "73+g", score: -1336 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+b 77+g)
-  "0xDD1C4193E1F628B4": {
+  // 4P ply 3 (after 33+d 37+d 77+g)
+  "0xDD0161E977E68472": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+g 77+e)
-  "0xDDFDE8763E6E4E4B": {
+  // 4P ply 3 (after 33+c 37+c 77+d)
+  "0xDD26460EA6AA0B56": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1396 },
-      { move: "73+e", score: -1396 },
-      { move: "73+g", score: -1516 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+a 73+f)
-  "0xDE014BF7BFE33F02": {
+  // 4P ply 4 (after 33+g 37+g 77+d 73+g)
+  "0xDD5BF9D05C6C9254": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33g+b", score: -120 },
+      { move: "33g+h", score: -120 },
+      { move: "33g+a", score: -120 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+f 33+b 37+d)
@@ -24442,13 +24859,13 @@ var OPENING_BOOK = {
       { move: "73+h", score: -590 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+b 73+g)
-  "0xDE40845BEB552B49": {
+  // 4P ply 4 (after 33+c 37+e 77+e 73+g)
+  "0xDE31A7456553E93D": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33c+b", score: -260 },
+      { move: "33c+h", score: -260 },
+      { move: "33c+a", score: -260 }
     ]
   },
   // OFK ply 4 (after 32+b 46+f 52+g 36+e)
@@ -24460,13 +24877,13 @@ var OPENING_BOOK = {
       { move: "42h+b", score: -1839 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+e 73+e)
-  "0xDE76C8D3DF2D3C6A": {
+  // 4P ply 4 (after 33+c 37+b 77+b 73+g)
+  "0xDE5DA4217D45878F": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -120 },
-      { move: "33c+h", score: -120 },
-      { move: "33c+a", score: -120 }
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+d 53c+b 77+e)
@@ -24478,58 +24895,49 @@ var OPENING_BOOK = {
       { move: "73+a", score: -1010 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+d 77+a 73+g)
-  "0xDEBFD2880B21BE92": {
+  // 4P ply 4 (after 33+d 37+b 77+a 73+g)
+  "0xDEA2F2F29D311254": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+c 77+h)
-  "0xDEC2C25A8A89AED2": {
+  // 4P ply 4 (after 33+a 37+g 77+d 73+e)
+  "0xDEAD66AB47E97977": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "33a+b", score: 160 },
+      { move: "33a+h", score: 160 },
+      { move: "33a+c", score: 20 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+c 77+e)
-  "0xDF2A7E89ADB936BE": {
+  // 4P ply 4 (after 33+b 37+f 77+b 73+g)
+  "0xDF5A578E91CA6EF3": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
+    ]
+  },
+  // 4P ply 4 (after 33+g 37+c 77+d 73+g)
+  "0xDF8C6F2FCFBBEAA1": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -260 },
+      { move: "33g+h", score: -260 },
+      { move: "33g+a", score: -260 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+g 77+d)
+  "0xDFF1D0F1357D73A3": {
     depth: 8,
     candidates: [
       { move: "73+f", score: -1256 },
       { move: "73+e", score: -1256 },
       { move: "73+g", score: -1376 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+f 77+b 73+f)
-  "0xDF65A5D98A39A93F": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+g 37+e 77+d 73+e)
-  "0xDFCB00B975C53FF6": {
-    depth: 8,
-    candidates: [
-      { move: "33g+b", score: -400 },
-      { move: "33g+h", score: -400 },
-      { move: "33g+a", score: -400 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+e 77+h 73+f)
-  "0xDFE6E9C15990B69D": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 37+d 53b-64 57+f)
@@ -24548,15 +24956,6 @@ var OPENING_BOOK = {
       { move: "53c+h", score: -610 },
       { move: "73+a", score: -610 },
       { move: "73+b", score: -730 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+c 77+h)
-  "0xE007373FF1705A2D": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 37+d 53a+b 57+e)
@@ -24586,53 +24985,53 @@ var OPENING_BOOK = {
       { move: "52+g", score: -3107 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+c 77+a 73+e)
-  "0xE0BC23536597D966": {
+  // 4P ply 4 (after 33+d 37+f 77+h 73+g)
+  "0xE087560EEC348648": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+a 73+f)
-  "0xE0C4BE92C41ACBFD": {
+  // 4P ply 4 (after 33+c 37+g 77+g 73+g)
+  "0xE089B097F81391A7": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+c 77+b)
-  "0xE11FC3DAF7774669": {
+  // 4P ply 3 (after 33+g 37+c 77+g)
+  "0xE0F40F4902D508A5": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1116 },
-      { move: "73+e", score: -1116 },
-      { move: "73+g", score: -1236 }
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+f 77+e 73+f)
-  "0xE150188AD0F7D9E8": {
+  // 4P ply 4 (after 33+a 37+e 77+a 73+g)
+  "0xE0FB4CC5DFE90C31": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+h", score: -380 },
-      { move: "33d+b", score: -380 }
+      { move: "33a+h", score: 0 },
+      { move: "33a+b", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+g 77+a 73+g)
-  "0xE19D2AD7EDC54AB0": {
+  // 4P ply 4 (after 33+h 37+f 77+b 73+g)
+  "0xE19FA2EBEA339A0C": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: 0 },
-      { move: "33g+h", score: 0 },
-      { move: "33g+a", score: 0 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+c 77+a)
-  "0xE1E095091703D3B2": {
+  // 4P ply 3 (after 33+g 37+g 77+g)
+  "0xE22399B691027050": {
     depth: 8,
     candidates: [
       { move: "73+f", score: -1236 },
@@ -24640,40 +25039,31 @@ var OPENING_BOOK = {
       { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+e 77+g 73+e)
-  "0xE21949FED1BA3C05": {
+  // 4P ply 4 (after 33+c 37+c 77+g 73+g)
+  "0xE25E26686BC4E952": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+d 73+g)
-  "0xE26421F52C98CAB0": {
+  // 4P ply 4 (after 33+d 37+d 77+d 73+g)
+  "0xE279018FBA886676": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
+      { move: "33d+a", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+b", score: -380 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+g 77+a 73+e)
-  "0xE26BB5ACF640A193": {
+  // 4P ply 4 (after 33+h 37+e 77+d 73+f)
+  "0xE2C798F00E4AE7E6": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 280 },
-      { move: "33a+h", score: 280 },
-      { move: "33a+c", score: 140 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+g 77+h)
-  "0xE2D0A1C062A722D8": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1516 },
-      { move: "73+e", score: -1516 },
-      { move: "73+g", score: -1636 }
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+a 57+c 73+h)
@@ -24685,6 +25075,15 @@ var OPENING_BOOK = {
       { move: "37+e", score: -2900 }
     ]
   },
+  // 4P ply 4 (after 33+g 37+e 77+a 73+e)
+  "0xE30DD3BEC46CE712": {
+    depth: 8,
+    candidates: [
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
   // 2P 1-Base ply 4 (after 33+b 57+c 53+h 77+f)
   "0xE31A4DABB018B666": {
     depth: 8,
@@ -24694,58 +25093,40 @@ var OPENING_BOOK = {
       { move: "53b-64", score: 400 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+g 77+a)
-  "0xE33703F684D4AB47": {
+  // 4P ply 4 (after 33+c 37+d 77+g 73+f)
+  "0xE443F3966C1DEC61": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "33c+b", score: -140 },
+      { move: "33c+h", score: -140 },
+      { move: "33c+a", score: -140 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+e 77+g)
-  "0xE345FFA4A32E36D1": {
+  // 4P_ED ply 1 (after 33+c)
+  "0xE44BA3E68D088A11": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "37+c", score: -1577 },
+      { move: "37+e", score: -1577 },
+      { move: "37+d", score: -1577 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+c 77+a 73+g)
-  "0xE34ABC287E123245": {
+  // 4P ply 4 (after 33+d 37+c 77+d 73+f)
+  "0xE464D471BD516345": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
+      { move: "33d+a", score: -240 },
+      { move: "33d+b", score: -240 },
+      { move: "33d+h", score: -240 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+g 77+b)
-  "0xE3C8552564A03E9C": {
+  // 4P ply 4 (after 33+h 37+b 77+d 73+e)
+  "0xE48002E225FD9B44": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1256 },
-      { move: "73+e", score: -1256 },
-      { move: "73+g", score: -1376 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+b 77+g 73+f)
-  "0xE45ED3ECFA0D40A7": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 120 },
-      { move: "33c+h", score: 120 },
-      { move: "33c+a", score: 120 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+d 77+d 73+e)
-  "0xE49D2298B3ED3782": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
   // 2P 1-Base ply 4 (after 33+b 57+c 53+b 37+d)
@@ -24766,22 +25147,22 @@ var OPENING_BOOK = {
       { move: "53h+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+a 73+f)
-  "0xE55769D679CB3776": {
+  // 4P ply 4 (after 33+g 37+b 77+a 73+f)
+  "0xE54A49ACEFDB9BB0": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+g 73+f)
-  "0xE55920431682A9DB": {
+  // 4P ply 4 (after 33+a 37+f 77+g 73+g)
+  "0xE566D2140D716E17": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
   // 2P 3-Base ply 1 (after 53+a)
@@ -24802,22 +25183,31 @@ var OPENING_BOOK = {
       { move: "53+b", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+f 77+h 73+e)
-  "0xE6637519E551D7BC": {
+  // 4P ply 2 (after 33+d 37+f)
+  "0xE64C962C3D2FEBC8": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "77+h", score: -260 },
+      { move: "77+a", score: -260 },
+      { move: "77+g", score: -380 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+a 73+e)
-  "0xE6832480EFADB75F": {
+  // 4P ply 4 (after 33+g 37+f 77+g 73+e)
+  "0xE6904D6F16F48534": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 260 },
-      { move: "33b+h", score: 260 },
-      { move: "33b+c", score: 120 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+a 73+e)
+  "0xE69E04FA79BD1B99": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 3 (after 53+c 77+f 73+b)
@@ -24829,40 +25219,13 @@ var OPENING_BOOK = {
       { move: "77+f", score: -2080 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+e 77+h)
-  "0xE6A47BBE426BDE8E": {
+  // 4P ply 4 (after 33+d 37+g 77+d 73+f)
+  "0xE6B3428E2E861BB0": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
-    ]
-  },
-  // 4P ply 3 (after 33+a 37+f 77+a)
-  "0xE6D8617571B654F7": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+f 77+b 73+e)
-  "0xE77B81FCE356CBF8": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+f 77+a 73+e)
-  "0xE784D72F03225E23": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33d+a", score: -100 },
+      { move: "33d+b", score: -100 },
+      { move: "33d+h", score: -100 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 57+c 33+b 57c+d)
@@ -24874,40 +25237,31 @@ var OPENING_BOOK = {
       { move: "73h+a", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+e 77+b)
-  "0xE7BC8F5B446CC2CA": {
+  // 4P ply 3 (after 33+h 37+d 77+e)
+  "0xE7CDAC45CA6A00BE": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+b 77+e)
-  "0xE7D08C3F5C7AAC78": {
+  // 4P ply 4 (after 33+b 37+e 77+g 73+g)
+  "0xE83FEFFBE140B3B5": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+e 77+g 73+f)
-  "0xE8001DACFAB37479": {
+  // 4P ply 4 (after 33+h 37+g 77+e 73+g)
+  "0xE8420D4C07F93FD0": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+g 77+a 73+f)
-  "0xE872E1FEDD49E9EF": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 140 },
-      { move: "33c+h", score: 140 },
-      { move: "33c+a", score: 140 }
+      { move: "33h+a", score: 160 },
+      { move: "33h+b", score: 160 },
+      { move: "33h+c", score: 20 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 37+d 73+b 57+d)
@@ -24919,31 +25273,40 @@ var OPENING_BOOK = {
       { move: "73b+g", score: -558 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+c 77+g 73+e)
-  "0xE878806D5B3E66E2": {
+  // 4P ply 1 (after 33+d)
+  "0xE8AB484ACEB8627D": {
     depth: 8,
     candidates: [
-      { move: "33b+h", score: 140 },
-      { move: "33b+a", score: 140 },
-      { move: "33b+c", score: 0 }
+      { move: "37+e", score: -1116 },
+      { move: "37+d", score: -1116 },
+      { move: "37+f", score: -1116 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+g 77+b 73+f)
-  "0xE88DB72D3D3D7C34": {
+  // 4P ply 4 (after 33+d 37+f 77+d 73+e)
+  "0xE945745FF0EDAC7C": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: 20 },
-      { move: "33d+b", score: 20 },
-      { move: "33d+h", score: 20 }
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+a", score: -380 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+h 73+f)
-  "0xE99543C83B3A6070": {
+  // 4P ply 4 (after 33+g 37+g 77+g 73+f)
+  "0xE9667BBEC89F32F8": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 280 },
-      { move: "33h+b", score: 280 },
-      { move: "33h+c", score: 140 }
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+e 77+d)
+  "0xE9827AF857D7A54E": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
   // 2P 3-Base ply 4 (after 33+h 57+e 73+h 77+e)
@@ -24955,98 +25318,44 @@ var OPENING_BOOK = {
       { move: "33b+a", score: -62 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+f 77+e)
-  "0xEA15FA82896A9B40": {
+  // 4P ply 4 (after 33+h 37+c 77+e 73+g)
+  "0xEA959BB3942E4725": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -856 },
-      { move: "73+e", score: -856 },
-      { move: "73+g", score: -976 }
+      { move: "33h+a", score: 20 },
+      { move: "33h+b", score: 20 },
+      { move: "33h+c", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+b 73+f)
-  "0xEA5A21D2AEEA04C1": {
+  // 4P ply 4 (after 33+h 37+d 77+b 73+e)
+  "0xEAA3D73BA0565006": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+c 77+a 73+f)
-  "0xEAA577014E9E911A": {
+  // 4P ply 2 (after 33+h 37+b)
+  "0xEB89E091E83FDCF0": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
+      { move: "77+h", score: 260 },
+      { move: "77+a", score: 260 },
+      { move: "77+g", score: 140 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+g 77+g 73+e)
-  "0xEAAF1692C8E91E17": {
+  // 4P ply 4 (after 33+g 37+c 77+g 73+f)
+  "0xEBB1ED415B484A0D": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 280 },
-      { move: "33b+h", score: 280 },
-      { move: "33b+c", score: 140 }
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+b 73+e)
-  "0xEABEF7413646FCC0": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 260 },
-      { move: "33h+b", score: 260 },
-      { move: "33h+c", score: 120 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+e 77+e 73+e)
-  "0xEAD2F4252E509272": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+c 77+h 73+f)
-  "0xEB42D537A8ED1885": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+e 77+a)
-  "0xEB815C9A9D878955": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
-    ]
-  },
-  // 4P ply 2 (after 33+h 37+d)
-  "0xEB94C0EB7E2F7036": {
-    depth: 8,
-    candidates: [
-      { move: "77+h", score: 0 },
-      { move: "77+a", score: 0 },
-      { move: "77+g", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+b 77+h 73+e)
-  "0xEBA603A43041E084": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: 0 },
-      { move: "33d+b", score: 0 },
-      { move: "33d+h", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+d 77+b 73+g)
-  "0xEC47F42CA93301F2": {
+  // 4P ply 4 (after 33+d 37+d 77+h 73+e)
+  "0xEBBB23DEA6514C42": {
     depth: 8,
     candidates: [
       { move: "33d+a", score: -260 },
@@ -25054,76 +25363,85 @@ var OPENING_BOOK = {
       { move: "33d+h", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+e 73+e)
-  "0xEC71B8A49D4B16D1": {
+  // 4P ply 4 (after 33+d 37+e 77+e 73+g)
+  "0xEC36D7322735C386": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -240 },
-      { move: "33d+b", score: -240 },
-      { move: "33d+h", score: -240 }
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+e 73+f)
-  "0xEC956E3705E7EED0": {
+  // 4P ply 4 (after 33+d 37+b 77+b 73+g)
+  "0xEC5AD4563F23AD34": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
+      { move: "33d+a", score: 0 },
+      { move: "33d+b", score: 0 },
+      { move: "33d+h", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+a 73+g)
-  "0xECB8A2FF49479429": {
+  // 4P ply 4 (after 33+h 37+d 77+e 73+f)
+  "0xEC884E4D93F74216": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+b 73+f)
-  "0xECF96D531DF18062": {
+  // 4P ply 4 (after 33+c 37+b 77+a 73+g)
+  "0xECA58285DF5738EF": {
     depth: 8,
     candidates: [
-      { move: "33h+b", score: 0 },
-      { move: "33h+a", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+d 77+h 73+g)
-  "0xED5F00C9AF341DB6": {
+  // 4P ply 4 (after 33+h 37+b 77+h 73+g)
+  "0xED4220B33924B170": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33h+a", score: 260 },
+      { move: "33h+b", score: 260 },
+      { move: "33h+c", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+f 77+a 73+f)
-  "0xED9D837D282B165F": {
+  // 2P_1B_SPED ply 0 (initial)
+  "0xED94D74F7390740E": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "53+a!", score: 0 },
+      { move: "53+b", score: 0 },
+      { move: "53+h", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+g 73+g)
-  "0xEDB118C5CA81E3F8": {
+  // 4P ply 4 (after 33+b 37+f 77+a 73+g)
+  "0xEDA2712A33D8D193": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -20 },
-      { move: "33g+h", score: -20 },
-      { move: "33g+a", score: -20 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+e 77+h 73+f)
-  "0xEDE199B61BF69C26": {
+  // 4P ply 4 (after 33+g 37+d 77+g 73+g)
+  "0xEDAC38BF5C914F3E": {
     depth: 8,
     candidates: [
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 },
-      { move: "33d+a", score: -260 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+g 77+d)
+  "0xEDF6A086771B5918": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1136 },
+      { move: "73+e", score: -1136 },
+      { move: "73+g", score: -1256 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+f 33+b 77+e)
@@ -25135,13 +25453,13 @@ var OPENING_BOOK = {
       { move: "33b+a", score: -62 }
     ]
   },
-  // 4P ply 3 (after 33+g 37+d 77+a)
-  "0xEE128BDE205675DE": {
+  // 4P ply 3 (after 33+g 37+b 77+a)
+  "0xEE0FABA4B646D918": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -956 },
-      { move: "73+e", score: -956 },
-      { move: "73+g", score: -1076 }
+      { move: "73+f", score: -1216 },
+      { move: "73+e", score: -1216 },
+      { move: "73+g", score: -1336 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+b 77+e 33+b 57+f)
@@ -25153,121 +25471,103 @@ var OPENING_BOOK = {
       { move: "33+b", score: -120 }
     ]
   },
-  // 4P ply 3 (after 33+b 37+f 77+g)
-  "0xEE1CC24B4F1FEB73": {
+  // 4P ply 4 (after 33+a 37+d 77+g 73+e)
+  "0xEE5AA7C44714A41D": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+b 77+g 73+e)
-  "0xEE4787BED10408DB": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 260 },
-      { move: "33a+h", score: 260 },
-      { move: "33a+c", score: 120 }
-    ]
-  },
-  // 4P ply 4 (after 33+d 37+g 77+e 73+e)
-  "0xEEA62E5B0E9C6E24": {
-    depth: 8,
-    candidates: [
-      { move: "33d+a", score: -100 },
-      { move: "33d+b", score: -100 },
-      { move: "33d+h", score: -100 }
-    ]
-  },
-  // 4P ply 3 (after 33+c 37+b 77+g)
-  "0xEF1B31E4A390020F": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1356 },
-      { move: "73+e", score: -1356 },
-      { move: "73+g", score: -1476 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+f 77+d 73+g)
-  "0xEFA15748F988FD88": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+f 77+g 73+f)
-  "0xF01B23E89FA9FAE1": {
-    depth: 8,
-    candidates: [
-      { move: "33a+h", score: 0 },
       { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
       { move: "33a+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+b 77+a 73+g)
-  "0xF037B8507D030F46": {
+  // 4P ply 3 (after 33+c 37+d 77+g)
+  "0xEF06119E3580AEC9": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -20 },
-      { move: "33g+h", score: -20 },
-      { move: "33g+a", score: -20 }
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+d 73+g)
-  "0xF119258D2F89F7B3": {
+  // 4P ply 3 (after 33+d 37+c 77+d)
+  "0xEF213679E4CC21ED": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -240 },
-      { move: "33d+b", score: -240 },
-      { move: "33d+h", score: -240 }
+      { move: "73+f", score: -996 },
+      { move: "73+e", score: -996 },
+      { move: "73+g", score: -1116 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+d 77+g 73+g)
-  "0xF13E026AFEC57897": {
+  // 4P ply 4 (after 33+b 37+f 77+g 73+g)
+  "0xF024D1BF845A3D2D": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+e 77+e)
-  "0xF20EC4C6EC7015D8": {
+  // 4P ply 4 (after 33+g 37+d 77+a 73+g)
+  "0xF02A982AEB13A380": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -856 },
-      { move: "73+e", score: -856 },
-      { move: "73+g", score: -976 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+b 77+b)
-  "0xF262C7A2F4667B6A": {
+  // 2P_3B_SPED ply 0 (initial)
+  "0xF0E7D925A2145A8B": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "73+h!", score: 0 },
+      { move: "53+a!", score: 0 },
+      { move: "33+a!", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+b 77+a)
-  "0xF29D91711412EEB1": {
+  // 4P ply 4 (after 33+c 37+b 77+g 73+g)
+  "0xF123221068D5D451": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1356 },
-      { move: "73+e", score: -1356 },
-      { move: "73+g", score: -1476 }
+      { move: "33c+b", score: 120 },
+      { move: "33c+h", score: 120 },
+      { move: "33c+a", score: 120 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+f 77+e 73+e)
-  "0xF2C9CA614B4A1CEA": {
+  // 4P ply 4 (after 33+d 37+e 77+d 73+e)
+  "0xF15E4A1B95F722E4": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
+      { move: "33d+a", score: -380 },
+      { move: "33d+h", score: -380 },
+      { move: "33d+b", score: -380 }
+    ]
+  },
+  // 4P ply 3 (after 33+h 37+f 77+d)
+  "0xF19944BC32CD2BD6": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
+    ]
+  },
+  // 4P ply 3 (after 33+d 37+d 77+b)
+  "0xF27FE7D86276D7AC": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -976 },
+      { move: "73+e", score: -976 },
+      { move: "73+g", score: -1096 }
+    ]
+  },
+  // 4P ply 3 (after 33+c 37+d 77+a)
+  "0xF280B10B82024277": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
     ]
   },
   // OFK ply 3 (after 32+a 46+f 42+a)
@@ -25279,31 +25579,22 @@ var OPENING_BOOK = {
       { move: "56+f", score: -4483 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+b 77+h)
-  "0xF37A3347F261672E": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1496 },
-      { move: "73+e", score: -1496 },
-      { move: "73+g", score: -1616 }
-    ]
-  },
-  // 4P ply 3 (after 33+g 37+d 77+g)
-  "0xF3942B4B97D49960": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -956 },
-      { move: "73+e", score: -956 },
-      { move: "73+g", score: -1076 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+f 77+a)
-  "0xF39A62DEF89D07CD": {
+  // 4P ply 3 (after 33+h 37+d 77+h)
+  "0xF367133D6471CBE8": {
     depth: 8,
     candidates: [
       { move: "73+f", score: -1236 },
       { move: "73+e", score: -1236 },
       { move: "73+g", score: -1356 }
+    ]
+  },
+  // 4P ply 3 (after 33+g 37+b 77+g)
+  "0xF3890B3101C435A6": {
+    depth: 8,
+    candidates: [
+      { move: "73+f", score: -1216 },
+      { move: "73+e", score: -1216 },
+      { move: "73+g", score: -1336 }
     ]
   },
   // 2P 3-Base ply 3 (after 53+b 57+f 33+h)
@@ -25315,22 +25606,31 @@ var OPENING_BOOK = {
       { move: "57d+e", score: -2024 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+b 77+a 73+e)
-  "0xF3C1272B6686E465": {
+  // 4P ply 4 (after 33+a 37+d 77+a 73+e)
+  "0xF3DC0751F09648A3": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 260 },
-      { move: "33a+h", score: 260 },
-      { move: "33a+c", score: 120 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+g 77+d 73+g)
-  "0xF3CEB372BC5E8F46": {
+  // 2P_3B_ED ply 1 (after 33+h)
+  "0xF3F679D1EE355366": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -100 },
-      { move: "33d+b", score: -100 },
-      { move: "33d+h", score: -100 }
+      { move: "77+e", score: -2512 },
+      { move: "37+e", score: -2512 },
+      { move: "57+e", score: -2512 }
+    ]
+  },
+  // 4P ply 4 (after 33+d 37+f 77+e 73+g)
+  "0xF42DE976422F4D1E": {
+    depth: 8,
+    candidates: [
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+a 37+d 53a+b 57+e)
@@ -25351,31 +25651,22 @@ var OPENING_BOOK = {
       { move: "57e+d", score: -3230 }
     ]
   },
-  // 4P ply 3 (after 33+h 37+c 77+e)
-  "0xF4AD88475F6B917B": {
+  // 4P ply 4 (after 33+g 37+g 77+a 73+f)
+  "0xF4E0DB2B7F1DDE46": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1256 },
-      { move: "73+e", score: -1256 },
-      { move: "73+g", score: -1376 }
+      { move: "33g+b", score: 0 },
+      { move: "33g+h", score: 0 },
+      { move: "33g+a", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+f 77+b 73+f)
-  "0xF4E2531778EB0EFA": {
+  // 4P ply 4 (after 33+h 37+g 77+d 73+e)
+  "0xF52A9065B53BDEB2": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+e 77+a 73+f)
-  "0xF586BD394D3198C7": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 0 },
-      { move: "33a+h", score: 0 },
-      { move: "33a+c", score: -140 }
+      { move: "33h+a", score: 160 },
+      { move: "33h+b", score: 160 },
+      { move: "33h+c", score: 20 }
     ]
   },
   // 2P 1-Base ply 4 (after 53+c 77+f 53c+h 37+d)
@@ -25387,49 +25678,22 @@ var OPENING_BOOK = {
       { move: "33+b", score: -730 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+g 77+g 73+f)
-  "0xF5F4416B6ACB0551": {
+  // 4P ply 4 (after 33+b 37+e 77+a 73+g)
+  "0xF5B94F6E56C25F0B": {
     depth: 8,
     candidates: [
-      { move: "33c+b", score: 140 },
-      { move: "33c+h", score: 140 },
-      { move: "33c+a", score: 140 }
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+f 77+h 73+f)
-  "0xF5FAA7F27EEC12BE": {
+  // 4P ply 4 (after 33+g 37+c 77+a 73+f)
+  "0xF6374DD4ECCAA6B3": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -260 },
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+c 77+a 73+e)
-  "0xF5FE20F8ECBC8A5C": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 140 },
-      { move: "33b+h", score: 140 },
-      { move: "33b+c", score: 0 }
-    ]
-  },
-  // 4P ply 3 (after 33+b 37+e 77+g)
-  "0xF607FC0F2A0565EB": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+g 77+e)
-  "0xF67A1EB8CCBCE98E": {
-    depth: 8,
-    candidates: [
-      { move: "73+f", score: -1396 },
-      { move: "73+e", score: -1396 },
-      { move: "73+g", score: -1516 }
+      { move: "33g+b", score: -140 },
+      { move: "33g+h", score: -140 },
+      { move: "33g+a", score: -140 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+a 57+d 33+c 77+e)
@@ -25441,31 +25705,13 @@ var OPENING_BOOK = {
       { move: "53a+h", score: -400 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+d 77+d 73+f)
-  "0xF704F0732850F280": {
+  // 4P ply 4 (after 33+d 37+b 77+d 73+f)
+  "0xF719D009BE405E46": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+b", score: -380 },
-      { move: "33d+h", score: -380 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+c 77+g 73+f)
-  "0xF723D794F91C7DA4": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 0 },
-      { move: "33c+h", score: 0 },
-      { move: "33c+a", score: 0 }
-    ]
-  },
-  // 4P ply 4 (after 33+b 37+g 77+a 73+e)
-  "0xF729B6077F6BF2A9": {
-    depth: 8,
-    candidates: [
-      { move: "33b+a", score: 280 },
-      { move: "33b+h", score: 280 },
-      { move: "33b+c", score: 140 }
+      { move: "33d+a", score: -120 },
+      { move: "33d+b", score: -120 },
+      { move: "33d+h", score: -120 }
     ]
   },
   // 2P 3-Base ply 4 (after 53+b 57+c 33+b 37+d)
@@ -25486,98 +25732,80 @@ var OPENING_BOOK = {
       { move: "37+d", score: -2282 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+d 73+g)
-  "0xF7BA690C9C927310": {
+  // 4P ply 4 (after 33+h 37+c 77+d 73+e)
+  "0xF7FD069A26ECA647": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
+      { move: "33h+a", score: 20 },
+      { move: "33h+b", score: 20 },
+      { move: "33h+c", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+b 77+h 73+f)
-  "0xF83FD14FABFC2586": {
+  // 4P ply 4 (after 33+h 37+d 77+h 73+f)
+  "0xF822F1353DEC8940": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 260 },
-      { move: "33h+b", score: 260 },
-      { move: "33h+c", score: 120 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+d 77+g 73+f)
-  "0xF8D1C943CE49DBC8": {
+  // 4P ply 4 (after 33+d 37+e 77+h 73+g)
+  "0xF89C684A892E08D0": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -280 },
-      { move: "33g+h", score: -280 },
-      { move: "33g+a", score: -280 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+c 77+h 73+e)
-  "0xF8DB07DC3350DD87": {
+  // 4P ply 4 (after 33+g 37+b 77+g 73+f)
+  "0xF8CCE9395859770E": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -120 },
-      { move: "33d+b", score: -120 },
-      { move: "33d+h", score: -120 }
+      { move: "33g+b", score: -20 },
+      { move: "33g+h", score: -20 },
+      { move: "33g+a", score: -20 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+f 77+a 73+f)
-  "0xF8DF80D6A1004565": {
+  // 4P ply 4 (after 33+a 37+f 77+a 73+g)
+  "0xF8E07281BAF382A9": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+b 73+f)
-  "0xF92725AAADFB39C2": {
+  // 4P ply 2 (after 33+h 37+c)
+  "0xF8F4E4E9EB2EE1F3": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: 0 },
-      { move: "33d+b", score: 0 },
-      { move: "33d+h", score: 0 }
+      { move: "77+h", score: 140 },
+      { move: "77+a", score: 140 },
+      { move: "77+g", score: 20 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+e 77+e 73+f)
-  "0xF94B26CEB5ED5770": {
+  // 4P ply 4 (after 33+d 37+d 77+b 73+f)
+  "0xF93A05D03BEB9504": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: -380 },
-      { move: "33d+h", score: -380 },
-      { move: "33d+b", score: -380 }
+      { move: "33d+a", score: -260 },
+      { move: "33d+b", score: -260 },
+      { move: "33d+h", score: -260 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+c 77+b 73+e)
-  "0xF9C3F3393557C1C3": {
+  // 4P ply 4 (after 33+h 37+e 77+b 73+g)
+  "0xF9849CAF8F291494": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 140 },
-      { move: "33h+b", score: 140 },
-      { move: "33h+c", score: 0 }
+      { move: "33h+a", score: 0 },
+      { move: "33h+b", score: 0 },
+      { move: "33h+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+c 37+b 77+a 73+f)
-  "0xF9D873794D8FAC19": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: 120 },
-      { move: "33c+h", score: 120 },
-      { move: "33c+a", score: 120 }
-    ]
-  },
-  // 4P ply 4 (after 33+h 37+d 77+e 73+g)
-  "0xF9F5BFB1012FD6E0": {
-    depth: 8,
-    candidates: [
-      { move: "33h+a", score: -120 },
-      { move: "33h+b", score: -120 },
-      { move: "33h+c", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+f 77+g 73+e)
-  "0xFA0277BAB4A0B29D": {
+  // 4P ply 4 (after 33+c 37+d 77+a 73+f)
+  "0xF9C55303DB9F00DF": {
     depth: 8,
     candidates: [
       { move: "33c+b", score: -140 },
@@ -25585,40 +25813,49 @@ var OPENING_BOOK = {
       { move: "33c+a", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+g 77+h 73+e)
-  "0xFA0C9123A087A572": {
+  // 4P ply 4 (after 33+h 37+b 77+e 73+g)
+  "0xF9E89FCB973F7A26": {
     depth: 8,
     candidates: [
-      { move: "33d+a", score: 20 },
-      { move: "33d+b", score: 20 },
-      { move: "33d+h", score: 20 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+b 77+g 73+e)
-  "0xFB058415582F5BE1": {
+  // 4P ply 2 (after 33+h 37+g)
+  "0xFA23721678F99906": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 260 },
-      { move: "33b+h", score: 260 },
-      { move: "33b+c", score: 120 }
+      { move: "77+h", score: 280 },
+      { move: "77+a", score: 280 },
+      { move: "77+g", score: 160 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+b 73+e)
-  "0xFB1465C6A680B936": {
+  // 4P ply 4 (after 33+h 37+f 77+d 73+f)
+  "0xFADCA6B46B50697E": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 280 },
-      { move: "33h+b", score: 280 },
-      { move: "33h+c", score: 140 }
+      { move: "33h+a", score: -120 },
+      { move: "33h+b", score: -120 },
+      { move: "33h+c", score: -260 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+f 77+g)
-  "0xFB5EC1E0C634B849": {
+  // 4P ply 4 (after 33+g 37+f 77+a 73+e)
+  "0xFB16EDFAA176698A": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
+    ]
+  },
+  // 4P ply 4 (after 33+b 37+d 77+g 73+e)
+  "0xFB18A46FCE3FF727": {
+    depth: 8,
+    candidates: [
+      { move: "33b+a", score: 0 },
+      { move: "33b+h", score: 0 },
+      { move: "33b+c", score: -140 }
     ]
   },
   // 2P 1-Base ply 1 (after 53+a)
@@ -25639,107 +25876,107 @@ var OPENING_BOOK = {
       { move: "53+h", score: 0 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+g 77+g 73+g)
-  "0xFC1B8A425A47A60E": {
+  // 4P ply 3 (after 33+d 37+b 77+d)
+  "0xFC5C3201E7DD1CEE": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: 0 },
-      { move: "33g+h", score: 0 },
-      { move: "33g+a", score: 0 }
+      { move: "73+f", score: -1116 },
+      { move: "73+e", score: -1116 },
+      { move: "73+g", score: -1236 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+d 77+d)
-  "0xFC41127B71CDB028": {
+  // 4P ply 4 (after 33+h 37+g 77+h 73+g)
+  "0xFCE8B234A9E2F486": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -856 },
-      { move: "73+e", score: -856 },
-      { move: "73+g", score: -976 }
+      { move: "33h+a", score: 280 },
+      { move: "33h+b", score: 280 },
+      { move: "33h+c", score: 140 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+c 77+g)
-  "0xFC66359CA0813F0C": {
+  // 4P ply 4 (after 33+c 37+g 77+a 73+g)
+  "0xFD0F10024F917D19": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33c+b", score: 140 },
+      { move: "33c+h", score: 140 },
+      { move: "33c+a", score: 140 }
     ]
   },
-  // 4P ply 4 (after 33+a 37+c 77+g 73+e)
-  "0xFD3A83C6D21535D8": {
+  // 4P_SP ply 0 (initial)
+  "0xFD5CAC35447FD5C0": {
     depth: 8,
     candidates: [
-      { move: "33a+b", score: 140 },
-      { move: "33a+h", score: 140 },
-      { move: "33a+c", score: 0 }
+      { move: "33+a!", score: 640 },
+      { move: "33+c!", score: 0 },
+      { move: "33+a", score: -467 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+g 77+e 73+f)
-  "0xFD3FFCB09521AB26": {
+  // 4P ply 3 (after 33+g 37+c 77+a)
+  "0xFD72AFDCB557E41B": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 160 },
-      { move: "33h+b", score: 160 },
-      { move: "33h+c", score: 20 }
+      { move: "73+f", score: -1096 },
+      { move: "73+e", score: -1096 },
+      { move: "73+g", score: -1216 }
     ]
   },
-  // 4P ply 4 (after 33+b 37+e 77+g 73+f)
-  "0xFD421E0773982743": {
+  // 4P ply 4 (after 33+a 37+e 77+g 73+g)
+  "0xFD7DEC50686BE08F": {
     depth: 8,
     candidates: [
-      { move: "33b+a", score: 0 },
-      { move: "33b+h", score: 0 },
-      { move: "33b+c", score: -140 }
+      { move: "33a+b", score: 0 },
+      { move: "33a+h", score: 0 },
+      { move: "33a+c", score: -140 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+e 77+h 73+e)
-  "0xFE784B5D804B5924": {
+  // 4P ply 4 (after 33+d 37+g 77+b 73+g)
+  "0xFDF046D1AFE5E8C2": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 0 },
-      { move: "33h+b", score: 0 },
-      { move: "33h+c", score: -140 }
+      { move: "33d+a", score: 20 },
+      { move: "33d+b", score: 20 },
+      { move: "33d+h", score: 20 }
     ]
   },
-  // 4P ply 3 (after 33+c 37+g 77+g)
-  "0xFEB1A363335647F9": {
+  // 4P ply 4 (after 33+h 37+c 77+h 73+g)
+  "0xFE3F24CB3A358C73": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1376 },
-      { move: "73+e", score: -1376 },
-      { move: "73+g", score: -1496 }
+      { move: "33h+a", score: 140 },
+      { move: "33h+b", score: 140 },
+      { move: "33h+c", score: 0 }
     ]
   },
-  // 4P ply 3 (after 33+d 37+f 77+h)
-  "0xFEBF45FA27715016": {
+  // 4P ply 2 (after 33+d 37+e)
+  "0xFE57A86858356550": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -976 },
-      { move: "73+e", score: -976 },
-      { move: "73+g", score: -1096 }
+      { move: "77+h", score: -260 },
+      { move: "77+a", score: -260 },
+      { move: "77+g", score: -380 }
     ]
   },
-  // 4P ply 3 (after 33+a 37+e 77+a)
-  "0xFEC35F3114ACDA6F": {
+  // 4P ply 4 (after 33+g 37+e 77+g 73+e)
+  "0xFE8B732B73EE0BAC": {
     depth: 8,
     candidates: [
-      { move: "73+f", score: -1236 },
-      { move: "73+e", score: -1236 },
-      { move: "73+g", score: -1356 }
+      { move: "33g+b", score: -280 },
+      { move: "33g+h", score: -280 },
+      { move: "33g+a", score: -280 }
     ]
   },
-  // 4P ply 4 (after 33+g 37+c 77+g 73+g)
-  "0xFECC1CBDC990DEFB": {
+  // 4P ply 4 (after 33+d 37+d 77+e 73+e)
+  "0xFF119CA6084A8714": {
     depth: 8,
     candidates: [
-      { move: "33g+b", score: -140 },
-      { move: "33g+h", score: -140 },
-      { move: "33g+a", score: -140 }
+      { move: "33d+a", score: -380 },
+      { move: "33d+b", score: -380 },
+      { move: "33d+h", score: -380 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+b 77+e 73+e)
-  "0xFF0CBCDC9E5A2BD2": {
+  // 4P ply 4 (after 33+d 37+c 77+b 73+g)
+  "0xFF27D02E3C329037": {
     depth: 8,
     candidates: [
       { move: "33d+a", score: -120 },
@@ -25747,26 +25984,8 @@ var OPENING_BOOK = {
       { move: "33d+h", score: -120 }
     ]
   },
-  // 4P ply 4 (after 33+d 37+e 77+b 73+e)
-  "0xFF60BFB8864C4560": {
-    depth: 8,
-    candidates: [
-      { move: "33d+b", score: -260 },
-      { move: "33d+h", score: -260 },
-      { move: "33d+a", score: -260 }
-    ]
-  },
-  // 4P ply 4 (after 33+c 37+e 77+a 73+e)
-  "0xFF9FE96B6638D0BB": {
-    depth: 8,
-    candidates: [
-      { move: "33c+b", score: -140 },
-      { move: "33c+h", score: -140 },
-      { move: "33c+a", score: -140 }
-    ]
-  },
-  // 4P ply 3 (after 33+h 37+f 77+b)
-  "0xFFA7B11F21764C52": {
+  // 4P ply 3 (after 33+g 37+g 77+a)
+  "0xFFA5392326809CEE": {
     depth: 8,
     candidates: [
       { move: "73+f", score: -1236 },
@@ -25774,22 +25993,13 @@ var OPENING_BOOK = {
       { move: "73+g", score: -1356 }
     ]
   },
-  // 4P ply 4 (after 33+h 37+c 77+e 73+f)
-  "0xFFE86A4F06F6D3D3": {
+  // 4P ply 4 (after 33+c 37+c 77+a 73+g)
+  "0xFFD886FDDC4605EC": {
     depth: 8,
     candidates: [
-      { move: "33h+a", score: 20 },
-      { move: "33h+b", score: 20 },
-      { move: "33h+c", score: -120 }
-    ]
-  },
-  // 4P ply 4 (after 33+a 37+g 77+g 73+e)
-  "0xFFED153941C24D2D": {
-    depth: 8,
-    candidates: [
-      { move: "33a+b", score: 280 },
-      { move: "33a+h", score: 280 },
-      { move: "33a+c", score: 140 }
+      { move: "33c+b", score: 0 },
+      { move: "33c+h", score: 0 },
+      { move: "33c+a", score: 0 }
     ]
   }
 };
@@ -28231,6 +28441,8 @@ function WebMoveComposer(stateGetter, onCommitCb) {
   this.jumpedSquaresChain = [];
   this._hopCaptureLinks = [];
   this.captureChoices = []; // { jumpedX, jumpedY, capture, mandatory }
+  this._confirmBarUserDragged = false;
+  this._captureCardUserDragged = false;
 }
 
 Object.defineProperty(WebMoveComposer.prototype, "isGuidedMoveActive", {
@@ -28285,8 +28497,29 @@ WebMoveComposer.prototype.reset = function () {
   this.jumpedSquaresChain = [];
   this._hopCaptureLinks = [];
   this.captureChoices = [];
+  this._confirmBarUserDragged = false;
+  this._captureCardUserDragged = false;
   var capOv = document.getElementById("web-capture-overlay");
-  if (capOv) capOv.style.display = "none";
+  if (capOv) {
+    capOv.style.display = "none";
+    capOv.style.alignItems = "center";
+    capOv.style.paddingTop = "0px";
+    capOv.style.paddingBottom = "0px";
+  }
+  var capCard = document.getElementById("web-capture-card");
+  if (capCard) {
+    capCard.style.left = "";
+    capCard.style.top = "";
+    capCard.style.transform = "";
+  }
+  var barEl = document.getElementById("web-ply-confirm-bar");
+  if (barEl) {
+    barEl.style.left = "10px";
+    barEl.style.right = "10px";
+    barEl.style.top = "auto";
+    barEl.style.bottom = "6px";
+    barEl.style.width = "auto";
+  }
   this.updateUi();
 };
 
@@ -28409,6 +28642,98 @@ WebMoveComposer.prototype.populatePreviewBoard = function () {
 
 WebMoveComposer.prototype._rebuildPreviewBoard = WebMoveComposer.prototype.populatePreviewBoard;
 
+WebMoveComposer.prototype.autoPositionConfirmBar = function () {
+  var bar = document.getElementById("web-ply-confirm-bar");
+  if (!bar || this._confirmBarUserDragged) return;
+  var s = this.previewState || (this.getState ? this.getState() : null);
+  var gw = (s && s.gw) ? s.gw : 9;
+  var gh = (s && s.gh) ? s.gh : 9;
+  var rot = (typeof boardRotationDeg === "number")
+    ? (((boardRotationDeg + (typeof liveRotationOffsetDeg === "number" ? liveRotationOffsetDeg : 0)) % 360) + 360) % 360
+    : 0;
+  var r = (Math.round(rot / 90) * 90) % 360;
+  var rows = (r === 90 || r === 270) ? gw : gh;
+  var topScore = 0;
+  var bottomScore = 0;
+
+  function scoreSq(x, y, weight) {
+    if (!x || !y) return;
+    var sg = boardToScreenGrid(x, y, gw, gh, r);
+    if (sg.row <= 1) topScore += weight;
+    if (sg.row >= rows - 2) bottomScore += weight;
+  }
+
+  if (this.guidedLegalDests && this.guidedLegalDests.length) {
+    for (var i = 0; i < this.guidedLegalDests.length; i++) {
+      scoreSq(this.guidedLegalDests[i].x, this.guidedLegalDests[i].y, 3);
+    }
+  }
+  if (this.guidedCurrentSquare) {
+    scoreSq(this.guidedCurrentSquare.x, this.guidedCurrentSquare.y, 2);
+  }
+  if (this.jumpedSquaresChain && this.jumpedSquaresChain.length) {
+    for (var j = 0; j < this.jumpedSquaresChain.length; j++) {
+      scoreSq(this.jumpedSquaresChain[j].x, this.jumpedSquaresChain[j].y, 2);
+      scoreSq(this.jumpedSquaresChain[j].toX, this.jumpedSquaresChain[j].toY, 1);
+    }
+  }
+  if (this.guidedOriginSquare && this.hasOtherMovablePodAtOrigin()) {
+    scoreSq(this.guidedOriginSquare.x, this.guidedOriginSquare.y, 2);
+  }
+
+  bar.style.left = "10px";
+  bar.style.right = "10px";
+  bar.style.width = "auto";
+  if (bottomScore > 0 && bottomScore >= topScore) {
+    bar.style.top = "6px";
+    bar.style.bottom = "auto";
+  } else {
+    bar.style.bottom = "6px";
+    bar.style.top = "auto";
+  }
+};
+
+WebMoveComposer.prototype.autoPositionCaptureCard = function (jx, jy, toX, toY) {
+  var capOv = document.getElementById("web-capture-overlay");
+  if (!capOv || this._captureCardUserDragged) return;
+  var s = this.previewState || (this.getState ? this.getState() : null);
+  var gw = (s && s.gw) ? s.gw : 9;
+  var gh = (s && s.gh) ? s.gh : 9;
+  var rot = (typeof boardRotationDeg === "number")
+    ? (((boardRotationDeg + (typeof liveRotationOffsetDeg === "number" ? liveRotationOffsetDeg : 0)) % 360) + 360) % 360
+    : 0;
+  var r = (Math.round(rot / 90) * 90) % 360;
+  var rows = (r === 90 || r === 270) ? gw : gh;
+  var midRow = (rows - 1) * 0.5;
+  var topWeight = 0;
+  var bottomWeight = 0;
+
+  function addRowWeight(x, y, w) {
+    if (!x || !y) return;
+    var sg = boardToScreenGrid(x, y, gw, gh, r);
+    if (sg.row < midRow) topWeight += w;
+    else bottomWeight += w;
+  }
+
+  addRowWeight(jx, jy, 2);
+  addRowWeight(toX, toY, 2);
+  if (this.guidedLegalDests && this.guidedLegalDests.length) {
+    for (var i = 0; i < this.guidedLegalDests.length; i++) {
+      addRowWeight(this.guidedLegalDests[i].x, this.guidedLegalDests[i].y, 3);
+    }
+  }
+
+  if (bottomWeight >= topWeight) {
+    capOv.style.alignItems = "flex-start";
+    capOv.style.paddingTop = "48px";
+    capOv.style.paddingBottom = "0px";
+  } else {
+    capOv.style.alignItems = "flex-end";
+    capOv.style.paddingBottom = "52px";
+    capOv.style.paddingTop = "0px";
+  }
+};
+
 WebMoveComposer.prototype.updateUi = function () {
   var bar = document.getElementById("web-ply-confirm-bar");
   var notEl = document.getElementById("web-staged-notation");
@@ -28430,6 +28755,7 @@ WebMoveComposer.prototype.updateUi = function () {
         hintEl.style.display = "none";
       }
     }
+    this.autoPositionConfirmBar();
     bar.style.display = "flex";
   } else {
     if (hintEl) {
@@ -29004,11 +29330,18 @@ WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
     var nextJumps = this.guidedNextSquares();
     if (nextJumps.length > 0) {
       this.guidedLegalDests = nextJumps;
+      if (hasJumpedPods) {
+        this.autoPositionCaptureCard(jx, jy, toX, toY);
+      }
       this.updateUi();
       renderPlayBoardCanvas();
       renderAllWebReserves();
       return true;
     }
+  }
+  if (isJump && hasJumpedPods) {
+    this.guidedLegalDests = [];
+    this.autoPositionCaptureCard(jx, jy, toX, toY);
   }
 
   this._guidedMidHop = false;
@@ -30418,12 +30751,20 @@ if (playCanvas) {
       boardRotationDeg = ((rawSnapped % 360) + 360) % 360;
       liveRotationOffsetDeg = 0;
       renderPlayBoardCanvas();
+      if (moveComposer && moveComposer.isAwaitingConfirmation) {
+        moveComposer.autoPositionConfirmBar();
+      }
       return;
     }
 
     if (boardPanActive) {
       boardPanActive = false;
       return;
+    }
+
+    var capOverlayOnBoardAct = document.getElementById("web-capture-overlay");
+    if (capOverlayOnBoardAct && capOverlayOnBoardAct.style.display === "flex") {
+      capOverlayOnBoardAct.style.display = "none";
     }
 
     // Off-board drag to toggle capture check
@@ -30787,6 +31128,98 @@ if (btnCapYes && btnCapNo) {
   });
 }
 
+// Draggable Floating Overlays (#web-ply-confirm-bar and #web-capture-card)
+function makeWebOverlayDraggable(el, containerEl, onDraggedCb) {
+  if (!el || !containerEl) return;
+  var dragging = false;
+  var startClientX = 0;
+  var startClientY = 0;
+  var startLeft = 0;
+  var startTop = 0;
+
+  function beginDrag(clientX, clientY, target) {
+    if (target && target.closest && target.closest("button, a, input, select, textarea")) {
+      return false;
+    }
+    var cRect = containerEl.getBoundingClientRect();
+    var eRect = el.getBoundingClientRect();
+    dragging = true;
+    startClientX = clientX;
+    startClientY = clientY;
+    startLeft = eRect.left - cRect.left;
+    startTop = eRect.top - cRect.top;
+    el.style.position = "absolute";
+    el.style.transform = "none";
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+    el.style.left = Math.round(startLeft) + "px";
+    el.style.top = Math.round(startTop) + "px";
+    if (onDraggedCb) onDraggedCb();
+    return true;
+  }
+
+  function moveDrag(clientX, clientY) {
+    if (!dragging) return;
+    var cRect = containerEl.getBoundingClientRect();
+    var eRect = el.getBoundingClientRect();
+    var nx = startLeft + (clientX - startClientX);
+    var ny = startTop + (clientY - startClientY);
+    var maxX = Math.max(4, cRect.width - eRect.width - 4);
+    var maxY = Math.max(4, cRect.height - eRect.height - 4);
+    nx = Math.max(4, Math.min(maxX, nx));
+    ny = Math.max(4, Math.min(maxY, ny));
+    el.style.left = Math.round(nx) + "px";
+    el.style.top = Math.round(ny) + "px";
+  }
+
+  function endDrag() {
+    dragging = false;
+  }
+
+  el.addEventListener("mousedown", function (e) {
+    if (e.button !== 0) return;
+    if (beginDrag(e.clientX, e.clientY, e.target)) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  });
+  window.addEventListener("mousemove", function (e) {
+    if (!dragging) return;
+    moveDrag(e.clientX, e.clientY);
+  });
+  window.addEventListener("mouseup", function () {
+    if (dragging) endDrag();
+  });
+
+  el.addEventListener("touchstart", function (e) {
+    if (e.touches.length !== 1) return;
+    var t = e.touches[0];
+    if (beginDrag(t.clientX, t.clientY, e.target)) {
+      e.stopPropagation();
+    }
+  }, { passive: true });
+  window.addEventListener("touchmove", function (e) {
+    if (!dragging || e.touches.length !== 1) return;
+    var t = e.touches[0];
+    moveDrag(t.clientX, t.clientY);
+  }, { passive: true });
+  window.addEventListener("touchend", function () {
+    if (dragging) endDrag();
+  });
+}
+
+(function initWebDraggableOverlays() {
+  var wrapEl = document.getElementById("web-play-board-wrap");
+  var confirmBarEl = document.getElementById("web-ply-confirm-bar");
+  var capCardEl = document.getElementById("web-capture-card");
+  makeWebOverlayDraggable(confirmBarEl, wrapEl, function () {
+    if (moveComposer) moveComposer._confirmBarUserDragged = true;
+  });
+  makeWebOverlayDraggable(capCardEl, wrapEl, function () {
+    if (moveComposer) moveComposer._captureCardUserDragged = true;
+  });
+})();
+
 // Game Over Dialog Buttons
 var btnGoNew = document.getElementById("btn-gameover-new");
 var btnGoReview = document.getElementById("btn-gameover-review");
@@ -30810,6 +31243,9 @@ if (btnWebRotate) {
   btnWebRotate.addEventListener("click", function () {
     boardRotationDeg = (boardRotationDeg + 90) % 360;
     renderPlayBoardCanvas();
+    if (moveComposer && moveComposer.isAwaitingConfirmation) {
+      moveComposer.autoPositionConfirmBar();
+    }
   });
 }
 

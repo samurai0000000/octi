@@ -551,6 +551,10 @@ public class OctiBotEngine {
     }
 
     private static long computePositionHashInternal(OctiBoard board, boolean mirrorHorizontal) {
+        return computePositionHashInternal(board, mirrorHorizontal, false);
+    }
+
+    private static long computePositionHashInternal(OctiBoard board, boolean mirrorHorizontal, boolean exclude4PBases) {
         long h = 0L;
         if (board == null) {
             return h;
@@ -568,8 +572,10 @@ public class OctiBotEngine {
         OctiPlayer turn = game.getTurn();
         int turnVal = (turn != null) ? turn.getValue() : 0;
         h ^= ZOB_TURN[turnVal % 5];
-        int btw = Math.min(4, Math.max(0, game.getBasesToWin()));
-        h ^= ZOB_BASES_TO_WIN[btw];
+        if (!exclude4PBases || mode != OctiGameMode.GAME_MODE_4) {
+            int btw = Math.min(4, Math.max(0, game.getBasesToWin()));
+            h ^= ZOB_BASES_TO_WIN[btw];
+        }
         h ^= ZOB_EDGELESS[game.useEdgelessBoard() ? 1 : 0];
         h ^= ZOB_SUPER_PRONGS[game.useSuperProngs() ? 1 : 0];
 
@@ -635,7 +641,7 @@ public class OctiBotEngine {
     }
 
     public static long computeCanonicalOpeningHash(OctiBoard board, boolean[] outMirrored) {
-        long hDirect = computePositionHashInternal(board, false);
+        long hDirect = computePositionHashInternal(board, false, true);
         if (board == null || board.getGameMode() == OctiGameMode.GAME_MODE_4) {
             if (outMirrored != null && outMirrored.length > 0) {
                 outMirrored[0] = false;
@@ -643,7 +649,7 @@ public class OctiBotEngine {
             return hDirect;
         }
 
-        long hMirror = computePositionHashInternal(board, true);
+        long hMirror = computePositionHashInternal(board, true, true);
         if (Long.compareUnsigned(hMirror, hDirect) < 0) {
             if (outMirrored != null && outMirrored.length > 0) {
                 outMirrored[0] = true;

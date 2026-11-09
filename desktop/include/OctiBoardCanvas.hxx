@@ -59,6 +59,7 @@ public:
 
     QRectF commitBtnRect() const { return _commitBtnRect; }
     QRectF rollbackBtnRect() const { return _rollbackBtnRect; }
+    QRectF commitBannerRect() const { return _commitBannerRect; }
 
     const OctiBoardGeometry &geometry() const;
 
@@ -179,6 +180,11 @@ private:
     QRectF _commitBtnRect;
     QRectF _rollbackBtnRect;
     QRectF _finishBtnRect;
+    QRectF _commitBannerRect;
+    QPointF _commitBannerCustomPos;
+    bool _hasCommitBannerCustomPos;
+    bool _draggingCommitBanner;
+    QPointF _commitBannerDragOffset;
     int _dragJumpedSquareX;
     int _dragJumpedSquareY;
 
