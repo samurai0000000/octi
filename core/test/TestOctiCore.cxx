@@ -7473,6 +7473,303 @@ TEST(OctiEnvelope4SearchTest, QuiescenceTtReducesNodesOnTranspositionsAndTtSizeL
     CHECK_EQUAL(std::size_t{1} << 12, qOnEngine.transpositionTableEntryCount());
 }
 
+namespace {
+
+static const char *const kE3bRef24Fens[24] = {
+    "2:3:1:0:P:B:-:0:4,0,17,0:4,0,18,0:A33abh,B53ade!,B53e,B37def,A77a!be,A77ab",
+    "2:3:1:0:P:B:-:0:3,0,16,0:4,0,12,0:A42abfh,B72abde!,A53h,B73e,B76defg,A37a!beh,A57abch",
+    "2:3:1:0:P:B:-:0:4,0,20,0:4,1,19,0:B52ade!,A33ab,B37def,A77a!eh,A77",
+    "2:3:1:0:P:A:-:0:4,0,17,0:4,0,17,0:B72ae!f,A53abh,B73ef,A37ab,B57def,A38a!be",
+    "2:3:1:0:P:A:-:0:4,0,23,0:4,1,23,0:A33,A53a,B34e!,B57e,A78a!",
+    "2:3:1:0:P:B:-:0:4,0,18,0:4,1,18,0:B33ade!h,B73efg,A37abc,A77a!bde,A77",
+    "2:1:1:0:P:B:-:0:4,1,21,0:4,0,24,0:B32e!,A53ab,A73a,B57,B77e!",
+    "2:1:1:0:P:B:-:0:4,0,22,0:4,0,24,0:A33b!,A53,A73ah,B34e!,B57,B77",
+    "2:1:1:0:P:B:-:0:4,1,19,0:4,0,22,0:B32e!,A53adh,A73ah,B66d!ef,B77",
+    "2:1:1:0:P:B:-:0:4,2,19,1:4,1,23,0:A71abdh,B32e!,B77de",
+    "2:1:1:0:P:B:-:0:4,1,20,0:4,0,23,0:B32e!,A53abh,A73a,B57e!f,B77",
+    "2:1:1:0:P:B:-:0:4,1,20,0:4,0,23,0:B32e!,A53ah,A73ah,B57e!f,B77",
+    "4:3:1:0:P:A:-:0:3,0,11,0:2,2,10,0:2,1,10,0:3,0,9,0:C27fg!,A38a!be!,D78a!eh",
+    "4:3:1:0:P:D:-:3:3,1,11,0:0,4,10,0:2,0,9,0:2,0,10,1:D33ab!g!h,D73,C37cfg!,C77",
+    "4:3:1:0:P:D:-:2:0,3,10,0:2,2,9,0:3,0,11,0:3,0,10,0:D23acg!h!,A33,C37ce!fg!",
+    "4:3:1:0:P:D:-:1:3,1,10,0:2,2,7,0:3,0,12,1:3,0,9,0:D33abfg!h!,C36efg!h",
+    "4:3:1:0:P:C:-:3:3,1,10,1:2,2,11,1:2,0,8,0:2,1,7,0:D33agh,C66efg,C37ce!fg!",
+    "4:3:1:0:P:C:-:2:3,0,11,0:3,1,10,0:3,0,9,0:3,0,9,0:D73a!gh,A37a!bc!,C77e!fg",
+    "2:3:1:1:P:A:-:0:4,0,15,0:4,0,14,0:B33cde!f,A73abh,A44abh,B65defg,A37a!bch,B77def",
+    "2:3:1:1:P:A:-:0:4,0,17,0:4,0,17,0:B53ade!,B53ef,A73abh,A37ab,B77def,A38a!be",
+    "2:3:1:1:P:B:-:0:4,0,25,0:2,4,14,0:B86bdef!,A37ab,A57abcf!h,A57",
+    "2:3:1:1:P:B:-:0:2,0,6,0:3,0,7,0:B53cde!fg,A73abch,A24abh,A34abch,A35abch,B95cdef,B36cdef,B37cdefg,A57a!bch",
+    "2:3:1:1:P:B:-:0:4,0,18,0:4,0,19,0:B33de,B33,A74a!bde,B36ae!fh,A77abh,A77",
+    "2:3:1:1:P:B:-:0:4,1,21,0:4,1,21,0:B32ade!,A73a,A57a!eh,B77d"
+};
+
+struct E3bSpVariantSpec {
+    octi::OctiGameMode mode;
+    bool edgeless;
+    octi::OctiGameBases bases;
+};
+
+static const E3bSpVariantSpec kE3bSpVariants8[8] = {
+    { octi::GAME_MODE_2, false, octi::GAME_BASES_3 },
+    { octi::GAME_MODE_2, true,  octi::GAME_BASES_3 },
+    { octi::GAME_MODE_2, false, octi::GAME_BASES_1 },
+    { octi::GAME_MODE_2, true,  octi::GAME_BASES_1 },
+    { octi::GAME_MODE_4, false, octi::GAME_BASES_3 },
+    { octi::GAME_MODE_4, true,  octi::GAME_BASES_3 },
+    { octi::GAME_MODE_4, false, octi::GAME_BASES_1 },
+    { octi::GAME_MODE_4, true,  octi::GAME_BASES_1 }
+};
+
+std::uint64_t e3bFnvMix64(std::uint64_t h, std::uint64_t v)
+{
+    for (int b = 0; b < 8; ++b) {
+        h ^= ((v >> (b * 8)) & 0xFFULL);
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+std::uint64_t e3bHashMoveListOpsAndKeys(const std::vector<octi::OctiMove> &moves)
+{
+    std::uint64_t h = 14695981039346656037ULL;
+    h = e3bFnvMix64(h, static_cast<std::uint64_t>(moves.size()));
+    for (const auto &m : moves) {
+        h = e3bFnvMix64(h, m.structuralKey());
+        const auto &ops = m.getOps();
+        h = e3bFnvMix64(h, static_cast<std::uint64_t>(ops.size()));
+        for (const auto &op : ops) {
+            std::uint64_t packed =
+                static_cast<std::uint64_t>(op.x0 & 0xFF) |
+                (static_cast<std::uint64_t>(op.y0 & 0xFF) << 8) |
+                (static_cast<std::uint64_t>(static_cast<unsigned char>(op.addProngDir)) << 16) |
+                (static_cast<std::uint64_t>(static_cast<unsigned char>(op.rmProngDir)) << 24) |
+                ((op.addPod ? 1ULL : 0ULL) << 32) |
+                ((op.liberate ? 1ULL : 0ULL) << 33) |
+                ((op.superProng ? 1ULL : 0ULL) << 34) |
+                ((op.isSuperProngBonusMove ? 1ULL : 0ULL) << 35) |
+                (static_cast<std::uint64_t>(op.hops.size() & 0xFFF) << 36);
+            h = e3bFnvMix64(h, packed);
+            h = e3bFnvMix64(h, static_cast<std::uint64_t>(op.pod.rawConfig()));
+            for (const auto &hop : op.hops) {
+                std::uint64_t hp =
+                    static_cast<std::uint64_t>(hop.x & 0xFF) |
+                    (static_cast<std::uint64_t>(hop.y & 0xFF) << 8) |
+                    ((hop.capture ? 1ULL : 0ULL) << 16);
+                h = e3bFnvMix64(h, hp);
+            }
+        }
+    }
+    return h;
+}
+
+std::string e3bJoinMoveStrings(const std::vector<octi::OctiMove> &moves)
+{
+    std::string out;
+    for (std::size_t i = 0; i < moves.size(); ++i) {
+        if (i > 0) {
+            out.push_back(' ');
+        }
+        out += moves[i].asString();
+    }
+    return out;
+}
+
+std::filesystem::path e3bResolveGoldenFixturePath()
+{
+    std::error_code ec;
+    std::filesystem::path fromSource =
+        std::filesystem::path(__FILE__).parent_path() / "fixtures" / "sp_movegen_golden.tsv";
+    if (std::filesystem::exists(fromSource, ec)) {
+        return fromSource;
+    }
+    const char *const kRelCandidates[] = {
+        "test/fixtures/sp_movegen_golden.tsv",
+        "../test/fixtures/sp_movegen_golden.tsv",
+        "core/test/fixtures/sp_movegen_golden.tsv"
+    };
+    for (const char *rel : kRelCandidates) {
+        std::filesystem::path p(rel);
+        if (std::filesystem::exists(p, ec)) {
+            return p;
+        }
+    }
+    return fromSource;
+}
+
+struct E3bGoldenRecord {
+    int index = -1;
+    std::string fen;
+    std::string legalOpsHashHex;
+    std::string legalJoined;
+    std::string tacticalOpsHashHex;
+    std::string tacticalJoined;
+};
+
+} // namespace
+
+TEST_GROUP(OctiEnvelope3bSpMoveGenTest)
+{
+};
+
+TEST(OctiEnvelope3bSpMoveGenTest, GoldenMoveListOrderOpsAndStringsAcrossRef24And1000RandomPlayouts)
+{
+    std::filesystem::path goldenPath = e3bResolveGoldenFixturePath();
+    std::ifstream ifs(goldenPath);
+    CHECK_TEXT(ifs.is_open(), "Failed to open sp_movegen_golden.tsv fixture");
+
+    std::vector<E3bGoldenRecord> golden;
+    golden.reserve(1024);
+    std::string rawLine;
+    while (std::getline(ifs, rawLine)) {
+        if (rawLine.empty() || rawLine[0] == '#') {
+            continue;
+        }
+        std::vector<std::string> cols;
+        cols.reserve(6);
+        std::size_t start = 0;
+        while (true) {
+            std::size_t tab = rawLine.find('\t', start);
+            if (tab == std::string::npos) {
+                cols.push_back(rawLine.substr(start));
+                break;
+            }
+            cols.push_back(rawLine.substr(start, tab - start));
+            start = tab + 1;
+        }
+        CHECK_EQUAL(6u, cols.size());
+        E3bGoldenRecord rec;
+        rec.index = std::stoi(cols[0]);
+        rec.fen = std::move(cols[1]);
+        rec.legalOpsHashHex = std::move(cols[2]);
+        rec.legalJoined = std::move(cols[3]);
+        rec.tacticalOpsHashHex = std::move(cols[4]);
+        rec.tacticalJoined = std::move(cols[5]);
+        golden.push_back(std::move(rec));
+    }
+    CHECK_EQUAL(1024u, golden.size());
+
+    std::size_t cursor = 0;
+    auto verifyPositionAgainstGolden = [&](const octi::OctiBoard &board, bool parseEveryMoveString) {
+        CHECK_TRUE(cursor < golden.size());
+        const E3bGoldenRecord &exp = golden[cursor];
+        CHECK_EQUAL(static_cast<int>(cursor), exp.index);
+
+        std::string actualFen = board.toPositionString();
+        STRCMP_EQUAL(exp.fen.c_str(), actualFen.c_str());
+
+        const octi::OctiGame *game = board.getGame();
+        CHECK_TRUE(game != nullptr);
+
+        std::vector<octi::OctiMove> legal;
+        game->generateLegalMoves(legal);
+        std::string actualLegalJoined = e3bJoinMoveStrings(legal);
+        CHECK_TRUE(actualLegalJoined == exp.legalJoined);
+
+        std::ostringstream lHashHex;
+        lHashHex << std::hex << e3bHashMoveListOpsAndKeys(legal);
+        STRCMP_EQUAL(exp.legalOpsHashHex.c_str(), lHashHex.str().c_str());
+
+        if (parseEveryMoveString) {
+            std::istringstream ms(exp.legalJoined);
+            std::string tok;
+            std::size_t mIdx = 0;
+            while (ms >> tok) {
+                CHECK_TRUE(mIdx < legal.size());
+                STRCMP_EQUAL(tok.c_str(), legal[mIdx].asString().c_str());
+                octi::OctiMove parsed(tok);
+                CHECK_EQUAL(parsed.structuralKey(), legal[mIdx].structuralKey());
+                CHECK_EQUAL(legal[mIdx].getOps().size(), parsed.getOps().size());
+                for (std::size_t opIdx = 0; opIdx < parsed.getOps().size(); ++opIdx) {
+                    const octi::OctiMoveOp &opA = legal[mIdx].getOps()[opIdx];
+                    const octi::OctiMoveOp &opB = parsed.getOps()[opIdx];
+                    CHECK_EQUAL(opA.x0, opB.x0);
+                    CHECK_EQUAL(opA.y0, opB.y0);
+                    CHECK_EQUAL(opA.pod.rawConfig() & 0xFFFFu,
+                                opB.pod.rawConfig() & 0xFFFFu);
+                    CHECK_EQUAL(opA.addPod, opB.addPod);
+                    CHECK_EQUAL(opA.liberate, opB.liberate);
+                    CHECK_EQUAL(opA.addProngDir, opB.addProngDir);
+                    CHECK_EQUAL(opA.rmProngDir, opB.rmProngDir);
+                    CHECK_EQUAL(opA.superProng, opB.superProng);
+                    CHECK_EQUAL(opA.isSuperProngBonusMove, opB.isSuperProngBonusMove);
+                    CHECK_TRUE(opA.hops == opB.hops);
+                }
+                ++mIdx;
+            }
+            CHECK_EQUAL(legal.size(), mIdx);
+        }
+
+        std::vector<octi::OctiMove> tactical;
+        game->generateTacticalMoves(tactical);
+        std::string actualTacticalJoined = e3bJoinMoveStrings(tactical);
+        CHECK_TRUE(actualTacticalJoined == exp.tacticalJoined);
+
+        std::ostringstream tHashHex;
+        tHashHex << std::hex << e3bHashMoveListOpsAndKeys(tactical);
+        STRCMP_EQUAL(exp.tacticalOpsHashHex.c_str(), tHashHex.str().c_str());
+
+        ++cursor;
+    };
+
+    // 1. All 24 reference superprong bench positions (with full OctiMove string round-trip equality)
+    for (int i = 0; i < 24; ++i) {
+        octi::OctiBoard board;
+        board.suppressBoardUpdateNotification(true);
+        board.fromPositionString(kE3bRef24Fens[i]);
+        verifyPositionAgainstGolden(board, true);
+    }
+
+    // 2. 1,000 positions from seeded random superprong playouts across the 8 superprong variants (125 each)
+    for (int v = 0; v < 8; ++v) {
+        const E3bSpVariantSpec &cfg = kE3bSpVariants8[v];
+        std::mt19937_64 rng(0xE3B502026ULL + static_cast<std::uint64_t>(v) * 0x9E3779B97F4A7C15ULL);
+        int collected = 0;
+        while (collected < 125) {
+            octi::OctiBoard board(cfg.mode, true, cfg.edgeless, cfg.bases);
+            board.suppressBoardUpdateNotification(true);
+            octi::OctiGame *game = board.getGame();
+            game->setSearchMode(true);
+            game->start(octi::PLAYER_A);
+
+            int ply = 0;
+            while (ply < 160 && !game->isGameOver() && collected < 125) {
+                std::vector<octi::OctiMove> legal;
+                game->generateLegalMoves(legal);
+                if (legal.empty()) {
+                    break;
+                }
+                if (ply >= 4 && ((ply - 4) % 3 == 0)) {
+                    verifyPositionAgainstGolden(board, (collected % 25 == 0));
+                    ++collected;
+                    if (collected >= 125) {
+                        break;
+                    }
+                }
+                std::size_t pickIdx = 0;
+                if (game->getFreeSuperProngs(game->getTurn()) > 0 && (rng() & 1ULL) != 0ULL) {
+                    std::vector<std::size_t> spArmIdx;
+                    for (std::size_t mi = 0; mi < legal.size(); ++mi) {
+                        const auto &ops = legal[mi].getOps();
+                        if (ops.size() == 1 && ops[0].superProng && ops[0].addProngDir != octi::DIR_UNDEF) {
+                            spArmIdx.push_back(mi);
+                        }
+                    }
+                    if (!spArmIdx.empty()) {
+                        pickIdx = spArmIdx[static_cast<std::size_t>(rng() % spArmIdx.size())];
+                    } else {
+                        pickIdx = static_cast<std::size_t>(rng() % legal.size());
+                    }
+                } else {
+                    pickIdx = static_cast<std::size_t>(rng() % legal.size());
+                }
+                game->move(legal[pickIdx]);
+                ++ply;
+            }
+        }
+    }
+
+    CHECK_EQUAL(1024u, cursor);
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();
