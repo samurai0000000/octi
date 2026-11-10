@@ -6,6 +6,7 @@
 
 #include "OctiGame.hxx"
 #include "OctiBoard.hxx"
+#include "OctiBotEngine.hxx"
 #include "OctiCrypto.hxx"
 #include <algorithm>
 #include <cctype>
@@ -237,11 +238,67 @@ int OctiGame::getNumMoves() const
 void OctiGame::setSearchMode(bool searchMode)
 {
     _searchMode = searchMode;
+    if (!searchMode) {
+        _nullMoveDepth = 0;
+    }
 }
 
 bool OctiGame::isSearchMode() const
 {
     return _searchMode;
+}
+
+bool OctiGame::makeNullMove(std::uint64_t *inOutHash)
+{
+    if (!_searchMode || !_gameStarted || _gameOver) {
+        return false;
+    }
+    if (_mode != GAME_MODE_2 && _mode != GAME_MODE_OFK) {
+        return false;
+    }
+    if (_turn != PLAYER_A && _turn != PLAYER_B) {
+        return false;
+    }
+
+    OctiPlayer prevTurn = _turn;
+    OctiPlayer nextTurn = (_turn == PLAYER_A) ? PLAYER_B : PLAYER_A;
+    _turn = nextTurn;
+    ++_searchPlyOffset;
+    ++_nullMoveDepth;
+    if (inOutHash != nullptr) {
+        *inOutHash = OctiBotEngine::toggleTurnHashStatic(
+            *inOutHash, prevTurn, nextTurn);
+    }
+    return true;
+}
+
+bool OctiGame::unmakeNullMove(std::uint64_t *inOutHash)
+{
+    if (!_searchMode || _nullMoveDepth <= 0) {
+        return false;
+    }
+    if (_mode != GAME_MODE_2 && _mode != GAME_MODE_OFK) {
+        return false;
+    }
+    if (_turn != PLAYER_A && _turn != PLAYER_B) {
+        return false;
+    }
+
+    OctiPlayer prevTurn = _turn;
+    OctiPlayer restoredTurn = (_turn == PLAYER_A) ? PLAYER_B : PLAYER_A;
+    _turn = restoredTurn;
+    --_searchPlyOffset;
+    --_nullMoveDepth;
+    if (inOutHash != nullptr) {
+        *inOutHash = OctiBotEngine::toggleTurnHashStatic(
+            *inOutHash, prevTurn, restoredTurn);
+    }
+    return true;
+}
+
+bool OctiGame::isInNullMove() const
+{
+    return _nullMoveDepth > 0;
 }
 
 void OctiGame::getMoves(std::vector<std::pair<OctiPlayer, OctiMove>> &history) const
@@ -273,6 +330,8 @@ void OctiGame::reset()
     _winner = PLAYER_UNDEF;
     _hasPreparedMove = false;
     _prepOps.clear();
+    _searchPlyOffset = 0;
+    _nullMoveDepth = 0;
 
     for (int p = 0; p < 5; p++) {
         _players[p] = OctiPlayerState();
@@ -356,6 +415,7 @@ void OctiGame::start(OctiPlayer startPlayer)
     _gameOver = false;
     _gameResigned = false;
     _winner = PLAYER_UNDEF;
+    _nullMoveDepth = 0;
 
     notifyGameUpdated();
     notifyUndoRedoStatusChanged();
@@ -3384,6 +3444,7 @@ OctiGameSnapshot OctiGame::captureSnapshot() const
     snap.gameOver = _gameOver;
     snap.gameResigned = _gameResigned;
     snap.searchPlyOffset = _searchPlyOffset;
+    snap.nullMoveDepth = _nullMoveDepth;
     if (!_searchMode) {
         snap.plyMetadata = _plyMetadata;
     }
@@ -3414,6 +3475,7 @@ void OctiGame::restoreSnapshot(const OctiGameSnapshot &snap)
     _gameOver = snap.gameOver;
     _gameResigned = snap.gameResigned;
     _searchPlyOffset = snap.searchPlyOffset;
+    _nullMoveDepth = snap.nullMoveDepth;
     if (!_searchMode) {
         _plyMetadata = snap.plyMetadata;
     }
