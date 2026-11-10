@@ -3455,8 +3455,8 @@ TEST(DesktopAppIntegrationTest, LeavingWaitingRoomTableVacatesSeatOnServer)
 
 TEST(DesktopAppIntegrationTest, GuiDesignBookCrossPlatformParityAndSseStormPrevention)
 {
-    /* 1. Verify canonical opening book entry count (2,058 positions) */
-    LONGS_EQUAL(2058, static_cast<long>(octi::g_openingBookEntryCount));
+    /* 1. Verify canonical opening book entry count (3,714 positions) */
+    LONGS_EQUAL(3714, static_cast<long>(octi::g_openingBookEntryCount));
 
     QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);
     QString artifactDir = repoRootStr + "/plan/plan_gui_design_book_and_cross_platform_parity.artifacts/desktop";

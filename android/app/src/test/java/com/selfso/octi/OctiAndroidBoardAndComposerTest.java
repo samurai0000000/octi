@@ -875,7 +875,7 @@ public class OctiAndroidBoardAndComposerTest {
         assertEquals(BuildConfig.VERSION_NAME, OctiDefs.OCTI_APP_VERSION);
         assertEquals("2.4.3", OctiDefs.OCTI_APP_VERSION);
         assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
-        assertEquals(2058, OctiOpeningBookData.ENTRIES.length);
+        assertEquals(3714, OctiOpeningBookData.ENTRIES.length);
 
         OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
         board.getGame().move("33+h");

@@ -20,8 +20,9 @@ public final class OctiOpeningBookData {
         OctiBotEngine.OpeningBookEntry[] c3 = chunk3();
         OctiBotEngine.OpeningBookEntry[] c4 = chunk4();
         OctiBotEngine.OpeningBookEntry[] c5 = chunk5();
+        OctiBotEngine.OpeningBookEntry[] c6 = chunk6();
         OctiBotEngine.OpeningBookEntry[] all =
-                new OctiBotEngine.OpeningBookEntry[c0.length + c1.length + c2.length + c3.length + c4.length + c5.length];
+                new OctiBotEngine.OpeningBookEntry[c0.length + c1.length + c2.length + c3.length + c4.length + c5.length + c6.length];
         int pos = 0;
         System.arraycopy(c0, 0, all, pos, c0.length);
         pos += c0.length;
@@ -35,6 +36,8 @@ public final class OctiOpeningBookData {
         pos += c4.length;
         System.arraycopy(c5, 0, all, pos, c5.length);
         pos += c5.length;
+        System.arraycopy(c6, 0, all, pos, c6.length);
+        pos += c6.length;
         return all;
     }
 
@@ -70,11 +73,26 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", -2752),
             new OctiBotEngine.OpeningBookCandidate("57f+e", -2752),
             new OctiBotEngine.OpeningBookCandidate("37+d", -2752)),
+        // 4P_ED ply 3 (after 33+a 37+f 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x003B3818A560E34BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
+        // 2P_3B_ED ply 3 (after 33+a 37+f 53+d)
+        new OctiBotEngine.OpeningBookEntry(0x003F888795CDDB70L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2069),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2069),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2069)),
         // OFK ply 2 (after 32+b 46+f)
         new OctiBotEngine.OpeningBookEntry(0x004C97ACE487F4A2L, 8,
             new OctiBotEngine.OpeningBookCandidate("42+a", -740),
             new OctiBotEngine.OpeningBookCandidate("52+h", -740),
             new OctiBotEngine.OpeningBookCandidate("42+h", -740)),
+        // 2P_3B_ED ply 3 (after 33+h 37+f 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x005B4032AB3A197DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2302),
+            new OctiBotEngine.OpeningBookCandidate("57+b", -2302),
+            new OctiBotEngine.OpeningBookCandidate("77+h", -2302)),
         // 4P ply 4 (after 33+c 37+f 77+f 73+b)
         new OctiBotEngine.OpeningBookEntry(0x005F4BDCFDDBA714L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 280),
@@ -115,11 +133,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", -2752),
             new OctiBotEngine.OpeningBookCandidate("37+d", -2752),
             new OctiBotEngine.OpeningBookCandidate("77+f", -2752)),
+        // 4P_ED ply 3 (after 33+c 37+e 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x00B8740076C9FCE9L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+f 37+d 77+h 73+f)
         new OctiBotEngine.OpeningBookEntry(0x00BBA4EDBC1016EBL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 2P_1B_ED ply 3 (after 53+b 57+d 33+h)
+        new OctiBotEngine.OpeningBookEntry(0x00C21E62F9753E23L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2980),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2980),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3100)),
         // 2P 1-Base ply 3 (after 53+b 57+d 33+b)
         new OctiBotEngine.OpeningBookEntry(0x00E070DC835A080BL, 8,
             new OctiBotEngine.OpeningBookCandidate("77+f", -4020),
@@ -135,6 +163,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("22+b", -620),
             new OctiBotEngine.OpeningBookCandidate("32+a", -620),
             new OctiBotEngine.OpeningBookCandidate("42h-33", -900)),
+        // 2P_3B_ED ply 3 (after 53+a 37+d 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x00F06597F487E6BCL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2453),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2453),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2721)),
         // 2P 3-Base ply 4 (after 53+b 37+e 33+b 57+f)
         new OctiBotEngine.OpeningBookEntry(0x00F5D335026032DAL, 8,
             new OctiBotEngine.OpeningBookCandidate("53h+a", -155),
@@ -180,11 +213,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", -793),
             new OctiBotEngine.OpeningBookCandidate("42a+h", -793),
             new OctiBotEngine.OpeningBookCandidate("22+b", -793)),
+        // 2P_1B_ED ply 3 (after 53+b 77+e 33+h)
+        new OctiBotEngine.OpeningBookEntry(0x0136BFAF5B676DFEL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2360),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2910),
+            new OctiBotEngine.OpeningBookCandidate("37e+d", -3100)),
         // OFK ply 4 (after 22+b 46+f 32+h 36+e)
         new OctiBotEngine.OpeningBookEntry(0x0142B434DDB7971AL, 8,
             new OctiBotEngine.OpeningBookCandidate("32h+b", -1248),
             new OctiBotEngine.OpeningBookCandidate("52+h", -1410),
             new OctiBotEngine.OpeningBookCandidate("42+h", -3273)),
+        // 4P_ED ply 2 (after 33+b 37+d)
+        new OctiBotEngine.OpeningBookEntry(0x014A4A4773128C15L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
         // 4P ply 4 (after 33+b 37+b 77+f 73+b)
         new OctiBotEngine.OpeningBookEntry(0x0158B87311544E68L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 280),
@@ -205,6 +248,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", -440),
             new OctiBotEngine.OpeningBookCandidate("53+a", -440),
             new OctiBotEngine.OpeningBookCandidate("73h+b", -1020)),
+        // 2P_3B_ED ply 3 (after 33+b 77+e 53+f)
+        new OctiBotEngine.OpeningBookEntry(0x01B9F8F25A2B306EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -1949)),
         // 4P ply 4 (after 33+h 37+c 77+h 73+f)
         new OctiBotEngine.OpeningBookEntry(0x01BE3125DFFFD28EL, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
@@ -235,6 +283,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 540),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 540),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 400)),
+        // 2P_3B_ED ply 3 (after 33+b 77+e 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x01F4A78458836AC0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2601),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2601)),
         // 4P ply 4 (after 33+d 37+h 77+f 73+g)
         new OctiBotEngine.OpeningBookEntry(0x0221B839C3EC5F2BL, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 260),
@@ -285,6 +338,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", -1350),
             new OctiBotEngine.OpeningBookCandidate("73b+h", -1540),
             new OctiBotEngine.OpeningBookCandidate("53+h", -1660)),
+        // 2P_1B_ED ply 2 (after 33+a 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x02861AABAC48872AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+h", 0),
+            new OctiBotEngine.OpeningBookCandidate("33+b", 0),
+            new OctiBotEngine.OpeningBookCandidate("53+a", -620)),
         // 2P 3-Base ply 4 (after 53+a 57+e 33+a 57e+d)
         new OctiBotEngine.OpeningBookEntry(0x0286CF68034C3671L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
@@ -370,11 +428,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", -260),
             new OctiBotEngine.OpeningBookCandidate("33c+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -400)),
+        // 2P_3B_ED ply 3 (after 33+b 57+d 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x037787C121F84454L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2632),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("57d+e", -2632)),
         // 4P ply 4 (after 33+b 37+e 77+f 73+g)
         new OctiBotEngine.OpeningBookEntry(0x0381892007762996L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -260)),
+        // 2P_3B_SP ply 1 (after 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x039206205B696EE6L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e!", -1832),
+            new OctiBotEngine.OpeningBookCandidate("77+e!", -1865),
+            new OctiBotEngine.OpeningBookCandidate("77+g", -2213)),
         // OFK ply 4 (after 32+a 56+f 52+b 36+e)
         new OctiBotEngine.OpeningBookEntry(0x0399CE55327C6F0DL, 8,
             new OctiBotEngine.OpeningBookCandidate("42a+h", -1199),
@@ -500,6 +568,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 4P_ED ply 3 (after 33+h 37+f 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x04C248E742221750L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 2P_3B_ED ply 3 (after 33+a 57+e 53+d)
+        new OctiBotEngine.OpeningBookEntry(0x04C8BF6BED3D7CF0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -1949)),
         // 4P ply 3 (after 33+b 37+f 77+g)
         new OctiBotEngine.OpeningBookEntry(0x04E02659380D2178L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
@@ -550,6 +628,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", -228),
             new OctiBotEngine.OpeningBookCandidate("42+h", -740),
             new OctiBotEngine.OpeningBookCandidate("42+a", -1248)),
+        // 2P_3B_ED ply 2 (after 33+a 37+d)
+        new OctiBotEngine.OpeningBookEntry(0x057EB1A2A6BCB47BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+h", -268),
+            new OctiBotEngine.OpeningBookCandidate("53+a", -299),
+            new OctiBotEngine.OpeningBookCandidate("53+b", -299)),
         // OFK ply 4 (after 32+b 56+f 32b+a 36+e)
         new OctiBotEngine.OpeningBookEntry(0x0582CFE4A41FDE04L, 8,
             new OctiBotEngine.OpeningBookCandidate("32+a", -179),
@@ -580,6 +663,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
+        // 2P_1B_ED ply 2 (after 53+b 37+e)
+        new OctiBotEngine.OpeningBookEntry(0x05F4549033E22EFDL, 8,
+            new OctiBotEngine.OpeningBookCandidate("33+b", -620),
+            new OctiBotEngine.OpeningBookCandidate("53h-44", -620),
+            new OctiBotEngine.OpeningBookCandidate("73+a", -620)),
+        // 2P_3B_ED ply 2 (after 53+a 37+d)
+        new OctiBotEngine.OpeningBookEntry(0x05FD903320A11766L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+h", 0),
+            new OctiBotEngine.OpeningBookCandidate("33+b", -120),
+            new OctiBotEngine.OpeningBookCandidate("33+a", -299)),
         // 4P ply 4 (after 33+f 37+h 77+g 73+b)
         new OctiBotEngine.OpeningBookEntry(0x0601F290020E84FDL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", 140),
@@ -620,6 +713,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53b+a", 120),
             new OctiBotEngine.OpeningBookCandidate("73+a", 120),
             new OctiBotEngine.OpeningBookCandidate("73+h", 0)),
+        // 2P_3B_ED ply 3 (after 33+b 77+f 73+b)
+        new OctiBotEngine.OpeningBookEntry(0x0689E483F9438482L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2213)),
         // OFK ply 4 (after 32+b 46+f 42+h 36+e)
         new OctiBotEngine.OpeningBookEntry(0x069784FA988CDB58L, 8,
             new OctiBotEngine.OpeningBookCandidate("32b+a", -1319),
@@ -690,6 +788,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+h", -1248),
             new OctiBotEngine.OpeningBookCandidate("42+b", -2348),
             new OctiBotEngine.OpeningBookCandidate("32+b", -3740)),
+        // 4P_ED ply 3 (after 33+c 37+c 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x0703CC64C3D5640EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 2P 3-Base ply 4 (after 33+h 57+e 53+h 77+c)
         new OctiBotEngine.OpeningBookEntry(0x07157BFC1015E412L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -139),
@@ -720,6 +823,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53h+a", 30),
             new OctiBotEngine.OpeningBookCandidate("73+a", 30),
             new OctiBotEngine.OpeningBookCandidate("53h-44", 30)),
+        // 4P_ED ply 2 (after 33+f 37+h)
+        new OctiBotEngine.OpeningBookEntry(0x074CA217677CBA6EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
         // 4P ply 4 (after 33+a 37+h 77+e 73+f)
         new OctiBotEngine.OpeningBookEntry(0x0755F06E8F4EB8FCL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 540),
@@ -765,6 +873,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("36+d", -3622),
             new OctiBotEngine.OpeningBookCandidate("56+f", -3622),
             new OctiBotEngine.OpeningBookCandidate("46e+f", -3943)),
+        // 2P_1B_ED ply 3 (after 33+b 57+d 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x07E419E19837CD3FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57f+d", -4020)),
         // OFK ply 4 (after 32+b 26+d 32b+c 46+a)
         new OctiBotEngine.OpeningBookEntry(0x07E4FD430454197EL, 8,
             new OctiBotEngine.OpeningBookCandidate("42+a", -240),
@@ -790,11 +903,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+a", 0),
             new OctiBotEngine.OpeningBookCandidate("53b+a", 0),
             new OctiBotEngine.OpeningBookCandidate("53b-64", 0)),
+        // 2P_1B_ED ply 3 (after 33+b 77+f 33b+a)
+        new OctiBotEngine.OpeningBookEntry(0x084249C72A35381EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2980),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2980),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2980)),
         // 2P 3-Base ply 4 (after 33+b 57+d 73+h 37+d)
         new OctiBotEngine.OpeningBookEntry(0x084E3BC6CF91D5E3L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", -163),
             new OctiBotEngine.OpeningBookCandidate("53+a", -163),
             new OctiBotEngine.OpeningBookCandidate("53+h", -283)),
+        // 4P_ED ply 3 (after 33+d 37+d 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x08589CE99006DC86L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+a 37+c 77+h 73+a)
         new OctiBotEngine.OpeningBookEntry(0x0889BB2052A6440AL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", -140),
@@ -810,6 +933,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 140)),
+        // 2P_1B_ED ply 3 (after 33+b 77+f 53+a)
+        new OctiBotEngine.OpeningBookEntry(0x08C16856AC289B03L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3060),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3060),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3100)),
+        // 2P_3B_ED ply 3 (after 33+h 57+e 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x08C7FE0FF7401093L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57e+d", -2213)),
         // 2P 3-Base ply 3 (after 33+a 57+d 53+b)
         new OctiBotEngine.OpeningBookEntry(0x08D17D1DDBF575B4L, 8,
             new OctiBotEngine.OpeningBookCandidate("37+e", -2752),
@@ -830,6 +963,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
+        // 4P_ED ply 3 (after 33+d 37+b 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x09073E5A97322068L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 1-Base ply 4 (after 33+a 37+e 53+h 77+c)
         new OctiBotEngine.OpeningBookEntry(0x0917A437432C974FL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", 400),
@@ -845,6 +983,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+h", -530),
             new OctiBotEngine.OpeningBookCandidate("33a+b", -530),
             new OctiBotEngine.OpeningBookCandidate("53+a", -700)),
+        // 2P_1B_ED ply 3 (after 53+b 77+e 53b+a)
+        new OctiBotEngine.OpeningBookEntry(0x09468BD48631B462L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3180),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3200),
+            new OctiBotEngine.OpeningBookCandidate("77e+f", -3200)),
         // 2P 3-Base ply 4 (after 53+a 37+d 33+b 77+d)
         new OctiBotEngine.OpeningBookEntry(0x095942B7A484E447L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", 0),
@@ -880,6 +1023,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 2P_1B_ED ply 3 (after 33+a 77+e 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x09C5AA45002C177FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3100),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -3170),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3170)),
         // 4P ply 4 (after 33+b 37+c 77+b 73+h)
         new OctiBotEngine.OpeningBookEntry(0x09C781068B5FFB71L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", -400),
@@ -965,11 +1113,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+f", -3090),
             new OctiBotEngine.OpeningBookCandidate("57+e", -3090),
             new OctiBotEngine.OpeningBookCandidate("77+e", -3220)),
+        // 4P_ED ply 3 (after 33+b 37+c 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x0AD9BD93FC4DA60EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+a 37+c 77+b 73+d)
         new OctiBotEngine.OpeningBookEntry(0x0AE678BF9A312F96L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+d", -140)),
+        // 2P_1B_ED ply 3 (after 53+b 37+e 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x0AF5DBE87395B01BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -4020)),
         // 4P ply 3 (after 33+h 37+c 77+h)
         new OctiBotEngine.OpeningBookEntry(0x0AFBD32D86629026L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
@@ -990,6 +1148,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", -155),
             new OctiBotEngine.OpeningBookCandidate("73+a", -155),
             new OctiBotEngine.OpeningBookCandidate("53b+a", -163)),
+        // 4P_ED ply 3 (after 33+a 37+c 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x0B310140DB7D3E62L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 3-Base ply 4 (after 33+h 37+e 53+h 57+f)
         new OctiBotEngine.OpeningBookEntry(0x0B36B7722A92EF3FL, 8,
             new OctiBotEngine.OpeningBookCandidate("53b+h", -977),
@@ -1000,6 +1163,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", -3100),
             new OctiBotEngine.OpeningBookCandidate("57+f", -3100),
             new OctiBotEngine.OpeningBookCandidate("37+d", -3100)),
+        // 2P_1B_ED ply 3 (after 33+a 57+f 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x0B468A00795739EBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3100),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3100),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3100)),
         // 2P 3-Base ply 4 (after 33+a 37+d 33a+b 77+f)
         new OctiBotEngine.OpeningBookEntry(0x0B4AF8019CF3D416L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", -318),
@@ -1035,6 +1203,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+a", -283),
             new OctiBotEngine.OpeningBookCandidate("53+h", -283),
             new OctiBotEngine.OpeningBookCandidate("33b+a", -438)),
+        // 2P_3B_ED ply 3 (after 53+a 37+f 73+b)
+        new OctiBotEngine.OpeningBookEntry(0x0B756202915A250BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2333),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2333),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2333)),
         // 2P 3-Base ply 4 (after 33+h 77+e 53+a 57+e)
         new OctiBotEngine.OpeningBookEntry(0x0B817B4FFA151F2DL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", -120),
@@ -1100,6 +1273,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
+        // 4P_ED ply 3 (after 33+c 37+f 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x0C09F53CBDC8B927L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 4P ply 3 (after 33+a 37+h 77+e)
         new OctiBotEngine.OpeningBookEntry(0x0C101266D6D3FA54L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
@@ -1160,6 +1338,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 140)),
+        // 4P_ED ply 3 (after 33+d 37+h 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x0CC234EE8DCB4854L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+b 37+b 77+b 73+d)
         new OctiBotEngine.OpeningBookEntry(0x0CD97F6C100B41AFL, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
@@ -1175,11 +1358,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -260)),
+        // 4P_ED ply 3 (after 33+a 37+b 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x0CE6BA407677C837L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 1-Base ply 4 (after 33+a 57+f 53+h 37+d)
         new OctiBotEngine.OpeningBookEntry(0x0D0102E09CC56EB7L, 8,
             new OctiBotEngine.OpeningBookCandidate("53b+h", -1230),
             new OctiBotEngine.OpeningBookCandidate("33+b", -1230),
             new OctiBotEngine.OpeningBookCandidate("73a+h", -1350)),
+        // 4P_ED ply 3 (after 33+b 37+b 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x0D0E06935147505BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 2P 1-Base ply 3 (after 53+b 37+d 53b-64)
         new OctiBotEngine.OpeningBookEntry(0x0D10451319016960L, 8,
             new OctiBotEngine.OpeningBookCandidate("57+f", -2480),
@@ -1220,11 +1413,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", -140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -280)),
+        // 2P_1B_ED ply 2 (after 33+b 37+d)
+        new OctiBotEngine.OpeningBookEntry(0x0D4FBC63FE13C9C4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+a", -610),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -610),
+            new OctiBotEngine.OpeningBookCandidate("53+b", -620)),
         // 4P ply 4 (after 33+a 37+e 77+h 73+d)
         new OctiBotEngine.OpeningBookEntry(0x0D5DC0DB2F2DB771L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 260),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 260),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 120)),
+        // 4P_ED ply 3 (after 33+b 37+e 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x0D6205F749513EE9L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+d 37+c 77+g 73+a)
         new OctiBotEngine.OpeningBookEntry(0x0D683F3AB3E3AC55L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
@@ -1245,6 +1448,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("57+e", -2577),
             new OctiBotEngine.OpeningBookCandidate("57+d", -2577),
             new OctiBotEngine.OpeningBookCandidate("77+f", -2577)),
+        // 4P_ED ply 3 (after 33+h 37+h 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x0DDAC00B8BCC5410L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1697),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1697),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1697)),
         // 4P ply 4 (after 33+c 37+f 77+b 73+d)
         new OctiBotEngine.OpeningBookEntry(0x0DDE8CC3FC84A8D3L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
@@ -1365,6 +1573,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", 0),
             new OctiBotEngine.OpeningBookCandidate("53a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+b", -610)),
+        // 2P_1B_ED ply 3 (after 53+b 57+f 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x0F04B59695443758L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57d+f", -4020)),
         // 2P 3-Base ply 4 (after 33+a 37+d 53+h 77+f)
         new OctiBotEngine.OpeningBookEntry(0x0F08C79770E0DAA5L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -318),
@@ -1400,6 +1613,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 0)),
+        // 2P_3B_ED ply 3 (after 33+h 37+f 53+a)
+        new OctiBotEngine.OpeningBookEntry(0x0F70ADB1D599F195L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2632),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2632),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2632)),
         // 2P 3-Base ply 4 (after 33+h 37+e 53+a 57+e)
         new OctiBotEngine.OpeningBookEntry(0x0F84B4FCBED6CBB3L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", -120),
@@ -1415,6 +1633,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+d", -140)),
+        // 2P_1B_ED ply 2 (after 33+a 57+d)
+        new OctiBotEngine.OpeningBookEntry(0x0F97D8A247EAFA0EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73a+h", -620),
+            new OctiBotEngine.OpeningBookCandidate("53+h", -630),
+            new OctiBotEngine.OpeningBookCandidate("33+b", -630)),
         // 4P ply 4 (after 33+b 37+f 77+g 73+f)
         new OctiBotEngine.OpeningBookEntry(0x0FA5C451619063D0L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 280),
@@ -1435,6 +1658,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 120),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 120),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 0)),
+        // 2P_3B_ED ply 3 (after 33+h 37+f 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x0FF38C2053845288L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2632),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2632),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2632)),
         // 4P ply 4 (after 33+a 37+b 77+b 73+h)
         new OctiBotEngine.OpeningBookEntry(0x0FF886D501659548L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", -260),
@@ -1445,6 +1673,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 0)),
+        // 4P_ED ply 3 (after 33+f 37+e 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x0FFE45A040F29C40L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+c 37+c 77+b 73+a)
         new OctiBotEngine.OpeningBookEntry(0x1011C97CE415D530L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", -400),
@@ -1460,6 +1693,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 260),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 260),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 120)),
+        // 2P_3B_ED ply 2 (after 33+b 37+d)
+        new OctiBotEngine.OpeningBookEntry(0x103CB2092F97E741L, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+a", -120),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -120),
+            new OctiBotEngine.OpeningBookCandidate("53+b", -299)),
         // 2P 1-Base ply 3 (after 33+a 37+e 53+h)
         new OctiBotEngine.OpeningBookEntry(0x10531D09ECA0DC72L, 8,
             new OctiBotEngine.OpeningBookCandidate("77+f", -3100),
@@ -1540,6 +1778,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+a", -120),
             new OctiBotEngine.OpeningBookCandidate("73h+a", -120),
             new OctiBotEngine.OpeningBookCandidate("33+b", -120)),
+        // 2P_3B_ED ply 3 (after 33+b 57+f 33b+d)
+        new OctiBotEngine.OpeningBookEntry(0x11454D2A166F474DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57f+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -1949)),
+        // 2P_3B_ED ply 3 (after 33+h 57+d 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x115473CC61413E5FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2632),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2752)),
         // 2P 1-Base ply 2 (after 53+b 57+f)
         new OctiBotEngine.OpeningBookEntry(0x117321D534CC98D4L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", -630),
@@ -1570,6 +1818,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", -318),
             new OctiBotEngine.OpeningBookCandidate("33+a", -318),
             new OctiBotEngine.OpeningBookCandidate("73a+h", -318)),
+        // 4P_ED ply 3 (after 33+c 37+h 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x11BBC2A8DA3D3131L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1977)),
         // 4P ply 4 (after 33+h 37+d 77+b 73+b)
         new OctiBotEngine.OpeningBookEntry(0x11BC6994780915A7L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -400),
@@ -1620,6 +1873,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", 0),
             new OctiBotEngine.OpeningBookCandidate("53a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("73+a", 0)),
+        // 2P_3B_ED ply 3 (after 33+b 57+f 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x1277BBFC44C019DDL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2651),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2651),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2654)),
         // 2P 1-Base ply 4 (after 33+a 37+d 53+h 77+f)
         new OctiBotEngine.OpeningBookEntry(0x127BC9FDA164F420L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", -1230),
@@ -1655,6 +1913,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", -419),
             new OctiBotEngine.OpeningBookCandidate("73+a", -419),
             new OctiBotEngine.OpeningBookCandidate("33h+a", -419)),
+        // 2P_3B_ED ply 2 (after 33+a 57+d)
+        new OctiBotEngine.OpeningBookEntry(0x12E4D6C8966ED48BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("33+b", -388),
+            new OctiBotEngine.OpeningBookCandidate("53+f", -388),
+            new OctiBotEngine.OpeningBookCandidate("33+d", -388)),
         // 2P 1-Base ply 4 (after 53+b 37+d 53b+a 77+f)
         new OctiBotEngine.OpeningBookEntry(0x12F8E86C2779573DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", 30),
@@ -1770,6 +2033,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 400),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 260)),
+        // 4P_ED ply 2 (after 33+a 37+d)
+        new OctiBotEngine.OpeningBookEntry(0x140849ECFA39DF2FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
         // 2P 3-Base ply 4 (after 33+h 77+e 73+h 37+d)
         new OctiBotEngine.OpeningBookEntry(0x140B8C4ABFE3AF85L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+a", -120),
@@ -1790,6 +2058,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", -179),
             new OctiBotEngine.OpeningBookCandidate("42h+a", -179),
             new OctiBotEngine.OpeningBookCandidate("32+b", -407)),
+        // 4P_ED ply 3 (after 33+c 37+e 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x1412CB78D8D237BFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 3-Base ply 4 (after 53+b 77+f 33+b 37+c)
         new OctiBotEngine.OpeningBookEntry(0x141645D64A7B723AL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", 245),
@@ -1805,6 +2078,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+a", -195),
             new OctiBotEngine.OpeningBookCandidate("32ab-43", -195),
             new OctiBotEngine.OpeningBookCandidate("52+h", -1127)),
+        // 2P_3B_ED ply 3 (after 53+a 37+e 53a+h)
+        new OctiBotEngine.OpeningBookEntry(0x143585BE57B59AE7L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2577),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2577),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2577)),
         // 2P 3-Base ply 4 (after 33+a 57+e 53+b 77+d)
         new OctiBotEngine.OpeningBookEntry(0x1442BD62BAE703DCL, 8,
             new OctiBotEngine.OpeningBookCandidate("53b+a", 120),
@@ -1820,6 +2098,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
+        // 4P_ED ply 3 (after 33+c 37+b 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x147EC81CC0C4590DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
         // 4P ply 4 (after 33+b 37+d 77+d 73+h)
         new OctiBotEngine.OpeningBookEntry(0x149950A70DE50D30L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", -140),
@@ -1830,6 +2113,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 540),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 540),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 280)),
+        // 2P_3B_ED ply 3 (after 33+a 77+e 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x14B6A42FD1A839FAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2608),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2721)),
         // OFK ply 4 (after 32+b 26+d 32b+g 46+a)
         new OctiBotEngine.OpeningBookEntry(0x14BC5CDFDE83253DL, 8,
             new OctiBotEngine.OpeningBookCandidate("32+a", -240),
@@ -1875,6 +2163,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33h+b", 280)),
+        // 2P_3B_ED ply 3 (after 33+b 77+e 33b+d)
+        new OctiBotEngine.OpeningBookEntry(0x1535CBE5AF6A0FD2L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -1949)),
         // 2P 3-Base ply 3 (after 33+a 37+f 53+h)
         new OctiBotEngine.OpeningBookEntry(0x153B2D27583E7C6FL, 8,
             new OctiBotEngine.OpeningBookCandidate("57+d", -2774),
@@ -1915,6 +2208,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", -400),
             new OctiBotEngine.OpeningBookCandidate("53h-44", -400),
             new OctiBotEngine.OpeningBookCandidate("53h+a", -400)),
+        // 2P_1B_ED ply 2 (after 33+b 37+f)
+        new OctiBotEngine.OpeningBookEntry(0x157218D8993C986AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("33+a", 120),
+            new OctiBotEngine.OpeningBookCandidate("53+b", 120),
+            new OctiBotEngine.OpeningBookCandidate("53+a", 120)),
         // 2P 3-Base ply 3 (after 33+b 57+f 53+h)
         new OctiBotEngine.OpeningBookEntry(0x1573D2C15FADDCE9L, 8,
             new OctiBotEngine.OpeningBookCandidate("77+e", -2752),
@@ -1925,6 +2223,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+b", -2141),
             new OctiBotEngine.OpeningBookCandidate("32+a", -3059),
             new OctiBotEngine.OpeningBookCandidate("42a+h", -3059)),
+        // 4P_ED ply 3 (after 33+b 37+f 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x15793BB32C4BB071L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
         // OFK ply 4 (after 32+a 26+d 42+a 46+f)
         new OctiBotEngine.OpeningBookEntry(0x1581B8D802FAD802L, 8,
             new OctiBotEngine.OpeningBookCandidate("32a+b", 299),
@@ -1960,6 +2263,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", 0),
             new OctiBotEngine.OpeningBookCandidate("73a+h", 0),
             new OctiBotEngine.OpeningBookCandidate("53+a", 0)),
+        // 2P_3B_ED ply 3 (after 53+a 37+d 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x15B2663C7DACB586L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2333),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2453),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2601)),
         // 2P 3-Base ply 3 (after 53+a 37+f 53a+h)
         new OctiBotEngine.OpeningBookEntry(0x15B80CB6DE23DF72L, 8,
             new OctiBotEngine.OpeningBookCandidate("57+e", -2697),
@@ -1975,6 +2283,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 2P_3B_ED ply 3 (after 33+a 77+e 73+f)
+        new OctiBotEngine.OpeningBookEntry(0x1605BA48DCD3A8B6L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2213),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2232),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2232)),
         // 4P ply 4 (after 33+d 37+h 77+g 73+f)
         new OctiBotEngine.OpeningBookEntry(0x161ECB0CC0109BF5L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 400),
@@ -1985,6 +2298,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", 299),
             new OctiBotEngine.OpeningBookCandidate("42h-33", 299),
             new OctiBotEngine.OpeningBookCandidate("22b+c", 80)),
+        // 2P_3B_ED ply 3 (after 33+a 57+d 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x1635846AA8D3176EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2752),
+            new OctiBotEngine.OpeningBookCandidate("57d+e", -2752),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2752)),
         // 2P 3-Base ply 1 (after 33+b)
         new OctiBotEngine.OpeningBookEntry(0x1636F05EC19C04C8L, 8,
             new OctiBotEngine.OpeningBookCandidate("77+e", -2752),
@@ -2030,6 +2348,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 2P_3B_ED ply 3 (after 53+a 57+d 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x16B6A5FB2ECEB473L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2654),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2654),
+            new OctiBotEngine.OpeningBookCandidate("57d-66", -2654)),
         // 4P ply 3 (after 33+d 37+d 77+d)
         new OctiBotEngine.OpeningBookEntry(0x16BDF66906DF7A23L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
@@ -2120,6 +2443,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", -195),
             new OctiBotEngine.OpeningBookCandidate("33h+a", -195),
             new OctiBotEngine.OpeningBookCandidate("52+h", -633)),
+        // 2P_3B_ED ply 3 (after 53+b 37+e 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x1786D582A2119E9EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2721),
+            new OctiBotEngine.OpeningBookCandidate("57+b", -2721),
+            new OctiBotEngine.OpeningBookCandidate("77+h", -2721)),
         // 4P ply 4 (after 33+a 37+f 77+e 73+h)
         new OctiBotEngine.OpeningBookEntry(0x178FBBF57C697562L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
@@ -2165,26 +2493,51 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+b", -721),
             new OctiBotEngine.OpeningBookCandidate("32+a", -1238),
             new OctiBotEngine.OpeningBookCandidate("22a+b", -1740)),
+        // 4P_ED ply 3 (after 33+f 37+f 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x17E57BE425E812D8L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
         // OFK ply 4 (after 22+b 36+e 42+h 46+f)
         new OctiBotEngine.OpeningBookEntry(0x17E5DC1A4F36D8F6L, 8,
             new OctiBotEngine.OpeningBookCandidate("42+a", 0),
             new OctiBotEngine.OpeningBookCandidate("32b-43", 0),
             new OctiBotEngine.OpeningBookCandidate("32b+h", -1079)),
+        // 2P_1B_ED ply 2 (after 33+a 37+d)
+        new OctiBotEngine.OpeningBookEntry(0x180DBFC877389AFEL, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+b", -500),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -500),
+            new OctiBotEngine.OpeningBookCandidate("53+a", -500)),
         // 4P ply 4 (after 33+b 37+e 77+h 73+d)
         new OctiBotEngine.OpeningBookEntry(0x181FC370A606E44BL, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 260),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 260),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 0)),
+        // 4P_ED ply 3 (after 33+a 37+e 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x1820065CC07A6DD3L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+f 37+b 77+f 73+h)
         new OctiBotEngine.OpeningBookEntry(0x1826C52981ED64DBL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -380)),
+        // 2P_3B_ED ply 3 (after 33+h 37+e 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x18407E76CE2097E5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2072),
+            new OctiBotEngine.OpeningBookCandidate("37e+d", -2072),
+            new OctiBotEngine.OpeningBookCandidate("57+b", -2182)),
         // 4P ply 4 (after 33+c 37+e 77+f 73+b)
         new OctiBotEngine.OpeningBookEntry(0x1844759898C1298CL, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 0)),
+        // 4P_ED ply 3 (after 33+a 37+b 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x184C0538D86C0361L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 2P_1B_ED ply 0 (initial)
         new OctiBotEngine.OpeningBookEntry(0x18591BCD3AB3BA6CL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", 0),
@@ -2205,6 +2558,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -260)),
+        // 2P_3B_ED ply 2 (after 53+b 37+e)
+        new OctiBotEngine.OpeningBookEntry(0x18875AFAE2660078L, 8,
+            new OctiBotEngine.OpeningBookCandidate("33+b", -419),
+            new OctiBotEngine.OpeningBookCandidate("73+a", -419),
+            new OctiBotEngine.OpeningBookCandidate("33+a", -419)),
         // OFK ply 4 (after 22+b 36+e 22b-33 56+f)
         new OctiBotEngine.OpeningBookEntry(0x1890159DD4DF64F9L, 8,
             new OctiBotEngine.OpeningBookCandidate("32+a", -1022),
@@ -2220,6 +2578,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
+        // 4P_ED ply 3 (after 33+c 37+f 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x18A34A4413D37271L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+h 37+h 77+b 73+d)
         new OctiBotEngine.OpeningBookEntry(0x18A7068C649B8EB2L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 260),
@@ -2260,6 +2623,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", -2980),
             new OctiBotEngine.OpeningBookCandidate("37+d", -2980),
             new OctiBotEngine.OpeningBookCandidate("57f-46", -2980)),
+        // 2P_3B_ED ply 3 (after 33+h 57+e 53+a)
+        new OctiBotEngine.OpeningBookEntry(0x19031386BCB5342AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57e+f", -2213)),
         // 4P ply 4 (after 33+f 37+f 77+b 73+g)
         new OctiBotEngine.OpeningBookEntry(0x1906F7336BCF05A7L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -660),
@@ -2290,11 +2658,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1977),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1977)),
+        // 4P_ED ply 3 (after 33+h 37+h 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x19707F7325D79F46L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1837)),
         // 4P ply 4 (after 33+f 37+d 77+g 73+h)
         new OctiBotEngine.OpeningBookEntry(0x1979679A86D99835L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 2P_3B_ED ply 3 (after 33+h 57+e 33h+a)
+        new OctiBotEngine.OpeningBookEntry(0x198032173AA89737L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57e+f", -2213)),
         // 4P ply 3 (after 33+h 37+b 77+h)
         new OctiBotEngine.OpeningBookEntry(0x1986D7558573AD25L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
@@ -2305,6 +2683,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 0)),
+        // 4P_ED ply 3 (after 33+b 37+b 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x19A4B9EBFF5C9B0DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+d 37+h 77+h 73+d)
         new OctiBotEngine.OpeningBookEntry(0x19BFF269629C92F6L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 520),
@@ -2360,6 +2743,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", 0),
             new OctiBotEngine.OpeningBookCandidate("73+a", 0),
             new OctiBotEngine.OpeningBookCandidate("44h+a", 0)),
+        // 4P_ED ply 3 (after 33+c 37+d 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x1A5D1DC5456F924FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+f 37+e 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0x1A5ECD288FB6784DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
@@ -2375,6 +2763,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33b+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -660)),
+        // 4P_ED ply 3 (after 33+d 37+c 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x1A7A3A2294231D6BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
+        // 2P_3B_ED ply 3 (after 33+b 57+d 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x1A97178B49B3E3BAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2651),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2651),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2651)),
         // OFK ply 1 (after 32+b)
         new OctiBotEngine.OpeningBookEntry(0x1A9B50BEC8C890F5L, 8,
             new OctiBotEngine.OpeningBookCandidate("46+e", -3343),
@@ -2390,6 +2788,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", -163),
             new OctiBotEngine.OpeningBookCandidate("53a+b", -163),
             new OctiBotEngine.OpeningBookCandidate("53a+h", -977)),
+        // 2P_3B_ED ply 3 (after 33+h 37+f 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x1AB18F8BDAAF01B2L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2721),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2721),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2721))
+        };
+    }
+
+    private static OctiBotEngine.OpeningBookEntry[] chunk1() {
+        return new OctiBotEngine.OpeningBookEntry[] {
         // OFK ply 4 (after 32+b 56+f 32b-43 26+e)
         new OctiBotEngine.OpeningBookEntry(0x1AB80D041CB388BAL, 8,
             new OctiBotEngine.OpeningBookCandidate("42+a", 441),
@@ -2405,6 +2813,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -440),
             new OctiBotEngine.OpeningBookCandidate("53+h", -440),
             new OctiBotEngine.OpeningBookCandidate("73+b", -560)),
+        // 2P_1B_SPED ply 1 (after 33+h)
+        new OctiBotEngine.OpeningBookEntry(0x1AC6A947B401A2D5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -4360),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -5080),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -6510)),
         // 4P ply 4 (after 33+h 37+h 77+h 73+a)
         new OctiBotEngine.OpeningBookEntry(0x1AC8C513AC0CE52EL, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 120),
@@ -2445,6 +2858,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 0)),
+        // 2P_3B_ED ply 3 (after 33+h 37+e 33h+a)
+        new OctiBotEngine.OpeningBookEntry(0x1B37FFFE1549EAACL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2601),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2601)),
         // 4P ply 4 (after 33+a 37+e 77+h 73+h)
         new OctiBotEngine.OpeningBookEntry(0x1B3E3AC9B76830ACL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", -140),
@@ -2495,6 +2913,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", -260),
             new OctiBotEngine.OpeningBookCandidate("33c+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -400)),
+        // 2P_3B_ED ply 3 (after 33+b 77+f 53+f)
+        new OctiBotEngine.OpeningBookEntry(0x1BC169FF2ED66F45L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("37d+e", -1949)),
         // 4P ply 4 (after 33+c 37+d 77+g 73+g)
         new OctiBotEngine.OpeningBookEntry(0x1BC2E67889D7B29CL, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
@@ -2540,6 +2963,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", -539),
             new OctiBotEngine.OpeningBookCandidate("73+h", -539),
             new OctiBotEngine.OpeningBookCandidate("53+h", -539)),
+        // 2P_1B_ED ply 3 (after 33+b 77+f 73+b)
+        new OctiBotEngine.OpeningBookEntry(0x1BFAEAE928C7AA07L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2360),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2360),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2360)),
         // 4P ply 4 (after 33+a 37+c 77+e 73+a)
         new OctiBotEngine.OpeningBookEntry(0x1C230458FCBD8F5CL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
@@ -2560,6 +2988,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32b+a", 210),
             new OctiBotEngine.OpeningBookCandidate("52+h", 179),
             new OctiBotEngine.OpeningBookCandidate("42+a", 179)),
+        // 2P_3B_ED ply 3 (after 33+h 77+e 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x1C45B1C58AE3437BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2213)),
         // 2P 3-Base ply 4 (after 53+a 37+d 33+b 57+d)
         new OctiBotEngine.OpeningBookEntry(0x1C53BEFA2A3C17FBL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", -163),
@@ -2585,6 +3018,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", -400),
             new OctiBotEngine.OpeningBookCandidate("33a+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33a+d", -540)),
+        // 2P_1B_ED ply 3 (after 53+b 77+e 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x1C87A9EE89074445L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -4020)),
         // OFK ply 4 (after 32+b 36+d 32b+a 36d+e)
         new OctiBotEngine.OpeningBookEntry(0x1C90F6EFE4B975D5L, 8,
             new OctiBotEngine.OpeningBookCandidate("42+a", -108),
@@ -2615,6 +3053,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", -140),
             new OctiBotEngine.OpeningBookCandidate("42a+h", -140),
             new OctiBotEngine.OpeningBookCandidate("22+b", -140)),
+        // 4P_ED ply 3 (after 33+h 37+e 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x1CD976A3273899C8L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P 3-Base ply 4 (after 33+h 77+e 73+h 57+g)
         new OctiBotEngine.OpeningBookEntry(0x1CF6E7F795DA1727L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+a", 280),
@@ -2685,6 +3128,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33h+b", 280)),
+        // 2P_3B_ED ply 3 (after 33+h 57+e 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x1D85FDA47E6B43A9L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57e+d", -2213)),
         // 2P 3-Base ply 4 (after 53+a 57+d 73+h 37+d)
         new OctiBotEngine.OpeningBookEntry(0x1D8F19FCC0A725C4L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", -43),
@@ -2740,6 +3188,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -260)),
+        // 2P_1B_ED ply 3 (after 33+a 57+f 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x1E0489ABF07C6AD1L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2980),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2980),
+            new OctiBotEngine.OpeningBookCandidate("57d+e", -2980)),
         // 2P 3-Base ply 3 (after 53+a 37+f 73+a)
         new OctiBotEngine.OpeningBookEntry(0x1E150F17625E4019L, 8,
             new OctiBotEngine.OpeningBookCandidate("57+e", -2752),
@@ -2789,12 +3242,7 @@ public final class OctiOpeningBookData {
         new OctiBotEngine.OpeningBookEntry(0x1E5C6F8824D4B71EL, 8,
             new OctiBotEngine.OpeningBookCandidate("42+h", -1248),
             new OctiBotEngine.OpeningBookCandidate("32a+b", -1320),
-            new OctiBotEngine.OpeningBookCandidate("42+b", -1678))
-        };
-    }
-
-    private static OctiBotEngine.OpeningBookEntry[] chunk1() {
-        return new OctiBotEngine.OpeningBookEntry[] {
+            new OctiBotEngine.OpeningBookCandidate("42+b", -1678)),
         // OFK ply 4 (after 32+b 46+e 42+a 26+e)
         new OctiBotEngine.OpeningBookEntry(0x1E6FAC4117A245E6L, 8,
             new OctiBotEngine.OpeningBookCandidate("32b-43", 0),
@@ -2805,6 +3253,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+b", 561),
             new OctiBotEngine.OpeningBookCandidate("32+c", 161),
             new OctiBotEngine.OpeningBookCandidate("32+a", 0)),
+        // 4P_ED ply 3 (after 33+b 37+c 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x1E7302EB52566D58L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 3-Base ply 3 (after 33+a 37+d 53+h)
         new OctiBotEngine.OpeningBookEntry(0x1E97BD7101BC277BL, 8,
             new OctiBotEngine.OpeningBookCandidate("57+e", -2453),
@@ -2835,6 +3288,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -260)),
+        // 2P_1B_SP ply 1 (after 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x1EE1084A8AED4063L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e!", 90),
+            new OctiBotEngine.OpeningBookCandidate("37+a", -2760),
+            new OctiBotEngine.OpeningBookCandidate("37+h", -3110)),
+        // 2P_3B_ED ply 3 (after 33+h 57+d 73+f)
+        new OctiBotEngine.OpeningBookEntry(0x1F020E6F258A81EAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1829),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -1829),
+            new OctiBotEngine.OpeningBookCandidate("57d+e", -1829)),
         // 4P ply 4 (after 33+d 37+f 77+h 73+f)
         new OctiBotEngine.OpeningBookEntry(0x1F0643E009FED8B5L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 0),
@@ -2850,6 +3313,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("57+f", -2752),
             new OctiBotEngine.OpeningBookCandidate("37+d", -2752),
             new OctiBotEngine.OpeningBookCandidate("37+e", -2752)),
+        // 2P_3B_ED ply 3 (after 33+h 77+e 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x1F32304D518A3E32L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2213)),
         // OFK ply 4 (after 32+b 26+d 32b+g 46+f)
         new OctiBotEngine.OpeningBookEntry(0x1F3F93AF9960AD34L, 8,
             new OctiBotEngine.OpeningBookCandidate("42+a", -1287),
@@ -2910,6 +3378,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+b", -620),
             new OctiBotEngine.OpeningBookCandidate("42+a", -620),
             new OctiBotEngine.OpeningBookCandidate("32+h", -1481)),
+        // 4P_ED ply 3 (after 33+a 37+c 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x1F9BBE387566F534L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P 3-Base ply 4 (after 33+b 57+f 33b+a 77+d)
         new OctiBotEngine.OpeningBookEntry(0x1F9CA34AF8D01595L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", 120),
@@ -2945,21 +3418,41 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+h", -438),
             new OctiBotEngine.OpeningBookCandidate("33a+b", -438),
             new OctiBotEngine.OpeningBookCandidate("53+b", -1140)),
+        // 2P_3B_ED ply 2 (after 33+a 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x1FF514C17DCCA9AFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+h", 0),
+            new OctiBotEngine.OpeningBookCandidate("33+b", 0),
+            new OctiBotEngine.OpeningBookCandidate("53+f", -388)),
         // 2P 3-Base ply 4 (after 53+a 57+e 33+a 77+e)
         new OctiBotEngine.OpeningBookEntry(0x20068D8108C7B8E8L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("53a+h", 0),
             new OctiBotEngine.OpeningBookCandidate("73+h", 0)),
+        // 2P_1B_SPED ply 1 (after 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x200693918B3B82B4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e!", -3630),
+            new OctiBotEngine.OpeningBookCandidate("57+g", -3760),
+            new OctiBotEngine.OpeningBookCandidate("57+e!", -3850)),
         // 2P 1-Base ply 4 (after 33+a 37+d 53+h 57+e)
         new OctiBotEngine.OpeningBookEntry(0x200F49221B848173L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", -630),
             new OctiBotEngine.OpeningBookCandidate("53h+a", -720),
             new OctiBotEngine.OpeningBookCandidate("73+a", -720)),
+        // 2P_1B_SP ply 1 (after 73+b)
+        new OctiBotEngine.OpeningBookEntry(0x2024FD2FF114B49CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3990),
+            new OctiBotEngine.OpeningBookCandidate("57+a", -4360),
+            new OctiBotEngine.OpeningBookCandidate("77+a", -4530)),
         // OFK ply 4 (after 32+a 36+e 52+h 46+e)
         new OctiBotEngine.OpeningBookEntry(0x2037E5690753889EL, 8,
             new OctiBotEngine.OpeningBookCandidate("32+a", -228),
             new OctiBotEngine.OpeningBookCandidate("32+b", -407),
             new OctiBotEngine.OpeningBookCandidate("52+h", -561)),
+        // 2P_3B_ED ply 3 (after 33+a 37+d 53+d)
+        new OctiBotEngine.OpeningBookEntry(0x203D79DC02C2BF02L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("77f+e", -1949)),
         // OFK ply 4 (after 32+a 26+d 32a+b 36+e)
         new OctiBotEngine.OpeningBookEntry(0x203E0525686EB3AFL, 8,
             new OctiBotEngine.OpeningBookCandidate("32+a", 120),
@@ -2980,6 +3473,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 2P_3B_ED ply 3 (after 53+b 77+f 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x207026AA006AE5ACL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2453),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2453),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2616)),
         // 4P ply 4 (after 33+d 37+c 77+h 73+d)
         new OctiBotEngine.OpeningBookEntry(0x20797A946EE49417L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 120),
@@ -3025,6 +3523,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+h", -1861),
             new OctiBotEngine.OpeningBookCandidate("32+a", -1861),
             new OctiBotEngine.OpeningBookCandidate("42+a", -2118)),
+        // 4P_ED ply 3 (after 33+h 37+c 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x20B6F78E29AF99A7L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
+        // 2P_1B_ED ply 3 (after 33+a 57+f 73+b)
+        new OctiBotEngine.OpeningBookEntry(0x20C17CCE8B859E2EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2980),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2980),
+            new OctiBotEngine.OpeningBookCandidate("57d+e", -2980)),
         // OFK ply 4 (after 22+b 36+e 32+b 46+e)
         new OctiBotEngine.OpeningBookEntry(0x20D68C276774801BL, 8,
             new OctiBotEngine.OpeningBookCandidate("32+a", -407),
@@ -3045,6 +3553,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+f", -2980),
             new OctiBotEngine.OpeningBookCandidate("37+e", -2980),
             new OctiBotEngine.OpeningBookCandidate("57d+e", -2980)),
+        // 2P_3B_ED ply 3 (after 53+a 37+f 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x20F294CC638882CEL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2752),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2752),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2752)),
         // 2P 3-Base ply 3 (after 33+b 77+f 53+c)
         new OctiBotEngine.OpeningBookEntry(0x20F4918F47FC1719L, 8,
             new OctiBotEngine.OpeningBookCandidate("57+e", -1933),
@@ -3130,6 +3643,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 0)),
+        // 4P_ED ply 3 (after 33+f 37+d 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x21B362464A405DC2L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+h 37+h 77+g 73+h)
         new OctiBotEngine.OpeningBookEntry(0x21BA7AAFE94E5AB1L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 260),
@@ -3160,6 +3678,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -400),
             new OctiBotEngine.OpeningBookCandidate("53c+h", -400),
             new OctiBotEngine.OpeningBookCandidate("33b+a", -400)),
+        // 2P_3B_ED ply 3 (after 33+a 37+e 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x21F7C5282A73CACDL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2721),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2721),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2721)),
         // 2P 3-Base ply 4 (after 53+b 57+d 73+a 57d+e)
         new OctiBotEngine.OpeningBookEntry(0x22068C55F7A13561L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", -244),
@@ -3180,6 +3703,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -540),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -540),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -660)),
+        // 4P_ED ply 3 (after 33+b 37+e 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x221C83C65CC16D37L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+d 37+h 77+d 73+g)
         new OctiBotEngine.OpeningBookEntry(0x2223496254E33B59L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 120),
@@ -3270,11 +3798,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+h", 0),
             new OctiBotEngine.OpeningBookCandidate("53+a", 0),
             new OctiBotEngine.OpeningBookCandidate("73a+h", -610)),
+        // 2P_1B_ED ply 3 (after 53+b 57+d 53b+a)
+        new OctiBotEngine.OpeningBookEntry(0x2326654A80C9C09CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3200),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3200),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3200)),
         // 2P 3-Base ply 4 (after 53+a 57+e 33+b 77+e)
         new OctiBotEngine.OpeningBookEntry(0x2336FC2C7B7E1F8CL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", 0),
             new OctiBotEngine.OpeningBookCandidate("53a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("73h+a", 0)),
+        // 2P_3B_ED ply 3 (after 33+b 57+d 53+f)
+        new OctiBotEngine.OpeningBookEntry(0x2339BA1B51A0BEF7L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57d+e", -1949)),
         // OFK ply 4 (after 22+b 46+e 52+b 26+d)
         new OctiBotEngine.OpeningBookEntry(0x2348399344E86816L, 8,
             new OctiBotEngine.OpeningBookCandidate("42+h", -740),
@@ -3290,11 +3828,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("37+e", -2213),
             new OctiBotEngine.OpeningBookCandidate("77+f", -2213),
             new OctiBotEngine.OpeningBookCandidate("57e+d", -2213)),
+        // 2P_3B_ED ply 3 (after 53+b 57+d 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x2374E56D5308E459L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2651),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2651),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2771)),
         // 4P ply 4 (after 33+b 37+e 77+d 73+g)
         new OctiBotEngine.OpeningBookEntry(0x2383787B90794DE4L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33b+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -400)),
+        // 2P_1B_ED ply 3 (after 33+a 57+f 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x23A544DB06D46381L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3170),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3170),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3170)),
         // 4P ply 4 (after 33+b 37+b 77+g 73+d)
         new OctiBotEngine.OpeningBookEntry(0x23A7F95D059B1271L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 540),
@@ -3305,11 +3853,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+a", 520),
             new OctiBotEngine.OpeningBookCandidate("53+b", 520),
             new OctiBotEngine.OpeningBookCandidate("53+a", 520)),
+        // 4P_ED ply 3 (after 33+d 37+h 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x23BCB2DF985B1B8AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1837)),
         // 2P 3-Base ply 3 (after 33+h 57+e 53+a)
         new OctiBotEngine.OpeningBookEntry(0x23E147EEF9A02263L, 8,
             new OctiBotEngine.OpeningBookCandidate("37+e", -2213),
             new OctiBotEngine.OpeningBookCandidate("77+f", -2213),
             new OctiBotEngine.OpeningBookCandidate("57e+d", -2213)),
+        // 2P_1B_ED ply 3 (after 33+b 37+f 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x23EDBB3D0147C307L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -4140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -4140),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -4140)),
         // 4P ply 4 (after 33+b 37+h 77+h 73+a)
         new OctiBotEngine.OpeningBookEntry(0x240D3076D7F511D1L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 260),
@@ -3365,6 +3923,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("36d+e", -2782),
             new OctiBotEngine.OpeningBookCandidate("46+e", -3382),
             new OctiBotEngine.OpeningBookCandidate("56+f", -3382)),
+        // 2P_3B_SPED ply 1 (after 53+e!)
+        new OctiBotEngine.OpeningBookEntry(0x24797DEA674229EBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+a", -1425),
+            new OctiBotEngine.OpeningBookCandidate("37+e!", -1425),
+            new OctiBotEngine.OpeningBookCandidate("37+a!", -1425)),
         // 4P ply 4 (after 33+h 37+b 77+b 73+h)
         new OctiBotEngine.OpeningBookEntry(0x247F701BF3B7328DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -400),
@@ -3445,6 +4008,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -318),
             new OctiBotEngine.OpeningBookCandidate("53+h", -318),
             new OctiBotEngine.OpeningBookCandidate("73+h", -438)),
+        // 2P_1B_ED ply 3 (after 33+b 77+f 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x253F1F8C533E5EF8L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -4020)),
         // 4P ply 4 (after 33+a 37+h 77+b 73+h)
         new OctiBotEngine.OpeningBookEntry(0x25430A500E0CAEAAL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
@@ -3515,6 +4083,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 400),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 260)),
+        // 4P_ED ply 3 (after 33+d 37+e 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x2615BB0F9AB41D04L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // OFK ply 4 (after 32+a 36+e 52+b 26+d)
         new OctiBotEngine.OpeningBookEntry(0x26250494FE0D02A6L, 8,
             new OctiBotEngine.OpeningBookCandidate("42a+h", -3067),
@@ -3530,11 +4103,26 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 4P_ED ply 3 (after 33+a 37+h 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x265D36C5791EF3D5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1837)),
         // 4P ply 4 (after 33+b 37+h 77+b 73+d)
         new OctiBotEngine.OpeningBookEntry(0x2662F3E91F627A4DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 140)),
+        // 4P_ED ply 3 (after 33+d 37+b 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x2679B86B82A273B6L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
+        // 2P_3B_ED ply 3 (after 33+b 37+e 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x26858B13B5D9631AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2651),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2651),
+            new OctiBotEngine.OpeningBookCandidate("77+h", -2721)),
         // 2P 1-Base ply 4 (after 33+b 57+d 73+h 57d+e)
         new OctiBotEngine.OpeningBookEntry(0x269512754E6EBC0AL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", -210),
@@ -3625,6 +4213,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", -400),
             new OctiBotEngine.OpeningBookCandidate("53g+h", -400),
             new OctiBotEngine.OpeningBookCandidate("33+a", -400)),
+        // 4P_ED ply 3 (after 33+h 37+b 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x27614C8E84A56FF2L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+a 37+c 77+d 73+b)
         new OctiBotEngine.OpeningBookEntry(0x27654EFB0C614423L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
@@ -3635,6 +4228,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", -2213),
             new OctiBotEngine.OpeningBookCandidate("37+d", -2213),
             new OctiBotEngine.OpeningBookCandidate("57e+f", -2213)),
+        // 2P_1B_ED ply 2 (after 53+b 57+f)
+        new OctiBotEngine.OpeningBookEntry(0x277416793869A064L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -630),
+            new OctiBotEngine.OpeningBookCandidate("33+b", -630),
+            new OctiBotEngine.OpeningBookCandidate("33+a", -630)),
         // 2P 3-Base ply 4 (after 33+b 57+f 53+h 77+e)
         new OctiBotEngine.OpeningBookEntry(0x2784FFA2EF3A3B00L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", -155),
@@ -3660,11 +4258,26 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 280)),
+        // 4P_ED ply 3 (after 33+b 37+h 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x27B58A165E2E6BB9L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1977)),
         // 4P ply 4 (after 33+d 37+e 77+b 73+d)
         new OctiBotEngine.OpeningBookEntry(0x27C2C2F0DBF80CF0L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -260)),
+        // 2P_3B_ED ply 3 (after 53+a 57+e 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x27C6E6E3C74CC0D5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2333),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2453),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2632)),
+        // 2P_1B_ED ply 3 (after 33+b 57+d 33b+a)
+        new OctiBotEngine.OpeningBookEntry(0x27E77B4DEAC76D32L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2980),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2980),
+            new OctiBotEngine.OpeningBookCandidate("57f-46", -2980)),
         // OFK ply 4 (after 32+b 46+e 22+a 26+d)
         new OctiBotEngine.OpeningBookEntry(0x27F5DBF5C64E780AL, 8,
             new OctiBotEngine.OpeningBookCandidate("42h-33", -1128),
@@ -3700,11 +4313,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("37+e", -2654),
             new OctiBotEngine.OpeningBookCandidate("77+f", -2654),
             new OctiBotEngine.OpeningBookCandidate("57d-66", -2654)),
+        // 4P_ED ply 3 (after 33+d 37+d 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x285A6DB20709B8F4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1297)),
         // 2P 3-Base ply 4 (after 33+h 37+d 53+b 57+c)
         new OctiBotEngine.OpeningBookEntry(0x28779557ECC8115CL, 8,
             new OctiBotEngine.OpeningBookCandidate("53h+a", 280),
             new OctiBotEngine.OpeningBookCandidate("33+b", 280),
             new OctiBotEngine.OpeningBookCandidate("33+a", 280)),
+        // 4P_ED ply 3 (after 33+c 37+c 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x287D4A55D64537D0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // OFK ply 4 (after 32+b 26+d 52+h 46+d)
         new OctiBotEngine.OpeningBookEntry(0x288700C0B529B649L, 8,
             new OctiBotEngine.OpeningBookCandidate("32b-43", 912),
@@ -3723,8 +4346,8 @@ public final class OctiOpeningBookData {
         // 2P_3B_ED ply 1 (after 33+b)
         new OctiBotEngine.OpeningBookEntry(0x28D16B85C04AC61FL, 8,
             new OctiBotEngine.OpeningBookCandidate("77+e", -2752),
-            new OctiBotEngine.OpeningBookCandidate("37+d", -2752),
-            new OctiBotEngine.OpeningBookCandidate("57+f", -2752)),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2752),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2752)),
         // 2P 3-Base ply 3 (after 33+a 57+d 73+a)
         new OctiBotEngine.OpeningBookEntry(0x28D21FB1A905D5B9L, 8,
             new OctiBotEngine.OpeningBookCandidate("37+e", -2752),
@@ -3765,6 +4388,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", -300),
             new OctiBotEngine.OpeningBookCandidate("53b-64", -300),
             new OctiBotEngine.OpeningBookCandidate("53b+a", -510)),
+        // 2P_1B_ED ply 3 (after 33+a 37+e 53+a)
+        new OctiBotEngine.OpeningBookEntry(0x2945E978F4C1146FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -3100),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3100),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3100)),
+        // 2P_3B_ED ply 3 (after 53+b 77+f 33+a)
+        new OctiBotEngine.OpeningBookEntry(0x294C2DDBE7822DF4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2453),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2453),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2608)),
         // 2P 3-Base ply 3 (after 33+b 77+e 53+h)
         new OctiBotEngine.OpeningBookEntry(0x29614E59A3C75C49L, 8,
             new OctiBotEngine.OpeningBookCandidate("77+f", -2752),
@@ -3810,6 +4443,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -260)),
+        // 2P_1B_ED ply 3 (after 33+a 77+e 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x29C6C8E972DCB772L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3100),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -3100),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3100)),
         // 4P ply 4 (after 33+c 37+h 77+b 73+a)
         new OctiBotEngine.OpeningBookEntry(0x29D74181E86DD3D1L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
@@ -3870,6 +4508,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
+        // 4P_ED ply 3 (after 33+d 37+f 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x2AA43A3351B558CAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P 3-Base ply 4 (after 33+h 37+f 73+h 57+f)
         new OctiBotEngine.OpeningBookEntry(0x2AB3A5AB9784A42CL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", 0),
@@ -3895,11 +4538,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 2P_1B_ED ply 3 (after 33+a 77+e 33a+b)
+        new OctiBotEngine.OpeningBookEntry(0x2AF6B94401651016L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3100),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -3100),
+            new OctiBotEngine.OpeningBookCandidate("37e+d", -3100)),
         // 2P 3-Base ply 4 (after 33+h 37+e 33h+a 57+f)
         new OctiBotEngine.OpeningBookEntry(0x2B35D5DE58624F32L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", -441),
             new OctiBotEngine.OpeningBookCandidate("33+b", -441),
             new OctiBotEngine.OpeningBookCandidate("53+b", -1140)),
+        // 2P_1B_ED ply 3 (after 53+b 57+d 33+a)
+        new OctiBotEngine.OpeningBookEntry(0x2B45E8AC0BA799E6L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3930),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3930),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3930)),
         // 2P 3-Base ply 4 (after 33+a 37+f 33a+b 77+f)
         new OctiBotEngine.OpeningBookEntry(0x2B48095A0BFCB064L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", 120),
@@ -3920,11 +4573,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", -3059),
             new OctiBotEngine.OpeningBookCandidate("42h+a", -3059),
             new OctiBotEngine.OpeningBookCandidate("32+b", -3059)),
+        // 2P_3B_ED ply 3 (after 53+a 37+f 53a+h)
+        new OctiBotEngine.OpeningBookEntry(0x2B5F976DDFF51DA5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2697),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2697),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2697)),
         // 2P 3-Base ply 4 (after 33+a 77+e 73+h 77e+d)
         new OctiBotEngine.OpeningBookEntry(0x2B6E93A509C96F52L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", 120),
             new OctiBotEngine.OpeningBookCandidate("53+a", 120),
             new OctiBotEngine.OpeningBookCandidate("33b+a", 120)),
+        // 2P_3B_ED ply 3 (after 53+b 57+d 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x2B94491A5E7B1E3EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2752),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2752),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2872)),
         // 2P 1-Base ply 2 (after 33+b 37+f)
         new OctiBotEngine.OpeningBookEntry(0x2B95830398EA5ABDL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", 120),
@@ -3945,6 +4608,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 660),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 660),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 520)),
+        // 4P_ED ply 3 (after 33+h 37+f 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x2BBCCED657B2448EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+f 37+h 77+e 73+g)
         new OctiBotEngine.OpeningBookEntry(0x2BCA469619AADE6FL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", 0),
@@ -4080,6 +4748,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", -283),
             new OctiBotEngine.OpeningBookCandidate("53a+h", -283),
             new OctiBotEngine.OpeningBookCandidate("33+a", -364)),
+        // 2P_3B_ED ply 3 (after 33+b 77+f 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x2D0E124D0B912347L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2333),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2453),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2601)),
         // 4P ply 4 (after 33+b 37+f 77+g 73+a)
         new OctiBotEngine.OpeningBookEntry(0x2D15B89A1E1B5291L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
@@ -4095,6 +4768,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", -260),
             new OctiBotEngine.OpeningBookCandidate("33a+c", -260),
             new OctiBotEngine.OpeningBookCandidate("33a+d", -400)),
+        // 2P_1B_ED ply 3 (after 53+b 37+e 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x2D84F77F9ECFB9C1L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -4020)),
         // 2P 3-Base ply 4 (after 33+h 57+e 73+a 57e+f)
         new OctiBotEngine.OpeningBookEntry(0x2D87D7843340E637L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", -364),
@@ -4120,6 +4798,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 280),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 280),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 140)),
+        // 4P_ED ply 2 (after 33+f 37+b)
+        new OctiBotEngine.OpeningBookEntry(0x2DF72E926815818CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -260),
+            new OctiBotEngine.OpeningBookCandidate("77+g", -260),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -260)),
         // OFK ply 4 (after 22+b 36+e 52+a 46+f)
         new OctiBotEngine.OpeningBookEntry(0x2DF83E9073A3EBB0L, 8,
             new OctiBotEngine.OpeningBookCandidate("42+h", -3438),
@@ -4170,11 +4853,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+a", -740),
             new OctiBotEngine.OpeningBookCandidate("32+b", -740),
             new OctiBotEngine.OpeningBookCandidate("42+h", -740)),
+        // 2P_1B_ED ply 3 (after 33+a 37+e 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x2EB486D2ED761EA5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3100),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3170),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -3170)),
         // 4P ply 4 (after 33+a 37+f 77+d 73+g)
         new OctiBotEngine.OpeningBookEntry(0x2EDA45947C489046L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+d", -140)),
+        // 2P_3B_ED ply 2 (after 33+h 37+d)
+        new OctiBotEngine.OpeningBookEntry(0x2EF9476C546E13BEL, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+a", -299),
+            new OctiBotEngine.OpeningBookCandidate("53+b", -299),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -299)),
         // 2P 3-Base ply 4 (after 33+h 57+d 73+a 77+e)
         new OctiBotEngine.OpeningBookEntry(0x2F301A6D1CA19BACL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", -275),
@@ -4185,6 +4878,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", 740),
             new OctiBotEngine.OpeningBookCandidate("64b+a", 740),
             new OctiBotEngine.OpeningBookCandidate("33+b", 620)),
+        // 4P_ED ply 3 (after 33+a 37+f 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x2F45BE29B0F0B095L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 4P ply 3 (after 33+c 37+h 77+g)
         new OctiBotEngine.OpeningBookEntry(0x2F5C5973DBEBF3E6L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
@@ -4195,6 +4893,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", -120),
             new OctiBotEngine.OpeningBookCandidate("53h-44", -120),
             new OctiBotEngine.OpeningBookCandidate("53h+a", -120)),
+        // 2P_3B_ED ply 3 (after 53+a 37+d 33+h)
+        new OctiBotEngine.OpeningBookEntry(0x2F725CEA429695E7L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2213)),
         // 4P ply 4 (after 33+b 37+d 77+b 73+b)
         new OctiBotEngine.OpeningBookEntry(0x2F799CF103F0E158L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", -260),
@@ -4215,6 +4918,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -120)),
+        // 2P_3B_ED ply 3 (after 33+h 37+d 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x2FF17D7BC48B36FAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2213),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2213)),
+        // 4P_ED ply 3 (after 33+f 37+e 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x2FFCB4FBD7FDF832L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
         // 4P ply 4 (after 33+c 37+d 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0x2FFF64161D241230L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
@@ -4260,6 +4973,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -260)),
+        // 2P_1B_ED ply 3 (after 33+b 77+f 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x307D1C27DA150DC2L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2980),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2980),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2980)),
         // 4P ply 4 (after 33+b 37+h 77+e 73+a)
         new OctiBotEngine.OpeningBookEntry(0x30A78F0E79EEDA87L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 400),
@@ -4280,6 +4998,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", -163),
             new OctiBotEngine.OpeningBookCandidate("53a+b", -163),
             new OctiBotEngine.OpeningBookCandidate("53a+h", -318)),
+        // 2P_3B_ED ply 3 (after 53+b 37+e 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x30F7F9154F4B9744L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2651)),
         // 4P ply 4 (after 33+d 37+e 77+e 73+a)
         new OctiBotEngine.OpeningBookEntry(0x3107BE17BD74AC3AL, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
@@ -4450,6 +5173,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 120),
             new OctiBotEngine.OpeningBookCandidate("73+a", -430),
             new OctiBotEngine.OpeningBookCandidate("73+h", -430)),
+        // 2P_1B_ED ply 3 (after 33+a 77+f 73+b)
+        new OctiBotEngine.OpeningBookEntry(0x32827311150F187FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2360),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2360),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2360)),
+        // 2P_3B_ED ply 3 (after 53+a 57+e 33+a)
+        new OctiBotEngine.OpeningBookEntry(0x3284E5484E6793EFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2453),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2453),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2752)),
         // 4P ply 4 (after 33+f 37+h 77+f 73+h)
         new OctiBotEngine.OpeningBookEntry(0x329D49AC8E845F39L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", 0),
@@ -4460,6 +5193,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", -260),
             new OctiBotEngine.OpeningBookCandidate("33c+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -400)),
+        // 4P_ED ply 3 (after 33+d 37+e 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x32BF047734AFD652L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1297)),
         // 2P 1-Base ply 3 (after 53+b 57+d 33+h)
         new OctiBotEngine.OpeningBookEntry(0x32C0E67DB113D20DL, 8,
             new OctiBotEngine.OpeningBookCandidate("37+d", -2980),
@@ -4470,6 +5208,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", 120),
             new OctiBotEngine.OpeningBookCandidate("33h+a", 120),
             new OctiBotEngine.OpeningBookCandidate("22+b", -265)),
+        // 2P_3B_ED ply 2 (after 53+b 57+f)
+        new OctiBotEngine.OpeningBookEntry(0x32E7B464E49E7486L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+h", -81),
+            new OctiBotEngine.OpeningBookCandidate("33+a", -81),
+            new OctiBotEngine.OpeningBookCandidate("53b+a", -81)),
         // 4P ply 3 (after 33+c 37+f 77+e)
         new OctiBotEngine.OpeningBookEntry(0x32EE6EE7BC1E7BF0L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
@@ -4480,11 +5223,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+a", -155),
             new OctiBotEngine.OpeningBookCandidate("73a+h", -155),
             new OctiBotEngine.OpeningBookCandidate("53b+a", -155)),
+        // 4P_ED ply 3 (after 33+a 37+h 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x32F789BDD7053883L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1977)),
         // 4P ply 4 (after 33+d 37+b 77+h 73+d)
         new OctiBotEngine.OpeningBookEntry(0x33047EEC6DF5A914L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 140)),
+        // 4P_ED ply 3 (after 33+b 37+h 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x331F356EF035A0EFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1837)),
         // 4P ply 4 (after 33+a 37+h 77+b 73+d)
         new OctiBotEngine.OpeningBookEntry(0x3320F04296492977L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 400),
@@ -4510,6 +5263,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+h", 0),
             new OctiBotEngine.OpeningBookCandidate("53+b", 0),
             new OctiBotEngine.OpeningBookCandidate("53+a", 0)),
+        // 4P_ED ply 3 (after 33+h 37+e 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x33A7F09232A8CA16L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
+        // 4P_ED ply 3 (after 33+h 37+b 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x33CBF3F62ABEA4A4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 1-Base ply 4 (after 33+a 57+f 73+h 57f+e)
         new OctiBotEngine.OpeningBookEntry(0x33D711DEC745EF30L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", -90),
@@ -4520,6 +5283,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
+        // 2P_1B_ED ply 3 (after 53+b 37+d 53b-64)
+        new OctiBotEngine.OpeningBookEntry(0x33F7DEC818D7ABB7L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2480),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2480),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2480)),
         // 4P ply 4 (after 33+a 37+c 77+g 73+h)
         new OctiBotEngine.OpeningBookEntry(0x33FB049C17E4FB95L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
@@ -4540,16 +5308,31 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 0)),
+        // 4P_ED ply 3 (after 33+h 37+c 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x341C48F687B452F1L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1297)),
         // OFK ply 4 (after 22+b 26+d 22b+a 46+f)
         new OctiBotEngine.OpeningBookEntry(0x34218D96AEB15CBBL, 8,
             new OctiBotEngine.OpeningBookCandidate("42+a", -3203),
             new OctiBotEngine.OpeningBookCandidate("32+b", -3203),
             new OctiBotEngine.OpeningBookCandidate("32+a", -3382)),
+        // 2P_3B_ED ply 3 (after 53+a 37+e 33+a)
+        new OctiBotEngine.OpeningBookEntry(0x3436E71225453AEAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2721),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2721),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2721)),
         // 4P ply 3 (after 33+b 37+c 77+h)
         new OctiBotEngine.OpeningBookEntry(0x343E2648FD9B64D9L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
+        // 2P_1B_ED ply 3 (after 53+b 77+f 33+a)
+        new OctiBotEngine.OpeningBookEntry(0x343F23B136060371L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3090),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3090),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3220)),
         // 2P 1-Base ply 4 (after 53+b 77+e 53b-64 57+a)
         new OctiBotEngine.OpeningBookEntry(0x344027DDF975C7D3L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", 520),
@@ -4570,6 +5353,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53h+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33+b", 0),
             new OctiBotEngine.OpeningBookCandidate("53h-44", 0)),
+        // 2P_3B_ED ply 3 (after 33+a 57+d 73+f)
+        new OctiBotEngine.OpeningBookEntry(0x3485F8A1D758262FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57d+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -1949)),
         // OFK ply 4 (after 22+b 46+f 32+h 56+f)
         new OctiBotEngine.OpeningBookEntry(0x3486CF3626D14E48L, 8,
             new OctiBotEngine.OpeningBookCandidate("32+b", -640),
@@ -4595,6 +5383,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 140)),
+        // 2P_3B_ED ply 3 (after 33+a 77+e 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x34B5C683A35899F7L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2721),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2721),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2721)),
         // 4P ply 4 (after 33+c 37+d 77+b 73+g)
         new OctiBotEngine.OpeningBookEntry(0x34BC60499C47E142L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", -400),
@@ -4635,11 +5428,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", 280),
             new OctiBotEngine.OpeningBookCandidate("53h-44", 280),
             new OctiBotEngine.OpeningBookCandidate("53h+a", 280)),
+        // 4P_ED ply 3 (after 33+d 37+c 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x3504BC1381B34EB5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
         // 4P ply 4 (after 33+b 37+e 77+g 73+a)
         new OctiBotEngine.OpeningBookEntry(0x350E86DE7B01DC09L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -260)),
+        // 4P_ED ply 3 (after 33+f 37+d 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x3519DD3EE45B9694L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
         // 4P ply 4 (after 33+c 37+e 77+h 73+f)
         new OctiBotEngine.OpeningBookEntry(0x351A0DD32E827C96L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
@@ -4695,6 +5498,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("37+e", -3100),
             new OctiBotEngine.OpeningBookCandidate("77+f", -3100),
             new OctiBotEngine.OpeningBookCandidate("57d+e", -3100)),
+        // 2P_1B_ED ply 1 (after 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x35A265EF11CEE89AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3100),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -3100),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3100)),
+        // 2P_3B_ED ply 3 (after 53+a 37+f 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x35B09767EAA3D1F4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2752),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2752),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2752)),
         // 4P ply 4 (after 33+b 37+b 77+g 73+h)
         new OctiBotEngine.OpeningBookEntry(0x35C4034F9DDE95ACL, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
@@ -4734,12 +5547,22 @@ public final class OctiOpeningBookData {
         new OctiBotEngine.OpeningBookEntry(0x362065D4F696D244L, 8,
             new OctiBotEngine.OpeningBookCandidate("37+e", -2213),
             new OctiBotEngine.OpeningBookCandidate("77+f", -2213),
-            new OctiBotEngine.OpeningBookCandidate("57e+d", -2213)),
+            new OctiBotEngine.OpeningBookCandidate("57e+d", -2213))
+        };
+    }
+
+    private static OctiBotEngine.OpeningBookEntry[] chunk2() {
+        return new OctiBotEngine.OpeningBookEntry[] {
         // OFK ply 4 (after 32+a 46+e 52+a 26+e)
         new OctiBotEngine.OpeningBookEntry(0x36365E3A52B05F3CL, 8,
             new OctiBotEngine.OpeningBookCandidate("42+a", -199),
             new OctiBotEngine.OpeningBookCandidate("32a+b", -561),
             new OctiBotEngine.OpeningBookCandidate("42+h", -740)),
+        // 2P_3B_ED ply 3 (after 33+a 57+d 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x3636E6C6DA23B763L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2752),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2752),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2872)),
         // 2P 1-Base ply 4 (after 33+a 77+f 33a+b 37+f)
         new OctiBotEngine.OpeningBookEntry(0x363B0730DA789EE1L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", 120),
@@ -4770,6 +5593,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("37+e", -2980),
             new OctiBotEngine.OpeningBookCandidate("57+d", -2980),
             new OctiBotEngine.OpeningBookCandidate("57+e", -2980)),
+        // 2P_3B_ED ply 3 (after 53+b 57+d 53b+a)
+        new OctiBotEngine.OpeningBookEntry(0x36B5C7575C3E147EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2752),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2752),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2752)),
         // 4P ply 3 (after 33+d 37+d 77+f)
         new OctiBotEngine.OpeningBookEntry(0x36BF073291D01E51L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
@@ -4790,6 +5618,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 540),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 540),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 400)),
+        // 2P_1B_ED ply 3 (after 53+b 57+d 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x36E747708FFF30BBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -4020),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -4020)),
         // 2P 3-Base ply 4 (after 33+b 37+e 73+h 57+e)
         new OctiBotEngine.OpeningBookEntry(0x36F7DE167448EFABL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", -120),
@@ -4815,6 +5648,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+a", -283),
             new OctiBotEngine.OpeningBookCandidate("53+b", -283),
             new OctiBotEngine.OpeningBookCandidate("73h+a", -438)),
+        // 4P_ED ply 3 (after 33+a 37+e 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x375E806DD5EA3E0DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // OFK ply 4 (after 22+b 36+e 22b-33 46+e)
         new OctiBotEngine.OpeningBookEntry(0x37798C9E4E9979F6L, 8,
             new OctiBotEngine.OpeningBookCandidate("32+a", -3891),
@@ -4840,6 +5678,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 4P_ED ply 3 (after 33+f 37+f 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x37E78ABFB2E776AAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+f 37+b 77+d 73+h)
         new OctiBotEngine.OpeningBookEntry(0x3824347216E200A9L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
@@ -4865,6 +5708,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -140)),
+        // 2P_3B_ED ply 3 (after 33+b 77+f 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x384C11E682BA707DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2601),
+            new OctiBotEngine.OpeningBookCandidate("37d+b", -2601)),
         // 4P ply 4 (after 33+a 37+f 77+g 73+a)
         new OctiBotEngine.OpeningBookEntry(0x3857BB31973001ABL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
@@ -5005,6 +5853,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", 0),
             new OctiBotEngine.OpeningBookCandidate("53+h", 0),
             new OctiBotEngine.OpeningBookCandidate("53+a", 0)),
+        // 4P_ED ply 3 (after 33+b 37+f 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x3A07BD8239DBE3AFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 2P 3-Base ply 4 (after 33+b 57+d 73+b 57d-66)
         new OctiBotEngine.OpeningBookEntry(0x3A0ADBFEA6FDD03EL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+a", -120),
@@ -5045,6 +5898,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -380)),
+        // 4P_ED ply 3 (after 33+c 37+d 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x3A5FEC9ED260F63DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // OFK ply 4 (after 32+b 36+e 52+h 56+e)
         new OctiBotEngine.OpeningBookEntry(0x3A69C3513738313FL, 8,
             new OctiBotEngine.OpeningBookCandidate("32+a", -299),
@@ -5075,6 +5933,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 400),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 260)),
+        // 4P_ED ply 3 (after 33+c 37+b 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x3B004E2DD5540AD3L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 2P 3-Base ply 2 (after 53+a 37+d)
         new OctiBotEngine.OpeningBookEntry(0x3B1A0BE82177D5B1L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", 0),
@@ -5125,6 +5988,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -260)),
+        // 2P_1B_ED ply 3 (after 53+b 77+e 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x3BF68579645D4D9FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -4020)),
         // 4P ply 4 (after 33+h 37+f 77+e 73+h)
         new OctiBotEngine.OpeningBookEntry(0x3C084D3B8EBBD2A7L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 0),
@@ -5160,6 +6028,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", -210),
             new OctiBotEngine.OpeningBookCandidate("53b+a", -210),
             new OctiBotEngine.OpeningBookCandidate("53b-64", -210)),
+        // 2P_1B_ED ply 3 (after 33+a 37+e 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x3C84CB42FBF7E448L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3100),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3100),
+            new OctiBotEngine.OpeningBookCandidate("77e+f", -3100)),
         // 2P 1-Base ply 4 (after 33+b 37+e 53+c 57+e)
         new OctiBotEngine.OpeningBookEntry(0x3C98E2C46429B719L, 8,
             new OctiBotEngine.OpeningBookCandidate("53c+h", -400),
@@ -5195,6 +6068,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+a", 120),
             new OctiBotEngine.OpeningBookCandidate("53+b", 120),
             new OctiBotEngine.OpeningBookCandidate("73h+a", 120)),
+        // 2P_1B_ED ply 3 (after 33+a 37+d 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x3D0328C0D1EECB29L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3090),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3090),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3170)),
         // OFK ply 4 (after 22+b 46+f 22b+c 56+f)
         new OctiBotEngine.OpeningBookEntry(0x3D10D031550F7664L, 8,
             new OctiBotEngine.OpeningBookCandidate("42+h", -99),
@@ -5245,6 +6123,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", -59),
             new OctiBotEngine.OpeningBookCandidate("42a+h", -179),
             new OctiBotEngine.OpeningBookCandidate("32+b", -323)),
+        // 2P_3B_ED ply 3 (after 33+h 57+d 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x3DB272A45A01B0ABL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2632),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("57d+e", -2632)),
         // 4P ply 4 (after 33+d 37+f 77+h 73+a)
         new OctiBotEngine.OpeningBookEntry(0x3DB63F2B7675E9F4L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
@@ -5280,6 +6163,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53a+h", 1140),
             new OctiBotEngine.OpeningBookCandidate("73+a", 520),
             new OctiBotEngine.OpeningBookCandidate("33b+a", 520)),
+        // 2P_1B_ED ply 3 (after 33+b 57+d 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x3E07EB07828CCADCL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -4020),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -4020)),
+        // 4P_ED ply 3 (after 33+d 37+f 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x3E0E854BFFAE939CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 3-Base ply 3 (after 53+a 37+d 73+a)
         new OctiBotEngine.OpeningBookEntry(0x3E17FE4CF551246BL, 8,
             new OctiBotEngine.OpeningBookCandidate("37+d", -2453),
@@ -5310,6 +6203,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("46+e", -3343),
             new OctiBotEngine.OpeningBookCandidate("36+e", -3343),
             new OctiBotEngine.OpeningBookCandidate("56+f", -3343)),
+        // 4P_ED ply 2 (after 33+f 37+c)
+        new OctiBotEngine.OpeningBookEntry(0x3E8A2AEA6B04BC8FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -400),
+            new OctiBotEngine.OpeningBookCandidate("77+g", -400),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -400)),
         // 4P ply 4 (after 33+a 37+c 77+e 73+f)
         new OctiBotEngine.OpeningBookEntry(0x3E9378938336BE1DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
@@ -5350,11 +6248,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("36+e", -3622),
             new OctiBotEngine.OpeningBookCandidate("26+d", -3622),
             new OctiBotEngine.OpeningBookCandidate("36+d", -3800)),
+        // 4P_ED ply 3 (after 33+c 37+h 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x3EC54499CFAD62EFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // OFK ply 4 (after 32+a 46+f 22+a 36+d)
         new OctiBotEngine.OpeningBookEntry(0x3ECD01BD7B7BC784L, 8,
             new OctiBotEngine.OpeningBookCandidate("32+b", -620),
             new OctiBotEngine.OpeningBookCandidate("52a+h", -620),
             new OctiBotEngine.OpeningBookCandidate("42a+h", -1120)),
+        // 2P_3B_ED ply 3 (after 53+b 57+d 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x3ED64AB1D7504D04L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2752),
+            new OctiBotEngine.OpeningBookCandidate("57f+e", -2752),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2752)),
         // 4P ply 3 (after 33+a 37+f 77+b)
         new OctiBotEngine.OpeningBookEntry(0x3EDCA3C3A4B6219CL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
@@ -5420,6 +6328,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("36+e", -4585),
             new OctiBotEngine.OpeningBookCandidate("46f-35", -4585),
             new OctiBotEngine.OpeningBookCandidate("46f+e", -6335)),
+        // 4P_ED ply 2 (after 33+h 37+d)
+        new OctiBotEngine.OpeningBookEntry(0x3F8FBF2208EB78EAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -140),
+            new OctiBotEngine.OpeningBookCandidate("77+g", -140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -140)),
         // 4P ply 4 (after 33+h 37+b 77+f 73+b)
         new OctiBotEngine.OpeningBookEntry(0x3F9D4D166AADBA97L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 140),
@@ -5544,12 +6457,12 @@ public final class OctiOpeningBookData {
         new OctiBotEngine.OpeningBookEntry(0x40748F678B52764BL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", -210),
             new OctiBotEngine.OpeningBookCandidate("53h-44", -210),
-            new OctiBotEngine.OpeningBookCandidate("53h+a", -210))
-        };
-    }
-
-    private static OctiBotEngine.OpeningBookEntry[] chunk2() {
-        return new OctiBotEngine.OpeningBookEntry[] {
+            new OctiBotEngine.OpeningBookCandidate("53h+a", -210)),
+        // 2P_3B_ED ply 3 (after 33+b 37+e 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x4077AF9C26DD29BDL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2632)),
         // 2P 3-Base ply 4 (after 33+a 57+e 73+h 77+d)
         new OctiBotEngine.OpeningBookEntry(0x4083B6D14D92139BL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+a", 120),
@@ -5610,6 +6523,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+a", 245),
             new OctiBotEngine.OpeningBookCandidate("73h+a", 245),
             new OctiBotEngine.OpeningBookCandidate("53b+a", 237)),
+        // 2P_3B_ED ply 3 (after 53+a 37+e 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x40F48E0DA0C08AA0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2632)),
+        // 2P_1B_ED ply 3 (after 53+b 77+f 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x40FD4AAEB383B33BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -4020)),
         // 4P ply 4 (after 33+b 37+b 77+g 73+a)
         new OctiBotEngine.OpeningBookEntry(0x41066A50185B25E6L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
@@ -5635,6 +6558,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", 0),
             new OctiBotEngine.OpeningBookCandidate("53h-44", 0),
             new OctiBotEngine.OpeningBookCandidate("33+a", 0)),
+        // 2P_1B_ED ply 1 (after 33+a)
+        new OctiBotEngine.OpeningBookEntry(0x41600CF0944B58D0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3100),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3100),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3100)),
+        // 4P_ED ply 3 (after 33+d 37+c 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x416053F9FAFFD9E8L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P 1-Base ply 3 (after 33+a 57+d 73+h)
         new OctiBotEngine.OpeningBookEntry(0x416378C4FD044B76L, 8,
             new OctiBotEngine.OpeningBookCandidate("77+f", -3930),
@@ -5670,6 +6603,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -260)),
+        // 4P_ED ply 2 (after 33+f 37+f)
+        new OctiBotEngine.OpeningBookEntry(0x41E4FC586E55F6FBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -260),
+            new OctiBotEngine.OpeningBookCandidate("77+g", -260),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -260)),
         // 2P 1-Base ply 4 (after 33+a 77+e 33a+b 37+f)
         new OctiBotEngine.OpeningBookEntry(0x41EF857D2E7156F9L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", 270),
@@ -5685,11 +6623,26 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 280),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 280),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 140)),
+        // 2P_1B_ED ply 3 (after 53+b 37+d 33+h)
+        new OctiBotEngine.OpeningBookEntry(0x420225987C99A686L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2360),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2360),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2480)),
+        // 2P_3B_ED ply 3 (after 53+a 57+e 53a+b)
+        new OctiBotEngine.OpeningBookEntry(0x4204B3C127F12D16L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2333),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2453),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2577)),
         // 2P 1-Base ply 3 (after 33+b 37+f 73+b)
         new OctiBotEngine.OpeningBookEntry(0x42084F12DF16CC72L, 8,
             new OctiBotEngine.OpeningBookCandidate("57+d", -2480),
             new OctiBotEngine.OpeningBookCandidate("77+f", -2480),
             new OctiBotEngine.OpeningBookCandidate("77+e", -3100)),
+        // 4P_ED ply 3 (after 33+a 37+d 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x4209CE50B1843B0CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 1-Base ply 4 (after 33+b 57+d 53+a 77+e)
         new OctiBotEngine.OpeningBookEntry(0x42142AA7DC46F206L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", -90),
@@ -5745,6 +6698,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 4P_ED ply 3 (after 33+h 37+h 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x426A16A84B0B5BC5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1837)),
         // 4P ply 4 (after 33+c 37+d 77+b 73+b)
         new OctiBotEngine.OpeningBookEntry(0x426DBD94E93F7F53L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", -260),
@@ -5755,6 +6713,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", 120),
             new OctiBotEngine.OpeningBookCandidate("53a+b", 120),
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0)),
+        // 2P_1B_ED ply 2 (after 33+b 57+d)
+        new OctiBotEngine.OpeningBookEntry(0x42B6435BD8D44DA7L, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+a", -610),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -610),
+            new OctiBotEngine.OpeningBookCandidate("73+a", -620)),
         // 4P ply 4 (after 33+f 37+d 77+b 73+a)
         new OctiBotEngine.OpeningBookEntry(0x42C588B416CC7BA1L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -800),
@@ -5800,6 +6763,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", 219),
             new OctiBotEngine.OpeningBookCandidate("42+h", 219),
             new OctiBotEngine.OpeningBookCandidate("42+a", -684)),
+        // 4P_ED ply 3 (after 33+a 37+b 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x43566CE3B6B0C7E2L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 2P 1-Base ply 4 (after 53+b 57+d 33+b 57d+e)
         new OctiBotEngine.OpeningBookEntry(0x43574757AED351C9L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", -210),
@@ -5820,6 +6788,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+a", -520),
             new OctiBotEngine.OpeningBookCandidate("73h+a", -520),
             new OctiBotEngine.OpeningBookCandidate("33+b", -520)),
+        // 2P_3B_ED ply 2 (after 33+h 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x4380FABD79221944L, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+b", -120),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -120),
+            new OctiBotEngine.OpeningBookCandidate("53+a", -419)),
         // 2P 3-Base ply 2 (after 33+b 77+e)
         new OctiBotEngine.OpeningBookEntry(0x43A29403030D2F6CL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", -120),
@@ -5845,6 +6818,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", 120),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 120),
             new OctiBotEngine.OpeningBookCandidate("33h+b", 0)),
+        // 2P_3B_ED ply 3 (after 53+b 77+e 53b-64)
+        new OctiBotEngine.OpeningBookEntry(0x43FD6D73E41F8FC8L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2333),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2333),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2333)),
         // 2P 3-Base ply 4 (after 53+a 37+e 33+b 77+e)
         new OctiBotEngine.OpeningBookEntry(0x440494C21CF255F9L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", 0),
@@ -5860,6 +6838,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53h-44", 0),
             new OctiBotEngine.OpeningBookCandidate("73+a", 0),
             new OctiBotEngine.OpeningBookCandidate("53h+a", 0)),
+        // 2P_3B_ED ply 3 (after 33+a 37+e 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x4435900ACACE270EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2721),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2721),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2721)),
         // 4P ply 3 (after 33+f 37+d 77+g)
         new OctiBotEngine.OpeningBookEntry(0x444E9046254A5B96L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
@@ -5895,6 +6878,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -260)),
+        // 2P_1B_ED ply 3 (after 33+a 37+d 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x44BF75385F90BD88L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2600),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2600),
+            new OctiBotEngine.OpeningBookCandidate("57+c", -3000)),
         // 4P ply 4 (after 33+b 37+h 77+b 73+a)
         new OctiBotEngine.OpeningBookEntry(0x44C360E402A24DDAL, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
@@ -5975,6 +6963,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -540),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -540),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -660)),
+        // 4P_ED ply 3 (after 33+b 37+c 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x45696B303C8AA9DBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // OFK ply 4 (after 22+b 26+d 42+a 36+d)
         new OctiBotEngine.OpeningBookEntry(0x456EE26CF6B6DDB2L, 8,
             new OctiBotEngine.OpeningBookCandidate("32+a", -20),
@@ -6020,6 +7013,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", 190),
             new OctiBotEngine.OpeningBookCandidate("53h+a", 190),
             new OctiBotEngine.OpeningBookCandidate("53h-44", 190)),
+        // 2P_1B_SPED ply 1 (after 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x45C4C6B36B866F77L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -4230),
+            new OctiBotEngine.OpeningBookCandidate("37+a", -4750),
+            new OctiBotEngine.OpeningBookCandidate("57+e!", -4870)),
         // 4P ply 4 (after 33+d 37+e 77+e 73+h)
         new OctiBotEngine.OpeningBookEntry(0x45C5D70838F11C70L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
@@ -6060,6 +7058,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33f+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -120)),
+        // 2P_1B_ED ply 3 (after 33+a 57+f 33a+b)
+        new OctiBotEngine.OpeningBookEntry(0x466711F9E6698E42L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3170),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3170),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3170)),
         // OFK ply 4 (after 32+b 46+e 42+h 26+d)
         new OctiBotEngine.OpeningBookEntry(0x4672493EA518E3DFL, 8,
             new OctiBotEngine.OpeningBookCandidate("52+h", -407),
@@ -6075,6 +7078,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
+        // 4P_ED ply 3 (after 33+a 37+h 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x46936657AC49AFDEL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // OFK ply 4 (after 32+b 36+d 52+a 36d+e)
         new OctiBotEngine.OpeningBookEntry(0x46A13A013F3C1685L, 8,
             new OctiBotEngine.OpeningBookCandidate("22a+b", -620),
@@ -6085,6 +7093,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 660),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 660),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 400)),
+        // 4P_ED ply 3 (after 33+d 37+b 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x46B7E8F957F52FBDL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+c 37+c 77+e 73+f)
         new OctiBotEngine.OpeningBookEntry(0x46C55A5DE0D2732CL, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
@@ -6145,6 +7158,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("37+d", -3050),
             new OctiBotEngine.OpeningBookCandidate("57+d", -3100),
             new OctiBotEngine.OpeningBookCandidate("37+e", -3100)),
+        // 2P_3B_ED ply 2 (after 33+h 37+e)
+        new OctiBotEngine.OpeningBookEntry(0x4785350E3DE1CDDAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+a", -419),
+            new OctiBotEngine.OpeningBookCandidate("33+a", -419),
+            new OctiBotEngine.OpeningBookCandidate("53+h", -419)),
         // 4P ply 3 (after 33+b 37+b 77+b)
         new OctiBotEngine.OpeningBookEntry(0x478D72A22BDD05D1L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
@@ -6160,11 +7178,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("57+e", -2333),
             new OctiBotEngine.OpeningBookCandidate("77+f", -2453),
             new OctiBotEngine.OpeningBookCandidate("77+e", -2577)),
+        // 4P_ED ply 3 (after 33+h 37+b 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x47AF1C1C51F233F9L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // OFK ply 4 (after 32+b 46+f 42+h 26+e)
         new OctiBotEngine.OpeningBookEntry(0x47B2BBCD9703C2EFL, 8,
             new OctiBotEngine.OpeningBookCandidate("42h+a", -477),
             new OctiBotEngine.OpeningBookCandidate("32b+a", -477),
             new OctiBotEngine.OpeningBookCandidate("22+b", -620)),
+        // 4P_ED ply 3 (after 33+h 37+e 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x47C31F7849E45D4BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // OFK ply 4 (after 22+b 36+e 42+a 26+d)
         new OctiBotEngine.OpeningBookEntry(0x47C8ECEF49F3FAADL, 8,
             new OctiBotEngine.OpeningBookCandidate("32+b", -1248),
@@ -6195,6 +7223,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53b+a", 280),
             new OctiBotEngine.OpeningBookCandidate("73+h", 280),
             new OctiBotEngine.OpeningBookCandidate("53b-64", 280)),
+        // 2P_1B_ED ply 3 (after 33+b 37+e 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x4846A25D7E725402L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -4020)),
         // 2P 3-Base ply 4 (after 53+b 77+f 33+b 37+f)
         new OctiBotEngine.OpeningBookEntry(0x48596B3E5CC70427L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", 0),
@@ -6215,6 +7248,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 400),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 260)),
+        // 4P_ED ply 3 (after 33+f 37+c 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x48895C0DB7B63CDEL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
         // 2P 3-Base ply 4 (after 53+a 57+d 53a+h 37+d)
         new OctiBotEngine.OpeningBookEntry(0x4892B549DD4907BCL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", -163),
@@ -6270,6 +7308,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53h-44", -120),
             new OctiBotEngine.OpeningBookCandidate("73+h", -280),
             new OctiBotEngine.OpeningBookCandidate("33b-44", -380)),
+        // 2P_1B_ED ply 3 (after 33+b 77+e 53+g)
+        new OctiBotEngine.OpeningBookEntry(0x4928E2E34505D66BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2700),
+            new OctiBotEngine.OpeningBookCandidate("37e+d", -2700),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2750)),
         // 2P 1-Base ply 4 (after 33+a 37+e 33a+b 57+e)
         new OctiBotEngine.OpeningBookEntry(0x4934CB65DADB853AL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", 0),
@@ -6295,6 +7338,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("37+e", -2651),
             new OctiBotEngine.OpeningBookCandidate("77+f", -2651),
             new OctiBotEngine.OpeningBookCandidate("37+d", -2771)),
+        // 2P_3B_ED ply 3 (after 33+h 57+d 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x49701BBBDF8400E1L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2632),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2752)),
         // 4P ply 4 (after 33+d 37+f 77+h 73+h)
         new OctiBotEngine.OpeningBookEntry(0x49745634F3F059BEL, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
@@ -6305,6 +7353,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+a", -120),
             new OctiBotEngine.OpeningBookCandidate("53+h", -120),
             new OctiBotEngine.OpeningBookCandidate("33b+a", -275)),
+        // 4P_ED ply 3 (after 33+h 37+d 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x498CC9C5D459F8BBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1297)),
         // 4P ply 3 (after 33+b 37+d 77+d)
         new OctiBotEngine.OpeningBookEntry(0x49AEA77BAE76CE93L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
@@ -6320,6 +7373,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("46+f", -6141),
             new OctiBotEngine.OpeningBookCandidate("26+d", -6141),
             new OctiBotEngine.OpeningBookCandidate("56+e", -6141)),
+        // 2P_1B_ED ply 3 (after 33+b 37+d 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x49C141DF546B7B63L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -4020)),
         // OFK ply 3 (after 22+b 56+f 32+a)
         new OctiBotEngine.OpeningBookEntry(0x49C94E3C2349A1E2L, 8,
             new OctiBotEngine.OpeningBookCandidate("36+e", -6261),
@@ -6340,6 +7398,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+h", -620),
             new OctiBotEngine.OpeningBookCandidate("22a+b", -620),
             new OctiBotEngine.OpeningBookCandidate("32a+h", -620)),
+        // 2P_3B_ED ply 2 (after 53+a 57+d)
+        new OctiBotEngine.OpeningBookEntry(0x4A046F0B06669305L, 8,
+            new OctiBotEngine.OpeningBookCandidate("33+b", 0),
+            new OctiBotEngine.OpeningBookCandidate("73+a", -81),
+            new OctiBotEngine.OpeningBookCandidate("53a+h", -81)),
         // 2P 1-Base ply 4 (after 33+a 77+e 73+a 57+e)
         new OctiBotEngine.OpeningBookEntry(0x4A04BAC8A962225EL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", 0),
@@ -6355,6 +7418,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 4P_ED ply 3 (after 33+d 37+f 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x4A6A6AA184E204C1L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 2P 3-Base ply 3 (after 33+h 57+d 73+h)
         new OctiBotEngine.OpeningBookEntry(0x4A71BD35802A114BL, 8,
             new OctiBotEngine.OpeningBookCandidate("77+e", -2632),
@@ -6365,6 +7433,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+a", -419),
             new OctiBotEngine.OpeningBookCandidate("53+h", -419),
             new OctiBotEngine.OpeningBookCandidate("33+b", -419)),
+        // 4P_ED ply 3 (after 33+c 37+h 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x4AA1AB73B4E1F5B2L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1977)),
         // 2P 3-Base ply 4 (after 33+b 37+e 73+h 57+f)
         new OctiBotEngine.OpeningBookEntry(0x4AA606F702F42CA4L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", -120),
@@ -6410,11 +7483,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73a+h", 120),
             new OctiBotEngine.OpeningBookCandidate("33+a", 120),
             new OctiBotEngine.OpeningBookCandidate("53b+a", 0)),
+        // 4P_ED ply 3 (after 33+h 37+f 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x4B729E4482E51885L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+c 37+h 77+b 73+d)
         new OctiBotEngine.OpeningBookEntry(0x4B76D28CF5ADE446L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 400),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 260)),
+        // 2P_1B_ED ply 3 (after 33+a 37+e 33a+b)
+        new OctiBotEngine.OpeningBookEntry(0x4B76D3F00DCBF366L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2980),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2980),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2980)),
         // 4P ply 4 (after 33+d 37+d 77+d 73+h)
         new OctiBotEngine.OpeningBookEntry(0x4B8A01B5A54CB980L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -280),
@@ -6445,6 +7528,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+a", 0),
             new OctiBotEngine.OpeningBookCandidate("73a+h", 0),
             new OctiBotEngine.OpeningBookCandidate("53a+b", 0)),
+        // 2P_1B_ED ply 3 (after 33+b 37+e 53+a)
+        new OctiBotEngine.OpeningBookEntry(0x4BF5F2618BD6507BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3060),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3060),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3150)),
         // OFK ply 4 (after 32+b 56+f 32b+a 56f+e)
         new OctiBotEngine.OpeningBookEntry(0x4C05FB79CE054827L, 8,
             new OctiBotEngine.OpeningBookCandidate("32+a", 0),
@@ -6475,6 +7563,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("22+b", -179),
             new OctiBotEngine.OpeningBookCandidate("42h+a", -179),
             new OctiBotEngine.OpeningBookCandidate("42h-33", -195)),
+        // 2P_3B_ED ply 3 (after 33+b 37+d 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x4C8E78F9073FC037L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2453),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2453),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2632)),
         // 4P ply 4 (after 33+a 37+f 77+g 73+h)
         new OctiBotEngine.OpeningBookEntry(0x4C95D22E12B5B1E1L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
@@ -6630,6 +7723,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", -140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -280)),
+        // 2P_3B_ED ply 3 (after 53+a 37+f 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x4E9DC24F3F48F066L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2632),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2632)),
         // 4P ply 4 (after 33+c 37+b 77+g 73+d)
         new OctiBotEngine.OpeningBookEntry(0x4EB3D838EF548C7AL, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 540),
@@ -6645,6 +7743,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("37+c", -1177),
             new OctiBotEngine.OpeningBookCandidate("37+e", -1177),
             new OctiBotEngine.OpeningBookCandidate("37+d", -1177)),
+        // 4P_ED ply 3 (after 33+c 37+e 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x4F08A2A3B60EF33CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+f 37+d 77+g 73+f)
         new OctiBotEngine.OpeningBookEntry(0x4F0B724E7CD7193EL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
@@ -6715,6 +7818,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -120)),
+        // 4P_ED ply 3 (after 33+a 37+c 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x502B689BB5A1FAE1L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 3-Base ply 4 (after 33+a 37+f 73+h 77+e)
         new OctiBotEngine.OpeningBookEntry(0x5043C68DDC224EC0L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", 120),
@@ -6775,6 +7883,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+a", -839),
             new OctiBotEngine.OpeningBookCandidate("52g+h", -839),
             new OctiBotEngine.OpeningBookCandidate("32b-43", -1119)),
+        // 2P_3B_ED ply 3 (after 33+h 37+d 73+f)
+        new OctiBotEngine.OpeningBookEntry(0x50FBF157034D0589L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1829),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -1829),
+            new OctiBotEngine.OpeningBookCandidate("37d+e", -1829)),
         // 2P 1-Base ply 3 (after 33+b 37+e 53+c)
         new OctiBotEngine.OpeningBookEntry(0x50FE2234BB343366L, 8,
             new OctiBotEngine.OpeningBookCandidate("57+f", -2660),
@@ -6790,6 +7903,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", 0),
             new OctiBotEngine.OpeningBookCandidate("53a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("73+a", 0)),
+        // 4P_ED ply 3 (after 33+f 37+h 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x514D25AB2CC15E4DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+d 37+e 77+h 73+h)
         new OctiBotEngine.OpeningBookEntry(0x516F687096EAD726L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -280),
@@ -6820,6 +7938,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53b+a", -283),
             new OctiBotEngine.OpeningBookCandidate("73+h", -283),
             new OctiBotEngine.OpeningBookCandidate("53b-64", -283)),
+        // 2P_1B_ED ply 3 (after 33+b 37+d 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x51FD7693D6BBEEB2L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3090),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3090),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3100)),
         // 4P ply 4 (after 33+b 37+h 77+e 73+d)
         new OctiBotEngine.OpeningBookEntry(0x52061C03642EED10L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 800),
@@ -6830,6 +7953,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("37+d", -2208),
             new OctiBotEngine.OpeningBookCandidate("57+f", -2208),
             new OctiBotEngine.OpeningBookCandidate("37+e", -2352)),
+        // 4P_ED ply 3 (after 33+d 37+b 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x521D5781F9EEE4EBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 2P_3B_ED ply 3 (after 53+b 37+d 33+h)
+        new OctiBotEngine.OpeningBookEntry(0x5248EF300E3694C5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2213)),
         // 2P 3-Base ply 3 (after 33+b 37+d 53+b)
         new OctiBotEngine.OpeningBookEntry(0x526A818E7419A2EDL, 8,
             new OctiBotEngine.OpeningBookCandidate("77+e", -2651),
@@ -6840,6 +7973,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -140)),
+        // 4P_ED ply 3 (after 33+d 37+e 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x527154E5E1F88A59L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
         // 4P ply 4 (after 33+b 37+c 77+g 73+a)
         new OctiBotEngine.OpeningBookEntry(0x527B6E281B4A18E5L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
@@ -6910,6 +8048,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("57+e", -3090),
             new OctiBotEngine.OpeningBookCandidate("37+d", -3090),
             new OctiBotEngine.OpeningBookCandidate("37+e", -3100)),
+        // 4P_ED ply 3 (after 33+h 37+e 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x5369A000E7FF961DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1297)),
         // 4P ply 4 (after 33+h 37+f 77+f 73+b)
         new OctiBotEngine.OpeningBookEntry(0x538E9FDC6CEDCDE0L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 140),
@@ -6935,6 +8078,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -120)),
+        // 4P_ED ply 3 (after 33+b 37+h 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x53D165FC2562FCE4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 1-Base ply 4 (after 33+a 77+e 53+b 77e+d)
         new OctiBotEngine.OpeningBookEntry(0x53DFC8ED38F0AC14L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", 120),
@@ -6955,6 +8103,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 660),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 660),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 520)),
+        // 2P_1B_ED ply 3 (after 33+b 37+f 53+a)
+        new OctiBotEngine.OpeningBookEntry(0x53EECC25EECCDEE3L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3180),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3180),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3270)),
         // 4P ply 3 (after 33+h 37+h 77+b)
         new OctiBotEngine.OpeningBookEntry(0x53F30B425F4DCACCL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
@@ -6985,6 +8138,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 2P_3B_ED ply 3 (after 33+b 57+f 53+f)
+        new OctiBotEngine.OpeningBookEntry(0x543896C70811EB26L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57d+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -1949)),
         // 2P 1-Base ply 4 (after 53+b 37+d 53b+a 57+d)
         new OctiBotEngine.OpeningBookEntry(0x543D1C25E6561B06L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", 30),
@@ -7020,11 +8178,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+d", -140)),
+        // 2P_3B_ED ply 3 (after 53+b 77+f 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x54B24FB585EF55E6L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2651),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2721),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2721)),
         // 4P ply 4 (after 33+b 37+f 77+e 73+f)
         new OctiBotEngine.OpeningBookEntry(0x54BFAD8A0F4CA753L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 280),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 280),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 20)),
+        // 4P_ED ply 3 (after 33+h 37+c 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x54D2186452E30EFAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
         // OFK ply 3 (after 22+b 26+d 22b+a)
         new OctiBotEngine.OpeningBookEntry(0x54E48BB7917BCC4FL, 8,
             new OctiBotEngine.OpeningBookCandidate("36+d", -3323),
@@ -7065,6 +8233,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", -90),
             new OctiBotEngine.OpeningBookCandidate("53b+a", -90),
             new OctiBotEngine.OpeningBookCandidate("53b-64", -90)),
+        // 2P_3B_ED ply 3 (after 33+b 37+e 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x5535AC37AFF67A87L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2601),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2601)),
         // OFK ply 4 (after 32+b 36+d 42+a 36d+e)
         new OctiBotEngine.OpeningBookEntry(0x554E965FC2FDF4DAL, 8,
             new OctiBotEngine.OpeningBookCandidate("32b-43", 120),
@@ -7085,6 +8258,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73a+h", 120),
             new OctiBotEngine.OpeningBookCandidate("53+h", -430),
             new OctiBotEngine.OpeningBookCandidate("33a+b", -430)),
+        // 4P_SP ply 1 (after 33+c!)
+        new OctiBotEngine.OpeningBookEntry(0x5574490AB8258B2EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+c!", -2792),
+            new OctiBotEngine.OpeningBookCandidate("37+e!", -2930),
+            new OctiBotEngine.OpeningBookCandidate("37+d!", -7718)),
         // 4P ply 4 (after 33+h 37+h 77+g 73+a)
         new OctiBotEngine.OpeningBookEntry(0x557813B06CCBEAFBL, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 260),
@@ -7105,26 +8283,51 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 280),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 280),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 140)),
+        // 4P_ED ply 3 (after 33+d 37+c 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x55CAEC8154E412BEL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1297)),
         // 4P ply 4 (after 33+c 37+e 77+b 73+f)
         new OctiBotEngine.OpeningBookEntry(0x55D45D41FBD5209DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", -260),
             new OctiBotEngine.OpeningBookCandidate("33c+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -400)),
+        // 4P_ED ply 3 (after 33+f 37+d 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x55D78DAC310CCA9FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -777),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -777),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -777)),
         // 2P 1-Base ply 4 (after 53+b 77+f 53b+a 57+f)
         new OctiBotEngine.OpeningBookEntry(0x55E1BB230CCD2939L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", -440),
             new OctiBotEngine.OpeningBookCandidate("73+h", -440),
-            new OctiBotEngine.OpeningBookCandidate("33+a", -440)),
+            new OctiBotEngine.OpeningBookCandidate("33+a", -440))
+        };
+    }
+
+    private static OctiBotEngine.OpeningBookEntry[] chunk3() {
+        return new OctiBotEngine.OpeningBookEntry[] {
         // 2P 3-Base ply 4 (after 33+h 57+d 53+h 57d+e)
         new OctiBotEngine.OpeningBookEntry(0x55E72D7A57A5A2A9L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", -539),
             new OctiBotEngine.OpeningBookCandidate("33+a", -539),
             new OctiBotEngine.OpeningBookCandidate("73b+a", -539)),
+        // 2P_3B_ED ply 3 (after 33+b 37+d 33b+d)
+        new OctiBotEngine.OpeningBookEntry(0x560151D28894C4AAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -1949)),
         // 4P ply 4 (after 33+d 37+h 77+g 73+d)
         new OctiBotEngine.OpeningBookEntry(0x560F24CAA25B9D23L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 660),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 660),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 540)),
+        // 4P_ED ply 3 (after 33+b 37+b 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x56146F483F9B94D8L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 2P 1-Base ply 4 (after 33+a 57+f 53+h 77+d)
         new OctiBotEngine.OpeningBookEntry(0x562EA693DE212B57L, 8,
             new OctiBotEngine.OpeningBookCandidate("73a+h", 120),
@@ -7215,11 +8418,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1977),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1977)),
+        // 4P_ED ply 3 (after 33+c 37+f 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x57139CE7D3147DA4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 2P 1-Base ply 3 (after 33+a 37+d 33a+b)
         new OctiBotEngine.OpeningBookEntry(0x5725B8A8274D19B9L, 8,
             new OctiBotEngine.OpeningBookCandidate("37+d", -3090),
             new OctiBotEngine.OpeningBookCandidate("57+e", -3090),
             new OctiBotEngine.OpeningBookCandidate("57+f", -3100)),
+        // 4P_ED ply 3 (after 33+b 37+d 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x574BCDFB38AF6836L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 3 (after 33+h 37+d 77+f)
         new OctiBotEngine.OpeningBookEntry(0x5769A34542805E1EL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
@@ -7365,6 +8578,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
+        // 2P_1B_ED ply 3 (after 33+a 37+e 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x59469E601B4A098BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77e+f", -3100),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3170),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3170)),
         // 2P 1-Base ply 4 (after 53+b 37+d 53b-64 57+e)
         new OctiBotEngine.OpeningBookEntry(0x596E518934C94AB5L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", 0),
@@ -7405,6 +8623,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53b+a", 930),
             new OctiBotEngine.OpeningBookCandidate("53b-64", 930),
             new OctiBotEngine.OpeningBookCandidate("33+a", 900)),
+        // 2P_3B_ED ply 3 (after 33+a 37+d 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x59CC7B528E14930DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2453),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2453),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2721)),
         // 4P ply 4 (after 33+b 37+f 77+g 73+h)
         new OctiBotEngine.OpeningBookEntry(0x59D7D1859B9EE2DBL, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
@@ -7415,6 +8638,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 0)),
+        // 4P_ED ply 2 (after 33+f 37+e)
+        new OctiBotEngine.OpeningBookEntry(0x59FFC21C0B4F7863L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -400),
+            new OctiBotEngine.OpeningBookCandidate("77+g", -400),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -400)),
         // OFK ply 3 (after 32+a 36+d 52+h)
         new OctiBotEngine.OpeningBookEntry(0x5A14F813248BBE62L, 8,
             new OctiBotEngine.OpeningBookCandidate("46+e", -3502),
@@ -7475,6 +8703,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("37+e", -2651),
             new OctiBotEngine.OpeningBookCandidate("57+d", -2651),
             new OctiBotEngine.OpeningBookCandidate("37+d", -2771)),
+        // 2P_3B_ED ply 3 (after 53+a 57+d 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x5B973E02B1F003DAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2752),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2752),
+            new OctiBotEngine.OpeningBookCandidate("57f+e", -2752)),
         // 2P 1-Base ply 4 (after 33+b 77+e 53+g 37+e)
         new OctiBotEngine.OpeningBookEntry(0x5BAA8A2A03A5FD6CL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", -400),
@@ -7485,6 +8718,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", -2213),
             new OctiBotEngine.OpeningBookCandidate("57f+e", -2213),
             new OctiBotEngine.OpeningBookCandidate("37+d", -2213)),
+        // 2P_3B_ED ply 3 (after 33+a 37+f 53+a)
+        new OctiBotEngine.OpeningBookEntry(0x5BDFC1E4B663A35CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2752),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2752),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2752)),
         // 2P 3-Base ply 4 (after 33+h 57+d 73+h 77+e)
         new OctiBotEngine.OpeningBookEntry(0x5BF2737299242BE6L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", -120),
@@ -7495,6 +8733,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 4P_ED ply 3 (after 33+f 37+b 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x5BF45875B4A701DDL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 2P 3-Base ply 3 (after 33+a 57+d 73+h)
         new OctiBotEngine.OpeningBookEntry(0x5C1076AE2C8065F3L, 8,
             new OctiBotEngine.OpeningBookCandidate("37+e", -2752),
@@ -7502,9 +8745,9 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("37+d", -2872)),
         // 2P_3B_ED ply 1 (after 33+a)
         new OctiBotEngine.OpeningBookEntry(0x5C13029A45CF7655L, 8,
-            new OctiBotEngine.OpeningBookCandidate("37+e", -2632),
             new OctiBotEngine.OpeningBookCandidate("77+e", -2632),
-            new OctiBotEngine.OpeningBookCandidate("57+e", -2632)),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2632)),
         // 4P ply 4 (after 33+h 37+d 77+f 73+f)
         new OctiBotEngine.OpeningBookEntry(0x5C2C414D1B1D1CB6L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 0),
@@ -7605,6 +8848,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+a", -179),
             new OctiBotEngine.OpeningBookCandidate("32b+a", -241),
             new OctiBotEngine.OpeningBookCandidate("32b+c", -579)),
+        // 2P_1B_ED ply 3 (after 33+a 77+e 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x5D04A1F6F7590738L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2980),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2980),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2980)),
         // 4P ply 4 (after 33+c 37+h 77+b 73+h)
         new OctiBotEngine.OpeningBookEntry(0x5D15289E6DE8639BL, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
@@ -7670,6 +8918,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -520)),
+        // 2P_3B_ED ply 3 (after 53+b 77+f 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x5D8E44C462079DBEL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2601),
+            new OctiBotEngine.OpeningBookCandidate("37d+b", -2601),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2651)),
         // 2P 3-Base ply 3 (after 33+a 77+e 53+h)
         new OctiBotEngine.OpeningBookEntry(0x5DA327462642EC03L, 8,
             new OctiBotEngine.OpeningBookCandidate("77+f", -2752),
@@ -7710,6 +8963,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32b-43", -195),
             new OctiBotEngine.OpeningBookCandidate("32b+a", -195),
             new OctiBotEngine.OpeningBookCandidate("52+h", -1020)),
+        // 4P_ED ply 3 (after 33+c 37+h 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x5E0B140B1AFA3EE4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1837)),
         // 4P ply 4 (after 33+h 37+f 77+b 73+d)
         new OctiBotEngine.OpeningBookEntry(0x5E0F58C36DB2C227L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 0),
@@ -7730,6 +8988,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("37+e", -2232),
             new OctiBotEngine.OpeningBookCandidate("57d+e", -2232),
             new OctiBotEngine.OpeningBookCandidate("37+d", -2232)),
+        // 4P_ED ply 2 (after 33+d 37+d)
+        new OctiBotEngine.OpeningBookEntry(0x5E591B55DBBB38A5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -140),
+            new OctiBotEngine.OpeningBookCandidate("77+g", -140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -140)),
+        // 2P_1B_ED ply 3 (after 53+b 77+e 53b-64)
+        new OctiBotEngine.OpeningBookEntry(0x5E8E6319359BA14DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2480),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2480),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2480)),
         // 4P ply 3 (after 33+c 37+e 77+b)
         new OctiBotEngine.OpeningBookEntry(0x5E91BF49A2486235L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
@@ -7795,6 +9063,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+h", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
             new OctiBotEngine.OpeningBookCandidate("53+a", 0)),
+        // 2P_1B_ED ply 3 (after 33+b 77+e 53+c)
+        new OctiBotEngine.OpeningBookEntry(0x5F5A90E5BF972235L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2700),
+            new OctiBotEngine.OpeningBookCandidate("77e+f", -2700),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2750)),
         // 2P 3-Base ply 4 (after 53+a 37+e 73+h 57+f)
         new OctiBotEngine.OpeningBookEntry(0x5F6724CD0DC2DC83L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", 0),
@@ -7830,11 +9103,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33b+c", -260),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -520)),
+        // 2P_3B_ED ply 2 (after 33+b 57+d)
+        new OctiBotEngine.OpeningBookEntry(0x5FC54D3109506322L, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+a", 0),
+            new OctiBotEngine.OpeningBookCandidate("53+h", -81),
+            new OctiBotEngine.OpeningBookCandidate("73+a", -81)),
         // OFK ply 4 (after 22+b 36+d 32+a 36d-45)
         new OctiBotEngine.OpeningBookEntry(0x5FCA047EE4ACD819L, 8,
             new OctiBotEngine.OpeningBookCandidate("42+h", -1020),
             new OctiBotEngine.OpeningBookCandidate("42+a", -1127),
             new OctiBotEngine.OpeningBookCandidate("42+b", -1127)),
+        // 4P_ED ply 3 (after 33+h 37+f 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x5FD8213C2CFED3D3L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 3-Base ply 2 (after 33+h 57+d)
         new OctiBotEngine.OpeningBookEntry(0x5FE7238F737F550AL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+a", -419),
@@ -7850,11 +9133,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 0)),
+        // 4P_ED ply 3 (after 33+c 37+b 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x601A27F6BB88CE50L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // OFK ply 4 (after 32+b 46+f 22+b 26+d)
         new OctiBotEngine.OpeningBookEntry(0x603341E35AE0B89CL, 8,
             new OctiBotEngine.OpeningBookCandidate("32+a", -1248),
             new OctiBotEngine.OpeningBookCandidate("42h-33", -1248),
             new OctiBotEngine.OpeningBookCandidate("22+b", -1248)),
+        // 2P_1B_ED ply 2 (after 33+b 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x603601B2D35FC33EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+b", -120),
+            new OctiBotEngine.OpeningBookCandidate("53+a", -120),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -120)),
         // OFK ply 4 (after 22+b 36+d 52+h 36d+e)
         new OctiBotEngine.OpeningBookEntry(0x603AA1AF35DD83ADL, 8,
             new OctiBotEngine.OpeningBookCandidate("32+b", -561),
@@ -7880,6 +9173,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -660),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -660),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -780)),
+        // 4P_ED ply 3 (after 33+c 37+e 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x60762492A39EA0E2L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 2P 3-Base ply 4 (after 33+a 57+e 73+h 77+f)
         new OctiBotEngine.OpeningBookEntry(0x6081478ADA9D77E9L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+a", -120),
@@ -7920,6 +9218,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+a", 0),
             new OctiBotEngine.OpeningBookCandidate("53+h", 0),
             new OctiBotEngine.OpeningBookCandidate("33+b", 0)),
+        // 4P_ED ply 3 (after 33+a 37+f 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x60F5688A7037BF40L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 2P_3B_ED ply 2 (after 33+h 57+d)
+        new OctiBotEngine.OpeningBookEntry(0x6100B85472A997DDL, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+a", -419),
+            new OctiBotEngine.OpeningBookCandidate("53+b", -419),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -419)),
+        // 4P_ED ply 3 (after 33+b 37+f 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x611DD4595707272CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 4P ply 3 (after 33+h 37+f 77+e)
         new OctiBotEngine.OpeningBookEntry(0x613FBAE72D281104L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
@@ -7930,6 +9243,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", -120),
             new OctiBotEngine.OpeningBookCandidate("33+a", -120),
             new OctiBotEngine.OpeningBookCandidate("53h+a", -120)),
+        // 2P_3B_ED ply 3 (after 33+h 57+d 53+a)
+        new OctiBotEngine.OpeningBookEntry(0x615704D48ECA23BBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2632)),
+        // 2P_1B_ED ply 1 (after 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x61636E5CE6BBF8DDL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3100),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3220),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3350)),
         // 4P ply 4 (after 33+h 37+c 77+b 73+f)
         new OctiBotEngine.OpeningBookEntry(0x617061B70AA88E85L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -400),
@@ -7945,6 +9268,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 400),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 260)),
+        // 2P_1B_ED ply 2 (after 53+b 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x61B1E230F946EC5FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+h", -630),
+            new OctiBotEngine.OpeningBookCandidate("33+a", -630),
+            new OctiBotEngine.OpeningBookCandidate("73+a", -630)),
         // 2P 1-Base ply 3 (after 33+b 77+e 53+c)
         new OctiBotEngine.OpeningBookEntry(0x61BD0B3EBE41E0E2L, 8,
             new OctiBotEngine.OpeningBookCandidate("57+d", -2700),
@@ -7970,6 +9298,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", -400),
             new OctiBotEngine.OpeningBookCandidate("73a+h", -520),
             new OctiBotEngine.OpeningBookCandidate("53c+b", -644)),
+        // 4P_ED ply 3 (after 33+a 37+d 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x620B3F0B268B5F7EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P 3-Base ply 4 (after 53+b 37+e 33+b 57+e)
         new OctiBotEngine.OpeningBookEntry(0x6236D5A5833DFFECL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", -120),
@@ -8040,11 +9373,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", -2632),
             new OctiBotEngine.OpeningBookCandidate("57+e", -2632),
             new OctiBotEngine.OpeningBookCandidate("37+e", -2632)),
+        // 2P_3B_ED ply 3 (after 33+a 57+d 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x62F7ED752D56A724L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2752),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2752),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2872)),
         // 2P 3-Base ply 4 (after 33+h 57+e 53+a 77+f)
         new OctiBotEngine.OpeningBookEntry(0x62FD092D939AC149L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", -283),
             new OctiBotEngine.OpeningBookCandidate("53a+h", -283),
             new OctiBotEngine.OpeningBookCandidate("33+a", -364)),
+        // 2P_3B_ED ply 3 (after 33+a 77+e 53+d)
+        new OctiBotEngine.OpeningBookEntry(0x6309E3EB253C747AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -1949)),
         // 4P ply 4 (after 33+f 37+b 77+h 73+b)
         new OctiBotEngine.OpeningBookEntry(0x630AA8B6CDA0B0CAL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
@@ -8060,6 +9403,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("36+e", -3203),
             new OctiBotEngine.OpeningBookCandidate("26+d", -3203),
             new OctiBotEngine.OpeningBookCandidate("26+c", -3803)),
+        // 2P_3B_ED ply 3 (after 53+b 37+e 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x6344BC9D27942ED4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2721),
+            new OctiBotEngine.OpeningBookCandidate("57+b", -2721),
+            new OctiBotEngine.OpeningBookCandidate("77+h", -2721)),
         // 4P ply 4 (after 33+a 37+f 77+e 73+a)
         new OctiBotEngine.OpeningBookEntry(0x634DD2EAF9ECC528L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
@@ -8160,6 +9508,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33+a", 0),
             new OctiBotEngine.OpeningBookCandidate("53h+a", 0)),
+        // 2P_1B_ED ply 3 (after 53+b 37+d 53b+a)
+        new OctiBotEngine.OpeningBookEntry(0x643F3605AB7DBE98L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3180),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3180),
+            new OctiBotEngine.OpeningBookCandidate("37d+e", -3180)),
         // 2P 3-Base ply 4 (after 33+a 57+e 53+c 77+e)
         new OctiBotEngine.OpeningBookEntry(0x646AACBB355DFA52L, 8,
             new OctiBotEngine.OpeningBookCandidate("73a+h", -400),
@@ -8175,6 +9528,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -260)),
+        // 2P_1B_ED ply 3 (after 33+a 37+d 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x64BC17942D601D85L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3090),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3090),
+            new OctiBotEngine.OpeningBookCandidate("37d+e", -3100)),
         // 2P 3-Base ply 4 (after 33+a 37+d 53+b 57+e)
         new OctiBotEngine.OpeningBookEntry(0x64C3781C368E795AL, 8,
             new OctiBotEngine.OpeningBookCandidate("53h+a", 0),
@@ -8210,6 +9568,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -260)),
+        // 2P_1B_ED ply 3 (after 33+b 37+e 73+b)
+        new OctiBotEngine.OpeningBookEntry(0x64F4EA8DBBDA803DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2360),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2360),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2980)),
         // 2P 3-Base ply 4 (after 33+a 37+e 53+b 77+d)
         new OctiBotEngine.OpeningBookEntry(0x6502A78A27F9BDF7L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", 120),
@@ -8220,11 +9583,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
+        // 4P_ED ply 3 (after 33+d 37+f 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x6514EC909172571FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 3-Base ply 3 (after 33+a 37+f 53+a)
         new OctiBotEngine.OpeningBookEntry(0x65385A3FB7B5618BL, 8,
             new OctiBotEngine.OpeningBookCandidate("57+d", -2752),
             new OctiBotEngine.OpeningBookCandidate("77+f", -2752),
             new OctiBotEngine.OpeningBookCandidate("57+e", -2752)),
+        // 2P_3B_ED ply 3 (after 53+a 57+d 73+b)
+        new OctiBotEngine.OpeningBookEntry(0x6552CB67CA09F725L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57f+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2213)),
         // OFK ply 4 (after 32+a 46+f 22+c 56+f)
         new OctiBotEngine.OpeningBookEntry(0x655D812FC4D6FC40L, 8,
             new OctiBotEngine.OpeningBookCandidate("42+h", -99),
@@ -8240,6 +9613,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 0)),
+        // 2P_3B_ED ply 3 (after 53+b 37+d 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x65B111249227A862L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2651),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2651),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2721)),
         // OFK ply 4 (after 32+b 46+e 22+a 36+e)
         new OctiBotEngine.OpeningBookEntry(0x65B618B2449F6792L, 8,
             new OctiBotEngine.OpeningBookCandidate("42h+a", -919),
@@ -8260,6 +9638,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", -275),
             new OctiBotEngine.OpeningBookCandidate("53+h", -275),
             new OctiBotEngine.OpeningBookCandidate("53+a", -283)),
+        // 2P_3B_SP ply 1 (after 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x66505302BBD48325L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e!", -530),
+            new OctiBotEngine.OpeningBookCandidate("77+e!", -1491),
+            new OctiBotEngine.OpeningBookCandidate("77+a", -2853)),
         // OFK ply 3 (after 32+b 46+e 42+h)
         new OctiBotEngine.OpeningBookEntry(0x665282DBA7464BACL, 8,
             new OctiBotEngine.OpeningBookCandidate("36+d", -3603),
@@ -8299,12 +9682,12 @@ public final class OctiOpeningBookData {
         new OctiBotEngine.OpeningBookEntry(0x668811A8525F85C7L, 8,
             new OctiBotEngine.OpeningBookCandidate("26+d", -3323),
             new OctiBotEngine.OpeningBookCandidate("36+e", -3323),
-            new OctiBotEngine.OpeningBookCandidate("26+e", -3323))
-        };
-    }
-
-    private static OctiBotEngine.OpeningBookEntry[] chunk3() {
-        return new OctiBotEngine.OpeningBookEntry[] {
+            new OctiBotEngine.OpeningBookCandidate("26+e", -3323)),
+        // 2P_3B_ED ply 3 (after 53+b 57+f 33+a)
+        new OctiBotEngine.OpeningBookEntry(0x66B5D2E3C145A997L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2608),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2608),
+            new OctiBotEngine.OpeningBookCandidate("57d+e", -2608)),
         // OFK ply 4 (after 32+a 46+e 52+b 46e+f)
         new OctiBotEngine.OpeningBookEntry(0x66C0C950C3993A21L, 8,
             new OctiBotEngine.OpeningBookCandidate("32+b", -841),
@@ -8395,6 +9778,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", 0),
             new OctiBotEngine.OpeningBookCandidate("53c+h", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0)),
+        // 4P_ED ply 3 (after 33+c 37+c 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x67CD9CF616823805L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+d 37+e 77+b 73+f)
         new OctiBotEngine.OpeningBookEntry(0x67D32D36B9B30A26L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -400),
@@ -8420,6 +9808,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", 280),
             new OctiBotEngine.OpeningBookCandidate("73a+h", 280),
             new OctiBotEngine.OpeningBookCandidate("53+a", 280)),
+        // 2P_3B_ED ply 3 (after 33+h 37+e 53+a)
+        new OctiBotEngine.OpeningBookEntry(0x6843096E21AB8A01L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+b", -2601),
+            new OctiBotEngine.OpeningBookCandidate("77+h", -2601)),
         // 4P ply 4 (after 33+a 37+c 77+b 73+a)
         new OctiBotEngine.OpeningBookEntry(0x6847EBB287F11801L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", -400),
@@ -8450,6 +9843,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+b", -1319),
             new OctiBotEngine.OpeningBookCandidate("52+h", -1319),
             new OctiBotEngine.OpeningBookCandidate("32+a", -2960)),
+        // 2P_3B_ED ply 2 (after 53+a 37+e)
+        new OctiBotEngine.OpeningBookEntry(0x68842DE20DED1D9CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+h", 0),
+            new OctiBotEngine.OpeningBookCandidate("33+b", -120),
+            new OctiBotEngine.OpeningBookCandidate("73+a", -419)),
+        // 4P_ED ply 3 (after 33+f 37+c 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x688BAD5620B958ACL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // OFK ply 4 (after 22+b 36+d 32+b 26+d)
         new OctiBotEngine.OpeningBookEntry(0x68914A493F753708L, 8,
             new OctiBotEngine.OpeningBookCandidate("42h+a", -179),
@@ -8470,6 +9873,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+h", -120),
             new OctiBotEngine.OpeningBookCandidate("53+a", -120),
             new OctiBotEngine.OpeningBookCandidate("53+b", -210)),
+        // 4P_ED ply 3 (after 33+h 37+b 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x68D19A2D44626027L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+a 37+c 77+e 73+h)
         new OctiBotEngine.OpeningBookEntry(0x68E16D4779383F16L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
@@ -8485,6 +9893,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
+        // 2P_3B_ED ply 3 (after 33+h 57+e 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x6900649E533E29CEL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -1914),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -1914),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -1980)),
         // 4P ply 4 (after 33+b 37+c 77+h 73+h)
         new OctiBotEngine.OpeningBookEntry(0x6909D1945E08A77AL, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", -140),
@@ -8520,11 +9933,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73a+h", -400),
             new OctiBotEngine.OpeningBookCandidate("33+b", -520),
             new OctiBotEngine.OpeningBookCandidate("53g+h", -644)),
+        // 4P_ED ply 3 (after 33+h 37+d 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x698E389E43569CC9L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 3 (after 33+b 37+d 77+f)
         new OctiBotEngine.OpeningBookEntry(0x69AC56203979AAE1L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 2P_1B_ED ply 3 (after 33+b 37+d 33b+a)
+        new OctiBotEngine.OpeningBookEntry(0x69C22373269BDB6EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3090),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3090),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -3100)),
         // 2P 3-Base ply 4 (after 33+a 37+e 53+h 77+d)
         new OctiBotEngine.OpeningBookEntry(0x69DDEA10042E8B4BL, 8,
             new OctiBotEngine.OpeningBookCandidate("73a+h", 120),
@@ -8540,11 +9963,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+a", -228),
             new OctiBotEngine.OpeningBookCandidate("32a+b", -407),
             new OctiBotEngine.OpeningBookCandidate("52+h", -561)),
+        // 4P_ED ply 3 (after 33+a 37+h 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x69EDE066B9D9FC00L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1977)),
         // 4P ply 3 (after 33+c 37+f 77+g)
         new OctiBotEngine.OpeningBookEntry(0x69F4073CD2C2BF73L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
+        // 4P_ED ply 3 (after 33+b 37+c 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x6A17ED01291AFA05L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+d 37+e 77+g 73+a)
         new OctiBotEngine.OpeningBookEntry(0x6A1DD7CCD3A868B9L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
@@ -8595,6 +10028,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53b+a", -977),
             new OctiBotEngine.OpeningBookCandidate("33+b", -977),
             new OctiBotEngine.OpeningBookCandidate("33+a", -1020)),
+        // 2P_3B_ED ply 3 (after 53+b 77+e 33+c)
+        new OctiBotEngine.OpeningBookEntry(0x6A946C18FF9BDD6AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2201),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2208),
+            new OctiBotEngine.OpeningBookCandidate("77+h", -2321)),
+        // 2P_1B_ED ply 3 (after 33+b 57+d 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x6AC6E0B475F9DA9BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57d+f", -4020)),
         // 4P ply 4 (after 33+d 37+b 77+g 73+h)
         new OctiBotEngine.OpeningBookEntry(0x6AD7525D3577211CL, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 0),
@@ -8620,6 +10063,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -777),
             new OctiBotEngine.OpeningBookCandidate("73+g", -777),
             new OctiBotEngine.OpeningBookCandidate("73+h", -777)),
+        // 2P_3B_ED ply 2 (after 33+b 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x6B377DDEF84919E5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+h", -120),
+            new OctiBotEngine.OpeningBookCandidate("53+a", -120),
+            new OctiBotEngine.OpeningBookCandidate("33+b", -120)),
         // 2P 3-Base ply 4 (after 33+h 77+e 53+b 57+c)
         new OctiBotEngine.OpeningBookEntry(0x6B430F60CB36DA24L, 8,
             new OctiBotEngine.OpeningBookCandidate("53h+a", 280),
@@ -8640,6 +10088,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -260)),
+        // 4P_SPED ply 1 (after 33+c!)
+        new OctiBotEngine.OpeningBookEntry(0x6B93D2D1B9F349F9L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+c!", -2792),
+            new OctiBotEngine.OpeningBookCandidate("37+e!", -2930),
+            new OctiBotEngine.OpeningBookCandidate("37+a!", -7101)),
         // 4P ply 4 (after 33+h 37+e 77+d 73+b)
         new OctiBotEngine.OpeningBookEntry(0x6B9750C39EF8270AL, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
@@ -8680,6 +10133,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", -120),
             new OctiBotEngine.OpeningBookCandidate("53g+h", -120),
             new OctiBotEngine.OpeningBookCandidate("33+a", -120)),
+        // 2P_3B_ED ply 3 (after 33+h 77+e 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x6BF05952D40F8E78L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2213)),
         // 2P 1-Base ply 4 (after 33+b 37+f 53+c 57+g)
         new OctiBotEngine.OpeningBookEntry(0x6BF3413BB81C5B9AL, 8,
             new OctiBotEngine.OpeningBookCandidate("53g+b", 120),
@@ -8690,26 +10148,56 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("52+h", -740),
             new OctiBotEngine.OpeningBookCandidate("32+b", -740),
             new OctiBotEngine.OpeningBookCandidate("42a+h", -760)),
+        // 4P_ED ply 3 (after 33+d 37+h 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x6C0C647C589C145FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1697),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1697),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1697)),
         // 4P ply 4 (after 33+b 37+b 77+h 73+d)
         new OctiBotEngine.OpeningBookEntry(0x6C172FFEC55C1DA4L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 140)),
+        // 4P_ED ply 3 (after 33+a 37+b 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x6C28EAD2A320943CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
         // 4P ply 4 (after 33+f 37+e 77+f 73+h)
         new OctiBotEngine.OpeningBookEntry(0x6C2E29A7E2B79D34L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 4P_ED ply 3 (after 33+a 37+e 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x6C44E9B6BB36FA8EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 2P_3B_ED ply 3 (after 33+h 77+e 53+a)
+        new OctiBotEngine.OpeningBookEntry(0x6C46C6DD65685E9FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2213)),
         // 4P ply 4 (after 33+c 37+b 77+f 73+b)
         new OctiBotEngine.OpeningBookEntry(0x6C4C9916FB9BD063L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 280),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 280),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 140)),
+        // 4P_ED ply 2 (after 33+c 37+d)
+        new OctiBotEngine.OpeningBookEntry(0x6C5E6B2299DD121EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
         // OFK ply 3 (after 32+a 26+d 22+b)
         new OctiBotEngine.OpeningBookEntry(0x6C7584FDEF38CC49L, 8,
             new OctiBotEngine.OpeningBookCandidate("36+e", -6141),
             new OctiBotEngine.OpeningBookCandidate("46+f", -6141),
             new OctiBotEngine.OpeningBookCandidate("56+e", -6141)),
+        // 2P_3B_ED ply 3 (after 53+b 37+d 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x6C8D1A5575CF603AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2601),
+            new OctiBotEngine.OpeningBookCandidate("37d+b", -2601)),
         // 4P ply 3 (after 33+d 37+e 77+b)
         new OctiBotEngine.OpeningBookEntry(0x6C96CF3EE02E488EL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
@@ -8725,6 +10213,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -260)),
+        // 2P_3B_ED ply 3 (after 33+b 37+d 53+f)
+        new OctiBotEngine.OpeningBookEntry(0x6CC0452377673A94L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -1949)),
         // 4P ply 4 (after 33+h 37+h 77+e 73+d)
         new OctiBotEngine.OpeningBookEntry(0x6CC3E9661FD719EFL, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 660),
@@ -8750,6 +10243,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", 280),
             new OctiBotEngine.OpeningBookCandidate("53+a", 280),
             new OctiBotEngine.OpeningBookCandidate("53+g", -120)),
+        // 2P_3B_ED ply 3 (after 33+h 57+e 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x6D05AB2D17FDFD50L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57e+d", -2213)),
         // 2P 1-Base ply 3 (after 33+b 37+f 53+a)
         new OctiBotEngine.OpeningBookEntry(0x6D0957FEEF1A1C34L, 8,
             new OctiBotEngine.OpeningBookCandidate("57+d", -3180),
@@ -8765,6 +10263,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 0)),
+        // 4P_ED ply 3 (after 33+h 37+h 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x6D1490995E9B081BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+d 37+c 77+d 73+b)
         new OctiBotEngine.OpeningBookEntry(0x6D341C422DE3A3A9L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
@@ -8785,6 +10288,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -380)),
+        // 2P_1B_ED ply 3 (after 33+a 77+f 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x6D801CE5CA88D5DDL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3090),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3090),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3100)),
         // 2P 1-Base ply 4 (after 33+b 37+e 53+a 57+f)
         new OctiBotEngine.OpeningBookEntry(0x6D85AA473C6F01BBL, 8,
             new OctiBotEngine.OpeningBookCandidate("53a+b", 0),
@@ -8800,6 +10308,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+d", -140)),
+        // 4P_ED ply 3 (after 33+b 37+e 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x6DAC55659C0662E2L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+f 37+d 77+g 73+a)
         new OctiBotEngine.OpeningBookEntry(0x6DBB0E85035C287FL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
@@ -8825,11 +10338,26 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -260)),
+        // 2P_3B_ED ply 3 (after 33+a 57+d 53+d)
+        new OctiBotEngine.OpeningBookEntry(0x6E1821E2CE9E095EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57f+e", -1949)),
+        // 2P_1B_ED ply 3 (after 33+b 37+e 53+c)
+        new OctiBotEngine.OpeningBookEntry(0x6E19B9EFBAE2F1B1L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2660),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2660),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2660)),
         // 2P 1-Base ply 4 (after 33+a 57+f 73+b 77+e)
         new OctiBotEngine.OpeningBookEntry(0x6E2543E69FF38524L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", -1020),
             new OctiBotEngine.OpeningBookCandidate("73b+h", -1020),
             new OctiBotEngine.OpeningBookCandidate("53+h", -1570)),
+        // 2P_3B_ED ply 3 (after 53+b 57+f 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x6E557E94CC3653F0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2616),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2616),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2654)),
         // 4P ply 4 (after 33+f 37+b 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0x6E5621A6ECEC81A2L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
@@ -8875,6 +10403,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33b+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -660)),
+        // 2P_3B_ED ply 2 (after 33+a 57+e)
+        new OctiBotEngine.OpeningBookEntry(0x6EB50E29E0D21784L, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+a", 0),
+            new OctiBotEngine.OpeningBookCandidate("53+h", 0),
+            new OctiBotEngine.OpeningBookCandidate("33+b", 0)),
         // 2P 1-Base ply 4 (after 33+a 37+e 53+a 57+d)
         new OctiBotEngine.OpeningBookEntry(0x6EB5DBEA4FD6A6DFL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", -90),
@@ -8975,6 +10508,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -520)),
+        // 2P_3B_ED ply 3 (after 53+b 37+d 53b+a)
+        new OctiBotEngine.OpeningBookEntry(0x7070331E9D115845L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2333),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2453),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2577)),
         // 4P ply 4 (after 33+f 37+c 77+h 73+b)
         new OctiBotEngine.OpeningBookEntry(0x7077ACCECEB18DC9L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
@@ -9005,16 +10543,31 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33f+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -120)),
+        // 2P_3B_ED ply 3 (after 33+h 37+f 33h+a)
+        new OctiBotEngine.OpeningBookEntry(0x70DB16BBC2ACA784L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2632)),
         // 4P ply 4 (after 33+c 37+c 77+h 73+a)
         new OctiBotEngine.OpeningBookEntry(0x70DF99EE3142893BL, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", -140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -280)),
+        // 2P_3B_ED ply 3 (after 53+b 37+d 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x70F3128F1B0CFB58L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2333),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2453),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2601)),
         // 2P 3-Base ply 4 (after 53+a 37+e 33+b 57+f)
         new OctiBotEngine.OpeningBookEntry(0x70F6A42DEDEB2F3EL, 8,
             new OctiBotEngine.OpeningBookCandidate("53a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33+a", 0),
             new OctiBotEngine.OpeningBookCandidate("73h+a", -120)),
+        // 4P_ED ply 3 (after 33+f 37+h 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x714FD4F0BBCE3A3FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+h 37+f 77+g 73+d)
         new OctiBotEngine.OpeningBookEntry(0x7171DEF2782291F9L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 400),
@@ -9045,6 +10598,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 2P_1B_ED ply 3 (after 33+b 37+d 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x71FE143FA44B4EBFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -4020)),
         // 2P 1-Base ply 4 (after 53+b 57+f 33+h 37+d)
         new OctiBotEngine.OpeningBookEntry(0x72000FB831B20318L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", -120),
@@ -9115,6 +10673,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -120)),
+        // 2P_1B_ED ply 3 (after 33+a 57+d 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x732670FE1DB27D75L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3930),
+            new OctiBotEngine.OpeningBookCandidate("57f+d", -3930),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3930)),
         // 4P ply 4 (after 33+a 37+h 77+b 73+f)
         new OctiBotEngine.OpeningBookEntry(0x73311F84F4022FA1L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
@@ -9140,6 +10703,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+a", -140),
             new OctiBotEngine.OpeningBookCandidate("22+b", -140),
             new OctiBotEngine.OpeningBookCandidate("42+h", -299)),
+        // 4P_ED ply 3 (after 33+c 37+c 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x7367238EB899F353L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // OFK ply 4 (after 32+a 26+d 22+b 36+f)
         new OctiBotEngine.OpeningBookEntry(0x736FD64D86754BD0L, 8,
             new OctiBotEngine.OpeningBookCandidate("42+h", 1140),
@@ -9180,6 +10748,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1977),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1977)),
+        // 4P_ED ply 3 (after 33+a 37+f 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x745FD7F2DE2C7416L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 2P 3-Base ply 4 (after 33+h 37+e 73+h 57+f)
         new OctiBotEngine.OpeningBookEntry(0x7463F392790DD85BL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", -275),
@@ -9205,6 +10778,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73a+h", 120),
             new OctiBotEngine.OpeningBookCandidate("33+a", 120),
             new OctiBotEngine.OpeningBookCandidate("53b+a", 120)),
+        // 4P_ED ply 3 (after 33+c 37+b 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x74B0988E15930506L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 1-Base ply 4 (after 33+a 57+f 73+a 77+f)
         new OctiBotEngine.OpeningBookEntry(0x74BD5F1812BB1816L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", -1540),
@@ -9245,6 +10823,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+h", 120),
             new OctiBotEngine.OpeningBookCandidate("53+a", 120),
             new OctiBotEngine.OpeningBookCandidate("33b+a", 120)),
+        // 2P_3B_ED ply 3 (after 53+a 37+f 73+c)
+        new OctiBotEngine.OpeningBookEntry(0x7543D3566ECF4E83L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2352),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2352),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2352)),
         // 4P ply 4 (after 33+b 37+e 77+f 73+b)
         new OctiBotEngine.OpeningBookEntry(0x755054FD720EB787L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
@@ -9260,6 +10843,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 2P_3B_ED ply 3 (after 33+a 37+e 53+d)
+        new OctiBotEngine.OpeningBookEntry(0x7588A5837023C2DBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -1949)),
         // 4P ply 4 (after 33+a 37+f 77+b 73+d)
         new OctiBotEngine.OpeningBookEntry(0x7588AE0D9F6065E2L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
@@ -9285,6 +10873,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+a", -3059),
             new OctiBotEngine.OpeningBookCandidate("32a+b", -3059),
             new OctiBotEngine.OpeningBookCandidate("42+h", -3059)),
+        // 4P_ED ply 3 (after 33+b 37+f 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x75B76B21F91CEC7AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 2P_3B_ED ply 2 (after 53+b 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x75FEE72BCF2A0A82L, 8,
+            new OctiBotEngine.OpeningBookCandidate("33+b", -419),
+            new OctiBotEngine.OpeningBookCandidate("73+a", -419),
+            new OctiBotEngine.OpeningBookCandidate("53h+a", -419)),
         // 4P ply 4 (after 33+b 37+f 77+e 73+a)
         new OctiBotEngine.OpeningBookEntry(0x760FD14170C79612L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
@@ -9335,6 +10933,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", 1020),
             new OctiBotEngine.OpeningBookCandidate("53h-44", 1020),
             new OctiBotEngine.OpeningBookCandidate("53h+a", 1020)),
+        // 2P_3B_ED ply 3 (after 33+b 37+e 53+f)
+        new OctiBotEngine.OpeningBookEntry(0x76B8D42E039A65BFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -1949)),
         // 2P 1-Base ply 4 (after 53+b 77+e 53b+a 37+d)
         new OctiBotEngine.OpeningBookEntry(0x76BD5ECCEDDD959FL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", 0),
@@ -9380,6 +10983,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53a+h", 30),
             new OctiBotEngine.OpeningBookCandidate("73+a", 30),
             new OctiBotEngine.OpeningBookCandidate("73+h", -90)),
+        // 4P_ED ply 3 (after 33+b 37+d 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x77493CA0AFA00C44L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P 3-Base ply 4 (after 33+h 77+e 33h+a 57+f)
         new OctiBotEngine.OpeningBookEntry(0x7753823F0AB47F3FL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", -395),
@@ -9430,6 +11038,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", -260),
             new OctiBotEngine.OpeningBookCandidate("33c+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -400)),
+        // 2P_3B_ED ply 3 (after 33+b 57+d 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x77B5EEDEA47DF41EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2651),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2651),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2771)),
         // 4P ply 4 (after 33+c 37+e 77+e 73+h)
         new OctiBotEngine.OpeningBookEntry(0x77C2A77F7A9736CBL, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
@@ -9444,7 +11057,12 @@ public final class OctiOpeningBookData {
         new OctiBotEngine.OpeningBookEntry(0x77CC14AA7BAD152EL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -660),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -660),
-            new OctiBotEngine.OpeningBookCandidate("33f+b", -780)),
+            new OctiBotEngine.OpeningBookCandidate("33f+b", -780))
+        };
+    }
+
+    private static OctiBotEngine.OpeningBookEntry[] chunk4() {
+        return new OctiBotEngine.OpeningBookEntry[] {
         // 2P 1-Base ply 3 (after 33+b 77+e 53+g)
         new OctiBotEngine.OpeningBookEntry(0x77CF793844D314BCL, 8,
             new OctiBotEngine.OpeningBookCandidate("57+f", -2700),
@@ -9480,6 +11098,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", 520),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 520),
             new OctiBotEngine.OpeningBookCandidate("33h+b", 400)),
+        // 4P_ED ply 3 (after 33+c 37+f 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x786D1AD6C6842E7AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
         // 2P 1-Base ply 4 (after 33+a 37+e 53+b 77+d)
         new OctiBotEngine.OpeningBookEntry(0x7871A9E0F67D9372L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", 120),
@@ -9500,6 +11123,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("52+h", -1128),
             new OctiBotEngine.OpeningBookCandidate("32+b", -1128),
             new OctiBotEngine.OpeningBookCandidate("32+a", -1203)),
+        // 4P_ED ply 3 (after 33+d 37+h 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x78A6DB04F687DF09L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1837)),
         // OFK ply 4 (after 32+b 46+f 52+h 26+d)
         new OctiBotEngine.OpeningBookEntry(0x78B8DE3664032551L, 8,
             new OctiBotEngine.OpeningBookCandidate("42+a", -265),
@@ -9510,16 +11138,31 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 540),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 540),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 280)),
+        // 2P_1B_ED ply 3 (after 33+b 77+f 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x78C21F4E43A386E7L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -4020),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -4020),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -4020)),
         // 4P ply 4 (after 33+b 37+e 77+b 73+d)
         new OctiBotEngine.OpeningBookEntry(0x78D193E27351B840L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -260)),
+        // 4P_ED ply 3 (after 33+a 37+e 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x78EE56CE152D31D8L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P 1-Base ply 4 (after 33+a 77+e 53+a 37+d)
         new OctiBotEngine.OpeningBookEntry(0x78F31B86959FF410L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", 0),
             new OctiBotEngine.OpeningBookCandidate("53a+h", 0),
             new OctiBotEngine.OpeningBookCandidate("33+a", -610)),
+        // 4P_ED ply 3 (after 33+b 37+e 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x7906EA1D321DA9B4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 3 (after 33+h 37+e 77+e)
         new OctiBotEngine.OpeningBookEntry(0x792484A348329F9CL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
@@ -9545,6 +11188,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+a", -419),
             new OctiBotEngine.OpeningBookCandidate("33+a", -419),
             new OctiBotEngine.OpeningBookCandidate("53+h", -419)),
+        // 4P_ED ply 3 (after 33+b 37+b 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x796AE9792A0BC706L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
         // 4P ply 4 (after 33+d 37+h 77+b 73+d)
         new OctiBotEngine.OpeningBookEntry(0x7971A2FBB7CBCEFDL, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 260),
@@ -9555,6 +11203,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", -140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -280)),
+        // 2P_1B_ED ply 3 (after 53+b 37+e 53b-64)
+        new OctiBotEngine.OpeningBookEntry(0x7998B99FC88914E1L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3050),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3100),
+            new OctiBotEngine.OpeningBookCandidate("77e+f", -3100)),
         // 4P ply 4 (after 33+d 37+c 77+g 73+h)
         new OctiBotEngine.OpeningBookEntry(0x79AA562536661C1FL, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
@@ -9580,6 +11233,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+a", -20),
             new OctiBotEngine.OpeningBookCandidate("32ab-43", -59),
             new OctiBotEngine.OpeningBookCandidate("52+h", -265)),
+        // 2P_3B_ED ply 3 (after 53+b 37+d 33+a)
+        new OctiBotEngine.OpeningBookEntry(0x79CF19FEFCE43300L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2333),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2453),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2601)),
         // 4P ply 4 (after 33+h 37+h 77+b 73+a)
         new OctiBotEngine.OpeningBookEntry(0x7A069581795BB925L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
@@ -9630,6 +11288,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", -367),
             new OctiBotEngine.OpeningBookCandidate("32+b", -740),
             new OctiBotEngine.OpeningBookCandidate("52+h", -740)),
+        // 4P_ED ply 3 (after 33+f 37+d 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x7AA90B9D249C9941L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+c 37+e 77+g 73+f)
         new OctiBotEngine.OpeningBookEntry(0x7AAADB70EE457343L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
@@ -9665,6 +11328,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 120),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 120),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 0)),
+        // 2P_1B_SP ply 1 (after 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x7B235D686A50ADA0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3950),
+            new OctiBotEngine.OpeningBookCandidate("37+a", -4650),
+            new OctiBotEngine.OpeningBookCandidate("57+e!", -4870)),
         // 4P ply 4 (after 33+f 37+d 77+d 73+g)
         new OctiBotEngine.OpeningBookEntry(0x7B36F020E824B992L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -540),
@@ -9695,6 +11363,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -140)),
+        // 2P_3B_ED ply 3 (after 33+a 37+d 73+f)
+        new OctiBotEngine.OpeningBookEntry(0x7B7C0799F19FA24CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2069),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2069)),
         // 4P ply 3 (after 33+b 37+c 77+g)
         new OctiBotEngine.OpeningBookEntry(0x7B8EF0EB3D5C6B0CL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
@@ -9710,16 +11383,31 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 0)),
+        // 4P_ED ply 3 (after 33+h 37+c 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x7BAC9E5547735D24L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // OFK ply 4 (after 22+b 36+d 32+a 46+f)
         new OctiBotEngine.OpeningBookEntry(0x7BAD95285890200DL, 8,
             new OctiBotEngine.OpeningBookCandidate("32+b", -217),
             new OctiBotEngine.OpeningBookCandidate("32+a", -217),
             new OctiBotEngine.OpeningBookCandidate("42a+h", -217)),
+        // 2P_1B_ED ply 3 (after 33+a 57+f 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x7BC6DC8910C18712L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3170),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3170),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3170)),
         // 4P ply 4 (after 33+a 37+e 77+b 73+h)
         new OctiBotEngine.OpeningBookEntry(0x7BF06A5B623F6CA7L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", -400),
             new OctiBotEngine.OpeningBookCandidate("33a+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33a+d", -540)),
+        // 4P_ED ply 3 (after 33+f 37+b 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x7BF6A92E23A865AFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
         // 2P 1-Base ply 4 (after 33+b 57+d 53+a 37+e)
         new OctiBotEngine.OpeningBookEntry(0x7BF7D841C6FDF5E5L, 8,
             new OctiBotEngine.OpeningBookCandidate("53a+h", 0),
@@ -9734,7 +11422,7 @@ public final class OctiOpeningBookData {
         new OctiBotEngine.OpeningBookEntry(0x7C106036373FD658L, 8,
             new OctiBotEngine.OpeningBookCandidate("37+d", -2752),
             new OctiBotEngine.OpeningBookCandidate("57+f", -2752),
-            new OctiBotEngine.OpeningBookCandidate("77+e", -2808)),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2808)),
         // 4P ply 4 (after 33+h 37+d 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0x7C2EB0168C1278C4L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
@@ -9760,11 +11448,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -280),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -280),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -400)),
+        // 4P_ED ply 3 (after 33+b 37+h 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x7CAFE3CD30F2AF3AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1977)),
         // 4P ply 4 (after 33+d 37+b 77+g 73+d)
         new OctiBotEngine.OpeningBookEntry(0x7CB4A84FAD32A6C1L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 280)),
+        // 2P_3B_ED ply 2 (after 33+a 37+f)
+        new OctiBotEngine.OpeningBookEntry(0x7CC37FADCD3D06A5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("33+b", -268),
+            new OctiBotEngine.OpeningBookCandidate("53+f", -268),
+            new OctiBotEngine.OpeningBookCandidate("33+d", -268)),
         // 2P 3-Base ply 3 (after 53+a 57+e 53a+b)
         new OctiBotEngine.OpeningBookEntry(0x7CE3281A2627EFC1L, 8,
             new OctiBotEngine.OpeningBookCandidate("77+f", -2333),
@@ -9775,11 +11473,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 2P_1B_ED ply 3 (after 33+b 37+f 73+b)
+        new OctiBotEngine.OpeningBookEntry(0x7CEFD4C9DEC00EA5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2480),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2480),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3100)),
         // 4P ply 4 (after 33+b 37+c 77+b 73+a)
         new OctiBotEngine.OpeningBookEntry(0x7D05E8190EDA4B3BL, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33b+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -660)),
+        // 4P_ED ply 3 (after 33+d 37+e 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x7D0FD2D4F468D987L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P 3-Base ply 4 (after 33+a 37+d 73+a 77+d)
         new OctiBotEngine.OpeningBookEntry(0x7D180A39A71CF710L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", 120),
@@ -9865,6 +11573,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", 120),
             new OctiBotEngine.OpeningBookCandidate("53+h", 120),
             new OctiBotEngine.OpeningBookCandidate("53+a", 120)),
+        // 2P_1B_ED ply 3 (after 33+a 77+e 53+h)
+        new OctiBotEngine.OpeningBookEntry(0x7E37B2F7F6100051L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37e+d", -3100),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3170),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3170)),
         // OFK ply 4 (after 22+b 36+d 52+h 36d-45)
         new OctiBotEngine.OpeningBookEntry(0x7E3AF605E13CF10CL, 8,
             new OctiBotEngine.OpeningBookCandidate("32+h", -1248),
@@ -9925,6 +11638,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", -400),
             new OctiBotEngine.OpeningBookCandidate("53g+b", -400),
             new OctiBotEngine.OpeningBookCandidate("73+a", -400)),
+        // 2P_3B_ED ply 3 (after 33+a 37+e 73+f)
+        new OctiBotEngine.OpeningBookEntry(0x7EE4943A82DA7E7DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -1949),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -1949)),
         // 2P 1-Base ply 4 (after 53+b 77+f 33+h 57+f)
         new OctiBotEngine.OpeningBookEntry(0x7EE56C7C78022DE1L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", -560),
@@ -9975,16 +11693,31 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+h", -940),
             new OctiBotEngine.OpeningBookCandidate("32+a", -1678),
             new OctiBotEngine.OpeningBookCandidate("32+b", -2018)),
+        // 4P_ED ply 3 (after 33+a 37+c 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x7F55EEAAA031A93FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+b 37+c 77+h 73+d)
         new OctiBotEngine.OpeningBookEntry(0x7F6A2B86C64D20A7L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 260),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 260),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 0)),
+        // 2P_3B_ED ply 3 (after 33+h 37+f 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x7F73DAA93A12EC71L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2721),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2721),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2721)),
         // 2P 1-Base ply 4 (after 53+b 37+e 53b+a 37e+d)
         new OctiBotEngine.OpeningBookEntry(0x7F8155BD0A355DC7L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33+b", 0),
             new OctiBotEngine.OpeningBookCandidate("53ah-44", 0)),
+        // 2P_1B_ED ply 3 (after 33+a 57+d 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x7F84E31FFCD289A1L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3930),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3930),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3930)),
         // 2P 1-Base ply 1 (after 33+a)
         new OctiBotEngine.OpeningBookEntry(0x7F87972B959D9A07L, 8,
             new OctiBotEngine.OpeningBookCandidate("77+e", -3100),
@@ -10095,6 +11828,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", -283),
             new OctiBotEngine.OpeningBookCandidate("53b+a", -283),
             new OctiBotEngine.OpeningBookCandidate("73+a", -364)),
+        // 4P_SP ply 1 (after 33+a!)
+        new OctiBotEngine.OpeningBookEntry(0x815487ECFA78EDA7L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e!", -7059),
+            new OctiBotEngine.OpeningBookCandidate("37+a!", -8455),
+            new OctiBotEngine.OpeningBookCandidate("37+a", -32000)),
         // 4P ply 4 (after 33+d 37+b 77+f 73+h)
         new OctiBotEngine.OpeningBookEntry(0x81693486D341BB3FL, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 0),
@@ -10155,6 +11893,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", -1010),
             new OctiBotEngine.OpeningBookCandidate("73h+a", -1010),
             new OctiBotEngine.OpeningBookCandidate("33+a", -1010)),
+        // 4P_ED ply 3 (after 33+h 37+d 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x82305E45A56006EAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+c 37+h 77+b 73+b)
         new OctiBotEngine.OpeningBookEntry(0x8237F5790754227CL, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
@@ -10170,6 +11913,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
+        // 4P_ED ply 3 (after 33+a 37+h 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x825386BD5FEF6623L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1977)),
         // 2P 1-Base ply 2 (after 53+b 37+d)
         new OctiBotEngine.OpeningBookEntry(0x828BCB3A5D367AD2L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", -500),
@@ -10185,6 +11933,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -540),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -540),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -660)),
+        // 2P_3B_ED ply 3 (after 53+b 77+f 33+h)
+        new OctiBotEngine.OpeningBookEntry(0x82AC992308BBDC59L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2333),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2333),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2333)),
         // 4P ply 4 (after 33+b 37+h 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0x82B10D9E1980D114L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 400),
@@ -10210,16 +11963,31 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 20)),
+        // 2P_3B_ED ply 2 (after 53+a 37+f)
+        new OctiBotEngine.OpeningBookEntry(0x830F8691C7E306DCL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", 120),
+            new OctiBotEngine.OpeningBookCandidate("33+b", 120),
+            new OctiBotEngine.OpeningBookCandidate("53a+h", 120)),
         // 4P ply 4 (after 33+d 37+e 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0x83113C87DD1AA7A9L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -260)),
+        // 4P_ED ply 3 (after 33+f 37+c 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x8335CB8DC68FC28FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 3 (after 33+b 37+b 77+f)
         new OctiBotEngine.OpeningBookEntry(0x834D9248D87BCC2CL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
+        // 4P_ED ply 3 (after 33+h 37+b 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x836FFCF6A254FA04L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 3-Base ply 4 (after 33+a 37+d 53+b 57+c)
         new OctiBotEngine.OpeningBookEntry(0x839721AF03F1E0F1L, 8,
             new OctiBotEngine.OpeningBookCandidate("53h+a", 400),
@@ -10230,6 +11998,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", -280),
             new OctiBotEngine.OpeningBookCandidate("33h+c", -280),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -400)),
+        // 2P_3B_ED ply 2 (after 33+b 57+f)
+        new OctiBotEngine.OpeningBookEntry(0x83C458E6466D0547L, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+a", -120),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -120),
+            new OctiBotEngine.OpeningBookCandidate("53+b", -201)),
         // 2P 3-Base ply 4 (after 33+a 37+e 73+h 37e+d)
         new OctiBotEngine.OpeningBookEntry(0x83D1A2E1E439BF6AL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+a", 0),
@@ -10275,6 +12048,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 140)),
+        // 2P_3B_ED ply 3 (after 53+a 37+d 33+a)
+        new OctiBotEngine.OpeningBookEntry(0x8492E812ADAF644AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2453),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2453),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2654)),
         // 4P ply 4 (after 33+b 37+d 77+b 73+a)
         new OctiBotEngine.OpeningBookEntry(0x84992809ECC910F5L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", -400),
@@ -10290,6 +12068,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+a", 0),
             new OctiBotEngine.OpeningBookCandidate("53+b", 0),
             new OctiBotEngine.OpeningBookCandidate("73h+a", 0)),
+        // 4P_ED ply 3 (after 33+c 37+e 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x84B43523C7370D6DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+f 37+d 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0x84B7E5CE0DEEE76FL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
@@ -10325,6 +12108,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 2P_3B_ED ply 3 (after 33+a 57+e 53+c)
+        new OctiBotEngine.OpeningBookEntry(0x85785145DCE9448DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2053),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2053),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2352)),
         // 2P 1-Base ply 4 (after 33+a 37+e 53+b 37e+d)
         new OctiBotEngine.OpeningBookEntry(0x85AEEA6AC4D4A35AL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", 0),
@@ -10340,6 +12128,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73ah-64", -630),
             new OctiBotEngine.OpeningBookCandidate("53+b", -870),
             new OctiBotEngine.OpeningBookCandidate("53+h", -1540)),
+        // 2P_1B_ED ply 2 (after 33+b 37+e)
+        new OctiBotEngine.OpeningBookEntry(0x85D4E68386D9A2B8L, 8,
+            new OctiBotEngine.OpeningBookCandidate("33+a", 0),
+            new OctiBotEngine.OpeningBookCandidate("53+b", 0),
+            new OctiBotEngine.OpeningBookCandidate("53+a", 0)),
         // 4P ply 4 (after 33+a 37+d 77+h 73+h)
         new OctiBotEngine.OpeningBookEntry(0x85D7122F3530AF8EL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", -140),
@@ -10390,11 +12183,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 0)),
+        // 4P_ED ply 2 (after 33+c 37+b)
+        new OctiBotEngine.OpeningBookEntry(0x86BFAF4A78DF74D3L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 140),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 140)),
         // 2P 1-Base ply 4 (after 33+b 57+d 73+h 57d+f)
         new OctiBotEngine.OpeningBookEntry(0x86C5DF4377EF1960L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+a", -210),
             new OctiBotEngine.OpeningBookCandidate("53+b", -280),
             new OctiBotEngine.OpeningBookCandidate("53+h", -280)),
+        // 4P_ED ply 3 (after 33+a 37+d 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x86C92EBA4222F2F1L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // OFK ply 4 (after 32+b 46+f 22+a 36+d)
         new OctiBotEngine.OpeningBookEntry(0x86E10F8E44EAE2AEL, 8,
             new OctiBotEngine.OpeningBookCandidate("42h-33", -721),
@@ -10405,6 +12208,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", 0),
             new OctiBotEngine.OpeningBookCandidate("73a+h", -120),
             new OctiBotEngine.OpeningBookCandidate("53a+h", -163)),
+        // 2P_1B_ED ply 2 (after 33+a 37+e)
+        new OctiBotEngine.OpeningBookEntry(0x86E4972EF56005DCL, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+b", -620),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -620),
+            new OctiBotEngine.OpeningBookCandidate("53+a", -620)),
+        // 4P_SP ply 1 (after 33+c)
+        new OctiBotEngine.OpeningBookEntry(0x86F000C395DE25B1L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+c!", -1140),
+            new OctiBotEngine.OpeningBookCandidate("37+e!", -1476),
+            new OctiBotEngine.OpeningBookCandidate("37+c", -2320)),
         // 4P ply 4 (after 33+b 37+f 77+g 73+b)
         new OctiBotEngine.OpeningBookEntry(0x86F50C62F122A33CL, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 280),
@@ -10460,6 +12273,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 2P_3B_ED ply 3 (after 53+a 57+d 33+b)
+        new OctiBotEngine.OpeningBookEntry(0x87962BD5FECD65BFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("57d+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2632)),
         // 4P ply 2 (after 33+h 37+f)
         new OctiBotEngine.OpeningBookEntry(0x879A325BEE7FAB87L, 8,
             new OctiBotEngine.OpeningBookCandidate("77+e", 0),
@@ -10475,6 +12293,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53h+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33+b", 0),
             new OctiBotEngine.OpeningBookCandidate("53h-44", 0)),
+        // 4P_ED ply 2 (after 33+b 37+f)
+        new OctiBotEngine.OpeningBookEntry(0x87B85CE594509DAFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 140),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 140)),
         // 2P 3-Base ply 4 (after 33+b 37+d 73+a 57+c)
         new OctiBotEngine.OpeningBookEntry(0x87D51E39EFE2EE42L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+a", 280),
@@ -10507,8 +12330,8 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("22b+h", -1396)),
         // 4P_ED ply 0 (initial)
         new OctiBotEngine.OpeningBookEntry(0x88262D8DCE9FCB7AL, 8,
-            new OctiBotEngine.OpeningBookCandidate("33+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33+a", 0),
+            new OctiBotEngine.OpeningBookCandidate("33+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33+b", 0)),
         // 4P ply 4 (after 33+a 37+d 77+f 73+g)
         new OctiBotEngine.OpeningBookEntry(0x882AA26D0C05E58EL, 8,
@@ -10555,6 +12378,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+a", -610),
             new OctiBotEngine.OpeningBookCandidate("73+h", -610),
             new OctiBotEngine.OpeningBookCandidate("73+a", -620)),
+        // 4P_ED ply 3 (after 33+a 37+b 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x88EAFB63C78939B3L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+h 37+c 77+h 73+b)
         new OctiBotEngine.OpeningBookEntry(0x88EEF9164F4D1262L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
@@ -10625,6 +12453,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -43),
             new OctiBotEngine.OpeningBookCandidate("53h-44", -43),
             new OctiBotEngine.OpeningBookCandidate("53h+a", -43)),
+        // 4P_ED ply 3 (after 33+h 37+h 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x89D681283A32A594L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1697),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1697),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1697)),
         // 4P ply 4 (after 33+f 37+f 77+g 73+d)
         new OctiBotEngine.OpeningBookEntry(0x89E88B2AF9DE0E52L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", 140),
@@ -10650,6 +12483,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("36+e", -3502),
             new OctiBotEngine.OpeningBookCandidate("46+f", -3502),
             new OctiBotEngine.OpeningBookCandidate("46+d", -3802)),
+        // 2P_3B_ED ply 3 (after 33+h 37+e 73+h)
+        new OctiBotEngine.OpeningBookEntry(0x8A1771D0C54A3B60L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2601),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2601)),
         // 2P 1-Base ply 3 (after 33+b 37+f 53+c)
         new OctiBotEngine.OpeningBookEntry(0x8A36A04D744FFBA2L, 8,
             new OctiBotEngine.OpeningBookCandidate("57+d", -2780),
@@ -10680,11 +12518,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -260)),
+        // 4P_ED ply 2 (after 33+a 37+e)
+        new OctiBotEngine.OpeningBookEntry(0x8AE1610A7861400DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
         // 4P ply 4 (after 33+f 37+e 77+e 73+f)
         new OctiBotEngine.OpeningBookEntry(0x8AF833739053429FL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -380)),
+        // 4P_ED ply 3 (after 33+c 37+d 77+e)
+        new OctiBotEngine.OpeningBookEntry(0x8AFBE39E5A8AA89DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+f 37+f 77+d 73+b)
         new OctiBotEngine.OpeningBookEntry(0x8B153B5F7A1E3639L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
@@ -10735,6 +12583,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+h", -120),
             new OctiBotEngine.OpeningBookCandidate("53+a", -120),
             new OctiBotEngine.OpeningBookCandidate("53+b", -210)),
+        // 2P_3B_ED ply 3 (after 33+h 37+d 53+d)
+        new OctiBotEngine.OpeningBookEntry(0x8BDDCD24EDFB4EAFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1829),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1829),
+            new OctiBotEngine.OpeningBookCandidate("77f+e", -1829)),
         // 2P 1-Base ply 4 (after 33+a 77+e 73+a 77e+f)
         new OctiBotEngine.OpeningBookEntry(0x8BE0AF20BC96C2D5L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", -440),
@@ -10745,6 +12598,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", -108),
             new OctiBotEngine.OpeningBookCandidate("42gh-33", -108),
             new OctiBotEngine.OpeningBookCandidate("22+b", -108)),
+        // 2P_1B_ED ply 2 (after 33+a 57+f)
+        new OctiBotEngine.OpeningBookEntry(0x8BF555271EC278F8L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+h", -620),
+            new OctiBotEngine.OpeningBookCandidate("53+b", -630),
+            new OctiBotEngine.OpeningBookCandidate("73+a", -630)),
         // OFK ply 3 (after 32+b 56+f 32b+a)
         new OctiBotEngine.OpeningBookEntry(0x8C14DBD041706347L, 8,
             new OctiBotEngine.OpeningBookCandidate("46+f", -3603),
@@ -10780,6 +12638,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+d", -140)),
+        // 2P_3B_SPED ply 1 (after 33+a!)
+        new OctiBotEngine.OpeningBookEntry(0x8CEFF2FC1C1362ECL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e!", -1145),
+            new OctiBotEngine.OpeningBookCandidate("57+a!", -1145),
+            new OctiBotEngine.OpeningBookCandidate("77+a!", -1285)),
         // OFK ply 3 (after 22+b 26+d 52+h)
         new OctiBotEngine.OpeningBookEntry(0x8CF5B29E21576BC2L, 8,
             new OctiBotEngine.OpeningBookCandidate("36+e", -3382),
@@ -10845,11 +12708,26 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -260)),
+        // 4P_ED ply 3 (after 33+d 37+f 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x8EAA8A4B7744CD3CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 3-Base ply 3 (after 53+a 37+e 73+a)
         new OctiBotEngine.OpeningBookEntry(0x8EB3F14C7DBB7ACBL, 8,
             new OctiBotEngine.OpeningBookCandidate("57+f", -2654),
             new OctiBotEngine.OpeningBookCandidate("37+d", -2654),
             new OctiBotEngine.OpeningBookCandidate("57+d", -2752)),
+        // 2P_3B_ED ply 2 (after 33+b 37+e)
+        new OctiBotEngine.OpeningBookEntry(0x8ED59AEFADCF7863L, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+h", 0),
+            new OctiBotEngine.OpeningBookCandidate("53+a", 0),
+            new OctiBotEngine.OpeningBookCandidate("73+a", 0)),
+        // 4P_ED ply 3 (after 33+b 37+c 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x8ED5FCB04DB3578AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 3 (after 33+h 37+c 77+d)
         new OctiBotEngine.OpeningBookEntry(0x8EF7920E379C61A2L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
@@ -10860,6 +12738,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+a", -400),
             new OctiBotEngine.OpeningBookCandidate("53g+b", -400),
             new OctiBotEngine.OpeningBookCandidate("73h+a", -400)),
+        // 2P_3B_ED ply 3 (after 33+h 57+d 53+d)
+        new OctiBotEngine.OpeningBookEntry(0x8F1F8493266E7E5FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1829),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -1829),
+            new OctiBotEngine.OpeningBookCandidate("57d+e", -1829)),
         // 2P 3-Base ply 4 (after 33+a 37+d 73+h 77+f)
         new OctiBotEngine.OpeningBookEntry(0x8F287584C5DB56E0L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+a", -43),
@@ -10925,6 +12808,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
+        // 4P_ED ply 3 (after 33+h 37+c 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x9012F88EA145C707L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // OFK ply 4 (after 32+b 46+f 42+h 46f+d)
         new OctiBotEngine.OpeningBookEntry(0x901BC27E14AEE182L, 8,
             new OctiBotEngine.OpeningBookCandidate("22+b", 613),
@@ -10940,6 +12828,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", 1508),
             new OctiBotEngine.OpeningBookCandidate("22b+h", 1508),
             new OctiBotEngine.OpeningBookCandidate("42h-33", 441)),
+        // 4P_ED ply 3 (after 33+f 37+b 77+g)
+        new OctiBotEngine.OpeningBookEntry(0x9048CFF5C59EFF8CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
         // 4P ply 3 (after 33+d 37+f 77+d)
         new OctiBotEngine.OpeningBookEntry(0x904FE0CBE19D6B99L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
@@ -10965,6 +12858,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 0)),
+        // 4P_ED ply 3 (after 33+f 37+d 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x91176D46C2AA0362L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+a 37+f 77+d 73+d)
         new OctiBotEngine.OpeningBookEntry(0x914ABFBCFBC9C86DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 400),
@@ -11054,12 +12952,7 @@ public final class OctiOpeningBookData {
         new OctiBotEngine.OpeningBookEntry(0x926B4605EAA71C8AL, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 0),
-            new OctiBotEngine.OpeningBookCandidate("33b+d", -260))
-        };
-    }
-
-    private static OctiBotEngine.OpeningBookEntry[] chunk4() {
-        return new OctiBotEngine.OpeningBookEntry[] {
+            new OctiBotEngine.OpeningBookCandidate("33b+d", -260)),
         // 2P 3-Base ply 4 (after 33+b 37+e 53+c 77+e)
         new OctiBotEngine.OpeningBookEntry(0x92784A7B82D261EBL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", -400),
@@ -11075,6 +12968,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1297),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1297)),
+        // 2P_3B_ED ply 3 (after 53+a 57+d 33+a)
+        new OctiBotEngine.OpeningBookEntry(0x92D4287E77E63685L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2752),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2752),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2752)),
         // 4P ply 4 (after 33+f 37+f 77+e 73+f)
         new OctiBotEngine.OpeningBookEntry(0x92E30D37F549CC07L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -120),
@@ -11085,11 +12983,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", 400),
             new OctiBotEngine.OpeningBookCandidate("77+g", 400),
             new OctiBotEngine.OpeningBookCandidate("77+f", 400)),
+        // 2P_1B_ED ply 3 (after 53+b 77+f 33+h)
+        new OctiBotEngine.OpeningBookEntry(0x92E6538B7A14EE1AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2480),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2480),
+            new OctiBotEngine.OpeningBookCandidate("57+c", -2880)),
         // 2P 3-Base ply 4 (after 33+h 37+f 73+h 77+e)
         new OctiBotEngine.OpeningBookEntry(0x92F99AE858A1BE3FL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", 0),
             new OctiBotEngine.OpeningBookCandidate("53+a", 0),
             new OctiBotEngine.OpeningBookCandidate("73h+a", 0)),
+        // 4P_ED ply 2 (after 33+a 37+f)
+        new OctiBotEngine.OpeningBookEntry(0x92FA5F4E1D7BCE95L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 140),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 140)),
         // 4P ply 4 (after 33+f 37+e 77+d 73+b)
         new OctiBotEngine.OpeningBookEntry(0x930E051B1F04B8A1L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
@@ -11120,6 +13028,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", -440),
             new OctiBotEngine.OpeningBookCandidate("53+a", -440),
             new OctiBotEngine.OpeningBookCandidate("53+h", -1020)),
+        // 4P_ED ply 3 (after 33+b 37+d 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x938B2D11CB09A1CBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+c 37+e 77+d 73+a)
         new OctiBotEngine.OpeningBookEntry(0x93A6303BE0F7BC53L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", -140),
@@ -11215,6 +13128,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", 30),
             new OctiBotEngine.OpeningBookCandidate("53h+a", 30),
             new OctiBotEngine.OpeningBookCandidate("53h-44", 30)),
+        // 2P_3B_ED ply 3 (after 33+a 57+e 73+f)
+        new OctiBotEngine.OpeningBookEntry(0x94D53597EED98345L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1949),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -1949),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -1949)),
         // OFK ply 4 (after 22+b 36+e 22b-33 56+e)
         new OctiBotEngine.OpeningBookEntry(0x950BA4954163E57DL, 8,
             new OctiBotEngine.OpeningBookCandidate("42+a", -1020),
@@ -11240,11 +13158,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 400),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 260)),
+        // 2P_3B_ED ply 3 (after 33+b 57+d 73+b)
+        new OctiBotEngine.OpeningBookEntry(0x95710E6C90B96684L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57f+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2213)),
         // 2P 3-Base ply 3 (after 33+h 37+d 33h+a)
         new OctiBotEngine.OpeningBookEntry(0x95746B259C7576DBL, 8,
             new OctiBotEngine.OpeningBookCandidate("57+d", -2213),
             new OctiBotEngine.OpeningBookCandidate("57+e", -2213),
             new OctiBotEngine.OpeningBookCandidate("37+e", -2213)),
+        // 4P_ED ply 3 (after 33+f 37+h 77+b)
+        new OctiBotEngine.OpeningBookEntry(0x958DC541DF6797B0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 2P 3-Base ply 4 (after 33+a 77+e 33a+b 57+d)
         new OctiBotEngine.OpeningBookEntry(0x9597628D3E70EDA5L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+a", 0),
@@ -11255,6 +13183,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+a", -120),
             new OctiBotEngine.OpeningBookCandidate("33+b", -120),
             new OctiBotEngine.OpeningBookCandidate("33+a", -155)),
+        // 4P_ED ply 2 (after 33+c 37+c)
+        new OctiBotEngine.OpeningBookEntry(0x95C2AB327BCE49D0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
         // 2P 3-Base ply 4 (after 33+a 37+d 53+b 57+f)
         new OctiBotEngine.OpeningBookEntry(0x95CC2609FEF2F0FBL, 8,
             new OctiBotEngine.OpeningBookCandidate("53b+a", -43),
@@ -11305,6 +13238,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", -740),
             new OctiBotEngine.OpeningBookCandidate("42+h", -740),
             new OctiBotEngine.OpeningBookCandidate("32+b", -760)),
+        // 2P_3B_ED ply 3 (after 33+a 57+e 53+b)
+        new OctiBotEngine.OpeningBookEntry(0x96662BF0E3A21209L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2333),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2453),
+            new OctiBotEngine.OpeningBookCandidate("57e+f", -2608)),
         // 2P 3-Base ply 3 (after 33+b 57+d 73+b)
         new OctiBotEngine.OpeningBookEntry(0x9670A8E2CF17772EL, 8,
             new OctiBotEngine.OpeningBookCandidate("37+e", -2213),
@@ -11330,6 +13268,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+h", -120),
             new OctiBotEngine.OpeningBookCandidate("53+a", -120),
             new OctiBotEngine.OpeningBookCandidate("73h+a", -120)),
+        // 4P_ED ply 3 (after 33+d 37+e 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x96B1B40F125E43A4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P 3-Base ply 2 (after 53+b 37+d)
         new OctiBotEngine.OpeningBookEntry(0x96C4CE216B5A9C0FL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", -299),
@@ -11355,6 +13298,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 280)),
+        // 4P_ED ply 3 (after 33+b 37+h 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x97118516D6C43519L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1977)),
         // OFK ply 1 (after 32+a)
         new OctiBotEngine.OpeningBookEntry(0x97220033605ECA2DL, 8,
             new OctiBotEngine.OpeningBookCandidate("46+e", -3714),
@@ -11500,6 +13448,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", 0),
             new OctiBotEngine.OpeningBookCandidate("53+a", 0),
             new OctiBotEngine.OpeningBookCandidate("73h+a", 0)),
+        // 2P_1B_ED ply 3 (after 33+a 37+d 53+a)
+        new OctiBotEngine.OpeningBookEntry(0x99E1E6787C2B4ACFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2480),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2480),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2600)),
         // 4P ply 4 (after 33+f 37+c 77+b 73+f)
         new OctiBotEngine.OpeningBookEntry(0x99E9346F8B54112EL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -660),
@@ -11530,6 +13483,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+a", 0),
             new OctiBotEngine.OpeningBookCandidate("32ab-43", 0),
             new OctiBotEngine.OpeningBookCandidate("52+a", -195)),
+        // 2P_3B_SPED ply 1 (after 73+h!)
+        new OctiBotEngine.OpeningBookEntry(0x9A1A59C3D2844C26L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+a!", -2320),
+            new OctiBotEngine.OpeningBookCandidate("37+e!", -2325),
+            new OctiBotEngine.OpeningBookCandidate("37+a!", -2411)),
         // 4P ply 3 (after 33+c 37+e 77+f)
         new OctiBotEngine.OpeningBookEntry(0x9A515FA351EEABC8L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
@@ -11570,6 +13528,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", 0),
             new OctiBotEngine.OpeningBookCandidate("53h-44", 0),
             new OctiBotEngine.OpeningBookCandidate("53h+a", 0)),
+        // 2P_1B_ED ply 3 (after 33+b 57+d 53+a)
+        new OctiBotEngine.OpeningBookEntry(0x9AE525BF2F494B3AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3060),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3060),
+            new OctiBotEngine.OpeningBookCandidate("57d-66", -3070)),
         // 4P ply 4 (after 33+d 37+e 77+e 73+b)
         new OctiBotEngine.OpeningBookEntry(0x9AE70AEF524D5D97L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 0),
@@ -11600,6 +13563,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 540),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 540),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 280)),
+        // 2P_3B_ED ply 3 (after 33+h 77+e 33h+a)
+        new OctiBotEngine.OpeningBookEntry(0x9B50BDC808A2BCC4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2213)),
         // OFK ply 4 (after 32+b 46+e 42+a 26+f)
         new OctiBotEngine.OpeningBookEntry(0x9B542BD1B0181951L, 8,
             new OctiBotEngine.OpeningBookCandidate("52+h", 500),
@@ -11630,6 +13598,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -120)),
+        // 2P_3B_ED ply 2 (after 33+a 37+e)
+        new OctiBotEngine.OpeningBookEntry(0x9B97994424E42B59L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+h", -388),
+            new OctiBotEngine.OpeningBookCandidate("53+d", -388),
+            new OctiBotEngine.OpeningBookCandidate("73+f", -388)),
+        // 4P_ED ply 3 (after 33+a 37+c 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x9B97FF1BC49804B0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // OFK ply 4 (after 22+b 36+d 32+b 36d-45)
         new OctiBotEngine.OpeningBookEntry(0x9BAD34436A7E03CEL, 8,
             new OctiBotEngine.OpeningBookCandidate("42+h", -1319),
@@ -11670,11 +13648,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -120)),
+        // 2P_1B_ED ply 2 (after 33+a 77+f)
+        new OctiBotEngine.OpeningBookEntry(0x9C6F324D2E101808L, 8,
+            new OctiBotEngine.OpeningBookCandidate("33+a", -620),
+            new OctiBotEngine.OpeningBookCandidate("53+b", -620),
+            new OctiBotEngine.OpeningBookCandidate("73a+h", -620)),
         // 4P ply 4 (after 33+h 37+h 77+f 73+f)
         new OctiBotEngine.OpeningBookEntry(0x9C7609A0F5764199L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33h+b", 280)),
+        // 4P_ED ply 3 (after 33+c 37+f 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x9CAF0B67A22D83F5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 3 (after 33+a 37+h 77+d)
         new OctiBotEngine.OpeningBookEntry(0x9CB6EC3DC936C086L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
@@ -11745,6 +13733,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+b", -620),
             new OctiBotEngine.OpeningBookCandidate("42+a", -620),
             new OctiBotEngine.OpeningBookCandidate("42+h", -1273)),
+        // 2P_3B_SPED ply 1 (after 33+e!)
+        new OctiBotEngine.OpeningBookEntry(0x9DA255C99F3D111EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+a!", -1145),
+            new OctiBotEngine.OpeningBookCandidate("57+e!", -1145),
+            new OctiBotEngine.OpeningBookCandidate("37+a", -1285)),
+        // 4P_ED ply 3 (after 33+b 37+b 77+d)
+        new OctiBotEngine.OpeningBookEntry(0x9DA8F8C84EA26A89L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+d 37+h 77+d 73+d)
         new OctiBotEngine.OpeningBookEntry(0x9DB3B34AD3626372L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 520),
@@ -11775,6 +13773,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", -120),
             new OctiBotEngine.OpeningBookCandidate("53b+a", -120),
             new OctiBotEngine.OpeningBookCandidate("53b-64", -120)),
+        // 4P_ED ply 2 (after 33+d 37+h)
+        new OctiBotEngine.OpeningBookEntry(0x9E0353B835D0658AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 260),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 260),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 260)),
         // OFK ply 4 (after 32+b 36+d 52+g 56+e)
         new OctiBotEngine.OpeningBookEntry(0x9E28C3B063467860L, 8,
             new OctiBotEngine.OpeningBookCandidate("42+a", -472),
@@ -11785,6 +13788,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("37+e", -2360),
             new OctiBotEngine.OpeningBookCandidate("77+f", -2360),
             new OctiBotEngine.OpeningBookCandidate("57d-66", -2360)),
+        // 4P_ED ply 3 (after 33+c 37+d 77+h)
+        new OctiBotEngine.OpeningBookEntry(0x9E515CE6F49163CBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+f 37+e 77+h 73+f)
         new OctiBotEngine.OpeningBookEntry(0x9E528C0B3E4889C9L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
@@ -11804,7 +13812,12 @@ public final class OctiOpeningBookData {
         new OctiBotEngine.OpeningBookEntry(0x9EA2AC8B35BD91EFL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", 0),
             new OctiBotEngine.OpeningBookCandidate("53+a", 0),
-            new OctiBotEngine.OpeningBookCandidate("33b+a", -440)),
+            new OctiBotEngine.OpeningBookCandidate("33b+a", -440))
+        };
+    }
+
+    private static OctiBotEngine.OpeningBookEntry[] chunk5() {
+        return new OctiBotEngine.OpeningBookEntry[] {
         // 4P ply 4 (after 33+h 37+h 77+d 73+a)
         new OctiBotEngine.OpeningBookEntry(0x9EC484301DF214AAL, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 120),
@@ -11840,6 +13853,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 280)),
+        // 2P_3B_ED ply 3 (after 33+h 37+e 73+a)
+        new OctiBotEngine.OpeningBookEntry(0x9F55727B4C61685AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2601),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2601)),
         // 4P ply 2 (after 33+h 37+e)
         new OctiBotEngine.OpeningBookEntry(0x9F810C1F8B65251FL, 8,
             new OctiBotEngine.OpeningBookCandidate("77+e", -140),
@@ -11850,6 +13868,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -380)),
+        // 4P_ED ply 2 (after 33+b 37+e)
+        new OctiBotEngine.OpeningBookEntry(0x9FA362A1F14A1337L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
         // OFK ply 4 (after 32+b 26+d 32b-43 36+d)
         new OctiBotEngine.OpeningBookEntry(0x9FD0E14D607D5E85L, 8,
             new OctiBotEngine.OpeningBookCandidate("52+h", 120),
@@ -11910,6 +13933,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", 400),
             new OctiBotEngine.OpeningBookCandidate("53+h", 400),
             new OctiBotEngine.OpeningBookCandidate("53+a", 400)),
+        // 2P_1B_ED ply 3 (after 33+a 57+d 73+b)
+        new OctiBotEngine.OpeningBookEntry(0xA0A63EF8966EC846L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2360),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2360),
+            new OctiBotEngine.OpeningBookCandidate("57d-66", -2360)),
         // 4P ply 3 (after 33+c 37+d 77+h)
         new OctiBotEngine.OpeningBookEntry(0xA0B6C73DF547A11CL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
@@ -11930,6 +13958,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", 30),
             new OctiBotEngine.OpeningBookCandidate("73+a", 30),
             new OctiBotEngine.OpeningBookCandidate("53ah-44", 30)),
+        // 2P_3B_ED ply 2 (after 53+b 37+d)
+        new OctiBotEngine.OpeningBookEntry(0xA11F5E8B8D649680L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+h", -299),
+            new OctiBotEngine.OpeningBookCandidate("33+a", -299),
+            new OctiBotEngine.OpeningBookCandidate("53b+a", -299)),
         // 2P 1-Base ply 3 (after 53+b 77+f 33+h)
         new OctiBotEngine.OpeningBookEntry(0xA1380C92D8E9300BL, 8,
             new OctiBotEngine.OpeningBookCandidate("77+f", -2480),
@@ -11950,6 +13983,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+a", 0),
             new OctiBotEngine.OpeningBookCandidate("53+b", 0),
             new OctiBotEngine.OpeningBookCandidate("73h+a", 0)),
+        // 4P_ED ply 2 (after 33+h 37+e)
+        new OctiBotEngine.OpeningBookEntry(0xA16697C48AB3E7C8L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -140),
+            new OctiBotEngine.OpeningBookCandidate("77+g", -140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -140)),
         // 4P ply 4 (after 33+d 37+b 77+d 73+h)
         new OctiBotEngine.OpeningBookEntry(0xA16BC5DD444EDF4DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
@@ -11975,6 +14013,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 4P_ED ply 3 (after 33+a 37+h 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xA25177E6C8E00251L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1837)),
         // 2P 3-Base ply 4 (after 33+h 37+f 53+h 77+f)
         new OctiBotEngine.OpeningBookEntry(0xA27D27FB65706CDAL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", -419),
@@ -12030,6 +14073,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -120)),
+        // 2P_3B_ED ply 3 (after 33+a 57+e 73+h)
+        new OctiBotEngine.OpeningBookEntry(0xA3274AF71879E13EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2333),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2453),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2632)),
         // 4P ply 3 (after 33+b 37+b 77+d)
         new OctiBotEngine.OpeningBookEntry(0xA34F63134F74A85EL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
@@ -12040,11 +14088,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+d", -140)),
+        // 4P_ED ply 3 (after 33+h 37+b 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xA36D0DAD355B9E76L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+h 37+d 77+f 73+g)
         new OctiBotEngine.OpeningBookEntry(0xA3AD54A3FED7424BL, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -260)),
+        // 2P_1B_ED ply 3 (after 33+b 37+f 73+h)
+        new OctiBotEngine.OpeningBookEntry(0xA3CD092EB47C4F42L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -4140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -4140),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -4140)),
         // 4P ply 4 (after 33+a 37+h 77+g 73+g)
         new OctiBotEngine.OpeningBookEntry(0xA3CE8C5B04582282L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 400),
@@ -12060,6 +14118,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 540),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 540),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 280)),
+        // 2P_3B_ED ply 3 (after 33+a 37+f 73+a)
+        new OctiBotEngine.OpeningBookEntry(0xA41338D8BCBDA325L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2752),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2752),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2752)),
         // OFK ply 4 (after 32+b 26+d 32b-43 46+d)
         new OctiBotEngine.OpeningBookEntry(0xA447F804AA1D14E4L, 8,
             new OctiBotEngine.OpeningBookCandidate("32+a", 912),
@@ -12090,11 +14153,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 120),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 120),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 0)),
+        // 2P_3B_ED ply 3 (after 53+b 77+f 53b+a)
+        new OctiBotEngine.OpeningBookEntry(0xA4918ABEDF5FC447L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2453),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2453),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2651)),
         // 4P ply 4 (after 33+f 37+d 77+f 73+f)
         new OctiBotEngine.OpeningBookEntry(0xA4B514959AE1831DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -380)),
+        // 4P_ED ply 3 (after 33+c 37+e 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xA4B6C4785038691FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+a 37+b 77+e 73+b)
         new OctiBotEngine.OpeningBookEntry(0xA4BEB4D8109543F2L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 280),
@@ -12120,6 +14193,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("22+b", -179),
             new OctiBotEngine.OpeningBookCandidate("42h-33", -195),
             new OctiBotEngine.OpeningBookCandidate("52+h", -217)),
+        // 2P_3B_ED ply 3 (after 53+a 37+e 73+h)
+        new OctiBotEngine.OpeningBookEntry(0xA516693CF546EB26L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2721),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2721),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2721)),
         // 2P 3-Base ply 4 (after 33+a 77+e 53+b 37+e)
         new OctiBotEngine.OpeningBookEntry(0xA5276DF4237A99D1L, 8,
             new OctiBotEngine.OpeningBookCandidate("53h+a", 0),
@@ -12270,6 +14348,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -260)),
+        // 4P_ED ply 3 (after 33+f 37+f 77+e)
+        new OctiBotEngine.OpeningBookEntry(0xA74174E4AD024C78L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
         // 2P 3-Base ply 4 (after 53+a 37+f 33+b 57+c)
         new OctiBotEngine.OpeningBookEntry(0xA754CEF3FEF0292DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", 520),
@@ -12295,11 +14378,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33b+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -400)),
+        // 4P_ED ply 2 (after 33+d 37+c)
+        new OctiBotEngine.OpeningBookEntry(0xA7C5DB4539A8636BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -140),
+            new OctiBotEngine.OpeningBookCandidate("77+g", -140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -140)),
         // 4P ply 4 (after 33+b 37+b 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0xA80A811B16E9EAF6L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -120)),
+        // 2P_3B_ED ply 2 (after 33+h 37+f)
+        new OctiBotEngine.OpeningBookEntry(0xA80B51CEB32C0204L, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+a", -299),
+            new OctiBotEngine.OpeningBookCandidate("73+a", -299),
+            new OctiBotEngine.OpeningBookCandidate("53+b", -299)),
         // 4P ply 4 (after 33+f 37+b 77+b 73+a)
         new OctiBotEngine.OpeningBookEntry(0xA8244CDCF7CE1D6CL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -660),
@@ -12320,6 +14413,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 4P_SPED ply 1 (after 33+g!)
+        new OctiBotEngine.OpeningBookEntry(0xA85259352508E52EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e!", 2930),
+            new OctiBotEngine.OpeningBookCandidate("37+g!", -1710),
+            new OctiBotEngine.OpeningBookCandidate("37+c!", -1850)),
         // 4P ply 3 (after 33+d 37+e 77+f)
         new OctiBotEngine.OpeningBookEntry(0xA8562FD413888173L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
@@ -12360,6 +14458,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 0)),
+        // 4P_ED ply 3 (after 33+a 37+b 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xA8E80A3850865DC1L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 4P ply 4 (after 33+f 37+e 77+b 73+h)
         new OctiBotEngine.OpeningBookEntry(0xA8EEC94D111154C9L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -800),
@@ -12400,6 +14503,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("36+d", -4010),
             new OctiBotEngine.OpeningBookCandidate("36+f", -4440),
             new OctiBotEngine.OpeningBookCandidate("46+e", -4796)),
+        // 4P_ED ply 3 (after 33+a 37+d 77+g)
+        new OctiBotEngine.OpeningBookEntry(0xA9B7A88B57B2A12FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 4P_ED ply 3 (after 33+h 37+h 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xA9D47073AD3DC1E6L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1837)),
         // 2P 3-Base ply 4 (after 33+h 57+e 33h+a 57e+f)
         new OctiBotEngine.OpeningBookEntry(0xA9E55A016A6864C1L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", -441),
@@ -12505,6 +14618,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -260)),
+        // 4P_ED ply 3 (after 33+f 37+e 77+h)
+        new OctiBotEngine.OpeningBookEntry(0xABF0F5D8660309B6L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
         // 4P ply 4 (after 33+c 37+d 77+h 73+f)
         new OctiBotEngine.OpeningBookEntry(0xABF32535ACDAE3B4L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
@@ -12515,6 +14633,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+h", -3438),
             new OctiBotEngine.OpeningBookCandidate("32+a", -3438),
             new OctiBotEngine.OpeningBookCandidate("42+a", -3438)),
+        // 2P_3B_ED ply 3 (after 33+a 37+f 73+h)
+        new OctiBotEngine.OpeningBookEntry(0xABFC04EFECD332FDL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2841),
+            new OctiBotEngine.OpeningBookCandidate("57+b", -2841),
+            new OctiBotEngine.OpeningBookCandidate("77+h", -2841)),
+        // 4P_ED ply 2 (after 33+c 37+h)
+        new OctiBotEngine.OpeningBookEntry(0xAC0423CF77B64F31L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 400),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 400),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 400)),
         // 2P 1-Base ply 4 (after 53+b 77+e 53b+a 37+f)
         new OctiBotEngine.OpeningBookEntry(0xAC1331D1322EAC6DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", 120),
@@ -12530,6 +14658,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("37+e", -2752),
             new OctiBotEngine.OpeningBookCandidate("77+e", -2752),
             new OctiBotEngine.OpeningBookCandidate("77+f", -2752)),
+        // 4P_ED ply 3 (after 33+f 37+c 77+b)
+        new OctiBotEngine.OpeningBookEntry(0xAC4B4DBCD31F9151L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -777),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -777),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -777)),
+        // 4P_ED ply 3 (after 33+d 37+d 77+h)
+        new OctiBotEngine.OpeningBookEntry(0xAC562C91B6F74970L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1297)),
         // OFK ply 4 (after 32+a 26+d 22+b 26d+e)
         new OctiBotEngine.OpeningBookEntry(0xAC64A454604DE729L, 8,
             new OctiBotEngine.OpeningBookCandidate("42+h", 740),
@@ -12560,6 +14698,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", -228),
             new OctiBotEngine.OpeningBookCandidate("42h-33", -633),
             new OctiBotEngine.OpeningBookCandidate("22+b", -740)),
+        // 2P_1B_ED ply 3 (after 33+a 77+e 53+a)
+        new OctiBotEngine.OpeningBookEntry(0xAD2764FDADE99699L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2480),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2480),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3100)),
         // 2P 1-Base ply 2 (after 33+b 37+e)
         new OctiBotEngine.OpeningBookEntry(0xAD410F5E7D9D9431L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", 0),
@@ -12570,6 +14713,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 540),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 540),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 400)),
+        // 4P_ED ply 3 (after 33+h 37+d 77+b)
+        new OctiBotEngine.OpeningBookEntry(0xAD4ED874B0F05534L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
         // 4P ply 3 (after 33+b 37+d 77+b)
         new OctiBotEngine.OpeningBookEntry(0xAD6CB6CACADF631CL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
@@ -12615,6 +14763,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", -140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -280)),
+        // 2P_1B_ED ply 3 (after 33+b 77+e 53+a)
+        new OctiBotEngine.OpeningBookEntry(0xAE171550DE5031FDL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -3100),
+            new OctiBotEngine.OpeningBookCandidate("37e+d", -3100),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3150)),
         // 4P ply 4 (after 33+a 37+c 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0xAE3586C89CD384CFL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
@@ -12635,11 +14788,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("36+d", -2882),
             new OctiBotEngine.OpeningBookCandidate("36+e", -2902),
             new OctiBotEngine.OpeningBookCandidate("26+d", -3714)),
+        // 4P_ED ply 3 (after 33+d 37+f 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xAEA87B10E04BA94EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 3 (after 33+f 37+b 77+g)
         new OctiBotEngine.OpeningBookEntry(0xAEAF542EC4483D5BL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
+        // 4P_ED ply 3 (after 33+b 37+c 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xAED70DEBDABC33F8L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 3 (after 33+h 37+c 77+f)
         new OctiBotEngine.OpeningBookEntry(0xAEF56355A09305D0L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
@@ -12700,6 +14863,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
+        // 4P_ED ply 3 (after 33+h 37+c 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xB01009D5364AA375L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1297)),
         // 4P ply 4 (after 33+a 37+b 77+h 73+b)
         new OctiBotEngine.OpeningBookEntry(0xB0140BA0BE8E88A4L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
@@ -12725,6 +14893,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -380)),
+        // 2P_3B_ED ply 3 (after 53+a 37+e 73+a)
+        new OctiBotEngine.OpeningBookEntry(0xB0546A977C6DB81CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2654),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2654),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2721)),
         // 2P 3-Base ply 4 (after 33+h 57+d 73+h 37+f)
         new OctiBotEngine.OpeningBookEntry(0xB079D801532A30A6L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+b", 0),
@@ -12740,6 +14913,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", -840),
             new OctiBotEngine.OpeningBookCandidate("73a+h", -840),
             new OctiBotEngine.OpeningBookCandidate("53+a", -840)),
+        // 2P_1B_ED ply 3 (after 53+b 77+f 53b+a)
+        new OctiBotEngine.OpeningBookEntry(0xB0DE8FA5E933229AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3180),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3180),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -3200)),
         // 2P 1-Base ply 4 (after 33+a 77+e 73+h 77e+f)
         new OctiBotEngine.OpeningBookEntry(0xB0EF8B6D3F0F506DL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", 0),
@@ -12760,6 +14938,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", 0),
             new OctiBotEngine.OpeningBookCandidate("53+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+b", -610)),
+        // 4P_ED ply 3 (after 33+f 37+d 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xB1159C1D55A56710L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
         // 4P ply 4 (after 33+c 37+e 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0xB1164CF09F7C8D12L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
@@ -12810,6 +14993,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 280),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 280),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 20)),
+        // 2P_3B_SP ply 1 (after 33+a!)
+        new OctiBotEngine.OpeningBookEntry(0xB20869271DC5A03BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e!", -1290),
+            new OctiBotEngine.OpeningBookCandidate("77+e!", -1426),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -1457)),
         // 4P ply 4 (after 33+d 37+c 77+d 73+h)
         new OctiBotEngine.OpeningBookEntry(0xB216C1A5475FE24EL, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -280),
@@ -12900,6 +15088,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 120),
             new OctiBotEngine.OpeningBookCandidate("53h+a", 120),
             new OctiBotEngine.OpeningBookCandidate("73+a", 120)),
+        // 4P_ED ply 3 (after 33+f 37+f 77+h)
+        new OctiBotEngine.OpeningBookEntry(0xB3EBCB9C0319872EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 2 (after 33+a 37+e)
         new OctiBotEngine.OpeningBookEntry(0xB406FAD179B782DAL, 8,
             new OctiBotEngine.OpeningBookCandidate("77+e", 0),
@@ -12965,6 +15158,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", -280),
             new OctiBotEngine.OpeningBookCandidate("33h+c", -280),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -400)),
+        // 4P_ED ply 2 (after 33+d 37+b)
+        new OctiBotEngine.OpeningBookEntry(0xB4B8DF3D3AB95E68L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
+        // 2P_1B_ED ply 3 (after 33+b 37+f 53+c)
+        new OctiBotEngine.OpeningBookEntry(0xB4D13B9675993975L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2780),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2780),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2870)),
         // 2P 1-Base ply 2 (after 33+a 57+f)
         new OctiBotEngine.OpeningBookEntry(0xB512CEFC1F14BA2FL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", -620),
@@ -12985,6 +15188,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", -90),
             new OctiBotEngine.OpeningBookCandidate("53h+a", -90),
             new OctiBotEngine.OpeningBookCandidate("53h-44", -90)),
+        // 2P_1B_ED ply 2 (after 53+b 37+d)
+        new OctiBotEngine.OpeningBookEntry(0xB5505B90BB08705DL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -500),
+            new OctiBotEngine.OpeningBookCandidate("33+b", -500),
+            new OctiBotEngine.OpeningBookCandidate("53h-44", -500)),
         // 4P ply 4 (after 33+a 37+c 77+b 73+g)
         new OctiBotEngine.OpeningBookEntry(0xB57682971DB077BDL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", -400),
@@ -13035,6 +15243,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", 860),
             new OctiBotEngine.OpeningBookCandidate("22+b", 860),
             new OctiBotEngine.OpeningBookCandidate("42ah-33", 860)),
+        // 4P_ED ply 3 (after 33+d 37+e 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xB6B34554855127D6L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1297)),
         // 4P ply 0 (initial)
         new OctiBotEngine.OpeningBookEntry(0xB6C1B656CF4909ADL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", 0),
@@ -13050,6 +15263,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 140)),
+        // 4P_ED ply 3 (after 33+b 37+h 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xB713744D41CB516BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1837)),
         // 4P ply 4 (after 33+d 37+e 77+g 73+g)
         new OctiBotEngine.OpeningBookEntry(0xB72CBEE949E90705L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
@@ -13072,8 +15290,8 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+b", -120)),
         // 4P_ED ply 1 (after 33+h)
         new OctiBotEngine.OpeningBookEntry(0xB79A77E61C3EE0E5L, 8,
-            new OctiBotEngine.OpeningBookCandidate("37+e", -1437),
             new OctiBotEngine.OpeningBookCandidate("37+c", -1437),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -1437),
             new OctiBotEngine.OpeningBookCandidate("37+d", -1437)),
         // 4P ply 1 (after 33+b)
         new OctiBotEngine.OpeningBookEntry(0xB7B819586611D6CDL, 8,
@@ -13100,6 +15318,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", -620),
             new OctiBotEngine.OpeningBookCandidate("73+h", -620),
             new OctiBotEngine.OpeningBookCandidate("53+a", -620)),
+        // 4P_SPED ply 1 (after 33+c)
+        new OctiBotEngine.OpeningBookEntry(0xB8179B189408E766L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+c!", -1140),
+            new OctiBotEngine.OpeningBookCandidate("37+a!", -1343),
+            new OctiBotEngine.OpeningBookCandidate("37+e!", -1476)),
         // 4P ply 3 (after 33+a 37+d 77+b)
         new OctiBotEngine.OpeningBookEntry(0xB82EB56143F43026L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
@@ -13155,6 +15378,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("36+e", -3622),
             new OctiBotEngine.OpeningBookCandidate("46+f", -3622),
             new OctiBotEngine.OpeningBookCandidate("36+d", -3800)),
+        // 4P_ED ply 3 (after 33+d 37+d 77+e)
+        new OctiBotEngine.OpeningBookEntry(0xB8FC93E918EC8226L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P 1-Base ply 4 (after 33+a 37+e 53+a 57+e)
         new OctiBotEngine.OpeningBookEntry(0xB9170E6E806B149BL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", 0),
@@ -13180,6 +15408,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", 140),
             new OctiBotEngine.OpeningBookCandidate("77+g", 140),
             new OctiBotEngine.OpeningBookCandidate("77+f", 140)),
+        // 4P_ED ply 2 (after 33+h 37+f)
+        new OctiBotEngine.OpeningBookEntry(0xB97DA980EFA96950L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
         // OFK ply 3 (after 32+b 26+d 42+a)
         new OctiBotEngine.OpeningBookEntry(0xB981856ED6771CB5L, 8,
             new OctiBotEngine.OpeningBookCandidate("46+e", -6261),
@@ -13240,6 +15473,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", 260),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 260),
             new OctiBotEngine.OpeningBookCandidate("33h+b", 140)),
+        // 4P_ED ply 3 (after 33+f 37+h 77+g)
+        new OctiBotEngine.OpeningBookEntry(0xBAF34370CAF7C46EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+h 37+d 77+e 73+h)
         new OctiBotEngine.OpeningBookEntry(0xBAFA5B9969F9C31DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
@@ -13275,6 +15513,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -260)),
+        // 4P_ED ply 3 (after 33+a 37+c 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xBB950E40539760C2L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 3-Base ply 3 (after 33+a 57+e 53+c)
         new OctiBotEngine.OpeningBookEntry(0xBB9FCA9EDD3F865AL, 8,
             new OctiBotEngine.OpeningBookCandidate("77+f", -2053),
@@ -13345,6 +15588,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", 260),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 260),
             new OctiBotEngine.OpeningBookCandidate("33h+b", 140)),
+        // 4P_ED ply 3 (after 33+c 37+f 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xBCADFA3C3522E787L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 4P ply 3 (after 33+a 37+h 77+f)
         new OctiBotEngine.OpeningBookEntry(0xBCB41D665E39A4F4L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
@@ -13370,6 +15618,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("42+a", -179),
             new OctiBotEngine.OpeningBookCandidate("32b-43", -315),
             new OctiBotEngine.OpeningBookCandidate("52h+b", -1079)),
+        // 4P_ED ply 3 (after 33+b 37+d 77+g)
+        new OctiBotEngine.OpeningBookEntry(0xBCF5AB20DE99F215L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+a 37+b 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0xBD4882B09FC2B9CCL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
@@ -13395,6 +15648,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73a+h", -690),
             new OctiBotEngine.OpeningBookCandidate("33+a", -690),
             new OctiBotEngine.OpeningBookCandidate("53b+a", -690)),
+        // 4P_ED ply 3 (after 33+b 37+b 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xBDAA0993D9AD0EFBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 4P ply 4 (after 33+d 37+h 77+f 73+d)
         new OctiBotEngine.OpeningBookEntry(0xBDB14211446D0700L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", 660),
@@ -13460,6 +15718,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+d", -140)),
+        // 4P_ED ply 3 (after 33+f 37+b 77+b)
+        new OctiBotEngine.OpeningBookEntry(0xBF3649C4D00EAC52L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -917),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -917),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -917)),
         // OFK ply 4 (after 32+a 56+f 52+b 46+f)
         new OctiBotEngine.OpeningBookEntry(0xBF48BBF3A6702DBAL, 8,
             new OctiBotEngine.OpeningBookCandidate("22+b", -620),
@@ -13470,6 +15733,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 0)),
+        // 4P_ED ply 3 (after 33+f 37+e 77+e)
+        new OctiBotEngine.OpeningBookEntry(0xBF5A4AA0C818C2E0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+b 37+f 77+h 73+g)
         new OctiBotEngine.OpeningBookEntry(0xBF94071C449D32F8L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
@@ -13485,6 +15753,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -155),
             new OctiBotEngine.OpeningBookCandidate("33a+b", -155),
             new OctiBotEngine.OpeningBookCandidate("53h+a", -155)),
+        // 4P_SPED ply 1 (after 33+a!)
+        new OctiBotEngine.OpeningBookEntry(0xBFB31C37FBAE2F70L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e!", -7103),
+            new OctiBotEngine.OpeningBookCandidate("37+a!", -8271),
+            new OctiBotEngine.OpeningBookCandidate("37+a", -32000)),
         // 4P ply 4 (after 33+a 37+b 77+f 73+a)
         new OctiBotEngine.OpeningBookEntry(0xBFFA0F207746ECFFL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
@@ -13495,6 +15768,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", 140),
             new OctiBotEngine.OpeningBookCandidate("77+g", 140),
             new OctiBotEngine.OpeningBookCandidate("77+f", 140)),
+        // 4P_SPED ply 1 (after 33+a)
+        new OctiBotEngine.OpeningBookEntry(0xC041B9D6F7EC2A57L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e!", -165),
+            new OctiBotEngine.OpeningBookCandidate("37+c!", -686),
+            new OctiBotEngine.OpeningBookCandidate("37+a!", -1269)),
         // 4P ply 4 (after 33+b 37+h 77+g 73+b)
         new OctiBotEngine.OpeningBookEntry(0xC05D522DF80BEFA9L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 540),
@@ -13520,11 +15798,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("52+h", -1121),
             new OctiBotEngine.OpeningBookCandidate("42+a", -1121),
             new OctiBotEngine.OpeningBookCandidate("42+h", -1492)),
+        // 4P_ED ply 2 (after 33+d 37+e)
+        new OctiBotEngine.OpeningBookEntry(0xC0B033B359E3A787L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -140),
+            new OctiBotEngine.OpeningBookCandidate("77+g", -140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -140)),
         // 4P ply 4 (after 33+h 37+b 77+d 73+h)
         new OctiBotEngine.OpeningBookEntry(0xC0BD61AA971E9F02L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -260)),
+        // 2P_3B_ED ply 3 (after 53+a 37+e 53a+b)
+        new OctiBotEngine.OpeningBookEntry(0xC0D43C1E15FB06E5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2721),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2721),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2721)),
         // 4P ply 4 (after 33+f 37+h 77+h 73+f)
         new OctiBotEngine.OpeningBookEntry(0xC0E1EC00527B4BC4L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", 0),
@@ -13540,6 +15828,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33b+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -400)),
+        // 4P_ED ply 2 (after 33+b 37+h)
+        new OctiBotEngine.OpeningBookEntry(0xC11002AA9D79D13AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 400),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 400),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 400)),
         // 4P ply 4 (after 33+a 37+c 77+e 73+g)
         new OctiBotEngine.OpeningBookEntry(0xC1126D7D66FCE0E0L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
@@ -13555,6 +15848,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", 260),
             new OctiBotEngine.OpeningBookCandidate("77+g", 260),
             new OctiBotEngine.OpeningBookCandidate("77+f", 260)),
+        // 2P_3B_ED ply 2 (after 33+h 57+e)
+        new OctiBotEngine.OpeningBookEntry(0xC15075624B2832B7L, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+a", -120),
+            new OctiBotEngine.OpeningBookCandidate("53+b", -120),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -120)),
         // 4P ply 4 (after 33+a 37+h 77+d 73+h)
         new OctiBotEngine.OpeningBookEntry(0xC1811BE16AA50325L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 260),
@@ -13565,6 +15863,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", -210),
             new OctiBotEngine.OpeningBookCandidate("53h+a", -210),
             new OctiBotEngine.OpeningBookCandidate("53h-44", -210)),
+        // 2P_3B_ED ply 3 (after 53+b 57+f 33+h)
+        new OctiBotEngine.OpeningBookEntry(0xC1B005DF67CC76C3L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("57f+e", -2213),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2213)),
         // 2P 1-Base ply 3 (after 53+b 57+f 53b+a)
         new OctiBotEngine.OpeningBookEntry(0xC1C0EB46CE22642EL, 8,
             new OctiBotEngine.OpeningBookCandidate("77+f", -3200),
@@ -13625,6 +15928,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+b", -283),
             new OctiBotEngine.OpeningBookCandidate("53a+h", -283),
             new OctiBotEngine.OpeningBookCandidate("53a+b", -857)),
+        // 4P_ED ply 3 (after 33+d 37+b 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xC2BBA9DAE60BDE39L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 3 (after 33+f 37+f 77+g)
         new OctiBotEngine.OpeningBookEntry(0xC2BC86E4C2084A2CL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
@@ -13670,6 +15978,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+a!", 640),
             new OctiBotEngine.OpeningBookCandidate("33+g!", 327),
             new OctiBotEngine.OpeningBookCandidate("33+e!", 103)),
+        // 4P_ED ply 3 (after 33+c 37+c 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xC3C32C8E3073ADF3L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+b 37+f 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0xC41953D110A99D81L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
@@ -13735,6 +16048,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1977),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1977)),
+        // 4P_ED ply 3 (after 33+a 37+f 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xC4FBD8F256C62AB6L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 4P ply 4 (after 33+c 37+b 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0xC51EA07EFC2674FDL, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
@@ -13775,6 +16093,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -120)),
+        // 4P_ED ply 2 (after 33+h 37+c)
+        new OctiBotEngine.OpeningBookEntry(0xC6137F32EAF82324L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -140),
+            new OctiBotEngine.OpeningBookCandidate("77+g", -140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -140)),
         // 2P 3-Base ply 4 (after 33+h 57+e 53+h 77+f)
         new OctiBotEngine.OpeningBookEntry(0xC61FC7953E5F40AFL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", -539),
@@ -13809,12 +16132,7 @@ public final class OctiOpeningBookData {
         new OctiBotEngine.OpeningBookEntry(0xC6C5D67DCBF616B5L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 0),
-            new OctiBotEngine.OpeningBookCandidate("33a+d", -140))
-        };
-    }
-
-    private static OctiBotEngine.OpeningBookEntry[] chunk5() {
-        return new OctiBotEngine.OpeningBookEntry[] {
+            new OctiBotEngine.OpeningBookCandidate("33a+d", -140)),
         // 2P 3-Base ply 4 (after 53+a 57+e 33+b 37+e)
         new OctiBotEngine.OpeningBookEntry(0xC6D41B1D2EF87E0AL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", 0),
@@ -13850,6 +16168,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 0)),
+        // 4P_ED ply 2 (after 33+f 37+d)
+        new OctiBotEngine.OpeningBookEntry(0xC716EAFA8917E741L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", -400),
+            new OctiBotEngine.OpeningBookCandidate("77+g", -400),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -400)),
         // 4P ply 4 (after 33+b 37+b 77+e 73+g)
         new OctiBotEngine.OpeningBookEntry(0xC72D6AAEECC68ED9L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
@@ -13885,6 +16208,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", 120),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 120),
             new OctiBotEngine.OpeningBookCandidate("33h+b", 0)),
+        // 4P_ED ply 3 (after 33+d 37+h 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xC802D4047E6D81A9L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1837)),
         // 4P ply 4 (after 33+b 37+b 77+f 73+d)
         new OctiBotEngine.OpeningBookEntry(0xC8199F86E3AD8852L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 540),
@@ -13900,11 +16228,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 0)),
+        // 2P_3B_ED ply 3 (after 53+a 37+d 33+b)
+        new OctiBotEngine.OpeningBookEntry(0xC86FD4EDD80AE1DCL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2453),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2453),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -2632)),
         // 2P 1-Base ply 2 (after 53+b 77+e)
         new OctiBotEngine.OpeningBookEntry(0xC8835A7C9D2079F2L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33+b", 0),
             new OctiBotEngine.OpeningBookCandidate("53h-44", 0)),
+        // 2P_3B_ED ply 3 (after 33+h 77+e 53+h)
+        new OctiBotEngine.OpeningBookEntry(0xC8A40865C8ADDF79L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -1895),
+            new OctiBotEngine.OpeningBookCandidate("57+d", -1895),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -1980)),
         // 4P ply 4 (after 33+a 37+f 77+e 73+b)
         new OctiBotEngine.OpeningBookEntry(0xC8AD661216D53485L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 280),
@@ -13970,6 +16308,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+a", -1248),
             new OctiBotEngine.OpeningBookCandidate("42+h", -1248),
             new OctiBotEngine.OpeningBookCandidate("42+b", -2441)),
+        // 4P_ED ply 3 (after 33+b 37+e 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xC9A2E51DBAF7F714L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+f 37+f 77+g 73+f)
         new OctiBotEngine.OpeningBookEntry(0xC9F964EC9B950884L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -120),
@@ -14030,6 +16373,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", -260),
             new OctiBotEngine.OpeningBookCandidate("33c+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -400)),
+        // 4P_ED ply 3 (after 33+f 37+e 77+b)
+        new OctiBotEngine.OpeningBookEntry(0xCB3EA54AB35455BDL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -777),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -777),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -777)),
+        // 4P_ED ply 3 (after 33+f 37+b 77+e)
+        new OctiBotEngine.OpeningBookEntry(0xCB52A62EAB423B0FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
         // 2P 1-Base ply 4 (after 33+a 77+f 73+b 37+f)
         new OctiBotEngine.OpeningBookEntry(0xCB8BB0AB99A12838L, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", 0),
@@ -14075,11 +16428,31 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", 0),
             new OctiBotEngine.OpeningBookCandidate("77+g", 0),
             new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
+        // 2P_3B_ED ply 2 (after 53+b 77+e)
+        new OctiBotEngine.OpeningBookEntry(0xCC66E35AA0289C7AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+h", 0),
+            new OctiBotEngine.OpeningBookCandidate("33+a", 0),
+            new OctiBotEngine.OpeningBookCandidate("33+b", -120)),
+        // 4P_ED ply 3 (after 33+f 37+c 77+h)
+        new OctiBotEngine.OpeningBookEntry(0xCC851D2E0648CD5AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
         // 2P 1-Base ply 4 (after 53+b 77+e 33+b 37+e)
         new OctiBotEngine.OpeningBookEntry(0xCC960A81777B071EL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+b", -120),
             new OctiBotEngine.OpeningBookCandidate("53h+a", -120),
             new OctiBotEngine.OpeningBookCandidate("53h-44", -120)),
+        // 4P_ED ply 3 (after 33+d 37+d 77+b)
+        new OctiBotEngine.OpeningBookEntry(0xCC987C0363A0157BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
+        // 2P_3B_ED ply 3 (after 33+h 37+e 53+b)
+        new OctiBotEngine.OpeningBookEntry(0xCCA1C7D68C6E0BE7L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2601),
+            new OctiBotEngine.OpeningBookCandidate("57+b", -2601),
+            new OctiBotEngine.OpeningBookCandidate("77+h", -2601)),
         // 2P 3-Base ply 4 (after 53+a 57+d 73+a 37+f)
         new OctiBotEngine.OpeningBookEntry(0xCCF1AB3B619E4135L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", 120),
@@ -14110,6 +16483,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -260)),
+        // 4P_ED ply 3 (after 33+h 37+d 77+h)
+        new OctiBotEngine.OpeningBookEntry(0xCD8088E665A7093FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1297)),
+        // 2P_1B_ED ply 3 (after 33+b 37+f 73+a)
+        new OctiBotEngine.OpeningBookEntry(0xCDA25FADE8BC3DEAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+f", -3100),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3100),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3100)),
         // 4P ply 3 (after 33+b 37+d 77+h)
         new OctiBotEngine.OpeningBookEntry(0xCDA2E6581F883F17L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
@@ -14125,11 +16508,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("73h+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33+a", 0)),
+        // 2P_3B_ED ply 2 (after 33+b 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xCDE100D88A31B31BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+a", 0),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -120),
+            new OctiBotEngine.OpeningBookCandidate("73+a", -268)),
         // 2P_3B_SP ply 0 (initial)
         new OctiBotEngine.OpeningBookEntry(0xCE0042FEA3C2985CL, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a!", 0),
             new OctiBotEngine.OpeningBookCandidate("53+a!", 0),
-            new OctiBotEngine.OpeningBookCandidate("33+b", 0)),
+            new OctiBotEngine.OpeningBookCandidate("53+h", 0)),
         // 4P ply 4 (after 33+a 37+c 77+f 73+d)
         new OctiBotEngine.OpeningBookEntry(0xCE2698556997E66BL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 400),
@@ -14179,7 +16567,12 @@ public final class OctiOpeningBookData {
         new OctiBotEngine.OpeningBookEntry(0xCF23C72273C3459FL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
-            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437))
+        };
+    }
+
+    private static OctiBotEngine.OpeningBookEntry[] chunk6() {
+        return new OctiBotEngine.OpeningBookEntry[] {
         // OFK ply 3 (after 32+b 36+d 52+a)
         new OctiBotEngine.OpeningBookEntry(0xCF372E35DA53ABC6L, 8,
             new OctiBotEngine.OpeningBookCandidate("36+e", -3323),
@@ -14200,6 +16593,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 2P_1B_SPED ply 1 (after 53+a!)
+        new OctiBotEngine.OpeningBookEntry(0xCF66BBF67A66C067L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e!", -4870),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -9330),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -9330)),
+        // 4P_ED ply 3 (after 33+h 37+f 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xCF7EDF67331BE901L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+d 37+d 77+h 73+h)
         new OctiBotEngine.OpeningBookEntry(0xCF86409614B24804L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -280),
@@ -14230,6 +16633,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33+a", 245),
             new OctiBotEngine.OpeningBookCandidate("73h+a", 245),
             new OctiBotEngine.OpeningBookCandidate("53b+a", 237)),
+        // 2P_1B_ED ply 3 (after 53+b 57+f 33+h)
+        new OctiBotEngine.OpeningBookEntry(0xD0266871FFF876BFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2910),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2910),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2910)),
         // 4P ply 4 (after 33+f 37+f 77+h 73+h)
         new OctiBotEngine.OpeningBookEntry(0xD03BA79BA15C865AL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
@@ -14245,11 +16653,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", -140),
             new OctiBotEngine.OpeningBookCandidate("33c+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -280)),
+        // 2P_1B_ED ply 2 (after 33+b 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xD0920EB25BB59D9EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -500),
+            new OctiBotEngine.OpeningBookCandidate("53+h", -500),
+            new OctiBotEngine.OpeningBookCandidate("53+a", -500)),
         // 4P ply 4 (after 33+a 37+e 77+e 73+b)
         new OctiBotEngine.OpeningBookEntry(0xD0B6585673CFBA1DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 0)),
+        // 4P_ED ply 3 (after 33+c 37+b 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xD0BE28F6336290F0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
         // 4P ply 4 (after 33+a 37+b 77+b 73+b)
         new OctiBotEngine.OpeningBookEntry(0xD0DA5B326BD9D4AFL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", -120),
@@ -14265,6 +16683,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 400),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 260)),
+        // 2P_1B_ED ply 2 (after 53+b 77+e)
+        new OctiBotEngine.OpeningBookEntry(0xD115ED3071ACB2FFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("33+a", 0),
+            new OctiBotEngine.OpeningBookCandidate("73+h", 0),
+            new OctiBotEngine.OpeningBookCandidate("53b-64", 0)),
         // 2P 3-Base ply 4 (after 53+a 37+f 73+c 77+f)
         new OctiBotEngine.OpeningBookEntry(0xD131BDDDBEC693A0L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+h", -280),
@@ -14287,6 +16710,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+d", -260)),
         // 4P ply 3 (after 33+h 37+f 77+f)
         new OctiBotEngine.OpeningBookEntry(0xD19BB5E7A5C24FA4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 4P_ED ply 3 (after 33+b 37+f 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xD1B9DB59DFED798CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
+        // 4P_ED ply 3 (after 33+d 37+c 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xD1C6ADA2E51AE33AL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1297)),
+        // 4P_ED ply 3 (after 33+c 37+d 77+g)
+        new OctiBotEngine.OpeningBookEntry(0xD1E18A4534566C1EL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
@@ -14320,6 +16758,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", -280),
             new OctiBotEngine.OpeningBookCandidate("53b+a", -440),
             new OctiBotEngine.OpeningBookCandidate("53b-64", -830)),
+        // 2P_3B_SPED ply 1 (after 53+a!)
+        new OctiBotEngine.OpeningBookEntry(0xD215B59CABE2EEE2L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e!", -1540),
+            new OctiBotEngine.OpeningBookCandidate("77+e!", -1857),
+            new OctiBotEngine.OpeningBookCandidate("77+b!", -1995)),
         // 4P ply 4 (after 33+b 37+d 77+e 73+f)
         new OctiBotEngine.OpeningBookEntry(0xD24DBB28E80EB6E9L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
@@ -14360,6 +16803,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("53+b", -419),
             new OctiBotEngine.OpeningBookCandidate("73+h", -419),
             new OctiBotEngine.OpeningBookCandidate("53+h", -419)),
+        // 4P_ED ply 3 (after 33+f 37+f 77+b)
+        new OctiBotEngine.OpeningBookEntry(0xD3259B0ED64EDB25L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -917),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -917),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -917)),
         // 4P ply 4 (after 33+h 37+h 77+e 73+g)
         new OctiBotEngine.OpeningBookEntry(0xD353134E985641C4L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 260),
@@ -14440,6 +16888,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -260)),
+        // 4P_ED ply 2 (after 33+a 37+h)
+        new OctiBotEngine.OpeningBookEntry(0xD452010114528200L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 400),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 400),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 400)),
         // 2P 3-Base ply 3 (after 53+a 57+d 53a+h)
         new OctiBotEngine.OpeningBookEntry(0xD453495B12D5B0CCL, 8,
             new OctiBotEngine.OpeningBookCandidate("77+e", -2577),
@@ -14450,6 +16903,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -380)),
+        // 2P_3B_ED ply 3 (after 33+a 37+f 53+b)
+        new OctiBotEngine.OpeningBookEntry(0xD4936E51D52B1DDCL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2841),
+            new OctiBotEngine.OpeningBookCandidate("57+h", -2841),
+            new OctiBotEngine.OpeningBookCandidate("37+b", -2841)),
         // 2P 3-Base ply 2 (after 53+a 57+e)
         new OctiBotEngine.OpeningBookEntry(0xD4B339E63E31F4B8L, 8,
             new OctiBotEngine.OpeningBookCandidate("33+a", 0),
@@ -14465,6 +16923,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -140)),
+        // 2P_1B_ED ply 3 (after 33+b 37+d 53+a)
+        new OctiBotEngine.OpeningBookEntry(0xD51CDA87098ECF59L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+d", -3180),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -3180),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -3180)),
         // 4P ply 4 (after 33+a 37+h 77+g 73+b)
         new OctiBotEngine.OpeningBookEntry(0xD51F51867120BC93L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 540),
@@ -14485,6 +16948,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -280),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -280),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -400)),
+        // 4P_ED ply 2 (after 33+h 37+b)
+        new OctiBotEngine.OpeningBookEntry(0xD56E7B4AE9E91E27L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
         // 4P ply 4 (after 33+h 37+d 77+f 73+b)
         new OctiBotEngine.OpeningBookEntry(0xD57C897E8BAFDC5AL, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 0),
@@ -14580,11 +17048,21 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("32+b", -1248),
             new OctiBotEngine.OpeningBookCandidate("52+h", -1248),
             new OctiBotEngine.OpeningBookCandidate("22b+a", -1755)),
+        // 4P_ED ply 3 (after 33+h 37+e 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xD765E12356016799L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1297),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1297)),
         // 4P ply 4 (after 33+a 37+h 77+d 73+d)
         new OctiBotEngine.OpeningBookEntry(0xD7E2E1F3F2E084F8L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 660),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 660),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 520)),
+        // 4P_ED ply 3 (after 33+f 37+c 77+e)
+        new OctiBotEngine.OpeningBookEntry(0xD82FA256A853060CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+a 37+c 77+f 73+h)
         new OctiBotEngine.OpeningBookEntry(0xD8456247F1D261B6L, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
@@ -14595,6 +17073,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -260)),
+        // 4P_ED ply 2 (after 33+d 37+f)
+        new OctiBotEngine.OpeningBookEntry(0xD8AB0DF73CF9291FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
         // 2P 3-Base ply 4 (after 33+a 37+e 73+a 57+d)
         new OctiBotEngine.OpeningBookEntry(0xD8B6F974A14E5A0CL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+h", -155),
@@ -14607,9 +17090,9 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P_3B_ED ply 1 (after 53+a)
         new OctiBotEngine.OpeningBookEntry(0xD8F2AE8E9AFA57BEL, 8,
-            new OctiBotEngine.OpeningBookCandidate("77+e", -2632),
             new OctiBotEngine.OpeningBookCandidate("37+e", -2632),
-            new OctiBotEngine.OpeningBookCandidate("57+e", -2632)),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2632),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2632)),
         // 4P ply 4 (after 33+h 37+d 77+b 73+d)
         new OctiBotEngine.OpeningBookEntry(0xD8FD4E618AF0D39DL, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
@@ -14630,6 +17113,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33f+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -120)),
+        // 4P_ED ply 3 (after 33+h 37+d 77+e)
+        new OctiBotEngine.OpeningBookEntry(0xD92A379ECBBCC269L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P 3-Base ply 3 (after 53+a 37+e 53a+b)
         new OctiBotEngine.OpeningBookEntry(0xD9428B52F977CDE8L, 8,
             new OctiBotEngine.OpeningBookCandidate("57+d", -2752),
@@ -14655,6 +17143,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 4P_ED ply 3 (after 33+c 37+h 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xDA075528AB04CF60L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1837),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1837)),
         // 4P ply 3 (after 33+a 37+f 77+d)
         new OctiBotEngine.OpeningBookEntry(0xDA1EB272C01F8C13L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
@@ -14775,6 +17268,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 4P_ED ply 3 (after 33+a 37+e 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xDCE0E6B633DCA42EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+f 37+b 77+b 73+h)
         new OctiBotEngine.OpeningBookEntry(0xDCE625C3724BAD26L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -660),
@@ -14810,6 +17308,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 140)),
+        // 2P_1B_ED ply 3 (after 53+b 37+e 53b+a)
+        new OctiBotEngine.OpeningBookEntry(0xDDA73274C47F2860L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77e+f", -3180),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -3200),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3200)),
         // 4P ply 4 (after 33+f 37+f 77+f 73+g)
         new OctiBotEngine.OpeningBookEntry(0xDDC617D99869CC5AL, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
@@ -14880,6 +17383,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+h", 0),
             new OctiBotEngine.OpeningBookCandidate("33+a", 0),
             new OctiBotEngine.OpeningBookCandidate("64b+a", 0)),
+        // 4P_ED ply 3 (after 33+f 37+b 77+h)
+        new OctiBotEngine.OpeningBookEntry(0xDFF819560559F059L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 2P 3-Base ply 4 (after 53+a 57+e 53a+b 37+d)
         new OctiBotEngine.OpeningBookEntry(0xE022D408E9BB58B1L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", 0),
@@ -14940,6 +17448,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -260)),
+        // 4P_ED ply 3 (after 33+f 37+h 77+e)
+        new OctiBotEngine.OpeningBookEntry(0xE1E92AABA42B00EDL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 3 (after 33+a 37+e 77+f)
         new OctiBotEngine.OpeningBookEntry(0xE2077D6D320A66F9L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
@@ -14960,6 +17473,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -260)),
+        // 2P_3B_ED ply 3 (after 53+a 57+d 53a+h)
+        new OctiBotEngine.OpeningBookEntry(0xE2547EF71E70887CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e", -2577),
+            new OctiBotEngine.OpeningBookCandidate("57d+e", -2577),
+            new OctiBotEngine.OpeningBookCandidate("77+f", -2577)),
         // 4P ply 4 (after 33+c 37+c 77+g 73+g)
         new OctiBotEngine.OpeningBookEntry(0xE25E26686BC4E952L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
@@ -14980,6 +17498,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 800),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 800),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 540)),
+        // 4P_ED ply 3 (after 33+d 37+b 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xE2B958817104BA4BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+h 37+e 77+d 73+f)
         new OctiBotEngine.OpeningBookEntry(0xE2C798F00E4AE7E6L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
@@ -15000,11 +17523,26 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33h+b", 20)),
+        // 4P_ED ply 3 (after 33+c 37+c 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xE3C1DDD5A77CC981L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
+        // 4P_ED ply 3 (after 33+d 37+d 77+g)
+        new OctiBotEngine.OpeningBookEntry(0xE3E6FA32763046A5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+b 37+f 77+f 73+f)
         new OctiBotEngine.OpeningBookEntry(0xE41BA28A87A6F9F3L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 280),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 280),
             new OctiBotEngine.OpeningBookCandidate("33b+d", 20)),
+        // 4P_ED ply 3 (after 33+f 37+e 77+g)
+        new OctiBotEngine.OpeningBookEntry(0xE440237BA6C40663L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
         // 4P ply 4 (after 33+c 37+d 77+g 73+f)
         new OctiBotEngine.OpeningBookEntry(0xE443F3966C1DEC61L, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
@@ -15035,6 +17573,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1837),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1837),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1837)),
+        // 4P_ED ply 3 (after 33+a 37+f 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xE4F929A9C1C94EC4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P 3-Base ply 4 (after 33+b 57+d 53+h 77+e)
         new OctiBotEngine.OpeningBookEntry(0xE517340457E6535CL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -155),
@@ -15075,6 +17618,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33f+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33f+b", 20)),
+        // 2P_3B_ED ply 2 (after 53+b 57+d)
+        new OctiBotEngine.OpeningBookEntry(0xE6060DC4A6D0E884L, 8,
+            new OctiBotEngine.OpeningBookCandidate("33+b", -419),
+            new OctiBotEngine.OpeningBookCandidate("73+a", -419),
+            new OctiBotEngine.OpeningBookCandidate("33+a", -419)),
+        // 4P_ED ply 3 (after 33+a 37+d 77+h)
+        new OctiBotEngine.OpeningBookEntry(0xE6077E289775AEFAL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P 3-Base ply 1 (after 53+a)
         new OctiBotEngine.OpeningBookEntry(0xE61535559B2C9569L, 8,
             new OctiBotEngine.OpeningBookCandidate("37+e", -2632),
@@ -15155,6 +17708,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
+        // 4P_ED ply 3 (after 33+b 37+d 77+e)
+        new OctiBotEngine.OpeningBookEntry(0xE7EFC2FBB0453696L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 4P_ED ply 3 (after 33+d 37+h 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xE800255FE962E5DBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1697),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1697),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1697)),
         // 4P ply 4 (after 33+b 37+b 77+d 73+d)
         new OctiBotEngine.OpeningBookEntry(0xE81B6EDD74A2EC20L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 400),
@@ -15215,6 +17778,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+c", 260),
             new OctiBotEngine.OpeningBookCandidate("33d+b", 140)),
+        // 4P_ED ply 3 (after 33+b 37+e 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xE9A014462DF89366L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 2P 3-Base ply 4 (after 33+h 77+e 73+h 57+e)
         new OctiBotEngine.OpeningBookEntry(0xE9D503F11EF4AE4CL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+a", -120),
@@ -15230,16 +17798,31 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", 120),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 120),
             new OctiBotEngine.OpeningBookCandidate("33h+b", 0)),
+        // 2P_3B_ED ply 2 (after 53+a 57+e)
+        new OctiBotEngine.OpeningBookEntry(0xEA54A23D3FE7366FL, 8,
+            new OctiBotEngine.OpeningBookCandidate("33+a", 0),
+            new OctiBotEngine.OpeningBookCandidate("73+a", 0),
+            new OctiBotEngine.OpeningBookCandidate("33+b", 0)),
         // 4P ply 4 (after 33+f 37+b 77+h 73+f)
         new OctiBotEngine.OpeningBookEntry(0xEA5A60855D127026L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -380)),
+        // 4P_SPED ply 1 (after 33+e!)
+        new OctiBotEngine.OpeningBookEntry(0xEA9443DEB6CC3B3BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+a!", -1476),
+            new OctiBotEngine.OpeningBookCandidate("37+e!", -2810),
+            new OctiBotEngine.OpeningBookCandidate("37+f!", -9359)),
         // 4P ply 4 (after 33+h 37+c 77+e 73+g)
         new OctiBotEngine.OpeningBookEntry(0xEA959BB3942E4725L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33h+b", -260)),
+        // 4P_ED ply 2 (after 33+c 37+f)
+        new OctiBotEngine.OpeningBookEntry(0xEAAC7D807E9F03A4L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 140),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 140)),
         // 4P ply 2 (after 33+a 37+h)
         new OctiBotEngine.OpeningBookEntry(0xEAB59ADA158440D7L, 8,
             new OctiBotEngine.OpeningBookCandidate("77+e", 400),
@@ -15275,6 +17858,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 4P_ED ply 2 (after 33+b 37+b)
+        new OctiBotEngine.OpeningBookEntry(0xEBAB8E2F9210EAD8L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 140),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 140)),
         // 4P ply 4 (after 33+b 37+d 77+f 73+b)
         new OctiBotEngine.OpeningBookEntry(0xEBB97C1BF05628A5L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
@@ -15325,6 +17913,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 0)),
+        // 2P_3B_SP ply 1 (after 53+a!)
+        new OctiBotEngine.OpeningBookEntry(0xECF22E47AA342C35L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("77+e!", -1865),
+            new OctiBotEngine.OpeningBookCandidate("37+e!", -1865)),
         // 4P ply 4 (after 33+b 37+c 77+d 73+h)
         new OctiBotEngine.OpeningBookEntry(0xED0590B7EFF656FEL, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", -140),
@@ -15335,6 +17928,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 400),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 400),
             new OctiBotEngine.OpeningBookCandidate("33c+d", 260)),
+        // 4P_SP ply 1 (after 33+b!)
+        new OctiBotEngine.OpeningBookEntry(0xED3FCE92FDB959FEL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e!", 3222),
+            new OctiBotEngine.OpeningBookCandidate("37+f!", -3728),
+            new OctiBotEngine.OpeningBookCandidate("37+b!", -3754)),
         // 4P ply 4 (after 33+h 37+b 77+h 73+g)
         new OctiBotEngine.OpeningBookEntry(0xED4220B33924B170L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
@@ -15350,6 +17948,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -260),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -380)),
+        // 4P_ED ply 2 (after 33+a 37+c)
+        new OctiBotEngine.OpeningBookEntry(0xED9489FC182A84E1L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
         // 2P_1B_SPED ply 0 (initial)
         new OctiBotEngine.OpeningBookEntry(0xED94D74F7390740EL, 8,
             new OctiBotEngine.OpeningBookCandidate("53+a!", 0),
@@ -15385,6 +17988,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 260),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 260),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 120)),
+        // 2P_3B_ED ply 3 (after 33+a 37+f 73+f)
+        new OctiBotEngine.OpeningBookEntry(0xEE426A619D3F44AFL, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2069),
+            new OctiBotEngine.OpeningBookCandidate("57+f", -2069),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -2069)),
         // 4P ply 3 (after 33+c 37+b 77+f)
         new OctiBotEngine.OpeningBookEntry(0xEE59B32D32B45227L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
@@ -15425,6 +18033,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1717),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1717)),
+        // 4P_ED ply 3 (after 33+h 37+f 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xEF7C2E3CA4148D73L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 4P ply 4 (after 33+h 37+e 77+h 73+b)
         new OctiBotEngine.OpeningBookEntry(0xEF9B11E02F06D68EL, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", -140),
@@ -15450,11 +18063,16 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33c+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33c+a", 0),
             new OctiBotEngine.OpeningBookCandidate("33c+d", -140)),
+        // 4P_ED ply 3 (after 33+c 37+b 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xF0BCD9ADA46DF482L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
         // 2P_3B_SPED ply 0 (initial)
         new OctiBotEngine.OpeningBookEntry(0xF0E7D925A2145A8BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("53+e!", 148),
             new OctiBotEngine.OpeningBookCandidate("73+h!", 0),
-            new OctiBotEngine.OpeningBookCandidate("53+a!", 0),
-            new OctiBotEngine.OpeningBookCandidate("33+a!", 0)),
+            new OctiBotEngine.OpeningBookCandidate("53+a!", 0)),
         // 4P ply 4 (after 33+b 37+d 77+e 73+a)
         new OctiBotEngine.OpeningBookEntry(0xF0FDC7E3978587A8L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", 0),
@@ -15480,8 +18098,23 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 280),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 280),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 140)),
+        // 2P_1B_SP ply 1 (after 53+a!)
+        new OctiBotEngine.OpeningBookEntry(0xF181202D7BB002B0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("57+e!", -4870),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -9640),
+            new OctiBotEngine.OpeningBookCandidate("37+d!", -9740)),
         // 4P ply 3 (after 33+h 37+f 77+d)
         new OctiBotEngine.OpeningBookEntry(0xF19944BC32CD2BD6L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
+        // 4P_ED ply 3 (after 33+b 37+f 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xF1BB2A0248E21DFEL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 4P_ED ply 3 (after 33+d 37+c 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xF1C45CF972158748L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
@@ -15495,11 +18128,26 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1037),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1037),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1037)),
+        // 4P_ED ply 3 (after 33+a 37+d 77+e)
+        new OctiBotEngine.OpeningBookEntry(0xF2ADC150396E65ACL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 4P_ED ply 2 (after 33+c 37+e)
+        new OctiBotEngine.OpeningBookEntry(0xF2B743C41B858D3CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
         // 4P ply 4 (after 33+f 37+d 77+f 73+h)
         new OctiBotEngine.OpeningBookEntry(0xF2C7014160EF0216L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -400),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -520)),
+        // 4P_ED ply 3 (after 33+b 37+d 77+h)
+        new OctiBotEngine.OpeningBookEntry(0xF3457D831E5EFDC0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // OFK ply 3 (after 32+a 36+d 42+a)
         new OctiBotEngine.OpeningBookEntry(0xF34AAEC0CCA098E6L, 8,
             new OctiBotEngine.OpeningBookCandidate("46+f", -3730),
@@ -15520,6 +18168,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 0),
             new OctiBotEngine.OpeningBookCandidate("33a+d", -140)),
+        // 2P_1B_ED ply 2 (after 53+b 57+d)
+        new OctiBotEngine.OpeningBookEntry(0xF395AFD97A273C66L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+h", -630),
+            new OctiBotEngine.OpeningBookCandidate("33+a", -630),
+            new OctiBotEngine.OpeningBookCandidate("73+a", -630)),
         // 4P ply 4 (after 33+f 37+b 77+g 73+h)
         new OctiBotEngine.OpeningBookEntry(0xF398A3F267DBFEF8L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -260),
@@ -15542,9 +18195,9 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+d", -140)),
         // 2P_3B_ED ply 1 (after 33+h)
         new OctiBotEngine.OpeningBookEntry(0xF3F679D1EE355366L, 8,
-            new OctiBotEngine.OpeningBookCandidate("77+e", -2512),
             new OctiBotEngine.OpeningBookCandidate("37+e", -2512),
-            new OctiBotEngine.OpeningBookCandidate("57+e", -2512)),
+            new OctiBotEngine.OpeningBookCandidate("57+e", -2512),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -2512)),
         // 4P ply 4 (after 33+c 37+e 77+g 73+b)
         new OctiBotEngine.OpeningBookEntry(0xF3FA13437EF7B3AFL, 8,
             new OctiBotEngine.OpeningBookCandidate("33c+b", 140),
@@ -15585,6 +18238,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33d+b", -260)),
+        // 4P_ED ply 3 (after 33+f 37+h 77+h)
+        new OctiBotEngine.OpeningBookEntry(0xF54395D30A30CBBBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+d 37+e 77+f 73+h)
         new OctiBotEngine.OpeningBookEntry(0xF561D808B01B42D0L, 8,
             new OctiBotEngine.OpeningBookCandidate("33d+a", -140),
@@ -15660,6 +18318,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+g", -1577),
             new OctiBotEngine.OpeningBookCandidate("73+h", -1577)),
+        // 4P_ED ply 3 (after 33+h 37+e 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xF7671078C10E03EBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 4 (after 33+h 37+f 77+h 73+b)
         new OctiBotEngine.OpeningBookEntry(0xF7802FA44A1C5816L, 8,
             new OctiBotEngine.OpeningBookCandidate("33h+a", 0),
@@ -15675,6 +18338,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", -2376),
             new OctiBotEngine.OpeningBookCandidate("37+d", -2376),
             new OctiBotEngine.OpeningBookCandidate("77+f", -2496)),
+        // 2P_1B_ED ply 3 (after 53+b 57+f 53b+a)
+        new OctiBotEngine.OpeningBookEntry(0xF7C7DCEAC2875C9EL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+d", -3200),
+            new OctiBotEngine.OpeningBookCandidate("77+e", -3200),
+            new OctiBotEngine.OpeningBookCandidate("37+e", -3200)),
         // 4P ply 4 (after 33+a 37+h 77+f 73+d)
         new OctiBotEngine.OpeningBookEntry(0xF7E010A865EFE08AL, 8,
             new OctiBotEngine.OpeningBookCandidate("33a+b", 800),
@@ -15705,6 +18373,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 400),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 400),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 260)),
+        // 4P_ED ply 2 (after 33+b 37+c)
+        new OctiBotEngine.OpeningBookEntry(0xF8D68A579101D7DBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 0),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 0)),
         // 4P ply 2 (after 33+h 37+c)
         new OctiBotEngine.OpeningBookEntry(0xF8F4E4E9EB2EE1F3L, 8,
             new OctiBotEngine.OpeningBookCandidate("77+e", -140),
@@ -15745,6 +18418,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("77+e", -400),
             new OctiBotEngine.OpeningBookCandidate("77+g", -400),
             new OctiBotEngine.OpeningBookCandidate("77+f", -400)),
+        // 4P_ED ply 3 (after 33+c 37+h 77+f)
+        new OctiBotEngine.OpeningBookEntry(0xFA05A4733C0BAB12L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1977),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1977)),
         // 4P ply 3 (after 33+a 37+f 77+f)
         new OctiBotEngine.OpeningBookEntry(0xFA1C43295710E861L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1717),
@@ -15805,6 +18483,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33b+a", 140),
             new OctiBotEngine.OpeningBookCandidate("33b+c", 140),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -120)),
+        // 4P_ED ply 3 (after 33+f 37+f 77+g)
+        new OctiBotEngine.OpeningBookEntry(0xFC5B1D3FC3DE88FBL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1317),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1317)),
         // 4P ply 3 (after 33+d 37+b 77+d)
         new OctiBotEngine.OpeningBookEntry(0xFC5C3201E7DD1CEEL, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
@@ -15815,6 +18498,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33h+a", 520),
             new OctiBotEngine.OpeningBookCandidate("33h+c", 520),
             new OctiBotEngine.OpeningBookCandidate("33h+b", 400)),
+        // 4P_ED ply 3 (after 33+a 37+e 77+d)
+        new OctiBotEngine.OpeningBookEntry(0xFCE217EDA4D3C05CL, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1437),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1437)),
         // 4P ply 3 (after 33+c 37+c 77+f)
         new OctiBotEngine.OpeningBookEntry(0xFD24B75531A56F24L, 8,
             new OctiBotEngine.OpeningBookCandidate("73+a", -1577),
@@ -15880,11 +18568,31 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33f+a", -660),
             new OctiBotEngine.OpeningBookCandidate("33f+c", -660),
             new OctiBotEngine.OpeningBookCandidate("33f+b", -780)),
+        // 4P_ED ply 3 (after 33+c 37+d 77+b)
+        new OctiBotEngine.OpeningBookEntry(0xFE9F0C7421C63FC0L, 8,
+            new OctiBotEngine.OpeningBookCandidate("73+a", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+g", -1177),
+            new OctiBotEngine.OpeningBookCandidate("73+h", -1177)),
+        // 4P_SP ply 1 (after 33+a)
+        new OctiBotEngine.OpeningBookEntry(0xFEA6220DF63AE880L, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e!", 19),
+            new OctiBotEngine.OpeningBookCandidate("37+c!", -686),
+            new OctiBotEngine.OpeningBookCandidate("37+d", -1943)),
         // 4P ply 4 (after 33+b 37+e 77+d 73+a)
         new OctiBotEngine.OpeningBookEntry(0xFEB2115E0A382258L, 8,
             new OctiBotEngine.OpeningBookCandidate("33b+a", -140),
             new OctiBotEngine.OpeningBookCandidate("33b+c", -140),
             new OctiBotEngine.OpeningBookCandidate("33b+d", -400)),
+        // 4P_SP ply 1 (after 33+h!)
+        new OctiBotEngine.OpeningBookEntry(0xFEE2A62FDA68CC0BL, 8,
+            new OctiBotEngine.OpeningBookCandidate("37+e!", 6826),
+            new OctiBotEngine.OpeningBookCandidate("37+c!", -366),
+            new OctiBotEngine.OpeningBookCandidate("37+f!", -1197)),
+        // 4P_ED ply 2 (after 33+a 37+b)
+        new OctiBotEngine.OpeningBookEntry(0xFEE98D841B3BB9E2L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 140),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 140),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 140)),
         // 4P ply 4 (after 33+f 37+b 77+e 73+f)
         new OctiBotEngine.OpeningBookEntry(0xFEF0DFFDF309BB70L, 8,
             new OctiBotEngine.OpeningBookCandidate("33f+a", -120),
@@ -15925,6 +18633,11 @@ public final class OctiOpeningBookData {
             new OctiBotEngine.OpeningBookCandidate("33a+b", 280),
             new OctiBotEngine.OpeningBookCandidate("33a+c", 280),
             new OctiBotEngine.OpeningBookCandidate("33a+d", 140)),
+        // 4P_ED ply 2 (after 33+h 37+h)
+        new OctiBotEngine.OpeningBookEntry(0xFFD5F7CFE68025C5L, 8,
+            new OctiBotEngine.OpeningBookCandidate("77+e", 260),
+            new OctiBotEngine.OpeningBookCandidate("77+g", 260),
+            new OctiBotEngine.OpeningBookCandidate("77+f", 260)),
         // 4P ply 2 (after 33+b 37+h)
         new OctiBotEngine.OpeningBookEntry(0xFFF799719CAF13EDL, 8,
             new OctiBotEngine.OpeningBookCandidate("77+e", 400),
