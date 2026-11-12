@@ -5884,7 +5884,7 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("OCTI v2.5.0") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v2.5.1") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Official Platform") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("OFFICIAL PLATFORM") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("Lv4: Expert (40s)") != std::string::npos);
@@ -6457,6 +6457,21 @@ TEST(OctiHttpServerIntegrationTest, WebUiJumpConfirmAndCaptureOverlaysDodgeTarge
     CHECK_TRUE(rPlay.body.find("web-drag-grip") != std::string::npos);
     CHECK_TRUE(rPlay.body.find("_confirmBarUserDragged") != std::string::npos);
     CHECK_TRUE(rPlay.body.find("_captureCardUserDragged") != std::string::npos);
+}
+
+TEST(OctiHttpServerIntegrationTest, WebUiStrengthenedBotSearchAndSuperProngBonusServed)
+{
+    Reply rPlay = http().get("/");
+    EXPECT_STATUS(200, rPlay);
+    CHECK_TRUE(rPlay.body.find("dfsSuperBonusJumps") != std::string::npos);
+    CHECK_TRUE(rPlay.body.find("enumerateSuperBonusPreludes") != std::string::npos);
+    CHECK_TRUE(rPlay.body.find("generateBaseMoves") != std::string::npos);
+    CHECK_TRUE(rPlay.body.find("isTacticalMove") != std::string::npos);
+    CHECK_TRUE(rPlay.body.find("quiescenceSearch") != std::string::npos);
+    CHECK_TRUE(rPlay.body.find("computeBestMove") != std::string::npos);
+    CHECK_TRUE(rPlay.body.find("ctx.qttMap") != std::string::npos);
+    CHECK_TRUE(rPlay.body.find("ctx.killers") != std::string::npos);
+    CHECK_TRUE(rPlay.body.find("ctx.history") != std::string::npos);
 }
 
 int main(int argc, char **argv)

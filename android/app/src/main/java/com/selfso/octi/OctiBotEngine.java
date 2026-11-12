@@ -66,6 +66,10 @@ public class OctiBotEngine {
     private static final int TT_MASK = TT_SIZE - 1;
     private static final int TT_LOCK_COUNT = 1024;
     private static final int TT_LOCK_MASK = TT_LOCK_COUNT - 1;
+    private static final int MAX_SEARCH_PLY = 128;
+    private static final int HISTORY_SIZE = 4096;
+    private static final int HISTORY_MASK = HISTORY_SIZE - 1;
+    private static final int MAX_HISTORY_VAL = 4096;
 
     public static final class TranspositionEntry {
         public volatile long key = 0L;
@@ -307,6 +311,11 @@ public class OctiBotEngine {
             p.lazySmpThreads = 2;
             p.compositeMoveMaxPly = 1;
             p.rootScoreJitter = 20;
+            p.usePvs = true;
+            p.useKillers = true;
+            p.useHistory = true;
+            p.qsearchUseTt = true;
+            p.lazySmpDiversifyHelpers = true;
             p.closestPodDistWeight = 320;
             p.secondClosestPodDistWeight = 150;
             p.oneStepBaseThreatBonus = 8500;
@@ -336,6 +345,15 @@ public class OctiBotEngine {
             p.lazySmpThreads = 4;
             p.compositeMoveMaxPly = 2;
             p.rootScoreJitter = 0;
+            p.usePvs = true;
+            p.aspirationWindowCp = 250;
+            p.useKillers = true;
+            p.useHistory = true;
+            p.lmrMinDepth = 3;
+            p.lmrMinMoveIndex = 4;
+            p.nullMoveMinDepth = 3;
+            p.qsearchUseTt = true;
+            p.lazySmpDiversifyHelpers = true;
             p.closestPodDistWeight = 350;
             p.secondClosestPodDistWeight = 220;
             p.oneStepBaseThreatBonus = 9500;
@@ -345,6 +363,10 @@ public class OctiBotEngine {
             p.secondArmedPodBonus = 1500;
             p.thirdArmedPodBonus = 900;
             p.singlePodMonopolyPenalty = 1400;
+            p.ofkSinglePodMonopolyPenalty = 5200;
+            p.enemyHeavyPodThreatPenalty = 800;
+            p.unarmedHomePodPenalty = 650;
+            p.canLiberateBonus = 2500;
             p.leapfrogBatteryWeight = 800;
             p.leapfrogForwardBonus = 600;
             p.jumpReachableSquareWeight = 180;
@@ -365,6 +387,15 @@ public class OctiBotEngine {
             p.lazySmpThreads = 4;
             p.compositeMoveMaxPly = 3;
             p.rootScoreJitter = 0;
+            p.usePvs = true;
+            p.aspirationWindowCp = 250;
+            p.useKillers = true;
+            p.useHistory = true;
+            p.lmrMinDepth = 3;
+            p.lmrMinMoveIndex = 4;
+            p.nullMoveMinDepth = 3;
+            p.qsearchUseTt = true;
+            p.lazySmpDiversifyHelpers = true;
             p.closestPodDistWeight = 350;
             p.secondClosestPodDistWeight = 220;
             p.oneStepBaseThreatBonus = 9500;
@@ -374,6 +405,10 @@ public class OctiBotEngine {
             p.secondArmedPodBonus = 1500;
             p.thirdArmedPodBonus = 900;
             p.singlePodMonopolyPenalty = 1400;
+            p.ofkSinglePodMonopolyPenalty = 5200;
+            p.enemyHeavyPodThreatPenalty = 800;
+            p.unarmedHomePodPenalty = 650;
+            p.canLiberateBonus = 2500;
             p.leapfrogBatteryWeight = 800;
             p.leapfrogForwardBonus = 600;
             p.jumpReachableSquareWeight = 180;
@@ -394,6 +429,15 @@ public class OctiBotEngine {
             p.lazySmpThreads = 4;
             p.compositeMoveMaxPly = 2;
             p.rootScoreJitter = 0;
+            p.usePvs = true;
+            p.aspirationWindowCp = 250;
+            p.useKillers = true;
+            p.useHistory = true;
+            p.lmrMinDepth = 3;
+            p.lmrMinMoveIndex = 4;
+            p.nullMoveMinDepth = 3;
+            p.qsearchUseTt = true;
+            p.lazySmpDiversifyHelpers = true;
             p.closestPodDistWeight = 350;
             p.secondClosestPodDistWeight = 220;
             p.oneStepBaseThreatBonus = 9500;
@@ -403,6 +447,10 @@ public class OctiBotEngine {
             p.secondArmedPodBonus = 1500;
             p.thirdArmedPodBonus = 900;
             p.singlePodMonopolyPenalty = 1400;
+            p.ofkSinglePodMonopolyPenalty = 5200;
+            p.enemyHeavyPodThreatPenalty = 800;
+            p.unarmedHomePodPenalty = 650;
+            p.canLiberateBonus = 2500;
             p.leapfrogBatteryWeight = 800;
             p.leapfrogForwardBonus = 600;
             p.jumpReachableSquareWeight = 180;
@@ -998,6 +1046,43 @@ public class OctiBotEngine {
         return best;
     }
 
+    private static long mixPathKey64(long z) {
+        z += 0x9E3779B97F4A7C15L;
+        z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
+        z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
+        return z ^ (z >>> 31);
+    }
+
+    private static boolean sameMovePathIgnoringCapture(List<OctiMoveOp> a,
+                                                       List<OctiMoveOp> b) {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        for (int i = 0; i < a.size(); i++) {
+            OctiMoveOp oa = a.get(i);
+            OctiMoveOp ob = b.get(i);
+            if (oa.x0 != ob.x0
+                    || oa.y0 != ob.y0
+                    || (oa.pod.rawConfig() & 0xFFFF) != (ob.pod.rawConfig() & 0xFFFF)
+                    || oa.addPod != ob.addPod
+                    || oa.liberate != ob.liberate
+                    || oa.addProngDir != ob.addProngDir
+                    || oa.rmProngDir != ob.rmProngDir
+                    || oa.superProng != ob.superProng
+                    || oa.isSuperProngBonusMove != ob.isSuperProngBonusMove
+                    || oa.hops.size() != ob.hops.size()) {
+                return false;
+            }
+            for (int h = 0; h < oa.hops.size(); h++) {
+                if (oa.hops.get(h).x != ob.hops.get(h).x
+                        || oa.hops.get(h).y != ob.hops.get(h).y) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     public static List<OctiMove> filterDominatedMoves(OctiBoard board,
                                                       OctiPlayer turn,
                                                       List<OctiMove> moves) {
@@ -1013,162 +1098,142 @@ public class OctiBotEngine {
         boolean edgeless = board.getGame() != null && board.getGame().useEdgelessBoard();
         int freeProngs = board.getGame() != null ? board.getGame().getFreeProngs(turn) : 0;
 
-        Map<PathKey, List<Integer>> enemyVariantsByKey = new HashMap<>();
-        boolean[] pointlessSelfCapture = new boolean[moves.size()];
+        int n = moves.size();
+        long[] pathKeys = new long[n];
+        int[] friendlyCapMasks = new int[n];
+        int[] enemyCapMasks = new int[n];
+        boolean[] hasAnyHops = new boolean[n];
+        boolean[] pointlessSelfCapture = new boolean[n];
+        int[] validHopIndices = new int[n];
+        int numValidHopMoves = 0;
+        boolean anyPointlessSelfCap = false;
+        boolean anyEnemyCap = false;
 
-        for (int i = 0; i < moves.size(); i++) {
+        for (int i = 0; i < n; i++) {
             OctiMove m = moves.get(i);
             List<OctiMoveOp> ops = m.getOps();
+            if (ops.size() == 1 && ops.get(0).hops.isEmpty()) {
+                continue;
+            }
 
-            // Check if move contains pointless self-capture of 0-prong friendly pod when freeProngs > 0
+            long h = mixPathKey64(ops.size());
+            int globalHopIdx = 0;
             boolean badSelfCap = false;
+            int fMask = 0;
+            int eMask = 0;
+            boolean anyHops = false;
+
             for (OctiMoveOp op : ops) {
+                h = mixPathKey64(h ^ (op.x0 & 0xFFL));
+                h = mixPathKey64(h ^ ((op.y0 & 0xFFL) << 8));
+                h = mixPathKey64(h ^ (op.pod.rawConfig() & 0xFFFFL));
+                long flags = (op.addPod ? 1L : 0L)
+                        | ((op.liberate ? 1L : 0L) << 1)
+                        | (((op.addProngDir != null ? op.addProngDir.getIndex() : 255) & 0xFFL) << 2)
+                        | (((op.rmProngDir != null ? op.rmProngDir.getIndex() : 255) & 0xFFL) << 10)
+                        | ((op.superProng ? 1L : 0L) << 18)
+                        | ((op.isSuperProngBonusMove ? 1L : 0L) << 19);
+                h = mixPathKey64(h ^ flags);
+                h = mixPathKey64(h ^ op.hops.size());
+
                 int cx = op.x0;
                 int cy = op.y0;
-                for (OctiHop hop : op.hops) {
-                    int dx = hop.x - cx;
-                    int dy = hop.y - cy;
+                for (int hIdx = 0; hIdx < op.hops.size(); hIdx++) {
+                    anyHops = true;
+                    OctiHop hopItem = op.hops.get(hIdx);
+                    h = mixPathKey64(h ^ ((hopItem.x & 0xFFL) | ((hopItem.y & 0xFFL) << 8)));
+
+                    int dx = hopItem.x - cx;
+                    int dy = hopItem.y - cy;
                     if (edgeless) {
                         for (int d = -2; d <= 2; d++) {
-                            if (((cx + d) % boardW + boardW) % boardW == hop.x) { dx = d; break; }
+                            if (((cx + d) % boardW + boardW) % boardW == hopItem.x) { dx = d; break; }
                         }
                         for (int d = -2; d <= 2; d++) {
-                            if (((cy + d) % boardH + boardH) % boardH == hop.y) { dy = d; break; }
+                            if (((cy + d) % boardH + boardH) % boardH == hopItem.y) { dy = d; break; }
                         }
                     }
                     boolean isJump = (Math.abs(dx) == 2 || Math.abs(dy) == 2);
-                    if (isJump && hop.capture) {
+                    if (isJump && hopItem.capture) {
                         int mx = edgeless ? (((cx + dx / 2) % boardW + boardW) % boardW) : (cx + dx / 2);
                         int my = edgeless ? (((cy + dy / 2) % boardH + boardH) % boardH) : (cy + dy / 2);
                         if (board.isValidCoord(mx, my)) {
                             OctiSquare midSq = board.squareAt(mx, my);
-                            if (!midSq.hasEnemyOf(turn)) {
-                                int prongsOnMid = 0;
-                                for (int pi = 0; pi < midSq.getNumPods(); pi++) {
-                                    prongsOnMid += midSq.getPodAt(pi).getNumProngs();
+                            if (midSq.hasEnemyOf(turn)) {
+                                eMask |= (1 << (globalHopIdx & 31));
+                            } else {
+                                if (freeProngs > 0) {
+                                    int prongsOnMid = 0;
+                                    for (int pi = 0; pi < midSq.getNumPods(); pi++) {
+                                        prongsOnMid += midSq.getPodAt(pi).getNumProngs();
+                                    }
+                                    if (prongsOnMid == 0) {
+                                        badSelfCap = true;
+                                        break;
+                                    }
                                 }
-                                if (prongsOnMid == 0 && freeProngs > 0) {
-                                    badSelfCap = true;
-                                    break;
-                                }
+                                fMask |= (1 << (globalHopIdx & 31));
                             }
                         }
                     }
-                    cx = hop.x;
-                    cy = hop.y;
+                    cx = hopItem.x;
+                    cy = hopItem.y;
+                    globalHopIdx++;
                 }
-                if (badSelfCap) break;
+                if (badSelfCap) {
+                    break;
+                }
             }
 
             if (badSelfCap) {
                 pointlessSelfCapture[i] = true;
+                anyPointlessSelfCap = true;
                 continue;
             }
 
-            if (ops.size() == 1 && !ops.get(0).hops.isEmpty()) {
-                OctiMoveOp op = ops.get(0);
-                List<Integer> coords = new ArrayList<>(op.hops.size());
-                int friendlyCapMask = 0;
-                int enemyCapMask = 0;
-                int cx = op.x0;
-                int cy = op.y0;
-
-                for (int hIdx = 0; hIdx < op.hops.size(); hIdx++) {
-                    OctiHop hopItem = op.hops.get(hIdx);
-                    coords.add(hopItem.x * 16 + hopItem.y);
-                    int dx = hopItem.x - cx;
-                    int dy = hopItem.y - cy;
-                    if (edgeless) {
-                        for (int d = -2; d <= 2; d++) {
-                            if (((cx + d) % boardW + boardW) % boardW == hopItem.x) { dx = d; break; }
-                        }
-                        for (int d = -2; d <= 2; d++) {
-                            if (((cy + d) % boardH + boardH) % boardH == hopItem.y) { dy = d; break; }
-                        }
-                    }
-                    boolean isJump = (Math.abs(dx) == 2 || Math.abs(dy) == 2);
-                    if (isJump && hopItem.capture) {
-                        int mx = edgeless ? (((cx + dx / 2) % boardW + boardW) % boardW) : (cx + dx / 2);
-                        int my = edgeless ? (((cy + dy / 2) % boardH + boardH) % boardH) : (cy + dy / 2);
-                        if (board.isValidCoord(mx, my)) {
-                            OctiSquare midSq = board.squareAt(mx, my);
-                            if (midSq.hasEnemyOf(turn)) {
-                                enemyCapMask |= (1 << (hIdx & 31));
-                            } else {
-                                friendlyCapMask |= (1 << (hIdx & 31));
-                            }
-                        }
-                    }
-                    cx = hopItem.x;
-                    cy = hopItem.y;
+            pathKeys[i] = h;
+            friendlyCapMasks[i] = fMask;
+            enemyCapMasks[i] = eMask;
+            hasAnyHops[i] = anyHops;
+            if (anyHops) {
+                validHopIndices[numValidHopMoves++] = i;
+                if (eMask != 0) {
+                    anyEnemyCap = true;
                 }
-
-                PathKey key = new PathKey(op.x0, op.y0, op.pod.rawConfig() & 0xFFFF, coords, friendlyCapMask);
-                enemyVariantsByKey.computeIfAbsent(key, k -> new ArrayList<>()).add(enemyCapMask);
             }
         }
 
-        List<OctiMove> filtered = new ArrayList<>(moves.size());
-        for (int i = 0; i < moves.size(); i++) {
+        if (!anyPointlessSelfCap && !anyEnemyCap) {
+            return moves;
+        }
+
+        List<OctiMove> filtered = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
             if (pointlessSelfCapture[i]) {
                 continue;
             }
-            OctiMove m = moves.get(i);
-            List<OctiMoveOp> ops = m.getOps();
-            if (ops.size() == 1 && !ops.get(0).hops.isEmpty()) {
-                OctiMoveOp op = ops.get(0);
-                List<Integer> coords = new ArrayList<>(op.hops.size());
-                int friendlyCapMask = 0;
-                int enemyCapMask = 0;
-                int cx = op.x0;
-                int cy = op.y0;
-
-                for (int hIdx = 0; hIdx < op.hops.size(); hIdx++) {
-                    OctiHop hopItem = op.hops.get(hIdx);
-                    coords.add(hopItem.x * 16 + hopItem.y);
-                    int dx = hopItem.x - cx;
-                    int dy = hopItem.y - cy;
-                    if (edgeless) {
-                        for (int d = -2; d <= 2; d++) {
-                            if (((cx + d) % boardW + boardW) % boardW == hopItem.x) { dx = d; break; }
-                        }
-                        for (int d = -2; d <= 2; d++) {
-                            if (((cy + d) % boardH + boardH) % boardH == hopItem.y) { dy = d; break; }
-                        }
+            if (anyEnemyCap && hasAnyHops[i]) {
+                boolean isDominated = false;
+                int eMask = enemyCapMasks[i];
+                int fMask = friendlyCapMasks[i];
+                long pKey = pathKeys[i];
+                for (int k = 0; k < numValidHopMoves; k++) {
+                    int j = validHopIndices[k];
+                    int otherEMask = enemyCapMasks[j];
+                    if (otherEMask != eMask
+                            && (otherEMask & eMask) == eMask
+                            && pathKeys[j] == pKey
+                            && friendlyCapMasks[j] == fMask
+                            && sameMovePathIgnoringCapture(moves.get(i).getOps(), moves.get(j).getOps())) {
+                        isDominated = true;
+                        break;
                     }
-                    boolean isJump = (Math.abs(dx) == 2 || Math.abs(dy) == 2);
-                    if (isJump && hopItem.capture) {
-                        int mx = edgeless ? (((cx + dx / 2) % boardW + boardW) % boardW) : (cx + dx / 2);
-                        int my = edgeless ? (((cy + dy / 2) % boardH + boardH) % boardH) : (cy + dy / 2);
-                        if (board.isValidCoord(mx, my)) {
-                            OctiSquare midSq = board.squareAt(mx, my);
-                            if (midSq.hasEnemyOf(turn)) {
-                                enemyCapMask |= (1 << (hIdx & 31));
-                            } else {
-                                friendlyCapMask |= (1 << (hIdx & 31));
-                            }
-                        }
-                    }
-                    cx = hopItem.x;
-                    cy = hopItem.y;
                 }
-
-                PathKey key = new PathKey(op.x0, op.y0, op.pod.rawConfig() & 0xFFFF, coords, friendlyCapMask);
-                List<Integer> enemyMasks = enemyVariantsByKey.get(key);
-                if (enemyMasks != null) {
-                    boolean isDominated = false;
-                    for (int otherEnemyMask : enemyMasks) {
-                        if (otherEnemyMask != enemyCapMask && (otherEnemyMask & enemyCapMask) == enemyCapMask) {
-                            isDominated = true;
-                            break;
-                        }
-                    }
-                    if (isDominated) {
-                        continue;
-                    }
+                if (isDominated) {
+                    continue;
                 }
             }
-            filtered.add(m);
+            filtered.add(moves.get(i));
         }
 
         return filtered.isEmpty() ? moves : filtered;
@@ -1503,6 +1568,88 @@ public class OctiBotEngine {
         return mask;
     }
 
+    public static int prongDirectionBonus(OctiBoard board,
+                                          OctiGameMode mode,
+                                          OctiPlayer seat,
+                                          OctiDir dir,
+                                          int primaryBonus,
+                                          int diagBonus,
+                                          int sideBonus) {
+        if (dir == null || dir == OctiDir.DIR_UNDEF) {
+            return 0;
+        }
+        if (mode != OctiGameMode.GAME_MODE_4) {
+            if (seat == OctiPlayer.PLAYER_A || seat == OctiPlayer.PLAYER_C) {
+                if (dir == OctiDir.DIR_N) {
+                    return primaryBonus;
+                } else if (dir == OctiDir.DIR_NE || dir == OctiDir.DIR_NW) {
+                    return diagBonus;
+                } else if (dir == OctiDir.DIR_E || dir == OctiDir.DIR_W) {
+                    return sideBonus;
+                }
+            } else if (seat == OctiPlayer.PLAYER_B || seat == OctiPlayer.PLAYER_D) {
+                if (dir == OctiDir.DIR_S) {
+                    return primaryBonus;
+                } else if (dir == OctiDir.DIR_SE || dir == OctiDir.DIR_SW) {
+                    return diagBonus;
+                } else if (dir == OctiDir.DIR_E || dir == OctiDir.DIR_W) {
+                    return sideBonus;
+                }
+            }
+            return 0;
+        }
+
+        OctiSquareType homeType;
+        if (seat == OctiPlayer.PLAYER_A) {
+            homeType = OctiSquareType.A_HOME_SQUARE;
+        } else if (seat == OctiPlayer.PLAYER_B) {
+            homeType = OctiSquareType.B_HOME_SQUARE;
+        } else if (seat == OctiPlayer.PLAYER_C) {
+            homeType = OctiSquareType.C_HOME_SQUARE;
+        } else if (seat == OctiPlayer.PLAYER_D) {
+            homeType = OctiSquareType.D_HOME_SQUARE;
+        } else {
+            return 0;
+        }
+
+        int w = (board != null) ? board.getBoardWidth() : 9;
+        int h = (board != null) ? board.getBoardHeight() : 9;
+        int hx = -1;
+        int hy = -1;
+        if (board != null) {
+            for (int y = 0; y < h && hx < 0; y++) {
+                for (int x = 0; x < w; x++) {
+                    if (board.squareAt(x, y).getType() == homeType) {
+                        hx = x;
+                        hy = y;
+                        break;
+                    }
+                }
+            }
+        }
+        if (hx < 0 || hy < 0) {
+            return 0;
+        }
+
+        int cx = w / 2;
+        int cy = h / 2;
+        int fx = (hx < cx) ? 1 : ((hx > cx) ? -1 : 0);
+        int fy = (hy < cy) ? 1 : ((hy > cy) ? -1 : 0);
+        int dx = dir.deltaX();
+        int dy = dir.deltaY();
+
+        if ((dx == 0 && dy == fy) || (dx == fx && dy == 0)) {
+            return primaryBonus;
+        }
+        if (dx == fx && dy == fy) {
+            return diagBonus;
+        }
+        if (dx != 0 && dy != 0 && (dx == fx || dy == fy)) {
+            return sideBonus;
+        }
+        return 0;
+    }
+
     private static int scoreMoveHeuristic(OctiBoard board,
                                           OctiMove move,
                                           OctiPlayer turn,
@@ -1528,21 +1675,90 @@ public class OctiBotEngine {
 
         int score = 0;
         List<OctiMoveOp> ops = move.getOps();
-
-        // High priority for composite multi-pod coordinated moves!
-        if (ops.size() > 1) {
-            score += 8000 + (ops.size() - 1) * 4000;
+        int regularOps = 0;
+        int preludeOps = 0;
+        for (OctiMoveOp op : ops) {
+            if (op.isSuperProngBonusMove) {
+                preludeOps++;
+            } else {
+                regularOps++;
+            }
         }
 
+        // Prioritize multi-pod composite moves (multiple regular ops), not superprong preludes
+        if (regularOps > 1) {
+            score += 8000 + (regularOps - 1) * 4000;
+        }
+
+        // Pre-scan move-wide enemy capture status across all ops (preludes + regular)
+        boolean moveHasEnemyCapture = false;
         for (OctiMoveOp op : ops) {
+            int prevX = op.x0;
+            int prevY = op.y0;
+            for (OctiHop hop : op.hops) {
+                int dx = hop.x - prevX;
+                int dy = hop.y - prevY;
+                if (edgeless) {
+                    for (int d = -2; d <= 2; d++) {
+                        if (((prevX + d) % w + w) % w == hop.x) { dx = d; break; }
+                    }
+                    for (int d = -2; d <= 2; d++) {
+                        if (((prevY + d) % h + h) % h == hop.y) { dy = d; break; }
+                    }
+                }
+                if ((Math.abs(dx) == 2 || Math.abs(dy) == 2) && hop.capture) {
+                    int mx = edgeless ? (((prevX + dx / 2) % w + w) % w) : (prevX + dx / 2);
+                    int my = edgeless ? (((prevY + dy / 2) % h + h) % h) : (prevY + dy / 2);
+                    if (!board.isValidCoord(mx, my) || board.squareAt(mx, my).hasEnemyOf(turn)) {
+                        moveHasEnemyCapture = true;
+                    }
+                } else if (hop.capture) {
+                    moveHasEnemyCapture = true;
+                }
+                prevX = hop.x;
+                prevY = hop.y;
+            }
+        }
+
+        long[] capturedSqMask = new long[2];
+
+        for (int opIdx = 0; opIdx < ops.size(); opIdx++) {
+            OctiMoveOp op = ops.get(opIdx);
             if (!op.hops.isEmpty()) {
-                int startDist = minChebyshevToTargets(op.x0, op.y0, enemyTargets, w, h, edgeless);
+                boolean isInitialSegmentForPod = true;
+                for (int k = 0; k < opIdx; k++) {
+                    OctiMoveOp prevOp = ops.get(k);
+                    if (!prevOp.hops.isEmpty()) {
+                        OctiHop prevEnd = prevOp.hops.get(prevOp.hops.size() - 1);
+                        if (prevEnd.x == op.x0 && prevEnd.y == op.y0) {
+                            isInitialSegmentForPod = false;
+                            break;
+                        }
+                    }
+                }
+
                 OctiHop lastHop = op.hops.get(op.hops.size() - 1);
+                boolean isFinalSegmentForPod = true;
+                int chainFinalX = lastHop.x;
+                int chainFinalY = lastHop.y;
+                for (int j = opIdx + 1; j < ops.size(); j++) {
+                    OctiMoveOp nextOp = ops.get(j);
+                    if (!nextOp.hops.isEmpty() && nextOp.x0 == chainFinalX && nextOp.y0 == chainFinalY) {
+                        if (j == opIdx + 1 || (chainFinalX == lastHop.x && chainFinalY == lastHop.y)) {
+                            isFinalSegmentForPod = false;
+                        }
+                        OctiHop nextEnd = nextOp.hops.get(nextOp.hops.size() - 1);
+                        chainFinalX = nextEnd.x;
+                        chainFinalY = nextEnd.y;
+                    }
+                }
+
+                int startDist = minChebyshevToTargets(op.x0, op.y0, enemyTargets, w, h, edgeless);
                 int endDist = minChebyshevToTargets(lastHop.x, lastHop.y, enemyTargets, w, h, edgeless);
 
                 score += (startDist - endDist) * 550;
 
-                boolean anyCapture = false;
+                boolean opEnemyCapture = false;
                 boolean isJump = (op.hops.size() > 1);
                 int prevX = op.x0;
                 int prevY = op.y0;
@@ -1567,6 +1783,12 @@ public class OctiBotEngine {
                                 score += profile.moveOrderLeapfrogBonus;
                             }
                             if (hop.capture) {
+                                int midBitIdx = my * 9 + mx;
+                                int midWord = (midBitIdx >>> 6) & 1;
+                                long midBit = 1L << (midBitIdx & 63);
+                                boolean alreadyScoredMid = ((capturedSqMask[midWord] & midBit) != 0L);
+                                capturedSqMask[midWord] |= midBit;
+
                                 int capturedPodsOnMid = midSq.getNumPods();
                                 int capturedProngsOnMid = 0;
                                 for (int pi = 0; pi < capturedPodsOnMid; ++pi) {
@@ -1576,9 +1798,11 @@ public class OctiBotEngine {
                                     }
                                 }
                                 if (midSq.hasEnemyOf(turn)) {
-                                    anyCapture = true;
-                                    score += profile.moveOrderCaptureBonus * capturedPodsOnMid + 600 * capturedProngsOnMid;
-                                } else {
+                                    opEnemyCapture = true;
+                                    if (!alreadyScoredMid) {
+                                        score += profile.moveOrderCaptureBonus * capturedPodsOnMid + 600 * capturedProngsOnMid;
+                                    }
+                                } else if (!alreadyScoredMid) {
                                     int freeProngs = board.getGame() != null ? board.getGame().getFreeProngs(turn) : 0;
                                     if (capturedProngsOnMid == 0 || mode == OctiGameMode.GAME_MODE_4) {
                                         score -= profile.moveOrderCaptureBonus;
@@ -1590,11 +1814,11 @@ public class OctiBotEngine {
                                 }
                             }
                         } else if (hop.capture) {
-                            anyCapture = true;
+                            opEnemyCapture = true;
                             score += profile.moveOrderCaptureBonus;
                         }
                     } else if (hop.capture) {
-                        anyCapture = true;
+                        opEnemyCapture = true;
                         score += profile.moveOrderCaptureBonus;
                     }
                     if (!hop.capture) {
@@ -1604,44 +1828,53 @@ public class OctiBotEngine {
                     prevY = hop.y;
                 }
 
+                if (op.isSuperProngBonusMove && !opEnemyCapture && endDist >= startDist && isFinalSegmentForPod) {
+                    score -= 600;
+                }
+
                 OctiSquare destSq = board.squareAt(lastHop.x, lastHop.y);
-                if (isEnemyHomeSquareFor(destSq.getType(), mode, turn)
-                        && !destSq.isCapturedByTeamOf(turn)) {
-                    if (anyCapture) {
-                        score += profile.moveOrderBaseEntryBonus;
-                    } else {
-                        score += (profile.moveOrderBaseEntryBonus * baseThreatScalePct) / 100;
+                if (isFinalSegmentForPod) {
+                    if (isEnemyHomeSquareFor(destSq.getType(), mode, turn)
+                            && !destSq.isCapturedByTeamOf(turn)) {
+                        if (moveHasEnemyCapture) {
+                            score += profile.moveOrderBaseEntryBonus;
+                        } else {
+                            score += (profile.moveOrderBaseEntryBonus * baseThreatScalePct) / 100;
+                        }
+                    }
+                    if (destSq.getType() == OctiSquareType.NEUTRAL_OCTI_SQUARE && destSq.isEmpty()) {
+                        score += 3000;
+                    }
+
+                    // Blunder penalty if ending square sits in enemy jump threat mask
+                    int destBitIdx = lastHop.y * 9 + lastHop.x;
+                    int destWord = (destBitIdx >>> 6) & 1;
+                    long destBit = 1L << (destBitIdx & 63);
+                    if (!moveHasEnemyCapture && enemyThreatMask != null && (enemyThreatMask[destWord] & destBit) != 0L) {
+                        score -= profile.moveOrderBlunderPenalty;
+                    }
+
+                    // Avoid stacking multiple friendly pods on non-enemy-base squares
+                    if (!isEnemyHomeSquareFor(destSq.getType(), mode, turn)
+                            && destSq.getNumPods() >= 1) {
+                        score -= 1200 * destSq.getNumPods();
+                    }
+
+                    // Penalize premature 1-prong lone-pod rushes during development
+                    if (!moveHasEnemyCapture && !isJump && earlyDevelopment && op.pod.getNumProngs() <= 1 && endDist <= 3) {
+                        score -= 3200;
                     }
                 }
-                if (destSq.getType() == OctiSquareType.NEUTRAL_OCTI_SQUARE && destSq.isEmpty()) {
-                    score += 3000;
-                }
 
-                // Blunder penalty if ending square sits in enemy jump threat mask
-                int destBitIdx = lastHop.y * 9 + lastHop.x;
-                int destWord = (destBitIdx >>> 6) & 1;
-                long destBit = 1L << (destBitIdx & 63);
-                if (!anyCapture && enemyThreatMask != null && (enemyThreatMask[destWord] & destBit) != 0L) {
-                    score -= profile.moveOrderBlunderPenalty;
-                }
-
-                OctiSquare startSq = board.squareAt(op.x0, op.y0);
-                if (isEnemyHomeSquareFor(startSq.getType(), mode, turn)) {
-                    if (startSq.getNumPods() <= 1
-                            && !isEnemyHomeSquareFor(destSq.getType(), mode, turn)) {
-                        score -= 22000;
+                if (isInitialSegmentForPod) {
+                    OctiSquare startSq = board.squareAt(op.x0, op.y0);
+                    OctiSquare finalDestSq = board.squareAt(chainFinalX, chainFinalY);
+                    if (isEnemyHomeSquareFor(startSq.getType(), mode, turn)) {
+                        if (startSq.getNumPods() <= 1
+                                && !isEnemyHomeSquareFor(finalDestSq.getType(), mode, turn)) {
+                            score -= 22000;
+                        }
                     }
-                }
-
-                // Avoid stacking multiple friendly pods on non-enemy-base squares
-                if (!isEnemyHomeSquareFor(destSq.getType(), mode, turn)
-                        && destSq.getNumPods() >= 1) {
-                    score -= 1200 * destSq.getNumPods();
-                }
-
-                // Penalize premature 1-prong lone-pod rushes during development
-                if (!anyCapture && !isJump && earlyDevelopment && op.pod.getNumProngs() <= 1 && endDist <= 3) {
-                    score -= 3200;
                 }
             } else if (op.addProngDir != OctiDir.DIR_UNDEF && op.rmProngDir == OctiDir.DIR_UNDEF) {
                 score += 650;
@@ -1676,23 +1909,7 @@ public class OctiBotEngine {
                 }
 
                 // Prioritize straight-forward prong highest, then forward diagonals
-                if (turn == OctiPlayer.PLAYER_A || turn == OctiPlayer.PLAYER_C) {
-                    if (op.addProngDir == OctiDir.DIR_N) {
-                        score += 1100;
-                    } else if (op.addProngDir == OctiDir.DIR_NE || op.addProngDir == OctiDir.DIR_NW) {
-                        score += 750;
-                    } else if (op.addProngDir == OctiDir.DIR_E || op.addProngDir == OctiDir.DIR_W) {
-                        score += 400;
-                    }
-                } else if (turn == OctiPlayer.PLAYER_B || turn == OctiPlayer.PLAYER_D) {
-                    if (op.addProngDir == OctiDir.DIR_S) {
-                        score += 1100;
-                    } else if (op.addProngDir == OctiDir.DIR_SE || op.addProngDir == OctiDir.DIR_SW) {
-                        score += 750;
-                    } else if (op.addProngDir == OctiDir.DIR_E || op.addProngDir == OctiDir.DIR_W) {
-                        score += 400;
-                    }
-                }
+                score += prongDirectionBonus(board, mode, turn, op.addProngDir, 1100, 750, 400);
             } else if (op.addPod) {
                 if (op.liberate) {
                     score += 6500;
@@ -1712,13 +1929,78 @@ public class OctiBotEngine {
         return score;
     }
 
+    private static boolean isTacticalMoveForSearch(OctiBoard board,
+                                                   OctiGameMode mode,
+                                                   OctiPlayer turn,
+                                                   OctiMove move) {
+        if (board == null || move == null) {
+            return false;
+        }
+        int w = board.getBoardWidth();
+        int h = board.getBoardHeight();
+        boolean edgeless = board.getGame() != null && board.getGame().useEdgelessBoard();
+        List<OctiMoveOp> ops = move.getOps();
+        for (int opIdx = 0; opIdx < ops.size(); opIdx++) {
+            OctiMoveOp op = ops.get(opIdx);
+            int cx = op.x0;
+            int cy = op.y0;
+            for (OctiHop hop : op.hops) {
+                int dx = hop.x - cx;
+                int dy = hop.y - cy;
+                if (edgeless) {
+                    for (int d = -2; d <= 2; d++) {
+                        if (((cx + d) % w + w) % w == hop.x) { dx = d; break; }
+                    }
+                    for (int d = -2; d <= 2; d++) {
+                        if (((cy + d) % h + h) % h == hop.y) { dy = d; break; }
+                    }
+                }
+                if (hop.capture && (Math.abs(dx) == 2 || Math.abs(dy) == 2)) {
+                    int mx = edgeless ? (((cx + dx / 2) % w + w) % w) : (cx + dx / 2);
+                    int my = edgeless ? (((cy + dy / 2) % h + h) % h) : (cy + dy / 2);
+                    if (board.isValidCoord(mx, my) && board.squareAt(mx, my).hasEnemyOf(turn)) {
+                        return true;
+                    }
+                }
+                cx = hop.x;
+                cy = hop.y;
+            }
+            if (!op.hops.isEmpty()) {
+                OctiHop lastHop = op.hops.get(op.hops.size() - 1);
+                boolean continuedLater = false;
+                for (int j = opIdx + 1; j < ops.size(); j++) {
+                    OctiMoveOp opJ = ops.get(j);
+                    if (!opJ.hops.isEmpty() && opJ.x0 == lastHop.x && opJ.y0 == lastHop.y) {
+                        continuedLater = true;
+                        break;
+                    }
+                }
+                if (!continuedLater && board.isValidCoord(lastHop.x, lastHop.y)) {
+                    OctiSquare destSq = board.squareAt(lastHop.x, lastHop.y);
+                    if (isEnemyHomeSquareFor(destSq.getType(), mode, turn)
+                            && !destSq.isCapturedByTeamOf(turn)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private static int historyBucketForMoveStr(String moveStr) {
+        if (moveStr == null || moveStr.isEmpty()) {
+            return 0;
+        }
+        return (moveStr.hashCode() & 0x7FFFFFFF) & HISTORY_MASK;
+    }
+
     private static List<OctiMove> orderAndCapMoves(OctiBoard board,
                                                    List<OctiMove> rawMoves,
                                                    OctiPlayer turn,
                                                    String ttBestMove,
                                                    int maxBranch) {
         return orderAndCapMoves(board, rawMoves, turn, ttBestMove, maxBranch,
-                defaultProfileForDifficulty(BotDifficulty.TACTICAL), true);
+                defaultProfileForDifficulty(BotDifficulty.TACTICAL), true, null, 0);
     }
 
     private static List<OctiMove> orderAndCapMoves(OctiBoard board,
@@ -1728,19 +2010,66 @@ public class OctiBotEngine {
                                                    int maxBranch,
                                                    BotTuningProfile profile,
                                                    boolean filterDominated) {
+        return orderAndCapMoves(board, rawMoves, turn, ttBestMove, maxBranch,
+                profile, filterDominated, null, 0);
+    }
+
+    private static List<OctiMove> orderAndCapMoves(OctiBoard board,
+                                                   List<OctiMove> rawMoves,
+                                                   OctiPlayer turn,
+                                                   String ttBestMove,
+                                                   int maxBranch,
+                                                   BotTuningProfile profile,
+                                                   boolean filterDominated,
+                                                   SearchContext ctx,
+                                                   int ply) {
         List<OctiMove> moves = filterDominated ? filterDominatedMoves(board, turn, rawMoves) : rawMoves;
         List<int[]> targets = targetEnemyBases(board, turn);
         long[] enemyThreatMask = computeEnemyThreatMask(board, turn, targets);
         CoalitionPhaseContext turnPhase = analyzeCoalitionPhase(board, turn);
         int baseThreatScalePct = turnPhase.baseThreatScalePct;
+        OctiGameMode mode = board.getGameMode();
 
+        String killer0 = null;
+        String killer1 = null;
+        boolean applyKillers = false;
+        boolean applyHistory = false;
+        int turnSlot = (turn != null) ? turn.getValue() : 0;
+        if (ctx != null) {
+            if (profile.useKillers && ply >= 0 && ply < MAX_SEARCH_PLY) {
+                applyKillers = true;
+                killer0 = ctx.killers[ply][0];
+                killer1 = ctx.killers[ply][1];
+            }
+            if (profile.useHistory && turnSlot >= 0 && turnSlot < 5) {
+                applyHistory = true;
+            }
+        }
+
+        boolean hasTtBest = (ttBestMove != null && !ttBestMove.isEmpty());
         int n = moves.size();
         int[][] scored = new int[n][2];
         for (int i = 0; i < n; i++) {
-            int s = scoreMoveHeuristic(board, moves.get(i), turn, targets, profile, enemyThreatMask, baseThreatScalePct);
-            if (ttBestMove != null && !ttBestMove.isEmpty()
-                    && moves.get(i).asString().equals(ttBestMove)) {
+            OctiMove m = moves.get(i);
+            int s = scoreMoveHeuristic(board, m, turn, targets, profile, enemyThreatMask, baseThreatScalePct);
+            String mStr = (hasTtBest || applyKillers || applyHistory) ? m.asString() : null;
+            if (hasTtBest && mStr.equals(ttBestMove)) {
                 s += 200000;
+            } else if ((applyKillers || applyHistory) && mStr != null
+                    && !isTacticalMoveForSearch(board, mode, turn, m)) {
+                if (applyKillers && mStr.equals(killer0)) {
+                    s += 12000;
+                    ctx.killerHits++;
+                } else if (applyKillers && mStr.equals(killer1)) {
+                    s += 10500;
+                    ctx.killerHits++;
+                }
+                if (applyHistory) {
+                    int hv = ctx.history[turnSlot][historyBucketForMoveStr(mStr)];
+                    if (hv > 0) {
+                        s += Math.min(6000, hv * 8);
+                    }
+                }
             }
             scored[i][0] = s;
             scored[i][1] = i;
@@ -1750,8 +2079,90 @@ public class OctiBotEngine {
 
         int limit = Math.min(n, maxBranch);
         List<OctiMove> result = new ArrayList<>(limit);
-        for (int i = 0; i < limit; i++) {
-            result.add(moves.get(scored[i][1]));
+        if (n <= limit) {
+            for (int i = 0; i < limit; i++) {
+                result.add(moves.get(scored[i][1]));
+            }
+            return result;
+        }
+
+        Map<Long, Integer> quietProngCountByPrelude = new HashMap<>();
+        Map<Long, Integer> quietStepCountByPrelude = new HashMap<>();
+        Map<Long, Integer> twoPreludeQuietCount = new HashMap<>();
+        List<Integer> deferredIndices = new ArrayList<>();
+
+        for (int i = 0; i < n && result.size() < limit; i++) {
+            int mIdx = scored[i][1];
+            OctiMove m = moves.get(mIdx);
+            List<OctiMoveOp> ops = m.getOps();
+            int numPreludes = 0;
+            for (OctiMoveOp op : ops) {
+                if (op.isSuperProngBonusMove) {
+                    numPreludes++;
+                }
+            }
+            if (numPreludes == 0) {
+                result.add(m);
+                continue;
+            }
+
+            if (isTacticalMoveForSearch(board, mode, turn, m)) {
+                result.add(m);
+                continue;
+            }
+
+            OctiMoveOp p0 = ops.get(0);
+            OctiHop p0End = p0.hops.isEmpty() ? new OctiHop(p0.x0, p0.y0, false) : p0.hops.get(p0.hops.size() - 1);
+            boolean p0Cap = false;
+            for (OctiHop hp : p0.hops) {
+                if (hp.capture) {
+                    p0Cap = true;
+                    break;
+                }
+            }
+            long pKey = ((long) (p0.x0 & 0xFF))
+                    | (((long) (p0.y0 & 0xFF)) << 8)
+                    | (((long) (p0End.x & 0xFF)) << 16)
+                    | (((long) (p0End.y & 0xFF)) << 24)
+                    | ((p0Cap ? 1L : 0L) << 32);
+
+            if (numPreludes >= 2) {
+                int cnt = twoPreludeQuietCount.getOrDefault(pKey, 0);
+                if (cnt < 2) {
+                    twoPreludeQuietCount.put(pKey, cnt + 1);
+                    result.add(m);
+                } else {
+                    deferredIndices.add(mIdx);
+                }
+                continue;
+            }
+
+            OctiMoveOp regOp = ops.get(ops.size() - 1);
+            boolean isProngOrPodReg = regOp.hops.isEmpty();
+            if (isProngOrPodReg) {
+                int cnt = quietProngCountByPrelude.getOrDefault(pKey, 0);
+                if (cnt < 2) {
+                    quietProngCountByPrelude.put(pKey, cnt + 1);
+                    result.add(m);
+                } else {
+                    deferredIndices.add(mIdx);
+                }
+            } else {
+                int cnt = quietStepCountByPrelude.getOrDefault(pKey, 0);
+                if (cnt < 3) {
+                    quietStepCountByPrelude.put(pKey, cnt + 1);
+                    result.add(m);
+                } else {
+                    deferredIndices.add(mIdx);
+                }
+            }
+        }
+
+        for (int mIdx : deferredIndices) {
+            if (result.size() >= limit) {
+                break;
+            }
+            result.add(moves.get(mIdx));
         }
         return result;
     }
@@ -1917,6 +2328,14 @@ public class OctiBotEngine {
         long[] allyJumpThreatMask = new long[2];
         long[] enemyJumpThreatMask = new long[2];
 
+        int allyOneStepBaseThreatRaw = 0;
+        int enemyOneStepBaseThreatRaw = 0;
+        int allyOneJumpBaseThreatRaw = 0;
+        int enemyOneJumpBaseThreatRaw = 0;
+        int allyTwoPlyBaseThreatRaw = 0;
+        int enemyTwoPlyBaseThreatRaw = 0;
+        int lostAlliedBasesScore = 0;
+
         int podZeroVal = profile.podZeroProngVal;
         int podOneVal = (mode == OctiGameMode.GAME_MODE_OFK) ? (profile.podOneProngVal * 135) / 100 : profile.podOneProngVal;
         int podTwoVal = (mode == OctiGameMode.GAME_MODE_OFK) ? (profile.podTwoProngVal * 135) / 100 : profile.podTwoProngVal;
@@ -1938,6 +2357,7 @@ public class OctiBotEngine {
                     if (sq.isCaptured() && !sq.isCapturedByTeamOf(perspective)) {
                         int basePen = ((profile.lostAlliedBasePenalty / numBases) * enemyBaseThreatScalePct) / 100;
                         totalScore -= basePen;
+                        lostAlliedBasesScore -= basePen;
                     }
                 } else if (sqType == OctiSquareType.NEUTRAL_OCTI_SQUARE) {
                     if (sq.isCapturedByTeamOf(perspective)) {
@@ -2037,23 +2457,7 @@ public class OctiBotEngine {
                         if (isOrthogonalDir(dir)) hasOrth = true;
                         if (isDiagonalDir(dir)) hasDiag = true;
 
-                        if (owner == OctiPlayer.PLAYER_A || owner == OctiPlayer.PLAYER_C) {
-                            if (dir == OctiDir.DIR_N) {
-                                podVal += 380;
-                            } else if (dir == OctiDir.DIR_NE || dir == OctiDir.DIR_NW) {
-                                podVal += 260;
-                            } else if (dir == OctiDir.DIR_E || dir == OctiDir.DIR_W) {
-                                podVal += 120;
-                            }
-                        } else if (owner == OctiPlayer.PLAYER_B || owner == OctiPlayer.PLAYER_D) {
-                            if (dir == OctiDir.DIR_S) {
-                                podVal += 380;
-                            } else if (dir == OctiDir.DIR_SE || dir == OctiDir.DIR_SW) {
-                                podVal += 260;
-                            } else if (dir == OctiDir.DIR_E || dir == OctiDir.DIR_W) {
-                                podVal += 120;
-                            }
-                        }
+                        podVal += prongDirectionBonus(board, mode, owner, dir, 380, 260, 120);
 
                         int nx = edgeless ? (((x + dir.deltaX()) % w + w) % w) : (x + dir.deltaX());
                         int ny = edgeless ? (((y + dir.deltaY()) % h + h) % h) : (y + dir.deltaY());
@@ -2102,15 +2506,30 @@ public class OctiBotEngine {
                     }
 
                     if (hasOneStepBaseThreat) {
-                        podVal += (profile.oneStepBaseThreatBonus * scalePct) / 100;
+                        int stepBonus = (profile.oneStepBaseThreatBonus * scalePct) / 100;
+                        if (isAlly) {
+                            allyOneStepBaseThreatRaw += stepBonus;
+                        } else {
+                            enemyOneStepBaseThreatRaw += stepBonus;
+                        }
                     }
                     if (hasOneJumpBaseThreat) {
-                        podVal += (profile.oneJumpBaseThreatBonus * scalePct) / 100;
+                        int jumpBonus = (profile.oneJumpBaseThreatBonus * scalePct) / 100;
+                        if (isAlly) {
+                            allyOneJumpBaseThreatRaw += jumpBonus;
+                        } else {
+                            enemyOneJumpBaseThreatRaw += jumpBonus;
+                        }
                     }
 
                     // 2-ply base threat check
                     if (dist == 1 && profile.twoPlyBaseThreatWeight > 0) {
-                        podVal += (profile.twoPlyBaseThreatWeight * scalePct) / 100;
+                        int twoPlyBonus = (profile.twoPlyBaseThreatWeight * scalePct) / 100;
+                        if (isAlly) {
+                            allyTwoPlyBaseThreatRaw += twoPlyBonus;
+                        } else {
+                            enemyTwoPlyBaseThreatRaw += twoPlyBonus;
+                        }
                     }
 
                     if (hasOrth && hasDiag) {
@@ -2140,6 +2559,22 @@ public class OctiBotEngine {
             }
         }
 
+        int contestedScalePct = Math.max(0, Math.min(100, profile.contestedEnemyBaseThreatScalePct));
+        boolean enemyContests = (enemyOneStepBaseThreatRaw > 0
+                || enemyOneJumpBaseThreatRaw > 0
+                || enemyTwoPlyBaseThreatRaw > 0
+                || lostAlliedBasesScore < 0
+                || enemyJumpThreatMask[0] != 0L
+                || enemyJumpThreatMask[1] != 0L);
+        if (contestedScalePct != 100 && enemyContests) {
+            allyOneStepBaseThreatRaw = (allyOneStepBaseThreatRaw * contestedScalePct) / 100;
+            allyOneJumpBaseThreatRaw = (allyOneJumpBaseThreatRaw * contestedScalePct) / 100;
+            allyTwoPlyBaseThreatRaw = (allyTwoPlyBaseThreatRaw * contestedScalePct) / 100;
+        }
+        totalScore += (allyOneStepBaseThreatRaw - enemyOneStepBaseThreatRaw)
+                + (allyOneJumpBaseThreatRaw - enemyOneJumpBaseThreatRaw)
+                + (allyTwoPlyBaseThreatRaw - enemyTwoPlyBaseThreatRaw);
+
         // Army Development Bonuses (Armed Pods)
         if (allyArmedPods >= 1) totalScore += profile.firstArmedPodBonus;
         if (allyArmedPods >= 2) totalScore += profile.secondArmedPodBonus;
@@ -2149,7 +2584,11 @@ public class OctiBotEngine {
         if (enemyArmedPods >= 2) totalScore -= profile.secondArmedPodBonus;
         if (enemyArmedPods >= 3) totalScore -= profile.thirdArmedPodBonus;
 
-        // Single-Pod Monopoly Penalty
+        int effMonopolyWeight = (mode == OctiGameMode.GAME_MODE_OFK && profile.ofkSinglePodMonopolyPenalty >= 0)
+                ? profile.ofkSinglePodMonopolyPenalty
+                : profile.singlePodMonopolyPenalty;
+
+        // Single-Pod Monopoly & Heavy-Pod Threat Penalty
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
                 OctiSquare sq = board.squareAt(x, y);
@@ -2157,11 +2596,30 @@ public class OctiBotEngine {
                     OctiPod pod = sq.getPodAt(i);
                     int prongs = pod.getNumProngs();
                     if (prongs > 2) {
-                        boolean isAlly = OctiPlayer.areAllied(mode, pod.getType().toPlayer(), perspective);
-                        if (isAlly && allyUnarmedHomePods >= 2) {
-                            totalScore -= (prongs - 2) * profile.singlePodMonopolyPenalty;
-                        } else if (!isAlly && enemyUnarmedHomePods >= 2) {
-                            totalScore += (prongs - 2) * profile.singlePodMonopolyPenalty;
+                        OctiPlayer podOwner = pod.getType().toPlayer();
+                        boolean isAlly = OctiPlayer.areAllied(mode, podOwner, perspective);
+                        int unarmedHome = isAlly ? allyUnarmedHomePods : enemyUnarmedHomePods;
+                        int armedPods = isAlly ? allyArmedPods : enemyArmedPods;
+                        boolean triggerMonopoly = (unarmedHome >= 2)
+                                || (prongs > 3 && armedPods <= 1 && (unarmedHome + game.getFreePods(podOwner)) >= 2);
+                        if (triggerMonopoly) {
+                            int monPen = (prongs - 2) * effMonopolyWeight;
+                            totalScore += isAlly ? -monPen : monPen;
+                        }
+                        if (!isAlly && prongs >= 4 && profile.enemyHeavyPodThreatPenalty != 0) {
+                            totalScore -= (prongs - 3) * profile.enemyHeavyPodThreatPenalty;
+                        }
+                        if (prongs >= 5) {
+                            int overArmPen = (prongs - 4) * 650 + (prongs >= 6 ? (prongs - 5) * 900 : 0);
+                            totalScore += isAlly ? -overArmPen : overArmPen;
+                        }
+                        if (prongs > 3) {
+                            List<int[]> targets = isAlly ? allyTargets : enemyTargets;
+                            int d = minChebyshevToTargets(x, y, targets, w, h, edgeless);
+                            if (d >= 4 && armedPods >= 3) {
+                                int backRankPen = (prongs - 3) * 320;
+                                totalScore += isAlly ? -backRankPen : backRankPen;
+                            }
                         }
                     }
                 }
@@ -2303,9 +2761,9 @@ public class OctiBotEngine {
             OctiPlayer p = OctiPlayer.fromValue(pIdx);
             boolean isAlly = OctiPlayer.areAllied(mode, p, perspective);
             int freePods = game.getFreePods(p);
-            int capturedPodPen = (mode == OctiGameMode.GAME_MODE_OFK) ? 4800 : 3800;
-            int freeProngVal = (mode == OctiGameMode.GAME_MODE_OFK) ? 180 : 140;
-            int resVal = freePods * 450
+            int capturedPodPen = (mode == OctiGameMode.GAME_MODE_OFK) ? 4800 : profile.capturedPodPenalty;
+            int freeProngVal = (mode == OctiGameMode.GAME_MODE_OFK) ? 180 : profile.reserveFreeProngVal;
+            int resVal = freePods * profile.reserveFreePodVal
                     - game.getCapturedPods(p) * capturedPodPen
                     + game.getFreeProngs(p) * freeProngVal
                     + game.getFreeSuperProngs(p) * 150;
@@ -2316,11 +2774,18 @@ public class OctiBotEngine {
                     && game.getFreeProngs(p) >= 6) {
                 resVal -= (4 - freePods) * 1500;
             }
+            if (mode != OctiGameMode.GAME_MODE_OFK
+                    && (isAlly ? (allyUnarmedHomePods >= 1 && totalAllyPodsOnBoard >= 2)
+                               : (enemyUnarmedHomePods >= 1 && totalEnemyPodsOnBoard >= 2))
+                    && game.getFreeProngs(p) >= 6) {
+                int unarmedHome = isAlly ? allyUnarmedHomePods : enemyUnarmedHomePods;
+                resVal -= unarmedHome * profile.unarmedHomePodPenalty;
+            }
             if (mode == OctiGameMode.GAME_MODE_4 && game.isPlayerEliminated(p)) {
                 resVal -= 20000;
             }
             if (board.canLiberate(p) && game.getCapturedPods(p) > 0) {
-                resVal += 2500;
+                resVal += profile.canLiberateBonus;
             }
             totalScore += isAlly ? resVal : -resVal;
         }
@@ -2330,10 +2795,22 @@ public class OctiBotEngine {
 
     private static final class SearchContext {
         long nodesVisited = 0;
+        long flushedNodes = 0;
         long deadlineMs = 0;
         volatile boolean timedOut = false;
         java.util.concurrent.atomic.AtomicBoolean stopSignal = null;
-        final OctiGameSnapshot[] plySnapshots = new OctiGameSnapshot[48];
+        final OctiGameSnapshot[] plySnapshots = new OctiGameSnapshot[MAX_SEARCH_PLY];
+        final String[][] killers = new String[MAX_SEARCH_PLY][2];
+        final int[][] history = new int[5][HISTORY_SIZE];
+        long killerHits = 0;
+        long killerUpdates = 0;
+        long historyUpdates = 0;
+        long pvsReSearches = 0;
+        long lmrReductions = 0;
+        long lmrReSearches = 0;
+        long qsearchTtProbes = 0;
+        long qsearchTtHits = 0;
+        long aspirationReSearches = 0;
 
         OctiGameSnapshot snapshotForPly(int ply) {
             int idx = Math.max(0, Math.min(plySnapshots.length - 1, ply));
@@ -2346,6 +2823,55 @@ public class OctiBotEngine {
         }
     }
 
+    private void recordNodeVisit(SearchContext ctx) {
+        ctx.nodesVisited++;
+        if ((ctx.nodesVisited & 63L) == 0L) {
+            long delta = ctx.nodesVisited - ctx.flushedNodes;
+            if (delta > 0L) {
+                ctx.flushedNodes = ctx.nodesVisited;
+                liveNodes.addAndGet(delta);
+            }
+        }
+    }
+
+    private void flushRemainingNodes(SearchContext ctx) {
+        long delta = ctx.nodesVisited - ctx.flushedNodes;
+        if (delta > 0L) {
+            ctx.flushedNodes = ctx.nodesVisited;
+            liveNodes.addAndGet(delta);
+        }
+    }
+
+    private void storeQuiesceTt(int ttIdx,
+                                Object ttLock,
+                                long hashKey,
+                                int storeDepth,
+                                int val,
+                                int ply,
+                                byte flag,
+                                String bestMoveStr) {
+        synchronized (ttLock) {
+            if (ttKeys[ttIdx] == 0L || storeDepth >= ttDepths[ttIdx]) {
+                boolean sameKey = (ttKeys[ttIdx] == hashKey);
+                ttKeys[ttIdx] = hashKey;
+                ttDepths[ttIdx] = storeDepth;
+                int storeScore = val;
+                if (storeScore >= WIN_SCORE - 1000) {
+                    storeScore += ply;
+                } else if (storeScore <= -WIN_SCORE + 1000) {
+                    storeScore -= ply;
+                }
+                ttScores[ttIdx] = storeScore;
+                if (bestMoveStr != null && !bestMoveStr.isEmpty()) {
+                    ttBestMoves[ttIdx] = bestMoveStr;
+                } else if (!sameKey) {
+                    ttBestMoves[ttIdx] = "";
+                }
+                ttFlags[ttIdx] = flag;
+            }
+        }
+    }
+
     private int quiesce(OctiBoard scratchBoard,
                         int qDepth,
                         int ply,
@@ -2353,9 +2879,8 @@ public class OctiBotEngine {
                         int beta,
                         OctiPlayer currentPerspective,
                         SearchContext ctx) {
-        ctx.nodesVisited++;
+        recordNodeVisit(ctx);
         if ((ctx.nodesVisited & 63L) == 0L) {
-            liveNodes.set(ctx.nodesVisited);
             if ((ctx.stopSignal != null && ctx.stopSignal.get())
                     || steadyClockMs() >= ctx.deadlineMs
                     || Thread.currentThread().isInterrupted()) {
@@ -2376,8 +2901,53 @@ public class OctiBotEngine {
                     : (-WIN_SCORE + ply);
         }
 
+        boolean useQsearchTt = profile.qsearchUseTt;
+        int qTtDepth = Math.max(-120, -qDepth);
+        long hashKey = 0L;
+        int ttIdx = 0;
+        Object ttLock = null;
+        String ttMove = "";
+        int origAlpha = alpha;
+
+        if (useQsearchTt) {
+            ctx.qsearchTtProbes++;
+            hashKey = computePositionHash(scratchBoard);
+            ttIdx = (int) (hashKey & TT_MASK);
+            ttLock = ttLocks[ttIdx & TT_LOCK_MASK];
+            synchronized (ttLock) {
+                if (ttKeys[ttIdx] == hashKey && ttDepths[ttIdx] > -128) {
+                    String m = ttBestMoves[ttIdx];
+                    ttMove = (m != null) ? m : "";
+                    if (ttDepths[ttIdx] >= qTtDepth) {
+                        int ttScore = ttScores[ttIdx];
+                        if (ttScore >= WIN_SCORE - 1000) {
+                            ttScore -= ply;
+                        } else if (ttScore <= -WIN_SCORE + 1000) {
+                            ttScore += ply;
+                        }
+                        byte entryFlag = ttFlags[ttIdx];
+                        if (entryFlag == 0) {
+                            ctx.qsearchTtHits++;
+                            return ttScore;
+                        }
+                        if (entryFlag == 1 && ttScore >= beta) {
+                            ctx.qsearchTtHits++;
+                            return ttScore;
+                        }
+                        if (entryFlag == 2 && ttScore <= alpha) {
+                            ctx.qsearchTtHits++;
+                            return ttScore;
+                        }
+                    }
+                }
+            }
+        }
+
         int standPat = evaluatePosition(scratchBoard, currentPerspective, profile);
         if (standPat >= beta) {
+            if (useQsearchTt && ttLock != null) {
+                storeQuiesceTt(ttIdx, ttLock, hashKey, 0, standPat, ply, (byte) 1, "");
+            }
             return beta;
         }
         if (standPat > alpha) {
@@ -2395,57 +2965,18 @@ public class OctiBotEngine {
 
         // Filter to tactical moves only: captures and uncaptured enemy base entries
         OctiPlayer turn = game.getTurn();
-        int boardW = scratchBoard.getBoardWidth();
-        int boardH = scratchBoard.getBoardHeight();
-        boolean edgeless = game.useEdgelessBoard();
         List<OctiMove> tacticalMoves = new ArrayList<>();
         for (OctiMove m : rawMoves) {
-            boolean isTactical = false;
-            for (OctiMoveOp op : m.getOps()) {
-                int cx = op.x0;
-                int cy = op.y0;
-                for (OctiHop hop : op.hops) {
-                    int dx = hop.x - cx;
-                    int dy = hop.y - cy;
-                    if (edgeless) {
-                        for (int d = -2; d <= 2; d++) {
-                            if (((cx + d) % boardW + boardW) % boardW == hop.x) { dx = d; break; }
-                        }
-                        for (int d = -2; d <= 2; d++) {
-                            if (((cy + d) % boardH + boardH) % boardH == hop.y) { dy = d; break; }
-                        }
-                    }
-                    if (hop.capture && (Math.abs(dx) == 2 || Math.abs(dy) == 2)) {
-                        int mx = edgeless ? (((cx + dx / 2) % boardW + boardW) % boardW) : (cx + dx / 2);
-                        int my = edgeless ? (((cy + dy / 2) % boardH + boardH) % boardH) : (cy + dy / 2);
-                        if (scratchBoard.isValidCoord(mx, my)) {
-                            OctiSquare midSq = scratchBoard.squareAt(mx, my);
-                            if (midSq.hasEnemyOf(turn)) {
-                                isTactical = true;
-                                break;
-                            }
-                        }
-                    }
-                    cx = hop.x;
-                    cy = hop.y;
-                }
-                if (isTactical) break;
-                if (!op.hops.isEmpty()) {
-                    OctiHop lastHop = op.hops.get(op.hops.size() - 1);
-                    OctiSquare destSq = scratchBoard.squareAt(lastHop.x, lastHop.y);
-                    if (isEnemyHomeSquareFor(destSq.getType(), mode, turn)
-                            && !destSq.isCapturedByTeamOf(turn)) {
-                        isTactical = true;
-                    }
-                }
-                if (isTactical) break;
-            }
-            if (isTactical) {
+            if (isTacticalMoveForSearch(scratchBoard, mode, turn, m)) {
                 tacticalMoves.add(m);
             }
         }
 
         if (tacticalMoves.isEmpty()) {
+            if (useQsearchTt && ttLock != null) {
+                storeQuiesceTt(ttIdx, ttLock, hashKey, 0, standPat, ply,
+                        (byte) (standPat > origAlpha ? 0 : 2), "");
+            }
             return standPat;
         }
 
@@ -2453,8 +2984,10 @@ public class OctiBotEngine {
                 ? profile.quiesceBranchCap
                 : tacticalMoves.size();
         List<OctiMove> ordered = orderAndCapMoves(
-                scratchBoard, tacticalMoves, turn, "", qCap, profile, false);
+                scratchBoard, tacticalMoves, turn, ttMove, qCap, profile, false, null, ply);
 
+        int bestVal = standPat;
+        String bestMoveStr = "";
         OctiGameSnapshot snap = ctx.snapshotForPly(ply);
         game.captureSnapshotInto(snap);
 
@@ -2493,12 +3026,24 @@ public class OctiBotEngine {
                 break;
             }
 
+            if (val > bestVal) {
+                bestVal = val;
+                bestMoveStr = mv.asString();
+            }
             if (val >= beta) {
+                if (useQsearchTt && ttLock != null) {
+                    storeQuiesceTt(ttIdx, ttLock, hashKey, qTtDepth, val, ply, (byte) 1, bestMoveStr);
+                }
                 return beta;
             }
             if (val > alpha) {
                 alpha = val;
             }
+        }
+
+        if (useQsearchTt && !ctx.timedOut && ttLock != null) {
+            storeQuiesceTt(ttIdx, ttLock, hashKey, qTtDepth, alpha, ply,
+                    (byte) (alpha > origAlpha ? 0 : 2), bestMoveStr);
         }
 
         return alpha;
@@ -2511,10 +3056,7 @@ public class OctiBotEngine {
                         int beta,
                         OctiPlayer currentPerspective,
                         SearchContext ctx) {
-        ctx.nodesVisited++;
-        if ((ctx.nodesVisited & 63L) == 0L) {
-            liveNodes.set(ctx.nodesVisited);
-        }
+        recordNodeVisit(ctx);
         if ((ctx.nodesVisited & 31L) == 0L) {
             if ((ctx.stopSignal != null && ctx.stopSignal.get())
                     || steadyClockMs() >= ctx.deadlineMs
@@ -2543,12 +3085,16 @@ public class OctiBotEngine {
             return evaluatePosition(scratchBoard, currentPerspective, profile);
         }
 
+        boolean useShallowTtMove = (profile.usePvs
+                || profile.useKillers
+                || profile.useHistory
+                || profile.lmrMinDepth > 0);
         long hashKey = computePositionHash(scratchBoard);
         int ttIdx = (int) (hashKey & TT_MASK);
         Object ttLock = ttLocks[ttIdx & TT_LOCK_MASK];
         String ttMove = "";
         synchronized (ttLock) {
-            if (ttKeys[ttIdx] == hashKey) {
+            if (ttKeys[ttIdx] == hashKey && ttDepths[ttIdx] > -128) {
                 String m = ttBestMoves[ttIdx];
                 ttMove = (m != null) ? m : "";
                 if (ttDepths[ttIdx] >= depth) {
@@ -2571,6 +3117,7 @@ public class OctiBotEngine {
                     if (alpha >= beta) {
                         return entryScore;
                     }
+                    ttMove = (m != null) ? m : "";
                 }
             }
         }
@@ -2589,7 +3136,8 @@ public class OctiBotEngine {
 
         int maxBranch = (profile.treeBranchCap > 0) ? profile.treeBranchCap : 24;
         List<OctiMove> ordered = orderAndCapMoves(
-                scratchBoard, rawMoves, turn, ttMove, maxBranch, profile, true);
+                scratchBoard, rawMoves, turn, ttMove, maxBranch, profile, true,
+                (profile.useKillers || profile.useHistory) ? ctx : null, ply);
 
         int origAlpha = alpha;
         int bestVal = -INF_SCORE;
@@ -2597,7 +3145,23 @@ public class OctiBotEngine {
         OctiGameSnapshot snap = ctx.snapshotForPly(ply);
         game.captureSnapshotInto(snap);
 
-        for (OctiMove mv : ordered) {
+        String killer0 = (profile.useKillers && ply >= 0 && ply < MAX_SEARCH_PLY) ? ctx.killers[ply][0] : null;
+        String killer1 = (profile.useKillers && ply >= 0 && ply < MAX_SEARCH_PLY) ? ctx.killers[ply][1] : null;
+        boolean lmrEnabled = (profile.lmrMinDepth > 0
+                && profile.lmrMinMoveIndex > 0
+                && depth >= profile.lmrMinDepth
+                && (depth - 1) >= 2);
+        boolean needMoveClass = (profile.useKillers || profile.useHistory || lmrEnabled);
+
+        for (int mvIdx = 0; mvIdx < ordered.size(); mvIdx++) {
+            OctiMove mv = ordered.get(mvIdx);
+            boolean mvIsTactical = needMoveClass && isTacticalMoveForSearch(scratchBoard, mode, turn, mv);
+            String mvStr = (lmrEnabled || (profile.useKillers && !mvIsTactical) || (profile.useHistory && !mvIsTactical))
+                    ? mv.asString()
+                    : null;
+            boolean mvIsKiller = (profile.useKillers && mvStr != null
+                    && (mvStr.equals(killer0) || mvStr.equals(killer1)));
+
             try {
                 game.move(mv);
             } catch (Throwable t) {
@@ -2614,15 +3178,69 @@ public class OctiBotEngine {
             } else {
                 OctiPlayer nextTurn = game.getTurn();
                 boolean sameTeamNext = OctiPlayer.areAllied(mode, turn, nextTurn);
+                int childDepth = depth - 1;
                 if (sameTeamNext) {
-                    val = negamax(scratchBoard, depth - 1, ply + 1,
-                            alpha, beta, turn, ctx);
+                    if (profile.usePvs && mvIdx > 0 && beta > alpha + 1) {
+                        val = negamax(scratchBoard, childDepth, ply + 1,
+                                alpha, alpha + 1, turn, ctx);
+                        if (!ctx.timedOut && val > alpha) {
+                            ctx.pvsReSearches++;
+                            val = negamax(scratchBoard, childDepth, ply + 1,
+                                    alpha, beta, turn, ctx);
+                        }
+                    } else {
+                        val = negamax(scratchBoard, childDepth, ply + 1,
+                                alpha, beta, turn, ctx);
+                    }
                 } else {
                     OctiPlayer oppPerspective = (nextTurn != OctiPlayer.PLAYER_UNDEF) ? nextTurn :
                             ((turn == OctiPlayer.PLAYER_A || turn == OctiPlayer.PLAYER_C)
                                     ? OctiPlayer.PLAYER_B : OctiPlayer.PLAYER_A);
-                    val = -negamax(scratchBoard, depth - 1, ply + 1,
-                            -beta, -alpha, oppPerspective, ctx);
+
+                    int lmrRed = 0;
+                    if (lmrEnabled
+                            && mvIdx >= profile.lmrMinMoveIndex
+                            && (ttMove.isEmpty() || !ttMove.equals(mvStr))
+                            && !mvIsTactical
+                            && !mvIsKiller) {
+                        lmrRed = 1;
+                        if (depth >= profile.lmrMinDepth + 2 && mvIdx >= profile.lmrMinMoveIndex * 3) {
+                            lmrRed = 2;
+                        }
+                        lmrRed = Math.min(lmrRed, childDepth - 1);
+                    }
+
+                    if (lmrRed > 0) {
+                        ctx.lmrReductions++;
+                        val = -negamax(scratchBoard, childDepth - lmrRed, ply + 1,
+                                -(alpha + 1), -alpha, oppPerspective, ctx);
+                        if (!ctx.timedOut && val > alpha) {
+                            ctx.lmrReSearches++;
+                            if (profile.usePvs && mvIdx > 0 && beta > alpha + 1) {
+                                val = -negamax(scratchBoard, childDepth, ply + 1,
+                                        -(alpha + 1), -alpha, oppPerspective, ctx);
+                                if (!ctx.timedOut && val > alpha) {
+                                    ctx.pvsReSearches++;
+                                    val = -negamax(scratchBoard, childDepth, ply + 1,
+                                            -beta, -alpha, oppPerspective, ctx);
+                                }
+                            } else {
+                                val = -negamax(scratchBoard, childDepth, ply + 1,
+                                        -beta, -alpha, oppPerspective, ctx);
+                            }
+                        }
+                    } else if (profile.usePvs && mvIdx > 0 && beta > alpha + 1) {
+                        val = -negamax(scratchBoard, childDepth, ply + 1,
+                                -(alpha + 1), -alpha, oppPerspective, ctx);
+                        if (!ctx.timedOut && val > alpha) {
+                            ctx.pvsReSearches++;
+                            val = -negamax(scratchBoard, childDepth, ply + 1,
+                                    -beta, -alpha, oppPerspective, ctx);
+                        }
+                    } else {
+                        val = -negamax(scratchBoard, childDepth, ply + 1,
+                                -beta, -alpha, oppPerspective, ctx);
+                    }
                 }
             }
 
@@ -2634,12 +3252,31 @@ public class OctiBotEngine {
 
             if (val > bestVal) {
                 bestVal = val;
-                bestMoveStr = mv.asString();
+                bestMoveStr = (mvStr != null) ? mvStr : mv.asString();
             }
             if (val > alpha) {
                 alpha = val;
             }
             if (alpha >= beta) {
+                if (!mvIsTactical && mvStr != null) {
+                    if (profile.useKillers && ply >= 0 && ply < MAX_SEARCH_PLY) {
+                        if (!mvStr.equals(ctx.killers[ply][0])) {
+                            ctx.killers[ply][1] = ctx.killers[ply][0];
+                            ctx.killers[ply][0] = mvStr;
+                            ctx.killerUpdates++;
+                        }
+                    }
+                    if (profile.useHistory && turn != null) {
+                        int pSlot = turn.getValue();
+                        if (pSlot >= 0 && pSlot < 5) {
+                            int bonus = Math.min(depth * depth, 400);
+                            int bucket = historyBucketForMoveStr(mvStr);
+                            int hEntry = ctx.history[pSlot][bucket];
+                            ctx.history[pSlot][bucket] = hEntry + bonus - (hEntry * bonus) / MAX_HISTORY_VAL;
+                            ctx.historyUpdates++;
+                        }
+                    }
+                }
                 break;
             }
         }
@@ -2655,6 +3292,11 @@ public class OctiBotEngine {
             }
             synchronized (ttLock) {
                 if (ttKeys[ttIdx] == 0L || depth >= ttDepths[ttIdx] - 1) {
+                    boolean preserveExistingMove = useShallowTtMove
+                            && bestVal <= origAlpha
+                            && ttKeys[ttIdx] == hashKey
+                            && ttBestMoves[ttIdx] != null
+                            && !ttBestMoves[ttIdx].isEmpty();
                     ttKeys[ttIdx] = hashKey;
                     ttDepths[ttIdx] = depth;
                     int storeScore = bestVal;
@@ -2664,13 +3306,85 @@ public class OctiBotEngine {
                         storeScore -= ply;
                     }
                     ttScores[ttIdx] = storeScore;
-                    ttBestMoves[ttIdx] = bestMoveStr;
+                    if (!preserveExistingMove) {
+                        ttBestMoves[ttIdx] = bestMoveStr;
+                    }
                     ttFlags[ttIdx] = storeFlag;
                 }
             }
         }
 
         return bestVal;
+    }
+
+    private boolean searchSingleRootMove(OctiBoard scratchBoard,
+                                         OctiGame game,
+                                         OctiGameSnapshot rootSnap,
+                                         OctiGameMode mode,
+                                         OctiPlayer rootTurn,
+                                         OctiMove mv,
+                                         int d,
+                                         int mvIdx,
+                                         int alpha,
+                                         int beta,
+                                         SearchContext ctx,
+                                         int[] outScore) {
+        try {
+            game.move(mv);
+        } catch (Throwable t) {
+            game.restoreSnapshot(rootSnap);
+            return false;
+        }
+
+        int score;
+        if (game.isGameOver()) {
+            OctiPlayer w = game.getWinner();
+            score = OctiPlayer.areAllied(mode, w, rootTurn)
+                    ? (WIN_SCORE - 1)
+                    : (-WIN_SCORE + 1);
+        } else {
+            OctiPlayer nextTurn = game.getTurn();
+            boolean sameTeamNext = OctiPlayer.areAllied(mode, rootTurn, nextTurn);
+            boolean rootNullWin = (profile.usePvs
+                    && profile.rootScoreJitter == 0
+                    && mvIdx > 0
+                    && alpha > -INF_SCORE
+                    && beta > alpha + 1);
+            if (sameTeamNext) {
+                if (rootNullWin) {
+                    score = negamax(scratchBoard, d - 1, 1,
+                            alpha, alpha + 1, rootTurn, ctx);
+                    if (!ctx.timedOut && score > alpha) {
+                        ctx.pvsReSearches++;
+                        score = negamax(scratchBoard, d - 1, 1,
+                                alpha, beta, rootTurn, ctx);
+                    }
+                } else {
+                    score = negamax(scratchBoard, d - 1, 1,
+                            alpha, beta, rootTurn, ctx);
+                }
+            } else {
+                OctiPlayer oppPerspective = (nextTurn != OctiPlayer.PLAYER_UNDEF) ? nextTurn :
+                        ((rootTurn == OctiPlayer.PLAYER_A || rootTurn == OctiPlayer.PLAYER_C)
+                                ? OctiPlayer.PLAYER_B : OctiPlayer.PLAYER_A);
+                if (rootNullWin) {
+                    score = -negamax(scratchBoard, d - 1, 1,
+                            -(alpha + 1), -alpha, oppPerspective, ctx);
+                    if (!ctx.timedOut && score > alpha) {
+                        ctx.pvsReSearches++;
+                        score = -negamax(scratchBoard, d - 1, 1,
+                                -beta, -alpha, oppPerspective, ctx);
+                    }
+                } else {
+                    score = -negamax(scratchBoard, d - 1, 1,
+                            -beta, -alpha, oppPerspective, ctx);
+                }
+            }
+        }
+
+        game.restoreSnapshot(rootSnap);
+        outScore[0] = score;
+        return true;
     }
 
     public String chooseMove(OctiBoard board) {
@@ -2736,21 +3450,19 @@ public class OctiBotEngine {
         // 1. Immediate 1-ply victory check across ALL candidates
         OctiGameSnapshot rootSnap = game.captureSnapshot();
         for (OctiMove mv : legalMoves) {
-            ctx.nodesVisited++;
-            if ((ctx.nodesVisited & 63L) == 0L) {
-                liveNodes.set(ctx.nodesVisited);
-            }
+            recordNodeVisit(ctx);
             try {
                 game.move(mv);
                 if (game.isGameOver()
                         && OctiPlayer.areAllied(mode, game.getWinner(), rootTurn)) {
                     game.restoreSnapshot(rootSnap);
+                    flushRemainingNodes(ctx);
+                    long totalNodes = liveNodes.get();
                     liveDepth.set(1);
-                    liveNodes.set(ctx.nodesVisited);
                     liveScore.set(WIN_SCORE);
                     if (outStats != null) {
                         outStats.depthReached = 1;
-                        outStats.nodesVisited = ctx.nodesVisited;
+                        outStats.nodesVisited = totalNodes;
                         outStats.bestScore = WIN_SCORE;
                         outStats.elapsedMs = Math.max(0L, steadyClockMs() - startMs);
                     }
@@ -2793,87 +3505,188 @@ public class OctiBotEngine {
         ExecutorService smpExecutor = null;
         if (timeBudgetMs >= 500 && profile.lazySmpThreads > 1) {
             int numHelpers = Math.min(profile.lazySmpThreads - 1, Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
+            final List<OctiMove> initialCandidates = new ArrayList<>(rootCandidates);
+            final boolean diversifyHelpers = profile.lazySmpDiversifyHelpers;
             smpExecutor = Executors.newFixedThreadPool(numHelpers);
             for (int h = 0; h < numHelpers; h++) {
+                final int helperId = h + 1;
                 final int helperDepthOffset = (h % 2 == 1) ? 1 : 2;
                 smpExecutor.submit(() -> {
+                    SearchContext helperCtx = new SearchContext();
+                    helperCtx.deadlineMs = deadlineMs;
+                    helperCtx.stopSignal = stopSignal;
                     try {
                         OctiBoard helperBoard = new OctiBoard();
                         helperBoard.suppressBoardUpdateNotification(true);
                         helperBoard.fromPositionString(rootPositionFen);
-                        if (helperBoard.getGame() != null) {
-                            helperBoard.getGame().setSearchMode(true);
+                        OctiGame hGame = helperBoard.getGame();
+                        if (hGame == null || initialCandidates.isEmpty()) {
+                            return;
                         }
-                        SearchContext helperCtx = new SearchContext();
-                        helperCtx.deadlineMs = deadlineMs;
-                        helperCtx.stopSignal = stopSignal;
+                        hGame.setSearchMode(true);
 
-                        for (int hd = 1 + helperDepthOffset;
-                                hd <= maxTargetDepth && !helperCtx.timedOut && !stopSignal.get();
-                                hd++) {
-                            if (steadyClockMs() >= deadlineMs || stopSignal.get()) {
-                                break;
+                        if (!diversifyHelpers) {
+                            for (int hd = 1 + helperDepthOffset;
+                                    hd <= maxTargetDepth && !helperCtx.timedOut && !stopSignal.get();
+                                    hd++) {
+                                if (steadyClockMs() >= deadlineMs || stopSignal.get()) {
+                                    break;
+                                }
+                                negamax(helperBoard, hd, 0, -INF_SCORE, INF_SCORE, rootTurn, helperCtx);
                             }
-                            negamax(helperBoard, hd, 0, -INF_SCORE, INF_SCORE, rootTurn, helperCtx);
+                        } else {
+                            OctiGameSnapshot hRootSnap = hGame.captureSnapshot();
+                            int startD = Math.min(maxTargetDepth, 1 + ((helperId - 1) % 4));
+                            for (int hd = startD;
+                                    hd <= maxTargetDepth && !helperCtx.timedOut && !stopSignal.get();
+                                    hd++) {
+                                if (steadyClockMs() >= deadlineMs || stopSignal.get()) {
+                                    break;
+                                }
+                                int hAlpha = -INF_SCORE;
+                                int hBeta = INF_SCORE;
+                                helperCtx.timedOut = false;
+                                for (int s = 0; s < initialCandidates.size() && !stopSignal.get(); s++) {
+                                    if (steadyClockMs() >= deadlineMs) {
+                                        helperCtx.timedOut = true;
+                                        break;
+                                    }
+                                    OctiMove mv = initialCandidates.get((helperId + s) % initialCandidates.size());
+                                    int[] hScore = new int[1];
+                                    if (!searchSingleRootMove(helperBoard, hGame, hRootSnap, mode, rootTurn,
+                                            mv, hd, s, hAlpha, hBeta, helperCtx, hScore)) {
+                                        continue;
+                                    }
+                                    if (helperCtx.timedOut) {
+                                        break;
+                                    }
+                                    if (hScore[0] > hAlpha) {
+                                        hAlpha = hScore[0];
+                                    }
+                                }
+                                if (helperCtx.timedOut || steadyClockMs() >= deadlineMs) {
+                                    break;
+                                }
+                            }
                         }
                     } catch (Throwable ignored) {
+                    } finally {
+                        flushRemainingNodes(helperCtx);
                     }
                 });
             }
         }
 
         try {
+            int[] outScoreHolder = new int[1];
             for (int d = 1; d <= maxTargetDepth; d++) {
                 ctx.timedOut = false;
-                int alpha = -INF_SCORE;
-                int beta = INF_SCORE;
                 String iterBestMove = bestMoveStr;
                 int iterBestScore = -INF_SCORE;
 
-                for (OctiMove mv : rootCandidates) {
-                    try {
-                        game.move(mv);
-                    } catch (Throwable t) {
-                        game.restoreSnapshot(rootSnap);
-                        continue;
-                    }
+                boolean useAspiration = (d >= 2
+                        && profile.aspirationWindowCp > 0
+                        && profile.rootScoreJitter == 0
+                        && bestScore > -WIN_SCORE + 2000
+                        && bestScore < WIN_SCORE - 2000);
 
-                    int score;
-                    if (game.isGameOver()) {
-                        OctiPlayer w = game.getWinner();
-                        score = OctiPlayer.areAllied(mode, w, rootTurn)
-                                ? (WIN_SCORE - 1)
-                                : (-WIN_SCORE + 1);
-                    } else {
-                        OctiPlayer nextTurn = game.getTurn();
-                        boolean sameTeamNext = OctiPlayer.areAllied(mode, rootTurn, nextTurn);
-                        if (sameTeamNext) {
-                            score = negamax(scratchBoard, d - 1, 1,
-                                    alpha, beta, rootTurn, ctx);
-                        } else {
-                            OctiPlayer oppPerspective = (nextTurn != OctiPlayer.PLAYER_UNDEF) ? nextTurn :
-                                    ((rootTurn == OctiPlayer.PLAYER_A || rootTurn == OctiPlayer.PLAYER_C)
-                                            ? OctiPlayer.PLAYER_B : OctiPlayer.PLAYER_A);
-                            score = -negamax(scratchBoard, d - 1, 1,
-                                    -beta, -alpha, oppPerspective, ctx);
+                if (!useAspiration) {
+                    int alpha = -INF_SCORE;
+                    int beta = INF_SCORE;
+                    for (int mvIdx = 0; mvIdx < rootCandidates.size(); mvIdx++) {
+                        OctiMove mv = rootCandidates.get(mvIdx);
+                        if (!searchSingleRootMove(scratchBoard, game, rootSnap, mode, rootTurn,
+                                mv, d, mvIdx, alpha, beta, ctx, outScoreHolder)) {
+                            continue;
+                        }
+                        if (ctx.timedOut && d > 1) {
+                            break;
+                        }
+                        int score = outScoreHolder[0];
+                        if (score > alpha) {
+                            if (profile.rootScoreJitter > 0 && Math.abs(score) < WIN_SCORE / 2) {
+                                int half = profile.rootScoreJitter;
+                                int jitter = (int) (Math.abs(nextRandom()) % (2L * half + 1L)) - half;
+                                score += jitter;
+                            }
+                            iterBestScore = score;
+                            iterBestMove = mv.asString();
+                            alpha = score;
                         }
                     }
+                } else {
+                    int delta = profile.aspirationWindowCp;
+                    int aspAlpha = Math.max(-INF_SCORE, bestScore - delta);
+                    int aspBeta = Math.min(INF_SCORE, bestScore + delta);
+                    int widenCount = 0;
+                    List<OctiMove> aspCandidates = new ArrayList<>(rootCandidates);
 
-                    game.restoreSnapshot(rootSnap);
+                    while (true) {
+                        int alpha = aspAlpha;
+                        int beta = aspBeta;
+                        String passBestMove = aspCandidates.get(0).asString();
+                        int passBestScore = -INF_SCORE;
+                        int passBestIdx = 0;
 
-                    if (ctx.timedOut && d > 1) {
+                        for (int mvIdx = 0; mvIdx < aspCandidates.size(); mvIdx++) {
+                            OctiMove mv = aspCandidates.get(mvIdx);
+                            if (!searchSingleRootMove(scratchBoard, game, rootSnap, mode, rootTurn,
+                                    mv, d, mvIdx, alpha, beta, ctx, outScoreHolder)) {
+                                continue;
+                            }
+                            if (ctx.timedOut && d > 1) {
+                                break;
+                            }
+                            int score = outScoreHolder[0];
+                            if (score > passBestScore) {
+                                passBestScore = score;
+                                passBestMove = mv.asString();
+                                passBestIdx = mvIdx;
+                            }
+                            if (score > alpha) {
+                                alpha = score;
+                            }
+                            if (alpha >= beta) {
+                                break;
+                            }
+                        }
+
+                        if (ctx.timedOut && d > 1) {
+                            break;
+                        }
+
+                        if (passBestScore <= aspAlpha && aspAlpha > -INF_SCORE) {
+                            ctx.aspirationReSearches++;
+                            widenCount++;
+                            if (widenCount >= 3 || aspAlpha - delta <= -WIN_SCORE) {
+                                aspAlpha = -INF_SCORE;
+                            } else {
+                                aspAlpha = Math.max(-INF_SCORE, aspAlpha - delta);
+                                delta *= 2;
+                            }
+                            continue;
+                        }
+
+                        if (passBestScore >= aspBeta && aspBeta < INF_SCORE) {
+                            if (passBestIdx > 0 && passBestIdx < aspCandidates.size()) {
+                                OctiMove promoted = aspCandidates.remove(passBestIdx);
+                                aspCandidates.add(0, promoted);
+                            }
+                            ctx.aspirationReSearches++;
+                            widenCount++;
+                            if (widenCount >= 3 || aspBeta + delta >= WIN_SCORE) {
+                                aspBeta = INF_SCORE;
+                            } else {
+                                aspBeta = Math.min(INF_SCORE, aspBeta + delta);
+                                delta *= 2;
+                            }
+                            continue;
+                        }
+
+                        iterBestScore = passBestScore;
+                        iterBestMove = passBestMove;
+                        rootCandidates = aspCandidates;
                         break;
-                    }
-
-                    if (score > alpha) {
-                        if (profile.rootScoreJitter > 0 && Math.abs(score) < WIN_SCORE / 2) {
-                            int half = profile.rootScoreJitter;
-                            int jitter = (int) (Math.abs(nextRandom()) % (2L * half + 1L)) - half;
-                            score += jitter;
-                        }
-                        iterBestScore = score;
-                        iterBestMove = mv.asString();
-                        alpha = score;
                     }
                 }
 
@@ -2881,8 +3694,8 @@ public class OctiBotEngine {
                     bestMoveStr = iterBestMove;
                     bestScore = iterBestScore;
                     completedDepth = d;
+                    flushRemainingNodes(ctx);
                     liveDepth.set(completedDepth);
-                    liveNodes.set(ctx.nodesVisited);
                     liveScore.set(bestScore);
                     for (int idx = 1; idx < rootCandidates.size(); idx++) {
                         if (rootCandidates.get(idx).asString().equals(bestMoveStr)) {
@@ -2909,15 +3722,17 @@ public class OctiBotEngine {
                 } catch (InterruptedException ignored) {
                 }
             }
+            flushRemainingNodes(ctx);
         }
 
+        long totalNodes = Math.max(ctx.nodesVisited, liveNodes.get());
         liveDepth.set(Math.max(1, completedDepth));
-        liveNodes.set(ctx.nodesVisited);
+        liveNodes.set(totalNodes);
         liveScore.set(bestScore);
 
         if (outStats != null) {
             outStats.depthReached = Math.max(1, completedDepth);
-            outStats.nodesVisited = ctx.nodesVisited;
+            outStats.nodesVisited = totalNodes;
             outStats.bestScore = bestScore;
             outStats.elapsedMs = Math.max(0L, steadyClockMs() - startMs);
         }

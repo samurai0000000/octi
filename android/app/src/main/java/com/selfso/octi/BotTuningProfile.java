@@ -19,6 +19,18 @@ public class BotTuningProfile {
     public int compositeMoveMaxPly = 1;
     public int rootScoreJitter = 25;
     public boolean useOpeningBook = true;
+    public int bookSelectionWindow = 80;
+    public boolean usePvs = false;
+    public int aspirationWindowCp = 0;
+    public boolean useKillers = false;
+    public boolean useHistory = false;
+    public int lmrMinDepth = 0;
+    public int lmrMinMoveIndex = 4;
+    public int nullMoveMinDepth = 0;
+    public int nullMoveReduction = 2;
+    public boolean qsearchUseTt = false;
+    public int ttSizeLog2 = 17;
+    public boolean lazySmpDiversifyHelpers = false;
 
     // --- 2. Base Occupation & Distance Weights ---
     public int capturedEnemyBaseBonus = 28000;
@@ -29,6 +41,7 @@ public class BotTuningProfile {
     public int oneStepBaseThreatBonus = 8500;
     public int oneJumpBaseThreatBonus = 12000;
     public int twoPlyBaseThreatWeight = 2400;
+    public int contestedEnemyBaseThreatScalePct = 100;
 
     // --- 3. Multi-Pod Development & Anti-Monopoly Weights ---
     public int podZeroProngVal = 320;
@@ -43,7 +56,14 @@ public class BotTuningProfile {
     public int secondArmedPodBonus = 1100;
     public int thirdArmedPodBonus = 700;
     public int singlePodMonopolyPenalty = 1000;
+    public int ofkSinglePodMonopolyPenalty = -1;
     public int loneOneProngRushPenalty = 550;
+    public int enemyHeavyPodThreatPenalty = 0;
+    public int unarmedHomePodPenalty = 900;
+    public int canLiberateBonus = 450;
+    public int reserveFreePodVal = 450;
+    public int capturedPodPenalty = 3800;
+    public int reserveFreeProngVal = 140;
 
     // --- 4. Leapfrog / Launchpad Battery & Jump Reachability Weights ---
     public int leapfrogBatteryWeight = 550;
@@ -79,6 +99,18 @@ public class BotTuningProfile {
             this.compositeMoveMaxPly = other.compositeMoveMaxPly;
             this.rootScoreJitter = other.rootScoreJitter;
             this.useOpeningBook = other.useOpeningBook;
+            this.bookSelectionWindow = other.bookSelectionWindow;
+            this.usePvs = other.usePvs;
+            this.aspirationWindowCp = other.aspirationWindowCp;
+            this.useKillers = other.useKillers;
+            this.useHistory = other.useHistory;
+            this.lmrMinDepth = other.lmrMinDepth;
+            this.lmrMinMoveIndex = other.lmrMinMoveIndex;
+            this.nullMoveMinDepth = other.nullMoveMinDepth;
+            this.nullMoveReduction = other.nullMoveReduction;
+            this.qsearchUseTt = other.qsearchUseTt;
+            this.ttSizeLog2 = other.ttSizeLog2;
+            this.lazySmpDiversifyHelpers = other.lazySmpDiversifyHelpers;
 
             this.capturedEnemyBaseBonus = other.capturedEnemyBaseBonus;
             this.lostAlliedBasePenalty = other.lostAlliedBasePenalty;
@@ -88,6 +120,7 @@ public class BotTuningProfile {
             this.oneStepBaseThreatBonus = other.oneStepBaseThreatBonus;
             this.oneJumpBaseThreatBonus = other.oneJumpBaseThreatBonus;
             this.twoPlyBaseThreatWeight = other.twoPlyBaseThreatWeight;
+            this.contestedEnemyBaseThreatScalePct = other.contestedEnemyBaseThreatScalePct;
 
             this.podZeroProngVal = other.podZeroProngVal;
             this.podOneProngVal = other.podOneProngVal;
@@ -101,7 +134,14 @@ public class BotTuningProfile {
             this.secondArmedPodBonus = other.secondArmedPodBonus;
             this.thirdArmedPodBonus = other.thirdArmedPodBonus;
             this.singlePodMonopolyPenalty = other.singlePodMonopolyPenalty;
+            this.ofkSinglePodMonopolyPenalty = other.ofkSinglePodMonopolyPenalty;
             this.loneOneProngRushPenalty = other.loneOneProngRushPenalty;
+            this.enemyHeavyPodThreatPenalty = other.enemyHeavyPodThreatPenalty;
+            this.unarmedHomePodPenalty = other.unarmedHomePodPenalty;
+            this.canLiberateBonus = other.canLiberateBonus;
+            this.reserveFreePodVal = other.reserveFreePodVal;
+            this.capturedPodPenalty = other.capturedPodPenalty;
+            this.reserveFreeProngVal = other.reserveFreeProngVal;
 
             this.leapfrogBatteryWeight = other.leapfrogBatteryWeight;
             this.leapfrogForwardBonus = other.leapfrogForwardBonus;

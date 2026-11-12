@@ -1769,7 +1769,7 @@ public class OctiGame {
         }
     }
 
-    public void generateLegalMoves(List<OctiMove> outMoves) {
+    private void generateSingleTurnMovesImpl(List<OctiMove> outMoves) {
         if (outMoves == null) {
             return;
         }
@@ -2034,6 +2034,607 @@ public class OctiGame {
                 }
             }
         }
+    }
+
+    private void dfsStraightSuperProngJumps(
+            int sx, int sy, int origStartPodCount,
+            int cx, int cy, OctiPod pod, OctiDir dir,
+            List<Coord> jumpedSquares, List<OctiHop> currentHops,
+            List<OctiMoveOp> outBonusOps) {
+        int w = board.getBoardWidth();
+        int h = board.getBoardHeight();
+
+        int jdx = dir.deltaX();
+        int jdy = dir.deltaY();
+        int dx = jdx * 2;
+        int dy = jdy * 2;
+
+        int jx = useEdgelessBoard ? (((cx + jdx) % w + w) % w) : (cx + jdx);
+        int jy = useEdgelessBoard ? (((cy + jdy) % h + h) % h) : (cy + jdy);
+        int lx = useEdgelessBoard ? (((cx + dx) % w + w) % w) : (cx + dx);
+        int ly = useEdgelessBoard ? (((cy + dy) % h + h) % h) : (cy + dy);
+
+        if (!useEdgelessBoard) {
+            if (jx < 0 || jx >= w || jy < 0 || jy >= h) return;
+            if (lx < 0 || lx >= w || ly < 0 || ly >= h) return;
+        }
+
+        for (Coord jc : jumpedSquares) {
+            if (jc.x == jx && jc.y == jy) {
+                return;
+            }
+        }
+
+        boolean jumpedEmpty = (jx == sx && jy == sy)
+                ? (origStartPodCount <= 1)
+                : board.squareAt(jx, jy).isEmpty();
+        if (jumpedEmpty) {
+            return;
+        }
+
+        boolean landingEmpty = (lx == sx && ly == sy)
+                ? (origStartPodCount <= 1)
+                : board.squareAt(lx, ly).isEmpty();
+        if (!landingEmpty) {
+            return;
+        }
+
+        jumpedSquares.add(new Coord(jx, jy));
+
+        // Branch 1: Without capture
+        {
+            OctiHop hop = new OctiHop(lx, ly, false);
+            currentHops.add(hop);
+
+            OctiMoveOp op = new OctiMoveOp();
+            op.x0 = sx;
+            op.y0 = sy;
+            op.pod = pod.copy();
+            op.isSuperProngBonusMove = true;
+            op.hops.addAll(currentHops);
+            outBonusOps.add(op);
+
+            dfsStraightSuperProngJumps(sx, sy, origStartPodCount,
+                    lx, ly, pod, dir, jumpedSquares, currentHops, outBonusOps);
+
+            currentHops.remove(currentHops.size() - 1);
+        }
+
+        // Branch 2: With capture
+        {
+            OctiHop hop = new OctiHop(lx, ly, true);
+            currentHops.add(hop);
+
+            OctiMoveOp op = new OctiMoveOp();
+            op.x0 = sx;
+            op.y0 = sy;
+            op.pod = pod.copy();
+            op.isSuperProngBonusMove = true;
+            op.hops.addAll(currentHops);
+            outBonusOps.add(op);
+
+            dfsStraightSuperProngJumps(sx, sy, origStartPodCount,
+                    lx, ly, pod, dir, jumpedSquares, currentHops, outBonusOps);
+
+            currentHops.remove(currentHops.size() - 1);
+        }
+
+        jumpedSquares.remove(jumpedSquares.size() - 1);
+    }
+
+    private void enumerateSinglePodSuperBonusOps(List<OctiMoveOp> outBonusOps) {
+        outBonusOps.clear();
+        if (board == null || !useSuperProngs) {
+            return;
+        }
+        int w = board.getBoardWidth();
+        int h = board.getBoardHeight();
+
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                OctiSquare sq = board.squareAt(x, y);
+                int origPodCount = sq.getNumPods();
+                if (origPodCount == 0) {
+                    continue;
+                }
+                Set<Integer> seenConfigs = new HashSet<>();
+
+                for (int i = 0; i < origPodCount; i++) {
+                    OctiPod pod = sq.getPodAt(i);
+                    if (pod.getType() != turn.toPodType() || !pod.hasSuperProng()) {
+                        continue;
+                    }
+                    int prongsConf = pod.rawConfig() & 0xFFFF;
+                    if (seenConfigs.contains(prongsConf)) {
+                        continue;
+                    }
+                    seenConfigs.add(prongsConf);
+
+                    for (int d = 0; d < OctiDir.DIR_MAX; d++) {
+                        OctiDir dir = OctiDir.fromIndex(d);
+                        if (pod.prongAt(dir) != OctiProngType.SUPER_PRONG) {
+                            continue;
+                        }
+
+                        // 1. Single step along superprong direction
+                        {
+                            int dx = dir.deltaX();
+                            int dy = dir.deltaY();
+                            int nx = useEdgelessBoard ? (((x + dx) % w + w) % w) : (x + dx);
+                            int ny = useEdgelessBoard ? (((y + dy) % h + h) % h) : (y + dy);
+
+                            boolean inBounds = useEdgelessBoard
+                                    || (nx >= 0 && nx < w && ny >= 0 && ny < h);
+                            if (inBounds) {
+                                OctiSquare destSq = board.squareAt(nx, ny);
+                                boolean canStep = (mode == OctiGameMode.GAME_MODE_OFK)
+                                        ? destSq.isEmpty()
+                                        : !destSq.hasEnemyOf(turn);
+                                if (canStep) {
+                                    OctiMoveOp op = new OctiMoveOp();
+                                    op.x0 = x;
+                                    op.y0 = y;
+                                    op.pod = pod.copy();
+                                    op.isSuperProngBonusMove = true;
+                                    op.hops.add(new OctiHop(nx, ny, false));
+                                    outBonusOps.add(op);
+                                }
+                            }
+                        }
+
+                        // 2. Straight jump chain prefixes along superprong direction
+                        {
+                            List<Coord> jumpedSquares = new ArrayList<>();
+                            List<OctiHop> currentHops = new ArrayList<>();
+                            dfsStraightSuperProngJumps(x, y, origPodCount,
+                                    x, y, pod, dir, jumpedSquares, currentHops, outBonusOps);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void applySingleSuperBonusPreludeInPlace(
+            OctiMoveOp bonusOp, List<Coord> capturedSquareCoords) {
+        if (board == null || bonusOp.hops.isEmpty()) {
+            return;
+        }
+        int w = board.getBoardWidth();
+        int h = board.getBoardHeight();
+
+        int cx = bonusOp.x0;
+        int cy = bonusOp.y0;
+        for (int k = 0; k < bonusOp.hops.size(); k++) {
+            OctiHop hop = bonusOp.hops.get(k);
+            int dx = hop.x - cx;
+            int dy = hop.y - cy;
+            if (useEdgelessBoard) {
+                for (int d = -2; d <= 2; d++) {
+                    if (((cx + d) % w + w) % w == hop.x) {
+                        dx = d;
+                        break;
+                    }
+                }
+                for (int d = -2; d <= 2; d++) {
+                    if (((cy + d) % h + h) % h == hop.y) {
+                        dy = d;
+                        break;
+                    }
+                }
+            }
+            if ((Math.abs(dx) == 2 || Math.abs(dy) == 2) && hop.capture) {
+                int jx = useEdgelessBoard ? (((cx + dx / 2) % w + w) % w) : (cx + dx / 2);
+                int jy = useEdgelessBoard ? (((cy + dy / 2) % h + h) % h) : (cy + dy / 2);
+                boolean seen = false;
+                for (Coord c : capturedSquareCoords) {
+                    if (c.x == jx && c.y == jy) {
+                        seen = true;
+                        break;
+                    }
+                }
+                if (!seen) {
+                    capturedSquareCoords.add(new Coord(jx, jy));
+                }
+            }
+            cx = hop.x;
+            cy = hop.y;
+        }
+
+        board.squareAt(bonusOp.x0, bonusOp.y0).removePod(bonusOp.pod);
+        OctiHop endHop = bonusOp.hops.get(bonusOp.hops.size() - 1);
+        board.squareAt(endHop.x, endHop.y).addPod(bonusOp.pod.copy());
+    }
+
+    private void finalizeSuperBonusCapturesInPlace(List<Coord> capturedSquareCoords) {
+        if (board == null) {
+            return;
+        }
+        int turnVal = turn.getValue();
+        for (Coord coord : capturedSquareCoords) {
+            OctiSquare cSq = board.squareAt(coord.x, coord.y);
+            for (int i = 0; i < cSq.getNumPods(); i++) {
+                OctiPod cPod = cSq.getPodAt(i);
+                OctiPlayer owner = cPod.getType().toPlayer();
+                players[turnVal].freeProngs += cPod.getNumNormalProngs();
+                players[turnVal].freeSuperProngs += cPod.getNumSuperProngs();
+                players[owner.getValue()].capturedPods++;
+            }
+            cSq.clear();
+        }
+    }
+
+    private String canonicalBoardAndReservesStateKey() {
+        StringBuilder sb = new StringBuilder(128);
+        int numP = (board != null) ? board.getNumPlayers() : 2;
+        for (int p = 1; p <= numP; p++) {
+            sb.append(players[p].freePods).append(',')
+              .append(players[p].capturedPods).append(',')
+              .append(players[p].freeProngs).append(',')
+              .append(players[p].freeSuperProngs).append(',')
+              .append(players[p].eliminated ? 1 : 0).append(':');
+        }
+        if (board != null) {
+            int w = board.getBoardWidth();
+            int h = board.getBoardHeight();
+            int[] podRaw = new int[16];
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    OctiSquare sq = board.squareAt(x, y);
+                    int n = sq.getNumPods();
+                    if (n == 0) {
+                        continue;
+                    }
+                    if (n > podRaw.length) {
+                        podRaw = new int[n];
+                    }
+                    for (int i = 0; i < n; i++) {
+                        podRaw[i] = sq.getPodAt(i).rawConfig();
+                    }
+                    for (int i = 1; i < n; i++) {
+                        int key = podRaw[i];
+                        int j = i - 1;
+                        while (j >= 0 && podRaw[j] > key) {
+                            podRaw[j + 1] = podRaw[j];
+                            j--;
+                        }
+                        podRaw[j + 1] = key;
+                    }
+                    sb.append('(').append(x).append(',').append(y).append(';');
+                    for (int i = 0; i < n; i++) {
+                        sb.append(podRaw[i]).append(',');
+                    }
+                    sb.append(')');
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    private String computePostOpStateKey(OctiMoveOp regOp) {
+        if (board == null || regOp == null) {
+            return "";
+        }
+        int w = board.getBoardWidth();
+        int h = board.getBoardHeight();
+        int numP = board.getNumPlayers();
+        int turnVal = turn.getValue();
+
+        int[] freePods = new int[5];
+        int[] capPods = new int[5];
+        int[] freeProngs = new int[5];
+        int[] freeSuperProngs = new int[5];
+        boolean[] elim = new boolean[5];
+        for (int p = 1; p <= numP; p++) {
+            freePods[p] = players[p].freePods;
+            capPods[p] = players[p].capturedPods;
+            freeProngs[p] = players[p].freeProngs;
+            freeSuperProngs[p] = players[p].freeSuperProngs;
+            elim[p] = players[p].eliminated;
+        }
+
+        int[] sqCount = new int[w * h];
+        int[] sqPods = new int[w * h * 16];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                OctiSquare sq = board.squareAt(x, y);
+                int n = sq.getNumPods();
+                int idx = y * w + x;
+                sqCount[idx] = n;
+                for (int i = 0; i < n && i < 16; i++) {
+                    sqPods[idx * 16 + i] = sq.getPodAt(i).rawConfig();
+                }
+            }
+        }
+
+        if (regOp.addPod) {
+            int idx = regOp.y0 * w + regOp.x0;
+            int c = sqCount[idx];
+            if (c < 16) {
+                sqPods[idx * 16 + c] = new OctiPod(turn.toPodType()).rawConfig();
+                sqCount[idx] = c + 1;
+            }
+            if (!regOp.liberate) {
+                freePods[turnVal]--;
+            } else {
+                if (mode == OctiGameMode.GAME_MODE_4) {
+                    OctiPlayer partner = (turn == OctiPlayer.PLAYER_A ? OctiPlayer.PLAYER_C :
+                                          turn == OctiPlayer.PLAYER_C ? OctiPlayer.PLAYER_A :
+                                          turn == OctiPlayer.PLAYER_B ? OctiPlayer.PLAYER_D
+                                                                      : OctiPlayer.PLAYER_B);
+                    OctiSquareType partnerHome = (partner == OctiPlayer.PLAYER_A ? OctiSquareType.A_HOME_SQUARE :
+                                                  partner == OctiPlayer.PLAYER_B ? OctiSquareType.B_HOME_SQUARE :
+                                                  partner == OctiPlayer.PLAYER_C ? OctiSquareType.C_HOME_SQUARE
+                                                                                 : OctiSquareType.D_HOME_SQUARE);
+                    if (board.squareAt(regOp.x0, regOp.y0).getType() == partnerHome
+                            && elim[partner.getValue()]) {
+                        capPods[partner.getValue()]--;
+                    } else {
+                        capPods[turnVal]--;
+                    }
+                } else {
+                    capPods[turnVal]--;
+                }
+            }
+        } else if (regOp.addProngDir != OctiDir.DIR_UNDEF) {
+            int idx = regOp.y0 * w + regOp.x0;
+            int targetRaw = regOp.pod.rawConfig();
+            OctiPod modPod = regOp.pod.copy();
+            if (regOp.rmProngDir != OctiDir.DIR_UNDEF) {
+                modPod.removeProng(regOp.rmProngDir);
+                modPod.addProng(regOp.addProngDir, false);
+            } else {
+                modPod.addProng(regOp.addProngDir, regOp.superProng);
+                if (regOp.superProng) {
+                    freeSuperProngs[turnVal]--;
+                } else {
+                    freeProngs[turnVal]--;
+                }
+            }
+            int newRaw = modPod.rawConfig();
+            int c = sqCount[idx];
+            for (int i = 0; i < c; i++) {
+                if (sqPods[idx * 16 + i] == targetRaw) {
+                    sqPods[idx * 16 + i] = newRaw;
+                    break;
+                }
+            }
+        } else if (!regOp.hops.isEmpty()) {
+            int startIdx = regOp.y0 * w + regOp.x0;
+            int targetRaw = regOp.pod.rawConfig();
+            int sc = sqCount[startIdx];
+            for (int i = 0; i < sc; i++) {
+                if (sqPods[startIdx * 16 + i] == targetRaw) {
+                    for (int j = i; j + 1 < sc; j++) {
+                        sqPods[startIdx * 16 + j] = sqPods[startIdx * 16 + j + 1];
+                    }
+                    sqCount[startIdx] = sc - 1;
+                    break;
+                }
+            }
+
+            int cx = regOp.x0;
+            int cy = regOp.y0;
+            boolean[] capSq = new boolean[w * h];
+            for (int k = 0; k < regOp.hops.size(); k++) {
+                OctiHop hop = regOp.hops.get(k);
+                int dx = hop.x - cx;
+                int dy = hop.y - cy;
+                if (useEdgelessBoard) {
+                    for (int d = -2; d <= 2; d++) {
+                        if (((cx + d) % w + w) % w == hop.x) {
+                            dx = d;
+                            break;
+                        }
+                    }
+                    for (int d = -2; d <= 2; d++) {
+                        if (((cy + d) % h + h) % h == hop.y) {
+                            dy = d;
+                            break;
+                        }
+                    }
+                }
+                if ((Math.abs(dx) == 2 || Math.abs(dy) == 2) && hop.capture) {
+                    int jx = useEdgelessBoard ? (((cx + dx / 2) % w + w) % w) : (cx + dx / 2);
+                    int jy = useEdgelessBoard ? (((cy + dy / 2) % h + h) % h) : (cy + dy / 2);
+                    if (jx >= 0 && jx < w && jy >= 0 && jy < h) {
+                        capSq[jy * w + jx] = true;
+                    }
+                }
+                cx = hop.x;
+                cy = hop.y;
+            }
+            int endIdx = cy * w + cx;
+            int ec = sqCount[endIdx];
+            if (ec < 16) {
+                sqPods[endIdx * 16 + ec] = targetRaw;
+                sqCount[endIdx] = ec + 1;
+            }
+
+            for (int cIdx = 0; cIdx < w * h; cIdx++) {
+                if (capSq[cIdx]) {
+                    int cc = sqCount[cIdx];
+                    for (int i = 0; i < cc; i++) {
+                        OctiPod cp = new OctiPod(sqPods[cIdx * 16 + i]);
+                        OctiPlayer owner = cp.getType().toPlayer();
+                        freeProngs[turnVal] += cp.getNumNormalProngs();
+                        freeSuperProngs[turnVal] += cp.getNumSuperProngs();
+                        capPods[owner.getValue()]++;
+                    }
+                    sqCount[cIdx] = 0;
+                }
+            }
+        }
+
+        if (mode == OctiGameMode.GAME_MODE_4) {
+            int[][] homeXY = { {-1, -1}, {2, 2}, {2, 6}, {6, 6}, {6, 2} };
+            for (int p = 1; p <= 4; p++) {
+                if (!elim[p]) {
+                    OctiPlayer player = OctiPlayer.fromValue(p);
+                    int hIdx = homeXY[p][1] * w + homeXY[p][0];
+                    boolean captured = false;
+                    for (int i = 0; i < sqCount[hIdx]; i++) {
+                        OctiPlayer podOwner = new OctiPod(sqPods[hIdx * 16 + i]).getType().toPlayer();
+                        if (podOwner != OctiPlayer.PLAYER_UNDEF && !OctiPlayer.areAllied(mode, player, podOwner)) {
+                            captured = true;
+                            break;
+                        }
+                    }
+                    if (captured) {
+                        elim[p] = true;
+                        for (int idx = 0; idx < w * h; idx++) {
+                            int writeIdx = 0;
+                            int c = sqCount[idx];
+                            for (int i = 0; i < c; i++) {
+                                int rc = sqPods[idx * 16 + i];
+                                OctiPod pod = new OctiPod(rc);
+                                if (pod.getType().toPlayer() == player) {
+                                    freeProngs[turnVal] += pod.getNumNormalProngs();
+                                    freeSuperProngs[turnVal] += pod.getNumSuperProngs();
+                                    capPods[p]++;
+                                } else {
+                                    sqPods[idx * 16 + writeIdx++] = rc;
+                                }
+                            }
+                            sqCount[idx] = writeIdx;
+                        }
+                    }
+                }
+            }
+        }
+
+        StringBuilder sb = new StringBuilder(128);
+        for (int p = 1; p <= numP; p++) {
+            sb.append(freePods[p]).append(',')
+              .append(capPods[p]).append(',')
+              .append(freeProngs[p]).append(',')
+              .append(freeSuperProngs[p]).append(',')
+              .append(elim[p] ? 1 : 0).append(':');
+        }
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int idx = y * w + x;
+                int n = sqCount[idx];
+                if (n == 0) {
+                    continue;
+                }
+                int base = idx * 16;
+                for (int i = 1; i < n; i++) {
+                    int key = sqPods[base + i];
+                    int j = i - 1;
+                    while (j >= 0 && sqPods[base + j] > key) {
+                        sqPods[base + j + 1] = sqPods[base + j];
+                        j--;
+                    }
+                    sqPods[base + j + 1] = key;
+                }
+                sb.append('(').append(x).append(',').append(y).append(';');
+                for (int i = 0; i < n; i++) {
+                    sb.append(sqPods[base + i]).append(',');
+                }
+                sb.append(')');
+            }
+        }
+        return sb.toString();
+    }
+
+    public void generateLegalMoves(List<OctiMove> outMoves) {
+        if (outMoves == null) {
+            return;
+        }
+        outMoves.clear();
+
+        if (!gameStarted || gameOver || turn == OctiPlayer.PLAYER_UNDEF || board == null) {
+            return;
+        }
+
+        List<OctiMove> baseMoves = new ArrayList<>();
+        generateSingleTurnMovesImpl(baseMoves);
+
+        if (!useSuperProngs) {
+            outMoves.addAll(baseMoves);
+            return;
+        }
+
+        List<OctiMoveOp> preludes1 = new ArrayList<>();
+        enumerateSinglePodSuperBonusOps(preludes1);
+
+        Set<String> seenPostMoveStates = new HashSet<>();
+        for (OctiMove m : baseMoves) {
+            if (!m.getOps().isEmpty()) {
+                String stateKey = computePostOpStateKey(m.getOps().get(0));
+                if (seenPostMoveStates.add(stateKey)) {
+                    outMoves.add(m);
+                }
+            }
+        }
+
+        if (preludes1.isEmpty()) {
+            return;
+        }
+
+        OctiGameSnapshot rootSnap = captureSnapshot();
+        List<OctiMove> regMoves = new ArrayList<>();
+
+        // 1-prelude moves
+        for (OctiMoveOp p1 : preludes1) {
+            restoreSnapshot(rootSnap);
+            List<Coord> cap1 = new ArrayList<>();
+            applySingleSuperBonusPreludeInPlace(p1, cap1);
+            finalizeSuperBonusCapturesInPlace(cap1);
+
+            generateSingleTurnMovesImpl(regMoves);
+            for (OctiMove rm : regMoves) {
+                if (rm.getOps().isEmpty()) {
+                    continue;
+                }
+                OctiMoveOp regOp = rm.getOps().get(0);
+                String stateKey = computePostOpStateKey(regOp);
+                if (!seenPostMoveStates.add(stateKey)) {
+                    continue;
+                }
+                List<OctiMoveOp> ops = new ArrayList<>(2);
+                ops.add(new OctiMoveOp(p1));
+                ops.add(new OctiMoveOp(regOp));
+                outMoves.add(new OctiMove(ops));
+            }
+        }
+
+        // 2-prelude moves
+        for (OctiMoveOp p1 : preludes1) {
+            restoreSnapshot(rootSnap);
+            List<Coord> cap1 = new ArrayList<>();
+            applySingleSuperBonusPreludeInPlace(p1, cap1);
+            OctiGameSnapshot afterP1NoCapSnap = captureSnapshot();
+
+            List<OctiMoveOp> preludes2 = new ArrayList<>();
+            enumerateSinglePodSuperBonusOps(preludes2);
+            for (OctiMoveOp p2 : preludes2) {
+                restoreSnapshot(afterP1NoCapSnap);
+                List<Coord> capBoth = new ArrayList<>(cap1);
+                applySingleSuperBonusPreludeInPlace(p2, capBoth);
+                finalizeSuperBonusCapturesInPlace(capBoth);
+
+                generateSingleTurnMovesImpl(regMoves);
+                for (OctiMove rm : regMoves) {
+                    if (rm.getOps().isEmpty()) {
+                        continue;
+                    }
+                    OctiMoveOp regOp = rm.getOps().get(0);
+                    String stateKey = computePostOpStateKey(regOp);
+                    if (!seenPostMoveStates.add(stateKey)) {
+                        continue;
+                    }
+                    List<OctiMoveOp> ops = new ArrayList<>(3);
+                    ops.add(new OctiMoveOp(p1));
+                    ops.add(new OctiMoveOp(p2));
+                    ops.add(new OctiMoveOp(regOp));
+                    outMoves.add(new OctiMove(ops));
+                }
+            }
+        }
+
+        restoreSnapshot(rootSnap);
     }
 
     public List<OctiMove> generateLegalMoves() {

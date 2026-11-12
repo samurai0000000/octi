@@ -4,6 +4,7 @@
  * Copyright (C) 2026, Charles Chiou
  */
 
+#include <algorithm>
 #include <atomic>
 #include <cstring>
 #include <fstream>
@@ -287,6 +288,9 @@ OctiMainWindow::OctiMainWindow(
     }
     _composer.setConfirmAllMoves(true);
     _configStore.preferences().confirmAllMoves = true;
+    _botEngine.setDifficulty(_localConfig.botDifficulty);
+    _botEngine.setTuningProfile(
+        strengthenedProfileForDifficulty(_localConfig.botDifficulty));
 
     setWindowIcon(createOctiAppIcon());
     setWindowTitle(
@@ -1791,6 +1795,49 @@ bool OctiMainWindow::isSfxMuted() const
 
 /* ---- Offline Local / Bot Play ---- */
 
+BotTuningProfile OctiMainWindow::strengthenedProfileForDifficulty(
+    BotDifficulty difficulty)
+{
+    BotTuningProfile p = OctiBotEngine::defaultProfileForDifficulty(difficulty);
+    switch (difficulty) {
+    case BotDifficulty::CASUAL:
+        break;
+    case BotDifficulty::TACTICAL:
+        p.usePvs = true;
+        p.useKillers = true;
+        p.useHistory = true;
+        p.qsearchUseTt = true;
+        p.lazySmpDiversifyHelpers = true;
+        break;
+    case BotDifficulty::MASTER:
+        p.usePvs = true;
+        p.useKillers = true;
+        p.useHistory = true;
+        p.qsearchUseTt = true;
+        p.lazySmpDiversifyHelpers = true;
+        p.aspirationWindowCp = 250;
+        p.lmrMinDepth = 3;
+        p.lmrMinMoveIndex = 4;
+        p.nullMoveMinDepth = 3;
+        break;
+    case BotDifficulty::EXPERT:
+    case BotDifficulty::GRANDMASTER:
+        p.usePvs = true;
+        p.useKillers = true;
+        p.useHistory = true;
+        p.qsearchUseTt = true;
+        p.lazySmpDiversifyHelpers = true;
+        p.aspirationWindowCp = 250;
+        p.lmrMinDepth = 3;
+        p.lmrMinMoveIndex = 4;
+        p.nullMoveMinDepth = 3;
+        p.lazySmpThreads = std::clamp<int>(
+            static_cast<int>(std::thread::hardware_concurrency()), 4, 8);
+        break;
+    }
+    return p;
+}
+
 void OctiMainWindow::startNewLocalGame(const LocalGameConfig &cfg)
 {
     leaveOnlineRoom();
@@ -1802,6 +1849,8 @@ void OctiMainWindow::startNewLocalGame(const LocalGameConfig &cfg)
     _localConfig = cfg;
     _isLocalBotGame = (cfg.playType == LocalPlayType::VS_AI_BOT);
     _botEngine.setDifficulty(cfg.botDifficulty);
+    _botEngine.setTuningProfile(
+        strengthenedProfileForDifficulty(cfg.botDifficulty));
     if (!isVisible()) {
         _botEngine.setTimeBudgetMs(25);
     }

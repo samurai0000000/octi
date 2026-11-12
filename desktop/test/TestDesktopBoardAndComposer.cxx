@@ -25,6 +25,7 @@
 #include "OctiDefs.hxx"
 #include "OctiDialogs.hxx"
 #include "OctiGame.hxx"
+#include "OctiMainWindow.hxx"
 #include "OctiMoveComposer.hxx"
 #include "OctiReservePanel.hxx"
 #include "OctiSoundSynth.hxx"
@@ -2931,6 +2932,41 @@ TEST(OctiOfkUsabilityTestSuite, CommitBannerAutoDodgesBottomRowJumpTargetsAndIsD
     QCoreApplication::sendEvent(&canvas, &press11);
     QCoreApplication::sendEvent(&canvas, &rel11);
     STRCMP_EQUAL("55df-33-11x", composer.stagedMoveNotation().c_str());
+}
+
+TEST(OctiOfkUsabilityTestSuite, StrengthenedBotProfileActiveForTacticalMasterExpertGrandmaster)
+{
+    BotTuningProfile pCasual = OctiMainWindow::strengthenedProfileForDifficulty(
+        BotDifficulty::CASUAL);
+    CHECK_FALSE(pCasual.usePvs);
+    CHECK_FALSE(pCasual.useKillers);
+    CHECK_FALSE(pCasual.useHistory);
+
+    BotTuningProfile pTactical = OctiMainWindow::strengthenedProfileForDifficulty(
+        BotDifficulty::TACTICAL);
+    CHECK_TRUE(pTactical.usePvs);
+    CHECK_TRUE(pTactical.useKillers);
+    CHECK_TRUE(pTactical.useHistory);
+    CHECK_TRUE(pTactical.qsearchUseTt);
+    CHECK_TRUE(pTactical.lazySmpDiversifyHelpers);
+
+    for (BotDifficulty d : {BotDifficulty::MASTER,
+                            BotDifficulty::EXPERT,
+                            BotDifficulty::GRANDMASTER}) {
+        BotTuningProfile p = OctiMainWindow::strengthenedProfileForDifficulty(d);
+        CHECK_TRUE(p.usePvs);
+        CHECK_TRUE(p.useKillers);
+        CHECK_TRUE(p.useHistory);
+        CHECK_TRUE(p.qsearchUseTt);
+        CHECK_TRUE(p.lazySmpDiversifyHelpers);
+        LONGS_EQUAL(250, p.aspirationWindowCp);
+        LONGS_EQUAL(3, p.lmrMinDepth);
+        LONGS_EQUAL(4, p.lmrMinMoveIndex);
+        LONGS_EQUAL(3, p.nullMoveMinDepth);
+        if (d == BotDifficulty::EXPERT || d == BotDifficulty::GRANDMASTER) {
+            CHECK_TRUE(p.lazySmpThreads >= 4 && p.lazySmpThreads <= 8);
+        }
+    }
 }
 
 extern "C" const char *__lsan_default_suppressions()

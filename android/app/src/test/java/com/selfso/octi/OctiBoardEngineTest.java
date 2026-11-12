@@ -1864,7 +1864,7 @@ public class OctiBoardEngineTest {
             bot.setTimeBudgetMs(1500);
             String chosen = bot.chooseMove(board);
             assertNotNull(chosen);
-            assertTrue(chosen.contains("x"));
+            assertTrue("chosen=" + chosen, chosen.contains("x"));
             assertFalse("66abcdefg-65".equals(chosen));
         }
 
@@ -2073,6 +2073,105 @@ public class OctiBoardEngineTest {
         assertEquals("53+a", corruptMove[0]);
         assertEquals(120, corruptScore[0]);
         assertEquals(8, corruptDepth[0]);
+    }
+
+    @Test
+    public void testFourPlayerSeatCDProngDirectionSymmetry() {
+        OctiBoard b4 = new OctiBoard(OctiGameMode.GAME_MODE_4);
+        b4.getGame().start(OctiPlayer.PLAYER_A);
+
+        // In 4P mode: A is at (2, 2) -> fx=+1 (E), fy=+1 (N)
+        // B is at (2, 6) -> fx=+1 (E), fy=-1 (S)
+        // C is at (6, 6) -> fx=-1 (W), fy=-1 (S)
+        // D is at (6, 2) -> fx=-1 (W), fy=+1 (N)
+        assertEquals(380, OctiBotEngine.prongDirectionBonus(
+                b4, OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_A, OctiDir.DIR_N, 380, 260, 120));
+        assertEquals(380, OctiBotEngine.prongDirectionBonus(
+                b4, OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_A, OctiDir.DIR_E, 380, 260, 120));
+        assertEquals(260, OctiBotEngine.prongDirectionBonus(
+                b4, OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_A, OctiDir.DIR_NE, 380, 260, 120));
+
+        assertEquals(380, OctiBotEngine.prongDirectionBonus(
+                b4, OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_C, OctiDir.DIR_S, 380, 260, 120));
+        assertEquals(380, OctiBotEngine.prongDirectionBonus(
+                b4, OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_C, OctiDir.DIR_W, 380, 260, 120));
+        assertEquals(260, OctiBotEngine.prongDirectionBonus(
+                b4, OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_C, OctiDir.DIR_SW, 380, 260, 120));
+        assertEquals(0, OctiBotEngine.prongDirectionBonus(
+                b4, OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_C, OctiDir.DIR_N, 380, 260, 120));
+
+        assertEquals(380, OctiBotEngine.prongDirectionBonus(
+                b4, OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_D, OctiDir.DIR_N, 380, 260, 120));
+        assertEquals(380, OctiBotEngine.prongDirectionBonus(
+                b4, OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_D, OctiDir.DIR_W, 380, 260, 120));
+        assertEquals(260, OctiBotEngine.prongDirectionBonus(
+                b4, OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_D, OctiDir.DIR_NW, 380, 260, 120));
+        assertEquals(0, OctiBotEngine.prongDirectionBonus(
+                b4, OctiGameMode.GAME_MODE_4, OctiPlayer.PLAYER_D, OctiDir.DIR_S, 380, 260, 120));
+    }
+
+    @Test
+    public void testSuperProngBonusMoveGenerationAndSearch() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, true, false, OctiGameBases.GAME_BASES_1);
+        board.fromPositionString("2:1:1:0:P:A:-:0:3,0,20,0:3,0,20,0:A33a!,B34,B36,B77");
+        List<OctiMove> moves = board.getGame().generateLegalMoves();
+        boolean hasCompositeSuperBonus = false;
+        boolean hasDoubleSuperCaptureWin = false;
+        for (OctiMove m : moves) {
+            String s = m.asString();
+            if (s.contains(";")) {
+                hasCompositeSuperBonus = true;
+            }
+            if (s.startsWith("33a!-35x-37x;")) {
+                hasDoubleSuperCaptureWin = true;
+            }
+        }
+        assertTrue(hasCompositeSuperBonus);
+        assertTrue(hasDoubleSuperCaptureWin);
+
+        OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
+        bot.setTimeBudgetMs(500);
+        String chosen = bot.chooseMove(board);
+        assertNotNull(chosen);
+        assertFalse(chosen.isEmpty());
+        board.getGame().move(chosen);
+        assertTrue(board.getGame().isGameOver());
+        assertEquals(OctiPlayer.PLAYER_A, board.getGame().getWinner());
+    }
+
+    @Test
+    public void testSearchUpgradesKillersHistoryPvsAndAspiration() {
+        for (OctiBotEngine.BotDifficulty diff : new OctiBotEngine.BotDifficulty[] {
+                OctiBotEngine.BotDifficulty.TACTICAL,
+                OctiBotEngine.BotDifficulty.MASTER,
+                OctiBotEngine.BotDifficulty.EXPERT,
+                OctiBotEngine.BotDifficulty.GRANDMASTER }) {
+            BotTuningProfile p = OctiBotEngine.defaultProfileForDifficulty(diff);
+            assertTrue(p.usePvs);
+            assertTrue(p.useKillers);
+            assertTrue(p.useHistory);
+            assertTrue(p.qsearchUseTt);
+            assertTrue(p.lazySmpDiversifyHelpers);
+            if (diff != OctiBotEngine.BotDifficulty.TACTICAL) {
+                assertEquals(250, p.aspirationWindowCp);
+                assertEquals(3, p.lmrMinDepth);
+                assertEquals(4, p.lmrMinMoveIndex);
+                assertEquals(3, p.nullMoveMinDepth);
+            }
+        }
+
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+        board.fromPositionString("2:3:0:0:P:A:-:0:4,0,22,0:4,0,22,0:A33ab,A53a,A73,B37ef,B57e,B77");
+        OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.MASTER);
+        bot.tuningProfile().useOpeningBook = false;
+        bot.tuningProfile().maxSearchDepth = 4;
+        bot.setTimeBudgetMs(800);
+        OctiBotEngine.BotSearchStats stats = new OctiBotEngine.BotSearchStats();
+        String move = bot.chooseMove(board, stats);
+        assertNotNull(move);
+        assertFalse(move.isEmpty());
+        assertTrue(stats.depthReached >= 2);
+        assertTrue(stats.nodesVisited > 10);
     }
 
     // -------------------------------------------------------------------------

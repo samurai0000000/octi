@@ -115,6 +115,9 @@ public:
     bool isSfxMuted() const;
 
     /* ---- Offline Local / Bot Play ---- */
+    static BotTuningProfile strengthenedProfileForDifficulty(
+        BotDifficulty difficulty);
+    const OctiBotEngine &botEngine() const { return _botEngine; }
     void startNewLocalGame(const LocalGameConfig &cfg);
     bool isLocalBotGame() const;
     const LocalGameConfig &localGameConfig() const;
