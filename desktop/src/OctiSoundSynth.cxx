@@ -5,19 +5,66 @@
  */
 
 #include "OctiSoundSynth.hxx"
-#include <algorithm>
-#include <cmath>
+#include <array>
+#include <QGuiApplication>
+#include <QtGlobal>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <mmsystem.h>
+#elif defined(__linux__)
+#include <alsa/asoundlib.h>
+#endif
 
 namespace octi {
 
 namespace {
 
-constexpr double TWO_PI = 6.28318530717958647692;
-
-std::int16_t clampPcm16(double sample)
+const std::vector<std::int16_t> &cachedCuePcm(SoundCue cue)
 {
-    double scaled = std::clamp(sample, -1.0, 1.0) * 30000.0;
-    return static_cast<std::int16_t>( std::lrint(scaled) );
+    static const std::array<std::vector<std::int16_t>, OCTI_SOUND_CUE_COUNT> cache = []() {
+        std::array<std::vector<std::int16_t>, OCTI_SOUND_CUE_COUNT> arr;
+        for (std::size_t i = 0; i < OCTI_SOUND_CUE_COUNT; ++i) {
+            SoundCue c = static_cast<SoundCue>(i);
+            std::size_t wavSize = 0;
+            const std::uint8_t *wavPtr = soundCueWavBytes(c, wavSize);
+            int sampleRate = 0;
+            if (wavPtr && wavSize > 0) {
+                decodeWavPcm16Mono(wavPtr, wavSize, arr[i], sampleRate);
+            }
+        }
+        return arr;
+    }();
+    std::size_t idx = static_cast<std::size_t>(cue);
+    if (idx >= OCTI_SOUND_CUE_COUNT) {
+        idx = 0;
+    }
+    return cache[idx];
+}
+
+bool isHardwareAudioAllowed()
+{
+#ifdef OCTI_DESKTOP_HERMETIC_TEST
+    return false;
+#else
+    const QString envPlatform =
+        qEnvironmentVariable("QT_QPA_PLATFORM").trimmed().toLower();
+    if (envPlatform.contains(QStringLiteral("offscreen")) ||
+        envPlatform.contains(QStringLiteral("minimal"))) {
+        return false;
+    }
+    if (QGuiApplication::instance() != nullptr) {
+        const QString plat = QGuiApplication::platformName().trimmed().toLower();
+        if (plat.contains(QStringLiteral("offscreen")) ||
+            plat.contains(QStringLiteral("minimal"))) {
+            return false;
+        }
+    }
+    return true;
+#endif
 }
 
 } // namespace
@@ -29,96 +76,34 @@ OctiSoundSynth::OctiSoundSynth()
 {
 }
 
-OctiSoundSynth::~OctiSoundSynth() = default;
+OctiSoundSynth::~OctiSoundSynth()
+{
+#if defined(__linux__)
+    {
+        std::lock_guard<std::mutex> lock(_alsaMutex);
+        _alsaStop = true;
+        _alsaQueue.clear();
+    }
+    _alsaCv.notify_all();
+    if (_alsaThread.joinable()) {
+        _alsaThread.join();
+    }
+#endif
+}
+
+std::vector<std::uint8_t> OctiSoundSynth::wavBytesForCue(SoundCue cue) const
+{
+    std::size_t wavSize = 0;
+    const std::uint8_t *wavPtr = soundCueWavBytes(cue, wavSize);
+    if (!wavPtr || wavSize == 0) {
+        return {};
+    }
+    return std::vector<std::uint8_t>(wavPtr, wavPtr + wavSize);
+}
 
 std::vector<std::int16_t> OctiSoundSynth::synthesizeCuePcm(SoundCue cue) const
 {
-    int durationMs = 110;
-    switch (cue) {
-    case SoundCue::POD_PLACE:      durationMs = 120; break;
-    case SoundCue::PRONG_SNAP:     durationMs = 75;  break;
-    case SoundCue::POD_STEP:       durationMs = 95;  break;
-    case SoundCue::POD_JUMP:       durationMs = 150; break;
-    case SoundCue::POD_CAPTURE:    durationMs = 210; break;
-    case SoundCue::CLOCK_LOW_TICK: durationMs = 45;  break;
-    case SoundCue::GAME_VICTORY:   durationMs = 360; break;
-    }
-
-    std::size_t numSamples = static_cast<std::size_t>((SAMPLE_RATE * durationMs) / 1000);
-    std::vector<std::int16_t> pcm(numSamples, 0);
-
-    for (std::size_t i = 0; i < numSamples; ++i) {
-        double t = static_cast<double>(i) / static_cast<double>(SAMPLE_RATE);
-        double progress = static_cast<double>(i) / static_cast<double>(std::max<std::size_t>(1, numSamples));
-        double attack = std::min(1.0, static_cast<double>(i) / 48.0);
-        double val = 0.0;
-
-        switch (cue) {
-        case SoundCue::POD_PLACE: {
-            // Warm resonant wood/slate tabletop thud with pitch drop
-            double freq = 145.0 * std::exp(-t * 14.0) + 68.0;
-            double env = attack * std::exp(-t * 24.0);
-            val = env * (0.72 * std::sin(TWO_PI * freq * t) +
-                         0.28 * std::sin(TWO_PI * (freq * 1.9) * t));
-            break;
-        }
-        case SoundCue::PRONG_SNAP: {
-            // Crisp metallic brass click
-            double env = attack * std::exp(-t * 48.0);
-            val = env * (0.50 * std::sin(TWO_PI * 1420.0 * t) +
-                         0.35 * std::sin(TWO_PI * 2680.0 * t) +
-                         0.15 * std::sin(TWO_PI * 3920.0 * t));
-            break;
-        }
-        case SoundCue::POD_STEP: {
-            // Soft felt/wood glide tap
-            double freq = 195.0 * std::exp(-t * 16.0) + 85.0;
-            double env = attack * std::exp(-t * 30.0);
-            val = env * (0.75 * std::sin(TWO_PI * freq * t) +
-                         0.25 * std::sin(TWO_PI * (freq * 2.1) * t));
-            break;
-        }
-        case SoundCue::POD_JUMP: {
-            // Rising two-note harmonic arc
-            double freq = (progress < 0.45) ? 440.0 : 587.33;
-            double env = attack * std::exp(-t * 14.0);
-            val = env * (0.68 * std::sin(TWO_PI * freq * t) +
-                         0.32 * std::sin(TWO_PI * (freq * 1.5) * t));
-            break;
-        }
-        case SoundCue::POD_CAPTURE: {
-            // Crisp capture chime triad (A4 -> C#5 -> E5)
-            double freq = (progress < 0.33) ? 440.0 :
-                          (progress < 0.66) ? 554.37 : 659.25;
-            double env = attack * std::exp(-t * 10.0);
-            val = env * (0.65 * std::sin(TWO_PI * freq * t) +
-                         0.25 * std::sin(TWO_PI * (freq * 2.0) * t) +
-                         0.10 * std::sin(TWO_PI * (freq * 3.0) * t));
-            break;
-        }
-        case SoundCue::CLOCK_LOW_TICK: {
-            // Short precision escapement tick
-            double env = attack * std::exp(-t * 75.0);
-            val = env * std::sin(TWO_PI * 1050.0 * t);
-            break;
-        }
-        case SoundCue::GAME_VICTORY: {
-            // Grandmaster 4-note brass/chime fanfare (C5 - E5 - G5 - C6)
-            double freq = (progress < 0.22) ? 523.25 :
-                          (progress < 0.44) ? 659.25 :
-                          (progress < 0.68) ? 783.99 : 1046.50;
-            double env = attack * std::exp(-t * 5.5);
-            val = env * (0.60 * std::sin(TWO_PI * freq * t) +
-                         0.28 * std::sin(TWO_PI * (freq * 1.5) * t) +
-                         0.12 * std::sin(TWO_PI * (freq * 2.0) * t));
-            break;
-        }
-        }
-
-        pcm[i] = clampPcm16(val);
-    }
-
-    return pcm;
+    return cachedCuePcm(cue);
 }
 
 void OctiSoundSynth::setMuted(bool muted)
@@ -147,10 +132,103 @@ void OctiSoundSynth::triggerCue(SoundCue cue)
     _lastCue = cue;
 
     if (_playbackCallback) {
-        std::vector<std::int16_t> samples = synthesizeCuePcm(cue);
-        _playbackCallback(samples);
+        _playbackCallback(synthesizeCuePcm(cue));
+        return;
+    }
+
+    if (!isHardwareAudioAllowed()) {
+        return;
+    }
+
+#ifdef _WIN32
+    std::size_t wavSize = 0;
+    const std::uint8_t *wavPtr = soundCueWavBytes(cue, wavSize);
+    if (wavPtr && wavSize > 0) {
+        PlaySoundA(reinterpret_cast<LPCSTR>(wavPtr),
+                   nullptr,
+                   SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+    }
+#elif defined(__linux__)
+    enqueueAlsaCue(cue);
+#endif
+}
+
+#if defined(__linux__)
+void OctiSoundSynth::enqueueAlsaCue(SoundCue cue)
+{
+    std::lock_guard<std::mutex> lock(_alsaMutex);
+    if (_alsaStop) {
+        return;
+    }
+    if (!_alsaThreadStarted) {
+        _alsaThreadStarted = true;
+        _alsaThread = std::thread(&OctiSoundSynth::alsaWorkerLoop, this);
+    }
+    constexpr std::size_t MAX_QUEUED_CUES = 4;
+    if (_alsaQueue.size() >= MAX_QUEUED_CUES) {
+        _alsaQueue.pop_front();
+    }
+    _alsaQueue.push_back(cue);
+    _alsaCv.notify_one();
+}
+
+void OctiSoundSynth::alsaWorkerLoop()
+{
+    while (true) {
+        SoundCue cue = SoundCue::POD_PLACE;
+        {
+            std::unique_lock<std::mutex> lock(_alsaMutex);
+            _alsaCv.wait(lock, [this]() {
+                return _alsaStop || !_alsaQueue.empty();
+            });
+            if (_alsaStop && _alsaQueue.empty()) {
+                break;
+            }
+            cue = _alsaQueue.front();
+            _alsaQueue.pop_front();
+        }
+
+        const std::vector<std::int16_t> &samples = cachedCuePcm(cue);
+        if (samples.empty()) {
+            continue;
+        }
+
+        snd_pcm_t *pcm = nullptr;
+        if (snd_pcm_open(&pcm, "default", SND_PCM_STREAM_PLAYBACK, 0) < 0 || !pcm) {
+            continue;
+        }
+        if (snd_pcm_set_params(pcm,
+                               SND_PCM_FORMAT_S16_LE,
+                               SND_PCM_ACCESS_RW_INTERLEAVED,
+                               1,
+                               SAMPLE_RATE,
+                               1,
+                               50000) >= 0) {
+            snd_pcm_uframes_t totalFrames =
+                static_cast<snd_pcm_uframes_t>(samples.size());
+            snd_pcm_uframes_t offset = 0;
+            while (offset < totalFrames) {
+                snd_pcm_sframes_t written = snd_pcm_writei(
+                    pcm,
+                    samples.data() + offset,
+                    totalFrames - offset);
+                if (written < 0) {
+                    written = snd_pcm_recover(pcm, static_cast<int>(written), 1);
+                    if (written < 0) {
+                        break;
+                    }
+                } else if (written == 0) {
+                    break;
+                } else {
+                    offset += static_cast<snd_pcm_uframes_t>(written);
+                }
+            }
+            snd_pcm_drain(pcm);
+        }
+        snd_pcm_close(pcm);
     }
 }
+#endif
 
 std::uint64_t OctiSoundSynth::triggeredCueCount() const
 {

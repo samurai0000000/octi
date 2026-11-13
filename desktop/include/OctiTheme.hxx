@@ -148,11 +148,45 @@ struct OctiPalette {
     const PodFactionPalette &factionForPlayer(OctiPlayer player) const;
 };
 
+struct WebChatStylePalette
+{
+    bool lightSurface = false;
+    QString pageBg;
+    QString cardBg;
+    QString cardBorder;
+    QString wellBg;
+    QString inputBorder;
+    QString headerTitle;
+    QString headerSubtitle;
+    QString timestamp;
+    QString teamScopeBadge;
+    QString peerHandle;
+    QString selfHandle;
+    QString botHandle;
+    QString systemTag;
+    QString eventBody;
+    QString messageBody;
+    QString primaryCtaBg;
+    QString primaryCtaText;
+    QString secondaryBtnBg;
+    QString secondaryBtnBorder;
+    QString secondaryBtnText;
+    QString dangerRed;
+    QString dangerHoverText;
+    QString dangerOutlineText;
+    QString bannerBg;
+    QString bannerBorder;
+    QString bannerText;
+};
+
 const char *themeIdToConfigKey(ThemeId id);
 const char *themeIdToWebKey(ThemeId id);
 QString themeDisplayName(ThemeId id);
 
 const OctiPalette &paletteForTheme(ThemeId id);
+bool isLightThemePalette(const OctiPalette &pal);
+WebChatStylePalette webChatStylePalette(bool lightSurface);
+WebChatStylePalette webChatStylePaletteForTheme(ThemeId id);
 QString buildAppStyleSheet(ThemeId id);
 
 void paintOctagonalPod(QPainter &p,

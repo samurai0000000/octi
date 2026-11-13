@@ -162,16 +162,17 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
       _refreshBtn(nullptr),
       _statusLabel(nullptr)
 {
+    setObjectName("lobbyRootView");
+    setAttribute(Qt::WA_StyledBackground, true);
+
     QVBoxLayout *outerLayout = new QVBoxLayout(this);
     outerLayout->setSpacing(10);
     outerLayout->setContentsMargins(14, 14, 14, 14);
 
     /* Top Banner: My Active Table */
     _myTableBanner = new QFrame(this);
+    _myTableBanner->setObjectName("myTableBanner");
     _myTableBanner->setFrameShape(QFrame::StyledPanel);
-    _myTableBanner->setStyleSheet(
-        "QFrame { background: rgba(212, 168, 83, 0.14); "
-        "border: 1px solid rgba(212, 168, 83, 0.55); border-radius: 6px; }");
     QHBoxLayout *bannerLayout = new QHBoxLayout(_myTableBanner);
     bannerLayout->setContentsMargins(12, 8, 12, 8);
     bannerLayout->setSpacing(12);
@@ -179,17 +180,19 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     QVBoxLayout *bannerTextCol = new QVBoxLayout();
     bannerTextCol->setSpacing(2);
     _myTableBannerLabel = new QLabel("My Active Table", _myTableBanner);
+    _myTableBannerLabel->setObjectName("myTableBannerLabel");
     _myTableBannerLabel->setWordWrap(true);
-    _myTableBannerLabel->setStyleSheet("font-weight: 700; border: none; background: transparent;");
     _myTableSeatsLabel = new QLabel("", _myTableBanner);
+    _myTableSeatsLabel->setObjectName("myTableSeatsLabel");
     _myTableSeatsLabel->setWordWrap(true);
-    _myTableSeatsLabel->setStyleSheet("border: none; background: transparent;");
     bannerTextCol->addWidget(_myTableBannerLabel);
     bannerTextCol->addWidget(_myTableSeatsLabel);
     bannerLayout->addLayout(bannerTextCol, 1);
 
     _openActiveBoardBtn = new QPushButton("Open Board", _myTableBanner);
+    _openActiveBoardBtn->setObjectName("lobbyOpenBoardBtn");
     _leaveActiveTableBtn = new QPushButton("Leave Table", _myTableBanner);
+    _leaveActiveTableBtn->setObjectName("lobbyBannerLeaveBtn");
     bannerLayout->addWidget(_openActiveBoardBtn);
     bannerLayout->addWidget(_leaveActiveTableBtn);
     _myTableBanner->setVisible(false);
@@ -200,19 +203,26 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     outerLayout->addLayout(root, 1);
 
     /* Center / Main Column: Active Game Tables + Table Inspector + Connected Users */
-    QGroupBox *tablesBox = new QGroupBox("Active Game Tables", this);
-    QVBoxLayout *tLayout = new QVBoxLayout(tablesBox);
+    _tablesBox = new QGroupBox("Active Game Tables", this);
+    _tablesBox->setObjectName("lobbyTablesBox");
+    QVBoxLayout *tLayout = new QVBoxLayout(_tablesBox);
 
     QHBoxLayout *toolbar = new QHBoxLayout();
-    _createTableBtn = new QPushButton("+ Create Table", tablesBox);
-    _matchmakingBtn = new QPushButton("Quick Match...", tablesBox);
-    _joinSelectedBtn = new QPushButton("Join Selected Table", tablesBox);
-    _leaveTableBtn = new QPushButton("Leave Seat", tablesBox);
-    _observeSelectedBtn = new QPushButton("Observe Selected Table", tablesBox);
+    toolbar->setSpacing(6);
+    _createTableBtn = new QPushButton("+ Create Table", _tablesBox);
+    _createTableBtn->setObjectName("lobbyCreateTableBtn");
+    _matchmakingBtn = new QPushButton("Quick Match...", _tablesBox);
+    _matchmakingBtn->setObjectName("lobbyQuickMatchBtn");
+    _joinSelectedBtn = new QPushButton("Join Selected Table", _tablesBox);
+    _joinSelectedBtn->setObjectName("lobbyJoinBtn");
+    _leaveTableBtn = new QPushButton("Leave Seat", _tablesBox);
+    _leaveTableBtn->setObjectName("lobbyLeaveSeatBtn");
+    _observeSelectedBtn = new QPushButton("Observe Selected Table", _tablesBox);
     _observeSelectedBtn->setVisible(false);
-    _refreshBtn = new QPushButton("Refresh", tablesBox);
-    _purgeTableBtn = new QPushButton("Delete Table...", tablesBox);
-    _purgeTableBtn->setStyleSheet("QPushButton { background-color: #dc2626; color: white; font-weight: bold; }");
+    _refreshBtn = new QPushButton("Refresh", _tablesBox);
+    _refreshBtn->setObjectName("lobbyRefreshBtn");
+    _purgeTableBtn = new QPushButton("Delete Table...", _tablesBox);
+    _purgeTableBtn->setObjectName("lobbyPurgeTableBtn");
     _purgeTableBtn->setVisible(false);
     toolbar->addWidget(_createTableBtn);
     toolbar->addWidget(_matchmakingBtn);
@@ -222,41 +232,46 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     toolbar->addWidget(_purgeTableBtn);
     tLayout->addLayout(toolbar);
 
-    _tablesTable = new QTableWidget(0, 7, tablesBox);
+    _tablesTable = new QTableWidget(0, 7, _tablesBox);
     _tablesTable->setHorizontalHeaderLabels(
         QStringList() << "Room ID" << "Variant" << "Phase"
                       << "Seats" << "Observers" << "Access" << "Host");
     _tablesTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    _tablesTable->verticalHeader()->setVisible(false);
     _tablesTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     _tablesTable->setSelectionMode(QAbstractItemView::SingleSelection);
     _tablesTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     tLayout->addWidget(_tablesTable, 2);
 
-    _inspectorBox = new QGroupBox("Table Seats && Details Inspector", tablesBox);
+    _inspectorBox = new QGroupBox("Table Seats && Details Inspector", _tablesBox);
+    _inspectorBox->setObjectName("lobbyInspectorBox");
     QVBoxLayout *inspLayout = new QVBoxLayout(_inspectorBox);
     inspLayout->setContentsMargins(10, 8, 10, 8);
     inspLayout->setSpacing(4);
     _inspectorTitleLabel = new QLabel(
         "Select a table above or click '+ Create Table' to host a new match.",
         _inspectorBox);
+    _inspectorTitleLabel->setObjectName("lobbyInspectorTitleLabel");
     _inspectorTitleLabel->setWordWrap(true);
-    _inspectorTitleLabel->setStyleSheet("font-weight: 600;");
     _inspectorSeatsLabel = new QLabel(
         "Seat roster and ruleset details will appear here.",
         _inspectorBox);
+    _inspectorSeatsLabel->setObjectName("lobbyInspectorSeatsLabel");
     _inspectorSeatsLabel->setWordWrap(true);
     inspLayout->addWidget(_inspectorTitleLabel);
     inspLayout->addWidget(_inspectorSeatsLabel);
     tLayout->addWidget(_inspectorBox);
 
     /* Connected Users Roster directly below _tablesTable and _inspectorBox */
-    _playersBox = new QGroupBox("Connected Users", tablesBox);
+    _playersBox = new QGroupBox("Connected Users", _tablesBox);
+    _playersBox->setObjectName("lobbyPlayersBox");
     QVBoxLayout *pLayout = new QVBoxLayout(_playersBox);
     pLayout->setContentsMargins(8, 6, 8, 6);
     _playersTable = new QTableWidget(0, 5, _playersBox);
     _playersTable->setHorizontalHeaderLabels(
         QStringList() << "User" << "Clients" << "Online" << "Idle" << "Status / Room");
     _playersTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    _playersTable->verticalHeader()->setVisible(false);
     _playersTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     _playersTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     _playersTable->setMinimumHeight(100);
@@ -264,40 +279,62 @@ LobbyView::LobbyView(OctiNetworkClient *netClient,
     tLayout->addWidget(_playersBox, 1);
 
     /* Connected Robots Roster */
-    _robotsBox = new QGroupBox("Connected Robots", tablesBox);
+    _robotsBox = new QGroupBox("Connected Robots", _tablesBox);
+    _robotsBox->setObjectName("lobbyRobotsBox");
     QVBoxLayout *rLayout = new QVBoxLayout(_robotsBox);
     rLayout->setContentsMargins(8, 6, 8, 6);
     _robotsTable = new QTableWidget(0, 5, _robotsBox);
     _robotsTable->setHorizontalHeaderLabels(
         QStringList() << "Robot" << "Clients" << "Online" << "Idle" << "Status / Room");
     _robotsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    _robotsTable->verticalHeader()->setVisible(false);
     _robotsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     _robotsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     _robotsTable->setMinimumHeight(100);
     rLayout->addWidget(_robotsTable);
     tLayout->addWidget(_robotsBox, 1);
 
-    _statusLabel = new QLabel("Connected to OCTI Lobby.", tablesBox);
+    _statusLabel = new QLabel("Connected to OCTI Lobby.", _tablesBox);
+    _statusLabel->setObjectName("lobbyStatusLabel");
     tLayout->addWidget(_statusLabel);
-    root->addWidget(tablesBox, 2);
+    root->addWidget(_tablesBox, 2);
 
-    /* Right Column: Global Lobby Chat */
-    QGroupBox *chatBox = new QGroupBox("Global Lobby Chat", this);
-    QVBoxLayout *cLayout = new QVBoxLayout(chatBox);
-    _chatTranscript = new QPlainTextEdit(chatBox);
+    /* Right Column: Global Lobby Chat (Web-aligned single header bar) */
+    _lobbyChatBox = new QGroupBox("", this);
+    _lobbyChatBox->setObjectName("lobbyChatBox");
+    QVBoxLayout *cLayout = new QVBoxLayout(_lobbyChatBox);
+    cLayout->setContentsMargins(10, 8, 10, 10);
+    cLayout->setSpacing(6);
+
+    QHBoxLayout *chatHeaderRow = new QHBoxLayout();
+    _lobbyChatTitleLabel = new QLabel("Lobby Chat", _lobbyChatBox);
+    _lobbyChatTitleLabel->setObjectName("lobbyChatTitleLabel");
+    _lobbyChatSubtitleLabel = new QLabel(
+        QString::fromUtf8("6h history \xE2\x80\xA2 Local time"), _lobbyChatBox);
+    _lobbyChatSubtitleLabel->setObjectName("lobbyChatSubtitleLabel");
+    chatHeaderRow->addWidget(_lobbyChatTitleLabel);
+    chatHeaderRow->addStretch(1);
+    chatHeaderRow->addWidget(_lobbyChatSubtitleLabel);
+    cLayout->addLayout(chatHeaderRow);
+
+    _chatTranscript = new QPlainTextEdit(_lobbyChatBox);
+    _chatTranscript->setObjectName("lobbyChatTranscript");
     _chatTranscript->setReadOnly(true);
     cLayout->addWidget(_chatTranscript, 1);
 
     QHBoxLayout *chatInputRow = new QHBoxLayout();
-    _chatInput = new QLineEdit(chatBox);
+    chatInputRow->setSpacing(6);
+    _chatInput = new QLineEdit(_lobbyChatBox);
+    _chatInput->setObjectName("lobbyChatInput");
     _chatInput->setPlaceholderText("Message the global lobby...");
-    _sendChatBtn = new QPushButton("Send", chatBox);
+    _sendChatBtn = new QPushButton("Send", _lobbyChatBox);
+    _sendChatBtn->setObjectName("lobbyChatSendBtn");
     chatInputRow->addWidget(_chatInput, 1);
     chatInputRow->addWidget(_sendChatBtn);
     cLayout->addLayout(chatInputRow);
-    chatBox->setMinimumWidth(280);
-    chatBox->setMaximumWidth(380);
-    root->addWidget(chatBox, 1);
+    _lobbyChatBox->setMinimumWidth(290);
+    _lobbyChatBox->setMaximumWidth(390);
+    root->addWidget(_lobbyChatBox, 1);
 
     QObject::connect(_tablesTable, &QTableWidget::cellClicked,
                      [this](int row, int /*col*/) {
@@ -527,12 +564,125 @@ OctiNetworkClient *LobbyView::networkClient() const
 void LobbyView::setTheme(ThemeId theme)
 {
     _theme = theme;
-    setStyleSheet(buildAppStyleSheet(_theme));
+    applyLobbyWebStyles();
+    rebuildTablesWidget();
+    rebuildPlayersTable();
+    rebuildChatTranscript();
 }
 
 ThemeId LobbyView::theme() const
 {
     return _theme;
+}
+
+void LobbyView::setWebLightSurfaceOverride(std::optional<bool> lightOverride)
+{
+    _webLightSurfaceOverride = lightOverride;
+    applyLobbyWebStyles();
+    rebuildTablesWidget();
+    rebuildPlayersTable();
+    rebuildChatTranscript();
+}
+
+bool LobbyView::isWebLightSurfaceActive() const
+{
+    if (_webLightSurfaceOverride.has_value()) {
+        return *_webLightSurfaceOverride;
+    }
+    return isLightThemePalette(paletteForTheme(_theme));
+}
+
+void LobbyView::applyLobbyWebStyles()
+{
+    const WebChatStylePalette ws = webChatStylePalette(isWebLightSurfaceActive());
+    QString headerBg = ws.lightSurface ? "#F4F4F5" : "#161D26";
+    QString cssPart1 = QString(
+        "\nQWidget#lobbyRootView { background-color: %1; color: %9; }\n"
+        "QGroupBox#lobbyTablesBox, QGroupBox#lobbyInspectorBox, "
+        "QGroupBox#lobbyPlayersBox, QGroupBox#lobbyRobotsBox { "
+        "background-color: %2; border: 1px solid %3; border-radius: 10px; "
+        "margin-top: 8px; padding-top: 12px; color: %6; font-weight: 700; }\n"
+        "QGroupBox#lobbyTablesBox::title, QGroupBox#lobbyInspectorBox::title, "
+        "QGroupBox#lobbyPlayersBox::title, QGroupBox#lobbyRobotsBox::title { "
+        "subcontrol-origin: margin; subcontrol-position: top left; left: 12px; "
+        "padding: 0 6px; color: %6; }\n"
+        "QGroupBox#lobbyChatBox { "
+        "background-color: %2; border: 1px solid %3; border-radius: 10px; "
+        "margin-top: 0px; padding-top: 0px; }\n"
+        "QLabel#lobbyChatTitleLabel { color: %6; font-size: 13px; font-weight: 700; }\n"
+        "QLabel#lobbyChatSubtitleLabel, QLabel#lobbyStatusLabel, "
+        "QLabel#lobbyInspectorSeatsLabel { color: %7; font-size: 11px; }\n"
+        "QLabel#lobbyInspectorTitleLabel { color: %9; font-size: 12px; font-weight: 700; }\n"
+        "QPlainTextEdit#lobbyChatTranscript { "
+        "background-color: %4; color: %9; border: 1px solid %3; border-radius: 6px; "
+        "padding: 6px; font-size: 12px; }\n"
+        "QLineEdit#lobbyChatInput { "
+        "background-color: %4; color: %9; border: 1px solid %5; border-radius: 6px; "
+        "padding: 5px 8px; font-size: 12px; }\n"
+        "QTableWidget { background-color: %4; color: %9; border: 1px solid %3; "
+        "border-radius: 6px; gridline-color: %3; }\n"
+        "QHeaderView::section { background-color: %8; color: %7; border: none; "
+        "border-bottom: 1px solid %3; padding: 5px 6px; font-size: 11px; font-weight: 700; }\n")
+        .arg(ws.pageBg,
+             ws.cardBg,
+             ws.cardBorder,
+             ws.wellBg,
+             ws.inputBorder,
+             ws.headerTitle,
+             ws.headerSubtitle,
+             headerBg,
+             ws.messageBody);
+
+    QString cssPart2 = QString(
+        "QPushButton#lobbyCreateTableBtn, QPushButton#lobbyChatSendBtn { "
+        "background-color: %1; color: %2; border: 1px solid %1; border-radius: 6px; "
+        "padding: 5px 12px; font-size: 12px; font-weight: 700; }\n"
+        "QPushButton#lobbyCreateTableBtn:hover, QPushButton#lobbyChatSendBtn:hover { "
+        "background-color: #D4B064; color: #0B0F17; }\n"
+        "QPushButton#lobbyCreateTableBtn:disabled, QPushButton#lobbyChatSendBtn:disabled { "
+        "background-color: %3; color: %9; border-color: %4; }\n"
+        "QPushButton#lobbyQuickMatchBtn, QPushButton#lobbyJoinBtn, "
+        "QPushButton#lobbyLeaveSeatBtn, QPushButton#lobbyRefreshBtn { "
+        "background-color: %3; color: %5; border: 1px solid %4; border-radius: 6px; "
+        "padding: 5px 10px; font-size: 12px; font-weight: 600; }\n"
+        "QPushButton#lobbyQuickMatchBtn:hover, QPushButton#lobbyJoinBtn:hover, "
+        "QPushButton#lobbyLeaveSeatBtn:hover, QPushButton#lobbyRefreshBtn:hover { "
+        "border-color: %1; }\n"
+        "QPushButton#lobbyQuickMatchBtn:disabled, QPushButton#lobbyJoinBtn:disabled, "
+        "QPushButton#lobbyLeaveSeatBtn:disabled, QPushButton#lobbyRefreshBtn:disabled { "
+        "color: %9; border-color: %4; }\n"
+        "QPushButton#lobbyPurgeTableBtn, QPushButton#lobbyBannerLeaveBtn { "
+        "background-color: %6; color: #FFFFFF; border: 1px solid %6; border-radius: 6px; "
+        "padding: 5px 10px; font-size: 12px; font-weight: 700; }\n"
+        "QPushButton#lobbyOpenBoardBtn { "
+        "background-color: #2563EB; color: #FFFFFF; border: 1px solid #2563EB; "
+        "border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 700; }\n"
+        "QFrame#myTableBanner { "
+        "background-color: %7; border: 1px solid %8; border-radius: 8px; }\n")
+        .arg(ws.primaryCtaBg,
+             ws.primaryCtaText,
+             ws.secondaryBtnBg,
+             ws.secondaryBtnBorder,
+             ws.secondaryBtnText,
+             ws.dangerRed,
+             ws.bannerBg,
+             ws.bannerBorder,
+             ws.headerSubtitle);
+
+    QString selBg = ws.lightSurface ? "#DBEAFE" : "#1E293B";
+    QString selFg = ws.lightSurface ? "#1E3A8A" : "#FDE68A";
+    QString cssPart3 = QString(
+        "QHeaderView, QTableCornerButton::section { "
+        "background-color: %2; border: none; }\n"
+        "QTableWidget::item:selected, QTableWidget::item:selected:!active { "
+        "background-color: %3; color: %4; font-weight: 700; }\n"
+        "QLabel#myTableBannerLabel { "
+        "color: %1; font-weight: 700; border: none; background: transparent; }\n"
+        "QLabel#myTableSeatsLabel { "
+        "color: %1; font-size: 12px; border: none; background: transparent; }\n")
+        .arg(ws.bannerText, headerBg, selBg, selFg);
+
+    setStyleSheet(buildAppStyleSheet(_theme) + cssPart1 + cssPart2 + cssPart3);
 }
 
 void LobbyView::setViewerIdentity(const std::string &playerUuid,
@@ -542,6 +692,9 @@ void LobbyView::setViewerIdentity(const std::string &playerUuid,
     _viewerHandle = handle;
     updateMyTableBanner();
     updateInspectorAndSelectionControls();
+    if (!_chatMessages.empty()) {
+        rebuildChatTranscript();
+    }
 }
 
 void LobbyView::setActiveRoomState(bool inRoom,
@@ -576,6 +729,69 @@ QString LobbyView::formatChatMessageLine(const LobbyChatEntry &entry)
     QString handle = formatHandleWithAt(entry.handle);
     return QString("%1%2: %3")
         .arg(prefix, handle, QString::fromStdString(entry.text));
+}
+
+bool LobbyView::isEntryFromRobot(const LobbyChatEntry &entry) const
+{
+    QString rawHandle = QString::fromStdString(entry.handle);
+    if (rawHandle.contains("[BOT]", Qt::CaseInsensitive)) {
+        return true;
+    }
+    QString normEntry = rawHandle.startsWith("@") ? rawHandle.mid(1) : rawHandle;
+    for (const auto &p : _players) {
+        if (!p.isRobot) {
+            continue;
+        }
+        if (!entry.playerUuid.empty() && !p.playerUuid.empty() &&
+            entry.playerUuid == p.playerUuid) {
+            return true;
+        }
+        QString ph = QString::fromStdString(p.handle);
+        if (ph.startsWith("@")) {
+            ph = ph.mid(1);
+        }
+        if (!normEntry.isEmpty() && !ph.isEmpty() &&
+            normEntry.compare(ph, Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+QString LobbyView::formatChatMessageHtml(const LobbyChatEntry &entry,
+                                         const std::string &viewerUuid,
+                                         const std::string &viewerHandle,
+                                         bool lightSurface,
+                                         bool forceRobot)
+{
+    const WebChatStylePalette ws = webChatStylePalette(lightSurface);
+    std::int64_t ts = (entry.createdAtMs > 0) ? entry.createdAtMs : entry.atMs;
+    QString prefixEsc = formatChatTimestamp(ts).toHtmlEscaped();
+
+    QString dispHandle = formatHandleWithAt(entry.handle);
+    bool isBot = forceRobot || dispHandle.contains("[BOT]", Qt::CaseInsensitive);
+
+    QString senderNorm = dispHandle.startsWith("@") ? dispHandle.mid(1) : dispHandle;
+    QString viewerNorm = QString::fromStdString(viewerHandle);
+    if (viewerNorm.startsWith("@")) {
+        viewerNorm = viewerNorm.mid(1);
+    }
+
+    bool isSelf = (!viewerUuid.empty() && !entry.playerUuid.empty() &&
+                   entry.playerUuid == viewerUuid) ||
+                  (!viewerNorm.isEmpty() && !senderNorm.isEmpty() &&
+                   senderNorm.compare(viewerNorm, Qt::CaseInsensitive) == 0);
+
+    QString handleColor = isSelf ? ws.selfHandle
+                                 : (isBot ? ws.botHandle : ws.peerHandle);
+    QString handleEsc = dispHandle.toHtmlEscaped();
+    QString bodyEsc = QString::fromStdString(entry.text).toHtmlEscaped();
+
+    return QString(
+        "<span style=\"font-family:monospace;font-size:11px;color:%1;\">%2</span>"
+        "<span style=\"color:%3;font-weight:700;\">%4:</span> "
+        "<span style=\"color:%5;\">%6</span>")
+        .arg(ws.timestamp, prefixEsc, handleColor, handleEsc, ws.messageBody, bodyEsc);
 }
 
 QString LobbyView::formatPhaseDisplay(const std::string &phase)
@@ -1028,7 +1244,12 @@ void LobbyView::appendLobbyChatEntry(const LobbyChatEntry &entry)
     }
     _chatMessages.push_back(normalized);
     if (_chatTranscript) {
-        _chatTranscript->appendPlainText(formatChatMessageLine(normalized));
+        _chatTranscript->appendHtml(
+            formatChatMessageHtml(normalized,
+                                  _viewerUuid,
+                                  _viewerHandle,
+                                  isWebLightSurfaceActive(),
+                                  isEntryFromRobot(normalized)));
         if (_chatTranscript->verticalScrollBar()) {
             _chatTranscript->verticalScrollBar()->setValue(
                 _chatTranscript->verticalScrollBar()->maximum());
@@ -1266,13 +1487,19 @@ void LobbyView::rebuildTablesWidget()
             i, 6, new QTableWidgetItem(formatHandleWithAt(t.hostHandle)));
 
         if (isMyActiveTable) {
+            QColor rowBg = isWebLightSurfaceActive()
+                ? QColor(239, 246, 255)
+                : QColor(200, 162, 83, 45);
+            QColor rowFg = isWebLightSurfaceActive()
+                ? QColor("#1E3A8A")
+                : pal.accentBrass;
             for (int col = 0; col <= 6; ++col) {
                 if (QTableWidgetItem *item = _tablesTable->item(i, col)) {
                     QFont f = item->font();
                     f.setBold(true);
                     item->setFont(f);
-                    item->setBackground(QBrush(QColor(200, 162, 83, 45)));
-                    item->setForeground(QBrush(pal.accentBrass));
+                    item->setBackground(QBrush(rowBg));
+                    item->setForeground(QBrush(rowFg));
                 }
             }
         }
@@ -1289,10 +1516,16 @@ void LobbyView::rebuildChatTranscript()
     if (!_chatTranscript) {
         return;
     }
+    const bool lightSurface = isWebLightSurfaceActive();
     _chatTranscript->clear();
     for (std::size_t i = 0; i < _chatMessages.size(); ++i) {
         const LobbyChatEntry &c = _chatMessages[i];
-        _chatTranscript->appendPlainText(formatChatMessageLine(c));
+        _chatTranscript->appendHtml(
+            formatChatMessageHtml(c,
+                                  _viewerUuid,
+                                  _viewerHandle,
+                                  lightSurface,
+                                  isEntryFromRobot(c)));
     }
     if (_chatTranscript->verticalScrollBar()) {
         _chatTranscript->verticalScrollBar()->setValue(

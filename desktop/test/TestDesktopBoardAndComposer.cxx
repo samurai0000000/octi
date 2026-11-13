@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
 #include <set>
 #include <string>
 #include <thread>
@@ -1107,6 +1108,73 @@ TEST(OctiSoundSynthTest, SynthesizeAllSevenCuesAndVerifyMuteGate)
     dispatcher.post([&]() { dispatched = true; });
     QCoreApplication::processEvents();
     CHECK_TRUE(dispatched);
+}
+
+TEST(OctiSoundSynthTest, SharedWavAssetsByteIdentityAndClassifierParity)
+{
+    OctiSoundSynth synth;
+    struct ExpectedCueSpec {
+        SoundCue cue;
+        std::size_t expectedSamples;
+    };
+    const ExpectedCueSpec specs[] = {
+        { SoundCue::POD_PLACE,      1920 },
+        { SoundCue::PRONG_SNAP,     1200 },
+        { SoundCue::POD_STEP,       1520 },
+        { SoundCue::POD_JUMP,       2400 },
+        { SoundCue::POD_CAPTURE,    3360 },
+        { SoundCue::CLOCK_LOW_TICK, 720  },
+        { SoundCue::GAME_VICTORY,   5760 },
+    };
+
+    for (const auto &spec : specs) {
+        std::size_t coreWavSize = 0;
+        const std::uint8_t *coreWavPtr = soundCueWavBytes(spec.cue, coreWavSize);
+        CHECK_TRUE(coreWavPtr != nullptr);
+        CHECK_TRUE(coreWavSize > 44);
+
+        std::vector<std::uint8_t> synthWav = synth.wavBytesForCue(spec.cue);
+        LONGS_EQUAL(static_cast<long>(coreWavSize),
+                    static_cast<long>(synthWav.size()));
+        CHECK_TRUE(std::memcmp(synthWav.data(), coreWavPtr, coreWavSize) == 0);
+
+        std::string diskPath = std::string(OCTI_REPO_ROOT_DIR) +
+            "/assets/sounds/" + soundCueAssetFileName(spec.cue);
+        std::ifstream ifs(diskPath, std::ios::binary);
+        CHECK_TRUE_TEXT(ifs.is_open(), diskPath.c_str());
+        std::vector<std::uint8_t> diskBytes(
+            (std::istreambuf_iterator<char>(ifs)),
+            std::istreambuf_iterator<char>());
+        LONGS_EQUAL(static_cast<long>(coreWavSize),
+                    static_cast<long>(diskBytes.size()));
+        CHECK_TRUE(std::memcmp(synthWav.data(), diskBytes.data(), coreWavSize) == 0);
+
+        std::vector<std::int16_t> expectedPcm;
+        int sampleRate = 0;
+        CHECK_TRUE(decodeWavPcm16Mono(
+            coreWavPtr, coreWavSize, expectedPcm, sampleRate));
+        LONGS_EQUAL(OctiSoundSynth::SAMPLE_RATE, sampleRate);
+        LONGS_EQUAL(static_cast<long>(spec.expectedSamples),
+                    static_cast<long>(expectedPcm.size()));
+
+        std::vector<std::int16_t> synthPcm = synth.synthesizeCuePcm(spec.cue);
+        LONGS_EQUAL(static_cast<long>(expectedPcm.size()),
+                    static_cast<long>(synthPcm.size()));
+        CHECK_TRUE(std::memcmp(synthPcm.data(),
+                               expectedPcm.data(),
+                               expectedPcm.size() * sizeof(std::int16_t)) == 0);
+    }
+
+    LONGS_EQUAL(static_cast<int>(SoundCue::PRONG_SNAP),
+                static_cast<int>(classifyMoveNotationSoundCue("33+a")));
+    LONGS_EQUAL(static_cast<int>(SoundCue::POD_PLACE),
+                static_cast<int>(classifyMoveNotationSoundCue("53")));
+    LONGS_EQUAL(static_cast<int>(SoundCue::POD_STEP),
+                static_cast<int>(classifyMoveNotationSoundCue("33a-34")));
+    LONGS_EQUAL(static_cast<int>(SoundCue::POD_JUMP),
+                static_cast<int>(classifyMoveNotationSoundCue("33a-35")));
+    LONGS_EQUAL(static_cast<int>(SoundCue::POD_CAPTURE),
+                static_cast<int>(classifyMoveNotationSoundCue("33a-35x")));
 }
 
 TEST_GROUP(OctiDialogsRefinementTest)
@@ -2839,6 +2907,121 @@ TEST(OctiBoardCanvasIndicatorTestSuite, GuidedModeFriendlyJumpSelfCaptureToggle)
     CHECK_FALSE(composer.captureChoices()[0].capture);
 }
 
+TEST(OctiBoardCanvasIndicatorTestSuite, JumpedSquareRendersZeroCapturePillBoxesAndClickTogglesCapture)
+{
+    OctiBoard board(GAME_MODE_2, false, false, GAME_BASES_3);
+    board.getGame()->start(PLAYER_A);
+    for (int x = 0; x < 9; ++x) {
+        for (int y = 0; y < 9; ++y) {
+            board.squareAt(x, y).clear();
+        }
+    }
+
+    // Friendly pod at (5, 4) with North prong; enemy pod at (5, 5) with top-reaching prongs
+    OctiPod jumper(A_POD);
+    jumper.addProng(DIR_N);
+    board.squareAt(4, 3).addPod(jumper);
+
+    OctiPod enemy(B_POD);
+    enemy.addProng(DIR_N);
+    enemy.addProng(DIR_NW);
+    enemy.addProng(DIR_NE);
+    enemy.addProng(DIR_E);
+    enemy.addProng(DIR_W);
+    board.squareAt(4, 4).addPod(enemy);
+
+    OctiMoveComposer composer(&board);
+    composer.setConfirmAllMoves(true);
+
+    OctiBoardCanvas canvas;
+    canvas.resize(800, 800);
+    canvas.setTurnIndicatorVisible(false);
+    canvas.attachBoard(&board, &composer);
+
+    CHECK_TRUE(composer.beginGuidedPodMove(5, 4, 0, false));
+    CHECK_TRUE(composer.selectGuidedDestination(5, 6));
+    CHECK_TRUE(composer.isAwaitingConfirmation());
+    LONGS_EQUAL(1, static_cast<long>(composer.captureChoices().size()));
+    CHECK_TRUE(composer.captureChoices()[0].capture);
+    STRCMP_EQUAL("54a-56x", composer.stagedMoveNotation().c_str());
+
+    auto countDiffInRect = [](const QImage &a, const QImage &b, const QRect &r) -> long {
+        long diffs = 0;
+        QRect clipped = r.intersected(QRect(0, 0, a.width(), a.height()));
+        for (int py = clipped.top(); py <= clipped.bottom(); ++py) {
+            for (int px = clipped.left(); px <= clipped.right(); ++px) {
+                if (a.pixel(px, py) != b.pixel(px, py)) {
+                    ++diffs;
+                }
+            }
+        }
+        return diffs;
+    };
+
+    QRectF sqRect = canvas.geometry().squareRect(5, 5);
+    QRectF topBandF(sqRect.left() + 2.0,
+                    sqRect.top() + 2.0,
+                    sqRect.width() - 4.0,
+                    std::max(16.0, sqRect.height() * 0.28));
+    QRect topBandRect = topBandF.toAlignedRect();
+    QRect fullSqRect = sqRect.adjusted(2.0, 2.0, -2.0, -2.0).toAlignedRect();
+
+    // 1. Verify capture = true state has zero pill overlay pixels over (5, 5)
+    OctiBoard previewCapture;
+    CHECK_TRUE(composer.populatePreviewBoard(previewCapture));
+    OctiBoardCanvas baselineCaptureCanvas;
+    baselineCaptureCanvas.resize(800, 800);
+    baselineCaptureCanvas.setTurnIndicatorVisible(false);
+    baselineCaptureCanvas.attachBoard(&previewCapture, nullptr);
+
+    QImage imgCapture = canvas.renderToImage(800, 800);
+    QImage baseCapture = baselineCaptureCanvas.renderToImage(800, 800);
+    LONGS_EQUAL(0, countDiffInRect(imgCapture, baseCapture, topBandRect));
+    LONGS_EQUAL(0, countDiffInRect(imgCapture, baseCapture, fullSqRect));
+
+    // 2. Click center of jumped square (5, 5) to toggle capture -> false (keep)
+    QPointF center55 = sqRect.center();
+    QMouseEvent pressCenter(QEvent::MouseButtonPress, center55, center55, center55,
+                            Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent relCenter(QEvent::MouseButtonRelease, center55, center55, center55,
+                          Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(&canvas, &pressCenter);
+    QCoreApplication::sendEvent(&canvas, &relCenter);
+    CHECK_FALSE(composer.captureChoices()[0].capture);
+    STRCMP_EQUAL("54a-56", composer.stagedMoveNotation().c_str());
+
+    // 3. Verify capture = false (non-capture) state has zero pill overlay pixels over enemy prongs
+    OctiBoard previewKeep;
+    CHECK_TRUE(composer.populatePreviewBoard(previewKeep));
+    OctiBoardCanvas baselineKeepCanvas;
+    baselineKeepCanvas.resize(800, 800);
+    baselineKeepCanvas.setTurnIndicatorVisible(false);
+    baselineKeepCanvas.attachBoard(&previewKeep, nullptr);
+
+    QImage imgKeep = canvas.renderToImage(800, 800);
+    QImage baseKeep = baselineKeepCanvas.renderToImage(800, 800);
+    LONGS_EQUAL(0, countDiffInRect(imgKeep, baseKeep, topBandRect));
+    LONGS_EQUAL(0, countDiffInRect(imgKeep, baseKeep, fullSqRect));
+
+    QString artifactsDir = QString::fromUtf8(OCTI_REPO_ROOT_DIR) +
+        "/plan/plan_capture_box_removal_and_chat_layout_unification.artifacts";
+    QDir().mkpath(artifactsDir);
+    QString jumpPngPath = artifactsDir + "/desktop_jump_no_capture_box.png";
+    CHECK_TRUE(imgKeep.save(jumpPngPath, "PNG"));
+    CHECK_TRUE(QFileInfo(jumpPngPath).size() > 10000);
+
+    // 4. Click inside the upper 28% band of (5, 5) and verify full-square toggle still flips back to capture = true
+    QPointF upper55(sqRect.center().x(), sqRect.top() + sqRect.height() * 0.14);
+    QMouseEvent pressUpper(QEvent::MouseButtonPress, upper55, upper55, upper55,
+                           Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent relUpper(QEvent::MouseButtonRelease, upper55, upper55, upper55,
+                         Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(&canvas, &pressUpper);
+    QCoreApplication::sendEvent(&canvas, &relUpper);
+    CHECK_TRUE(composer.captureChoices()[0].capture);
+    STRCMP_EQUAL("54a-56x", composer.stagedMoveNotation().c_str());
+}
+
 TEST(OctiOfkUsabilityTestSuite, GameOverDialogSingleReviewBoardButtonAndKeyAccept)
 {
     OctiBoard board(GAME_MODE_2, false, false, GAME_BASES_3);
@@ -2967,6 +3150,472 @@ TEST(OctiOfkUsabilityTestSuite, StrengthenedBotProfileActiveForTacticalMasterExp
             CHECK_TRUE(p.lazySmpThreads >= 4 && p.lazySmpThreads <= 8);
         }
     }
+}
+
+TEST_GROUP(SuperProngPreludeAndStackInspectorTest)
+{
+};
+
+TEST(SuperProngPreludeAndStackInspectorTest,
+     SuperProngSinglePreludeAutoPauseAndContinuations)
+{
+    const std::string posSingle =
+        "2:3:1:1:P:A:-:1:2,2,10,1:2,2,10,1:A33a!,B37";
+
+    // 1. Even with confirmAllMoves == false, moving a superprong pod pauses
+    //    with isAwaitingSuperProngBonusMove() == true and canCommitStagedMove() == true
+    {
+        OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+        board.fromPositionString(posSingle);
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(false);
+        std::string committed;
+        composer.setMoveCommittedCallback([&](const std::string &m) { committed = m; });
+
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4));
+        CHECK_TRUE(composer.isAwaitingConfirmation());
+        CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+        CHECK_TRUE(composer.canCommitStagedMove());
+        STRCMP_EQUAL("33a!-34", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(committed.empty());
+
+        OctiBoard previewBoard;
+        CHECK_TRUE(composer.populatePreviewBoard(previewBoard));
+        LONGS_EQUAL(static_cast<int>(PLAYER_A),
+                    static_cast<int>(previewBoard.getGame()->getTurn()));
+        LONGS_EQUAL(0, previewBoard.squareAt(2, 2).getNumPods());
+        LONGS_EQUAL(1, previewBoard.squareAt(2, 3).getNumPods());
+
+        auto addDirs = composer.legalProngAdditionsAt(3, 4, 0, false);
+        CHECK_TRUE(std::find(addDirs.begin(), addDirs.end(), DIR_NE) != addDirs.end());
+        auto dests = composer.legalDestinationsFrom(3, 4, 0);
+        CHECK_TRUE(std::find(dests.begin(), dests.end(), std::make_pair(3, 5)) != dests.end());
+        CHECK_TRUE(composer.canPlaceReservePodAt(3, 3));
+        auto drops = composer.legalPodDropSquares(false);
+        CHECK_TRUE(std::find(drops.begin(), drops.end(), std::make_pair(3, 3)) != drops.end());
+
+        // Immediate commit submits standalone "33a!-34"
+        CHECK_TRUE(composer.commitStagedMove());
+        STRCMP_EQUAL("33a!-34", committed.c_str());
+        LONGS_EQUAL(static_cast<int>(PLAYER_B),
+                    static_cast<int>(board.getGame()->getTurn()));
+    }
+
+    // 2. Staging +b at (3,4) produces "33a!-34;34a!+b"
+    {
+        OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+        board.fromPositionString(posSingle);
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(true);
+
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4));
+        CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+        CHECK_TRUE(composer.stageOrCommitAddProng(3, 4, 0, DIR_NE, false));
+        STRCMP_EQUAL("33a!-34;34a!+b", composer.stagedMoveNotation().c_str());
+        CHECK_FALSE(composer.isAwaitingSuperProngBonusMove());
+        CHECK_TRUE(composer.canCommitStagedMove());
+        CHECK_TRUE(composer.commitStagedMove());
+        LONGS_EQUAL(1, board.squareAt(2, 3).getNumPods());
+        LONGS_EQUAL(static_cast<int>(NORMAL_PRONG),
+                    static_cast<int>(board.squareAt(2, 3).getPodAt(0).prongAt(DIR_NE)));
+    }
+
+    // 3. Staging 34 -> 35 produces "33a!-34;34a!-35" and blocks a 3rd move on 1 superprong
+    {
+        OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+        board.fromPositionString(posSingle);
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(true);
+
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4));
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 4, 0, 3, 5));
+        STRCMP_EQUAL("33a!-34;34a!-35", composer.stagedMoveNotation().c_str());
+        CHECK_FALSE(composer.isAwaitingSuperProngBonusMove());
+        CHECK_TRUE(composer.canCommitStagedMove());
+
+        // 3rd move on 1 superprong MUST be rejected
+        CHECK_FALSE(composer.stageOrCommitPodMoveOrJump(3, 5, 0, 3, 6));
+        STRCMP_EQUAL("33a!-34;34a!-35", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.commitStagedMove());
+        LONGS_EQUAL(1, board.squareAt(2, 4).getNumPods());
+    }
+
+    // 4. Staging reserve pod drop at vacated home (3,3) produces "33a!-34;33"
+    {
+        OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+        board.fromPositionString(posSingle);
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(true);
+
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4));
+        CHECK_TRUE(composer.stageOrCommitAddPod(3, 3, false));
+        STRCMP_EQUAL("33a!-34;33", composer.stagedMoveNotation().c_str());
+        CHECK_FALSE(composer.isAwaitingSuperProngBonusMove());
+        CHECK_TRUE(composer.commitStagedMove());
+        LONGS_EQUAL(1, board.squareAt(2, 2).getNumPods());
+        LONGS_EQUAL(1, board.squareAt(2, 3).getNumPods());
+    }
+
+    // 5. Staging prong reposition after prelude produces "33a!c-34;34a!c+b-c"
+    {
+        OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+        board.fromPositionString("2:3:1:1:P:A:-:1:2,2,10,1:2,2,10,1:A33a!c,B37");
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(true);
+
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4));
+        CHECK_TRUE(composer.stageOrCommitRepositionProng(3, 4, 0, DIR_E, DIR_NE));
+        STRCMP_EQUAL("33a!c-34;34a!c+b-c", composer.stagedMoveNotation().c_str());
+        CHECK_FALSE(composer.isAwaitingSuperProngBonusMove());
+        CHECK_TRUE(composer.commitStagedMove());
+    }
+}
+
+TEST(SuperProngPreludeAndStackInspectorTest,
+     SuperProngDualPreludesAcrossTwoPodsAndSinglePod)
+{
+    // 1. Two distinct superprong pods: A33a!, A53a!
+    const std::string posTwoPods =
+        "2:3:1:1:P:A:-:1:2,2,10,1:2,2,10,1:A33a!,A53a!,B37";
+    {
+        OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+        board.fromPositionString(posTwoPods);
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(false);
+        std::string committed;
+        composer.setMoveCommittedCallback([&](const std::string &m) { committed = m; });
+
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4));
+        STRCMP_EQUAL("33a!-34", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(5, 3, 0, 5, 4));
+        STRCMP_EQUAL("33a!-34;53a!-54", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.isAwaitingConfirmation());
+        CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+        CHECK_TRUE(composer.canCommitStagedMove());
+        CHECK_TRUE(committed.empty());
+
+        // Early commit at "33a!-34;53a!-54" succeeds
+        CHECK_TRUE(composer.commitStagedMove());
+        STRCMP_EQUAL("33a!-34;53a!-54", committed.c_str());
+    }
+
+    {
+        OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+        board.fromPositionString(posTwoPods);
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(true);
+
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4));
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(5, 3, 0, 5, 4));
+        CHECK_TRUE(composer.stageOrCommitAddProng(3, 4, 0, DIR_NE, false));
+        STRCMP_EQUAL("33a!-34;53a!-54;34a!+b", composer.stagedMoveNotation().c_str());
+        CHECK_FALSE(composer.isAwaitingSuperProngBonusMove());
+        CHECK_TRUE(composer.canCommitStagedMove());
+        CHECK_TRUE(composer.commitStagedMove());
+    }
+
+    // 2. Single pod with 2 superprongs: A33a!c!
+    {
+        OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+        board.fromPositionString("2:3:1:1:P:A:-:1:2,2,10,1:2,2,10,1:A33a!c!,B37");
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(true);
+
+        CHECK_TRUE(composer.beginGuidedPodMove(3, 3, 0));
+        CHECK_TRUE(composer.selectGuidedDestination(3, 4));
+        STRCMP_EQUAL("33a!c!-34", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+
+        CHECK_TRUE(composer.beginGuidedPodMove(3, 4, 0));
+        CHECK_TRUE(composer.selectGuidedDestination(4, 4));
+        STRCMP_EQUAL("33a!c!-34;34a!c!-44", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+
+        CHECK_TRUE(composer.stageOrCommitAddProng(4, 4, 0, DIR_NE, false));
+        STRCMP_EQUAL("33a!c!-34;34a!c!-44;44a!c!+b",
+                     composer.stagedMoveNotation().c_str());
+        CHECK_FALSE(composer.isAwaitingSuperProngBonusMove());
+        CHECK_TRUE(composer.canCommitStagedMove());
+        CHECK_TRUE(composer.commitStagedMove());
+    }
+}
+
+TEST(SuperProngPreludeAndStackInspectorTest,
+     SuperProngPreludeJumpCaptureUnlocksZeroReserveProngsAndKeepsPreviewTurn)
+{
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.fromPositionString("2:3:1:1:P:A:-:1:2,2,0,0:2,2,10,1:A33a!,B34e,B37");
+    LONGS_EQUAL(0, board.getGame()->getFreeProngs(PLAYER_A));
+
+    OctiMoveComposer composer(&board);
+    composer.setConfirmAllMoves(true);
+
+    CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 5));
+    STRCMP_EQUAL("33a!-35x", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+
+    OctiBoard previewBoard;
+    CHECK_TRUE(composer.populatePreviewBoard(previewBoard));
+    LONGS_EQUAL(static_cast<int>(PLAYER_A),
+                static_cast<int>(previewBoard.getGame()->getTurn()));
+    LONGS_EQUAL(1, previewBoard.getGame()->getFreeProngs(PLAYER_A));
+    CHECK_TRUE(previewBoard.squareAt(2, 3).isEmpty());
+
+    auto addDirs = composer.legalProngAdditionsAt(3, 5, 0, false);
+    CHECK_TRUE(std::find(addDirs.begin(), addDirs.end(), DIR_NE) != addDirs.end());
+
+    CHECK_TRUE(composer.stageOrCommitAddProng(3, 5, 0, DIR_NE, false));
+    STRCMP_EQUAL("33a!-35x;35a!+b", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.canCommitStagedMove());
+    CHECK_TRUE(composer.commitStagedMove());
+
+    LONGS_EQUAL(0, board.getGame()->getFreeProngs(PLAYER_A));
+    LONGS_EQUAL(1, board.squareAt(2, 4).getNumPods());
+    LONGS_EQUAL(static_cast<int>(NORMAL_PRONG),
+                static_cast<int>(board.squareAt(2, 4).getPodAt(0).prongAt(DIR_NE)));
+}
+
+TEST(SuperProngPreludeAndStackInspectorTest,
+     SameOriginCommaVsSemicolonDisambiguation)
+{
+    // 1. Valid ONLY as ',' composite: A33a!, A33a jumping over B34e to (3,5)
+    {
+        OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+        board.fromPositionString(
+            "2:3:1:1:P:A:-:1:2,2,10,1:2,2,10,1:A33a!,A33a,B34e,B37");
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(true);
+
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 5));
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 1, 3, 5));
+        STRCMP_EQUAL("33a!-35x,33a-35x", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.canCommitStagedMove());
+        CHECK_TRUE(composer.commitStagedMove());
+    }
+
+    // 2. Stacked superprong pods A33a!, A33a! stepping 33->34, 33->34, then +b at (3,4)
+    {
+        OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+        board.fromPositionString(
+            "2:3:1:1:P:A:-:1:2,2,10,1:2,2,10,1:A33a!,A33a!,B37");
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(true);
+
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4));
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 1, 3, 4));
+        CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+        CHECK_TRUE(composer.stageOrCommitAddProng(3, 4, 0, DIR_NE, false));
+        STRCMP_EQUAL("33a!-34;33a!-34;34a!+b", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.canCommitStagedMove());
+        CHECK_TRUE(composer.commitStagedMove());
+    }
+}
+
+TEST(SuperProngPreludeAndStackInspectorTest,
+     PodStackClickInspectorAndBoardUxRouting)
+{
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.fromPositionString(
+        "2:3:1:1:P:A:-:1:2,2,10,1:2,2,10,1:A33a!,A33bd,A53a,B37e");
+    OctiMoveComposer composer(&board);
+    composer.setConfirmAllMoves(false);
+
+    OctiBoardCanvas canvas;
+    canvas.resize(800, 800);
+    canvas.attachBoard(&board, &composer);
+    canvas.setVisible(true);
+
+    int openCalls = 0;
+    int lastOpenX = -1;
+    int lastOpenY = -1;
+    canvas.setZoomedSquareOpenHook([&](int x, int y) {
+        ++openCalls;
+        lastOpenX = x;
+        lastOpenY = y;
+        return true;
+    });
+
+    auto sendStationaryClick = [](QWidget *w, const QPointF &pt) {
+        QMouseEvent press(QEvent::MouseButtonPress, pt, pt, pt,
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(w, &press);
+        QMouseEvent release(QEvent::MouseButtonRelease, pt, pt, pt,
+                            Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(w, &release);
+    };
+
+    // 1. Stationary single click on 2-pod friendly stack (3,3) opens ZoomedSquareDialog on 1st click
+    QPointF pt33 = canvas.geometry().squareCenter(3, 3);
+    sendStationaryClick(&canvas, pt33);
+    LONGS_EQUAL(1, openCalls);
+    LONGS_EQUAL(3, lastOpenX);
+    LONGS_EQUAL(3, lastOpenY);
+    CHECK_FALSE(composer.isGuidedMoveActive());
+
+    // 2. Stationary single click on 1-pod armed friendly square (5,3) starts guided move on 1st click
+    //    and opens ZoomedSquareDialog on 2nd click
+    QPointF pt53 = canvas.geometry().squareCenter(5, 3);
+    sendStationaryClick(&canvas, pt53);
+    LONGS_EQUAL(1, openCalls);
+    CHECK_TRUE(composer.isGuidedMoveActive());
+    sendStationaryClick(&canvas, pt53);
+    LONGS_EQUAL(2, openCalls);
+    LONGS_EQUAL(5, lastOpenX);
+    LONGS_EQUAL(3, lastOpenY);
+    CHECK_FALSE(composer.isGuidedMoveActive());
+
+    // 3. Stationary single click on enemy pod (3,7) opens ZoomedSquareDialog on 1st click
+    QPointF pt37 = canvas.geometry().squareCenter(3, 7);
+    sendStationaryClick(&canvas, pt37);
+    LONGS_EQUAL(3, openCalls);
+    LONGS_EQUAL(3, lastOpenX);
+    LONGS_EQUAL(7, lastOpenY);
+
+    // 4. Press-drag-release from 2-pod friendly stack (3,3) to (3,4) moves directly without dialog
+    //    Setup (3,3) with top pod having DIR_N superprong
+    board.fromPositionString(
+        "2:3:1:1:P:A:-:1:2,2,10,1:2,2,10,1:A33a!c,A33b,A53a,B37e");
+    composer.cancelAndRollback();
+    QPointF pt34 = canvas.geometry().squareCenter(3, 4);
+    {
+        QMouseEvent press(QEvent::MouseButtonPress, pt33, pt33, pt33,
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&canvas, &press);
+        QMouseEvent moveEv(QEvent::MouseMove, pt34, pt34, pt34,
+                           Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&canvas, &moveEv);
+        QMouseEvent release(QEvent::MouseButtonRelease, pt34, pt34, pt34,
+                            Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(&canvas, &release);
+    }
+    LONGS_EQUAL(3, openCalls);
+    STRCMP_EQUAL("33a!c-34", composer.stagedMoveNotation().c_str());
+    CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+
+    // 5. Post-prelude click on (3,4) (1 pod on previewBoard, unarmed in guided sense? No, armed:
+    //    2nd click opens ZoomedSquareDialog at (3,4)!)
+    sendStationaryClick(&canvas, pt34);
+    sendStationaryClick(&canvas, pt34);
+    LONGS_EQUAL(4, openCalls);
+    LONGS_EQUAL(3, lastOpenX);
+    LONGS_EQUAL(4, lastOpenY);
+    STRCMP_EQUAL("33a!c-34", composer.stagedMoveNotation().c_str());
+    composer.cancelAndRollback();
+
+    // 6. Stationary single click when setInteractiveEnabled(false) opens ZoomedSquareDialog
+    canvas.setInteractiveEnabled(false);
+    sendStationaryClick(&canvas, pt33);
+    LONGS_EQUAL(5, openCalls);
+    LONGS_EQUAL(3, lastOpenX);
+    LONGS_EQUAL(3, lastOpenY);
+
+    // 7. Stationary single click when isGameOver() == true opens ZoomedSquareDialog
+    canvas.setInteractiveEnabled(true);
+    board.getGame()->resign(PLAYER_B);
+    CHECK_TRUE(board.getGame()->isGameOver());
+    sendStationaryClick(&canvas, pt33);
+    LONGS_EQUAL(6, openCalls);
+    LONGS_EQUAL(3, lastOpenX);
+    LONGS_EQUAL(3, lastOpenY);
+
+    // 8. Verify ZoomedSquareDialog read-only "Close-Up Inspect Mode" across Enemy,
+    //    non-interactive (composer == nullptr), and Game Over states
+    OctiBoard liveBoard(GAME_MODE_2, true, true, GAME_BASES_3);
+    liveBoard.fromPositionString(
+        "2:3:1:1:P:A:-:1:2,2,10,1:2,2,10,1:A33a!,B37e");
+    OctiMoveComposer liveComposer(&liveBoard);
+
+    ZoomedSquareDialog dlgEnemy(&liveBoard, &liveComposer, 3, 7,
+                                BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    QImage imgEnemy = dlgEnemy.renderToImage(560, 530);
+    CHECK_TRUE(dlgEnemy.movePodBtnRect().isEmpty());
+
+    ZoomedSquareDialog dlgNonInteractive(&liveBoard, nullptr, 3, 3,
+                                         BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    QImage imgNonInteractive = dlgNonInteractive.renderToImage(560, 530);
+    CHECK_TRUE(dlgNonInteractive.movePodBtnRect().isEmpty());
+    CHECK_TRUE(dlgNonInteractive.placeReserveBtnRect().isEmpty());
+
+    ZoomedSquareDialog dlgGameOver(&board, &composer, 3, 3,
+                                   BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    QImage imgGameOver = dlgGameOver.renderToImage(560, 530);
+    CHECK_TRUE(dlgGameOver.movePodBtnRect().isEmpty());
+    CHECK_TRUE(dlgGameOver.placeReserveBtnRect().isEmpty());
+
+    // Header subtitle prefix "Close-Up Inspect " at QRect(16, 42, 115, 20) matches enemy inspect mode
+    QRect headerPrefixRect(16, 42, 115, 20);
+    CHECK_TRUE(imgNonInteractive.copy(headerPrefixRect) == imgEnemy.copy(headerPrefixRect));
+    CHECK_TRUE(imgGameOver.copy(headerPrefixRect) == imgEnemy.copy(headerPrefixRect));
+}
+
+TEST(SuperProngPreludeAndStackInspectorTest,
+     ZoomedSquareDialogMultiPodStackCardsRenderMiniPodsAndSaveArtifact)
+{
+    OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
+    board.fromPositionString(
+        "2:3:1:1:P:A:-:1:2,2,10,1:2,2,10,1:A33a!c!e,A33bdf,A33,A53a,B37e");
+    OctiMoveComposer composer(&board);
+
+    // Preserve numPods == 1 socketCenters invariant around (280, 236)
+    {
+        ZoomedSquareDialog dlgSingle(&board, &composer, 5, 3,
+                                     BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+        dlgSingle.renderToImage(560, 530);
+        const auto &sockets = dlgSingle.socketCenters();
+        LONGS_EQUAL(8, static_cast<long>(sockets.size()));
+        DOUBLES_EQUAL(280.0, sockets.at(DIR_N).x(), 1.0);
+        DOUBLES_EQUAL(236.0, sockets.at(DIR_E).y(), 1.0);
+    }
+
+    // Multi-pod stack (numPods == 3) at (3, 3)
+    ZoomedSquareDialog dlgStack(&board, &composer, 3, 3,
+                                BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    QImage stackImg = dlgStack.renderToImage(560, 530);
+    CHECK_FALSE(stackImg.isNull());
+
+    const auto &tabs = dlgStack.stackPodTabRects();
+    LONGS_EQUAL(3, static_cast<long>(tabs.size()));
+
+    for (std::size_t i = 0; i < tabs.size(); ++i) {
+        const QRectF &tabR = tabs[i];
+        CHECK_TRUE(tabR.width() >= 95.0);
+        CHECK_TRUE(tabR.height() >= 32.0);
+
+        // Left icon region (mini 8-dir pod octagon + prong/superprong rays)
+        int iconX0 = static_cast<int>(tabR.left()) + 3;
+        int iconY0 = static_cast<int>(tabR.top()) + 3;
+        int iconW = 28;
+        int iconH = static_cast<int>(tabR.height()) - 6;
+
+        int podFactionPixels = 0;
+        int brightRayPixels = 0;
+        for (int py = iconY0; py < iconY0 + iconH; ++py) {
+            for (int px = iconX0; px < iconX0 + iconW; ++px) {
+                QColor c = stackImg.pixelColor(px, py);
+                // Green faction pod core/highlight on PLAYER_A pod
+                if (c.green() > c.red() + 25 && c.green() > 90) {
+                    ++podFactionPixels;
+                }
+                if (c.red() > 180 && c.green() > 150) {
+                    ++brightRayPixels;
+                }
+            }
+        }
+        CHECK_TRUE(podFactionPixels >= 20);
+        if (i < 2) {
+            // Cards #1 (a!c!e) and #2 (bdf) have prong/superprong rays
+            CHECK_TRUE(brightRayPixels >= 6);
+        }
+    }
+
+    QString artifactDir = QString::fromUtf8(OCTI_REPO_ROOT_DIR) +
+        "/plan/plan_superprong_rules_ui_and_stack_inspector.artifacts";
+    QDir().mkpath(artifactDir);
+    QString artifactPath = artifactDir + "/desktop_stack_inspector.png";
+    CHECK_TRUE(stackImg.save(artifactPath, "PNG"));
+    CHECK_TRUE(QFileInfo(artifactPath).size() > 10000);
 }
 
 extern "C" const char *__lsan_default_suppressions()

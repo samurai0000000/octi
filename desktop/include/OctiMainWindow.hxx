@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 #include <QCheckBox>
@@ -60,6 +61,17 @@ struct DesktopCliArgs {
     static std::string usageBanner(const char *progName);
 };
 
+struct GameChatEntry {
+    std::int64_t atMs = 0;
+    std::string scope;
+    std::string playerUuid;
+    std::string handle;
+    std::string text;
+    bool isSystemEvent = false;
+    bool isRobot = false;
+    std::string rawLine;
+};
+
 class OctiMainWindow : public QMainWindow {
 public:
     explicit OctiMainWindow(
@@ -106,6 +118,8 @@ public:
     void toggleTheme();
     void setTheme(ThemeId theme);
     ThemeId theme() const;
+    void setWebLightSurfaceOverride(std::optional<bool> lightOverride);
+    bool isWebLightSurfaceActive() const;
     QComboBox *themeSelectorCombo() const { return _themeCombo; }
 
     int menuActionCountWithIconsAndShortcuts() const;
@@ -216,10 +230,16 @@ public:
     void pumpUiEvents();
 
     /* ---- Board Chat & Mutual Proposals ---- */
+    static QString formatGameChatEntryHtml(const GameChatEntry &entry,
+                                           const std::string &viewerUuid,
+                                           const std::string &viewerHandle,
+                                           bool lightSurface = false);
     void openBoardChatZoomDialog();
     bool sendGameChatMessage(const std::string &scope,
                              const std::string &text);
     const std::vector<std::string> &gameChatLines() const;
+    const std::vector<GameChatEntry> &gameChatEntries() const { return _gameChatEntries; }
+    QPlainTextEdit *gameChatTranscript() const { return _gameChatTranscript; }
     QLineEdit *gameChatInput() const { return _gameChatInput; }
     QPushButton *sendGameChatButton() const { return _sendGameChatBtn; }
 
@@ -308,6 +328,12 @@ private:
     void showProtocolUpgradeRequired(const std::string &message = "");
     void setupMenuBar();
     void updateStartMatchOverlay();
+    void applyTabletopWebStyles();
+    void applyZoomChatDialogStyle(QDialog *dlg) const;
+    void rebuildGameChatTranscripts();
+    void appendGameChatEntry(const GameChatEntry &entry);
+    bool isOnlineSeatRobot(const std::string &playerUuid,
+                           const std::string &handle) const;
 
     ClientConfigStore _configStore;
     std::unique_ptr<OctiNetworkClient> _netClient;
@@ -318,6 +344,7 @@ private:
     UiDispatcher _dispatcher;
 
     ThemeId _theme;
+    std::optional<bool> _webLightSurfaceOverride;
     bool _offlineMode;
     bool _authenticated;
     PlayerProfileInfo _profile;
@@ -341,7 +368,10 @@ private:
     int _lastOrientedViewerSeat = 0;
     GameViewData _onlineGameView;
     std::vector<std::string> _appliedOnlineMoves;
+    bool _hasInitialOnlineRoomSync = false;
+    std::string _lastLocalSubmittedOnlineMove;
     std::vector<std::string> _gameChatLines;
+    std::vector<GameChatEntry> _gameChatEntries;
     std::int64_t _lastGameChatSeq;
     std::int64_t _lastAppliedGameEventSeq = 0;
     int _vcrTotalPlies;
@@ -372,6 +402,9 @@ private:
     LobbyView *_lobbyView;
 
     /* ---- Right Side Panel Widgets ---- */
+    QLabel *_statusHeaderTitleLabel = nullptr;
+    QLabel *_statusRoomBadgeLabel = nullptr;
+    QLabel *_statusTtlPillLabel = nullptr;
     QLabel *_matchModeLabel;
     QLabel *_matchTurnStatusLabel;
     QPushButton *_sidebarNewGameBtn;

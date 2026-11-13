@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -39,6 +40,8 @@ public:
 
     void setTheme(ThemeId theme);
     ThemeId theme() const;
+    void setWebLightSurfaceOverride(std::optional<bool> lightOverride);
+    bool isWebLightSurfaceActive() const;
 
     void setViewerIdentity(const std::string &playerUuid,
                            const std::string &handle);
@@ -59,6 +62,11 @@ public:
 
     static QString formatChatTimestamp(std::int64_t atMs);
     static QString formatChatMessageLine(const LobbyChatEntry &entry);
+    static QString formatChatMessageHtml(const LobbyChatEntry &entry,
+                                         const std::string &viewerUuid,
+                                         const std::string &viewerHandle,
+                                         bool lightSurface = false,
+                                         bool forceRobot = false);
     static QString formatPhaseDisplay(const std::string &phase);
     static QString formatSeatOccupancySummary(const TableSummaryInfo &table);
     static QString formatSeatBreakdownText(const TableSummaryInfo &table);
@@ -122,14 +130,17 @@ public:
     QGroupBox *robotsBox() const { return _robotsBox; }
     QTableWidget *tablesTable() const { return _tablesTable; }
     QGroupBox *inspectorBox() const { return _inspectorBox; }
+    QGroupBox *lobbyChatBox() const { return _lobbyChatBox; }
     QLabel *inspectorTitleLabel() const { return _inspectorTitleLabel; }
     QLabel *inspectorSeatsLabel() const { return _inspectorSeatsLabel; }
     QPlainTextEdit *chatTranscript() const { return _chatTranscript; }
     QLineEdit *chatInput() const { return _chatInput; }
     QPushButton *chatSendButton() const { return _sendChatBtn; }
     QLabel *statusLabel() const { return _statusLabel; }
+    bool isEntryFromRobot(const LobbyChatEntry &entry) const;
 
 private:
+    void applyLobbyWebStyles();
     void rebuildPlayersTable();
     void rebuildTablesWidget();
     void rebuildChatTranscript();
@@ -138,6 +149,7 @@ private:
 
     OctiNetworkClient *_netClient;
     ThemeId _theme;
+    std::optional<bool> _webLightSurfaceOverride;
 
     std::string _viewerUuid;
     std::string _viewerHandle;
@@ -155,6 +167,10 @@ private:
 
     QGroupBox *_playersBox = nullptr;
     QGroupBox *_robotsBox = nullptr;
+    QGroupBox *_tablesBox = nullptr;
+    QGroupBox *_lobbyChatBox = nullptr;
+    QLabel *_lobbyChatTitleLabel = nullptr;
+    QLabel *_lobbyChatSubtitleLabel = nullptr;
     QTableWidget *_playersTable = nullptr;
     QTableWidget *_robotsTable = nullptr;
     QTableWidget *_tablesTable;

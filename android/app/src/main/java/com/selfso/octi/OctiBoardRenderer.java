@@ -694,23 +694,6 @@ public final class OctiBoardRenderer {
             }
         }
 
-        // 10. Floating Capture [x] / Keep [ ] pills
-        if (composer != null && !composer.captureChoices().isEmpty()) {
-            for (OctiMoveComposer.CaptureChoice cc : composer.captureChoices()) {
-                double[] sqRect = g.squareRect(cc.jumpedX, cc.jumpedY);
-                if (sqRect[2] <= 0.0) {
-                    continue;
-                }
-                double px = sqRect[0] + 2.0;
-                double py = sqRect[1] + 2.0;
-                double pw = sqRect[2] - 4.0;
-                double ph = Math.max(12.0, sqRect[3] * 0.26);
-                int bg = cc.capture ? pal.legalCaptureGlow : pal.panelCardBg;
-                fillRectSolid(pixels, w, h, px, py, pw, ph, bg);
-                drawRectOutline(pixels, w, h, px, py, pw, ph, 1.2, pal.prongSuperCore);
-            }
-        }
-
         return pixels;
     }
 

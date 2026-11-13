@@ -111,7 +111,9 @@ import com.selfso.octi.OctiGameBases
 import com.selfso.octi.OctiGameMode
 import com.selfso.octi.OctiMoveComposer
 import com.selfso.octi.OctiNetworkClient
+import com.selfso.octi.OctiPalette
 import com.selfso.octi.OctiPlayer
+import com.selfso.octi.OctiPod
 import com.selfso.octi.OctiProngType
 import com.selfso.octi.OctiSquare
 import com.selfso.octi.OctiSquareType
@@ -125,6 +127,17 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
+data class StackPodChipSpec(
+    val rank: Int,
+    val podIndex: Int,
+    val ownerLabel: String,
+    val configStr: String,
+    val labelText: String,
+    val isClaimed: Boolean,
+    val normalDirs: List<OctiDir>,
+    val superDirs: List<OctiDir>
+)
+
 object OctiDialogs {
     const val SPLASH_DURATION_MS: Long = 10000L
     const val PLACE_RESERVE_POD_LABEL = "Place Reserve Pod"
@@ -133,6 +146,58 @@ object OctiDialogs {
     const val START_MATCH_CARD_MIN_WIDTH_DP = 300
     const val START_MATCH_CARD_MAX_WIDTH_DP = 360
     const val START_MATCH_BUTTON_HORIZONTAL_PADDING_DP = 10
+
+    @JvmStatic
+    fun buildStackPodChipSpecs(
+        sq: OctiSquare?,
+        composer: OctiMoveComposer?,
+        squareX: Int,
+        squareY: Int
+    ): List<StackPodChipSpec> {
+        if (sq == null || sq.numPods <= 0) {
+            return emptyList()
+        }
+        val sorted = OctiBoardRenderer.sortedPodIndicesMostProngsFirst(sq)
+        val out = ArrayList<StackPodChipSpec>(sorted.size)
+        for (rank in sorted.indices) {
+            val podIdx = sorted[rank]
+            val pod = sq.getPodAt(podIdx)
+            val ownerLabel = when (pod.type.toPlayer()) {
+                OctiPlayer.PLAYER_A -> "A"
+                OctiPlayer.PLAYER_B -> "B"
+                OctiPlayer.PLAYER_C -> "C"
+                OctiPlayer.PLAYER_D -> "D"
+                else -> "?"
+            }
+            val cfgStr = pod.configString
+            val claimed = composer?.isSquarePodClaimed(squareX, squareY, podIdx) == true
+            val normalDirs = ArrayList<OctiDir>()
+            val superDirs = ArrayList<OctiDir>()
+            for (d in 0 until OctiDir.DIR_MAX) {
+                val dir = OctiDir.fromIndex(d)
+                when (pod.prongAt(dir)) {
+                    OctiProngType.NORMAL_PRONG -> normalDirs.add(dir)
+                    OctiProngType.SUPER_PRONG -> superDirs.add(dir)
+                    else -> {}
+                }
+            }
+            val baseLabel = "#${rank + 1} ${cfgStr.ifEmpty { "—" }} ($ownerLabel)"
+            val labelText = if (claimed) "$baseLabel (Moved)" else baseLabel
+            out.add(
+                StackPodChipSpec(
+                    rank = rank,
+                    podIndex = podIdx,
+                    ownerLabel = ownerLabel,
+                    configStr = cfgStr,
+                    labelText = labelText,
+                    isClaimed = claimed,
+                    normalDirs = normalDirs,
+                    superDirs = superDirs
+                )
+            )
+        }
+        return out
+    }
 
     fun describeTerminationReason(board: OctiBoard?): String {
         if (board == null || board.game == null) {
@@ -1240,6 +1305,88 @@ fun CreateTableDialog(
     )
 }
 
+@Composable
+fun MiniPodStackChipCanvas(
+    pod: OctiPod,
+    rotation: OctiBoardGeometry.BoardRotation,
+    themeId: OctiThemeId,
+    modifier: Modifier = Modifier.size(28.dp)
+) {
+    val pal = remember(themeId) { OctiPalette.forTheme(themeId) }
+    val geo = remember(rotation) { OctiBoardGeometry(128, 128, 9, 9, rotation) }
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val cx = w * 0.5f
+        val cy = h * 0.5f
+        val minDim = min(w, h)
+        val podR = minDim * 0.27f
+        val innerRay = podR * 0.85f
+        val normalTip = minDim * 0.46f
+        val superTip = minDim * 0.49f
+
+        val factionPal = when (pod.type.toPlayer()) {
+            OctiPlayer.PLAYER_A -> pal.podA
+            OctiPlayer.PLAYER_B -> pal.podB
+            OctiPlayer.PLAYER_C -> pal.podC
+            OctiPlayer.PLAYER_D -> pal.podD
+            else -> null
+        }
+        val podCoreColor = Color(factionPal?.core ?: pal.neutralOctiFill)
+        val podRimColor = Color(factionPal?.rim ?: pal.neutralOctiRim)
+        val normalRayColor = Color(pal.prongNormal)
+        val superGoldColor = Color(0xFFFDE047)
+        val superCoreColor = Color(pal.prongSuperGold)
+
+        for (d in 0 until OctiDir.DIR_MAX) {
+            val dir = OctiDir.fromIndex(d)
+            val pt = pod.prongAt(dir)
+            if (pt == OctiProngType.NO_PRONG) continue
+            val u = geo.dirUnitVectorScreen(dir)
+            val ux = u[0].toFloat()
+            val uy = u[1].toFloat()
+            val start = Offset(cx + ux * innerRay, cy + uy * innerRay)
+            if (pt == OctiProngType.SUPER_PRONG) {
+                val end = Offset(cx + ux * superTip, cy + uy * superTip)
+                drawLine(
+                    color = superCoreColor,
+                    start = start,
+                    end = end,
+                    strokeWidth = max(2.2f, minDim * 0.11f)
+                )
+                drawCircle(
+                    color = superGoldColor,
+                    radius = max(1.8f, minDim * 0.085f),
+                    center = end
+                )
+            } else {
+                val end = Offset(cx + ux * normalTip, cy + uy * normalTip)
+                drawLine(
+                    color = normalRayColor,
+                    start = start,
+                    end = end,
+                    strokeWidth = max(1.6f, minDim * 0.08f)
+                )
+            }
+        }
+
+        val octoPath = Path()
+        for (i in 0 until 8) {
+            val angle = (i * 45.0 + 22.5) * Math.PI / 180.0
+            val px = cx + cos(angle).toFloat() * podR
+            val py = cy + sin(angle).toFloat() * podR
+            if (i == 0) octoPath.moveTo(px, py) else octoPath.lineTo(px, py)
+        }
+        octoPath.close()
+        drawPath(path = octoPath, color = podCoreColor)
+        drawPath(
+            path = octoPath,
+            color = podRimColor,
+            style = Stroke(width = max(1.2f, minDim * 0.055f))
+        )
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ZoomedSquareDialog(
@@ -1256,7 +1403,11 @@ fun ZoomedSquareDialog(
     onRepositionProng: (podIndex: Int, srcDir: OctiDir, dstDir: OctiDir) -> Unit,
     onPlaceReservePod: (liberate: Boolean) -> Unit
 ) {
-    val displayBoard = if (composer.isAwaitingConfirmation) composer.buildPreviewBoard() ?: board else board
+    val displayBoard = if (composer.isAwaitingConfirmation && board === composer.board) {
+        composer.buildPreviewBoard() ?: board
+    } else {
+        board
+    }
     val displayGame = displayBoard.game
     val sq = if (displayBoard.isValidCoord(squareX - 1, squareY - 1)) {
         displayBoard.squareAt(squareX - 1, squareY - 1)
@@ -1264,11 +1415,15 @@ fun ZoomedSquareDialog(
         null
     }
     val numPods = sq?.numPods ?: 0
-    val sortedPodIndices = remember(squareX, squareY, numPods, composer.stagedMoveNotation()) {
+    val activeComposerForClaims = if (board === composer.board) composer else null
+    val sortedPodIndices = remember(sq, squareX, squareY, numPods, composer.stagedMoveNotation()) {
         if (sq != null) OctiBoardRenderer.sortedPodIndicesMostProngsFirst(sq).toList() else emptyList()
     }
+    val stackChipSpecs = remember(sq, squareX, squareY, numPods, composer.stagedMoveNotation()) {
+        OctiDialogs.buildStackPodChipSpecs(sq, activeComposerForClaims, squareX, squareY)
+    }
     val defaultPodIdx = remember(sortedPodIndices) {
-        val unclaimed = sortedPodIndices.firstOrNull { !composer.isSquarePodClaimed(squareX, squareY, it) }
+        val unclaimed = sortedPodIndices.firstOrNull { activeComposerForClaims?.isSquarePodClaimed(squareX, squareY, it) != true }
         unclaimed ?: sortedPodIndices.firstOrNull() ?: 0
     }
     var selectedPodIndex by remember(squareX, squareY, defaultPodIdx) { mutableIntStateOf(defaultPodIdx) }
@@ -1304,8 +1459,8 @@ fun ZoomedSquareDialog(
         (displayGame?.isPlayerEliminated(partner) == true) && isOwnOccupied &&
         ((displayGame?.getCapturedPods(partner) ?: 0) > 0)
 
-    val canPlaceReserve = composer.canPlaceReservePodAt(squareX, squareY)
-    val canLiberateHere = composer.canLiberateCapturedPodAt(squareX, squareY)
+    val canPlaceReserve = isTurn && composer.canPlaceReservePodAt(squareX, squareY)
+    val canLiberateHere = isTurn && composer.canLiberateCapturedPodAt(squareX, squareY)
     val canShowPodPlacement = isTurn && displayBoard.gameMode != OctiGameMode.GAME_MODE_OFK && (canPlaceReserve || canLiberateHere)
     var moveAllStack by remember(squareX, squareY) { mutableStateOf(false) }
 
@@ -1320,7 +1475,7 @@ fun ZoomedSquareDialog(
     var hoverSocketDir by remember(squareX, squareY) { mutableStateOf(-1) }
     var podBoxPxSize by remember { mutableStateOf(IntSize(480, 480)) }
 
-    val zoomedBitmap = remember(squareX, squareY, selectedPodIndex, rotation, themeId, hoverSocketDir, composer.stagedMoveNotation()) {
+    val zoomedBitmap = remember(displayBoard, squareX, squareY, selectedPodIndex, rotation, themeId, hoverSocketDir, composer.stagedMoveNotation()) {
         val sizePx = 480
         val pixels = OctiBoardRenderer.renderZoomedPodPixels(
             displayBoard,
@@ -1386,7 +1541,14 @@ fun ZoomedSquareDialog(
                             color = OctiTheme.colors.accentBrass
                         )
                         Text(
-                            text = if (hasEnemy) "Opponent Inspect" else if (isEmptySquare) "Home Square" else if (isOwnOccupied) "Friendly Pod" else "Partner Pod",
+                            text = when {
+                                hasEnemy -> "Opponent Inspect"
+                                !isTurn && displayGame?.isGameOver == true -> "Game Over — Inspect"
+                                !isTurn -> "Close-Up Inspect"
+                                isEmptySquare -> "Home Square"
+                                isOwnOccupied -> if (numPods >= 2) "Friendly Stack ($numPods)" else "Friendly Pod"
+                                else -> "Partner Pod"
+                            },
                             style = MaterialTheme.typography.labelMedium,
                             color = if (hasEnemy) OctiTheme.colors.legalCapture else OctiTheme.colors.textSecondary
                         )
@@ -1397,23 +1559,29 @@ fun ZoomedSquareDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            sortedPodIndices.forEachIndexed { rank, i ->
-                                val isClaimed = composer.isSquarePodClaimed(squareX, squareY, i)
+                            stackChipSpecs.forEach { spec ->
+                                val podObj = if (sq != null && spec.podIndex in 0 until sq.numPods) sq.getPodAt(spec.podIndex) else null
                                 FilterChip(
-                                    selected = i == selectedPodIndex,
+                                    selected = spec.podIndex == selectedPodIndex,
                                     onClick = {
-                                        selectedPodIndex = i
-                                        composer.selectStackPodIndex(squareX, squareY, i)
+                                        selectedPodIndex = spec.podIndex
+                                        if (isTurn) {
+                                            composer.selectStackPodIndex(squareX, squareY, spec.podIndex)
+                                        }
                                         selectedRepositionSrcDir = null
                                     },
+                                    leadingIcon = if (podObj != null) {
+                                        {
+                                            MiniPodStackChipCanvas(
+                                                pod = podObj,
+                                                rotation = rotation,
+                                                themeId = themeId,
+                                                modifier = Modifier.size(28.dp)
+                                            )
+                                        }
+                                    } else null,
                                     label = {
-                                        Text(
-                                            if (isClaimed) {
-                                                "Pod ${i + 1}/$numPods (Moved)"
-                                            } else {
-                                                "Pod ${i + 1}/$numPods"
-                                            }
-                                        )
+                                        Text(spec.labelText)
                                     }
                                 )
                             }
@@ -1488,7 +1656,7 @@ fun ZoomedSquareDialog(
                                     podBoxPxSize = newSize
                                 }
                             }
-                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize, squareX, squareY, freeProngs, freeSuper, board.gameMode) {
+                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize, squareX, squareY, freeProngs, freeSuper, displayBoard.gameMode) {
                                 detectTapGestures(
                                     onTap = { offset ->
                                         if (!isFriendlyTurn || sq == null) return@detectTapGestures
@@ -1509,7 +1677,7 @@ fun ZoomedSquareDialog(
                                                     hoverSocketDir = hitDir.index
                                                 }
                                             } else if (pt == OctiProngType.NORMAL_PRONG) {
-                                                if (board.gameMode != OctiGameMode.GAME_MODE_OFK) {
+                                                if (displayBoard.gameMode != OctiGameMode.GAME_MODE_OFK) {
                                                     selectedRepositionSrcDir = hitDir
                                                     hoverSocketDir = hitDir.index
                                                 }
@@ -1524,7 +1692,7 @@ fun ZoomedSquareDialog(
                                     }
                                 )
                             }
-                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize, sortedPodIndices, squareX, squareY, freeProngs, freeSuper, board.gameMode) {
+                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize, sortedPodIndices, squareX, squareY, freeProngs, freeSuper, displayBoard.gameMode) {
                                 var isRepositionDrag = false
                                 var verticalSlideAccumPx = 0f
                                 val density = this
@@ -1543,7 +1711,7 @@ fun ZoomedSquareDialog(
                                         if (hitDir != OctiDir.DIR_UNDEF) {
                                             hoverSocketDir = hitDir.index
                                         }
-                                        if (isFriendlyTurn && hitDir != OctiDir.DIR_UNDEF && pod.prongAt(hitDir) == OctiProngType.NORMAL_PRONG && board.gameMode != OctiGameMode.GAME_MODE_OFK) {
+                                        if (isFriendlyTurn && hitDir != OctiDir.DIR_UNDEF && pod.prongAt(hitDir) == OctiProngType.NORMAL_PRONG && displayBoard.gameMode != OctiGameMode.GAME_MODE_OFK) {
                                             selectedRepositionSrcDir = hitDir
                                             isRepositionDrag = true
                                         }
@@ -3036,6 +3204,10 @@ fun BoardChatZoomDialog(
     val chatLog by viewModel.gameChatLog.collectAsState()
     val matchType by viewModel.matchType.collectAsState()
     val activeGameView by viewModel.activeGameView.collectAsState()
+    val currentProfile by viewModel.currentProfile.collectAsState()
+    val myUuid = currentProfile?.uuid ?: ""
+    val myHandle = currentProfile?.handle ?: ""
+    val webPal = resolveWebChatStylePaletteForColor(OctiTheme.colors.windowBg)
     val canTeamChat = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeGameView?.mode == "4P" && (activeGameView?.viewerSeat ?: 0) > 0
     var inputText by remember { mutableStateOf("") }
     var currentScope by remember { mutableStateOf("ALL") }
@@ -3057,17 +3229,17 @@ fun BoardChatZoomDialog(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
+                .fillMaxWidth()
                 .imePadding()
-                .navigationBarsPadding()
-                .background(OctiTheme.colors.panelCardBg, RoundedCornerShape(12.dp))
-                .border(1.5.dp, OctiTheme.colors.accentBrass, RoundedCornerShape(12.dp))
-                .padding(14.dp),
-            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
-            shape = RoundedCornerShape(12.dp)
+                .navigationBarsPadding(),
+            colors = CardDefaults.cardColors(containerColor = webPal.cardBg),
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, webPal.cardBorder)
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Header row
@@ -3080,7 +3252,7 @@ fun BoardChatZoomDialog(
                         text = "TABLE CHAT",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = OctiTheme.colors.accentBrass
+                        color = webPal.headerTitle
                     )
                     IconButton(
                         onClick = onDismiss,
@@ -3089,7 +3261,7 @@ fun BoardChatZoomDialog(
                         Text(
                             text = "✕",
                             style = MaterialTheme.typography.titleMedium,
-                            color = OctiTheme.colors.textSecondary
+                            color = webPal.timestamp
                         )
                     }
                 }
@@ -3099,9 +3271,9 @@ fun BoardChatZoomDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 160.dp, max = 260.dp),
-                    color = OctiTheme.colors.windowBg,
+                    color = webPal.wellBg,
                     shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+                    border = BorderStroke(1.dp, webPal.cardBorder)
                 ) {
                     if (chatLog.isEmpty()) {
                         Box(
@@ -3113,7 +3285,7 @@ fun BoardChatZoomDialog(
                             Text(
                                 text = "No messages yet. Chat with players at the table.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = OctiTheme.colors.textSecondary
+                                color = webPal.timestamp
                             )
                         }
                     } else {
@@ -3125,45 +3297,19 @@ fun BoardChatZoomDialog(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             items(chatLog) { msg ->
-                                val sender = if (msg.senderHandle.isNotEmpty()) {
-                                    val clean = msg.senderHandle.removePrefix("@")
-                                    if (clean.equals("bot", ignoreCase = true) || clean.equals("stock", ignoreCase = true)) {
-                                        "@$clean [BOT]"
-                                    } else {
-                                        "@$clean"
-                                    }
-                                } else {
-                                    "You"
-                                }
-                                val scopePrefix = if (msg.scope.equals("TEAM", ignoreCase = true)) "[TEAM] " else ""
-                                val sdf = remember {
-                                    java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).apply {
-                                        timeZone = java.util.TimeZone.getDefault()
-                                    }
-                                }
-                                val timeStr = sdf.format(java.util.Date(msg.atMs))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.Top
-                                ) {
-                                    Text(
-                                        text = "[$timeStr] ",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = OctiTheme.colors.textSecondary
-                                    )
-                                    Text(
-                                        text = "$scopePrefix$sender: ",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (sender.contains("[BOT]")) OctiTheme.colors.accentBrass else OctiTheme.colors.textPrimary
-                                    )
-                                    Text(
-                                        text = msg.text,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = OctiTheme.colors.textPrimary,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
+                                val isRobotSeat = activeGameView?.seats?.firstOrNull { it.seat == msg.seat }?.isRobot == true
+                                Text(
+                                    text = formatGameChatEntryAnnotatedString(
+                                        msg = msg,
+                                        viewerUuid = myUuid,
+                                        viewerHandle = myHandle,
+                                        lightSurface = webPal.lightSurface,
+                                        includeTimestamp = true,
+                                        isRobotSeat = isRobotSeat
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                             }
                         }
                     }
@@ -3185,17 +3331,23 @@ fun BoardChatZoomDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (canTeamChat) {
+                        val isTeamScope = currentScope == "TEAM"
                         OutlinedButton(
                             onClick = {
                                 currentScope = if (currentScope == "ALL") "TEAM" else "ALL"
                             },
+                            border = BorderStroke(
+                                1.dp,
+                                if (isTeamScope) webPal.teamScope else webPal.inputBorder
+                            ),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             modifier = Modifier.height(48.dp)
                         ) {
                             Text(
                                 text = currentScope,
                                 style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                color = if (isTeamScope) webPal.teamScope else webPal.messageBody
                             )
                         }
                     }
@@ -3263,6 +3415,9 @@ fun LobbyChatZoomDialog(
     val lobbyChatMessages by viewModel.lobbyChatMessages.collectAsState()
     val lobbyState by viewModel.lobbyState.collectAsState()
     val isAuthenticated by viewModel.isAuthenticated.collectAsState()
+    val currentProfile by viewModel.currentProfile.collectAsState()
+    val myHandle = currentProfile?.handle ?: ""
+    val webPal = resolveWebChatStylePaletteForColor(OctiTheme.colors.windowBg)
     var inputText by remember { mutableStateOf("") }
     var chatErrorText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -3271,13 +3426,8 @@ fun LobbyChatZoomDialog(
         if (lobbyChatMessages.isNotEmpty()) {
             lobbyChatMessages
         } else {
-            val sdf = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).apply {
-                timeZone = java.util.TimeZone.getDefault()
-            }
             lobbyState.recentChat.map { entry ->
-                val timeStr = sdf.format(java.util.Date(if (entry.atMs > 0L) entry.atMs else System.currentTimeMillis()))
-                val handleStr = entry.handle.ifEmpty { "anon" }
-                "[$timeStr] $handleStr: ${entry.text}"
+                OctiAppViewModel.formatLobbyChatEntry(entry)
             }
         }
     }
@@ -3294,12 +3444,13 @@ fun LobbyChatZoomDialog(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .fillMaxHeight(0.70f)
-                .padding(8.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
-            border = BorderStroke(2.dp, OctiTheme.colors.accentBrass)
+                .fillMaxWidth()
+                .fillMaxHeight(0.72f)
+                .imePadding()
+                .navigationBarsPadding(),
+            shape = RoundedCornerShape(10.dp),
+            colors = CardDefaults.cardColors(containerColor = webPal.cardBg),
+            border = BorderStroke(1.dp, webPal.cardBorder)
         ) {
             Column(
                 modifier = Modifier
@@ -3318,19 +3469,19 @@ fun LobbyChatZoomDialog(
                             text = "Lobby Chat",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = OctiTheme.colors.accentBrass
+                            color = webPal.headerTitle
                         )
                         Text(
                             text = "Global • Local time",
                             style = MaterialTheme.typography.labelSmall,
-                            color = OctiTheme.colors.textSecondary
+                            color = webPal.timestamp
                         )
                     }
                     IconButton(onClick = onDismiss) {
                         Text(
                             text = "✕",
                             style = MaterialTheme.typography.titleMedium,
-                            color = OctiTheme.colors.textSecondary
+                            color = webPal.timestamp
                         )
                     }
                 }
@@ -3340,9 +3491,9 @@ fun LobbyChatZoomDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    color = OctiTheme.colors.windowBg,
+                    color = webPal.wellBg,
                     shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+                    border = BorderStroke(1.dp, webPal.cardBorder)
                 ) {
                     if (formattedMessages.isEmpty()) {
                         Box(
@@ -3354,7 +3505,7 @@ fun LobbyChatZoomDialog(
                             Text(
                                 text = "No messages in lobby chat yet. Say hello!",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = OctiTheme.colors.textSecondary
+                                color = webPal.timestamp
                             )
                         }
                     } else {
@@ -3367,9 +3518,13 @@ fun LobbyChatZoomDialog(
                         ) {
                             items(formattedMessages) { line ->
                                 Text(
-                                    text = line,
+                                    text = formatWebChatLineAnnotatedString(
+                                        rawLine = line,
+                                        viewerHandle = myHandle,
+                                        lightSurface = webPal.lightSurface
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = OctiTheme.colors.textPrimary
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             }
                         }

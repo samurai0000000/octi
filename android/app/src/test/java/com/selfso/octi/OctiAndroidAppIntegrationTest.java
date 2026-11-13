@@ -11,6 +11,10 @@ import android.view.KeyEvent;
 
 import com.selfso.octi.ui.OctiAppViewModel;
 import com.selfso.octi.ui.OctiDialogs;
+import com.selfso.octi.ui.OctiReserveHudKt;
+import com.selfso.octi.ui.ResolvedChatSpan;
+import com.selfso.octi.ui.StackPodChipSpec;
+import com.selfso.octi.ui.WebChatStylePalette;
 import com.selfso.selfupdate.UpdateManifest;
 
 import org.junit.After;
@@ -898,6 +902,8 @@ public class OctiAndroidAppIntegrationTest {
         final List<String> receivedLeaveRooms = new ArrayList<>();
         final List<String> receivedUnobserveRooms = new ArrayList<>();
         final List<String> receivedGameActions = new ArrayList<>();
+        final List<String> receivedSubmittedMoves = new ArrayList<>();
+        volatile java.util.function.Consumer<String> onMoveSubmitted = null;
         volatile String tablePasscodeRequired = null;
         volatile String customGameViewJson = null;
         volatile String currentHandle = "samurai";
@@ -1122,6 +1128,23 @@ public class OctiAndroidAppIntegrationTest {
                             status = 200;
                             respBody = "{\"room_id\":\"room-test-123\",\"seat\":" + seat + ",\"phase\":\"WAITING_FOR_PLAYERS\"}";
                         }
+                    } else if (reqLine.contains("/api/v1/games/") && reqLine.contains("/move")) {
+                        String mv = OctiMiniJson.getString(reqJson, "move", "");
+                        synchronized (receivedSubmittedMoves) {
+                            receivedSubmittedMoves.add(mv);
+                        }
+                        java.util.function.Consumer<String> cb = onMoveSubmitted;
+                        if (cb != null) {
+                            cb.accept(mv);
+                        }
+                        status = 200;
+                        respBody = "{\n"
+                                + "  \"move\": \"" + mv + "\",\n"
+                                + "  \"clock_ms\": 180000,\n"
+                                + "  \"elapsed_ms\": 250,\n"
+                                + "  \"game_over\": false,\n"
+                                + "  \"seq\": " + receivedSubmittedMoves.size() + "\n"
+                                + "}";
                     } else if (reqLine.contains("/api/v1/games/") && reqLine.contains("/action")) {
                         String act = OctiMiniJson.getString(reqJson, "action", "");
                         synchronized (receivedGameActions) {
@@ -2999,6 +3022,621 @@ public class OctiAndroidAppIntegrationTest {
             }
         } finally {
             OctiNetworkClient.resetUiThreadGuardForTest();
+        }
+    }
+
+    private static File resolveAndroidSourceFile(String relativeFromSrcMain) {
+        File userDir = new File(System.getProperty("user.dir", "."));
+        File candidate = new File(userDir, "src/main/java/" + relativeFromSrcMain);
+        if (!candidate.exists()) {
+            candidate = new File(userDir, "app/src/main/java/" + relativeFromSrcMain);
+        }
+        if (!candidate.exists()) {
+            candidate = new File(userDir, "android/app/src/main/java/" + relativeFromSrcMain);
+        }
+        return candidate;
+    }
+
+    @Test
+    public void testWebAlignedChatColorSpansAndFullWidthVerticalChatStack() throws Exception {
+        // 1. Dark and light surface WebChatStylePalette parity with WebUi.cxx
+        assertFalse(OctiReserveHudKt.isLightChatSurfaceArgb(0xFF0B0F17));
+        assertTrue(OctiReserveHudKt.isLightChatSurfaceArgb(0xFFFBFBFA));
+
+        WebChatStylePalette darkPal = OctiReserveHudKt.resolveWebChatStylePaletteForWindowBg(0xFF0B0F17);
+        assertFalse(darkPal.getLightSurface());
+        assertEquals(0xFF101622, darkPal.getCardBgArgb());
+        assertEquals(0xFF0B0F17, darkPal.getWellBgArgb());
+        assertEquals(0xFF1E293B, darkPal.getCardBorderArgb());
+        assertEquals(0xFFC8A253, darkPal.getHeaderTitleArgb());
+        assertEquals(0xFF94A3B8, darkPal.getTimestampArgb());
+        assertEquals(0xFFA78BFA, darkPal.getTeamScopeArgb());
+        assertEquals(0xFF38BDF8, darkPal.getPeerHandleArgb());
+        assertEquals(0xFF34D399, darkPal.getSelfHandleArgb());
+        assertEquals(0xFFFBBF24, darkPal.getBotHandleArgb());
+        assertEquals(0xFFC8A253, darkPal.getSystemTagArgb());
+        assertEquals(0xFFFDE68A, darkPal.getSystemEventBodyArgb());
+        assertEquals(0xFFF1F5F9, darkPal.getMessageBodyArgb());
+
+        WebChatStylePalette lightPal = OctiReserveHudKt.resolveWebChatStylePaletteForWindowBg(0xFFFBFBFA);
+        assertTrue(lightPal.getLightSurface());
+        assertEquals(0xFFFFFFFF, lightPal.getCardBgArgb());
+        assertEquals(0xFFFBFBFA, lightPal.getWellBgArgb());
+        assertEquals(0xFFE4E4E7, lightPal.getCardBorderArgb());
+        assertEquals(0xFF0F172A, lightPal.getHeaderTitleArgb());
+        assertEquals(0xFF64748B, lightPal.getTimestampArgb());
+        assertEquals(0xFF7C3AED, lightPal.getTeamScopeArgb());
+        assertEquals(0xFF0284C7, lightPal.getPeerHandleArgb());
+        assertEquals(0xFF059669, lightPal.getSelfHandleArgb());
+        assertEquals(0xFFD97706, lightPal.getBotHandleArgb());
+        assertEquals(0xFFB45309, lightPal.getSystemTagArgb());
+        assertEquals(0xFF92400E, lightPal.getSystemEventBodyArgb());
+        assertEquals(0xFF0F172A, lightPal.getMessageBodyArgb());
+
+        // 2. formatWebChatLineAnnotatedString SpanStyle verification (dark & light)
+        List<ResolvedChatSpan> peerDark = OctiReserveHudKt.extractResolvedChatSpans(
+                OctiReserveHudKt.formatWebChatLineAnnotatedString(
+                        "[14:23] Viper: Good luck", "Alice", false));
+        assertEquals(3, peerDark.size());
+        assertEquals("[14:23] ", peerDark.get(0).getText());
+        assertEquals(0xFF94A3B8, peerDark.get(0).getColorArgb());
+        assertTrue(peerDark.get(0).isMonospace());
+        assertEquals("@Viper:", peerDark.get(1).getText());
+        assertEquals(0xFF38BDF8, peerDark.get(1).getColorArgb());
+        assertTrue(peerDark.get(1).isBold());
+        assertEquals(" Good luck", peerDark.get(2).getText());
+        assertEquals(0xFFF1F5F9, peerDark.get(2).getColorArgb());
+
+        List<ResolvedChatSpan> peerLight = OctiReserveHudKt.extractResolvedChatSpans(
+                OctiReserveHudKt.formatWebChatLineAnnotatedString(
+                        "[14:23] Viper: Good luck", "Alice", true));
+        assertEquals(3, peerLight.size());
+        assertEquals(0xFF64748B, peerLight.get(0).getColorArgb());
+        assertEquals(0xFF0284C7, peerLight.get(1).getColorArgb());
+        assertEquals(0xFF0F172A, peerLight.get(2).getColorArgb());
+
+        // Self + [TEAM] badge
+        List<ResolvedChatSpan> selfTeamDark = OctiReserveHudKt.extractResolvedChatSpans(
+                OctiReserveHudKt.formatWebChatLineAnnotatedString(
+                        "[14:24] [TEAM] @Alice: Defend base", "Alice", false));
+        assertEquals(4, selfTeamDark.size());
+        assertEquals("[14:24] ", selfTeamDark.get(0).getText());
+        assertEquals(0xFF94A3B8, selfTeamDark.get(0).getColorArgb());
+        assertEquals("[TEAM] ", selfTeamDark.get(1).getText());
+        assertEquals(0xFFA78BFA, selfTeamDark.get(1).getColorArgb());
+        assertTrue(selfTeamDark.get(1).isBold());
+        assertEquals("@Alice:", selfTeamDark.get(2).getText());
+        assertEquals(0xFF34D399, selfTeamDark.get(2).getColorArgb());
+        assertTrue(selfTeamDark.get(2).isBold());
+        assertEquals(" Defend base", selfTeamDark.get(3).getText());
+        assertEquals(0xFFF1F5F9, selfTeamDark.get(3).getColorArgb());
+
+        List<ResolvedChatSpan> selfTeamLight = OctiReserveHudKt.extractResolvedChatSpans(
+                OctiReserveHudKt.formatWebChatLineAnnotatedString(
+                        "[14:24] [TEAM] @Alice: Defend base", "Alice", true));
+        assertEquals(4, selfTeamLight.size());
+        assertEquals(0xFF64748B, selfTeamLight.get(0).getColorArgb());
+        assertEquals(0xFF7C3AED, selfTeamLight.get(1).getColorArgb());
+        assertEquals(0xFF059669, selfTeamLight.get(2).getColorArgb());
+        assertEquals(0xFF0F172A, selfTeamLight.get(3).getColorArgb());
+
+        List<ResolvedChatSpan> selfYouDark = OctiReserveHudKt.extractResolvedChatSpans(
+                OctiReserveHudKt.formatWebChatLineAnnotatedString(
+                        "You: Ready", "Alice", false));
+        assertEquals(2, selfYouDark.size());
+        assertEquals("You:", selfYouDark.get(0).getText());
+        assertEquals(0xFF34D399, selfYouDark.get(0).getColorArgb());
+        assertTrue(selfYouDark.get(0).isBold());
+
+        // Bot handle ([BOT] tag and stock handle)
+        List<ResolvedChatSpan> botDark = OctiReserveHudKt.extractResolvedChatSpans(
+                OctiReserveHudKt.formatWebChatLineAnnotatedString(
+                        "[14:25] @octibot [BOT]: Thinking", "Alice", false));
+        assertEquals(3, botDark.size());
+        assertEquals("@octibot [BOT]:", botDark.get(1).getText());
+        assertEquals(0xFFFBBF24, botDark.get(1).getColorArgb());
+        assertTrue(botDark.get(1).isBold());
+
+        List<ResolvedChatSpan> botLight = OctiReserveHudKt.extractResolvedChatSpans(
+                OctiReserveHudKt.formatWebChatLineAnnotatedString(
+                        "[14:25] stock: Move 53+a", "Alice", true));
+        assertEquals(3, botLight.size());
+        assertEquals("@stock [BOT]:", botLight.get(1).getText());
+        assertEquals(0xFFD97706, botLight.get(1).getColorArgb());
+        assertTrue(botLight.get(1).isBold());
+
+        // System message
+        List<ResolvedChatSpan> sysDark = OctiReserveHudKt.extractResolvedChatSpans(
+                OctiReserveHudKt.formatWebChatLineAnnotatedString(
+                        "[14:26] [System] Seat 2 joined", "Alice", false));
+        assertEquals(3, sysDark.size());
+        assertEquals("[14:26] ", sysDark.get(0).getText());
+        assertEquals(0xFF94A3B8, sysDark.get(0).getColorArgb());
+        assertEquals("[System] ", sysDark.get(1).getText());
+        assertEquals(0xFFC8A253, sysDark.get(1).getColorArgb());
+        assertTrue(sysDark.get(1).isBold());
+        assertEquals("Seat 2 joined", sysDark.get(2).getText());
+        assertEquals(0xFFFDE68A, sysDark.get(2).getColorArgb());
+        assertTrue(sysDark.get(2).isItalic());
+
+        List<ResolvedChatSpan> sysLight = OctiReserveHudKt.extractResolvedChatSpans(
+                OctiReserveHudKt.formatWebChatLineAnnotatedString(
+                        "[14:26] [System] Seat 2 joined", "Alice", true));
+        assertEquals(3, sysLight.size());
+        assertEquals(0xFFB45309, sysLight.get(1).getColorArgb());
+        assertEquals(0xFF92400E, sysLight.get(2).getColorArgb());
+        assertTrue(sysLight.get(2).isItalic());
+
+        // 3. formatGameChatEntryAnnotatedString SpanStyle verification
+        long sampleMs = 1_710_000_000_000L;
+        OctiAppViewModel.GameChatMessage peerGameMsg = new OctiAppViewModel.GameChatMessage(
+                1L, "ALL", "u-peer-2", "Viper", 2, "Nice jump", sampleMs);
+        List<ResolvedChatSpan> peerGameSpans = OctiReserveHudKt.extractResolvedChatSpans(
+                OctiReserveHudKt.formatGameChatEntryAnnotatedString(
+                        peerGameMsg, "u-self-1", "Alice", false, true, false));
+        assertEquals(3, peerGameSpans.size());
+        assertEquals(0xFF94A3B8, peerGameSpans.get(0).getColorArgb());
+        assertTrue(peerGameSpans.get(0).isMonospace());
+        assertEquals("@Viper:", peerGameSpans.get(1).getText());
+        assertEquals(0xFF38BDF8, peerGameSpans.get(1).getColorArgb());
+        assertTrue(peerGameSpans.get(1).isBold());
+        assertEquals(" Nice jump", peerGameSpans.get(2).getText());
+        assertEquals(0xFFF1F5F9, peerGameSpans.get(2).getColorArgb());
+
+        OctiAppViewModel.GameChatMessage selfTeamGameMsg = new OctiAppViewModel.GameChatMessage(
+                2L, "TEAM", "u-self-1", "Alice", 1, "Cover left", sampleMs);
+        List<ResolvedChatSpan> selfGameSpans = OctiReserveHudKt.extractResolvedChatSpans(
+                OctiReserveHudKt.formatGameChatEntryAnnotatedString(
+                        selfTeamGameMsg, "u-self-1", "Alice", false, true, false));
+        assertEquals(4, selfGameSpans.size());
+        assertEquals("[TEAM] ", selfGameSpans.get(1).getText());
+        assertEquals(0xFFA78BFA, selfGameSpans.get(1).getColorArgb());
+        assertEquals("@Alice:", selfGameSpans.get(2).getText());
+        assertEquals(0xFF34D399, selfGameSpans.get(2).getColorArgb());
+
+        OctiAppViewModel.GameChatMessage botGameMsg = new OctiAppViewModel.GameChatMessage(
+                3L, "ALL", "r-uuid-9", "TacticalBot", 2, "glhf", sampleMs);
+        List<ResolvedChatSpan> botGameSpans = OctiReserveHudKt.extractResolvedChatSpans(
+                OctiReserveHudKt.formatGameChatEntryAnnotatedString(
+                        botGameMsg, "u-self-1", "Alice", false, true, true));
+        assertEquals(3, botGameSpans.size());
+        assertEquals("@TacticalBot [BOT]:", botGameSpans.get(1).getText());
+        assertEquals(0xFFFBBF24, botGameSpans.get(1).getColorArgb());
+        assertTrue(botGameSpans.get(1).isBold());
+
+        OctiAppViewModel.GameChatMessage sysGameMsg = new OctiAppViewModel.GameChatMessage(
+                4L, "SYSTEM", "", "System", 0, "Game started", sampleMs);
+        List<ResolvedChatSpan> sysGameSpans = OctiReserveHudKt.extractResolvedChatSpans(
+                OctiReserveHudKt.formatGameChatEntryAnnotatedString(
+                        sysGameMsg, "u-self-1", "Alice", false, true, false));
+        assertEquals(3, sysGameSpans.size());
+        assertEquals("[System] ", sysGameSpans.get(1).getText());
+        assertEquals(0xFFC8A253, sysGameSpans.get(1).getColorArgb());
+        assertEquals("Game started", sysGameSpans.get(2).getText());
+        assertEquals(0xFFFDE68A, sysGameSpans.get(2).getColorArgb());
+        assertTrue(sysGameSpans.get(2).isItalic());
+
+        // 4. Full-screen-width vertical chat stack invariants & source wiring
+        assertTrue(OctiReserveHudKt.isVerticalFullWidthChatStack());
+        assertEquals(1.0f, OctiReserveHudKt.chatSectionWidthFraction(), 1e-6f);
+        assertEquals(1.0f, OctiReserveHudKt.chatZoomDialogWidthFraction(), 1e-6f);
+        assertEquals(0, OctiReserveHudKt.RESERVE_HUD_CHAT_HORIZONTAL_PADDING_DP);
+        assertEquals(6, OctiReserveHudKt.RESERVE_HUD_CONTROLS_HORIZONTAL_PADDING_DP);
+        assertEquals(44, OctiReserveHudKt.RESERVE_HUD_CHAT_MIN_HEIGHT_DP);
+
+        List<String> onlineStack = OctiReserveHudKt.chatStackOrder(true);
+        assertEquals(2, onlineStack.size());
+        assertEquals("TABLE_CHAT", onlineStack.get(0));
+        assertEquals("LOBBY_CHAT", onlineStack.get(1));
+
+        List<String> localStack = OctiReserveHudKt.chatStackOrder(false);
+        assertEquals(1, localStack.size());
+        assertEquals("LOBBY_CHAT", localStack.get(0));
+
+        File mainActivityFile = resolveAndroidSourceFile("com/selfso/octi/MainActivity.kt");
+        File reserveHudFile = resolveAndroidSourceFile("com/selfso/octi/ui/OctiReserveHud.kt");
+        File dialogsFile = resolveAndroidSourceFile("com/selfso/octi/ui/OctiDialogs.kt");
+        File lobbyFile = resolveAndroidSourceFile("com/selfso/octi/ui/LobbyScreen.kt");
+        assertTrue(mainActivityFile.exists());
+        assertTrue(reserveHudFile.exists());
+        assertTrue(dialogsFile.exists());
+        assertTrue(lobbyFile.exists());
+
+        String mainCode = new String(Files.readAllBytes(mainActivityFile.toPath()), StandardCharsets.UTF_8);
+        String hudCode = new String(Files.readAllBytes(reserveHudFile.toPath()), StandardCharsets.UTF_8);
+        String dialogsCode = new String(Files.readAllBytes(dialogsFile.toPath()), StandardCharsets.UTF_8);
+        String lobbyCode = new String(Files.readAllBytes(lobbyFile.toPath()), StandardCharsets.UTF_8);
+
+        // MainActivity passes edge-to-edge full width to OctiReserveHud without 8.dp horizontal inset
+        int hudCallIdx = mainCode.indexOf("OctiReserveHud(");
+        assertTrue("OctiReserveHud( call site must exist in MainActivity.kt", hudCallIdx >= 0);
+        int hudEndIdx = mainCode.indexOf("onRequestSitSeat", hudCallIdx);
+        assertTrue("OctiReserveHud call site must pass onRequestSitSeat", hudEndIdx > hudCallIdx);
+        String hudCallBlock = mainCode.substring(hudCallIdx, hudEndIdx);
+        assertTrue("OctiReserveHud modifier must include .fillMaxWidth()",
+                hudCallBlock.contains(".fillMaxWidth()"));
+        assertFalse("OctiReserveHud modifier must not include horizontal padding",
+                hudCallBlock.contains(".padding("));
+
+        // Chat zoom dialogs span 100% width and apply Web AnnotatedString formatters
+        int boardZoomIdx = dialogsCode.indexOf("fun BoardChatZoomDialog(");
+        assertTrue("BoardChatZoomDialog must exist in OctiDialogs.kt", boardZoomIdx >= 0);
+        String zoomDialogsTail = dialogsCode.substring(boardZoomIdx);
+        assertFalse("Chat zoom dialogs must use .fillMaxWidth() instead of .fillMaxWidth(0.92f)",
+                zoomDialogsTail.contains("fillMaxWidth(0.92f)"));
+        assertTrue(zoomDialogsTail.contains("formatGameChatEntryAnnotatedString("));
+        assertTrue(zoomDialogsTail.contains("formatWebChatLineAnnotatedString("));
+
+        // Inline HUD and LobbyScreen both use the shared Web chat formatters
+        assertTrue(hudCode.contains("formatGameChatEntryAnnotatedString("));
+        assertTrue(hudCode.contains("formatWebChatLineAnnotatedString("));
+        assertTrue(lobbyCode.contains("formatWebChatLineAnnotatedString("));
+    }
+
+    @Test
+    public void testPodStackSingleTapInspectorAndStackPodChipSpecs() throws Exception {
+        File cfgFile = new File(_tempDir, "client_config_stack_inspector.json");
+        Files.write(cfgFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+
+        try (MockSsoHarnessServer server = new MockSsoHarnessServer()) {
+            try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(server.port())) {
+                ClientConfigStore configStore = new ClientConfigStore(cfgFile);
+                try (OctiAppViewModel vm = new OctiAppViewModel(configStore, client)) {
+                    vm.setStorageRootDir(_tempDir);
+                    vm.setAsyncBotThinkingEnabled(false);
+                    vm.startNewLocalGame(
+                            OctiGameMode.GAME_MODE_2,
+                            true,
+                            false,
+                            OctiGameBases.GAME_BASES_3,
+                            false,
+                            OctiBotEngine.BotDifficulty.TACTICAL,
+                            OctiPlayer.PLAYER_A);
+
+                    // Build a 2-pod friendly stack on (3,3) and a 1-pod armed friendly square on (5,3):
+                    // 1. A: 33+a
+                    // 2. B: 37+e
+                    // 3. A: 53+a
+                    // 4. B: 57+e
+                    // 5. A: 33 (places 2nd pod on (3,3)!)
+                    // 6. B: 77+e
+                    assertTrue(vm.applyMoveNotation("33+a"));
+                    assertTrue(vm.applyMoveNotation("37+e"));
+                    assertTrue(vm.applyMoveNotation("53+a"));
+                    assertTrue(vm.applyMoveNotation("57+e"));
+                    assertTrue(vm.applyMoveNotation("33"));
+                    assertTrue(vm.applyMoveNotation("77+e"));
+
+                    assertEquals(OctiPlayer.PLAYER_A, vm.getBoard().getGame().getTurn());
+                    assertEquals(2, vm.getBoard().squareAt(2, 2).getNumPods());
+                    assertEquals(1, vm.getBoard().squareAt(4, 2).getNumPods());
+                    vm.closeZoomedSquare();
+
+                    // 1. 1st tap on friendly numPods >= 2 stack (3,3) opens ZoomedSquareDialog immediately
+                    assertTrue("1st tap on friendly 2-pod stack (3,3) must be handled",
+                            vm.handleBoardSquareSingleTap(3, 3));
+                    assertNotNull("1st tap on friendly 2-pod stack (3,3) must open ZoomedSquareDialog",
+                            vm.getZoomedSquare().getValue());
+                    assertEquals(Integer.valueOf(3), vm.getZoomedSquare().getValue().getFirst());
+                    assertEquals(Integer.valueOf(3), vm.getZoomedSquare().getValue().getSecond());
+                    assertFalse("1st tap on 2-pod stack must NOT start guided move before pod inspection",
+                            vm.getComposer().isGuidedMoveActive());
+                    vm.closeZoomedSquare();
+
+                    // 2. 1st tap on 1-pod armed friendly square (5,3) still starts guided pod move
+                    assertTrue("1st tap on 1-pod armed friendly square (5,3) must start guided move",
+                            vm.handleBoardSquareSingleTap(5, 3));
+                    assertNull("1st tap on 1-pod armed friendly square must NOT open ZoomedSquareDialog",
+                            vm.getZoomedSquare().getValue());
+                    assertTrue("1st tap on 1-pod armed friendly square must activate guided move",
+                            vm.getComposer().isGuidedMoveActive());
+                    vm.rollbackStagedMove();
+
+                    // 3. 1st tap on enemy square (3,7) opens ZoomedSquareDialog in read-only inspect mode
+                    assertTrue("1st tap on enemy square (3,7) must open read-only ZoomedSquareDialog",
+                            vm.handleBoardSquareSingleTap(3, 7));
+                    assertNotNull(vm.getZoomedSquare().getValue());
+                    assertEquals(Integer.valueOf(3), vm.getZoomedSquare().getValue().getFirst());
+                    assertEquals(Integer.valueOf(7), vm.getZoomedSquare().getValue().getSecond());
+                    vm.closeZoomedSquare();
+
+                    // 4. VCR history scrubbing view: single-tap and zoom-inspect on occupied square open ZoomedSquareDialog
+                    vm.vcrFirst();
+                    assertTrue(vm.isViewingHistory());
+                    assertTrue("Single-tap during VCR history view on occupied square (3,3) must open inspect",
+                            vm.handleBoardSquareSingleTap(3, 3));
+                    assertNotNull(vm.getZoomedSquare().getValue());
+                    vm.closeZoomedSquare();
+                    assertTrue("Double-tap/long-press during VCR history view on occupied square (3,7) must open inspect",
+                            vm.handleBoardSquareZoomInspect(3, 7));
+                    assertNotNull(vm.getZoomedSquare().getValue());
+                    vm.closeZoomedSquare();
+                    vm.vcrLast();
+                    assertFalse(vm.isViewingHistory());
+
+                    // 5. Game-over board: single-tap and zoom-inspect on occupied square open read-only ZoomedSquareDialog
+                    vm.resignMatch();
+                    assertTrue(vm.getBoard().getGame().isGameOver());
+                    vm.closeZoomedSquare();
+                    assertTrue("Single-tap on occupied square after game over must open read-only inspect",
+                            vm.handleBoardSquareSingleTap(3, 3));
+                    assertNotNull(vm.getZoomedSquare().getValue());
+                    vm.closeZoomedSquare();
+                    assertTrue("Zoom-inspect on occupied square after game over must open read-only inspect",
+                            vm.handleBoardSquareZoomInspect(3, 7));
+                    assertNotNull(vm.getZoomedSquare().getValue());
+                    vm.closeZoomedSquare();
+
+                    // 6. Non-interactive online turn: single-tap on occupied square opens read-only ZoomedSquareDialog
+                    OctiNetworkClient.GameViewData gvOffTurn = new OctiNetworkClient.GameViewData();
+                    gvOffTurn.roomId = "room-offturn-1";
+                    gvOffTurn.phase = "IN_PROGRESS";
+                    gvOffTurn.mode = "2P";
+                    gvOffTurn.bases = 3;
+                    gvOffTurn.viewerSeat = 0;
+                    vm.setOnlineMatchForTest("room-offturn-1", gvOffTurn);
+                    assertFalse(vm.isInteractiveOnlineTurn());
+                    assertTrue("Single-tap during non-interactive online turn must open read-only inspect",
+                            vm.handleBoardSquareSingleTap(3, 3));
+                    assertNotNull(vm.getZoomedSquare().getValue());
+                    vm.closeZoomedSquare();
+
+                    // 6b. Post-prelude superprong continuation via handleBoardSquareSingleTap:
+                    // After staging 33a!-34, single-tapping newly vacated home square (3,3) stages 33a!-34;33
+                    vm.startNewLocalGame(
+                            OctiGameMode.GAME_MODE_2,
+                            true,
+                            false,
+                            OctiGameBases.GAME_BASES_3,
+                            false,
+                            OctiBotEngine.BotDifficulty.TACTICAL,
+                            OctiPlayer.PLAYER_A);
+                    vm.getBoard().fromPositionString("2:3:1:0:P:A:-:0:1,0,10,1:3,0,20,2:A33a!,B77");
+                    vm.getComposer().attachBoard(vm.getBoard());
+                    assertTrue(vm.handleBoardSquareSingleTap(3, 3)); // 1-pod armed -> guided move
+                    assertTrue(vm.getComposer().isGuidedMoveActive());
+                    assertTrue(vm.handleBoardSquareSingleTap(3, 4)); // step to (3,4) -> prelude staged
+                    assertEquals("33a!-34", vm.getComposer().stagedMoveNotation());
+                    assertTrue(vm.getComposer().isAwaitingSuperProngBonusMove());
+                    assertTrue("Single-tap on vacated home square (3,3) during superprong bonus must stage 33a!-34;33",
+                            vm.handleBoardSquareSingleTap(3, 3));
+                    assertEquals("33a!-34;33", vm.getComposer().stagedMoveNotation());
+                    assertTrue(vm.commitStagedMove());
+                }
+            }
+        }
+
+        // 7. Verify ZoomedSquareDialog stack selector mini-pod chip specs & 28.dp Canvas diagram
+        OctiBoard stackBoard = new OctiBoard();
+        stackBoard.fromPositionString("2:3:1:0:P:A:-:0:2,0,18,1:3,0,20,2:A33a!ce,A33g,B77");
+        OctiSquare stackSq = stackBoard.squareAt(2, 2);
+        assertEquals(2, stackSq.getNumPods());
+
+        List<StackPodChipSpec> specs = OctiDialogs.buildStackPodChipSpecs(stackSq, null, 3, 3);
+        assertEquals(2, specs.size());
+        assertEquals("#1 a!ce (A)", specs.get(0).getLabelText());
+        assertEquals(1, specs.get(0).getSuperDirs().size());
+        assertEquals(OctiDir.DIR_N, specs.get(0).getSuperDirs().get(0));
+        assertEquals(2, specs.get(0).getNormalDirs().size());
+        assertEquals("#2 g (A)", specs.get(1).getLabelText());
+        assertEquals(0, specs.get(1).getSuperDirs().size());
+        assertEquals(1, specs.get(1).getNormalDirs().size());
+        assertEquals(OctiDir.DIR_W, specs.get(1).getNormalDirs().get(0));
+
+        File dialogsFile = resolveAndroidSourceFile("com/selfso/octi/ui/OctiDialogs.kt");
+        String dialogsCode = new String(Files.readAllBytes(dialogsFile.toPath()), StandardCharsets.UTF_8);
+        assertTrue("ZoomedSquareDialog must render 28.dp mini-pod Canvas in stack selector chips",
+                dialogsCode.contains("28.dp") && dialogsCode.contains("MiniPodStackChipCanvas("));
+    }
+
+    private static String buildOnlineGameViewJson(
+            String roomId,
+            String phase,
+            int viewerSeat,
+            List<String> moves,
+            int winnerSeat) {
+        StringBuilder movesArr = new StringBuilder("[");
+        for (int i = 0; i < moves.size(); i++) {
+            if (i > 0) {
+                movesArr.append(',');
+            }
+            movesArr.append('"').append(moves.get(i)).append('"');
+        }
+        movesArr.append(']');
+        int turnSeat = (moves.size() % 2 == 0) ? 1 : 2;
+        return "{\n"
+                + "  \"room_id\": \"" + roomId + "\",\n"
+                + "  \"mode\": \"2P\",\n"
+                + "  \"bases\": 3,\n"
+                + "  \"super_prongs\": false,\n"
+                + "  \"edgeless\": false,\n"
+                + "  \"phase\": \"" + phase + "\",\n"
+                + "  \"viewer_seat\": " + viewerSeat + ",\n"
+                + "  \"turn_seat\": " + turnSeat + ",\n"
+                + "  \"winner_seat\": " + winnerSeat + ",\n"
+                + "  \"moves\": " + movesArr + ",\n"
+                + "  \"seats\": [\n"
+                + "    {\"seat\": 1, \"player_uuid\": \"p-google\", \"handle\": \"Alice\", \"clock_ms\": 180000},\n"
+                + "    {\"seat\": 2, \"player_uuid\": \"bot-1\", \"handle\": \"OctiBot\", \"clock_ms\": 180000}\n"
+                + "  ],\n"
+                + "  \"observers\": []\n"
+                + "}";
+    }
+
+    @Test
+    public void testLocalAndOnlineOpponentMoveSoundCuesAndEchoSuppression() throws Exception {
+        OctiSoundSynth synth = OctiSoundSynth.getDefaultInstance();
+        boolean prevMuted = synth.isMuted();
+        synth.setMuted(false);
+        try (MockSsoHarnessServer ssoServer = new MockSsoHarnessServer();
+             OctiNetworkClient netClient = OctiNetworkClient.forHermeticTest(ssoServer.port());
+             OctiAppViewModel vm = new OctiAppViewModel(
+                     new ClientConfigStore(new File(_tempDir, "audio_cues_vm.json")),
+                     netClient)) {
+            vm.setSfxMuted(false);
+
+            // Part 1: Local applyMoveNotation triggers exact classified cues (including POD_JUMP vs POD_STEP)
+            vm.startNewLocalGame(
+                    OctiGameMode.GAME_MODE_2,
+                    false,
+                    false,
+                    OctiGameBases.GAME_BASES_3,
+                    false,
+                    OctiBotEngine.BotDifficulty.TACTICAL,
+                    OctiPlayer.PLAYER_A);
+
+            long countBefore = synth.triggeredCueCount();
+            assertTrue(vm.applyMoveNotation("33+a"));
+            assertEquals(countBefore + 1, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.PRONG_SNAP, synth.lastTriggeredCue());
+
+            assertTrue(vm.applyMoveNotation("37+e"));
+            assertEquals(countBefore + 2, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.PRONG_SNAP, synth.lastTriggeredCue());
+
+            assertTrue(vm.applyMoveNotation("53"));
+            assertEquals(countBefore + 3, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.POD_PLACE, synth.lastTriggeredCue());
+
+            assertTrue(vm.applyMoveNotation("37e-36"));
+            assertEquals(countBefore + 4, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.POD_STEP, synth.lastTriggeredCue());
+
+            assertTrue(vm.applyMoveNotation("33a-34"));
+            assertEquals(countBefore + 5, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.POD_STEP, synth.lastTriggeredCue());
+
+            assertTrue(vm.applyMoveNotation("36e-35"));
+            assertEquals(countBefore + 6, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.POD_STEP, synth.lastTriggeredCue());
+
+            // Non-capturing jump over enemy pod at (3,5) -> POD_JUMP (not POD_STEP!)
+            assertTrue(vm.applyMoveNotation("34a-36"));
+            assertEquals(countBefore + 7, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.POD_JUMP, synth.lastTriggeredCue());
+
+            assertTrue(vm.applyMoveNotation("35e+a"));
+            assertEquals(countBefore + 8, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.PRONG_SNAP, synth.lastTriggeredCue());
+
+            assertTrue(vm.applyMoveNotation("73"));
+            assertEquals(countBefore + 9, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.POD_PLACE, synth.lastTriggeredCue());
+
+            // Capturing jump over enemy pod at (3,6) -> POD_CAPTURE
+            assertTrue(vm.applyMoveNotation("35ae-37x"));
+            assertEquals(countBefore + 10, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.POD_CAPTURE, synth.lastTriggeredCue());
+
+            // Part 2: Online room initial sync silence, opponent/robot move cues, echo deduplication & victory
+            assertTrue(vm.loginWithSso("google", "token-alice").ok);
+            List<String> serverMoves = new ArrayList<>();
+            serverMoves.add("33+a");
+            serverMoves.add("37+e");
+            serverMoves.add("53");
+            ssoServer.customGameViewJson = buildOnlineGameViewJson(
+                    "room-audio-1", "IN_PROGRESS", 1, serverMoves, 0);
+            ssoServer.onMoveSubmitted = mv -> {
+                serverMoves.add(mv);
+                ssoServer.customGameViewJson = buildOnlineGameViewJson(
+                        "room-audio-1", "IN_PROGRESS", 1, serverMoves, 0);
+            };
+
+            // 2a. Initial room sync on an IN_PROGRESS room with 3 existing moves must trigger 0 cues
+            long onlineBaseCount = synth.triggeredCueCount();
+            assertTrue(vm.enterOnlineRoom("room-audio-1").ok);
+            assertEquals(3, vm.livePlyCount());
+            assertEquals("Initial sync on pre-populated online room must fire 0 cues",
+                    onlineBaseCount, synth.triggeredCueCount());
+
+            // 2b. Opponent/robot move #4 ("37e-36") arrives via room sync -> POD_STEP
+            serverMoves.add("37e-36");
+            ssoServer.customGameViewJson = buildOnlineGameViewJson(
+                    "room-audio-1", "IN_PROGRESS", 1, serverMoves, 0);
+            assertTrue(vm.refreshActiveGameView().ok);
+            assertEquals(4, vm.livePlyCount());
+            assertEquals(onlineBaseCount + 1, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.POD_STEP, synth.lastTriggeredCue());
+
+            // Duplicate sync with unchanged move list -> 0 cues
+            assertTrue(vm.refreshActiveGameView().ok);
+            assertEquals(onlineBaseCount + 1, synth.triggeredCueCount());
+
+            // 2c. Local human submits move #5 ("33a-34") -> server echo must fire 0 duplicate cues
+            assertTrue(vm.applyMoveNotation("33a-34"));
+            assertEquals(5, vm.livePlyCount());
+            assertEquals("Server echo of local human's own online move must fire 0 duplicate cues",
+                    onlineBaseCount + 1, synth.triggeredCueCount());
+            assertTrue(vm.refreshActiveGameView().ok);
+            assertEquals(onlineBaseCount + 1, synth.triggeredCueCount());
+
+            // 2d. Opponent/robot move #6 ("36e-35") -> POD_STEP
+            serverMoves.add("36e-35");
+            ssoServer.customGameViewJson = buildOnlineGameViewJson(
+                    "room-audio-1", "IN_PROGRESS", 1, serverMoves, 0);
+            assertTrue(vm.refreshActiveGameView().ok);
+            assertEquals(onlineBaseCount + 2, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.POD_STEP, synth.lastTriggeredCue());
+
+            // 2e. Local human stages and commits move #7 ("34a-36") via commitStagedMove() -> 0 echo cues
+            assertTrue(vm.getComposer().stageOrCommitPodMoveOrJump(3, 4, 0, 3, 6, false));
+            assertTrue(vm.getComposer().toggleCaptureAtSquare(3, 5));
+            assertEquals("34a-36", vm.getComposer().stagedMoveNotation());
+            assertTrue(vm.commitStagedMove());
+            assertEquals(7, vm.livePlyCount());
+            assertEquals("commitStagedMove() echo in online room must fire 0 duplicate cues",
+                    onlineBaseCount + 2, synth.triggeredCueCount());
+
+            // 2f. Opponent/robot prong add #8 ("35e+a") -> PRONG_SNAP
+            serverMoves.add("35e+a");
+            ssoServer.customGameViewJson = buildOnlineGameViewJson(
+                    "room-audio-1", "IN_PROGRESS", 1, serverMoves, 0);
+            assertTrue(vm.refreshActiveGameView().ok);
+            assertEquals(onlineBaseCount + 3, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.PRONG_SNAP, synth.lastTriggeredCue());
+
+            // 2g. Local human move #9 ("73") -> 0 echo cues
+            assertTrue(vm.applyMoveNotation("73"));
+            assertEquals(9, vm.livePlyCount());
+            assertEquals(onlineBaseCount + 3, synth.triggeredCueCount());
+
+            // 2h. Opponent/robot non-capturing jump #10 ("35ae-37") -> POD_JUMP
+            serverMoves.add("35ae-37");
+            ssoServer.customGameViewJson = buildOnlineGameViewJson(
+                    "room-audio-1", "IN_PROGRESS", 1, serverMoves, 0);
+            assertTrue(vm.refreshActiveGameView().ok);
+            assertEquals(onlineBaseCount + 4, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.POD_JUMP, synth.lastTriggeredCue());
+
+            // 2i. Local human move #11 ("53+a") -> 0 echo cues, then opponent capture #12 ("37ae-35x") -> POD_CAPTURE
+            assertTrue(vm.applyMoveNotation("53+a"));
+            assertEquals(onlineBaseCount + 4, synth.triggeredCueCount());
+            serverMoves.add("37ae-35x");
+            ssoServer.customGameViewJson = buildOnlineGameViewJson(
+                    "room-audio-1", "IN_PROGRESS", 1, serverMoves, 0);
+            assertTrue(vm.refreshActiveGameView().ok);
+            assertEquals(onlineBaseCount + 5, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.POD_CAPTURE, synth.lastTriggeredCue());
+
+            // 2j. Transition to phase == "FINISHED" -> GAME_VICTORY (once, no repeat on re-poll)
+            ssoServer.customGameViewJson = buildOnlineGameViewJson(
+                    "room-audio-1", "FINISHED", 1, serverMoves, 2);
+            assertTrue(vm.refreshActiveGameView().ok);
+            assertEquals(onlineBaseCount + 6, synth.triggeredCueCount());
+            assertEquals(OctiSoundSynth.SoundCue.GAME_VICTORY, synth.lastTriggeredCue());
+
+            assertTrue(vm.refreshActiveGameView().ok);
+            assertEquals("Repeated poll of FINISHED room must not re-fire GAME_VICTORY",
+                    onlineBaseCount + 6, synth.triggeredCueCount());
+
+            // 2k. Entering an already-FINISHED room from scratch must fire 0 cues on initial sync
+            ssoServer.customGameViewJson = buildOnlineGameViewJson(
+                    "room-audio-already-finished", "FINISHED", 1, serverMoves, 2);
+            assertTrue(vm.enterOnlineRoom("room-audio-already-finished").ok);
+            assertEquals("Initial sync on already-FINISHED room must fire 0 cues",
+                    onlineBaseCount + 6, synth.triggeredCueCount());
+        } finally {
+            synth.setMuted(prevMuted);
         }
     }
 }

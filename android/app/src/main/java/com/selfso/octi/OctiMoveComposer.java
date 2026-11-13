@@ -121,6 +121,7 @@ public class OctiMoveComposer {
     // Guided step / jump chain state (0-based internally)
     private boolean guidedMoveActive = false;
     private boolean guidedMidHop = false;
+    private boolean guidedPromotionPending = false;
     private int guidedOriginBx = -1;
     private int guidedOriginBy = -1;
     private int guidedCurBx = -1;
@@ -283,10 +284,11 @@ public class OctiMoveComposer {
     }
 
     public boolean beginAddPodFromReserve() {
-        if (board == null || board.getGame() == null) {
+        OctiBoard effBoard = effectiveSingleActionBoard();
+        if (effBoard == null || effBoard.getGame() == null) {
             return false;
         }
-        OctiGame game = board.getGame();
+        OctiGame game = effBoard.getGame();
         if (!game.isGameStarted() || game.isGameOver()) {
             return false;
         }
@@ -303,10 +305,11 @@ public class OctiMoveComposer {
     }
 
     public boolean beginLiberatePodFromReserve() {
-        if (board == null || board.getGame() == null) {
+        OctiBoard effBoard = effectiveSingleActionBoard();
+        if (effBoard == null || effBoard.getGame() == null) {
             return false;
         }
-        OctiGame game = board.getGame();
+        OctiGame game = effBoard.getGame();
         if (game.getMode() == OctiGameMode.GAME_MODE_OFK) {
             return false;
         }
@@ -336,10 +339,11 @@ public class OctiMoveComposer {
     }
 
     public boolean beginAddProngFromReserve(boolean superProng) {
-        if (board == null || board.getGame() == null) {
+        OctiBoard effBoard = effectiveSingleActionBoard();
+        if (effBoard == null || effBoard.getGame() == null) {
             return false;
         }
-        OctiGame game = board.getGame();
+        OctiGame game = effBoard.getGame();
         if (!game.isGameStarted() || game.isGameOver()) {
             return false;
         }
@@ -363,10 +367,11 @@ public class OctiMoveComposer {
     }
 
     public boolean beginRepositionProng(int x, int y, int podIndex, OctiDir srcDir) {
-        if (board == null || board.getGame() == null) {
+        OctiBoard effBoard = effectiveSingleActionBoard();
+        if (effBoard == null || effBoard.getGame() == null) {
             return false;
         }
-        if (!board.isValidCoord(x - 1, y - 1) || srcDir == null || srcDir == OctiDir.DIR_UNDEF) {
+        if (!effBoard.isValidCoord(x - 1, y - 1) || srcDir == null || srcDir == OctiDir.DIR_UNDEF) {
             return false;
         }
         activeDragKind = DragKind.REPOSITION_PRONG_ON_POD;
@@ -681,17 +686,224 @@ public class OctiMoveComposer {
         }
     }
 
-    private boolean hasContinuationJumpFrom(int bx, int by,
+    private boolean validatePreviewOpsOnScratch(List<OctiMoveOp> ops) {
+        if (board == null || board.getGame() == null || ops == null || ops.isEmpty()) {
+            return false;
+        }
+        try {
+            OctiBoard scratch = new OctiBoard();
+            scratch.suppressBoardUpdateNotification(true);
+            scratch.fromPositionString(board.toPositionString());
+            scratch.getGame().applyUncommittedTurnForPreview(ops);
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private int leadingBonusOpCount() {
+        int count = 0;
+        for (OctiMoveOp op : stagedOps) {
+            if (op.isSuperProngBonusMove) {
+                count++;
+            } else {
+                break;
+            }
+        }
+        return count;
+    }
+
+    private OctiBoard buildPostBonusBaseBoard() {
+        if (board == null || board.getGame() == null) {
+            return board;
+        }
+        int bonusCount = leadingBonusOpCount();
+        if (bonusCount <= 0) {
+            return board;
+        }
+        List<OctiMoveOp> bonusPrefix = new ArrayList<>(bonusCount);
+        for (int i = 0; i < bonusCount; i++) {
+            bonusPrefix.add(new OctiMoveOp(stagedOps.get(i)));
+        }
+        try {
+            OctiBoard scratch = new OctiBoard();
+            scratch.suppressBoardUpdateNotification(true);
+            scratch.fromPositionString(board.toPositionString());
+            scratch.getGame().applyUncommittedTurnForPreview(bonusPrefix);
+            return scratch;
+        } catch (Throwable t) {
+            return board;
+        }
+    }
+
+    private OctiBoard buildPromotedPreludeBoard(List<OctiMoveOp> outPromotedOps, int[] outSplitHopIdx) {
+        if (outSplitHopIdx != null && outSplitHopIdx.length > 0) {
+            outSplitHopIdx[0] = -1;
+        }
+        if (board == null || board.getGame() == null || !board.getGame().useSuperProngs()) {
+            return null;
+        }
+        if (stagedOps.isEmpty() || stagedOps.size() > 2) {
+            return null;
+        }
+        for (OctiMoveOp op : stagedOps) {
+            if (op.hops.isEmpty() || op.addPod
+                    || op.addProngDir != OctiDir.DIR_UNDEF
+                    || op.rmProngDir != OctiDir.DIR_UNDEF) {
+                return null;
+            }
+        }
+
+        List<OctiMoveOp> direct = new ArrayList<>(stagedOps.size());
+        for (OctiMoveOp op : stagedOps) {
+            OctiMoveOp copy = new OctiMoveOp(op);
+            copy.isSuperProngBonusMove = true;
+            direct.add(copy);
+        }
+        try {
+            OctiBoard scratch = new OctiBoard();
+            scratch.suppressBoardUpdateNotification(true);
+            scratch.fromPositionString(board.toPositionString());
+            scratch.getGame().applyUncommittedTurnForPreview(direct);
+            if (scratch.getGame().hasAnyRegularMove()) {
+                if (outPromotedOps != null) {
+                    outPromotedOps.clear();
+                    outPromotedOps.addAll(direct);
+                }
+                return scratch;
+            }
+        } catch (Throwable ignored) {
+            // Fall through to single-op multi-hop bend split check below
+        }
+
+        if (stagedOps.size() == 1 && stagedOps.get(0).hops.size() >= 2) {
+            OctiMoveOp op0 = stagedOps.get(0);
+            int w = board.getBoardWidth();
+            int h = board.getBoardHeight();
+            boolean edgeless = board.getGame().useEdgelessBoard();
+            int[] d0 = new int[2];
+            if (computeDisplacement(op0.x0, op0.y0, op0.hops.get(0).x, op0.hops.get(0).y, edgeless, w, h, d0)) {
+                OctiDir firstDir = (Math.max(Math.abs(d0[0]), Math.abs(d0[1])) == 1)
+                        ? OctiDir.deltaToDir(d0[0], d0[1])
+                        : OctiDir.deltaToDir(d0[0] / 2, d0[1] / 2);
+                int splitIdx = -1;
+                int cx = op0.hops.get(0).x;
+                int cy = op0.hops.get(0).y;
+                for (int hi = 1; hi < op0.hops.size(); hi++) {
+                    OctiHop hop = op0.hops.get(hi);
+                    int[] dh = new int[2];
+                    if (!computeDisplacement(cx, cy, hop.x, hop.y, edgeless, w, h, dh)) {
+                        break;
+                    }
+                    OctiDir dirH = (Math.max(Math.abs(dh[0]), Math.abs(dh[1])) == 1)
+                            ? OctiDir.deltaToDir(dh[0], dh[1])
+                            : OctiDir.deltaToDir(dh[0] / 2, dh[1] / 2);
+                    if (dirH != firstDir) {
+                        splitIdx = hi;
+                        break;
+                    }
+                    cx = hop.x;
+                    cy = hop.y;
+                }
+                if (splitIdx >= 1) {
+                    OctiMoveOp p1 = new OctiMoveOp();
+                    p1.x0 = op0.x0;
+                    p1.y0 = op0.y0;
+                    p1.pod = op0.pod.copy();
+                    p1.isSuperProngBonusMove = true;
+                    for (int hi = 0; hi < splitIdx; hi++) {
+                        p1.hops.add(new OctiHop(op0.hops.get(hi)));
+                    }
+
+                    OctiHop p1End = op0.hops.get(splitIdx - 1);
+                    OctiMoveOp p2 = new OctiMoveOp();
+                    p2.x0 = p1End.x;
+                    p2.y0 = p1End.y;
+                    p2.pod = op0.pod.copy();
+                    p2.isSuperProngBonusMove = true;
+                    for (int hi = splitIdx; hi < op0.hops.size(); hi++) {
+                        p2.hops.add(new OctiHop(op0.hops.get(hi)));
+                    }
+
+                    List<OctiMoveOp> splitOps = new ArrayList<>(2);
+                    splitOps.add(p1);
+                    splitOps.add(p2);
+                    try {
+                        OctiBoard scratch = new OctiBoard();
+                        scratch.suppressBoardUpdateNotification(true);
+                        scratch.fromPositionString(board.toPositionString());
+                        scratch.getGame().applyUncommittedTurnForPreview(splitOps);
+                        if (scratch.getGame().hasAnyRegularMove()) {
+                            if (outPromotedOps != null) {
+                                outPromotedOps.clear();
+                                outPromotedOps.addAll(splitOps);
+                            }
+                            if (outSplitHopIdx != null && outSplitHopIdx.length > 0) {
+                                outSplitHopIdx[0] = splitIdx;
+                            }
+                            return scratch;
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    public boolean canPromoteStagedToSuperProngPreludes() {
+        return buildPromotedPreludeBoard(null, null) != null;
+    }
+
+    private boolean applyPromotedPreludesInPlace(List<OctiMoveOp> promotedOps, int splitHopIdx) {
+        if (promotedOps == null || promotedOps.isEmpty()) {
+            return false;
+        }
+        stagedOps.clear();
+        for (OctiMoveOp p : promotedOps) {
+            stagedOps.add(new OctiMoveOp(p));
+        }
+        if (splitHopIdx >= 1) {
+            List<HopCaptureLink> updatedLinks = new ArrayList<>(hopCaptureLinks.size());
+            for (HopCaptureLink link : hopCaptureLinks) {
+                if (link.opIndex == 0 && link.hopIndex >= splitHopIdx) {
+                    updatedLinks.add(new HopCaptureLink(1, link.hopIndex - splitHopIdx, link.jumpedX, link.jumpedY));
+                } else {
+                    updatedLinks.add(link);
+                }
+            }
+            hopCaptureLinks.clear();
+            hopCaptureLinks.addAll(updatedLinks);
+        }
+        claimedStartPods.clear();
+        activeJumpHasChain = false;
+        activeJumpedCoords.clear();
+        guidedPromotionPending = false;
+        return true;
+    }
+
+    private OctiBoard effectiveSingleActionBoard() {
+        if (board == null || board.getGame() == null) {
+            return null;
+        }
+        if (stagedOps.isEmpty()) {
+            return board;
+        }
+        return buildPromotedPreludeBoard(null, null);
+    }
+
+    private boolean hasContinuationJumpFrom(OctiBoard refBoard,
+                                            int bx, int by,
                                             OctiPod pod,
                                             int startBx, int startBy,
                                             List<OctiPod> ghostPods,
                                             List<IntPair> alreadyJumped) {
-        if (board == null || board.getGame() == null) {
+        if (refBoard == null || refBoard.getGame() == null) {
             return false;
         }
-        int w = board.getBoardWidth();
-        int h = board.getBoardHeight();
-        boolean edgeless = board.getGame().useEdgelessBoard();
+        int w = refBoard.getBoardWidth();
+        int h = refBoard.getBoardHeight();
+        boolean edgeless = refBoard.getGame().useEdgelessBoard();
 
         for (int d = 0; d < OctiDir.DIR_MAX; d++) {
             OctiDir dir = OctiDir.fromIndex(d);
@@ -721,7 +933,7 @@ public class OctiMoveComposer {
                 continue;
             }
 
-            OctiSquare jumpedSq = board.squareAt(jx, jy);
+            OctiSquare jumpedSq = refBoard.squareAt(jx, jy);
             boolean jumpedEmpty = (jx == startBx && jy == startBy)
                     ? jumpedSq.isEmptyWithout(ghostPods)
                     : jumpedSq.isEmpty();
@@ -729,7 +941,7 @@ public class OctiMoveComposer {
                 continue;
             }
 
-            OctiSquare landSq = board.squareAt(lx, ly);
+            OctiSquare landSq = refBoard.squareAt(lx, ly);
             boolean landEmpty = (lx == startBx && ly == startBy)
                     ? landSq.isEmptyWithout(ghostPods)
                     : landSq.isEmpty();
@@ -742,11 +954,11 @@ public class OctiMoveComposer {
         return false;
     }
 
-    private boolean hasOtherMovableFriendlyPods(int bx, int by, OctiPlayer turn) {
-        if (board == null || !board.isValidCoord(bx, by)) {
+    private boolean hasOtherMovableFriendlyPods(OctiBoard refBoard, int bx, int by, OctiPlayer turn) {
+        if (refBoard == null || !refBoard.isValidCoord(bx, by)) {
             return false;
         }
-        OctiSquare sq = board.squareAt(bx, by);
+        OctiSquare sq = refBoard.squareAt(bx, by);
         OctiPodType desiredType = turn.toPodType();
 
         for (int i = 0; i < sq.getNumPods(); i++) {
@@ -781,36 +993,37 @@ public class OctiMoveComposer {
                     && op.rmProngDir != OctiDir.DIR_UNDEF) {
                 game.prepareReposition(op.x0, op.y0, op.pod, op.rmProngDir, op.addProngDir);
             } else if (!op.hops.isEmpty()) {
-                game.prepareHops(op.x0, op.y0, op.pod, op.hops);
+                game.prepareHops(op.x0, op.y0, op.pod, op.hops, op.isSuperProngBonusMove);
             }
         }
     }
 
     public boolean canPlaceReservePodAt(int targetX, int targetY) {
-        if (board == null || board.getGame() == null) {
+        OctiBoard effBoard = effectiveSingleActionBoard();
+        if (effBoard == null || effBoard.getGame() == null) {
             return false;
         }
-        OctiGame game = board.getGame();
+        OctiGame game = effBoard.getGame();
         if (!game.isGameStarted() || game.isGameOver()) {
             return false;
         }
-        if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK) {
+        if (effBoard.getGameMode() == OctiGameMode.GAME_MODE_OFK) {
             return false;
         }
         int bx = targetX - 1;
         int by = targetY - 1;
-        if (!board.isValidCoord(bx, by)) {
+        if (!effBoard.isValidCoord(bx, by)) {
             return false;
         }
         OctiPlayer turn = game.getTurn();
         if (game.getFreePods(turn) <= 0) {
             return false;
         }
-        OctiSquare sq = board.squareAt(bx, by);
+        OctiSquare sq = effBoard.squareAt(bx, by);
         if (sq.getType() == OctiSquareType.NEUTRAL_SQUARE) {
             return false;
         }
-        if (board.getGameMode() == OctiGameMode.GAME_MODE_2) {
+        if (effBoard.getGameMode() == OctiGameMode.GAME_MODE_2) {
             boolean isFriendlyHome = (sq.getType() == (turn == OctiPlayer.PLAYER_A
                     ? OctiSquareType.A_HOME_SQUARE : OctiSquareType.B_HOME_SQUARE));
             if (isFriendlyHome) {
@@ -818,7 +1031,7 @@ public class OctiMoveComposer {
             } else {
                 return sq.isOccupiedBy(turn);
             }
-        } else if (board.getGameMode() == OctiGameMode.GAME_MODE_4) {
+        } else if (effBoard.getGameMode() == OctiGameMode.GAME_MODE_4) {
             OctiSquareType homeType = (turn == OctiPlayer.PLAYER_A ? OctiSquareType.A_HOME_SQUARE :
                                        turn == OctiPlayer.PLAYER_B ? OctiSquareType.B_HOME_SQUARE :
                                        turn == OctiPlayer.PLAYER_C ? OctiSquareType.C_HOME_SQUARE
@@ -843,35 +1056,36 @@ public class OctiMoveComposer {
     }
 
     public boolean canLiberateCapturedPodAt(int targetX, int targetY) {
-        if (board == null || board.getGame() == null) {
+        OctiBoard effBoard = effectiveSingleActionBoard();
+        if (effBoard == null || effBoard.getGame() == null) {
             return false;
         }
-        OctiGame game = board.getGame();
+        OctiGame game = effBoard.getGame();
         if (!game.isGameStarted() || game.isGameOver()) {
             return false;
         }
-        if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK) {
+        if (effBoard.getGameMode() == OctiGameMode.GAME_MODE_OFK) {
             return false;
         }
         int bx = targetX - 1;
         int by = targetY - 1;
-        if (!board.isValidCoord(bx, by)) {
+        if (!effBoard.isValidCoord(bx, by)) {
             return false;
         }
         OctiPlayer turn = game.getTurn();
-        OctiSquare sq = board.squareAt(bx, by);
+        OctiSquare sq = effBoard.squareAt(bx, by);
         if (sq.getType() == OctiSquareType.NEUTRAL_SQUARE) {
             return false;
         }
-        if (board.getGameMode() == OctiGameMode.GAME_MODE_2) {
+        if (effBoard.getGameMode() == OctiGameMode.GAME_MODE_2) {
             boolean isFriendlyHome = (sq.getType() == (turn == OctiPlayer.PLAYER_A
                     ? OctiSquareType.A_HOME_SQUARE : OctiSquareType.B_HOME_SQUARE));
             if (isFriendlyHome) {
-                return sq.isOccupiedBy(turn) && board.canLiberate(turn) && game.getCapturedPods(turn) > 0;
+                return sq.isOccupiedBy(turn) && effBoard.canLiberate(turn) && game.getCapturedPods(turn) > 0;
             } else {
                 return sq.isOccupiedBy(turn) && game.getCapturedPods(turn) > 0;
             }
-        } else if (board.getGameMode() == OctiGameMode.GAME_MODE_4) {
+        } else if (effBoard.getGameMode() == OctiGameMode.GAME_MODE_4) {
             OctiSquareType homeType = (turn == OctiPlayer.PLAYER_A ? OctiSquareType.A_HOME_SQUARE :
                                        turn == OctiPlayer.PLAYER_B ? OctiSquareType.B_HOME_SQUARE :
                                        turn == OctiPlayer.PLAYER_C ? OctiSquareType.C_HOME_SQUARE
@@ -885,12 +1099,12 @@ public class OctiMoveComposer {
                                           partner == OctiPlayer.PLAYER_C ? OctiSquareType.C_HOME_SQUARE
                                                                          : OctiSquareType.D_HOME_SQUARE);
             if (sq.getType() == homeType) {
-                return sq.isOccupiedBy(turn) && board.canLiberate(turn) && game.getCapturedPods(turn) > 0;
+                return sq.isOccupiedBy(turn) && effBoard.canLiberate(turn) && game.getCapturedPods(turn) > 0;
             } else if (sq.getType() == partnerHome) {
                 if (game.isPlayerEliminated(partner)) {
                     return sq.isOccupiedBy(turn) && game.getCapturedPods(partner) > 0;
                 } else {
-                    return sq.isOccupiedBy(turn) && board.canLiberate(turn) && game.getCapturedPods(turn) > 0;
+                    return sq.isOccupiedBy(turn) && effBoard.canLiberate(turn) && game.getCapturedPods(turn) > 0;
                 }
             } else if (sq.getType() == OctiSquareType.NEUTRAL_OCTI_SQUARE) {
                 return sq.isOccupiedBy(turn) && game.getCapturedPods(turn) > 0;
@@ -909,8 +1123,8 @@ public class OctiMoveComposer {
         if (board == null || board.getGame() == null) {
             return false;
         }
-        OctiGame game = board.getGame();
-        if (!game.isGameStarted() || game.isGameOver()) {
+        OctiGame baseGame = board.getGame();
+        if (!baseGame.isGameStarted() || baseGame.isGameOver()) {
             return false;
         }
 
@@ -920,12 +1134,19 @@ public class OctiMoveComposer {
             return false;
         }
 
+        List<OctiMoveOp> promotedPreludes = new ArrayList<>();
+        int[] splitHopIdx = new int[]{-1};
+        OctiBoard workBoard = board;
         if (!stagedOps.isEmpty()) {
-            return false;
+            workBoard = buildPromotedPreludeBoard(promotedPreludes, splitHopIdx);
+            if (workBoard == null) {
+                return false;
+            }
         }
 
+        OctiGame game = workBoard.getGame();
         OctiPlayer turn = game.getTurn();
-        OctiSquare sq = board.squareAt(bx, by);
+        OctiSquare sq = workBoard.squareAt(bx, by);
         if (sq.getType() == OctiSquareType.NEUTRAL_SQUARE) {
             return false;
         }
@@ -939,7 +1160,7 @@ public class OctiMoveComposer {
                 // If freePods == 0, falling back to captured pod liberation is permitted where legal
                 if (game.getFreePods(turn) == 0 && canLiberateCapturedPodAt(targetX, targetY)) {
                     liberate = true;
-                } else if (board.getGameMode() == OctiGameMode.GAME_MODE_4) {
+                } else if (workBoard.getGameMode() == OctiGameMode.GAME_MODE_4) {
                     // In 4P on partnerHome, if partner is eliminated and has captured pods, auto-liberate partner!
                     OctiPlayer partner = (turn == OctiPlayer.PLAYER_A ? OctiPlayer.PLAYER_C :
                                           turn == OctiPlayer.PLAYER_C ? OctiPlayer.PLAYER_A :
@@ -966,14 +1187,21 @@ public class OctiMoveComposer {
         op.addPod = true;
         op.liberate = liberate;
 
-        if (!validateOpsOnScratch(Collections.singletonList(op))) {
+        List<OctiMoveOp> candidateOps = new ArrayList<>(promotedPreludes);
+        candidateOps.add(op);
+        if (!validateOpsOnScratch(candidateOps)) {
             return false;
         }
 
-        stagedOps.clear();
+        if (!promotedPreludes.isEmpty()) {
+            applyPromotedPreludesInPlace(promotedPreludes, splitHopIdx[0]);
+        } else {
+            stagedOps.clear();
+        }
         stagedOps.add(op);
         guidedMoveActive = false;
         guidedMidHop = false;
+        guidedPromotionPending = false;
         awaitingConfirmation = true;
         syncPreparedStateToGame();
 
@@ -990,8 +1218,8 @@ public class OctiMoveComposer {
         if (board == null || board.getGame() == null) {
             return false;
         }
-        OctiGame game = board.getGame();
-        if (!game.isGameStarted() || game.isGameOver()) {
+        OctiGame baseGame = board.getGame();
+        if (!baseGame.isGameStarted() || baseGame.isGameOver()) {
             return false;
         }
         if (dir == null || dir == OctiDir.DIR_UNDEF) {
@@ -1004,18 +1232,22 @@ public class OctiMoveComposer {
             return false;
         }
 
-        OctiPlayer turn = game.getTurn();
-        if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK) {
-            if (superProng) {
+        if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK && superProng) {
+            return false;
+        }
+
+        List<OctiMoveOp> promotedPreludes = new ArrayList<>();
+        int[] splitHopIdx = new int[]{-1};
+        OctiBoard workBoard = board;
+        if (!stagedOps.isEmpty()) {
+            workBoard = buildPromotedPreludeBoard(promotedPreludes, splitHopIdx);
+            if (workBoard == null) {
                 return false;
             }
         }
 
-        if (!stagedOps.isEmpty()) {
-            return false;
-        }
-
-        OctiSquare sq = board.squareAt(bx, by);
+        OctiPlayer turn = workBoard.getGame().getTurn();
+        OctiSquare sq = workBoard.squareAt(bx, by);
         int resolvedIdx = resolvePodIndex(sq, x, y, podIndex, turn, false);
         if (resolvedIdx < 0) {
             return false;
@@ -1033,14 +1265,21 @@ public class OctiMoveComposer {
         op.addProngDir = dir;
         op.superProng = superProng;
 
-        if (!validateOpsOnScratch(Collections.singletonList(op))) {
+        List<OctiMoveOp> candidateOps = new ArrayList<>(promotedPreludes);
+        candidateOps.add(op);
+        if (!validateOpsOnScratch(candidateOps)) {
             return false;
         }
 
-        stagedOps.clear();
+        if (!promotedPreludes.isEmpty()) {
+            applyPromotedPreludesInPlace(promotedPreludes, splitHopIdx[0]);
+        } else {
+            stagedOps.clear();
+        }
         stagedOps.add(op);
         guidedMoveActive = false;
         guidedMidHop = false;
+        guidedPromotionPending = false;
         awaitingConfirmation = true;
         syncPreparedStateToGame();
 
@@ -1057,8 +1296,8 @@ public class OctiMoveComposer {
         if (board == null || board.getGame() == null) {
             return false;
         }
-        OctiGame game = board.getGame();
-        if (!game.isGameStarted() || game.isGameOver()) {
+        OctiGame baseGame = board.getGame();
+        if (!baseGame.isGameStarted() || baseGame.isGameOver()) {
             return false;
         }
         if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK) {
@@ -1069,18 +1308,25 @@ public class OctiMoveComposer {
                 || srcDir == tgtDir) {
             return false;
         }
+
+        List<OctiMoveOp> promotedPreludes = new ArrayList<>();
+        int[] splitHopIdx = new int[]{-1};
+        OctiBoard workBoard = board;
         if (!stagedOps.isEmpty()) {
-            return false;
+            workBoard = buildPromotedPreludeBoard(promotedPreludes, splitHopIdx);
+            if (workBoard == null) {
+                return false;
+            }
         }
 
         int bx = x - 1;
         int by = y - 1;
-        if (!board.isValidCoord(bx, by)) {
+        if (!workBoard.isValidCoord(bx, by)) {
             return false;
         }
 
-        OctiPlayer turn = game.getTurn();
-        OctiSquare sq = board.squareAt(bx, by);
+        OctiPlayer turn = workBoard.getGame().getTurn();
+        OctiSquare sq = workBoard.squareAt(bx, by);
         int resolvedIdx = resolvePodIndex(sq, x, y, podIndex, turn, false);
         if (resolvedIdx < 0) {
             return false;
@@ -1100,14 +1346,21 @@ public class OctiMoveComposer {
         op.addProngDir = tgtDir;
         op.superProng = false;
 
-        if (!validateOpsOnScratch(Collections.singletonList(op))) {
+        List<OctiMoveOp> candidateOps = new ArrayList<>(promotedPreludes);
+        candidateOps.add(op);
+        if (!validateOpsOnScratch(candidateOps)) {
             return false;
         }
 
-        stagedOps.clear();
+        if (!promotedPreludes.isEmpty()) {
+            applyPromotedPreludesInPlace(promotedPreludes, splitHopIdx[0]);
+        } else {
+            stagedOps.clear();
+        }
         stagedOps.add(op);
         guidedMoveActive = false;
         guidedMidHop = false;
+        guidedPromotionPending = false;
         awaitingConfirmation = true;
         syncPreparedStateToGame();
 
@@ -1152,137 +1405,189 @@ public class OctiMoveComposer {
         boolean edgeless = game.useEdgelessBoard();
 
         // Case B: Appending a continuation hop to an active staged jump chain
-        if (activeJumpHasChain && !stagedOps.isEmpty()
+        if (!guidedPromotionPending && activeJumpHasChain && !stagedOps.isEmpty()
                 && fbx == activeJumpCurBx && fby == activeJumpCurBy) {
+            OctiBoard regBaseBoard = buildPostBonusBaseBoard();
             OctiMoveOp activeOp = stagedOps.get(stagedOps.size() - 1);
-            OctiSquare startSq = board.squareAt(activeJumpStartBx, activeJumpStartBy);
+            OctiSquare startSq = regBaseBoard.squareAt(activeJumpStartBx, activeJumpStartBy);
             List<OctiPod> ghostPods = new ArrayList<>(startSq.pods());
 
             List<OctiHop> extraHops = new ArrayList<>();
             List<IntPair> nextJumped = new ArrayList<>();
-            if (!findJumpPathBfs(board, edgeless, turn,
+            if (findJumpPathBfs(regBaseBoard, edgeless, turn,
                     activeJumpStartBx, activeJumpStartBy,
                     activeJumpCurBx, activeJumpCurBy,
                     tbx, tby, activeOp.pod, ghostPods,
                     activeJumpedCoords, extraHops, nextJumped)) {
-                return false;
-            }
-
-            List<OctiMoveOp> candidateOps = new ArrayList<>();
-            for (OctiMoveOp op : stagedOps) {
-                candidateOps.add(new OctiMoveOp(op));
-            }
-            List<Integer> matchingStackOpIndices = new ArrayList<>();
-            for (int idx = 0; idx < candidateOps.size(); idx++) {
-                OctiMoveOp cop = candidateOps.get(idx);
-                if (cop.x0 == activeJumpStartBx && cop.y0 == activeJumpStartBy && !cop.hops.isEmpty()) {
-                    OctiHop lastHop = cop.hops.get(cop.hops.size() - 1);
-                    if (lastHop.x == activeJumpCurBx && lastHop.y == activeJumpCurBy) {
-                        boolean canFollow = true;
-                        int cx = activeJumpCurBx;
-                        int cy = activeJumpCurBy;
-                        for (OctiHop eh : extraHops) {
-                            int[] hDxDy = new int[2];
-                            if (!computeDisplacement(cx, cy, eh.x, eh.y, edgeless, w, h, hDxDy)) {
-                                canFollow = false;
-                                break;
+                List<OctiMoveOp> candidateOps = new ArrayList<>();
+                for (OctiMoveOp op : stagedOps) {
+                    candidateOps.add(new OctiMoveOp(op));
+                }
+                List<Integer> matchingStackOpIndices = new ArrayList<>();
+                int bonusPrefixCount = leadingBonusOpCount();
+                for (int idx = bonusPrefixCount; idx < candidateOps.size(); idx++) {
+                    OctiMoveOp cop = candidateOps.get(idx);
+                    if (cop.x0 == activeJumpStartBx && cop.y0 == activeJumpStartBy && !cop.hops.isEmpty()) {
+                        OctiHop lastHop = cop.hops.get(cop.hops.size() - 1);
+                        if (lastHop.x == activeJumpCurBx && lastHop.y == activeJumpCurBy) {
+                            boolean canFollow = true;
+                            int cx = activeJumpCurBx;
+                            int cy = activeJumpCurBy;
+                            for (OctiHop eh : extraHops) {
+                                int[] hDxDy = new int[2];
+                                if (!computeDisplacement(cx, cy, eh.x, eh.y, edgeless, w, h, hDxDy)) {
+                                    canFollow = false;
+                                    break;
+                                }
+                                OctiDir reqDir = OctiDir.deltaToDir(hDxDy[0] / 2, hDxDy[1] / 2);
+                                if (reqDir == OctiDir.DIR_UNDEF || cop.pod.prongAt(reqDir) == OctiProngType.NO_PRONG) {
+                                    canFollow = false;
+                                    break;
+                                }
+                                cx = eh.x;
+                                cy = eh.y;
                             }
-                            OctiDir reqDir = OctiDir.deltaToDir(hDxDy[0] / 2, hDxDy[1] / 2);
-                            if (reqDir == OctiDir.DIR_UNDEF || cop.pod.prongAt(reqDir) == OctiProngType.NO_PRONG) {
-                                canFollow = false;
-                                break;
+                            if (canFollow) {
+                                matchingStackOpIndices.add(idx);
                             }
-                            cx = eh.x;
-                            cy = eh.y;
-                        }
-                        if (canFollow) {
-                            matchingStackOpIndices.add(idx);
                         }
                     }
                 }
-            }
-            if (matchingStackOpIndices.isEmpty()) {
-                matchingStackOpIndices.add(candidateOps.size() - 1);
-            }
-            for (int opIdxToExtend : matchingStackOpIndices) {
-                OctiMoveOp targetCandidate = candidateOps.get(opIdxToExtend);
-                for (OctiHop eh : extraHops) {
-                    targetCandidate.hops.add(new OctiHop(eh));
+                if (matchingStackOpIndices.isEmpty()) {
+                    matchingStackOpIndices.add(candidateOps.size() - 1);
                 }
-            }
-            if (!validateOpsOnScratch(candidateOps)) {
-                return false;
-            }
-
-            int prevJumpedCount = activeJumpedCoords.size();
-            for (int opIdxToExtend : matchingStackOpIndices) {
-                OctiMoveOp targetOp = stagedOps.get(opIdxToExtend);
-                for (int i = 0; i < extraHops.size(); i++) {
-                    int hopIdx = targetOp.hops.size();
-                    targetOp.hops.add(new OctiHop(extraHops.get(i)));
-                    IntPair jc = nextJumped.get(prevJumpedCount + i);
-                    OctiSquare jsq = board.squareAt(jc.first, jc.second);
-                    if (jsq.getNumPods() > 0) {
-                        boolean hasEnemy = jsq.hasEnemyOf(turn);
-                        int jx1 = jc.first + 1;
-                        int jy1 = jc.second + 1;
-                        hopCaptureLinks.add(new HopCaptureLink(opIdxToExtend, hopIdx, jx1, jy1));
-                        boolean alreadyListed = false;
-                        for (CaptureChoice cc : captureChoices) {
-                            if (cc.jumpedX == jx1 && cc.jumpedY == jy1) {
-                                alreadyListed = true;
-                                break;
-                            }
-                        }
-                        if (!alreadyListed) {
-                            captureChoices.add(new CaptureChoice(jx1, jy1, hasEnemy, false));
-                        }
+                for (int opIdxToExtend : matchingStackOpIndices) {
+                    OctiMoveOp targetCandidate = candidateOps.get(opIdxToExtend);
+                    for (OctiHop eh : extraHops) {
+                        targetCandidate.hops.add(new OctiHop(eh));
                     }
                 }
-            }
+                if (validateOpsOnScratch(candidateOps)) {
+                    int prevJumpedCount = activeJumpedCoords.size();
+                    for (int opIdxToExtend : matchingStackOpIndices) {
+                        OctiMoveOp targetOp = stagedOps.get(opIdxToExtend);
+                        for (int i = 0; i < extraHops.size(); i++) {
+                            int hopIdx = targetOp.hops.size();
+                            targetOp.hops.add(new OctiHop(extraHops.get(i)));
+                            IntPair jc = nextJumped.get(prevJumpedCount + i);
+                            OctiSquare jsq = regBaseBoard.squareAt(jc.first, jc.second);
+                            if (jsq.getNumPods() > 0) {
+                                boolean hasEnemy = jsq.hasEnemyOf(turn);
+                                int jx1 = jc.first + 1;
+                                int jy1 = jc.second + 1;
+                                hopCaptureLinks.add(new HopCaptureLink(opIdxToExtend, hopIdx, jx1, jy1));
+                                boolean alreadyListed = false;
+                                for (CaptureChoice cc : captureChoices) {
+                                    if (cc.jumpedX == jx1 && cc.jumpedY == jy1) {
+                                        alreadyListed = true;
+                                        break;
+                                    }
+                                }
+                                if (!alreadyListed) {
+                                    captureChoices.add(new CaptureChoice(jx1, jy1, hasEnemy, false));
+                                }
+                            }
+                        }
+                    }
 
-            activeJumpedCoords = nextJumped;
-            activeJumpCurBx = tbx;
-            activeJumpCurBy = tby;
-            guidedCurBx = tbx;
-            guidedCurBy = tby;
+                    activeJumpedCoords = nextJumped;
+                    activeJumpCurBx = tbx;
+                    activeJumpCurBy = tby;
+                    guidedCurBx = tbx;
+                    guidedCurBy = tby;
 
-            boolean hasContinuation = hasContinuationJumpFrom(
-                    tbx, tby, activeOp.pod, activeJumpStartBx, activeJumpStartBy, ghostPods, nextJumped);
-            if (hasContinuation) {
-                guidedMidHop = true;
-                guidedMoveActive = true;
-            } else {
-                List<Integer> unclaimed = unclaimedMovablePodIndicesAtOrigin();
-                if (!unclaimed.isEmpty() && !hasDistinctUnclaimedPodsAtOrigin()) {
-                    guidedCurBx = guidedOriginBx;
-                    guidedCurBy = guidedOriginBy;
-                    guidedPodIndex = unclaimed.get(0);
-                    guidedMoveAllStack = false;
-                    guidedMidHop = false;
-                    guidedMoveActive = true;
-                } else {
-                    guidedMidHop = false;
-                    guidedMoveActive = false;
+                    boolean hasContinuation = hasContinuationJumpFrom(regBaseBoard,
+                            tbx, tby, activeOp.pod, activeJumpStartBx, activeJumpStartBy, ghostPods, nextJumped);
+                    if (hasContinuation) {
+                        guidedMidHop = true;
+                        guidedMoveActive = true;
+                    } else {
+                        List<Integer> unclaimed = unclaimedMovablePodIndicesAtOrigin();
+                        if (!unclaimed.isEmpty() && !hasDistinctUnclaimedPodsAtOrigin()) {
+                            guidedCurBx = guidedOriginBx;
+                            guidedCurBy = guidedOriginBy;
+                            guidedPodIndex = unclaimed.get(0);
+                            guidedMoveAllStack = false;
+                            guidedMidHop = false;
+                            guidedMoveActive = true;
+                        } else {
+                            guidedMidHop = false;
+                            guidedMoveActive = false;
+                        }
+                    }
+                    awaitingConfirmation = true;
+                    syncPreparedStateToGame();
+                    return true;
                 }
             }
-            awaitingConfirmation = true;
-            syncPreparedStateToGame();
-            return true;
-        }
-
-        // Case C: Starting a new move/jump op (or adding a composite pod from the same start square)
-        if (!stagedOps.isEmpty()) {
-            for (OctiMoveOp existingOp : stagedOps) {
-                if (existingOp.hops.isEmpty()
-                        || existingOp.x0 != fbx || existingOp.y0 != fby) {
-                    return false;
-                }
+            if (!canPromoteStagedToSuperProngPreludes()) {
+                return false;
             }
         }
 
-        OctiSquare startSq = board.squareAt(fbx, fby);
-        int resolvedIdx = resolvePodIndex(startSq, fromX, fromY, podIndex, turn, true);
+        // Case C: Starting a new move/jump op, composite ',' pod, or ';' superprong continuation
+        if (stagedOps.isEmpty()) {
+            return tryStagePodMoveOnBoard(board, Collections.emptyList(), -1, false,
+                    fromX, fromY, podIndex, toX, toY, moveAllMatchingStack);
+        }
+
+        int bonusPrefixCount = leadingBonusOpCount();
+        boolean canTrySameOriginComposite = !guidedPromotionPending && bonusPrefixCount < stagedOps.size();
+        if (canTrySameOriginComposite) {
+            for (int i = bonusPrefixCount; i < stagedOps.size(); i++) {
+                OctiMoveOp existingOp = stagedOps.get(i);
+                if (existingOp.hops.isEmpty() || existingOp.x0 != fbx || existingOp.y0 != fby) {
+                    canTrySameOriginComposite = false;
+                    break;
+                }
+            }
+        }
+        if (canTrySameOriginComposite) {
+            OctiBoard regBaseBoard = buildPostBonusBaseBoard();
+            if (tryStagePodMoveOnBoard(regBaseBoard, stagedOps, -1, false,
+                    fromX, fromY, podIndex, toX, toY, moveAllMatchingStack)) {
+                return true;
+            }
+        }
+
+        List<OctiMoveOp> promotedPreludes = new ArrayList<>();
+        int[] splitHopIdx = new int[]{-1};
+        OctiBoard promBoard = buildPromotedPreludeBoard(promotedPreludes, splitHopIdx);
+        if (promBoard != null) {
+            return tryStagePodMoveOnBoard(promBoard, promotedPreludes, splitHopIdx[0], true,
+                    fromX, fromY, podIndex, toX, toY, moveAllMatchingStack);
+        }
+
+        return false;
+    }
+
+    private boolean tryStagePodMoveOnBoard(OctiBoard refBoard,
+                                           List<OctiMoveOp> prefixOps,
+                                           int splitHopIdx,
+                                           boolean promoteExisting,
+                                           int fromX, int fromY,
+                                           int podIndex,
+                                           int toX, int toY,
+                                           boolean moveAllMatchingStack) {
+        if (refBoard == null || refBoard.getGame() == null) {
+            return false;
+        }
+        int fbx = fromX - 1;
+        int fby = fromY - 1;
+        int tbx = toX - 1;
+        int tby = toY - 1;
+        if (fbx == tbx && fby == tby) {
+            return false;
+        }
+        OctiGame refGame = refBoard.getGame();
+        OctiPlayer turn = refGame.getTurn();
+        int w = refBoard.getBoardWidth();
+        int h = refBoard.getBoardHeight();
+        boolean edgeless = refGame.useEdgelessBoard();
+
+        OctiSquare startSq = refBoard.squareAt(fbx, fby);
+        boolean excludeClaimed = !promoteExisting;
+        int resolvedIdx = resolvePodIndex(startSq, fromX, fromY, podIndex, turn, excludeClaimed);
         if (resolvedIdx < 0) {
             return false;
         }
@@ -1308,7 +1613,7 @@ public class OctiMoveComposer {
             }
             chosenHops.add(new OctiHop(tbx, tby, false));
         } else {
-            if (!findJumpPathBfs(board, edgeless, turn,
+            if (!findJumpPathBfs(refBoard, edgeless, turn,
                     fbx, fby, fbx, fby, tbx, tby,
                     movingPod, ghostPods, Collections.emptyList(),
                     chosenHops, chosenJumped)) {
@@ -1320,9 +1625,9 @@ public class OctiMoveComposer {
         List<Integer> podIndicesToMove = new ArrayList<>();
         podIndicesToMove.add(resolvedIdx);
 
-        if (moveStack && board.getGameMode() != OctiGameMode.GAME_MODE_OFK) {
+        if (moveStack && refBoard.getGameMode() != OctiGameMode.GAME_MODE_OFK) {
             for (int i = 0; i < startSq.getNumPods(); i++) {
-                if (i == resolvedIdx || isPodClaimed(fbx, fby, i)) {
+                if (i == resolvedIdx || (excludeClaimed && isPodClaimed(fbx, fby, i))) {
                     continue;
                 }
                 OctiPod otherPod = startSq.getPodAt(i);
@@ -1358,7 +1663,7 @@ public class OctiMoveComposer {
         }
 
         List<OctiMoveOp> candidateOps = new ArrayList<>();
-        for (OctiMoveOp op : stagedOps) {
+        for (OctiMoveOp op : prefixOps) {
             candidateOps.add(new OctiMoveOp(op));
         }
         for (int pIdx : podIndicesToMove) {
@@ -1374,6 +1679,10 @@ public class OctiMoveComposer {
 
         if (!validateOpsOnScratch(candidateOps)) {
             return false;
+        }
+
+        if (promoteExisting) {
+            applyPromotedPreludesInPlace(prefixOps, splitHopIdx);
         }
 
         int startKey = fbx * 10 + fby;
@@ -1392,7 +1701,7 @@ public class OctiMoveComposer {
             if (!isDist1) {
                 for (int hi = 0; hi < chosenJumped.size(); hi++) {
                     IntPair jc = chosenJumped.get(hi);
-                    OctiSquare jsq = board.squareAt(jc.first, jc.second);
+                    OctiSquare jsq = refBoard.squareAt(jc.first, jc.second);
                     if (jsq.getNumPods() > 0) {
                         boolean hasEnemy = jsq.hasEnemyOf(turn);
                         int jx1 = jc.first + 1;
@@ -1413,6 +1722,7 @@ public class OctiMoveComposer {
             }
         }
 
+        guidedPromotionPending = false;
         guidedOriginBx = fbx;
         guidedOriginBy = fby;
         activeJumpHasChain = !isDist1;
@@ -1422,9 +1732,9 @@ public class OctiMoveComposer {
         activeJumpCurBy = tby;
         activeJumpedCoords = chosenJumped;
 
-        boolean hasMorePodsOnStart = hasOtherMovableFriendlyPods(fbx, fby, turn);
+        boolean hasMorePodsOnStart = hasOtherMovableFriendlyPods(refBoard, fbx, fby, turn);
         boolean hasContinuation = !isDist1
-                && hasContinuationJumpFrom(tbx, tby, movingPod, fbx, fby, ghostPods, chosenJumped);
+                && hasContinuationJumpFrom(refBoard, tbx, tby, movingPod, fbx, fby, ghostPods, chosenJumped);
         if (hasContinuation) {
             guidedMidHop = true;
             guidedMoveActive = true;
@@ -1453,12 +1763,13 @@ public class OctiMoveComposer {
             }
         }
 
+        awaitingConfirmation = true;
         boolean shouldPause = confirmAllMoves
                 || hasMorePodsOnStart
                 || hasContinuation
-                || hasOptionalCapture;
+                || hasOptionalCapture
+                || isAwaitingSuperProngBonusMove();
 
-        awaitingConfirmation = true;
         syncPreparedStateToGame();
 
         if (!shouldPause) {
@@ -1488,16 +1799,24 @@ public class OctiMoveComposer {
             return;
         }
 
-        choice.capture = capture;
-
+        List<OctiMoveOp> testOps = new ArrayList<>(stagedOps.size());
+        for (OctiMoveOp op : stagedOps) {
+            testOps.add(new OctiMoveOp(op));
+        }
         for (HopCaptureLink link : hopCaptureLinks) {
             if (link.jumpedX == jumpedX && link.jumpedY == jumpedY
-                    && link.opIndex < stagedOps.size()
-                    && link.hopIndex < stagedOps.get(link.opIndex).hops.size()) {
-                stagedOps.get(link.opIndex).hops.get(link.hopIndex).capture = capture;
+                    && link.opIndex < testOps.size()
+                    && link.hopIndex < testOps.get(link.opIndex).hops.size()) {
+                testOps.get(link.opIndex).hops.get(link.hopIndex).capture = capture;
             }
         }
+        if (!validatePreviewOpsOnScratch(testOps)) {
+            return;
+        }
 
+        choice.capture = capture;
+        stagedOps.clear();
+        stagedOps.addAll(testOps);
         syncPreparedStateToGame();
     }
 
@@ -1523,16 +1842,24 @@ public class OctiMoveComposer {
         }
 
         boolean newCap = !choice.capture;
-        choice.capture = newCap;
-
+        List<OctiMoveOp> testOps = new ArrayList<>(stagedOps.size());
+        for (OctiMoveOp op : stagedOps) {
+            testOps.add(new OctiMoveOp(op));
+        }
         for (HopCaptureLink link : hopCaptureLinks) {
             if (link.jumpedX == jumpedX && link.jumpedY == jumpedY
-                    && link.opIndex < stagedOps.size()
-                    && link.hopIndex < stagedOps.get(link.opIndex).hops.size()) {
-                stagedOps.get(link.opIndex).hops.get(link.hopIndex).capture = newCap;
+                    && link.opIndex < testOps.size()
+                    && link.hopIndex < testOps.get(link.opIndex).hops.size()) {
+                testOps.get(link.opIndex).hops.get(link.hopIndex).capture = newCap;
             }
         }
+        if (!validatePreviewOpsOnScratch(testOps)) {
+            return false;
+        }
 
+        choice.capture = newCap;
+        stagedOps.clear();
+        stagedOps.addAll(testOps);
         syncPreparedStateToGame();
         return true;
     }
@@ -1569,14 +1896,14 @@ public class OctiMoveComposer {
         if (board == null) {
             return null;
         }
-        if (!isAwaitingConfirmation() || stagedOps.isEmpty()) {
+        if (stagedOps.isEmpty()) {
             return board;
         }
         try {
             OctiBoard preview = new OctiBoard();
             preview.suppressBoardUpdateNotification(true);
             preview.fromPositionString(board.toPositionString());
-            preview.getGame().move(new OctiMove(stagedOps));
+            preview.getGame().applyUncommittedTurnForPreview(stagedOps);
             return preview;
         } catch (Throwable t) {
             return board;
@@ -1588,11 +1915,13 @@ public class OctiMoveComposer {
     }
 
     public boolean isAwaitingSuperProngBonusMove() {
-        return false;
+        return canPromoteStagedToSuperProngPreludes()
+                || (!stagedOps.isEmpty()
+                    && stagedOps.get(stagedOps.size() - 1).isSuperProngBonusMove);
     }
 
     public boolean hasUnlockedSuperProngBonus() {
-        return false;
+        return leadingBonusOpCount() > 0 || isAwaitingSuperProngBonusMove();
     }
 
     public int[] eighthProngOriginSquare() {
@@ -1630,36 +1959,66 @@ public class OctiMoveComposer {
             return false;
         }
 
-        if (!stagedOps.isEmpty()) {
-            for (OctiMoveOp op : stagedOps) {
+        OctiPlayer turn = game.getTurn();
+        int bonusPrefixCount = leadingBonusOpCount();
+        boolean canUseRegBase = stagedOps.isEmpty();
+        if (!stagedOps.isEmpty() && bonusPrefixCount < stagedOps.size()) {
+            canUseRegBase = true;
+            for (int i = bonusPrefixCount; i < stagedOps.size(); i++) {
+                OctiMoveOp op = stagedOps.get(i);
                 if (op.hops.isEmpty() || op.x0 != bx || op.y0 != by) {
-                    return false;
+                    canUseRegBase = false;
+                    break;
                 }
             }
         }
 
-        OctiPlayer turn = game.getTurn();
-        OctiSquare sq = board.squareAt(bx, by);
-        int resolvedIdx = resolvePodIndex(sq, x, y, podIndex, turn, true);
-        if (resolvedIdx < 0 || resolvedIdx >= sq.getNumPods()) {
-            return false;
+        if (canUseRegBase) {
+            OctiBoard regBaseBoard = buildPostBonusBaseBoard();
+            OctiSquare sq = regBaseBoard.squareAt(bx, by);
+            int resolvedIdx = resolvePodIndex(sq, x, y, podIndex, turn, true);
+            if (resolvedIdx >= 0 && resolvedIdx < sq.getNumPods()) {
+                guidedPromotionPending = false;
+                guidedOriginBx = bx;
+                guidedOriginBy = by;
+                guidedCurBx = bx;
+                guidedCurBy = by;
+                guidedPodIndex = resolvedIdx;
+                guidedMoveAllStack = moveAllMatchingStack;
+                guidedMidHop = false;
+                guidedMoveActive = true;
+                if (!guidedNextSquares().isEmpty()) {
+                    return true;
+                }
+                guidedMoveActive = false;
+            }
         }
 
-        guidedOriginBx = bx;
-        guidedOriginBy = by;
-        guidedCurBx = bx;
-        guidedCurBy = by;
-        guidedPodIndex = resolvedIdx;
-        guidedMoveAllStack = moveAllMatchingStack;
-        guidedMidHop = false;
-        guidedMoveActive = true;
-
-        if (guidedNextSquares().isEmpty()) {
-            guidedMoveActive = false;
-            return false;
+        if (!stagedOps.isEmpty()) {
+            OctiBoard promBoard = buildPromotedPreludeBoard(null, null);
+            if (promBoard != null) {
+                OctiSquare sq = promBoard.squareAt(bx, by);
+                int resolvedIdx = resolvePodIndex(sq, x, y, podIndex, turn, false);
+                if (resolvedIdx >= 0 && resolvedIdx < sq.getNumPods()) {
+                    guidedPromotionPending = true;
+                    guidedOriginBx = bx;
+                    guidedOriginBy = by;
+                    guidedCurBx = bx;
+                    guidedCurBy = by;
+                    guidedPodIndex = resolvedIdx;
+                    guidedMoveAllStack = moveAllMatchingStack;
+                    guidedMidHop = false;
+                    guidedMoveActive = true;
+                    if (!guidedNextSquares().isEmpty()) {
+                        return true;
+                    }
+                    guidedMoveActive = false;
+                    guidedPromotionPending = false;
+                }
+            }
         }
 
-        return true;
+        return false;
     }
 
     public boolean isGuidedMoveActive() {
@@ -1680,6 +2039,10 @@ public class OctiMoveComposer {
     public int[] guidedOriginSquare() {
         if (guidedOriginBx >= 0 && guidedOriginBy >= 0) {
             return new int[]{guidedOriginBx + 1, guidedOriginBy + 1};
+        }
+        int regIdx = leadingBonusOpCount();
+        if (regIdx < stagedOps.size()) {
+            return new int[]{stagedOps.get(regIdx).x0 + 1, stagedOps.get(regIdx).y0 + 1};
         }
         if (!stagedOps.isEmpty()) {
             return new int[]{stagedOps.get(0).x0 + 1, stagedOps.get(0).y0 + 1};
@@ -1704,10 +2067,24 @@ public class OctiMoveComposer {
         Set<IntPair> seen = new HashSet<>();
 
         if (!guidedMidHop) {
-            if (!board.isValidCoord(guidedOriginBx, guidedOriginBy)) {
+            List<OctiMoveOp> prefixOps = new ArrayList<>();
+            OctiBoard refBoard;
+            if (guidedPromotionPending) {
+                refBoard = buildPromotedPreludeBoard(prefixOps, null);
+                if (refBoard == null) {
+                    return result;
+                }
+            } else {
+                refBoard = buildPostBonusBaseBoard();
+                for (OctiMoveOp sop : stagedOps) {
+                    prefixOps.add(new OctiMoveOp(sop));
+                }
+            }
+
+            if (!refBoard.isValidCoord(guidedOriginBx, guidedOriginBy)) {
                 return result;
             }
-            OctiSquare startSq = board.squareAt(guidedOriginBx, guidedOriginBy);
+            OctiSquare startSq = refBoard.squareAt(guidedOriginBx, guidedOriginBy);
             if (guidedPodIndex < 0 || guidedPodIndex >= startSq.getNumPods()) {
                 return result;
             }
@@ -1727,11 +2104,11 @@ public class OctiMoveComposer {
                 int jdy = dir.deltaY();
                 int sx = edgeless ? (((guidedOriginBx + jdx) % w + w) % w) : (guidedOriginBx + jdx);
                 int sy = edgeless ? (((guidedOriginBy + jdy) % h + h) % h) : (guidedOriginBy + jdy);
-                if (!board.isValidCoord(sx, sy)) {
+                if (!refBoard.isValidCoord(sx, sy)) {
                     continue;
                 }
-                OctiSquare destSq = board.squareAt(sx, sy);
-                if (board.getGameMode() == OctiGameMode.GAME_MODE_OFK) {
+                OctiSquare destSq = refBoard.squareAt(sx, sy);
+                if (refBoard.getGameMode() == OctiGameMode.GAME_MODE_OFK) {
                     if (!destSq.isEmpty()) {
                         continue;
                     }
@@ -1750,7 +2127,7 @@ public class OctiMoveComposer {
                 op.pod = pod.copy();
                 op.hops.add(hop);
                 List<OctiMoveOp> cand = new ArrayList<>();
-                for (OctiMoveOp sop : stagedOps) {
+                for (OctiMoveOp sop : prefixOps) {
                     cand.add(new OctiMoveOp(sop));
                 }
                 cand.add(op);
@@ -1776,17 +2153,17 @@ public class OctiMoveComposer {
                 int jy = edgeless ? (((guidedOriginBy + jdy) % h + h) % h) : (guidedOriginBy + jdy);
                 int lx = edgeless ? (((guidedOriginBx + dx) % w + w) % w) : (guidedOriginBx + dx);
                 int ly = edgeless ? (((guidedOriginBy + dy) % h + h) % h) : (guidedOriginBy + dy);
-                if (!board.isValidCoord(jx, jy) || !board.isValidCoord(lx, ly)) {
+                if (!refBoard.isValidCoord(jx, jy) || !refBoard.isValidCoord(lx, ly)) {
                     continue;
                 }
-                OctiSquare jumpedSq = board.squareAt(jx, jy);
+                OctiSquare jumpedSq = refBoard.squareAt(jx, jy);
                 boolean jumpedEmpty = (jx == guidedOriginBx && jy == guidedOriginBy)
                         ? jumpedSq.isEmptyWithout(ghostPods) : jumpedSq.isEmpty();
                 if (jumpedEmpty) {
                     continue;
                 }
 
-                OctiSquare landSq = board.squareAt(lx, ly);
+                OctiSquare landSq = refBoard.squareAt(lx, ly);
                 boolean landEmpty = (lx == guidedOriginBx && ly == guidedOriginBy)
                         ? landSq.isEmptyWithout(ghostPods) : landSq.isEmpty();
                 if (!landEmpty) {
@@ -1800,7 +2177,7 @@ public class OctiMoveComposer {
                 op.pod = pod.copy();
                 op.hops.add(hop);
                 List<OctiMoveOp> cand = new ArrayList<>();
-                for (OctiMoveOp sop : stagedOps) {
+                for (OctiMoveOp sop : prefixOps) {
                     cand.add(new OctiMoveOp(sop));
                 }
                 cand.add(op);
@@ -1816,9 +2193,10 @@ public class OctiMoveComposer {
             if (stagedOps.isEmpty()) {
                 return result;
             }
+            OctiBoard regBaseBoard = buildPostBonusBaseBoard();
             OctiMoveOp curOp = stagedOps.get(stagedOps.size() - 1);
             OctiPod pod = curOp.pod;
-            OctiSquare startSq = board.squareAt(guidedOriginBx, guidedOriginBy);
+            OctiSquare startSq = regBaseBoard.squareAt(guidedOriginBx, guidedOriginBy);
             List<OctiPod> ghostPods = new ArrayList<>(startSq.pods());
 
             for (int d = 0; d < OctiDir.DIR_MAX; d++) {
@@ -1834,20 +2212,20 @@ public class OctiMoveComposer {
                 int jy = edgeless ? (((guidedCurBy + jdy) % h + h) % h) : (guidedCurBy + jdy);
                 int lx = edgeless ? (((guidedCurBx + dx) % w + w) % w) : (guidedCurBx + dx);
                 int ly = edgeless ? (((guidedCurBy + dy) % h + h) % h) : (guidedCurBy + dy);
-                if (!board.isValidCoord(jx, jy) || !board.isValidCoord(lx, ly)) {
+                if (!regBaseBoard.isValidCoord(jx, jy) || !regBaseBoard.isValidCoord(lx, ly)) {
                     continue;
                 }
                 if (activeJumpedCoords.contains(new IntPair(jx, jy))) {
                     continue;
                 }
-                OctiSquare jumpedSq = board.squareAt(jx, jy);
+                OctiSquare jumpedSq = regBaseBoard.squareAt(jx, jy);
                 boolean jumpedEmpty = (jx == guidedOriginBx && jy == guidedOriginBy)
                         ? jumpedSq.isEmptyWithout(ghostPods) : jumpedSq.isEmpty();
                 if (jumpedEmpty) {
                     continue;
                 }
 
-                OctiSquare landSq = board.squareAt(lx, ly);
+                OctiSquare landSq = regBaseBoard.squareAt(lx, ly);
                 boolean landEmpty = (lx == guidedOriginBx && ly == guidedOriginBy)
                         ? landSq.isEmptyWithout(ghostPods) : landSq.isEmpty();
                 if (!landEmpty) {
@@ -1928,8 +2306,10 @@ public class OctiMoveComposer {
         if (!guidedMoveActive) {
             return false;
         }
+        guidedPromotionPending = false;
         if (guidedMidHop) {
             guidedMoveActive = false;
+            guidedMidHop = false;
             activeJumpHasChain = false;
             return true;
         }
@@ -1943,7 +2323,8 @@ public class OctiMoveComposer {
 
     public boolean canAddMoreMoves() {
         return hasOtherMovablePodAtOrigin()
-                || hasContinuationJump();
+                || hasContinuationJump()
+                || isAwaitingSuperProngBonusMove();
     }
 
     public boolean canAddMoreMovesToTurn() {
@@ -1969,14 +2350,16 @@ public class OctiMoveComposer {
 
     public List<Integer> unclaimedMovablePodIndicesAtOrigin() {
         List<Integer> list = new ArrayList<>();
-        if (stagedOps.isEmpty() || stagedOps.get(0).hops.isEmpty()
+        int regIdx = leadingBonusOpCount();
+        if (regIdx >= stagedOps.size() || stagedOps.get(regIdx).hops.isEmpty()
                 || board == null || board.getGame() == null) {
             return list;
         }
-        int origBx = stagedOps.get(0).x0;
-        int origBy = stagedOps.get(0).y0;
-        OctiPlayer turn = board.getGame().getTurn();
-        OctiSquare sq = board.squareAt(origBx, origBy);
+        OctiBoard regBaseBoard = buildPostBonusBaseBoard();
+        int origBx = stagedOps.get(regIdx).x0;
+        int origBy = stagedOps.get(regIdx).y0;
+        OctiPlayer turn = regBaseBoard.getGame().getTurn();
+        OctiSquare sq = regBaseBoard.squareAt(origBx, origBy);
         OctiPodType desiredType = turn.toPodType();
 
         for (int i = 0; i < sq.getNumPods(); i++) {
@@ -1988,7 +2371,7 @@ public class OctiMoveComposer {
                 continue;
             }
             if (pod.getNumProngs() > 0) {
-                List<int[]> dests = legalDestinationsFrom(origBx + 1, origBy + 1, i);
+                List<int[]> dests = legalDestinationsFromOnBoard(regBaseBoard, origBx + 1, origBy + 1, i, true);
                 if (!dests.isEmpty()) {
                     list.add(i);
                 }
@@ -2017,9 +2400,14 @@ public class OctiMoveComposer {
         if (list.size() < 2) {
             return false;
         }
-        int origBx = stagedOps.get(0).x0;
-        int origBy = stagedOps.get(0).y0;
-        OctiSquare sq = board.squareAt(origBx, origBy);
+        int regIdx = leadingBonusOpCount();
+        if (regIdx >= stagedOps.size()) {
+            return false;
+        }
+        OctiBoard regBaseBoard = buildPostBonusBaseBoard();
+        int origBx = stagedOps.get(regIdx).x0;
+        int origBy = stagedOps.get(regIdx).y0;
+        OctiSquare sq = regBaseBoard.squareAt(origBx, origBy);
         int firstConfig = -1;
         for (int idx : list) {
             OctiPod pod = sq.getPodAt(idx);
@@ -2062,37 +2450,107 @@ public class OctiMoveComposer {
         int h = board.getBoardHeight();
         boolean edgeless = game.useEdgelessBoard();
 
-        if (activeJumpHasChain && !stagedOps.isEmpty()
+        if (!guidedPromotionPending && activeJumpHasChain && !stagedOps.isEmpty()
                 && bx == activeJumpCurBx && by == activeJumpCurBy) {
+            OctiBoard regBaseBoard = buildPostBonusBaseBoard();
             OctiPod pod = stagedOps.get(stagedOps.size() - 1).pod;
-            OctiSquare startSq = board.squareAt(activeJumpStartBx, activeJumpStartBy);
+            OctiSquare startSq = regBaseBoard.squareAt(activeJumpStartBx, activeJumpStartBy);
             List<OctiPod> ghostPods = new ArrayList<>(startSq.pods());
 
+            Set<IntPair> seen = new LinkedHashSet<>();
             for (int ty = 0; ty < h; ty++) {
                 for (int tx = 0; tx < w; tx++) {
                     List<OctiHop> extraHops = new ArrayList<>();
                     List<IntPair> nextJumped = new ArrayList<>();
-                    if (findJumpPathBfs(board, edgeless, turn,
+                    if (findJumpPathBfs(regBaseBoard, edgeless, turn,
                             activeJumpStartBx, activeJumpStartBy,
                             activeJumpCurBx, activeJumpCurBy,
                             tx, ty, pod, ghostPods,
                             activeJumpedCoords, extraHops, nextJumped)) {
-                        result.add(new int[]{tx + 1, ty + 1});
+                        IntPair dest = new IntPair(tx + 1, ty + 1);
+                        if (seen.add(dest)) {
+                            result.add(new int[]{dest.first, dest.second});
+                        }
+                    }
+                }
+            }
+            OctiBoard promBoard = buildPromotedPreludeBoard(null, null);
+            if (promBoard != null) {
+                for (int[] d : legalDestinationsFromOnBoard(promBoard, x, y, podIndex, false)) {
+                    IntPair dest = new IntPair(d[0], d[1]);
+                    if (seen.add(dest)) {
+                        result.add(d);
                     }
                 }
             }
             return result;
         }
 
-        OctiSquare sq = board.squareAt(bx, by);
-        int resolvedIdx = resolvePodIndex(sq, x, y, podIndex, turn, true);
+        if (stagedOps.isEmpty()) {
+            return legalDestinationsFromOnBoard(board, x, y, podIndex, true);
+        }
+
+        Set<IntPair> seen = new LinkedHashSet<>();
+        int bonusPrefixCount = leadingBonusOpCount();
+        boolean canUseRegBase = bonusPrefixCount < stagedOps.size();
+        if (canUseRegBase) {
+            for (int i = bonusPrefixCount; i < stagedOps.size(); i++) {
+                OctiMoveOp op = stagedOps.get(i);
+                if (op.hops.isEmpty() || op.x0 != bx || op.y0 != by) {
+                    canUseRegBase = false;
+                    break;
+                }
+            }
+        }
+        if (canUseRegBase) {
+            OctiBoard regBaseBoard = buildPostBonusBaseBoard();
+            for (int[] d : legalDestinationsFromOnBoard(regBaseBoard, x, y, podIndex, true)) {
+                IntPair dest = new IntPair(d[0], d[1]);
+                if (seen.add(dest)) {
+                    result.add(d);
+                }
+            }
+        }
+
+        OctiBoard promBoard = buildPromotedPreludeBoard(null, null);
+        if (promBoard != null) {
+            for (int[] d : legalDestinationsFromOnBoard(promBoard, x, y, podIndex, false)) {
+                IntPair dest = new IntPair(d[0], d[1]);
+                if (seen.add(dest)) {
+                    result.add(d);
+                }
+            }
+        }
+        return result;
+    }
+
+    private List<int[]> legalDestinationsFromOnBoard(OctiBoard refBoard,
+                                                     int x, int y,
+                                                     int podIndex,
+                                                     boolean excludeClaimed) {
+        List<int[]> result = new ArrayList<>();
+        if (refBoard == null || refBoard.getGame() == null) {
+            return result;
+        }
+        int bx = x - 1;
+        int by = y - 1;
+        if (!refBoard.isValidCoord(bx, by)) {
+            return result;
+        }
+        OctiGame refGame = refBoard.getGame();
+        OctiPlayer turn = refGame.getTurn();
+        OctiSquare sq = refBoard.squareAt(bx, by);
+        int resolvedIdx = resolvePodIndex(sq, x, y, podIndex, turn, excludeClaimed);
         boolean filterByPod = (podIndex >= 0 && resolvedIdx >= 0);
+        if (podIndex >= 0 && resolvedIdx < 0) {
+            return result;
+        }
         int targetPodConf = filterByPod
                 ? (sq.getPodAt(resolvedIdx).rawConfig() & 0xFFFF)
                 : 0;
 
         Set<IntPair> seen = new LinkedHashSet<>();
-        List<OctiMove> legal = game.generateLegalMoves();
+        List<OctiMove> legal = refGame.generateLegalMoves();
         for (OctiMove mv : legal) {
             List<OctiMoveOp> ops = mv.getOps();
             if (ops.size() != 1 || ops.get(0).hops.isEmpty()) {
@@ -2116,17 +2574,18 @@ public class OctiMoveComposer {
 
     public List<OctiDir> legalProngAdditionsAt(int x, int y, int podIndex, boolean superProng) {
         List<OctiDir> result = new ArrayList<>();
-        if (board == null || board.getGame() == null) {
+        OctiBoard effBoard = effectiveSingleActionBoard();
+        if (effBoard == null || effBoard.getGame() == null) {
             return result;
         }
-        OctiGame game = board.getGame();
+        OctiGame game = effBoard.getGame();
         if (!game.isGameStarted() || game.isGameOver()) {
             return result;
         }
 
         int bx = x - 1;
         int by = y - 1;
-        if (!board.isValidCoord(bx, by)) {
+        if (!effBoard.isValidCoord(bx, by)) {
             return result;
         }
 
@@ -2141,7 +2600,7 @@ public class OctiMoveComposer {
             }
         }
 
-        OctiSquare sq = board.squareAt(bx, by);
+        OctiSquare sq = effBoard.squareAt(bx, by);
         int resolvedIdx = resolvePodIndex(sq, x, y, podIndex, turn, false);
         if (resolvedIdx < 0) {
             return result;
@@ -2160,10 +2619,15 @@ public class OctiMoveComposer {
 
     public List<int[]> legalPodDropSquares(boolean liberate) {
         List<int[]> result = new ArrayList<>();
-        if (board == null || board.getGame() == null) {
+        List<OctiMoveOp> prefixOps = new ArrayList<>();
+        OctiBoard effBoard = board;
+        if (!stagedOps.isEmpty()) {
+            effBoard = buildPromotedPreludeBoard(prefixOps, null);
+        }
+        if (effBoard == null || effBoard.getGame() == null) {
             return result;
         }
-        OctiGame game = board.getGame();
+        OctiGame game = effBoard.getGame();
         if (!game.isGameStarted() || game.isGameOver()) {
             return result;
         }
@@ -2179,8 +2643,8 @@ public class OctiMoveComposer {
             }
         }
 
-        int w = board.getBoardWidth();
-        int h = board.getBoardHeight();
+        int w = effBoard.getBoardWidth();
+        int h = effBoard.getBoardHeight();
         for (int by = 0; by < h; by++) {
             for (int bx = 0; bx < w; bx++) {
                 OctiMoveOp op = new OctiMoveOp();
@@ -2188,7 +2652,9 @@ public class OctiMoveComposer {
                 op.y0 = by;
                 op.addPod = true;
                 op.liberate = liberate;
-                if (validateOpsOnScratch(Collections.singletonList(op))) {
+                List<OctiMoveOp> cand = new ArrayList<>(prefixOps);
+                cand.add(op);
+                if (validateOpsOnScratch(cand)) {
                     result.add(new int[]{bx + 1, by + 1});
                 }
             }
@@ -2232,6 +2698,7 @@ public class OctiMoveComposer {
 
         guidedMoveActive = false;
         guidedMidHop = false;
+        guidedPromotionPending = false;
         guidedOriginBx = -1;
         guidedOriginBy = -1;
         guidedCurBx = -1;
@@ -2270,6 +2737,7 @@ public class OctiMoveComposer {
 
         guidedMoveActive = false;
         guidedMidHop = false;
+        guidedPromotionPending = false;
         guidedOriginBx = -1;
         guidedOriginBy = -1;
         guidedCurBx = -1;

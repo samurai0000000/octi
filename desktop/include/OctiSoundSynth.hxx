@@ -10,26 +10,24 @@
 #include <cstdint>
 #include <functional>
 #include <vector>
+#if defined(__linux__)
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <thread>
+#endif
+#include "OctiSoundCue.hxx"
 
 namespace octi {
 
-enum class SoundCue {
-    POD_PLACE      = 0,
-    PRONG_SNAP     = 1,
-    POD_STEP       = 2,
-    POD_JUMP       = 3,
-    POD_CAPTURE    = 4,
-    CLOCK_LOW_TICK = 5,
-    GAME_VICTORY   = 6,
-};
-
 class OctiSoundSynth {
 public:
-    static constexpr int SAMPLE_RATE = 16000;
+    static constexpr int SAMPLE_RATE = OCTI_SOUND_SAMPLE_RATE;
 
     OctiSoundSynth();
     ~OctiSoundSynth();
 
+    std::vector<std::uint8_t> wavBytesForCue(SoundCue cue) const;
     std::vector<std::int16_t> synthesizeCuePcm(SoundCue cue) const;
 
     void setMuted(bool muted);
@@ -45,10 +43,23 @@ public:
     SoundCue lastTriggeredCue() const;
 
 private:
+#if defined(__linux__)
+    void enqueueAlsaCue(SoundCue cue);
+    void alsaWorkerLoop();
+#endif
+
     bool _muted;
     std::uint64_t _triggeredCount;
     SoundCue _lastCue;
     std::function<void(const std::vector<std::int16_t> &)> _playbackCallback;
+#if defined(__linux__)
+    std::mutex _alsaMutex;
+    std::condition_variable _alsaCv;
+    std::deque<SoundCue> _alsaQueue;
+    bool _alsaStop = false;
+    bool _alsaThreadStarted = false;
+    std::thread _alsaThread;
+#endif
 };
 
 } // namespace octi

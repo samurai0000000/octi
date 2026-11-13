@@ -54,9 +54,16 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.selfso.octi.OctiGameMode
@@ -66,11 +73,378 @@ import com.selfso.octi.OctiPlayer
 import com.selfso.octi.ui.theme.OctiTheme
 import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sin
+
+const val RESERVE_HUD_CONTROLS_HORIZONTAL_PADDING_DP: Int = 6
+const val RESERVE_HUD_CHAT_HORIZONTAL_PADDING_DP: Int = 0
+const val RESERVE_HUD_CHAT_MIN_HEIGHT_DP: Int = 44
+const val RESERVE_HUD_CHAT_STACK_SPACING_DP: Int = 4
+const val CHAT_LUMINANCE_LIGHT_THRESHOLD: Float = 0.55f
+
+fun isVerticalFullWidthChatStack(): Boolean = true
+
+fun chatSectionWidthFraction(): Float = 1.0f
+
+fun chatZoomDialogWidthFraction(): Float = 1.0f
+
+fun chatStackOrder(isOnlineRoom: Boolean): List<String> =
+    if (isOnlineRoom) listOf("TABLE_CHAT", "LOBBY_CHAT") else listOf("LOBBY_CHAT")
+
+data class WebChatStylePalette(
+    val lightSurface: Boolean,
+    val pageBgArgb: Int,
+    val cardBgArgb: Int,
+    val wellBgArgb: Int,
+    val cardBorderArgb: Int,
+    val inputBorderArgb: Int,
+    val headerTitleArgb: Int,
+    val timestampArgb: Int,
+    val teamScopeArgb: Int,
+    val peerHandleArgb: Int,
+    val selfHandleArgb: Int,
+    val botHandleArgb: Int,
+    val systemTagArgb: Int,
+    val systemEventBodyArgb: Int,
+    val messageBodyArgb: Int,
+    val dangerOutlineArgb: Int,
+    val dangerTextArgb: Int
+) {
+    val pageBg: Color get() = Color(pageBgArgb.toLong() and 0xFFFFFFFFL)
+    val cardBg: Color get() = Color(cardBgArgb.toLong() and 0xFFFFFFFFL)
+    val wellBg: Color get() = Color(wellBgArgb.toLong() and 0xFFFFFFFFL)
+    val cardBorder: Color get() = Color(cardBorderArgb.toLong() and 0xFFFFFFFFL)
+    val inputBorder: Color get() = Color(inputBorderArgb.toLong() and 0xFFFFFFFFL)
+    val headerTitle: Color get() = Color(headerTitleArgb.toLong() and 0xFFFFFFFFL)
+    val timestamp: Color get() = Color(timestampArgb.toLong() and 0xFFFFFFFFL)
+    val teamScope: Color get() = Color(teamScopeArgb.toLong() and 0xFFFFFFFFL)
+    val peerHandle: Color get() = Color(peerHandleArgb.toLong() and 0xFFFFFFFFL)
+    val selfHandle: Color get() = Color(selfHandleArgb.toLong() and 0xFFFFFFFFL)
+    val botHandle: Color get() = Color(botHandleArgb.toLong() and 0xFFFFFFFFL)
+    val systemTag: Color get() = Color(systemTagArgb.toLong() and 0xFFFFFFFFL)
+    val systemEventBody: Color get() = Color(systemEventBodyArgb.toLong() and 0xFFFFFFFFL)
+    val messageBody: Color get() = Color(messageBodyArgb.toLong() and 0xFFFFFFFFL)
+    val dangerOutline: Color get() = Color(dangerOutlineArgb.toLong() and 0xFFFFFFFFL)
+    val dangerText: Color get() = Color(dangerTextArgb.toLong() and 0xFFFFFFFFL)
+}
+
+data class ResolvedChatSpan(
+    val text: String,
+    val start: Int,
+    val end: Int,
+    val colorArgb: Int,
+    val isBold: Boolean,
+    val isItalic: Boolean,
+    val isMonospace: Boolean
+)
+
+fun computeColorLuminanceArgb(argb: Int): Float {
+    fun linearize(channel8: Int): Float {
+        val s = (channel8 and 0xFF) / 255.0f
+        return if (s <= 0.04045f) {
+            s / 12.92f
+        } else {
+            Math.pow(((s + 0.055) / 1.055), 2.4).toFloat()
+        }
+    }
+    val r = linearize(argb ushr 16)
+    val g = linearize(argb ushr 8)
+    val b = linearize(argb)
+    return 0.2126f * r + 0.7152f * g + 0.0722f * b
+}
+
+fun isLightChatSurfaceArgb(windowBgArgb: Int): Boolean =
+    computeColorLuminanceArgb(windowBgArgb) >= CHAT_LUMINANCE_LIGHT_THRESHOLD
+
+fun isLightChatSurface(windowBg: Color): Boolean =
+    windowBg.luminance() >= CHAT_LUMINANCE_LIGHT_THRESHOLD
+
+fun resolveWebChatStylePalette(lightSurface: Boolean): WebChatStylePalette {
+    return if (lightSurface) {
+        WebChatStylePalette(
+            lightSurface = true,
+            pageBgArgb = 0xFFFBFBFA.toInt(),
+            cardBgArgb = 0xFFFFFFFF.toInt(),
+            wellBgArgb = 0xFFFBFBFA.toInt(),
+            cardBorderArgb = 0xFFE4E4E7.toInt(),
+            inputBorderArgb = 0xFFD4D4D8.toInt(),
+            headerTitleArgb = 0xFF0F172A.toInt(),
+            timestampArgb = 0xFF64748B.toInt(),
+            teamScopeArgb = 0xFF7C3AED.toInt(),
+            peerHandleArgb = 0xFF0284C7.toInt(),
+            selfHandleArgb = 0xFF059669.toInt(),
+            botHandleArgb = 0xFFD97706.toInt(),
+            systemTagArgb = 0xFFB45309.toInt(),
+            systemEventBodyArgb = 0xFF92400E.toInt(),
+            messageBodyArgb = 0xFF0F172A.toInt(),
+            dangerOutlineArgb = 0xFFDC2626.toInt(),
+            dangerTextArgb = 0xFFDC2626.toInt()
+        )
+    } else {
+        WebChatStylePalette(
+            lightSurface = false,
+            pageBgArgb = 0xFF0B0F17.toInt(),
+            cardBgArgb = 0xFF101622.toInt(),
+            wellBgArgb = 0xFF0B0F17.toInt(),
+            cardBorderArgb = 0xFF1E293B.toInt(),
+            inputBorderArgb = 0xFF334155.toInt(),
+            headerTitleArgb = 0xFFC8A253.toInt(),
+            timestampArgb = 0xFF94A3B8.toInt(),
+            teamScopeArgb = 0xFFA78BFA.toInt(),
+            peerHandleArgb = 0xFF38BDF8.toInt(),
+            selfHandleArgb = 0xFF34D399.toInt(),
+            botHandleArgb = 0xFFFBBF24.toInt(),
+            systemTagArgb = 0xFFC8A253.toInt(),
+            systemEventBodyArgb = 0xFFFDE68A.toInt(),
+            messageBodyArgb = 0xFFF1F5F9.toInt(),
+            dangerOutlineArgb = 0xFFDC2626.toInt(),
+            dangerTextArgb = 0xFFF87171.toInt()
+        )
+    }
+}
+
+fun resolveWebChatStylePaletteForWindowBg(windowBgArgb: Int): WebChatStylePalette =
+    resolveWebChatStylePalette(isLightChatSurfaceArgb(windowBgArgb))
+
+fun resolveWebChatStylePaletteForColor(windowBg: Color): WebChatStylePalette =
+    resolveWebChatStylePalette(isLightChatSurface(windowBg))
+
+private val CHAT_TIMESTAMP_REGEX = Regex("^\\[(\\d{1,2}:\\d{2}(?::\\d{2})?)\\]\\s*")
+private val CHAT_TEAM_SCOPE_REGEX = Regex("^\\[TEAM\\]\\s*", RegexOption.IGNORE_CASE)
+private val CHAT_SYSTEM_PREFIX_REGEX = Regex("^(\\[System\\]:?|System:)\\s*", RegexOption.IGNORE_CASE)
+private val CHAT_TRAILING_BOT_TAG_REGEX = Regex("\\s*\\[BOT\\]$", RegexOption.IGNORE_CASE)
+
+private fun isBotSenderToken(rawSender: String, cleanHandle: String): Boolean {
+    if (rawSender.contains("[BOT]", ignoreCase = true)) {
+        return true
+    }
+    val lower = cleanHandle.lowercase()
+    return lower == "bot" ||
+        lower == "stock" ||
+        lower.startsWith("octibot") ||
+        lower.startsWith("bot_") ||
+        lower.startsWith("bot-")
+}
+
+private fun colorToArgbInt(c: Color): Int {
+    val a = (c.alpha * 255.0f).roundToInt().coerceIn(0, 255)
+    val r = (c.red * 255.0f).roundToInt().coerceIn(0, 255)
+    val g = (c.green * 255.0f).roundToInt().coerceIn(0, 255)
+    val b = (c.blue * 255.0f).roundToInt().coerceIn(0, 255)
+    return (a shl 24) or (r shl 16) or (g shl 8) or b
+}
+
+fun extractResolvedChatSpans(annotated: AnnotatedString): List<ResolvedChatSpan> {
+    return annotated.spanStyles.map { range ->
+        val item = range.item
+        ResolvedChatSpan(
+            text = annotated.text.substring(range.start, range.end),
+            start = range.start,
+            end = range.end,
+            colorArgb = colorToArgbInt(item.color),
+            isBold = item.fontWeight == FontWeight.Bold,
+            isItalic = item.fontStyle == FontStyle.Italic,
+            isMonospace = item.fontFamily == FontFamily.Monospace
+        )
+    }
+}
+
+@JvmOverloads
+fun formatWebChatLineAnnotatedString(
+    rawLine: String,
+    viewerHandle: String = "",
+    lightSurface: Boolean = false
+): AnnotatedString {
+    val pal = resolveWebChatStylePalette(lightSurface)
+    var rest = rawLine
+    val cleanViewer = viewerHandle.trim().removePrefix("@")
+
+    return buildAnnotatedString {
+        val tsMatch = CHAT_TIMESTAMP_REGEX.find(rest)
+        if (tsMatch != null) {
+            val tsToken = "[${tsMatch.groupValues[1]}] "
+            withStyle(SpanStyle(color = pal.timestamp, fontFamily = FontFamily.Monospace)) {
+                append(tsToken)
+            }
+            rest = rest.substring(tsMatch.value.length)
+        }
+
+        val teamMatch = CHAT_TEAM_SCOPE_REGEX.find(rest)
+        if (teamMatch != null) {
+            withStyle(SpanStyle(color = pal.teamScope, fontWeight = FontWeight.Bold)) {
+                append("[TEAM] ")
+            }
+            rest = rest.substring(teamMatch.value.length)
+        }
+
+        val sysMatch = CHAT_SYSTEM_PREFIX_REGEX.find(rest)
+        if (sysMatch != null) {
+            withStyle(SpanStyle(color = pal.systemTag, fontWeight = FontWeight.Bold)) {
+                append("[System] ")
+            }
+            val eventBody = rest.substring(sysMatch.value.length)
+            if (eventBody.isNotEmpty()) {
+                withStyle(SpanStyle(color = pal.systemEventBody, fontStyle = FontStyle.Italic)) {
+                    append(eventBody)
+                }
+            }
+            return@buildAnnotatedString
+        }
+
+        val colonIdx = rest.indexOf(": ")
+        if (colonIdx in 1..48) {
+            val rawSender = rest.substring(0, colonIdx).trim()
+            val body = rest.substring(colonIdx + 2)
+            val cleanSender = rawSender
+                .removePrefix("@")
+                .replace(CHAT_TRAILING_BOT_TAG_REGEX, "")
+                .trim()
+
+            if (cleanSender.equals("System", ignoreCase = true) ||
+                rawSender.equals("[System]", ignoreCase = true)
+            ) {
+                withStyle(SpanStyle(color = pal.systemTag, fontWeight = FontWeight.Bold)) {
+                    append("[System] ")
+                }
+                withStyle(SpanStyle(color = pal.systemEventBody, fontStyle = FontStyle.Italic)) {
+                    append(body)
+                }
+                return@buildAnnotatedString
+            }
+
+            val isBot = isBotSenderToken(rawSender, cleanSender)
+            val isSelf = !isBot && (
+                cleanSender.equals("You", ignoreCase = true) ||
+                    (cleanViewer.isNotEmpty() && cleanSender.equals(cleanViewer, ignoreCase = true))
+                )
+
+            val senderLabel: String
+            val senderColor: Color
+            when {
+                isBot -> {
+                    senderLabel = "@${cleanSender.ifEmpty { "bot" }} [BOT]:"
+                    senderColor = pal.botHandle
+                }
+                isSelf -> {
+                    senderLabel = if (cleanSender.equals("You", ignoreCase = true)) "You:" else "@$cleanSender:"
+                    senderColor = pal.selfHandle
+                }
+                else -> {
+                    senderLabel = "@${cleanSender.ifEmpty { "anon" }}:"
+                    senderColor = pal.peerHandle
+                }
+            }
+
+            withStyle(SpanStyle(color = senderColor, fontWeight = FontWeight.Bold)) {
+                append(senderLabel)
+            }
+            withStyle(SpanStyle(color = pal.messageBody)) {
+                append(" ")
+                append(body)
+            }
+        } else {
+            withStyle(SpanStyle(color = pal.messageBody)) {
+                append(rest)
+            }
+        }
+    }
+}
+
+@JvmOverloads
+fun formatGameChatEntryAnnotatedString(
+    msg: OctiAppViewModel.GameChatMessage,
+    viewerUuid: String = "",
+    viewerHandle: String = "",
+    lightSurface: Boolean = false,
+    includeTimestamp: Boolean = true,
+    isRobotSeat: Boolean = false
+): AnnotatedString {
+    val pal = resolveWebChatStylePalette(lightSurface)
+    val cleanViewer = viewerHandle.trim().removePrefix("@")
+    val rawHandle = msg.senderHandle.trim()
+    val cleanHandle = rawHandle
+        .removePrefix("@")
+        .replace(CHAT_TRAILING_BOT_TAG_REGEX, "")
+        .trim()
+
+    val isSystem = msg.scope.equals("SYSTEM", ignoreCase = true) ||
+        msg.scope.equals("EVENT", ignoreCase = true) ||
+        cleanHandle.equals("System", ignoreCase = true) ||
+        rawHandle.equals("[System]", ignoreCase = true) ||
+        (rawHandle.isEmpty() && msg.senderUuid.isEmpty() && msg.seat == 0 &&
+            CHAT_SYSTEM_PREFIX_REGEX.containsMatchIn(msg.text))
+
+    return buildAnnotatedString {
+        if (includeTimestamp) {
+            val tsStr = OctiAppViewModel.formatLobbyChatTimestamp(msg.atMs)
+            withStyle(SpanStyle(color = pal.timestamp, fontFamily = FontFamily.Monospace)) {
+                append("[$tsStr] ")
+            }
+        }
+
+        if (msg.scope.equals("TEAM", ignoreCase = true)) {
+            withStyle(SpanStyle(color = pal.teamScope, fontWeight = FontWeight.Bold)) {
+                append("[TEAM] ")
+            }
+        }
+
+        if (isSystem) {
+            withStyle(SpanStyle(color = pal.systemTag, fontWeight = FontWeight.Bold)) {
+                append("[System] ")
+            }
+            val cleanedEventText = msg.text.replaceFirst(CHAT_SYSTEM_PREFIX_REGEX, "")
+            withStyle(SpanStyle(color = pal.systemEventBody, fontStyle = FontStyle.Italic)) {
+                append(cleanedEventText)
+            }
+            return@buildAnnotatedString
+        }
+
+        val isBot = isRobotSeat ||
+            msg.senderUuid.startsWith("bot", ignoreCase = true) ||
+            isBotSenderToken(rawHandle, cleanHandle)
+
+        val isSelf = !isBot && (
+            (rawHandle.isEmpty() && msg.senderUuid.isEmpty()) ||
+                cleanHandle.equals("You", ignoreCase = true) ||
+                (viewerUuid.isNotEmpty() && msg.senderUuid == viewerUuid) ||
+                (cleanViewer.isNotEmpty() && cleanHandle.isNotEmpty() &&
+                    cleanHandle.equals(cleanViewer, ignoreCase = true))
+            )
+
+        val senderLabel: String
+        val senderColor: Color
+        when {
+            isBot -> {
+                senderLabel = "@${cleanHandle.ifEmpty { "bot" }} [BOT]:"
+                senderColor = pal.botHandle
+            }
+            isSelf -> {
+                senderLabel = if (cleanHandle.isEmpty() || cleanHandle.equals("You", ignoreCase = true)) {
+                    "You:"
+                } else {
+                    "@$cleanHandle:"
+                }
+                senderColor = pal.selfHandle
+            }
+            else -> {
+                senderLabel = "@${cleanHandle.ifEmpty { "player" }}:"
+                senderColor = pal.peerHandle
+            }
+        }
+
+        withStyle(SpanStyle(color = senderColor, fontWeight = FontWeight.Bold)) {
+            append(senderLabel)
+        }
+        withStyle(SpanStyle(color = pal.messageBody)) {
+            append(" ")
+            append(msg.text)
+        }
+    }
+}
 
 /**
  * Tabletop reserve HUD, move confirmation dock, VCR move-history scrubber,
- * and expandable multi-row Table Chat surface.
+ * and full-screen-width vertically stacked Table Chat & Lobby Chat surfaces.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -93,8 +467,13 @@ fun OctiReserveHud(
     val activeGameView by viewModel.activeGameView.collectAsState()
     val gameChatLog by viewModel.gameChatLog.collectAsState()
     val lobbyChatMessages by viewModel.lobbyChatMessages.collectAsState()
+    val lobbyState by viewModel.lobbyState.collectAsState()
+    val currentProfile by viewModel.currentProfile.collectAsState()
     val themeId by viewModel.theme.collectAsState()
     val pal = OctiPalette.forTheme(themeId)
+    val webPal = resolveWebChatStylePaletteForColor(OctiTheme.colors.windowBg)
+    val myUuid = currentProfile?.uuid ?: ""
+    val myHandle = currentProfile?.handle ?: ""
     val isInteractiveTurn = viewModel.isInteractiveOnlineTurn()
 
     val activeBoard = if (viewModel.isViewingHistory()) {
@@ -116,15 +495,16 @@ fun OctiReserveHud(
     val totalPlies = viewModel.livePlyCount()
     val compactBtnPad = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
 
-    Card(
+    Surface(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
-        border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+        color = webPal.cardBg,
+        shape = RoundedCornerShape(0.dp),
+        border = BorderStroke(1.dp, webPal.cardBorder)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(top = 4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             val gameMode = game?.mode ?: OctiGameMode.GAME_MODE_2
@@ -137,7 +517,9 @@ fun OctiReserveHud(
             val chunked = players.chunked(2)
             for (rowPlayers in chunked) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = RESERVE_HUD_CONTROLS_HORIZONTAL_PADDING_DP.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     for (p in rowPlayers) {
@@ -266,7 +648,9 @@ fun OctiReserveHud(
             val isGuidedCancelVisible = viewModel.composer.isGuidedMoveActive && boardRev >= 0L
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = RESERVE_HUD_CONTROLS_HORIZONTAL_PADDING_DP.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -370,7 +754,9 @@ fun OctiReserveHud(
             val isOnlineActivePhase = activeGameView?.phase == "IN_PROGRESS" || activeGameView?.phase == "PAUSED"
             if (isOnlineSeatedPlayer && isOnlineActivePhase) {
                 FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = RESERVE_HUD_CONTROLS_HORIZONTAL_PADDING_DP.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -426,29 +812,47 @@ fun OctiReserveHud(
             }
 
             val isOnlineRoom = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM
+            val effectiveLobbyMessages = if (lobbyChatMessages.isNotEmpty()) {
+                lobbyChatMessages
+            } else {
+                lobbyState.recentChat.map { OctiAppViewModel.formatLobbyChatEntry(it) }
+            }
+            val tableChatListState = rememberLazyListState()
+            val lobbyChatListState = rememberLazyListState()
 
-            if (isOnlineRoom) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .heightIn(min = 96.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    // 1. Table Chat Card
+            LaunchedEffect(gameChatLog.size) {
+                if (gameChatLog.isNotEmpty()) {
+                    tableChatListState.scrollToItem(gameChatLog.size - 1)
+                }
+            }
+            LaunchedEffect(effectiveLobbyMessages.size) {
+                if (effectiveLobbyMessages.isNotEmpty()) {
+                    lobbyChatListState.scrollToItem(effectiveLobbyMessages.size - 1)
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(RESERVE_HUD_CHAT_STACK_SPACING_DP.dp)
+            ) {
+                if (isOnlineRoom) {
+                    // 1. Table Chat (Top, 100% full screen width)
                     Surface(
                         modifier = Modifier
+                            .fillMaxWidth()
                             .weight(1f)
-                            .fillMaxHeight()
+                            .heightIn(min = RESERVE_HUD_CHAT_MIN_HEIGHT_DP.dp)
                             .clickable { viewModel.openBoardChatZoomDialog() },
-                        color = OctiTheme.colors.windowBg,
-                        shape = RoundedCornerShape(6.dp),
-                        border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+                        color = webPal.wellBg,
+                        shape = RoundedCornerShape(0.dp),
+                        border = BorderStroke(1.dp, webPal.cardBorder)
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Row(
@@ -460,7 +864,7 @@ fun OctiReserveHud(
                                     text = "Table Chat",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = OctiTheme.colors.textSecondary
+                                    color = webPal.headerTitle
                                 )
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -469,29 +873,34 @@ fun OctiReserveHud(
                                     if (activeRoomId.isNotEmpty()) {
                                         OutlinedButton(
                                             onClick = { viewModel.leaveOnlineTableAsync(activeRoomId) },
-                                            modifier = Modifier.height(22.dp),
+                                            modifier = Modifier.height(20.dp),
+                                            border = BorderStroke(1.dp, webPal.dangerOutline),
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                                         ) {
-                                            Text("Leave", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+                                            Text(
+                                                text = "Leave",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontSize = 9.sp,
+                                                color = webPal.dangerText
+                                            )
                                         }
                                     }
                                     Surface(
-                                        color = OctiTheme.colors.panelCardBg,
+                                        color = webPal.cardBg,
                                         shape = RoundedCornerShape(4.dp),
-                                        border = BorderStroke(1.dp, OctiTheme.colors.accentBrass)
+                                        border = BorderStroke(1.dp, webPal.headerTitle)
                                     ) {
                                         Text(
                                             text = "⤢",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = OctiTheme.colors.accentBrass,
+                                            color = webPal.headerTitle,
                                             fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                                         )
                                     }
                                 }
                             }
-                            val recentTableMessages = gameChatLog.takeLast(4)
-                            if (recentTableMessages.isEmpty()) {
+                            if (gameChatLog.isEmpty()) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -501,114 +910,39 @@ fun OctiReserveHud(
                                     Text(
                                         text = "Table Chat • Tap to open",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = OctiTheme.colors.textSecondary,
+                                        color = webPal.timestamp,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             } else {
-                                Column(
+                                LazyColumn(
+                                    state = tableChatListState,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .weight(1f),
                                     verticalArrangement = Arrangement.spacedBy(1.dp)
                                 ) {
-                                    for (msg in recentTableMessages) {
-                                        val sender = if (msg.senderHandle.isNotEmpty()) {
-                                            val clean = msg.senderHandle.removePrefix("@")
-                                            if (clean.equals("bot", ignoreCase = true) || clean.equals("stock", ignoreCase = true)) {
-                                                "@$clean [BOT]"
-                                            } else {
-                                                "@$clean"
-                                            }
-                                        } else {
-                                            "You"
-                                        }
-                                        val scopePrefix = if (msg.scope.equals("TEAM", ignoreCase = true)) "[TEAM] " else ""
-                                        Text(
-                                            text = "$scopePrefix$sender: ${msg.text}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = OctiTheme.colors.textPrimary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                    items(gameChatLog) { msg ->
+                                        val isSeatBot = activeGameView?.seats
+                                            ?.firstOrNull { it.seat == msg.seat }
+                                            ?.isRobot == true
+                                        val styled = formatGameChatEntryAnnotatedString(
+                                            msg = msg,
+                                            viewerUuid = myUuid,
+                                            viewerHandle = myHandle,
+                                            lightSurface = webPal.lightSurface,
+                                            includeTimestamp = true,
+                                            isRobotSeat = isSeatBot
                                         )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 2. Lobby Chat Card
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable { viewModel.openLobbyChatZoomDialog() },
-                        color = OctiTheme.colors.windowBg,
-                        shape = RoundedCornerShape(6.dp),
-                        border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 6.dp, vertical = 4.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Lobby Chat",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = OctiTheme.colors.textSecondary
-                                )
-                                Surface(
-                                    color = OctiTheme.colors.panelCardBg,
-                                    shape = RoundedCornerShape(4.dp),
-                                    border = BorderStroke(1.dp, OctiTheme.colors.accentBrass)
-                                ) {
-                                    Text(
-                                        text = "⤢",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = OctiTheme.colors.accentBrass,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                    )
-                                }
-                            }
-                            val recentLobbyMessages = lobbyChatMessages.takeLast(4)
-                            if (recentLobbyMessages.isEmpty()) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(1f),
-                                    contentAlignment = Alignment.CenterStart
-                                ) {
-                                    Text(
-                                        text = "Global Lobby • Tap to chat",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = OctiTheme.colors.textSecondary,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            } else {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(1.dp)
-                                ) {
-                                    for (msgLine in recentLobbyMessages) {
                                         Text(
-                                            text = msgLine,
+                                            text = styled,
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = OctiTheme.colors.textPrimary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { viewModel.openBoardChatZoomDialog() }
                                         )
                                     }
                                 }
@@ -616,22 +950,22 @@ fun OctiReserveHud(
                         }
                     }
                 }
-            } else {
-                // Local AI / local game: only Lobby Chat in non-board chat area
+
+                // 2. Lobby Chat (Bottom when online, full chat stack when local; 100% full screen width)
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .heightIn(min = 96.dp)
+                        .heightIn(min = RESERVE_HUD_CHAT_MIN_HEIGHT_DP.dp)
                         .clickable { viewModel.openLobbyChatZoomDialog() },
-                    color = OctiTheme.colors.windowBg,
-                    shape = RoundedCornerShape(6.dp),
-                    border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+                    color = webPal.wellBg,
+                    shape = RoundedCornerShape(0.dp),
+                    border = BorderStroke(1.dp, webPal.cardBorder)
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Row(
@@ -639,28 +973,37 @@ fun OctiReserveHud(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Lobby Chat (Global)",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = OctiTheme.colors.textSecondary
-                            )
-                            Surface(
-                                color = OctiTheme.colors.panelCardBg,
-                                shape = RoundedCornerShape(4.dp),
-                                border = BorderStroke(1.dp, OctiTheme.colors.accentBrass)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Chat ⤢",
+                                    text = "Lobby Chat",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = OctiTheme.colors.accentBrass,
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                    color = webPal.headerTitle
+                                )
+                                Text(
+                                    text = "Global",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = webPal.timestamp
+                                )
+                            }
+                            Surface(
+                                color = webPal.cardBg,
+                                shape = RoundedCornerShape(4.dp),
+                                border = BorderStroke(1.dp, webPal.headerTitle)
+                            ) {
+                                Text(
+                                    text = "⤢",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = webPal.headerTitle,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                                 )
                             }
                         }
-                        val recentLobbyMessages = lobbyChatMessages.takeLast(4)
-                        if (recentLobbyMessages.isEmpty()) {
+                        if (effectiveLobbyMessages.isEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -670,25 +1013,33 @@ fun OctiReserveHud(
                                 Text(
                                     text = "Global Lobby Chat • Tap to open & chat",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = OctiTheme.colors.textSecondary,
+                                    color = webPal.timestamp,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
                         } else {
-                            Column(
+                            LazyColumn(
+                                state = lobbyChatListState,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                verticalArrangement = Arrangement.spacedBy(1.dp)
                             ) {
-                                for (msgLine in recentLobbyMessages) {
+                                items(effectiveLobbyMessages) { msgLine ->
+                                    val styled = formatWebChatLineAnnotatedString(
+                                        rawLine = msgLine,
+                                        viewerHandle = myHandle,
+                                        lightSurface = webPal.lightSurface
+                                    )
                                     Text(
-                                        text = msgLine,
+                                        text = styled,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = OctiTheme.colors.textPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { viewModel.openLobbyChatZoomDialog() }
                                     )
                                 }
                             }

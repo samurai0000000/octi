@@ -14,6 +14,7 @@
 #include "OctiCrypto.hxx"
 #include "OctiExceptions.hxx"
 #include "OctiGame.hxx"
+#include "OctiSoundCue.hxx"
 #include "WebUi.hxx"
 
 #include <httplib.h>
@@ -1128,6 +1129,7 @@ struct OctiHttpServer::Impl {
     /* handlers */
     void handleHealth(const Request &req, Response &res);
     void handleAvatarGet(const Request &req, Response &res);
+    void handleSoundAssetGet(const Request &req, Response &res);
     void handlePrivacy(const Request &req, Response &res);
     void handleDataDeletion(const Request &req, Response &res);
     void handleAuthAuthorize(const Request &req, Response &res);
@@ -1352,6 +1354,9 @@ void OctiHttpServer::Impl::stop()
         stopping = true;
     }
     wakeCv.notify_all();
+    for (int i = 0; i < 250 && sseActive.load() > 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
     server.stop();
     if (listenThread.joinable()) {
         listenThread.join();
@@ -2341,6 +2346,31 @@ void OctiHttpServer::Impl::handleAvatarGet(const Request &req, Response &res)
     res.status = 200;
     res.set_header("Cache-Control", "public, max-age=86400");
     res.set_content(bytes, mime.c_str());
+}
+
+void OctiHttpServer::Impl::handleSoundAssetGet(const Request &req,
+                                               Response &res)
+{
+    auto it = req.path_params.find("file");
+    if (it == req.path_params.end() || it->second.empty()) {
+        sendError(res, 404, "NOT_FOUND", "sound asset not found");
+        return;
+    }
+    SoundCue cue = SoundCue::POD_PLACE;
+    if (!soundCueFromAssetFileName(it->second, cue)) {
+        sendError(res, 404, "NOT_FOUND", "sound asset not found");
+        return;
+    }
+    std::size_t wavSize = 0;
+    const std::uint8_t *wavBytes = soundCueWavBytes(cue, wavSize);
+    if (wavBytes == nullptr || wavSize == 0) {
+        sendError(res, 404, "NOT_FOUND", "sound asset not found");
+        return;
+    }
+    res.status = 200;
+    res.set_header("Cache-Control", "public, max-age=86400");
+    res.set_content(reinterpret_cast<const char *>(wavBytes), wavSize,
+                    "audio/wav");
 }
 
 void OctiHttpServer::Impl::handlePrivacy(const Request &, Response &res)
@@ -6292,7 +6322,8 @@ void OctiHttpServer::Impl::handleIndex(const Request &, Response &res)
                    "default-src 'none'; script-src 'unsafe-inline'; "
                    "worker-src 'self' blob:; "
                    "style-src 'unsafe-inline'; connect-src 'self'; "
-                   "img-src 'self' data:; base-uri 'none'; "
+                   "img-src 'self' data:; media-src 'self' data: blob:; "
+                   "base-uri 'none'; "
                    "form-action 'none'; frame-ancestors 'none'");
     res.set_content(webUiHtml(), "text/html; charset=utf-8");
 }
@@ -6589,6 +6620,7 @@ void OctiHttpServer::Impl::registerRoutes()
         {"GET", "/api/v1/health", &Impl::handleHealth},
         {"GET", "/api/v1/avatars/:file", &Impl::handleAvatarGet},
         {"GET", "/avatar/:file", &Impl::handleAvatarGet},
+        {"GET", "/sounds/:file", &Impl::handleSoundAssetGet},
         {"GET", "/api/v1/auth/data-deletion", &Impl::handleDataDeletion},
         {"POST", "/api/v1/auth/data-deletion", &Impl::handleDataDeletion},
         {"GET", "/api/v1/auth/authorize", &Impl::handleAuthAuthorize},

@@ -722,17 +722,80 @@ public class OctiGame {
         return true;
     }
 
+    public void applyUncommittedTurnForPreview(List<OctiMoveOp> ops) {
+        if (!gameStarted) {
+            throw new IllegalMoveException("game has not started");
+        }
+        if (gameOver) {
+            throw new IllegalMoveException("game is already over");
+        }
+        if (turn == OctiPlayer.PLAYER_UNDEF) {
+            throw new IllegalMoveException("turn is undefined");
+        }
+        if (ops == null || ops.isEmpty()) {
+            throw new IllegalMoveException("no operations in move");
+        }
+
+        OctiGameSnapshot snapBefore = captureSnapshot();
+        try {
+            applyMoveOpsInternal(ops, true);
+            check4PlayerElimination();
+        } catch (Throwable t) {
+            restoreSnapshot(snapBefore);
+            if (t instanceof RuntimeException) {
+                throw (RuntimeException) t;
+            }
+            throw new RuntimeException(t);
+        }
+    }
+
+    boolean hasAnyRegularMove() {
+        if (!gameStarted || gameOver || turn == OctiPlayer.PLAYER_UNDEF) {
+            return false;
+        }
+        List<OctiMove> moves = new ArrayList<>();
+        generateSingleTurnMovesImpl(moves);
+        return !moves.isEmpty();
+    }
+
+    private OctiDir bonusOpSuperDir(OctiMoveOp bOp) {
+        if (board == null || bOp == null || bOp.hops.isEmpty()) {
+            return OctiDir.DIR_UNDEF;
+        }
+        OctiHop h0 = bOp.hops.get(0);
+        int[] delta = new int[2];
+        if (!findStepDelta(bOp.x0, bOp.y0, h0.x, h0.y, useEdgelessBoard,
+                board.getBoardWidth(), board.getBoardHeight(), delta)) {
+            return OctiDir.DIR_UNDEF;
+        }
+        int dx = delta[0];
+        int dy = delta[1];
+        if (Math.max(Math.abs(dx), Math.abs(dy)) == 1) {
+            return OctiDir.deltaToDir(dx, dy);
+        }
+        return OctiDir.deltaToDir(dx / 2, dy / 2);
+    }
+
     private void applyMoveOps(List<OctiMoveOp> ops) {
+        applyMoveOpsInternal(ops, false);
+    }
+
+    private void applyMoveOpsInternal(List<OctiMoveOp> ops, boolean allowPreludeOnly) {
         if (ops == null || ops.isEmpty()) {
             throw new IllegalMoveException("no operations in move");
         }
 
         List<OctiMoveOp> bonusOps = new ArrayList<>();
         List<OctiMoveOp> regularOps = new ArrayList<>();
+        boolean seenRegular = false;
         for (OctiMoveOp op : ops) {
             if (op.isSuperProngBonusMove) {
+                if (seenRegular) {
+                    throw new IllegalMoveException("superprong bonus move must precede regular turn action");
+                }
                 bonusOps.add(op);
             } else {
+                seenRegular = true;
                 regularOps.add(op);
             }
         }
@@ -745,8 +808,15 @@ public class OctiGame {
                 throw new IllegalMoveException("exceeded maximum superprong bonus moves");
             }
 
+            int p1EndX = -1;
+            int p1EndY = -1;
+            int p1Cfg = -1;
+            OctiDir p1SuperDir = OctiDir.DIR_UNDEF;
+            int sameCfgCountAfterP1 = 0;
+
             Set<Coord> bonusCaptures = new HashSet<>();
-            for (OctiMoveOp bOp : bonusOps) {
+            for (int bIdx = 0; bIdx < bonusOps.size(); bIdx++) {
+                OctiMoveOp bOp = bonusOps.get(bIdx);
                 if (bOp.hops.isEmpty()) {
                     throw new IllegalMoveException("superprong bonus move must contain hops");
                 }
@@ -770,9 +840,14 @@ public class OctiGame {
 
                 int cx = bOp.x0;
                 int cy = bOp.y0;
+                OctiDir opSuperDir = OctiDir.DIR_UNDEF;
                 Set<Coord> jumpedSquares = new HashSet<>();
 
-                for (OctiHop hop : bOp.hops) {
+                for (int hopIdx = 0; hopIdx < bOp.hops.size(); hopIdx++) {
+                    OctiHop hop = bOp.hops.get(hopIdx);
+                    if (!board.isValidCoord(hop.x, hop.y)) {
+                        throw new IllegalMoveException("bonus hop destination out of bounds");
+                    }
                     int[] delta = new int[2];
                     if (!findStepDelta(cx, cy, hop.x, hop.y, useEdgelessBoard,
                             board.getBoardWidth(), board.getBoardHeight(), delta)) {
@@ -791,7 +866,11 @@ public class OctiGame {
                         if (dir == OctiDir.DIR_UNDEF || pod.prongAt(dir) != OctiProngType.SUPER_PRONG) {
                             throw new IllegalMoveException("bonus move must follow superprong direction");
                         }
+                        opSuperDir = dir;
                         OctiSquare destSq = board.squareAt(hop.x, hop.y);
+                        if (mode == OctiGameMode.GAME_MODE_OFK && !destSq.isEmpty()) {
+                            throw new IllegalMoveException("pod stacking forbidden in OCTI for Kids");
+                        }
                         if (destSq.hasEnemyOf(turn)) {
                             throw new IllegalMoveException("cannot move onto enemy square in bonus move");
                         }
@@ -806,8 +885,15 @@ public class OctiGame {
                             throw new IllegalMoveException("invalid jump geometry in bonus move");
                         }
                         OctiDir dir = OctiDir.deltaToDir(dx / 2, dy / 2);
-                        if (dir == OctiDir.DIR_UNDEF || pod.prongAt(dir) != OctiProngType.SUPER_PRONG) {
-                            throw new IllegalMoveException("bonus jump must follow superprong direction");
+                        if (hopIdx == 0) {
+                            if (dir == OctiDir.DIR_UNDEF || pod.prongAt(dir) != OctiProngType.SUPER_PRONG) {
+                                throw new IllegalMoveException("bonus jump must follow superprong direction");
+                            }
+                            opSuperDir = dir;
+                        } else {
+                            if (dir != opSuperDir) {
+                                throw new IllegalMoveException("bonus jump must follow single superprong direction");
+                            }
                         }
                         int bw = board.getBoardWidth();
                         int bh = board.getBoardHeight();
@@ -834,7 +920,31 @@ public class OctiGame {
                         cy = hop.y;
                     }
                 }
+
+                int curCfg = pod.rawConfig() & 0xFFFF;
+                if (bIdx == 1
+                        && bOp.x0 == p1EndX && bOp.y0 == p1EndY
+                        && curCfg == p1Cfg && opSuperDir == p1SuperDir
+                        && sameCfgCountAfterP1 < 2) {
+                    throw new IllegalMoveException("cannot reuse same superprong socket twice in one turn");
+                }
+
                 board.squareAt(cx, cy).addPod(pod);
+
+                if (bIdx == 0) {
+                    p1EndX = cx;
+                    p1EndY = cy;
+                    p1Cfg = curCfg;
+                    p1SuperDir = opSuperDir;
+                    sameCfgCountAfterP1 = 0;
+                    OctiSquare p1DestSq = board.squareAt(p1EndX, p1EndY);
+                    for (int k = 0; k < p1DestSq.getNumPods(); k++) {
+                        OctiPod dp = p1DestSq.getPodAt(k);
+                        if (dp.getType() == turn.toPodType() && (dp.rawConfig() & 0xFFFF) == p1Cfg) {
+                            sameCfgCountAfterP1++;
+                        }
+                    }
+                }
             }
 
             for (Coord coord : bonusCaptures) {
@@ -855,6 +965,9 @@ public class OctiGame {
         }
 
         if (regularOps.isEmpty()) {
+            if (allowPreludeOnly && !bonusOps.isEmpty()) {
+                return;
+            }
             throw new IllegalMoveException("move must include a regular turn action");
         }
 
@@ -1608,6 +1721,10 @@ public class OctiGame {
     }
 
     public void prepareHops(int x, int y, OctiPod pod, List<OctiHop> hops) {
+        prepareHops(x, y, pod, hops, false);
+    }
+
+    public void prepareHops(int x, int y, OctiPod pod, List<OctiHop> hops, boolean isSuperProngBonusMove) {
         if (!hasPreparedMove) {
             prepSnapshot = captureSnapshot();
             prepOps.clear();
@@ -1618,6 +1735,7 @@ public class OctiGame {
         op.x0 = x;
         op.y0 = y;
         op.pod = (pod != null) ? pod.copy() : new OctiPod();
+        op.isSuperProngBonusMove = isSuperProngBonusMove;
         if (hops != null) {
             for (OctiHop h : hops) {
                 op.hops.add(new OctiHop(h));
@@ -2605,11 +2723,31 @@ public class OctiGame {
             restoreSnapshot(rootSnap);
             List<Coord> cap1 = new ArrayList<>();
             applySingleSuperBonusPreludeInPlace(p1, cap1);
+            OctiHop p1End = p1.hops.get(p1.hops.size() - 1);
+            int p1EndX = p1End.x;
+            int p1EndY = p1End.y;
+            int p1Cfg = p1.pod.rawConfig() & 0xFFFF;
+            OctiDir p1SuperDir = bonusOpSuperDir(p1);
+            int sameCfgCountAfterP1 = 0;
+            OctiSquare p1DestSq = board.squareAt(p1EndX, p1EndY);
+            for (int i = 0; i < p1DestSq.getNumPods(); i++) {
+                OctiPod dp = p1DestSq.getPodAt(i);
+                if (dp.getType() == turn.toPodType() && (dp.rawConfig() & 0xFFFF) == p1Cfg) {
+                    sameCfgCountAfterP1++;
+                }
+            }
             OctiGameSnapshot afterP1NoCapSnap = captureSnapshot();
 
             List<OctiMoveOp> preludes2 = new ArrayList<>();
             enumerateSinglePodSuperBonusOps(preludes2);
             for (OctiMoveOp p2 : preludes2) {
+                OctiDir p2SuperDir = bonusOpSuperDir(p2);
+                int p2Cfg = p2.pod.rawConfig() & 0xFFFF;
+                if (p2.x0 == p1EndX && p2.y0 == p1EndY
+                        && p2Cfg == p1Cfg && p2SuperDir == p1SuperDir
+                        && sameCfgCountAfterP1 < 2) {
+                    continue;
+                }
                 restoreSnapshot(afterP1NoCapSnap);
                 List<Coord> capBoth = new ArrayList<>(cap1);
                 applySingleSuperBonusPreludeInPlace(p2, capBoth);

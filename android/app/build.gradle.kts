@@ -63,6 +63,11 @@ android {
         compose = true
         buildConfig = true
     }
+    sourceSets {
+        getByName("main") {
+            resources.srcDir("../../assets")
+        }
+    }
     testOptions {
         unitTests.isReturnDefaultValues = true
     }

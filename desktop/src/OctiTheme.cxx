@@ -896,6 +896,78 @@ const OctiPalette &paletteForTheme(ThemeId id)
     }
 }
 
+bool isLightThemePalette(const OctiPalette &pal)
+{
+    return pal.windowBg.lightness() >= 140;
+}
+
+WebChatStylePalette webChatStylePalette(bool lightSurface)
+{
+    WebChatStylePalette ws;
+    ws.lightSurface = lightSurface;
+    if (lightSurface) {
+        ws.pageBg = "#FBFBFA";
+        ws.cardBg = "#FFFFFF";
+        ws.cardBorder = "#E4E4E7";
+        ws.wellBg = "#FFFFFF";
+        ws.inputBorder = "#D4D4D8";
+        ws.headerTitle = "#0F172A";
+        ws.headerSubtitle = "#64748B";
+        ws.timestamp = "#64748B";
+        ws.teamScopeBadge = "#7C3AED";
+        ws.peerHandle = "#0284C7";
+        ws.selfHandle = "#059669";
+        ws.botHandle = "#D97706";
+        ws.systemTag = "#B45309";
+        ws.eventBody = "#92400E";
+        ws.messageBody = "#0F172A";
+        ws.primaryCtaBg = "#C8A253";
+        ws.primaryCtaText = "#0F172A";
+        ws.secondaryBtnBg = "#F4F4F5";
+        ws.secondaryBtnBorder = "#D4D4D8";
+        ws.secondaryBtnText = "#0F172A";
+        ws.dangerRed = "#DC2626";
+        ws.dangerHoverText = "#FFFFFF";
+        ws.dangerOutlineText = "#DC2626";
+        ws.bannerBg = "#EFF6FF";
+        ws.bannerBorder = "#93C5FD";
+        ws.bannerText = "#1E3A8A";
+    } else {
+        ws.pageBg = "#0B0F17";
+        ws.cardBg = "#101622";
+        ws.cardBorder = "#1E293B";
+        ws.wellBg = "#0B0F17";
+        ws.inputBorder = "#334155";
+        ws.headerTitle = "#C8A253";
+        ws.headerSubtitle = "#94A3B8";
+        ws.timestamp = "#94A3B8";
+        ws.teamScopeBadge = "#A78BFA";
+        ws.peerHandle = "#38BDF8";
+        ws.selfHandle = "#34D399";
+        ws.botHandle = "#FBBF24";
+        ws.systemTag = "#C8A253";
+        ws.eventBody = "#FDE68A";
+        ws.messageBody = "#F1F5F9";
+        ws.primaryCtaBg = "#C8A253";
+        ws.primaryCtaText = "#0B0F17";
+        ws.secondaryBtnBg = "#161D26";
+        ws.secondaryBtnBorder = "#334155";
+        ws.secondaryBtnText = "#E2E8F0";
+        ws.dangerRed = "#DC2626";
+        ws.dangerHoverText = "#FFFFFF";
+        ws.dangerOutlineText = "#F87171";
+        ws.bannerBg = "rgba(56, 189, 248, 0.12)";
+        ws.bannerBorder = "#38BDF8";
+        ws.bannerText = "#E0F2FE";
+    }
+    return ws;
+}
+
+WebChatStylePalette webChatStylePaletteForTheme(ThemeId id)
+{
+    return webChatStylePalette(isLightThemePalette(paletteForTheme(id)));
+}
+
 QString buildAppStyleSheet(ThemeId id)
 {
     const OctiPalette &p = paletteForTheme(id);

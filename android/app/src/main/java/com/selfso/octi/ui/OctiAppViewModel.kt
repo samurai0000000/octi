@@ -519,6 +519,28 @@ class OctiAppViewModel @JvmOverloads constructor(
     private var _lastSubmittedOnlinePly: Int = 0
     fun lastSubmittedOnlinePly(): Int = _lastSubmittedOnlinePly
 
+    @Volatile
+    private var _hasInitialOnlineSyncForRoom: Boolean = false
+    @Volatile
+    private var _onlineSyncedRoomId: String = ""
+    @Volatile
+    private var _prevOnlineMoveCount: Int = 0
+    @Volatile
+    private var _lastLocalOnlineCommittedPly: Int = 0
+    @Volatile
+    private var _lastLocalOnlineVictoryPly: Int = 0
+    @Volatile
+    private var _pendingLocalOnlineMove: String = ""
+
+    private fun resetOnlineAudioSyncState(roomId: String = "") {
+        _hasInitialOnlineSyncForRoom = false
+        _onlineSyncedRoomId = roomId
+        _prevOnlineMoveCount = 0
+        _lastLocalOnlineCommittedPly = 0
+        _lastLocalOnlineVictoryPly = 0
+        _pendingLocalOnlineMove = ""
+    }
+
     data class CapturePromptData(val jumpedX: Int, val jumpedY: Int, val player: OctiPlayer)
 
     private val _zoomedSquare = MutableStateFlow<Pair<Int, Int>?>(null)
@@ -1182,23 +1204,113 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun handleBoardSquareSingleTap(sqX: Int, sqY: Int): Boolean {
-        if (!isInteractiveOnlineTurn() || isViewingHistory() || _awaitingMatchStart.value) {
+        if (_awaitingMatchStart.value && _matchType.value != MatchType.ONLINE_ROOM) {
+            return false
+        }
+        if (isViewingHistory()) {
+            if (!displayBoard.isValidCoord(sqX - 1, sqY - 1)) {
+                return false
+            }
+            val sq = displayBoard.squareAt(sqX - 1, sqY - 1)
+            if (!sq.isEmpty) {
+                openZoomedSquare(sqX, sqY)
+                bumpRevision()
+                return true
+            }
             return false
         }
         return synchronized(board) {
             val g = board.game ?: return@synchronized false
-            if (!g.isGameStarted || g.isGameOver || !board.isValidCoord(sqX - 1, sqY - 1)) {
+            if (!g.isGameStarted || !board.isValidCoord(sqX - 1, sqY - 1)) {
                 return@synchronized false
             }
-            if (composer.isGuidedMoveActive || composer.isAwaitingConfirmation) {
+            val isOnlineFinished = _matchType.value == MatchType.ONLINE_ROOM && _activeGameView.value?.phase == "FINISHED"
+            val isBotTurn = _matchType.value == MatchType.LOCAL_VS_BOT &&
+                (_isBotThinking.value || g.turn != _humanSeat.value)
+            val canAct = isInteractiveOnlineTurn() && !isOnlineFinished && !g.isGameOver && !isBotTurn
+            if (!canAct) {
+                val sq = board.squareAt(sqX - 1, sqY - 1)
+                if (!sq.isEmpty) {
+                    openZoomedSquare(sqX, sqY)
+                    bumpRevision()
+                    return@synchronized true
+                }
                 return@synchronized false
             }
-            val sq = board.squareAt(sqX - 1, sqY - 1)
-            val activeTurn = g.turn ?: return@synchronized false
+
+            if (composer.isAwaitingConfirmation) {
+                if (composer.toggleCaptureAtSquare(sqX, sqY)) {
+                    notifyComposerUpdated()
+                    return@synchronized true
+                }
+                val orig = composer.guidedOriginSquare()
+                val isOriginSquare = orig != null && orig.size >= 2 && orig[0] == sqX && orig[1] == sqY
+                if (isOriginSquare && composer.hasOtherMovablePodAtOrigin()) {
+                    composer.finishGuidedMoveHere()
+                    if (composer.hasDistinctUnclaimedPodsAtOrigin()) {
+                        openZoomedSquare(sqX, sqY)
+                    } else {
+                        val nextPod = composer.firstUnclaimedFriendlyPodIndex(sqX, sqY)
+                        composer.beginGuidedPodMove(sqX, sqY, nextPod, _moveEntireMatchingStack.value)
+                    }
+                    notifyComposerUpdated()
+                    return@synchronized true
+                }
+                if (composer.isGuidedMoveActive && composer.isGuidedLegalDestination(sqX, sqY)) {
+                    if (composer.selectGuidedDestination(sqX, sqY)) {
+                        notifyComposerUpdated()
+                        return@synchronized true
+                    }
+                }
+                if (!composer.isAwaitingSuperProngBonusMove) {
+                    val prevBoard = composer.buildPreviewBoard() ?: board
+                    val prevSq = prevBoard.squareAt(sqX - 1, sqY - 1)
+                    val prevTurn = prevBoard.game?.turn ?: g.turn
+                    if (!prevSq.isEmpty && (prevSq.numPods >= 2 || (prevTurn != null && prevSq.hasEnemyOf(prevTurn)))) {
+                        openZoomedSquare(sqX, sqY)
+                        bumpRevision()
+                        return@synchronized true
+                    }
+                    return@synchronized false
+                }
+                if (composer.isGuidedMoveActive) {
+                    composer.finishGuidedMoveHere()
+                }
+            } else if (composer.isGuidedMoveActive) {
+                val orig = composer.guidedOriginSquare()
+                val isOriginSquare = orig != null && orig.size >= 2 && orig[0] == sqX && orig[1] == sqY
+                if (isOriginSquare) {
+                    composer.cancelAndRollback()
+                    openZoomedSquare(sqX, sqY)
+                    notifyComposerUpdated()
+                    return@synchronized true
+                }
+                if (composer.isGuidedLegalDestination(sqX, sqY)) {
+                    if (composer.selectGuidedDestination(sqX, sqY)) {
+                        notifyComposerUpdated()
+                        return@synchronized true
+                    }
+                }
+                composer.cancelAndRollback()
+                val rawSq = board.squareAt(sqX - 1, sqY - 1)
+                if (rawSq.isEmpty) {
+                    notifyComposerUpdated()
+                    return@synchronized false
+                }
+            }
+
+            val activeBoard = if (composer.isAwaitingConfirmation) {
+                composer.buildPreviewBoard() ?: board
+            } else {
+                board
+            }
+            val activeGame = activeBoard.game ?: return@synchronized false
+            val sq = activeBoard.squareAt(sqX - 1, sqY - 1)
+            val activeTurn = activeGame.turn ?: return@synchronized false
             if (sq.numPods == 0) {
-                if (board.gameMode != OctiGameMode.GAME_MODE_OFK &&
-                    board.isHomeSquareOf(sqX - 1, sqY - 1, activeTurn) &&
-                    g.getFreePods(activeTurn) > 0
+                if (activeBoard.gameMode != OctiGameMode.GAME_MODE_OFK &&
+                    activeBoard.isHomeSquareOf(sqX - 1, sqY - 1, activeTurn) &&
+                    activeGame.getFreePods(activeTurn) > 0
                 ) {
                     if (composer.stageOrCommitAddPod(sqX, sqY, false)) {
                         soundSynth.triggerCue(OctiSoundSynth.SoundCue.POD_DROP)
@@ -1208,16 +1320,23 @@ class OctiAppViewModel @JvmOverloads constructor(
                 }
                 return@synchronized false
             }
-            if (!sq.isEmpty && !sq.hasEnemyOf(activeTurn)) {
-                val pIdx = composer.selectedStackPodIndex(sqX, sqY)
-                val resolvedIdx = if (pIdx >= 0 && pIdx < sq.numPods) pIdx else 0
-                if (!composer.beginGuidedPodMove(sqX, sqY, resolvedIdx, _moveEntireMatchingStack.value)) {
-                    openZoomedSquare(sqX, sqY)
-                }
+            if (sq.hasEnemyOf(activeTurn) || !sq.isOccupiedBy(activeTurn)) {
+                openZoomedSquare(sqX, sqY)
                 bumpRevision()
                 return@synchronized true
             }
-            false
+            if (sq.numPods >= 2) {
+                openZoomedSquare(sqX, sqY)
+                bumpRevision()
+                return@synchronized true
+            }
+            val pIdx = composer.selectedStackPodIndex(sqX, sqY)
+            val resolvedIdx = if (pIdx >= 0 && pIdx < sq.numPods) pIdx else 0
+            if (!composer.beginGuidedPodMove(sqX, sqY, resolvedIdx, _moveEntireMatchingStack.value)) {
+                openZoomedSquare(sqX, sqY)
+            }
+            bumpRevision()
+            true
         }
     }
 
@@ -1226,19 +1345,40 @@ class OctiAppViewModel @JvmOverloads constructor(
             return false
         }
         if (isViewingHistory()) {
+            if (!displayBoard.isValidCoord(sqX - 1, sqY - 1)) {
+                return false
+            }
+            val sq = displayBoard.squareAt(sqX - 1, sqY - 1)
+            if (!sq.isEmpty) {
+                openZoomedSquare(sqX, sqY)
+                bumpRevision()
+                return true
+            }
             return false
         }
         val isOnlineFinished = _matchType.value == MatchType.ONLINE_ROOM && _activeGameView.value?.phase == "FINISHED"
         return synchronized(board) {
-            val g = board.game
-            if ((g?.isGameOver == true) || isOnlineFinished || !board.isValidCoord(sqX - 1, sqY - 1)) {
+            val inspBoard = if (composer.isAwaitingConfirmation) {
+                composer.buildPreviewBoard() ?: board
+            } else {
+                board
+            }
+            val g = inspBoard.game
+            if (!inspBoard.isValidCoord(sqX - 1, sqY - 1)) {
                 return@synchronized false
             }
-            val sq = board.squareAt(sqX - 1, sqY - 1)
+            val sq = inspBoard.squareAt(sqX - 1, sqY - 1)
             val turn = g?.turn
-            val canEdit = isInteractiveOnlineTurn()
-            val isHome = if (canEdit && turn != null && board.gameMode != OctiGameMode.GAME_MODE_OFK) {
-                board.isHomeSquareOf(sqX - 1, sqY - 1, turn) && !sq.hasEnemyOf(turn)
+            val isBotTurn = _matchType.value == MatchType.LOCAL_VS_BOT &&
+                (_isBotThinking.value || g?.turn != _humanSeat.value)
+            val canEdit = isInteractiveOnlineTurn() &&
+                !isOnlineFinished &&
+                (g?.isGameOver != true) &&
+                !isBotTurn
+            val isHome = if (canEdit && turn != null && inspBoard.gameMode != OctiGameMode.GAME_MODE_OFK &&
+                (!composer.isAwaitingConfirmation || composer.isAwaitingSuperProngBonusMove)
+            ) {
+                inspBoard.isHomeSquareOf(sqX - 1, sqY - 1, turn) && !sq.hasEnemyOf(turn)
             } else {
                 false
             }
@@ -1246,13 +1386,18 @@ class OctiAppViewModel @JvmOverloads constructor(
                 if (canEdit) {
                     val isOriginWithOther = composer.isAwaitingConfirmation &&
                         composer.hasOtherMovablePodAtOrigin() &&
-                        composer.guidedOriginSquare().let { it[0] == sqX && it[1] == sqY }
+                        composer.guidedOriginSquare().let { it.size >= 2 && it[0] == sqX && it[1] == sqY }
                     if (composer.isGuidedMoveActive && !composer.isAwaitingConfirmation && !isOriginWithOther) {
                         composer.cancelAndRollback()
+                    } else if (composer.isGuidedMoveActive && composer.isAwaitingConfirmation && composer.isAwaitingSuperProngBonusMove) {
+                        composer.finishGuidedMoveHere()
                     }
+                    openZoomedSquare(sqX, sqY)
+                    notifyComposerUpdated()
+                } else {
+                    openZoomedSquare(sqX, sqY)
+                    bumpRevision()
                 }
-                openZoomedSquare(sqX, sqY)
-                notifyComposerUpdated()
                 return@synchronized true
             }
             false
@@ -1260,6 +1405,9 @@ class OctiAppViewModel @JvmOverloads constructor(
     }
 
     fun setOnlineMatchForTest(roomId: String, gv: OctiNetworkClient.GameViewData?) {
+        if (_activeRoomId.value != roomId || gv == null) {
+            resetOnlineAudioSyncState(roomId)
+        }
         _matchType.value = MatchType.ONLINE_ROOM
         _activeRoomId.value = roomId
         if (gv != null) {
@@ -1307,6 +1455,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             _moveHistory.clear()
             _fenHistory.add(initialFen)
             _lastSubmittedOnlinePly = 0
+            resetOnlineAudioSyncState()
         }
         _viewingPly.value = 0
         clearLastMoveIndicators()
@@ -1404,6 +1553,9 @@ class OctiAppViewModel @JvmOverloads constructor(
             return false
         }
         if (_matchType.value == MatchType.ONLINE_ROOM && _activeRoomId.value.isNotEmpty()) {
+            val prevKnownPly = Math.max(_prevOnlineMoveCount, _activeGameView.value?.moves?.size ?: 0)
+            _lastLocalOnlineCommittedPly = Math.max(_lastLocalOnlineCommittedPly, prevKnownPly + 1)
+            _pendingLocalOnlineMove = notation.trim()
             if (isMainThread()) {
                 _backgroundExecutor.submit {
                     submitOnlineMove(notation)
@@ -1444,6 +1596,9 @@ class OctiAppViewModel @JvmOverloads constructor(
         val stagedNotation = composer.stagedMoveNotation()
         if (_matchType.value == MatchType.ONLINE_ROOM && _activeRoomId.value.isNotEmpty()) {
             composer.rollbackMove()
+            val prevKnownPly = Math.max(_prevOnlineMoveCount, _activeGameView.value?.moves?.size ?: 0)
+            _lastLocalOnlineCommittedPly = Math.max(_lastLocalOnlineCommittedPly, prevKnownPly + 1)
+            _pendingLocalOnlineMove = stagedNotation.trim()
             if (isMainThread()) {
                 _backgroundExecutor.submit {
                     submitOnlineMove(stagedNotation)
@@ -1745,6 +1900,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             loadedBoard.deserializeGame(octiText)
 
             _matchType.value = MatchType.ARCHIVE_REPLAY
+            resetOnlineAudioSyncState()
             _fenHistory.clear()
             _moveHistory.clear()
 
@@ -2040,12 +2196,12 @@ class OctiAppViewModel @JvmOverloads constructor(
             _showGameOverDialog.value = true
             uploadCompletedBotGameIfEligible()
         } else {
-            val cue = when {
-                notation.contains("x") -> OctiSoundSynth.SoundCue.POD_CAPTURE
-                notation.contains("+") -> OctiSoundSynth.SoundCue.PRONG_SNAP
-                notation.contains("-") -> OctiSoundSynth.SoundCue.POD_STEP
-                else -> OctiSoundSynth.SoundCue.POD_PLACE
-            }
+            val cue = OctiSoundSynth.classifyMoveNotationSoundCue(
+                notation,
+                edgeless,
+                board.boardWidth,
+                board.boardHeight
+            )
             soundSynth.triggerCue(cue)
         }
     }
@@ -2116,17 +2272,28 @@ class OctiAppViewModel @JvmOverloads constructor(
 
             if (board.game.isGameOver) {
                 soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
+                if (_matchType.value == MatchType.ONLINE_ROOM && _activeRoomId.value.isNotEmpty()) {
+                    _lastLocalOnlineVictoryPly = livePlyCount()
+                }
                 _statusBanner.value = formatGameOverBanner(board.game.winner)
                 _showGameOverDialog.value = true
                 uploadCompletedBotGameIfEligible()
             } else {
-                soundSynth.triggerCue(OctiSoundSynth.SoundCue.POD_STEP)
+                val cue = OctiSoundSynth.classifyMoveNotationSoundCue(
+                    lastMoveStr,
+                    edgeless,
+                    board.boardWidth,
+                    board.boardHeight
+                )
+                soundSynth.triggerCue(cue)
             }
             syncRotationToActiveSeat()
             if (_matchType.value == MatchType.ONLINE_ROOM && _activeRoomId.value.isNotEmpty() && !composer.hasActiveTurn && livePlyCount() > _lastSubmittedOnlinePly) {
                 val moveList = board.game?.moveHistory ?: emptyList()
                 val lastMoveStr = moveList.lastOrNull()?.asString() ?: ""
                 _lastSubmittedOnlinePly = livePlyCount()
+                _lastLocalOnlineCommittedPly = Math.max(_lastLocalOnlineCommittedPly, livePlyCount())
+                _pendingLocalOnlineMove = lastMoveStr.trim()
                 if (lastMoveStr.isNotEmpty()) {
                     if (isMainThread()) {
                         _backgroundExecutor.submit {
@@ -2567,6 +2734,7 @@ class OctiAppViewModel @JvmOverloads constructor(
                     _activeGameView.value = null
                     _gameChatLog.value = emptyList()
                     _lastSubmittedOnlinePly = 0
+                    resetOnlineAudioSyncState()
                     _matchType.value = MatchType.LOCAL_VS_BOT
                     _currentTab.value = AppTab.ONLINE_LOBBY
                     _statusBanner.value = "Returned to lobby"
@@ -2701,6 +2869,7 @@ class OctiAppViewModel @JvmOverloads constructor(
                         _activeGameView.value = null
                         _gameChatLog.value = emptyList()
                         _lastSubmittedOnlinePly = 0
+                        resetOnlineAudioSyncState()
                         _matchType.value = MatchType.LOCAL_PASS_AND_PLAY
                         _currentTab.value = AppTab.ONLINE_LOBBY
                         _statusBanner.value = "Table #$targetRoomId deleted"
@@ -2896,6 +3065,8 @@ class OctiAppViewModel @JvmOverloads constructor(
         _linkedIdentities.value = emptyList()
         _activeRoomId.value = ""
         _activeGameView.value = null
+        _lastSubmittedOnlinePly = 0
+        resetOnlineAudioSyncState()
         _statusBanner.value = "Signed out"
         return res
     }
@@ -3323,12 +3494,18 @@ class OctiAppViewModel @JvmOverloads constructor(
                 _activeGameView.value = null
                 _gameChatLog.value = emptyList()
                 _lastSubmittedOnlinePly = 0
+                resetOnlineAudioSyncState()
                 _matchType.value = MatchType.LOCAL_VS_BOT
                 _currentTab.value = AppTab.ONLINE_LOBBY
                 _statusBanner.value = "Returned to lobby"
             }
         }
         return res
+    }
+
+    @JvmOverloads
+    fun leaveOnlineRoom(roomId: String = _activeRoomId.value): OctiNetworkClient.ApiResult<Boolean> {
+        return leaveOnlineTable(roomId)
     }
 
     fun kickSeatFromTable(seat: Int): OctiNetworkClient.ApiResult<Boolean> {
@@ -3375,6 +3552,7 @@ class OctiAppViewModel @JvmOverloads constructor(
     fun enterOnlineRoom(roomId: String): OctiNetworkClient.ApiResult<OctiNetworkClient.GameViewData> {
         _awaitingMatchStart.value = false
         _gameOverDialogShownForCurrentOnlineMatch = false
+        resetOnlineAudioSyncState(roomId)
         if (_activeRoomId.value != roomId) {
             _gameChatLog.value = emptyList()
         }
@@ -3428,14 +3606,18 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     private fun applyGameViewToBoard(gv: OctiNetworkClient.GameViewData) {
         _awaitingMatchStart.value = false
-        val prevPhase = _activeGameView.value?.phase
-        _activeGameView.value = gv
-        _lastSubmittedOnlinePly = gv.moves.size
-
         if (gv.rematchRoomId.isNotEmpty() && gv.rematchRoomId != _activeRoomId.value) {
             enterOnlineRoom(gv.rematchRoomId)
             return
         }
+        if (_onlineSyncedRoomId.isNotEmpty() && gv.roomId.isNotEmpty() && gv.roomId != _onlineSyncedRoomId) {
+            resetOnlineAudioSyncState(gv.roomId)
+        }
+        val prevPhase = _activeGameView.value?.phase
+        val hadInitialSync = _hasInitialOnlineSyncForRoom
+        val prevOnlineMoveCount = _prevOnlineMoveCount
+        _activeGameView.value = gv
+        _lastSubmittedOnlinePly = gv.moves.size
 
         if (gv.phase == "IN_PROGRESS" && prevPhase == "WAITING_FOR_PLAYERS") {
             _currentTab.value = AppTab.BOARD
@@ -3523,6 +3705,44 @@ class OctiAppViewModel @JvmOverloads constructor(
                 }
             }
         }
+        _hasInitialOnlineSyncForRoom = true
+        if (gv.roomId.isNotEmpty()) {
+            _onlineSyncedRoomId = gv.roomId
+        } else if (_onlineSyncedRoomId.isEmpty()) {
+            _onlineSyncedRoomId = _activeRoomId.value
+        }
+        val newMoveCount = gv.moves.size
+        _prevOnlineMoveCount = newMoveCount
+        if (newMoveCount < _lastLocalOnlineCommittedPly) {
+            _lastLocalOnlineCommittedPly = newMoveCount
+        }
+        if (newMoveCount < _lastLocalOnlineVictoryPly) {
+            _lastLocalOnlineVictoryPly = newMoveCount
+        }
+
+        if (hadInitialSync) {
+            if (gv.phase == "FINISHED" && prevPhase != "FINISHED") {
+                _pendingLocalOnlineMove = ""
+                if (_lastLocalOnlineVictoryPly < newMoveCount || newMoveCount == 0) {
+                    soundSynth.triggerCue(OctiSoundSynth.SoundCue.GAME_VICTORY)
+                }
+            } else if (newMoveCount > prevOnlineMoveCount) {
+                val latestMoveStr = gv.moves.lastOrNull() ?: ""
+                val isOwnCommittedMove = (newMoveCount <= _lastLocalOnlineCommittedPly) ||
+                    (_pendingLocalOnlineMove.isNotEmpty() && _pendingLocalOnlineMove == latestMoveStr)
+                _pendingLocalOnlineMove = ""
+                if (!isOwnCommittedMove && latestMoveStr.isNotEmpty()) {
+                    val cue = OctiSoundSynth.classifyMoveNotationSoundCue(
+                        latestMoveStr,
+                        gv.edgeless,
+                        board.boardWidth,
+                        board.boardHeight
+                    )
+                    soundSynth.triggerCue(cue)
+                }
+            }
+        }
+
         if (gv.phase == "FINISHED") {
             if (!_gameOverDialogShownForCurrentOnlineMatch) {
                 _gameOverDialogShownForCurrentOnlineMatch = true
@@ -3553,10 +3773,18 @@ class OctiAppViewModel @JvmOverloads constructor(
         moveNotation: String
     ): OctiNetworkClient.ApiResult<OctiNetworkClient.MoveSubmitData> {
         val roomId = _activeRoomId.value
+        val trimmedMove = moveNotation.trim()
+        val prevKnownPly = Math.max(_prevOnlineMoveCount, _activeGameView.value?.moves?.size ?: 0)
+        if (trimmedMove.isNotEmpty()) {
+            _lastLocalOnlineCommittedPly = Math.max(_lastLocalOnlineCommittedPly, prevKnownPly + 1)
+            _pendingLocalOnlineMove = trimmedMove
+        }
         val res = netClient.submitMove(roomId, moveNotation)
         if (res.ok) {
             refreshActiveGameView()
         } else {
+            _lastLocalOnlineCommittedPly = prevKnownPly
+            _pendingLocalOnlineMove = ""
             _statusBanner.value = "Move rejected: ${res.errorMessage}"
             refreshActiveGameView()
         }

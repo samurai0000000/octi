@@ -4130,8 +4130,15 @@ ZoomedSquareDialog::ZoomedSquareDialog(OctiBoard *board,
     setMouseTracking(true);
     setWindowTitle(QString("Square (%1, %2) Close-Up Inspector").arg(_squareX).arg(_squareY));
 
-    if (_board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
-        const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+    const OctiBoard *activeBoard = _board;
+    OctiBoard previewBoard;
+    if (_board && _composer && _composer->isAwaitingConfirmation() &&
+        _composer->populatePreviewBoard(previewBoard)) {
+        activeBoard = &previewBoard;
+    }
+
+    if (activeBoard && activeBoard->isValidCoord(_squareX - 1, _squareY - 1)) {
+        const OctiSquare &sq = activeBoard->squareAt(_squareX - 1, _squareY - 1);
         if (_composer) {
             _selectedPodIndex = _composer->selectedStackPodIndex(_squareX, _squareY);
         }
@@ -4139,7 +4146,8 @@ ZoomedSquareDialog::ZoomedSquareDialog(OctiBoard *board,
             auto sorted = sortedPodIndicesMostProngsFirst(sq);
             _selectedPodIndex = sorted.empty() ? 0 : sorted.front();
         }
-        if (_composer && sq.getNumPods() > 0 &&
+        bool checkClaims = (_composer && !_composer->isAwaitingSuperProngBonusMove());
+        if (checkClaims && sq.getNumPods() > 0 &&
             _composer->isSquarePodClaimed(_squareX, _squareY, _selectedPodIndex)) {
             int unclaimed = _composer->firstUnclaimedFriendlyPodIndex(_squareX, _squareY);
             if (unclaimed >= 0 && unclaimed < sq.getNumPods()) {
@@ -4147,10 +4155,11 @@ ZoomedSquareDialog::ZoomedSquareDialog(OctiBoard *board,
                 _composer->selectStackPodIndex(_squareX, _squareY, _selectedPodIndex);
             }
         }
-        if (_board->getGame()) {
+        const OctiGame *g = activeBoard->getGame() ? activeBoard->getGame()
+                                                   : (_board ? _board->getGame() : nullptr);
+        if (g && _board && _board->getGame()) {
             OctiPlayer t = _board->getGame()->getTurn();
-            if (_board->getGame()->getFreeProngs(t) == 0 &&
-                _board->getGame()->getFreeSuperProngs(t) > 0) {
+            if (g->getFreeProngs(t) == 0 && g->getFreeSuperProngs(t) > 0) {
                 _selectedProngType = SelectedProngType::SUPER;
             }
         }
@@ -4181,10 +4190,16 @@ bool ZoomedSquareDialog::actionCompleted() const
 
 void ZoomedSquareDialog::cycleSelectedPod(int delta)
 {
-    if (!_board || !_board->isValidCoord(_squareX - 1, _squareY - 1)) {
+    const OctiBoard *activeBoard = _board;
+    OctiBoard previewBoard;
+    if (_board && _composer && _composer->isAwaitingConfirmation() &&
+        _composer->populatePreviewBoard(previewBoard)) {
+        activeBoard = &previewBoard;
+    }
+    if (!activeBoard || !activeBoard->isValidCoord(_squareX - 1, _squareY - 1)) {
         return;
     }
-    const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+    const OctiSquare &sq = activeBoard->squareAt(_squareX - 1, _squareY - 1);
     int numPods = sq.getNumPods();
     if (numPods < 2) {
         return;
@@ -4268,74 +4283,103 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         }
     }
 
+    bool isGameOver = (_board && _board->getGame() && _board->getGame()->isGameOver());
     OctiPlayer turn = (_board && _board->getGame()) ? _board->getGame()->getTurn() : PLAYER_A;
-    if (_board && _board->getGame() && _board->getGame()->getTurn() != PLAYER_UNDEF) {
+    if (_board && _board->getGame() && _board->getGame()->isGameStarted() &&
+        !isGameOver && turn != PLAYER_UNDEF) {
         isTurn = true;
     }
 
+    bool hasFriendly = false;
     if (activeBoard && activeBoard->isValidCoord(_squareX - 1, _squareY - 1)) {
         const OctiSquare &sq = activeBoard->squareAt(_squareX - 1, _squareY - 1);
         numPods = sq.getNumPods();
         isEmptySquare = sq.isEmpty();
-        hasEnemy = (isTurn && sq.hasEnemyOf(turn));
+        hasEnemy = (_board && _board->getGame() && turn != PLAYER_UNDEF && sq.hasEnemyOf(turn));
+        hasFriendly = (!isEmptySquare && turn != PLAYER_UNDEF && sq.isOccupiedBy(turn));
     }
+
+    bool isPartnerRevivalHead = (_composer && isTurn &&
+                                 _composer->canRevivePartnerPodAt(_squareX, _squareY));
+    bool readOnlyInspect = (!_composer || !isTurn || hasEnemy ||
+                            (!isEmptySquare && !hasFriendly && !isPartnerRevivalHead));
 
     QFont modeFont("SansSerif", 10, QFont::Medium);
     p.setFont(modeFont);
-    p.setPen(hasEnemy ? pal.legalCaptureGlow : pal.accentBrass);
-    QString modeStr = hasEnemy
-        ? "Close-Up Inspect Mode (Opponent Square)"
+    p.setPen(readOnlyInspect ? pal.legalCaptureGlow : pal.accentBrass);
+    QString modeStr = readOnlyInspect
+        ? "Close-Up Inspect Mode"
         : (isEmptySquare
                ? "Eligible Friendly Home Square"
                : "Active Turn - Pod Configuration & Move Planning");
     QRectF modeRect(16, 42, width - 32, 20);
     p.drawText(modeRect, Qt::AlignLeft | Qt::AlignVCenter, modeStr);
 
-    // 3. Stack Selector Strip (when >= 2 pods)
+    int rotDeg = static_cast<int>(_rotation);
+
+    // 3. Stack Selector Strip (when >= 2 pods): visual mini-pod breakdown cards
     _stackPodTabRects.clear();
     _moveStackCheckRect = QRectF();
     if (numPods >= 2) {
-        double tabW = std::min(80.0, (width - 150.0) / numPods);
-        double tabH = 26.0;
-        double startX = 120.0;
-        double startY = 66.0;
+        double gap = 6.0;
+        double availW = std::max(200.0, static_cast<double>(width) - 32.0);
+        double tabW = std::min(168.0, (availW - (numPods - 1) * gap) / numPods);
+        double tabH = 34.0;
+        double rowW = numPods * tabW + (numPods - 1) * gap;
+        double startX = (static_cast<double>(width) - rowW) * 0.5;
+        double startY = 63.0;
 
         const OctiSquare &sq = activeBoard->squareAt(_squareX - 1, _squareY - 1);
         auto sorted = sortedPodIndicesMostProngsFirst(sq);
         for (int rank = 0; rank < numPods; ++rank) {
             int podIdx = sorted[rank];
-            QRectF tabR(startX + rank * (tabW + 6.0), startY, tabW, tabH);
+            const OctiPod &pod = sq.getPodAt(podIdx);
+            QRectF tabR(startX + rank * (tabW + gap), startY, tabW, tabH);
             _stackPodTabRects.push_back(tabR);
 
             bool sel = (podIdx == _selectedPodIndex);
-            bool claimed = (_composer && _composer->isSquarePodClaimed(_squareX, _squareY, podIdx));
-            p.setPen(QPen(sel ? pal.prongSuperGold : pal.accentBrass, sel ? 1.8 : 1.0));
-            p.setBrush(sel ? pal.boardOuterFrame.darker(140) : pal.panelCardBg.darker(120));
-            p.drawRoundedRect(tabR, 4.0, 4.0);
+            bool claimed = (!readOnlyInspect && _composer &&
+                            !_composer->isAwaitingSuperProngBonusMove() &&
+                            _composer->isSquarePodClaimed(_squareX, _squareY, podIdx));
+            p.setPen(QPen(sel ? pal.prongSuperGold : pal.accentBrass, sel ? 2.0 : 1.1));
+            p.setBrush(sel ? QColor(24, 34, 52, 240) : pal.panelCardBg.darker(125));
+            p.drawRoundedRect(tabR, 5.0, 5.0);
 
-            p.setPen(claimed ? pal.textSecondary : (sel ? pal.prongSuperGold : pal.textPrimary));
-            QFont tabFont("SansSerif", 9, sel ? QFont::Bold : QFont::Normal);
-            p.setFont(tabFont);
+            QRectF iconR(tabR.left() + 4.0, tabR.top() + 4.0, 26.0, 26.0);
+            paintOctagonalPod(p, iconR, pod.getType(), pod, pal, rotDeg,
+                              false, claimed ? 0.55 : 1.0, QString(" "));
+
+            QString cfgStr = (pod.getNumProngs() > 0)
+                ? QString::fromStdString(pod.getConfigString())
+                : QString::fromUtf8("\xE2\x80\x94");
             QString tabLabel = claimed
-                ? QString::fromUtf8("Pod %1/%2 \xE2\x9C\x93").arg(rank + 1).arg(numPods)
-                : QString("Pod %1/%2").arg(rank + 1).arg(numPods);
-            p.drawText(tabR, Qt::AlignCenter, tabLabel);
+                ? QString::fromUtf8("#%1 %2 \xE2\x9C\x93").arg(rank + 1).arg(cfgStr)
+                : QString("#%1 %2").arg(rank + 1).arg(cfgStr);
+
+            QRectF textR(tabR.left() + 33.0, tabR.top() + 2.0,
+                         std::max(12.0, tabR.width() - 37.0), tabR.height() - 4.0);
+            p.setPen(claimed ? pal.textSecondary : (sel ? pal.prongSuperGold : pal.textPrimary));
+            QFont tabFont("SansSerif", 9, sel ? QFont::Bold : QFont::Medium);
+            p.setFont(tabFont);
+            p.drawText(textR, Qt::AlignLeft | Qt::AlignVCenter,
+                       p.fontMetrics().elidedText(tabLabel, Qt::ElideRight,
+                                                  static_cast<int>(textR.width())));
         }
 
-        if (!hasEnemy && isTurn) {
-            _moveStackCheckRect = QRectF(120.0, 96.0, 240.0, 20.0);
+        if (!readOnlyInspect) {
+            _moveStackCheckRect = QRectF(120.0, 100.0, 260.0, 18.0);
             p.setPen(QPen(pal.accentBrass, 1.2));
             p.setBrush(_moveAllMatchingStack ? pal.accentBrass : Qt::NoBrush);
-            p.drawRect(120.0, 98.0, 14.0, 14.0);
+            p.drawRect(120.0, 102.0, 14.0, 14.0);
             if (_moveAllMatchingStack) {
                 p.setPen(QPen(Qt::black, 2.0));
-                p.drawLine(122.0, 105.0, 126.0, 110.0);
-                p.drawLine(126.0, 110.0, 132.0, 100.0);
+                p.drawLine(122.0, 109.0, 126.0, 114.0);
+                p.drawLine(126.0, 114.0, 132.0, 104.0);
             }
             p.setPen(pal.textPrimary);
             QFont chkFont("SansSerif", 9);
             p.setFont(chkFont);
-            p.drawText(QRectF(140.0, 96.0, 220.0, 18.0),
+            p.drawText(QRectF(140.0, 100.0, 240.0, 18.0),
                        Qt::AlignLeft | Qt::AlignVCenter,
                        "Move All Matching Pods (Stack)");
         }
@@ -4352,7 +4396,6 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
     _socketRadius = 18.0;
 
     _socketCenters.clear();
-    int rotDeg = static_cast<int>(_rotation);
 
     if (!isEmptySquare && activeBoard && activeBoard->isValidCoord(_squareX - 1, _squareY - 1)) {
         const OctiSquare &sq = activeBoard->squareAt(_squareX - 1, _squareY - 1);
@@ -4488,13 +4531,14 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         }
 
         // Hover prong blade preview on empty socket (ZPB-D01)
-        bool currentPodClaimed = (!isEmptySquare && _composer &&
+        bool currentPodClaimed = (!isEmptySquare && !readOnlyInspect && _composer &&
+                                  !_composer->isAwaitingSuperProngBonusMove() &&
                                   _composer->isSquarePodClaimed(_squareX, _squareY, pIdx));
         const OctiBoard *prongBoard = (activeBoard && activeBoard->getGame()) ? activeBoard : _board;
         int freeProngs = (prongBoard && prongBoard->getGame()) ? prongBoard->getGame()->getFreeProngs(turn) : 0;
         int freeSuper = (prongBoard && prongBoard->getGame()) ? prongBoard->getGame()->getFreeSuperProngs(turn) : 0;
 
-        if (!hasEnemy && isTurn && !currentPodClaimed && _hoverProngDir != DIR_UNDEF &&
+        if (!readOnlyInspect && !currentPodClaimed && _hoverProngDir != DIR_UNDEF &&
             pod.prongAt(_hoverProngDir) == NO_PRONG) {
             bool canPreview = false;
             bool previewSuper = false;
@@ -4575,9 +4619,10 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
     // 5. Left Side: Prong Dispenser Tray (for friendly pods on player's turn)
     _normalProngTrayRect = QRectF();
     _superProngTrayRect = QRectF();
-    bool currentPodClaimed = (!isEmptySquare && _composer &&
+    bool currentPodClaimed = (!isEmptySquare && !readOnlyInspect && _composer &&
+                              !_composer->isAwaitingSuperProngBonusMove() &&
                               _composer->isSquarePodClaimed(_squareX, _squareY, _selectedPodIndex));
-    if (!isEmptySquare && !hasEnemy && isTurn && !currentPodClaimed &&
+    if (!isEmptySquare && !readOnlyInspect && !currentPodClaimed &&
         _board && _board->getGame()) {
         const OctiBoard *prongBoard = (activeBoard && activeBoard->getGame()) ? activeBoard : _board;
         int freeProngs = prongBoard->getGame()->getFreeProngs(turn);
@@ -4626,11 +4671,11 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
     _placeReserveBtnRect = QRectF();
     _liberateBtnRect = QRectF();
 
-    bool canPlaceReserve = _composer && _composer->canPlaceReservePodAt(_squareX, _squareY);
-    bool canLiberatePod = _composer && _composer->canLiberateCapturedPodAt(_squareX, _squareY);
-    bool isPartnerRevival = _composer && _composer->canRevivePartnerPodAt(_squareX, _squareY);
+    bool canPlaceReserve = !readOnlyInspect && _composer && _composer->canPlaceReservePodAt(_squareX, _squareY);
+    bool canLiberatePod = !readOnlyInspect && _composer && _composer->canLiberateCapturedPodAt(_squareX, _squareY);
+    bool isPartnerRevival = !readOnlyInspect && _composer && _composer->canRevivePartnerPodAt(_squareX, _squareY);
 
-    bool canShowPodPlacement = isTurn && !hasEnemy && _board &&
+    bool canShowPodPlacement = !readOnlyInspect && _board &&
                                _board->getGameMode() != GAME_MODE_OFK &&
                                (canPlaceReserve || canLiberatePod);
 
@@ -4659,7 +4704,7 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         }
     };
 
-    if (!isEmptySquare && !hasEnemy && isTurn && !currentPodClaimed) {
+    if (!isEmptySquare && !readOnlyInspect && !currentPodClaimed) {
         if (canShowPodPlacement) {
             _movePodBtnRect = QRectF(120, 444, 320, 32);
             if (canPlaceReserve && canLiberatePod) {
@@ -4692,13 +4737,13 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         } else {
             drawPlaceAndLiberate(QRectF(), QRectF(120, 460, 320, 38), isPartnerRevival ? 8 : 9);
         }
-    } else if (hasEnemy) {
+    } else if (readOnlyInspect) {
         QFont roFont("SansSerif", 10, QFont::Medium);
         p.setFont(roFont);
         p.setPen(pal.textSecondary);
         p.drawText(QRectF(40, 460, width - 80, 38),
                    Qt::AlignCenter,
-                   QString::fromUtf8("Read-Only Opponent Pod Inspection \xE2\x80\x94 Click Outside or [Esc] to Close"));
+                   QString::fromUtf8("Close-Up Inspect Mode \xE2\x80\x94 Click Outside or [Esc] to Close"));
     } else if (currentPodClaimed) {
         QFont clFont("SansSerif", 10, QFont::Medium);
         p.setFont(clFont);
@@ -4742,11 +4787,19 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
         return;
     }
 
-    // 1. Check Stack tabs
+    const OctiBoard *activeBoard = _board;
+    OctiBoard previewBoard;
+    if (_board && _composer && _composer->isAwaitingConfirmation()) {
+        if (_composer->populatePreviewBoard(previewBoard)) {
+            activeBoard = &previewBoard;
+        }
+    }
+
+    // 1. Check Stack tabs (enabled in both interactive and read-only inspect modes!)
     for (std::size_t rank = 0; rank < _stackPodTabRects.size(); ++rank) {
         if (_stackPodTabRects[rank].contains(pos)) {
-            if (_board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
-                const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+            if (activeBoard && activeBoard->isValidCoord(_squareX - 1, _squareY - 1)) {
+                const OctiSquare &sq = activeBoard->squareAt(_squareX - 1, _squareY - 1);
                 auto sorted = sortedPodIndicesMostProngsFirst(sq);
                 if (rank < sorted.size()) {
                     _selectedPodIndex = sorted[rank];
@@ -4760,6 +4813,17 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
         }
     }
 
+    bool isGameOver = (_board && _board->getGame() && _board->getGame()->isGameOver());
+    OctiPlayer turn = (_board && _board->getGame()) ? _board->getGame()->getTurn() : PLAYER_A;
+    bool isTurn = (_board && _board->getGame() && _board->getGame()->isGameStarted() &&
+                   !isGameOver && turn != PLAYER_UNDEF);
+    if (!_composer || !isTurn) {
+        return;
+    }
+
+    bool podClaimed = (!_composer->isAwaitingSuperProngBonusMove() &&
+                       _composer->isSquarePodClaimed(_squareX, _squareY, _selectedPodIndex));
+
     // 2. Check Move Stack check box
     if (!_moveStackCheckRect.isEmpty() && _moveStackCheckRect.contains(pos)) {
         _moveAllMatchingStack = !_moveAllMatchingStack;
@@ -4769,8 +4833,7 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
 
     // 3. Check Move Pod button
     if (!_movePodBtnRect.isEmpty() && _movePodBtnRect.contains(pos)) {
-        if (_composer &&
-            !_composer->isSquarePodClaimed(_squareX, _squareY, _selectedPodIndex) &&
+        if (!podClaimed &&
             !_composer->legalDestinationsFrom(_squareX, _squareY, _selectedPodIndex).empty()) {
             _shouldMovePod = true;
             accept();
@@ -4780,7 +4843,7 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
 
     // 4. Check Home square buttons
     if (!_placeReserveBtnRect.isEmpty() && _placeReserveBtnRect.contains(pos)) {
-        if (_composer && _composer->stageOrCommitAddPod(_squareX, _squareY, false)) {
+        if (_composer->stageOrCommitAddPod(_squareX, _squareY, false)) {
             _actionCompleted = true;
             accept();
             return;
@@ -4788,7 +4851,7 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
         return;
     }
     if (!_liberateBtnRect.isEmpty() && _liberateBtnRect.contains(pos)) {
-        if (_composer && _composer->stageOrCommitAddPod(_squareX, _squareY, true)) {
+        if (_composer->stageOrCommitAddPod(_squareX, _squareY, true)) {
             _actionCompleted = true;
             accept();
             return;
@@ -4815,21 +4878,13 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
     }
 
     // 6. Check socket interaction (GUI2-04: both single click/tap and drag-and-drop)
-    const OctiBoard *activeBoard = _board;
-    OctiBoard previewBoard;
-    if (_board && _composer && _composer->isAwaitingConfirmation()) {
-        if (_composer->populatePreviewBoard(previewBoard)) {
-            activeBoard = &previewBoard;
-        }
-    }
     if (activeBoard && activeBoard->isValidCoord(_squareX - 1, _squareY - 1)) {
         const OctiSquare &sq = activeBoard->squareAt(_squareX - 1, _squareY - 1);
-        OctiPlayer turn = (_board && _board->getGame()) ? _board->getGame()->getTurn() : PLAYER_A;
-        bool isTurn = (_board && _board->getGame() && _board->getGame()->getTurn() != PLAYER_UNDEF);
-        bool hasEnemy = isTurn && sq.hasEnemyOf(turn);
+        bool hasEnemy = sq.hasEnemyOf(turn);
 
-        if (!hasEnemy && isTurn && _selectedPodIndex < sq.getNumPods() &&
-            (!_composer || !_composer->isSquarePodClaimed(_squareX, _squareY, _selectedPodIndex))) {
+        if (!hasEnemy && sq.isOccupiedBy(turn) &&
+            _selectedPodIndex >= 0 && _selectedPodIndex < sq.getNumPods() &&
+            !podClaimed) {
             const OctiPod &pod = sq.getPodAt(_selectedPodIndex);
             QPointF pc = _podCanvasRect.center();
             double podR = 100.0;
@@ -4850,7 +4905,7 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
                     if (!isOfk && _selectedProngSocketForReposition != DIR_UNDEF &&
                         _selectedProngSocketForReposition != hitDir) {
                         // Reposition previously selected prong to this socket!
-                        if (_composer && _composer->stageOrCommitRepositionProng(
+                        if (_composer->stageOrCommitRepositionProng(
                                 _squareX, _squareY, _selectedPodIndex,
                                 _selectedProngSocketForReposition, hitDir)) {
                             _actionCompleted = true;
@@ -4860,7 +4915,7 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
                     } else {
                         // Add new prong to this socket!
                         bool isSuper = !isOfk && (_selectedProngType == SelectedProngType::SUPER);
-                        if (_composer && _composer->stageOrCommitAddProng(
+                        if (_composer->stageOrCommitAddProng(
                                 _squareX, _squareY, _selectedPodIndex, hitDir, isSuper)) {
                             _actionCompleted = true;
                             accept();
@@ -4919,8 +4974,15 @@ void ZoomedSquareDialog::mouseMoveEvent(QMouseEvent *event)
     _dragCursorPos = pos;
 
     _hoverProngDir = DIR_UNDEF;
-    if (_board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
-        const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+    const OctiBoard *activeBoard = _board;
+    OctiBoard previewBoard;
+    if (_board && _composer && _composer->isAwaitingConfirmation()) {
+        if (_composer->populatePreviewBoard(previewBoard)) {
+            activeBoard = &previewBoard;
+        }
+    }
+    if (activeBoard && activeBoard->isValidCoord(_squareX - 1, _squareY - 1)) {
+        const OctiSquare &sq = activeBoard->squareAt(_squareX - 1, _squareY - 1);
         int pIdx = std::clamp(_selectedPodIndex, 0, sq.getNumPods() - 1);
         if (pIdx >= 0 && pIdx < sq.getNumPods()) {
             QPointF pc = _podCanvasRect.center();
@@ -4940,11 +5002,19 @@ void ZoomedSquareDialog::mouseReleaseEvent(QMouseEvent *event)
     }
     QPointF pos = mousePosF(event);
 
-    if (_dragKind != ZoomDragKind::NONE && _composer) {
+    bool isGameOver = (_board && _board->getGame() && _board->getGame()->isGameOver());
+    if (_dragKind != ZoomDragKind::NONE && _composer && !isGameOver) {
+        const OctiBoard *activeBoard = _board;
+        OctiBoard previewBoard;
+        if (_board && _composer->isAwaitingConfirmation()) {
+            if (_composer->populatePreviewBoard(previewBoard)) {
+                activeBoard = &previewBoard;
+            }
+        }
         const bool isOfk = (_board && _board->getGame() && _board->getGame()->getMode() == GAME_MODE_OFK);
         OctiDir targetDir = DIR_UNDEF;
-        if (_board && _board->isValidCoord(_squareX - 1, _squareY - 1)) {
-            const OctiSquare &sq = _board->squareAt(_squareX - 1, _squareY - 1);
+        if (activeBoard && activeBoard->isValidCoord(_squareX - 1, _squareY - 1)) {
+            const OctiSquare &sq = activeBoard->squareAt(_squareX - 1, _squareY - 1);
             int pIdx = std::clamp(_selectedPodIndex, 0, sq.getNumPods() - 1);
             if (pIdx >= 0 && pIdx < sq.getNumPods()) {
                 QPointF pc = _podCanvasRect.center();

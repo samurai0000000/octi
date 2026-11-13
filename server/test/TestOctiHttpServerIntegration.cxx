@@ -24,6 +24,7 @@
 #include "OctiDefs.hxx"
 #include "OctiGame.hxx"
 #include "OctiHttpServer.hxx"
+#include "OctiSoundCue.hxx"
 #include "OidcVerifier.hxx"
 #include "ServerApp.hxx"
 
@@ -5884,7 +5885,7 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("OCTI v2.5.1") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v2.5.2") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Official Platform") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("OFFICIAL PLATFORM") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("Lv4: Expert (40s)") != std::string::npos);
@@ -6472,6 +6473,1628 @@ TEST(OctiHttpServerIntegrationTest, WebUiStrengthenedBotSearchAndSuperProngBonus
     CHECK_TRUE(rPlay.body.find("ctx.qttMap") != std::string::npos);
     CHECK_TRUE(rPlay.body.find("ctx.killers") != std::string::npos);
     CHECK_TRUE(rPlay.body.find("ctx.history") != std::string::npos);
+}
+
+TEST(OctiHttpServerIntegrationTest, SharedSoundAssetsEndpointAndWebPlayerMoveCues)
+{
+    /* 1. Nominal HTTP GET /sounds/:file byte-for-byte identity against OctiSoundCue */
+    Json expectedWavHex = Json::object();
+    for (std::size_t i = 0; i < OCTI_SOUND_CUE_COUNT; ++i) {
+        SoundCue cue = static_cast<SoundCue>(i);
+        const char *cueName = soundCueName(cue);
+        const char *fileName = soundCueAssetFileName(cue);
+        std::size_t wavSize = 0;
+        const std::uint8_t *wavBytes = soundCueWavBytes(cue, wavSize);
+        CHECK_TRUE(wavBytes != nullptr);
+        CHECK_TRUE(wavSize >= 44u);
+
+        Reply rWav = http().get(std::string("/sounds/") + fileName);
+        EXPECT_STATUS(200, rWav);
+        CHECK_TRUE(rWav.contentType.find("audio/wav") != std::string::npos);
+        STRCMP_EQUAL("public, max-age=86400", rWav.header("Cache-Control").c_str());
+        LONGS_EQUAL(static_cast<long>(wavSize), static_cast<long>(rWav.body.size()));
+        CHECK_EQUAL(0, std::memcmp(rWav.body.data(), wavBytes, wavSize));
+
+        static const char kHexDigits[] = "0123456789abcdef";
+        std::string hex;
+        hex.reserve(wavSize * 2u);
+        for (std::size_t b = 0; b < wavSize; ++b) {
+            hex.push_back(kHexDigits[(wavBytes[b] >> 4) & 0x0Fu]);
+            hex.push_back(kHexDigits[wavBytes[b] & 0x0Fu]);
+        }
+        expectedWavHex[cueName] = hex;
+    }
+
+    /* 2. Fault & path-traversal rejection on GET /sounds/:file */
+    EXPECT_ERROR(404, "NOT_FOUND", http().get("/sounds/nonexistent.wav"));
+    EXPECT_ERROR(404, "NOT_FOUND", http().get("/sounds/..%2fetc%2fpasswd"));
+    EXPECT_ERROR(404, "NOT_FOUND", http().get("/sounds/prong_snap.mp3"));
+    EXPECT_STATUS(404, http().get("/sounds/.."));
+    EXPECT_STATUS(404, http().get("/sounds/"));
+
+    /* 3. Strict CSP self-containment & media-src policy on GET / */
+    Reply rUi = http().get("/");
+    EXPECT_STATUS(200, rUi);
+    CHECK_TRUE(rUi.header("Content-Security-Policy").find("media-src 'self' data:") !=
+               std::string::npos);
+    {
+        std::string strippedUi = rUi.body;
+        const char *kAllowedTokens[] = {
+            "http://www.w3.org/2000/svg",
+            "https://www.selfso.com/software/windows/octi/",
+            "https://www.selfso.com/software/android/octi/",
+            "placeholder=\"Robot URL (optional http:// or https://, no '?')\"",
+            "<link rel=\"icon\"",
+            "<link rel=\"apple-touch-icon\""
+        };
+        for (size_t ti = 0; ti < sizeof(kAllowedTokens) / sizeof(kAllowedTokens[0]); ++ti) {
+            const std::string tok(kAllowedTokens[ti]);
+            size_t pos = 0;
+            while ((pos = strippedUi.find(tok)) != std::string::npos) {
+                strippedUi.replace(pos, tok.size(), "");
+            }
+        }
+        CHECK_TRUE(strippedUi.find("http://") == std::string::npos);
+        CHECK_TRUE(strippedUi.find("https://") == std::string::npos);
+        CHECK_TRUE(strippedUi.find("src=\"//") == std::string::npos);
+        CHECK_TRUE(strippedUi.find("<link") == std::string::npos);
+        CHECK_TRUE(strippedUi.find("<iframe") == std::string::npos);
+    }
+
+    /* 4. Prepare two real online rooms on octi_server for Node.js syncOnlineGameRoom verification:
+     *    - prePopulatedRoom: already has 6 plies committed (initial sync must fire 0 cues).
+     *    - liveRoom: 2P 1-base match at ply 0 for live human echo suppression + opponent move + victory cues.
+     */
+    User uA = signIn("google", "sub-sfx-alice", "SfxAlice");
+    User uB = signIn("apple", "sub-sfx-bob", "SfxBob");
+    std::vector<User> pairUsers = {uA, uB};
+    std::string prePopulatedRoom = startGame(pairUsers, Json{{"mode", "2P"}, {"bases", 3}});
+    CHECK_EQUAL(6, playPlies(prePopulatedRoom, pairUsers, GAME_MODE_2, 6,
+                             Json{{"mode", "2P"}, {"bases", 3}}));
+
+    User uC = signIn("google", "sub-sfx-carol", "SfxCarol");
+    User uD = signIn("apple", "sub-sfx-dave", "SfxDave");
+    std::vector<User> liveUsers = {uC, uD};
+    std::string liveRoom = startGame(liveUsers, Json{{"mode", "2P"}, {"bases", 1}});
+
+    size_t scStart = rUi.body.find("<script>");
+    CHECK_TRUE(scStart != std::string::npos);
+    size_t scEnd = rUi.body.find("</script>", scStart);
+    CHECK_TRUE(scEnd != std::string::npos);
+    std::string jsCode = rUi.body.substr(scStart + 8, scEnd - (scStart + 8));
+
+    std::string pidTag = std::to_string(getpid());
+    std::string webJsPath = "/tmp/octi_sfx_webui_" + pidTag + ".js";
+    std::string cfgJsonPath = "/tmp/octi_sfx_cfg_" + pidTag + ".json";
+    std::string runnerJsPath = "/tmp/octi_sfx_runner_" + pidTag + ".js";
+
+    {
+        std::ofstream ofs(webJsPath);
+        ofs << jsCode;
+    }
+    {
+        Json cfg;
+        cfg["port"] = http().port();
+        cfg["expectedWavHex"] = expectedWavHex;
+        cfg["prePopulatedRoom"] = prePopulatedRoom;
+        cfg["liveRoom"] = liveRoom;
+        cfg["seat1Token"] = uC.token;
+        cfg["seat1Uuid"] = uC.uuid;
+        cfg["seat1Handle"] = uC.handle;
+        cfg["seat2Token"] = uD.token;
+        std::ofstream cfs(cfgJsonPath);
+        cfs << cfg.dump();
+    }
+    {
+        std::ofstream rfs(runnerJsPath);
+        rfs << R"NODEJS(
+const assert = require("assert");
+const fs = require("fs");
+const vm = require("vm");
+
+const webJsRaw = fs.readFileSync(process.argv[2], "utf8");
+const cfg = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+
+const unhandledRejections = [];
+process.on("unhandledRejection", (reason) => {
+  unhandledRejections.push(String(reason));
+});
+
+const iifeClose = webJsRaw.lastIndexOf("})();");
+assert.ok(iifeClose > 0, "Expected closing })(); in WebUi script");
+const instrumentedJs =
+  webJsRaw.slice(0, iifeClose) +
+  "\nwindow.__octiTest = {\n" +
+  "  parseOctiFen: parseOctiFen,\n" +
+  "  applyMoveToState: applyMoveToState,\n" +
+  "  cloneState: cloneState,\n" +
+  "  clockTimers: clockTimers\n" +
+  "};\n})();\n";
+
+const canvas2dProxy = new Proxy({
+  createLinearGradient: () => ({ addColorStop() {} }),
+  createRadialGradient: () => ({ addColorStop() {} }),
+  createPattern: () => ({}),
+  measureText: () => ({ width: 20 })
+}, {
+  get(target, prop) {
+    if (prop in target) return target[prop];
+    return () => {};
+  },
+  set(target, prop, val) {
+    target[prop] = val;
+    return true;
+  }
+});
+
+class MockNode {}
+const elements = {};
+function makeElement(id) {
+  const elObj = Object.assign(new MockNode(), {
+    id: id || "",
+    tagName: "DIV",
+    textContent: "",
+    innerHTML: "",
+    value: "",
+    checked: false,
+    disabled: false,
+    className: "",
+    width: 600,
+    height: 600,
+    clientWidth: 600,
+    clientHeight: 600,
+    offsetWidth: 600,
+    offsetHeight: 600,
+    scrollHeight: 0,
+    scrollTop: 0,
+    firstChild: null,
+    parentNode: null,
+    style: {
+      setProperty(k, v) { this[k] = v; },
+      removeProperty(k) { delete this[k]; },
+      getPropertyValue(k) { return this[k] || ""; }
+    },
+    dataset: {},
+    listeners: {},
+    addEventListener(ev, fn, opts) {
+      if (!this.listeners[ev]) this.listeners[ev] = [];
+      this.listeners[ev].push({ fn, opts });
+    },
+    removeEventListener() {},
+    click() {
+      const arr = this.listeners["click"] || [];
+      for (const item of arr) item.fn.call(this, { preventDefault() {}, stopPropagation() {}, target: this });
+    },
+    classList: {
+      add() {},
+      remove() {},
+      toggle() {},
+      contains() { return false; }
+    },
+    appendChild(ch) { return ch; },
+    insertBefore(ch) { return ch; },
+    removeChild(ch) { return ch; },
+    replaceChild(ch) { return ch; },
+    cloneNode() { return makeElement(""); },
+    focus() {},
+    blur() {},
+    select() {},
+    scrollIntoView() {},
+    contains() { return false; },
+    getAttribute() { return null; },
+    setAttribute() {},
+    removeAttribute() {},
+    querySelector() { return makeElement(""); },
+    querySelectorAll() { return []; },
+    getBoundingClientRect() {
+      return { left: 0, top: 0, right: 600, bottom: 600, width: 600, height: 600 };
+    },
+      getContext() { return canvas2dProxy; }
+  });
+  return elObj;
+}
+
+const storageMap = new Map();
+const localStorageShim = {
+  getItem(k) { return storageMap.has(k) ? storageMap.get(k) : null; },
+  setItem(k, v) { storageMap.set(String(k), String(v)); },
+  removeItem(k) { storageMap.delete(k); },
+  clear() { storageMap.clear(); }
+};
+
+let nextIntervalId = 0;
+const activeIntervals = new Map();
+const windowListeners = {};
+const documentListeners = {};
+
+let decodedInputs = [];
+let startedBufferSources = [];
+class MockRunningAudioContext {
+  constructor() {
+    this.state = "running";
+    this.destination = { kind: "destination" };
+  }
+  resume() {
+    this.state = "running";
+    return Promise.resolve();
+  }
+  decodeAudioData(ab, okCb) {
+    assert.ok(ab instanceof ArrayBuffer || (ab && typeof ab.byteLength === "number"),
+              "decodeAudioData must receive an ArrayBuffer");
+    const u8 = new Uint8Array(ab);
+    assert.strictEqual(String.fromCharCode(u8[0], u8[1], u8[2], u8[3]), "RIFF");
+    assert.strictEqual(String.fromCharCode(u8[8], u8[9], u8[10], u8[11]), "WAVE");
+    const sampleRate = u8[24] | (u8[25] << 8) | (u8[26] << 16) | (u8[27] << 24);
+    assert.strictEqual(sampleRate, 16000, "Canonical shared WAV sampleRate must be 16000 Hz");
+    const dataBytes = u8[40] | (u8[41] << 8) | (u8[42] << 16) | (u8[43] << 24);
+    decodedInputs.push(u8.length);
+    /* Simulate real WebAudio neutering/transferring input ArrayBuffer via structuredClone transfer */
+    try { structuredClone(ab, { transfer: [ab] }); } catch (_) {}
+    const fakeBuf = { sampleRate, length: dataBytes / 2, numberOfChannels: 1 };
+    if (typeof okCb === "function") okCb(fakeBuf);
+    return Promise.resolve(fakeBuf);
+  }
+  createBufferSource() {
+    const node = {
+      buffer: null,
+      connectedTo: null,
+      started: false,
+      connect(dest) { this.connectedTo = dest; },
+      start() {
+        this.started = true;
+        startedBufferSources.push(this);
+      }
+    };
+    return node;
+  }
+}
+
+const htmlAudioCreated = [];
+const htmlAudioPlayed = [];
+class MockHtmlAudio {
+  constructor(src) {
+    this.src = src || "";
+    this.preload = "none";
+    this.paused = true;
+    this.ended = false;
+    this.currentTime = 0;
+    htmlAudioCreated.push(this);
+  }
+  play() {
+    this.paused = false;
+    htmlAudioPlayed.push(this.src);
+    this.paused = true;
+    this.ended = true;
+    return Promise.resolve();
+  }
+}
+
+const sandbox = {
+  console,
+  Date,
+  Math,
+  JSON,
+  Array,
+  Object,
+  String,
+  Number,
+  Boolean,
+  RegExp,
+  Error,
+  Map,
+  Set,
+  BigInt,
+  Promise,
+  Uint8Array,
+  Int16Array,
+  Float32Array,
+  ArrayBuffer,
+  DataView,
+  URL,
+  URLSearchParams,
+  Blob,
+  FormData,
+  Headers,
+  AbortController,
+  crypto,
+  Node: MockNode,
+  parseInt,
+  parseFloat,
+  isNaN,
+  isFinite,
+  encodeURIComponent,
+  decodeURIComponent,
+  atob: (b64) => Buffer.from(b64, "base64").toString("binary"),
+  btoa: (bin) => Buffer.from(bin, "binary").toString("base64"),
+  localStorage: localStorageShim,
+  location: {
+    hash: "",
+    pathname: "/",
+    search: "",
+    origin: "http://127.0.0.1:" + cfg.port,
+    href: "http://127.0.0.1:" + cfg.port + "/"
+  },
+  history: { replaceState() {}, pushState() {} },
+  navigator: { clipboard: { writeText: () => Promise.resolve() }, userAgent: "OctiNodeTest/1.0" },
+  devicePixelRatio: 1,
+  innerWidth: 1280,
+  innerHeight: 800,
+  AudioContext: MockRunningAudioContext,
+  Audio: MockHtmlAudio,
+  EventSource: function () { this.close = function () {}; },
+  Image: function () {},
+  alert() {},
+  confirm() { return true; },
+  prompt() { return ""; },
+  open() { return null; },
+  requestAnimationFrame() { return 0; },
+  setTimeout() { return 0; },
+  clearTimeout() {},
+  setInterval(fn, ms) {
+    const id = ++nextIntervalId;
+    activeIntervals.set(id, { fn, ms });
+    return id;
+  },
+  clearInterval(id) {
+    activeIntervals.delete(id);
+  },
+  addEventListener(ev, fn, opts) {
+    if (!windowListeners[ev]) windowListeners[ev] = [];
+    windowListeners[ev].push({ fn, opts });
+  },
+  removeEventListener() {},
+  fetch(url, opts) {
+    const target = (typeof url === "string" && url.startsWith("/"))
+      ? ("http://127.0.0.1:" + cfg.port + url)
+      : url;
+    return fetch(target, opts);
+  },
+  document: {
+    body: makeElement("body"),
+    documentElement: makeElement("html"),
+    activeElement: null,
+    hidden: false,
+    visibilityState: "visible",
+    getElementById(id) {
+      if (!elements[id]) elements[id] = makeElement(id);
+      return elements[id];
+    },
+    createElement(tag) {
+      const e = makeElement("");
+      e.tagName = String(tag || "DIV").toUpperCase();
+      return e;
+    },
+    createElementNS(ns, tag) {
+      const e = makeElement("");
+      e.namespaceURI = String(ns || "");
+      e.tagName = String(tag || "SVG").toUpperCase();
+      return e;
+    },
+    createTextNode(txt) {
+      return Object.assign(new MockNode(), {
+        nodeType: 3,
+        textContent: txt == null ? "" : String(txt),
+        parentNode: null
+      });
+    },
+    querySelector(sel) { return makeElement(sel); },
+    querySelectorAll() { return []; },
+    addEventListener(ev, fn, opts) {
+      if (!documentListeners[ev]) documentListeners[ev] = [];
+      documentListeners[ev].push({ fn, opts });
+    },
+    removeEventListener() {}
+  }
+};
+sandbox.window = sandbox;
+sandbox.self = sandbox;
+
+vm.runInNewContext(instrumentedJs, sandbox, { filename: "WebUi.js", timeout: 4000 });
+
+function sleepMs(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+let currentTestStep = "boot";
+function markStep(name) {
+  currentTestStep = name;
+  if (process.env.OCTI_SFX_DEBUG) {
+    console.error("[SFX-STEP] " + name);
+  }
+}
+
+(async () => {
+  markStep("initial-sleep");
+  await sleepMs(40);
+  markStep("sec-A");
+
+  const synth = sandbox.OctiWebSoundSynth;
+  assert.ok(synth, "OctiWebSoundSynth must be defined");
+  assert.strictEqual(sandbox.window.OctiWebSoundSynth, synth, "OctiWebSoundSynth must be exported on window");
+  assert.strictEqual(typeof synth.getWavBytes, "function", "getWavBytes must exist");
+  assert.strictEqual(typeof synth.unlockAudio, "function", "unlockAudio must exist");
+  assert.strictEqual(typeof synth.classifyMoveCue, "function", "classifyMoveCue must exist");
+  assert.strictEqual(typeof synth.playForMove, "function", "playForMove must exist");
+  assert.strictEqual(typeof synth.triggeredCueCount, "function", "triggeredCueCount must exist");
+  assert.strictEqual(typeof synth.lastTriggeredCue, "function", "lastTriggeredCue must exist");
+
+  /* A. Byte-for-byte identity of OctiWebSoundSynth.getWavBytes(cue) with C++ soundCueWavBytes */
+  const cueNames = Object.keys(cfg.expectedWavHex);
+  assert.strictEqual(cueNames.length, 7);
+  for (const cue of cueNames) {
+    const wavU8 = synth.getWavBytes(cue);
+    assert.ok(wavU8 instanceof sandbox.Uint8Array || Uint8Array.prototype.isPrototypeOf(wavU8) || wavU8.byteLength > 0);
+    const actualHex = Buffer.from(wavU8).toString("hex");
+    assert.strictEqual(actualHex, cfg.expectedWavHex[cue], "WAV byte mismatch for cue " + cue);
+  }
+  /* POD_DROP alias normalizes to POD_PLACE */
+  assert.strictEqual(
+    Buffer.from(synth.getWavBytes("POD_DROP")).toString("hex"),
+    cfg.expectedWavHex["POD_PLACE"]
+  );
+  assert.strictEqual(synth.getWavBytes("NONEXISTENT_CUE").length, 0);
+
+  /* B. Passive gesture unlock listeners & non-detaching pre-decode of all 7 WAV buffers */
+  for (const evName of ["pointerdown", "keydown", "touchstart"]) {
+    const reg = (windowListeners[evName] || []).concat(documentListeners[evName] || []);
+    assert.ok(
+      reg.some((item) => item.opts && item.opts.passive === true && item.opts.capture === true),
+      "Expected passive capture unlock listener on " + evName
+    );
+  }
+  synth.unlockAudio();
+  await sleepMs(20);
+  assert.strictEqual(decodedInputs.length, 7, "unlockAudio must pre-decode all 7 shared WAV assets");
+  /* Verify decodeAudioData neutering did NOT detach cached getWavBytes(cue) */
+  assert.strictEqual(
+    Buffer.from(synth.getWavBytes("POD_PLACE")).toString("hex"),
+    cfg.expectedWavHex["POD_PLACE"],
+    "getWavBytes must remain intact after decodeAudioData transfers ArrayBuffer"
+  );
+
+  /* C. POD_DROP normalization + WebAudio playback */
+  const c0 = synth.triggeredCueCount();
+  const src0 = startedBufferSources.length;
+  synth.play("POD_DROP");
+  await sleepMs(10);
+  assert.strictEqual(synth.triggeredCueCount(), c0 + 1);
+  assert.strictEqual(synth.lastTriggeredCue(), "POD_PLACE");
+  assert.strictEqual(startedBufferSources.length, src0 + 1);
+
+  /* D. SFX: Off suppression & localStorage ("octi.sfxEnabled") persistence */
+  synth.setEnabled(false);
+  assert.strictEqual(synth.isEnabled(), false);
+  assert.strictEqual(localStorageShim.getItem("octi.sfxEnabled"), "0");
+  assert.strictEqual(elements["btn-sfx"].textContent, "SFX: Off");
+  const mutedCountBefore = synth.triggeredCueCount();
+  synth.play("PRONG_SNAP");
+  synth.playForMove("57+e");
+  assert.strictEqual(synth.triggeredCueCount(), mutedCountBefore, "Muted synth must suppress all cues");
+
+  synth.setEnabled(true);
+  assert.strictEqual(synth.isEnabled(), true);
+  assert.strictEqual(localStorageShim.getItem("octi.sfxEnabled"), "1");
+  assert.strictEqual(elements["btn-sfx"].textContent, "SFX: On");
+
+  /* E. classifyMoveCue priority rules (regular, jump, capture, superprong prelude, edgeless wrap) */
+  assert.strictEqual(synth.classifyMoveCue("57"), "POD_PLACE");
+  assert.strictEqual(synth.classifyMoveCue("57*"), "POD_PLACE");
+  assert.strictEqual(synth.classifyMoveCue("57+e"), "PRONG_SNAP");
+  assert.strictEqual(synth.classifyMoveCue("57e+f-e"), "PRONG_SNAP");
+  assert.strictEqual(synth.classifyMoveCue("57e-56"), "POD_STEP");
+  assert.strictEqual(synth.classifyMoveCue("57e-55"), "POD_JUMP");
+  assert.strictEqual(synth.classifyMoveCue("57e-55x"), "POD_CAPTURE");
+  assert.strictEqual(synth.classifyMoveCue("33A-34;34+b"), "PRONG_SNAP");
+  assert.strictEqual(synth.classifyMoveCue("33A-35x;35+b"), "POD_CAPTURE");
+  assert.strictEqual(synth.classifyMoveCue("15g-85", { edgeless: true, gw: 9, gh: 9 }), "POD_JUMP");
+  assert.strictEqual(synth.classifyMoveCue(""), "POD_PLACE");
+
+  const t = sandbox.window.__octiTest;
+  assert.ok(t, "__octiTest helpers must be exported");
+
+  /* F. Local vs. AI bot move cues in onLocalMoveCommitted (and no double-play on human move) */
+  markStep("sec-F");
+  sandbox.window.stopOnlineGameSync(false);
+  sandbox.window.localMatchConfig.playMode = "bot";
+  sandbox.window.localMatchConfig.humanSeat = "A";
+  sandbox.window.matchStarted = true;
+
+  /* Human move commit without aiMeta must NOT fire duplicate cue inside onLocalMoveCommitted */
+  sandbox.window.localMatchConfig.playMode = "pass";
+  sandbox.window.activePlayState = t.parseOctiFen("2:1:0:0:P:A:-:0:4,0,25,0:4,0,25,0:A33,A53,A73,B37,B57,B77");
+  const beforeHumanLocal = synth.triggeredCueCount();
+  const afterHumanSt = t.applyMoveToState(t.cloneState(sandbox.window.activePlayState), "53+a", "A");
+  sandbox.window.onLocalMoveCommitted("53+a", afterHumanSt);
+  assert.strictEqual(synth.triggeredCueCount(), beforeHumanLocal, "Human local move must not double-play in onLocalMoveCommitted");
+
+  /* AI bot moves (with aiMeta) trigger exact move cues */
+  sandbox.window.localMatchConfig.playMode = "bot";
+  sandbox.window.localMatchConfig.humanSeat = "A";
+  const fakeAiMeta = { score: 12, depth: 4, nodes: 500, elapsedMs: 25 };
+
+  const aiCases = [
+    {
+      fen: "2:3:0:0:P:B:-:0:4,0,24,0:4,0,25,0:A33,A53a,A73,B37,B57,B77",
+      move: "57+e",
+      expectedCue: "PRONG_SNAP"
+    },
+    {
+      fen: "2:3:0:0:P:B:-:0:4,0,24,0:4,0,24,0:A33,A53a,A73,B37,B57e,B77",
+      move: "57e-56",
+      expectedCue: "POD_STEP"
+    },
+    {
+      fen: "2:3:0:0:P:B:-:0:4,0,24,0:4,0,24,0:A33,A56,A73,B37,B57e,B77",
+      move: "57e-55",
+      expectedCue: "POD_JUMP"
+    },
+    {
+      fen: "2:3:0:0:P:B:-:0:4,0,24,0:4,0,24,0:A33,A56,A73,B37,B57e,B77",
+      move: "57e-55x",
+      expectedCue: "POD_CAPTURE"
+    },
+    {
+      fen: "2:3:0:0:P:B:-:0:4,0,24,0:4,0,24,0:A33,A53a,A73,B37,B77",
+      move: "57",
+      expectedCue: "POD_PLACE"
+    },
+    {
+      fen: "2:1:0:0:P:B:-:0:4,0,24,0:4,0,24,0:A33,A73,B37,B54e,B77",
+      move: "54e-53",
+      expectedCue: "GAME_VICTORY"
+    }
+  ];
+
+  for (const tc of aiCases) {
+    sandbox.window.activePlayState = t.parseOctiFen(tc.fen);
+    const nextSt = t.applyMoveToState(t.cloneState(sandbox.window.activePlayState), tc.move, "B");
+    const cntBefore = synth.triggeredCueCount();
+    sandbox.window.onLocalMoveCommitted(tc.move, nextSt, fakeAiMeta);
+    assert.strictEqual(synth.triggeredCueCount(), cntBefore + 1,
+                       "AI move " + tc.move + " must trigger exactly 1 cue");
+    assert.strictEqual(synth.lastTriggeredCue(), tc.expectedCue,
+                       "AI move " + tc.move + " expected " + tc.expectedCue);
+  }
+
+  /* G. Online Room Sync against REAL octi_server */
+  markStep("sec-G1");
+  /* G1: Initial sync on prePopulatedRoom (6 existing moves) must trigger 0 cues */
+  localStorageShim.setItem("octi_jwt_token", cfg.seat1Token);
+  const beforePrePopOpen = synth.triggeredCueCount();
+  sandbox.window.openOnlineTableBoard(cfg.prePopulatedRoom);
+  await sleepMs(100);
+  assert.strictEqual(sandbox.window.playMatchPlies.length, 7, "Expected initial setup + 6 existing plies");
+  assert.strictEqual(synth.triggeredCueCount(), beforePrePopOpen,
+                     "Initial syncOnlineGameRoom on room with 6 moves must fire 0 cues");
+
+  /* G2: Switch to liveRoom (2P 1-base) as Seat 1 (uC) */
+  markStep("sec-G2");
+  sandbox.window.stopOnlineGameSync(false);
+  const beforeLiveOpen = synth.triggeredCueCount();
+  sandbox.window.openOnlineTableBoard(cfg.liveRoom);
+  await sleepMs(100);
+  assert.strictEqual(synth.triggeredCueCount(), beforeLiveOpen,
+                     "Initial sync on fresh online room must fire 0 cues");
+
+  /* G3: Seat 1 (local human) commits "53+a" via onLocalMoveCommitted -> own echo must fire 0 cues */
+  markStep("sec-G3");
+  const beforeOwnOnline = synth.triggeredCueCount();
+  const sAfterOwn1 = t.applyMoveToState(t.cloneState(sandbox.window.activePlayState), "53+a", "A");
+  sandbox.window.onLocalMoveCommitted("53+a", sAfterOwn1);
+  await sleepMs(120);
+  assert.strictEqual(sandbox.window.playMatchPlies.length, 2);
+  assert.strictEqual(synth.triggeredCueCount(), beforeOwnOnline,
+                     "Local human online move echo must fire 0 duplicate cues");
+
+  /* G4: Opponent Seat 2 (uD) submits "57+e" to server -> syncOnlineGameRoom must trigger PRONG_SNAP */
+  markStep("sec-G4");
+  const oppMove1Res = await fetch("http://127.0.0.1:" + cfg.port + "/api/v1/games/" + cfg.liveRoom + "/move", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + cfg.seat2Token
+    },
+    body: JSON.stringify({ move: "57+e" })
+  });
+  assert.strictEqual(oppMove1Res.status, 200);
+  const beforeOpp1Sync = synth.triggeredCueCount();
+  sandbox.window.syncOnlineGameRoom(cfg.liveRoom, false);
+  await sleepMs(100);
+  assert.strictEqual(synth.triggeredCueCount(), beforeOpp1Sync + 1,
+                     "Opponent online move must trigger 1 cue");
+  assert.strictEqual(synth.lastTriggeredCue(), "PRONG_SNAP");
+
+  /* G5: Advance to jump & terminal base capture in liveRoom */
+  markStep("sec-G5");
+  /* Seat 1 local move "53a-54" -> 0 cues */
+  const beforeOwn2 = synth.triggeredCueCount();
+  sandbox.window.onLocalMoveCommitted(
+    "53a-54",
+    t.applyMoveToState(t.cloneState(sandbox.window.activePlayState), "53a-54", "A")
+  );
+  await sleepMs(120);
+  assert.strictEqual(synth.triggeredCueCount(), beforeOwn2);
+
+  /* Opponent Seat 2 plays "57e-56" -> triggers POD_STEP */
+  assert.strictEqual((await fetch("http://127.0.0.1:" + cfg.port + "/api/v1/games/" + cfg.liveRoom + "/move", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.seat2Token },
+    body: JSON.stringify({ move: "57e-56" })
+  })).status, 200);
+  const beforeOppStep = synth.triggeredCueCount();
+  sandbox.window.syncOnlineGameRoom(cfg.liveRoom, false);
+  await sleepMs(100);
+  assert.strictEqual(synth.triggeredCueCount(), beforeOppStep + 1);
+  assert.strictEqual(synth.lastTriggeredCue(), "POD_STEP");
+
+  /* Seat 1 local move "54a-55" -> 0 cues */
+  const beforeOwn3 = synth.triggeredCueCount();
+  sandbox.window.onLocalMoveCommitted(
+    "54a-55",
+    t.applyMoveToState(t.cloneState(sandbox.window.activePlayState), "54a-55", "A")
+  );
+  await sleepMs(120);
+  assert.strictEqual(synth.triggeredCueCount(), beforeOwn3);
+
+  /* Opponent Seat 2 jumps over A55: "56e-54x" -> triggers POD_CAPTURE */
+  assert.strictEqual((await fetch("http://127.0.0.1:" + cfg.port + "/api/v1/games/" + cfg.liveRoom + "/move", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.seat2Token },
+    body: JSON.stringify({ move: "56e-54x" })
+  })).status, 200);
+  const beforeOppCap = synth.triggeredCueCount();
+  sandbox.window.syncOnlineGameRoom(cfg.liveRoom, false);
+  await sleepMs(100);
+  assert.strictEqual(synth.triggeredCueCount(), beforeOppCap + 1);
+  assert.strictEqual(synth.lastTriggeredCue(), "POD_CAPTURE");
+
+  /* Seat 1 local move "33+a" -> 0 cues */
+  sandbox.window.onLocalMoveCommitted(
+    "33+a",
+    t.applyMoveToState(t.cloneState(sandbox.window.activePlayState), "33+a", "A")
+  );
+  await sleepMs(120);
+
+  /* Opponent Seat 2 steps into A's base (5,3) in 1-base match: "54e-53" -> triggers GAME_VICTORY once */
+  assert.strictEqual((await fetch("http://127.0.0.1:" + cfg.port + "/api/v1/games/" + cfg.liveRoom + "/move", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.seat2Token },
+    body: JSON.stringify({ move: "54e-53" })
+  })).status, 200);
+  const beforeOppWin = synth.triggeredCueCount();
+  sandbox.window.syncOnlineGameRoom(cfg.liveRoom, false);
+  await sleepMs(100);
+  assert.strictEqual(synth.triggeredCueCount(), beforeOppWin + 1);
+  assert.strictEqual(synth.lastTriggeredCue(), "GAME_VICTORY");
+
+  /* Polling finished room again must trigger 0 extra victory cues */
+  sandbox.window.syncOnlineGameRoom(cfg.liveRoom, true);
+  await sleepMs(100);
+  assert.strictEqual(synth.triggeredCueCount(), beforeOppWin + 1,
+                     "Repeated sync on already-finished room must not re-fire GAME_VICTORY");
+  sandbox.window.stopOnlineGameSync(false);
+
+  /* H. Local clockInterval boundary checks: 11s -> silent, 10s..1s -> CLOCK_LOW_TICK, 0s -> GAME_VICTORY */
+  markStep("sec-H");
+  sandbox.window.localMatchConfig.playMode = "pass";
+  sandbox.window.localMatchConfig.timeControl = "300+3";
+  sandbox.window.prepareLocalMatchInitialState();
+  const intervalsBeforeStart = new Set(activeIntervals.keys());
+  elements["btn-web-start-match"].click();
+  let clockTickFn = null;
+  for (const [id, entry] of activeIntervals.entries()) {
+    if (!intervalsBeforeStart.has(id) && entry.ms === 1000) {
+      clockTickFn = entry.fn;
+    }
+  }
+  assert.strictEqual(typeof clockTickFn, "function", "Expected 1000ms clockInterval on timed match start");
+
+  t.clockTimers.A = 12;
+  const beforeTick11 = synth.triggeredCueCount();
+  clockTickFn(); /* 12 -> 11s */
+  assert.strictEqual(t.clockTimers.A, 11);
+  assert.strictEqual(synth.triggeredCueCount(), beforeTick11, "11s remaining must not trigger CLOCK_LOW_TICK");
+
+  clockTickFn(); /* 11 -> 10s */
+  assert.strictEqual(t.clockTimers.A, 10);
+  assert.strictEqual(synth.triggeredCueCount(), beforeTick11 + 1, "10s remaining must trigger CLOCK_LOW_TICK");
+  assert.strictEqual(synth.lastTriggeredCue(), "CLOCK_LOW_TICK");
+
+  t.clockTimers.A = 2;
+  const beforeTick1 = synth.triggeredCueCount();
+  clockTickFn(); /* 2 -> 1s */
+  assert.strictEqual(t.clockTimers.A, 1);
+  assert.strictEqual(synth.triggeredCueCount(), beforeTick1 + 1, "1s remaining must trigger CLOCK_LOW_TICK");
+  assert.strictEqual(synth.lastTriggeredCue(), "CLOCK_LOW_TICK");
+
+  clockTickFn(); /* 1 -> 0s -> timeout victory */
+  assert.strictEqual(t.clockTimers.A, 0);
+  assert.strictEqual(synth.triggeredCueCount(), beforeTick1 + 2, "0s timeout must trigger GAME_VICTORY");
+  assert.strictEqual(synth.lastTriggeredCue(), "GAME_VICTORY");
+
+  /* I. Fault injection: suspended AudioContext whose resume() rejects falls back cleanly to HTMLAudioElement */
+  markStep("sec-I");
+  class RejectingSuspendedAudioContext {
+    constructor() {
+      this.state = "suspended";
+      this.destination = {};
+    }
+    resume() {
+      return Promise.reject(new Error("NotAllowedError: AudioContext resume blocked in background tab"));
+    }
+    decodeAudioData() {
+      return Promise.reject(new Error("decode blocked"));
+    }
+    createBufferSource() {
+      throw new Error("createBufferSource blocked");
+    }
+  }
+  class RejectingPlayHtmlAudio {
+    constructor(src) {
+      this.src = src || "";
+      this.preload = "none";
+      this.paused = true;
+      this.ended = false;
+      this.currentTime = 0;
+    }
+    play() {
+      htmlAudioPlayed.push(this.src);
+      return Promise.reject(new Error("HTMLAudioElement autoplay blocked"));
+    }
+  }
+  sandbox.AudioContext = RejectingSuspendedAudioContext;
+  sandbox.window.AudioContext = RejectingSuspendedAudioContext;
+  sandbox.Audio = RejectingPlayHtmlAudio;
+  sandbox.window.Audio = RejectingPlayHtmlAudio;
+
+  const fallbackPlayedBefore = htmlAudioPlayed.length;
+  const countBeforeFallback = synth.triggeredCueCount();
+  synth.play("PRONG_SNAP");
+  await sleepMs(30);
+  assert.strictEqual(synth.triggeredCueCount(), countBeforeFallback + 1);
+  assert.strictEqual(synth.lastTriggeredCue(), "PRONG_SNAP");
+  assert.ok(htmlAudioPlayed.length > fallbackPlayedBefore,
+            "Suspended rejecting AudioContext must fall back to HTMLAudioElement");
+  assert.ok(
+    htmlAudioPlayed[htmlAudioPlayed.length - 1].startsWith("data:audio/wav;base64,"),
+    "HTMLAudioElement fallback must use data:audio/wav;base64,..."
+  );
+  assert.strictEqual(unhandledRejections.length, 0,
+                     "Must have zero unhandled Promise rejections, got: " + unhandledRejections.join("; "));
+
+  process.exit(0);
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
+)NODEJS";
+    }
+
+    int rcNode = std::system(("timeout -k 2 25 node " + runnerJsPath + " " + webJsPath + " " + cfgJsonPath).c_str());
+    std::remove(webJsPath.c_str());
+    std::remove(cfgJsonPath.c_str());
+    std::remove(runnerJsPath.c_str());
+    CHECK_EQUAL(0, rcNode);
+}
+
+TEST(OctiHttpServerIntegrationTest, SuperProngJsEngineComposerStagingAndStackInspector)
+{
+    /* 1. Strict CSP self-containment check on GET / */
+    Reply rUi = http().get("/");
+    EXPECT_STATUS(200, rUi);
+    {
+        std::string strippedUi = rUi.body;
+        const char *kAllowedTokens[] = {
+            "http://www.w3.org/2000/svg",
+            "https://www.selfso.com/software/windows/octi/",
+            "https://www.selfso.com/software/android/octi/",
+            "placeholder=\"Robot URL (optional http:// or https://, no '?')\"",
+            "<link rel=\"icon\"",
+            "<link rel=\"apple-touch-icon\""
+        };
+        for (size_t ti = 0; ti < sizeof(kAllowedTokens) / sizeof(kAllowedTokens[0]); ++ti) {
+            const std::string tok(kAllowedTokens[ti]);
+            size_t pos = 0;
+            while ((pos = strippedUi.find(tok)) != std::string::npos) {
+                strippedUi.replace(pos, tok.size(), "");
+            }
+        }
+        CHECK_TRUE(strippedUi.find("http://") == std::string::npos);
+        CHECK_TRUE(strippedUi.find("https://") == std::string::npos);
+        CHECK_TRUE(strippedUi.find("src=\"//") == std::string::npos);
+        CHECK_TRUE(strippedUi.find("<link") == std::string::npos);
+        CHECK_TRUE(strippedUi.find("<iframe") == std::string::npos);
+    }
+
+    /* 2. Compute authoritative C++ OctiGame::generateLegalMoves sets across all required superprong positions */
+    struct ParityFixture {
+        const char *label;
+        const char *fen;
+    };
+    const ParityFixture kParityFixtures[] = {
+        {"single_superprong_A33a_bang", "2:3:1:0:P:A:-:0:3,0,10,1:3,0,12,2:A33a!,B57"},
+        {"single_superprong_jump_A33a_bang", "2:3:1:0:P:A:-:0:3,0,10,1:2,0,12,2:A33a!,B34e,B57"},
+        {"dual_superprong_single_pod_A33a_bang_c_bang", "2:3:1:0:P:A:-:0:3,0,10,0:3,0,12,2:A33a!c!,B57"},
+        {"dual_pod_A33a_bang_A53a_bang", "2:3:1:0:P:A:-:0:2,0,10,0:3,0,12,2:A33a!,A53a!,B57"},
+        {"stacked_A33a_bang_A33a_bang", "2:3:1:0:P:A:-:0:2,0,10,0:3,0,12,2:A33a!,A33a!,B57"},
+        {"stacked_jump_over_B34_A33a_bang_A33a_bang", "2:3:1:0:P:A:-:0:2,0,0,0:2,0,12,2:A33a!,A33a!,B34e,B57"},
+        {"pre_existing_dest_A33a_bang_A34a_bang", "2:3:1:0:P:A:-:0:2,0,10,0:3,0,12,2:A33a!,A34a!,B57"},
+        {"edgeless_wrap_A15g_bang", "2:3:1:1:P:A:-:0:3,0,10,1:3,0,12,2:A15g!,B57"},
+        {"edgeless_wrap_jump_A15g_bang", "2:3:1:1:P:A:-:0:3,0,10,1:2,0,12,2:A15g!,B95c,B57"}
+    };
+
+    Json parityCases = Json::array();
+    for (size_t i = 0; i < sizeof(kParityFixtures) / sizeof(kParityFixtures[0]); ++i) {
+        octi::OctiBoard board;
+        board.fromPositionString(kParityFixtures[i].fen);
+        CHECK_TRUE(board.getGame() != nullptr);
+        std::vector<octi::OctiMove> legal = board.getGame()->generateLegalMoves();
+        Json moveStrings = Json::array();
+        for (const auto &mv : legal) {
+            moveStrings.push_back(mv.asString());
+        }
+        parityCases.push_back(Json{
+            {"label", kParityFixtures[i].label},
+            {"fen", kParityFixtures[i].fen},
+            {"moves", moveStrings}
+        });
+    }
+
+    /* Authoritative post-move FEN for stacked deferred capture across p1 and p2 */
+    const std::string stackedDeferredStartFen =
+        "2:3:1:0:P:A:-:0:2,0,0,0:1,0,12,2:A31a!,A31a!,B32e,B34,B57";
+    const std::string stackedDeferredMove = "31a!-33x-35;31a!-33x;33a!+b";
+    std::string stackedDeferredAfterFen;
+    {
+        octi::OctiBoard board;
+        board.fromPositionString(stackedDeferredStartFen);
+        board.getGame()->move(stackedDeferredMove);
+        stackedDeferredAfterFen = board.toPositionString();
+    }
+
+    size_t scStart = rUi.body.find("<script>");
+    CHECK_TRUE(scStart != std::string::npos);
+    size_t scEnd = rUi.body.find("</script>", scStart);
+    CHECK_TRUE(scEnd != std::string::npos);
+    std::string jsCode = rUi.body.substr(scStart + 8, scEnd - (scStart + 8));
+
+    std::string pidTag = std::to_string(getpid());
+    std::string webJsPath = "/tmp/octi_sp_webui_" + pidTag + ".js";
+    std::string cfgJsonPath = "/tmp/octi_sp_cfg_" + pidTag + ".json";
+    std::string runnerJsPath = "/tmp/octi_sp_runner_" + pidTag + ".js";
+
+    {
+        std::ofstream ofs(webJsPath);
+        ofs << jsCode;
+    }
+    {
+        Json cfg;
+        cfg["port"] = http().port();
+        cfg["parityCases"] = parityCases;
+        cfg["stackedDeferredStartFen"] = stackedDeferredStartFen;
+        cfg["stackedDeferredMove"] = stackedDeferredMove;
+        cfg["stackedDeferredAfterFen"] = stackedDeferredAfterFen;
+        std::ofstream cfs(cfgJsonPath);
+        cfs << cfg.dump();
+    }
+    {
+        std::ofstream rfs(runnerJsPath);
+        rfs << R"NODEJS(
+const assert = require("assert");
+const crypto = require("crypto");
+const fs = require("fs");
+const vm = require("vm");
+
+const webJsRaw = fs.readFileSync(process.argv[2], "utf8");
+const cfg = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+
+const iifeClose = webJsRaw.lastIndexOf("})();");
+assert.ok(iifeClose > 0, "Expected closing })(); in WebUi script");
+const instrumentedJs =
+  webJsRaw.slice(0, iifeClose) +
+  "\nwindow.__octiSpTest = {\n" +
+  "  parseOctiFen: parseOctiFen,\n" +
+  "  serializeOctiFen: serializeOctiFen,\n" +
+  "  cloneState: cloneState,\n" +
+  "  generateMoves: generateMoves,\n" +
+  "  generateMovesForState: (typeof generateMovesForState === 'function') ? generateMovesForState : null,\n" +
+  "  applyMoveToState: applyMoveToState,\n" +
+  "  WebMoveComposer: WebMoveComposer,\n" +
+  "  getMoveComposer: function() { return moveComposer; },\n" +
+  "  setMoveComposer: function(mc) { moveComposer = mc; },\n" +
+  "  getPlayBoardGeom: function() { return playBoardGeom; },\n" +
+  "  renderPlayBoardCanvas: renderPlayBoardCanvas,\n" +
+  "  handlePlaySquareClick: handlePlaySquareClick,\n" +
+  "  openZoomedSquare: openZoomedSquare,\n" +
+  "  closeZoomedSquare: closeZoomedSquare,\n" +
+  "  setActivePlayState: function(s) { activePlayState = s; window.activePlayState = s; },\n" +
+  "  getActivePlayState: function() { return activePlayState; },\n" +
+  "  setMatchStarted: function(v) { matchStarted = v; window.matchStarted = v; },\n" +
+  "  setOnlineSpectator: function(roomId, seat, roomView) {\n" +
+  "    activeOnlineGameId = roomId;\n" +
+  "    activeOnlineViewerSeat = seat;\n" +
+  "    activeOnlineRoomView = roomView;\n" +
+  "  },\n" +
+  "  setVcrState: function(plies, idx) {\n" +
+  "    playMatchPlies = plies;\n" +
+  "    playVcrIndex = idx;\n" +
+  "  }\n" +
+  "};\n})();\n";
+
+function createCanvas2dContext(ownerEl) {
+  return new Proxy({
+    createLinearGradient: () => ({ addColorStop() {} }),
+    createRadialGradient: () => ({ addColorStop() {} }),
+    createPattern: () => ({}),
+    measureText: () => ({ width: 20 })
+  }, {
+    get(target, prop) {
+      if (prop in target) return target[prop];
+      return function () {
+        if (ownerEl && (prop === "fill" || prop === "stroke" || prop === "arc" || prop === "lineTo")) {
+          ownerEl._drawCalls = (ownerEl._drawCalls || 0) + 1;
+        }
+      };
+    },
+    set(target, prop, val) {
+      target[prop] = val;
+      return true;
+    }
+  });
+}
+
+class MockNode {}
+const elements = {};
+function makeElement(id) {
+  let _innerHTML = "";
+  const elObj = Object.assign(new MockNode(), {
+    id: id || "",
+    tagName: "DIV",
+    textContent: "",
+    value: "",
+    checked: false,
+    disabled: false,
+    className: "",
+    width: 760,
+    height: 760,
+    clientWidth: 760,
+    clientHeight: 760,
+    offsetWidth: 760,
+    offsetHeight: 760,
+    scrollHeight: 0,
+    scrollTop: 0,
+    children: [],
+    firstChild: null,
+    parentNode: null,
+    _drawCalls: 0,
+    style: {
+      setProperty(k, v) { this[k] = v; },
+      removeProperty(k) { delete this[k]; },
+      getPropertyValue(k) { return this[k] || ""; }
+    },
+    dataset: {},
+    listeners: {},
+    addEventListener(ev, fn, opts) {
+      if (!this.listeners[ev]) this.listeners[ev] = [];
+      this.listeners[ev].push({ fn, opts });
+    },
+    removeEventListener() {},
+    dispatch(ev, payload) {
+      const arr = this.listeners[ev] || [];
+      const evt = Object.assign({
+        button: 0,
+        preventDefault() {},
+        stopPropagation() {},
+        target: this
+      }, payload || {});
+      for (const item of arr) item.fn.call(this, evt);
+    },
+    click() {
+      if (typeof this.onclick === "function") {
+        this.onclick({ preventDefault() {}, stopPropagation() {}, target: this });
+      }
+      this.dispatch("click");
+    },
+    classList: {
+      add(...cls) {
+        const cur = new Set(String(elObj.className || "").split(/\s+/).filter(Boolean));
+        for (const c of cls) cur.add(c);
+        elObj.className = Array.from(cur).join(" ");
+      },
+      remove(...cls) {
+        const cur = new Set(String(elObj.className || "").split(/\s+/).filter(Boolean));
+        for (const c of cls) cur.delete(c);
+        elObj.className = Array.from(cur).join(" ");
+      },
+      toggle(c, force) {
+        const has = this.contains(c);
+        const next = (force !== undefined) ? Boolean(force) : !has;
+        if (next) this.add(c); else this.remove(c);
+        return next;
+      },
+      contains(c) {
+        return String(elObj.className || "").split(/\s+/).filter(Boolean).includes(c);
+      }
+    },
+    appendChild(ch) {
+      if (ch) {
+        ch.parentNode = this;
+        this.children.push(ch);
+        this.firstChild = this.children[0] || null;
+      }
+      return ch;
+    },
+    insertBefore(ch) { return this.appendChild(ch); },
+    removeChild(ch) {
+      const idx = this.children.indexOf(ch);
+      if (idx >= 0) {
+        this.children.splice(idx, 1);
+        ch.parentNode = null;
+      }
+      this.firstChild = this.children[0] || null;
+      return ch;
+    },
+    replaceChild(ch, oldCh) {
+      const idx = this.children.indexOf(oldCh);
+      if (idx >= 0) this.children[idx] = ch;
+      else this.children.push(ch);
+      this.firstChild = this.children[0] || null;
+      return oldCh;
+    },
+    cloneNode() { return makeElement(""); },
+    focus() {},
+    blur() {},
+    select() {},
+    scrollIntoView() {},
+    contains(other) {
+      if (other === this) return true;
+      return this.children.some((c) => c === other || (c.contains && c.contains(other)));
+    },
+    getAttribute() { return null; },
+    setAttribute() {},
+    removeAttribute() {},
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+    getBoundingClientRect() {
+      const w = Number(this.width) || 760;
+      const h = Number(this.height) || 760;
+      return { left: 0, top: 0, right: w, bottom: h, width: w, height: h };
+    },
+    getContext() {
+      if (!this._ctx2d) this._ctx2d = createCanvas2dContext(this);
+      return this._ctx2d;
+    }
+  });
+  Object.defineProperty(elObj, "innerHTML", {
+    get() { return _innerHTML; },
+    set(v) {
+      _innerHTML = String(v || "");
+      elObj.children = [];
+      elObj.firstChild = null;
+    }
+  });
+  return elObj;
+}
+
+const storageMap = new Map();
+const localStorageShim = {
+  getItem(k) { return storageMap.has(k) ? storageMap.get(k) : null; },
+  setItem(k, v) { storageMap.set(String(k), String(v)); },
+  removeItem(k) { storageMap.delete(k); },
+  clear() { storageMap.clear(); }
+};
+
+const windowListeners = {};
+const documentListeners = {};
+
+class StubAudioCtx {
+  constructor() { this.state = "running"; this.destination = {}; }
+  resume() { return Promise.resolve(); }
+  decodeAudioData() { return Promise.resolve({ sampleRate: 16000, length: 160, numberOfChannels: 1 }); }
+  createBufferSource() { return { connect() {}, start() {} }; }
+}
+class StubHtmlAudio {
+  play() { return Promise.resolve(); }
+}
+
+const sandbox = {
+  console,
+  Date,
+  Math,
+  JSON,
+  Array,
+  Object,
+  String,
+  Number,
+  Boolean,
+  RegExp,
+  Error,
+  Map,
+  Set,
+  BigInt,
+  Promise,
+  Uint8Array,
+  Int16Array,
+  Float32Array,
+  ArrayBuffer,
+  DataView,
+  URL,
+  URLSearchParams,
+  Blob,
+  FormData,
+  Headers,
+  AbortController,
+  crypto,
+  Node: MockNode,
+  parseInt,
+  parseFloat,
+  isNaN,
+  isFinite,
+  encodeURIComponent,
+  decodeURIComponent,
+  atob: (b64) => Buffer.from(b64, "base64").toString("binary"),
+  btoa: (bin) => Buffer.from(bin, "binary").toString("base64"),
+  localStorage: localStorageShim,
+  location: {
+    hash: "",
+    pathname: "/",
+    search: "",
+    origin: "http://127.0.0.1:" + cfg.port,
+    href: "http://127.0.0.1:" + cfg.port + "/"
+  },
+  history: { replaceState() {}, pushState() {} },
+  navigator: { clipboard: { writeText: () => Promise.resolve() }, userAgent: "OctiNodeTest/1.0" },
+  devicePixelRatio: 1,
+  innerWidth: 1280,
+  innerHeight: 800,
+  AudioContext: StubAudioCtx,
+  Audio: StubHtmlAudio,
+  EventSource: function () { this.close = function () {}; },
+  Image: function () {},
+  alert() {},
+  confirm() { return true; },
+  prompt() { return ""; },
+  open() { return null; },
+  requestAnimationFrame() { return 0; },
+  setTimeout() { return 0; },
+  clearTimeout() {},
+  setInterval() { return 1; },
+  clearInterval() {},
+  addEventListener(ev, fn, opts) {
+    if (!windowListeners[ev]) windowListeners[ev] = [];
+    windowListeners[ev].push({ fn, opts });
+  },
+  removeEventListener() {},
+  fetch() { return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }); },
+  document: {
+    body: makeElement("body"),
+    documentElement: makeElement("html"),
+    activeElement: null,
+    hidden: false,
+    visibilityState: "visible",
+    getElementById(id) {
+      if (!elements[id]) {
+        const el = makeElement(id);
+        if (id === "web-zoom-canvas") { el.width = 320; el.height = 320; }
+        elements[id] = el;
+      }
+      return elements[id];
+    },
+    createElement(tag) {
+      const e = makeElement("");
+      e.tagName = String(tag || "DIV").toUpperCase();
+      return e;
+    },
+    createElementNS(ns, tag) {
+      const e = makeElement("");
+      e.namespaceURI = String(ns || "");
+      e.tagName = String(tag || "SVG").toUpperCase();
+      return e;
+    },
+    createTextNode(txt) {
+      return Object.assign(new MockNode(), {
+        nodeType: 3,
+        textContent: txt == null ? "" : String(txt),
+        parentNode: null
+      });
+    },
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+    addEventListener(ev, fn, opts) {
+      if (!documentListeners[ev]) documentListeners[ev] = [];
+      documentListeners[ev].push({ fn, opts });
+    },
+    removeEventListener() {}
+  }
+};
+sandbox.window = sandbox;
+sandbox.self = sandbox;
+
+vm.runInNewContext(instrumentedJs, sandbox, { filename: "WebUi.js", timeout: 5000 });
+
+const t = sandbox.window.__octiSpTest;
+assert.ok(t, "__octiSpTest must be available");
+
+/* ============================================================================
+ * PART 1: Engine Parity (generateMovesForState vs C++ OctiGame::generateLegalMoves
+ *         + applyMoveToState validation & preludeDeferredCaps)
+ * ============================================================================ */
+assert.strictEqual(typeof t.generateMovesForState, "function",
+                   "generateMovesForState must be defined on WebUi JS engine");
+
+for (const pc of cfg.parityCases) {
+  const st = t.parseOctiFen(pc.fen);
+  const jsMoves = t.generateMovesForState(st);
+  const cppSet = new Set(pc.moves);
+  const jsSet = new Set(jsMoves);
+  const missingInJs = pc.moves.filter((m) => !jsSet.has(m));
+  const extraInJs = jsMoves.filter((m) => !cppSet.has(m));
+  assert.strictEqual(
+    jsMoves.length,
+    jsSet.size,
+    "JS generateMovesForState emitted duplicate moves on " + pc.label
+  );
+  assert.deepStrictEqual(
+    { missingInJs, extraInJs },
+    { missingInJs: [], extraInJs: [] },
+    "Move-set mismatch on " + pc.label + " (" + pc.fen + ")"
+  );
+}
+
+/* applyMoveToState rejections */
+assert.throws(() => {
+  const s = t.parseOctiFen("2:3:1:0:P:A:-:0:3,0,10,1:3,0,12,2:A33a!,B57");
+  t.applyMoveToState(s, "33a!-34;34a!-35;35a!+b", "A");
+}, "Single-socket double-prelude must be rejected");
+
+assert.throws(() => {
+  const s = t.parseOctiFen("2:3:1:0:P:A:-:0:3,0,10,0:1,0,12,2:A31a!c!,B32,B43,B57");
+  t.applyMoveToState(s, "31a!c!-33-53;53a!c!+b", "A");
+}, "Mid-prelude bend must be rejected");
+
+assert.throws(() => {
+  const s = t.parseOctiFen("2:3:1:0:P:A:-:0:3,0,10,0:3,0,12,2:A33a!c!e!,B57");
+  t.applyMoveToState(s, "33a!c!e!-34;34a!c!e!-44;44a!c!e!-43;43a!c!e!+b", "A");
+}, ">2 preludes must be rejected");
+
+assert.throws(() => {
+  const s = t.parseOctiFen("2:3:0:0:P:A:-:0:3,0,10,0:3,0,12,0:A33a,B57");
+  t.applyMoveToState(s, "33a-34;34a+b", "A");
+}, "Semicolon superprong prelude must be rejected when !s.superProngs");
+
+/* Shared preludeDeferredCaps across p1 and p2 on stacked A33a!,A33a! over B34e */
+{
+  const sDef = t.parseOctiFen(cfg.stackedDeferredStartFen);
+  const afterDef = t.applyMoveToState(sDef, cfg.stackedDeferredMove, "A");
+  assert.strictEqual(
+    t.serializeOctiFen(afterDef),
+    cfg.stackedDeferredAfterFen,
+    "Deferred capture across p1 and p2 must match C++ OctiBoard::toPositionString()"
+  );
+}
+
+/* ============================================================================
+ * PART 2: WebMoveComposer ';'-Prelude Staging
+ * ============================================================================ */
+function makeComposerForFen(fen, committedOut) {
+  let curSt = t.parseOctiFen(fen);
+  const comp = new t.WebMoveComposer(
+    function () { return curSt; },
+    function (notStr, nextSt) {
+      if (committedOut) committedOut.push(notStr);
+      curSt = nextSt;
+    }
+  );
+  return { comp, getState: () => curSt };
+}
+
+/* 2.1: A33a! steps 33 -> 34: committable immediately AND isAwaitingSuperProngBonusMove() === true */
+{
+  const committed = [];
+  const { comp, getState } = makeComposerForFen("2:3:1:0:P:A:-:0:3,0,4,1:3,0,4,1:A33a!,B57", committed);
+  assert.strictEqual(typeof comp.isAwaitingSuperProngBonusMove, "function",
+                     "WebMoveComposer.prototype.isAwaitingSuperProngBonusMove must exist");
+  assert.strictEqual(comp.beginGuidedPodMove(3, 3, 0), true);
+  assert.strictEqual(comp.selectGuidedDestination(3, 4), true);
+  assert.strictEqual(comp.stagedNotation, "33a!-34");
+  assert.strictEqual(comp.isAwaitingConfirmation, true);
+  assert.strictEqual(comp.isAwaitingSuperProngBonusMove(), true);
+  assert.strictEqual(comp.commitStagedMove(), true);
+  assert.deepStrictEqual(committed, ["33a!-34"]);
+  assert.strictEqual(getState().turn, "B");
+}
+
+/* 2.2: A33a! steps 33 -> 34 then adds prong +b at (3,4) -> "33a!-34;34a!+b" */
+{
+  const committed = [];
+  const { comp, getState } = makeComposerForFen("2:3:1:0:P:A:-:0:3,0,4,1:3,0,4,1:A33a!,B57", committed);
+  assert.strictEqual(comp.beginGuidedPodMove(3, 3, 0), true);
+  assert.strictEqual(comp.selectGuidedDestination(3, 4), true);
+  assert.strictEqual(comp.isAwaitingSuperProngBonusMove(), true);
+  assert.strictEqual(comp.stageAddProng(3, 4, 0, 1, false), true);
+  assert.strictEqual(comp.stagedNotation, "33a!-34;34a!+b");
+  assert.strictEqual(comp.isAwaitingSuperProngBonusMove(), false);
+  assert.strictEqual(comp.commitStagedMove(), true);
+  assert.deepStrictEqual(committed, ["33a!-34;34a!+b"]);
+  assert.strictEqual(getState().turn, "B");
+}
+
+/* 2.3: A33a! steps 33 -> 34 then moves 34 -> 35 -> "33a!-34;34a!-35", 3rd move blocked */
+{
+  const committed = [];
+  const { comp } = makeComposerForFen("2:3:1:0:P:A:-:0:3,0,4,1:3,0,4,1:A33a!,B57", committed);
+  assert.strictEqual(comp.beginGuidedPodMove(3, 3, 0), true);
+  assert.strictEqual(comp.selectGuidedDestination(3, 4), true);
+  assert.strictEqual(comp.beginGuidedPodMove(3, 4, 0), true);
+  assert.strictEqual(comp.selectGuidedDestination(3, 5), true);
+  assert.strictEqual(comp.stagedNotation, "33a!-34;34a!-35");
+  assert.strictEqual(comp.isAwaitingSuperProngBonusMove(), false);
+  assert.strictEqual(comp.beginGuidedPodMove(3, 5, 0), false,
+                     "3rd move must be blocked on a single superprong socket");
+  assert.strictEqual(comp.stageMoveOrJump(3, 5, 3, 6), false,
+                     "3rd drag/stage move must be blocked on a single superprong socket");
+  assert.strictEqual(comp.stagedNotation, "33a!-34;34a!-35");
+  assert.strictEqual(comp.commitStagedMove(), true);
+  assert.deepStrictEqual(committed, ["33a!-34;34a!-35"]);
+}
+
+/* 2.4a: 2 superprongs across 2 pods (A33a!,A53a!): early commit at "33a!-34;53a!-54" AND full "33a!-34;53a!-54;34a!+b" */
+{
+  const earlyCommitted = [];
+  const early = makeComposerForFen("2:3:1:0:P:A:-:0:2,0,4,0:3,0,4,0:A33a!,A53a!,B57", earlyCommitted);
+  assert.strictEqual(early.comp.beginGuidedPodMove(3, 3, 0), true);
+  assert.strictEqual(early.comp.selectGuidedDestination(3, 4), true);
+  assert.strictEqual(early.comp.isAwaitingSuperProngBonusMove(), true);
+  assert.strictEqual(early.comp.beginGuidedPodMove(5, 3, 0), true);
+  assert.strictEqual(early.comp.selectGuidedDestination(5, 4), true);
+  assert.strictEqual(early.comp.stagedNotation, "33a!-34;53a!-54");
+  assert.strictEqual(early.comp.isAwaitingSuperProngBonusMove(), true);
+  assert.strictEqual(early.comp.commitStagedMove(), true);
+  assert.deepStrictEqual(earlyCommitted, ["33a!-34;53a!-54"]);
+
+  const fullCommitted = [];
+  const full = makeComposerForFen("2:3:1:0:P:A:-:0:2,0,4,0:3,0,4,0:A33a!,A53a!,B57", fullCommitted);
+  assert.strictEqual(full.comp.beginGuidedPodMove(3, 3, 0), true);
+  assert.strictEqual(full.comp.selectGuidedDestination(3, 4), true);
+  assert.strictEqual(full.comp.beginGuidedPodMove(5, 3, 0), true);
+  assert.strictEqual(full.comp.selectGuidedDestination(5, 4), true);
+  assert.strictEqual(full.comp.stageAddProng(3, 4, 0, 1, false), true);
+  assert.strictEqual(full.comp.stagedNotation, "33a!-34;53a!-54;34a!+b");
+  assert.strictEqual(full.comp.isAwaitingSuperProngBonusMove(), false);
+  assert.strictEqual(full.comp.commitStagedMove(), true);
+  assert.deepStrictEqual(fullCommitted, ["33a!-34;53a!-54;34a!+b"]);
+}
+
+/* 2.4b: 2 superprongs on 1 pod (A33a!c!): "33a!c!-34;34a!c!-44;44a!c!+b" */
+{
+  const committed = [];
+  const { comp } = makeComposerForFen("2:3:1:0:P:A:-:0:3,0,4,0:3,0,4,0:A33a!c!,B57", committed);
+  assert.strictEqual(comp.beginGuidedPodMove(3, 3, 0), true);
+  assert.strictEqual(comp.selectGuidedDestination(3, 4), true);
+  assert.strictEqual(comp.stagedNotation, "33a!c!-34");
+  assert.strictEqual(comp.isAwaitingSuperProngBonusMove(), true);
+  assert.strictEqual(comp.beginGuidedPodMove(3, 4, 0), true);
+  assert.strictEqual(comp.selectGuidedDestination(4, 4), true);
+  assert.strictEqual(comp.stagedNotation, "33a!c!-34;34a!c!-44");
+  assert.strictEqual(comp.isAwaitingSuperProngBonusMove(), true);
+  assert.strictEqual(comp.stageAddProng(4, 4, 0, 1, false), true);
+  assert.strictEqual(comp.stagedNotation, "33a!c!-34;34a!c!-44;44a!c!+b");
+  assert.strictEqual(comp.isAwaitingSuperProngBonusMove(), false);
+  assert.strictEqual(comp.commitStagedMove(), true);
+  assert.deepStrictEqual(committed, ["33a!c!-34;34a!c!-44;44a!c!+b"]);
+}
+
+/* 2.5: 0 reserve prongs + prelude capture credits freeProngs === 1 with turn === "A" -> "33a!-35x;35a!+b" */
+{
+  const committed = [];
+  const { comp, getState } = makeComposerForFen("2:3:1:0:P:A:-:0:0,0,0,0:0,0,0,0:A33a!,B34e", committed);
+  assert.strictEqual(comp.beginGuidedPodMove(3, 3, 0), true);
+  assert.strictEqual(comp.selectGuidedDestination(3, 5), true);
+  assert.strictEqual(comp.stagedNotation, "33a!-35x");
+  assert.strictEqual(comp.previewState.turn, "A", "Post-prelude previewState must keep turn === 'A'");
+  assert.strictEqual(comp.previewState.reserves[0].freeProngs, 1,
+                     "Prelude capture must credit B34e's prong to A's previewState freeProngs");
+  /* Toggle capture off & back on before staging +b */
+  assert.strictEqual(comp.toggleCaptureAtSquare(3, 4), true);
+  assert.strictEqual(comp.stagedNotation, "33a!-35");
+  assert.strictEqual(comp.previewState.reserves[0].freeProngs, 0);
+  assert.strictEqual(comp.toggleCaptureAtSquare(3, 4), true);
+  assert.strictEqual(comp.stagedNotation, "33a!-35x");
+  assert.strictEqual(comp.previewState.reserves[0].freeProngs, 1);
+
+  assert.strictEqual(comp.stageAddProng(3, 5, 0, 1, false), true);
+  assert.strictEqual(comp.stagedNotation, "33a!-35x;35a!+b");
+  assert.strictEqual(comp.previewState.reserves[0].freeProngs, 0);
+  assert.strictEqual(comp.commitStagedMove(), true);
+  assert.deepStrictEqual(committed, ["33a!-35x;35a!+b"]);
+  assert.strictEqual(getState().status, "O");
+  assert.strictEqual(getState().winner, "A");
+}
+
+/* ============================================================================
+ * PART 3: Pod-Stack Click Inspector & 34x34 Mini Pod Diagrams
+ * ============================================================================ */
+const playCanvas = elements["web-play-canvas"];
+const zoomOverlay = elements["web-zoom-overlay"];
+const zoomTabs = elements["web-zoom-pod-tabs"];
+assert.ok(playCanvas, "web-play-canvas must be registered");
+
+function collectDescendantTexts(node) {
+  let out = String(node.textContent || "");
+  if (Array.isArray(node.children)) {
+    for (const c of node.children) out += collectDescendantTexts(c);
+  }
+  return out;
+}
+
+function findDescendantCanvases(node) {
+  const res = [];
+  if (node && node.tagName === "CANVAS") res.push(node);
+  if (node && Array.isArray(node.children)) {
+    for (const c of node.children) res.push(...findDescendantCanvases(c));
+  }
+  return res;
+}
+
+function squarePt(x, y) {
+  t.renderPlayBoardCanvas();
+  const geom = t.getPlayBoardGeom();
+  assert.ok(geom, "playBoardGeom must be initialized");
+  const r = geom.squareRect(x, y);
+  return { x: r.x + r.w * 0.5, y: r.y + r.h * 0.5 };
+}
+
+function clickSquareOnPlayCanvas(x, y) {
+  const pt = squarePt(x, y);
+  playCanvas.dispatch("mousedown", { clientX: pt.x, clientY: pt.y, button: 0 });
+  playCanvas.dispatch("mouseup", { clientX: pt.x, clientY: pt.y, button: 0 });
+}
+
+function dragSquaresOnPlayCanvas(x0, y0, x1, y1) {
+  const p0 = squarePt(x0, y0);
+  const p1 = squarePt(x1, y1);
+  playCanvas.dispatch("mousedown", { clientX: p0.x, clientY: p0.y, button: 0 });
+  playCanvas.dispatch("mousemove", { clientX: p1.x, clientY: p1.y, button: 0 });
+  playCanvas.dispatch("mouseup", { clientX: p1.x, clientY: p1.y, button: 0 });
+}
+
+function setupBoardSession(fen, opts) {
+  const o = opts || {};
+  t.closeZoomedSquare();
+  zoomOverlay.style.display = "none";
+  sandbox.window.stopOnlineGameSync(false);
+  sandbox.window.localMatchConfig.playMode = o.playMode || "pass";
+  sandbox.window.localMatchConfig.humanSeat = o.humanSeat || "A";
+  t.setMatchStarted(o.matchStarted !== undefined ? o.matchStarted : true);
+  if (o.onlineRoomId) {
+    t.setOnlineSpectator(o.onlineRoomId, o.viewerSeat || 0, o.roomView || { phase: "IN_PROGRESS", seats: [] });
+  }
+  const st = t.parseOctiFen(fen);
+  t.setActivePlayState(st);
+  t.setVcrState(o.plies || [], o.vcrIndex !== undefined ? o.vcrIndex : 0);
+  const mc = new t.WebMoveComposer(
+    function () { return t.getActivePlayState(); },
+    function (notStr, nextSt) { t.setActivePlayState(nextSt); }
+  );
+  t.setMoveComposer(mc);
+  t.renderPlayBoardCanvas();
+  return mc;
+}
+
+function assertReadOnlyZoomControls() {
+  assert.strictEqual(zoomOverlay.style.display, "flex", "Zoom inspector must open");
+  assert.notStrictEqual(elements["btn-zoom-move-pod"].style.display, "inline-block",
+                        "Move Pod button must be hidden in read-only inspect");
+  assert.notStrictEqual(elements["btn-zoom-place-pod"].style.display, "inline-block",
+                        "Place Pod button must be hidden in read-only inspect");
+  assert.notStrictEqual(elements["btn-zoom-liberate-pod"].style.display, "inline-block",
+                        "Liberate Pod button must be hidden in read-only inspect");
+  const mc = t.getMoveComposer();
+  const prevNotation = mc ? mc.stagedNotation : "";
+  elements["web-zoom-canvas"].dispatch("click", { clientX: 160, clientY: 40 });
+  assert.strictEqual(mc ? mc.stagedNotation : "", prevNotation,
+                     "Clicking zoom canvas in read-only inspect must not stage prong mutations");
+}
+
+/* 3.1: 2-pod friendly stack 1st click opens #web-zoom-overlay with 34x34 <canvas> mini pod diagrams & #1/#2 labels */
+{
+  const mc = setupBoardSession("2:3:1:0:P:A:-:0:1,0,4,1:3,0,4,0:A33a!c,A33e,A53a,B57ef");
+  clickSquareOnPlayCanvas(3, 3);
+  assert.strictEqual(zoomOverlay.style.display, "flex",
+                     "1st click on 2-pod friendly stack must open #web-zoom-overlay immediately");
+  assert.strictEqual(mc.isGuidedMoveActive, false,
+                     "1st click on 2-pod friendly stack must not silently start beginGuidedPodMove");
+  assert.strictEqual(zoomTabs.children.length, 2,
+                     "Expected 2 pod tab buttons in #web-zoom-pod-tabs");
+
+  const tabTexts = zoomTabs.children.map((btn) => collectDescendantTexts(btn));
+  assert.ok(tabTexts[0].includes("#1 a!c"), "Expected '#1 a!c' in 1st tab, got: " + tabTexts[0]);
+  assert.ok(tabTexts[1].includes("#2 e"), "Expected '#2 e' in 2nd tab, got: " + tabTexts[1]);
+
+  for (let i = 0; i < zoomTabs.children.length; i++) {
+    const canvases = findDescendantCanvases(zoomTabs.children[i]);
+    assert.strictEqual(canvases.length, 1, "Each pod tab must contain a mini <canvas>");
+    assert.strictEqual(canvases[0].width, 34, "Mini pod <canvas> width must be 34");
+    assert.strictEqual(canvases[0].height, 34, "Mini pod <canvas> height must be 34");
+    assert.ok(canvases[0]._drawCalls > 0, "Mini pod <canvas> must draw pod & prong geometry");
+  }
+
+  /* Close zoom overlay and verify drag-to-move on the 2-pod stack still drags directly without opening zoom */
+  t.closeZoomedSquare();
+  assert.strictEqual(zoomOverlay.style.display, "none");
+  dragSquaresOnPlayCanvas(3, 3, 3, 4);
+  assert.strictEqual(zoomOverlay.style.display, "none",
+                     "Drag-to-move on 2-pod stack must not open #web-zoom-overlay");
+  assert.strictEqual(mc.stagedNotation, "33a!c-34",
+                     "Drag-to-move on 2-pod stack must move the top movable pod directly");
+}
+
+/* 3.2: 1-pod armed friendly square (5,3) still starts beginGuidedPodMove on 1st click, opens zoom on 2nd click */
+{
+  const mc = setupBoardSession("2:3:1:0:P:A:-:0:1,0,4,1:3,0,4,0:A33a!c,A33e,A53a,B57ef");
+  clickSquareOnPlayCanvas(5, 3);
+  assert.strictEqual(zoomOverlay.style.display, "none",
+                     "1st click on 1-pod armed friendly square must NOT open zoom overlay");
+  assert.strictEqual(mc.isGuidedMoveActive, true,
+                     "1st click on 1-pod armed friendly square must start beginGuidedPodMove");
+  clickSquareOnPlayCanvas(5, 3);
+  assert.strictEqual(zoomOverlay.style.display, "flex",
+                     "2nd click on 1-pod armed origin square must open zoom overlay");
+}
+
+/* 3.3: Enemy square (5,7) during A's turn opens read-only zoom inspector with 34x34 mini diagram */
+{
+  setupBoardSession("2:3:1:0:P:A:-:0:1,0,4,1:3,0,4,0:A33a!c,A33e,A53a,B57ef");
+  clickSquareOnPlayCanvas(5, 7);
+  assertReadOnlyZoomControls();
+  assert.strictEqual(zoomTabs.children.length, 1);
+  assert.ok(collectDescendantTexts(zoomTabs.children[0]).includes("#1 ef"));
+  const canvases = findDescendantCanvases(zoomTabs.children[0]);
+  assert.strictEqual(canvases.length, 1);
+  assert.strictEqual(canvases[0].width, 34);
+  assert.strictEqual(canvases[0].height, 34);
+}
+
+/* 3.4: Read-only states: AI/opponent turn, online spectator, VCR replay, status === 'O', status === 'R' */
+{
+  /* AI / opponent turn (humanSeat = A, turn = B) */
+  setupBoardSession("2:3:1:0:P:B:-:0:1,0,4,1:3,0,4,0:A33a!c,A33e,B57ef",
+                    { playMode: "bot", humanSeat: "A" });
+  clickSquareOnPlayCanvas(3, 3);
+  assertReadOnlyZoomControls();
+
+  /* Online spectator (viewerSeat = 0) */
+  setupBoardSession("2:3:1:0:P:A:-:0:1,0,4,1:3,0,4,0:A33a!c,A33e,B57ef",
+                    { onlineRoomId: "room-spec-1", viewerSeat: 0 });
+  clickSquareOnPlayCanvas(3, 3);
+  assertReadOnlyZoomControls();
+
+  /* VCR history replay (playVcrIndex = 0 < playMatchPlies.length - 1) */
+  setupBoardSession("2:3:1:0:P:A:-:0:1,0,4,1:3,0,4,0:A33a!c,A33e,B57ef",
+                    { plies: [{ ply: 1, move: "33+a" }, { ply: 2, move: "57+e" }], vcrIndex: 0 });
+  clickSquareOnPlayCanvas(3, 3);
+  assertReadOnlyZoomControls();
+
+  /* Game Over (status === "O") */
+  setupBoardSession("2:3:1:0:O:A:A:10:1,0,4,1:3,0,4,0:A33a!c,A33e,B57ef");
+  clickSquareOnPlayCanvas(3, 3);
+  assertReadOnlyZoomControls();
+
+  /* Resigned (status === "R") */
+  setupBoardSession("2:3:1:0:R:A:B:10:1,0,4,1:3,0,4,0:A33a!c,A33e,B57ef");
+  clickSquareOnPlayCanvas(3, 3);
+  assertReadOnlyZoomControls();
+}
+
+process.exit(0);
+)NODEJS";
+    }
+
+    int rcNode = std::system(("timeout -k 2 20 node " + runnerJsPath + " " + webJsPath + " " + cfgJsonPath).c_str());
+    std::remove(webJsPath.c_str());
+    std::remove(cfgJsonPath.c_str());
+    std::remove(runnerJsPath.c_str());
+    CHECK_EQUAL(0, rcNode);
 }
 
 int main(int argc, char **argv)

@@ -2175,6 +2175,151 @@ public class OctiBoardEngineTest {
     }
 
     // -------------------------------------------------------------------------
+    // Envelope 4: Superprong Single-Socket Rule, Straight Bonus Jumps & Preview
+    // -------------------------------------------------------------------------
+
+    private static java.util.Set<String> legalMoveStrings(OctiBoard board) {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        for (OctiMove m : board.getGame().generateLegalMoves()) {
+            out.add(m.asString());
+        }
+        return out;
+    }
+
+    @Test
+    public void testSuperProngSingleSocketRuleAcrossAllSixCasesAndEdgeless() {
+        // Case 1: Single superprong A33a! -> 1 bonus prelude + 1 regular action ONLY
+        OctiBoard b1 = new OctiBoard();
+        b1.fromPositionString("2:3:1:0:P:A:-:0:3,0,20,2:3,0,20,2:A33a!,B77");
+        java.util.Set<String> legal1 = legalMoveStrings(b1);
+        assertTrue("1 superprong allows 1 prelude + 1 regular step", legal1.contains("33a!-34;34a!-35"));
+        assertTrue("1 superprong allows 1 prelude + 1 regular prong build", legal1.contains("33a!-34;34a!+b"));
+        assertFalse("1 superprong must NEVER generate 2 preludes + build", legal1.contains("33a!-34;34a!-35;35a!+b"));
+        assertFalse("1 superprong must NEVER generate 2 preludes + step", legal1.contains("33a!-34;34a!-35;35a!-36"));
+        assertThrowsIllegalMove(() -> b1.getGame().move("33a!-34;34a!-35;35a!+b"));
+        assertThrowsIllegalMove(() -> b1.getGame().move("33a!-34;34a!-35;35a!-36"));
+
+        // Case 2: Two-superprong pod A33a!c! -> 2 distinct superprong directions allowed, same socket twice forbidden
+        OctiBoard b2 = new OctiBoard();
+        b2.fromPositionString("2:3:1:0:P:A:-:0:3,0,20,2:3,0,20,2:A33a!c!,B77");
+        java.util.Set<String> legal2 = legalMoveStrings(b2);
+        assertTrue("2-superprong pod allows a! prelude + c! prelude + build",
+                legal2.contains("33a!c!-34;34a!c!-44;44a!c!+b"));
+        assertFalse("2-superprong pod must NEVER reuse a! twice as prelude",
+                legal2.contains("33a!c!-34;34a!c!-35;35a!c!+b"));
+        assertThrowsIllegalMove(() -> b2.getGame().move("33a!c!-34;34a!c!-35;35a!c!+b"));
+        b2.getGame().move("33a!c!-34;34a!c!-44;44a!c!+b");
+        assertEquals(OctiPlayer.PLAYER_B, b2.getGame().getTurn());
+
+        // Case 3: Mid-prelude 90-degree bend loophole rejected with exact message
+        OctiBoard b3 = new OctiBoard();
+        b3.fromPositionString("2:3:1:0:P:A:-:0:3,0,20,2:3,0,20,2:A31a!c!,B32,B43,B77");
+        java.util.Set<String> legal3 = legalMoveStrings(b3);
+        assertFalse("Generator must never emit bent single-prelude superprong jump",
+                legal3.contains("31a!c!-33-53;53a!c!+b"));
+        assertTrue("Generator must emit two separate straight preludes 31a!c!-33;33a!c!-53;53a!c!+b",
+                legal3.contains("31a!c!-33;33a!c!-53;53a!c!+b"));
+        try {
+            b3.getGame().move("31a!c!-33-53;53a!c!+b");
+            fail("Expected IllegalMoveException on bent bonus jump 31a!c!-33-53;53a!c!+b");
+        } catch (IllegalMoveException expected) {
+            assertTrue("Expected straight bonus jump error message, got: " + expected.getMessage(),
+                    expected.getMessage() != null
+                            && expected.getMessage().contains("bonus jump must follow single superprong direction"));
+        }
+        b3.getGame().move("31a!c!-33;33a!c!-53;53a!c!+b");
+        assertEquals(OctiPlayer.PLAYER_B, b3.getGame().getTurn());
+
+        // Case 4: Stacked identical pods A33a!,A33a! -> 33a!-34;33a!-34;34a!+b allowed, 33a!-34;34a!-35;35a!+b rejected
+        OctiBoard b4 = new OctiBoard();
+        b4.fromPositionString("2:3:1:0:P:A:-:0:2,0,20,2:3,0,20,2:A33a!,A33a!,B77");
+        java.util.Set<String> legal4 = legalMoveStrings(b4);
+        assertTrue("Two stacked A33a! pods allow each pod to use its own a! socket",
+                legal4.contains("33a!-34;33a!-34;34a!+b"));
+        assertFalse("Moving only one A33a! pod to 34 leaves only 1 pod at 34, forbidding 34a!-35 prelude",
+                legal4.contains("33a!-34;34a!-35;35a!+b"));
+        assertThrowsIllegalMove(() -> b4.getGame().move("33a!-34;34a!-35;35a!+b"));
+        b4.getGame().move("33a!-34;33a!-34;34a!+b");
+        assertEquals(OctiPlayer.PLAYER_B, b4.getGame().getTurn());
+
+        // Case 5: Two distinct squares A33a!,A53a! -> 33a!-34;53a!-54;34a!+b allowed
+        OctiBoard b5 = new OctiBoard();
+        b5.fromPositionString("2:3:1:0:P:A:-:0:2,0,20,2:3,0,20,2:A33a!,A53a!,B77");
+        java.util.Set<String> legal5 = legalMoveStrings(b5);
+        assertTrue("Two distinct superprong pods allow 33a!-34;53a!-54;34a!+b",
+                legal5.contains("33a!-34;53a!-54;34a!+b"));
+        b5.getGame().move("33a!-34;53a!-54;34a!+b");
+        assertEquals(OctiPlayer.PLAYER_B, b5.getGame().getTurn());
+
+        // Case 6: Pre-existing destination pod A33a!,A34a! -> after p1 lands on 34, 2 identical A..a! pods exist at 34!
+        OctiBoard b6 = new OctiBoard();
+        b6.fromPositionString("2:3:1:0:P:A:-:0:2,0,20,2:3,0,20,2:A33a!,A34a!,B77");
+        b6.getGame().move("33a!-34;34a!-35;35a!+b");
+        assertEquals(OctiPlayer.PLAYER_B, b6.getGame().getTurn());
+        // With A35c occupying (3,5) so 33a!-35 jump is blocked, 33a!-34;34a!-35;35a!+b is uniquely generated too
+        OctiBoard b6Gen = new OctiBoard();
+        b6Gen.fromPositionString("2:3:1:0:P:A:-:0:1,0,20,2:3,0,20,2:A33a!,A34a!,A35c,B77");
+        java.util.Set<String> legal6 = legalMoveStrings(b6Gen);
+        assertTrue("Pre-existing A34a! pod at destination generates 33a!-34;34a!-35;35a!+b",
+                legal6.contains("33a!-34;34a!-35;35a!+b"));
+
+        // Case 7: Edgeless wrap superprong single-socket enforcement
+        OctiBoard b7 = new OctiBoard();
+        b7.fromPositionString("2:3:1:1:P:A:-:0:3,0,20,2:3,0,20,2:A15g!,B77");
+        java.util.Set<String> legal7 = legalMoveStrings(b7);
+        assertTrue("Edgeless wrap 1 prelude + build is legal", legal7.contains("15g!-95;95g!+a"));
+        assertFalse("Edgeless wrap reusing g! socket twice is illegal", legal7.contains("15g!-95;95g!-85;85g!+a"));
+        assertThrowsIllegalMove(() -> b7.getGame().move("15g!-95;95g!-85;85g!+a"));
+        b7.getGame().move("15g!-95;95g!+a");
+        assertEquals(OctiPlayer.PLAYER_B, b7.getGame().getTurn());
+
+        // Case 8: Generator vs Validator equivalence across 2P, 4P, and edgeless superprong boards
+        String[] fenFixtures = new String[] {
+            "2:3:1:0:P:A:-:0:3,0,20,2:3,0,20,2:A33a!c,B34e,B77",
+            "2:3:1:1:P:A:-:0:3,0,20,2:3,0,20,2:A13g!a!,B93,B77",
+            "4:3:1:0:P:A:-:0:2,0,10,2:2,0,10,2:2,0,10,2:2,0,10,2:A33a!,A34a!,B37,C77,D73"
+        };
+        for (String fen : fenFixtures) {
+            OctiBoard base = new OctiBoard();
+            base.fromPositionString(fen);
+            List<OctiMove> moves = base.getGame().generateLegalMoves();
+            assertFalse("Generated legal moves should be non-empty for " + fen, moves.isEmpty());
+            for (OctiMove m : moves) {
+                OctiBoard copy = new OctiBoard();
+                copy.fromPositionString(fen);
+                copy.getGame().move(m);
+            }
+        }
+    }
+
+    @Test
+    public void testApplyUncommittedTurnForPreviewCreditsCapturesWithoutAdvancingTurn() {
+        OctiBoard board = new OctiBoard();
+        board.fromPositionString("2:3:1:0:P:A:-:0:0,0,0,0:3,0,10,1:A33a!,B34ef!,B77");
+
+        OctiMove parsed = new OctiMove("33a!-35x;35a!+b");
+        List<OctiMoveOp> preludeOnly = new ArrayList<>();
+        OctiMoveOp p1 = new OctiMoveOp(parsed.getOps().get(0));
+        p1.isSuperProngBonusMove = true;
+        preludeOnly.add(p1);
+
+        board.getGame().applyUncommittedTurnForPreview(preludeOnly);
+
+        // Active turn and move counter must NOT advance
+        assertEquals(OctiPlayer.PLAYER_A, board.getGame().getTurn());
+        assertEquals(0, board.getGame().getNumMoves());
+
+        // Board squares updated and captured pod/prongs/superprongs credited to PLAYER_A
+        assertEquals(0, board.squareAt(2, 2).getNumPods());
+        assertEquals(0, board.squareAt(2, 3).getNumPods());
+        assertEquals(1, board.squareAt(2, 4).getNumPods());
+        assertEquals(0, board.getGame().getCapturedPods(OctiPlayer.PLAYER_A));
+        assertEquals(1, board.getGame().getCapturedPods(OctiPlayer.PLAYER_B));
+        assertEquals(1, board.getGame().getFreeProngs(OctiPlayer.PLAYER_A));
+        assertEquals(1, board.getGame().getFreeSuperProngs(OctiPlayer.PLAYER_A));
+    }
+
+    // -------------------------------------------------------------------------
     // Exception Assert Helpers
     // -------------------------------------------------------------------------
 

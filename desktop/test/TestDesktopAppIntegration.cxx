@@ -36,6 +36,7 @@
 #include <QGuiApplication>
 #include <QImage>
 #include <QPainter>
+#include <QTextDocument>
 
 #include "AccountStore.hxx"
 #include "GameRoomManager.hxx"
@@ -4151,6 +4152,590 @@ TEST(DesktopAppIntegrationTest, DesktopTableChatAndSidebarLayoutEnvelope3)
     CHECK_FALSE(win.actionResign()->isEnabled());
 
     std::filesystem::remove_all(testCfgDir);
+}
+
+TEST(DesktopAppIntegrationTest, WebAlignedSidebarHeadersRichChatHtmlAndLightDarkPalettes)
+{
+    // 1. Unit-verify palette helper thresholds and all 10 ThemeId enum entries remain intact
+    OctiPalette synthLight = paletteForTheme(ThemeId::OBSIDIAN_BRASS);
+    CHECK_FALSE(isLightThemePalette(synthLight));
+    synthLight.windowBg = QColor("#FBFBFA");
+    CHECK_TRUE(isLightThemePalette(synthLight));
+
+    const WebChatStylePalette darkWs = webChatStylePalette(false);
+    const WebChatStylePalette lightWs = webChatStylePalette(true);
+    STRCMP_EQUAL("#101622", darkWs.cardBg.toUtf8().constData());
+    STRCMP_EQUAL("#0B0F17", darkWs.wellBg.toUtf8().constData());
+    STRCMP_EQUAL("#1E293B", darkWs.cardBorder.toUtf8().constData());
+    STRCMP_EQUAL("#FFFFFF", lightWs.cardBg.toUtf8().constData());
+    STRCMP_EQUAL("#FBFBFA", lightWs.pageBg.toUtf8().constData());
+    STRCMP_EQUAL("#E4E4E7", lightWs.cardBorder.toUtf8().constData());
+
+    LiveServerEnv env;
+    auto cliAlice = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginAlice = cliAlice->loginWithSso(
+        "google", makeToken("google", "sub-web-chat-alice", "Alice_WebUi"), "Alice_WebUi");
+    CHECK_TRUE_TEXT(loginAlice.ok, loginAlice.errorMessage.c_str());
+
+    auto cliBob = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginBob = cliBob->loginWithSso(
+        "google", makeToken("google", "sub-web-chat-bob", "Bob_WebUi"), "Bob_WebUi");
+    CHECK_TRUE_TEXT(loginBob.ok, loginBob.errorMessage.c_str());
+
+    std::string cfgPath = env.dir + "/web_aligned_desktop.json";
+    OctiMainWindow winA(std::move(cliAlice), cfgPath);
+    winA.applyAuthenticatedProfile(loginAlice.data.profile);
+    winA.resize(1440, 900);
+    winA.showBoardView();
+    winA.show();
+    winA.pumpUiEvents();
+    winA.syncSidePanelsToBoardEdges();
+
+    // 2. Verify duplicate QGroupBox titles are cleared while single inner Web headers exist
+    CHECK_TRUE(winA.statusBox() != nullptr);
+    CHECK_TRUE(winA.historyBox() != nullptr);
+    CHECK_TRUE(winA.boardLobbyChatBox() != nullptr);
+    CHECK_TRUE(winA.chatBox() != nullptr);
+    CHECK_TRUE(winA.actionsBox() != nullptr);
+    CHECK_TRUE(winA.lobbyView()->lobbyChatBox() != nullptr);
+
+    CHECK_TRUE(winA.statusBox()->title().isEmpty());
+    CHECK_TRUE(winA.historyBox()->title().isEmpty());
+    CHECK_TRUE(winA.boardLobbyChatBox()->title().isEmpty());
+    CHECK_TRUE(winA.chatBox()->title().isEmpty());
+    CHECK_TRUE(winA.actionsBox()->title().isEmpty());
+    CHECK_TRUE(winA.lobbyView()->lobbyChatBox()->title().isEmpty());
+
+    QLabel *statusHdr = winA.findChild<QLabel *>("statusHeaderTitleLabel");
+    QLabel *histHdr = winA.findChild<QLabel *>("historyTitleLabel");
+    QLabel *boardLobbyHdr = winA.findChild<QLabel *>("boardLobbyChatTitleLabel");
+    QLabel *boardLobbySub = winA.findChild<QLabel *>("boardLobbyChatSubLabel");
+    QLabel *tableChatHdr = winA.findChild<QLabel *>("tableChatTitleLabel");
+    QLabel *lobbyChatHdr = winA.lobbyView()->findChild<QLabel *>("lobbyChatTitleLabel");
+    QLabel *lobbyChatSub = winA.lobbyView()->findChild<QLabel *>("lobbyChatSubtitleLabel");
+    CHECK_TRUE(statusHdr != nullptr && statusHdr->text() == "Match Status");
+    CHECK_TRUE(histHdr != nullptr && histHdr->text() == "Move History");
+    CHECK_TRUE(boardLobbyHdr != nullptr && boardLobbyHdr->text() == "Lobby Chat");
+    CHECK_TRUE(boardLobbySub != nullptr && boardLobbySub->text() == "Global");
+    CHECK_TRUE(tableChatHdr != nullptr && tableChatHdr->text() == "Table Chat");
+    CHECK_TRUE(lobbyChatHdr != nullptr && lobbyChatHdr->text() == "Lobby Chat");
+    CHECK_TRUE(lobbyChatSub != nullptr && lobbyChatSub->text().contains("6h history"));
+
+    // Verify right sidebar top & bottom edges align within <= 2.0px of boardOuterRect in offline mode
+    DOUBLES_EQUAL(winA.boardCanvas()->geometry().boardOuterRect().top(),
+                  winA.rightPanelTopWidgetGeometry().top(), 2.0);
+    DOUBLES_EQUAL(winA.boardCanvas()->geometry().boardOuterRect().bottom(),
+                  winA.rightPanelBottomWidgetGeometry().bottom(), 2.0);
+
+    // 3. Create an online 4P table and populate Lobby Chat + Table Chat + Zoom Table Chat
+    CreateTableRequest req;
+    req.mode = "4P";
+    req.bases = 3;
+    auto created = winA.createAndEnterOnlineTable(req);
+    CHECK_TRUE_TEXT(created.ok, created.errorMessage.c_str());
+    winA.pumpUiEvents();
+    winA.syncSidePanelsToBoardEdges();
+
+    // Verify right sidebar top & bottom edges align within <= 2.0px in online room mode too
+    CHECK_TRUE(winA.chatBox()->isVisible());
+    DOUBLES_EQUAL(winA.boardCanvas()->geometry().boardOuterRect().top(),
+                  winA.rightPanelTopWidgetGeometry().top(), 2.0);
+    DOUBLES_EQUAL(winA.boardCanvas()->geometry().boardOuterRect().bottom(),
+                  winA.rightPanelBottomWidgetGeometry().bottom(), 2.0);
+
+    const std::int64_t nowMs = static_cast<std::int64_t>(
+        QDateTime::currentDateTimeUtc().toMSecsSinceEpoch());
+
+    // Post real Lobby Chat messages from Alice (self) and Bob (peer with <script> payload)
+    CHECK_TRUE(winA.lobbyView()->sendLobbyChatMessage("Hosting 4P tabletop room!"));
+    auto bobLobbyRes = cliBob->postLobbyChat("Joining now <script>alert(1)</script>!");
+    CHECK_TRUE_TEXT(bobLobbyRes.ok, bobLobbyRes.errorMessage.c_str());
+
+    // Stop background lobby SSE stream and drain coalesced refresh timer before adding synthetic entries
+    winA.netClient()->stopLobbyEventStream();
+    std::this_thread::sleep_for(std::chrono::milliseconds(180));
+    winA.pumpUiEvents();
+    winA.lobbyView()->refreshLobby();
+    winA.pumpUiEvents();
+
+    LobbyChatEntry lobbyPeerXss;
+    lobbyPeerXss.seq = 9002;
+    lobbyPeerXss.createdAtMs = nowMs;
+    lobbyPeerXss.atMs = nowMs;
+    lobbyPeerXss.playerUuid = loginBob.data.profile.uuid;
+    lobbyPeerXss.handle = "Bob<script>bad()</script>";
+    lobbyPeerXss.text = "Handle escape check";
+    winA.lobbyView()->appendLobbyChatEntry(lobbyPeerXss);
+
+    LobbyChatEntry lobbyBot;
+    lobbyBot.seq = 9003;
+    lobbyBot.createdAtMs = nowMs;
+    lobbyBot.atMs = nowMs;
+    lobbyBot.playerUuid = "uuid-bot-alpha";
+    lobbyBot.handle = "OctiBotAlpha [BOT]";
+    lobbyBot.text = "Ready for tactical sparring.";
+    winA.lobbyView()->appendLobbyChatEntry(lobbyBot);
+
+    // Populate Table Chat: self message, peer [TEAM] XSS test, robot message, and [System] room event
+    CHECK_TRUE(winA.sendGameChatMessage("ALL", "Welcome to Table Chat!"));
+
+    SseEvent peerTeamChat;
+    peerTeamChat.id = 9101;
+    peerTeamChat.event = "CHAT";
+    peerTeamChat.dataJson = Json({
+        {"seq", 9101},
+        {"created_at_ms", nowMs},
+        {"scope", "TEAM"},
+        {"player_uuid", loginBob.data.profile.uuid},
+        {"handle", "Bob_WebUi"},
+        {"text", "Coordinate center <script>evil()</script>"}
+    }).dump();
+    winA.handleGameSseEvent(peerTeamChat);
+
+    SseEvent botTableChat;
+    botTableChat.id = 9102;
+    botTableChat.event = "CHAT";
+    botTableChat.dataJson = Json({
+        {"seq", 9102},
+        {"created_at_ms", nowMs},
+        {"scope", "ALL"},
+        {"player_uuid", "uuid-bot-alpha"},
+        {"handle", "OctiBotAlpha [BOT]"},
+        {"text", "Book line 33+a selected."}
+    }).dump();
+    winA.handleGameSseEvent(botTableChat);
+
+    SseEvent seatJoinedEv;
+    seatJoinedEv.id = 9103;
+    seatJoinedEv.event = "SEAT_JOINED";
+    seatJoinedEv.dataJson = Json({
+        {"handle", "Bob_WebUi"},
+        {"seat", 2}
+    }).dump();
+    winA.handleGameSseEvent(seatJoinedEv);
+
+    winA.openBoardChatZoomDialog();
+    winA.pumpUiEvents();
+    QDialog *zoomDlg = winA.findChild<QDialog *>("boardChatZoomDialog");
+    CHECK_TRUE(zoomDlg != nullptr);
+    QPlainTextEdit *zoomTranscript = zoomDlg->findChild<QPlainTextEdit *>("boardChatZoomTranscript");
+    CHECK_TRUE(zoomTranscript != nullptr);
+
+    // 4. Assert Dark Web Hex Colors, Plain-Text Integrity, and Strict <script> HTML Escaping
+    QString darkWinCss = winA.styleSheet().toLower();
+    CHECK_TRUE(darkWinCss.contains("#101622"));
+    CHECK_TRUE(darkWinCss.contains("#0b0f17"));
+    CHECK_TRUE(darkWinCss.contains("#1e293b"));
+    CHECK_TRUE(darkWinCss.contains("#c8a253"));
+    CHECK_TRUE(darkWinCss.contains("#dc2626"));
+
+    for (QPlainTextEdit *lobEdit : {winA.lobbyView()->chatTranscript(),
+                                    winA.boardLobbyChatTranscript()}) {
+        QString html = lobEdit->document()->toHtml().toLower();
+        QString plain = lobEdit->toPlainText();
+        CHECK_TRUE(html.contains("#94a3b8"));
+        CHECK_TRUE(html.contains("#34d399"));
+        CHECK_TRUE(html.contains("#38bdf8"));
+        CHECK_TRUE(html.contains("#fbbf24"));
+        CHECK_TRUE(html.contains("#f1f5f9"));
+        CHECK_FALSE(html.contains("<script>"));
+        CHECK_TRUE(html.contains("&lt;script&gt;"));
+        CHECK_TRUE(plain.contains("Joining now <script>alert(1)</script>!"));
+    }
+
+    for (QPlainTextEdit *tblEdit : {winA.gameChatTranscript(), zoomTranscript}) {
+        QString html = tblEdit->document()->toHtml().toLower();
+        QString plain = tblEdit->toPlainText();
+        CHECK_TRUE(html.contains("#94a3b8"));
+        CHECK_TRUE(html.contains("#a78bfa"));
+        CHECK_TRUE(html.contains("#34d399"));
+        CHECK_TRUE(html.contains("#38bdf8"));
+        CHECK_TRUE(html.contains("#fbbf24"));
+        CHECK_TRUE(html.contains("#c8a253"));
+        CHECK_TRUE(html.contains("#fde68a"));
+        CHECK_TRUE(html.contains("#f1f5f9"));
+        CHECK_FALSE(html.contains("<script>"));
+        CHECK_TRUE(html.contains("&lt;script&gt;"));
+        CHECK_TRUE(plain.contains("[TEAM]"));
+        CHECK_TRUE(plain.contains("Coordinate center <script>evil()</script>"));
+        CHECK_TRUE(plain.contains("[System] @Bob_WebUi joined Seat 2"));
+    }
+    CHECK_TRUE(winA.gameChatLines().front() == "[ALL] Alice_WebUi: Welcome to Table Chat!");
+
+    QString artifactsDir = QString::fromUtf8(OCTI_REPO_ROOT_DIR) +
+        "/plan/plan_capture_box_removal_and_chat_layout_unification.artifacts";
+    QDir().mkpath(artifactsDir);
+
+    QString darkTabletopPath = artifactsDir + "/desktop_tabletop_web_dark.png";
+    QImage darkTabletopImg = winA.renderWindowToImage(1440, 900);
+    CHECK_TRUE(darkTabletopImg.save(darkTabletopPath, "PNG"));
+    CHECK_TRUE(QFileInfo(darkTabletopPath).size() > 10000);
+
+    // 5. Switch to Light Web Surface and verify live re-render across all 4 transcripts + PNG proofs
+    winA.setWebLightSurfaceOverride(true);
+    winA.pumpUiEvents();
+
+    QString lightWinCss = winA.styleSheet().toLower();
+    QString lightLobbyCss = winA.lobbyView()->styleSheet().toLower();
+    CHECK_TRUE(lightWinCss.contains("#ffffff"));
+    CHECK_TRUE(lightWinCss.contains("#fbfbfa"));
+    CHECK_TRUE(lightWinCss.contains("#e4e4e7"));
+    CHECK_TRUE(lightLobbyCss.contains("#ffffff"));
+    CHECK_TRUE(lightLobbyCss.contains("#fbfbfa"));
+    CHECK_TRUE(lightLobbyCss.contains("#e4e4e7"));
+
+    for (QPlainTextEdit *lobEdit : {winA.lobbyView()->chatTranscript(),
+                                    winA.boardLobbyChatTranscript()}) {
+        QString html = lobEdit->document()->toHtml().toLower();
+        CHECK_TRUE(html.contains("#64748b"));
+        CHECK_TRUE(html.contains("#059669"));
+        CHECK_TRUE(html.contains("#0284c7"));
+        CHECK_TRUE(html.contains("#d97706"));
+        CHECK_TRUE(html.contains("#0f172a"));
+        CHECK_FALSE(html.contains("<script>"));
+    }
+
+    for (QPlainTextEdit *tblEdit : {winA.gameChatTranscript(), zoomTranscript}) {
+        QString html = tblEdit->document()->toHtml().toLower();
+        CHECK_TRUE(html.contains("#64748b"));
+        CHECK_TRUE(html.contains("#7c3aed"));
+        CHECK_TRUE(html.contains("#059669"));
+        CHECK_TRUE(html.contains("#0284c7"));
+        CHECK_TRUE(html.contains("#d97706"));
+        CHECK_TRUE(html.contains("#b45309"));
+        CHECK_TRUE(html.contains("#92400e"));
+        CHECK_TRUE(html.contains("#0f172a"));
+        CHECK_FALSE(html.contains("<script>"));
+    }
+
+    zoomDlg->close();
+    winA.pumpUiEvents();
+
+    QString lightTabletopPath = artifactsDir + "/desktop_tabletop_web_light.png";
+    QImage lightTabletopImg = winA.renderWindowToImage(1440, 900);
+    CHECK_TRUE(lightTabletopImg.save(lightTabletopPath, "PNG"));
+    CHECK_TRUE(QFileInfo(lightTabletopPath).size() > 10000);
+
+    winA.showLobbyView();
+    winA.lobbyView()->refreshLobby();
+    winA.lobbyView()->appendLobbyChatEntry(lobbyBot);
+    winA.pumpUiEvents();
+    CHECK_TRUE(winA.lobbyView()->isMyTableBannerVisible());
+
+    QString lightLobbyPath = artifactsDir + "/desktop_lobby_web_light.png";
+    QImage lightLobbyImg = winA.renderWindowToImage(1440, 900);
+    CHECK_TRUE(lightLobbyImg.save(lightLobbyPath, "PNG"));
+    CHECK_TRUE(QFileInfo(lightLobbyPath).size() > 10000);
+
+    winA.hide();
+}
+
+TEST(DesktopAppIntegrationTest,
+     SuperProngPreludeStagingAndStackClickInspectInMainWindow)
+{
+    std::string cfgPath =
+        "/tmp/octi_superprong_stack_integration_" + std::to_string(::getpid()) + ".json";
+    std::remove(cfgPath.c_str());
+
+    OctiMainWindow win(nullptr, cfgPath, true);
+    win.resize(1366, 860);
+    win.show();
+    win.pumpUiEvents();
+
+    LocalGameConfig cfg;
+    cfg.playType = LocalPlayType::PASS_AND_PLAY;
+    cfg.mode = GAME_MODE_2;
+    cfg.bases = GAME_BASES_3;
+    cfg.useSuperProngs = true;
+    cfg.useEdgelessBoard = true;
+    cfg.timeControlEnabled = false;
+
+    win.startNewLocalGame(cfg);
+    if (win.isAwaitingMatchStart()) {
+        win.confirmMatchStart();
+    }
+    win.setConfirmAllMoves(false);
+    win.pumpUiEvents();
+
+    win.board()->fromPositionString(
+        "2:3:1:1:P:A:-:1:2,2,10,1:2,2,10,1:A33a!c,A33b,B37e");
+    win.moveComposer()->cancelAndRollback();
+    win.pumpUiEvents();
+
+    int zoomOpens = 0;
+    int lastX = -1;
+    int lastY = -1;
+    win.boardCanvas()->setZoomedSquareOpenHook([&](int x, int y) {
+        ++zoomOpens;
+        lastX = x;
+        lastY = y;
+        return true;
+    });
+
+    auto clickSquare = [&](int sx, int sy) {
+        QPointF pt = win.boardCanvas()->geometry().squareCenter(sx, sy);
+        QMouseEvent press(QEvent::MouseButtonPress, pt, pt, pt,
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(win.boardCanvas(), &press);
+        QMouseEvent release(QEvent::MouseButtonRelease, pt, pt, pt,
+                            Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(win.boardCanvas(), &release);
+    };
+
+    // 1. Stationary single click on 2-pod friendly stack (3,3) opens ZoomedSquareDialog
+    clickSquare(3, 3);
+    LONGS_EQUAL(1, zoomOpens);
+    LONGS_EQUAL(3, lastX);
+    LONGS_EQUAL(3, lastY);
+
+    // 2. Press-drag-release from 2-pod stack (3,3) to (3,4) stages "33a!c-34"
+    //    and pauses in confirmation even when confirmAllMoves() == false
+    {
+        QPointF p33 = win.boardCanvas()->geometry().squareCenter(3, 3);
+        QPointF p34 = win.boardCanvas()->geometry().squareCenter(3, 4);
+        QMouseEvent press(QEvent::MouseButtonPress, p33, p33, p33,
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(win.boardCanvas(), &press);
+        QMouseEvent moveEv(QEvent::MouseMove, p34, p34, p34,
+                           Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(win.boardCanvas(), &moveEv);
+        QMouseEvent release(QEvent::MouseButtonRelease, p34, p34, p34,
+                            Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(win.boardCanvas(), &release);
+    }
+    LONGS_EQUAL(1, zoomOpens);
+    CHECK_TRUE(win.moveComposer()->isAwaitingConfirmation());
+    CHECK_TRUE(win.moveComposer()->isAwaitingSuperProngBonusMove());
+    CHECK_TRUE(win.moveComposer()->canCommitStagedMove());
+    STRCMP_EQUAL("33a!c-34", win.moveComposer()->stagedMoveNotation().c_str());
+
+    // 3. Stage ';34a!c+b' via ZoomedSquareDialog socket click on post-prelude square (3,4)
+    {
+        win.setConfirmAllMoves(true);
+        ZoomedSquareDialog dlg34(win.board(), win.moveComposer(), 3, 4,
+                                 win.boardRotation(), win.theme());
+        dlg34.renderToImage(560, 530);
+        QPointF nePt = dlg34.socketCenters().at(DIR_NE);
+        QMouseEvent sPress(QEvent::MouseButtonPress, nePt, nePt, nePt,
+                           Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&dlg34, &sPress);
+        QMouseEvent sRel(QEvent::MouseButtonRelease, nePt, nePt, nePt,
+                         Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(&dlg34, &sRel);
+    }
+    STRCMP_EQUAL("33a!c-34;34a!c+b", win.moveComposer()->stagedMoveNotation().c_str());
+    CHECK_TRUE(win.moveComposer()->commitStagedMove());
+    LONGS_EQUAL(static_cast<int>(PLAYER_B),
+                static_cast<int>(win.board()->getGame()->getTurn()));
+
+    // 4. After game over, stationary left-click on occupied square still opens ZoomedSquareDialog
+    win.board()->getGame()->resign(PLAYER_B);
+    CHECK_TRUE(win.board()->getGame()->isGameOver());
+    clickSquare(3, 4);
+    LONGS_EQUAL(2, zoomOpens);
+    LONGS_EQUAL(3, lastX);
+    LONGS_EQUAL(4, lastY);
+
+    win.hide();
+    std::remove(cfgPath.c_str());
+}
+
+TEST(DesktopAppIntegrationTest,
+     BotAndOnlineOpponentMoveSoundCuesAndEchoSuppression)
+{
+    std::string cfgPath =
+        "/tmp/octi_opponent_sound_cues_" + std::to_string(::getpid()) + ".json";
+    std::remove(cfgPath.c_str());
+
+    // 1. Local Bot game triggers classified move cue (PRONG_SNAP on opening prong move, not POD_STEP)
+    {
+        OctiMainWindow botWin(nullptr, cfgPath, true);
+        LocalGameConfig botCfg;
+        botCfg.playType = LocalPlayType::VS_AI_BOT;
+        botCfg.humanSeat = PLAYER_B;
+        botCfg.botDifficulty = BotDifficulty::CASUAL;
+        botCfg.mode = GAME_MODE_2;
+        botCfg.bases = GAME_BASES_3;
+        botCfg.timeControlEnabled = false;
+
+        std::vector<SoundCue> botCues;
+        botWin.soundSynth()->setPlaybackCallback([&](const std::vector<std::int16_t> &) {
+            botCues.push_back(botWin.soundSynth()->lastTriggeredCue());
+        });
+
+        botWin.startNewLocalGame(botCfg);
+        if (botWin.isAwaitingMatchStart()) {
+            botWin.confirmMatchStart();
+        }
+        botWin.pumpUiEvents();
+
+        CHECK_TRUE(botWin.board()->getGame()->getNumMoves() >= 1);
+        CHECK_FALSE(botCues.empty());
+        // Opening move by Player A in standard Octi must be a prong addition or pod placement, never POD_STEP
+        SoundCue lastBotCue = botCues.back();
+        CHECK_TRUE(lastBotCue == SoundCue::PRONG_SNAP ||
+                   lastBotCue == SoundCue::POD_PLACE);
+    }
+
+    // 2. Online Room Initial Sync with existing moves does NOT fire historical move cues,
+    //    and subsequent opponent/robot moves fire exact classified SoundCue values
+    {
+        OctiMainWindow win(nullptr, cfgPath, true);
+        std::vector<SoundCue> triggeredCues;
+        win.soundSynth()->setPlaybackCallback([&](const std::vector<std::int16_t> &) {
+            triggeredCues.push_back(win.soundSynth()->lastTriggeredCue());
+        });
+
+        GameViewData view;
+        view.roomId = "room-sound-cues-1";
+        view.phase = "IN_PROGRESS";
+        view.mode = "2P";
+        view.bases = 3;
+        view.viewerSeat = 1;
+        view.turnSeat = 2;
+        view.seq = 1;
+        GameSeatInfo s1;
+        s1.seat = 1;
+        s1.playerUuid = "u-seat-1";
+        s1.handle = "Alice";
+        GameSeatInfo s2;
+        s2.seat = 2;
+        s2.playerUuid = "u-seat-2";
+        s2.handle = "BobBot";
+        s2.isRobot = true;
+        view.seats = {s1, s2};
+        // Pre-populate historical moves before initial sync
+        view.moves = {"33+a", "37+e"};
+
+        win.applyGameViewData(view);
+        win.pumpUiEvents();
+        LONGS_EQUAL(0, static_cast<long>(triggeredCues.size()));
+
+        // Opponent/Local subsequent moves arriving via applyGameViewData:
+        // Move 3 (A): Pod step ("33a-34") -> POD_STEP
+        view.seq = 2;
+        view.moves.push_back("33a-34");
+        win.applyGameViewData(view);
+        LONGS_EQUAL(1, static_cast<long>(triggeredCues.size()));
+        LONGS_EQUAL(static_cast<int>(SoundCue::POD_STEP),
+                    static_cast<int>(triggeredCues.back()));
+
+        // Move 4 (B): Pod step ("37e-36") -> POD_STEP
+        view.seq = 3;
+        view.moves.push_back("37e-36");
+        win.applyGameViewData(view);
+        LONGS_EQUAL(2, static_cast<long>(triggeredCues.size()));
+        LONGS_EQUAL(static_cast<int>(SoundCue::POD_STEP),
+                    static_cast<int>(triggeredCues.back()));
+
+        // Move 5 (A): Pod placement ("53") -> POD_PLACE
+        view.seq = 4;
+        view.moves.push_back("53");
+        win.applyGameViewData(view);
+        LONGS_EQUAL(3, static_cast<long>(triggeredCues.size()));
+        LONGS_EQUAL(static_cast<int>(SoundCue::POD_PLACE),
+                    static_cast<int>(triggeredCues.back()));
+
+        // Move 6 (B): Pod step ("36e-35") -> POD_STEP
+        view.seq = 5;
+        view.moves.push_back("36e-35");
+        win.applyGameViewData(view);
+        LONGS_EQUAL(4, static_cast<long>(triggeredCues.size()));
+        LONGS_EQUAL(static_cast<int>(SoundCue::POD_STEP),
+                    static_cast<int>(triggeredCues.back()));
+
+        // Move 7 (A): Pod jump ("34a-36") -> POD_JUMP
+        view.seq = 6;
+        view.moves.push_back("34a-36");
+        win.applyGameViewData(view);
+        LONGS_EQUAL(5, static_cast<long>(triggeredCues.size()));
+        LONGS_EQUAL(static_cast<int>(SoundCue::POD_JUMP),
+                    static_cast<int>(triggeredCues.back()));
+
+        // Move 8 (B): Prong addition ("35e+a") -> PRONG_SNAP
+        view.seq = 7;
+        view.moves.push_back("35e+a");
+        win.applyGameViewData(view);
+        LONGS_EQUAL(6, static_cast<long>(triggeredCues.size()));
+        LONGS_EQUAL(static_cast<int>(SoundCue::PRONG_SNAP),
+                    static_cast<int>(triggeredCues.back()));
+
+        // Move 9 (A): Prong addition ("53+a") -> PRONG_SNAP
+        view.seq = 8;
+        view.moves.push_back("53+a");
+        win.applyGameViewData(view);
+        LONGS_EQUAL(7, static_cast<long>(triggeredCues.size()));
+        LONGS_EQUAL(static_cast<int>(SoundCue::PRONG_SNAP),
+                    static_cast<int>(triggeredCues.back()));
+
+        // Move 10 (B): Pod capture ("35ae-37x") -> POD_CAPTURE
+        view.seq = 9;
+        view.moves.push_back("35ae-37x");
+        win.applyGameViewData(view);
+        LONGS_EQUAL(8, static_cast<long>(triggeredCues.size()));
+        LONGS_EQUAL(static_cast<int>(SoundCue::POD_CAPTURE),
+                    static_cast<int>(triggeredCues.back()));
+    }
+
+    // 3. Live Online Match: Local human move does NOT double-fire on server echo,
+    //    while remote opponent move triggers the classified cue on sync
+    {
+        LiveServerEnv env;
+
+        auto clientA = OctiNetworkClient::createForLoopbackTest(env.port());
+        auto loginA = clientA->loginWithSso(
+            "google", makeToken("google", "sub-sfx-a", "SfxAlice"), "SfxAlice");
+        CHECK_TRUE_TEXT(loginA.ok, loginA.errorMessage.c_str());
+
+        std::string cfgA = env.dir + "/client_sfx_a.json";
+        OctiMainWindow winA(std::move(clientA), cfgA);
+        winA.applyAuthenticatedProfile(loginA.data.profile);
+
+        CreateTableRequest req;
+        req.mode = "2P";
+        req.bases = 3;
+        auto createRes = winA.createAndEnterOnlineTable(req);
+        CHECK_TRUE_TEXT(createRes.ok, createRes.errorMessage.c_str());
+        std::string roomId = createRes.data.roomId;
+
+        auto clientB = OctiNetworkClient::createForLoopbackTest(env.port());
+        auto loginB = clientB->loginWithSso(
+            "google", makeToken("google", "sub-sfx-b", "SfxBob"), "SfxBob");
+        CHECK_TRUE_TEXT(loginB.ok, loginB.errorMessage.c_str());
+
+        std::string cfgB = env.dir + "/client_sfx_b.json";
+        OctiMainWindow winB(std::move(clientB), cfgB);
+        winB.applyAuthenticatedProfile(loginB.data.profile);
+        CHECK_TRUE(winB.joinAndEnterOnlineTable(roomId, 2).ok);
+
+        winA.refreshOnlineGameView();
+        winB.refreshOnlineGameView();
+        CHECK_TRUE(winA.isInteractiveOnlineTurn());
+
+        std::uint64_t aCountBefore = winA.soundSynth()->triggeredCueCount();
+        winA.setConfirmAllMoves(false);
+        CHECK_TRUE(winA.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+        // Local canvas interaction + server submit + refreshOnlineGameView should fire PRONG_SNAP exactly once
+        LONGS_EQUAL(static_cast<long>(aCountBefore + 1),
+                    static_cast<long>(winA.soundSynth()->triggeredCueCount()));
+        LONGS_EQUAL(static_cast<int>(SoundCue::PRONG_SNAP),
+                    static_cast<int>(winA.soundSynth()->lastTriggeredCue()));
+
+        // Now Player B submits a pod placement ("57") from winB; when winA refreshes, winA hears POD_PLACE
+        winB.refreshOnlineGameView();
+        CHECK_TRUE(winB.isInteractiveOnlineTurn());
+        winB.setConfirmAllMoves(false);
+        CHECK_TRUE(winB.boardCanvas()->simulateDragFromReserveToSquare(
+            DragKind::ADD_POD_FROM_RESERVE, 5, 7));
+
+        winA.refreshOnlineGameView();
+        LONGS_EQUAL(static_cast<long>(aCountBefore + 2),
+                    static_cast<long>(winA.soundSynth()->triggeredCueCount()));
+        LONGS_EQUAL(static_cast<int>(SoundCue::POD_PLACE),
+                    static_cast<int>(winA.soundSynth()->lastTriggeredCue()));
+    }
+
+    std::remove(cfgPath.c_str());
 }
 
 extern "C" const char *__lsan_default_suppressions()

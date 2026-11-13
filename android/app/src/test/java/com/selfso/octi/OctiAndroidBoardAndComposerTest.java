@@ -6,15 +6,19 @@
 
 package com.selfso.octi;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import org.junit.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -735,6 +739,78 @@ public class OctiAndroidBoardAndComposerTest {
         assertEquals(360 * 360, pxOfk.length);
     }
 
+    @Test
+    public void testBoardRendererJumpCaptureAndKeepZeroPillBoxOverlay() throws Exception {
+        OctiBoard board = createStartedBoard(OctiGameMode.GAME_MODE_2);
+        for (int x = 0; x < 9; x++) {
+            for (int y = 0; y < 9; y++) {
+                board.squareAt(x, y).clear();
+            }
+        }
+        OctiPod podA = new OctiPod(OctiPodType.A_POD);
+        podA.addProng(OctiDir.DIR_N, false);
+        board.squareAt(4, 2).addPod(podA); // (5, 3)
+
+        OctiPod podB1 = new OctiPod(OctiPodType.B_POD);
+        for (int d = 0; d < OctiDir.DIR_MAX; d++) {
+            podB1.addProng(OctiDir.fromIndex(d), false);
+        }
+        board.squareAt(4, 3).addPod(podB1); // (5, 4) jumped enemy pod with all 8 prongs
+
+        OctiPod podB2 = new OctiPod(OctiPodType.B_POD);
+        podB2.addProng(OctiDir.DIR_N, false);
+        podB2.addProng(OctiDir.DIR_S, false);
+        board.squareAt(4, 5).addPod(podB2); // (5, 6) second jumped enemy pod
+        board.squareAt(7, 7).addPod(new OctiPod(OctiPodType.B_POD));
+
+        OctiMoveComposer composer = new OctiMoveComposer(board);
+        composer.setConfirmAllMoves(true);
+        assertTrue(composer.beginGuidedPodMove(5, 3, 0, false));
+        assertTrue(composer.selectGuidedDestination(5, 5));
+        assertTrue(composer.selectGuidedDestination(5, 7));
+        assertEquals(2, composer.captureChoices().size());
+
+        // Hop 0 at (5,4): toggle to keep (capture = false); Hop 1 at (5,6): leave capture = true
+        assertTrue(composer.toggleCaptureAtSquare(5, 4));
+        assertFalse(composer.captureChoices().get(0).capture);
+        assertTrue(composer.captureChoices().get(1).capture);
+
+        int size = 640;
+        OctiBoardGeometry geom = new OctiBoardGeometry(
+                size, size, 9, 9, OctiBoardGeometry.BoardRotation.ROT_0);
+        OctiPalette pal = OctiPalette.forTheme(OctiThemeId.OBSIDIAN_BRASS);
+        OctiBoard preview = composer.buildPreviewBoard();
+        assertNotNull(preview);
+
+        int[] pxActual = OctiBoardRenderer.renderBoardPixels(
+                preview, composer, geom, OctiThemeId.OBSIDIAN_BRASS);
+        int[] pxClean = OctiBoardRenderer.renderBoardPixels(
+                preview, null, geom, OctiThemeId.OBSIDIAN_BRASS);
+
+        for (OctiMoveComposer.CaptureChoice cc : composer.captureChoices()) {
+            double[] sqRect = geom.squareRect(cc.jumpedX, cc.jumpedY);
+            int x0 = (int) Math.ceil(sqRect[0] + 3.0);
+            int x1 = (int) Math.floor(sqRect[0] + sqRect[2] - 3.0);
+            int y0 = (int) Math.ceil(sqRect[1] + 3.0);
+            int y1 = (int) Math.floor(sqRect[1] + Math.max(12.0, sqRect[3] * 0.26) - 1.0);
+            for (int y = y0; y <= y1; y++) {
+                for (int x = x0; x <= x1; x++) {
+                    int actual = pxActual[y * size + x];
+                    int expected = pxClean[y * size + x];
+                    assertFalse("Jumped square (" + cc.jumpedX + "," + cc.jumpedY
+                            + ") must not contain legalCaptureGlow pill pixel",
+                            actual == pal.legalCaptureGlow);
+                    assertFalse("Jumped square (" + cc.jumpedX + "," + cc.jumpedY
+                            + ") must not contain panelCardBg pill pixel",
+                            actual == pal.panelCardBg);
+                    assertEquals("Jumped square (" + cc.jumpedX + "," + cc.jumpedY
+                            + ") top band must match clean unobstructed render",
+                            expected, actual);
+                }
+            }
+        }
+    }
+
     // -------------------------------------------------------------------------
     // 8. 500-Trial Seeded Property-Based Fuzzing Suite
     // -------------------------------------------------------------------------
@@ -873,7 +949,7 @@ public class OctiAndroidBoardAndComposerTest {
     @Test
     public void testOctiAppVersionAndProtocolConstants() {
         assertEquals(BuildConfig.VERSION_NAME, OctiDefs.OCTI_APP_VERSION);
-        assertEquals("2.5.1", OctiDefs.OCTI_APP_VERSION);
+        assertEquals("2.5.2", OctiDefs.OCTI_APP_VERSION);
         assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
         assertEquals(3714, OctiOpeningBookData.ENTRIES.length);
 
@@ -1435,6 +1511,355 @@ public class OctiAndroidBoardAndComposerTest {
         assertTrue(composer.toggleCaptureAtSquare(3, 4));
         assertEquals("33a-35", composer.stagedMoveNotation());
         assertFalse(composer.captureChoices().get(0).capture);
+    }
+
+    @Test
+    public void testComposerSeamlessSuperProngPreludeStagingAndCaptureProngUnlock() {
+        // 1. Single superprong A33a! with confirmAllMoves = false pauses auto-commit to offer bonus move
+        OctiBoard bCommitNow = new OctiBoard();
+        bCommitNow.fromPositionString("2:3:1:0:P:A:-:0:3,0,20,2:3,0,20,2:A33a!,B77");
+        OctiMoveComposer cCommitNow = new OctiMoveComposer(bCommitNow);
+        cCommitNow.setConfirmAllMoves(false);
+
+        assertTrue(cCommitNow.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4, false));
+        assertTrue("Superprong move must pause auto-commit even when confirmAllMoves == false",
+                cCommitNow.isAwaitingConfirmation());
+        assertTrue("isAwaitingSuperProngBonusMove() must be true after 1st superprong move",
+                cCommitNow.isAwaitingSuperProngBonusMove());
+        assertTrue("canCommitStagedMove() must be true so player can stop after 33a!-34",
+                cCommitNow.canCommitStagedMove());
+        assertEquals("33a!-34", cCommitNow.stagedMoveNotation());
+        assertTrue("Pressing Commit immediately commits 33a!-34", cCommitNow.commitMove());
+        assertEquals(OctiPlayer.PLAYER_B, bCommitNow.getGame().getTurn());
+        assertEquals(1, bCommitNow.getGame().getNumMoves());
+        assertEquals("33a!-34", bCommitNow.getGame().getMoves().get(0).getMove().asString());
+
+        // 2. Continuing after 33a!-34 with +b at (3,4) produces "33a!-34;34a!+b"
+        OctiBoard bAddProng = new OctiBoard();
+        bAddProng.fromPositionString("2:3:1:0:P:A:-:0:3,0,20,2:3,0,20,2:A33a!,B77");
+        OctiMoveComposer cAddProng = new OctiMoveComposer(bAddProng);
+        cAddProng.setConfirmAllMoves(true);
+        assertTrue(cAddProng.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4, false));
+        assertTrue(cAddProng.isAwaitingSuperProngBonusMove());
+        assertTrue(cAddProng.stageOrCommitAddProng(3, 4, 0, OctiDir.DIR_NE, false));
+        assertEquals("33a!-34;34a!+b", cAddProng.stagedMoveNotation());
+        assertFalse("Prong addition finishes the regular action",
+                cAddProng.isAwaitingSuperProngBonusMove());
+        assertTrue(cAddProng.commitMove());
+        assertEquals(OctiPlayer.PLAYER_B, bAddProng.getGame().getTurn());
+
+        // 3. Continuing after 33a!-34 with pod placement at (3,3) produces "33a!-34;33"
+        OctiBoard bAddPod = new OctiBoard();
+        bAddPod.fromPositionString("2:3:1:0:P:A:-:0:3,0,20,2:3,0,20,2:A33a!,B77");
+        OctiMoveComposer cAddPod = new OctiMoveComposer(bAddPod);
+        cAddPod.setConfirmAllMoves(true);
+        assertTrue(cAddPod.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4, false));
+        assertTrue(cAddPod.canPlaceReservePodAt(3, 3));
+        assertTrue(cAddPod.stageOrCommitAddPod(3, 3, false));
+        assertEquals("33a!-34;33", cAddPod.stagedMoveNotation());
+        assertTrue(cAddPod.commitMove());
+
+        // 4. Continuing after 33a!c-34 with prong reposition produces "33a!c-34;34a!c+b-c"
+        OctiBoard bRepo = new OctiBoard();
+        bRepo.fromPositionString("2:3:1:0:P:A:-:0:0,0,0,0:3,0,20,2:A33a!c,B77");
+        OctiMoveComposer cRepo = new OctiMoveComposer(bRepo);
+        cRepo.setConfirmAllMoves(true);
+        assertTrue(cRepo.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4, false));
+        assertTrue(cRepo.stageOrCommitRepositionProng(3, 4, 0, OctiDir.DIR_E, OctiDir.DIR_NE));
+        assertEquals("33a!c-34;34a!c+b-c", cRepo.stagedMoveNotation());
+        assertTrue(cRepo.commitMove());
+
+        // 5. Continuing after 33a!-34 with 34 -> 35 produces "33a!-34;34a!-35" with isAwaitingSuperProngBonusMove == false (blocks 3rd move!)
+        OctiBoard bTwoSteps = new OctiBoard();
+        bTwoSteps.fromPositionString("2:3:1:0:P:A:-:0:3,0,20,2:3,0,20,2:A33a!,B77");
+        OctiMoveComposer cTwoSteps = new OctiMoveComposer(bTwoSteps);
+        cTwoSteps.setConfirmAllMoves(true);
+        assertTrue(cTwoSteps.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4, false));
+        assertTrue(cTwoSteps.isAwaitingSuperProngBonusMove());
+        assertTrue(cTwoSteps.stageOrCommitPodMoveOrJump(3, 4, 0, 3, 5, false));
+        assertEquals("33a!-34;34a!-35", cTwoSteps.stagedMoveNotation());
+        assertFalse("1 superprong is exhausted after 1 prelude + 1 regular move",
+                cTwoSteps.isAwaitingSuperProngBonusMove());
+        assertFalse("3rd action on a 1-superprong pod must be rejected",
+                cTwoSteps.stageOrCommitAddProng(3, 5, 0, OctiDir.DIR_NE, false));
+        assertEquals("33a!-34;34a!-35", cTwoSteps.stagedMoveNotation());
+        assertTrue(cTwoSteps.commitMove());
+
+        // 6. Dual superprongs across 2 pods (A33a!,A53a!) stage "33a!-34;53a!-54;34a!+b"
+        OctiBoard bDualPods = new OctiBoard();
+        bDualPods.fromPositionString("2:3:1:0:P:A:-:0:2,0,20,2:3,0,20,2:A33a!,A53a!,B77");
+        OctiMoveComposer cDualPods = new OctiMoveComposer(bDualPods);
+        cDualPods.setConfirmAllMoves(true);
+        assertTrue(cDualPods.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4, false));
+        assertTrue(cDualPods.isAwaitingSuperProngBonusMove());
+        assertTrue(cDualPods.stageOrCommitPodMoveOrJump(5, 3, 0, 5, 4, false));
+        assertEquals("33a!-34;53a!-54", cDualPods.stagedMoveNotation());
+        assertTrue("2nd superprong pod allows a 3rd regular action",
+                cDualPods.isAwaitingSuperProngBonusMove());
+        assertTrue(cDualPods.stageOrCommitAddProng(3, 4, 0, OctiDir.DIR_NE, false));
+        assertEquals("33a!-34;53a!-54;34a!+b", cDualPods.stagedMoveNotation());
+        assertFalse("Max 2 bonus preludes reached",
+                cDualPods.isAwaitingSuperProngBonusMove());
+        assertTrue(cDualPods.commitMove());
+
+        // 7. Dual superprongs on 1 pod (A33a!c!) stage "33a!c!-34;34a!c!-44;44a!c!+b"
+        OctiBoard bDualDirs = new OctiBoard();
+        bDualDirs.fromPositionString("2:3:1:0:P:A:-:0:3,0,20,2:3,0,20,2:A33a!c!,B77");
+        OctiMoveComposer cDualDirs = new OctiMoveComposer(bDualDirs);
+        cDualDirs.setConfirmAllMoves(true);
+        assertTrue(cDualDirs.beginGuidedPodMove(3, 3, 0, false));
+        assertTrue(cDualDirs.selectGuidedDestination(3, 4));
+        assertTrue(cDualDirs.isAwaitingSuperProngBonusMove());
+        assertTrue(cDualDirs.beginGuidedPodMove(3, 4, 0, false));
+        assertTrue(cDualDirs.selectGuidedDestination(4, 4));
+        assertEquals("33a!c!-34;34a!c!-44", cDualDirs.stagedMoveNotation());
+        assertTrue(cDualDirs.isAwaitingSuperProngBonusMove());
+        assertTrue(cDualDirs.stageOrCommitAddProng(4, 4, 0, OctiDir.DIR_NE, false));
+        assertEquals("33a!c!-34;34a!c!-44;44a!c!+b", cDualDirs.stagedMoveNotation());
+        assertTrue(cDualDirs.commitMove());
+
+        // 8. Stacked identical superprongs (A33a!,A33a!) promote both pods to preludes -> "33a!-34;33a!-34;34a!+b"
+        OctiBoard bStacked = new OctiBoard();
+        bStacked.fromPositionString("2:3:1:0:P:A:-:0:2,0,20,2:3,0,20,2:A33a!,A33a!,B77");
+        OctiMoveComposer cStacked = new OctiMoveComposer(bStacked);
+        cStacked.setConfirmAllMoves(true);
+        assertTrue(cStacked.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4, false));
+        assertTrue(cStacked.stageOrCommitPodMoveOrJump(3, 3, 1, 3, 4, false));
+        assertTrue(cStacked.isAwaitingSuperProngBonusMove());
+        assertTrue(cStacked.stageOrCommitAddProng(3, 4, 0, OctiDir.DIR_NE, false));
+        assertEquals("33a!-34;33a!-34;34a!+b", cStacked.stagedMoveNotation());
+        assertTrue(cStacked.commitMove());
+
+        // 9. Prelude jump capture with 0 free reserve prongs unlocks immediate prong addition via buildPreviewBoard()!
+        OctiBoard bCapUnlock = new OctiBoard();
+        bCapUnlock.fromPositionString("2:3:1:0:P:A:-:0:0,0,0,0:3,0,10,0:A33a!,B34e,B77");
+        OctiMoveComposer cCapUnlock = new OctiMoveComposer(bCapUnlock);
+        cCapUnlock.setConfirmAllMoves(true);
+        assertEquals(0, bCapUnlock.getGame().getFreeProngs(OctiPlayer.PLAYER_A));
+        assertTrue(cCapUnlock.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 5, false));
+        assertEquals("33a!-35x", cCapUnlock.stagedMoveNotation());
+        assertTrue(cCapUnlock.isAwaitingSuperProngBonusMove());
+        assertTrue(cCapUnlock.beginAddProngFromReserve(false));
+        assertFalse(cCapUnlock.legalProngAdditionsAt(3, 5, 0, false).isEmpty());
+
+        OctiBoard preview = cCapUnlock.buildPreviewBoard();
+        assertNotNull(preview);
+        assertEquals("buildPreviewBoard() must keep active turn on PLAYER_A during uncommitted staging",
+                OctiPlayer.PLAYER_A, preview.getGame().getTurn());
+        assertEquals("buildPreviewBoard() must credit captured enemy prong to PLAYER_A",
+                1, preview.getGame().getFreeProngs(OctiPlayer.PLAYER_A));
+        assertTrue("stageOrCommitAddProng must succeed using prong captured in prelude",
+                cCapUnlock.stageOrCommitAddProng(3, 5, 0, OctiDir.DIR_NE, false));
+        assertEquals("33a!-35x;35a!+b", cCapUnlock.stagedMoveNotation());
+        assertTrue(cCapUnlock.commitMove());
+        assertEquals(OctiPlayer.PLAYER_B, bCapUnlock.getGame().getTurn());
+
+        // 10. Same-origin ',' vs ';' disambiguation when 2nd pod jumps over square captured by 1st pod
+        OctiBoard bCompositeJump = new OctiBoard();
+        bCompositeJump.fromPositionString("2:3:1:0:P:A:-:0:2,0,20,2:3,0,20,2:A33a!,A33a,B34,B77");
+        OctiMoveComposer cCompositeJump = new OctiMoveComposer(bCompositeJump);
+        cCompositeJump.setConfirmAllMoves(true);
+        assertTrue(cCompositeJump.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 5, false));
+        assertTrue(cCompositeJump.stageOrCommitPodMoveOrJump(3, 3, 1, 3, 5, false));
+        assertEquals("33a!-35x,33a-35x", cCompositeJump.stagedMoveNotation());
+        assertTrue(cCompositeJump.commitMove());
+    }
+
+    @Test
+    public void testSharedSoundAssetsMatchCanonicalWavFilesAndClassifier() throws Exception {
+        File repoRoot = resolveRepoRoot();
+        File canonicalSoundsDir = new File(repoRoot, "assets/sounds");
+        assertTrue("Canonical shared assets/sounds directory must exist", canonicalSoundsDir.isDirectory());
+
+        OctiSoundSynth.SoundCue[] cues = new OctiSoundSynth.SoundCue[]{
+            OctiSoundSynth.SoundCue.POD_PLACE,
+            OctiSoundSynth.SoundCue.PRONG_SNAP,
+            OctiSoundSynth.SoundCue.POD_STEP,
+            OctiSoundSynth.SoundCue.POD_JUMP,
+            OctiSoundSynth.SoundCue.POD_CAPTURE,
+            OctiSoundSynth.SoundCue.CLOCK_LOW_TICK,
+            OctiSoundSynth.SoundCue.GAME_VICTORY
+        };
+        String[] expectedFiles = new String[]{
+            "pod_place.wav",
+            "prong_snap.wav",
+            "pod_step.wav",
+            "pod_jump.wav",
+            "pod_capture.wav",
+            "clock_low_tick.wav",
+            "game_victory.wav"
+        };
+        int[] expectedSizes = new int[]{
+            3884, 2444, 3084, 4844, 6764, 1484, 11564
+        };
+        int[] expectedSampleCounts = new int[]{
+            1920, 1200, 1520, 2400, 3360, 720, 5760
+        };
+
+        assertEquals("", OctiSoundSynth.assetFileNameForCue(null));
+
+        OctiSoundSynth synth = OctiSoundSynth.getDefaultInstance();
+        for (int i = 0; i < cues.length; i++) {
+            OctiSoundSynth.SoundCue cue = cues[i];
+            String fileName = OctiSoundSynth.assetFileNameForCue(cue);
+            assertEquals(expectedFiles[i], fileName);
+
+            // Verify zero duplicate .wav copies inside android/app/src/
+            assertFalse("Must not duplicate .wav into android/app/src/main/assets",
+                    new File(repoRoot, "android/app/src/main/assets/sounds/" + fileName).exists());
+            assertFalse("Must not duplicate .wav into android/app/src/main/resources",
+                    new File(repoRoot, "android/app/src/main/resources/sounds/" + fileName).exists());
+
+            File diskWav = new File(canonicalSoundsDir, fileName);
+            assertTrue("Canonical WAV must exist: " + fileName, diskWav.isFile());
+            byte[] expectedBytes = Files.readAllBytes(diskWav.toPath());
+            assertEquals("Canonical WAV byte size mismatch for " + cue,
+                    expectedSizes[i], expectedBytes.length);
+
+            // Verify build.gradle.kts mounts ../../assets onto classpath as /sounds/<file>
+            try (InputStream cpIn = OctiSoundSynth.class.getResourceAsStream("/sounds/" + fileName)) {
+                assertNotNull("Classpath resource /sounds/" + fileName + " must be mounted", cpIn);
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] buf = new byte[1024];
+                int n;
+                while ((n = cpIn.read(buf)) != -1) {
+                    baos.write(buf, 0, n);
+                }
+                assertArrayEquals("Classpath /sounds/" + fileName + " must match canonical WAV",
+                        expectedBytes, baos.toByteArray());
+            }
+
+            byte[] synthWav = synth.wavBytesForCue(cue);
+            assertNotNull(synthWav);
+            assertArrayEquals("wavBytesForCue(" + cue + ") must match canonical WAV byte-for-byte",
+                    expectedBytes, synthWav);
+
+            int[] sampleRateOut = new int[1];
+            short[] decodedPcm = OctiSoundSynth.decodeWavPcm16Mono(synthWav, sampleRateOut);
+            assertEquals(OctiSoundSynth.SAMPLE_RATE, sampleRateOut[0]);
+            assertEquals("Decoded PCM sample count mismatch for " + cue,
+                    expectedSampleCounts[i], decodedPcm.length);
+
+            short[] synthPcm = synth.synthesizeCuePcm(cue);
+            assertArrayEquals("synthesizeCuePcm(" + cue + ") must match decoded canonical WAV PCM16",
+                    decodedPcm, synthPcm);
+        }
+
+        // Fault injection on decodeWavPcm16Mono: reject malformed/truncated/non-mono-16bit/overflowing headers
+        byte[] validTemplate = synth.wavBytesForCue(OctiSoundSynth.SoundCue.CLOCK_LOW_TICK);
+        assertInvalidWav(null, "null buffer");
+        assertInvalidWav(new byte[0], "empty buffer");
+        assertInvalidWav(new byte[43], "truncated 43-byte buffer");
+
+        byte[] badRiff = validTemplate.clone();
+        badRiff[0] = 'X';
+        assertInvalidWav(badRiff, "corrupted RIFF magic");
+
+        byte[] badWave = validTemplate.clone();
+        badWave[8] = 'X';
+        assertInvalidWav(badWave, "corrupted WAVE magic");
+
+        byte[] floatFormat = validTemplate.clone();
+        floatFormat[20] = 3; // IEEE float != 1 (PCM)
+        floatFormat[21] = 0;
+        assertInvalidWav(floatFormat, "non-PCM audioFormat=3");
+
+        byte[] stereoWav = validTemplate.clone();
+        stereoWav[22] = 2; // 2 channels
+        stereoWav[23] = 0;
+        stereoWav[32] = 4; // blockAlign = 4
+        stereoWav[33] = 0;
+        writeLe32(stereoWav, 28, 64000); // byteRate = 64000
+        assertInvalidWav(stereoWav, "stereo 2-channel WAV");
+
+        byte[] pcm8Wav = validTemplate.clone();
+        pcm8Wav[32] = 1; // blockAlign = 1
+        pcm8Wav[33] = 0;
+        pcm8Wav[34] = 8; // bitsPerSample = 8
+        pcm8Wav[35] = 0;
+        writeLe32(pcm8Wav, 28, 16000);
+        assertInvalidWav(pcm8Wav, "8-bit PCM WAV");
+
+        byte[] zeroSampleRate = validTemplate.clone();
+        writeLe32(zeroSampleRate, 24, 0);
+        writeLe32(zeroSampleRate, 28, 0);
+        assertInvalidWav(zeroSampleRate, "sampleRate=0 WAV");
+
+        byte[] oddDataChunk = new byte[validTemplate.length + 1];
+        System.arraycopy(validTemplate, 0, oddDataChunk, 0, validTemplate.length);
+        writeLe32(oddDataChunk, 4, oddDataChunk.length - 8);
+        writeLe32(oddDataChunk, 40, (validTemplate.length - 44) + 1);
+        assertInvalidWav(oddDataChunk, "odd-sized data chunk");
+
+        byte[] overflowDataChunk = validTemplate.clone();
+        writeLe32(overflowDataChunk, 40, 0xFFFFFFFF);
+        assertInvalidWav(overflowDataChunk, "0xFFFFFFFF overflowing data chunk size");
+
+        // Verify classifyMoveNotationSoundCue & classifyMoveSoundCue 1-to-1 parity with C++ OctiSoundCue
+        assertEquals(OctiSoundSynth.SoundCue.POD_PLACE,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_PLACE,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33*", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.PRONG_SNAP,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33+a", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.PRONG_SNAP,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33+a!", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.PRONG_SNAP,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33a+b-a", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_STEP,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33a-34", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_STEP,
+                OctiSoundSynth.classifyMoveNotationSoundCue("15g-95", true, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_JUMP,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33a-35", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_JUMP,
+                OctiSoundSynth.classifyMoveNotationSoundCue("15g-85", true, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_STEP,
+                OctiSoundSynth.classifyMoveNotationSoundCue("15g-85", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_CAPTURE,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33a-35x", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_CAPTURE,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33a-35-37x", false, 9, 9));
+
+        // Superprong preludes: regular action governs unless prelude jumped or captured
+        assertEquals(OctiSoundSynth.SoundCue.PRONG_SNAP,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33a!-34;34a!+b", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_PLACE,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33a!-34;33", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_STEP,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33a!-34;34a!-35", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_JUMP,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33a!-35;35a!+b", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_CAPTURE,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33a!-35x;35a!+b", false, 9, 9));
+
+        // OctiMove object overload + malformed / empty / NUL fallbacks
+        assertEquals(OctiSoundSynth.SoundCue.POD_JUMP,
+                OctiSoundSynth.classifyMoveSoundCue(new OctiMove("33a-35"), false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_PLACE,
+                OctiSoundSynth.classifyMoveNotationSoundCue("", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_PLACE,
+                OctiSoundSynth.classifyMoveNotationSoundCue(null, false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_PLACE,
+                OctiSoundSynth.classifyMoveNotationSoundCue("not-a-move", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_PLACE,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33\0+a", false, 9, 9));
+    }
+
+    private static void writeLe32(byte[] buf, int offset, int value) {
+        buf[offset] = (byte) (value & 0xFF);
+        buf[offset + 1] = (byte) ((value >>> 8) & 0xFF);
+        buf[offset + 2] = (byte) ((value >>> 16) & 0xFF);
+        buf[offset + 3] = (byte) ((value >>> 24) & 0xFF);
+    }
+
+    private static void assertInvalidWav(byte[] wav, String label) {
+        try {
+            OctiSoundSynth.decodeWavPcm16Mono(wav);
+            fail("Expected IllegalArgumentException for " + label);
+        } catch (IllegalArgumentException expected) {
+            // expected
+        }
     }
 }
 

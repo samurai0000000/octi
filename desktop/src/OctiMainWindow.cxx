@@ -299,6 +299,7 @@ OctiMainWindow::OctiMainWindow(
     resize(1440, 900);
 
     QWidget *central = new QWidget(this);
+    central->setObjectName("mainWindowCentral");
     QVBoxLayout *rootLayout = new QVBoxLayout(central);
     rootLayout->setContentsMargins(10, 10, 10, 10);
     rootLayout->setSpacing(10);
@@ -407,6 +408,7 @@ OctiMainWindow::OctiMainWindow(
     _viewStack = new QStackedWidget(central);
 
     _boardPage = new QWidget(_viewStack);
+    _boardPage->setObjectName("boardPageWidget");
     QHBoxLayout *boardLayout = new QHBoxLayout(_boardPage);
     boardLayout->setContentsMargins(0, 0, 0, 0);
     boardLayout->setSpacing(12);
@@ -448,41 +450,64 @@ OctiMainWindow::OctiMainWindow(
             handleLocalOrOnlineMoveCommitted(moveNotation);
         });
 
-    const QString compactBtnCss = "QPushButton { padding: 4px 6px; font-size: 12px; }";
-
     /* 0. Match Status Card inside Left Middle Container */
-    QGroupBox *statusBox = new QGroupBox("Match Status", _leftMiddleContainer);
+    QGroupBox *statusBox = new QGroupBox("", _leftMiddleContainer);
+    statusBox->setObjectName("statusBox");
     _statusBox = statusBox;
     QVBoxLayout *statusLayout = new QVBoxLayout(statusBox);
-    statusLayout->setContentsMargins(6, 4, 6, 6);
-    statusLayout->setSpacing(2);
+    statusLayout->setContentsMargins(8, 6, 8, 6);
+    statusLayout->setSpacing(4);
+
+    QHBoxLayout *statusHeaderRow = new QHBoxLayout();
+    statusHeaderRow->setSpacing(6);
+    _statusHeaderTitleLabel = new QLabel("Match Status", statusBox);
+    _statusHeaderTitleLabel->setObjectName("statusHeaderTitleLabel");
+    _statusRoomBadgeLabel = new QLabel("", statusBox);
+    _statusRoomBadgeLabel->setObjectName("statusRoomBadgeLabel");
+    _statusRoomBadgeLabel->setVisible(false);
+    _statusTtlPillLabel = new QLabel("", statusBox);
+    _statusTtlPillLabel->setObjectName("statusTtlPillLabel");
+    _statusTtlPillLabel->setVisible(false);
+    statusHeaderRow->addWidget(_statusHeaderTitleLabel);
+    statusHeaderRow->addStretch(1);
+    statusHeaderRow->addWidget(_statusTtlPillLabel);
+    statusLayout->addLayout(statusHeaderRow);
+    statusLayout->addWidget(_statusRoomBadgeLabel);
+
     _matchModeLabel = new QLabel("Local vs AI Bot", statusBox);
+    _matchModeLabel->setObjectName("matchModeLabel");
     _matchModeLabel->setWordWrap(true);
     _matchTurnStatusLabel = new QLabel("Active Turn: Player A", statusBox);
-    _matchTurnStatusLabel->setStyleSheet("font-size: 13px; font-weight: bold;");
+    _matchTurnStatusLabel->setObjectName("matchTurnStatusLabel");
     _matchTurnStatusLabel->setWordWrap(true);
     statusLayout->addWidget(_matchModeLabel);
     statusLayout->addWidget(_matchTurnStatusLabel);
     leftMiddleLayout->addWidget(statusBox);
 
     /* 0b. Online Waiting-Room Banner inside Left Middle Container */
-    _waitingRoomBannerWidget = new QGroupBox("Waiting for Players", _leftMiddleContainer);
+    QGroupBox *waitBox = new QGroupBox("", _leftMiddleContainer);
+    waitBox->setObjectName("waitingRoomBannerBox");
+    _waitingRoomBannerWidget = waitBox;
     QVBoxLayout *waitLayout = new QVBoxLayout(_waitingRoomBannerWidget);
-    waitLayout->setContentsMargins(6, 4, 6, 6);
+    waitLayout->setContentsMargins(8, 6, 8, 6);
     waitLayout->setSpacing(4);
+    QLabel *waitTitle = new QLabel("Waiting for Players", _waitingRoomBannerWidget);
+    waitTitle->setObjectName("waitingRoomTitleLabel");
+    waitLayout->addWidget(waitTitle);
     _waitingRoomBannerLabel = new QLabel(
         "Waiting for opponents to join this table...",
         _waitingRoomBannerWidget);
+    _waitingRoomBannerLabel->setObjectName("waitingRoomBannerLabel");
     _waitingRoomBannerLabel->setWordWrap(true);
     waitLayout->addWidget(_waitingRoomBannerLabel);
     QHBoxLayout *waitBtnRow = new QHBoxLayout();
     waitBtnRow->setSpacing(4);
     _sitSeatBtn = new QPushButton("Sit / Join Game", _waitingRoomBannerWidget);
-    _sitSeatBtn->setStyleSheet("QPushButton { background-color: #2563eb; color: white; font-weight: bold; padding: 4px 6px; font-size: 12px; }");
+    _sitSeatBtn->setObjectName("sitSeatBtn");
     _deleteWaitingTableBtn = new QPushButton("Delete Table", _waitingRoomBannerWidget);
-    _deleteWaitingTableBtn->setStyleSheet("QPushButton { background-color: #dc2626; color: white; font-weight: bold; padding: 4px 6px; font-size: 12px; }");
+    _deleteWaitingTableBtn->setObjectName("deleteWaitingTableBtn");
     _leaveWaitingTableBtn = new QPushButton("Leave Table", _waitingRoomBannerWidget);
-    _leaveWaitingTableBtn->setStyleSheet("QPushButton { padding: 4px 6px; font-size: 12px; }");
+    _leaveWaitingTableBtn->setObjectName("leaveWaitingTableBtn");
     waitBtnRow->addWidget(_sitSeatBtn);
     waitBtnRow->addWidget(_deleteWaitingTableBtn);
     waitBtnRow->addWidget(_leaveWaitingTableBtn);
@@ -491,19 +516,25 @@ OctiMainWindow::OctiMainWindow(
     leftMiddleLayout->addWidget(_waitingRoomBannerWidget);
 
     /* 0c. Active Proposal Banner inside Left Middle Container */
-    _proposalBannerWidget = new QGroupBox("Pending Proposal", _leftMiddleContainer);
+    QGroupBox *propBox = new QGroupBox("", _leftMiddleContainer);
+    propBox->setObjectName("proposalBannerBox");
+    _proposalBannerWidget = propBox;
     QVBoxLayout *propLayout = new QVBoxLayout(_proposalBannerWidget);
-    propLayout->setContentsMargins(6, 4, 6, 6);
+    propLayout->setContentsMargins(8, 6, 8, 6);
     propLayout->setSpacing(4);
+    QLabel *propTitle = new QLabel("Pending Proposal", _proposalBannerWidget);
+    propTitle->setObjectName("proposalBannerTitleLabel");
+    propLayout->addWidget(propTitle);
     _proposalBannerLabel = new QLabel("No active proposal.", _proposalBannerWidget);
+    _proposalBannerLabel->setObjectName("proposalBannerLabel");
     _proposalBannerLabel->setWordWrap(true);
     propLayout->addWidget(_proposalBannerLabel);
     QHBoxLayout *propRespRow = new QHBoxLayout();
     propRespRow->setSpacing(4);
     _acceptProposalBtn = new QPushButton("Accept", _proposalBannerWidget);
-    _acceptProposalBtn->setStyleSheet(compactBtnCss);
+    _acceptProposalBtn->setObjectName("acceptProposalBtn");
     _declineProposalBtn = new QPushButton("Decline", _proposalBannerWidget);
-    _declineProposalBtn->setStyleSheet(compactBtnCss);
+    _declineProposalBtn->setObjectName("declineProposalBtn");
     propRespRow->addWidget(_acceptProposalBtn);
     propRespRow->addWidget(_declineProposalBtn);
     propLayout->addLayout(propRespRow);
@@ -511,24 +542,26 @@ OctiMainWindow::OctiMainWindow(
     leftMiddleLayout->addWidget(_proposalBannerWidget);
 
     /* 1. Move History & VCR Replay Card inside Left Middle Container */
-    QGroupBox *historyBox = new QGroupBox("Move History", _leftMiddleContainer);
+    QGroupBox *historyBox = new QGroupBox("", _leftMiddleContainer);
+    historyBox->setObjectName("historyBox");
     _historyBox = historyBox;
     QVBoxLayout *histLayout = new QVBoxLayout(historyBox);
-    histLayout->setContentsMargins(6, 4, 6, 6);
+    histLayout->setContentsMargins(8, 6, 8, 6);
     histLayout->setSpacing(4);
 
     QHBoxLayout *histHeaderRow = new QHBoxLayout();
     QLabel *histTitle = new QLabel("Move History", historyBox);
-    histTitle->setStyleSheet("font-weight: bold; font-size: 12px;");
+    histTitle->setObjectName("historyTitleLabel");
     _exportNotationBtn = new QPushButton("Export", historyBox);
+    _exportNotationBtn->setObjectName("exportNotationBtn");
     _exportNotationBtn->setToolTip("Export Match Notation / FEN...");
-    _exportNotationBtn->setStyleSheet(compactBtnCss);
     histHeaderRow->addWidget(histTitle);
     histHeaderRow->addStretch(1);
     histHeaderRow->addWidget(_exportNotationBtn);
     histLayout->addLayout(histHeaderRow);
 
     _moveHistoryList = new QListWidget(historyBox);
+    _moveHistoryList->setObjectName("moveHistoryList");
     _moveHistoryList->setMinimumHeight(68);
     _moveHistoryList->setSelectionMode(QAbstractItemView::ExtendedSelection);
     histLayout->addWidget(_moveHistoryList, 1);
@@ -561,23 +594,23 @@ OctiMainWindow::OctiMainWindow(
     QHBoxLayout *vcrRow = new QHBoxLayout();
     vcrRow->setSpacing(4);
     _vcrFirstBtn = new QPushButton("|<<", historyBox);
+    _vcrFirstBtn->setObjectName("vcrFirstBtn");
     _vcrFirstBtn->setToolTip("Jump to First Ply");
-    _vcrFirstBtn->setStyleSheet(compactBtnCss);
-    _vcrPrevBtn = new QPushButton("< Prev", historyBox);
+    _vcrPrevBtn = new QPushButton("<", historyBox);
+    _vcrPrevBtn->setObjectName("vcrPrevBtn");
     _vcrPrevBtn->setToolTip("Previous Ply");
-    _vcrPrevBtn->setStyleSheet(compactBtnCss);
     _vcrPlyLabel = new QLabel("Ply 0/0", historyBox);
-    _vcrPlyLabel->setStyleSheet("font-size: 11px; font-weight: bold; padding: 0 4px;");
+    _vcrPlyLabel->setObjectName("vcrPlyLabel");
     _vcrPlyLabel->setAlignment(Qt::AlignCenter);
-    _vcrNextBtn = new QPushButton("Next >", historyBox);
+    _vcrNextBtn = new QPushButton(">", historyBox);
+    _vcrNextBtn->setObjectName("vcrNextBtn");
     _vcrNextBtn->setToolTip("Next Ply");
-    _vcrNextBtn->setStyleSheet(compactBtnCss);
     _vcrLastBtn = new QPushButton(">>|", historyBox);
+    _vcrLastBtn->setObjectName("vcrLastBtn");
     _vcrLastBtn->setToolTip("Return to Live / Latest Ply");
-    _vcrLastBtn->setStyleSheet(compactBtnCss);
     vcrRow->addWidget(_vcrFirstBtn);
     vcrRow->addWidget(_vcrPrevBtn);
-    vcrRow->addWidget(_vcrPlyLabel);
+    vcrRow->addWidget(_vcrPlyLabel, 1);
     vcrRow->addWidget(_vcrNextBtn);
     vcrRow->addWidget(_vcrLastBtn);
     histLayout->addLayout(vcrRow);
@@ -593,6 +626,7 @@ OctiMainWindow::OctiMainWindow(
 
     /* ---- Right Side Panel (Lobby Chat, Table Chat, Compact Match Actions) ---- */
     QWidget *rightSide = new QWidget(_boardPage);
+    rightSide->setObjectName("tabletopRightSide");
     _rightSide = rightSide;
     rightSide->setMinimumWidth(320);
     rightSide->setMaximumWidth(380);
@@ -602,37 +636,38 @@ OctiMainWindow::OctiMainWindow(
     rightLayout->setSpacing(6);
 
     /* 1. Top Half: Lobby Chat • Global (Always visible on Board view) */
-    _boardLobbyChatBox = new QGroupBox("Lobby Chat • Global", rightSide);
+    _boardLobbyChatBox = new QGroupBox("", rightSide);
     _boardLobbyChatBox->setObjectName("boardLobbyChatBox");
     _rightTopHalfWidget = _boardLobbyChatBox;
     QVBoxLayout *lobbyChatLayout = new QVBoxLayout(_boardLobbyChatBox);
-    lobbyChatLayout->setContentsMargins(6, 4, 6, 6);
-    lobbyChatLayout->setSpacing(4);
+    lobbyChatLayout->setContentsMargins(8, 6, 8, 8);
+    lobbyChatLayout->setSpacing(5);
 
     QHBoxLayout *lobbyHeader = new QHBoxLayout();
     QLabel *lobbyTitle = new QLabel("Lobby Chat", _boardLobbyChatBox);
-    lobbyTitle->setStyleSheet("font-weight: bold; font-size: 12px;");
+    lobbyTitle->setObjectName("boardLobbyChatTitleLabel");
     QLabel *lobbySub = new QLabel("Global", _boardLobbyChatBox);
-    lobbySub->setStyleSheet("font-size: 11px; color: #8b949e;");
+    lobbySub->setObjectName("boardLobbyChatSubLabel");
     lobbyHeader->addWidget(lobbyTitle);
-    lobbyHeader->addSpacing(6);
-    lobbyHeader->addWidget(lobbySub);
     lobbyHeader->addStretch(1);
+    lobbyHeader->addWidget(lobbySub);
     lobbyChatLayout->addLayout(lobbyHeader);
 
     _boardLobbyChatTranscript = new QPlainTextEdit(_boardLobbyChatBox);
+    _boardLobbyChatTranscript->setObjectName("boardLobbyChatTranscript");
     _boardLobbyChatTranscript->setReadOnly(true);
     _boardLobbyChatTranscript->setMinimumHeight(54);
     _boardLobbyChatTranscript->setMaximumBlockCount(200);
     lobbyChatLayout->addWidget(_boardLobbyChatTranscript, 1);
 
     QHBoxLayout *lobbyInputRow = new QHBoxLayout();
-    lobbyInputRow->setSpacing(4);
+    lobbyInputRow->setSpacing(5);
     _boardLobbyChatInput = new QLineEdit(_boardLobbyChatBox);
+    _boardLobbyChatInput->setObjectName("boardLobbyChatInput");
     _boardLobbyChatInput->setPlaceholderText("Sign in to chat in lobby...");
     _boardLobbyChatInput->setEnabled(false);
     _boardLobbyChatSendBtn = new QPushButton("Send", _boardLobbyChatBox);
-    _boardLobbyChatSendBtn->setStyleSheet(compactBtnCss);
+    _boardLobbyChatSendBtn->setObjectName("boardLobbyChatSendBtn");
     _boardLobbyChatSendBtn->setEnabled(false);
     lobbyInputRow->addWidget(_boardLobbyChatInput, 1);
     lobbyInputRow->addWidget(_boardLobbyChatSendBtn);
@@ -641,46 +676,37 @@ OctiMainWindow::OctiMainWindow(
     _rightLayout->addWidget(_boardLobbyChatBox, 1);
 
     /* 2. Middle Half: Table Chat (Visible only in Online Room) */
-    _chatBox = new QGroupBox("Table Chat", rightSide);
-    _chatBox->setObjectName("chatBox");
+    QGroupBox *tableChatGroup = new QGroupBox("", rightSide);
+    tableChatGroup->setObjectName("chatBox");
+    _chatBox = tableChatGroup;
     QVBoxLayout *chatLayout = new QVBoxLayout(_chatBox);
-    chatLayout->setContentsMargins(6, 4, 6, 6);
-    chatLayout->setSpacing(4);
+    chatLayout->setContentsMargins(8, 6, 8, 8);
+    chatLayout->setSpacing(5);
 
     QHBoxLayout *chatHeaderRow = new QHBoxLayout();
     chatHeaderRow->setSpacing(4);
     QLabel *chatTitle = new QLabel("Table Chat", _chatBox);
-    chatTitle->setStyleSheet("font-weight: bold; font-size: 12px;");
+    chatTitle->setObjectName("tableChatTitleLabel");
     chatHeaderRow->addWidget(chatTitle);
     chatHeaderRow->addStretch(1);
 
     _tableChatLeaveBtn = new QPushButton("Leave Table", _chatBox);
     _tableChatLeaveBtn->setObjectName("tableChatLeaveBtn");
-    _tableChatLeaveBtn->setStyleSheet(
-        "QPushButton { border: 1px solid #dc2626; color: #f87171; padding: 2px 6px; font-size: 11px; font-weight: bold; }"
-        "QPushButton:hover { background: #dc2626; color: white; }"
-    );
     _leaveTableBtn = _tableChatLeaveBtn;
 
     _tableChatPurgeBtn = new QPushButton("Purge Table", _chatBox);
     _tableChatPurgeBtn->setObjectName("tableChatPurgeBtn");
-    _tableChatPurgeBtn->setStyleSheet(
-        "QPushButton { background-color: #dc2626; color: white; padding: 2px 6px; font-size: 11px; font-weight: bold; }"
-    );
     _tableChatPurgeBtn->setVisible(false);
 
-    _zoomChatBtn = new QPushButton("Zoom ⤢", _chatBox);
+    _zoomChatBtn = new QPushButton("Zoom \xE2\xA4\xA2", _chatBox);
     _zoomChatBtn->setObjectName("zoomChatBtn");
-    _zoomChatBtn->setStyleSheet(
-        "QPushButton { background: #21262D; color: #C8A253; border: 1px solid #30363D; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: bold; }"
-        "QPushButton:hover { background: #30363D; color: #F0F6FC; }"
-    );
     chatHeaderRow->addWidget(_tableChatLeaveBtn);
     chatHeaderRow->addWidget(_tableChatPurgeBtn);
     chatHeaderRow->addWidget(_zoomChatBtn);
     chatLayout->addLayout(chatHeaderRow);
 
     _gameChatTranscript = new QPlainTextEdit(_chatBox);
+    _gameChatTranscript->setObjectName("gameChatTranscript");
     _gameChatTranscript->setReadOnly(true);
     _gameChatTranscript->setMinimumHeight(54);
     _gameChatTranscript->setMaximumBlockCount(200);
@@ -688,14 +714,16 @@ OctiMainWindow::OctiMainWindow(
     chatLayout->addWidget(_gameChatTranscript, 1);
 
     QHBoxLayout *chatInputRow = new QHBoxLayout();
-    chatInputRow->setSpacing(4);
+    chatInputRow->setSpacing(5);
     _chatScopeCombo = new QComboBox(_chatBox);
+    _chatScopeCombo->setObjectName("chatScopeCombo");
     _chatScopeCombo->addItem("ALL", "ALL");
     _chatScopeCombo->addItem("TEAM", "TEAM");
     _gameChatInput = new QLineEdit(_chatBox);
+    _gameChatInput->setObjectName("gameChatInput");
     _gameChatInput->setPlaceholderText("Send table message...");
     _sendGameChatBtn = new QPushButton("Send", _chatBox);
-    _sendGameChatBtn->setStyleSheet(compactBtnCss);
+    _sendGameChatBtn->setObjectName("sendGameChatBtn");
     chatInputRow->addWidget(_chatScopeCombo);
     chatInputRow->addWidget(_gameChatInput, 1);
     chatInputRow->addWidget(_sendGameChatBtn);
@@ -705,28 +733,28 @@ OctiMainWindow::OctiMainWindow(
     _rightLayout->addWidget(_chatBox, 1);
 
     /* 3. Bottom Card: Compact Match Actions (stretch = 0) */
-    _actionsBox = new QGroupBox("Match Actions", rightSide);
+    _actionsBox = new QGroupBox("", rightSide);
     _actionsBox->setObjectName("actionsBox");
     QVBoxLayout *actLayout = new QVBoxLayout(_actionsBox);
-    actLayout->setContentsMargins(6, 4, 6, 6);
+    actLayout->setContentsMargins(8, 6, 8, 6);
     actLayout->setSpacing(4);
 
     QHBoxLayout *actRow = new QHBoxLayout();
     actRow->setSpacing(4);
     _sidebarNewGameBtn = new QPushButton("New Game...", _actionsBox);
-    _sidebarNewGameBtn->setStyleSheet(compactBtnCss);
+    _sidebarNewGameBtn->setObjectName("sidebarNewGameBtn");
     _offerDrawBtn = new QPushButton("Draw", _actionsBox);
-    _offerDrawBtn->setStyleSheet(compactBtnCss);
+    _offerDrawBtn->setObjectName("offerDrawBtn");
     _pauseResumeBtn = new QPushButton("Pause", _actionsBox);
-    _pauseResumeBtn->setStyleSheet(compactBtnCss);
+    _pauseResumeBtn->setObjectName("pauseResumeBtn");
     _undoRequestBtn = new QPushButton("Undo", _actionsBox);
-    _undoRequestBtn->setStyleSheet(compactBtnCss);
+    _undoRequestBtn->setObjectName("undoRequestBtn");
     _claimForfeitBtn = new QPushButton("Forfeit", _actionsBox);
-    _claimForfeitBtn->setStyleSheet(compactBtnCss);
+    _claimForfeitBtn->setObjectName("claimForfeitBtn");
     _resignBtn = new QPushButton("Resign", _actionsBox);
-    _resignBtn->setStyleSheet(compactBtnCss);
+    _resignBtn->setObjectName("resignBtn");
     _moderationBtn = new QPushButton("Moderation", _actionsBox);
-    _moderationBtn->setStyleSheet(compactBtnCss);
+    _moderationBtn->setObjectName("moderationBtn");
     _moderationBtn->setVisible(false);
     actRow->addWidget(_sidebarNewGameBtn);
     actRow->addWidget(_offerDrawBtn);
@@ -745,8 +773,14 @@ OctiMainWindow::OctiMainWindow(
 
     _lobbyView = new LobbyView(_netClient.get(), _theme, _viewStack);
     _lobbyView->setOnChatAppendedCallback([this](const LobbyChatEntry &entry) {
-        if (_boardLobbyChatTranscript) {
-            _boardLobbyChatTranscript->appendPlainText(LobbyView::formatChatMessageLine(entry));
+        if (_boardLobbyChatTranscript && _lobbyView) {
+            _boardLobbyChatTranscript->appendHtml(
+                LobbyView::formatChatMessageHtml(
+                    entry,
+                    _profile.uuid,
+                    _profile.handle,
+                    isWebLightSurfaceActive(),
+                    _lobbyView->isEntryFromRobot(entry)));
             if (_boardLobbyChatTranscript->verticalScrollBar()) {
                 _boardLobbyChatTranscript->verticalScrollBar()->setValue(
                     _boardLobbyChatTranscript->verticalScrollBar()->maximum());
@@ -1301,6 +1335,8 @@ void OctiMainWindow::applyAuthenticatedProfile(const PlayerProfileInfo &profile)
             _inOnlineRoom, _onlineRoomId, _onlineViewerSeat, _onlineGameView);
         _lobbyView->updateAuthUiState();
     }
+    syncBoardLobbyChatTranscript();
+    rebuildGameChatTranscripts();
     updateMatchActionsVisibility();
 }
 
@@ -1432,7 +1468,7 @@ void OctiMainWindow::toggleTheme()
 void OctiMainWindow::setTheme(ThemeId theme)
 {
     _theme = theme;
-    setStyleSheet(buildAppStyleSheet(_theme));
+    applyTabletopWebStyles();
     if (_boardCanvas) {
         _boardCanvas->setTheme(_theme);
     }
@@ -1441,6 +1477,7 @@ void OctiMainWindow::setTheme(ThemeId theme)
     }
     if (_lobbyView) {
         _lobbyView->setTheme(_theme);
+        _lobbyView->setWebLightSurfaceOverride(_webLightSurfaceOverride);
     }
     if (_themeToggleBtn) {
         _themeToggleBtn->setText("Theme: " + themeDisplayName(_theme));
@@ -1453,6 +1490,11 @@ void OctiMainWindow::setTheme(ThemeId theme)
     _configStore.preferences().theme = _theme;
     std::string ignoredErr;
     _configStore.save(ignoredErr);
+    syncBoardLobbyChatTranscript();
+    rebuildGameChatTranscripts();
+    if (_boardChatZoomDialog) {
+        applyZoomChatDialogStyle(_boardChatZoomDialog);
+    }
     refreshMoveHistoryAndFenUi();
     setupMenuBar();
     updateStartMatchOverlay();
@@ -1461,6 +1503,182 @@ void OctiMainWindow::setTheme(ThemeId theme)
 ThemeId OctiMainWindow::theme() const
 {
     return _theme;
+}
+
+void OctiMainWindow::setWebLightSurfaceOverride(std::optional<bool> lightOverride)
+{
+    _webLightSurfaceOverride = lightOverride;
+    applyTabletopWebStyles();
+    if (_lobbyView) {
+        _lobbyView->setWebLightSurfaceOverride(_webLightSurfaceOverride);
+    }
+    syncBoardLobbyChatTranscript();
+    rebuildGameChatTranscripts();
+    if (_boardChatZoomDialog) {
+        applyZoomChatDialogStyle(_boardChatZoomDialog);
+    }
+    refreshMoveHistoryAndFenUi();
+}
+
+bool OctiMainWindow::isWebLightSurfaceActive() const
+{
+    if (_webLightSurfaceOverride.has_value()) {
+        return *_webLightSurfaceOverride;
+    }
+    return isLightThemePalette(paletteForTheme(_theme));
+}
+
+void OctiMainWindow::applyTabletopWebStyles()
+{
+    const bool lightSurface = isWebLightSurfaceActive();
+    const WebChatStylePalette ws = webChatStylePalette(lightSurface);
+
+    QString surfaceOverrideCss;
+    if (_webLightSurfaceOverride.has_value()) {
+        surfaceOverrideCss = QString(
+            "\nQWidget#mainWindowCentral, QWidget#boardPageWidget, QWidget#tabletopRightSide { "
+            "background-color: %1; color: %2; }\n")
+            .arg(ws.pageBg, ws.messageBody);
+    }
+
+    QString cardsCss = QString(
+        "\nQGroupBox#statusBox, QGroupBox#historyBox, QGroupBox#waitingRoomBannerBox, "
+        "QGroupBox#proposalBannerBox, QGroupBox#boardLobbyChatBox, QGroupBox#chatBox, "
+        "QGroupBox#actionsBox { "
+        "background-color: %1; border: 1px solid %2; border-radius: 10px; "
+        "margin-top: 0px; padding-top: 0px; }\n"
+        "QLabel#statusHeaderTitleLabel, QLabel#historyTitleLabel, "
+        "QLabel#waitingRoomTitleLabel, QLabel#proposalBannerTitleLabel, "
+        "QLabel#boardLobbyChatTitleLabel, QLabel#tableChatTitleLabel { "
+        "color: %3; font-size: 13px; font-weight: 700; }\n"
+        "QLabel#boardLobbyChatSubLabel, QLabel#matchModeLabel, QLabel#vcrPlyLabel { "
+        "color: %4; font-size: 11px; font-weight: 600; }\n"
+        "QLabel#waitingRoomBannerLabel, QLabel#proposalBannerLabel { "
+        "color: %5; font-size: 12px; }\n"
+        "QLabel#statusRoomBadgeLabel { color: %6; font-size: 11px; font-weight: 700; }\n"
+        "QLabel#statusTtlPillLabel { "
+        "background-color: #0F172A; color: #FDE047; border: 1px solid #C8A253; "
+        "border-radius: 4px; padding: 1px 5px; font-size: 10px; font-weight: 700; }\n"
+        "QPlainTextEdit#boardLobbyChatTranscript, QPlainTextEdit#gameChatTranscript, "
+        "QListWidget#moveHistoryList { "
+        "background-color: %7; color: %5; border: 1px solid %2; border-radius: 6px; "
+        "padding: 4px; font-size: 12px; }\n"
+        "QListWidget#moveHistoryList { font-family: monospace; font-size: 11px; }\n"
+        "QLineEdit#boardLobbyChatInput, QLineEdit#gameChatInput, QComboBox#chatScopeCombo { "
+        "background-color: %7; color: %5; border: 1px solid %8; border-radius: 5px; "
+        "padding: 4px 6px; font-size: 12px; }\n")
+        .arg(ws.cardBg,
+             ws.cardBorder,
+             ws.headerTitle,
+             ws.headerSubtitle,
+             ws.messageBody,
+             ws.peerHandle,
+             ws.wellBg,
+             ws.inputBorder);
+
+    QString buttonsCss = QString(
+        "QPushButton#sidebarNewGameBtn, QPushButton#boardLobbyChatSendBtn, "
+        "QPushButton#sendGameChatBtn, QPushButton#acceptProposalBtn { "
+        "background-color: %1; color: %2; border: 1px solid %1; border-radius: 5px; "
+        "padding: 4px 8px; font-size: 11px; font-weight: 700; }\n"
+        "QPushButton#sidebarNewGameBtn:hover, QPushButton#boardLobbyChatSendBtn:hover, "
+        "QPushButton#sendGameChatBtn:hover, QPushButton#acceptProposalBtn:hover { "
+        "background-color: #D4B064; color: #0B0F17; }\n"
+        "QPushButton#sidebarNewGameBtn:disabled, QPushButton#boardLobbyChatSendBtn:disabled, "
+        "QPushButton#sendGameChatBtn:disabled, QPushButton#acceptProposalBtn:disabled { "
+        "background-color: %3; color: %6; border-color: %4; }\n"
+        "QPushButton#exportNotationBtn, QPushButton#zoomChatBtn { "
+        "background-color: %3; color: %1; border: 1px solid %1; border-radius: 5px; "
+        "padding: 2px 8px; font-size: 11px; font-weight: 700; }\n"
+        "QPushButton#exportNotationBtn:hover, QPushButton#zoomChatBtn:hover { "
+        "background-color: %1; color: %2; }\n"
+        "QPushButton#vcrFirstBtn, QPushButton#vcrPrevBtn, QPushButton#vcrNextBtn, "
+        "QPushButton#vcrLastBtn, QPushButton#offerDrawBtn, QPushButton#pauseResumeBtn, "
+        "QPushButton#undoRequestBtn, QPushButton#claimForfeitBtn, "
+        "QPushButton#moderationBtn, QPushButton#declineProposalBtn, "
+        "QPushButton#leaveWaitingTableBtn { "
+        "background-color: %3; color: %5; border: 1px solid %4; border-radius: 5px; "
+        "padding: 4px 6px; font-size: 11px; font-weight: 600; }\n"
+        "QPushButton#vcrFirstBtn:hover, QPushButton#vcrPrevBtn:hover, "
+        "QPushButton#vcrNextBtn:hover, QPushButton#vcrLastBtn:hover, "
+        "QPushButton#offerDrawBtn:hover, QPushButton#pauseResumeBtn:hover, "
+        "QPushButton#undoRequestBtn:hover, QPushButton#claimForfeitBtn:hover, "
+        "QPushButton#moderationBtn:hover, QPushButton#declineProposalBtn:hover, "
+        "QPushButton#leaveWaitingTableBtn:hover { border-color: %1; }\n"
+        "QPushButton#vcrFirstBtn:disabled, QPushButton#vcrPrevBtn:disabled, "
+        "QPushButton#vcrNextBtn:disabled, QPushButton#vcrLastBtn:disabled, "
+        "QPushButton#offerDrawBtn:disabled, QPushButton#pauseResumeBtn:disabled, "
+        "QPushButton#undoRequestBtn:disabled, QPushButton#claimForfeitBtn:disabled, "
+        "QPushButton#moderationBtn:disabled { color: %6; border-color: %4; }\n"
+        "QPushButton#resignBtn, QPushButton#tableChatLeaveBtn { "
+        "background-color: %3; color: %8; border: 1px solid %7; border-radius: 5px; "
+        "padding: 4px 6px; font-size: 11px; font-weight: 700; }\n"
+        "QPushButton#resignBtn:hover, QPushButton#tableChatLeaveBtn:hover { "
+        "background-color: %7; color: #FFFFFF; }\n"
+        "QPushButton#resignBtn:disabled, QPushButton#tableChatLeaveBtn:disabled { "
+        "color: %6; border-color: %4; }\n"
+        "QPushButton#tableChatPurgeBtn, QPushButton#deleteWaitingTableBtn { "
+        "background-color: %7; color: #FFFFFF; border: 1px solid %7; border-radius: 5px; "
+        "padding: 3px 7px; font-size: 11px; font-weight: 700; }\n"
+        "QPushButton#sitSeatBtn { "
+        "background-color: #2563EB; color: #FFFFFF; border: 1px solid #2563EB; "
+        "border-radius: 5px; padding: 4px 8px; font-size: 11px; font-weight: 700; }\n")
+        .arg(ws.primaryCtaBg,
+             ws.primaryCtaText,
+             ws.secondaryBtnBg,
+             ws.secondaryBtnBorder,
+             ws.secondaryBtnText,
+             ws.headerSubtitle,
+             ws.dangerRed,
+             ws.dangerOutlineText);
+
+    setStyleSheet(buildAppStyleSheet(_theme) + surfaceOverrideCss + cardsCss + buttonsCss);
+}
+
+void OctiMainWindow::applyZoomChatDialogStyle(QDialog *dlg) const
+{
+    if (!dlg) {
+        return;
+    }
+    const WebChatStylePalette ws = webChatStylePalette(isWebLightSurfaceActive());
+    QString css = QString(
+        "QDialog#boardChatZoomDialog {"
+        "  background-color: %1;"
+        "  border: 2px solid #C8A253;"
+        "  border-radius: 10px;"
+        "}"
+        "QLabel#boardChatZoomTitleLabel {"
+        "  color: %2; font-size: 14px; font-weight: 700; background: transparent; border: none;"
+        "}"
+        "QPlainTextEdit#boardChatZoomTranscript {"
+        "  background-color: %3; color: %4; border: 1px solid %5; border-radius: 6px;"
+        "  padding: 6px; font-size: 13px;"
+        "}"
+        "QLineEdit#boardChatZoomInput, QComboBox#boardChatZoomScopeCombo {"
+        "  background-color: %3; color: %4; border: 1px solid %6; border-radius: 5px;"
+        "  padding: 5px 8px; font-size: 12px;"
+        "}"
+        "QPushButton#boardChatZoomSendBtn {"
+        "  background-color: %7; color: %8; border: 1px solid %7; border-radius: 5px;"
+        "  padding: 5px 14px; font-size: 12px; font-weight: 700;"
+        "}"
+        "QPushButton#boardChatZoomCloseBtn {"
+        "  background-color: %9; color: %4; border: 1px solid %6; border-radius: 5px;"
+        "  padding: 3px 10px; font-size: 11px; font-weight: 600;"
+        "}"
+        "QPushButton#boardChatZoomCloseBtn:hover {"
+        "  background-color: #DC2626; color: #FFFFFF; border-color: #DC2626;"
+        "}")
+        .arg(ws.cardBg,
+             ws.headerTitle,
+             ws.wellBg,
+             ws.messageBody,
+             ws.cardBorder,
+             ws.inputBorder,
+             ws.primaryCtaBg,
+             ws.primaryCtaText,
+             ws.secondaryBtnBg);
+    dlg->setStyleSheet(css);
 }
 
 void OctiMainWindow::showSplashAboutDialog()
@@ -2015,9 +2233,16 @@ void OctiMainWindow::syncBoardLobbyChatTranscript()
     if (!_boardLobbyChatTranscript || !_lobbyView) {
         return;
     }
+    const bool lightSurface = isWebLightSurfaceActive();
     _boardLobbyChatTranscript->clear();
     for (const auto &c : _lobbyView->chatMessages()) {
-        _boardLobbyChatTranscript->appendPlainText(LobbyView::formatChatMessageLine(c));
+        _boardLobbyChatTranscript->appendHtml(
+            LobbyView::formatChatMessageHtml(
+                c,
+                _profile.uuid,
+                _profile.handle,
+                lightSurface,
+                _lobbyView->isEntryFromRobot(c)));
     }
     if (_boardLobbyChatTranscript->verticalScrollBar()) {
         _boardLobbyChatTranscript->verticalScrollBar()->setValue(
@@ -2249,7 +2474,14 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
             game->move(botMove);
             lastBotMoveStr = botMove;
             movedAny = true;
-            _soundSynth.triggerCue(SoundCue::POD_STEP);
+            if (!game->isGameOver()) {
+                _soundSynth.triggerCue(
+                    classifyMoveNotationSoundCue(
+                        botMove,
+                        game->useEdgelessBoard(),
+                        _board.getBoardWidth(),
+                        _board.getBoardHeight()));
+            }
 
             OctiPlyMetadata plyMeta;
             plyMeta.isAiMove = true;
@@ -2393,11 +2625,12 @@ ApiResult<CreateTableResponse> OctiMainWindow::createAndEnterOnlineTable(
     _lastOrientedViewerSeat = 0;
     _lastAppliedGameEventSeq = 0;
     _appliedOnlineMoves.clear();
+    _hasInitialOnlineRoomSync = false;
+    _lastLocalSubmittedOnlineMove.clear();
     _gameChatLines.clear();
+    _gameChatEntries.clear();
     _lastGameChatSeq = 0;
-    if (_gameChatTranscript) {
-        _gameChatTranscript->clear();
-    }
+    rebuildGameChatTranscripts();
 
     refreshOnlineGameView();
     _netClient->startGameEventStream(
@@ -2445,11 +2678,12 @@ ApiResult<JoinTableResponse> OctiMainWindow::joinAndEnterOnlineTable(
     _lastOrientedViewerSeat = 0;
     _lastAppliedGameEventSeq = 0;
     _appliedOnlineMoves.clear();
+    _hasInitialOnlineRoomSync = false;
+    _lastLocalSubmittedOnlineMove.clear();
     _gameChatLines.clear();
+    _gameChatEntries.clear();
     _lastGameChatSeq = 0;
-    if (_gameChatTranscript) {
-        _gameChatTranscript->clear();
-    }
+    rebuildGameChatTranscripts();
 
     refreshOnlineGameView();
     _netClient->startGameEventStream(
@@ -2496,11 +2730,12 @@ ApiResult<bool> OctiMainWindow::observeOnlineTable(
     _lastOrientedViewerSeat = 0;
     _lastAppliedGameEventSeq = 0;
     _appliedOnlineMoves.clear();
+    _hasInitialOnlineRoomSync = false;
+    _lastLocalSubmittedOnlineMove.clear();
     _gameChatLines.clear();
+    _gameChatEntries.clear();
     _lastGameChatSeq = 0;
-    if (_gameChatTranscript) {
-        _gameChatTranscript->clear();
-    }
+    rebuildGameChatTranscripts();
 
     refreshOnlineGameView();
     _netClient->startGameEventStream(
@@ -2586,9 +2821,13 @@ void OctiMainWindow::leaveOnlineRoom()
     _lastOrientedViewerSeat = 0;
     _onlineGameView = GameViewData();
     _appliedOnlineMoves.clear();
+    _hasInitialOnlineRoomSync = false;
+    _lastLocalSubmittedOnlineMove.clear();
     _gameChatLines.clear();
+    _gameChatEntries.clear();
     _lastGameChatSeq = 0;
     _lastAppliedGameEventSeq = 0;
+    rebuildGameChatTranscripts();
     _gameOverDialogShownForCurrentMatch = false;
     if (_boardCanvas) {
         _boardCanvas->setInteractiveEnabled(!_awaitingMatchStart);
@@ -2718,11 +2957,12 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
         _lastOrientedViewerSeat = 0;
         _lastAppliedGameEventSeq = 0;
         _appliedOnlineMoves.clear();
+        _hasInitialOnlineRoomSync = false;
+        _lastLocalSubmittedOnlineMove.clear();
         _gameChatLines.clear();
+        _gameChatEntries.clear();
         _lastGameChatSeq = 0;
-        if (_gameChatTranscript) {
-            _gameChatTranscript->clear();
-        }
+        rebuildGameChatTranscripts();
         _gameOverDialogShownForCurrentMatch = false;
         refreshOnlineGameView();
         if (_netClient) {
@@ -2738,10 +2978,14 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
     _awaitingMatchStart = false;
     if (!view.roomId.empty()) {
         _inOnlineRoom = true;
-        if (_onlineRoomId.empty()) {
+        if (_onlineRoomId != view.roomId) {
             _onlineRoomId = view.roomId;
+            _hasInitialOnlineRoomSync = false;
+            _lastLocalSubmittedOnlineMove.clear();
         }
     }
+    bool hadInitialSync = _hasInitialOnlineRoomSync;
+    _hasInitialOnlineRoomSync = true;
     updateStartMatchOverlay();
     if (view.phase != "FINISHED") {
         _gameOverDialogShownForCurrentMatch = false;
@@ -2839,6 +3083,29 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
             }
             break;
         }
+    }
+
+    if (hadInitialSync &&
+        _appliedOnlineMoves.size() > prevMovesCount &&
+        !latestOnlineMoveStr.empty()) {
+        bool isOwnEcho =
+            !_lastLocalSubmittedOnlineMove.empty() &&
+            latestOnlineMoveStr == _lastLocalSubmittedOnlineMove;
+        if (isOwnEcho) {
+            _lastLocalSubmittedOnlineMove.clear();
+        } else if (view.phase != "FINISHED" &&
+                   !(_board.getGame() && _board.getGame()->isGameOver())) {
+            _soundSynth.triggerCue(
+                classifyMoveNotationSoundCue(
+                    latestOnlineMoveStr,
+                    view.edgeless,
+                    _board.getBoardWidth(),
+                    _board.getBoardHeight()));
+        }
+    } else if (!_lastLocalSubmittedOnlineMove.empty() &&
+               !view.moves.empty() &&
+               view.moves.back() == _lastLocalSubmittedOnlineMove) {
+        _lastLocalSubmittedOnlineMove.clear();
     }
 
     for (std::size_t i = 0; i < view.seats.size(); ++i) {
@@ -2946,6 +3213,9 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
         std::string handle = j.value("handle", "Player");
         std::string text = j.value("text", "");
         std::string playerUuid = j.value("player_uuid", "");
+        std::int64_t atMs = j.value(
+            "created_at_ms",
+            j.value("at_ms", static_cast<std::int64_t>(QDateTime::currentDateTimeUtc().toMSecsSinceEpoch())));
         std::string line = "[" + scope + "] " + handle + ": " + text;
         if (seq > 0 && seq == _lastGameChatSeq) {
             return;
@@ -2955,19 +3225,16 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
             return;
         }
         _gameChatLines.push_back(line);
-        if (_gameChatTranscript) {
-            _gameChatTranscript->appendPlainText(
-                QString::fromStdString(line));
-            _gameChatTranscript->verticalScrollBar()->setValue(
-                _gameChatTranscript->verticalScrollBar()->maximum());
-        }
-        if (_boardChatZoomDialog) {
-            QPlainTextEdit *zt = _boardChatZoomDialog->findChild<QPlainTextEdit *>("boardChatZoomTranscript");
-            if (zt) {
-                zt->appendPlainText(QString::fromStdString(line));
-                zt->verticalScrollBar()->setValue(zt->verticalScrollBar()->maximum());
-            }
-        }
+        GameChatEntry entry;
+        entry.atMs = atMs;
+        entry.scope = scope;
+        entry.playerUuid = playerUuid;
+        entry.handle = handle;
+        entry.text = text;
+        entry.isSystemEvent = false;
+        entry.isRobot = isOnlineSeatRobot(playerUuid, handle);
+        entry.rawLine = line;
+        appendGameChatEntry(entry);
         return;
     }
 
@@ -2983,10 +3250,9 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
             _lastAppliedGameEventSeq = 0;
             _appliedOnlineMoves.clear();
             _gameChatLines.clear();
+            _gameChatEntries.clear();
             _lastGameChatSeq = 0;
-            if (_gameChatTranscript) {
-                _gameChatTranscript->clear();
-            }
+            rebuildGameChatTranscripts();
             _gameOverDialogShownForCurrentMatch = false;
             refreshOnlineGameView();
             if (_netClient) {
@@ -3054,18 +3320,23 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
 
     if (!sysMsg.empty()) {
         _gameChatLines.push_back(sysMsg);
-        if (_gameChatTranscript) {
-            _gameChatTranscript->appendPlainText(QString::fromStdString(sysMsg));
-            _gameChatTranscript->verticalScrollBar()->setValue(
-                _gameChatTranscript->verticalScrollBar()->maximum());
+        std::string bodyText = sysMsg;
+        const std::string sysPrefix = "[System] ";
+        if (bodyText.rfind(sysPrefix, 0) == 0) {
+            bodyText = bodyText.substr(sysPrefix.size());
         }
-        if (_boardChatZoomDialog) {
-            QPlainTextEdit *zt = _boardChatZoomDialog->findChild<QPlainTextEdit *>("boardChatZoomTranscript");
-            if (zt) {
-                zt->appendPlainText(QString::fromStdString(sysMsg));
-                zt->verticalScrollBar()->setValue(zt->verticalScrollBar()->maximum());
-            }
-        }
+        GameChatEntry entry;
+        entry.atMs = j.is_object()
+            ? j.value("created_at_ms",
+                      j.value("at_ms", static_cast<std::int64_t>(QDateTime::currentDateTimeUtc().toMSecsSinceEpoch())))
+            : static_cast<std::int64_t>(QDateTime::currentDateTimeUtc().toMSecsSinceEpoch());
+        entry.scope = "ALL";
+        entry.handle = "[System]";
+        entry.text = bodyText;
+        entry.isSystemEvent = true;
+        entry.isRobot = false;
+        entry.rawLine = sysMsg;
+        appendGameChatEntry(entry);
     }
 
     if (ev.event == "MOVE" || ev.event == "UNDO_APPLIED") {
@@ -3123,11 +3394,14 @@ void OctiMainWindow::handleLocalOrOnlineMoveCommitted(
             refreshOnlineGameView();
             return;
         }
+        _lastLocalSubmittedOnlineMove = moveNotation;
         auto res = _netClient->submitMove(_onlineRoomId, moveNotation);
         if (res.ok) {
             std::string appliedMove = res.data.move.empty() ? moveNotation : res.data.move;
+            _lastLocalSubmittedOnlineMove = appliedMove;
             _appliedOnlineMoves.push_back(appliedMove);
         } else {
+            _lastLocalSubmittedOnlineMove.clear();
             if (_matchTurnStatusLabel) {
                 _matchTurnStatusLabel->setText(
                     QString::fromStdString(res.errorMessage.empty() ? "Move rejected" : res.errorMessage));
@@ -3167,9 +3441,159 @@ void OctiMainWindow::handleLocalOrOnlineMoveCommitted(
 
 /* ---- Board Chat & Mutual Proposals ---- */
 
+bool OctiMainWindow::isOnlineSeatRobot(const std::string &playerUuid,
+                                       const std::string &handle) const
+{
+    QString raw = QString::fromStdString(handle);
+    if (raw.contains("[BOT]", Qt::CaseInsensitive)) {
+        return true;
+    }
+    QString norm = raw.startsWith("@") ? raw.mid(1) : raw;
+    for (const auto &s : _onlineGameView.seats) {
+        if (!s.isRobot) {
+            continue;
+        }
+        if (!playerUuid.empty() && !s.playerUuid.empty() &&
+            playerUuid == s.playerUuid) {
+            return true;
+        }
+        QString sh = QString::fromStdString(s.handle);
+        if (sh.startsWith("@")) {
+            sh = sh.mid(1);
+        }
+        if (!norm.isEmpty() && !sh.isEmpty() &&
+            norm.compare(sh, Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+QString OctiMainWindow::formatGameChatEntryHtml(const GameChatEntry &entry,
+                                                const std::string &viewerUuid,
+                                                const std::string &viewerHandle,
+                                                bool lightSurface)
+{
+    const WebChatStylePalette ws = webChatStylePalette(lightSurface);
+    QString prefixEsc = LobbyView::formatChatTimestamp(entry.atMs).toHtmlEscaped();
+
+    QString teamBadgeHtml;
+    if (!entry.isSystemEvent && entry.scope == "TEAM") {
+        teamBadgeHtml = QString(
+            "<span style=\"color:%1;font-weight:700;\">[TEAM] </span>")
+            .arg(ws.teamScopeBadge);
+    }
+
+    if (entry.isSystemEvent) {
+        QString bodyEsc = QString::fromStdString(entry.text).toHtmlEscaped();
+        return QString(
+            "<span style=\"font-family:monospace;font-size:11px;color:%1;\">%2</span>"
+            "<span style=\"color:%3;font-weight:700;\">[System]</span> "
+            "<span style=\"color:%4;font-style:italic;\">%5</span>")
+            .arg(ws.timestamp, prefixEsc, ws.systemTag, ws.eventBody, bodyEsc);
+    }
+
+    QString dispHandle = QString::fromStdString(entry.handle);
+    if (dispHandle.isEmpty()) {
+        dispHandle = "@Player";
+    } else if (!dispHandle.startsWith("@")) {
+        dispHandle.prepend("@");
+    }
+
+    bool isBot = entry.isRobot || dispHandle.contains("[BOT]", Qt::CaseInsensitive);
+    if (isBot && !dispHandle.contains("[BOT]", Qt::CaseInsensitive)) {
+        dispHandle += " [BOT]";
+    }
+
+    QString senderNorm = dispHandle.startsWith("@") ? dispHandle.mid(1) : dispHandle;
+    QString viewerNorm = QString::fromStdString(viewerHandle);
+    if (viewerNorm.startsWith("@")) {
+        viewerNorm = viewerNorm.mid(1);
+    }
+
+    bool isSelf = (entry.scope == "LOCAL") ||
+                  (!viewerUuid.empty() && !entry.playerUuid.empty() &&
+                   entry.playerUuid == viewerUuid) ||
+                  (!viewerNorm.isEmpty() && !senderNorm.isEmpty() &&
+                   senderNorm.compare(viewerNorm, Qt::CaseInsensitive) == 0);
+
+    QString handleColor = isSelf ? ws.selfHandle
+                                 : (isBot ? ws.botHandle : ws.peerHandle);
+    QString handleEsc = dispHandle.toHtmlEscaped();
+    QString bodyEsc = QString::fromStdString(entry.text).toHtmlEscaped();
+
+    return QString(
+        "<span style=\"font-family:monospace;font-size:11px;color:%1;\">%2</span>"
+        "%3"
+        "<span style=\"color:%4;font-weight:700;\">%5:</span> "
+        "<span style=\"color:%6;\">%7</span>")
+        .arg(ws.timestamp,
+             prefixEsc,
+             teamBadgeHtml,
+             handleColor,
+             handleEsc,
+             ws.messageBody,
+             bodyEsc);
+}
+
+void OctiMainWindow::appendGameChatEntry(const GameChatEntry &entry)
+{
+    _gameChatEntries.push_back(entry);
+    const QString html = formatGameChatEntryHtml(
+        entry, _profile.uuid, _profile.handle, isWebLightSurfaceActive());
+    if (_gameChatTranscript) {
+        _gameChatTranscript->appendHtml(html);
+        if (_gameChatTranscript->verticalScrollBar()) {
+            _gameChatTranscript->verticalScrollBar()->setValue(
+                _gameChatTranscript->verticalScrollBar()->maximum());
+        }
+    }
+    if (_boardChatZoomDialog) {
+        QPlainTextEdit *zt = _boardChatZoomDialog->findChild<QPlainTextEdit *>("boardChatZoomTranscript");
+        if (zt) {
+            zt->appendHtml(html);
+            if (zt->verticalScrollBar()) {
+                zt->verticalScrollBar()->setValue(zt->verticalScrollBar()->maximum());
+            }
+        }
+    }
+}
+
+void OctiMainWindow::rebuildGameChatTranscripts()
+{
+    const bool lightSurface = isWebLightSurfaceActive();
+    if (_gameChatTranscript) {
+        _gameChatTranscript->clear();
+        for (const auto &entry : _gameChatEntries) {
+            _gameChatTranscript->appendHtml(
+                formatGameChatEntryHtml(
+                    entry, _profile.uuid, _profile.handle, lightSurface));
+        }
+        if (_gameChatTranscript->verticalScrollBar()) {
+            _gameChatTranscript->verticalScrollBar()->setValue(
+                _gameChatTranscript->verticalScrollBar()->maximum());
+        }
+    }
+    if (_boardChatZoomDialog) {
+        QPlainTextEdit *zt = _boardChatZoomDialog->findChild<QPlainTextEdit *>("boardChatZoomTranscript");
+        if (zt) {
+            zt->clear();
+            for (const auto &entry : _gameChatEntries) {
+                zt->appendHtml(
+                    formatGameChatEntryHtml(
+                        entry, _profile.uuid, _profile.handle, lightSurface));
+            }
+            if (zt->verticalScrollBar()) {
+                zt->verticalScrollBar()->setValue(zt->verticalScrollBar()->maximum());
+            }
+        }
+    }
+}
+
 void OctiMainWindow::openBoardChatZoomDialog()
 {
     if (_boardChatZoomDialog) {
+        applyZoomChatDialogStyle(_boardChatZoomDialog);
         _boardChatZoomDialog->show();
         _boardChatZoomDialog->raise();
         _boardChatZoomDialog->activateWindow();
@@ -3180,13 +3604,6 @@ void OctiMainWindow::openBoardChatZoomDialog()
     dlg->setObjectName("boardChatZoomDialog");
     dlg->setMinimumSize(540, 420);
     dlg->resize(560, 440);
-    dlg->setStyleSheet(
-        "QDialog#boardChatZoomDialog {"
-        "  background-color: #161D26;"
-        "  border: 2px solid #C8A253;"
-        "  border-radius: 8px;"
-        "}"
-    );
 
     QVBoxLayout *layout = new QVBoxLayout(dlg);
     layout->setContentsMargins(12, 12, 12, 12);
@@ -3195,14 +3612,13 @@ void OctiMainWindow::openBoardChatZoomDialog()
     // Header bar
     QHBoxLayout *headerRow = new QHBoxLayout();
     QLabel *titleLabel = new QLabel("Table Chat", dlg);
-    titleLabel->setStyleSheet("color: #E6EDF3; font-size: 14px; font-weight: bold;");
+    titleLabel->setObjectName("boardChatZoomTitleLabel");
     headerRow->addWidget(titleLabel);
 
     headerRow->addStretch();
 
     QPushButton *btnClose = new QPushButton("Close [Esc]", dlg);
-    btnClose->setStyleSheet("QPushButton { background: #30363D; color: #F0F6FC; border-radius: 4px; padding: 2px 8px; font-size: 11px; }"
-                            "QPushButton:hover { background: #8B0000; }");
+    btnClose->setObjectName("boardChatZoomCloseBtn");
 
     headerRow->addWidget(btnClose);
     layout->addLayout(headerRow);
@@ -3212,10 +3628,16 @@ void OctiMainWindow::openBoardChatZoomDialog()
     zoomTranscript->setObjectName("boardChatZoomTranscript");
     zoomTranscript->setReadOnly(true);
     zoomTranscript->setMaximumBlockCount(500);
-    for (const auto &line : _gameChatLines) {
-        zoomTranscript->appendPlainText(QString::fromStdString(line));
+    const bool lightSurface = isWebLightSurfaceActive();
+    for (const auto &entry : _gameChatEntries) {
+        zoomTranscript->appendHtml(
+            formatGameChatEntryHtml(
+                entry, _profile.uuid, _profile.handle, lightSurface));
     }
-    zoomTranscript->verticalScrollBar()->setValue(zoomTranscript->verticalScrollBar()->maximum());
+    if (zoomTranscript->verticalScrollBar()) {
+        zoomTranscript->verticalScrollBar()->setValue(
+            zoomTranscript->verticalScrollBar()->maximum());
+    }
     layout->addWidget(zoomTranscript, 1);
 
     // Input row
@@ -3223,7 +3645,9 @@ void OctiMainWindow::openBoardChatZoomDialog()
     QComboBox *scopeCombo = new QComboBox(dlg);
     scopeCombo->setObjectName("boardChatZoomScopeCombo");
     scopeCombo->addItem("ALL", "ALL");
-    scopeCombo->addItem("TEAM", "TEAM");
+    if (_onlineGameView.mode == "4P" && _onlineViewerSeat > 0) {
+        scopeCombo->addItem("TEAM", "TEAM");
+    }
 
     QLineEdit *inputEdit = new QLineEdit(dlg);
     inputEdit->setObjectName("boardChatZoomInput");
@@ -3237,7 +3661,9 @@ void OctiMainWindow::openBoardChatZoomDialog()
     inputRow->addWidget(sendBtn);
     layout->addLayout(inputRow);
 
-    auto doSend = [this, scopeCombo, inputEdit, zoomTranscript]() {
+    applyZoomChatDialogStyle(dlg);
+
+    auto doSend = [this, scopeCombo, inputEdit]() {
         QString text = inputEdit->text().trimmed();
         if (text.isEmpty()) {
             return;
@@ -3245,11 +3671,6 @@ void OctiMainWindow::openBoardChatZoomDialog()
         std::string scope = scopeCombo->currentText().toStdString();
         sendGameChatMessage(scope, text.toStdString());
         inputEdit->clear();
-        zoomTranscript->clear();
-        for (const auto &line : _gameChatLines) {
-            zoomTranscript->appendPlainText(QString::fromStdString(line));
-        }
-        zoomTranscript->verticalScrollBar()->setValue(zoomTranscript->verticalScrollBar()->maximum());
     };
 
     QObject::connect(sendBtn, &QPushButton::clicked, dlg, doSend);
@@ -3269,6 +3690,8 @@ bool OctiMainWindow::sendGameChatMessage(const std::string &scope,
     if (text.empty()) {
         return false;
     }
+    const std::int64_t nowMs = static_cast<std::int64_t>(
+        QDateTime::currentDateTimeUtc().toMSecsSinceEpoch());
     if (_inOnlineRoom && !_onlineRoomId.empty() && _netClient) {
         if (!isAuthenticated()) {
             return false;
@@ -3283,41 +3706,32 @@ bool OctiMainWindow::sendGameChatMessage(const std::string &scope,
         std::string line = "[" + scope + "] " + handle + ": " + text;
         if (_gameChatLines.empty() || _gameChatLines.back() != line) {
             _gameChatLines.push_back(line);
-            if (_gameChatTranscript) {
-                _gameChatTranscript->appendPlainText(
-                    QString::fromStdString(line));
-                _gameChatTranscript->verticalScrollBar()->setValue(
-                    _gameChatTranscript->verticalScrollBar()->maximum());
-            }
-            if (_boardChatZoomDialog) {
-                QPlainTextEdit *zt = _boardChatZoomDialog->findChild<QPlainTextEdit *>("boardChatZoomTranscript");
-                if (zt) {
-                    zt->appendPlainText(QString::fromStdString(line));
-                    zt->verticalScrollBar()->setValue(zt->verticalScrollBar()->maximum());
-                }
-            }
+            GameChatEntry entry;
+            entry.atMs = nowMs;
+            entry.scope = scope;
+            entry.playerUuid = _profile.uuid;
+            entry.handle = handle;
+            entry.text = text;
+            entry.isSystemEvent = false;
+            entry.isRobot = false;
+            entry.rawLine = line;
+            appendGameChatEntry(entry);
         }
         return true;
     }
 
     std::string line = "[LOCAL] Player: " + text;
     _gameChatLines.push_back(line);
-    if (_gameChatTranscript) {
-        _gameChatTranscript->appendPlainText(QString::fromStdString(line));
-        _gameChatTranscript->verticalScrollBar()->setValue(
-            _gameChatTranscript->verticalScrollBar()->maximum());
-    }
-
-    if (_boardChatZoomDialog) {
-        QPlainTextEdit *zt = _boardChatZoomDialog->findChild<QPlainTextEdit *>("boardChatZoomTranscript");
-        if (zt) {
-            zt->clear();
-            for (const auto &l : _gameChatLines) {
-                zt->appendPlainText(QString::fromStdString(l));
-            }
-            zt->verticalScrollBar()->setValue(zt->verticalScrollBar()->maximum());
-        }
-    }
+    GameChatEntry entry;
+    entry.atMs = nowMs;
+    entry.scope = (scope == "TEAM") ? "TEAM" : "LOCAL";
+    entry.playerUuid = _profile.uuid;
+    entry.handle = _profile.handle.empty() ? "Player" : _profile.handle;
+    entry.text = text;
+    entry.isSystemEvent = false;
+    entry.isRobot = false;
+    entry.rawLine = line;
+    appendGameChatEntry(entry);
 
     return true;
 }
@@ -4147,22 +4561,52 @@ void OctiMainWindow::updateMatchActionsVisibility()
         _sendGameChatBtn->setEnabled(!isObservingUnauthed && !isSilentObserver);
     }
 
-    if (_matchModeLabel) {
+    if (_statusRoomBadgeLabel) {
         if (online) {
             QString roomDisp = QString::fromStdString(_onlineRoomId);
-            if (roomDisp.size() > 16) {
-                roomDisp = roomDisp.left(16);
+            if (roomDisp.size() > 14) {
+                roomDisp = roomDisp.left(14);
             }
-            QString modeStr = QString("Room #%1").arg(roomDisp);
-            if (_onlineGameView.ttlRemainingMs >= 0) {
-                int64_t totalSec = _onlineGameView.ttlRemainingMs / 1000;
-                int mm = static_cast<int>(totalSec / 60);
-                int ss = static_cast<int>(totalSec % 60);
-                modeStr += QString::fromUtf8(" \xE2\x80\xA2 TTL %1:%2")
+            _statusRoomBadgeLabel->setText(QString("Room #%1").arg(roomDisp));
+            _statusRoomBadgeLabel->setToolTip(QString::fromStdString(_onlineRoomId));
+            _statusRoomBadgeLabel->setVisible(true);
+        } else {
+            _statusRoomBadgeLabel->clear();
+            _statusRoomBadgeLabel->setVisible(false);
+        }
+    }
+    if (_statusTtlPillLabel) {
+        if (online && _onlineGameView.ttlRemainingMs >= 0) {
+            int64_t totalSec = std::max<int64_t>(0, _onlineGameView.ttlRemainingMs / 1000);
+            int mm = static_cast<int>(totalSec / 60);
+            int ss = static_cast<int>(totalSec % 60);
+            _statusTtlPillLabel->setText(
+                QString("TTL %1:%2")
                     .arg(mm, 2, 10, QChar('0'))
-                    .arg(ss, 2, 10, QChar('0'));
+                    .arg(ss, 2, 10, QChar('0')));
+            _statusTtlPillLabel->setVisible(true);
+        } else {
+            _statusTtlPillLabel->clear();
+            _statusTtlPillLabel->setVisible(false);
+        }
+    }
+
+    if (_matchModeLabel) {
+        if (online) {
+            QString roleStr;
+            if (_onlineViewerSeat >= 1 && _onlineViewerSeat <= 4) {
+                QChar seatCh = QChar('A' + _onlineViewerSeat - 1);
+                roleStr = QString("Seated: Seat %1 (%2)")
+                    .arg(_onlineViewerSeat)
+                    .arg(seatCh);
+            } else {
+                roleStr = "Observing";
             }
-            _matchModeLabel->setText(modeStr);
+            QString modeDisp = _onlineGameView.mode.empty()
+                ? "2P"
+                : QString::fromStdString(_onlineGameView.mode);
+            _matchModeLabel->setText(
+                QString::fromUtf8("%1 \xE2\x80\xA2 %2").arg(roleStr, modeDisp));
             _matchModeLabel->setToolTip(QString::fromStdString(_onlineRoomId));
         } else if (_isLocalBotGame) {
             _matchModeLabel->setText(
@@ -4174,6 +4618,8 @@ void OctiMainWindow::updateMatchActionsVisibility()
     }
 
     if (_matchTurnStatusLabel) {
+        const OctiGame *g = _board.getGame();
+        bool viewerActiveTurn = false;
         if (waitingForPlayers) {
             _matchTurnStatusLabel->setText("Waiting for Players...");
         } else if (online && _onlineGameView.phase == "FINISHED") {
@@ -4186,21 +4632,36 @@ void OctiMainWindow::updateMatchActionsVisibility()
             }
         } else if (_awaitingMatchStart && !online) {
             _matchTurnStatusLabel->setText("Awaiting Match Start");
-        } else {
-            const OctiGame *g = _board.getGame();
-            if (g && g->isGameOver()) {
-                _matchTurnStatusLabel->setText(
-                    QString::fromUtf8("%1 \xE2\x80\x94 %2")
-                        .arg(GameOverDialog::describeWinnerBanner(&_board))
-                        .arg(GameOverDialog::describeTerminationReason(&_board)));
-            } else if (g) {
-                int pIdx = static_cast<int>(g->getTurn());
-                QChar pCh = (pIdx >= 1 && pIdx <= 4) ? QChar('A' + pIdx - 1) : QChar('A');
-                _matchTurnStatusLabel->setText(
-                    QString("Active Turn: Player %1").arg(pCh));
+        } else if (g && g->isGameOver()) {
+            _matchTurnStatusLabel->setText(
+                QString::fromUtf8("%1 \xE2\x80\x94 %2")
+                    .arg(GameOverDialog::describeWinnerBanner(&_board))
+                    .arg(GameOverDialog::describeTerminationReason(&_board)));
+        } else if (g) {
+            int pIdx = static_cast<int>(g->getTurn());
+            QChar pCh = (pIdx >= 1 && pIdx <= 4) ? QChar('A' + pIdx - 1) : QChar('A');
+            _matchTurnStatusLabel->setText(
+                QString("Active Turn: Player %1").arg(pCh));
+            if (online) {
+                viewerActiveTurn = isInteractiveOnlineTurn();
             } else {
-                _matchTurnStatusLabel->setText("Match Idle");
+                viewerActiveTurn = !_isLocalBotGame ||
+                                   (g->getTurn() == _localConfig.humanSeat);
             }
+        } else {
+            _matchTurnStatusLabel->setText("Match Idle");
+        }
+
+        const WebChatStylePalette ws = webChatStylePalette(isWebLightSurfaceActive());
+        if (viewerActiveTurn) {
+            _matchTurnStatusLabel->setStyleSheet(
+                "background-color: #064E3B; color: #6EE7B7; border: 1px solid #059669; "
+                "border-radius: 5px; padding: 3px 6px; font-size: 12px; font-weight: 700;");
+        } else {
+            _matchTurnStatusLabel->setStyleSheet(
+                QString("background-color: %1; color: %2; border: 1px solid %3; "
+                        "border-radius: 5px; padding: 3px 6px; font-size: 12px; font-weight: 700;")
+                    .arg(ws.wellBg, ws.messageBody, ws.cardBorder));
         }
     }
 

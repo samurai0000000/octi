@@ -812,8 +812,7 @@ fun OctiMainAppContent(
                             viewModel = viewModel,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .weight(1f)
-                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                                .weight(1f),
                             onRequestSitSeat = { seatNum ->
                                 if (activeGameView?.hasPasscode == true) {
                                     pendingPasscodeSeat = seatNum
@@ -850,6 +849,8 @@ fun OctiMainAppContent(
             if (isAwaitingConfirm) {
                 val hint = if (viewModel.composer.hasContinuationJump()) {
                     "Tap board square to continue jumping"
+                } else if (viewModel.composer.isAwaitingSuperProngBonusMove) {
+                    "Superprong bonus — tap board to continue turn or Commit now"
                 } else if (viewModel.composer.hasOtherMovablePodAtOrigin()) {
                     "Tap origin square to move another pod"
                 } else null
@@ -941,22 +942,40 @@ fun OctiMainAppContent(
         }
 
         zoomedSquare?.let { (zx, zy) ->
+            val isOnlineFinished = matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && activeGameView?.phase == "FINISHED"
+            val isBotTurn = matchType == OctiAppViewModel.MatchType.LOCAL_VS_BOT &&
+                    (isBotThinking || viewModel.board.game?.turn != viewModel.humanSeat.value)
+            val isOriginWithOther = viewModel.composer.isAwaitingConfirmation &&
+                    viewModel.composer.hasOtherMovablePodAtOrigin() &&
+                    viewModel.composer.guidedOriginSquare().let { it.size >= 2 && it[0] == zx && it[1] == zy }
+            val canEditSquare = viewModel.isInteractiveOnlineTurn() &&
+                    !viewModel.isViewingHistory() &&
+                    !isOnlineFinished &&
+                    viewModel.board.game?.isGameOver != true &&
+                    !isBotTurn &&
+                    (!viewModel.composer.isAwaitingConfirmation ||
+                            viewModel.composer.isAwaitingSuperProngBonusMove ||
+                            isOriginWithOther)
             ZoomedSquareDialog(
-                board = viewModel.board,
+                board = if (viewModel.isViewingHistory()) viewModel.displayBoard else viewModel.board,
                 composer = viewModel.composer,
                 squareX = zx,
                 squareY = zy,
                 rotation = viewModel.boardRotation.collectAsState().value,
                 themeId = themeId,
-                canInteract = viewModel.isInteractiveOnlineTurn() && !viewModel.isViewingHistory(),
+                canInteract = canEditSquare,
                 onDismiss = { viewModel.closeZoomedSquare() },
                 onBeginGuidedMove = { podIndex, moveAllStack ->
                     viewModel.clearLastMoveIndicators()
-                    val isOriginWithOther = viewModel.composer.isAwaitingConfirmation &&
-                            viewModel.composer.hasOtherMovablePodAtOrigin() &&
-                            viewModel.composer.guidedOriginSquare().let { it[0] == zx && it[1] == zy }
-                    if (viewModel.composer.isAwaitingConfirmation && !isOriginWithOther) {
-                        viewModel.composer.cancelAndRollback()
+                    val allowKeepStaged = viewModel.composer.isAwaitingSuperProngBonusMove || isOriginWithOther
+                    if (viewModel.composer.isAwaitingConfirmation) {
+                        if (allowKeepStaged) {
+                            if (viewModel.composer.isGuidedMoveActive) {
+                                viewModel.composer.finishGuidedMoveHere()
+                            }
+                        } else {
+                            viewModel.composer.cancelAndRollback()
+                        }
                     }
                     if (viewModel.composer.beginGuidedPodMove(zx, zy, podIndex, moveAllStack)) {
                         viewModel.closeZoomedSquare()
@@ -966,7 +985,13 @@ fun OctiMainAppContent(
                 onAddProng = { podIndex, dir, superProng ->
                     viewModel.clearLastMoveIndicators()
                     if (viewModel.composer.isAwaitingConfirmation) {
-                        viewModel.composer.cancelAndRollback()
+                        if (viewModel.composer.isAwaitingSuperProngBonusMove) {
+                            if (viewModel.composer.isGuidedMoveActive) {
+                                viewModel.composer.finishGuidedMoveHere()
+                            }
+                        } else {
+                            viewModel.composer.cancelAndRollback()
+                        }
                     }
                     viewModel.composer.selectStackPodIndex(zx, zy, podIndex)
                     viewModel.composer.beginAddProngFromReserve(superProng)
@@ -981,7 +1006,13 @@ fun OctiMainAppContent(
                 onRepositionProng = { podIndex, srcDir, dstDir ->
                     viewModel.clearLastMoveIndicators()
                     if (viewModel.composer.isAwaitingConfirmation) {
-                        viewModel.composer.cancelAndRollback()
+                        if (viewModel.composer.isAwaitingSuperProngBonusMove) {
+                            if (viewModel.composer.isGuidedMoveActive) {
+                                viewModel.composer.finishGuidedMoveHere()
+                            }
+                        } else {
+                            viewModel.composer.cancelAndRollback()
+                        }
                     }
                     viewModel.composer.selectStackPodIndex(zx, zy, podIndex)
                     viewModel.composer.beginRepositionProng(zx, zy, podIndex, srcDir)
@@ -996,7 +1027,13 @@ fun OctiMainAppContent(
                 onPlaceReservePod = { liberate ->
                     viewModel.clearLastMoveIndicators()
                     if (viewModel.composer.isAwaitingConfirmation) {
-                        viewModel.composer.cancelAndRollback()
+                        if (viewModel.composer.isAwaitingSuperProngBonusMove) {
+                            if (viewModel.composer.isGuidedMoveActive) {
+                                viewModel.composer.finishGuidedMoveHere()
+                            }
+                        } else {
+                            viewModel.composer.cancelAndRollback()
+                        }
                     }
                     val canStart = if (liberate) {
                         viewModel.composer.beginLiberatePodFromReserve()

@@ -122,9 +122,19 @@ private:
 
     int resolvePodIndex(const OctiSquare &sq, int x, int y, int requestedIndex,
                         OctiPlayer turn, bool excludeClaimed) const;
+    int resolvePodIndexOnBoard(const OctiSquare &sq, int x, int y, int requestedIndex,
+                               OctiPlayer turn, bool excludeClaimed,
+                               int removedByPreludes) const;
     bool isPodClaimed(int bx, int by, int podIdx) const;
     bool validateOpsOnScratch(const std::vector<OctiMoveOp> &ops) const;
-    bool hasContinuationJumpFrom(int bx, int by, const OctiPod &pod,
+    bool canPromoteStagedToSuperProngPreludes() const;
+    bool buildPostPreludeBoard(std::vector<OctiMoveOp> &outPromotedOps,
+                               OctiBoard &outBoard) const;
+    bool buildBoardAfterBonusOps(const std::vector<OctiMoveOp> &ops,
+                                 OctiBoard &outBoard,
+                                 std::size_t *outBonusCount = nullptr) const;
+    bool hasContinuationJumpFrom(const OctiBoard *refBoard,
+                                 int bx, int by, const OctiPod &pod,
                                  int startBx, int startBy,
                                  const std::vector<OctiPod> &ghostPods,
                                  const std::vector<std::pair<int, int>> &alreadyJumped) const;

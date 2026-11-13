@@ -537,9 +537,15 @@ bool OctiBoardCanvas::simulateDragPodToSquare(int fromX, int fromY,
     QPointF toPt = _geometry.squareCenter(toX, toY);
     OctiPod animPod;
     OctiPodType animType = A_POD;
-    if (_board->isValidCoord(fromX - 1, fromY - 1) &&
-        !_board->squareAt(fromX - 1, fromY - 1).isEmpty()) {
-        const OctiSquare &sq = _board->squareAt(fromX - 1, fromY - 1);
+    const OctiBoard *srcBoard = _board;
+    OctiBoard previewBoard;
+    if (_composer->isAwaitingConfirmation() &&
+        _composer->populatePreviewBoard(previewBoard)) {
+        srcBoard = &previewBoard;
+    }
+    if (srcBoard->isValidCoord(fromX - 1, fromY - 1) &&
+        !srcBoard->squareAt(fromX - 1, fromY - 1).isEmpty()) {
+        const OctiSquare &sq = srcBoard->squareAt(fromX - 1, fromY - 1);
         int idx = std::clamp(podIndex < 0 ? sq.getNumPods() - 1 : podIndex,
                              0, sq.getNumPods() - 1);
         animPod = sq.getPodAt(idx);
@@ -847,45 +853,6 @@ void OctiBoardCanvas::paintStackFanOverlay(QPainter &p,
     p.restore();
 }
 
-void OctiBoardCanvas::paintCaptureChoicePills(QPainter &p,
-                                              const OctiBoardGeometry &geom,
-                                              const OctiPalette &pal)
-{
-    if (!_composer) {
-        return;
-    }
-    const auto &choices = _composer->captureChoices();
-    if (choices.empty()) {
-        return;
-    }
-
-    p.save();
-    for (const auto &cc : choices) {
-        QRectF sqRect = geom.squareRect(cc.jumpedX, cc.jumpedY);
-        if (sqRect.isEmpty()) {
-            continue;
-        }
-        QRectF pill(sqRect.left() + 2.0,
-                    sqRect.top() + 2.0,
-                    sqRect.width() - 4.0,
-                    std::max(16.0, sqRect.height() * 0.28));
-
-        QColor bg = cc.capture ? pal.legalCaptureGlow : pal.panelCardBg;
-        p.setPen(QPen(pal.prongSuperCore, 1.2));
-        p.setBrush(bg);
-        p.drawRoundedRect(pill, 4.0, 4.0);
-
-        QFont f = p.font();
-        f.setBold(true);
-        f.setPixelSize(std::max(8, static_cast<int>(pill.height() * 0.65)));
-        p.setFont(f);
-        p.setPen(Qt::white);
-        QString text = cc.capture ? "Capture [x]" : "Keep [ ]";
-        p.drawText(pill, Qt::AlignCenter, text);
-    }
-    p.restore();
-}
-
 void OctiBoardCanvas::paintCommitBanner(QPainter &p,
                                         const OctiBoardGeometry &geom,
                                         const OctiPalette &pal)
@@ -982,7 +949,7 @@ void OctiBoardCanvas::paintCommitBanner(QPainter &p,
 
     QString staged = QString::fromStdString(_composer->stagedMoveNotation());
     if (_composer->isAwaitingSuperProngBonusMove()) {
-        staged += " (8th Superprong Bonus Move Ready)";
+        staged += QString::fromUtf8(" (Superprong Ready \xE2\x80\x94 Stage ; Action or Commit)");
     } else if (_composer->hasOtherMovablePodAtOrigin()) {
         staged += " (Click Origin Square to Move Next Pod)";
     } else if (_composer->isGuidedMoveActive()) {
@@ -1667,8 +1634,7 @@ void OctiBoardCanvas::paintBoardScene(QPainter &p, int width, int height)
                           geom.rotationDegrees(), true, 0.92);
     }
 
-    // 9. Floating Capture [x] / Keep [ ] pills & Commit Move / Rollback banner
-    paintCaptureChoicePills(p, geom, pal);
+    // 9. Floating Commit Move / Rollback banner
     paintCommitBanner(p, geom, pal);
 
     // 10. Persistent Game Over Victory Banner (PCE-D06)
@@ -1721,25 +1687,43 @@ void OctiBoardCanvas::resizeEvent(QResizeEvent *event)
 bool OctiBoardCanvas::openZoomedSquareAt(int sx, int sy)
 {
     cancelHandRotateHold();
-    if (!_board || !_board->isValidCoord(sx - 1, sy - 1)) {
+    for (QObject *child : children()) {
+        auto *w = qobject_cast<QWidget *>(child);
+        if (w && !dynamic_cast<ZoomedSquareDialog *>(w) && w->isVisible()) {
+            return false;
+        }
+    }
+    const OctiBoard *activeBoard = _board;
+    OctiBoard previewBoard;
+    if (_composer && _composer->isAwaitingConfirmation() &&
+        _composer->populatePreviewBoard(previewBoard)) {
+        activeBoard = &previewBoard;
+    }
+    if (!activeBoard || !activeBoard->isValidCoord(sx - 1, sy - 1)) {
         return false;
     }
-    const OctiSquare &sq = _board->squareAt(sx - 1, sy - 1);
+    const OctiSquare &sq = activeBoard->squareAt(sx - 1, sy - 1);
     bool isNonEmpty = !sq.isEmpty();
+    bool isGameOver = (_board && _board->getGame() && _board->getGame()->isGameOver());
+    bool canMutate = (_interactiveEnabled && _composer && !isGameOver &&
+                      activeBoard->getGame() && activeBoard->getGame()->isGameStarted() &&
+                      (!_composer->isAwaitingConfirmation() ||
+                       _composer->isAwaitingSuperProngBonusMove()));
+
     bool isEligibleHome = false;
-    if (_interactiveEnabled && _board->getGame() && _board->getGame()->isGameStarted() &&
-        _board->getGameMode() != GAME_MODE_OFK) {
+    if (canMutate && activeBoard->getGameMode() != GAME_MODE_OFK) {
         OctiPlayer turn = _board->getGame()->getTurn();
         bool isFriendlyBase = false;
-        if (_board->getNumPlayers() == 2) {
+        if (activeBoard->getNumPlayers() == 2) {
             isFriendlyBase = ((turn == PLAYER_A && sq.getType() == A_HOME_SQUARE) ||
                               (turn == PLAYER_B && sq.getType() == B_HOME_SQUARE));
-        } else if (_board->getNumPlayers() == 4) {
+        } else if (activeBoard->getNumPlayers() == 4) {
             isFriendlyBase = (sq.getType() == static_cast<OctiSquareType>(turn));
         }
         if (isFriendlyBase && !sq.hasEnemyOf(turn)) {
-            if (_board->getGame()->getFreePods(turn) > 0 ||
-                (_board->getGame()->getCapturedPods(turn) > 0 && _board->canLiberate(turn))) {
+            if (activeBoard->getGame()->getFreePods(turn) > 0 ||
+                (activeBoard->getGame()->getCapturedPods(turn) > 0 &&
+                 activeBoard->canLiberate(turn))) {
                 isEligibleHome = true;
             }
         }
@@ -1757,13 +1741,25 @@ bool OctiBoardCanvas::openZoomedSquareAt(int sx, int sy)
         return false;
     }
 
-    OctiMoveComposer *activeComposer = _interactiveEnabled ? _composer : nullptr;
+    OctiMoveComposer *activeComposer = (_interactiveEnabled && !isGameOver)
+        ? _composer : nullptr;
     bool isOriginWithRemaining = (activeComposer && activeComposer->isAwaitingConfirmation() &&
                                   activeComposer->hasOtherMovablePodAtOrigin() &&
-                                  std::make_pair(sx, sy) == activeComposer->guidedOriginSquare());
-    if (!isOriginWithRemaining && activeComposer && activeComposer->isGuidedMoveActive() &&
-        !activeComposer->isAwaitingConfirmation()) {
-        activeComposer->cancelAndRollback();
+                                  !activeComposer->stagedOps().empty() &&
+                                  std::make_pair(sx, sy) ==
+                                      std::make_pair(activeComposer->stagedOps().back().x0 + 1,
+                                                     activeComposer->stagedOps().back().y0 + 1));
+    if (activeComposer && activeComposer->isAwaitingConfirmation() &&
+        !activeComposer->isAwaitingSuperProngBonusMove() &&
+        !isOriginWithRemaining) {
+        activeComposer = nullptr;
+    }
+    if (!isOriginWithRemaining && activeComposer && activeComposer->isGuidedMoveActive()) {
+        if (activeComposer->isAwaitingConfirmation()) {
+            activeComposer->finishGuidedMoveHere();
+        } else {
+            activeComposer->cancelAndRollback();
+        }
     }
     ZoomedSquareDialog dlg(_board, activeComposer, sx, sy, _rotation, _theme, this);
     if (dlg.exec() == QDialog::Accepted && activeComposer) {
@@ -1785,7 +1781,7 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
         return;
     }
     if (event->button() == Qt::RightButton) {
-        if (_board && !(_board->getGame() && _board->getGame()->isGameOver())) {
+        if (_board) {
             QPointF pos = mousePosF(event);
             int rx = 0, ry = 0;
             if (_geometry.screenToSquare(pos, rx, ry) && openZoomedSquareAt(rx, ry)) {
@@ -1855,10 +1851,14 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
     }
 
     // 2. Check clicking staged origin square when multiple pods remain at origin
-    if (_composer && _composer->isAwaitingConfirmation() && _composer->hasOtherMovablePodAtOrigin()) {
+    if (_composer && _composer->isAwaitingConfirmation() &&
+        _composer->hasOtherMovablePodAtOrigin() && !_composer->stagedOps().empty()) {
         int cx = 0, cy = 0;
         if (_geometry.screenToSquare(pos, cx, cy)) {
-            std::pair<int, int> orig = _composer->guidedOriginSquare();
+            std::pair<int, int> orig = {
+                _composer->stagedOps().back().x0 + 1,
+                _composer->stagedOps().back().y0 + 1
+            };
             if (cx == orig.first && cy == orig.second) {
                 cancelHandRotateHold();
                 _composer->finishGuidedMoveHere();
@@ -1875,21 +1875,8 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
         }
     }
 
-    // 3. Check Capture [x] / Keep [ ] pills
-    for (const auto &cc : _composer->captureChoices()) {
-        QRectF sqRect = _geometry.squareRect(cc.jumpedX, cc.jumpedY);
-        QRectF pill(sqRect.left() + 2.0, sqRect.top() + 2.0,
-                    sqRect.width() - 4.0, std::max(16.0, sqRect.height() * 0.28));
-        if (pill.contains(pos)) {
-            cancelHandRotateHold();
-            _composer->toggleCaptureAtSquare(cc.jumpedX, cc.jumpedY);
-            update();
-            return;
-        }
-    }
-
-    // 4. Check drag-off-board capture initiation during staged review
-    if (_composer->isAwaitingConfirmation()) {
+    // 3. Check jumped-square click toggle / drag-off-board capture initiation during staged review
+    if (_composer->isAwaitingConfirmation() || !_composer->captureChoices().empty()) {
         int cx = 0, cy = 0;
         if (_geometry.screenToSquare(pos, cx, cy)) {
             for (const auto &cc : _composer->captureChoices()) {
@@ -1903,8 +1890,17 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
         }
     }
 
-    // 4b. When awaiting move confirmation, strictly guard against unwanted board interactions
-    if (_composer && _composer->isAwaitingConfirmation()) {
+    const OctiBoard *activeBoard = _board;
+    OctiBoard previewBoard;
+    if (_composer && _composer->isAwaitingConfirmation() &&
+        _composer->populatePreviewBoard(previewBoard)) {
+        activeBoard = &previewBoard;
+    }
+
+    // 4b. When awaiting move confirmation (and not awaiting a ';' superprong bonus continuation),
+    //     strictly guard against unwanted board mutations while still allowing read-only inspect
+    if (_composer && _composer->isAwaitingConfirmation() &&
+        !_composer->isAwaitingSuperProngBonusMove()) {
         int gx = 0, gy = 0;
         bool isContinuationHop = false;
         if (_geometry.screenToSquare(pos, gx, gy) && _composer->isGuidedMoveActive()) {
@@ -1925,6 +1921,18 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
             }
         }
         if (!isContinuationHop) {
+            if (event->button() == Qt::LeftButton && gx >= 1 && gy >= 1 &&
+                activeBoard && activeBoard->isValidCoord(gx - 1, gy - 1) &&
+                !activeBoard->squareAt(gx - 1, gy - 1).isEmpty()) {
+                _dragKind = DragKind::NONE;
+                _dragStartX = gx;
+                _dragStartY = gy;
+                _dragPodIndex = -1;
+                _leftMouseHeld = true;
+                _holdRotateTimer.start(200);
+                update();
+                return;
+            }
             cancelHandRotateHold();
             if (isVisible()) {
                 presentPlyConfirmationIfNeeded();
@@ -1987,9 +1995,9 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
                                 ? _board->getGameMode() : GAME_MODE_2;
                             OctiPlayer jumpedOwner = activeTurn;
                             bool isEnemy = false;
-                            if (_board->isValidCoord(cc.jumpedX - 1, cc.jumpedY - 1)) {
+                            if (activeBoard && activeBoard->isValidCoord(cc.jumpedX - 1, cc.jumpedY - 1)) {
                                 const OctiSquare &jsq =
-                                    _board->squareAt(cc.jumpedX - 1, cc.jumpedY - 1);
+                                    activeBoard->squareAt(cc.jumpedX - 1, cc.jumpedY - 1);
                                 if (jsq.getNumPods() > 0) {
                                     jumpedOwner = podTypeToPlayer(jsq.getPodAt(0).getType());
                                     for (int pi = 0; pi < jsq.getNumPods(); ++pi) {
@@ -2036,7 +2044,8 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
                 return;
             }
         }
-        if (_composer->isAwaitingConfirmation()) {
+        if (_composer->isAwaitingConfirmation() &&
+            !_composer->isAwaitingSuperProngBonusMove()) {
             if (isVisible()) {
                 presentPlyConfirmationIfNeeded();
             }
@@ -2044,15 +2053,31 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
             return;
         }
         bool zeroHopsSoFar = (_composer->guidedCurrentSquare() == _composer->guidedOriginSquare());
-        std::pair<int, int> oldOrigin = _composer->guidedOriginSquare();
-        _composer->cancelAndRollback();
+        std::pair<int, int> oldCur = _composer->guidedCurrentSquare();
+        if (_composer->isAwaitingConfirmation()) {
+            _composer->finishGuidedMoveHere();
+        } else {
+            _composer->cancelAndRollback();
+        }
         if (zeroHopsSoFar && gx >= 1 && gy >= 1 &&
-            (gx != oldOrigin.first || gy != oldOrigin.second) &&
-            _board->isValidCoord(gx - 1, gy - 1)) {
-            const OctiSquare &clickedSq = _board->squareAt(gx - 1, gy - 1);
-            if (!clickedSq.isEmpty() && _board->getGame() &&
-                _board->getGame()->isGameStarted() &&
-                !clickedSq.hasEnemyOf(_board->getGame()->getTurn())) {
+            gx == oldCur.first && gy == oldCur.second) {
+            // 2nd click on the same 0-hop guided origin square: open ZoomedSquareDialog on release
+            // (or allow dragging from this square if dragged to another square)
+            _wasOriginSquareBeforePress = true;
+            _dragStartX = gx;
+            _dragStartY = gy;
+            _dragPodIndex = _composer->selectedStackPodIndex(gx, gy);
+            _dragKind = DragKind::MOVE_OR_JUMP_POD;
+            _dragSrcProngDir = DIR_UNDEF;
+            update();
+            return;
+        }
+        if (gx >= 1 && gy >= 1 && activeBoard &&
+            activeBoard->isValidCoord(gx - 1, gy - 1)) {
+            const OctiSquare &clickedSq = activeBoard->squareAt(gx - 1, gy - 1);
+            if (!clickedSq.isEmpty() ||
+                (_composer->isAwaitingSuperProngBonusMove() &&
+                 _composer->canPlaceReservePodAt(gx, gy))) {
                 // Fall through to step 7
             } else {
                 update();
@@ -2066,8 +2091,8 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
 
     // 6. Check Stack Fan Pop-over slot selection
     if (_stackFanX >= 1 && _stackFanY >= 1 &&
-        _board->isValidCoord(_stackFanX - 1, _stackFanY - 1)) {
-        const OctiSquare &sq = _board->squareAt(_stackFanX - 1, _stackFanY - 1);
+        activeBoard->isValidCoord(_stackFanX - 1, _stackFanY - 1)) {
+        const OctiSquare &sq = activeBoard->squareAt(_stackFanX - 1, _stackFanY - 1);
         int n = sq.getNumPods();
         int slot = _geometry.hitTestStackFanSlot(_stackFanX, _stackFanY, n, pos);
         if (slot >= 0) {
@@ -2086,7 +2111,7 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
     // 7. Hit-test board square: open ZoomedSquareDialog on clicking non-empty square or stage pod on empty friendly home square
     int sx = 0, sy = 0;
     if (_geometry.screenToSquare(pos, sx, sy) &&
-        _board->isValidCoord(sx - 1, sy - 1)) {
+        activeBoard->isValidCoord(sx - 1, sy - 1)) {
         _hoverSquareX = sx;
         _hoverSquareY = sy;
 
@@ -2098,12 +2123,13 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
             return;
         }
 
-        const OctiSquare &sq = _board->squareAt(sx - 1, sy - 1);
+        const OctiSquare &sq = activeBoard->squareAt(sx - 1, sy - 1);
         _stackFanX = -1;
         _stackFanY = -1;
+        OctiPlayer activeTurn = (_board->getGame()) ? _board->getGame()->getTurn() : PLAYER_A;
 
         if (!sq.isEmpty() && _board->getGame() && _board->getGame()->isGameStarted() &&
-            !sq.hasEnemyOf(_board->getGame()->getTurn())) {
+            !sq.hasEnemyOf(activeTurn) && sq.isOccupiedBy(activeTurn)) {
 
             if (_dragKind == DragKind::ADD_PRONG_FROM_RESERVE ||
                 _dragKind == DragKind::ADD_SUPERPRONG_FROM_RESERVE) {
@@ -2122,14 +2148,20 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
             _dragPodIndex = clickedPodIdx;
             _dragKind = DragKind::MOVE_OR_JUMP_POD;
             _dragSrcProngDir = DIR_UNDEF;
-            _composer->beginGuidedPodMove(
-                sx, sy, clickedPodIdx, _composer->moveEntireMatchingStack());
+            // For 1-pod squares, start 0-hop guided move on 1st click (2nd click opens inspector);
+            // for multi-pod stacks (numPods >= 2), stationary 1st click opens inspector while
+            // press-drag-release moves directly!
+            if (sq.getNumPods() == 1) {
+                _composer->beginGuidedPodMove(
+                    sx, sy, clickedPodIdx, _composer->moveEntireMatchingStack());
+            }
         } else if (event->button() == Qt::LeftButton && sq.isEmpty() &&
                    _board->getGame() && _board->getGame()->isGameStarted() &&
                    !_board->getGame()->isGameOver() &&
-                   _board->getGameMode() != GAME_MODE_OFK &&
+                   activeBoard->getGameMode() != GAME_MODE_OFK &&
                    _composer && !_composer->isGuidedMoveActive() &&
-                   !_composer->isAwaitingConfirmation()) {
+                   (!_composer->isAwaitingConfirmation() ||
+                    _composer->isAwaitingSuperProngBonusMove())) {
             if (_composer->canPlaceReservePodAt(sx, sy) &&
                 _composer->stageOrCommitAddPod(sx, sy, false)) {
                 cancelHandRotateHold();
@@ -2142,11 +2174,14 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
                 update();
                 return;
             }
-        } else if (!isVisible() && !sq.isEmpty()) {
+        } else if (event->button() == Qt::LeftButton && !sq.isEmpty()) {
+            _selectedSquareX = -1;
+            _selectedSquareY = -1;
+            _selectedPodIndex = -1;
             _dragStartX = sx;
             _dragStartY = sy;
-            _dragPodIndex = _composer->selectedStackPodIndex(sx, sy);
-            _dragKind = DragKind::MOVE_OR_JUMP_POD;
+            _dragPodIndex = -1;
+            _dragKind = DragKind::NONE;
             _dragSrcProngDir = DIR_UNDEF;
         }
 
@@ -2290,6 +2325,17 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
     if (!event || !_interactiveEnabled || !_composer ||
         (_board && _board->getGame() && _board->getGame()->isGameOver())) {
         _dragKind = DragKind::NONE;
+        if (event && event->button() == Qt::LeftButton && _board) {
+            QPointF curRaw = rawMousePosF(event);
+            double moveDist = std::hypot(curRaw.x() - _pressRawPos.x(),
+                                         curRaw.y() - _pressRawPos.y());
+            if (moveDist <= 6.0) {
+                int tx = -1, ty = -1;
+                if (_geometry.screenToSquare(mousePosF(event), tx, ty)) {
+                    openZoomedSquareAt(tx, ty);
+                }
+            }
+        }
         return;
     }
 
@@ -2341,9 +2387,13 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
                 return;
             }
 
-            if (_wasOriginSquareBeforePress && _composer &&
-                !_composer->isAwaitingConfirmation()) {
-                _composer->cancelAndRollback();
+            if (_wasOriginSquareBeforePress && _composer) {
+                if (_composer->isAwaitingConfirmation()) {
+                    _composer->finishGuidedMoveHere();
+                } else {
+                    _composer->cancelAndRollback();
+                }
+                _wasOriginSquareBeforePress = false;
                 openZoomedSquareAt(tx, ty);
                 _dragKind = DragKind::NONE;
                 update();
@@ -2379,6 +2429,15 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
                 _selectedPodIndex = _dragPodIndex;
             }
         } else if (_dragKind == DragKind::NONE &&
+                   tx == _dragStartX && ty == _dragStartY &&
+                   tx >= 1 && ty >= 1) {
+            QPointF curRaw = rawMousePosF(event);
+            double moveDist = std::hypot(curRaw.x() - _pressRawPos.x(),
+                                         curRaw.y() - _pressRawPos.y());
+            if (moveDist <= 6.0) {
+                openZoomedSquareAt(tx, ty);
+            }
+        } else if (_dragKind == DragKind::NONE &&
                    _selectedSquareX >= 1 && _selectedSquareY >= 1 &&
                    (tx != _selectedSquareX || ty != _selectedSquareY)) {
             simulateDragPodToSquare(
@@ -2390,6 +2449,7 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
         }
     }
 
+    _wasOriginSquareBeforePress = false;
     _dragKind = DragKind::NONE;
     _dragStartX = -1;
     _dragStartY = -1;
@@ -2413,10 +2473,8 @@ void OctiBoardCanvas::mouseDoubleClickEvent(QMouseEvent *event)
     if (!event || !_board) {
         return;
     }
-    if (_board->getGame() && _board->getGame()->isGameOver()) {
-        return;
-    }
-    if (_interactiveEnabled && _composer && _composer->isAwaitingConfirmation()) {
+    if (_interactiveEnabled && _composer && _composer->isAwaitingConfirmation() &&
+        !(_board->getGame() && _board->getGame()->isGameOver())) {
         std::string stagedNot = _composer->stagedMoveNotation();
         if (_composer->commitStagedMove() && _lastMoveModifiedSquares.empty() && !stagedNot.empty()) {
             try {

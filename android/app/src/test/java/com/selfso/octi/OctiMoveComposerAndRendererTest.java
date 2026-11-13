@@ -14,6 +14,7 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.util.List;
 
 public class OctiMoveComposerAndRendererTest {
@@ -467,6 +468,132 @@ public class OctiMoveComposerAndRendererTest {
         assertEquals("Enemy pod at (2, 5) must be captured", 0, board.squareAt(1, 4).getNumPods());
         assertEquals(1, game.getCapturedPods(OctiPlayer.PLAYER_B));
         assertEquals(0, game.getCapturedPods(OctiPlayer.PLAYER_A));
+    }
+
+    @Test
+    public void testJumpedSquareHasZeroCaptureOrKeepOverlayBoxInBothStates() throws Exception {
+        OctiBoard jumpBoard = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+        jumpBoard.getGame().start(OctiPlayer.PLAYER_A);
+        for (int x = 0; x < 9; x++) {
+            for (int y = 0; y < 9; y++) {
+                jumpBoard.squareAt(x, y).clear();
+            }
+        }
+
+        // Player A jumper at (3, 3) with North prong
+        OctiPod jumperA = new OctiPod(OctiPodType.A_POD);
+        jumperA.addProng(OctiDir.DIR_N, false);
+        jumpBoard.squareAt(2, 2).addPod(jumperA);
+
+        // Player B pod at (3, 4) carrying N, NW, NE, S prongs extending into top 26% of square
+        OctiPod jumpedB = new OctiPod(OctiPodType.B_POD);
+        jumpedB.addProng(OctiDir.DIR_N, false);
+        jumpedB.addProng(OctiDir.DIR_NW, false);
+        jumpedB.addProng(OctiDir.DIR_NE, false);
+        jumpedB.addProng(OctiDir.DIR_S, false);
+        jumpBoard.squareAt(2, 3).addPod(jumpedB);
+
+        // Keep at least one extra B pod elsewhere so game isn't immediately over on preview
+        jumpBoard.squareAt(6, 6).addPod(new OctiPod(OctiPodType.B_POD));
+
+        OctiMoveComposer jumpComposer = new OctiMoveComposer(jumpBoard);
+        jumpComposer.setConfirmAllMoves(true);
+        assertTrue(jumpComposer.beginMoveOrJumpPod(3, 3, 0, false));
+        assertTrue(jumpComposer.dropOnSquare(3, 5));
+        assertTrue(jumpComposer.isAwaitingConfirmation());
+        assertEquals(1, jumpComposer.captureChoices().size());
+        assertEquals(3, jumpComposer.captureChoices().get(0).jumpedX);
+        assertEquals(4, jumpComposer.captureChoices().get(0).jumpedY);
+        assertTrue("Initial enemy jump defaults to capture=true",
+                jumpComposer.captureChoices().get(0).capture);
+
+        int size = 720;
+        OctiBoardGeometry geom = new OctiBoardGeometry(
+                size, size, 9, 9, OctiBoardGeometry.BoardRotation.ROT_0);
+        OctiPalette pal = OctiPalette.forTheme(OctiThemeId.OBSIDIAN_BRASS);
+        double[] sqRect = geom.squareRect(3, 4);
+        int x0 = (int) Math.ceil(sqRect[0] + 3.0);
+        int x1 = (int) Math.floor(sqRect[0] + sqRect[2] - 3.0);
+        int y0 = (int) Math.ceil(sqRect[1] + 3.0);
+        int y1 = (int) Math.floor(sqRect[1] + Math.max(12.0, sqRect[3] * 0.26) - 1.0);
+
+        // 1. Verify capture = true renders zero pill-box overlay pixels and matches composer == null
+        OctiBoard previewCapture = jumpComposer.buildPreviewBoard();
+        assertNotNull(previewCapture);
+        int[] pxCaptureWithComposer = OctiBoardRenderer.renderBoardPixels(
+                previewCapture, jumpComposer, geom, OctiThemeId.OBSIDIAN_BRASS);
+        int[] pxCaptureBaseline = OctiBoardRenderer.renderBoardPixels(
+                previewCapture, null, geom, OctiThemeId.OBSIDIAN_BRASS);
+
+        for (int y = y0; y <= y1; y++) {
+            for (int x = x0; x <= x1; x++) {
+                int actual = pxCaptureWithComposer[y * size + x];
+                int expected = pxCaptureBaseline[y * size + x];
+                assertFalse("capture=true top band must have zero legalCaptureGlow pill pixels",
+                        actual == pal.legalCaptureGlow);
+                assertFalse("capture=true top band must have zero panelCardBg pill pixels",
+                        actual == pal.panelCardBg);
+                assertEquals("capture=true jumped square pixel (" + x + "," + y + ") must match unobstructed baseline",
+                        expected, actual);
+            }
+        }
+
+        // 2. Toggle capture off (capture = false / keep) and verify pod + prongs are 100% unobstructed
+        assertTrue(jumpComposer.toggleCaptureAtSquare(3, 4));
+        assertFalse(jumpComposer.captureChoices().get(0).capture);
+
+        OctiBoard previewKeep = jumpComposer.buildPreviewBoard();
+        assertNotNull(previewKeep);
+        assertEquals("Non-capture preview must retain jumped pod on (3,4)",
+                1, previewKeep.squareAt(2, 3).getNumPods());
+        int[] pxKeepWithComposer = OctiBoardRenderer.renderBoardPixels(
+                previewKeep, jumpComposer, geom, OctiThemeId.OBSIDIAN_BRASS);
+        int[] pxKeepBaseline = OctiBoardRenderer.renderBoardPixels(
+                previewKeep, null, geom, OctiThemeId.OBSIDIAN_BRASS);
+
+        for (int y = y0; y <= y1; y++) {
+            for (int x = x0; x <= x1; x++) {
+                int actual = pxKeepWithComposer[y * size + x];
+                int expected = pxKeepBaseline[y * size + x];
+                assertFalse("capture=false top band must have zero legalCaptureGlow pill pixels",
+                        actual == pal.legalCaptureGlow);
+                assertFalse("capture=false top band must have zero panelCardBg pill pixels",
+                        actual == pal.panelCardBg);
+                assertEquals("capture=false jumped square pixel (" + x + "," + y + ") must match unobstructed pod/prongs",
+                        expected, actual);
+            }
+        }
+
+        // 3. Verify toggling back to capture = true via jumped square still works
+        assertTrue(jumpComposer.toggleCaptureAtSquare(3, 4));
+        assertTrue(jumpComposer.captureChoices().get(0).capture);
+
+        // 4. Export PNG evidence if plan artifacts directory exists
+        File artifactsDir = resolveCapturePlanArtifactsDir();
+        if (artifactsDir != null && artifactsDir.isDirectory()) {
+            OctiAppIconRenderer.writeArgbPng(
+                    size, size, pxKeepWithComposer,
+                    new File(artifactsDir, "android_jump_no_capture_box.png"));
+            OctiAppIconRenderer.writeArgbPng(
+                    size, size, pxCaptureWithComposer,
+                    new File(artifactsDir, "android_jump_capture_no_box.png"));
+        }
+    }
+
+    private static File resolveCapturePlanArtifactsDir() {
+        File cur = new File(System.getProperty("user.dir", ".")).getAbsoluteFile();
+        while (cur != null) {
+            File active = new File(cur, "plan/plan_capture_box_removal_and_chat_layout_unification.artifacts");
+            if (active.isDirectory()) {
+                return active;
+            }
+            File done = new File(cur, "plan/done/plan_capture_box_removal_and_chat_layout_unification.artifacts");
+            if (done.isDirectory()) {
+                return done;
+            }
+            cur = cur.getParentFile();
+        }
+        return null;
     }
 }
 

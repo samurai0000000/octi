@@ -20,7 +20,7 @@ BOOK_OPP_BRANCH ?= 6
 
 CMAKE_CMD := $(shell if [ -x /usr/bin/cmake ]; then echo /usr/bin/cmake; else echo cmake; fi)
 
-.PHONY: all core server desktop deb linux windows installer android test clean distclean sync-core-to-octibot sync-core-from-octibot opening-book opening-book-sync opening-book-cpp opening-book-java opening-book-js
+.PHONY: all core server desktop deb linux windows installer android test clean distclean sync-core-to-octibot sync-core-from-octibot opening-book opening-book-sync opening-book-cpp opening-book-java opening-book-js sound-assets sound-assets-sync
 
 all: core server desktop android
 
@@ -182,3 +182,27 @@ opening-book-sync:
 	@if [ -d "../octibot/core/include" ]; then \
 		cp -f core/include/OctiOpeningBookData.hxx ../octibot/core/include/OctiOpeningBookData.hxx; \
 	fi
+
+sound-assets:
+	@mkdir -p core/build && \
+	if [ ! -f assets/sounds/game_victory.wav ]; then \
+		(cd core/build && $(CMAKE_CMD) $(CURDIR)/core -DCMAKE_BUILD_TYPE=Release -DOCTI_BOOTSTRAP_SOUND_ASSETS=ON > /dev/null); \
+	else \
+		(cd core/build && (test -f Makefile || $(CMAKE_CMD) $(CURDIR)/core -DCMAKE_BUILD_TYPE=Release)); \
+	fi && \
+	MAKEFLAGS= $(MAKE) --no-print-directory -C $(CURDIR)/core/build octi_sound_gen -j"$$(nproc 2>/dev/null || echo 4)" && \
+	./core/build/octi_sound_gen --out-dir assets/sounds --verify-dir assets/sounds && \
+	(cd core/build && $(CMAKE_CMD) $(CURDIR)/core -DCMAKE_BUILD_TYPE=Release -DOCTI_BOOTSTRAP_SOUND_ASSETS=OFF > /dev/null)
+	@if [ -f server/src/WebUi.cxx ] && grep -q "BEGIN_OCTI_SHARED_SOUND_ASSETS" server/src/WebUi.cxx; then \
+		MAKEFLAGS= $(MAKE) --no-print-directory sound-assets-sync; \
+	fi
+
+sound-assets-sync:
+	@if [ ! -x core/build/octi_sound_gen ]; then \
+		mkdir -p core/build && \
+		(cd core/build && (test -f Makefile || $(CMAKE_CMD) $(CURDIR)/core -DCMAKE_BUILD_TYPE=Release)) && \
+		MAKEFLAGS= $(MAKE) --no-print-directory -C $(CURDIR)/core/build octi_sound_gen -j"$$(nproc 2>/dev/null || echo 4)"; \
+	fi
+	@./core/build/octi_sound_gen \
+		--from-dir assets/sounds \
+		--out-js server/src/WebUi.cxx

@@ -155,12 +155,6 @@ fun OctiBoardCanvas(
         if (effectiveAwaitingMatchStart || multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L) {
             return
         }
-        if (viewModel.isViewingHistory()) {
-            return
-        }
-        if (effectiveGameOver) {
-            return
-        }
         val geo = viewModel.geometry
         val scaleX = currentRenderedBitmap.width.toDouble() / Math.max(1, viewportSize.width).toDouble()
         val scaleY = currentRenderedBitmap.height.toDouble() / Math.max(1, viewportSize.height).toDouble()
@@ -274,9 +268,13 @@ fun OctiBoardCanvas(
                                 val startSq = b.squareAt(startX - 1, startY - 1)
                                 val hasFriendlyPod = !startSq.isEmpty && turn != null && !startSq.hasEnemyOf(turn)
                                 if (composer.isAwaitingConfirmation) {
-                                    if (composer.isGuidedMoveActive && composer.isGuidedLegalDestination(endX, endY)) {
+                                    val curSq = composer.guidedCurrentSquare()
+                                    if (composer.isGuidedMoveActive &&
+                                        curSq.size >= 2 && curSq[0] == startX && curSq[1] == startY &&
+                                        composer.isGuidedLegalDestination(endX, endY)
+                                    ) {
                                         val prevCapCount = composer.captureChoices().size
-                                        val curSq = composer.guidedCurrentSquare()
+                                        val prevBoardSnap = composer.buildPreviewBoard() ?: b
                                         if (composer.clickBoardSquareForGuidedMove(endX, endY)) {
                                             viewModel.refreshDisplayBoard()
                                             val capChoices = composer.captureChoices()
@@ -292,9 +290,42 @@ fun OctiBoardCanvas(
                                             if (capChoices.size > prevCapCount) {
                                                 val latestCap = capChoices.lastOrNull { !it.mandatory }
                                                 if (latestCap != null) {
-                                                    val jsq = b.squareAt(latestCap.jumpedX - 1, latestCap.jumpedY - 1)
+                                                    val jsq = prevBoardSnap.squareAt(latestCap.jumpedX - 1, latestCap.jumpedY - 1)
                                                     val jumpedPlayer = if (!jsq.isEmpty) jsq.getPodAt(0).type.toPlayer() else OctiPlayer.PLAYER_B
                                                     viewModel.promptCapture(latestCap.jumpedX, latestCap.jumpedY, jumpedPlayer)
+                                                }
+                                            }
+                                        }
+                                    } else if (composer.isAwaitingSuperProngBonusMove) {
+                                        if (composer.isGuidedMoveActive) {
+                                            composer.finishGuidedMoveHere()
+                                        }
+                                        val prevBoard = composer.buildPreviewBoard() ?: b
+                                        val prevTurn = prevBoard.game?.turn
+                                        val prevStartSq = prevBoard.squareAt(startX - 1, startY - 1)
+                                        if (!prevStartSq.isEmpty && prevTurn != null && !prevStartSq.hasEnemyOf(prevTurn)) {
+                                            val pIdx = composer.selectedStackPodIndex(startX, startY)
+                                            val resolvedIdx = if (pIdx in 0 until prevStartSq.numPods) pIdx else -1
+                                            val prevCapCount = composer.captureChoices().size
+                                            if (composer.stageOrCommitPodMoveOrJump(startX, startY, resolvedIdx, endX, endY, viewModel.moveEntireMatchingStack.value)) {
+                                                viewModel.refreshDisplayBoard()
+                                                val capChoices = composer.captureChoices()
+                                                if (composer.isAwaitingConfirmation) {
+                                                    val dx = Math.abs(endX - startX)
+                                                    val dy = Math.abs(endY - startY)
+                                                    val isCap = capChoices.size > prevCapCount
+                                                    val cue = if (isCap) OctiSoundSynth.Cue.POD_CAPTURE
+                                                        else if (dx > 1 || dy > 1) OctiSoundSynth.Cue.POD_JUMP
+                                                        else OctiSoundSynth.Cue.POD_STEP
+                                                    OctiSoundSynth.playCue(cue, !viewModel.sfxMuted.value)
+                                                }
+                                                if (capChoices.size > prevCapCount) {
+                                                    val latestCap = capChoices.lastOrNull { !it.mandatory }
+                                                    if (latestCap != null) {
+                                                        val jsq = prevBoard.squareAt(latestCap.jumpedX - 1, latestCap.jumpedY - 1)
+                                                        val jumpedPlayer = if (!jsq.isEmpty) jsq.getPodAt(0).type.toPlayer() else OctiPlayer.PLAYER_B
+                                                        viewModel.promptCapture(latestCap.jumpedX, latestCap.jumpedY, jumpedPlayer)
+                                                    }
                                                 }
                                             }
                                         }
@@ -363,27 +394,15 @@ fun OctiBoardCanvas(
                 detectTapGestures(
                     onDoubleTap = { offset ->
                         currentOnUserInteraction()
-                        if (viewModel.isInteractiveOnlineTurn() && viewModel.composer.isAwaitingConfirmation) {
-                            viewModel.setStatusBanner("Confirm or Cancel your staged move first")
-                            return@detectTapGestures
-                        }
                         openZoomForOffset(offset, size)
                     },
                     onLongPress = { offset ->
                         currentOnUserInteraction()
-                        if (viewModel.isInteractiveOnlineTurn() && viewModel.composer.isAwaitingConfirmation) {
-                            viewModel.setStatusBanner("Confirm or Cancel your staged move first")
-                            return@detectTapGestures
-                        }
                         openZoomForOffset(offset, size)
                     },
                     onTap = { offset ->
                         currentOnUserInteraction()
-                        if (!viewModel.isInteractiveOnlineTurn()) return@detectTapGestures
                         if (multiTouchActive || System.currentTimeMillis() - lastMultiTouchTimeMs < 250L || System.currentTimeMillis() - lastDragTimeMs < 250L) {
-                            return@detectTapGestures
-                        }
-                        if (viewModel.isViewingHistory()) {
                             return@detectTapGestures
                         }
                         val composer = viewModel.composer
@@ -394,12 +413,30 @@ fun OctiBoardCanvas(
                         val px = offset.x.toDouble() * scaleX
                         val py = offset.y.toDouble() * scaleY
 
+                        val isBotTurn = viewModel.matchType.value == OctiAppViewModel.MatchType.LOCAL_VS_BOT &&
+                            (viewModel.isBotThinking.value || b.game?.turn != viewModel.humanSeat.value)
+                        val canActOnBoard = viewModel.isInteractiveOnlineTurn() &&
+                            !viewModel.isViewingHistory() &&
+                            !effectiveGameOver &&
+                            b.game?.isGameOver != true &&
+                            !isBotTurn
+                        if (!canActOnBoard) {
+                            val xy = IntArray(2)
+                            if (geo.screenToSquare(px, py, xy)) {
+                                if (viewModel.handleBoardSquareSingleTap(xy[0], xy[1])) {
+                                    selectedOriginSquare = Pair(xy[0], xy[1])
+                                }
+                            }
+                            return@detectTapGestures
+                        }
+
                         // 1. Check Stack Fan Overlay first if open
                         if (composer.isStackFanOpen) {
                             val fanX = composer.stackFanX
                             val fanY = composer.stackFanY
-                            if (b.isValidCoord(fanX - 1, fanY - 1)) {
-                                val sq = b.squareAt(fanX - 1, fanY - 1)
+                            val fanBoard = if (composer.isAwaitingConfirmation) (composer.buildPreviewBoard() ?: b) else b
+                            if (fanBoard.isValidCoord(fanX - 1, fanY - 1)) {
+                                val sq = fanBoard.squareAt(fanX - 1, fanY - 1)
                                 val hitSlot = geo.hitTestStackFanSlot(
                                     fanX,
                                     fanY,
@@ -473,6 +510,7 @@ fun OctiBoardCanvas(
                             if (isDestination) {
                                 val prevCapCount = composer.captureChoices().size
                                 val curSq = composer.guidedCurrentSquare()
+                                val prevBoardSnap = if (composer.isAwaitingConfirmation) (composer.buildPreviewBoard() ?: b) else b
                                 if (composer.selectGuidedDestination(sqX, sqY)) {
                                     val capChoices = composer.captureChoices()
                                     if (composer.isAwaitingConfirmation) {
@@ -487,7 +525,7 @@ fun OctiBoardCanvas(
                                     if (capChoices.size > prevCapCount) {
                                         val latestCap = capChoices.lastOrNull { !it.mandatory }
                                         if (latestCap != null) {
-                                            val jsq = b.squareAt(latestCap.jumpedX - 1, latestCap.jumpedY - 1)
+                                            val jsq = prevBoardSnap.squareAt(latestCap.jumpedX - 1, latestCap.jumpedY - 1)
                                             val jumpedPlayer = if (!jsq.isEmpty) jsq.getPodAt(0).type.toPlayer() else OctiPlayer.PLAYER_B
                                             viewModel.promptCapture(latestCap.jumpedX, latestCap.jumpedY, jumpedPlayer)
                                         }
@@ -499,36 +537,48 @@ fun OctiBoardCanvas(
 
                             // Not a legal destination!
                             if (composer.isAwaitingConfirmation) {
-                                viewModel.setStatusBanner("Confirm or Cancel your staged move first")
-                                viewModel.notifyComposerUpdated()
-                                return@detectTapGestures
-                            } else {
-                                composer.cancelAndRollback()
-                                val sq = b.squareAt(sqX - 1, sqY - 1)
-                                val turn = b.game?.turn
-                                val isFriendlyPod = !sq.isEmpty && turn != null && !sq.hasEnemyOf(turn)
-                                if (!isFriendlyPod) {
+                                if (composer.isAwaitingSuperProngBonusMove) {
+                                    composer.finishGuidedMoveHere()
+                                    // Fall through to post-prelude continuation / inspection on preview board
+                                } else {
+                                    if (viewModel.handleBoardSquareSingleTap(sqX, sqY)) {
+                                        selectedOriginSquare = Pair(sqX, sqY)
+                                        return@detectTapGestures
+                                    }
+                                    viewModel.setStatusBanner("Confirm or Cancel your staged move first")
                                     viewModel.notifyComposerUpdated()
                                     return@detectTapGestures
                                 }
-                                // Friendly pod: fall through to process guided move start
+                            } else {
+                                composer.cancelAndRollback()
+                                val sq = b.squareAt(sqX - 1, sqY - 1)
+                                if (sq.isEmpty) {
+                                    viewModel.notifyComposerUpdated()
+                                    return@detectTapGestures
+                                }
+                                // Non-empty square: fall through to guided move or stack/enemy inspection
                             }
-                        } else if (composer.isAwaitingConfirmation) {
+                        } else if (composer.isAwaitingConfirmation && !composer.isAwaitingSuperProngBonusMove) {
+                            if (viewModel.handleBoardSquareSingleTap(sqX, sqY)) {
+                                selectedOriginSquare = Pair(sqX, sqY)
+                                return@detectTapGestures
+                            }
                             viewModel.setStatusBanner("Confirm or Cancel your staged move first")
                             viewModel.notifyComposerUpdated()
                             return@detectTapGestures
                         }
 
-                        if (b.game?.isGameOver == true) {
-                            return@detectTapGestures
+                        val activeBoard = if (composer.isAwaitingConfirmation) {
+                            composer.buildPreviewBoard() ?: b
+                        } else {
+                            b
                         }
-
                         val dragKind = composer.activeDragKind()
                         if (dragKind == OctiMoveComposer.DragKind.ADD_PRONG_FROM_RESERVE ||
                             dragKind == OctiMoveComposer.DragKind.ADD_SUPERPRONG_FROM_RESERVE
                         ) {
-                            val sqProng = b.squareAt(sqX - 1, sqY - 1)
-                            val turnProng = b.game?.turn
+                            val sqProng = activeBoard.squareAt(sqX - 1, sqY - 1)
+                            val turnProng = activeBoard.game?.turn
                             if (!sqProng.isEmpty && turnProng != null && !sqProng.hasEnemyOf(turnProng)) {
                                 selectedOriginSquare = Pair(sqX, sqY)
                                 viewModel.openZoomedSquare(sqX, sqY)
@@ -550,22 +600,10 @@ fun OctiBoardCanvas(
                             }
                         }
 
-                        // 5. Empty friendly home square (single-tap reserve pod placement) or friendly pod square (guided move start)
-                        val sq = b.squareAt(sqX - 1, sqY - 1)
-                        val activeTurn = b.game?.turn
-                        if (sq.numPods == 0 && activeTurn != null &&
-                            b.gameMode != OctiGameMode.GAME_MODE_OFK &&
-                            b.isHomeSquareOf(sqX - 1, sqY - 1, activeTurn) &&
-                            (b.game?.getFreePods(activeTurn) ?: 0) > 0
-                        ) {
-                            if (viewModel.handleBoardSquareSingleTap(sqX, sqY)) {
-                                selectedOriginSquare = null
-                                return@detectTapGestures
-                            }
-                        }
-                        if (!sq.isEmpty && activeTurn != null && !sq.hasEnemyOf(activeTurn)) {
-                            selectedOriginSquare = Pair(sqX, sqY)
-                            viewModel.handleBoardSquareSingleTap(sqX, sqY)
+                        // 5. Empty friendly home square (single-tap reserve pod placement), 1-pod guided move, or stack/enemy inspect
+                        val sq = activeBoard.squareAt(sqX - 1, sqY - 1)
+                        if (viewModel.handleBoardSquareSingleTap(sqX, sqY)) {
+                            selectedOriginSquare = if (sq.isEmpty) null else Pair(sqX, sqY)
                             return@detectTapGestures
                         }
                     }

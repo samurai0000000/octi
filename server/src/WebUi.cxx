@@ -1084,6 +1084,9 @@ tr.active-ply {
   margin: 8px 0;
 }
 .zoom-pod-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #E2E8F0;
@@ -5209,10 +5212,15 @@ function dfsJumpChains(s, startX, startY, curX, curY, pod, jumpedSquares, curren
       ? (startX + "" + startY + cfgStr + "-" + landX + "" + landY)
       : (currentMoveStr + "-" + landX + "" + landY);
 
-    var options = [
-      { moveStr: hopPrefix + "x", isCap: true, isEnemyCap: hasEnemy },
-      { moveStr: hopPrefix, isCap: false, isEnemyCap: false }
-    ];
+    var options = onlyTactical
+      ? [
+          { moveStr: hopPrefix + "x", isCap: true, isEnemyCap: hasEnemy },
+          { moveStr: hopPrefix, isCap: false, isEnemyCap: false }
+        ]
+      : [
+          { moveStr: hopPrefix, isCap: false, isEnemyCap: false },
+          { moveStr: hopPrefix + "x", isCap: true, isEnemyCap: hasEnemy }
+        ];
 
     for (var o = 0; o < options.length; o++) {
       var opt = options[o];
@@ -5273,7 +5281,9 @@ function dfsSuperBonusJumps(s, startX, startY, origStartCount, curX, curY, pod, 
     startY: startY,
     endX: landX,
     endY: landY,
+    podCfg: cfgStr,
     dir: dirIdx,
+    superDir: dirIdx,
     isTactical: hasEnemySoFar || isBaseEntry
   });
   dfsSuperBonusJumps(s, startX, startY, origStartCount, landX, landY, pod, dirIdx, nextJumped, hopPrefix, hasEnemySoFar, oppBases, outPreludes);
@@ -5285,7 +5295,9 @@ function dfsSuperBonusJumps(s, startX, startY, origStartCount, curX, curY, pod, 
     startY: startY,
     endX: landX,
     endY: landY,
+    podCfg: cfgStr,
     dir: dirIdx,
+    superDir: dirIdx,
     isTactical: capTactical
   });
   dfsSuperBonusJumps(s, startX, startY, origStartCount, landX, landY, pod, dirIdx, nextJumped, hopPrefix + "x", hasEnemySoFar || hasEnemy, oppBases, outPreludes);
@@ -5295,50 +5307,50 @@ function enumerateSuperBonusPreludes(s, player) {
   var outPreludes = [];
   if (!s || !s.superProngs || !s.map) return outPreludes;
   var oppBases = getUncapturedOpponentBases(s, player);
-  var keys = Object.keys(s.map);
-  for (var ki = 0; ki < keys.length; ki++) {
-    var k = keys[ki];
-    var stack = s.map[k] || [];
-    if (!stack.length) continue;
-    var coords = k.split(",");
-    var px = parseInt(coords[0], 10);
-    var py = parseInt(coords[1], 10);
-    var seenCfgs = {};
-    for (var p = 0; p < stack.length; p++) {
-      var pod = stack[p];
-      if (pod.owner !== player || !pod.cfg || !pod.cfg.prongs) continue;
-      var hasSuper = false;
-      for (var sd = 0; sd < 8; sd++) {
-        if (pod.cfg.prongs[sd] === 2) { hasSuper = true; break; }
-      }
-      if (!hasSuper) continue;
-      var cfgStr = formatProngConfig(pod.cfg.prongs);
-      if (seenCfgs[cfgStr]) continue;
-      seenCfgs[cfgStr] = true;
+  for (var py = 1; py <= s.gh; py++) {
+    for (var px = 1; px <= s.gw; px++) {
+      var k = px + "," + py;
+      var stack = s.map[k] || [];
+      if (!stack.length) continue;
+      var seenCfgs = {};
+      for (var p = 0; p < stack.length; p++) {
+        var pod = stack[p];
+        if (pod.owner !== player || !pod.cfg || !pod.cfg.prongs) continue;
+        var hasSuper = false;
+        for (var sd = 0; sd < 8; sd++) {
+          if (pod.cfg.prongs[sd] === 2) { hasSuper = true; break; }
+        }
+        if (!hasSuper) continue;
+        var cfgStr = formatProngConfig(pod.cfg.prongs);
+        if (seenCfgs[cfgStr]) continue;
+        seenCfgs[cfgStr] = true;
 
-      for (var d = 0; d < 8; d++) {
-        if (pod.cfg.prongs[d] !== 2) continue;
-        var dx = DIR_DELTAS[d][0], dy = DIR_DELTAS[d][1];
-        var nx = px + dx, ny = py + dy;
-        var inBounds = true;
-        if (s.edgeless) {
-          nx = wrapCoord(nx, s.gw); ny = wrapCoord(ny, s.gh);
-        } else if (nx < 1 || nx > s.gw || ny < 1 || ny > s.gh) {
-          inBounds = false;
+        for (var d = 0; d < 8; d++) {
+          if (pod.cfg.prongs[d] !== 2) continue;
+          var dx = DIR_DELTAS[d][0], dy = DIR_DELTAS[d][1];
+          var nx = px + dx, ny = py + dy;
+          var inBounds = true;
+          if (s.edgeless) {
+            nx = wrapCoord(nx, s.gw); ny = wrapCoord(ny, s.gh);
+          } else if (nx < 1 || nx > s.gw || ny < 1 || ny > s.gh) {
+            inBounds = false;
+          }
+          if (inBounds && !squareHasEnemyOf(s, nx, ny, player)) {
+            var isBaseStep = oppBases.some(function (b) { return b.x === nx && b.y === ny; });
+            outPreludes.push({
+              moveStr: px + "" + py + cfgStr + "-" + nx + "" + ny,
+              startX: px,
+              startY: py,
+              endX: nx,
+              endY: ny,
+              podCfg: cfgStr,
+              dir: d,
+              superDir: d,
+              isTactical: isBaseStep
+            });
+          }
+          dfsSuperBonusJumps(s, px, py, stack.length, px, py, pod, d, [], "", false, oppBases, outPreludes);
         }
-        if (inBounds && !squareHasEnemyOf(s, nx, ny, player)) {
-          var isBaseStep = oppBases.some(function (b) { return b.x === nx && b.y === ny; });
-          outPreludes.push({
-            moveStr: px + "" + py + cfgStr + "-" + nx + "" + ny,
-            startX: px,
-            startY: py,
-            endX: nx,
-            endY: ny,
-            dir: d,
-            isTactical: isBaseStep
-          });
-        }
-        dfsSuperBonusJumps(s, px, py, stack.length, px, py, pod, d, [], "", false, oppBases, outPreludes);
       }
     }
   }
@@ -5370,143 +5382,194 @@ function generateBaseMoves(s, player, onlyTactical) {
     });
   }
 
-  /* 2. Prong additions & Repositions */
-  if (!onlyTactical) {
-    Object.keys(s.map).forEach(function (k) {
+  /* 2. Per-square Prong additions, Repositions, Steps, and Recursive Jumps in C++ (y, x) order */
+  for (var py = 1; py <= s.gh; py++) {
+    for (var px = 1; px <= s.gw; px++) {
+      var k = px + "," + py;
       var stack = s.map[k] || [];
-      var coords = k.split(",");
-      var px = coords[0], py = coords[1];
+      if (!stack.length) continue;
+      var seenCfgs = {};
 
       for (var p = 0; p < stack.length; p++) {
         var pod = stack[p];
         if (pod.owner !== player) continue;
-        var cfgText = pod.cfg.text || "";
+        var cfgText = (pod.cfg && pod.cfg.prongs) ? formatProngConfig(pod.cfg.prongs) : (pod.cfg.text || "");
+        if (seenCfgs[cfgText]) continue;
+        seenCfgs[cfgText] = true;
 
-        // Prong additions
-        if (res && res.freeProngs > 0) {
-          for (var d = 0; d < 8; d++) {
-            if (!pod.cfg.prongs[d]) {
-              var addMove = px + "" + py + cfgText + "+" + DIR_CHARS[d];
-              if (!seenMap[addMove]) { seenMap[addMove] = true; moves.push(addMove); }
+        if (!onlyTactical) {
+          // Prong additions
+          if (res && (res.freeProngs > 0 || (s.superProngs && res.freeSuper > 0))) {
+            for (var d = 0; d < 8; d++) {
+              if (!pod.cfg.prongs[d]) {
+                if (res.freeProngs > 0) {
+                  var addMove = px + "" + py + cfgText + "+" + DIR_CHARS[d];
+                  if (!seenMap[addMove]) { seenMap[addMove] = true; moves.push(addMove); }
+                }
+                if (s.superProngs && res.freeSuper > 0) {
+                  var addSupMove = px + "" + py + cfgText + "+" + DIR_CHARS[d] + "!";
+                  if (!seenMap[addSupMove]) { seenMap[addSupMove] = true; moves.push(addSupMove); }
+                }
+              }
             }
           }
-        }
-        if (s.superProngs && res && res.freeSuper > 0) {
-          for (var sd = 0; sd < 8; sd++) {
-            if (!pod.cfg.prongs[sd]) {
-              var addSupMove = px + "" + py + cfgText + "+" + DIR_CHARS[sd] + "!";
-              if (!seenMap[addSupMove]) { seenMap[addSupMove] = true; moves.push(addSupMove); }
-            }
-          }
-        }
 
-        // Prong repositions
-        if (s.mode !== "OFK" && pod.cfg.count > 0) {
-          for (var src = 0; src < 8; src++) {
-            if (pod.cfg.prongs[src] === 1) {
-              for (var dst = 0; dst < 8; dst++) {
-                if (!pod.cfg.prongs[dst]) {
-                  var repoMove = px + "" + py + cfgText + "+" + DIR_CHARS[dst] + "-" + DIR_CHARS[src];
-                  if (!seenMap[repoMove]) { seenMap[repoMove] = true; moves.push(repoMove); }
+          // Prong repositions
+          if (s.mode !== "OFK" && pod.cfg.count > 0) {
+            for (var src = 0; src < 8; src++) {
+              if (pod.cfg.prongs[src] === 1) {
+                for (var dst = 0; dst < 8; dst++) {
+                  if (!pod.cfg.prongs[dst]) {
+                    var repoMove = px + "" + py + cfgText + "+" + DIR_CHARS[dst] + "-" + DIR_CHARS[src];
+                    if (!seenMap[repoMove]) { seenMap[repoMove] = true; moves.push(repoMove); }
+                  }
                 }
               }
             }
           }
         }
-      }
-    });
-  }
 
-  /* 3. Steps and Recursive Jumps */
-  Object.keys(s.map).forEach(function (k) {
-    var stack = s.map[k] || [];
-    var coords = k.split(",");
-    var px = parseInt(coords[0], 10);
-    var py = parseInt(coords[1], 10);
+        if (pod.cfg.count > 0) {
+          // Single steps (distance 1)
+          for (var sd = 0; sd < 8; sd++) {
+            if (!pod.cfg.prongs[sd]) continue;
+            var dx = DIR_DELTAS[sd][0], dy = DIR_DELTAS[sd][1];
+            var sx = px + dx, sy = py + dy;
+            if (s.edgeless) {
+              sx = wrapCoord(sx, s.gw); sy = wrapCoord(sy, s.gh);
+            } else {
+              if (sx < 1 || sx > s.gw || sy < 1 || sy > s.gh) continue;
+            }
 
-    for (var p = 0; p < stack.length; p++) {
-      var pod = stack[p];
-      if (pod.owner !== player) continue;
-      var cfgText = pod.cfg.text || "";
+            var stepK = sx + "," + sy;
+            var stepStack = s.map[stepK];
+            var canLandStep = false;
+            if (!stepStack || !stepStack.length) {
+              canLandStep = true;
+            } else if (s.mode !== "OFK" && !squareHasEnemyOf(s, sx, sy, player)) {
+              canLandStep = true;
+            }
 
-      // Single steps (distance 1)
-      for (var d = 0; d < 8; d++) {
-        if (!pod.cfg.prongs[d]) continue;
-        var dx = DIR_DELTAS[d][0], dy = DIR_DELTAS[d][1];
-        var sx = px + dx, sy = py + dy;
-        if (s.edgeless) {
-          sx = wrapCoord(sx, s.gw); sy = wrapCoord(sy, s.gh);
-        } else {
-          if (sx < 1 || sx > s.gw || sy < 1 || sy > s.gh) continue;
-        }
-
-        var stepK = sx + "," + sy;
-        var stepStack = s.map[stepK];
-        var canLandStep = false;
-        if (!stepStack || !stepStack.length) {
-          canLandStep = true;
-        } else if (s.mode !== "OFK" && !squareHasEnemyOf(s, sx, sy, player)) {
-          canLandStep = true;
-        }
-
-        if (canLandStep) {
-          var isBaseEntry = oppBases.some(function (b) { return b.x === sx && b.y === sy; });
-          if (!onlyTactical || isBaseEntry) {
-            var stepMove = px + "" + py + cfgText + "-" + sx + "" + sy;
-            if (!seenMap[stepMove]) { seenMap[stepMove] = true; moves.push(stepMove); }
+            if (canLandStep) {
+              var isBaseEntry = oppBases.some(function (b) { return b.x === sx && b.y === sy; });
+              if (!onlyTactical || isBaseEntry) {
+                var stepMove = px + "" + py + cfgText + "-" + sx + "" + sy;
+                if (!seenMap[stepMove]) { seenMap[stepMove] = true; moves.push(stepMove); }
+              }
+            }
           }
+
+          // Multi-hop jumps
+          dfsJumpChains(s, px, py, px, py, pod, [], "", moves, seenMap, onlyTactical, true);
         }
       }
-
-      // Multi-hop jumps
-      dfsJumpChains(s, px, py, px, py, pod, [], "", moves, seenMap, onlyTactical, true);
     }
-  });
+  }
 
   return moves;
 }
 
+function canonicalPostMoveStateKey(s) {
+  var resParts = [];
+  for (var i = 0; i < s.reserves.length; i++) {
+    var r = s.reserves[i];
+    resParts.push(r.freePods + "," + r.capturedPods + "," + r.freeProngs + "," + r.freeSuper);
+  }
+  var sqParts = [];
+  var keys = Object.keys(s.map);
+  keys.sort(function (a, b) {
+    var pA = a.split(","), pB = b.split(",");
+    var xA = parseInt(pA[0], 10), yA = parseInt(pA[1], 10);
+    var xB = parseInt(pB[0], 10), yB = parseInt(pB[1], 10);
+    if (yA !== yB) return yA - yB;
+    return xA - xB;
+  });
+  for (var ki = 0; ki < keys.length; ki++) {
+    var k = keys[ki];
+    var stack = s.map[k];
+    if (!stack || !stack.length) continue;
+    var p = k.split(",");
+    var px = p[0], py = p[1];
+    var podToks = [];
+    for (var pi = 0; pi < stack.length; pi++) {
+      var pod = stack[pi];
+      var cfgStr = (pod.cfg && pod.cfg.prongs) ? formatProngConfig(pod.cfg.prongs) : ((pod.cfg && pod.cfg.text) ? pod.cfg.text : "");
+      podToks.push(pod.owner + px + py + cfgStr);
+    }
+    if (podToks.length > 1) podToks.sort();
+    for (var ti = 0; ti < podToks.length; ti++) sqParts.push(podToks[ti]);
+  }
+  return String(s.elimMask || 0) + "|" + resParts.join(":") + "|" + sqParts.join(",");
+}
+
 function generateMoves(s, player, onlyTactical) {
-  var moves = generateBaseMoves(s, player, onlyTactical);
-  if (!s || !s.superProngs) return moves;
+  var rawBaseMoves = generateBaseMoves(s, player, onlyTactical);
+  if (!s || !s.superProngs) return rawBaseMoves;
+
+  var moves = [];
+  var seenPostStates = {};
+  for (var bm = 0; bm < rawBaseMoves.length; bm++) {
+    var post0 = cloneState(s);
+    applyRegularMoveOpNoTurn(post0, rawBaseMoves[bm], player);
+    var key0 = canonicalPostMoveStateKey(post0);
+    if (!seenPostStates[key0]) {
+      seenPostStates[key0] = true;
+      moves.push(rawBaseMoves[bm]);
+    }
+  }
 
   var preludes1 = enumerateSuperBonusPreludes(s, player);
   if (!preludes1.length) return moves;
 
-  var seenMoveStr = {};
-  for (var bm = 0; bm < moves.length; bm++) {
-    seenMoveStr[moves[bm]] = true;
-  }
-  var seenPreludeStates = {};
-
+  // 1-prelude moves
   for (var i = 0; i < preludes1.length; i++) {
     var p1 = preludes1[i];
     var s1 = cloneState(s);
     applySingleHopChain(s1, p1.moveStr, player);
-    var p1Fen = serializeOctiFen(s1);
-    if (seenPreludeStates[p1Fen]) continue;
-    seenPreludeStates[p1Fen] = true;
 
     var restrict1 = !!(onlyTactical && !p1.isTactical);
     var reg1 = generateBaseMoves(s1, player, restrict1);
     for (var r1 = 0; r1 < reg1.length; r1++) {
-      var full1 = p1.moveStr + ";" + reg1[r1];
-      if (!seenMoveStr[full1]) {
-        seenMoveStr[full1] = true;
-        moves.push(full1);
+      var post1 = cloneState(s1);
+      applyRegularMoveOpNoTurn(post1, reg1[r1], player);
+      var key1 = canonicalPostMoveStateKey(post1);
+      if (!seenPostStates[key1]) {
+        seenPostStates[key1] = true;
+        moves.push(p1.moveStr + ";" + reg1[r1]);
+      }
+    }
+  }
+
+  // 2-prelude moves
+  for (var i2 = 0; i2 < preludes1.length; i2++) {
+    var p1b = preludes1[i2];
+    var s1NoCap = cloneState(s);
+    var defCaps1 = [];
+    applySingleHopChain(s1NoCap, p1b.moveStr, player, defCaps1);
+
+    var sameCfgCountAfterP1 = 0;
+    var p1LandStack = s1NoCap.map[p1b.endX + "," + p1b.endY] || [];
+    for (var li = 0; li < p1LandStack.length; li++) {
+      if (p1LandStack[li].owner === player &&
+          formatProngConfig(p1LandStack[li].cfg.prongs) === p1b.podCfg) {
+        sameCfgCountAfterP1++;
       }
     }
 
-    // 2-prelude moves
-    var s1NoCap = cloneState(s);
-    var defCaps1 = [];
-    applySingleHopChain(s1NoCap, p1.moveStr, player, defCaps1);
     var preludes2 = enumerateSuperBonusPreludes(s1NoCap, player);
     for (var j = 0; j < preludes2.length; j++) {
       var p2 = preludes2[j];
+      if (sameCfgCountAfterP1 < 2 &&
+          p2.startX === p1b.endX &&
+          p2.startY === p1b.endY &&
+          p2.podCfg === p1b.podCfg &&
+          p2.dir === p1b.dir) {
+        continue;
+      }
+
       var s2 = cloneState(s);
       var defCapsBoth = [];
-      applySingleHopChain(s2, p1.moveStr, player, defCapsBoth);
+      applySingleHopChain(s2, p1b.moveStr, player, defCapsBoth);
       applySingleHopChain(s2, p2.moveStr, player, defCapsBoth);
       var pIdx = playerIndex(player);
       var res = s2.reserves[pIdx];
@@ -5528,23 +5591,26 @@ function generateMoves(s, player, onlyTactical) {
           delete s2.map[midK];
         }
       }
-      var p2Fen = serializeOctiFen(s2);
-      if (seenPreludeStates[p2Fen]) continue;
-      seenPreludeStates[p2Fen] = true;
 
-      var restrict2 = !!(onlyTactical && !p1.isTactical && !p2.isTactical);
+      var restrict2 = !!(onlyTactical && !p1b.isTactical && !p2.isTactical);
       var reg2 = generateBaseMoves(s2, player, restrict2);
       for (var r2 = 0; r2 < reg2.length; r2++) {
-        var full2 = p1.moveStr + ";" + p2.moveStr + ";" + reg2[r2];
-        if (!seenMoveStr[full2]) {
-          seenMoveStr[full2] = true;
-          moves.push(full2);
+        var post2 = cloneState(s2);
+        applyRegularMoveOpNoTurn(post2, reg2[r2], player);
+        var key2 = canonicalPostMoveStateKey(post2);
+        if (!seenPostStates[key2]) {
+          seenPostStates[key2] = true;
+          moves.push(p1b.moveStr + ";" + p2.moveStr + ";" + reg2[r2]);
         }
       }
     }
   }
 
   return moves;
+}
+
+function generateMovesForState(s) {
+  return Array.from(generateMoves(s, s.turn, false));
 }
 
 function applySingleHopChain(s, move, player, deferCapturesList, deferLandingsList) {
@@ -5838,19 +5904,16 @@ function advanceTurn(s, player) {
   }
 }
 
-function applyMoveToState(s, move, player) {
+function deltaToDirIndex(dx, dy) {
+  for (var d = 0; d < 8; d++) {
+    if (DIR_DELTAS[d][0] === dx && DIR_DELTAS[d][1] === dy) return d;
+  }
+  return -1;
+}
+
+function applyRegularMoveOpNoTurn(s, move, player) {
   var pIdx = playerIndex(player);
   var res = s.reserves[pIdx];
-
-  // Super-prelude: e.g. "33a!-34;34a!+b"
-  if (move.indexOf(";") !== -1) {
-    var parts = move.split(";");
-    for (var sp = 0; sp < parts.length - 1; sp++) {
-      var preMove = parts[sp].trim();
-      if (preMove) applySingleHopChain(s, preMove, player);
-    }
-    move = parts[parts.length - 1].trim();
-  }
 
   // Composite move: e.g. "37df-46,37e-36"
   if (move.indexOf(",") !== -1 && move.indexOf("-") !== -1) {
@@ -5887,9 +5950,6 @@ function applyMoveToState(s, move, player) {
     if (s.mode === "4" || s.mode === "4P") {
       check4PlayerElimination(s, player);
     }
-    checkWinner(s);
-    if (s.status === "O") return s;
-    advanceTurn(s, player);
     return s;
   }
 
@@ -6028,6 +6088,200 @@ function applyMoveToState(s, move, player) {
   if (s.mode === "4" || s.mode === "4P") {
     check4PlayerElimination(s, player);
   }
+  return s;
+}
+
+function applyMoveToState(s, move, player) {
+  var pIdx = playerIndex(player);
+  var res = s.reserves[pIdx];
+
+  // Super-prelude: e.g. "33a!-34;34a!+b"
+  if (move.indexOf(";") !== -1) {
+    if (!s || !s.superProngs) {
+      throw new Error("Superprong bonus move not allowed when superprongs disabled");
+    }
+    var parts = move.split(";");
+    if (parts.length > 3) {
+      throw new Error("At most two superprong bonus preludes allowed");
+    }
+    var regMove = parts[parts.length - 1].trim();
+    if (!regMove) {
+      throw new Error("Move must include a regular turn action");
+    }
+
+    var preludeDeferredCaps = [];
+    var p1EndX = -1, p1EndY = -1, p1Cfg = "", p1SuperDir = -1, sameCfgCountAfterP1 = 0;
+
+    for (var sp = 0; sp < parts.length - 1; sp++) {
+      var preMove = parts[sp].trim();
+      if (!preMove || preMove.indexOf(",") !== -1 || preMove.indexOf("+") !== -1 ||
+          preMove.indexOf("*") !== -1 || preMove.indexOf("-") === -1) {
+        throw new Error("Invalid superprong bonus prelude");
+      }
+      var hops = preMove.split("-");
+      if (hops.length < 2) {
+        throw new Error("Superprong bonus prelude must contain hops");
+      }
+      var origM = /^([1-9])([1-9])([a-hA-H!]*)$/.exec(hops[0]);
+      if (!origM) {
+        throw new Error("Invalid superprong bonus prelude origin");
+      }
+      var startX = parseInt(origM[1], 10);
+      var startY = parseInt(origM[2], 10);
+      var rawCfgMatch = origM[3] || "";
+      var normCfgMatch = rawCfgMatch ? formatProngConfig(parseProngConfig(rawCfgMatch).prongs) : "";
+      var fromK = startX + "," + startY;
+      var fromStack = s.map[fromK];
+      if (!fromStack || !fromStack.length) {
+        throw new Error("Pod for superprong bonus move not found");
+      }
+
+      var podIdx = -1;
+      for (var pi = 0; pi < fromStack.length; pi++) {
+        if (fromStack[pi].owner === player) {
+          var pText = formatProngConfig(fromStack[pi].cfg.prongs);
+          if (pText === normCfgMatch || fromStack[pi].cfg.text === rawCfgMatch) {
+            podIdx = pi;
+            break;
+          }
+        }
+      }
+      if (podIdx === -1) {
+        throw new Error("Pod for superprong bonus move not found");
+      }
+
+      var movingPod = fromStack.splice(podIdx, 1)[0];
+      if (!fromStack.length) delete s.map[fromK];
+      var opCfg = formatProngConfig(movingPod.cfg.prongs);
+      var curX = startX, curY = startY;
+      var opSuperDir = -1;
+      var jumpedInOp = {};
+
+      for (var h = 1; h < hops.length; h++) {
+        var hopM = /^([1-9])([1-9])(x?)$/.exec(hops[h]);
+        if (!hopM) {
+          throw new Error("Invalid hop in superprong bonus prelude");
+        }
+        var toX = parseInt(hopM[1], 10);
+        var toY = parseInt(hopM[2], 10);
+        var isCap = (hopM[3] === "x");
+        var dx = toX - curX, dy = toY - curY;
+        if (s.edgeless) {
+          if (dx > s.gw / 2) dx -= s.gw;
+          else if (dx < -s.gw / 2) dx += s.gw;
+          if (dy > s.gh / 2) dy -= s.gh;
+          else if (dy < -s.gh / 2) dy += s.gh;
+        }
+
+        var isDist1 = (Math.max(Math.abs(dx), Math.abs(dy)) === 1 &&
+                       (Math.abs(dx) === 1 || Math.abs(dy) === 1));
+        if (isDist1) {
+          if (hops.length !== 2 || isCap) {
+            throw new Error("Invalid distance-1 superprong bonus hop");
+          }
+          var stepDir = deltaToDirIndex(dx, dy);
+          if (stepDir < 0 || movingPod.cfg.prongs[stepDir] !== 2) {
+            throw new Error("Superprong bonus move must follow superprong direction");
+          }
+          opSuperDir = stepDir;
+          if (sp === 1 && startX === p1EndX && startY === p1EndY &&
+              opCfg === p1Cfg && opSuperDir === p1SuperDir && sameCfgCountAfterP1 < 2) {
+            throw new Error("Superprong socket already used in bonus prelude");
+          }
+          if (squareHasEnemyOf(s, toX, toY, player) ||
+              (s.mode === "OFK" && s.map[toX + "," + toY] && s.map[toX + "," + toY].length > 0)) {
+            throw new Error("Cannot step onto blocked square in superprong bonus move");
+          }
+          curX = toX;
+          curY = toY;
+        } else {
+          var validJump = (Math.abs(dx) === 0 || Math.abs(dx) === 2) &&
+                          (Math.abs(dy) === 0 || Math.abs(dy) === 2) &&
+                          (Math.abs(dx) === 2 || Math.abs(dy) === 2);
+          if (!validJump) {
+            throw new Error("Invalid jump geometry in superprong bonus move");
+          }
+          var jumpDir = deltaToDirIndex(dx / 2, dy / 2);
+          if (jumpDir < 0 || movingPod.cfg.prongs[jumpDir] !== 2) {
+            throw new Error("Superprong bonus jump must follow superprong direction");
+          }
+          if (h === 1) {
+            opSuperDir = jumpDir;
+            if (sp === 1 && startX === p1EndX && startY === p1EndY &&
+                opCfg === p1Cfg && opSuperDir === p1SuperDir && sameCfgCountAfterP1 < 2) {
+              throw new Error("Superprong socket already used in bonus prelude");
+            }
+          } else if (jumpDir !== opSuperDir) {
+            throw new Error("Superprong bonus jump must follow single straight superprong direction");
+          }
+          var midX = curX + dx / 2, midY = curY + dy / 2;
+          if (s.edgeless) {
+            midX = wrapCoord(midX, s.gw);
+            midY = wrapCoord(midY, s.gh);
+          }
+          var midK = midX + "," + midY;
+          if (jumpedInOp[midK]) {
+            throw new Error("Cannot jump same square twice in superprong bonus move");
+          }
+          jumpedInOp[midK] = true;
+          if (!s.map[midK] || !s.map[midK].length) {
+            throw new Error("Cannot jump empty square in superprong bonus move");
+          }
+          var toK = toX + "," + toY;
+          if (s.map[toK] && s.map[toK].length) {
+            throw new Error("Landing square must be empty in superprong bonus move");
+          }
+          if (isCap && preludeDeferredCaps.indexOf(midK) === -1) {
+            preludeDeferredCaps.push(midK);
+          }
+          curX = toX;
+          curY = toY;
+        }
+      }
+
+      var endK = curX + "," + curY;
+      if (!s.map[endK]) s.map[endK] = [];
+      s.map[endK].push(movingPod);
+
+      if (sp === 0) {
+        p1EndX = curX;
+        p1EndY = curY;
+        p1Cfg = opCfg;
+        p1SuperDir = opSuperDir;
+        sameCfgCountAfterP1 = 0;
+        var landPods = s.map[endK] || [];
+        for (var lpi = 0; lpi < landPods.length; lpi++) {
+          if (landPods[lpi].owner === player &&
+              formatProngConfig(landPods[lpi].cfg.prongs) === p1Cfg) {
+            sameCfgCountAfterP1++;
+          }
+        }
+      }
+    }
+
+    for (var dc = 0; dc < preludeDeferredCaps.length; dc++) {
+      var capK = preludeDeferredCaps[dc];
+      if (s.map[capK] && s.map[capK].length) {
+        for (var v = 0; v < s.map[capK].length; v++) {
+          var vPod = s.map[capK][v];
+          var vIdx = playerIndex(vPod.owner);
+          s.reserves[vIdx].capturedPods++;
+          for (var d = 0; d < 8; d++) {
+            if (vPod.cfg.prongs[d] === 1) res.freeProngs++;
+            else if (vPod.cfg.prongs[d] === 2) {
+              if (s.superProngs) res.freeSuper++;
+              else res.freeProngs++;
+            }
+          }
+        }
+        delete s.map[capK];
+      }
+    }
+
+    move = regMove;
+  }
+
+  applyRegularMoveOpNoTurn(s, move, player);
   checkWinner(s);
   if (s.status === "O") return s;
   advanceTurn(s, player);
@@ -43383,94 +43637,673 @@ if ($("robot-detail-close")) $("robot-detail-close").addEventListener("click", f
  * Tab 2: Web Player (Desktop & Android Parity Engine, Audio Synth & Gesture Board)
  * ========================================================================= */
 
+/* BEGIN_OCTI_SHARED_SOUND_ASSETS */
+var OCTI_SHARED_WAV_BASE64 = {
+  POD_PLACE: "UklGRiQPAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAPAAAAAEEAAgE9AuYD8wVSCPEKvQ2hEIgTXBYJGX0bph11H94g2CFeImwiAyImId0fMR4sHN0ZUReYFMER3A73Cx8JXga/A0YB+f7Z/OL6Evlf98L1LvSV8urwHu8h7eXqXeh+5dri7d+63EXZltW30bbNosmPxZDBur0juuG2C7S3sfiv4K6BrueuHrAushm14riEvfnCNskt0M3XAuC16MzxLfu6BFYO4xdDIVkqCjM5O85Cs0nUTyFVjFkKXZZfLGHNYX1hQ2AqXj5bkVczUzlOuUjJQoA89jVCL3souCEMG4sURQ5LCKkCaf2U+C/0PfC/7LPpFeff5AvjjuFe4HHfut4u3sDdZN0P3bfcUtzY20Lbi9qw2bDYiddA1tbUU9O80RvQeM7fzFzL+cnEyMnHFceyxqvGDMfcxyTJ6couzfjPRdMV12TbLOBn5QrrC/Fe9/P9vQSqC6oSqhmZIGUn/C1MNEU61j/xRIlJkU0AUcxT8FVmVytYQVimV2BWc1TnUcROFEvjRj5CMz3QNyUyQiw2JhEg4xm7E6gNtgf0AWz8KPcz8pTtUOlu5e/h1t4k3NbZ7Ndh1jHVVtTJ04TTf9Ox0xLUmdQ/1fvVxNaV12TYLdnr2ZjaMNuz2x3cbdym3Mfc09zN3LncnNx63FrcQdw33ELcZ9yv3B/dvt2R3pzf5uBx4j/kVeax6FbrQe5x8eP0k/h9/JsA5gRXCecNjBI9F/EbnyA7JbwpGC5FMjk26zlTPWdAIkN7RW1H9EgLSq9K3kqYStxJrEgLR/tEgEKgP2I8yzjjNLMwQyycJ8gi0B2/GJ4Tdw5UCT4EP/9e+qX1GvHF7Kzo1eRE4f3dA9tZ2ADW+NND0t7QyM//zoDOR85QzpfOF8/Lz6zQt9Hk0i/UkNUE14XYDdqX2yDdo94c4Ijh5eIw5Gfli+aZ55Lod+lI6gbrtOtT7ObscO317Xbu+O597wvwo/BL8QPy0fK387f01fUR92346/mM+0/9Nf88AWUDrQUSCJIKKg3XD5QSXxUyGAob4R2yIHkjMCbSKFkrwi0GMCEyDzTKNVA3nDiqOXk6BTtMO047CDt6OqU5iDglN301kTNmMfwuWCx9KXAmNSPQH0YcnRjbFAQRHg0vCTwFTAFj/Yj5vvUN8njuA+u0547klOHL3jTc09mp17jVAdSF0kPRPtBzz+HOic5nznvOws45z9/Pr9Cn0cTSAtRd1dPWXtj92avbZd0o3+/guOKA5EXmAui36WHr/uyM7grwePHT8hv0UfV09oT3gfht+Uf6EvvO+338H/24/Uj+0f5W/9j/WADZAF0B5QFzAgkDqANRBAYFxwWWBnMHXwhaCWQKfAukDNkNGw9qEMQRKBOUFAcWfhf5GHQa7xtlHdYePiCcIe0iLiRdJXcmeydnKDcp6il/KvIqRCtyK3srXyscK7EqHyplKYMoeidKJvMkdyPWIRMgLh4qHAcayhdyFQQTgRDsDUgLlwjdBRsDVwCR/c36D/hY9a3yDvCA7QXrn+hQ5hvkAuIH4CzecdzZ2mXZFdjr1ufVCdVS1MLTWdMW0/jSANMs03zT7tOA1DLVAdbt1vTXEtlI2pLb79xd3trfYuH24pLkNObb54TpLuvW7HzuHfC48Uzz1vRX9sz3NfmR+t/7H/1Q/nH/gwCGAXgCWwMuBPMEqAVQBuoGdwf4B20I2Ag5CZIJ4gksCnEKsArsCiULXAuSC8kLAAw5DHQMswz2DDwNiA3ZDTAOjA7vDlcPxg87ELUQNRG7EUUS1BJmE/wTlBQtFcgVYhb8FpQXKBi6GEYZzBlLGsMaMRuVG+4bPBx8HK4c0hzmHOoc3Ry/HI4cSxz1G4sbDht+GtkZIRlVGHYXgxZ+FWYUPRMCErcQXA/zDXsM9gpmCcoHJQZ4BMMCCAFJ/4b9wfv8+Tj4dva39P3ySvGe7/vtYuzU6lTp4Od85ijl5OOy4pPhh+CP36ve3d0l3YPc99uC2yTb3dqs2pPakNqj2s3aDNth28rbSNzZ3HzdMt763tHfuOCu4bHiwePd5APmMudq6Krp7+o67Int2+4v8ITx2fIu9ID1z/Yb+GL5pPrg+xX9Qv5n/4QAlwGhAqEDlgSBBWAGNQf+B7wIbgkVCrAKQAvFC0AMrwwUDW8NwA0HDkYOfA6qDtAO7w4HDxkPJQ8tDy8PLg8oDyAPFQ8ID/oO6g7aDsoOuQ6pDpoOjQ6ADnYObg5nDmQOYw5kDmgObw55DoYOlQ6nDrwO0w7sDgcPJA9DD2IPgw+kD8YP6A8JECkQSBBmEIEQmhCxEMQQ0xDeEOUQ5xDjENsQzBC2EJoQeBBOEBwQ4w+hD1gPBg+sDkoO3w1rDe4MaQzcC0ULpwoAClEJmwjcBxYHSgZ2BZwEvAPXAuwB/AAIABD/Ff4X/Rf8FfsS+g75CvgH9wT2BPUF9AnzEfId8S3wQu9d7n7tpezU6wvrSeqQ6eDoOeic5wnngeYD5pDlKeXN5H3kOOT/49PjsuOe45bjmuOq48bj7uMi5GLkreQD5WTl0OVG5sbmUefk54HoJunT6YnqResJ7NPso+157lTvM/AW8f3x5vLS88H0sfWh9pP3hPh1+WX6U/tA/Cv9E/74/tn/tgCQAWQCNAP/A8QEhAU9BvEGnQdECOMIfAkNCpgKGwuXCwwMeQzfDD4NlQ3lDS8OcQ6sDuAODQ80D1UPbw+ED5MPnA+fD54PmA+ND30Pag9SDzcPGQ/3DtMOrA6DDlcOKg77DcsNmg1oDTUNAg3ODJsMaAw1DAIM0QugC3ALQQsUC+cKvAqTCmsKRQogCv0J3Am9CZ8JggloCU8JNwkhCQwJ+QjnCNYIxgi3CKgImwiNCIEIdAhoCFsITghBCDMIJQgWCAUI9AfhB80HtwefB4YHagdMBywHCQfkBrwGkgZkBjQGAAbJBZAFUwUSBc8EiAQ+BPADoANLA/QCmgI8AtsBdwEQAacAOgDL/1r/5v5w/vf9ff0B/YP8BPyD+wL7f/r8+Xj59Phw+O33affm9mT24/Vj9eT0aPTt83Tz/fKK8hnyqvE/8djwdPAU8LfvX+8L77zuce4r7untre127UTtGO3x7M/ss+yd7I3sgux97H7sheyS7KXsvezc7ADtKe1Z7Y7tye0J7k7ume7p7j7vl+/271nwwfAs8ZzxEPKI8gPzgvME9In0EfWb9Sj2t/ZI99v3b/gF+Zz5M/rL+mT7/fuW/C/9yP1g/vf+jf8iALUARwHXAWUC8QJ7AwIEhwQJBYgFBAZ9BvMGZQfTBz8IpggJCWkJxQkcCnAKwAoLC1ILlQvUCw8MRQx3DKUMzwz1DBYNMw1NDWINdA2BDYsNkQ2TDZINjg2GDXoNbA1bDUYNLw0VDfgM2Qy4DJQMbgxHDB0M8QvEC5YLZgs1CwILzwqbCmYKMAr6CcMJjAlVCR4J5givCHgIQQgLCNUHnwdqBzYHAgfQBp4GbQY9Bg4G4AWzBYcFXAUyBQoF4gS8BJcEcwRQBC8EDgTvA9EDtAOYA3wDYgNJAzEDGQMDA+0C2ALDAq8CnAKJAncCZQJTAkICMAIfAg4C/QHrAdoByAG3AaQBkgF/AWsBVwFDAS4BGAEBAekA0QC4AJ0AggBmAEkAKwALAOv/yf+n/4P/Xv84/xH/6f6//pX+af48/g7+3/2v/X79Tf0a/eb8sfx8/Eb8D/zY+6D7Z/su+/X6u/qB+kf6DPrS+Zj5Xfkj+en4sPh3+D74BvjP95j3Y/cu9/r2x/aV9mX2NvYI9tz1sfWI9WD1O/UX9fX01fS39Jv0gfRp9FT0QfQw9CH0FfQM9AX0APT+8//zAvQI9BD0G/Qp9Dn0TPRh9Hr0lfSy9NL09fQa9UH1bPWY9cf1+fUs9mL2mvbV9hH3UPeQ99P3F/hd+KX47/g6+Yb51Pkk+nT6xvoZ+237wfsX/G38xPwc/XT9zP0l/n3+1v4v/4j/4f85AJEA6AA/AZYB6wFAApQC5wI5A4oD2gMoBHUEwQQLBVQFmwXhBSQGZgamBuUGIQdbB5QHygf+BzAIYAiOCLoI4wgKCS8JUQlyCZAJqwnFCdwJ8QkDChQKIgotCjcKPgpDCkYKRwpGCkMKPQo2Ci0KIQoUCgUK9QniCc4JuAmhCYgJbQlRCTQJFgn2CNUIsgiPCGsIRggfCPgH0AeoB38HVQcqB/8G1AaoBnwGUAYkBvcFygWdBXEFRAUXBesEvwSTBGcEOwQQBOYDuwOSA2gDQAMYA/ACyQKjAn4CWQI1AhEC7wHNAawBiwFsAU0BLwESAfYA2wDAAKYAjQB1AF4ARwAxABwACAD0/+L/z/++/63/nf+N/37/cP9i/1X/SP88/zD/Jf8Z/w//BP/6/vH+5/7e/tX+zP7D/rr+sv6p/qH+mP6Q/of+f/52/m3+ZP5b/lH+SP4+/jT+Kv4f/hT+Cf79/fH95f3Z/cz9vv2x/aL9lP2F/Xb9Zv1W/Ub9Nf0k/RL9AP3u/Nv8yPy1/KL8jvx6/GX8Ufw8/Cf8Evz8++f70fu8+6b7kPt6+2X7T/s5+yT7D/v6+uX60Pq8+qf6lPqA+m36WvpI+jf6JfoV+gX69fnn+dn5y/m++bP5p/md+ZT5i/mD+X35d/ly+W75a/lp+Wj5aflq+Wz5cPl0+Xr5gfmJ+ZL5nPmo+bT5wvnR+eH58/kF+hn6LvpE+lv6c/qM+qf6wvrf+v36G/s7+1z7fvug+8T76fsO/DT8W/yD/Kz81vwA/Sv9Vv2C/a/93P0K/jj+Z/6W/sX+9f4l/1X/hf+2/+f/FwBIAHkAqgDaAAsBOwFrAZsBywH6ASkCVwKFArMC4AIMAzgDYwOOA7cD4QMJBDAEVwR9BKIExgTpBAsFLAVMBWsFiQWmBcIF3QX2BQ8GJgY8BlEGZQZ3BogGmAanBrUGwQbMBtYG3gblBuwG8Ab0BvYG9wb3BvYG8wbwBusG5QbeBtYGzAbCBrcGqgacBo4GfgZuBl0GSgY3BiMGDgb4BeIFywWzBZoFgQVnBU0FMgUWBfoE3QTABKMEhQRnBEkEKgQLBOwDzAOtA40DbQNNAy0DDQPtAs0CrQKNAm4CTgIvAhAC8QHSAbQBlQF4AVoBPQE=",
+  PRONG_SNAP: "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",
+  POD_STEP: "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",
+  POD_JUMP: "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",
+  POD_CAPTURE: "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",
+  CLOCK_LOW_TICK: "UklGRsQFAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YaAFAAAAAPkAjQPTBo4JhArRCC0ED/2l9KHs5OYS5THoXPCn/DMLdRmuJG0qEyk0IMUQCP076AnW68l3xuLMqtyW8wcOhieMO0pGZkV0OCUhDAMY48HGFrPaq8myPccs5qQKjS60S/la7FqzS/wvhgxO543Gsa9ypjqs778m3rsBsCQzQZFS/lUKS6oz5BMY8RvRPrlprXiv8r4i2ZD5wxowNyNKi1BySSk2BRrM+eragcKVtGGz+L5N1Y3yxhG9Lc9BtkoRR5g3/h5yAfDjYsvXu9G337+O0qXsuQnoJK45okQIRBU45CISCCjs0dMSw6e8iMHJ0MfnmQK8HNUxaz54QL83ziW4DZLzvdsvysXB0cPkz+DjX/w+FVYqKziAPLI20idwEi76HuMX0Q/HoMbEz9/gAvdxDj8j+jE7OAo1CClKFgAA7Om7127M18lQ0K7eefJXCJ0c6yvBM+IyhylUGQ8FIfAM3szRX81v0TvduO7tAnUWDyYqL1EwZSmhG2IJvvX/4xbXINEL03LcsOsu/s4QcyCJKm4ttyhAHQMNwfqL6T3cB9UN1T7cVekW+qoLIxvvJU4qkidDHv0PL/+r7jThANlh147cmOeb9gsHJxZsIQMnCia7HlwSCwNc8+7l+9z02U7daua28+4ChRENHaAjMiS4HisUWgab92Xq6uC13G7eveVc8VH/Qg3bGDIgGSJLHncVJAlo+5HuweSV393fguWF7zD8XwnfFMgc0B+CHU0WcQvG/m3yduiE4ozhq+Ul7oX53wUhEWwZZR1uHLoWSQ23Aff1Aex45WzjKuYx7Ur3wAKlDSkW5hoaG8kWtA4/BC35Wu9l6HDl8uae7Hn1AABuCgYTXBiVGYcWvQ9kBg/8fPJB647n9+di7An0nP1/BwoQ0xXqF/8VbRAqCJ7+ZPUG7rnpLelz7PPykfvZBDsNUxMkFjwVzBCYCdwAEPis8Ojri+rF7C/y2vl6ApwK5BBNFEoU5BC1CssCffov8xXuBexP7bXxcvhjADAIjA5sEjATvhCHC3AErPyJ9Tbwku0I7nzxVPeQ/vkFUAyLEPkRYxAWDM4Fnv6690fyLO/n7n3xefYA/fcDNQqvDqwQ2w9oDOoGUwC9+UP0y/Dl77Hx3PWu+ysCPAjfDFAPLg+EDMkHzQGT+yT2aPL58BDyd/WY+pQAaQYeC+0NYw5wDG8IEAM6/en3/vMd8pLyRPW6+TH/vQRyCYgMgA00DOMIHQSz/o75iPVL8zPzPfUO+f79OQPdBycLjAzWCygJ+QQAABP7BPd+9OrzXPWR+Pv83AFiBs0JjAtaC0QJpwUhAXX8bfix9bT0nPU++CX8pwADBX4IhgrICjwJKgYYArb9wPnf9ov1+PUR+Hj7mP/AAz4HfgkjChYJhwbnAtT+/foF+Gn2a/YG+PH6rv6aAg4GdwhwCdQIwQaRA9H/Ivwh+Uz38PYX+I765/2SAfEEdQe0CH0I2wYZBK4ALv0v+jD4g/dC+Ev6Qv2nAOkDewbzBxMI2waABGsBIP4u+xD5IPiD+CT6vPzZ//UCjAUvB5wHwgbKBAoC+v4c/Oz5xPjU+Bf6U/wm/xcCqARsBhkHlgb6BI4Cuv/5/L/6bPk0+SD6BPyO/k8B0gOsBY8GWAYSBfcCYgDD/Yr7FPqg+Tz6zvsP/p0ACwPyBAAGDAYVBUgD8wB6/kn8vPoT+mn6rfun/QAAVAI/BG8FtQUHBYMDbQEf//z8X/uM+qP6oPtV/Xj/rAGUA98EVgXoBKoD0gGx/6L9/fsH++j6o/sX/QP/FQH0AlAE8QS9BL8DJAIxADv+lPyE+zb7tfvr/KH+jgBeAsUDiASHBMUDZAKgAMX+JP0A/Iv71PvP/FH+FgDUAT8DHARIBLwDkwL+AEL/qv16/OP7/vvD/BH+rv9VAb8CsQM=",
+  GAME_VICTORY: "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"
+};
+/* END_OCTI_SHARED_SOUND_ASSETS */
+
 var OctiWebSoundSynth = (function () {
+  var CUE_NAMES = [
+    "POD_PLACE",
+    "PRONG_SNAP",
+    "POD_STEP",
+    "POD_JUMP",
+    "POD_CAPTURE",
+    "CLOCK_LOW_TICK",
+    "GAME_VICTORY"
+  ];
+  var STORAGE_KEY = "octi.sfxEnabled";
   var audioCtx = null;
+  var audioCtxCtor = null;
   var sfxEnabled = true;
+  var cachedWavBytes = {};
+  var decodedBuffers = {};
+  var decodingPromises = {};
+  var htmlAudioPool = {};
+  var triggeredCount = 0;
+  var lastCue = "";
 
-  function getAudioContext() {
-    if (!audioCtx && (typeof window !== "undefined") && (window.AudioContext || window.webkitAudioContext)) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (audioCtx && audioCtx.state === "suspended") {
-      audioCtx.resume().catch(function () {});
-    }
-    return audioCtx;
-  }
+  (function initStoredPreference() {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        var stored = window.localStorage.getItem(STORAGE_KEY);
+        if (stored === "0" || stored === "false") {
+          sfxEnabled = false;
+        } else if (stored === "1" || stored === "true") {
+          sfxEnabled = true;
+        }
+      }
+    } catch (e) {}
+  })();
 
-  function setEnabled(val) {
-    sfxEnabled = !!val;
-    var btn = typeof document !== "undefined" ? document.getElementById("btn-sfx") : null;
+  function syncSfxButtonDom() {
+    var btn = (typeof document !== "undefined" && typeof document.getElementById === "function")
+      ? document.getElementById("btn-sfx")
+      : null;
     if (btn) {
       btn.textContent = sfxEnabled ? "SFX: On" : "SFX: Off";
       btn.className = sfxEnabled ? "btn" : "btn dim";
     }
   }
 
+  function normalizeCueName(rawCue) {
+    if (rawCue === "POD_DROP") return "POD_PLACE";
+    return typeof rawCue === "string" ? rawCue : "";
+  }
+
+  function decodeBase64ToUint8Array(b64) {
+    if (typeof b64 !== "string" || !b64.length) return new Uint8Array(0);
+    var clean = b64.replace(/[^A-Za-z0-9+/=]/g, "");
+    var pad = 0;
+    if (clean.length >= 2) {
+      if (clean.charAt(clean.length - 1) === "=") pad++;
+      if (clean.charAt(clean.length - 2) === "=") pad++;
+    }
+    var outLen = Math.max(0, Math.floor((clean.length * 3) / 4) - pad);
+    var out = new Uint8Array(outLen);
+    var lut = {};
+    var alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    for (var ai = 0; ai < alpha.length; ai++) {
+      lut[alpha.charAt(ai)] = ai;
+    }
+    var o = 0;
+    for (var i = 0; i + 3 < clean.length && o < outLen; i += 4) {
+      var c0 = lut[clean.charAt(i)] || 0;
+      var c1 = lut[clean.charAt(i + 1)] || 0;
+      var ch2 = clean.charAt(i + 2);
+      var ch3 = clean.charAt(i + 3);
+      var c2 = (ch2 === "=") ? 0 : (lut[ch2] || 0);
+      var c3 = (ch3 === "=") ? 0 : (lut[ch3] || 0);
+      var triple = (c0 << 18) | (c1 << 12) | (c2 << 6) | c3;
+      if (o < outLen) out[o++] = (triple >> 16) & 0xFF;
+      if (o < outLen && ch2 !== "=") out[o++] = (triple >> 8) & 0xFF;
+      if (o < outLen && ch3 !== "=") out[o++] = triple & 0xFF;
+    }
+    return out;
+  }
+
+  function getWavBytes(rawCue) {
+    var cue = normalizeCueName(rawCue);
+    if (!cue || !OCTI_SHARED_WAV_BASE64 || !Object.prototype.hasOwnProperty.call(OCTI_SHARED_WAV_BASE64, cue)) {
+      return new Uint8Array(0);
+    }
+    if (!cachedWavBytes[cue]) {
+      cachedWavBytes[cue] = decodeBase64ToUint8Array(OCTI_SHARED_WAV_BASE64[cue]);
+    }
+    var src = cachedWavBytes[cue];
+    var copy = new Uint8Array(src.length);
+    copy.set(src);
+    return copy;
+  }
+
+  function resolveAudioContextCtor() {
+    if (typeof window !== "undefined" && (window.AudioContext || window.webkitAudioContext)) {
+      return window.AudioContext || window.webkitAudioContext;
+    }
+    if (typeof AudioContext === "function") {
+      return AudioContext;
+    }
+    return null;
+  }
+
+  function getAudioContext() {
+    var Ctor = resolveAudioContextCtor();
+    if (!Ctor) return null;
+    if (!audioCtx || audioCtx.state === "closed" || audioCtxCtor !== Ctor) {
+      try {
+        audioCtx = new Ctor();
+        audioCtxCtor = Ctor;
+        decodedBuffers = {};
+        decodingPromises = {};
+      } catch (e) {
+        audioCtx = null;
+        audioCtxCtor = null;
+        return null;
+      }
+    }
+    return audioCtx;
+  }
+
+  function decodeSingleCueBuffer(ctx, cue) {
+    if (!ctx || typeof ctx.decodeAudioData !== "function") return null;
+    if (decodedBuffers[cue]) return Promise.resolve(decodedBuffers[cue]);
+    if (decodingPromises[cue]) return decodingPromises[cue];
+    var bytes = getWavBytes(cue);
+    if (!bytes || !bytes.length) return Promise.resolve(null);
+    var ab = new ArrayBuffer(bytes.length);
+    new Uint8Array(ab).set(bytes);
+    var p = new Promise(function (resolve) {
+      var settled = false;
+      function finish(buf) {
+        if (settled) return;
+        settled = true;
+        if (buf) decodedBuffers[cue] = buf;
+        resolve(buf || null);
+      }
+      try {
+        var ret = ctx.decodeAudioData(
+          ab,
+          function (buf) { finish(buf); },
+          function () { finish(null); }
+        );
+        if (ret && typeof ret.then === "function") {
+          ret.then(finish, function () { finish(null); });
+        }
+      } catch (e) {
+        finish(null);
+      }
+    });
+    decodingPromises[cue] = p.then(function (buf) {
+      if (!buf) delete decodingPromises[cue];
+      return buf;
+    });
+    return decodingPromises[cue];
+  }
+
+  function getAudioElementCtor() {
+    if (typeof window !== "undefined" && typeof window.Audio === "function") {
+      return window.Audio;
+    }
+    if (typeof Audio === "function") {
+      return Audio;
+    }
+    return null;
+  }
+
+  function preloadHtmlAudioPool() {
+    var AudioCtor = getAudioElementCtor();
+    if (!AudioCtor || !OCTI_SHARED_WAV_BASE64) return;
+    for (var i = 0; i < CUE_NAMES.length; i++) {
+      var c = CUE_NAMES[i];
+      if (!htmlAudioPool[c] && OCTI_SHARED_WAV_BASE64[c]) {
+        try {
+          var elem = new AudioCtor("data:audio/wav;base64," + OCTI_SHARED_WAV_BASE64[c]);
+          elem.preload = "auto";
+          htmlAudioPool[c] = { ctor: AudioCtor, items: [elem] };
+        } catch (e) {}
+      }
+    }
+  }
+
+  function playHtmlAudioFallback(cue) {
+    var b64 = OCTI_SHARED_WAV_BASE64 && OCTI_SHARED_WAV_BASE64[cue];
+    if (!b64) return false;
+    var AudioCtor = getAudioElementCtor();
+    if (!AudioCtor) return false;
+    var dataUri = "data:audio/wav;base64," + b64;
+    try {
+      var bucket = htmlAudioPool[cue];
+      if (!bucket || bucket.ctor !== AudioCtor) {
+        bucket = { ctor: AudioCtor, items: [] };
+        htmlAudioPool[cue] = bucket;
+      }
+      var elem = null;
+      for (var i = 0; i < bucket.items.length; i++) {
+        var cand = bucket.items[i];
+        if (cand && (cand.paused || cand.ended)) {
+          elem = cand;
+          break;
+        }
+      }
+      if (!elem) {
+        if (bucket.items.length < 4) {
+          elem = new AudioCtor(dataUri);
+          elem.preload = "auto";
+          bucket.items.push(elem);
+        } else {
+          elem = bucket.items[0];
+        }
+      }
+      if (!elem.src) {
+        elem.src = dataUri;
+      }
+      try { elem.currentTime = 0; } catch (seekErr) {}
+      var playRet = elem.play();
+      if (playRet && typeof playRet.catch === "function") {
+        playRet.catch(function () {});
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function startBufferOnContext(ctx, buf) {
+    if (!ctx || !buf || typeof ctx.createBufferSource !== "function") return false;
+    try {
+      var srcNode = ctx.createBufferSource();
+      srcNode.buffer = buf;
+      srcNode.connect(ctx.destination);
+      srcNode.start(0);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function unlockAudio() {
+    preloadHtmlAudioPool();
+    var ctx = getAudioContext();
+    if (!ctx) return;
+    if ((ctx.state === "suspended" || ctx.state === "interrupted") && typeof ctx.resume === "function") {
+      try {
+        var rp = ctx.resume();
+        if (rp && typeof rp.catch === "function") {
+          rp.catch(function () {});
+        }
+      } catch (e) {}
+    }
+    for (var i = 0; i < CUE_NAMES.length; i++) {
+      decodeSingleCueBuffer(ctx, CUE_NAMES[i]);
+    }
+  }
+
+  (function installPassiveGestureUnlock() {
+    var gestureEvents = ["pointerdown", "keydown", "touchstart"];
+    var opts = { capture: true, passive: true };
+    for (var i = 0; i < gestureEvents.length; i++) {
+      var ev = gestureEvents[i];
+      try {
+        if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+          window.addEventListener(ev, unlockAudio, opts);
+        }
+      } catch (e) {}
+      try {
+        if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+          document.addEventListener(ev, unlockAudio, opts);
+        }
+      } catch (e) {}
+    }
+  })();
+
+  function setEnabled(val) {
+    sfxEnabled = !!val;
+    syncSfxButtonDom();
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        window.localStorage.setItem(STORAGE_KEY, sfxEnabled ? "1" : "0");
+      }
+    } catch (e) {}
+  }
+
   function isEnabled() {
     return sfxEnabled;
   }
 
-  function play(cue) {
-    if (!sfxEnabled) return;
-    var ctx = getAudioContext();
-    if (!ctx) return;
-    var sampleRate = 44100;
-    var durationMs = 110;
-    if (cue === "POD_PLACE") durationMs = 120;
-    else if (cue === "PRONG_SNAP") durationMs = 75;
-    else if (cue === "POD_STEP") durationMs = 95;
-    else if (cue === "POD_JUMP") durationMs = 150;
-    else if (cue === "POD_CAPTURE") durationMs = 210;
-    else if (cue === "GAME_VICTORY") durationMs = 360;
+  function charToDirIdx(ch) {
+    if (!ch || ch.length !== 1) return -1;
+    var code = ch.charCodeAt(0);
+    if (code >= 65 && code <= 72) return code - 65;
+    if (code >= 97 && code <= 104) return code - 97;
+    return -1;
+  }
 
-    var numSamples = Math.floor((sampleRate * durationMs) / 1000);
-    var buffer = ctx.createBuffer(1, numSamples, sampleRate);
-    var ch = buffer.getChannelData(0);
-    var twoPi = 2.0 * Math.PI;
-
-    for (var i = 0; i < numSamples; i++) {
-      var t = i / sampleRate;
-      var progress = i / Math.max(1, numSamples);
-      var attack = Math.min(1.0, i / 48.0);
-      var val = 0.0;
-      if (cue === "POD_PLACE") {
-        var fPlace = 145.0 * Math.exp(-t * 14.0) + 68.0;
-        var envPlace = attack * Math.exp(-t * 24.0);
-        val = envPlace * (0.72 * Math.sin(twoPi * fPlace * t) + 0.28 * Math.sin(twoPi * (fPlace * 1.9) * t));
-      } else if (cue === "PRONG_SNAP") {
-        var envSnap = attack * Math.exp(-t * 48.0);
-        val = envSnap * (0.50 * Math.sin(twoPi * 1420.0 * t) + 0.35 * Math.sin(twoPi * 2680.0 * t) + 0.15 * Math.sin(twoPi * 3920.0 * t));
-      } else if (cue === "POD_STEP") {
-        var fStep = 195.0 * Math.exp(-t * 16.0) + 85.0;
-        var envStep = attack * Math.exp(-t * 30.0);
-        val = envStep * (0.75 * Math.sin(twoPi * fStep * t) + 0.25 * Math.sin(twoPi * (fStep * 2.1) * t));
-      } else if (cue === "POD_JUMP") {
-        var fJump = (progress < 0.45) ? 440.0 : 587.33;
-        var envJump = attack * Math.exp(-t * 14.0);
-        val = envJump * (0.68 * Math.sin(twoPi * fJump * t) + 0.32 * Math.sin(twoPi * (fJump * 1.5) * t));
-      } else if (cue === "POD_CAPTURE") {
-        var fCap = (progress < 0.33) ? 440.0 : ((progress < 0.66) ? 554.37 : 659.25);
-        var envCap = attack * Math.exp(-t * 10.0);
-        val = envCap * (0.65 * Math.sin(twoPi * fCap * t) + 0.25 * Math.sin(twoPi * (fCap * 2.0) * t) + 0.10 * Math.sin(twoPi * (fCap * 3.0) * t));
-      } else if (cue === "GAME_VICTORY") {
-        var fVic = (progress < 0.22) ? 523.25 : ((progress < 0.44) ? 659.25 : ((progress < 0.68) ? 783.99 : 1046.50));
-        var envVic = attack * Math.exp(-t * 5.5);
-        val = envVic * (0.60 * Math.sin(twoPi * fVic * t) + 0.28 * Math.sin(twoPi * (fVic * 1.5) * t) + 0.12 * Math.sin(twoPi * (fVic * 2.0) * t));
-      }
-      ch[i] = Math.max(-1.0, Math.min(1.0, val));
+  function parseSingleRegularMoveOp(s) {
+    if (!s || s.length < 2) return null;
+    var c0 = s.charCodeAt(0);
+    var c1 = s.charCodeAt(1);
+    if (c0 < 49 || c0 > 57 || c1 < 49 || c1 > 57) return null;
+    var op = {
+      x0: c0 - 49,
+      y0: c1 - 49,
+      addPod: false,
+      addProng: false,
+      rmProng: false,
+      hops: [],
+      isSuperProngBonusMove: false
+    };
+    if (s.length === 2) {
+      op.addPod = true;
+      return op;
+    }
+    if (s.length === 3 && s.charAt(2) === "*") {
+      op.addPod = true;
+      return op;
     }
 
-    var srcNode = ctx.createBufferSource();
-    srcNode.buffer = buffer;
-    srcNode.connect(ctx.destination);
-    srcNode.start();
+    var idx = 2;
+    var prongs = [0, 0, 0, 0, 0, 0, 0, 0];
+    while (idx < s.length) {
+      var d = charToDirIdx(s.charAt(idx));
+      if (d < 0) break;
+      if (prongs[d] !== 0) return null;
+      idx++;
+      var isSup = false;
+      if (idx < s.length && s.charAt(idx) === "!") {
+        isSup = true;
+        idx++;
+      }
+      prongs[d] = isSup ? 2 : 1;
+    }
+    if (idx >= s.length) return null;
+
+    var action = s.charAt(idx);
+    if (action === "+") {
+      idx++;
+      if (idx >= s.length) return null;
+      var addDir = charToDirIdx(s.charAt(idx));
+      if (addDir < 0) return null;
+      idx++;
+      var addSuper = false;
+      if (idx < s.length && s.charAt(idx) === "!") {
+        addSuper = true;
+        idx++;
+      }
+      if (idx === s.length) {
+        if (prongs[addDir] !== 0) return null;
+        op.addProng = true;
+        return op;
+      }
+      if (s.charAt(idx) === "-") {
+        idx++;
+        if (idx >= s.length) return null;
+        var rmDir = charToDirIdx(s.charAt(idx));
+        if (rmDir < 0) return null;
+        idx++;
+        if (addSuper || idx !== s.length || addDir === rmDir ||
+            prongs[rmDir] !== 1 || prongs[addDir] !== 0) {
+          return null;
+        }
+        op.addProng = true;
+        op.rmProng = true;
+        return op;
+      }
+      return null;
+    }
+
+    if (action === "-") {
+      idx++;
+      if (idx >= s.length) return null;
+      var nextCh = s.charAt(idx);
+      var rmDir2 = charToDirIdx(nextCh);
+      if (rmDir2 >= 0) {
+        idx++;
+        if (idx >= s.length || s.charAt(idx) !== "+") return null;
+        idx++;
+        if (idx >= s.length) return null;
+        var addDir2 = charToDirIdx(s.charAt(idx));
+        if (addDir2 < 0) return null;
+        idx++;
+        if (idx !== s.length || addDir2 === rmDir2 ||
+            prongs[rmDir2] !== 1 || prongs[addDir2] !== 0) {
+          return null;
+        }
+        op.addProng = true;
+        op.rmProng = true;
+        return op;
+      }
+      var nc = nextCh.charCodeAt(0);
+      if (nc >= 49 && nc <= 57) {
+        while (true) {
+          if (idx + 1 >= s.length) return null;
+          var hx = s.charCodeAt(idx);
+          var hy = s.charCodeAt(idx + 1);
+          if (hx < 49 || hx > 57 || hy < 49 || hy > 57) return null;
+          var hopX = hx - 49;
+          var hopY = hy - 49;
+          idx += 2;
+          var cap = false;
+          if (idx < s.length && (s.charAt(idx) === "x" || s.charAt(idx) === "X")) {
+            cap = true;
+            idx++;
+            if (idx < s.length && (s.charAt(idx) === "x" || s.charAt(idx) === "X")) {
+              return null;
+            }
+          }
+          op.hops.push({ x: hopX, y: hopY, capture: cap });
+          if (idx >= s.length) break;
+          if (s.charAt(idx) !== "-") return null;
+          idx++;
+        }
+        return op.hops.length ? op : null;
+      }
+      return null;
+    }
+
+    return null;
   }
+
+  function parseSingleHopChainOp(s) {
+    var op = parseSingleRegularMoveOp(s);
+    if (!op || !op.hops.length || op.addPod || op.addProng || op.rmProng) {
+      return null;
+    }
+    return op;
+  }
+
+  function parseMoveStringToOps(rawStr) {
+    if (typeof rawStr !== "string" || rawStr.indexOf("\0") !== -1) return null;
+    var s = rawStr.trim();
+    if (!s) return null;
+    var semiParts = s.split(";");
+    if (semiParts.length > 3) return null;
+    for (var i = 0; i < semiParts.length; i++) {
+      semiParts[i] = semiParts[i].trim();
+      if (!semiParts[i]) return null;
+    }
+    var ops = [];
+    for (var p = 0; p + 1 < semiParts.length; p++) {
+      if (semiParts[p].indexOf(",") !== -1) return null;
+      var preOp = parseSingleHopChainOp(semiParts[p]);
+      if (!preOp) return null;
+      preOp.isSuperProngBonusMove = true;
+      ops.push(preOp);
+    }
+    var regStr = semiParts[semiParts.length - 1];
+    if (regStr.indexOf(",") !== -1) {
+      var commaParts = regStr.split(",");
+      var commonX0 = -1;
+      var commonY0 = -1;
+      for (var c = 0; c < commaParts.length; c++) {
+        var sub = commaParts[c].trim();
+        if (!sub) return null;
+        var subOp = parseSingleHopChainOp(sub);
+        if (!subOp) return null;
+        subOp.isSuperProngBonusMove = false;
+        if (c === 0) {
+          commonX0 = subOp.x0;
+          commonY0 = subOp.y0;
+        } else if (subOp.x0 !== commonX0 || subOp.y0 !== commonY0) {
+          return null;
+        }
+        ops.push(subOp);
+      }
+    } else {
+      var regOp = parseSingleRegularMoveOp(regStr);
+      if (!regOp) return null;
+      regOp.isSuperProngBonusMove = false;
+      ops.push(regOp);
+    }
+    return ops;
+  }
+
+  function wrappedAbsDelta(fromCoord, toCoord, edgeless, span) {
+    var d = toCoord - fromCoord;
+    if (edgeless && span > 2) {
+      d = d % span;
+      var half = Math.trunc(span / 2);
+      if (d > half) d -= span;
+      else if (d < -half) d += span;
+    }
+    return d < 0 ? -d : d;
+  }
+
+  function classifyMoveCue(notation, stateOrEdgeless) {
+    var edgeless = false;
+    var boardW = 9;
+    var boardH = 9;
+    if (typeof stateOrEdgeless === "boolean") {
+      edgeless = stateOrEdgeless;
+    } else if (stateOrEdgeless && typeof stateOrEdgeless === "object") {
+      edgeless = Boolean(stateOrEdgeless.edgeless);
+      if (typeof stateOrEdgeless.gw === "number" && stateOrEdgeless.gw > 0) {
+        boardW = stateOrEdgeless.gw;
+      } else if (typeof stateOrEdgeless.boardWidth === "number" && stateOrEdgeless.boardWidth > 0) {
+        boardW = stateOrEdgeless.boardWidth;
+      } else if (stateOrEdgeless.mode === "OFK") {
+        boardW = 6;
+      }
+      if (typeof stateOrEdgeless.gh === "number" && stateOrEdgeless.gh > 0) {
+        boardH = stateOrEdgeless.gh;
+      } else if (typeof stateOrEdgeless.boardHeight === "number" && stateOrEdgeless.boardHeight > 0) {
+        boardH = stateOrEdgeless.boardHeight;
+      } else if (stateOrEdgeless.mode === "OFK") {
+        boardH = 7;
+      }
+    }
+
+    var ops = parseMoveStringToOps(notation);
+    if (!ops || !ops.length) return "POD_PLACE";
+
+    for (var i = 0; i < ops.length; i++) {
+      for (var h = 0; h < ops[i].hops.length; h++) {
+        if (ops[i].hops[h].capture) return "POD_CAPTURE";
+      }
+    }
+
+    for (var j = 0; j < ops.length; j++) {
+      var curX = ops[j].x0;
+      var curY = ops[j].y0;
+      for (var k = 0; k < ops[j].hops.length; k++) {
+        var hop = ops[j].hops[k];
+        var dx = wrappedAbsDelta(curX, hop.x, edgeless, boardW);
+        var dy = wrappedAbsDelta(curY, hop.y, edgeless, boardH);
+        var cheb = dx > dy ? dx : dy;
+        if (cheb === 2) return "POD_JUMP";
+        curX = hop.x;
+        curY = hop.y;
+      }
+    }
+
+    var hasRegStep = false;
+    var hasRegProng = false;
+    var hasRegPod = false;
+    var hasBonusStep = false;
+    for (var m = 0; m < ops.length; m++) {
+      var mop = ops[m];
+      if (mop.isSuperProngBonusMove) {
+        if (mop.hops.length > 0) hasBonusStep = true;
+      } else {
+        if (mop.hops.length > 0) hasRegStep = true;
+        if (mop.addProng) hasRegProng = true;
+        if (mop.addPod) hasRegPod = true;
+      }
+    }
+
+    if (hasRegStep) return "POD_STEP";
+    if (hasRegProng) return "PRONG_SNAP";
+    if (hasRegPod) return "POD_PLACE";
+    if (hasBonusStep) return "POD_STEP";
+    return "POD_PLACE";
+  }
+
+  function play(rawCue) {
+    if (!sfxEnabled) return false;
+    var cue = normalizeCueName(rawCue);
+    if (!cue || !OCTI_SHARED_WAV_BASE64 || !Object.prototype.hasOwnProperty.call(OCTI_SHARED_WAV_BASE64, cue)) {
+      return false;
+    }
+
+    triggeredCount++;
+    lastCue = cue;
+
+    var ctx = getAudioContext();
+    if (!ctx) {
+      playHtmlAudioFallback(cue);
+      return true;
+    }
+
+    if (ctx.state === "suspended" || ctx.state === "interrupted") {
+      if (typeof ctx.resume === "function") {
+        var resumeRet = null;
+        try {
+          resumeRet = ctx.resume();
+        } catch (resumeErr) {
+          playHtmlAudioFallback(cue);
+          return true;
+        }
+        if (resumeRet && typeof resumeRet.then === "function") {
+          resumeRet.then(function () {
+            if (ctx.state && ctx.state !== "running") {
+              playHtmlAudioFallback(cue);
+              return;
+            }
+            var decP = decodeSingleCueBuffer(ctx, cue);
+            if (!decP) {
+              playHtmlAudioFallback(cue);
+              return;
+            }
+            decP.then(function (buf) {
+              if (!buf || !startBufferOnContext(ctx, buf)) {
+                playHtmlAudioFallback(cue);
+              }
+            }, function () {
+              playHtmlAudioFallback(cue);
+            });
+          }, function () {
+            playHtmlAudioFallback(cue);
+          });
+          return true;
+        }
+      }
+      playHtmlAudioFallback(cue);
+      return true;
+    }
+
+    if (decodedBuffers[cue]) {
+      if (!startBufferOnContext(ctx, decodedBuffers[cue])) {
+        playHtmlAudioFallback(cue);
+      }
+      return true;
+    }
+
+    var decodePromise = decodeSingleCueBuffer(ctx, cue);
+    if (!decodePromise) {
+      playHtmlAudioFallback(cue);
+      return true;
+    }
+    decodePromise.then(function (buf) {
+      if (!buf || !startBufferOnContext(ctx, buf)) {
+        playHtmlAudioFallback(cue);
+      }
+    }, function () {
+      playHtmlAudioFallback(cue);
+    });
+    return true;
+  }
+
+  function playForMove(notation, stateOrEdgeless) {
+    return play(classifyMoveCue(notation, stateOrEdgeless));
+  }
+
+  function triggeredCueCount() {
+    return triggeredCount;
+  }
+
+  function lastTriggeredCue() {
+    return lastCue;
+  }
+
+  syncSfxButtonDom();
 
   return {
     setEnabled: setEnabled,
     isEnabled: isEnabled,
+    unlockAudio: unlockAudio,
+    getWavBytes: getWavBytes,
+    classifyMoveCue: classifyMoveCue,
     play: play,
-    triggerCue: play
+    triggerCue: play,
+    playForMove: playForMove,
+    triggeredCueCount: triggeredCueCount,
+    lastTriggeredCue: lastTriggeredCue
   };
 })();
 
@@ -43540,6 +44373,8 @@ var activeOnlineEventSeq = 0;
 var activeOnlineChatMessages = [];
 var activeOnlineLastSyncedPlyCount = -1;
 var activeOnlineLastSyncedFen = "";
+var activeOnlinePendingLocalMove = "";
+var activeOnlinePrevFinished = false;
 var activeBoardContextMode = "local";
 var localPlayContext = null;
 var onlinePlayContext = {
@@ -43551,6 +44386,8 @@ var onlinePlayContext = {
   chatMessages: [],
   lastSyncedPlyCount: -1,
   lastSyncedFen: "",
+  pendingLocalMove: "",
+  prevFinished: false,
   state: null,
   plies: [],
   vcrIndex: 0,
@@ -43648,6 +44485,8 @@ function saveOnlinePlayContext() {
   onlinePlayContext.chatMessages = Array.isArray(activeOnlineChatMessages) ? activeOnlineChatMessages.slice() : [];
   onlinePlayContext.lastSyncedPlyCount = activeOnlineLastSyncedPlyCount;
   onlinePlayContext.lastSyncedFen = activeOnlineLastSyncedFen;
+  onlinePlayContext.pendingLocalMove = activeOnlinePendingLocalMove;
+  onlinePlayContext.prevFinished = activeOnlinePrevFinished;
   onlinePlayContext.state = activePlayState ? cloneState(activePlayState) : null;
   onlinePlayContext.plies = Array.isArray(playMatchPlies) ? playMatchPlies.slice() : [];
   onlinePlayContext.vcrIndex = playVcrIndex;
@@ -43675,6 +44514,8 @@ function restoreOnlinePlayContext() {
   activeOnlineChatMessages = Array.isArray(onlinePlayContext.chatMessages) ? onlinePlayContext.chatMessages.slice() : [];
   activeOnlineLastSyncedPlyCount = onlinePlayContext.lastSyncedPlyCount;
   activeOnlineLastSyncedFen = onlinePlayContext.lastSyncedFen || "";
+  activeOnlinePendingLocalMove = onlinePlayContext.pendingLocalMove || "";
+  activeOnlinePrevFinished = Boolean(onlinePlayContext.prevFinished);
   if (onlinePlayContext.state) {
     activePlayState = cloneState(onlinePlayContext.state);
   }
@@ -43691,6 +44532,9 @@ function restoreOnlinePlayContext() {
 
 function isInteractiveBoardTurn(s) {
   if (!s || s.status !== "P") return false;
+  if (Array.isArray(playMatchPlies) && playMatchPlies.length > 0 && playVcrIndex < playMatchPlies.length - 1) {
+    return false;
+  }
   if (activeOnlineGameId) {
     return isMyOnlineTurn(s);
   }
@@ -43716,6 +44560,7 @@ function WebMoveComposer(stateGetter, onCommitCb) {
   this._preTurnSnap = "";
   this._stagedOps = [];
   this.stagedOps = this._stagedOps;
+  this.ops = this._stagedOps;
   this.stagedNotation = "";
   this.completedSubMoves = [];
   this.currentChainNotation = "";
@@ -43742,7 +44587,7 @@ function WebMoveComposer(stateGetter, onCommitCb) {
   this._currentChainJumped = [];
   this.jumpedSquaresChain = [];
   this._hopCaptureLinks = [];
-  this.captureChoices = []; // { jumpedX, jumpedY, capture, mandatory }
+  this.captureChoices = []; // { opIdx, hopIdx, jumpedX, jumpedY, capture, mandatory }
   this._confirmBarUserDragged = false;
   this._captureCardUserDragged = false;
 }
@@ -43773,6 +44618,7 @@ WebMoveComposer.prototype.reset = function () {
   this._preTurnSnap = "";
   this._stagedOps = [];
   this.stagedOps = this._stagedOps;
+  this.ops = this._stagedOps;
   this.stagedNotation = "";
   this.completedSubMoves = [];
   this.currentChainNotation = "";
@@ -43843,6 +44689,161 @@ WebMoveComposer.prototype._getPreTurnBoard = function () {
   return base ? cloneState(base) : null;
 };
 
+WebMoveComposer.prototype.formatOpNotation = function (op) {
+  if (!op) return "";
+  if (op.type === "move") {
+    if (!op.hops || !op.hops.length) return "";
+    var subNot = op.x0 + "" + op.y0 + (op.podConfig || "");
+    for (var hi = 0; hi < op.hops.length; hi++) {
+      var hop = op.hops[hi];
+      subNot += "-" + hop.x + "" + hop.y + (hop.isJump && hop.capture ? "x" : "");
+    }
+    return subNot;
+  }
+  return op.notation || "";
+};
+
+WebMoveComposer.prototype.applyUncommittedPreludesToState = function (baseState, preludeOps) {
+  if (!baseState) return null;
+  var s = cloneState(baseState);
+  if (!preludeOps || !preludeOps.length) return s;
+
+  var preludeDeferredCaps = [];
+  for (var i = 0; i < preludeOps.length; i++) {
+    var op = preludeOps[i];
+    var preStr = this.formatOpNotation(op);
+    if (preStr) {
+      applySingleHopChain(s, preStr, s.turn, preludeDeferredCaps);
+    }
+  }
+
+  var capturerIdx = playerIndex(s.turn);
+  var res = s.reserves[capturerIdx];
+  for (var dc = 0; dc < preludeDeferredCaps.length; dc++) {
+    var midK = preludeDeferredCaps[dc];
+    var jStack = s.map[midK];
+    if (jStack && jStack.length) {
+      for (var v = 0; v < jStack.length; v++) {
+        var vPod = jStack[v];
+        var vIdx = playerIndex(vPod.owner);
+        if (s.reserves[vIdx]) s.reserves[vIdx].capturedPods++;
+        for (var pi = 0; pi < 8; pi++) {
+          if (vPod.cfg.prongs[pi] === 1) {
+            if (res) res.freeProngs++;
+          } else if (vPod.cfg.prongs[pi] === 2) {
+            if (s.superProngs) {
+              if (res) res.freeSuper++;
+            } else {
+              if (res) res.freeProngs++;
+            }
+          }
+        }
+      }
+      delete s.map[midK];
+    }
+  }
+
+  return s;
+};
+
+WebMoveComposer.prototype._getPostPreludesBoard = function () {
+  var base = this._getPreTurnBoard();
+  if (!base) return null;
+  var preludeOps = [];
+  for (var i = 0; i < this._stagedOps.length; i++) {
+    if (this._stagedOps[i].isSuperProngBonusMove) {
+      preludeOps.push(this._stagedOps[i]);
+    }
+  }
+  if (preludeOps.length === 0) return base;
+  return this.applyUncommittedPreludesToState(base, preludeOps);
+};
+
+WebMoveComposer.prototype.canPromoteToSuperProngPreludes = function () {
+  var baseState = this._getPreTurnBoard();
+  if (!baseState || !baseState.superProngs) return false;
+  if (!this._stagedOps || this._stagedOps.length === 0 || this._stagedOps.length > 2) return false;
+
+  for (var i = 0; i < this._stagedOps.length; i++) {
+    var op = this._stagedOps[i];
+    if (!op || op.type !== "move" || !op.hops || op.hops.length === 0) return false;
+    if (!op.pod || !op.pod.cfg || !op.pod.cfg.prongs) return false;
+    var dir0 = op.hops[0].dir;
+    if (dir0 === undefined || dir0 < 0 || op.pod.cfg.prongs[dir0] !== 2) return false;
+    if (!op.hops[0].isJump) {
+      if (op.hops.length !== 1 || op.hops[0].capture) return false;
+    } else {
+      for (var h = 0; h < op.hops.length; h++) {
+        if (!op.hops[h].isJump || op.hops[h].dir !== dir0) return false;
+      }
+    }
+  }
+
+  if (this._stagedOps.length === 2) {
+    var op1 = this._stagedOps[0];
+    var op2 = this._stagedOps[1];
+    var p1End = op1.hops[op1.hops.length - 1];
+    var p1Cfg = formatProngConfig(op1.pod.cfg.prongs);
+    var p2Cfg = formatProngConfig(op2.pod.cfg.prongs);
+    var p1Dir = op1.hops[0].dir;
+    var p2Dir = op2.hops[0].dir;
+
+    var sAfterP1 = cloneState(baseState);
+    var defCaps1 = [];
+    applySingleHopChain(sAfterP1, this.formatOpNotation(op1), baseState.turn, defCaps1);
+    var sameCfgCountAfterP1 = 0;
+    var landStack = sAfterP1.map[p1End.x + "," + p1End.y] || [];
+    for (var li = 0; li < landStack.length; li++) {
+      if (landStack[li].owner === baseState.turn &&
+          formatProngConfig(landStack[li].cfg.prongs) === p1Cfg) {
+        sameCfgCountAfterP1++;
+      }
+    }
+    if (op2.x0 === p1End.x && op2.y0 === p1End.y &&
+        p2Cfg === p1Cfg && p2Dir === p1Dir && sameCfgCountAfterP1 < 2) {
+      return false;
+    }
+  }
+
+  var postState = this.applyUncommittedPreludesToState(baseState, this._stagedOps);
+  if (!postState) return false;
+  var nextMoves = generateBaseMoves(postState, baseState.turn, false);
+  return nextMoves.length > 0;
+};
+
+WebMoveComposer.prototype.isAwaitingSuperProngBonusMove = function () {
+  return Boolean(
+    this._stagedOps.length > 0 &&
+    (this._stagedOps[this._stagedOps.length - 1].isSuperProngBonusMove ||
+     this.canPromoteToSuperProngPreludes())
+  );
+};
+
+WebMoveComposer.prototype.promoteStagedOpsToSuperProngPreludes = function () {
+  if (this.guidedMoveActive) {
+    this.guidedMoveActive = false;
+    this._guidedMidHop = false;
+    this._guidedMoveAllStack = false;
+    this._guidedActiveOpIndices = [];
+    this._currentChainJumped = [];
+    this.guidedLegalDests = [];
+    this.currentChainNotation = "";
+  }
+  for (var i = 0; i < this._stagedOps.length; i++) {
+    this._stagedOps[i].isSuperProngBonusMove = true;
+  }
+  this.guidedOriginSquare = null;
+  this.guidedCurrentSquare = null;
+  this.guidedPodIndex = -1;
+  this._guidedOriginPodIndex = -1;
+  this.guidedPodConfig = "";
+  this.guidedHops = [];
+  this._claimedStartPods = [];
+  this.claimedPodsAtOrigin = {};
+  this.awaitingSuperProngBonusMove = true;
+  this.populatePreviewBoard();
+};
+
 WebMoveComposer.prototype.populatePreviewBoard = function () {
   var s = this._getPreTurnBoard();
   if (!s) {
@@ -43850,24 +44851,52 @@ WebMoveComposer.prototype.populatePreviewBoard = function () {
     return null;
   }
   if (this._stagedOps.length === 0) {
+    this.stagedNotation = "";
+    this.completedSubMoves = [];
+    this.captureChoices = [];
     this.previewState = s;
     return s;
   }
 
-  var moveOps = [];
+  var preludeOps = [];
+  var regularOps = [];
   for (var i = 0; i < this._stagedOps.length; i++) {
-    if (this._stagedOps[i].type === "move") {
-      moveOps.push(this._stagedOps[i]);
+    if (this._stagedOps[i].isSuperProngBonusMove) {
+      preludeOps.push(this._stagedOps[i]);
+    } else {
+      regularOps.push(this._stagedOps[i]);
     }
   }
 
-  if (moveOps.length > 0 && this.guidedOriginSquare) {
-    var ox = this.guidedOriginSquare.x, oy = this.guidedOriginSquare.y;
+  if (preludeOps.length > 0) {
+    s = this.applyUncommittedPreludesToState(s, preludeOps);
+  }
+
+  var regMoveOps = [];
+  var regOtherOps = [];
+  for (var r = 0; r < regularOps.length; r++) {
+    if (regularOps[r].type === "move") {
+      regMoveOps.push(regularOps[r]);
+    } else {
+      regOtherOps.push(regularOps[r]);
+    }
+  }
+
+  if (regMoveOps.length > 0) {
+    var ox = regMoveOps[0].x0, oy = regMoveOps[0].y0;
     var origK = ox + "," + oy;
     var origStack = s.map[origK] || [];
+    var claimedList = this._claimedStartPods.length ? this._claimedStartPods.slice() : [];
+    if (!claimedList.length) {
+      for (var ci0 = 0; ci0 < regMoveOps.length; ci0++) {
+        if (regMoveOps[ci0].podIndex !== undefined && claimedList.indexOf(regMoveOps[ci0].podIndex) === -1) {
+          claimedList.push(regMoveOps[ci0].podIndex);
+        }
+      }
+    }
     var remainingOrig = [];
     for (var oi = 0; oi < origStack.length; oi++) {
-      if (this._claimedStartPods.indexOf(oi) === -1) {
+      if (claimedList.indexOf(oi) === -1) {
         remainingOrig.push(origStack[oi]);
       }
     }
@@ -43878,14 +44907,11 @@ WebMoveComposer.prototype.populatePreviewBoard = function () {
     }
 
     var capturedKeys = [];
-    var subNotations = [];
-    for (var mi = 0; mi < moveOps.length; mi++) {
-      var op = moveOps[mi];
+    for (var mi = 0; mi < regMoveOps.length; mi++) {
+      var op = regMoveOps[mi];
       if (!op.hops || !op.hops.length) continue;
-      var subNot = op.x0 + "" + op.y0 + (op.podConfig || "");
       for (var hi = 0; hi < op.hops.length; hi++) {
         var hop = op.hops[hi];
-        subNot += "-" + hop.x + "" + hop.y + (hop.isJump && hop.capture ? "x" : "");
         if (hop.isJump && hop.capture) {
           var capK = hop.jumpedX + "," + hop.jumpedY;
           if (capturedKeys.indexOf(capK) === -1) {
@@ -43893,7 +44919,6 @@ WebMoveComposer.prototype.populatePreviewBoard = function () {
           }
         }
       }
-      subNotations.push(subNot);
 
       var lastHop = op.hops[op.hops.length - 1];
       var toK = lastHop.x + "," + lastHop.y;
@@ -43933,16 +44958,58 @@ WebMoveComposer.prototype.populatePreviewBoard = function () {
         delete s.map[jK];
       }
     }
-
-    this.completedSubMoves = subNotations.slice();
-    this.stagedNotation = subNotations.join(",");
   }
 
+  for (var ro = 0; ro < regOtherOps.length; ro++) {
+    if (regOtherOps[ro].notation) {
+      applyRegularMoveOpNoTurn(s, regOtherOps[ro].notation, s.turn);
+    }
+  }
+
+  var preParts = [];
+  for (var pIdx2 = 0; pIdx2 < preludeOps.length; pIdx2++) {
+    var pn = this.formatOpNotation(preludeOps[pIdx2]);
+    if (pn) preParts.push(pn);
+  }
+  var regParts = [];
+  for (var rIdx2 = 0; rIdx2 < regularOps.length; rIdx2++) {
+    var rn = this.formatOpNotation(regularOps[rIdx2]);
+    if (rn) regParts.push(rn);
+  }
+
+  this.completedSubMoves = regParts.slice();
+  var segments = preParts.slice();
+  if (regParts.length > 0) {
+    segments.push(regParts.join(","));
+  }
+  this.stagedNotation = segments.join(";");
+
+  this.captureChoices = [];
+  for (var opIdx = 0; opIdx < this._stagedOps.length; opIdx++) {
+    var cop = this._stagedOps[opIdx];
+    if (cop.type !== "move" || !cop.hops) continue;
+    for (var hIdx = 0; hIdx < cop.hops.length; hIdx++) {
+      var chop = cop.hops[hIdx];
+      if (chop.isJump && chop.canToggleCapture) {
+        this.captureChoices.push({
+          opIdx: opIdx,
+          hopIdx: hIdx,
+          jumpedX: chop.jumpedX,
+          jumpedY: chop.jumpedY,
+          capture: !!chop.capture,
+          mandatory: false
+        });
+      }
+    }
+  }
+
+  this.awaitingSuperProngBonusMove = this.isAwaitingSuperProngBonusMove();
   this.previewState = s;
   return s;
 };
 
 WebMoveComposer.prototype._rebuildPreviewBoard = WebMoveComposer.prototype.populatePreviewBoard;
+WebMoveComposer.prototype.rebuildNotationAndPreview = WebMoveComposer.prototype.populatePreviewBoard;
 
 WebMoveComposer.prototype.autoPositionConfirmBar = function () {
   var bar = document.getElementById("web-ply-confirm-bar");
@@ -44088,7 +45155,7 @@ WebMoveComposer.prototype.isSquarePodClaimed = function (x, y, podIndex) {
 
 WebMoveComposer.prototype.unclaimedMovablePodIndicesAtOrigin = function () {
   if (!this.guidedOriginSquare) return [];
-  var s = this._getPreTurnBoard();
+  var s = this._getPostPreludesBoard();
   if (!s || !s.map) return [];
   var ox = this.guidedOriginSquare.x, oy = this.guidedOriginSquare.y;
   var stack = s.map[ox + "," + oy] || [];
@@ -44110,7 +45177,7 @@ WebMoveComposer.prototype.hasOtherMovablePodAtOrigin = function () {
 WebMoveComposer.prototype.hasDistinctUnclaimedPodsAtOrigin = function () {
   var unclaimed = this.unclaimedMovablePodIndicesAtOrigin();
   if (unclaimed.length <= 1) return false;
-  var s = this._getPreTurnBoard();
+  var s = this._getPostPreludesBoard();
   if (!s || !s.map) return false;
   var stack = s.map[this.guidedOriginSquare.x + "," + this.guidedOriginSquare.y] || [];
   var firstPod = stack[unclaimed[0]];
@@ -44132,7 +45199,7 @@ WebMoveComposer.prototype.firstUnclaimedFriendlyPodIndex = function (x, y) {
     y = x.y;
     x = x.x;
   }
-  var s = this._getPreTurnBoard();
+  var s = this._getPostPreludesBoard();
   if (!s || !s.map) return -1;
   var stack = s.map[x + "," + y] || [];
   var sorted = sortedPodIndicesMostProngsFirst(stack);
@@ -44152,12 +45219,20 @@ WebMoveComposer.prototype.firstUnclaimedFriendlyPodIndex = function (x, y) {
 };
 
 WebMoveComposer.prototype.stageAddPod = function (x, y, forceLiberate) {
-  if (!this.awaitingSuperProngBonusMove) {
+  var needPromote = false;
+  if (this._stagedOps.length > 0) {
+    if (!this.isAwaitingSuperProngBonusMove()) {
+      return false;
+    }
+    needPromote = true;
+  } else {
     this.reset();
   }
-  var s = this._getPreTurnBoard();
+
+  var s = needPromote
+    ? this.applyUncommittedPreludesToState(this._getPreTurnBoard(), this._stagedOps)
+    : this._getPostPreludesBoard();
   if (!s) return false;
-  this.previewState = s;
   var turn = s.turn;
   var pIdx = playerIndex(turn);
   var res = s.reserves[pIdx];
@@ -44178,41 +45253,13 @@ WebMoveComposer.prototype.stageAddPod = function (x, y, forceLiberate) {
     return false;
   }
 
-  var k = x + "," + y;
-  var partnerIdx = partnerIndex(s.mode, pIdx);
-  var isPartnerRevival = (s.mode === "4" || s.mode === "4P") &&
-                         (s.elimMask & (1 << partnerIdx)) !== 0 &&
-                         isPartnerHome(s.mode, partnerIdx, x, y);
-
-  if (doLiberate) {
-    if (isPartnerRevival) {
-      if (s.reserves[partnerIdx]) s.reserves[partnerIdx].capturedPods--;
-      s.elimMask &= ~(1 << partnerIdx);
-      if (!s.map[k]) s.map[k] = [];
-      s.map[k].push({
-        owner: ["A", "B", "C", "D"][partnerIdx],
-        cfg: { prongs: [0, 0, 0, 0, 0, 0, 0, 0], count: 0, text: "" }
-      });
-    } else {
-      res.capturedPods--;
-      if (!s.map[k]) s.map[k] = [];
-      s.map[k].push({
-        owner: turn,
-        cfg: { prongs: [0, 0, 0, 0, 0, 0, 0, 0], count: 0, text: "" }
-      });
-    }
-    this.stagedNotation = x + "" + y + "*";
-  } else {
-    res.freePods--;
-    if (!s.map[k]) s.map[k] = [];
-    s.map[k].push({
-      owner: turn,
-      cfg: { prongs: [0, 0, 0, 0, 0, 0, 0, 0], count: 0, text: "" }
-    });
-    this.stagedNotation = x + "" + y;
+  if (needPromote) {
+    this.promoteStagedOpsToSuperProngPreludes();
   }
 
-  this._stagedOps.push({ type: "add_pod", notation: this.stagedNotation });
+  var not = x + "" + y + (doLiberate ? "*" : "");
+  this._stagedOps.push({ type: "add_pod", notation: not, isSuperProngBonusMove: false });
+  this.populatePreviewBoard();
   OctiWebSoundSynth.play("POD_PLACE");
   this.isAwaitingConfirmation = true;
   this.updateUi();
@@ -44222,12 +45269,20 @@ WebMoveComposer.prototype.stageAddPod = function (x, y, forceLiberate) {
 };
 
 WebMoveComposer.prototype.stageAddProng = function (x, y, podIdx, dirIdx, isSuper) {
-  if (!this.awaitingSuperProngBonusMove) {
+  var needPromote = false;
+  if (this._stagedOps.length > 0) {
+    if (!this.isAwaitingSuperProngBonusMove()) {
+      return false;
+    }
+    needPromote = true;
+  } else {
     this.reset();
   }
-  var s = this._getPreTurnBoard();
+
+  var s = needPromote
+    ? this.applyUncommittedPreludesToState(this._getPreTurnBoard(), this._stagedOps)
+    : this._getPostPreludesBoard();
   if (!s) return false;
-  this.previewState = s;
   var turn = s.turn;
   var pIdx = (turn === "A") ? 0 : ((turn === "B") ? 1 : ((turn === "C") ? 2 : 3));
   var res = s.reserves[pIdx];
@@ -44237,24 +45292,21 @@ WebMoveComposer.prototype.stageAddProng = function (x, y, podIdx, dirIdx, isSupe
   var pod = stack[podIdx];
   if (pod.owner !== turn || pod.cfg.prongs[dirIdx]) return false;
 
-  var prevCfg = formatProngConfig(pod.cfg.prongs);
-
   if (isSuper) {
     if (!s.superProngs || !res || res.freeSuper <= 0) return false;
-    res.freeSuper--;
-    pod.cfg.prongs[dirIdx] = 2;
   } else {
     if (!res || res.freeProngs <= 0) return false;
-    res.freeProngs--;
-    pod.cfg.prongs[dirIdx] = 1;
   }
-  pod.cfg.count++;
-  var dirChar = DIR_CHARS[dirIdx];
-  pod.cfg.text = formatProngConfig(pod.cfg.prongs);
 
+  if (needPromote) {
+    this.promoteStagedOpsToSuperProngPreludes();
+  }
+
+  var prevCfg = formatProngConfig(pod.cfg.prongs);
+  var dirChar = DIR_CHARS[dirIdx];
   var not = x + "" + y + prevCfg + "+" + dirChar + (isSuper ? "!" : "");
-  this.stagedNotation = not;
-  this._stagedOps.push({ type: "add_prong", notation: not });
+  this._stagedOps.push({ type: "add_prong", notation: not, isSuperProngBonusMove: false });
+  this.populatePreviewBoard();
 
   OctiWebSoundSynth.play("PRONG_SNAP");
   this.isAwaitingConfirmation = true;
@@ -44277,12 +45329,20 @@ WebMoveComposer.addProng = function (x, y, dir, isSuper, podIdx) {
 };
 
 WebMoveComposer.prototype.stageRepositionProng = function (x, y, podIdx, srcDirIdx, dstDirIdx) {
-  if (!this.awaitingSuperProngBonusMove) {
+  var needPromote = false;
+  if (this._stagedOps.length > 0) {
+    if (!this.isAwaitingSuperProngBonusMove()) {
+      return false;
+    }
+    needPromote = true;
+  } else {
     this.reset();
   }
-  var s = this._getPreTurnBoard();
+
+  var s = needPromote
+    ? this.applyUncommittedPreludesToState(this._getPreTurnBoard(), this._stagedOps)
+    : this._getPostPreludesBoard();
   if (!s) return false;
-  this.previewState = s;
   if (s.mode === "OFK") return false;
   var turn = s.turn;
   var k = x + "," + y;
@@ -44291,15 +45351,16 @@ WebMoveComposer.prototype.stageRepositionProng = function (x, y, podIdx, srcDirI
   var pod = stack[podIdx];
   if (pod.owner !== turn || pod.cfg.prongs[srcDirIdx] !== 1 || pod.cfg.prongs[dstDirIdx]) return false;
 
-  var prevCfg = formatProngConfig(pod.cfg.prongs);
-  pod.cfg.prongs[srcDirIdx] = 0;
-  pod.cfg.prongs[dstDirIdx] = 1;
-  pod.cfg.text = formatProngConfig(pod.cfg.prongs);
+  if (needPromote) {
+    this.promoteStagedOpsToSuperProngPreludes();
+  }
 
+  var prevCfg = formatProngConfig(pod.cfg.prongs);
   var srcCh = DIR_CHARS[srcDirIdx];
   var dstCh = DIR_CHARS[dstDirIdx];
-  this.stagedNotation = x + "" + y + prevCfg + "+" + dstCh + "-" + srcCh;
-  this._stagedOps.push({ type: "reposition_prong", notation: this.stagedNotation });
+  var not = x + "" + y + prevCfg + "+" + dstCh + "-" + srcCh;
+  this._stagedOps.push({ type: "reposition_prong", notation: not, isSuperProngBonusMove: false });
+  this.populatePreviewBoard();
 
   OctiWebSoundSynth.play("PRONG_SNAP");
   this.isAwaitingConfirmation = true;
@@ -44379,7 +45440,7 @@ WebMoveComposer.prototype.legalDestinationsFrom = function (x, y, podIdx) {
     y = x.y;
     x = x.x;
   }
-  var s = this._getPreTurnBoard();
+  var s = this._getPostPreludesBoard();
   if (!s || !s.map) return [];
   var stack = s.map[x + "," + y] || [];
   if (podIdx === undefined || podIdx === null || podIdx < 0) {
@@ -44393,7 +45454,7 @@ WebMoveComposer.prototype.legalDestinationsFrom = function (x, y, podIdx) {
 
 WebMoveComposer.prototype.guidedNextSquares = function () {
   if (!this.guidedMoveActive || !this.guidedCurrentSquare) return [];
-  var s = this._getPreTurnBoard();
+  var s = this._getPostPreludesBoard();
   if (!s || !s.map) return [];
   var ox = this.guidedOriginSquare ? this.guidedOriginSquare.x : this.guidedCurrentSquare.x;
   var oy = this.guidedOriginSquare ? this.guidedOriginSquare.y : this.guidedCurrentSquare.y;
@@ -44434,17 +45495,46 @@ WebMoveComposer.prototype.beginGuidedPodMove = function (x, y, podIdx, moveAllMa
     y = x.y;
     x = x.x;
   }
-  var isContinuingComposite = this.guidedOriginSquare &&
-    this.guidedOriginSquare.x === x && this.guidedOriginSquare.y === y &&
-    this._stagedOps.length > 0 && this._stagedOps[0].type === "move";
+  var lastOp = this._stagedOps.length > 0 ? this._stagedOps[this._stagedOps.length - 1] : null;
+  var isContinuingComposite = Boolean(
+    this.guidedOriginSquare &&
+    this.guidedOriginSquare.x === x &&
+    this.guidedOriginSquare.y === y &&
+    lastOp && !lastOp.isSuperProngBonusMove && lastOp.type === "move" &&
+    this.hasOtherMovablePodAtOrigin()
+  );
 
-  if (!isContinuingComposite && !this.awaitingSuperProngBonusMove) {
-    this.reset();
-  } else if (isContinuingComposite && this._guidedMidHop) {
+  if (!isContinuingComposite) {
+    if (this._stagedOps.length > 0) {
+      if (!this.isAwaitingSuperProngBonusMove()) {
+        return false;
+      }
+      var candBoard = this.applyUncommittedPreludesToState(this._getPreTurnBoard(), this._stagedOps);
+      if (!candBoard || !candBoard.map) return false;
+      var candStack = candBoard.map[x + "," + y] || [];
+      var candIdx = podIdx;
+      if (candIdx === undefined || candIdx === null || candIdx < 0 || candIdx >= candStack.length) {
+        var sortedCand = sortedPodIndicesMostProngsFirst(candStack);
+        candIdx = -1;
+        for (var sci = 0; sci < sortedCand.length; sci++) {
+          if (candStack[sortedCand[sci]].owner === candBoard.turn) {
+            candIdx = sortedCand[sci];
+            break;
+          }
+        }
+      }
+      if (candIdx < 0 || candIdx >= candStack.length || !candStack[candIdx] || candStack[candIdx].owner !== candBoard.turn) {
+        return false;
+      }
+      this.promoteStagedOpsToSuperProngPreludes();
+    } else {
+      this.reset();
+    }
+  } else if (this._guidedMidHop) {
     this.finishGuidedMoveHere();
   }
 
-  var s = this._getPreTurnBoard();
+  var s = this._getPostPreludesBoard();
   if (!s || !s.map) return false;
   var k = x + "," + y;
   var stack = s.map[k] || [];
@@ -44487,7 +45577,7 @@ WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
   var matchDest = this.guidedLegalDests.find(function (d) { return d.x === toX && d.y === toY; });
   if (!matchDest) return false;
 
-  var s = this._getPreTurnBoard();
+  var s = this._getPostPreludesBoard();
   if (!s || !s.map) return false;
   var ox = this.guidedOriginSquare.x, oy = this.guidedOriginSquare.y;
   var origStack = s.map[ox + "," + oy] || [];
@@ -44531,6 +45621,7 @@ WebMoveComposer.prototype.selectGuidedDestination = function (toX, toY) {
         x0: ox,
         y0: oy,
         podIndex: pIdx,
+        isSuperProngBonusMove: false,
         pod: {
           owner: pObj.owner,
           cfg: {
@@ -45456,11 +46547,14 @@ var zoomSelectedRepositionDir = null;
 function getZoomSquareStateAndStack(x, y) {
   var preview = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
   if (!preview) return { state: null, stack: [], isOriginComposite: false };
+  var lastOp = (moveComposer && moveComposer._stagedOps && moveComposer._stagedOps.length > 0)
+    ? moveComposer._stagedOps[moveComposer._stagedOps.length - 1]
+    : null;
   var isOriginComposite = !!(moveComposer && moveComposer.guidedOriginSquare &&
     moveComposer.guidedOriginSquare.x === x && moveComposer.guidedOriginSquare.y === y &&
-    moveComposer._stagedOps && moveComposer._stagedOps.length > 0 && moveComposer._stagedOps[0].type === "move");
+    lastOp && !lastOp.isSuperProngBonusMove && lastOp.type === "move");
   if (isOriginComposite) {
-    var preBoard = moveComposer._getPreTurnBoard();
+    var preBoard = moveComposer._getPostPreludesBoard();
     var origStack = (preBoard && preBoard.map) ? (preBoard.map[x + "," + y] || []) : [];
     return { state: preview, stack: origStack, isOriginComposite: true };
   }
@@ -45532,13 +46626,34 @@ function updateZoomOverlayControls() {
   var tabsContainer = document.getElementById("web-zoom-pod-tabs");
   if (tabsContainer) {
     tabsContainer.innerHTML = "";
+    var pal = PALETTES[currentTheme] || PALETTES.obsidian;
+    var rotDeg = ((boardRotationDeg + liveRotationOffsetDeg) % 360 + 360) % 360;
     var sortedIndices = sortedPodIndicesMostProngsFirst(stack);
     sortedIndices.forEach(function (pIdx, rank) {
       var btn = document.createElement("button");
       btn.type = "button";
       var isMoved = moveComposer && moveComposer.isSquarePodClaimed(zoomSq.x, zoomSq.y, pIdx);
       btn.className = "zoom-pod-tab-btn" + (pIdx === zoomSelectedPodIdx ? " active" : "");
-      btn.textContent = "Pod " + (rank + 1) + " (" + stack[pIdx].owner + ")" + (isMoved ? " (Moved)" : "");
+
+      var miniCanvas = document.createElement("canvas");
+      miniCanvas.width = 34;
+      miniCanvas.height = 34;
+      miniCanvas.style.width = "34px";
+      miniCanvas.style.height = "34px";
+      miniCanvas.style.display = "block";
+      var miniCtx = miniCanvas.getContext("2d");
+      if (miniCtx) {
+        drawOctagonalPod(miniCtx, { x: 7, y: 7, w: 20, h: 20 }, stack[pIdx].owner, stack[pIdx].cfg, pal, rotDeg, false, "");
+      }
+
+      var cfgStr = (stack[pIdx].cfg && stack[pIdx].cfg.prongs)
+        ? formatProngConfig(stack[pIdx].cfg.prongs)
+        : ((stack[pIdx].cfg && stack[pIdx].cfg.text) ? stack[pIdx].cfg.text : "");
+      var lbl = document.createElement("span");
+      lbl.textContent = "#" + (rank + 1) + " " + (cfgStr || "\u2014") + " (" + stack[pIdx].owner + ")" + (isMoved ? " (Moved)" : "");
+
+      btn.appendChild(miniCanvas);
+      btn.appendChild(lbl);
       btn.addEventListener("click", function () {
         zoomSelectedPodIdx = pIdx;
         zoomSelectedRepositionDir = null;
@@ -45872,6 +46987,8 @@ if (zoomCanvas) {
 
 // Dismiss ZoomedSquareDialog on outside backdrop click or Esc
 var zoomOverlay = document.getElementById("web-zoom-overlay");
+var zoomPodTabsInit = document.getElementById("web-zoom-pod-tabs");
+void zoomPodTabsInit;
 if (zoomOverlay) {
   zoomOverlay.addEventListener("click", function (e) {
     if (e.target === zoomOverlay) {
@@ -46109,6 +47226,11 @@ if (playCanvas) {
             return;
           }
         }
+        if (moveComposer.isAwaitingSuperProngBonusMove()) {
+          if (moveComposer.stageMoveOrJump(pressSq.x, pressSq.y, releaseSq.x, releaseSq.y, undefined, shiftMoveAll)) {
+            return;
+          }
+        }
         pulseConfirmBar();
         return;
       }
@@ -46147,10 +47269,22 @@ if (playCanvas) {
     // Board Square Click Handling
     if (!matchStarted && !activeOnlineGameId) return;
     var s = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
-    if (!s || s.status === "O" || s.status === "R") return;
+    if (!s) return;
 
     var isMyTurn = isInteractiveBoardTurn(s);
-    if (!isMyTurn) return;
+    if (!isMyTurn) {
+      if (playBoardGeom) {
+        var bPtRo = getBoardPos(raw);
+        var sqRo = playBoardGeom.screenToSquare(bPtRo.x, bPtRo.y);
+        if (sqRo) {
+          var roStack = (s.map && s.map[sqRo.x + "," + sqRo.y]) ? s.map[sqRo.x + "," + sqRo.y] : [];
+          if (roStack.length > 0) {
+            openZoomedSquare(sqRo.x, sqRo.y);
+          }
+        }
+      }
+      return;
+    }
 
     if (playBoardGeom) {
       var bPt = getBoardPos(raw);
@@ -46264,8 +47398,19 @@ function handlePlaySquareClick(x, y, ptX, ptY, shiftKey) {
       openZoomedSquare(x, y);
       return;
     }
-    pulseConfirmBar();
-    return;
+    var curS = moveComposer.previewState ? moveComposer.previewState : activePlayState;
+    if (curS && squareHasEnemyOf(curS, x, y, curS.turn)) {
+      openZoomedSquare(x, y);
+      return;
+    }
+    if (moveComposer.isAwaitingSuperProngBonusMove()) {
+      if (moveComposer.isGuidedMoveActive) {
+        moveComposer.finishGuidedMoveHere();
+      }
+    } else {
+      pulseConfirmBar();
+      return;
+    }
   }
 
   var s = (moveComposer.previewState) ? moveComposer.previewState : activePlayState;
@@ -46288,7 +47433,11 @@ function handlePlaySquareClick(x, y, ptX, ptY, shiftKey) {
     // If clicked origin square while 0 hops have been made (2nd click on origin pod)
     var isOrigin = moveComposer.guidedOriginSquare && moveComposer.guidedOriginSquare.x === x && moveComposer.guidedOriginSquare.y === y;
     if (isOrigin && (!moveComposer.guidedHops || moveComposer.guidedHops.length === 0)) {
-      moveComposer.cancel();
+      if (moveComposer._stagedOps.length > 0) {
+        moveComposer.finishGuidedMoveHere();
+      } else {
+        moveComposer.cancel();
+      }
       openZoomedSquare(x, y);
       return;
     }
@@ -46317,12 +47466,21 @@ function handlePlaySquareClick(x, y, ptX, ptY, shiftKey) {
   }
 
   if (bestFriendlyIdx !== -1) {
+    // Multi-pod stack (2+ pods): 1st stationary click opens ZoomedSquareDialog immediately
+    if (stack.length >= 2) {
+      openZoomedSquare(x, y);
+      return;
+    }
     // GDB-07.1: Prongs are added/repositioned exclusively inside ZoomedSquareDialog.
-    // Begin guided move for top friendly pod (or open ZoomedSquareDialog if 0 legal moves).
+    // Begin guided move for 1-pod friendly square (or open ZoomedSquareDialog if 0 legal moves).
     moveComposer.beginGuidedPodMove(x, y, bestFriendlyIdx, moveAll);
     if (!moveComposer.guidedLegalDests || moveComposer.guidedLegalDests.length === 0) {
       // Unarmed pod -> open zoom modal directly!
-      moveComposer.cancel();
+      if (moveComposer._stagedOps.length > 0) {
+        moveComposer.finishGuidedMoveHere();
+      } else {
+        moveComposer.cancel();
+      }
       openZoomedSquare(x, y);
       return;
     }
@@ -46563,6 +47721,8 @@ if (webThemeSelect) {
 // SFX Toggle Button
 var btnSfx = document.getElementById("btn-sfx");
 if (btnSfx) {
+  btnSfx.textContent = OctiWebSoundSynth.isEnabled() ? "SFX: On" : "SFX: Off";
+  btnSfx.className = OctiWebSoundSynth.isEnabled() ? "btn" : "btn dim";
   btnSfx.addEventListener("click", function () {
     OctiWebSoundSynth.setEnabled(!OctiWebSoundSynth.isEnabled());
   });
@@ -46851,6 +48011,8 @@ if (btnStartMatch) {
             renderAllWebReserves();
             if (activeBoardContextMode === "local") saveLocalPlayContext();
             autoUploadCompletedLocalMatch();
+          } else if (clockTimers[curTurn] <= 10) {
+            OctiWebSoundSynth.play("CLOCK_LOW_TICK");
           }
         }
       }, 1000);
@@ -47204,6 +48366,7 @@ function onLocalMoveCommitted(notation, newState, aiMeta) {
 
   if (activeOnlineGameId) {
     var targetRoom = activeOnlineGameId;
+    activeOnlinePendingLocalMove = notation;
     api("/api/v1/games/" + encodeURIComponent(targetRoom) + "/move", {
       method: "POST",
       body: { move: notation }
@@ -47211,6 +48374,9 @@ function onLocalMoveCommitted(notation, newState, aiMeta) {
       syncOnlineGameRoom(targetRoom, false);
       pollOnlineGameEvents(targetRoom);
     }).catch(function (e) {
+      if (activeOnlinePendingLocalMove === notation) {
+        activeOnlinePendingLocalMove = "";
+      }
       alert("Move rejected by server: " + e.message);
       syncOnlineGameRoom(targetRoom, true);
     });
@@ -47240,6 +48406,10 @@ function onLocalMoveCommitted(notation, newState, aiMeta) {
     if (activeBoardContextMode === "local") saveLocalPlayContext();
     autoUploadCompletedLocalMatch();
     return;
+  }
+
+  if (aiMeta) {
+    OctiWebSoundSynth.playForMove(notation, activePlayState);
   }
 
   if (activeBoardContextMode === "local") saveLocalPlayContext();
@@ -47523,12 +48693,16 @@ function stopOnlineGameSync(preserveOnlineContext) {
   activeOnlineViewerSeat = 0;
   activeOnlineLastSyncedPlyCount = -1;
   activeOnlineLastSyncedFen = "";
+  activeOnlinePendingLocalMove = "";
+  activeOnlinePrevFinished = false;
   if (!preserveOnlineContext) {
     activeOnlineTableRoomId = "";
     if (onlinePlayContext) {
       onlinePlayContext.viewingBoard = false;
       onlinePlayContext.roomId = "";
       onlinePlayContext.roomView = null;
+      onlinePlayContext.pendingLocalMove = "";
+      onlinePlayContext.prevFinished = false;
       onlinePlayContext.state = null;
       onlinePlayContext.plies = [];
     }
@@ -48038,9 +49212,12 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
     var isStaging = moveComposer && (moveComposer.stagedNotation || moveComposer.isGuidedMoveActive || moveComposer.isAwaitingConfirmation);
     var srvMoves = Array.isArray(res.moves) ? res.moves : [];
     var srvFen = res.fen || "";
+    var srvPhaseFinished = (res.phase === "FINISHED");
 
-    if (!isStaging && (forceRebuild || srvFen !== activeOnlineLastSyncedFen || srvMoves.length !== activeOnlineLastSyncedPlyCount)) {
-      if (activeOnlineLastSyncedPlyCount >= 0 && srvMoves.length !== activeOnlineLastSyncedPlyCount) {
+    if (!isStaging && (forceRebuild || srvPhaseFinished !== activeOnlinePrevFinished || srvFen !== activeOnlineLastSyncedFen || srvMoves.length !== activeOnlineLastSyncedPlyCount)) {
+      var prevSyncedPlyCount = activeOnlineLastSyncedPlyCount;
+      var wasOnlineFinished = activeOnlinePrevFinished;
+      if (prevSyncedPlyCount >= 0 && srvMoves.length !== prevSyncedPlyCount) {
         onlineRoomTtlRemainingMs = 3600000;
         onlineRoomTtlFetchedAtMs = Date.now();
         var bTtl = document.getElementById("web-play-online-ttl-badge");
@@ -48082,10 +49259,13 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
         lastMoveHighlightSquares = [];
       }
 
+      var isNowOnlineFinished = (res.phase === "FINISHED" || Boolean(activePlayState && (activePlayState.status === "O" || activePlayState.status === "R")));
+      activeOnlinePrevFinished = isNowOnlineFinished;
+
       var goOverlay = document.getElementById("web-gameover-overlay");
       var goTitle = document.getElementById("web-gameover-title");
       var goSub = document.getElementById("web-gameover-subtitle");
-      if (res.phase === "FINISHED" || (activePlayState && (activePlayState.status === "O" || activePlayState.status === "R"))) {
+      if (isNowOnlineFinished) {
         if (goOverlay && goTitle && goSub) {
           var winSeat = res.winner_seat || 0;
           var winLetter = winSeat > 0 ? seatLetterOf(winSeat) : (activePlayState ? activePlayState.winner : "");
@@ -48099,6 +49279,21 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
         }
       } else if (goOverlay) {
         goOverlay.style.display = "none";
+      }
+
+      if (prevSyncedPlyCount >= 0) {
+        if (!wasOnlineFinished && isNowOnlineFinished) {
+          activeOnlinePendingLocalMove = "";
+          OctiWebSoundSynth.play("GAME_VICTORY");
+        } else if (srvMoves.length > prevSyncedPlyCount && builtPlies.length > 1) {
+          var latestOnlineMove = srvMoves[srvMoves.length - 1];
+          var latestMover = builtPlies[builtPlies.length - 1].player;
+          var isOwnEcho = (vSeat > 0 && seatLetterOf(vSeat) === latestMover && activeOnlinePendingLocalMove === latestOnlineMove);
+          activeOnlinePendingLocalMove = "";
+          if (!isOwnEcho) {
+            OctiWebSoundSynth.playForMove(latestOnlineMove, activePlayState);
+          }
+        }
       }
     }
 
@@ -48139,6 +49334,8 @@ function openOnlineTableBoard(roomId) {
   }
   activeOnlineLastSyncedPlyCount = -1;
   activeOnlineLastSyncedFen = "";
+  activeOnlinePendingLocalMove = "";
+  activeOnlinePrevFinished = false;
   if (switchedRoom) {
     activeOnlineEventSeq = 0;
     activeOnlineChatMessages = [];
@@ -49631,6 +50828,9 @@ window.openZoomedSquare = openZoomedSquare;
 window.closeZoomedSquare = closeZoomedSquare;
 window.handlePlaySquareClick = handlePlaySquareClick;
 window.prepareLocalMatchInitialState = prepareLocalMatchInitialState;
+window.OctiWebSoundSynth = OctiWebSoundSynth;
+window.onLocalMoveCommitted = onLocalMoveCommitted;
+window.stopOnlineGameSync = stopOnlineGameSync;
 window.WebMoveComposer = WebMoveComposer;
 window.moveComposer = moveComposer;
 Object.defineProperty(window, "localMatchConfig", {

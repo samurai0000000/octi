@@ -575,12 +575,13 @@ fun LobbyScreen(
         }
 
         // 2. Lobby Chat Card (weight 1f)
+        val lobbyWebPal = resolveWebChatStylePaletteForColor(OctiTheme.colors.windowBg)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
-            border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+            colors = CardDefaults.cardColors(containerColor = lobbyWebPal.cardBg),
+            border = BorderStroke(1.dp, lobbyWebPal.cardBorder)
         ) {
             Column(
                 modifier = Modifier
@@ -600,18 +601,17 @@ fun LobbyScreen(
                         text = "Lobby Chat",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = OctiTheme.colors.accentBrass
+                        color = lobbyWebPal.headerTitle
                     )
                     Text(
                         text = "Global • Tap to zoom ⤢",
                         style = MaterialTheme.typography.labelSmall,
-                        color = OctiTheme.colors.accentBrass,
+                        color = lobbyWebPal.headerTitle,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
 
                 // Chat Messages Log
-                val lobbyChatMessages by viewModel.lobbyChatMessages.collectAsState()
                 val formattedChatList = if (lobbyChatMessages.isNotEmpty()) {
                     lobbyChatMessages
                 } else {
@@ -629,9 +629,9 @@ fun LobbyScreen(
                         .fillMaxWidth()
                         .weight(1f)
                         .clickable { viewModel.openLobbyChatZoomDialog() },
-                    color = OctiTheme.colors.windowBg,
+                    color = lobbyWebPal.wellBg,
                     shape = RoundedCornerShape(6.dp),
-                    border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+                    border = BorderStroke(1.dp, lobbyWebPal.cardBorder)
                 ) {
                     if (formattedChatList.isEmpty()) {
                         Box(
@@ -643,7 +643,7 @@ fun LobbyScreen(
                             Text(
                                 text = "No messages in lobby chat yet. Say hello!",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = OctiTheme.colors.textSecondary
+                                color = lobbyWebPal.timestamp
                             )
                         }
                     } else {
@@ -656,9 +656,13 @@ fun LobbyScreen(
                         ) {
                             items(formattedChatList) { line ->
                                 Text(
-                                    text = line,
+                                    text = formatWebChatLineAnnotatedString(
+                                        rawLine = line,
+                                        viewerHandle = myHandle,
+                                        lightSurface = lobbyWebPal.lightSurface
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = OctiTheme.colors.textPrimary
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             }
                         }
@@ -880,18 +884,34 @@ fun LobbyChatScreen(
     val lobbyState by viewModel.lobbyState.collectAsState()
     val lobbyChatMessages by viewModel.lobbyChatMessages.collectAsState()
     val isAuthenticated by viewModel.isAuthenticated.collectAsState()
+    val profile by viewModel.currentProfile.collectAsState()
+    val myHandle = profile?.handle ?: ""
+    val webPal = resolveWebChatStylePaletteForColor(OctiTheme.colors.windowBg)
     var chatDraft by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    val formattedList = if (lobbyChatMessages.isNotEmpty()) {
+        lobbyChatMessages
+    } else {
+        lobbyState.recentChat.map { OctiAppViewModel.formatLobbyChatEntry(it) }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.refreshLobbyStateAsync()
+    }
+
+    LaunchedEffect(formattedList.size) {
+        if (formattedList.isNotEmpty()) {
+            listState.scrollToItem(formattedList.size - 1)
+        }
     }
 
     Card(
         modifier = modifier
             .fillMaxSize()
             .padding(12.dp),
-        colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg),
-        border = BorderStroke(1.dp, OctiTheme.colors.panelCardBorder)
+        colors = CardDefaults.cardColors(containerColor = webPal.cardBg),
+        border = BorderStroke(1.dp, webPal.cardBorder)
     ) {
         Column(
             modifier = Modifier
@@ -909,12 +929,12 @@ fun LobbyChatScreen(
                         text = "Lobby Chat",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = OctiTheme.colors.accentBrass
+                        color = webPal.headerTitle
                     )
                     Text(
                         text = "6h history • Local time",
                         style = MaterialTheme.typography.labelSmall,
-                        color = OctiTheme.colors.textSecondary
+                        color = webPal.timestamp
                     )
                 }
                 Row(
@@ -936,33 +956,46 @@ fun LobbyChatScreen(
                 }
             }
 
-            LazyColumn(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                color = webPal.wellBg,
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, webPal.cardBorder)
             ) {
-                val formattedList = if (lobbyChatMessages.isNotEmpty()) {
-                    lobbyChatMessages
-                } else {
-                    lobbyState.recentChat.map { OctiAppViewModel.formatLobbyChatEntry(it) }
-                }
                 if (formattedList.isEmpty()) {
-                    item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
                             text = "No messages in lobby chat yet. Say hello!",
                             style = MaterialTheme.typography.bodySmall,
-                            color = OctiTheme.colors.textSecondary,
-                            modifier = Modifier.padding(vertical = 12.dp)
+                            color = webPal.timestamp
                         )
                     }
                 } else {
-                    items(formattedList) { line ->
-                        Text(
-                            text = line,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = OctiTheme.colors.textPrimary
-                        )
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(formattedList) { line ->
+                            Text(
+                                text = formatWebChatLineAnnotatedString(
+                                    rawLine = line,
+                                    viewerHandle = myHandle,
+                                    lightSurface = webPal.lightSurface
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             }

@@ -145,8 +145,6 @@ private:
                                 const OctiPalette &pal) const;
     void paintStackFanOverlay(QPainter &p, const OctiBoardGeometry &geom,
                               int x, int y, const OctiPalette &pal) const;
-    void paintCaptureChoicePills(QPainter &p, const OctiBoardGeometry &geom,
-                                 const OctiPalette &pal);
     void paintCommitBanner(QPainter &p, const OctiBoardGeometry &geom,
                            const OctiPalette &pal);
     void presentPlyConfirmationIfNeeded();
