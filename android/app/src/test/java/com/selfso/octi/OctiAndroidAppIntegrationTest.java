@@ -746,6 +746,9 @@ public class OctiAndroidAppIntegrationTest {
 
     private static File findServerBinary() {
         String[] candidates = new String[] {
+                "../server/build/web_fix/octi_server",
+                "../../server/build/web_fix/octi_server",
+                "server/build/web_fix/octi_server",
                 "../server/build/octi_server",
                 "../../server/build/octi_server",
                 "server/build/octi_server"
@@ -3638,6 +3641,85 @@ public class OctiAndroidAppIntegrationTest {
         } finally {
             synth.setMuted(prevMuted);
         }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testEnvelope5Android13VariantsDualPoolLaddersAnd4PBasesLock() throws Exception {
+        Class<?> dialogsClass = Class.forName("com.selfso.octi.ui.OctiDialogs");
+        java.lang.reflect.Method laddersMethod;
+        java.lang.reflect.Method filtersMethod;
+        java.lang.reflect.Method arenaFiltersMethod;
+        java.lang.reflect.Method normalizeCreateMethod;
+        java.lang.reflect.Method ratingsSummaryMethod;
+        try {
+            laddersMethod = dialogsClass.getMethod("leaderboardLadders");
+            filtersMethod = dialogsClass.getMethod("archiveVariantFilters");
+            arenaFiltersMethod = dialogsClass.getMethod("arenaParticipantFilters");
+            normalizeCreateMethod = dialogsClass.getMethod(
+                    "normalizeCreateTableState",
+                    String.class, int.class, boolean.class, boolean.class, boolean.class);
+            ratingsSummaryMethod = dialogsClass.getMethod(
+                    "formatProfileRatingsSummary",
+                    OctiNetworkClient.PlayerProfileInfo.class);
+        } catch (NoSuchMethodException e) {
+            fail("Missing OctiDialogs Envelope 5 UI contract helper: " + e.getMessage());
+            return;
+        }
+
+        List<String> ladders = (List<String>) laddersMethod.invoke(null);
+        assertEquals(java.util.Arrays.asList("2P_3B", "2P_1B", "OFK"), ladders);
+        assertFalse(ladders.contains("4P"));
+
+        List<String> archiveFilters = (List<String>) filtersMethod.invoke(null);
+        assertTrue(archiveFilters.contains(""));
+        assertTrue(archiveFilters.contains("2P_ALL"));
+        assertTrue(archiveFilters.contains("4P_ALL"));
+        assertTrue(archiveFilters.contains("2P_3B_SPED"));
+        assertTrue(archiveFilters.contains("4P_ED"));
+        assertTrue(archiveFilters.contains("OFK"));
+        assertEquals(16, archiveFilters.size());
+
+        List<String> arenaFilters = (List<String>) arenaFiltersMethod.invoke(null);
+        assertEquals(java.util.Arrays.asList("all", "robots", "humans"), arenaFilters);
+
+        // Verify CreateTable normalization: 4P locks bases=3 and disables rated; SP/ED disables rated
+        Object st4p = normalizeCreateMethod.invoke(null, "4P", 1, false, false, true);
+        assertEquals(3, st4p.getClass().getMethod("getBases").invoke(st4p));
+        assertEquals(Boolean.TRUE, st4p.getClass().getMethod("getBasesLocked").invoke(st4p));
+        assertEquals(Boolean.FALSE, st4p.getClass().getMethod("getRated").invoke(st4p));
+        assertEquals(Boolean.FALSE, st4p.getClass().getMethod("getRatedEnabled").invoke(st4p));
+        assertEquals("4P", st4p.getClass().getMethod("getVariantCode").invoke(st4p));
+
+        Object stSp = normalizeCreateMethod.invoke(null, "2P", 3, true, false, true);
+        assertEquals(Boolean.FALSE, stSp.getClass().getMethod("getRated").invoke(stSp));
+        assertEquals(Boolean.FALSE, stSp.getClass().getMethod("getRatedEnabled").invoke(stSp));
+        assertEquals("2P_3B_SP", stSp.getClass().getMethod("getVariantCode").invoke(stSp));
+
+        Object stRated2p1b = normalizeCreateMethod.invoke(null, "2P", 1, false, false, true);
+        assertEquals(Boolean.TRUE, stRated2p1b.getClass().getMethod("getRated").invoke(stRated2p1b));
+        assertEquals(Boolean.TRUE, stRated2p1b.getClass().getMethod("getRatedEnabled").invoke(stRated2p1b));
+        assertEquals("2P_1B", stRated2p1b.getClass().getMethod("getVariantCode").invoke(stRated2p1b));
+
+        // Verify source wiring in MainActivity.kt, ArchiveScreen.kt, LobbyScreen.kt
+        String mainSrc = new String(
+                Files.readAllBytes(resolveAndroidSourceFile("com/selfso/octi/MainActivity.kt").toPath()),
+                StandardCharsets.UTF_8);
+        assertTrue(mainSrc.contains("refreshLeaderboardAsync(\"2P_3B\", 50)"));
+        assertFalse(mainSrc.contains("refreshLeaderboardAsync(\"2P\", 50)"));
+
+        String archiveSrc = new String(
+                Files.readAllBytes(resolveAndroidSourceFile("com/selfso/octi/ui/ArchiveScreen.kt").toPath()),
+                StandardCharsets.UTF_8);
+        assertTrue(archiveSrc.contains("[BOT]"));
+        assertTrue(archiveSrc.contains("[HUMAN]"));
+        assertTrue(archiveSrc.contains("allVariantCodes()"));
+
+        String lobbySrc = new String(
+                Files.readAllBytes(resolveAndroidSourceFile("com/selfso/octi/ui/LobbyScreen.kt").toPath()),
+                StandardCharsets.UTF_8);
+        assertTrue(lobbySrc.contains("variantCode()"));
+        assertTrue(lobbySrc.contains("normalizeCreateTableState"));
     }
 }
 

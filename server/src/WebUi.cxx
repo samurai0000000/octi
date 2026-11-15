@@ -547,11 +547,127 @@ tr.active-ply {
   align-items: center;
   justify-content: center;
 }
-.rule-diagram-wrap svg {
+.rule-diagram-wrap svg,
+.rule-diagram-wrap img {
   width: 100%;
   max-width: 260px;
   height: auto;
   display: block;
+}
+/* Illustrated Rulebook (#tab-rules) */
+.rb-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.rb-toc {
+  position: sticky;
+  top: 14px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+.rb-toc h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--dim);
+}
+.rb-toc a {
+  display: block;
+  padding: 7px 10px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.rb-toc a:hover {
+  background: var(--panel-elev);
+  border-color: var(--line);
+  color: var(--acc-bright);
+}
+.rb-chapter {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px 22px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  scroll-margin-top: 16px;
+}
+.rb-chapter h2 {
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 19px;
+}
+.rb-chapter h3 {
+  margin: 16px 0 8px 0;
+  font-size: 15.5px;
+}
+.rb-chapter p, .rb-chapter li {
+  font-size: 14px;
+  line-height: 1.62;
+}
+.rb-chapter ul, .rb-chapter ol {
+  margin: 0 0 12px 0;
+  padding-left: 22px;
+}
+.rb-chapter li { margin-bottom: 6px; }
+.rb-callout {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-left: 4px solid #c8a253;
+  border-radius: 8px;
+  padding: 11px 14px;
+  margin: 12px 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.rb-fig-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.rb-fig {
+  background: #0b0f17;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 10px;
+  color: #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.rb-fig img {
+  width: 100%;
+  max-width: 380px;
+  height: auto;
+  border-radius: 6px;
+  display: block;
+}
+.rb-fig-cap {
+  margin-top: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #cbd5e1;
+  text-align: center;
+}
+@media (max-width: 900px) {
+  .rb-layout {
+    grid-template-columns: 1fr;
+  }
+  .rb-toc {
+    position: static;
+  }
 }
 .rule-box h4 {
   margin: 0 0 6px 0;
@@ -1331,6 +1447,7 @@ tr.active-ply {
     <button type="button" data-tab="board" id="nav-board-btn" class="btn">Leaderboard</button>
     <button type="button" data-tab="robots" id="nav-robots-btn" class="btn">Robots</button>
     <button type="button" data-tab="archive" id="nav-archive-btn" class="btn">Game Archive</button>
+    <button type="button" data-tab="rules" id="nav-rules-btn" class="btn">Rulebook</button>
     <button type="button" data-tab="account" id="nav-account-btn" class="btn">Account</button>
   </nav>
   <div class="header-right">
@@ -1681,7 +1798,7 @@ tr.active-ply {
           </svg>
         </div>
         <h3>Global ELO Leaderboard</h3>
-        <p>Official rankings across 2-Player (9x9 3-Base), 4-Player, and OCTI for Kids (6x7) modes updated continuously.</p>
+        <p>Official Human-Only rankings across 2P_3B (9x9 3-Base), 2P_1B (9x9 1-Base), and OFK (6x7 OCTI for Kids) ladders, plus the Open Bot &amp; Human Arena.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon-wrap" style="background:rgba(168,85,247,0.12);">
@@ -1711,112 +1828,54 @@ tr.active-ply {
   </div>
 
   <div class="panel">
-    <h2>How to Play OCTI</h2>
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <h2 style="margin:0;">How to Play OCTI</h2>
+      <button type="button" class="btn btn-primary" id="home-cta-rules">Open Complete Illustrated Rulebook</button>
+    </div>
     <div class="rules-grid">
       <div class="rule-box">
         <div class="rule-diagram-wrap">
-          <svg viewBox="0 0 240 110" xmlns="http://www.w3.org/2000/svg">
-            <rect width="240" height="110" fill="#0B0F17"/>
-            <g transform="translate(70, 55)">
-              <circle cx="0" cy="-30" r="3" fill="#E5C158"/>
-              <circle cx="21" cy="-21" r="3" fill="#64748B"/>
-              <circle cx="30" cy="0" r="3" fill="#64748B"/>
-              <circle cx="21" cy="21" r="3" fill="#64748B"/>
-              <circle cx="0" cy="30" r="3" fill="#64748B"/>
-              <circle cx="-21" cy="21" r="3" fill="#64748B"/>
-              <circle cx="-30" cy="0" r="3" fill="#64748B"/>
-              <circle cx="-21" cy="-21" r="3" fill="#64748B"/>
-              <polygon points="-10,-24 10,-24 24,-10 24,10 10,24 -10,24 -24,10 -24,-10" fill="#10B981" stroke="#34D399" stroke-width="2"/>
-              <circle cx="0" cy="0" r="9" fill="#064E3B"/>
-              <text x="0" y="3" text-anchor="middle" fill="#A7F3D0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="700">8 SOX</text>
-            </g>
-            <g transform="translate(145, 30)">
-              <rect x="0" y="0" width="75" height="24" rx="4" fill="#1E293B" stroke="#334155"/>
-              <polygon points="12,12 16,8 20,12 16,16" fill="#10B981"/>
-              <text x="32" y="16" fill="#E2E8F0" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11" font-weight="700">Pods: 4</text>
-            </g>
-            <g transform="translate(145, 60)">
-              <rect x="0" y="0" width="75" height="24" rx="4" fill="#1E293B" stroke="#334155"/>
-              <line x1="12" y1="12" x2="20" y2="12" stroke="#E5C158" stroke-width="3" stroke-linecap="round"/>
-              <text x="32" y="16" fill="#E2E8F0" font-family="ui-monospace, SFMono-Regular, monospace" font-size="11" font-weight="700">Prongs: 25</text>
-            </g>
-          </svg>
+          <img src="/assets/rulebook/rule_01_2p_3b_setup.png" loading="lazy" alt="OCTI 9x9 2P Starting Setup">
         </div>
-        <h4>1. Pods &amp; Reserves</h4>
-        <p>Players begin with pods on their home base squares and in reserve. Pods are octagonal pieces that can hold prongs and stack upon each other.</p>
+        <h4>1. Pods, Bases &amp; Reserves</h4>
+        <p>In standard 2-Player OCTI, each side starts with 3 pods on home bases (<code>33/53/73</code> vs. <code>37/57/77</code>), 4 reserve pods, and 25 prongs.</p>
       </div>
       <div class="rule-box">
         <div class="rule-diagram-wrap">
-          <svg viewBox="0 0 240 110" xmlns="http://www.w3.org/2000/svg">
-            <rect width="240" height="110" fill="#0B0F17"/>
-            <g transform="translate(120, 52)">
-              <line x1="0" y1="-18" x2="0" y2="-38" stroke="#E5C158" stroke-width="3.5" stroke-linecap="round"/>
-              <polygon points="-4,-35 0,-43 4,-35" fill="#FDE047"/>
-              <line x1="13" y1="-13" x2="27" y2="-27" stroke="#E5C158" stroke-width="3.5" stroke-linecap="round"/>
-              <polygon points="21,-29 31,-31 29,-21" fill="#FDE047"/>
-              <line x1="18" y1="0" x2="38" y2="0" stroke="#E5C158" stroke-width="3.5" stroke-linecap="round"/>
-              <polygon points="35,-4 43,0 35,4" fill="#FDE047"/>
-              <line x1="-13" y1="-13" x2="-27" y2="-27" stroke="#E5C158" stroke-width="3.5" stroke-linecap="round"/>
-              <polygon points="-29,-21 -31,-31 -21,-29" fill="#FDE047"/>
-              <polygon points="-8,-18 8,-18 18,-8 18,8 8,18 -8,18 -18,8 -18,-8" fill="#10B981" stroke="#34D399" stroke-width="2"/>
-              <circle cx="0" cy="0" r="7" fill="#064E3B"/>
-            </g>
-            <text x="120" y="98" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600">Prongs define Move &amp; Jump Vectors</text>
-          </svg>
+          <img src="/assets/rulebook/rule_03_prongs_8dir.png" loading="lazy" alt="8 Compass Prong Directions">
         </div>
-        <h4>2. Prongs &amp; Direction</h4>
-        <p>On your turn, you can allocate a directional prong (North, North-East, East, etc.) to one of your pods, granting movement and jumping vectors.</p>
+        <h4>2. Prongs &amp; 8 Compass Vectors</h4>
+        <p>Insert prongs into perimeter sockets <code>a</code>&ndash;<code>h</code> (North clockwise to North-West) or reposition existing prongs to construct movement vectors.</p>
       </div>
       <div class="rule-box">
         <div class="rule-diagram-wrap">
-          <svg viewBox="0 0 240 110" xmlns="http://www.w3.org/2000/svg">
-            <rect width="240" height="110" fill="#0B0F17"/>
-            <g transform="translate(15, 14)">
-              <rect x="10" y="10" width="60" height="55" fill="#141E30" stroke="#1E293B" rx="4"/>
-              <rect x="75" y="10" width="60" height="55" fill="#0F1726" stroke="#1E293B" rx="4"/>
-              <rect x="140" y="10" width="60" height="55" fill="#141E30" stroke="#1E293B" rx="4"/>
-              <path d="M 40 25 Q 105 -5 170 25" fill="none" stroke="#E5C158" stroke-width="2.5" stroke-dasharray="4 3" stroke-linecap="round"/>
-              <polygon points="166,22 173,27 167,31" fill="#E5C158"/>
-              <g transform="translate(40, 37)">
-                <line x1="8" y1="0" x2="16" y2="0" stroke="#E5C158" stroke-width="3" stroke-linecap="round"/>
-                <polygon points="-5,-12 5,-12 12,-5 12,5 5,12 -5,12 -12,5 -12,-5" fill="#10B981" stroke="#34D399" stroke-width="1.5"/>
-                <circle cx="0" cy="0" r="4.5" fill="#064E3B"/>
-              </g>
-              <g transform="translate(105, 37)">
-                <circle cx="0" cy="0" r="18" fill="none" stroke="#EF4444" stroke-width="1.5" stroke-dasharray="3 2"/>
-                <polygon points="-5,-12 5,-12 12,-5 12,5 5,12 -5,12 -12,5 -12,-5" fill="#F43F5E" stroke="#FDA4AF" stroke-width="1.5"/>
-                <circle cx="0" cy="0" r="4.5" fill="#881337"/>
-              </g>
-              <g transform="translate(170, 37)">
-                <circle cx="0" cy="0" r="14" fill="none" stroke="#10B981" stroke-width="1.5" stroke-dasharray="3 2"/>
-                <text x="0" y="4" text-anchor="middle" fill="#34D399" font-family="ui-monospace, SFMono-Regular, monospace" font-size="10" font-weight="700">LAND</text>
-              </g>
-              <text x="105" y="82" text-anchor="middle" fill="#FDE68A" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600">Jump over Pod &bull; Optional Capture</text>
-            </g>
-          </svg>
+          <img src="/assets/rulebook/rule_04_step_vs_jump.png" loading="lazy" alt="Step, Jump, and Optional Capture">
         </div>
-        <h4>3. Move, Jump &amp; Capture</h4>
-        <p>Pods can step into adjacent empty squares or jump over adjacent pods along prong directions. Jumping enemy pods allows capturing or stacking.</p>
+        <h4>3. Step, Multi-Hop Jump &amp; Capture</h4>
+        <p>Step 1 empty square or chain 2-square jumps over occupied squares along installed prongs. Capturing jumped enemies (<code>x</code>) plunders all their prongs.</p>
       </div>
       <div class="rule-box">
         <div class="rule-diagram-wrap">
-          <svg viewBox="0 0 240 110" xmlns="http://www.w3.org/2000/svg">
-            <rect width="240" height="110" fill="#0B0F17"/>
-            <g transform="translate(120, 54)">
-              <rect x="-42" y="-30" width="84" height="60" fill="#2E0D19" stroke="#F43F5E" stroke-width="2" rx="6"/>
-              <text x="0" y="24" text-anchor="middle" fill="#FDA4AF" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="800" letter-spacing="1">OCTI BASE</text>
-              <path d="M -16 -24 L -10 -18 L 0 -26 L 10 -18 L 16 -24 L 14 -12 L -14 -12 Z" fill="#FDE047" stroke="#C8A253" stroke-width="1"/>
-              <circle cx="-16" cy="-25" r="1.5" fill="#FFF"/>
-              <circle cx="0" cy="-27" r="1.5" fill="#FFF"/>
-              <circle cx="16" cy="-25" r="1.5" fill="#FFF"/>
-              <polygon points="-7,-15 7,-15 15,-7 15,7 7,15 -7,15 -15,7 -15,-7" fill="#10B981" stroke="#FDE047" stroke-width="2"/>
-              <circle cx="0" cy="0" r="5" fill="#064E3B"/>
-            </g>
-            <text x="120" y="100" text-anchor="middle" fill="#6EE7B7" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="700">Infiltrate Opponent Base = Instant Win</text>
-          </svg>
+          <img src="/assets/rulebook/rule_12_victory_infiltration.png" loading="lazy" alt="3-Base Infiltration Victory">
         </div>
-        <h4>4. Victory Conditions</h4>
-        <p>Win immediately by moving any of your pods onto any opponent's home base square, or by capturing all opponent pods so none remain.</p>
+        <h4>4. Base Infiltration Victory</h4>
+        <p>Win immediately by occupying all 3 enemy home bases in <code>2P_3B</code> (any 1 base in <code>2P_1B</code> &amp; <code>OFK</code>; both enemy corners in <code>4P</code>), or by wiping out all legal moves.</p>
+      </div>
+    </div>
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+      <h3 style="margin:0 0 8px 0;">Rating Pools &amp; Official Ladders</h3>
+      <p style="margin:0 0 10px 0;font-size:13.5px;color:var(--dim);">
+        Official Elo ratings are tracked across the three competitive 1v1 ladders: <strong>2P_3B</strong> (9x9 3-Base), <strong>2P_1B</strong> (9x9 1-Base), and <strong>OFK</strong> (6x7 OCTI for Kids). All 4-Player (<code>4P*</code>), Superprongs (<code>*_SP</code>), Edgeless (<code>*_ED</code>), and offline AI matches are casual unrated play.
+      </p>
+      <div class="cols" style="gap:12px;">
+        <div style="flex:1;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px;">
+          <strong>Pool 1 &mdash; Human-Only Ladders (<a href="#board">#board</a>, <a href="#users">#users</a>)</strong>
+          <div class="dim" style="margin-top:4px;">Pure Human-vs-Human rated online matches (<code>K = 32</code>). Completely insulated from robot games.</div>
+        </div>
+        <div style="flex:1;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px;">
+          <strong>Pool 2 &mdash; Open Bot &amp; Human Arena (<a href="#robots">#robots</a>)</strong>
+          <div class="dim" style="margin-top:4px;">Rated online matches with at least one registered robot (<code>K = 32</code>; same-owner Bot-vs-Bot <code>K = 16</code>; Human-vs-Own-Robot unrated; max 4 rated games / 24h per pair; &lt; 8 ply resignation unrated).</div>
+        </div>
       </div>
     </div>
   </div>
@@ -2078,6 +2137,7 @@ tr.active-ply {
             </label>
             <button type="button" class="btn btn-primary" id="btn-web-create-table-submit">Host Table</button>
           </div>
+          <div id="web-create-rated-notice" class="dim" style="display:none;margin-top:6px;font-size:12.5px;">Only 2P_3B, 2P_1B, and OFK are rated; 4P / SP / ED are casual.</div>
         </div>
 
         <div style="background:#f4f4f5;border:1px solid var(--line);border-radius:6px;padding:8px 12px;margin:10px 0;font-size:13px;">
@@ -2143,8 +2203,8 @@ tr.active-ply {
     <div class="row">
       <input id="users-search-input" placeholder="Search handle, display name, location, or bio..." style="min-width:280px;flex:1;">
       <select id="users-sort-select">
-        <option value="elo_2p" selected>2P ELO</option>
-        <option value="elo_4p">4P ELO</option>
+        <option value="elo_2p_3b" selected>2P_3B ELO</option>
+        <option value="elo_2p_1b">2P_1B ELO</option>
         <option value="elo_ofk">OFK ELO</option>
         <option value="games_played">Games Played</option>
         <option value="wins">Wins</option>
@@ -2169,8 +2229,8 @@ tr.active-ply {
           <th>Display Name</th>
           <th>Location</th>
           <th>Bio</th>
-          <th>2P ELO</th>
-          <th>4P ELO</th>
+          <th>2P_3B ELO</th>
+          <th>2P_1B ELO</th>
           <th>OFK ELO</th>
           <th>Games (W-L-D)</th>
           <th>Robots</th>
@@ -2224,8 +2284,26 @@ tr.active-ply {
   </div>
   <div class="panel">
     <div class="row">
-      <label>Mode <select id="ar-mode"><option value="">Any</option>
-        <option>2P</option><option>4P</option><option>OFK</option></select>
+      <label>Variant <select id="ar-mode"><option value="">Any</option>
+        <optgroup label="Broad Modes">
+          <option value="2P">2P (All)</option>
+          <option value="4P_ALL">4P (All)</option>
+        </optgroup>
+        <optgroup label="Exact Variants">
+          <option value="2P_3B">2P_3B</option>
+          <option value="2P_3B_SP">2P_3B_SP</option>
+          <option value="2P_3B_ED">2P_3B_ED</option>
+          <option value="2P_3B_SPED">2P_3B_SPED</option>
+          <option value="2P_1B">2P_1B</option>
+          <option value="2P_1B_SP">2P_1B_SP</option>
+          <option value="2P_1B_ED">2P_1B_ED</option>
+          <option value="2P_1B_SPED">2P_1B_SPED</option>
+          <option value="4P">4P</option>
+          <option value="4P_SP">4P_SP</option>
+          <option value="4P_ED">4P_ED</option>
+          <option value="4P_SPED">4P_SPED</option>
+          <option value="OFK">OFK</option>
+        </optgroup></select>
       </label>
       <label>Source <select id="ar-source"><option value="">Any</option>
         <option value="online">Online</option><option value="client_upload">Client Upload</option></select>
@@ -2256,7 +2334,7 @@ tr.active-ply {
       <a class="btn" id="ar-export-btn" href="/api/v1/archive/export" target="_blank">Export Filtered (NDJSON)</a>
     </div>
     <div id="ar-msg" class="dim"></div>
-    <table id="ar-table"><thead><tr><th>Game ID</th><th>Mode</th><th>Source</th>
+    <table id="ar-table"><thead><tr><th>Game ID</th><th>Variant</th><th>Source</th>
       <th>Players</th><th>Winner</th><th>Outcome</th><th>Plies</th><th>Date</th><th class="web-ar-admin-col" style="display:none;">Actions</th></tr></thead>
       <tbody></tbody></table>
     <div class="row" style="margin-top:10px">
@@ -2332,13 +2410,16 @@ tr.active-ply {
   </div>
 </section>
 
-<!-- Tab 5: Leaderboard (100% Preserved) -->
+<!-- Tab 5: Leaderboard (Pool 1 Human-Only Ladders) -->
 <section id="tab-board" class="tab">
   <div class="panel">
     <div class="row">
-      <label>Mode <select id="lb-mode"><option>2P</option><option>4P</option>
-        <option>OFK</option></select></label>
+      <label>Ladder <select id="lb-mode">
+        <option value="2P_3B" selected>2P_3B (9x9 3-Base)</option>
+        <option value="2P_1B">2P_1B (9x9 1-Base)</option>
+        <option value="OFK">OFK (6x7 Kids)</option></select></label>
       <button type="button" class="btn" id="lb-go">Refresh</button>
+      <span class="dim" style="font-size:12.5px;">Pool 1 Human-Only Ladders (pure Human-vs-Human)</span>
     </div>
     <div id="lb-msg" class="dim"></div>
     <table id="lb-table"><thead><tr><th>#</th><th>Player</th><th>Elo</th>
@@ -2375,7 +2456,7 @@ tr.active-ply {
           <span class="home-highlight-pill"><strong>Ubuntu 24.04 &amp; Windows</strong> Guides</span>
           <span class="home-highlight-pill"><strong>Live Table Chat</strong> Search Telemetry</span>
           <span class="home-highlight-pill"><strong>W-L-D &amp; Win Rate</strong> Tracking</span>
-          <span class="home-highlight-pill"><strong>Human-Only ELO</strong> Protected</span>
+          <span class="home-highlight-pill"><strong>Dual-Pool ELO</strong> Human &amp; Arena Ladders</span>
         </div>
       </div>
       <div class="home-hero-art">
@@ -2490,12 +2571,20 @@ tr.active-ply {
 
   <div class="panel">
     <div class="row">
-      <input id="robots-search-q" placeholder="Search robot name, description, or owner..." style="min-width:280px;flex:1;">
+      <input id="robots-search-q" placeholder="Search participant name, bio, or owner..." style="min-width:240px;flex:1;">
+      <select id="robots-participant-type">
+        <option value="all" selected>All (Bots + Humans)</option>
+        <option value="robots">Robots Only</option>
+        <option value="humans">Humans Only</option>
+      </select>
       <select id="robots-sort">
-        <option value="wins" selected>Wins</option>
+        <option value="elo_2p_3b" selected>2P_3B ELO</option>
+        <option value="elo_2p_1b">2P_1B ELO</option>
+        <option value="elo_ofk">OFK ELO</option>
+        <option value="wins">Wins</option>
         <option value="games_played">Games Played</option>
         <option value="win_rate">Win Rate</option>
-        <option value="robot_name">Robot Name</option>
+        <option value="name">Name</option>
         <option value="created_at">Joined Date</option>
       </select>
       <select id="robots-order">
@@ -2509,14 +2598,17 @@ tr.active-ply {
     <table id="robots-table">
       <thead>
         <tr>
-          <th>Robot</th>
+          <th>Participant</th>
+          <th>Type</th>
           <th>Owner</th>
-          <th>Description</th>
-          <th>URL</th>
+          <th>2P_3B</th>
+          <th>2P_1B</th>
+          <th>OFK</th>
           <th>Status</th>
-          <th>Games Played</th>
+          <th>Games</th>
           <th>Record (W-L-D)</th>
           <th>Win Rate</th>
+          <th>URL</th>
           <th>Created</th>
         </tr>
       </thead>
@@ -2552,20 +2644,32 @@ tr.active-ply {
       <a id="robot-detail-url-link" href="#" target="_blank" rel="nofollow ugc noopener noreferrer" style="color:#38BDF8;word-break:break-all;font-size:13px;"></a>
     </div>
 
-    <div class="cols" style="margin:16px 0;">
-      <div class="col-side" style="flex:1;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
+    <div class="cols" style="margin:16px 0;flex-wrap:wrap;">
+      <div class="col-side" style="flex:1;min-width:110px;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
+        <div class="dim" style="font-size:12px;">2P_3B ELO</div>
+        <div id="robot-kpi-elo-3b" style="font-size:22px;font-weight:700;color:#FDE047;margin-top:4px;">1200</div>
+      </div>
+      <div class="col-side" style="flex:1;min-width:110px;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
+        <div class="dim" style="font-size:12px;">2P_1B ELO</div>
+        <div id="robot-kpi-elo-1b" style="font-size:22px;font-weight:700;color:#FDE047;margin-top:4px;">1200</div>
+      </div>
+      <div class="col-side" style="flex:1;min-width:110px;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
+        <div class="dim" style="font-size:12px;">OFK ELO</div>
+        <div id="robot-kpi-elo-ofk" style="font-size:22px;font-weight:700;color:#FDE047;margin-top:4px;">1200</div>
+      </div>
+      <div class="col-side" style="flex:1;min-width:110px;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
         <div class="dim" style="font-size:12px;">GAMES PLAYED</div>
         <div id="robot-kpi-games" style="font-size:22px;font-weight:700;color:#F8FAFC;margin-top:4px;">0</div>
       </div>
-      <div class="col-side" style="flex:1;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
+      <div class="col-side" style="flex:1;min-width:120px;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
         <div class="dim" style="font-size:12px;">W - L - D</div>
         <div id="robot-kpi-record" style="font-size:22px;font-weight:700;color:#38BDF8;margin-top:4px;">0 - 0 - 0</div>
       </div>
-      <div class="col-side" style="flex:1;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
+      <div class="col-side" style="flex:1;min-width:110px;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
         <div class="dim" style="font-size:12px;">WIN RATE</div>
         <div id="robot-kpi-winrate" style="font-size:22px;font-weight:700;color:#10B981;margin-top:4px;">0.0%</div>
       </div>
-      <div class="col-side" style="flex:1;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
+      <div class="col-side" style="flex:1;min-width:120px;background:#0F172A;border:1px solid #1E293B;border-radius:6px;padding:12px;text-align:center;">
         <div class="dim" style="font-size:12px;">REGISTERED</div>
         <div id="robot-kpi-created" style="font-size:14px;color:#94A3B8;margin-top:8px;">-</div>
       </div>
@@ -2577,7 +2681,7 @@ tr.active-ply {
         <thead>
           <tr>
             <th>Outcome</th>
-            <th>Mode</th>
+            <th>Variant</th>
             <th>Players</th>
             <th>Result</th>
             <th>Plies</th>
@@ -2710,6 +2814,229 @@ tr.active-ply {
           <span>Show Purge Buttons</span>
         </label>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- Tab 8: Official Illustrated Rulebook -->
+<section id="tab-rules" class="tab">
+  <div class="panel" style="background:linear-gradient(135deg,#0b0f17 0%,#152238 62%,#1e293b 100%);color:#f8fafc;border-color:#334155;margin-bottom:18px;">
+    <div class="row" style="justify-content:space-between;align-items:center;gap:14px;">
+      <div>
+        <h1 style="margin:0 0 6px 0;font-size:24px;color:#fde047;">OCTI Official Illustrated Rulebook</h1>
+        <p style="margin:0;color:#cbd5e1;font-size:14px;">Complete multi-variant rules, tactical mechanics, Appendix A edge cases, OCTI-FEN specification, and Dual-Pool Elo regulations.</p>
+      </div>
+      <div class="row" style="margin:0;gap:8px;">
+        <button type="button" class="btn btn-primary" id="rules-cta-play">Practice vs AI Bot</button>
+        <button type="button" class="btn" id="rules-cta-online" style="background:#1e293b;color:#f8fafc;border-color:#475569;">Play Online</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="rb-layout">
+    <aside class="rb-toc" aria-label="Rulebook Chapters">
+      <h3>Chapters</h3>
+      <a href="#rules-ch1">1. Setup, Pods &amp; Prongs</a>
+      <a href="#rules-ch2">2. Complete Turn Actions</a>
+      <a href="#rules-ch3">3. Stacking &amp; Appendix A</a>
+      <a href="#rules-ch4">4. Victory &amp; 4P Revival</a>
+      <a href="#rules-ch5">5. 13-Variant Matrix</a>
+      <a href="#rules-ch6">6. Notation &amp; OCTI-FEN</a>
+      <a href="#rules-ch7">7. Dual-Pool Elo Rules</a>
+    </aside>
+
+    <div class="rb-main">
+      <article class="rb-chapter" id="rules-ch1">
+        <h2>Chapter 1 &mdash; Board Geometry, Pods, Prongs &amp; Starting Setup</h2>
+        <p>OCTI is a deterministic, perfect-information abstract strategy game of vector construction. Every pod enters the board blank (with zero movement directions) and earns directional mobility as players insert <strong>prongs</strong> one turn at a time.</p>
+        <ul>
+          <li><strong>9&times;9 Standard Grid:</strong> Columns <code>x = 1..9</code> run West-to-East (left to right); rows <code>y = 1..9</code> run South-to-North (bottom to top). Every square is written as two digits <code>xy</code> (for example, <code>53</code> is column 5, row 3).</li>
+          <li><strong>2-Player Starting Resources (<code>2P_3B</code> &amp; <code>2P_1B</code>):</strong> Player A begins with <strong>3 pods</strong> on home OCTI bases <code>33</code>, <code>53</code>, and <code>73</code>; Player B begins with <strong>3 pods</strong> on home OCTI bases <code>37</code>, <code>57</code>, and <code>77</code>. Each side also holds <strong>4 reserve pods</strong> (7 pods total per player) and <strong>25 prongs</strong> (or <strong>24 normal prongs + 1 gold SuperProng</strong> in <code>_SP</code> variants).</li>
+          <li><strong>8 Compass Prong Sockets (<code>a</code>&ndash;<code>h</code>):</strong> Every octagonal pod has 8 perimeter sockets mapped clockwise from North: <code>a</code>=N (<code>0,+1</code>), <code>b</code>=NE (<code>+1,+1</code>), <code>c</code>=E (<code>+1,0</code>), <code>d</code>=SE (<code>+1,-1</code>), <code>e</code>=S (<code>0,-1</code>), <code>f</code>=SW (<code>-1,-1</code>), <code>g</code>=W (<code>-1,0</code>), and <code>h</code>=NW (<code>-1,+1</code>).</li>
+        </ul>
+        <div class="rb-fig-grid">
+          <div class="rb-fig">
+            <img src="/assets/rulebook/rule_01_2p_3b_setup.png" loading="lazy" alt="2P 3-Base Starting Setup">
+            <div class="rb-fig-cap"><strong>Figure 1:</strong> Standard 9&times;9 <code>2P_3B</code> setup with home rows <code>33/53/73</code> vs. <code>37/57/77</code> and 1-based coordinate gutters.</div>
+          </div>
+          <div class="rb-fig">
+            <img src="/assets/rulebook/rule_02_2p_1b_setup.png" loading="lazy" alt="2P 1-Base Blitz Sudden Death">
+            <div class="rb-fig-cap"><strong>Figure 2:</strong> <code>2P_1B</code> (1-Base Blitz) uses the identical setup, but infiltrating <strong>any 1</strong> enemy base (<code>55ab-57x</code>) wins immediately.</div>
+          </div>
+          <div class="rb-fig">
+            <img src="/assets/rulebook/rule_03_prongs_8dir.png" loading="lazy" alt="8 Compass Prong Directions">
+            <div class="rb-fig-cap"><strong>Figure 3:</strong> The 8 compass sockets <code>a</code>&ndash;<code>h</code> around pod <code>A55acg</code>, supply insertion (<code>55acg+b</code>), and zero-cost reposition (<code>33b+a-b</code>).</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="rb-chapter" id="rules-ch2">
+        <h2>Chapter 2 &mdash; Complete Turn Actions</h2>
+        <p>Player A moves first and turns alternate strictly (in <code>4P</code>, turn order rotates <code>A &rarr; B &rarr; C &rarr; D</code>, skipping eliminated seats). Passing is forbidden; on your turn you must execute <strong>exactly one</strong> regular turn action:</p>
+        <ol>
+          <li><strong>Insert a Prong (<code>xy&lt;cfg&gt;+&lt;dir&gt;</code>):</strong> Take 1 prong from your free supply and insert it into an empty socket on one of your pods on the board (e.g., <code>55acg+b</code>; or <code>33+b!</code> for a gold SuperProng).</li>
+          <li><strong>Reposition a Normal Prong (<code>xy&lt;cfg&gt;+&lt;add&gt;-&lt;rm&gt;</code>):</strong> Move an existing normal prong on one of your pods to another empty socket on that <em>same</em> pod (e.g., <code>33b+a-b</code>). Costs 0 supply prongs. <em>Forbidden on SuperProngs (<code>!</code>) and forbidden in OCTI for Kids (<code>OFK</code>).</em></li>
+          <li><strong>1-Square Step (<code>xy&lt;cfg&gt;-x'y'</code>):</strong> Move a pod 1 square along one of its installed prong directions onto an empty square or a friendly/allied stack (e.g., <code>44ab-45</code>). Steps <strong>never capture</strong> and cannot enter an enemy-occupied square.</li>
+          <li><strong>2-Square Jump &amp; Multi-Hop Chain (<code>xy&lt;cfg&gt;-x1y1[x]-x2y2[x]...</code>):</strong> Jump 2 squares along an installed prong direction over an adjacent occupied square (friendly or enemy) onto an empty square beyond it. You may chain additional jumps with that same pod along any of its installed prongs (pivoting mid-chain) and stop early after any legal hop.</li>
+          <li><strong>Deploy Reserve Pod (<code>xy</code>) or Liberate Captured Pod (<code>xy*</code>):</strong> Place 1 reserve pod onto a non-enemy-occupied own home base (or an enemy base you already occupy), or liberate 1 of your captured pods (<code>xy*</code>) onto an OCTI square you already occupy when eligible.</li>
+        </ol>
+        <div class="rb-callout">
+          <strong>Optional Capture &amp; Prong Plunder:</strong> Jumping over an enemy square makes capture <strong>optional</strong> (append <code>x</code> to capture, e.g., <code>44ab-66x</code>, or omit <code>x</code> to leave the jumped enemy stack intact, e.g., <code>44ab-66</code>). Captured enemy pods are removed at the end of the turn into their owner's <code>capturedPods</code> pool, while <strong>all prongs attached to them transfer immediately into the capturing player's free prong supply</strong>! Friendly/allied pods can be vaulted freely and are never captured.
+        </div>
+        <div class="rb-fig-grid">
+          <div class="rb-fig">
+            <img src="/assets/rulebook/rule_04_step_vs_jump.png" loading="lazy" alt="Step vs Jump and Capture">
+            <div class="rb-fig-cap"><strong>Figure 4:</strong> Pod <code>A44ab</code> stepping 1 square North (<code>44ab-45</code>) vs. jumping 2 squares NE over <code>B55e</code> with optional capture (<code>44ab-66x</code>).</div>
+          </div>
+          <div class="rb-fig">
+            <img src="/assets/rulebook/rule_05_multihop_chain.png" loading="lazy" alt="Multi-Hop Chain Jump">
+            <div class="rb-fig-cap"><strong>Figure 5:</strong> Multi-hop chain <code>33abd-55-57x-75x</code> vaulting friendly <code>A44h</code>, pivoting North to capture <code>B56e</code>, then SE to capture <code>B66c</code>.</div>
+          </div>
+          <div class="rb-fig">
+            <img src="/assets/rulebook/rule_07_reserve_liberate.png" loading="lazy" alt="Reserve Pod Deployment vs Liberation">
+            <div class="rb-fig-cap"><strong>Figure 7:</strong> Deploying a free reserve pod onto empty home base <code>33</code> vs. liberating a captured pod (<code>53*</code> or <code>57*</code>) while <code>A57ab</code> holds an enemy base.</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="rb-chapter" id="rules-ch3">
+        <h2>Chapter 3 &mdash; Stacking, Composite Moves &amp; Appendix A Edge Cases</h2>
+        <ul>
+          <li><strong>Friendly Stacking &amp; Composite Multi-Pod Moves (<code>,</code>):</strong> Multiple friendly pods (and diagonal-partner pods in <code>4P</code>) may stack on the same square (forbidden in <code>OFK</code>). Any subset of your own pods that <strong>start the turn on the same square</strong> may move together or split along independent step/jump paths in a single turn, joined by commas (e.g., <code>44a-45,44beg-34</code>). Pod placement and prong edits never combine with movement.</li>
+          <li><strong>End-of-Turn Capture Removal:</strong> Enemy stacks jumped with <code>x</code> remain physically on the board as jumpable fulcrums for remaining composite stack-mates during the same turn and are removed together at turn end. However, a single pod may <strong>never jump over the exact same square twice</strong> during one hop chain.</li>
+          <li><strong>Appendix A.1 &mdash; Starting-Square Vacancy &amp; Loop-Back Jumps:</strong> During a single or composite move from square <code>S</code>, all pods initially on <code>S</code> (including stationary stack-mates!) are treated as vacated for jump geometry: a jumping pod from <code>S</code> <strong>cannot jump over <code>S</code></strong>, yet <strong>can legally land back onto <code>S</code></strong> at the end of a multi-hop loop (e.g., <code>44beg-66x-64x-44</code> rejoining stationary <code>A44a</code> on <code>44</code>!).</li>
+          <li><strong>Liberation Clearance Exact Conditions:</strong> Liberating a captured pod (<code>xy*</code>) always requires the target OCTI square to be <strong>already occupied by at least one of your own pods</strong> (never an empty base!). In <code>2P</code>, liberating onto your own home base additionally requires occupying at least one enemy base; liberating directly onto an enemy base you already occupy requires only <code>capturedPods &gt; 0</code>. In <code>4P</code>, liberating onto your own or active partner's base requires personally occupying a neutral (<code>53</code>/<code>57</code>) or enemy OCTI square.</li>
+          <li><strong>Edgeless Torus Wrapping (<code>_ED</code>):</strong> Column <code>1</code> wraps to column <code>9</code> and row <code>1</code> wraps to row <code>9</code> (including diagonals) for both 1-square steps (<code>15g-95</code>) and 2-square jumps (<code>97b-29x</code> jumping <code>B18e</code>).</li>
+          <li><strong>SuperProngs &amp; Bonus Preludes (<code>_SP</code>, <code>;</code>):</strong> A gold SuperProng (<code>!</code>) is permanent once inserted. Before your regular turn action, you may execute <strong>1 or 2 bonus prelude moves</strong> delimited by semicolons (e.g., <code>44ab!-66x;66ab!-67</code>). Each prelude moves along a single SuperProng socket, and its captures resolve <em>immediately</em> before the next segment! The exact same SuperProng socket on the exact same pod cannot be fired twice in two preludes on the same turn.</li>
+        </ul>
+        <div class="rb-fig-grid">
+          <div class="rb-fig">
+            <img src="/assets/rulebook/rule_06_stack_split_loop.png" loading="lazy" alt="Stack Split and Appendix A.1 Loop">
+            <div class="rb-fig-cap"><strong>Figure 6:</strong> Stack <code>[A44a, A44beg]</code> splitting via <code>44a-45,44beg-34</code> or looping back onto stationary <code>A44a</code> via <code>44beg-66x-64x-44</code> (Appendix A.1).</div>
+          </div>
+          <div class="rb-fig">
+            <img src="/assets/rulebook/rule_08_edgeless_wrap.png" loading="lazy" alt="Edgeless Torus Wrap-Around">
+            <div class="rb-fig-cap"><strong>Figure 8:</strong> Edgeless board (<code>_ED</code>) wrap-around step <code>15g-95</code> and diagonal wrap jump capture <code>97b-29x</code> across the portal border.</div>
+          </div>
+          <div class="rb-fig">
+            <img src="/assets/rulebook/rule_09_superprongs.png" loading="lazy" alt="SuperProng Bonus Prelude">
+            <div class="rb-fig-cap"><strong>Figure 9:</strong> Gold SuperProng bonus prelude <code>44ab!-66x;</code> capturing <code>B55e!</code> immediately before regular step <code>66ab!-67</code>.</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="rb-chapter" id="rules-ch4">
+        <h2>Chapter 4 &mdash; Victory, Elimination &amp; Stalemate Conditions</h2>
+        <ul>
+          <li><strong><code>2P_3B</code> Family (3-Base Standard):</strong> Win immediately at the end of your turn if your pods simultaneously occupy <strong>all 3</strong> enemy home bases (<code>37</code>, <code>57</code>, <code>77</code> for A; <code>33</code>, <code>53</code>, <code>73</code> for B).</li>
+          <li><strong><code>2P_1B</code> Family (1-Base Blitz):</strong> Win immediately when your pod occupies <strong>any 1</strong> of the 3 enemy home bases.</li>
+          <li><strong><code>OFK</code> (OCTI for Kids, 6&times;7):</strong> Win immediately when your pod occupies <strong>any 1</strong> of the 4 enemy home bases (<code>26, 36, 46, 56</code> for A; <code>22, 32, 42, 52</code> for B).</li>
+          <li><strong><code>4P</code> Partnership Family (Team A&amp;C vs. Team B&amp;D):</strong> Diagonal partners win together when allied pods simultaneously occupy <strong>both enemy corner bases</strong> (<code>37</code> and <code>73</code> for Team A&amp;C; <code>33</code> and <code>77</code> for Team B&amp;D).</li>
+          <li><strong>4-Player Base-Capture Elimination &amp; Teammate Revival:</strong> In <code>4P</code>, if an enemy pod ends its turn on your corner home base (or you have zero pods on the board and zero legal placements), you are <strong>eliminated</strong>: all of your remaining board pods move into your <code>capturedPods</code> pool and their prongs transfer to the capturing side. Your surviving partner plays on and can <strong>revive</strong> you by moving one of their own pods onto your corner base (once clear of enemies) and playing <code>xy*</code> (e.g., <code>77*</code>)!</li>
+          <li><strong>Total Wipeout / Stalemate:</strong> If the next player (or both enemy seats in <code>4P</code>) has <strong>zero legal moves</strong>, the player/team who just moved wins immediately. Timed games also end on clock flag forfeit or resignation.</li>
+        </ul>
+        <div class="rb-fig-grid">
+          <div class="rb-fig">
+            <img src="/assets/rulebook/rule_10_4p_partnership.png" loading="lazy" alt="4-Player Partnership Setup">
+            <div class="rb-fig-cap"><strong>Figure 10:</strong> 4-Player Partnership (<code>4P</code>): diagonal allies A(<code>33</code>)&amp;C(<code>77</code>) vs. B(<code>37</code>)&amp;D(<code>73</code>), allied stack <code>[A55ab, C55cf]</code>, and neutral bases <code>53</code> &amp; <code>57</code>.</div>
+          </div>
+          <div class="rb-fig">
+            <img src="/assets/rulebook/rule_11_ofk_6x7.png" loading="lazy" alt="OCTI for Kids 6x7">
+            <div class="rb-fig-cap"><strong>Figure 11:</strong> OCTI for Kids (<code>OFK</code>) on the 6&times;7 grid: 4 bases per side, 0 reserve pods, permanent prongs, no stacking, and 1-base victory (<code>34a-36x</code>).</div>
+          </div>
+          <div class="rb-fig">
+            <img src="/assets/rulebook/rule_12_victory_infiltration.png" loading="lazy" alt="3-Base Victory Infiltration">
+            <div class="rb-fig-cap"><strong>Figure 12:</strong> <code>2P_3B</code> victory state (<code>status = O</code>) with Player A simultaneously occupying all 3 enemy bases (<code>A37c</code>, <code>A57a</code>, <code>A77g</code>).</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="rb-chapter" id="rules-ch5">
+        <h2>Chapter 5 &mdash; Canonical 13-Variant Reference Matrix</h2>
+        <p>Every match across Web, Desktop, Android, Archive, and Bot SDK uses one of <strong>13 canonical variant codes</strong>:</p>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Grid</th>
+                <th>Players</th>
+                <th>Pods (Board + Res)</th>
+                <th>Prongs (Norm / Super)</th>
+                <th>Special Modifiers &amp; Win Target</th>
+                <th>Rated?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>2P_3B</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>25 / 0</td><td>Standard rules; occupy all 3 enemy bases</td><td><strong>Yes</strong> (Pool 1 &amp; 2)</td></tr>
+              <tr><td><code>2P_3B_SP</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>24 / 1</td><td>SuperProng <code>!</code> + <code>;</code> bonus preludes; 3 bases</td><td>Casual</td></tr>
+              <tr><td><code>2P_3B_ED</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>25 / 0</td><td>Edgeless torus wrap-around; 3 bases</td><td>Casual</td></tr>
+              <tr><td><code>2P_3B_SPED</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>24 / 1</td><td>SuperProng + Edgeless wrap-around; 3 bases</td><td>Casual</td></tr>
+              <tr><td><code>2P_1B</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>25 / 0</td><td>Sudden-death blitz; occupy any 1 enemy base</td><td><strong>Yes</strong> (Pool 1 &amp; 2)</td></tr>
+              <tr><td><code>2P_1B_SP</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>24 / 1</td><td>SuperProng + 1-base sudden death</td><td>Casual</td></tr>
+              <tr><td><code>2P_1B_ED</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>25 / 0</td><td>Edgeless wrap-around + 1-base sudden death</td><td>Casual</td></tr>
+              <tr><td><code>2P_1B_SPED</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>24 / 1</td><td>SuperProng + Edgeless + 1-base sudden death</td><td>Casual</td></tr>
+              <tr><td><code>4P</code></td><td>9&times;9</td><td>4 (A&amp;C vs B&amp;D)</td><td>1 + 3</td><td>12 / 0</td><td>Neutral <code>53/57</code>, base elimination &amp; revival; 2 enemy bases</td><td>Casual</td></tr>
+              <tr><td><code>4P_SP</code></td><td>9&times;9</td><td>4 (A&amp;C vs B&amp;D)</td><td>1 + 3</td><td>11 / 1</td><td>4P Partnership + SuperProng bonus preludes</td><td>Casual</td></tr>
+              <tr><td><code>4P_ED</code></td><td>9&times;9</td><td>4 (A&amp;C vs B&amp;D)</td><td>1 + 3</td><td>12 / 0</td><td>4P Partnership + Edgeless torus wrap-around</td><td>Casual</td></tr>
+              <tr><td><code>4P_SPED</code></td><td>9&times;9</td><td>4 (A&amp;C vs B&amp;D)</td><td>1 + 3</td><td>11 / 1</td><td>4P Partnership + SuperProng + Edgeless</td><td>Casual</td></tr>
+              <tr><td><code>OFK</code></td><td>6&times;7</td><td>2 (1v1)</td><td>4 + 0</td><td>12 / 0</td><td>4 bases/side, no stacking, no reposition, no composite; 1 base wins</td><td><strong>Yes</strong> (Pool 1 &amp; 2)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="rb-chapter" id="rules-ch6">
+        <h2>Chapter 6 &mdash; Official Move Notation &amp; OCTI-FEN Specification</h2>
+        <h3>Algebraic Move Notation Grammar</h3>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr><th>Syntax</th><th>Action</th><th>Verified Example</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>xy</code></td><td>Deploy free reserve pod onto OCTI square</td><td><code>33</code></td></tr>
+              <tr><td><code>xy*</code></td><td>Liberate captured pod (or revive eliminated 4P partner)</td><td><code>53*</code>, <code>57*</code>, <code>77*</code></td></tr>
+              <tr><td><code>xy&lt;cfg&gt;+&lt;d&gt;</code></td><td>Insert normal prong in socket <code>d &isin; {a..h}</code></td><td><code>55acg+b</code></td></tr>
+              <tr><td><code>xy&lt;cfg&gt;+&lt;d&gt;!</code></td><td>Insert gold SuperProng in socket <code>d</code></td><td><code>33+b!</code></td></tr>
+              <tr><td><code>xy&lt;cfg&gt;+&lt;add&gt;-&lt;rm&gt;</code></td><td>Reposition normal prong on same pod (<code>-&lt;rm&gt;+&lt;add&gt;</code> also accepted)</td><td><code>33b+a-b</code></td></tr>
+              <tr><td><code>xy&lt;cfg&gt;-x'y'</code></td><td>1-square non-capturing step</td><td><code>44ab-45</code></td></tr>
+              <tr><td><code>xy&lt;cfg&gt;-x1y1[x]-...</code></td><td>Single or multi-hop jump chain (<code>x</code> = optional capture)</td><td><code>33abd-55-57x-75x</code></td></tr>
+              <tr><td><code>op1,op2[,...]</code></td><td>Composite move splitting pods from the same origin square</td><td><code>44a-45,44beg-34</code></td></tr>
+              <tr><td><code>pre1;[pre2;]reg</code></td><td>1&ndash;2 SuperProng bonus preludes followed by regular turn</td><td><code>44ab!-66x;66ab!-67</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>OCTI-FEN Position String Format</h3>
+        <p>Board states serialize into colon-separated <strong>OCTI-FEN</strong> strings (11 tokens for <code>2</code> / <code>OFK</code>; 13 tokens for <code>4</code>):</p>
+        <p><code>mode:bases:super:edgeless:status:turn:winner:elimMask:resA:resB[:resC:resD]:squares</code></p>
+        <ul>
+          <li><code>mode</code>: <code>2</code>, <code>4</code>, or <code>OFK</code> &bull; <code>bases</code>: <code>3</code> or <code>1</code> &bull; <code>super</code> / <code>edgeless</code>: <code>0</code> or <code>1</code>.</li>
+          <li><code>status</code>: <code>N</code> (not started), <code>P</code> (in progress), <code>O</code> (game over), <code>R</code> (resigned).</li>
+          <li><code>turn</code> / <code>winner</code>: <code>A</code>, <code>B</code>, <code>C</code>, <code>D</code>, or <code>-</code> &bull; <code>elimMask</code>: 4P elimination bitmask (<code>A=1, B=2, C=4, D=8</code>).</li>
+          <li><code>resP</code>: <code>freePods,capturedPods,freeProngs,freeSuperProngs</code> (e.g., <code>4,0,25,0</code>).</li>
+          <li><code>squares</code>: comma-separated pods in row-major order <code>&lt;Owner&gt;&lt;x&gt;&lt;y&gt;&lt;prongs&gt;</code> (e.g., <code>A44ab!,B55e!</code>), or <code>-</code> if empty.</li>
+        </ul>
+      </article>
+
+      <article class="rb-chapter" id="rules-ch7">
+        <h2>Chapter 7 &mdash; Dual-Pool Elo &amp; Competitive Arena Rules</h2>
+        <p>Official ratings begin at <strong>1200 Elo</strong> across three independent 1v1 variant ladders: <strong><code>2P_3B</code></strong>, <strong><code>2P_1B</code></strong>, and <strong><code>OFK</code></strong>. All 4-Player (<code>4P*</code>), SuperProng (<code>*_SP</code>), Edgeless (<code>*_ED</code>), combined (<code>*_SPED</code>), and offline matches are strictly casual (unrated).</p>
+        <div class="rb-callout">
+          <strong>Pool 1 &mdash; Human-Only Ladders (<a href="#board">Leaderboard</a> &amp; <a href="#users">Players Roster</a>):</strong><br>
+          Tracks exclusively online rated Human-vs-Human matches using standard Elo factor <code>K = 32</code>. Human-Only ratings are 100% insulated from robot matches.
+        </div>
+        <div class="rb-callout" style="border-left-color:#10b981;">
+          <strong>Pool 2 &mdash; Open Bot &amp; Human Arena (<a href="#robots">Robots Directory</a>):</strong><br>
+          Tracks rated online matches involving at least one registered AI robot (Human-vs-Robot and Robot-vs-Robot) on a unified competitive scale with four anti-farming safeguards:
+          <ul style="margin-top:6px;margin-bottom:0;">
+            <li><strong>Cross-Owner Matches:</strong> Standard <code>K = 32</code>.</li>
+            <li><strong>Same-Owner Bot-vs-Bot Self-Testing:</strong> Allowed at reduced <code>K = 16</code>.</li>
+            <li><strong>Human-vs-Own-Robot Exclusion:</strong> Always forced <strong>unrated</strong> to prevent manual point transfers.</li>
+            <li><strong>Pairwise Cap &amp; Early-Resign Guard:</strong> Maximum <strong>4 rated games per rolling 24-hour window</strong> between any unordered participant pair (5th+ auto-downgrades to casual), and resignations before <strong>8 plies</strong> record 0 Elo delta.</li>
+          </ul>
+        </div>
+      </article>
     </div>
   </div>
 </section>
@@ -7577,11 +7904,30 @@ function orderMoves(a1, a2, a3, a4, a5, a6, a7) {
   return scored.map(function (item) { return item.move; });
 }
 
+function maybeEmitSearchProgress(ctx, force) {
+  if (!ctx || !ctx.progressCb) return;
+  var nowMs = Date.now();
+  if (!force && (nowMs - (ctx.lastProgressAtMs || ctx.t0)) < 150) return;
+  ctx.lastProgressAtMs = nowMs;
+  ctx.progressCb({
+    depth: ctx.curDepth || 1,
+    maxDepth: ctx.maxDepth || 8,
+    nodes: ctx.nodes,
+    score: ctx.bestScore || 0,
+    bestMove: ctx.bestMove || "",
+    elapsedMs: nowMs - ctx.t0,
+    budgetMs: ctx.budgetMs || 10000
+  });
+}
+
 function quiesce(s, qDepth, ply, alpha, beta, botSide, curPlayer, ctx, prof) {
   ctx.nodes++;
-  if ((ctx.nodes & 63) === 0 && ctx.deadlineMs && Date.now() >= ctx.deadlineMs) {
-    ctx.timedOut = true;
-    return evaluateState(s, botSide, prof);
+  if ((ctx.nodes & 63) === 0 && ctx.deadlineMs) {
+    if (Date.now() >= ctx.deadlineMs) {
+      ctx.timedOut = true;
+      return evaluateState(s, botSide, prof);
+    }
+    maybeEmitSearchProgress(ctx, false);
   }
   if (s.status === "O") {
     if (s.winner === botSide || areAllied(s.mode, s.winner, botSide)) return 1000000 - ply;
@@ -7678,17 +8024,7 @@ function alphaBeta(s, depth, ply, alpha, beta, botSide, curPlayer, ctx, prof, tt
       ctx.timedOut = true;
       return evaluateState(s, botSide, prof);
     }
-    if (ctx.progressCb && (ctx.nodes & 2047) === 0) {
-      ctx.progressCb({
-        depth: ctx.curDepth || 1,
-        maxDepth: ctx.maxDepth || prof.maxSearchDepth,
-        nodes: ctx.nodes,
-        score: ctx.bestScore || 0,
-        bestMove: ctx.bestMove || "",
-        elapsedMs: nowMs - ctx.t0,
-        budgetMs: ctx.budgetMs || prof.timeBudgetMs
-      });
-    }
+    maybeEmitSearchProgress(ctx, false);
   }
   if (s.status === "O") {
     if (s.winner === botSide || areAllied(s.mode, s.winner, botSide)) return 1000000 - ply;
@@ -41590,6 +41926,7 @@ function botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs) {
   var ctx = {
     nodes: 0,
     t0: t0,
+    lastProgressAtMs: t0,
     budgetMs: budgetMs,
     deadlineMs: deadlineMs,
     timedOut: false,
@@ -41717,17 +42054,10 @@ function botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs) {
           ctx.bestScore = depthBestScore;
         }
 
-        if (progressCb) {
-          progressCb({
-            depth: d,
-            maxDepth: maxDepth,
-            nodes: ctx.nodes,
-            score: depthBestScore,
-            bestMove: depthBestMove,
-            elapsedMs: Date.now() - t0,
-            budgetMs: budgetMs
-          });
-        }
+        ctx.curDepth = d;
+        ctx.bestMove = depthBestMove;
+        ctx.bestScore = depthBestScore;
+        maybeEmitSearchProgress(ctx, false);
         if (alpha >= beta) {
           break;
         }
@@ -41756,17 +42086,10 @@ function botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs) {
       bestOverallMove = depthBestMove;
       bestOverallScore = depthBestScore;
       completedDepth = d;
-      if (progressCb) {
-        progressCb({
-          depth: completedDepth,
-          maxDepth: maxDepth,
-          nodes: ctx.nodes,
-          score: bestOverallScore,
-          bestMove: bestOverallMove,
-          elapsedMs: Date.now() - t0,
-          budgetMs: budgetMs
-        });
-      }
+      ctx.curDepth = completedDepth;
+      ctx.bestMove = bestOverallMove;
+      ctx.bestScore = bestOverallScore;
+      maybeEmitSearchProgress(ctx, true);
     }
     if (depthTimedOut || Date.now() >= deadlineMs || Math.abs(bestOverallScore) >= 999000) {
       break;
@@ -41787,93 +42110,116 @@ function computeBestMove(fen, difficulty, mode, botSide, progressCb, customBudge
 }
 
 /* Inline Web Worker Initialization */
+var workerCode = "";
+var workerBlobUrl = null;
 var botWorker = null;
-try {
-  var workerParts = [
-    "self.onmessage = function (e) {",
-    "  var d = e.data;",
-    "  if (d.type === 'search') {",
-    "    var t0 = Date.now();",
-    "    var res = (" + botSearch.toString() + ")(d.fen, d.depth, d.mode, d.side, function (prog) {",
-    "      self.postMessage(Object.assign({ type: 'progress' }, prog));",
-    "    });",
-    "    var elapsed = Date.now() - t0;",
-    "    self.postMessage({",
-    "      type: 'done',",
-    "      bestMove: res.bestMove,",
-    "      score: res.score,",
-    "      nodes: res.nodes,",
-    "      depth: res.depth,",
-    "      elapsedMs: elapsed",
-    "    });",
-    "  }",
-    "};",
-    "var DIR_DELTAS = " + JSON.stringify(DIR_DELTAS) + ";",
-    "var DIR_CHARS = " + JSON.stringify(DIR_CHARS) + ";",
-    "var DEFAULT_BOT_TUNING = " + JSON.stringify(DEFAULT_BOT_TUNING) + ";",
-    "var BOT_PROFILES = " + JSON.stringify(BOT_PROFILES) + ";",
-    getBotProfile.toString(),
-    wrapCoord.toString(),
-    playerIndex.toString(),
-    partnerOf.toString(),
-    partnerIndex.toString(),
-    isPartnerHome.toString(),
-    areAllied.toString(),
-    isSquareOccupiedBy.toString(),
-    squareHasEnemyOf.toString(),
-    canLiberate.toString(),
-    canPlaceReservePodOnSquare.toString(),
-    canLiberateOnSquare.toString(),
-    formatProngConfig.toString(),
-    parseProngConfig.toString(),
-    parseOctiFen.toString(),
-    serializeOctiFen.toString(),
-    cloneState.toString(),
-    getHomeSquares.toString(),
-    getOpponentBases.toString(),
-    dfsJumpChains.toString(),
-    dfsSuperBonusJumps.toString(),
-    enumerateSuperBonusPreludes.toString(),
-    generateBaseMoves.toString(),
-    generateMoves.toString(),
-    applySingleHopChain.toString(),
-    check4PlayerElimination.toString(),
-    checkWinner.toString(),
-    hasAnyLegalMove.toString(),
-    advanceTurn.toString(),
-    applyMoveToState.toString(),
-    torusDist.toString(),
-    chebyshevDist.toString(),
-    minChebyshevToTargets.toString(),
-    getUncapturedOpponentBases.toString(),
-    analyzeCoalitionPhase.toString(),
-    evaluateJumpThreatDfs.toString(),
-    evaluatePodJumpThreat.toString(),
-    filterDominatedMoves.toString(),
-    evaluateState.toString(),
-    isTacticalMove.toString(),
-    orderMoves.toString(),
-    quiesce.toString(),
-    quiescenceSearch.toString(),
-    alphaBeta.toString(),
-    computeBestMove.toString(),
-    "var OPENING_BOOK = " + JSON.stringify(OPENING_BOOK) + ";",
-    initZobristTables.toString(),
-    "var ZOBRIST_TABLES = initZobristTables();",
-    mirrorDirCharHorizontal.toString(),
-    mirrorProngs.toString(),
-    mirrorProngStr.toString(),
-    mirrorMoveNotation.toString(),
-    computePositionHashBigInt.toString(),
-    computeCanonicalOpeningHash.toString(),
-    probeOpeningBook.toString()
-  ];
-  var workerCode = workerParts.join(String.fromCharCode(10));
-  var blob = new Blob([workerCode], { type: "application/javascript" });
-  botWorker = new Worker(URL.createObjectURL(blob));
-} catch (e) {
-  botWorker = null;
+var activeAiSearchId = 0;
+var aiSearchInFlight = false;
+var aiThinkTicker = null;
+
+function initBotWorker() {
+  if (botWorker) return botWorker;
+  try {
+    if (!workerCode) {
+      var workerParts = [
+        "self.onmessage = function (e) {",
+        "  var d = e.data;",
+        "  if (d.type === 'search') {",
+        "    var t0 = Date.now();",
+        "    var diff = (d.difficulty !== undefined) ? d.difficulty : d.depth;",
+        "    var botSide = d.botSide || d.side;",
+        "    var res = (" + botSearch.toString() + ")(d.fen, diff, d.mode, botSide, function (prog) {",
+        "      self.postMessage(Object.assign({ type: 'progress', searchId: d.searchId }, prog));",
+        "    }, d.budgetMs);",
+        "    var elapsed = Date.now() - t0;",
+        "    self.postMessage({",
+        "      type: 'done',",
+        "      searchId: d.searchId,",
+        "      bestMove: res.bestMove,",
+        "      score: res.score,",
+        "      nodes: res.nodes,",
+        "      depth: res.depth,",
+        "      elapsedMs: elapsed",
+        "    });",
+        "  }",
+        "};",
+        "var DIR_DELTAS = " + JSON.stringify(DIR_DELTAS) + ";",
+        "var DIR_CHARS = " + JSON.stringify(DIR_CHARS) + ";",
+        "var DEFAULT_BOT_TUNING = " + JSON.stringify(DEFAULT_BOT_TUNING) + ";",
+        "var BOT_PROFILES = " + JSON.stringify(BOT_PROFILES) + ";",
+        getBotProfile.toString(),
+        wrapCoord.toString(),
+        playerIndex.toString(),
+        partnerOf.toString(),
+        partnerIndex.toString(),
+        isPartnerHome.toString(),
+        areAllied.toString(),
+        isSquareOccupiedBy.toString(),
+        squareHasEnemyOf.toString(),
+        canLiberate.toString(),
+        canPlaceReservePodOnSquare.toString(),
+        canLiberateOnSquare.toString(),
+        formatProngConfig.toString(),
+        parseProngConfig.toString(),
+        parseOctiFen.toString(),
+        serializeOctiFen.toString(),
+        cloneState.toString(),
+        getHomeSquares.toString(),
+        getOpponentBases.toString(),
+        canonicalPostMoveStateKey.toString(),
+        dfsJumpChains.toString(),
+        dfsSuperBonusJumps.toString(),
+        enumerateSuperBonusPreludes.toString(),
+        generateBaseMoves.toString(),
+        generateMoves.toString(),
+        applySingleHopChain.toString(),
+        deltaToDirIndex.toString(),
+        applyRegularMoveOpNoTurn.toString(),
+        check4PlayerElimination.toString(),
+        checkWinner.toString(),
+        hasAnyLegalMove.toString(),
+        advanceTurn.toString(),
+        applyMoveToState.toString(),
+        torusDist.toString(),
+        chebyshevDist.toString(),
+        minChebyshevToTargets.toString(),
+        getUncapturedOpponentBases.toString(),
+        analyzeCoalitionPhase.toString(),
+        evaluateJumpThreatDfs.toString(),
+        evaluatePodJumpThreat.toString(),
+        filterDominatedMoves.toString(),
+        evaluateState.toString(),
+        isTacticalMove.toString(),
+        orderMoves.toString(),
+        maybeEmitSearchProgress.toString(),
+        quiesce.toString(),
+        quiescenceSearch.toString(),
+        alphaBeta.toString(),
+        computeBestMove.toString(),
+        "var OPENING_BOOK = " + JSON.stringify(OPENING_BOOK) + ";",
+        initZobristTables.toString(),
+        "var ZOBRIST_TABLES = initZobristTables();",
+        mirrorDirCharHorizontal.toString(),
+        mirrorProngs.toString(),
+        mirrorProngStr.toString(),
+        mirrorMoveNotation.toString(),
+        computePositionHashBigInt.toString(),
+        computeCanonicalOpeningHash.toString(),
+        probeOpeningBook.toString()
+      ];
+      workerCode = workerParts.join(String.fromCharCode(10));
+    }
+    if (!workerBlobUrl) {
+      var blob = new Blob([workerCode], { type: "application/javascript" });
+      workerBlobUrl = URL.createObjectURL(blob);
+    }
+    botWorker = new Worker(workerBlobUrl);
+  } catch (e) {
+    botWorker = null;
+  }
+  return botWorker;
 }
+initBotWorker();
 
 
 
@@ -41888,6 +42234,7 @@ var tabs = {
   board: $("tab-board"),
   robots: $("tab-robots"),
   replay: $("tab-replay"),
+  rules: $("tab-rules"),
   account: $("tab-account")
 };
 
@@ -41954,6 +42301,7 @@ function switchTab(name) {
       scrollAllVisibleChatsToBottom();
     } else { // online
       if (activeBoardContextMode === "local") {
+        cancelPendingAiSearch();
         saveLocalPlayContext();
         if (clockInterval) {
           clearInterval(clockInterval);
@@ -41982,6 +42330,7 @@ function switchTab(name) {
   }
 
   if (activeBoardContextMode === "local") {
+    cancelPendingAiSearch();
     saveLocalPlayContext();
   } else if (activeBoardContextMode === "online" && activeOnlineGameId) {
     saveOnlinePlayContext();
@@ -42131,6 +42480,14 @@ function checkHash() {
     }
   } else if (h === "#play") {
     switchTab("play");
+  } else if (h === "#rules" || h.indexOf("#rules-") === 0 || h.indexOf("#rules/") === 0) {
+    switchTab("rules");
+    if (h.length > 7) {
+      var rbTarget = $(h.substring(1)) || $("rules-" + h.substring(7));
+      if (rbTarget && typeof rbTarget.scrollIntoView === "function") {
+        rbTarget.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
   } else if (h.indexOf("#users/") === 0) {
     var uid = decodeURIComponent(h.substring(7));
     switchTab("users");
@@ -42153,6 +42510,9 @@ $("home-cta-play").addEventListener("click", function () { switchTab("play"); })
 if ($("home-cta-online")) $("home-cta-online").addEventListener("click", function () { switchTab("online"); });
 $("home-cta-users").addEventListener("click", function () { switchTab("users"); });
 $("home-cta-account").addEventListener("click", function () { switchTab("account"); });
+if ($("home-cta-rules")) $("home-cta-rules").addEventListener("click", function () { location.hash = "#rules"; switchTab("rules"); });
+if ($("rules-cta-play")) $("rules-cta-play").addEventListener("click", function () { location.hash = "#play"; switchTab("play"); });
+if ($("rules-cta-online")) $("rules-cta-online").addEventListener("click", function () { location.hash = "#online"; switchTab("online"); });
 
 /* =========================================================================
  * Tab 7: Account & Authentication
@@ -42956,7 +43316,10 @@ function loadMyRobots() {
       var d = r.draws || 0;
       var gp = r.games_played || (w + l + d);
       var tdRecord = el("td", w + "W - " + l + "L - " + d + "D");
-      tdRecord.title = gp + " games played";
+      tdRecord.title = gp + " games | Arena ELO: " +
+        (r.elo_2p_3b !== undefined ? r.elo_2p_3b : 1200) + " / " +
+        (r.elo_2p_1b !== undefined ? r.elo_2p_1b : 1200) + " / " +
+        (r.elo_ofk !== undefined ? r.elo_ofk : 1200);
 
       /* Secret Token with Show/Hide & Copy */
       var tdTok = el("td");
@@ -43140,15 +43503,18 @@ function usersSearch(offset) {
       var bioDisplay = bioRaw ? (bioRaw.length > 60 ? bioRaw.substring(0, 57) + "..." : bioRaw) : "—";
       var tdBio = el("td", bioDisplay);
       if (bioRaw) { tdBio.title = bioRaw; }
-      var tdElo2p = el("td", u.elo_2p !== undefined ? u.elo_2p : 1200);
-      var tdElo4p = el("td", u.elo_4p !== undefined ? u.elo_4p : 1200);
-      var tdEloOfk = el("td", u.elo_ofk !== undefined ? u.elo_ofk : 1200);
+      var elo3b = u.elo_2p_3b !== undefined ? u.elo_2p_3b : (u.elo_2p !== undefined ? u.elo_2p : 1200);
+      var elo1b = u.elo_2p_1b !== undefined ? u.elo_2p_1b : 1200;
+      var eloOfk = u.elo_ofk !== undefined ? u.elo_ofk : 1200;
+      var tdElo3b = el("td", elo3b);
+      var tdElo1b = el("td", elo1b);
+      var tdEloOfk = el("td", eloOfk);
       var wld = (u.wins || 0) + "-" + (u.losses || 0) + "-" + (u.draws || 0);
       var tdGames = el("td", wld);
       var tdRobots = el("td", u.active_robots_count !== undefined ? u.active_robots_count : 0);
       var tdJoined = el("td", fmtTime(u.created_at));
 
-      [tdAv, tdHandle, tdName, tdLoc, tdBio, tdElo2p, tdElo4p, tdEloOfk, tdGames, tdRobots, tdJoined].forEach(function (td) {
+      [tdAv, tdHandle, tdName, tdLoc, tdBio, tdElo3b, tdElo1b, tdEloOfk, tdGames, tdRobots, tdJoined].forEach(function (td) {
         tr.appendChild(td);
       });
 
@@ -43177,6 +43543,51 @@ $("users-search-input").addEventListener("keydown", function (ev) {
   if (ev.key === "Enter") { usersSearch(0); }
 });
 
+var ALL_OCTI_VARIANT_CODES = [
+  "2P_3B", "2P_3B_SP", "2P_3B_ED", "2P_3B_SPED",
+  "2P_1B", "2P_1B_SP", "2P_1B_ED", "2P_1B_SPED",
+  "4P", "4P_SP", "4P_ED", "4P_SPED",
+  "OFK"
+];
+
+function formatVariantCode(modeOrObj, bases, superProngs, edgeless) {
+  var m = modeOrObj;
+  var b = bases;
+  var sp = superProngs;
+  var ed = edgeless;
+  if (modeOrObj && typeof modeOrObj === "object") {
+    if (typeof modeOrObj.variant === "string" && modeOrObj.variant) {
+      var vUp = modeOrObj.variant.toUpperCase();
+      if (ALL_OCTI_VARIANT_CODES.indexOf(vUp) >= 0) {
+        return vUp;
+      }
+    }
+    m = modeOrObj.mode || modeOrObj.game_mode || modeOrObj.gameMode || "2P";
+    b = (modeOrObj.bases !== undefined) ? modeOrObj.bases
+      : ((modeOrObj.game_bases !== undefined) ? modeOrObj.game_bases : 3);
+    sp = !!(modeOrObj.super_prongs !== undefined ? modeOrObj.super_prongs : modeOrObj.superProngs);
+    ed = !!(modeOrObj.edgeless !== undefined ? modeOrObj.edgeless : modeOrObj.useEdgelessBoard);
+  }
+  var mUp = String(m || "2P").toUpperCase();
+  if (mUp === "OFK") {
+    return "OFK";
+  }
+  var code;
+  if (mUp === "4P" || mUp === "4") {
+    code = "4P";
+  } else if (mUp === "2P" || mUp === "2" || mUp === "") {
+    code = (Number(b) === 1) ? "2P_1B" : "2P_3B";
+  } else if (ALL_OCTI_VARIANT_CODES.indexOf(mUp) >= 0) {
+    return mUp;
+  } else {
+    code = (Number(b) === 1) ? "2P_1B" : "2P_3B";
+  }
+  if (sp && ed) code += "_SPED";
+  else if (sp) code += "_SP";
+  else if (ed) code += "_ED";
+  return code;
+}
+
 function openUserProfile(id) {
   if (!id) return;
   switchTab("users");
@@ -43202,16 +43613,25 @@ function openUserProfile(id) {
 
     var statsBox = $("user-detail-stats");
     clear(statsBox);
+    var uElo3b = u.elo_2p_3b !== undefined ? u.elo_2p_3b : (u.elo_2p !== undefined ? u.elo_2p : 1200);
+    var uElo1b = u.elo_2p_1b !== undefined ? u.elo_2p_1b : 1200;
+    var uEloOfk = u.elo_ofk !== undefined ? u.elo_ofk : 1200;
     var statItems = [
-      ["2P Elo", u.elo_2p !== undefined ? u.elo_2p : 1200],
-      ["4P Elo", u.elo_4p !== undefined ? u.elo_4p : 1200],
-      ["OFK Elo", u.elo_ofk !== undefined ? u.elo_ofk : 1200],
+      ["2P_3B Elo", uElo3b],
+      ["2P_1B Elo", uElo1b],
+      ["OFK Elo", uEloOfk],
       ["Games", u.games_played || 0],
       ["Wins", u.wins || 0],
       ["Losses", u.losses || 0],
       ["Draws", u.draws || 0],
       ["Win Rate", (u.games_played ? ((u.wins / u.games_played) * 100).toFixed(1) + "%" : "0.0%")]
     ];
+    if ((u.arena_games_played || 0) > 0) {
+      statItems.push(["Arena 2P_3B", u.arena_elo_2p_3b !== undefined ? u.arena_elo_2p_3b : 1200]);
+      statItems.push(["Arena 2P_1B", u.arena_elo_2p_1b !== undefined ? u.arena_elo_2p_1b : 1200]);
+      statItems.push(["Arena OFK", u.arena_elo_ofk !== undefined ? u.arena_elo_ofk : 1200]);
+      statItems.push(["Arena W-L-D", (u.arena_wins || 0) + "-" + (u.arena_losses || 0) + "-" + (u.arena_draws || 0)]);
+    }
     statItems.forEach(function (it) {
       var box = el("div", null, "stat-box");
       box.appendChild(el("div", it[0], "lbl"));
@@ -43226,7 +43646,7 @@ function openUserProfile(id) {
       rBox.textContent = "No active public robots.";
     } else {
       var rTable = el("table");
-      rTable.innerHTML = "<thead><tr><th>Robot Name</th><th>Description</th><th>URL</th><th>Created</th></tr></thead>";
+      rTable.innerHTML = "<thead><tr><th>Robot Name</th><th>Arena ELO (3B / 1B / OFK)</th><th>Description</th><th>URL</th><th>Created</th></tr></thead>";
       var rTbody = el("tbody");
       rList.forEach(function (rb) {
         var rtr = el("tr");
@@ -43246,6 +43666,10 @@ function openUserProfile(id) {
           tdName.textContent = rb.robot_name;
         }
         rtr.appendChild(tdName);
+        var rbEloStr = (rb.elo_2p_3b !== undefined ? rb.elo_2p_3b : 1200) + " / " +
+          (rb.elo_2p_1b !== undefined ? rb.elo_2p_1b : 1200) + " / " +
+          (rb.elo_ofk !== undefined ? rb.elo_ofk : 1200);
+        rtr.appendChild(el("td", rbEloStr));
         rtr.appendChild(el("td", rb.description || "-"));
         var tdUrl = el("td");
         if (rb.robot_url) {
@@ -43274,7 +43698,7 @@ function openUserProfile(id) {
       gBox.textContent = "No match history available.";
     } else {
       var gTable = el("table");
-      gTable.innerHTML = "<thead><tr><th>Outcome</th><th>Mode</th><th>Players</th><th>Result</th><th>Plies</th><th>Date</th><th>Action</th></tr></thead>";
+      gTable.innerHTML = "<thead><tr><th>Outcome</th><th>Variant</th><th>Players</th><th>Result</th><th>Plies</th><th>Date</th><th>Action</th></tr></thead>";
       var gTbody = el("tbody");
       gList.forEach(function (gm) {
         var gtr = el("tr");
@@ -43284,7 +43708,8 @@ function openUserProfile(id) {
         var badgeCls = isWin ? "badge badge-active" : (isLoss ? "badge badge-revoked" : "badge");
         var tdOut = el("td");
         tdOut.appendChild(el("span", outStr || (isWin ? "WIN" : (isLoss ? "LOSS" : "DRAW")), badgeCls));
-        var tdMode = el("td", gm.mode || "2P");
+        var tdMode = el("td");
+        tdMode.appendChild(el("span", formatVariantCode(gm), "badge"));
         var tdPl = el("td");
         if (gm.players && gm.players.length) {
           gm.players.forEach(function (p, pIdx) {
@@ -43363,43 +43788,64 @@ function loadRobotsDirectory(offset) {
   robotsLoaded = true;
   if (offset !== undefined) robotsOffset = Math.max(0, offset);
   var q = $("robots-search-q") ? $("robots-search-q").value.trim() : "";
-  var sortField = $("robots-sort") ? $("robots-sort").value : "wins";
+  var partType = $("robots-participant-type") ? $("robots-participant-type").value : "all";
+  var sortField = $("robots-sort") ? $("robots-sort").value : "elo_2p_3b";
   var sortOrder = $("robots-order") ? $("robots-order").value : "desc";
   var url = "/api/v1/robots/directory?limit=" + ROBOTS_PAGE_LIMIT + "&offset=" + robotsOffset +
+            "&participant_type=" + encodeURIComponent(partType) +
             "&sort=" + encodeURIComponent(sortField) + "&order=" + encodeURIComponent(sortOrder);
   if (q) url += "&q=" + encodeURIComponent(q);
 
   var msgEl = $("robots-msg");
-  if (msgEl) msgEl.textContent = "Loading robots...";
+  if (msgEl) msgEl.textContent = "Loading arena standings...";
 
   api(url).then(function (data) {
     robotsTotal = data.total || 0;
     var tbody = $("robots-tbody");
     if (!tbody) return;
     clear(tbody);
-    if (!data.robots || data.robots.length === 0) {
-      if (msgEl) msgEl.textContent = "No robots found with active match history.";
+    var entries = data.entries || data.robots || [];
+    if (!entries.length) {
+      if (msgEl) msgEl.textContent = "No arena participants found with active match history.";
     } else {
       if (msgEl) msgEl.textContent = "";
-      data.robots.forEach(function (r) {
+      entries.forEach(function (r) {
         var tr = el("tr");
+        var isHuman = (r.entry_type === "human");
 
-        // Robot Name (clickable)
+        // Participant Name (clickable)
         var tdName = el("td");
-        var nameLink = el("a", r.robot_name || r.name, "");
+        var dispLabel = isHuman ? ("@" + (r.name || r.handle || "")) : (r.robot_name || r.name || "");
+        var nameLink = el("a", dispLabel, "");
         nameLink.style.fontWeight = "700";
         nameLink.style.cursor = "pointer";
         nameLink.style.color = "#38BDF8";
-        nameLink.href = "#robots/" + encodeURIComponent(r.robot_uuid);
-        nameLink.addEventListener("click", function (e) {
-          e.preventDefault();
-          viewRobotProfile(r.robot_uuid);
-        });
+        if (r.description) nameLink.title = r.description;
+        if (isHuman) {
+          var targetUser = r.uuid || r.name || "";
+          nameLink.href = "#users/" + encodeURIComponent(targetUser);
+          nameLink.addEventListener("click", function (e) {
+            e.preventDefault();
+            switchTab("users");
+            openUserProfile(targetUser);
+          });
+        } else {
+          var targetBot = r.robot_uuid || r.uuid || "";
+          nameLink.href = "#robots/" + encodeURIComponent(targetBot);
+          nameLink.addEventListener("click", function (e) {
+            e.preventDefault();
+            viewRobotProfile(targetBot);
+          });
+        }
         tdName.appendChild(nameLink);
 
-        // Owner Handle (clickable)
+        // Participant Type Badge
+        var tdType = el("td");
+        tdType.appendChild(el("span", isHuman ? "HUMAN" : "BOT", isHuman ? "badge" : "badge badge-active"));
+
+        // Owner Handle (clickable for bots)
         var tdOwner = el("td");
-        if (r.owner_handle) {
+        if (!isHuman && r.owner_handle) {
           var ownerLink = el("a", "@" + r.owner_handle, "");
           ownerLink.href = "#users/" + encodeURIComponent(r.owner_uuid || r.owner_handle);
           ownerLink.style.cursor = "pointer";
@@ -43410,40 +43856,23 @@ function loadRobotsDirectory(offset) {
           });
           tdOwner.appendChild(ownerLink);
         } else {
-          tdOwner.textContent = "-";
+          tdOwner.textContent = "—";
         }
 
-        // Description
-        var tdDesc = el("td", r.description || "-", "dim");
-        tdDesc.style.maxWidth = "220px";
-        tdDesc.style.overflow = "hidden";
-        tdDesc.style.textOverflow = "ellipsis";
-        tdDesc.style.whiteSpace = "nowrap";
-
-        // URL
-        var tdUrl = el("td");
-        if (r.robot_url) {
-          var urlA = el("a", r.robot_url, "");
-          urlA.href = r.robot_url;
-          urlA.target = "_blank";
-          urlA.rel = "nofollow ugc noopener noreferrer";
-          urlA.style.color = "#38BDF8";
-          urlA.style.wordBreak = "break-all";
-          urlA.style.maxWidth = "160px";
-          urlA.style.display = "inline-block";
-          urlA.style.overflow = "hidden";
-          urlA.style.textOverflow = "ellipsis";
-          urlA.style.whiteSpace = "nowrap";
-          tdUrl.appendChild(urlA);
-        } else {
-          tdUrl.appendChild(el("span", "-", "dim"));
-        }
+        // Pool 2 Arena 3-Ladder Elos
+        var tdElo3b = el("td", String(r.elo_2p_3b !== undefined ? r.elo_2p_3b : 1200));
+        var tdElo1b = el("td", String(r.elo_2p_1b !== undefined ? r.elo_2p_1b : 1200));
+        var tdEloOfk = el("td", String(r.elo_ofk !== undefined ? r.elo_ofk : 1200));
 
         // Status Badge
         var tdStatus = el("td");
-        var isRetired = (r.retired || r.status === "retired" || r.revoked || r.token_deleted);
-        var badgeCls = isRetired ? "badge badge-revoked" : "badge badge-active";
-        tdStatus.appendChild(el("span", isRetired ? "Retired" : "Active", badgeCls));
+        if (isHuman) {
+          tdStatus.appendChild(el("span", "Active", "badge badge-active"));
+        } else {
+          var isRetired = (r.retired || r.status === "retired" || r.revoked || r.token_deleted);
+          var badgeCls = isRetired ? "badge badge-revoked" : "badge badge-active";
+          tdStatus.appendChild(el("span", isRetired ? "Retired" : "Active", badgeCls));
+        }
 
         // Games Played
         var tdGames = el("td", String(r.games_played || 0));
@@ -43455,10 +43884,29 @@ function loadRobotsDirectory(offset) {
         var wr = (r.win_rate !== undefined) ? (r.win_rate + "%") : "0.0%";
         var tdWr = el("td", wr);
 
+        // URL
+        var tdUrl = el("td");
+        if (r.robot_url) {
+          var urlA = el("a", r.robot_url, "");
+          urlA.href = r.robot_url;
+          urlA.target = "_blank";
+          urlA.rel = "nofollow ugc noopener noreferrer";
+          urlA.style.color = "#38BDF8";
+          urlA.style.wordBreak = "break-all";
+          urlA.style.maxWidth = "140px";
+          urlA.style.display = "inline-block";
+          urlA.style.overflow = "hidden";
+          urlA.style.textOverflow = "ellipsis";
+          urlA.style.whiteSpace = "nowrap";
+          tdUrl.appendChild(urlA);
+        } else {
+          tdUrl.appendChild(el("span", "—", "dim"));
+        }
+
         // Created
         var tdDate = el("td", fmtTime(r.created_at));
 
-        [tdName, tdOwner, tdDesc, tdUrl, tdStatus, tdGames, tdRec, tdWr, tdDate].forEach(function (td) {
+        [tdName, tdType, tdOwner, tdElo3b, tdElo1b, tdEloOfk, tdStatus, tdGames, tdRec, tdWr, tdUrl, tdDate].forEach(function (td) {
           tr.appendChild(td);
         });
         tbody.appendChild(tr);
@@ -43467,14 +43915,14 @@ function loadRobotsDirectory(offset) {
 
     var pageInfo = $("robots-page-info");
     if (pageInfo) {
-      var last = Math.min(robotsOffset + (data.robots ? data.robots.length : 0), robotsTotal);
-      pageInfo.textContent = robotsTotal ? ((robotsOffset + 1) + "-" + last + " of " + robotsTotal) : "0 robots";
+      var last = Math.min(robotsOffset + entries.length, robotsTotal);
+      pageInfo.textContent = robotsTotal ? ((robotsOffset + 1) + "-" + last + " of " + robotsTotal) : "0 participants";
     }
     if ($("robots-prev-btn")) $("robots-prev-btn").disabled = (robotsOffset <= 0);
     if ($("robots-next-btn")) $("robots-next-btn").disabled = (robotsOffset + ROBOTS_PAGE_LIMIT >= robotsTotal);
   }).catch(function (e) {
     if (msgEl) {
-      msgEl.textContent = "Failed to load robots: " + e.message;
+      msgEl.textContent = "Failed to load arena standings: " + e.message;
       msgEl.className = "err";
     }
   });
@@ -43526,6 +43974,9 @@ function viewRobotProfile(id) {
         urlRow.style.display = "none";
       }
     }
+    if ($("robot-kpi-elo-3b")) $("robot-kpi-elo-3b").textContent = String(r.elo_2p_3b !== undefined ? r.elo_2p_3b : 1200);
+    if ($("robot-kpi-elo-1b")) $("robot-kpi-elo-1b").textContent = String(r.elo_2p_1b !== undefined ? r.elo_2p_1b : 1200);
+    if ($("robot-kpi-elo-ofk")) $("robot-kpi-elo-ofk").textContent = String(r.elo_ofk !== undefined ? r.elo_ofk : 1200);
     if ($("robot-kpi-games")) $("robot-kpi-games").textContent = String(r.games_played || 0);
     if ($("robot-kpi-record")) $("robot-kpi-record").textContent = (r.wins || 0) + " - " + (r.losses || 0) + " - " + (r.draws || 0);
     if ($("robot-kpi-winrate")) $("robot-kpi-winrate").textContent = (r.win_rate !== undefined ? r.win_rate : 0) + "%";
@@ -43553,7 +44004,8 @@ function viewRobotProfile(id) {
           var tdOut = el("td");
           tdOut.appendChild(el("span", outStr, badgeCls));
 
-          var tdMode = el("td", gm.mode || "2P");
+          var tdMode = el("td");
+          tdMode.appendChild(el("span", formatVariantCode(gm), "badge"));
 
           var tdPl = el("td");
           var playersArr = gm.players || [];
@@ -43624,6 +44076,7 @@ function viewRobotProfile(id) {
 
 if ($("btn-robots-search")) $("btn-robots-search").addEventListener("click", function () { loadRobotsDirectory(0); });
 if ($("robots-search-q")) $("robots-search-q").addEventListener("keydown", function (e) { if (e.key === "Enter") loadRobotsDirectory(0); });
+if ($("robots-participant-type")) $("robots-participant-type").addEventListener("change", function () { loadRobotsDirectory(0); });
 if ($("robots-sort")) $("robots-sort").addEventListener("change", function () { loadRobotsDirectory(0); });
 if ($("robots-order")) $("robots-order").addEventListener("change", function () { loadRobotsDirectory(0); });
 if ($("robots-prev-btn")) $("robots-prev-btn").addEventListener("click", function () { loadRobotsDirectory(robotsOffset - ROBOTS_PAGE_LIMIT); });
@@ -44470,6 +44923,11 @@ function restoreLocalPlayContext() {
   updatePlaySidebar();
   renderPlayBoardCanvas();
   renderAllWebReserves();
+  if (!activeOnlineGameId && matchStarted && activePlayState &&
+      activePlayState.status === "P" &&
+      playVcrIndex === Math.max(0, playMatchPlies.length - 1)) {
+    checkMatchTurn();
+  }
 }
 
 function saveOnlinePlayContext() {
@@ -47771,14 +48229,10 @@ function updateStartMatchSummary() {
   var seatStr = "Seat " + localMatchConfig.humanSeat + " (" + (seatColors[localMatchConfig.humanSeat] || "Emerald") + ")";
   line1.textContent = playModeStr + " • " + seatStr;
 
-  var modeStr = localMatchConfig.gameMode + " (" + (localMatchConfig.gameMode === "OFK" ? "6x7" : "9x9") + ")";
-  var basesStr = is4p ? "2 Enemy Bases" : (localMatchConfig.bases + " " + (localMatchConfig.bases === 1 ? "Base" : "Bases"));
-  var extras = [];
-  if (localMatchConfig.superProngs) extras.push("Superprongs");
-  if (localMatchConfig.edgeless) extras.push("Edgeless");
-  if (localMatchConfig.timeControl !== "untimed") extras.push(localMatchConfig.timeControl);
-  var extraStr = extras.length ? (" • " + extras.join(", ")) : " • Standard";
-  line2.textContent = modeStr + " • " + basesStr + extraStr;
+  var vCode = formatVariantCode(localMatchConfig);
+  var gridStr = (localMatchConfig.gameMode === "OFK") ? "6x7" : "9x9";
+  var tcStr = (localMatchConfig.timeControl !== "untimed") ? localMatchConfig.timeControl : "Untimed";
+  line2.textContent = vCode + " (" + gridStr + ") \u2022 " + tcStr;
 
   var footnote = document.getElementById("web-start-ai-footnote");
   if (footnote) {
@@ -47870,6 +48324,7 @@ if (btnSetupApply) {
 }
 
 function prepareLocalMatchInitialState() {
+  cancelPendingAiSearch();
   stopOnlineGameSync(true);
   if (clockInterval) {
     clearInterval(clockInterval);
@@ -47983,6 +48438,7 @@ if (btnStartMatch) {
           clockTimers[curTurn]--;
           updateClockDisplay();
           if (clockTimers[curTurn] <= 0) {
+            cancelPendingAiSearch();
             clearInterval(clockInterval);
             clockInterval = null;
             activePlayState.status = "O";
@@ -48039,17 +48495,17 @@ function updatePlaySidebar() {
     if (onlineMetaEl) onlineMetaEl.style.display = "none";
     if (localSumEl) {
       localSumEl.style.display = "block";
+      var vCodeLocal = formatVariantCode(localMatchConfig);
       var botSummary = (localMatchConfig.playMode === "bot" ? ("vs JS Robot (Lv" + localMatchConfig.botDifficulty + ")") : "Pass & Play");
       var timeSummary = (localMatchConfig.timeControl === "untimed" ? "Untimed" : localMatchConfig.timeControl);
-      localSumEl.textContent = "Local Match \u2022 " + botSummary + " \u2022 " + timeSummary;
+      localSumEl.textContent = "Local Match \u2022 " + vCodeLocal + " \u2022 " + botSummary + " \u2022 " + timeSummary;
     }
   }
 
   var is4p = (s.mode === "4" || s.mode === "4P");
   var modeBadge = document.getElementById("web-play-mode-badge");
   if (modeBadge) {
-    var baseDesc = is4p ? "2 Enemy Bases" : (s.bases + (s.bases === 1 ? " Base" : " Bases"));
-    modeBadge.textContent = s.mode + " • " + baseDesc;
+    modeBadge.textContent = formatVariantCode(s);
   }
 
   var turnBadge = document.getElementById("web-play-turn-badge");
@@ -48125,6 +48581,9 @@ function updatePlaySidebar() {
 
 function showPlayVcrPly(idx) {
   if (idx < 0 || idx >= playMatchPlies.length) return;
+  if (aiSearchInFlight && idx < playMatchPlies.length - 1) {
+    cancelPendingAiSearch();
+  }
   if (moveComposer) moveComposer.reset();
   playVcrIndex = idx;
   var pl = playMatchPlies[idx];
@@ -48134,6 +48593,12 @@ function showPlayVcrPly(idx) {
   updatePlaySidebar();
   renderPlayBoardCanvas();
   renderAllWebReserves();
+  if (!activeOnlineGameId && matchStarted && activePlayState &&
+      activePlayState.status === "P" &&
+      playVcrIndex === Math.max(0, playMatchPlies.length - 1) &&
+      !aiSearchInFlight) {
+    checkMatchTurn();
+  }
 }
 
 // VCR Bar Navigation
@@ -48427,28 +48892,95 @@ function checkMatchTurn() {
   }
 }
 
+function updateThinkingProgressUi(prog) {
+  var titleEl = document.getElementById("web-thinking-title");
+  var fillEl = document.getElementById("web-thinking-progress-fill");
+  var txtEl = document.getElementById("web-thinking-progress-text");
+  var diff = (prog && prog.difficulty) || localMatchConfig.botDifficulty || 2;
+  var defaultBudgetMs = getBotProfile(diff).timeBudgetMs || 10000;
+  var effBudget = (prog && prog.budgetMs) ? prog.budgetMs : defaultBudgetMs;
+  var elapsedMs = Math.max(0, (prog && prog.elapsedMs !== undefined) ? prog.elapsedMs : 0);
+  var depth = Math.max(1, (prog && prog.depth) ? prog.depth : 1);
+  var maxD = Math.max(depth, (prog && prog.maxDepth) ? prog.maxDepth : (getBotProfile(diff).maxSearchDepth || 8));
+  var nodes = (prog && prog.nodes) ? prog.nodes : 0;
+  var depthPct = Math.round((depth / maxD) * 100);
+  var timePct = (effBudget > 0) ? Math.round((elapsedMs / effBudget) * 100) : 0;
+  var pct = Math.min(99, Math.max(0, Math.max(depthPct, timePct)));
+  var remSec = Math.max(0, (effBudget - elapsedMs) / 1000).toFixed(1);
+  var elapsedSec = (elapsedMs / 1000).toFixed(1);
+  var budgetSec = (effBudget / 1000).toFixed(1);
+  if (titleEl) {
+    titleEl.textContent = "AI Thinking (Level " + diff + ") \u2014 " + remSec + "s remaining";
+  }
+  if (fillEl) fillEl.style.width = pct + "%";
+  if (txtEl) {
+    txtEl.textContent = "Depth " + depth + " \u2022 " + nodes + " nodes \u2022 " + elapsedSec + "s / " + budgetSec + "s (" + pct + "%)";
+  }
+}
+
+function cancelPendingAiSearch() {
+  activeAiSearchId++;
+  if (aiThinkTicker) {
+    clearInterval(aiThinkTicker);
+    aiThinkTicker = null;
+  }
+  if (aiSearchInFlight && botWorker) {
+    try { botWorker.terminate(); } catch (e) {}
+    botWorker = null;
+    initBotWorker();
+  }
+  aiSearchInFlight = false;
+  var thinkOverlay = document.getElementById("web-thinking-overlay");
+  if (thinkOverlay) thinkOverlay.style.display = "none";
+}
+
 // AI Bot Search with 100% Opaque Thinking Progress Bar
 function triggerAiBotTurn() {
+  if (!activePlayState || activePlayState.status !== "P") return;
+  if (aiSearchInFlight) {
+    cancelPendingAiSearch();
+  }
   var s = activePlayState;
   var fen = serializeOctiFen(s);
   var diff = localMatchConfig.botDifficulty || 2;
   var side = s.turn;
   var mode = s.mode;
+  var prof = getBotProfile(diff);
+  var defaultBudgetMs = prof.timeBudgetMs || 10000;
+  var maxD = prof.maxSearchDepth || 8;
+
+  var searchId = ++activeAiSearchId;
+  aiSearchInFlight = true;
+  var searchStartedAtMs = Date.now();
+  var latestProg = {
+    difficulty: diff,
+    depth: 1,
+    maxDepth: maxD,
+    nodes: 0,
+    elapsedMs: 0,
+    budgetMs: defaultBudgetMs
+  };
 
   var thinkOverlay = document.getElementById("web-thinking-overlay");
-  var titleEl = document.getElementById("web-thinking-title");
-  var fillEl = document.getElementById("web-thinking-progress-fill");
-  var txtEl = document.getElementById("web-thinking-progress-text");
-  var defaultBudgetMs = getBotProfile(diff).timeBudgetMs || 10000;
-
   if (thinkOverlay) thinkOverlay.style.display = "flex";
-  if (titleEl) {
-    titleEl.textContent = "AI Thinking (Level " + diff + ") \u2014 " + (defaultBudgetMs / 1000).toFixed(1) + "s remaining";
+  updateThinkingProgressUi(latestProg);
+
+  if (aiThinkTicker) {
+    clearInterval(aiThinkTicker);
   }
-  if (fillEl) fillEl.style.width = "0%";
-  if (txtEl) txtEl.textContent = "Depth 1 \u2022 0 nodes \u2022 0.0s / " + (defaultBudgetMs / 1000).toFixed(1) + "s (0%)";
+  aiThinkTicker = setInterval(function () {
+    if (searchId !== activeAiSearchId || !aiSearchInFlight) return;
+    latestProg.elapsedMs = Math.max(latestProg.elapsedMs, Date.now() - searchStartedAtMs);
+    updateThinkingProgressUi(latestProg);
+  }, 100);
 
   function finishAiMove(res) {
+    if (searchId !== activeAiSearchId) return;
+    aiSearchInFlight = false;
+    if (aiThinkTicker) {
+      clearInterval(aiThinkTicker);
+      aiThinkTicker = null;
+    }
     if (thinkOverlay) thinkOverlay.style.display = "none";
     if (!matchStarted || !activePlayState || activePlayState.status !== "P" || activePlayState.turn !== side) {
       return;
@@ -48465,56 +48997,64 @@ function triggerAiBotTurn() {
     }
   }
 
-  if (botWorker) {
-    botWorker.onerror = function (err) {
+  var worker = initBotWorker();
+  if (worker) {
+    worker.onerror = function (err) {
+      if (searchId !== activeAiSearchId) return;
       console.warn("botWorker error, falling back to main-thread botSearch:", err);
-      var r = botSearch(fen, diff, mode, side);
+      try { worker.terminate(); } catch (e) {}
+      botWorker = null;
+      var r = botSearch(fen, diff, mode, side, function (prog) {
+        if (searchId !== activeAiSearchId) return;
+        latestProg.depth = prog.depth || latestProg.depth;
+        latestProg.maxDepth = prog.maxDepth || maxD;
+        latestProg.nodes = prog.nodes || latestProg.nodes;
+        latestProg.elapsedMs = prog.elapsedMs !== undefined ? prog.elapsedMs : (Date.now() - searchStartedAtMs);
+        latestProg.budgetMs = prog.budgetMs || defaultBudgetMs;
+        updateThinkingProgressUi(latestProg);
+      }, defaultBudgetMs);
       finishAiMove(r);
     };
-    botWorker.onmessage = function (e) {
+    worker.onmessage = function (e) {
       if (!e.data) return;
+      if (e.data.searchId !== undefined && e.data.searchId !== searchId) return;
+      if (searchId !== activeAiSearchId) return;
       if (e.data.type === "progress") {
         var d = e.data;
-        var maxD = d.maxDepth || 8;
-        var depthPct = Math.round((d.depth / maxD) * 100);
-        var effBudget = d.budgetMs || defaultBudgetMs;
-        var timePct = (effBudget > 0 && d.elapsedMs !== undefined)
-          ? Math.round((d.elapsedMs / effBudget) * 100)
-          : 0;
-        var pct = Math.min(99, Math.max(0, Math.max(depthPct, timePct)));
-        var remSec = Math.max(0, (effBudget - (d.elapsedMs || 0)) / 1000).toFixed(1);
-        if (titleEl) {
-          titleEl.textContent = "AI Thinking (Level " + diff + ") \u2014 " + remSec + "s remaining";
-        }
-        var elapsedSec = ((d.elapsedMs || 0) / 1000).toFixed(1);
-        var budgetSec = (effBudget / 1000).toFixed(1);
-        if (fillEl) fillEl.style.width = pct + "%";
-        if (txtEl) txtEl.textContent = "Depth " + d.depth + " \u2022 " + (d.nodes || 0) + " nodes \u2022 " + elapsedSec + "s / " + budgetSec + "s (" + pct + "%)";
+        latestProg.depth = d.depth || latestProg.depth;
+        latestProg.maxDepth = d.maxDepth || maxD;
+        latestProg.nodes = d.nodes || latestProg.nodes;
+        latestProg.elapsedMs = d.elapsedMs !== undefined ? d.elapsedMs : (Date.now() - searchStartedAtMs);
+        latestProg.budgetMs = d.budgetMs || defaultBudgetMs;
+        updateThinkingProgressUi(latestProg);
       } else if (e.data.type === "done" || e.data.type === "result") {
         finishAiMove(e.data);
       }
     };
-    botWorker.postMessage({ type: "search", fen: fen, depth: diff, mode: mode, side: side });
+    worker.postMessage({
+      type: "search",
+      searchId: searchId,
+      fen: fen,
+      depth: diff,
+      difficulty: diff,
+      mode: mode,
+      side: side,
+      botSide: side,
+      budgetMs: defaultBudgetMs
+    });
   } else {
     // Fallback search with live progress callback
     setTimeout(function () {
+      if (searchId !== activeAiSearchId) return;
       var r = botSearch(fen, diff, mode, side, function (prog) {
-        var maxD = prog.maxDepth || 8;
-        var depthPct = Math.round((prog.depth / maxD) * 100);
-        var effBudget = prog.budgetMs || defaultBudgetMs;
-        var timePct = (effBudget > 0 && prog.elapsedMs !== undefined)
-          ? Math.round((prog.elapsedMs / effBudget) * 100)
-          : 0;
-        var pct = Math.min(99, Math.max(0, Math.max(depthPct, timePct)));
-        var remSec = Math.max(0, (effBudget - (prog.elapsedMs || 0)) / 1000).toFixed(1);
-        if (titleEl) {
-          titleEl.textContent = "AI Thinking (Level " + diff + ") \u2014 " + remSec + "s remaining";
-        }
-        var elapsedSec = ((prog.elapsedMs || 0) / 1000).toFixed(1);
-        var budgetSec = (effBudget / 1000).toFixed(1);
-        if (fillEl) fillEl.style.width = pct + "%";
-        if (txtEl) txtEl.textContent = "Depth " + prog.depth + " \u2022 " + (prog.nodes || 0) + " nodes \u2022 " + elapsedSec + "s / " + budgetSec + "s (" + pct + "%)";
-      });
+        if (searchId !== activeAiSearchId) return;
+        latestProg.depth = prog.depth || latestProg.depth;
+        latestProg.maxDepth = prog.maxDepth || maxD;
+        latestProg.nodes = prog.nodes || latestProg.nodes;
+        latestProg.elapsedMs = prog.elapsedMs !== undefined ? prog.elapsedMs : (Date.now() - searchStartedAtMs);
+        latestProg.budgetMs = prog.budgetMs || defaultBudgetMs;
+        updateThinkingProgressUi(latestProg);
+      }, defaultBudgetMs);
       finishAiMove(r);
     }, 50);
   }
@@ -48532,6 +49072,7 @@ if (btnUndo) {
     if (activeOnlineGameId) {
       return;
     }
+    cancelPendingAiSearch();
     var goOverlay = document.getElementById("web-gameover-overlay");
     if (goOverlay) goOverlay.style.display = "none";
     var thinkOverlay = document.getElementById("web-thinking-overlay");
@@ -48602,6 +49143,7 @@ if (btnDraw) {
       return;
     }
     if (!confirm("Declare game as draw?")) return;
+    cancelPendingAiSearch();
     if (clockInterval) {
       clearInterval(clockInterval);
       clockInterval = null;
@@ -48642,6 +49184,7 @@ if (btnResign) {
       });
       return;
     }
+    cancelPendingAiSearch();
     var turn = activePlayState.turn;
     if (clockInterval) {
       clearInterval(clockInterval);
@@ -49309,6 +49852,7 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
 
 function openOnlineTableBoard(roomId) {
   if (!roomId) return;
+  cancelPendingAiSearch();
   if (activeBoardContextMode === "local") {
     saveLocalPlayContext();
   }
@@ -49798,10 +50342,7 @@ if (typeof document !== "undefined") {
 }
 
 function formatTableRulesetSummary(t) {
-  var parts = [t.mode || "2P"];
-  if (t.bases) parts.push(t.bases + "-Base");
-  if (t.super_prongs) parts.push("Superprongs");
-  if (t.edgeless) parts.push("Edgeless");
+  var parts = [formatVariantCode(t)];
   parts.push(t.rated ? "Rated" : "Casual");
   if (t.time_control && typeof t.time_control === "object") {
     if (t.time_control.enabled && t.time_control.initial_ms > 0) {
@@ -50182,9 +50723,11 @@ function submitCreateOnlineTable() {
     bases = 1;
     superProngs = false;
     edgeless = false;
+  } else if (mode === "4P") {
+    bases = 3;
   }
-  if (mode === "4P" && bases === 4) bases = 1;
-  var rated = $("web-create-rated") ? !!$("web-create-rated").checked : true;
+  var isCasualVariant = (mode === "4P" || superProngs || edgeless);
+  var rated = isCasualVariant ? false : ($("web-create-rated") ? !!$("web-create-rated").checked : true);
   var allowRobots = $("web-create-allow-robots") ? !!$("web-create-allow-robots").checked : true;
   var tcVal = $("web-create-tc") ? $("web-create-tc").value : "untimed";
   var passcode = $("web-create-passcode") ? $("web-create-passcode").value : "";
@@ -50213,23 +50756,46 @@ function submitCreateOnlineTable() {
   }).catch(function (e) { alert("Failed to create table: " + e.message); });
 }
 
-if ($("web-create-mode")) {
-  $("web-create-mode").addEventListener("change", function () {
-    var isOfk = $("web-create-mode").value === "OFK";
-    if ($("web-create-bases")) {
-      if (isOfk) $("web-create-bases").value = "1";
-      $("web-create-bases").disabled = isOfk;
-    }
-    if ($("web-create-super-prongs")) {
-      if (isOfk) $("web-create-super-prongs").checked = false;
-      $("web-create-super-prongs").disabled = isOfk;
-    }
-    if ($("web-create-edgeless")) {
-      if (isOfk) $("web-create-edgeless").checked = false;
-      $("web-create-edgeless").disabled = isOfk;
-    }
-  });
+function syncCreateTableVariantConstraints() {
+  var modeEl = $("web-create-mode");
+  var basesEl = $("web-create-bases");
+  var spEl = $("web-create-super-prongs");
+  var edEl = $("web-create-edgeless");
+  var ratedEl = $("web-create-rated");
+  var noticeEl = $("web-create-rated-notice");
+  var mode = modeEl ? modeEl.value : "2P";
+  var isOfk = (mode === "OFK");
+  var is4p = (mode === "4P");
+  if (basesEl) {
+    if (isOfk) basesEl.value = "1";
+    else if (is4p) basesEl.value = "3";
+    basesEl.disabled = (isOfk || is4p);
+  }
+  if (spEl) {
+    if (isOfk) spEl.checked = false;
+    spEl.disabled = isOfk;
+  }
+  if (edEl) {
+    if (isOfk) edEl.checked = false;
+    edEl.disabled = isOfk;
+  }
+  var sp = spEl ? !!spEl.checked : false;
+  var ed = edEl ? !!edEl.checked : false;
+  var isCasual = (is4p || sp || ed);
+  if (ratedEl) {
+    if (isCasual) ratedEl.checked = false;
+    ratedEl.disabled = isCasual;
+  }
+  if (noticeEl) {
+    noticeEl.style.display = isCasual ? "block" : "none";
+  }
 }
+
+["web-create-mode", "web-create-bases", "web-create-super-prongs", "web-create-edgeless"].forEach(function (cid) {
+  var cel = $(cid);
+  if (cel) cel.addEventListener("change", syncCreateTableVariantConstraints);
+});
+syncCreateTableVariantConstraints();
 
 $("btn-web-create-table").addEventListener("click", submitCreateOnlineTable);
 if ($("btn-web-create-table-submit")) {
@@ -50335,6 +50901,17 @@ function loadArchiveStats() {
         box.appendChild(el("div", String(it[1]), "val"));
         cards.appendChild(box);
       });
+      if (s.by_variant && typeof s.by_variant === "object") {
+        ALL_OCTI_VARIANT_CODES.forEach(function (vc) {
+          var vCount = s.by_variant[vc] || 0;
+          if (vCount > 0) {
+            var vBox = el("div", null, "stat-box");
+            vBox.appendChild(el("div", vc, "lbl"));
+            vBox.appendChild(el("div", String(vCount), "val"));
+            cards.appendChild(vBox);
+          }
+        });
+      }
     }
     if (s.ai_win_rates && s.ai_win_rates.length) {
       ai.textContent = "AI Win Rates by Difficulty: " + s.ai_win_rates.map(function (w) {
@@ -50357,7 +50934,9 @@ function buildArchiveQuery(limit, offset) {
   var ai = $("ar-ai").value;
   var srt = $("ar-sort").value;
   var p = $("ar-player").value.trim();
-  if (mode) { q += "&mode=" + encodeURIComponent(mode); }
+  if (mode === "2P") { q += "&mode=2P"; }
+  else if (mode === "4P_ALL") { q += "&mode=4P"; }
+  else if (mode) { q += "&variant=" + encodeURIComponent(mode); }
   if (src) { q += "&source=" + encodeURIComponent(src); }
   if (st) { q += "&status=" + encodeURIComponent(st); }
   if (win) { q += "&winner=" + encodeURIComponent(win); }
@@ -50402,7 +50981,8 @@ function arSearch(offset) {
       var shortId = g.game_id.length > 16 ? (g.game_id.slice(0, 12) + "...") : g.game_id;
       var tdGame = el("td", shortId);
       tdGame.title = g.game_id;
-      var tdMode = el("td", g.mode);
+      var tdMode = el("td");
+      tdMode.appendChild(el("span", formatVariantCode(g), "badge"));
       var tdSrc = el("td"); tdSrc.appendChild(srcBadge);
       var tdPl = el("td");
       var pls = g.players || [];
@@ -50526,7 +51106,7 @@ function arOpen(id) {
   location.hash = "#replay/" + encodeURIComponent(id);
   api("/api/v1/archive/games/" + encodeURIComponent(id)).then(function (g) {
     $("ar-detail").style.display = "block";
-    $("ar-title").textContent = "Game " + g.game_id.slice(0, 16) + "... (" + g.mode + ")";
+    $("ar-title").textContent = "Game " + g.game_id.slice(0, 16) + "... (" + formatVariantCode(g) + ")";
     $("ar-dl").setAttribute("href", "/api/v1/archive/games/" +
       encodeURIComponent(id) + "/transcript");
     $("ar-dl").setAttribute("download", id + ".json");
@@ -50863,7 +51443,12 @@ Object.defineProperty(window, "activePlayState", {
   }
 });
 window.switchTab = switchTab;
+window.formatVariantCode = formatVariantCode;
+window.ALL_OCTI_VARIANT_CODES = ALL_OCTI_VARIANT_CODES;
 window.triggerAiBotTurn = triggerAiBotTurn;
+window.initBotWorker = initBotWorker;
+window.cancelPendingAiSearch = cancelPendingAiSearch;
+window.updateThinkingProgressUi = updateThinkingProgressUi;
 window.renderOnlineUsersRoster = renderOnlineUsersRoster;
 window.viewRobotProfile = viewRobotProfile;
 window.loadRobotsDirectory = loadRobotsDirectory;

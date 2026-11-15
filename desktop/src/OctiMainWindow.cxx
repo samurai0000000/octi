@@ -1342,7 +1342,9 @@ void OctiMainWindow::applyAuthenticatedProfile(const PlayerProfileInfo &profile)
 
 void OctiMainWindow::refreshAuthenticatedProfileFromServer()
 {
-    if (!_authenticated || !_netClient || _configStore.preferences().sessionToken.empty()) {
+    if (!_authenticated || !_netClient ||
+        (_netClient->sessionToken().empty() &&
+         _configStore.preferences().sessionToken.empty())) {
         return;
     }
     auto res = _netClient->fetchMyProfile();
@@ -1681,6 +1683,12 @@ void OctiMainWindow::applyZoomChatDialogStyle(QDialog *dlg) const
     dlg->setStyleSheet(css);
 }
 
+void OctiMainWindow::showRulebookDialog()
+{
+    OctiRulebookDialog dlg(_theme, isWebLightSurfaceActive(), this);
+    dlg.exec();
+}
+
 void OctiMainWindow::showSplashAboutDialog()
 {
     OctiSplashDialog splash(this, _theme, true);
@@ -1951,7 +1959,7 @@ void OctiMainWindow::setupMenuBar()
     });
 
     _actRobots = onlineMenu->addAction("Robots Directory & Profiles...");
-    _actRobots->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
+    _actRobots->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_B));
     QObject::connect(_actRobots, &QAction::triggered, this, [this]() {
         RobotsDirectoryDialog dlg(_netClient.get(), _theme, this);
         dlg.setOnLoadReplayCallback(
@@ -1973,6 +1981,12 @@ void OctiMainWindow::setupMenuBar()
     // 4. &Help Menu
     QMenu *helpMenu = mb->addMenu("&Help");
 
+    _actRulebook = helpMenu->addAction(createMenuIcon(MenuIconKind::RULEBOOK, _theme), "OCTI Illustrated Rulebook...");
+    _actRulebook->setShortcut(QKeySequence(Qt::Key_F1));
+    QObject::connect(_actRulebook, &QAction::triggered, this, [this]() {
+        showRulebookDialog();
+    });
+
     _actUpdate = helpMenu->addAction(createMenuIcon(MenuIconKind::CHECK_UPDATE, _theme), "Check for Updates...");
     _actUpdate->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_U));
     QObject::connect(_actUpdate, &QAction::triggered, this, [this]() {
@@ -1982,7 +1996,7 @@ void OctiMainWindow::setupMenuBar()
     });
 
     _actSplash = helpMenu->addAction(createMenuIcon(MenuIconKind::SHOW_SPLASH, _theme), "Show Splash / About OCTI");
-    _actSplash->setShortcut(QKeySequence(Qt::Key_F1));
+    _actSplash->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F1));
     QObject::connect(_actSplash, &QAction::triggered, this, [this]() {
         showSplashAboutDialog();
     });
@@ -2065,16 +2079,26 @@ void OctiMainWindow::startNewLocalGame(const LocalGameConfig &cfg)
     _matchStartedEpochSec = _awaitingMatchStart ? 0 : QDateTime::currentSecsSinceEpoch();
     _currentTurnStartedEpochMs = _awaitingMatchStart ? 0 : QDateTime::currentMSecsSinceEpoch();
     _localConfig = cfg;
-    _isLocalBotGame = (cfg.playType == LocalPlayType::VS_AI_BOT);
-    _botEngine.setDifficulty(cfg.botDifficulty);
+    if (_localConfig.mode == GAME_MODE_4) {
+        _localConfig.bases = GAME_BASES_3;
+    } else if (_localConfig.mode == GAME_MODE_OFK) {
+        _localConfig.bases = GAME_BASES_1;
+        _localConfig.useSuperProngs = false;
+        _localConfig.useEdgelessBoard = false;
+    }
+    _isLocalBotGame = (_localConfig.playType == LocalPlayType::VS_AI_BOT);
+    _botEngine.setDifficulty(_localConfig.botDifficulty);
     _botEngine.setTuningProfile(
-        strengthenedProfileForDifficulty(cfg.botDifficulty));
+        strengthenedProfileForDifficulty(_localConfig.botDifficulty));
     if (!isVisible()) {
         _botEngine.setTimeBudgetMs(25);
     }
 
     _board.setGameMode(
-        cfg.mode, cfg.useSuperProngs, cfg.useEdgelessBoard, cfg.bases);
+        _localConfig.mode,
+        _localConfig.useSuperProngs,
+        _localConfig.useEdgelessBoard,
+        _localConfig.bases);
     _board.getGame()->reset();
     _board.getGame()->start(PLAYER_A);
 
@@ -2367,6 +2391,9 @@ void OctiMainWindow::updateMenuActionsState()
     }
 
     // 4. &Help Menu
+    if (_actRulebook) {
+        _actRulebook->setEnabled(true);
+    }
     if (_actUpdate) {
         _actUpdate->setEnabled(true);
     }
@@ -4331,10 +4358,10 @@ void OctiMainWindow::updateTopBarLabels()
     if (_profileBadgeLabel) {
         if (_authenticated) {
             _profileBadgeLabel->setText(
-                QString("%1 • 2P: %2 • 4P: %3 • OFK: %4")
+                QString("%1 • 2P_3B: %2 • 2P_1B: %3 • OFK: %4")
                     .arg(QString::fromStdString(_profile.handle))
-                    .arg(_profile.elo2p)
-                    .arg(_profile.elo4p)
+                    .arg(_profile.elo2p3b)
+                    .arg(_profile.elo2p1b)
                     .arg(_profile.eloOfk));
         } else {
             QString localMode = _isLocalBotGame
@@ -4602,9 +4629,7 @@ void OctiMainWindow::updateMatchActionsVisibility()
             } else {
                 roleStr = "Observing";
             }
-            QString modeDisp = _onlineGameView.mode.empty()
-                ? "2P"
-                : QString::fromStdString(_onlineGameView.mode);
+            QString modeDisp = QString::fromStdString(_onlineGameView.variantCode());
             _matchModeLabel->setText(
                 QString::fromUtf8("%1 \xE2\x80\xA2 %2").arg(roleStr, modeDisp));
             _matchModeLabel->setToolTip(QString::fromStdString(_onlineRoomId));

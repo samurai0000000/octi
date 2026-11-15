@@ -89,6 +89,68 @@ public class OctiCoreUnitTest {
             // Success
         }
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testCanonical13VariantsBijectiveAndOfficialRatedPredicates() throws Exception {
+        java.lang.reflect.Method allMethod;
+        java.lang.reflect.Method codeMethod;
+        java.lang.reflect.Method parseMethod;
+        java.lang.reflect.Method ratedCodeMethod;
+        try {
+            allMethod = OctiGameMode.class.getMethod("allVariantCodes");
+            codeMethod = OctiGameMode.class.getMethod(
+                    "variantCode",
+                    OctiGameMode.class,
+                    OctiGameBases.class,
+                    boolean.class,
+                    boolean.class);
+            parseMethod = OctiGameMode.class.getMethod("parseVariantCode", String.class);
+            ratedCodeMethod = OctiGameMode.class.getMethod("isOfficialRatedVariantCode", String.class);
+        } catch (NoSuchMethodException e) {
+            fail("Missing OctiGameMode 13-variant helper: " + e.getMessage());
+            return;
+        }
+
+        List<String> expected13 = java.util.Arrays.asList(
+                "2P_3B", "2P_3B_SP", "2P_3B_ED", "2P_3B_SPED",
+                "2P_1B", "2P_1B_SP", "2P_1B_ED", "2P_1B_SPED",
+                "4P", "4P_SP", "4P_ED", "4P_SPED",
+                "OFK");
+        List<String> actualAll = (List<String>) allMethod.invoke(null);
+        assertEquals(expected13, actualAll);
+
+        for (String v : expected13) {
+            Object parsed = parseMethod.invoke(null, v);
+            assertTrue("Expected parseVariantCode non-null for " + v, parsed != null);
+            OctiGameMode m = (OctiGameMode) parsed.getClass().getField("mode").get(parsed);
+            OctiGameBases b = (OctiGameBases) parsed.getClass().getField("bases").get(parsed);
+            boolean sp = parsed.getClass().getField("superProngs").getBoolean(parsed);
+            boolean ed = parsed.getClass().getField("edgeless").getBoolean(parsed);
+            if (v.startsWith("4P")) {
+                assertEquals(OctiGameBases.GAME_BASES_3, b);
+            }
+            if ("OFK".equals(v)) {
+                assertEquals(OctiGameBases.GAME_BASES_1, b);
+                assertFalse(sp);
+                assertFalse(ed);
+            }
+            String roundTrip = (String) codeMethod.invoke(null, m, b, sp, ed);
+            assertEquals(v, roundTrip);
+
+            boolean isRated = (Boolean) ratedCodeMethod.invoke(null, v);
+            boolean shouldBeRated = "2P_3B".equals(v) || "2P_1B".equals(v) || "OFK".equals(v);
+            assertEquals("Official rated mismatch for " + v, shouldBeRated, isRated);
+        }
+
+        assertEquals("4P", codeMethod.invoke(
+                null, OctiGameMode.GAME_MODE_4, OctiGameBases.GAME_BASES_1, false, false));
+        assertEquals("OFK", codeMethod.invoke(
+                null, OctiGameMode.GAME_MODE_OFK, OctiGameBases.GAME_BASES_3, true, true));
+        assertTrue(parseMethod.invoke(null, "BOGUS_VARIANT") == null);
+        assertFalse((Boolean) ratedCodeMethod.invoke(null, "4P"));
+        assertFalse((Boolean) ratedCodeMethod.invoke(null, "BOGUS_VARIANT"));
+    }
 }
 
 /*

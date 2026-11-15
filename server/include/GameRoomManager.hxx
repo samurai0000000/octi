@@ -634,6 +634,7 @@ private:
     void startGameLocked(Room &r, int64_t now);
     void seatPlayerLocked(Room &r, int seat, int64_t playerId, int64_t now);
     void unseatLocked(Room &r, int seat);
+    void refreshRoomSeatRatingsLocked(Room &r);
     /* Voluntary leave of a waiting table; true when the room was closed. */
     bool leaveWaitingSeatLocked(Room &r, int seat, int64_t now);
     void spawnMatchRoomLocked(const MatchGroup &g, int64_t now);

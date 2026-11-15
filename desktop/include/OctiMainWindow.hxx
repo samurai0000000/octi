@@ -123,6 +123,7 @@ public:
     QComboBox *themeSelectorCombo() const { return _themeCombo; }
 
     int menuActionCountWithIconsAndShortcuts() const;
+    void showRulebookDialog();
     void showSplashAboutDialog();
 
     void setSfxMuted(bool muted);
@@ -223,6 +224,8 @@ public:
     QAction *actionLeaderboard() const { return _actLeaderboard; }
     QAction *actionRobots() const { return _actRobots; }
     QAction *actionModeration() const { return _actModeration; }
+    QAction *actionRulebook() const { return _actRulebook; }
+    QAction *actionSplash() const { return _actSplash; }
 
     bool refreshOnlineGameView();
     void applyGameViewData(const GameViewData &view);
@@ -447,6 +450,7 @@ private:
     QAction *_actRobots = nullptr;
     QAction *_actModeration = nullptr;
     QAction *_actUpdate = nullptr;
+    QAction *_actRulebook = nullptr;
     QAction *_actSplash = nullptr;
     QAction *_actTelemetry = nullptr;
 

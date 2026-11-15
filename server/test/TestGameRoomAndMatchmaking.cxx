@@ -1544,7 +1544,9 @@ TEST(GameRoomManagerTest, CompleteTwoPlayerGameWithOneBase)
     CHECK_EQUAL(1, rec.gameBases);
     checkTranscriptReplays(room, rec);
     PlayerProfile w = profile(p[static_cast<size_t>(truth.winner - 1)]);
-    CHECK_EQUAL(1216, w.elo2p);
+    CHECK_EQUAL(1216, w.elo2p1b);
+    CHECK_EQUAL(1200, w.elo2p3b);
+    CHECK_EQUAL(1200, w.elo2p);
     CHECK_EQUAL(1200, w.eloOfk);
 }
 
@@ -1558,27 +1560,29 @@ TEST(GameRoomManagerTest, CompleteFourPlayerGameRatesBothTeams)
     CHECK_TRUE(last.gameOver);
 
     RoomView v = view(room);
+    CHECK_FALSE(v.config.rated);
     STRCMP_EQUAL(truth.fen.c_str(), v.fen.c_str());
     STRCMP_EQUAL(truth.winner == 1 ? "TEAM_13_WIN" : "TEAM_24_WIN", v.result.c_str());
     STRCMP_EQUAL("BASE_CAPTURE", v.termination.c_str());
     GameRecord rec = archived(room);
+    CHECK_EQUAL(0, rec.rated);
+    CHECK_EQUAL(0, rec.eloPool);
     LONGS_EQUAL(p[2], rec.p3PlayerId);
     LONGS_EQUAL(p[3], rec.p4PlayerId);
     STRCMP_EQUAL(handle[3].c_str(), rec.p4Handle.c_str());
     CHECK_EQUAL(truth.winner, rec.winnerSeat);
     checkTranscriptReplays(room, rec);
 
-    int sum = 0;
+    /* 4P is casual-only: archived in full, never modifies Elo or rated W/L/D */
     for (int s = 1; s <= 4; ++s) {
         PlayerProfile pr = profile(p[static_cast<size_t>(s - 1)]);
-        bool winners = (truth.winner == 1) ? (s % 2 == 1) : (s % 2 == 0);
-        CHECK_EQUAL(winners ? 1216 : 1184, pr.elo4p);
-        CHECK_EQUAL(winners ? 1 : 0, pr.wins);
-        CHECK_EQUAL(winners ? 0 : 1, pr.losses);
+        CHECK_EQUAL(1200, pr.elo4p);
         CHECK_EQUAL(1200, pr.elo2p);
-        sum += pr.elo4p - 1200;
+        CHECK_EQUAL(1200, pr.elo2p3b);
+        CHECK_EQUAL(0, pr.gamesPlayed);
+        CHECK_EQUAL(0, pr.wins);
+        CHECK_EQUAL(0, pr.losses);
     }
-    CHECK_EQUAL(0, sum);
 }
 
 TEST(GameRoomManagerTest, UnratedGamesAreArchivedButNeverRated)
@@ -1958,7 +1962,8 @@ TEST(GameRoomManagerTest, FourPlayerDrawNeedsEveryOtherActiveSeat)
     STRCMP_EQUAL("DRAW", done.result.c_str());
     CHECK_TRUE(done.archived);
     for (int i = 0; i < 4; ++i) {
-        CHECK_EQUAL(1, profile(p[static_cast<size_t>(i)]).draws);
+        CHECK_EQUAL(0, profile(p[static_cast<size_t>(i)]).draws);
+        CHECK_EQUAL(1200, profile(p[static_cast<size_t>(i)]).elo4p);
     }
 
     /* a single decline kills it */
@@ -1978,6 +1983,9 @@ TEST(GameRoomManagerTest, FourPlayerDrawNeedsEveryOtherActiveSeat)
 TEST(GameRoomManagerTest, ResignationEndsTheGameForTheResigningSideOnly)
 {
     std::string room = start2P();
+    const std::vector<std::string> eightPlies = {
+        "33+a", "37+e", "53+a", "57+e", "73+a", "77+e", "33a+b", "37e+f"};
+    play(room, eightPlies, 2);
     EXPECT_CODE(FORBIDDEN_NOT_SEATED, mgr->resign(room, p[5]));
     RoomResult r = mgr->resign(room, p[1]);
     EXPECT_OK(r);
@@ -2002,10 +2010,10 @@ TEST(GameRoomManagerTest, FourPlayerResignationLosesForTheWholeTeam)
     RoomView v = view(room);
     STRCMP_EQUAL("TEAM_24_WIN", v.result.c_str());
     CHECK_EQUAL(2, v.winnerSeat);
-    CHECK_EQUAL(1184, profile(p[0]).elo4p);
-    CHECK_EQUAL(1184, profile(p[2]).elo4p);
-    CHECK_EQUAL(1216, profile(p[1]).elo4p);
-    CHECK_EQUAL(1216, profile(p[3]).elo4p);
+    CHECK_EQUAL(1200, profile(p[0]).elo4p);
+    CHECK_EQUAL(1200, profile(p[2]).elo4p);
+    CHECK_EQUAL(1200, profile(p[1]).elo4p);
+    CHECK_EQUAL(1200, profile(p[3]).elo4p);
     checkTranscriptReplays(room, archived(room));
 }
 
@@ -2670,6 +2678,9 @@ TEST(GameRoomManagerTest, TranscriptCarriesRulesetAndPlayerMetadata)
 TEST(GameRoomManagerTest, FailedArchiveIsKeptAndRetriedByTick)
 {
     std::string room = start2P();
+    const std::vector<std::string> eightPlies = {
+        "33+a", "37+e", "53+a", "57+e", "73+a", "77+e", "33a+b", "37e+f"};
+    play(room, eightPlies, 2);
     store->close();
     EXPECT_OK(mgr->resign(room, p[1]));
     RoomView v = view(room);
@@ -2818,6 +2829,14 @@ TEST(GameRoomManagerTest, MatchmakingSpawnsARatedRoomForACompatiblePair)
     EXPECT_CODE(ALREADY_SEATED, mgr->enqueueMatchmaking(p[0], MatchRuleset()));
     EXPECT_CODE(INVALID_STATE, mgr->dequeueMatchmaking(p[0]));
     CHECK_EQUAL(0, mgr->tick().matchesSpawned);
+
+    EXPECT_OK(mgr->submitMove(st.matchedRoomId, p[1], "37+e"));
+    EXPECT_OK(mgr->submitMove(st.matchedRoomId, p[0], "53+a"));
+    EXPECT_OK(mgr->submitMove(st.matchedRoomId, p[1], "57+e"));
+    EXPECT_OK(mgr->submitMove(st.matchedRoomId, p[0], "73+a"));
+    EXPECT_OK(mgr->submitMove(st.matchedRoomId, p[1], "77+e"));
+    EXPECT_OK(mgr->submitMove(st.matchedRoomId, p[0], "33a+b"));
+    EXPECT_OK(mgr->submitMove(st.matchedRoomId, p[1], "37e+f"));
 
     EXPECT_OK(mgr->resign(st.matchedRoomId, p[1]));
     CHECK_EQUAL(1216, profile(p[0]).elo2p);               /* matchmaking games are rated */
@@ -3959,7 +3978,8 @@ TEST(GameRoomManagerTest, RobotActorIdsAndAllowRobotsToggle)
 
 TEST(GameRoomManagerTest, HumanOnlyEloInvariantAndRobotGameOutcomes)
 {
-    CreateRobotResult cr = store->createRobot(p[0], "bot-sparring", "Sparring partner");
+    /* Bot owned by p[1] so p[0] vs bot is a cross-owner Pool 2 Arena rated match */
+    CreateRobotResult cr = store->createRobot(p[1], "bot-sparring", "Sparring partner");
     CHECK_EQUAL((int)RobotStatus::OK, (int)cr.status);
     int64_t robotActorId = makeRobotActorId(cr.robot.robotId);
 
@@ -4002,15 +4022,20 @@ TEST(GameRoomManagerTest, HumanOnlyEloInvariantAndRobotGameOutcomes)
     // Active room lookup for robot is now false
     CHECK_FALSE(mgr->findActiveRoomForActor(robotActorId, activeRoom));
 
-    // Human-Only Elo Invariant: human Elo & gamesPlayed in players table are UNTOUCHED!
+    // Pool 1 Human-Only Elo & gamesPlayed remain UNTOUCHED; Pool 2 Arena Elo & stats update!
     PlayerProfile profAfter;
     CHECK_TRUE(store->getProfileById(p[0], profAfter));
     CHECK_EQUAL(initialElo, profAfter.elo2p);
+    CHECK_EQUAL(initialElo, profAfter.elo2p1b);
     CHECK_EQUAL(initialGames, profAfter.gamesPlayed);
+    CHECK_EQUAL(1216, profAfter.arenaElo2p1b);
+    CHECK_EQUAL(1, profAfter.arenaGamesPlayed);
+    CHECK_EQUAL(1, profAfter.arenaWins);
 
-    // Robot outcomes recorded in robots table
+    // Robot outcomes + Arena Elo recorded atomically ONCE in robots table
     RobotRecord botRec;
     CHECK_TRUE(store->getRobotById(cr.robot.robotId, botRec));
+    CHECK_EQUAL(1184, botRec.elo2p1b);
     CHECK_EQUAL(1, botRec.gamesPlayed);
     CHECK_EQUAL(0, botRec.wins);
     CHECK_EQUAL(1, botRec.losses);
@@ -4419,6 +4444,253 @@ TEST(GameRoomManagerTest, UnseatedRobotHostWithAllowRobotsFalseCanSitInOwnTable)
     EXPECT_OK(jHostBot);
     CHECK_EQUAL(2, jHostBot.seat);
     CHECK_TRUE(jHostBot.gameStarted);
+}
+
+TEST(GameRoomManagerTest, DualPoolRoutingFairnessGuardsAndUnratedVariantClamping)
+{
+    const std::vector<std::string> eightPlies = {
+        "33+a", "37+e", "53+a", "57+e", "73+a", "77+e", "33a+b", "37e+f"};
+    const std::vector<std::string> sevenPlies(
+        eightPlies.begin(), eightPlies.begin() + 7);
+
+    /* 1. Unrated clamping across all 10 casual variants (createTable, matchmaking, restoreFromStore) */
+    const std::vector<std::string> casualVariants = {
+        "2P_3B_SP", "2P_3B_ED", "2P_3B_SPED",
+        "2P_1B_SP", "2P_1B_ED", "2P_1B_SPED",
+        "4P",       "4P_SP",    "4P_ED",      "4P_SPED"
+    };
+    for (size_t idx = 0; idx < casualVariants.size(); ++idx) {
+        OctiGameMode vm = GAME_MODE_2;
+        OctiGameBases vb = GAME_BASES_3;
+        bool vsp = false;
+        bool ved = false;
+        CHECK_TRUE(octi::parseOctiVariantCode(casualVariants[idx], vm, vb, vsp, ved));
+
+        GameTableConfig tc = cfg(vm);
+        tc.bases = vb;
+        tc.useSuperProngs = vsp;
+        tc.useEdgelessBoard = ved;
+        tc.rated = true;
+        RoomResult cr = mgr->createTable(p[0], tc);
+        EXPECT_OK(cr);
+        RoomView tv = view(cr.roomId);
+        CHECK_FALSE_TEXT(tv.config.rated, casualVariants[idx].c_str());
+        if (vm == GAME_MODE_4) {
+            CHECK_EQUAL(static_cast<int>(GAME_BASES_3),
+                        static_cast<int>(tv.config.bases));
+        }
+
+        /* Tamper persisted live_rooms row to rated=true and verify restoreFromStore clamps it back */
+        CHECK_TRUE(mgr->checkpointToStore());
+        std::vector<octi::LiveRoomRow> rows;
+        std::string err;
+        CHECK_TRUE(store->listLiveRooms(rows, err));
+        for (size_t ri = 0; ri < rows.size(); ++ri) {
+            if (rows[ri].roomId == cr.roomId) {
+                auto jState = nlohmann::json::parse(rows[ri].stateJson);
+                jState["config"]["rated"] = true;
+                CHECK_TRUE(store->upsertLiveRoom(cr.roomId, jState.dump(), err));
+            }
+        }
+        delete mgr;
+        mgr = new GameRoomManager(*store);
+        mgr->setClock([this]() -> int64_t { return now; });
+        mgr->setWallClock([this]() -> int64_t { return wall; });
+        CHECK_FALSE_TEXT(view(cr.roomId).config.rated, casualVariants[idx].c_str());
+        EXPECT_OK(mgr->leaveTable(cr.roomId, p[0]));
+
+        /* Matchmaking spawn clamps rated=false for casual ruleset */
+        MatchRuleset mr;
+        mr.mode = vm;
+        mr.bases = vb;
+        mr.useSuperProngs = vsp;
+        mr.useEdgelessBoard = ved;
+        int needed = mr.playersRequired();
+        for (int s = 0; s < needed; ++s) {
+            EXPECT_OK(mgr->enqueueMatchmaking(p[static_cast<size_t>(s)], mr));
+        }
+        CHECK_EQUAL(1, mgr->tick().matchesSpawned);
+        std::string mmRoom = mgr->matchmakingStatus(p[0]).matchedRoomId;
+        CHECK_FALSE(mmRoom.empty());
+        CHECK_FALSE_TEXT(view(mmRoom).config.rated, casualVariants[idx].c_str());
+        EXPECT_OK(mgr->resign(mmRoom, p[1]));
+        GameRecord mmRec = archived(mmRoom);
+        CHECK_EQUAL(0, mmRec.rated);
+        CHECK_EQUAL(0, mmRec.eloPool);
+    }
+
+    /* 2. < 8 ply RESIGNED skip (0 plies and 7 plies unrated; 8 plies rated) */
+    {
+        std::string r0 = start2P();
+        EXPECT_OK(mgr->resign(r0, p[1]));
+        GameRecord rec0 = archived(r0);
+        CHECK_EQUAL(1, rec0.rated);
+        CHECK_EQUAL(0, rec0.eloPool);
+        CHECK_EQUAL(1200, profile(p[0]).elo2p3b);
+
+        std::string r7 = start2P();
+        play(r7, sevenPlies, 2);
+        EXPECT_OK(mgr->resign(r7, p[1]));
+        GameRecord rec7 = archived(r7);
+        CHECK_EQUAL(7, rec7.plyCount);
+        CHECK_EQUAL(1, rec7.rated);
+        CHECK_EQUAL(0, rec7.eloPool);
+        CHECK_EQUAL(1200, profile(p[0]).elo2p3b);
+
+        std::string r8 = start2P();
+        play(r8, eightPlies, 2);
+        EXPECT_OK(mgr->resign(r8, p[1]));
+        GameRecord rec8 = archived(r8);
+        CHECK_EQUAL(8, rec8.plyCount);
+        CHECK_EQUAL(1, rec8.rated);
+        CHECK_EQUAL(1, rec8.eloPool);
+        CHECK_EQUAL(1216, profile(p[0]).elo2p3b);
+        CHECK_EQUAL(1184, profile(p[1]).elo2p3b);
+    }
+
+    /* 3. Dynamic seatRating Pool 1 vs Pool 2 when robot joins/leaves waiting table */
+    CreateRobotResult botP0A = store->createRobot(p[0], "OwnerZeroBotA", "Bot A");
+    CreateRobotResult botP0B = store->createRobot(p[0], "OwnerZeroBotB", "Bot B");
+    CreateRobotResult botP3 = store->createRobot(p[3], "OwnerThreeBot", "Bot 3");
+    CHECK_EQUAL((int)RobotStatus::OK, (int)botP0A.status);
+    CHECK_EQUAL((int)RobotStatus::OK, (int)botP0B.status);
+    CHECK_EQUAL((int)RobotStatus::OK, (int)botP3.status);
+    int64_t actBot0A = makeRobotActorId(botP0A.robot.robotId);
+    int64_t actBot0B = makeRobotActorId(botP0B.robot.robotId);
+    int64_t actBot3 = makeRobotActorId(botP3.robot.robotId);
+
+    {
+        /* p[0] currently has Pool 1 elo2p3b = 1216, Pool 2 arenaElo2p3b = 1200 */
+        GameTableConfig waitCfg = cfg(GAME_MODE_2);
+        waitCfg.bases = GAME_BASES_3;
+        waitCfg.rated = true;
+        waitCfg.allowRobots = true;
+        RoomResult wRes = mgr->createTable(p[0], waitCfg);
+        EXPECT_OK(wRes);
+        CHECK_EQUAL(1216, view(wRes.roomId).seats[0].rating);
+        EXPECT_OK(mgr->joinTable(wRes.roomId, actBot3, 2, ""));
+        /* Now a robot is seated -> both seats reflect Pool 2 Arena Elo (1200 vs 1200) */
+        CHECK_EQUAL(1200, view(wRes.roomId).seats[0].rating);
+        CHECK_EQUAL(1200, view(wRes.roomId).seats[1].rating);
+        /* Play 8 plies and resign bot -> p[0] Pool 2 arenaElo2p3b becomes 1216, Pool 1 stays 1216 */
+        for (size_t i = 0; i < eightPlies.size(); ++i) {
+            int64_t mover = (i % 2 == 0) ? p[0] : actBot3;
+            EXPECT_OK(mgr->submitMove(wRes.roomId, mover, eightPlies[i]));
+        }
+        EXPECT_OK(mgr->resign(wRes.roomId, actBot3));
+        CHECK_EQUAL(1216, profile(p[0]).elo2p3b);
+        CHECK_EQUAL(1216, profile(p[0]).arenaElo2p3b);
+        RobotRecord b3Rec;
+        CHECK_TRUE(store->getRobotById(botP3.robot.robotId, b3Rec));
+        CHECK_EQUAL(1184, b3Rec.elo2p3b);
+        CHECK_EQUAL(1, b3Rec.gamesPlayed);
+    }
+
+    /* 4. Same-Owner Human-vs-Own-Robot -> eloPool = 0 (unrated), robot W/L/D = 1 */
+    {
+        GameTableConfig hc = cfg(GAME_MODE_2);
+        hc.bases = GAME_BASES_1;
+        hc.rated = true;
+        hc.allowRobots = true;
+        RoomResult hr = mgr->createTable(p[0], hc);
+        EXPECT_OK(hr);
+        EXPECT_OK(mgr->joinTable(hr.roomId, actBot0A, 2, ""));
+        for (size_t i = 0; i < kTwoPlayerWin.size(); ++i) {
+            int64_t mover = (i % 2 == 0) ? p[0] : actBot0A;
+            EXPECT_OK(mgr->submitMove(hr.roomId, mover, kTwoPlayerWin[i]));
+        }
+        GameRecord recOwn = archived(hr.roomId);
+        CHECK_EQUAL(1, recOwn.rated);
+        CHECK_EQUAL(0, recOwn.eloPool);
+        CHECK_EQUAL(1200, profile(p[0]).arenaElo2p1b);
+        RobotRecord b0a;
+        CHECK_TRUE(store->getRobotById(botP0A.robot.robotId, b0a));
+        CHECK_EQUAL(1200, b0a.elo2p1b);
+        CHECK_EQUAL(1, b0a.gamesPlayed);
+        CHECK_EQUAL(1, b0a.losses);
+    }
+
+    /* 5. Same-Owner Bot-vs-Bot -> Pool 2 rated with K = 16 (1208 / 1192) + single-tx W/L/D */
+    {
+        GameTableConfig bc = cfg(GAME_MODE_2);
+        bc.bases = GAME_BASES_1;
+        bc.rated = true;
+        bc.allowRobots = true;
+        RoomResult br = mgr->createTable(actBot0A, bc);
+        EXPECT_OK(br);
+        EXPECT_OK(mgr->joinTable(br.roomId, actBot0B, 2, ""));
+        for (size_t i = 0; i < kTwoPlayerWin.size(); ++i) {
+            int64_t mover = (i % 2 == 0) ? actBot0A : actBot0B;
+            EXPECT_OK(mgr->submitMove(br.roomId, mover, kTwoPlayerWin[i]));
+        }
+        GameRecord recSame = archived(br.roomId);
+        CHECK_EQUAL(1, recSame.rated);
+        CHECK_EQUAL(2, recSame.eloPool);
+        RobotRecord b0a, b0b;
+        CHECK_TRUE(store->getRobotById(botP0A.robot.robotId, b0a));
+        CHECK_TRUE(store->getRobotById(botP0B.robot.robotId, b0b));
+        CHECK_EQUAL(1208, b0a.elo2p1b);
+        CHECK_EQUAL(1192, b0b.elo2p1b);
+        CHECK_EQUAL(2, b0a.gamesPlayed);
+        CHECK_EQUAL(1, b0b.gamesPlayed);
+    }
+
+    /* 6. Pairwise 4 rated games / 24h rolling cap (p[2] vs botP3 on OFK) */
+    {
+        auto playOfkVsBot = [&](int64_t humanActor, bool swapSeats) -> GameRecord {
+            GameTableConfig oc = cfg(GAME_MODE_OFK);
+            oc.rated = true;
+            oc.allowRobots = true;
+            if (swapSeats) {
+                RoomResult bHost = mgr->createTable(actBot3, oc);
+                CHECK_TRUE_TEXT(bHost.ok(), bHost.message.c_str());
+                EXPECT_OK(mgr->joinTable(bHost.roomId, humanActor, 2, ""));
+                for (size_t i = 0; i < kOfkWin.size(); ++i) {
+                    int64_t mover = (i % 2 == 0) ? actBot3 : humanActor;
+                    EXPECT_OK(mgr->submitMove(bHost.roomId, mover, kOfkWin[i]));
+                }
+                return archived(bHost.roomId);
+            }
+            RoomResult orc = mgr->createTable(humanActor, oc);
+            CHECK_TRUE_TEXT(orc.ok(), orc.message.c_str());
+            EXPECT_OK(mgr->joinTable(orc.roomId, actBot3, 2, ""));
+            for (size_t i = 0; i < kOfkWin.size(); ++i) {
+                int64_t mover = (i % 2 == 0) ? humanActor : actBot3;
+                EXPECT_OK(mgr->submitMove(orc.roomId, mover, kOfkWin[i]));
+            }
+            return archived(orc.roomId);
+        };
+
+        for (int gIdx = 0; gIdx < 4; ++gIdx) {
+            wall += 60;
+            GameRecord gr = playOfkVsBot(p[2], (gIdx % 2) == 1);
+            CHECK_EQUAL(2, gr.eloPool);
+        }
+        int eloAfter4 = profile(p[2]).arenaEloOfk;
+        RobotRecord b3After4;
+        CHECK_TRUE(store->getRobotById(botP3.robot.robotId, b3After4));
+
+        /* 5th game within 24h between same pair -> eloPool = 0 (capped!), W/L/D still increments */
+        wall += 60;
+        GameRecord gr5 = playOfkVsBot(p[2], true);
+        CHECK_EQUAL(1, gr5.rated);
+        CHECK_EQUAL(0, gr5.eloPool);
+        CHECK_EQUAL(eloAfter4, profile(p[2]).arenaEloOfk);
+        RobotRecord b3After5;
+        CHECK_TRUE(store->getRobotById(botP3.robot.robotId, b3After5));
+        CHECK_EQUAL(b3After4.eloOfk, b3After5.eloOfk);
+        CHECK_EQUAL(b3After4.gamesPlayed + 1, b3After5.gamesPlayed);
+
+        /* Different opponent p[4] vs botP3 is NOT capped -> eloPool = 2 */
+        wall += 60;
+        GameRecord grOther = playOfkVsBot(p[4], false);
+        CHECK_EQUAL(2, grOther.eloPool);
+
+        /* Advance past 24h window -> p[2] vs botP3 is rated again! */
+        wall += 86401;
+        GameRecord grAfterWindow = playOfkVsBot(p[2], false);
+        CHECK_EQUAL(2, grAfterWindow.eloPool);
+    }
 }
 
 int main(int argc, char **argv)

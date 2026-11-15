@@ -242,10 +242,13 @@ fun LobbyScreen(
     }
 
     val filteredTables = remember(lobbyState.tables, selectedFilterMode) {
-        if (selectedFilterMode == "All") {
-            lobbyState.tables
-        } else {
-            lobbyState.tables.filter { it.mode.equals(selectedFilterMode, ignoreCase = true) }
+        when (selectedFilterMode) {
+            "All" -> lobbyState.tables
+            "2P (All)" -> lobbyState.tables.filter { it.mode.equals("2P", ignoreCase = true) }
+            "4P (All)" -> lobbyState.tables.filter { it.mode.equals("4P", ignoreCase = true) }
+            else -> lobbyState.tables.filter {
+                it.variantCode().equals(selectedFilterMode, ignoreCase = true)
+            }
         }
     }
 
@@ -344,7 +347,7 @@ fun LobbyScreen(
                     val tableRoomId = seatedTableInLobby?.roomId ?: activeRoomId
                     val shortTableRoomId = if (tableRoomId.length > 16) tableRoomId.take(16) else tableRoomId
                     val tablePhase = seatedTableInLobby?.phase ?: activeGameView?.phase ?: "WAITING_FOR_PLAYERS"
-                    val tableMode = seatedTableInLobby?.mode ?: activeGameView?.mode ?: "2P"
+                    val tableVariant = seatedTableInLobby?.variantCode() ?: activeGameView?.variantCode() ?: "2P_3B"
                     val phaseLabel = if (tablePhase == "WAITING_FOR_PLAYERS") "Waiting" else "In Progress"
 
                     Spacer(modifier = Modifier.height(6.dp))
@@ -363,7 +366,7 @@ fun LobbyScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Active Table #$shortTableRoomId ($tableMode • $phaseLabel)",
+                                    text = "Active Table #$shortTableRoomId ($tableVariant • $phaseLabel)",
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
                                     color = OctiTheme.colors.accentBrass,
@@ -400,12 +403,17 @@ fun LobbyScreen(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
+                val lobbyFilterChips = remember {
+                    listOf("All", "2P (All)", "4P (All)") + OctiGameMode.allVariantCodes()
+                }
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    listOf("All", "2P", "4P", "OFK").forEach { modeChip ->
+                    lobbyFilterChips.forEach { modeChip ->
                         FilterChip(
                             selected = selectedFilterMode == modeChip,
                             onClick = { selectedFilterMode = modeChip },
@@ -509,10 +517,8 @@ fun LobbyScreen(
 
                                     // Ruleset Row
                                     Text(
-                                        text = "${t.mode} • ${t.bases}-Base • $tcText" +
-                                            (if (t.rated) " • Rated" else " • Casual") +
-                                            (if (t.superProngs) " • SuperProngs" else "") +
-                                            (if (t.edgeless) " • Edgeless" else ""),
+                                        text = "${t.variantCode()} • $tcText" +
+                                            (if (t.rated) " • Rated" else " • Casual"),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = OctiTheme.colors.textSecondary
                                     )
@@ -765,13 +771,20 @@ fun LobbyScreen(
         var createAllowTakeback by remember { mutableStateOf(false) }
         var createPasscode by remember { mutableStateOf("") }
         val profileActionBusy by viewModel.profileActionBusy.collectAsState()
+        val uiState = OctiDialogs.normalizeCreateTableState(
+            createMode,
+            createBases,
+            createSuperProngs,
+            createEdgeless,
+            createRated
+        )
 
         AlertDialog(
             onDismissRequest = { showInlineCreateTableDialog = false },
             containerColor = OctiTheme.colors.panelCardBg,
             titleContentColor = OctiTheme.colors.accentBrass,
             textContentColor = OctiTheme.colors.textPrimary,
-            title = { Text("Create Online Table") },
+            title = { Text("Create Online Table (${uiState.variantCode})") },
             text = {
                 Column(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -784,7 +797,7 @@ fun LobbyScreen(
                                 selected = createMode == m,
                                 onClick = {
                                     createMode = m
-                                    createBases = if (m == "4P" || m == "OFK") 1 else 3
+                                    createBases = if (m == "OFK") 1 else 3
                                     if (m == "OFK") {
                                         createSuperProngs = false
                                         createEdgeless = false
@@ -794,16 +807,26 @@ fun LobbyScreen(
                             )
                         }
                     }
-                    if (createMode != "OFK") {
+                    if (createMode == "2P") {
                         Text("Bases", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf(3 to "3-Base", 1 to "1-Base").forEach { (b, lbl) ->
                                 FilterChip(
-                                    selected = createBases == b,
+                                    selected = uiState.bases == b,
                                     onClick = { createBases = b },
                                     label = { Text(lbl) }
                                 )
                             }
+                        }
+                    } else if (createMode == "4P") {
+                        Text("Bases", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FilterChip(
+                                selected = true,
+                                onClick = {},
+                                enabled = false,
+                                label = { Text("3-Base (Locked for 4P)") }
+                            )
                         }
                     }
                     Text("Time Control", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
@@ -816,19 +839,35 @@ fun LobbyScreen(
                             )
                         }
                     }
-                    if (createMode != "OFK") {
+                    if (uiState.modifiersEnabled) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = createSuperProngs, onCheckedChange = { createSuperProngs = it })
+                            Checkbox(checked = uiState.superProngs, onCheckedChange = { createSuperProngs = it })
                             Text("Super-Prongs")
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = createEdgeless, onCheckedChange = { createEdgeless = it })
+                            Checkbox(checked = uiState.edgeless, onCheckedChange = { createEdgeless = it })
                             Text("Edgeless")
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = createRated, onCheckedChange = { createRated = it })
-                        Text(if (createRated) "Rated" else "Casual")
+                        Checkbox(
+                            checked = uiState.rated,
+                            enabled = uiState.ratedEnabled,
+                            onCheckedChange = {
+                                if (uiState.ratedEnabled) {
+                                    createRated = it
+                                }
+                            }
+                        )
+                        Text(
+                            if (!uiState.ratedEnabled) {
+                                "Casual Only (${uiState.variantCode})"
+                            } else if (uiState.rated) {
+                                "Rated"
+                            } else {
+                                "Casual"
+                            }
+                        )
                     }
                     OutlinedTextField(
                         value = createPasscode,
@@ -843,12 +882,13 @@ fun LobbyScreen(
                 Button(
                     onClick = {
                         val req = OctiNetworkClient.CreateTableRequest().apply {
-                            this.mode = createMode
-                            this.bases = if (createMode == "OFK") 1 else createBases
-                            this.superProngs = if (createMode == "OFK") false else createSuperProngs
-                            this.edgeless = if (createMode == "OFK") false else createEdgeless
+                            this.mode = uiState.mode
+                            this.bases = uiState.bases
+                            this.superProngs = uiState.superProngs
+                            this.edgeless = uiState.edgeless
+                            this.variant = uiState.variantCode
                             this.timeControl = createTimeControl
-                            this.rated = createRated
+                            this.rated = uiState.rated
                             this.allowTakeback = createAllowTakeback
                             this.passcode = createPasscode.trim()
                         }

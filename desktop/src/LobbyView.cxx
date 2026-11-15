@@ -933,11 +933,7 @@ void LobbyView::updateMyTableBanner()
                 : ((matchedTable->phase == "IN_PROGRESS")
                        ? "IN PROGRESS"
                        : QString::fromStdString(matchedTable->phase));
-        QString variant = QString("%1 • %2B%3%4")
-            .arg(QString::fromStdString(matchedTable->mode))
-            .arg(matchedTable->bases)
-            .arg(matchedTable->superProngs ? " +!" : "")
-            .arg(matchedTable->edgeless ? " +Wrap" : "");
+        QString variant = QString::fromStdString(matchedTable->variantCode());
         _myTableBannerLabel->setText(
             QString("My Active Table: Room #%1  |  %2  |  Phase: %3")
                 .arg(QString::fromStdString(matchedTable->roomId),
@@ -969,6 +965,7 @@ void LobbyView::updateMyTableBanner()
         synth.bases = bases;
         synth.superProngs = _activeGameView.superProngs;
         synth.edgeless = _activeGameView.edgeless;
+        synth.variant = _activeGameView.variant;
         synth.phase = phase;
         synth.seatsTotal = (mode == "4P" || mode == "4P_FFA") ? 4 : 2;
         synth.seatsFilled = static_cast<int>(_activeGameView.seats.size());
@@ -980,11 +977,7 @@ void LobbyView::updateMyTableBanner()
             s.connected = _activeGameView.seats[i].connected;
             synth.seats.push_back(s);
         }
-        QString variant = QString("%1 • %2B%3%4")
-            .arg(QString::fromStdString(synth.mode))
-            .arg(synth.bases)
-            .arg(synth.superProngs ? " +!" : "")
-            .arg(synth.edgeless ? " +Wrap" : "");
+        QString variant = QString::fromStdString(synth.variantCode());
         _myTableBannerLabel->setText(
             QString("My Active Table: Room #%1  |  %2  |  Phase: %3")
                 .arg(QString::fromStdString(_activeRoomId),
@@ -1006,11 +999,9 @@ void LobbyView::updateInspectorAndSelectionControls()
 
     if (_inspectorTitleLabel && _inspectorSeatsLabel) {
         if (selected) {
-            QString variant = QString("%1 • %2 Bases%3%4")
-                .arg(QString::fromStdString(selected->mode))
-                .arg(selected->bases)
-                .arg(selected->superProngs ? " • SuperProngs" : "")
-                .arg(selected->edgeless ? " • Edgeless" : "");
+            QString variant = QString("%1 • %2")
+                .arg(QString::fromStdString(selected->variantCode()),
+                     selected->rated ? "Rated" : "Casual");
             QString access = selected->hasPasscode
                 ? "Locked [Passcode Required]"
                 : "Open Table";
@@ -1454,11 +1445,9 @@ void LobbyView::rebuildTablesWidget()
             selectedRow = i;
             _selectedRoomId = t.roomId;
         }
-        QString variant = QString("%1 • %2B%3%4")
-            .arg(QString::fromStdString(t.mode))
-            .arg(t.bases)
-            .arg(t.superProngs ? " +!" : "")
-            .arg(t.edgeless ? " +Wrap" : "");
+        QString variant = QString("%1 • %2")
+            .arg(QString::fromStdString(t.variantCode()),
+                 t.rated ? "Rated" : "Casual");
         QString seats = formatSeatOccupancySummary(t);
         QString access = t.hasPasscode ? QString("Locked [Passcode]")
                                        : QString("Open");

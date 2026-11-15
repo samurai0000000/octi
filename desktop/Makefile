@@ -13,6 +13,7 @@ MINGW_CC := x86_64-w64-mingw32-gcc-posix
 MINGW_CXX := x86_64-w64-mingw32-g++-posix
 MINGW_RC := x86_64-w64-mingw32-windres
 QT_PREBUILT_ROOT ?= $(shell if [ -d "$$HOME/work/aimon/build/qt-prebuilt" ]; then echo "$$HOME/work/aimon/build/qt-prebuilt"; else echo "$(CURDIR)/build/qt-prebuilt"; fi)
+NUM_PROCS ?= $(shell nproc)
 
 SANITIZE ?= 0
 ifneq (,$(findstring -fsanitize,$(CFLAGS) $(CXXFLAGS)))
@@ -32,7 +33,7 @@ linux:
 	@if [ ! -f "$(LINUX_BUILD_DIR)/CMakeCache.txt" ]; then \
 		$(CMAKE) -S . -B $(LINUX_BUILD_DIR) $(LINUX_CMAKE_FLAGS); \
 	fi
-	@$(CMAKE) --build $(LINUX_BUILD_DIR) -j$$(nproc)
+	@$(CMAKE) --build $(LINUX_BUILD_DIR) -j$(NUM_PROCS)
 
 windows:
 	@if [ ! -f "$(WINDOWS_BUILD_DIR)/CMakeCache.txt" ]; then \
@@ -43,7 +44,7 @@ windows:
 			-DCMAKE_RC_COMPILER=$(MINGW_RC) \
 			-DOCTI_QT_PREBUILT_ROOT="$(QT_PREBUILT_ROOT)"; \
 	fi
-	@$(CMAKE) --build $(WINDOWS_BUILD_DIR) -j$$(nproc)
+	@$(CMAKE) --build $(WINDOWS_BUILD_DIR) -j$(NUM_PROCS)
 	@test -f "$(WINDOWS_INSTALLER)"
 
 installer: windows
@@ -51,7 +52,7 @@ installer: windows
 test: linux windows
 	@QT_QPA_PLATFORM=offscreen ./$(LINUX_BUILD_DIR)/test_desktop_board_and_composer
 	@QT_QPA_PLATFORM=offscreen ./$(LINUX_BUILD_DIR)/test_desktop_network_and_voice
-	@QT_QPA_PLATFORM=offscreen ./$(LINUX_BUILD_DIR)/test_desktop_app_integration
+	@QT_QPA_PLATFORM=offscreen OCTI_WINDOWS_BUILD_DIR="$(WINDOWS_BUILD_DIR)" ./$(LINUX_BUILD_DIR)/test_desktop_app_integration
 
 clean:
 	@rm -rf build/linux build/linux-asan $(WINDOWS_BUILD_DIR)

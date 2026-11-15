@@ -7,6 +7,7 @@
 #ifndef OCTI_SERVER_ACCOUNT_STORE_HXX
 #define OCTI_SERVER_ACCOUNT_STORE_HXX
 
+#include "OctiDefs.hxx"
 #include "OidcVerifier.hxx"
 
 #include <cstdint>
@@ -19,6 +20,171 @@
 struct sqlite3;
 
 namespace octi {
+
+#ifndef OCTI_VARIANT_CODE_HELPERS_DEFINED
+#define OCTI_VARIANT_CODE_HELPERS_DEFINED
+
+inline std::vector<std::string> allOctiVariantCodes()
+{
+    return {
+        "2P_3B",    "2P_3B_SP", "2P_3B_ED", "2P_3B_SPED",
+        "2P_1B",    "2P_1B_SP", "2P_1B_ED", "2P_1B_SPED",
+        "4P",       "4P_SP",    "4P_ED",    "4P_SPED",
+        "OFK"
+    };
+}
+
+inline std::string octiVariantCode(OctiGameMode mode, int bases,
+                                   bool superProngs, bool edgeless)
+{
+    if (mode == GAME_MODE_OFK) {
+        return "OFK";
+    }
+    std::string code;
+    if (mode == GAME_MODE_4) {
+        code = "4P";
+    } else {
+        code = (bases == 1) ? "2P_1B" : "2P_3B";
+    }
+    if (superProngs && edgeless) {
+        code += "_SPED";
+    } else if (superProngs) {
+        code += "_SP";
+    } else if (edgeless) {
+        code += "_ED";
+    }
+    return code;
+}
+
+inline std::string octiVariantCode(OctiGameMode mode, OctiGameBases bases,
+                                   bool superProngs, bool edgeless)
+{
+    return octiVariantCode(mode, static_cast<int>(bases), superProngs, edgeless);
+}
+
+inline bool parseOctiVariantCode(const std::string &code,
+                                 OctiGameMode &modeOut,
+                                 int &basesOut,
+                                 bool &superProngsOut,
+                                 bool &edgelessOut)
+{
+    std::string u = code;
+    for (size_t i = 0; i < u.size(); ++i) {
+        if (u[i] >= 'a' && u[i] <= 'z') {
+            u[i] = static_cast<char>(u[i] - 'a' + 'A');
+        }
+    }
+    if (u == "OFK") {
+        modeOut = GAME_MODE_OFK;
+        basesOut = 1;
+        superProngsOut = false;
+        edgelessOut = false;
+        return true;
+    }
+    if (u == "4P" || u == "4P_SP" || u == "4P_ED" || u == "4P_SPED") {
+        modeOut = GAME_MODE_4;
+        basesOut = 3;
+        superProngsOut = (u == "4P_SP" || u == "4P_SPED");
+        edgelessOut = (u == "4P_ED" || u == "4P_SPED");
+        return true;
+    }
+    if (u == "2P_3B" || u == "2P_3B_SP" || u == "2P_3B_ED" || u == "2P_3B_SPED") {
+        modeOut = GAME_MODE_2;
+        basesOut = 3;
+        superProngsOut = (u == "2P_3B_SP" || u == "2P_3B_SPED");
+        edgelessOut = (u == "2P_3B_ED" || u == "2P_3B_SPED");
+        return true;
+    }
+    if (u == "2P_1B" || u == "2P_1B_SP" || u == "2P_1B_ED" || u == "2P_1B_SPED") {
+        modeOut = GAME_MODE_2;
+        basesOut = 1;
+        superProngsOut = (u == "2P_1B_SP" || u == "2P_1B_SPED");
+        edgelessOut = (u == "2P_1B_ED" || u == "2P_1B_SPED");
+        return true;
+    }
+    return false;
+}
+
+inline bool parseOctiVariantCode(const std::string &code,
+                                 OctiGameMode &modeOut,
+                                 OctiGameBases &basesOut,
+                                 bool &superProngsOut,
+                                 bool &edgelessOut)
+{
+    int b = 3;
+    if (!parseOctiVariantCode(code, modeOut, b, superProngsOut, edgelessOut)) {
+        return false;
+    }
+    basesOut = (b == 1) ? GAME_BASES_1 : GAME_BASES_3;
+    return true;
+}
+
+inline bool isValidOctiVariantCode(const std::string &code)
+{
+    OctiGameMode m = GAME_MODE_2;
+    int b = 3;
+    bool sp = false;
+    bool ed = false;
+    return parseOctiVariantCode(code, m, b, sp, ed);
+}
+
+inline std::string octiVariantCodeFromModeStr(const std::string &modeStr,
+                                              int bases,
+                                              bool superProngs,
+                                              bool edgeless)
+{
+    std::string u = modeStr;
+    for (size_t i = 0; i < u.size(); ++i) {
+        if (u[i] >= 'a' && u[i] <= 'z') {
+            u[i] = static_cast<char>(u[i] - 'a' + 'A');
+        }
+    }
+    if (u == "OFK") {
+        return "OFK";
+    }
+    if (u == "4P" || u == "4") {
+        return octiVariantCode(GAME_MODE_4, bases, superProngs, edgeless);
+    }
+    if (u == "2P" || u == "2" || u.empty()) {
+        return octiVariantCode(GAME_MODE_2, bases, superProngs, edgeless);
+    }
+    OctiGameMode pm = GAME_MODE_2;
+    int pb = 3;
+    bool psp = false;
+    bool ped = false;
+    if (parseOctiVariantCode(u, pm, pb, psp, ped)) {
+        return octiVariantCode(pm, pb, psp, ped);
+    }
+    return octiVariantCode(GAME_MODE_2, bases, superProngs, edgeless);
+}
+
+inline bool isOfficialRatedVariant(OctiGameMode mode, int bases,
+                                   bool superProngs, bool edgeless)
+{
+    std::string v = octiVariantCode(mode, bases, superProngs, edgeless);
+    return v == "2P_3B" || v == "2P_1B" || v == "OFK";
+}
+
+inline bool isOfficialRatedVariant(OctiGameMode mode, OctiGameBases bases,
+                                   bool superProngs, bool edgeless)
+{
+    return isOfficialRatedVariant(mode, static_cast<int>(bases),
+                                  superProngs, edgeless);
+}
+
+inline bool isOfficialRatedVariantCode(const std::string &code)
+{
+    OctiGameMode m = GAME_MODE_2;
+    int b = 3;
+    bool sp = false;
+    bool ed = false;
+    if (!parseOctiVariantCode(code, m, b, sp, ed)) {
+        return false;
+    }
+    return isOfficialRatedVariant(m, b, sp, ed);
+}
+
+#endif // OCTI_VARIANT_CODE_HELPERS_DEFINED
 
 bool transcodeWebpToPng(const std::string &webpBytes, std::string &outPngBytes);
 
@@ -41,12 +207,21 @@ struct PlayerProfile {
     bool banned = false;
     bool isAdmin = false;
     int elo2p = 1200;
+    int elo2p3b = 1200;
+    int elo2p1b = 1200;
     int elo4p = 1200;
     int eloOfk = 1200;
     int gamesPlayed = 0;
     int wins = 0;
     int losses = 0;
     int draws = 0;
+    int arenaElo2p3b = 1200;
+    int arenaElo2p1b = 1200;
+    int arenaEloOfk = 1200;
+    int arenaGamesPlayed = 0;
+    int arenaWins = 0;
+    int arenaLosses = 0;
+    int arenaDraws = 0;
     int64_t createdAt = 0;
     int64_t lastSeenAt = 0;
     int64_t handleChangedAt = 0;
@@ -134,10 +309,16 @@ enum class UpdateStatus {
 
 enum class GameOutcome { WIN, LOSS, DRAW };
 
-/* New absolute rating and outcome for one player of a finished game. */
+/* New absolute rating and outcome for one participant of a finished game. */
 struct RatingUpdate {
     int64_t playerId = 0;
+    int64_t robotId = 0;
     int newElo = 1200;
+    GameOutcome outcome = GameOutcome::DRAW;
+};
+
+struct RobotOutcomeUpdate {
+    int64_t robotId = 0;
     GameOutcome outcome = GameOutcome::DRAW;
 };
 
@@ -186,6 +367,8 @@ struct GameRecord {
     int64_t uploadedAt = 0;             // server clock set on receipt
     std::string winner = "NONE";        // 'A' | 'B' | 'C' | 'D' | 'NONE'
     std::string status = "GAME_OVER";   // 'GAME_OVER' | 'RESIGNED'
+    int rated = 0;                      // 0 or 1
+    int eloPool = 0;                    // 0 = unrated, 1 = Human-Only, 2 = Arena
     int aiDifficulty = 0;               // 0 or 1..5
     std::string appVersion;
     std::string platform;
@@ -202,7 +385,8 @@ enum class ArchiveStatus {
 };
 
 struct ArchiveFilter {
-    std::string mode;                   // empty = any
+    std::string mode;                   // empty = any ("2P", "4P", "OFK" or exact code)
+    std::string variant;                // empty = any, or canonical 13-variant code
     std::string playerUuid;             // empty = any
     std::string robotUuid;
     int64_t robotId = 0;
@@ -233,6 +417,7 @@ struct ArchiveStats {
     int64_t totalGames = 0;
     std::map<std::string, int64_t> bySource;        // "online", "client_upload"
     std::map<std::string, int64_t> byMode;          // "2P", "4P", "OFK"
+    std::map<std::string, int64_t> byVariant;       // 13 canonical codes ("2P_3B".."OFK")
     std::map<int, int64_t> byAiDifficulty;          // 0, 1..5
     std::map<std::string, int64_t> byWinner;        // "A", "B", "C", "D", "NONE"
     std::vector<AiDifficultyStats> aiDifficultyStats; // for difficulties 1..5
@@ -302,6 +487,9 @@ struct RobotRecord {
     int wins = 0;
     int losses = 0;
     int draws = 0;
+    int elo2p3b = 1200;
+    int elo2p1b = 1200;
+    int eloOfk = 1200;
     int64_t createdAt = 0;
     bool revoked = false;
     int64_t revokedAt = 0;
@@ -316,6 +504,44 @@ struct RobotDirectoryFilter {
     bool sortAsc = false;
     int limit = kDefaultUsersPageLimit; // 1..100
     int offset = 0;
+};
+
+struct ArenaStandingsFilter {
+    std::string participantType = "all"; // "all" | "robots" | "humans"
+    std::string query;
+    std::string sortField;  // "elo_2p_3b" | "elo_2p_1b" | "elo_ofk" | "wins" | "games_played" | "win_rate" | "name" | "robot_name" | "created_at"
+    bool sortAsc = false;
+    int limit = kDefaultUsersPageLimit; // 1..100
+    int offset = 0;
+};
+
+struct ArenaStandingEntry {
+    std::string entryType = "robot";    // "robot" | "human"
+    int64_t robotId = 0;
+    int64_t playerId = 0;
+    std::string uuid;
+    std::string robotUuid;
+    std::string name;
+    std::string displayName;
+    std::string avatarUrl;
+    std::string description;
+    std::string robotUrl;
+    int64_t nameChangedAt = 0;
+    std::string ownerUuid;
+    std::string ownerHandle;
+    std::string ownerAvatarUrl;
+    int elo2p3b = 1200;
+    int elo2p1b = 1200;
+    int eloOfk = 1200;
+    int gamesPlayed = 0;
+    int wins = 0;
+    int losses = 0;
+    int draws = 0;
+    double winRate = 0.0;
+    int64_t createdAt = 0;
+    int64_t lastSeenAt = 0;
+    bool revoked = false;
+    bool tokenDeleted = false;
 };
 
 enum class RobotStatus {
@@ -464,6 +690,14 @@ public:
     bool listPublicRobotsDirectory(const RobotDirectoryFilter &filter,
                                    std::vector<RobotRecord> &out,
                                    int64_t *total = nullptr);
+    bool listArenaStandings(const ArenaStandingsFilter &filter,
+                            std::vector<ArenaStandingEntry> &out,
+                            int64_t *total = nullptr);
+    int countRecentArenaRatedPairGames(int64_t p1PlayerId,
+                                       int64_t p1RobotId,
+                                       int64_t p2PlayerId,
+                                       int64_t p2RobotId,
+                                       int64_t windowSec = 24LL * 3600);
     RobotStatus revokeRobot(int64_t ownerPlayerId,
                             const std::string &robotUuidOrName);
     RobotStatus deleteRobot(int64_t ownerPlayerId,
@@ -489,6 +723,11 @@ public:
     ArchiveStatus archiveGameWithRatings(const GameRecord &record,
                                          const std::vector<RatingUpdate> &updates,
                                          std::string &error);
+    ArchiveStatus archiveGameWithRatings(
+        const GameRecord &record,
+        const std::vector<RatingUpdate> &updates,
+        const std::vector<RobotOutcomeUpdate> &robotOutcomes,
+        std::string &error);
     bool purgeArchivedGame(const std::string &gameId, std::string &errorOut);
     bool getArchivedGame(const std::string &gameId, GameRecord &out);
     bool getArchivedTranscript(const std::string &gameId,

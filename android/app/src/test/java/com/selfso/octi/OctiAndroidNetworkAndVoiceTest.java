@@ -749,6 +749,9 @@ public class OctiAndroidNetworkAndVoiceTest {
 
     private static File findServerBinary() {
         String[] candidates = new String[] {
+                "../server/build/web_fix/octi_server",
+                "../../server/build/web_fix/octi_server",
+                "server/build/web_fix/octi_server",
                 "../server/build/octi_server",
                 "../../server/build/octi_server",
                 "server/build/octi_server"
@@ -1219,6 +1222,109 @@ public class OctiAndroidNetworkAndVoiceTest {
 
             // Verify lastSubmittedOnlinePly was updated to 1
             assertEquals(1, vm.lastSubmittedOnlinePly());
+        }
+    }
+
+    @Test
+    public void testLiveServer13VariantArchiveDualPoolLaddersAndMergedArenaDirectory() throws Exception {
+        startLiveServer(0);
+        try {
+            String aliceUuid = "11111111-2222-3333-4444-555555555501";
+            String bobUuid = "11111111-2222-3333-4444-555555555502";
+            String botUuid = "11111111-2222-3333-4444-555555555599";
+            String aliceToken = "tok-e5-alice-live";
+            String bobToken = "tok-e5-bob-live";
+            seedLivePlayer(1, aliceUuid, "AliceE5Live", aliceToken, "google", "sub-e5-a", null, null);
+            seedLivePlayer(2, bobUuid, "BobE5Live", bobToken, "google", "sub-e5-b", null, null);
+
+            long now = System.currentTimeMillis() / 1000L;
+            String extraSql = "PRAGMA busy_timeout=5000;\n"
+                    + "UPDATE players SET elo_2p=1530, elo_2p_3b=1530, elo_2p_1b=1190, elo_ofk=1250, "
+                    + "arena_elo_2p_3b=1620, arena_elo_2p_1b=1210, arena_elo_ofk=1300, "
+                    + "arena_games_played=3, arena_wins=2, arena_losses=1, arena_draws=0 WHERE player_id=1;\n"
+                    + "UPDATE players SET elo_2p=1180, elo_2p_3b=1180, elo_2p_1b=1490, elo_ofk=1200, "
+                    + "arena_games_played=0 WHERE player_id=2;\n"
+                    + String.format(
+                    "INSERT INTO robots(robot_id, robot_uuid, owner_player_id, robot_name, description, "
+                            + "token_hash, token_prefix, token, elo_2p_3b, elo_2p_1b, elo_ofk, "
+                            + "games_played, wins, losses, draws, created_at, revoked) "
+                            + "VALUES(10, '%s', 1, 'BotOmegaE5', 'Arena test bot', '%s', 'octi_bot_test', "
+                            + "'octi_bot_test_raw', 1560, 1220, 1200, 4, 3, 1, 0, %d, 0);\n",
+                    botUuid, sha256Hex("octi_bot_test_raw"), now)
+                    + String.format(
+                    "INSERT INTO games(game_id, game_mode, game_bases, super_prongs, edgeless, time_control, "
+                            + "p1_player_id, p2_player_id, p1_handle, p2_handle, p3_handle, p4_handle, "
+                            + "result, winner_seat, termination, ply_count, octi_transcript, transcript_json, "
+                            + "final_fen, started_at, ended_at, source, uploaded_at, winner, status, rated, elo_pool) "
+                            + "VALUES('e5-live-sp', '2P', 3, 1, 0, 'untimed', 1, 2, 'AliceE5Live', 'BobE5Live', '', '', "
+                            + "'P1_WIN', 1, 'BASE_CAPTURE', 10, '{\"format\":\"octi.transcript.v3\",\"moves\":[\"33+b\"]}', "
+                            + "'{\"format\":\"octi.transcript.v3\",\"moves\":[\"33+b\"]}', 'start', %d, %d, 'online', %d, "
+                            + "'A', 'GAME_OVER', 0, 0);\n",
+                    now - 60, now - 30, now - 30)
+                    + String.format(
+                    "INSERT INTO games(game_id, game_mode, game_bases, super_prongs, edgeless, time_control, "
+                            + "p1_player_id, p2_robot_id, p1_handle, p2_handle, p3_handle, p4_handle, "
+                            + "result, winner_seat, termination, ply_count, octi_transcript, transcript_json, "
+                            + "final_fen, started_at, ended_at, source, uploaded_at, winner, status, rated, elo_pool) "
+                            + "VALUES('e5-live-arena', '2P', 3, 0, 0, 'untimed', 1, 10, 'AliceE5Live', 'BotOmegaE5', '', '', "
+                            + "'P1_WIN', 1, 'BASE_CAPTURE', 14, '{\"format\":\"octi.transcript.v3\",\"moves\":[\"33+b\"]}', "
+                            + "'{\"format\":\"octi.transcript.v3\",\"moves\":[\"33+b\"]}', 'start', %d, %d, 'online', %d, "
+                            + "'A', 'GAME_OVER', 1, 2);\n",
+                    now - 25, now - 10, now - 10);
+
+            Process p = new ProcessBuilder("sqlite3", _sqliteDbFile.getAbsolutePath())
+                    .redirectErrorStream(true)
+                    .start();
+            try (OutputStream os = p.getOutputStream()) {
+                os.write(extraSql.getBytes(StandardCharsets.UTF_8));
+            }
+            assertEquals(0, p.waitFor());
+
+            OctiNetworkClient client = OctiNetworkClient.createForLoopbackTest(_serverPort);
+            client.setSessionToken(aliceToken);
+
+            // 1. 3-ladder leaderboard (2P_3B, 2P_1B, OFK) and rejection of 4P
+            OctiNetworkClient.ApiResult<List<OctiNetworkClient.LeaderboardRow>> lb3b =
+                    client.fetchLeaderboard("2P_3B", 50);
+            assertTrue(lb3b.ok);
+            assertEquals("AliceE5Live", lb3b.data.get(0).handle);
+            assertEquals(1530, lb3b.data.get(0).elo);
+
+            OctiNetworkClient.ApiResult<List<OctiNetworkClient.LeaderboardRow>> lb1b =
+                    client.fetchLeaderboard("2P_1B", 50);
+            assertTrue(lb1b.ok);
+            assertEquals("BobE5Live", lb1b.data.get(0).handle);
+            assertEquals(1490, lb1b.data.get(0).elo);
+
+            OctiNetworkClient.ApiResult<List<OctiNetworkClient.LeaderboardRow>> lb4p =
+                    client.fetchLeaderboard("4P", 50);
+            assertFalse("4P leaderboard must be rejected", lb4p.ok);
+
+            // 2. Exact 13-variant archive query ("2P_3B_SP")
+            OctiNetworkClient.ApiResult<OctiNetworkClient.ArchivedGamesPage> spPage =
+                    client.listArchivedGames("2P_3B_SP", "", 20, 0);
+            assertTrue(spPage.ok);
+            assertEquals("Expected exact 1 2P_3B_SP game via ?variant=2P_3B_SP", 1, spPage.data.games.size());
+            assertEquals("e5-live-sp", spPage.data.games.get(0).gameId);
+
+            // 3. Merged Pool 2 Arena directory & profile (returns both AliceE5Live human and BotOmegaE5 robot)
+            OctiNetworkClient.ApiResult<List<OctiNetworkClient.RobotDirectoryEntry>> dirAll =
+                    client.fetchRobotsDirectory("", "elo_2p_3b");
+            assertTrue(dirAll.ok);
+            assertEquals("Arena directory must merge humans with arena_games_played>0 and robots",
+                    2, dirAll.data.size());
+            assertEquals("AliceE5Live", dirAll.data.get(0).handle);
+
+            OctiNetworkClient.ApiResult<OctiNetworkClient.RobotProfileData> aliceArenaProf =
+                    client.fetchRobotProfile(aliceUuid);
+            assertTrue(aliceArenaProf.ok);
+            assertEquals("Human Arena profile must expose Pool 2 arena_games_played (3), not Pool 1 (1)",
+                    3, aliceArenaProf.data.gamesPlayed);
+            int arenaElo3b = OctiNetworkClient.RobotProfileData.class
+                    .getField("elo2p3b").getInt(aliceArenaProf.data);
+            assertEquals(1620, arenaElo3b);
+        } finally {
+            stopLiveServer();
         }
     }
 }

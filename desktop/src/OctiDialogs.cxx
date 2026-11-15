@@ -28,6 +28,8 @@
 #include <QRadioButton>
 #include <QSplitter>
 #include <QStandardItemModel>
+#include <QTextBrowser>
+#include <QTextDocument>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -46,6 +48,7 @@
 #include "OctiCore.hxx"
 #include "OctiDialogs.hxx"
 #include "OctiMainWindow.hxx"
+#include "OctiRulebook.hxx"
 #include "Version.hxx"
 
 namespace octi {
@@ -428,9 +431,9 @@ ApiResult<SsoLoginData> SsoOnboardingDialog::signInWithToken(
         }
         if (_statusLabel) {
             _statusLabel->setText(
-                QString("Signed in as %1 (2P Elo %2).")
+                QString("Signed in as %1 (2P_3B Elo %2).")
                     .arg(QString::fromStdString(_loggedInProfile.handle))
-                    .arg(_loggedInProfile.elo2p));
+                    .arg(_loggedInProfile.elo2p3b));
         }
         if (_onSignedInCallback) {
             _onSignedInCallback(_loggedInProfile);
@@ -1621,6 +1624,15 @@ CreateTableDialog::CreateTableDialog(OctiNetworkClient *netClient,
     QObject::connect(_modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int) {
         updateOfkConstraints();
     });
+    QObject::connect(_basesCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int) {
+        updateOfkConstraints();
+    });
+    QObject::connect(_superProngsCheck, &QCheckBox::toggled, [this](bool) {
+        updateOfkConstraints();
+    });
+    QObject::connect(_edgelessCheck, &QCheckBox::toggled, [this](bool) {
+        updateOfkConstraints();
+    });
     updateOfkConstraints();
 
     setTheme(_theme);
@@ -1630,7 +1642,15 @@ CreateTableDialog::~CreateTableDialog() = default;
 
 void CreateTableDialog::updateOfkConstraints()
 {
-    bool isOFK = (_modeCombo->currentData().toString() == "OFK");
+    std::string modeStr = _modeCombo->currentData().toString().toStdString();
+    bool isOFK = (modeStr == "OFK");
+    bool is4P = (modeStr == "4P");
+
+    _basesCombo->blockSignals(true);
+    _superProngsCheck->blockSignals(true);
+    _edgelessCheck->blockSignals(true);
+    _ratedCheck->blockSignals(true);
+
     if (isOFK) {
         int b1Idx = _basesCombo->findData(1);
         if (b1Idx >= 0) {
@@ -1641,11 +1661,38 @@ void CreateTableDialog::updateOfkConstraints()
         _superProngsCheck->setEnabled(false);
         _edgelessCheck->setChecked(false);
         _edgelessCheck->setEnabled(false);
+    } else if (is4P) {
+        int b3Idx = _basesCombo->findData(3);
+        if (b3Idx >= 0) {
+            _basesCombo->setCurrentIndex(b3Idx);
+        }
+        _basesCombo->setEnabled(false);
+        _superProngsCheck->setEnabled(true);
+        _edgelessCheck->setEnabled(true);
     } else {
         _basesCombo->setEnabled(true);
         _superProngsCheck->setEnabled(true);
         _edgelessCheck->setEnabled(true);
     }
+
+    std::string vCode = octiVariantCodeFromModeStr(
+        modeStr,
+        _basesCombo->currentData().toInt(),
+        _superProngsCheck->isChecked(),
+        _edgelessCheck->isChecked());
+    if (!isOfficialRatedVariantCode(vCode)) {
+        _ratedCheck->setChecked(false);
+        _ratedCheck->setEnabled(false);
+        _ratedCheck->setText("Rated Match (Casual only — 2P_3B, 2P_1B, OFK)");
+    } else {
+        _ratedCheck->setEnabled(true);
+        _ratedCheck->setText("Rated Match (Elo)");
+    }
+
+    _ratedCheck->blockSignals(false);
+    _edgelessCheck->blockSignals(false);
+    _superProngsCheck->blockSignals(false);
+    _basesCombo->blockSignals(false);
 }
 
 void CreateTableDialog::setTheme(ThemeId theme)
@@ -1661,17 +1708,47 @@ ThemeId CreateTableDialog::theme() const
 
 void CreateTableDialog::setRequest(const CreateTableRequest &req)
 {
-    int mIdx = _modeCombo->findData(QString::fromStdString(req.mode));
+    std::string useMode = req.mode;
+    int useBases = req.bases;
+    bool useSp = req.superProngs;
+    bool useEd = req.edgeless;
+    if (!req.variant.empty() && isValidOctiVariantCode(req.variant)) {
+        OctiGameMode pm = GAME_MODE_2;
+        int pb = 3;
+        bool psp = false;
+        bool ped = false;
+        if (parseOctiVariantCode(req.variant, pm, pb, psp, ped)) {
+            useMode = (pm == GAME_MODE_OFK) ? "OFK" : ((pm == GAME_MODE_4) ? "4P" : "2P");
+            useBases = pb;
+            useSp = psp;
+            useEd = ped;
+        }
+    }
+
+    _modeCombo->blockSignals(true);
+    _basesCombo->blockSignals(true);
+    _superProngsCheck->blockSignals(true);
+    _edgelessCheck->blockSignals(true);
+
+    int mIdx = _modeCombo->findData(QString::fromStdString(useMode));
     if (mIdx >= 0) {
         _modeCombo->setCurrentIndex(mIdx);
     }
-    int bIdx = _basesCombo->findData(req.bases);
+    int bIdx = _basesCombo->findData(useBases);
     if (bIdx >= 0) {
         _basesCombo->setCurrentIndex(bIdx);
     }
-    _superProngsCheck->setChecked(req.superProngs);
-    _edgelessCheck->setChecked(req.edgeless);
-    _ratedCheck->setChecked(req.rated);
+    _superProngsCheck->setChecked(useSp);
+    _edgelessCheck->setChecked(useEd);
+
+    _edgelessCheck->blockSignals(false);
+    _superProngsCheck->blockSignals(false);
+    _basesCombo->blockSignals(false);
+    _modeCombo->blockSignals(false);
+
+    updateOfkConstraints();
+    _ratedCheck->setChecked(req.rated && _ratedCheck->isEnabled());
+
     _allowRobotsCheck->setChecked(req.allowRobots);
     _takebackCheck->setChecked(req.allowTakeback);
     _timeControlCheck->setChecked(req.timeControlEnabled);
@@ -1686,7 +1763,6 @@ void CreateTableDialog::setRequest(const CreateTableRequest &req)
         _observerPolicyCombo->setCurrentIndex(oIdx);
     }
     _passcodeEdit->setText(QString::fromStdString(req.passcode));
-    updateOfkConstraints();
 }
 
 CreateTableRequest CreateTableDialog::buildRequest() const
@@ -1696,7 +1772,15 @@ CreateTableRequest CreateTableDialog::buildRequest() const
     req.bases = _basesCombo->currentData().toInt();
     req.superProngs = _superProngsCheck->isChecked();
     req.edgeless = _edgelessCheck->isChecked();
-    req.rated = _ratedCheck->isChecked();
+    if (req.mode == "OFK") {
+        req.bases = 1;
+        req.superProngs = false;
+        req.edgeless = false;
+    } else if (req.mode == "4P") {
+        req.bases = 3;
+    }
+    req.variant = req.variantCode();
+    req.rated = isOfficialRatedVariantCode(req.variant) && _ratedCheck->isChecked();
     req.allowRobots = _allowRobotsCheck->isChecked();
     req.allowTakeback = _takebackCheck->isChecked();
     req.timeControlEnabled = _timeControlCheck->isChecked();
@@ -1893,7 +1977,9 @@ MatchmakingDialog::~MatchmakingDialog()
 
 void MatchmakingDialog::updateOfkConstraints()
 {
-    bool isOFK = (_modeCombo->currentData().toString() == "OFK");
+    QString modeStr = _modeCombo->currentData().toString();
+    bool isOFK = (modeStr == "OFK");
+    bool is4P = (modeStr == "4P");
     if (isOFK) {
         int b1Idx = _basesCombo->findData(1);
         if (b1Idx >= 0) {
@@ -1904,6 +1990,14 @@ void MatchmakingDialog::updateOfkConstraints()
         _superProngsCheck->setEnabled(false);
         _edgelessCheck->setChecked(false);
         _edgelessCheck->setEnabled(false);
+    } else if (is4P) {
+        int b3Idx = _basesCombo->findData(3);
+        if (b3Idx >= 0) {
+            _basesCombo->setCurrentIndex(b3Idx);
+        }
+        _basesCombo->setEnabled(false);
+        _superProngsCheck->setEnabled(true);
+        _edgelessCheck->setEnabled(true);
     } else {
         _basesCombo->setEnabled(true);
         _superProngsCheck->setEnabled(true);
@@ -1950,6 +2044,14 @@ MatchmakingRequest MatchmakingDialog::buildRequest() const
     req.bases = _basesCombo->currentData().toInt();
     req.superProngs = _superProngsCheck->isChecked();
     req.edgeless = _edgelessCheck->isChecked();
+    if (req.mode == "OFK") {
+        req.bases = 1;
+        req.superProngs = false;
+        req.edgeless = false;
+    } else if (req.mode == "4P") {
+        req.bases = 3;
+    }
+    req.variant = req.variantCode();
     req.allowRobots = _allowRobotsCheck->isChecked();
     req.timeControlEnabled = _timeControlCheck->isChecked();
     req.initialMs =
@@ -2340,16 +2442,19 @@ ArchiveBrowserDialog::ArchiveBrowserDialog(OctiNetworkClient *netClient,
 
     QHBoxLayout *filterBar = new QHBoxLayout();
     _modeFilterCombo = new QComboBox(this);
-    _modeFilterCombo->addItem("All Modes", "");
-    _modeFilterCombo->addItem("2P", "2P");
-    _modeFilterCombo->addItem("4P", "4P");
-    _modeFilterCombo->addItem("OFK", "OFK");
+    _modeFilterCombo->addItem("All Variants", "");
+    _modeFilterCombo->addItem("2P (All)", "2P_ALL");
+    _modeFilterCombo->addItem("4P (All)", "4P_ALL");
+    for (const std::string &vCode : allOctiVariantCodes()) {
+        QString qv = QString::fromStdString(vCode);
+        _modeFilterCombo->addItem(qv, qv);
+    }
 
     _playerFilterEdit = new QLineEdit(this);
     _playerFilterEdit->setPlaceholderText("Filter by Player UUID...");
     _refreshBtn = new QPushButton("Search Archive", this);
 
-    filterBar->addWidget(new QLabel("Mode:", this));
+    filterBar->addWidget(new QLabel("Variant:", this));
     filterBar->addWidget(_modeFilterCombo);
     filterBar->addWidget(_playerFilterEdit);
     filterBar->addWidget(_refreshBtn);
@@ -2357,7 +2462,7 @@ ArchiveBrowserDialog::ArchiveBrowserDialog(OctiNetworkClient *netClient,
 
     _gamesTable = new QTableWidget(0, 5, this);
     _gamesTable->setHorizontalHeaderLabels(
-        QStringList() << "Game ID" << "Mode" << "Players" << "Result" << "Plies");
+        QStringList() << "Game ID" << "Variant" << "Players" << "Result" << "Plies");
     _gamesTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     _gamesTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     _gamesTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -2471,7 +2576,7 @@ void ArchiveBrowserDialog::rebuildGamesTable()
         _gamesTable->setItem(
             i, 0, new QTableWidgetItem(QString::fromStdString(g.gameId)));
         _gamesTable->setItem(
-            i, 1, new QTableWidgetItem(QString::fromStdString(g.mode)));
+            i, 1, new QTableWidgetItem(QString::fromStdString(g.variantCode())));
         _gamesTable->setItem(
             i, 2, new QTableWidgetItem(playersStr));
         _gamesTable->setItem(
@@ -2571,11 +2676,11 @@ LeaderboardDialog::LeaderboardDialog(OctiNetworkClient *netClient,
 
     QHBoxLayout *topBar = new QHBoxLayout();
     _modeCombo = new QComboBox(this);
-    _modeCombo->addItem("2-Player Standard", "2P");
-    _modeCombo->addItem("4-Player Partnership", "4P");
-    _modeCombo->addItem("OCTI for Kids", "OFK");
+    _modeCombo->addItem("2P 3-Base (2P_3B)", "2P_3B");
+    _modeCombo->addItem("2P 1-Base (2P_1B)", "2P_1B");
+    _modeCombo->addItem("OCTI for Kids (OFK)", "OFK");
     _refreshBtn = new QPushButton("Refresh", this);
-    topBar->addWidget(new QLabel("Mode:", this));
+    topBar->addWidget(new QLabel("Ladder:", this));
     topBar->addWidget(_modeCombo);
     topBar->addWidget(_refreshBtn);
     root->addLayout(topBar);
@@ -2623,7 +2728,7 @@ ThemeId LeaderboardDialog::theme() const
 std::string LeaderboardDialog::selectedMode() const
 {
     return _modeCombo ? _modeCombo->currentData().toString().toStdString()
-                      : std::string("2P");
+                      : std::string("2P_3B");
 }
 
 ApiResult<std::vector<LeaderboardRow>> LeaderboardDialog::refreshLeaderboard(
@@ -2635,13 +2740,14 @@ ApiResult<std::vector<LeaderboardRow>> LeaderboardDialog::refreshLeaderboard(
         res.errorMessage = "Network client is null";
         return res;
     }
-    int idx = _modeCombo->findData(QString::fromStdString(mode));
+    const std::string normMode = (mode.empty() || mode == "2P") ? "2P_3B" : mode;
+    int idx = _modeCombo->findData(QString::fromStdString(normMode));
     if (idx >= 0 && _modeCombo->currentIndex() != idx) {
         _modeCombo->blockSignals(true);
         _modeCombo->setCurrentIndex(idx);
         _modeCombo->blockSignals(false);
     }
-    res = _netClient->fetchLeaderboard(mode, limit);
+    res = _netClient->fetchLeaderboard(normMode, limit);
     if (res.ok) {
         _rows = res.data;
         rebuildTable();
@@ -2683,6 +2789,8 @@ RobotsDirectoryDialog::RobotsDirectoryDialog(OctiNetworkClient *netClient,
       _netClient(netClient),
       _theme(theme),
       _searchEdit(nullptr),
+      _participantFilterCombo(nullptr),
+      _sortCombo(nullptr),
       _refreshBtn(nullptr),
       _robotsTable(nullptr),
       _profileBox(nullptr),
@@ -2692,8 +2800,8 @@ RobotsDirectoryDialog::RobotsDirectoryDialog(OctiNetworkClient *netClient,
       _replayBtn(nullptr),
       _statusLabel(nullptr)
 {
-    setWindowTitle("OCTI Robots Directory & Profiles");
-    setMinimumSize(880, 560);
+    setWindowTitle("OCTI Bot & Human Arena Directory");
+    setMinimumSize(940, 560);
 
     QVBoxLayout *root = new QVBoxLayout(this);
     root->setSpacing(10);
@@ -2701,29 +2809,46 @@ RobotsDirectoryDialog::RobotsDirectoryDialog(OctiNetworkClient *netClient,
 
     QHBoxLayout *topBar = new QHBoxLayout();
     _searchEdit = new QLineEdit(this);
-    _searchEdit->setPlaceholderText("Filter robots by handle or owner...");
+    _searchEdit->setPlaceholderText("Filter Arena participants by handle or owner...");
+    _participantFilterCombo = new QComboBox(this);
+    _participantFilterCombo->addItem("All Participants", "all");
+    _participantFilterCombo->addItem("Robots Only", "robots");
+    _participantFilterCombo->addItem("Humans Only", "humans");
+
+    _sortCombo = new QComboBox(this);
+    _sortCombo->addItem("2P_3B Elo", "elo_2p_3b");
+    _sortCombo->addItem("2P_1B Elo", "elo_2p_1b");
+    _sortCombo->addItem("OFK Elo", "elo_ofk");
+    _sortCombo->addItem("Wins", "wins");
+    _sortCombo->addItem("Games Played", "games_played");
+    _sortCombo->addItem("Win Rate", "win_rate");
+
     _refreshBtn = new QPushButton("Refresh", this);
     topBar->addWidget(new QLabel("Search:", this));
     topBar->addWidget(_searchEdit, 1);
+    topBar->addWidget(new QLabel("Show:", this));
+    topBar->addWidget(_participantFilterCombo);
+    topBar->addWidget(new QLabel("Sort:", this));
+    topBar->addWidget(_sortCombo);
     topBar->addWidget(_refreshBtn);
     root->addLayout(topBar);
 
     QSplitter *splitter = new QSplitter(Qt::Horizontal, this);
 
-    _robotsTable = new QTableWidget(0, 6, splitter);
+    _robotsTable = new QTableWidget(0, 8, splitter);
     _robotsTable->setHorizontalHeaderLabels(
-        QStringList() << "Robot Handle" << "Owner" << "Status"
-                      << "W / L / D" << "Win Rate" << "Elo 2P");
+        QStringList() << "Participant" << "Owner / Type" << "Status"
+                      << "2P_3B" << "2P_1B" << "OFK" << "W / L / D" << "Win Rate");
     _robotsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     _robotsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     _robotsTable->setSelectionMode(QAbstractItemView::SingleSelection);
     _robotsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     splitter->addWidget(_robotsTable);
 
-    _profileBox = new QGroupBox("Robot Profile && Recent Matches", splitter);
+    _profileBox = new QGroupBox("Arena Profile && Recent Matches", splitter);
     QVBoxLayout *pLayout = new QVBoxLayout(_profileBox);
     pLayout->setSpacing(6);
-    _profileHeaderLabel = new QLabel("Select a robot to view details", _profileBox);
+    _profileHeaderLabel = new QLabel("Select a participant to view Arena details", _profileBox);
     _profileHeaderLabel->setStyleSheet("font-size: 14px; font-weight: bold;");
     _profileStatsLabel = new QLabel("", _profileBox);
     _profileStatsLabel->setWordWrap(true);
@@ -2732,7 +2857,7 @@ RobotsDirectoryDialog::RobotsDirectoryDialog(OctiNetworkClient *netClient,
 
     _recentGamesTable = new QTableWidget(0, 5, _profileBox);
     _recentGamesTable->setHorizontalHeaderLabels(
-        QStringList() << "Game ID" << "Mode" << "Result" << "Opponent" << "Plies");
+        QStringList() << "Game ID" << "Variant" << "Result" << "Opponent" << "Plies");
     _recentGamesTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     _recentGamesTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     _recentGamesTable->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -2760,13 +2885,23 @@ RobotsDirectoryDialog::RobotsDirectoryDialog(OctiNetworkClient *netClient,
     QObject::connect(_searchEdit, &QLineEdit::textChanged, [this](const QString &text) {
         refreshRobots(text.trimmed().toStdString());
     });
+    QObject::connect(_participantFilterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int) {
+        refreshRobots(_searchEdit->text().trimmed().toStdString());
+    });
+    QObject::connect(_sortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int) {
+        refreshRobots(_searchEdit->text().trimmed().toStdString());
+    });
     QObject::connect(_refreshBtn, &QPushButton::clicked, [this]() {
         refreshRobots(_searchEdit->text().trimmed().toStdString());
     });
     QObject::connect(_robotsTable, &QTableWidget::itemSelectionChanged, [this]() {
         int r = _robotsTable->currentRow();
         if (r >= 0 && r < static_cast<int>(_robots.size())) {
-            selectRobot(_robots[static_cast<std::size_t>(r)].robotUuid);
+            const auto &ent = _robots[static_cast<std::size_t>(r)];
+            const std::string targetId = (ent.entryType == "human")
+                ? ent.uuid
+                : (ent.robotUuid.empty() ? ent.uuid : ent.robotUuid);
+            selectRobot(targetId);
         }
     });
     QObject::connect(_recentGamesTable, &QTableWidget::itemSelectionChanged, [this]() {
@@ -2813,6 +2948,24 @@ ThemeId RobotsDirectoryDialog::theme() const
     return _theme;
 }
 
+std::string RobotsDirectoryDialog::selectedParticipantFilter() const
+{
+    return _participantFilterCombo
+        ? _participantFilterCombo->currentData().toString().toStdString()
+        : std::string("all");
+}
+
+void RobotsDirectoryDialog::setParticipantFilter(const std::string &filter)
+{
+    if (!_participantFilterCombo) {
+        return;
+    }
+    int idx = _participantFilterCombo->findData(QString::fromStdString(filter));
+    if (idx >= 0) {
+        _participantFilterCombo->setCurrentIndex(idx);
+    }
+}
+
 void RobotsDirectoryDialog::setOnLoadReplayCallback(
     std::function<void(const std::string &gameId,
                        const std::string &octiTranscript,
@@ -2830,7 +2983,11 @@ bool RobotsDirectoryDialog::refreshRobots(const std::string &query)
         return false;
     }
     _robots.clear();
-    auto res = _netClient->fetchRobotsDirectory(query);
+    const std::string pType = selectedParticipantFilter();
+    const std::string sField = _sortCombo
+        ? _sortCombo->currentData().toString().toStdString()
+        : std::string("elo_2p_3b");
+    auto res = _netClient->fetchRobotsDirectory(query, pType, sField, false, 100, 0);
     if (!res.ok) {
         if (_statusLabel) {
             _statusLabel->setText(res.httpStatus > 0
@@ -2842,7 +2999,7 @@ bool RobotsDirectoryDialog::refreshRobots(const std::string &query)
     }
     _robots = res.data;
     if (_statusLabel) {
-        _statusLabel->setText(QString("Found %1 robot(s)").arg(_robots.size()));
+        _statusLabel->setText(QString("Found %1 Arena participant(s)").arg(_robots.size()));
     }
     rebuildRobotsTable();
     return true;
@@ -2856,6 +3013,16 @@ bool RobotsDirectoryDialog::selectRobot(const std::string &robotUuid)
     auto res = _netClient->fetchPlayerProfile(robotUuid);
     if (res.ok) {
         _selectedProfile = res.data;
+        if (_selectedProfile.recentGames.empty()) {
+            const std::string pUuid = _selectedProfile.isRobot ? "" : _selectedProfile.uuid;
+            const std::string rUuid = _selectedProfile.isRobot
+                ? (_selectedProfile.robotUuid.empty() ? _selectedProfile.uuid : _selectedProfile.robotUuid)
+                : "";
+            auto archRes = _netClient->listArchivedGames("", pUuid, rUuid, 20, 0);
+            if (archRes.ok) {
+                _selectedProfile.recentGames = archRes.data.games;
+            }
+        }
         rebuildProfileCard();
         return true;
     }
@@ -2870,14 +3037,23 @@ void RobotsDirectoryDialog::rebuildRobotsTable()
     _robotsTable->setRowCount(static_cast<int>(_robots.size()));
     for (int i = 0; i < static_cast<int>(_robots.size()); ++i) {
         const auto &r = _robots[static_cast<std::size_t>(i)];
-        _robotsTable->setItem(i, 0, new QTableWidgetItem(QString::fromStdString(r.handle)));
-        _robotsTable->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(r.ownerHandle.empty() ? r.ownerUuid : r.ownerHandle)));
+        const bool isHuman = (r.entryType == "human");
+        QString handleCell = QString("@%1 [%2]")
+            .arg(QString::fromStdString(r.handle),
+                 isHuman ? "HUMAN" : "BOT");
+        QString ownerCell = isHuman
+            ? QString("Human Challenger")
+            : QString::fromStdString(r.ownerHandle.empty() ? r.ownerUuid : ("@" + r.ownerHandle));
+        _robotsTable->setItem(i, 0, new QTableWidgetItem(handleCell));
+        _robotsTable->setItem(i, 1, new QTableWidgetItem(ownerCell));
         _robotsTable->setItem(i, 2, new QTableWidgetItem(QString::fromStdString(r.status)));
+        _robotsTable->setItem(i, 3, new QTableWidgetItem(QString::number(r.elo2p3b)));
+        _robotsTable->setItem(i, 4, new QTableWidgetItem(QString::number(r.elo2p1b)));
+        _robotsTable->setItem(i, 5, new QTableWidgetItem(QString::number(r.eloOfk)));
         QString record = QString("%1-%2-%3").arg(r.wins).arg(r.losses).arg(r.draws);
-        _robotsTable->setItem(i, 3, new QTableWidgetItem(record));
-        QString winRateStr = QString("%1%").arg(QString::number(r.winRate * 100.0, 'f', 1));
-        _robotsTable->setItem(i, 4, new QTableWidgetItem(winRateStr));
-        _robotsTable->setItem(i, 5, new QTableWidgetItem(QString::number(r.elo2p)));
+        _robotsTable->setItem(i, 6, new QTableWidgetItem(record));
+        QString winRateStr = QString("%1%").arg(QString::number(r.winRate, 'f', 1));
+        _robotsTable->setItem(i, 7, new QTableWidgetItem(winRateStr));
     }
 }
 
@@ -2886,22 +3062,48 @@ void RobotsDirectoryDialog::rebuildProfileCard()
     if (!_profileHeaderLabel || !_profileStatsLabel || !_recentGamesTable) {
         return;
     }
-    _profileHeaderLabel->setText(QString::fromStdString(_selectedProfile.handle) + " (Robot)");
-    QString stats = QString("Owner: %1\nDescription: %2\nElo: %3 | Games: %4 (W:%5 L:%6 D:%7)")
-        .arg(QString::fromStdString(_selectedProfile.ownerHandle.empty() ? _selectedProfile.ownerUuid : _selectedProfile.ownerHandle))
-        .arg(QString::fromStdString(_selectedProfile.description))
-        .arg(_selectedProfile.elo2p)
-        .arg(_selectedProfile.gamesPlayed)
-        .arg(_selectedProfile.wins)
-        .arg(_selectedProfile.losses)
-        .arg(_selectedProfile.draws);
-    _profileStatsLabel->setText(stats);
+    if (_selectedProfile.isRobot) {
+        _profileHeaderLabel->setText(
+            QString("@%1 [BOT]").arg(QString::fromStdString(_selectedProfile.handle)));
+        QString stats = QString(
+            "Owner: %1\nDescription: %2\n"
+            "Arena Elo — 2P_3B: %3 | 2P_1B: %4 | OFK: %5\n"
+            "Arena Games: %6 (W:%7 L:%8 D:%9)")
+            .arg(QString::fromStdString(_selectedProfile.ownerHandle.empty()
+                                            ? _selectedProfile.ownerUuid
+                                            : _selectedProfile.ownerHandle))
+            .arg(QString::fromStdString(_selectedProfile.description))
+            .arg(_selectedProfile.elo2p3b)
+            .arg(_selectedProfile.elo2p1b)
+            .arg(_selectedProfile.eloOfk)
+            .arg(_selectedProfile.gamesPlayed)
+            .arg(_selectedProfile.wins)
+            .arg(_selectedProfile.losses)
+            .arg(_selectedProfile.draws);
+        _profileStatsLabel->setText(stats);
+    } else {
+        _profileHeaderLabel->setText(
+            QString("@%1 [HUMAN]").arg(QString::fromStdString(_selectedProfile.handle)));
+        QString stats = QString(
+            "Type: Human Arena Challenger\nBio: %1\n"
+            "Arena Elo — 2P_3B: %2 | 2P_1B: %3 | OFK: %4\n"
+            "Arena Games: %5 (W:%6 L:%7 D:%8)")
+            .arg(QString::fromStdString(_selectedProfile.bio))
+            .arg(_selectedProfile.arenaElo2p3b)
+            .arg(_selectedProfile.arenaElo2p1b)
+            .arg(_selectedProfile.arenaEloOfk)
+            .arg(_selectedProfile.arenaGamesPlayed)
+            .arg(_selectedProfile.arenaWins)
+            .arg(_selectedProfile.arenaLosses)
+            .arg(_selectedProfile.arenaDraws);
+        _profileStatsLabel->setText(stats);
+    }
 
     _recentGamesTable->setRowCount(static_cast<int>(_selectedProfile.recentGames.size()));
     for (int i = 0; i < static_cast<int>(_selectedProfile.recentGames.size()); ++i) {
         const auto &g = _selectedProfile.recentGames[static_cast<std::size_t>(i)];
         _recentGamesTable->setItem(i, 0, new QTableWidgetItem(QString::fromStdString(g.gameId)));
-        _recentGamesTable->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(g.mode)));
+        _recentGamesTable->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(g.variantCode())));
         _recentGamesTable->setItem(i, 2, new QTableWidgetItem(QString::fromStdString(g.result)));
         std::string opp;
         for (const auto &p : g.players) {
@@ -3054,6 +3256,14 @@ void NewLocalGameDialog::updateModeConstraints()
         _superProngsCheck->setEnabled(false);
         _edgelessCheck->setChecked(false);
         _edgelessCheck->setEnabled(false);
+    } else if (is4P) {
+        int b3Idx = _basesCombo->findData(static_cast<int>(GAME_BASES_3));
+        if (b3Idx >= 0) {
+            _basesCombo->setCurrentIndex(b3Idx);
+        }
+        _basesCombo->setEnabled(false);
+        _superProngsCheck->setEnabled(true);
+        _edgelessCheck->setEnabled(true);
     } else {
         _basesCombo->setEnabled(true);
         _superProngsCheck->setEnabled(true);
@@ -3119,6 +3329,13 @@ LocalGameConfig NewLocalGameDialog::config() const
     cfg.bases = static_cast<OctiGameBases>(_basesCombo->currentData().toInt());
     cfg.useSuperProngs = _superProngsCheck->isChecked();
     cfg.useEdgelessBoard = _edgelessCheck->isChecked();
+    if (cfg.mode == GAME_MODE_4) {
+        cfg.bases = GAME_BASES_3;
+    } else if (cfg.mode == GAME_MODE_OFK) {
+        cfg.bases = GAME_BASES_1;
+        cfg.useSuperProngs = false;
+        cfg.useEdgelessBoard = false;
+    }
     cfg.timeControlEnabled = _timeControlCheck->isChecked();
     cfg.initialTimeMs =
         static_cast<long>(_initialSecSpin->value()) * 1000L;
@@ -6027,6 +6244,22 @@ QIcon createMenuIcon(MenuIconKind kind, ThemeId theme)
         p.drawArc(7, 8, 18, 12, 0, 180 * 16);
         break;
     }
+    case MenuIconKind::RULEBOOK: {
+        p.setPen(QPen(pal.accentBrass, 1.6));
+        p.setBrush(pal.panelCardBg);
+        p.drawRoundedRect(QRectF(5.0, 6.0, 11.0, 20.0), 2.0, 2.0);
+        p.drawRoundedRect(QRectF(16.0, 6.0, 11.0, 20.0), 2.0, 2.0);
+        p.setPen(QPen(pal.prongSuperGold, 1.8));
+        p.drawLine(16, 6, 16, 26);
+        p.setPen(QPen(pal.accentBrass, 1.2));
+        p.drawLine(8, 11, 13, 11);
+        p.drawLine(8, 15, 13, 15);
+        p.drawLine(8, 19, 13, 19);
+        p.drawLine(19, 11, 24, 11);
+        p.drawLine(19, 15, 24, 15);
+        p.drawLine(19, 19, 24, 19);
+        break;
+    }
     case MenuIconKind::SHOW_SPLASH: {
         p.setPen(QPen(pal.prongSuperGold, 1.8));
         p.setBrush(pal.podA.core);
@@ -6367,9 +6600,11 @@ QString OctiStartMatchDialog::formatConfigSummary(const LocalGameConfig &cfg)
     default:            modeStr = "2P (9x9)"; break;
     }
 
-    QString basesStr = (cfg.bases == GAME_BASES_1 || cfg.mode == GAME_MODE_4 || cfg.mode == GAME_MODE_OFK)
+    QString basesStr = (cfg.mode == GAME_MODE_OFK)
         ? "1 Base"
-        : "3 Bases";
+        : ((cfg.mode == GAME_MODE_4)
+               ? "3 Bases"
+               : (cfg.bases == GAME_BASES_1 ? "1 Base" : "3 Bases"));
 
     QString line2 = QString("%1 \xE2\x80\xA2 %2").arg(modeStr, basesStr);
     if (cfg.useSuperProngs) {
@@ -6618,6 +6853,218 @@ void OctiStartMatchDialog::reject()
             _onStartMatchCallback();
         }
     }
+}
+
+/* ==================================================================== */
+/* OctiRulebookDialog (Offline 7-Chapter Illustrated Rulebook)           */
+/* ==================================================================== */
+
+namespace {
+
+class OfflineRulebookTextBrowser : public QTextBrowser {
+public:
+    explicit OfflineRulebookTextBrowser(QWidget *parent = nullptr)
+        : QTextBrowser(parent)
+    {
+        setOpenExternalLinks(false);
+        setOpenLinks(false);
+    }
+
+protected:
+    QVariant loadResource(int type, const QUrl &name) override
+    {
+        if (type == QTextDocument::ImageResource &&
+            name.scheme() == QStringLiteral("octi") &&
+            name.host() == QStringLiteral("rulebook")) {
+            QString path = name.path();
+            if (path.startsWith(QLatin1Char('/'))) {
+                path.remove(0, 1);
+            }
+            std::size_t pngSize = 0u;
+            const std::uint8_t *pngBytes =
+                rulebookImageBytes(path.toStdString(), pngSize);
+            if (pngBytes != nullptr && pngSize > 0u) {
+                QImage img;
+                if (img.loadFromData(pngBytes, static_cast<int>(pngSize), "PNG")) {
+                    return img;
+                }
+            }
+        }
+        return QVariant();
+    }
+};
+
+} // namespace
+
+OctiRulebookDialog::OctiRulebookDialog(ThemeId theme,
+                                       bool lightSurface,
+                                       QWidget *parent)
+    : QDialog(parent)
+    , _theme(theme)
+    , _lightSurface(lightSurface)
+    , _splitter(nullptr)
+    , _tocList(nullptr)
+    , _browser(nullptr)
+    , _closeBtn(nullptr)
+{
+    setWindowTitle(QStringLiteral("OCTI Official Illustrated Rulebook"));
+    resize(1040, 740);
+    setMinimumSize(780, 540);
+
+    QVBoxLayout *root = new QVBoxLayout(this);
+    root->setContentsMargins(14, 14, 14, 14);
+    root->setSpacing(10);
+
+    _splitter = new QSplitter(Qt::Horizontal, this);
+    _splitter->setChildrenCollapsible(false);
+
+    _tocList = new QListWidget(_splitter);
+    _tocList->setObjectName(QStringLiteral("rulebookTocList"));
+    _tocList->setMinimumWidth(240);
+    _tocList->setMaximumWidth(290);
+    _tocList->setSpacing(3);
+
+    const std::vector<RulebookSection> &sections = rulebookSections();
+    for (std::size_t i = 0; i < sections.size(); ++i) {
+        const QString itemLabel = QString("%1. %2")
+            .arg(static_cast<int>(i + 1))
+            .arg(QString::fromUtf8(sections[i].title));
+        QListWidgetItem *item = new QListWidgetItem(itemLabel, _tocList);
+        item->setData(Qt::UserRole, QString::fromUtf8(sections[i].id));
+        item->setToolTip(QString::fromUtf8(sections[i].summary));
+    }
+
+    _browser = new OfflineRulebookTextBrowser(_splitter);
+    _browser->setObjectName(QStringLiteral("rulebookContentBrowser"));
+
+    _splitter->addWidget(_tocList);
+    _splitter->addWidget(_browser);
+    _splitter->setStretchFactor(0, 0);
+    _splitter->setStretchFactor(1, 1);
+    root->addWidget(_splitter, 1);
+
+    QHBoxLayout *footer = new QHBoxLayout();
+    QLabel *hintLabel = new QLabel(
+        QStringLiteral("Offline Illustrated Reference  \xE2\x80\xA2  7 Chapters  \xE2\x80\xA2  12 Engine-Verified Diagrams"),
+        this);
+    hintLabel->setObjectName(QStringLiteral("rulebookFooterHint"));
+    footer->addWidget(hintLabel);
+    footer->addStretch(1);
+
+    _closeBtn = new QPushButton(QStringLiteral("Close (Esc)"), this);
+    _closeBtn->setDefault(true);
+    QObject::connect(_closeBtn, &QPushButton::clicked, this, &QDialog::accept);
+    footer->addWidget(_closeBtn);
+    root->addLayout(footer);
+
+    QObject::connect(_tocList, &QListWidget::currentRowChanged, this, [this](int row) {
+        if (!_browser || row < 0 || row >= _tocList->count()) {
+            return;
+        }
+        const QListWidgetItem *it = _tocList->item(row);
+        if (it) {
+            const QString anchor = it->data(Qt::UserRole).toString();
+            if (!anchor.isEmpty()) {
+                _browser->scrollToAnchor(anchor);
+            }
+        }
+    });
+
+    QObject::connect(_browser, &QTextBrowser::anchorClicked, this, [this](const QUrl &url) {
+        const QString frag = url.fragment();
+        if (!frag.isEmpty()) {
+            _browser->scrollToAnchor(frag);
+            for (int r = 0; r < _tocList->count(); ++r) {
+                if (_tocList->item(r)->data(Qt::UserRole).toString() == frag) {
+                    _tocList->blockSignals(true);
+                    _tocList->setCurrentRow(r);
+                    _tocList->blockSignals(false);
+                    break;
+                }
+            }
+        }
+    });
+
+    applyThemeAndReloadHtml();
+    if (_tocList->count() > 0) {
+        _tocList->setCurrentRow(0);
+    }
+}
+
+OctiRulebookDialog::~OctiRulebookDialog() = default;
+
+void OctiRulebookDialog::setTheme(ThemeId theme, bool lightSurface)
+{
+    _theme = theme;
+    _lightSurface = lightSurface;
+    applyThemeAndReloadHtml();
+}
+
+void OctiRulebookDialog::applyThemeAndReloadHtml()
+{
+    setStyleSheet(buildAppStyleSheet(_theme));
+    const QString listBg    = _lightSurface ? QStringLiteral("#f5efe2") : QStringLiteral("#101724");
+    const QString listFg    = _lightSurface ? QStringLiteral("#1e293b") : QStringLiteral("#e2e8f0");
+    const QString selBg     = _lightSurface ? QStringLiteral("#d9c8a9") : QStringLiteral("#263552");
+    const QString selFg     = _lightSurface ? QStringLiteral("#5c3507") : QStringLiteral("#fde047");
+    const QString borderHex = _lightSurface ? QStringLiteral("#cbbba0") : QStringLiteral("#2b3954");
+
+    if (_tocList) {
+        _tocList->setStyleSheet(
+            QString("QListWidget { background-color: %1; color: %2; border: 1px solid %3; "
+                    "border-radius: 8px; padding: 6px; font-size: 12.5px; font-weight: 600; }"
+                    "QListWidget::item { padding: 8px 8px; border-radius: 5px; }"
+                    "QListWidget::item:selected { background-color: %4; color: %5; }")
+                .arg(listBg, listFg, borderHex, selBg, selFg));
+    }
+    if (_browser) {
+        _browser->setStyleSheet(
+            QString("QTextBrowser { background-color: %1; border: 1px solid %2; border-radius: 8px; }")
+                .arg(_lightSurface ? QStringLiteral("#f8f3e8") : QStringLiteral("#0b0f17"),
+                     borderHex));
+    }
+
+    _htmlSource = QString::fromStdString(buildDesktopRulebookHtml(_lightSurface));
+    if (_browser) {
+        const int prevRow = _tocList ? _tocList->currentRow() : 0;
+        _browser->setHtml(_htmlSource);
+        if (_tocList && prevRow >= 0 && prevRow < _tocList->count()) {
+            const QString anchor = _tocList->item(prevRow)->data(Qt::UserRole).toString();
+            if (!anchor.isEmpty()) {
+                _browser->scrollToAnchor(anchor);
+            }
+        }
+    }
+}
+
+void OctiRulebookDialog::selectChapter(int index)
+{
+    if (!_tocList || index < 0 || index >= _tocList->count()) {
+        return;
+    }
+    _tocList->setCurrentRow(index);
+    if (_browser) {
+        const QString anchor = _tocList->item(index)->data(Qt::UserRole).toString();
+        if (!anchor.isEmpty()) {
+            _browser->scrollToAnchor(anchor);
+        }
+    }
+}
+
+QImage OctiRulebookDialog::renderToImage(int width, int height)
+{
+    const int w = std::max(640, width);
+    const int h = std::max(480, height);
+    resize(w, h);
+    if (layout()) {
+        layout()->activate();
+    }
+    QImage img(w, h, QImage::Format_ARGB32_Premultiplied);
+    QColor bg = paletteForTheme(_theme).windowBg;
+    bg.setAlpha(255);
+    img.fill(bg);
+    render(&img);
+    return img;
 }
 
 } // namespace octi

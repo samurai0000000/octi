@@ -23,6 +23,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPlainTextEdit>
@@ -30,7 +31,9 @@
 #include <QPushButton>
 #include <QSlider>
 #include <QSpinBox>
+#include <QSplitter>
 #include <QTableWidget>
+#include <QTextBrowser>
 #include <QTimer>
 #include <QWheelEvent>
 #include "ClientConfigStore.hxx"
@@ -536,7 +539,7 @@ public:
     ThemeId theme() const;
 
     ApiResult<std::vector<LeaderboardRow>> refreshLeaderboard(
-        const std::string &mode = "2P",
+        const std::string &mode = "2P_3B",
         int limit = 50);
 
     const std::vector<LeaderboardRow> &rows() const;
@@ -569,6 +572,9 @@ public:
     bool refreshRobots(const std::string &query = "");
     bool selectRobot(const std::string &robotUuid);
 
+    std::string selectedParticipantFilter() const;
+    void setParticipantFilter(const std::string &filter);
+
     const std::vector<RobotDirectoryEntry> &robots() const { return _robots; }
     const PlayerProfileInfo &selectedRobotProfile() const { return _selectedProfile; }
 
@@ -585,6 +591,8 @@ private:
     ThemeId _theme;
 
     QLineEdit *_searchEdit;
+    QComboBox *_participantFilterCombo;
+    QComboBox *_sortCombo;
     QPushButton *_refreshBtn;
     QTableWidget *_robotsTable;
     QGroupBox *_profileBox;
@@ -1124,6 +1132,38 @@ private:
 };
 
 /*
+ * Offline Illustrated OCTI Rulebook Dialog (7 Chapters + 12 Embedded Boards)
+ */
+class OctiRulebookDialog : public QDialog {
+public:
+    explicit OctiRulebookDialog(ThemeId theme = ThemeId::OBSIDIAN_BRASS,
+                                bool lightSurface = false,
+                                QWidget *parent = nullptr);
+    ~OctiRulebookDialog() override;
+
+    void setTheme(ThemeId theme, bool lightSurface = false);
+    ThemeId theme() const { return _theme; }
+    bool isLightSurface() const { return _lightSurface; }
+
+    QListWidget *tocListWidget() const { return _tocList; }
+    QTextBrowser *contentBrowser() const { return _browser; }
+    QString htmlSource() const { return _htmlSource; }
+    void selectChapter(int index);
+    QImage renderToImage(int width = 1040, int height = 740);
+
+private:
+    void applyThemeAndReloadHtml();
+
+    ThemeId _theme;
+    bool _lightSurface;
+    QSplitter *_splitter;
+    QListWidget *_tocList;
+    QTextBrowser *_browser;
+    QPushButton *_closeBtn;
+    QString _htmlSource;
+};
+
+/*
  * Procedural Vector Menu Icon Generator (GUI-04)
  */
 enum class MenuIconKind {
@@ -1149,6 +1189,7 @@ enum class MenuIconKind {
     LEADERBOARD,
     MODERATION,
     CHECK_UPDATE,
+    RULEBOOK,
     SHOW_SPLASH,
 };
 

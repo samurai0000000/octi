@@ -138,6 +138,18 @@ data class StackPodChipSpec(
     val superDirs: List<OctiDir>
 )
 
+data class CreateTableUiState(
+    val mode: String,
+    val bases: Int,
+    val basesLocked: Boolean,
+    val superProngs: Boolean,
+    val edgeless: Boolean,
+    val modifiersEnabled: Boolean,
+    val rated: Boolean,
+    val ratedEnabled: Boolean,
+    val variantCode: String
+)
+
 object OctiDialogs {
     const val SPLASH_DURATION_MS: Long = 10000L
     const val PLACE_RESERVE_POD_LABEL = "Place Reserve Pod"
@@ -146,6 +158,65 @@ object OctiDialogs {
     const val START_MATCH_CARD_MIN_WIDTH_DP = 300
     const val START_MATCH_CARD_MAX_WIDTH_DP = 360
     const val START_MATCH_BUTTON_HORIZONTAL_PADDING_DP = 10
+
+    @JvmStatic
+    fun leaderboardLadders(): List<String> = listOf("2P_3B", "2P_1B", "OFK")
+
+    @JvmStatic
+    fun archiveVariantFilters(): List<String> =
+        listOf("", "2P_ALL", "4P_ALL") + OctiGameMode.allVariantCodes()
+
+    @JvmStatic
+    fun arenaParticipantFilters(): List<String> = listOf("all", "robots", "humans")
+
+    @JvmStatic
+    fun normalizeCreateTableState(
+        mode: String,
+        bases: Int,
+        superProngs: Boolean,
+        edgeless: Boolean,
+        requestedRated: Boolean
+    ): CreateTableUiState {
+        val normMode = when (mode.trim().uppercase()) {
+            "OFK" -> "OFK"
+            "4P" -> "4P"
+            else -> "2P"
+        }
+        val normBases = when (normMode) {
+            "OFK" -> 1
+            "4P" -> 3
+            else -> if (bases == 1) 1 else 3
+        }
+        val basesLocked = (normMode == "OFK" || normMode == "4P")
+        val modifiersEnabled = (normMode != "OFK")
+        val normSp = if (modifiersEnabled) superProngs else false
+        val normEd = if (modifiersEnabled) edgeless else false
+        val vCode = OctiGameMode.variantCodeFromModeStr(normMode, normBases, normSp, normEd)
+        val ratedEnabled = OctiGameMode.isOfficialRatedVariantCode(vCode)
+        val normRated = ratedEnabled && requestedRated
+        return CreateTableUiState(
+            mode = normMode,
+            bases = normBases,
+            basesLocked = basesLocked,
+            superProngs = normSp,
+            edgeless = normEd,
+            modifiersEnabled = modifiersEnabled,
+            rated = normRated,
+            ratedEnabled = ratedEnabled,
+            variantCode = vCode
+        )
+    }
+
+    @JvmStatic
+    fun formatProfileRatingsSummary(p: OctiNetworkClient.PlayerProfileInfo): String {
+        val humanLine =
+            "Human Elo — 2P_3B: ${p.elo2p3b}  •  2P_1B: ${p.elo2p1b}  •  OFK: ${p.eloOfk}"
+        return if (p.arenaGamesPlayed > 0) {
+            "$humanLine\nArena Elo — 2P_3B: ${p.arenaElo2p3b}  •  2P_1B: ${p.arenaElo2p1b}  •  OFK: ${p.arenaEloOfk}"
+        } else {
+            humanLine
+        }
+    }
 
     @JvmStatic
     fun buildStackPodChipSpecs(
@@ -281,7 +352,10 @@ fun NewGameSetupDialog(
 ) {
     var mode by remember { mutableStateOf(viewModel.board.gameMode) }
     var threeBases by remember {
-        mutableStateOf(viewModel.board.game?.bases == OctiGameBases.GAME_BASES_3)
+        mutableStateOf(
+            viewModel.board.gameMode == OctiGameMode.GAME_MODE_4 ||
+                viewModel.board.game?.bases == OctiGameBases.GAME_BASES_3
+        )
     }
     var useSuperProngs by remember {
         mutableStateOf(viewModel.board.game?.useSuperProngs() == true)
@@ -320,9 +394,9 @@ fun NewGameSetupDialog(
                         selected = mode == OctiGameMode.GAME_MODE_4,
                         onClick = {
                             mode = OctiGameMode.GAME_MODE_4
-                            threeBases = false
+                            threeBases = true
                         },
-                        label = { Text("4-Player (9x9)") }
+                        label = { Text("4-Player (9x9 • 3 Bases)") }
                     )
                     FilterChip(
                         selected = mode == OctiGameMode.GAME_MODE_OFK,
@@ -407,12 +481,10 @@ fun NewGameSetupDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val bases = if (mode == OctiGameMode.GAME_MODE_OFK) {
-                        OctiGameBases.GAME_BASES_1
-                    } else if (threeBases) {
-                        OctiGameBases.GAME_BASES_3
-                    } else {
-                        OctiGameBases.GAME_BASES_1
+                    val bases = when (mode) {
+                        OctiGameMode.GAME_MODE_OFK -> OctiGameBases.GAME_BASES_1
+                        OctiGameMode.GAME_MODE_4 -> OctiGameBases.GAME_BASES_3
+                        else -> if (threeBases) OctiGameBases.GAME_BASES_3 else OctiGameBases.GAME_BASES_1
                     }
                     val resolvedSeat = if (!vsBot) {
                         OctiPlayer.PLAYER_A
@@ -883,7 +955,7 @@ fun AccountIdentitiesDialog(
                     }
 
                     Text(
-                        text = "Rating — 2P: ${p.elo2p}  •  4P: ${p.elo4p}  •  OFK: ${p.eloOfk}",
+                        text = OctiDialogs.formatProfileRatingsSummary(p),
                         style = MaterialTheme.typography.bodyMedium,
                         color = OctiTheme.colors.textSecondary
                     )
@@ -1195,13 +1267,14 @@ fun CreateTableDialog(
     var allowTakeback by remember { mutableStateOf(false) }
     var passcode by remember { mutableStateOf("") }
     val profileActionBusy by viewModel.profileActionBusy.collectAsState()
+    val uiState = OctiDialogs.normalizeCreateTableState(mode, bases, superProngs, edgeless, rated)
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = OctiTheme.colors.panelCardBg,
         titleContentColor = OctiTheme.colors.accentBrass,
         textContentColor = OctiTheme.colors.textPrimary,
-        title = { Text("Create Online Table") },
+        title = { Text("Create Online Table (${uiState.variantCode})") },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -1214,7 +1287,7 @@ fun CreateTableDialog(
                             selected = mode == m,
                             onClick = {
                                 mode = m
-                                bases = if (m == "4P" || m == "OFK") 1 else 3
+                                bases = if (m == "OFK") 1 else 3
                                 if (m == "OFK") {
                                     superProngs = false
                                     edgeless = false
@@ -1224,16 +1297,26 @@ fun CreateTableDialog(
                         )
                     }
                 }
-                if (mode != "OFK") {
+                if (mode == "2P") {
                     Text("Bases", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf(3 to "3-Base", 1 to "1-Base").forEach { (b, lbl) ->
                             FilterChip(
-                                selected = bases == b,
+                                selected = uiState.bases == b,
                                 onClick = { bases = b },
                                 label = { Text(lbl) }
                             )
                         }
+                    }
+                } else if (mode == "4P") {
+                    Text("Bases", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(
+                            selected = true,
+                            onClick = {},
+                            enabled = false,
+                            label = { Text("3-Base (Locked for 4P)") }
+                        )
                     }
                 }
                 Text("Time Control", fontWeight = FontWeight.SemiBold, color = OctiTheme.colors.accentBrass)
@@ -1246,19 +1329,33 @@ fun CreateTableDialog(
                         )
                     }
                 }
-                if (mode != "OFK") {
+                if (uiState.modifiersEnabled) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = superProngs, onCheckedChange = { superProngs = it })
+                        Checkbox(checked = uiState.superProngs, onCheckedChange = { superProngs = it })
                         Text("Super-Prongs")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = edgeless, onCheckedChange = { edgeless = it })
+                        Checkbox(checked = uiState.edgeless, onCheckedChange = { edgeless = it })
                         Text("Edgeless Board")
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = rated, onCheckedChange = { rated = it })
-                    Text("Elo Rated Match")
+                    Checkbox(
+                        checked = uiState.rated,
+                        enabled = uiState.ratedEnabled,
+                        onCheckedChange = {
+                            if (uiState.ratedEnabled) {
+                                rated = it
+                            }
+                        }
+                    )
+                    Text(
+                        if (uiState.ratedEnabled) {
+                            "Elo Rated Match"
+                        } else {
+                            "Casual Only (${uiState.variantCode} has no Elo ladder)"
+                        }
+                    )
                 }
                 OutlinedTextField(
                     value = passcode,
@@ -1273,12 +1370,13 @@ fun CreateTableDialog(
             Button(
                 onClick = {
                     val req = OctiNetworkClient.CreateTableRequest().apply {
-                        this.mode = mode
-                        this.bases = if (mode == "OFK") 1 else bases
-                        this.superProngs = if (mode == "OFK") false else superProngs
-                        this.edgeless = if (mode == "OFK") false else edgeless
+                        this.mode = uiState.mode
+                        this.bases = uiState.bases
+                        this.superProngs = uiState.superProngs
+                        this.edgeless = uiState.edgeless
+                        this.variant = uiState.variantCode
                         this.timeControl = timeControl
-                        this.rated = rated
+                        this.rated = uiState.rated
                         this.allowTakeback = allowTakeback
                         this.passcode = passcode.trim()
                     }

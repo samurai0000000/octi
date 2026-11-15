@@ -14,6 +14,7 @@
 #include "OctiCrypto.hxx"
 #include "OctiExceptions.hxx"
 #include "OctiGame.hxx"
+#include "OctiRulebook.hxx"
 #include "OctiSoundCue.hxx"
 #include "WebUi.hxx"
 
@@ -804,13 +805,22 @@ Json profileJson(const PlayerProfile &p, bool includeSeen)
     j["avatar_url"] = p.avatarUrl;
     j["location"] = p.location;
     j["bio"] = p.bio;
-    j["elo_2p"] = p.elo2p;
+    j["elo_2p"] = p.elo2p3b;
+    j["elo_2p_3b"] = p.elo2p3b;
+    j["elo_2p_1b"] = p.elo2p1b;
     j["elo_4p"] = p.elo4p;
     j["elo_ofk"] = p.eloOfk;
     j["games_played"] = p.gamesPlayed;
     j["wins"] = p.wins;
     j["losses"] = p.losses;
     j["draws"] = p.draws;
+    j["arena_elo_2p_3b"] = p.arenaElo2p3b;
+    j["arena_elo_2p_1b"] = p.arenaElo2p1b;
+    j["arena_elo_ofk"] = p.arenaEloOfk;
+    j["arena_games_played"] = p.arenaGamesPlayed;
+    j["arena_wins"] = p.arenaWins;
+    j["arena_losses"] = p.arenaLosses;
+    j["arena_draws"] = p.arenaDraws;
     j["is_admin"] = p.isAdmin;
     j["created_at"] = p.createdAt;
     if (includeSeen) {
@@ -842,6 +852,8 @@ Json configJson(const GameTableConfig &c)
     j["bases"] = static_cast<int>(c.bases);
     j["super_prongs"] = c.useSuperProngs;
     j["edgeless"] = c.useEdgelessBoard;
+    j["variant"] = octiVariantCode(c.mode, c.bases,
+                                   c.useSuperProngs, c.useEdgelessBoard);
     Json tc;
     tc["enabled"] = c.timeControl.enabled;
     tc["initial_ms"] = c.timeControl.initialMs;
@@ -919,6 +931,16 @@ bool parseTimeControl(const Json &b, TimeControlConfig &tc, std::string &err)
 bool parseTableConfig(const Json &b, GameTableConfig &cfg, std::string &err)
 {
     cfg = GameTableConfig();
+    std::string variantText;
+    if (!fieldString(b, "variant", false, variantText, err)) {
+        return false;
+    }
+    if (!variantText.empty() &&
+        !parseOctiVariantCode(variantText, cfg.mode, cfg.bases,
+                              cfg.useSuperProngs, cfg.useEdgelessBoard)) {
+        err = "variant must be one of the 13 canonical OCTI variant codes";
+        return false;
+    }
     std::string modeText;
     if (!fieldString(b, "mode", false, modeText, err)) {
         return false;
@@ -1130,6 +1152,7 @@ struct OctiHttpServer::Impl {
     void handleHealth(const Request &req, Response &res);
     void handleAvatarGet(const Request &req, Response &res);
     void handleSoundAssetGet(const Request &req, Response &res);
+    void handleRulebookAssetGet(const Request &req, Response &res);
     void handlePrivacy(const Request &req, Response &res);
     void handleDataDeletion(const Request &req, Response &res);
     void handleAuthAuthorize(const Request &req, Response &res);
@@ -2047,6 +2070,8 @@ Json OctiHttpServer::Impl::gameSummaryJson(const GameRecord &g)
     j["bases"] = g.gameBases;
     j["super_prongs"] = g.superProngs;
     j["edgeless"] = g.edgeless;
+    j["variant"] = octiVariantCodeFromModeStr(g.gameMode, g.gameBases,
+                                              g.superProngs, g.edgeless);
     j["time_control"] = g.timeControl;
     Json players = Json::array();
     const int64_t ids[4] = {g.p1PlayerId, g.p2PlayerId, g.p3PlayerId,
@@ -2093,6 +2118,8 @@ Json OctiHttpServer::Impl::gameSummaryJson(const GameRecord &g)
     j["ai_difficulty"] = g.aiDifficulty;
     j["app_version"] = g.appVersion;
     j["platform"] = g.platform;
+    j["rated"] = (g.rated != 0);
+    j["elo_pool"] = g.eloPool;
     return j;
 }
 
@@ -2371,6 +2398,26 @@ void OctiHttpServer::Impl::handleSoundAssetGet(const Request &req,
     res.set_header("Cache-Control", "public, max-age=86400");
     res.set_content(reinterpret_cast<const char *>(wavBytes), wavSize,
                     "audio/wav");
+}
+
+void OctiHttpServer::Impl::handleRulebookAssetGet(const Request &req,
+                                                  Response &res)
+{
+    auto it = req.path_params.find("file");
+    if (it == req.path_params.end() || it->second.empty()) {
+        sendError(res, 404, "NOT_FOUND", "rulebook asset not found");
+        return;
+    }
+    std::size_t pngSize = 0u;
+    const std::uint8_t *pngBytes = rulebookImageBytes(it->second, pngSize);
+    if (pngBytes == nullptr || pngSize == 0u) {
+        sendError(res, 404, "NOT_FOUND", "rulebook asset not found");
+        return;
+    }
+    res.status = 200;
+    res.set_header("Cache-Control", "public, max-age=86400");
+    res.set_content(reinterpret_cast<const char *>(pngBytes), pngSize,
+                    "image/png");
 }
 
 void OctiHttpServer::Impl::handlePrivacy(const Request &, Response &res)
@@ -3105,6 +3152,11 @@ void OctiHttpServer::Impl::handleProfileGet(const Request &req, Response &res)
         j["owner_uuid"] = auth.robotRecord.ownerUuid;
         j["owner_handle"] = auth.robotRecord.ownerHandle;
         j["owner_avatar_url"] = auth.robotRecord.ownerAvatarUrl;
+        j["elo"] = auth.robotRecord.elo2p3b;
+        j["elo_2p"] = auth.robotRecord.elo2p3b;
+        j["elo_2p_3b"] = auth.robotRecord.elo2p3b;
+        j["elo_2p_1b"] = auth.robotRecord.elo2p1b;
+        j["elo_ofk"] = auth.robotRecord.eloOfk;
         j["games_played"] = auth.robotRecord.gamesPlayed;
         j["wins"] = auth.robotRecord.wins;
         j["losses"] = auth.robotRecord.losses;
@@ -3247,7 +3299,7 @@ void OctiHttpServer::Impl::handleUsersList(const Request &req, Response &res)
         filter.sortField = req.get_param_value("sort");
     }
     if (filter.sortField.empty()) {
-        filter.sortField = "elo_2p";
+        filter.sortField = "elo_2p_3b";
     }
     if (req.has_param("order")) {
         std::string ord = lower(req.get_param_value("order"));
@@ -3292,13 +3344,22 @@ void OctiHttpServer::Impl::handleUsersList(const Request &req, Response &res)
         uj["avatar_url"] = e.profile.avatarUrl;
         uj["location"] = e.profile.location;
         uj["bio"] = e.profile.bio;
-        uj["elo_2p"] = e.profile.elo2p;
+        uj["elo_2p"] = e.profile.elo2p3b;
+        uj["elo_2p_3b"] = e.profile.elo2p3b;
+        uj["elo_2p_1b"] = e.profile.elo2p1b;
         uj["elo_4p"] = e.profile.elo4p;
         uj["elo_ofk"] = e.profile.eloOfk;
         uj["games_played"] = e.profile.gamesPlayed;
         uj["wins"] = e.profile.wins;
         uj["losses"] = e.profile.losses;
         uj["draws"] = e.profile.draws;
+        uj["arena_elo_2p_3b"] = e.profile.arenaElo2p3b;
+        uj["arena_elo_2p_1b"] = e.profile.arenaElo2p1b;
+        uj["arena_elo_ofk"] = e.profile.arenaEloOfk;
+        uj["arena_games_played"] = e.profile.arenaGamesPlayed;
+        uj["arena_wins"] = e.profile.arenaWins;
+        uj["arena_losses"] = e.profile.arenaLosses;
+        uj["arena_draws"] = e.profile.arenaDraws;
         uj["active_robots_count"] = e.activeRobotsCount;
         uj["created_at"] = e.profile.createdAt;
         uj["last_seen_at"] = e.profile.lastSeenAt;
@@ -3331,7 +3392,11 @@ Json OctiHttpServer::Impl::buildRobotProfilePayload(const RobotRecord &r)
     rj["owner_uuid"] = r.ownerUuid;
     rj["owner_handle"] = r.ownerHandle;
     rj["owner_avatar_url"] = r.ownerAvatarUrl;
-    rj["elo"] = 1200;
+    rj["elo"] = r.elo2p3b;
+    rj["elo_2p"] = r.elo2p3b;
+    rj["elo_2p_3b"] = r.elo2p3b;
+    rj["elo_2p_1b"] = r.elo2p1b;
+    rj["elo_ofk"] = r.eloOfk;
     rj["games_played"] = r.gamesPlayed;
     rj["wins"] = r.wins;
     rj["losses"] = r.losses;
@@ -3472,6 +3537,11 @@ void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
         rj["description"] = r.description;
         rj["robot_url"] = r.robotUrl;
         rj["name_changed_at"] = r.nameChangedAt;
+        rj["elo"] = r.elo2p3b;
+        rj["elo_2p"] = r.elo2p3b;
+        rj["elo_2p_3b"] = r.elo2p3b;
+        rj["elo_2p_1b"] = r.elo2p1b;
+        rj["elo_ofk"] = r.eloOfk;
         rj["games_played"] = r.gamesPlayed;
         rj["wins"] = r.wins;
         rj["losses"] = r.losses;
@@ -3546,14 +3616,24 @@ void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
 
 void OctiHttpServer::Impl::handleRobotsDirectory(const Request &req, Response &res)
 {
-    RobotDirectoryFilter filter;
+    ArenaStandingsFilter filter;
+    filter.participantType = "all";
+    if (req.has_param("participant_type")) {
+        std::string pt = lower(req.get_param_value("participant_type"));
+        if (pt != "all" && pt != "robots" && pt != "humans") {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "participant_type must be all, robots or humans");
+            return;
+        }
+        filter.participantType = pt;
+    }
     if (req.has_param("q")) {
         filter.query = req.get_param_value("q");
     }
     if (req.has_param("sort")) {
         filter.sortField = req.get_param_value("sort");
     } else {
-        filter.sortField = "wins";
+        filter.sortField = "elo_2p_3b";
     }
     if (req.has_param("order")) {
         std::string ord = lower(req.get_param_value("order"));
@@ -3584,55 +3664,61 @@ void OctiHttpServer::Impl::handleRobotsDirectory(const Request &req, Response &r
     if (offset < 0) offset = 0;
     filter.offset = offset;
 
-    std::vector<RobotRecord> list;
+    std::vector<ArenaStandingEntry> list;
     int64_t total = 0;
-    if (!store.listPublicRobotsDirectory(filter, list, &total)) {
-        sendError(res, 500, "INTERNAL_ERROR", "failed to list robots directory");
+    if (!store.listArenaStandings(filter, list, &total)) {
+        sendError(res, 500, "INTERNAL_ERROR", "failed to list arena directory");
         return;
     }
 
     Json arr = Json::array();
     for (size_t i = 0; i < list.size(); ++i) {
-        const auto &r = list[i];
+        const auto &e = list[i];
+        const bool isRobot = (e.entryType == "robot");
         Json rj;
-        rj["robot_uuid"] = r.robotUuid;
-        rj["name"] = r.robotName;
-        rj["robot_name"] = r.robotName;
-        rj["display_name"] = r.robotName;
-        rj["description"] = r.description;
-        rj["bio"] = r.description;
-        rj["robot_url"] = r.robotUrl;
-        rj["name_changed_at"] = r.nameChangedAt;
-        rj["is_robot"] = true;
-        rj["elo"] = 1200;
-        rj["games_played"] = r.gamesPlayed;
-        rj["wins"] = r.wins;
-        rj["losses"] = r.losses;
-        rj["draws"] = r.draws;
-        double wr = (r.gamesPlayed > 0)
-                        ? std::round((static_cast<double>(r.wins) /
-                                      r.gamesPlayed) *
-                                     1000.0) /
-                              10.0
-                        : 0.0;
-        rj["win_rate"] = wr;
-        rj["revoked"] = r.revoked;
-        rj["token_deleted"] = r.tokenDeleted;
-        bool retired = (r.revoked || r.tokenDeleted);
+        rj["entry_type"] = e.entryType;
+        rj["is_robot"] = isRobot;
+        rj["uuid"] = e.uuid;
+        rj["robot_uuid"] = isRobot ? e.robotUuid : "";
+        rj["user_uuid"] = isRobot ? "" : e.uuid;
+        rj["handle"] = e.name;
+        rj["name"] = e.name;
+        rj["robot_name"] = isRobot ? e.name : "";
+        rj["display_name"] = e.displayName;
+        rj["avatar_url"] = e.avatarUrl;
+        rj["description"] = e.description;
+        rj["bio"] = e.description;
+        rj["robot_url"] = e.robotUrl;
+        rj["name_changed_at"] = e.nameChangedAt;
+        rj["elo"] = e.elo2p3b;
+        rj["elo_2p"] = e.elo2p3b;
+        rj["elo_2p_3b"] = e.elo2p3b;
+        rj["elo_2p_1b"] = e.elo2p1b;
+        rj["elo_ofk"] = e.eloOfk;
+        rj["games_played"] = e.gamesPlayed;
+        rj["wins"] = e.wins;
+        rj["losses"] = e.losses;
+        rj["draws"] = e.draws;
+        rj["win_rate"] = e.winRate;
+        rj["revoked"] = e.revoked;
+        rj["token_deleted"] = e.tokenDeleted;
+        bool retired = isRobot && (e.revoked || e.tokenDeleted);
         rj["retired"] = retired;
         rj["status"] = (!retired) ? "active" : "retired";
-        rj["created_at"] = r.createdAt;
-        rj["last_seen_at"] = 0;
-        rj["owner_uuid"] = r.ownerUuid;
-        rj["owner_handle"] = r.ownerHandle;
-        rj["owner_avatar_url"] = r.ownerAvatarUrl;
+        rj["created_at"] = e.createdAt;
+        rj["last_seen_at"] = e.lastSeenAt;
+        rj["owner_uuid"] = e.ownerUuid;
+        rj["owner_handle"] = e.ownerHandle;
+        rj["owner_avatar_url"] = e.ownerAvatarUrl;
         arr.push_back(rj);
     }
 
     Json resp;
+    resp["participant_type"] = filter.participantType;
     resp["total"] = total;
     resp["limit"] = limit;
     resp["offset"] = offset;
+    resp["entries"] = arr;
     resp["robots"] = arr;
     sendJson(res, 200, resp);
 }
@@ -3697,6 +3783,11 @@ void OctiHttpServer::Impl::handleRobotsList(const Request &req, Response &res)
         rj["robot_token"] = r.token;
         rj["token_prefix"] = r.tokenPrefix;
         rj["created_at"] = r.createdAt;
+        rj["elo"] = r.elo2p3b;
+        rj["elo_2p"] = r.elo2p3b;
+        rj["elo_2p_3b"] = r.elo2p3b;
+        rj["elo_2p_1b"] = r.elo2p1b;
+        rj["elo_ofk"] = r.eloOfk;
         rj["games_played"] = r.gamesPlayed;
         rj["wins"] = r.wins;
         rj["losses"] = r.losses;
@@ -3772,6 +3863,11 @@ void OctiHttpServer::Impl::handleRobotCreate(const Request &req, Response &res)
         j["robot_token"] = cr.rawToken;
         j["token_prefix"] = cr.robot.tokenPrefix;
         j["created_at"] = cr.robot.createdAt;
+        j["elo"] = cr.robot.elo2p3b;
+        j["elo_2p"] = cr.robot.elo2p3b;
+        j["elo_2p_3b"] = cr.robot.elo2p3b;
+        j["elo_2p_1b"] = cr.robot.elo2p1b;
+        j["elo_ofk"] = cr.robot.eloOfk;
         j["revoked"] = cr.robot.revoked;
         sendJson(res, 201, j);
         return;
@@ -4147,13 +4243,15 @@ void OctiHttpServer::Impl::handleRobotsExportConf(const Request &req, Response &
 void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
                                              Response &res)
 {
-    std::string mode = "2P";
-    if (req.has_param("mode")) {
+    std::string mode = "2P_3B";
+    if (req.has_param("ladder")) {
+        mode = upper(req.get_param_value("ladder"));
+    } else if (req.has_param("mode")) {
         mode = upper(req.get_param_value("mode"));
     }
-    OctiGameMode parsed = GAME_MODE_2;
-    if (!parseModeName(mode, parsed)) {
-        sendError(res, 400, "INVALID_ARGUMENT", "mode must be 2P, 4P or OFK");
+    if (mode != "2P" && mode != "2P_3B" && mode != "2P_1B" && mode != "OFK") {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "mode must be 2P_3B, 2P_1B or OFK");
         return;
     }
     int64_t limit = 50;
@@ -4187,6 +4285,7 @@ void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
     }
     Json j;
     j["mode"] = mode;
+    j["ladder"] = (mode == "2P") ? "2P_3B" : mode;
     j["entries"] = arr;
     sendJson(res, 200, j);
 }
@@ -5790,14 +5889,38 @@ void OctiHttpServer::Impl::handleArchiveList(const Request &req,
 {
     ArchiveFilter f;
     if (req.has_param("mode")) {
-        OctiGameMode m = GAME_MODE_2;
         std::string mode = upper(req.get_param_value("mode"));
-        if (!parseModeName(mode, m)) {
-            sendError(res, 400, "INVALID_ARGUMENT",
-                      "mode must be 2P, 4P or OFK");
-            return;
+        if (!mode.empty()) {
+            if (mode == "2P" || mode == "2P_ALL") {
+                f.mode = "2P";
+            } else if (mode == "4P" || mode == "4P_ALL") {
+                f.mode = "4P";
+            } else if (mode == "OFK") {
+                f.mode = "OFK";
+            } else if (isValidOctiVariantCode(mode)) {
+                f.variant = mode;
+            } else {
+                sendError(res, 400, "INVALID_ARGUMENT",
+                          "mode must be 2P, 4P, OFK, or a canonical variant code");
+                return;
+            }
         }
-        f.mode = mode;
+    }
+    if (req.has_param("variant")) {
+        std::string var = upper(req.get_param_value("variant"));
+        if (!var.empty()) {
+            if (var == "2P" || var == "2P_ALL") {
+                f.mode = "2P";
+            } else if (var == "4P_ALL") {
+                f.mode = "4P";
+            } else if (isValidOctiVariantCode(var)) {
+                f.variant = var;
+            } else {
+                sendError(res, 400, "INVALID_ARGUMENT",
+                          "variant must be one of the 13 canonical OCTI variant codes");
+                return;
+            }
+        }
     }
     if (req.has_param("player")) {
         f.playerUuid = req.get_param_value("player");
@@ -6104,6 +6227,7 @@ void OctiHttpServer::Impl::handleArchiveStats(const Request &req, Response &res)
     j["total_games"] = stats.totalGames;
     j["by_source"] = stats.bySource;
     j["by_mode"] = stats.byMode;
+    j["by_variant"] = stats.byVariant;
     Json byDiff = Json::object();
     for (const auto &kv : stats.byAiDifficulty) {
         byDiff[std::to_string(kv.first)] = kv.second;
@@ -6139,13 +6263,38 @@ void OctiHttpServer::Impl::handleArchiveExport(const Request &req, Response &res
     f.maxLimit = AccountStore::kMaxExportLimit;
 
     if (req.has_param("mode")) {
-        OctiGameMode m = GAME_MODE_2;
         std::string mode = upper(req.get_param_value("mode"));
-        if (!parseModeName(mode, m)) {
-            sendError(res, 400, "INVALID_ARGUMENT", "mode must be 2P, 4P or OFK");
-            return;
+        if (!mode.empty()) {
+            if (mode == "2P" || mode == "2P_ALL") {
+                f.mode = "2P";
+            } else if (mode == "4P" || mode == "4P_ALL") {
+                f.mode = "4P";
+            } else if (mode == "OFK") {
+                f.mode = "OFK";
+            } else if (isValidOctiVariantCode(mode)) {
+                f.variant = mode;
+            } else {
+                sendError(res, 400, "INVALID_ARGUMENT",
+                          "mode must be 2P, 4P, OFK, or a canonical variant code");
+                return;
+            }
         }
-        f.mode = mode;
+    }
+    if (req.has_param("variant")) {
+        std::string var = upper(req.get_param_value("variant"));
+        if (!var.empty()) {
+            if (var == "2P" || var == "2P_ALL") {
+                f.mode = "2P";
+            } else if (var == "4P_ALL") {
+                f.mode = "4P";
+            } else if (isValidOctiVariantCode(var)) {
+                f.variant = var;
+            } else {
+                sendError(res, 400, "INVALID_ARGUMENT",
+                          "variant must be one of the 13 canonical OCTI variant codes");
+                return;
+            }
+        }
     }
     if (req.has_param("player")) {
         f.playerUuid = req.get_param_value("player");
@@ -6621,6 +6770,7 @@ void OctiHttpServer::Impl::registerRoutes()
         {"GET", "/api/v1/avatars/:file", &Impl::handleAvatarGet},
         {"GET", "/avatar/:file", &Impl::handleAvatarGet},
         {"GET", "/sounds/:file", &Impl::handleSoundAssetGet},
+        {"GET", "/assets/rulebook/:file", &Impl::handleRulebookAssetGet},
         {"GET", "/api/v1/auth/data-deletion", &Impl::handleDataDeletion},
         {"POST", "/api/v1/auth/data-deletion", &Impl::handleDataDeletion},
         {"GET", "/api/v1/auth/authorize", &Impl::handleAuthAuthorize},

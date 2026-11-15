@@ -87,6 +87,8 @@ public final class OctiNetworkClient implements AutoCloseable {
         public int seat = 0;
         public String handle = "";
         public String playerUuid = "";
+        public boolean isRobot = false;
+        public String robotUuid = "";
     }
 
     public static final class ArchivedGameSummary {
@@ -95,6 +97,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         public int bases = 3;
         public boolean superProngs = false;
         public boolean edgeless = false;
+        public String variant = "";
         public String timeControl = "untimed";
         public List<ArchivedGamePlayer> players = new ArrayList<>();
         public String result = "";
@@ -103,8 +106,17 @@ public final class OctiNetworkClient implements AutoCloseable {
         public int plyCount = 0;
         public long startedAt = 0;
         public long endedAt = 0;
+        public boolean rated = false;
+        public int eloPool = 0;
         public String finalFen = "";
         public String octiTranscript = "";
+
+        public String variantCode() {
+            if (variant != null && !variant.isEmpty() && OctiGameMode.isValidVariantCode(variant)) {
+                return OctiGameMode.variantCodeFromModeStr(variant, bases, superProngs, edgeless);
+            }
+            return OctiGameMode.variantCodeFromModeStr(mode, bases, superProngs, edgeless);
+        }
     }
 
     public static final class ArchivedGamesPage {
@@ -168,15 +180,26 @@ public final class OctiNetworkClient implements AutoCloseable {
         public String bio = "";
         public String location = "";
         public int elo2p = 1200;
+        public int elo2p3b = 1200;
+        public int elo2p1b = 1200;
         public int elo4p = 1200;
         public int eloOfk = 1200;
         public int gamesPlayed = 0;
         public int wins = 0;
         public int losses = 0;
         public int draws = 0;
+        public int arenaElo2p3b = 1200;
+        public int arenaElo2p1b = 1200;
+        public int arenaEloOfk = 1200;
+        public int arenaGamesPlayed = 0;
+        public int arenaWins = 0;
+        public int arenaLosses = 0;
+        public int arenaDraws = 0;
         public long createdAt = 0;
         public long lastSeenAt = 0;
         public boolean isAdmin = false;
+        public boolean isRobot = false;
+        public String robotUuid = "";
         public List<LinkedIdentityInfo> identities = new ArrayList<>();
         public List<ArchivedGameSummary> recentGames = new ArrayList<>();
     }
@@ -338,6 +361,8 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     public static final class RobotDirectoryEntry {
+        public String entryType = "robot";
+        public String uuid = "";
         public long robotId = 0;
         public String robotUuid = "";
         public String handle = "";
@@ -349,6 +374,10 @@ public final class OctiNetworkClient implements AutoCloseable {
         public String ownerUuid = "";
         public String ownerHandle = "";
         public String ownerAvatarUrl = "";
+        public int elo2p = 1200;
+        public int elo2p3b = 1200;
+        public int elo2p1b = 1200;
+        public int eloOfk = 1200;
         public int gamesPlayed = 0;
         public int wins = 0;
         public int losses = 0;
@@ -362,6 +391,7 @@ public final class OctiNetworkClient implements AutoCloseable {
 
     public static final class RobotProfileData {
         public boolean isRobot = true;
+        public String entryType = "robot";
         public String uuid = "";
         public String robotUuid = "";
         public String handle = "";
@@ -373,6 +403,10 @@ public final class OctiNetworkClient implements AutoCloseable {
         public String ownerUuid = "";
         public String ownerHandle = "";
         public String ownerAvatarUrl = "";
+        public int elo2p = 1200;
+        public int elo2p3b = 1200;
+        public int elo2p1b = 1200;
+        public int eloOfk = 1200;
         public int gamesPlayed = 0;
         public int wins = 0;
         public int losses = 0;
@@ -425,6 +459,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         public int bases = 3;
         public boolean superProngs = false;
         public boolean edgeless = false;
+        public String variant = "";
         public boolean timeControlEnabled = false;
         public long initialMs = 0;
         public long incrementMs = 0;
@@ -446,6 +481,13 @@ public final class OctiNetworkClient implements AutoCloseable {
         public long lastMoveAtMs = 0L;
         public long idleMs = 0L;
         public long ttlRemainingMs = -1L;
+
+        public String variantCode() {
+            if (variant != null && !variant.isEmpty() && OctiGameMode.isValidVariantCode(variant)) {
+                return OctiGameMode.variantCodeFromModeStr(variant, bases, superProngs, edgeless);
+            }
+            return OctiGameMode.variantCodeFromModeStr(mode, bases, superProngs, edgeless);
+        }
     }
 
     public static final class TableSummary extends TableSummaryInfo {
@@ -463,6 +505,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         public int bases = 3;
         public boolean superProngs = false;
         public boolean edgeless = false;
+        public String variant = "";
         public String timeControl = "";
         public boolean timeControlEnabled = false;
         public long initialMs = 600000;
@@ -472,6 +515,13 @@ public final class OctiNetworkClient implements AutoCloseable {
         public boolean allowTakeback = false;
         public String observerPolicy = "OPEN";
         public String passcode = "";
+
+        public String variantCode() {
+            if (variant != null && !variant.isEmpty() && OctiGameMode.isValidVariantCode(variant)) {
+                return OctiGameMode.variantCodeFromModeStr(variant, bases, superProngs, edgeless);
+            }
+            return OctiGameMode.variantCodeFromModeStr(mode, bases, superProngs, edgeless);
+        }
     }
 
     public static final class CreateTableResponse {
@@ -490,9 +540,17 @@ public final class OctiNetworkClient implements AutoCloseable {
         public int bases = 3;
         public boolean superProngs = false;
         public boolean edgeless = false;
+        public String variant = "";
         public boolean timeControlEnabled = false;
         public long initialMs = 0;
         public long incrementMs = 0;
+
+        public String variantCode() {
+            if (variant != null && !variant.isEmpty() && OctiGameMode.isValidVariantCode(variant)) {
+                return OctiGameMode.variantCodeFromModeStr(variant, bases, superProngs, edgeless);
+            }
+            return OctiGameMode.variantCodeFromModeStr(mode, bases, superProngs, edgeless);
+        }
     }
 
     public static final class MatchmakingStatusData {
@@ -531,6 +589,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         public int bases = 3;
         public boolean superProngs = false;
         public boolean edgeless = false;
+        public String variant = "";
         public boolean timeControlEnabled = false;
         public long initialMs = 0;
         public long incrementMs = 0;
@@ -563,6 +622,13 @@ public final class OctiNetworkClient implements AutoCloseable {
         public long lastMoveAtMs = 0L;
         public long idleMs = 0L;
         public long ttlRemainingMs = -1L;
+
+        public String variantCode() {
+            if (variant != null && !variant.isEmpty() && OctiGameMode.isValidVariantCode(variant)) {
+                return OctiGameMode.variantCodeFromModeStr(variant, bases, superProngs, edgeless);
+            }
+            return OctiGameMode.variantCodeFromModeStr(mode, bases, superProngs, edgeless);
+        }
     }
 
     public static final class MoveSubmitData {
@@ -1570,12 +1636,12 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     public ApiResult<List<LeaderboardRow>> fetchLeaderboard() {
-        return fetchLeaderboard("2P", 50);
+        return fetchLeaderboard("2P_3B", 50);
     }
 
     public ApiResult<List<LeaderboardRow>> fetchLeaderboard(String mode, int limit) {
         ApiResult<List<LeaderboardRow>> res = new ApiResult<>(new ArrayList<>());
-        String m = (mode == null || mode.isEmpty()) ? "2P" : mode;
+        String m = (mode == null || mode.isEmpty()) ? "2P_3B" : mode;
         String path = "/api/v1/leaderboard?mode=" + urlEncode(m) + "&limit=" + limit;
         RawResponse raw = doGet(path);
         if (!raw.transportOk || raw.status != 200 || raw.json == null) {
@@ -1613,14 +1679,46 @@ public final class OctiNetworkClient implements AutoCloseable {
         return fetchRobotsDirectory(query, sort);
     }
 
+    public ApiResult<List<RobotDirectoryEntry>> listRobotsDirectory(
+            String query,
+            String participantType,
+            String sort,
+            boolean sortAsc,
+            int limit,
+            int offset) {
+        return fetchRobotsDirectory(query, participantType, sort, sortAsc, limit, offset);
+    }
+
     public ApiResult<List<RobotDirectoryEntry>> fetchRobotsDirectory(String query, String sort) {
+        return fetchRobotsDirectory(query, "all", sort, false, 100, 0);
+    }
+
+    public ApiResult<List<RobotDirectoryEntry>> fetchRobotsDirectory(
+            String query,
+            String participantType,
+            String sort,
+            boolean sortAsc,
+            int limit,
+            int offset) {
         ApiResult<List<RobotDirectoryEntry>> res = new ApiResult<>(new ArrayList<>());
-        StringBuilder path = new StringBuilder("/api/v1/robots/directory?limit=100");
+        String pType = (participantType == null || participantType.trim().isEmpty())
+                ? "all" : participantType.trim();
+        String sField = (sort == null || sort.trim().isEmpty())
+                ? "elo_2p_3b" : sort.trim();
+        int clampedLimit = Math.max(1, Math.min(100, limit));
+        int clampedOffset = Math.max(0, offset);
+        StringBuilder path = new StringBuilder("/api/v1/robots/directory?participant_type=")
+                .append(urlEncode(pType))
+                .append("&sort=")
+                .append(urlEncode(sField))
+                .append("&order=")
+                .append(sortAsc ? "asc" : "desc")
+                .append("&limit=")
+                .append(clampedLimit)
+                .append("&offset=")
+                .append(clampedOffset);
         if (query != null && !query.trim().isEmpty()) {
             path.append("&q=").append(urlEncode(query.trim()));
-        }
-        if (sort != null && !sort.trim().isEmpty()) {
-            path.append("&sort=").append(urlEncode(sort.trim()));
         }
         RawResponse raw = doGet(path.toString());
         if (!raw.transportOk || raw.status != 200 || raw.json == null) {
@@ -1629,30 +1727,47 @@ public final class OctiNetworkClient implements AutoCloseable {
         }
         res.ok = true;
         res.httpStatus = raw.status;
-        List<Object> arr = OctiMiniJson.getArray(raw.json, "robots");
+        List<Object> arr = OctiMiniJson.getArray(raw.json, "entries");
+        if (arr == null) {
+            arr = OctiMiniJson.getArray(raw.json, "robots");
+        }
         if (arr != null) {
             for (Object item : arr) {
                 if (item instanceof Map<?, ?>) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> m = (Map<String, Object>) item;
                     RobotDirectoryEntry e = new RobotDirectoryEntry();
+                    boolean isRob = OctiMiniJson.getBoolean(m, "is_robot", true);
+                    e.entryType = OctiMiniJson.getString(
+                            m, "entry_type", isRob ? "robot" : "human");
                     e.robotId = OctiMiniJson.getLong(m, "robot_id", 0);
                     e.robotUuid = OctiMiniJson.getString(m, "robot_uuid", "");
-                    if (e.robotUuid.isEmpty()) {
-                        e.robotUuid = OctiMiniJson.getString(m, "uuid", "");
+                    e.uuid = OctiMiniJson.getString(m, "uuid", e.robotUuid);
+                    if (e.robotUuid.isEmpty() && isRob) {
+                        e.robotUuid = e.uuid;
                     }
-                    e.robotName = OctiMiniJson.getString(m, "robot_name", "");
-                    if (e.robotName.isEmpty()) {
-                        e.robotName = OctiMiniJson.getString(m, "handle", "");
+                    String h = OctiMiniJson.getString(m, "handle", "");
+                    if (h.isEmpty()) {
+                        h = OctiMiniJson.getString(m, "robot_name", "");
                     }
-                    e.handle = e.robotName;
-                    e.displayName = OctiMiniJson.getString(m, "display_name", e.robotName);
+                    if (h.isEmpty()) {
+                        h = OctiMiniJson.getString(m, "name", "");
+                    }
+                    e.handle = h;
+                    e.robotName = OctiMiniJson.getString(m, "robot_name", h);
+                    e.displayName = OctiMiniJson.getString(m, "display_name", h);
                     e.description = OctiMiniJson.getString(m, "description", "");
                     e.bio = OctiMiniJson.getString(m, "bio", e.description);
                     e.avatarUrl = OctiMiniJson.getString(m, "avatar_url", "");
                     e.ownerUuid = OctiMiniJson.getString(m, "owner_uuid", "");
                     e.ownerHandle = OctiMiniJson.getString(m, "owner_handle", "");
                     e.ownerAvatarUrl = OctiMiniJson.getString(m, "owner_avatar_url", "");
+                    e.elo2p3b = OctiMiniJson.getInt(
+                            m, "elo_2p_3b",
+                            OctiMiniJson.getInt(m, "elo_2p", OctiMiniJson.getInt(m, "elo", 1200)));
+                    e.elo2p1b = OctiMiniJson.getInt(m, "elo_2p_1b", 1200);
+                    e.eloOfk = OctiMiniJson.getInt(m, "elo_ofk", 1200);
+                    e.elo2p = e.elo2p3b;
                     e.gamesPlayed = OctiMiniJson.getInt(m, "games_played", 0);
                     e.wins = OctiMiniJson.getInt(m, "wins", 0);
                     e.losses = OctiMiniJson.getInt(m, "losses", 0);
@@ -1675,41 +1790,68 @@ public final class OctiNetworkClient implements AutoCloseable {
             res.errorMessage = "Missing robot identifier";
             return res;
         }
-        RawResponse raw = doGet("/api/v1/robots/profile/" + urlEncode(robotIdOrUuid.trim()));
+        String target = robotIdOrUuid.trim();
+        RawResponse raw = doGet("/api/v1/robots/profile/" + urlEncode(target));
         if (!raw.transportOk || raw.status != 200 || raw.json == null) {
-            raw = doGet("/api/v1/users/" + urlEncode(robotIdOrUuid.trim()));
+            raw = doGet("/api/v1/users/" + urlEncode(target));
             if (!raw.transportOk || raw.status != 200 || raw.json == null) {
-                populateError(raw, res);
-                return res;
+                raw = doGet("/api/v1/players/" + urlEncode(target));
+                if (!raw.transportOk || raw.status != 200 || raw.json == null) {
+                    populateError(raw, res);
+                    return res;
+                }
             }
         }
         res.ok = true;
         res.httpStatus = raw.status;
         Map<String, Object> m = raw.json;
         RobotProfileData p = new RobotProfileData();
-        p.isRobot = OctiMiniJson.getBoolean(m, "is_robot", true);
-        p.robotUuid = OctiMiniJson.getString(m, "robot_uuid", "");
-        if (p.robotUuid.isEmpty()) {
-            p.robotUuid = OctiMiniJson.getString(m, "uuid", "");
+        String rawRobotUuid = OctiMiniJson.getString(m, "robot_uuid", "");
+        p.isRobot = OctiMiniJson.getBoolean(m, "is_robot", !rawRobotUuid.isEmpty());
+        p.entryType = OctiMiniJson.getString(m, "entry_type", p.isRobot ? "robot" : "human");
+        p.uuid = OctiMiniJson.getString(m, "uuid", rawRobotUuid);
+        p.robotUuid = p.isRobot ? (rawRobotUuid.isEmpty() ? p.uuid : rawRobotUuid) : "";
+        String h = OctiMiniJson.getString(m, "handle", "");
+        if (h.isEmpty()) {
+            h = OctiMiniJson.getString(m, "robot_name", "");
         }
-        p.uuid = p.robotUuid;
-        p.robotName = OctiMiniJson.getString(m, "robot_name", "");
-        if (p.robotName.isEmpty()) {
-            p.robotName = OctiMiniJson.getString(m, "handle", "");
-        }
-        p.handle = p.robotName;
-        p.displayName = OctiMiniJson.getString(m, "display_name", p.robotName);
+        p.handle = h;
+        p.robotName = OctiMiniJson.getString(m, "robot_name", h);
+        p.displayName = OctiMiniJson.getString(m, "display_name", h);
         p.description = OctiMiniJson.getString(m, "description", "");
         p.bio = OctiMiniJson.getString(m, "bio", p.description);
+        if (p.description.isEmpty()) {
+            p.description = p.bio;
+        }
         p.avatarUrl = OctiMiniJson.getString(m, "avatar_url", "");
         p.ownerUuid = OctiMiniJson.getString(m, "owner_uuid", "");
         p.ownerHandle = OctiMiniJson.getString(m, "owner_handle", "");
         p.ownerAvatarUrl = OctiMiniJson.getString(m, "owner_avatar_url", "");
-        p.gamesPlayed = OctiMiniJson.getInt(m, "games_played", 0);
-        p.wins = OctiMiniJson.getInt(m, "wins", 0);
-        p.losses = OctiMiniJson.getInt(m, "losses", 0);
-        p.draws = OctiMiniJson.getInt(m, "draws", 0);
-        p.winRate = OctiMiniJson.getDouble(m, "win_rate", 0.0);
+        if (p.isRobot) {
+            p.elo2p3b = OctiMiniJson.getInt(
+                    m, "elo_2p_3b",
+                    OctiMiniJson.getInt(m, "elo_2p", OctiMiniJson.getInt(m, "elo", 1200)));
+            p.elo2p1b = OctiMiniJson.getInt(m, "elo_2p_1b", 1200);
+            p.eloOfk = OctiMiniJson.getInt(m, "elo_ofk", 1200);
+            p.elo2p = p.elo2p3b;
+            p.gamesPlayed = OctiMiniJson.getInt(m, "games_played", 0);
+            p.wins = OctiMiniJson.getInt(m, "wins", 0);
+            p.losses = OctiMiniJson.getInt(m, "losses", 0);
+            p.draws = OctiMiniJson.getInt(m, "draws", 0);
+            p.winRate = OctiMiniJson.getDouble(m, "win_rate", 0.0);
+        } else {
+            p.elo2p3b = OctiMiniJson.getInt(m, "arena_elo_2p_3b", 1200);
+            p.elo2p1b = OctiMiniJson.getInt(m, "arena_elo_2p_1b", 1200);
+            p.eloOfk = OctiMiniJson.getInt(m, "arena_elo_ofk", 1200);
+            p.elo2p = p.elo2p3b;
+            p.gamesPlayed = OctiMiniJson.getInt(m, "arena_games_played", 0);
+            p.wins = OctiMiniJson.getInt(m, "arena_wins", 0);
+            p.losses = OctiMiniJson.getInt(m, "arena_losses", 0);
+            p.draws = OctiMiniJson.getInt(m, "arena_draws", 0);
+            p.winRate = p.gamesPlayed > 0
+                    ? Math.round((p.wins * 1000.0) / p.gamesPlayed) / 10.0
+                    : 0.0;
+        }
         p.createdAt = OctiMiniJson.getLong(m, "created_at", 0);
         p.revoked = OctiMiniJson.getBoolean(m, "revoked", false);
         p.retired = OctiMiniJson.getBoolean(m, "retired", p.revoked);
@@ -1722,6 +1864,13 @@ public final class OctiNetworkClient implements AutoCloseable {
                     Map<String, Object> gm = (Map<String, Object>) gObj;
                     p.recentGames.add(parseArchivedGameSummary(gm));
                 }
+            }
+        }
+        if (p.recentGames.isEmpty() && (!p.uuid.isEmpty() || !p.robotUuid.isEmpty())) {
+            ApiResult<ArchivedGamesPage> archRes = listArchivedGames(
+                    "", p.isRobot ? "" : p.uuid, p.isRobot ? p.robotUuid : "", 20, 0);
+            if (archRes.ok && archRes.data != null) {
+                p.recentGames.addAll(archRes.data.games);
             }
         }
         res.data = p;
@@ -1880,12 +2029,39 @@ public final class OctiNetworkClient implements AutoCloseable {
     public ApiResult<CreateTableResponse> createTable(CreateTableRequest req) {
         ApiResult<CreateTableResponse> res = new ApiResult<>(new CreateTableResponse());
         CreateTableRequest r = req != null ? req : new CreateTableRequest();
+        String normMode = (r.mode != null && !r.mode.isEmpty()) ? r.mode : "2P";
+        int normBases = r.bases;
+        boolean normSp = r.superProngs;
+        boolean normEd = r.edgeless;
+        if (r.variant != null && !r.variant.isEmpty() && OctiGameMode.isValidVariantCode(r.variant)) {
+            OctiGameMode.ParsedVariant pv = OctiGameMode.parseVariantCode(r.variant);
+            if (pv != null) {
+                normMode = pv.mode == OctiGameMode.GAME_MODE_OFK ? "OFK"
+                        : (pv.mode == OctiGameMode.GAME_MODE_4 ? "4P" : "2P");
+                normBases = pv.bases == OctiGameBases.GAME_BASES_1 ? 1 : 3;
+                normSp = pv.superProngs;
+                normEd = pv.edgeless;
+            }
+        }
+        if ("OFK".equalsIgnoreCase(normMode)) {
+            normMode = "OFK";
+            normBases = 1;
+            normSp = false;
+            normEd = false;
+        } else if ("4P".equalsIgnoreCase(normMode)) {
+            normMode = "4P";
+            normBases = 3;
+        }
+        String vCode = OctiGameMode.variantCodeFromModeStr(normMode, normBases, normSp, normEd);
+        boolean normRated = r.rated && OctiGameMode.isOfficialRatedVariantCode(vCode);
+
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("mode", r.mode != null ? r.mode : "2P");
-        body.put("bases", r.bases);
-        body.put("super_prongs", r.superProngs);
-        body.put("edgeless", r.edgeless);
-        body.put("rated", r.rated);
+        body.put("mode", normMode);
+        body.put("bases", normBases);
+        body.put("super_prongs", normSp);
+        body.put("edgeless", normEd);
+        body.put("variant", vCode);
+        body.put("rated", normRated);
         body.put("allow_takeback", r.allowTakeback);
         body.put("observer_policy", normalizeObserverPolicy(r.observerPolicy));
         if (r.passcode != null && !r.passcode.isEmpty()) {
@@ -2075,11 +2251,26 @@ public final class OctiNetworkClient implements AutoCloseable {
     public ApiResult<Boolean> enqueueMatchmaking(MatchmakingRequest req) {
         ApiResult<Boolean> res = new ApiResult<>(Boolean.FALSE);
         MatchmakingRequest r = req != null ? req : new MatchmakingRequest();
+        String normMode = (r.mode != null && !r.mode.isEmpty()) ? r.mode : "2P";
+        int normBases = r.bases;
+        boolean normSp = r.superProngs;
+        boolean normEd = r.edgeless;
+        if ("OFK".equalsIgnoreCase(normMode)) {
+            normMode = "OFK";
+            normBases = 1;
+            normSp = false;
+            normEd = false;
+        } else if ("4P".equalsIgnoreCase(normMode)) {
+            normMode = "4P";
+            normBases = 3;
+        }
+        String vCode = OctiGameMode.variantCodeFromModeStr(normMode, normBases, normSp, normEd);
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("mode", r.mode != null ? r.mode : "2P");
-        body.put("bases", r.bases);
-        body.put("super_prongs", r.superProngs);
-        body.put("edgeless", r.edgeless);
+        body.put("mode", normMode);
+        body.put("bases", normBases);
+        body.put("super_prongs", normSp);
+        body.put("edgeless", normEd);
+        body.put("variant", vCode);
         if (r.timeControlEnabled && r.initialMs > 0) {
             Map<String, Object> tc = new LinkedHashMap<>();
             tc.put("initial_ms", r.initialMs);
@@ -2315,16 +2506,34 @@ public final class OctiNetworkClient implements AutoCloseable {
 
     public ApiResult<ArchivedGamesPage> listArchivedGames(
             String mode, String playerUuid, int limit, int offset) {
+        return listArchivedGames(mode, playerUuid, "", limit, offset);
+    }
+
+    public ApiResult<ArchivedGamesPage> listArchivedGames(
+            String mode, String playerUuid, String robotUuid, int limit, int offset) {
         ApiResult<ArchivedGamesPage> res = new ApiResult<>(new ArchivedGamesPage());
         StringBuilder path = new StringBuilder("/api/v1/archive/games?limit=")
                 .append(limit)
                 .append("&offset=")
                 .append(offset);
-        if (mode != null && !mode.isEmpty()) {
-            path.append("&mode=").append(urlEncode(mode));
+        if (mode != null && !mode.trim().isEmpty()) {
+            String trimmed = mode.trim();
+            if ("2P".equalsIgnoreCase(trimmed) || "2P_ALL".equalsIgnoreCase(trimmed)) {
+                path.append("&mode=2P");
+            } else if ("4P_ALL".equalsIgnoreCase(trimmed)) {
+                path.append("&mode=4P");
+            } else if (OctiGameMode.isValidVariantCode(trimmed)) {
+                path.append("&variant=")
+                        .append(urlEncode(OctiGameMode.parseVariantCode(trimmed).code));
+            } else {
+                path.append("&mode=").append(urlEncode(trimmed));
+            }
         }
         if (playerUuid != null && !playerUuid.isEmpty()) {
             path.append("&player=").append(urlEncode(playerUuid));
+        }
+        if (robotUuid != null && !robotUuid.isEmpty()) {
+            path.append("&robot=").append(urlEncode(robotUuid));
         }
         RawResponse raw = doGet(path.toString());
         if (!raw.transportOk || raw.status != 200 || raw.json == null) {
@@ -3324,9 +3533,12 @@ public final class OctiNetworkClient implements AutoCloseable {
         g.gameId = OctiMiniJson.getString(
                 j, "game_id", OctiMiniJson.getString(j, "room_id", ""));
         g.mode = OctiMiniJson.getString(j, "mode", "2P");
-        g.bases = OctiMiniJson.getInt(j, "bases", 3);
+        g.bases = OctiMiniJson.getInt(j, "bases", "4P".equalsIgnoreCase(g.mode) ? 3 : 3);
         g.superProngs = OctiMiniJson.getBoolean(j, "super_prongs", false);
         g.edgeless = OctiMiniJson.getBoolean(j, "edgeless", false);
+        g.variant = OctiMiniJson.getString(j, "variant", "");
+        g.rated = OctiMiniJson.getBoolean(j, "rated", false);
+        g.eloPool = OctiMiniJson.getInt(j, "elo_pool", 0);
         g.timeControl = OctiMiniJson.getString(j, "time_control", "untimed");
         List<Object> pl = OctiMiniJson.getArray(j, "players");
         if (pl != null) {
@@ -3341,6 +3553,9 @@ public final class OctiNetworkClient implements AutoCloseable {
                 p.seat = OctiMiniJson.getInt(pm, "seat", i + 1);
                 p.handle = OctiMiniJson.getString(pm, "handle", "");
                 p.playerUuid = OctiMiniJson.getString(pm, "player_uuid", "");
+                p.isRobot = OctiMiniJson.getBoolean(pm, "is_robot", false)
+                        || OctiMiniJson.getBoolean(pm, "isRobot", false);
+                p.robotUuid = OctiMiniJson.getString(pm, "robot_uuid", "");
                 g.players.add(p);
             }
         }
@@ -3353,6 +3568,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         g.finalFen = OctiMiniJson.getString(
                 j, "final_fen", OctiMiniJson.getString(j, "fen", ""));
         g.octiTranscript = OctiMiniJson.getString(j, "octi_transcript", "");
+        g.variant = g.variantCode();
         return g;
     }
 
@@ -3368,15 +3584,26 @@ public final class OctiNetworkClient implements AutoCloseable {
         p.bio = OctiMiniJson.getString(j, "bio", "");
         p.location = OctiMiniJson.getString(j, "location", "");
         p.elo2p = OctiMiniJson.getInt(j, "elo_2p", 1200);
+        p.elo2p3b = OctiMiniJson.getInt(j, "elo_2p_3b", p.elo2p);
+        p.elo2p1b = OctiMiniJson.getInt(j, "elo_2p_1b", 1200);
         p.elo4p = OctiMiniJson.getInt(j, "elo_4p", 1200);
         p.eloOfk = OctiMiniJson.getInt(j, "elo_ofk", 1200);
+        p.arenaElo2p3b = OctiMiniJson.getInt(j, "arena_elo_2p_3b", 1200);
+        p.arenaElo2p1b = OctiMiniJson.getInt(j, "arena_elo_2p_1b", 1200);
+        p.arenaEloOfk = OctiMiniJson.getInt(j, "arena_elo_ofk", 1200);
         p.gamesPlayed = OctiMiniJson.getInt(j, "games_played", 0);
         p.wins = OctiMiniJson.getInt(j, "wins", 0);
         p.losses = OctiMiniJson.getInt(j, "losses", 0);
         p.draws = OctiMiniJson.getInt(j, "draws", 0);
+        p.arenaGamesPlayed = OctiMiniJson.getInt(j, "arena_games_played", 0);
+        p.arenaWins = OctiMiniJson.getInt(j, "arena_wins", 0);
+        p.arenaLosses = OctiMiniJson.getInt(j, "arena_losses", 0);
+        p.arenaDraws = OctiMiniJson.getInt(j, "arena_draws", 0);
         p.createdAt = OctiMiniJson.getLong(j, "created_at", 0);
         p.lastSeenAt = OctiMiniJson.getLong(j, "last_seen_at", 0);
         p.isAdmin = OctiMiniJson.getBoolean(j, "is_admin", false);
+        p.isRobot = OctiMiniJson.getBoolean(j, "is_robot", false);
+        p.robotUuid = OctiMiniJson.getString(j, "robot_uuid", "");
         List<Object> ids = OctiMiniJson.getArray(j, "linked_identities");
         if (ids != null) {
             p.identities = parseLinkedIdentities(ids);
@@ -3422,6 +3649,8 @@ public final class OctiNetworkClient implements AutoCloseable {
         t.bases = OctiMiniJson.getInt(j, "bases", 3);
         t.superProngs = OctiMiniJson.getBoolean(j, "super_prongs", false);
         t.edgeless = OctiMiniJson.getBoolean(j, "edgeless", false);
+        t.variant = OctiMiniJson.getString(j, "variant", "");
+        t.variant = t.variantCode();
         Map<String, Object> tc = OctiMiniJson.getObject(j, "time_control");
         if (tc != null) {
             t.timeControlEnabled = OctiMiniJson.getBoolean(tc, "enabled", false);
@@ -3498,6 +3727,8 @@ public final class OctiNetworkClient implements AutoCloseable {
         v.bases = OctiMiniJson.getInt(j, "bases", 3);
         v.superProngs = OctiMiniJson.getBoolean(j, "super_prongs", false);
         v.edgeless = OctiMiniJson.getBoolean(j, "edgeless", false);
+        v.variant = OctiMiniJson.getString(j, "variant", "");
+        v.variant = v.variantCode();
         Map<String, Object> tc = OctiMiniJson.getObject(j, "time_control");
         if (tc != null) {
             v.timeControlEnabled = OctiMiniJson.getBoolean(tc, "enabled", false);

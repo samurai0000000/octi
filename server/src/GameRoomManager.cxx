@@ -444,6 +444,10 @@ bool validateConfig(const GameTableConfig &in, GameTableConfig &out,
     } else if (out.mode == GAME_MODE_4) {
         out.bases = GAME_BASES_3;
     }
+    if (!isOfficialRatedVariant(out.mode, out.bases, out.useSuperProngs,
+                                out.useEdgelessBoard)) {
+        out.rated = false;
+    }
     if (out.rated) {
         out.allowTakeback = false;
     }
@@ -1680,25 +1684,76 @@ RoomResult GameRoomManager::checkViewLocked(const Room &r, int64_t viewerId) con
 /* Seats and tables                                                    */
 /* ------------------------------------------------------------------ */
 
+void GameRoomManager::refreshRoomSeatRatingsLocked(Room &r)
+{
+    bool hasRobot = false;
+    for (int s = 1; s <= r.seatCount; ++s) {
+        if (isRobotActorId(r.seatPlayer[s])) {
+            hasRobot = true;
+            break;
+        }
+    }
+    for (int s = 1; s <= r.seatCount; ++s) {
+        int64_t pid = r.seatPlayer[s];
+        if (pid == 0) {
+            r.seatRating[s] = 0;
+            continue;
+        }
+        if (isRobotActorId(pid)) {
+            RobotRecord rob;
+            if (_store.getRobotById(robotIdFromActorId(pid), rob)) {
+                if (r.config.mode == GAME_MODE_4) {
+                    r.seatRating[s] = 1200;
+                } else if (r.config.mode == GAME_MODE_OFK) {
+                    r.seatRating[s] = rob.eloOfk;
+                } else if (r.config.bases == GAME_BASES_1) {
+                    r.seatRating[s] = rob.elo2p1b;
+                } else {
+                    r.seatRating[s] = rob.elo2p3b;
+                }
+            } else {
+                r.seatRating[s] = 1200;
+            }
+        } else {
+            PlayerProfile prof;
+            if (_store.getProfileById(pid, prof)) {
+                if (hasRobot) {
+                    if (r.config.mode == GAME_MODE_4) {
+                        r.seatRating[s] = 1200;
+                    } else if (r.config.mode == GAME_MODE_OFK) {
+                        r.seatRating[s] = prof.arenaEloOfk;
+                    } else if (r.config.bases == GAME_BASES_1) {
+                        r.seatRating[s] = prof.arenaElo2p1b;
+                    } else {
+                        r.seatRating[s] = prof.arenaElo2p3b;
+                    }
+                } else {
+                    if (r.config.mode == GAME_MODE_4) {
+                        r.seatRating[s] = prof.elo4p;
+                    } else if (r.config.mode == GAME_MODE_OFK) {
+                        r.seatRating[s] = prof.eloOfk;
+                    } else if (r.config.bases == GAME_BASES_1) {
+                        r.seatRating[s] = prof.elo2p1b;
+                    } else {
+                        r.seatRating[s] = prof.elo2p3b;
+                    }
+                }
+            } else {
+                r.seatRating[s] = 1200;
+            }
+        }
+    }
+}
+
 void GameRoomManager::seatPlayerLocked(Room &r, int seat, int64_t playerId,
                                        int64_t now)
 {
     r.seatPlayer[seat] = playerId;
     r.seatHandle[seat] = handleOf(playerId);
-    r.seatRating[seat] = 0;
-    if (isRobotActorId(playerId)) {
-        r.seatRating[seat] = 1200;
-    } else {
-        PlayerProfile prof;
-        if (_store.getProfileById(playerId, prof)) {
-            r.seatRating[seat] = r.config.mode == GAME_MODE_4     ? prof.elo4p
-                                 : r.config.mode == GAME_MODE_OFK ? prof.eloOfk
-                                                                  : prof.elo2p;
-        }
-    }
     r.seatConnected[seat] = true;
     r.seatDisconnectedAt[seat] = 0;
     r.lastActivityMs = now;
+    refreshRoomSeatRatingsLocked(r);
     _seatRoom[playerId] = r.id;
     _queue.dequeue(playerId);
     _matchAssignments.erase(playerId);
@@ -1718,8 +1773,12 @@ void GameRoomManager::unseatLocked(Room &r, int seat)
     int64_t pid = r.seatPlayer[seat];
     r.seatPlayer[seat] = 0;
     r.seatHandle[seat].clear();
+    r.seatRating[seat] = 0;
     r.seatConnected[seat] = true;
     r.seatDisconnectedAt[seat] = 0;
+    if (r.phase == RoomPhase::WAITING_FOR_PLAYERS) {
+        refreshRoomSeatRatingsLocked(r);
+    }
     std::map<int64_t, std::string>::iterator sr = _seatRoom.find(pid);
     if (sr != _seatRoom.end() && sr->second == r.id) {
         _seatRoom.erase(sr);
@@ -2184,15 +2243,22 @@ RoomResult GameRoomManager::enqueueMatchmaking(int64_t playerId,
     }
     int rating = 1200;
     if (isRobotActorId(playerId)) {
-        rating = 1200;
+        RobotRecord rob;
+        if (_store.getRobotById(robotIdFromActorId(playerId), rob)) {
+            rating = rs.mode == GAME_MODE_4     ? 1200
+                     : rs.mode == GAME_MODE_OFK ? rob.eloOfk
+                     : rs.bases == GAME_BASES_1 ? rob.elo2p1b
+                                                : rob.elo2p3b;
+        }
     } else {
         PlayerProfile p;
         if (!_store.getProfileById(playerId, p)) {
             return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
         }
-        rating = rs.mode == GAME_MODE_4 ? p.elo4p
+        rating = rs.mode == GAME_MODE_4     ? 1200
                  : rs.mode == GAME_MODE_OFK ? p.eloOfk
-                                            : p.elo2p;
+                 : rs.bases == GAME_BASES_1 ? p.elo2p1b
+                                            : p.elo2p3b;
     }
     touchOnlineLocked(playerId);
     _players[playerId].lastActiveMs = nowMs();
@@ -2255,7 +2321,9 @@ void GameRoomManager::spawnMatchRoomLocked(const MatchGroup &g, int64_t now)
     cfg.timeControl.enabled = g.ruleset.isTimed();
     cfg.timeControl.initialMs = g.ruleset.initialMs;
     cfg.timeControl.incrementMs = g.ruleset.incrementMs;
-    cfg.rated = true;
+    cfg.rated = isOfficialRatedVariant(cfg.mode, cfg.bases,
+                                       cfg.useSuperProngs,
+                                       cfg.useEdgelessBoard);
     cfg.allowTakeback = false;
     cfg.allowRobots = g.ruleset.allowRobots;
 
@@ -3283,11 +3351,150 @@ bool GameRoomManager::archiveLocked(Room &r)
     rec.appVersion = "";
     rec.platform = "";
     rec.installId = "";
+    rec.rated = r.config.rated ? 1 : 0;
+    rec.eloPool = 0;
+
+    std::vector<RobotOutcomeUpdate> robotOutcomes;
+    for (int s = 1; s <= r.seatCount; ++s) {
+        int64_t pid = r.seatPlayer[s];
+        if (isRobotActorId(pid)) {
+            GameOutcome outcome = GameOutcome::DRAW;
+            if (r.winnerSeat != 0) {
+                if (r.config.mode == GAME_MODE_4) {
+                    int team = (s % 2 == 1) ? 1 : 2;
+                    outcome = (r.winnerSeat == team) ? GameOutcome::WIN : GameOutcome::LOSS;
+                } else {
+                    outcome = (r.winnerSeat == s) ? GameOutcome::WIN : GameOutcome::LOSS;
+                }
+            }
+            RobotOutcomeUpdate ro;
+            ro.robotId = robotIdFromActorId(pid);
+            ro.outcome = outcome;
+            robotOutcomes.push_back(ro);
+        }
+    }
 
     std::vector<RatingUpdate> updates;
-    if (hasRobotSeat) {
-        // Human-Only Elo Invariant: never update Elo ratings when a robot played.
-        // Record per-robot W/L/D outcome in AccountStore.
+    const bool eligibleForRating =
+        (r.seatCount == 2) && r.config.rated &&
+        isOfficialRatedVariant(r.config.mode, rec.gameBases,
+                               rec.superProngs, rec.edgeless) &&
+        !(rec.status == "RESIGNED" &&
+          rec.termination == "RESIGNATION" &&
+          rec.plyCount < 8);
+
+    if (eligibleForRating) {
+        EloOutcome oc = r.winnerSeat == 0   ? EloOutcome::DRAW
+                        : r.winnerSeat == 1 ? EloOutcome::FIRST_WINS
+                                            : EloOutcome::SECOND_WINS;
+        if (!hasRobotSeat) {
+            PlayerProfile prof[3];
+            for (int s = 1; s <= 2; ++s) {
+                if (!_store.getProfileById(r.seatPlayer[s], prof[s])) {
+                    r.archiveError = "player profile lookup failed";
+                    saveRoomLocked(r);
+                    return false;
+                }
+            }
+            auto pool1RatingOf = [&r, &rec](const PlayerProfile &p) -> int {
+                if (r.config.mode == GAME_MODE_OFK) {
+                    return p.eloOfk;
+                }
+                return rec.gameBases == 1 ? p.elo2p1b : p.elo2p3b;
+            };
+            EloCalculator::DuelUpdate up = EloCalculator::updateDuel(
+                pool1RatingOf(prof[1]), pool1RatingOf(prof[2]), oc, 32);
+            for (int s = 1; s <= 2; ++s) {
+                RatingUpdate ru;
+                ru.playerId = r.seatPlayer[s];
+                ru.robotId = 0;
+                ru.newElo = s == 1 ? up.newRating1 : up.newRating2;
+                ru.outcome = r.winnerSeat == 0   ? GameOutcome::DRAW
+                             : r.winnerSeat == s ? GameOutcome::WIN
+                                                 : GameOutcome::LOSS;
+                updates.push_back(ru);
+            }
+            rec.eloPool = 1;
+        } else {
+            PlayerProfile prof[3];
+            RobotRecord rob[3];
+            bool seatIsRobot[3] = {false, false, false};
+            for (int s = 1; s <= 2; ++s) {
+                int64_t actor = r.seatPlayer[s];
+                if (isRobotActorId(actor)) {
+                    seatIsRobot[s] = true;
+                    if (!_store.getRobotById(robotIdFromActorId(actor), rob[s])) {
+                        r.archiveError = "robot lookup failed";
+                        saveRoomLocked(r);
+                        return false;
+                    }
+                } else {
+                    if (!_store.getProfileById(actor, prof[s])) {
+                        r.archiveError = "player profile lookup failed";
+                        saveRoomLocked(r);
+                        return false;
+                    }
+                }
+            }
+
+            const bool sameOwnerHumanBot =
+                (!seatIsRobot[1] && seatIsRobot[2] &&
+                 rob[2].ownerPlayerId == r.seatPlayer[1]) ||
+                (seatIsRobot[1] && !seatIsRobot[2] &&
+                 rob[1].ownerPlayerId == r.seatPlayer[2]);
+
+            const bool pairCapReached =
+                !sameOwnerHumanBot &&
+                (_store.countRecentArenaRatedPairGames(
+                     rec.p1PlayerId, rec.p1RobotId, rec.p2PlayerId,
+                     rec.p2RobotId, 24LL * 3600) >= 4);
+
+            if (!sameOwnerHumanBot && !pairCapReached) {
+                int kFactor = 32;
+                if (seatIsRobot[1] && seatIsRobot[2] &&
+                    rob[1].ownerPlayerId > 0 &&
+                    rob[1].ownerPlayerId == rob[2].ownerPlayerId) {
+                    kFactor = 16;
+                }
+                auto pool2RatingOf = [&](int s) -> int {
+                    if (seatIsRobot[s]) {
+                        if (r.config.mode == GAME_MODE_OFK) {
+                            return rob[s].eloOfk;
+                        }
+                        return rec.gameBases == 1 ? rob[s].elo2p1b : rob[s].elo2p3b;
+                    }
+                    if (r.config.mode == GAME_MODE_OFK) {
+                        return prof[s].arenaEloOfk;
+                    }
+                    return rec.gameBases == 1 ? prof[s].arenaElo2p1b
+                                              : prof[s].arenaElo2p3b;
+                };
+                EloCalculator::DuelUpdate up = EloCalculator::updateDuel(
+                    pool2RatingOf(1), pool2RatingOf(2), oc, kFactor);
+                for (int s = 1; s <= 2; ++s) {
+                    RatingUpdate ru;
+                    if (seatIsRobot[s]) {
+                        ru.playerId = 0;
+                        ru.robotId = robotIdFromActorId(r.seatPlayer[s]);
+                    } else {
+                        ru.playerId = r.seatPlayer[s];
+                        ru.robotId = 0;
+                    }
+                    ru.newElo = s == 1 ? up.newRating1 : up.newRating2;
+                    ru.outcome = r.winnerSeat == 0   ? GameOutcome::DRAW
+                                 : r.winnerSeat == s ? GameOutcome::WIN
+                                                     : GameOutcome::LOSS;
+                    updates.push_back(ru);
+                }
+                rec.eloPool = 2;
+            }
+        }
+    }
+
+    std::string err;
+    ArchiveStatus st =
+        _store.archiveGameWithRatings(rec, updates, robotOutcomes, err);
+    if (st == ArchiveStatus::OK) {
         for (int s = 1; s <= r.seatCount; ++s) {
             int64_t pid = r.seatPlayer[s];
             if (isRobotActorId(pid)) {
@@ -3300,8 +3507,6 @@ bool GameRoomManager::archiveLocked(Room &r)
                         outcome = (r.winnerSeat == s) ? GameOutcome::WIN : GameOutcome::LOSS;
                     }
                 }
-                int64_t robotId = robotIdFromActorId(pid);
-                _store.recordRobotGameOutcome(robotId, outcome);
                 std::map<int64_t, PlayerInfo>::iterator pit = _players.find(pid);
                 if (pit != _players.end()) {
                     pit->second.robotGamesPlayed++;
@@ -3315,59 +3520,6 @@ bool GameRoomManager::archiveLocked(Room &r)
                 }
             }
         }
-    } else if (r.config.rated) {
-        PlayerProfile prof[5];
-        for (int s = 1; s <= r.seatCount; ++s) {
-            if (!_store.getProfileById(r.seatPlayer[s], prof[s])) {
-                r.archiveError = "player profile lookup failed";
-                saveRoomLocked(r);
-                return false;
-            }
-        }
-        auto ratingOf = [&r](const PlayerProfile &p) -> int {
-            if (r.config.mode == GAME_MODE_4) {
-                return p.elo4p;
-            }
-            return r.config.mode == GAME_MODE_OFK ? p.eloOfk : p.elo2p;
-        };
-        if (r.seatCount == 4) {
-            std::array<int, 4> rt = {{ratingOf(prof[1]), ratingOf(prof[2]),
-                                      ratingOf(prof[3]), ratingOf(prof[4])}};
-            EloOutcome oc = r.winnerSeat == 0   ? EloOutcome::DRAW
-                            : r.winnerSeat == 1 ? EloOutcome::FIRST_WINS
-                                                : EloOutcome::SECOND_WINS;
-            EloCalculator::TeamUpdate up = EloCalculator::updateTeams(rt, oc);
-            for (int i = 0; i < 4; ++i) {
-                int team = (i % 2 == 0) ? 1 : 2;
-                RatingUpdate ru;
-                ru.playerId = r.seatPlayer[i + 1];
-                ru.newElo = up.newRating[static_cast<size_t>(i)];
-                ru.outcome = r.winnerSeat == 0      ? GameOutcome::DRAW
-                             : r.winnerSeat == team ? GameOutcome::WIN
-                                                    : GameOutcome::LOSS;
-                updates.push_back(ru);
-            }
-        } else {
-            EloOutcome oc = r.winnerSeat == 0   ? EloOutcome::DRAW
-                            : r.winnerSeat == 1 ? EloOutcome::FIRST_WINS
-                                                : EloOutcome::SECOND_WINS;
-            EloCalculator::DuelUpdate up = EloCalculator::updateDuel(
-                ratingOf(prof[1]), ratingOf(prof[2]), oc);
-            for (int s = 1; s <= 2; ++s) {
-                RatingUpdate ru;
-                ru.playerId = r.seatPlayer[s];
-                ru.newElo = s == 1 ? up.newRating1 : up.newRating2;
-                ru.outcome = r.winnerSeat == 0   ? GameOutcome::DRAW
-                             : r.winnerSeat == s ? GameOutcome::WIN
-                                                 : GameOutcome::LOSS;
-                updates.push_back(ru);
-            }
-        }
-    }
-
-    std::string err;
-    ArchiveStatus st = _store.archiveGameWithRatings(rec, updates, err);
-    if (st == ArchiveStatus::OK) {
         r.archived = true;
         r.archiveError.clear();
         saveRoomLocked(r);
@@ -4243,6 +4395,18 @@ bool GameRoomManager::restoreFromStoreLocked()
                         tc.value("disconnectGraceMs", 90000LL);
                 }
                 r->config.rated = cfg.value("rated", true);
+                if (r->config.mode == GAME_MODE_OFK) {
+                    r->config.bases = GAME_BASES_1;
+                    r->config.useSuperProngs = false;
+                    r->config.useEdgelessBoard = false;
+                } else if (r->config.mode == GAME_MODE_4) {
+                    r->config.bases = GAME_BASES_3;
+                }
+                if (!isOfficialRatedVariant(r->config.mode, r->config.bases,
+                                            r->config.useSuperProngs,
+                                            r->config.useEdgelessBoard)) {
+                    r->config.rated = false;
+                }
                 r->config.allowTakeback = cfg.value("allowTakeback", false);
                 r->config.allowRobots = cfg.value("allowRobots", true);
                 parseObserverPolicy(cfg.value("observerPolicy", "OPEN"),
@@ -4489,6 +4653,10 @@ bool GameRoomManager::restoreFromStoreLocked()
                     _observing[*oit].insert(r->id);
                     _players[*oit].online = true;
                 }
+            }
+
+            if (r->phase == RoomPhase::WAITING_FOR_PLAYERS) {
+                refreshRoomSeatRatingsLocked(*r);
             }
 
             _rooms[r->id] = std::move(r);

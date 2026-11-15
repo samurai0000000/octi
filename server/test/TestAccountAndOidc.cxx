@@ -1535,15 +1535,17 @@ TEST(AccountStoreTest, SchemaMatchesPlanAndHasNoGuestSupport)
                              "'linked_identities','sessions','games')"));
     CHECK_EQUAL(0, countRows("SELECT COUNT(*) FROM pragma_table_info('players')"
                              " WHERE name LIKE '%guest%'"));
-    CHECK_EQUAL(18, countRows("SELECT COUNT(*) FROM pragma_table_info('players')"));
+    CHECK_EQUAL(27, countRows("SELECT COUNT(*) FROM pragma_table_info('players')"));
     CHECK_EQUAL(4, countRows("SELECT COUNT(*) FROM pragma_table_info('player_installs')"));
     CHECK_EQUAL(8, countRows(
                        "SELECT COUNT(*) FROM pragma_table_info('linked_identities')"));
     CHECK_EQUAL(7, countRows("SELECT COUNT(*) FROM pragma_table_info('sessions')"));
-    CHECK_EQUAL(35, countRows("SELECT COUNT(*) FROM pragma_table_info('games')"));
-    CHECK_EQUAL(21, countRows("SELECT COUNT(*) FROM pragma_table_info('robots')"));
+    CHECK_EQUAL(37, countRows("SELECT COUNT(*) FROM pragma_table_info('games')"));
+    CHECK_EQUAL(24, countRows("SELECT COUNT(*) FROM pragma_table_info('robots')"));
     CHECK_TRUE(countRows("SELECT COUNT(*) FROM sqlite_master WHERE type='index'"
                          " AND name='idx_games_ended_at'") == 1);
+    CHECK_TRUE(countRows("SELECT COUNT(*) FROM sqlite_master WHERE type='index'"
+                         " AND name='idx_games_elo_pool_ended'") == 1);
 
     LoginResult guest = store->loginWithSso(makeClaims("guest", "anon"), "x");
     CHECK_FALSE(guest.ok);
@@ -2273,8 +2275,11 @@ TEST(AccountStoreTest, LeaderboardOrdersByEloThenGamesThenAge)
     CHECK_EQUAL(1, lb[2].draws);
     CHECK_FALSE(lb[0].uuid.empty());
 
-    /* other modes are independent: all still 1200, ordered by games then age */
-    CHECK_TRUE(store->leaderboard("4P", 10, lb));
+    /* 4P is casual-only (not an official rated ladder); 2P_1B and OFK remain 1200 */
+    CHECK_FALSE(store->leaderboard("4P", 10, lb));
+    CHECK_TRUE(store->leaderboard("2P_3B", 10, lb));
+    CHECK_EQUAL(1300, lb[0].elo);
+    CHECK_TRUE(store->leaderboard("2P_1B", 10, lb));
     CHECK_EQUAL(5, static_cast<int>(lb.size()));
     for (size_t i = 0; i < lb.size(); ++i) {
         CHECK_EQUAL(1200, lb[i].elo);
@@ -2364,7 +2369,8 @@ TEST(AccountStoreTest, RatingUpdatesAreAtomic)
     CHECK_TRUE(store->getProfileById(b, p));
     CHECK_EQUAL(1100, p.eloOfk);
     CHECK_EQUAL(1, p.draws);
-    CHECK_TRUE(store->applyRatingUpdates("4P", std::vector<octi::RatingUpdate>(), err));
+    CHECK_FALSE(store->applyRatingUpdates("4P", std::vector<octi::RatingUpdate>(), err));
+    CHECK_TRUE(store->applyRatingUpdates("2P_1B", std::vector<octi::RatingUpdate>(), err));
 }
 
 /* ---- Archive ---- */
@@ -3610,6 +3616,258 @@ TEST(AccountStoreTest, DeleteRobotRetentionAndDirectoryFiltering)
     CHECK_EQUAL(1, (int)archivedGames.size());
     STRCMP_EQUAL("g-bot-beta-01", archivedGames[0].gameId.c_str());
     CHECK_EQUAL(r2.robot.robotId, archivedGames[0].p2RobotId);
+}
+
+TEST(AccountStoreTest, DualPoolThreeLadderMigrationStandingsAndPairCap)
+{
+    /* 1. Legacy DB idempotent migration: seeds elo_2p_3b = elo_2p exactly once */
+    std::string legacyDbPath = dir->path() + "/legacy_dual_pool.db";
+    {
+        sqlite3 *ldb = nullptr;
+        CHECK_EQUAL(SQLITE_OK, sqlite3_open(legacyDbPath.c_str(), &ldb));
+        const char *legacySql =
+            "CREATE TABLE players ("
+            "  player_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  uuid TEXT NOT NULL UNIQUE,"
+            "  handle TEXT NOT NULL UNIQUE COLLATE NOCASE,"
+            "  display_name TEXT NOT NULL DEFAULT '',"
+            "  avatar_url TEXT NOT NULL DEFAULT '',"
+            "  bio TEXT NOT NULL DEFAULT '',"
+            "  location TEXT NOT NULL DEFAULT '',"
+            "  banned INTEGER NOT NULL DEFAULT 0,"
+            "  elo_2p INTEGER NOT NULL DEFAULT 1200,"
+            "  elo_4p INTEGER NOT NULL DEFAULT 1200,"
+            "  elo_ofk INTEGER NOT NULL DEFAULT 1200,"
+            "  games_played INTEGER NOT NULL DEFAULT 0,"
+            "  wins INTEGER NOT NULL DEFAULT 0,"
+            "  losses INTEGER NOT NULL DEFAULT 0,"
+            "  draws INTEGER NOT NULL DEFAULT 0,"
+            "  created_at INTEGER NOT NULL,"
+            "  last_seen_at INTEGER NOT NULL,"
+            "  handle_changed_at INTEGER NOT NULL DEFAULT 0"
+            ");"
+            "INSERT INTO players (uuid, handle, display_name, elo_2p, elo_4p, elo_ofk, games_played, wins, created_at, last_seen_at)"
+            " VALUES ('u-legacy-1', 'LegacyChamp', 'Legacy Champ', 1435, 1310, 1280, 12, 9, 1700000000, 1700000100);";
+        char *errMsg = nullptr;
+        CHECK_EQUAL(SQLITE_OK, sqlite3_exec(ldb, legacySql, nullptr, nullptr, &errMsg));
+        sqlite3_close(ldb);
+    }
+
+    AccountStore migStore;
+    std::string err;
+    CHECK_TRUE_TEXT(migStore.openOrCreate(legacyDbPath, err), err.c_str());
+    PlayerProfile legProf;
+    CHECK_TRUE(migStore.getProfileByUuid("u-legacy-1", legProf));
+    CHECK_EQUAL(1435, legProf.elo2p3b);
+    CHECK_EQUAL(1435, legProf.elo2p);
+    CHECK_EQUAL(1200, legProf.elo2p1b);
+    CHECK_EQUAL(1280, legProf.eloOfk);
+    CHECK_EQUAL(1200, legProf.arenaElo2p3b);
+    CHECK_EQUAL(1200, legProf.arenaElo2p1b);
+    CHECK_EQUAL(1200, legProf.arenaEloOfk);
+    CHECK_EQUAL(0, legProf.arenaGamesPlayed);
+
+    /* Update elo_2p_3b, reopen DB, confirm idempotent open does not overwrite */
+    std::vector<octi::RatingUpdate> migUp(1);
+    migUp[0].playerId = legProf.playerId;
+    migUp[0].newElo = 1460;
+    migUp[0].outcome = GameOutcome::WIN;
+    CHECK_TRUE(migStore.applyRatingUpdates("2P_3B", migUp, err));
+    migStore.close();
+    CHECK_TRUE_TEXT(migStore.openOrCreate(legacyDbPath, err), err.c_str());
+    CHECK_TRUE(migStore.getProfileByUuid("u-legacy-1", legProf));
+    CHECK_EQUAL(1460, legProf.elo2p3b);
+    CHECK_EQUAL(1460, legProf.elo2p);
+    migStore.close();
+
+    /* 2. Pool 1 (Human-Only) 3 independent ladders: 2P_3B, 2P_1B, OFK */
+    int64_t h1 = newPlayer("g-h1", "HumanOne");
+    int64_t h2 = newPlayer("g-h2", "HumanTwo");
+    int64_t h3 = newPlayer("g-h3", "HumanThree");
+
+    GameRecord g3b = record("g-pool1-3b", clockNow, h1, h2, "2P");
+    g3b.gameBases = 3;
+    g3b.rated = 1;
+    g3b.eloPool = 1;
+    std::vector<octi::RatingUpdate> u3b(2);
+    u3b[0] = {h1, 0, 1216, GameOutcome::WIN};
+    u3b[1] = {h2, 0, 1184, GameOutcome::LOSS};
+    CHECK_EQUAL((int)ArchiveStatus::OK,
+                (int)store->archiveGameWithRatings(g3b, u3b, {}, err));
+
+    GameRecord g1b = record("g-pool1-1b", clockNow + 10, h1, h2, "2P");
+    g1b.gameBases = 1;
+    g1b.rated = 1;
+    g1b.eloPool = 1;
+    std::vector<octi::RatingUpdate> u1b(2);
+    u1b[0] = {h1, 0, 1184, GameOutcome::LOSS};
+    u1b[1] = {h2, 0, 1216, GameOutcome::WIN};
+    CHECK_EQUAL((int)ArchiveStatus::OK,
+                (int)store->archiveGameWithRatings(g1b, u1b, {}, err));
+
+    GameRecord gOfk = record("g-pool1-ofk", clockNow + 20, h1, h2, "OFK");
+    gOfk.gameBases = 1;
+    gOfk.rated = 1;
+    gOfk.eloPool = 1;
+    std::vector<octi::RatingUpdate> uOfk(2);
+    uOfk[0] = {h1, 0, 1232, GameOutcome::WIN};
+    uOfk[1] = {h2, 0, 1168, GameOutcome::LOSS};
+    CHECK_EQUAL((int)ArchiveStatus::OK,
+                (int)store->archiveGameWithRatings(gOfk, uOfk, {}, err));
+
+    PlayerProfile p1, p2;
+    CHECK_TRUE(store->getProfileById(h1, p1));
+    CHECK_TRUE(store->getProfileById(h2, p2));
+    CHECK_EQUAL(1216, p1.elo2p3b);
+    CHECK_EQUAL(1216, p1.elo2p);
+    CHECK_EQUAL(1184, p1.elo2p1b);
+    CHECK_EQUAL(1232, p1.eloOfk);
+    CHECK_EQUAL(3, p1.gamesPlayed);
+    CHECK_EQUAL(2, p1.wins);
+    CHECK_EQUAL(1, p1.losses);
+    CHECK_EQUAL(1200, p1.arenaElo2p3b);
+    CHECK_EQUAL(0, p1.arenaGamesPlayed);
+
+    GameRecord got3b;
+    CHECK_TRUE(store->getArchivedGame("g-pool1-3b", got3b));
+    CHECK_EQUAL(1, got3b.rated);
+    CHECK_EQUAL(1, got3b.eloPool);
+
+    /* 3. Pool 2 (Arena) single-tx archiveGameWithRatings + rollback atomicity + pair cap */
+    CreateRobotResult b1 = store->createRobot(h2, "ArenaBotAlpha", "Alpha arena bot");
+    CreateRobotResult b2 = store->createRobot(h2, "ArenaBotBeta", "Beta arena bot");
+    CreateRobotResult bZero = store->createRobot(h2, "ActiveZeroGames", "Should hide until first game");
+    CreateRobotResult bBannedOwner = store->createRobot(h3, "BannedOwnerBot", "Should hide when owner banned");
+    CHECK_EQUAL((int)octi::RobotStatus::OK, (int)b1.status);
+    CHECK_EQUAL((int)octi::RobotStatus::OK, (int)b2.status);
+    CHECK_EQUAL((int)octi::RobotStatus::OK, (int)bZero.status);
+    CHECK_EQUAL((int)octi::RobotStatus::OK, (int)bBannedOwner.status);
+    CHECK_TRUE(store->recordRobotGameOutcome(b2.robot.robotId, GameOutcome::DRAW));
+    CHECK_TRUE(store->recordRobotGameOutcome(bBannedOwner.robot.robotId, GameOutcome::WIN));
+
+    /* Rollback check: invalid ghost robotId aborts game archive, human arena update, and robot outcome */
+    GameRecord gBad = record("g-pool2-bad", clockNow + 30, h1, 0, "2P");
+    gBad.p2RobotId = b1.robot.robotId;
+    gBad.p2Handle = b1.robot.robotName;
+    gBad.rated = 1;
+    gBad.eloPool = 2;
+    std::vector<octi::RatingUpdate> badUp(2);
+    badUp[0] = {h1, 0, 1250, GameOutcome::WIN};
+    badUp[1] = {0, 999999, 1150, GameOutcome::LOSS};
+    std::vector<octi::RobotOutcomeUpdate> badOut = {{b1.robot.robotId, GameOutcome::LOSS}};
+    CHECK_TRUE(store->archiveGameWithRatings(gBad, badUp, badOut, err) != ArchiveStatus::OK);
+    GameRecord missing;
+    CHECK_FALSE(store->getArchivedGame("g-pool2-bad", missing));
+    RobotRecord rCheck;
+    CHECK_TRUE(store->getRobotById(b1.robot.robotId, rCheck));
+    CHECK_EQUAL(0, rCheck.gamesPlayed);
+    CHECK_TRUE(store->getProfileById(h1, p1));
+    CHECK_EQUAL(0, p1.arenaGamesPlayed);
+
+    /* Valid Pool 2 Human vs Robot game in both seat orders + window test */
+    clockNow += 100;
+    GameRecord gOld = record("g-pool2-old", clockNow - 90000, h1, 0, "2P");
+    gOld.p2RobotId = b1.robot.robotId;
+    gOld.p2Handle = b1.robot.robotName;
+    gOld.rated = 1;
+    gOld.eloPool = 2;
+    std::vector<octi::RatingUpdate> uArena1 = {
+        {h1, 0, 1216, GameOutcome::WIN},
+        {0, b1.robot.robotId, 1184, GameOutcome::LOSS}
+    };
+    std::vector<octi::RobotOutcomeUpdate> ro1 = {{b1.robot.robotId, GameOutcome::LOSS}};
+    CHECK_EQUAL((int)ArchiveStatus::OK,
+                (int)store->archiveGameWithRatings(gOld, uArena1, ro1, err));
+
+    GameRecord gRecentA = record("g-pool2-rec1", clockNow - 3600, h1, 0, "2P");
+    gRecentA.p2RobotId = b1.robot.robotId;
+    gRecentA.p2Handle = b1.robot.robotName;
+    gRecentA.rated = 1;
+    gRecentA.eloPool = 2;
+    std::vector<octi::RatingUpdate> uArena2 = {
+        {h1, 0, 1230, GameOutcome::WIN},
+        {0, b1.robot.robotId, 1170, GameOutcome::LOSS}
+    };
+    CHECK_EQUAL((int)ArchiveStatus::OK,
+                (int)store->archiveGameWithRatings(gRecentA, uArena2, ro1, err));
+
+    /* Seat-swapped (Robot seat 1, Human seat 2) */
+    GameRecord gRecentB = record("g-pool2-rec2", clockNow - 1800, 0, h1, "2P");
+    gRecentB.p1RobotId = b1.robot.robotId;
+    gRecentB.p1Handle = b1.robot.robotName;
+    gRecentB.rated = 1;
+    gRecentB.eloPool = 2;
+    std::vector<octi::RatingUpdate> uArena3 = {
+        {0, b1.robot.robotId, 1188, GameOutcome::WIN},
+        {h1, 0, 1212, GameOutcome::LOSS}
+    };
+    std::vector<octi::RobotOutcomeUpdate> roWin = {{b1.robot.robotId, GameOutcome::WIN}};
+    CHECK_EQUAL((int)ArchiveStatus::OK,
+                (int)store->archiveGameWithRatings(gRecentB, uArena3, roWin, err));
+
+    /* Unrated Pool 0 game with same pair must NOT count toward rated pair cap */
+    GameRecord gUnratedPair = record("g-pool0-pair", clockNow - 600, h1, 0, "2P");
+    gUnratedPair.p2RobotId = b1.robot.robotId;
+    gUnratedPair.p2Handle = b1.robot.robotName;
+    gUnratedPair.rated = 1;
+    gUnratedPair.eloPool = 0;
+    CHECK_EQUAL((int)ArchiveStatus::OK,
+                (int)store->archiveGameWithRatings(gUnratedPair, {}, ro1, err));
+
+    CHECK_EQUAL(2, store->countRecentArenaRatedPairGames(
+                       h1, 0, 0, b1.robot.robotId, 24LL * 3600));
+    CHECK_EQUAL(2, store->countRecentArenaRatedPairGames(
+                       0, b1.robot.robotId, h1, 0, 24LL * 3600));
+
+    CHECK_TRUE(store->getProfileById(h1, p1));
+    CHECK_EQUAL(1216, p1.elo2p3b);        /* Pool 1 untouched by Arena! */
+    CHECK_EQUAL(3, p1.gamesPlayed);       /* Pool 1 gamesPlayed untouched! */
+    CHECK_EQUAL(1212, p1.arenaElo2p3b);
+    CHECK_EQUAL(3, p1.arenaGamesPlayed);
+    CHECK_EQUAL(2, p1.arenaWins);
+    CHECK_EQUAL(1, p1.arenaLosses);
+
+    CHECK_TRUE(store->getRobotById(b1.robot.robotId, rCheck));
+    CHECK_EQUAL(1188, rCheck.elo2p3b);
+    CHECK_EQUAL(4, rCheck.gamesPlayed);
+    CHECK_EQUAL(1, rCheck.wins);
+    CHECK_EQUAL(3, rCheck.losses);
+
+    /* 4. listArenaStandings: all | robots | humans + banned/revoked exclusions + sorts */
+    CHECK_TRUE(store->setBanned(h3, true));
+    octi::ArenaStandingsFilter asf;
+    asf.participantType = "all";
+    asf.sortField = "elo_2p_3b";
+    std::vector<octi::ArenaStandingEntry> standings;
+    int64_t totalStandings = 0;
+    CHECK_TRUE(store->listArenaStandings(asf, standings, &totalStandings));
+    /* Expected: h1 (human, arenaGamesPlayed=3, elo2p3b=1212), b2 (1-game robot, elo2p3b=1200),
+     * b1 (4-game robot, elo2p3b=1188). Excluded: h2 (arenaGamesPlayed=0), h3 (banned),
+     * bZero (0 games), bBannedOwner (owner h3 banned). */
+    CHECK_EQUAL(3, (int)totalStandings);
+    CHECK_EQUAL(3, (int)standings.size());
+    STRCMP_EQUAL("human", standings[0].entryType.c_str());
+    STRCMP_EQUAL("HumanOne", standings[0].name.c_str());
+    CHECK_EQUAL(1212, standings[0].elo2p3b);
+    STRCMP_EQUAL("robot", standings[1].entryType.c_str());
+    STRCMP_EQUAL("ArenaBotBeta", standings[1].name.c_str());
+    CHECK_EQUAL(1200, standings[1].elo2p3b);
+    STRCMP_EQUAL("robot", standings[2].entryType.c_str());
+    STRCMP_EQUAL("ArenaBotAlpha", standings[2].name.c_str());
+    CHECK_EQUAL(1188, standings[2].elo2p3b);
+
+    asf.participantType = "robots";
+    CHECK_TRUE(store->listArenaStandings(asf, standings, &totalStandings));
+    CHECK_EQUAL(2, (int)totalStandings);
+    for (size_t i = 0; i < standings.size(); ++i) {
+        STRCMP_EQUAL("robot", standings[i].entryType.c_str());
+    }
+
+    asf.participantType = "humans";
+    CHECK_TRUE(store->listArenaStandings(asf, standings, &totalStandings));
+    CHECK_EQUAL(1, (int)totalStandings);
+    STRCMP_EQUAL("human", standings[0].entryType.c_str());
+    STRCMP_EQUAL("HumanOne", standings[0].name.c_str());
 }
 
 int main(int argc, char **argv)

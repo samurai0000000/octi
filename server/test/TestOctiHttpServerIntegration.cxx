@@ -24,6 +24,8 @@
 #include "OctiDefs.hxx"
 #include "OctiGame.hxx"
 #include "OctiHttpServer.hxx"
+#include "OctiNetworkClient.hxx"
+#include "OctiRulebook.hxx"
 #include "OctiSoundCue.hxx"
 #include "OidcVerifier.hxx"
 #include "ServerApp.hxx"
@@ -1078,9 +1080,9 @@ TEST(OctiHttpServerIntegrationTest, NominalFullScenario)
                                   Json{{"move", "37+e"}});
     EXPECT_ERROR(403, "NOT_YOUR_TURN", outOfTurn);
     std::vector<User> players = {a, b};
-    CHECK_EQUAL(4, playPlies(room, players, GAME_MODE_2, 4));
-    CHECK_EQUAL(4, view(room).value("ply_count", 0));
-    CHECK_EQUAL(4, static_cast<int>(view(room)["moves"].size()));
+    CHECK_EQUAL(8, playPlies(room, players, GAME_MODE_2, 8));
+    CHECK_EQUAL(8, view(room).value("ply_count", 0));
+    CHECK_EQUAL(8, static_cast<int>(view(room)["moves"].size()));
 
     /* ---- pause / resume freezes play ---- */
     EXPECT_STATUS(200, act(room, a, "request_pause"));
@@ -1186,7 +1188,7 @@ TEST(OctiHttpServerIntegrationTest, NominalFullScenario)
     const std::string listedId = list.json["games"][0].value("game_id", "");
     STRCMP_EQUAL(room.c_str(), listedId.c_str());
     STRCMP_EQUAL("2P", list.json["games"][0].value("mode", "").c_str());
-    CHECK_EQUAL(4, list.json["games"][0].value("ply_count", 0));
+    CHECK_EQUAL(8, list.json["games"][0].value("ply_count", 0));
     Reply detail = http().get("/api/v1/archive/games/" + room);
     EXPECT_STATUS(200, detail);
     CHECK_FALSE(detail.json.value("octi_transcript", "").empty());
@@ -1446,7 +1448,7 @@ TEST(OctiHttpServerIntegrationTest, OfkAndFourPlayerTablesPlayOverHttp)
     CHECK_EQUAL(300000, kv["time_control"].value("initial_ms", 0));
     CHECK_EQUAL(2000, kv["time_control"].value("increment_ms", 0));
     CHECK_TRUE(kv["seats"][0].value("clock_ms", -1) > 0);
-    CHECK_EQUAL(3, playPlies(kids, two, GAME_MODE_OFK, 3, Json{{"bases", 1}}));
+    CHECK_EQUAL(8, playPlies(kids, two, GAME_MODE_OFK, 8, Json{{"bases", 1}}));
     EXPECT_STATUS(200, http().post("/api/v1/games/" + kids + "/resign", b.token,
                                    Json::object()));
     STRCMP_EQUAL("OFK", http().get("/api/v1/archive/games?mode=OFK")
@@ -5885,7 +5887,7 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("OCTI v2.5.2") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("OCTI v" + std::string(OCTI_APP_VERSION)) != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Official Platform") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("OFFICIAL PLATFORM") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("Lv4: Expert (40s)") != std::string::npos);
@@ -6589,6 +6591,7 @@ TEST(OctiHttpServerIntegrationTest, SharedSoundAssetsEndpointAndWebPlayerMoveCue
         std::ofstream rfs(runnerJsPath);
         rfs << R"NODEJS(
 const assert = require("assert");
+const crypto = require("crypto");
 const fs = require("fs");
 const vm = require("vm");
 
@@ -8095,6 +8098,1095 @@ process.exit(0);
     std::remove(cfgJsonPath.c_str());
     std::remove(runnerJsPath.c_str());
     CHECK_EQUAL(0, rcNode);
+}
+
+TEST(OctiHttpServerIntegrationTest, WebPlayerBotWorkerExecutionAndProgress)
+{
+    Reply rUi = http().get("/");
+    EXPECT_STATUS(200, rUi);
+
+    struct WorkerCase {
+        const char *variant;
+        const char *mode;
+        const char *side;
+        const char *fen;
+        int searchId;
+    };
+    const WorkerCase kCases[] = {
+        {"2P_3B", "2P", "A",
+         "2:3:0:0:P:A:-:0:4,0,19,0:4,0,19,0:A34ab,A53ac,A73a,B37e,B56eg,B77ef",
+         101},
+        {"2P_3B_SP", "2P", "A",
+         "2:3:1:0:P:A:-:0:4,0,19,0:4,0,19,0:A34a!b,A53ac,A73a,B37e!,B56eg,B77ef",
+         102},
+        {"4P_SP", "4P", "A",
+         "4:3:1:0:P:A:-:0:3,0,9,0:3,0,9,0:3,0,9,0:3,0,9,0:A34a!b,D73g,B36e!f,C77c",
+         103},
+        {"OFK", "OFK", "A",
+         "OFK:1:0:0:P:A:-:0:0,0,6,0:0,0,6,0:A23ab,A32a,A42c,A52a,B26e,B35ef,B46g,B56e",
+         104}
+    };
+
+    Json casesJson = Json::array();
+    for (size_t i = 0; i < sizeof(kCases) / sizeof(kCases[0]); ++i) {
+        octi::OctiBoard board;
+        board.fromPositionString(kCases[i].fen);
+        CHECK_TRUE(board.getGame() != nullptr);
+        CHECK_FALSE(board.getGame()->isGameOver());
+        std::vector<octi::OctiMove> legal = board.getGame()->generateLegalMoves();
+        CHECK_TRUE(!legal.empty());
+        Json legalJson = Json::array();
+        for (size_t m = 0; m < legal.size(); ++m) {
+            legalJson.push_back(legal[m].asString());
+        }
+        casesJson.push_back(Json{
+            {"variant", kCases[i].variant},
+            {"mode", kCases[i].mode},
+            {"side", kCases[i].side},
+            {"fen", kCases[i].fen},
+            {"searchId", kCases[i].searchId},
+            {"legalMoves", legalJson}
+        });
+    }
+
+    size_t scStart = rUi.body.find("<script>");
+    CHECK_TRUE(scStart != std::string::npos);
+    size_t scEnd = rUi.body.find("</script>", scStart);
+    CHECK_TRUE(scEnd != std::string::npos);
+    std::string jsCode = rUi.body.substr(scStart + 8, scEnd - (scStart + 8));
+
+    std::string pidTag = std::to_string(getpid());
+    std::string webJsPath = "/tmp/octi_worker_webui_" + pidTag + ".js";
+    std::string cfgJsonPath = "/tmp/octi_worker_cfg_" + pidTag + ".json";
+    std::string runnerJsPath = "/tmp/octi_worker_runner_" + pidTag + ".js";
+
+    {
+        std::ofstream ofs(webJsPath);
+        ofs << jsCode;
+    }
+    {
+        Json cfg;
+        cfg["port"] = http().port();
+        cfg["cases"] = casesJson;
+        std::ofstream cfs(cfgJsonPath);
+        cfs << cfg.dump();
+    }
+    {
+        std::ofstream rfs(runnerJsPath);
+        rfs << R"NODEJS(
+const assert = require("assert");
+const crypto = require("crypto");
+const fs = require("fs");
+const vm = require("vm");
+
+const webJsRaw = fs.readFileSync(process.argv[2], "utf8");
+const cfg = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+
+const iifeClose = webJsRaw.lastIndexOf("})();");
+assert.ok(iifeClose > 0, "Expected closing })(); in WebUi script");
+const instrumentedJs =
+  webJsRaw.slice(0, iifeClose) +
+  "\nwindow.__octiWorkerTest = {\n" +
+  "  getWorkerCode: function() { return (typeof workerCode === 'string') ? workerCode : ''; },\n" +
+  "  initBotWorker: (typeof initBotWorker === 'function') ? initBotWorker : null,\n" +
+  "  cancelPendingAiSearch: (typeof cancelPendingAiSearch === 'function') ? cancelPendingAiSearch : null,\n" +
+  "  updateThinkingProgressUi: (typeof updateThinkingProgressUi === 'function') ? updateThinkingProgressUi : null,\n" +
+  "  getBotWorker: function() { return botWorker; },\n" +
+  "  getActiveAiSearchId: function() { return (typeof activeAiSearchId === 'number') ? activeAiSearchId : -1; },\n" +
+  "  isAiSearchInFlight: function() { return (typeof aiSearchInFlight === 'boolean') ? aiSearchInFlight : false; },\n" +
+  "  parseOctiFen: parseOctiFen,\n" +
+  "  setLocalContextForRestore: function(fen) {\n" +
+  "    localMatchConfig.playMode = 'bot';\n" +
+  "    localMatchConfig.humanSeat = 'A';\n" +
+  "    localMatchConfig.botDifficulty = 2;\n" +
+  "    localPlayContext = {\n" +
+  "      state: parseOctiFen(fen),\n" +
+  "      plies: [\n" +
+  "        { plyIndex: 0, player: '-', move: '(Initial Setup)', fenAfter: fen },\n" +
+  "        { plyIndex: 1, player: 'A', move: '33+a', fenAfter: fen }\n" +
+  "      ],\n" +
+  "      vcrIndex: 1,\n" +
+  "      matchStarted: true,\n" +
+  "      lastMoveHighlightSquares: [],\n" +
+  "      lastMoveSetAtMs: 0,\n" +
+  "      clockTimers: { A: 300, B: 300, C: 300, D: 300 },\n" +
+  "      boardRotationDeg: 0,\n" +
+  "      startOverlayVisible: false,\n" +
+  "      gameoverVisible: false,\n" +
+  "      gameoverTitle: '',\n" +
+  "      gameoverSubtitle: '',\n" +
+  "      archiveStatusText: ''\n" +
+  "    };\n" +
+  "  },\n" +
+  "  restoreLocalPlayContext: restoreLocalPlayContext\n" +
+  "};\n})();\n";
+
+let capturedBlobText = "";
+class CapturingBlob {
+  constructor(parts, opts) {
+    this.parts = Array.isArray(parts) ? parts : [];
+    this.type = (opts && opts.type) || "";
+    this.text = this.parts.map((p) => String(p)).join("");
+    if (this.text.includes("self.onmessage")) {
+      capturedBlobText = this.text;
+    }
+  }
+}
+
+const workerInstances = [];
+class MockWorker {
+  constructor(url) {
+    this.url = url;
+    this.terminated = false;
+    this.posted = [];
+    this.onmessage = null;
+    this.onerror = null;
+    workerInstances.push(this);
+  }
+  postMessage(msg) {
+    this.posted.push(msg);
+  }
+  terminate() {
+    this.terminated = true;
+  }
+}
+
+class MockNode {}
+const elements = {};
+function makeElement(id) {
+  let _innerHTML = "";
+  const elObj = Object.assign(new MockNode(), {
+    id: id || "",
+    tagName: "DIV",
+    textContent: "",
+    value: "",
+    checked: false,
+    disabled: false,
+    className: "",
+    width: 760,
+    height: 760,
+    clientWidth: 760,
+    clientHeight: 760,
+    offsetWidth: 760,
+    offsetHeight: 760,
+    scrollHeight: 0,
+    scrollTop: 0,
+    children: [],
+    firstChild: null,
+    parentNode: null,
+    style: {
+      setProperty(k, v) { this[k] = v; },
+      removeProperty(k) { delete this[k]; },
+      getPropertyValue(k) { return this[k] || ""; }
+    },
+    dataset: {},
+    listeners: {},
+    addEventListener(ev, fn, opts) {
+      if (!this.listeners[ev]) this.listeners[ev] = [];
+      this.listeners[ev].push({ fn, opts });
+    },
+    removeEventListener() {},
+    classList: {
+      add() {},
+      remove() {},
+      toggle() {},
+      contains() { return false; }
+    },
+    appendChild(ch) {
+      if (ch) this.children.push(ch);
+      return ch;
+    },
+    insertBefore(ch) { return this.appendChild(ch); },
+    removeChild(ch) { return ch; },
+    replaceChild(ch) { return ch; },
+    cloneNode() { return makeElement(""); },
+    focus() {},
+    blur() {},
+    select() {},
+    scrollIntoView() {},
+    contains() { return false; },
+    getAttribute() { return null; },
+    setAttribute() {},
+    removeAttribute() {},
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+    getBoundingClientRect() {
+      return { left: 0, top: 0, right: 760, bottom: 760, width: 760, height: 760 };
+    },
+    getContext() {
+      return new Proxy({
+        createLinearGradient: () => ({ addColorStop() {} }),
+        createRadialGradient: () => ({ addColorStop() {} }),
+        createPattern: () => ({}),
+        measureText: () => ({ width: 20 })
+      }, {
+        get(target, prop) { return prop in target ? target[prop] : function () {}; },
+        set(target, prop, val) { target[prop] = val; return true; }
+      });
+    }
+  });
+  Object.defineProperty(elObj, "innerHTML", {
+    get() { return _innerHTML; },
+    set(v) { _innerHTML = String(v || ""); elObj.children = []; }
+  });
+  return elObj;
+}
+
+const storageMap = new Map();
+const sandbox = {
+  console,
+  Date,
+  Math,
+  JSON,
+  Array,
+  Object,
+  String,
+  Number,
+  Boolean,
+  RegExp,
+  Error,
+  Map,
+  Set,
+  BigInt,
+  Promise,
+  Uint8Array,
+  Int16Array,
+  Float32Array,
+  ArrayBuffer,
+  DataView,
+  URL: Object.assign(function (u, b) { return new URL(u, b); }, {
+    createObjectURL() { return "blob:octi-bot-worker"; },
+    revokeObjectURL() {}
+  }),
+  URLSearchParams,
+  Blob: CapturingBlob,
+  Worker: MockWorker,
+  FormData,
+  Headers,
+  AbortController,
+  crypto,
+  Node: MockNode,
+  parseInt,
+  parseFloat,
+  isNaN,
+  isFinite,
+  encodeURIComponent,
+  decodeURIComponent,
+  atob: (b64) => Buffer.from(b64, "base64").toString("binary"),
+  btoa: (bin) => Buffer.from(bin, "binary").toString("base64"),
+  localStorage: {
+    getItem(k) { return storageMap.has(k) ? storageMap.get(k) : null; },
+    setItem(k, v) { storageMap.set(String(k), String(v)); },
+    removeItem(k) { storageMap.delete(k); },
+    clear() { storageMap.clear(); }
+  },
+  location: {
+    hash: "",
+    pathname: "/",
+    search: "",
+    origin: "http://127.0.0.1:" + cfg.port,
+    href: "http://127.0.0.1:" + cfg.port + "/"
+  },
+  history: { replaceState() {}, pushState() {} },
+  navigator: { clipboard: { writeText: () => Promise.resolve() }, userAgent: "OctiWorkerTest/1.0" },
+  devicePixelRatio: 1,
+  innerWidth: 1280,
+  innerHeight: 800,
+  AudioContext: function () { this.state = "running"; this.destination = {}; },
+  Audio: function () { this.play = () => Promise.resolve(); },
+  EventSource: function () { this.close = function () {}; },
+  Image: function () {},
+  alert() {},
+  confirm() { return true; },
+  prompt() { return ""; },
+  open() { return null; },
+  requestAnimationFrame() { return 0; },
+  setTimeout() { return 1; },
+  clearTimeout() {},
+  setInterval() { return 1; },
+  clearInterval() {},
+  addEventListener() {},
+  removeEventListener() {},
+  fetch() { return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }); },
+  document: {
+    body: makeElement("body"),
+    documentElement: makeElement("html"),
+    activeElement: null,
+    hidden: false,
+    visibilityState: "visible",
+    getElementById(id) {
+      if (!elements[id]) elements[id] = makeElement(id);
+      return elements[id];
+    },
+    createElement(tag) {
+      const e = makeElement("");
+      e.tagName = String(tag || "DIV").toUpperCase();
+      return e;
+    },
+    createElementNS(ns, tag) {
+      const e = makeElement("");
+      e.tagName = String(tag || "SVG").toUpperCase();
+      return e;
+    },
+    createTextNode(txt) {
+      return Object.assign(new MockNode(), { nodeType: 3, textContent: String(txt || "") });
+    },
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+    addEventListener() {},
+    removeEventListener() {}
+  }
+};
+sandbox.window = sandbox;
+sandbox.self = sandbox;
+
+vm.runInNewContext(instrumentedJs, sandbox, { filename: "WebUi.js", timeout: 5000 });
+
+const wt = sandbox.window.__octiWorkerTest;
+assert.ok(wt, "__octiWorkerTest must be exposed");
+const workerCode = capturedBlobText || wt.getWorkerCode();
+assert.ok(workerCode && workerCode.length > 1000, "Failed to extract inline workerCode from WebUi");
+
+/* Execute workerCode in a strictly isolated Worker VM context (zero DOM / main-thread globals) */
+const workerMessages = [];
+const workerSandbox = {
+  console,
+  Date,
+  Math,
+  JSON,
+  Array,
+  Object,
+  String,
+  Number,
+  Boolean,
+  RegExp,
+  Error,
+  Map,
+  Set,
+  BigInt,
+  parseInt,
+  parseFloat,
+  isNaN,
+  isFinite,
+  postMessage(msg) {
+    workerMessages.push(msg);
+  }
+};
+workerSandbox.self = workerSandbox;
+
+vm.runInNewContext(workerCode, workerSandbox, { filename: "botWorker.js", timeout: 5000 });
+assert.strictEqual(typeof workerSandbox.self.onmessage, "function", "worker self.onmessage must be a function");
+
+const tStartAll = Date.now();
+for (const c of cfg.cases) {
+  workerMessages.length = 0;
+  workerSandbox.self.onmessage({
+    data: {
+      type: "search",
+      searchId: c.searchId,
+      fen: c.fen,
+      depth: 3,
+      mode: c.mode,
+      side: c.side,
+      budgetMs: 600
+    }
+  });
+
+  const progMsgs = workerMessages.filter((m) => m && m.type === "progress");
+  const doneMsgs = workerMessages.filter((m) => m && m.type === "done");
+
+  assert.ok(
+    progMsgs.length >= 1,
+    "Expected >= 1 'progress' message for " + c.variant + ", got " + progMsgs.length
+  );
+  for (const pm of progMsgs) {
+    assert.strictEqual(
+      pm.searchId,
+      c.searchId,
+      "Progress message searchId mismatch for " + c.variant
+    );
+    assert.ok(pm.depth >= 1, "Progress depth must be >= 1 for " + c.variant);
+    assert.ok(pm.nodes > 0, "Progress nodes must be > 0 for " + c.variant);
+    assert.strictEqual(pm.budgetMs, 600, "Progress budgetMs must be 600 for " + c.variant);
+  }
+
+  assert.strictEqual(doneMsgs.length, 1, "Expected 1 'done' message for " + c.variant);
+  const dm = doneMsgs[0];
+  assert.strictEqual(dm.searchId, c.searchId, "Done message searchId mismatch for " + c.variant);
+  assert.ok(dm.bestMove && typeof dm.bestMove === "string", "Done bestMove must be non-empty string for " + c.variant);
+  assert.ok(
+    c.legalMoves.includes(dm.bestMove),
+    "Worker returned illegal move '" + dm.bestMove + "' for " + c.variant
+  );
+  assert.ok(dm.nodes > 1, "Expected non-book tree search (nodes > 1) for " + c.variant + ", got " + dm.nodes);
+}
+const totalElapsedMs = Date.now() - tStartAll;
+assert.ok(totalElapsedMs < 3000, "Expected all 4 worker searches to finish in < 3000ms, took " + totalElapsedMs + "ms");
+
+/* Verify main-thread worker lifecycle, cancellation, and restoreLocalPlayContext unfreeze */
+assert.strictEqual(typeof wt.initBotWorker, "function", "initBotWorker must be defined");
+assert.strictEqual(typeof wt.cancelPendingAiSearch, "function", "cancelPendingAiSearch must be defined");
+assert.strictEqual(typeof wt.updateThinkingProgressUi, "function", "updateThinkingProgressUi must be defined");
+
+wt.setLocalContextForRestore("2:3:0:0:P:B:-:0:4,0,24,0:4,0,25,0:A33a,A53,A73,B37,B57,B77");
+wt.restoreLocalPlayContext();
+assert.strictEqual(wt.isAiSearchInFlight(), true, "restoreLocalPlayContext must re-trigger AI search when returning to #play on AI turn");
+const activeWorker = wt.getBotWorker();
+assert.ok(activeWorker && activeWorker.posted.length > 0, "restoreLocalPlayContext must post search to botWorker");
+const lastPosted = activeWorker.posted[activeWorker.posted.length - 1];
+assert.strictEqual(lastPosted.searchId, wt.getActiveAiSearchId(), "Posted searchId must match activeAiSearchId");
+
+wt.cancelPendingAiSearch();
+assert.strictEqual(wt.isAiSearchInFlight(), false, "cancelPendingAiSearch must clear aiSearchInFlight");
+assert.strictEqual(activeWorker.terminated, true, "cancelPendingAiSearch must terminate in-flight worker");
+assert.strictEqual(elements["web-thinking-overlay"].style.display, "none", "cancelPendingAiSearch must hide thinking overlay");
+
+process.exit(0);
+)NODEJS";
+    }
+
+    int rcNode = std::system(("timeout -k 2 20 node " + runnerJsPath + " " + webJsPath + " " + cfgJsonPath).c_str());
+    std::remove(webJsPath.c_str());
+    std::remove(cfgJsonPath.c_str());
+    std::remove(runnerJsPath.c_str());
+    CHECK_EQUAL(0, rcNode);
+}
+
+TEST(OctiHttpServerIntegrationTest, ArchiveExact13VariantFilteringAndByVariantStats)
+{
+    User alice = signIn("google", "sub-var-alice", "Alice Variant");
+    User bob = signIn("apple", "sub-var-bob", "Bob Variant");
+
+    Reply rBot = http().post("/api/v1/robots", alice.token,
+                             Json{{"robot_name", "alice_variant_bot"},
+                                  {"description", "Variant test bot"}});
+    EXPECT_STATUS(201, rBot);
+    std::string botUuid = rBot.json.value("robot_uuid", "");
+    CHECK_FALSE(botUuid.empty());
+
+    PlayerProfile aliceProf;
+    PlayerProfile bobProf;
+    RobotRecord botRec;
+    CHECK_TRUE(env->store.getProfileByUuid(alice.uuid, aliceProf));
+    CHECK_TRUE(env->store.getProfileByUuid(bob.uuid, bobProf));
+    CHECK_TRUE(env->store.getRobotByUuid(botUuid, botRec));
+
+    auto seedGame = [&](const std::string &id, const std::string &mode,
+                        int bases, bool sp, bool ed,
+                        int64_t p1Pid, int64_t p2Pid, int64_t p2Rid,
+                        const std::string &p1Handle,
+                        const std::string &p2Handle,
+                        int64_t endedAt) {
+        GameRecord g;
+        g.gameId = id;
+        g.gameMode = mode;
+        g.gameBases = bases;
+        g.superProngs = sp;
+        g.edgeless = ed;
+        g.timeControl = "untimed";
+        g.p1PlayerId = p1Pid;
+        g.p2PlayerId = p2Pid;
+        g.p2RobotId = p2Rid;
+        g.p1Handle = p1Handle;
+        g.p2Handle = p2Handle;
+        g.result = (mode == "4P") ? "TEAM_13_WIN" : "P1_WIN";
+        g.winnerSeat = 1;
+        g.termination = "BASE_CAPTURE";
+        g.plyCount = 12;
+        g.finalFen = "2:3:0:0:P:A:-:12:4,0,24,0:4,0,24,0:A33";
+        g.startedAt = endedAt - 60;
+        g.endedAt = endedAt;
+        g.uploadedAt = endedAt;
+        g.source = "online";
+        g.winner = "A";
+        g.status = "GAME_OVER";
+        Json tr = {
+            {"format", "octi.transcript.v3"},
+            {"game_id", id},
+            {"mode", mode},
+            {"bases", bases},
+            {"super_prongs", sp},
+            {"edgeless", ed}
+        };
+        g.octiTranscript = tr.dump();
+        std::string err;
+        ArchiveStatus st = env->store.archiveGame(g, err);
+        CHECK_EQUAL_TEXT(static_cast<int>(ArchiveStatus::OK),
+                         static_cast<int>(st), err.c_str());
+    };
+
+    /*
+     * Seed 10 games spanning 9 distinct canonical variants, including BOTH
+     * a normal 4P row (game_bases = 3) and a legacy 4P row (game_bases = 1),
+     * plus a legacy 4P_SP row (game_bases = 1).
+     */
+    seedGame("var_2p_3b",      "2P",  3, false, false, aliceProf.playerId, bobProf.playerId, 0, alice.handle, bob.handle, 1762000010);
+    seedGame("var_2p_3b_sp",   "2P",  3, true,  false, aliceProf.playerId, 0, botRec.robotId, alice.handle, botRec.robotName, 1762000020);
+    seedGame("var_2p_1b",      "2P",  1, false, false, aliceProf.playerId, bobProf.playerId, 0, alice.handle, bob.handle, 1762000030);
+    seedGame("var_2p_1b_ed",   "2P",  1, false, true,  bobProf.playerId,   0, botRec.robotId, bob.handle, botRec.robotName, 1762000040);
+    seedGame("var_2p_1b_sped", "2P",  1, true,  true,  0, 0, 0, "guest1", "guest2", 1762000050);
+    seedGame("var_4p_std3",    "4P",  3, false, false, 0, 0, 0, "g1", "g2", 1762000060);
+    seedGame("var_4p_leg1",    "4P",  1, false, false, aliceProf.playerId, 0, botRec.robotId, alice.handle, botRec.robotName, 1762000070);
+    seedGame("var_4p_sp_leg1", "4P",  1, true,  false, 0, 0, 0, "g3", "g4", 1762000080);
+    seedGame("var_4p_sped",    "4P",  3, true,  true,  0, 0, 0, "g5", "g6", 1762000090);
+    seedGame("var_ofk",        "OFK", 1, false, false, aliceProf.playerId, bobProf.playerId, 0, alice.handle, bob.handle, 1762000100);
+    CHECK_TRUE(env->store.reconcileRobotStats());
+
+    /* 1. Direct AccountStore ArchiveFilter::mode (broad) vs ArchiveFilter::variant (exact) */
+    {
+        std::vector<GameRecord> rows;
+        int64_t total = 0;
+
+        ArchiveFilter fBroad4p;
+        fBroad4p.mode = "4P";
+        CHECK_TRUE(env->store.listArchivedGames(fBroad4p, rows, &total));
+        LONGS_EQUAL(4, static_cast<long>(total));
+        LONGS_EQUAL(4, static_cast<long>(rows.size()));
+
+        ArchiveFilter fExact4p;
+        fExact4p.variant = "4P";
+        CHECK_TRUE(env->store.listArchivedGames(fExact4p, rows, &total));
+        LONGS_EQUAL(2, static_cast<long>(total));
+        LONGS_EQUAL(2, static_cast<long>(rows.size()));
+        STRCMP_EQUAL("var_4p_leg1", rows[0].gameId.c_str());
+        STRCMP_EQUAL("var_4p_std3", rows[1].gameId.c_str());
+
+        ArchiveFilter fExact4pSp;
+        fExact4pSp.variant = "4p_sp";
+        CHECK_TRUE(env->store.listArchivedGames(fExact4pSp, rows, &total));
+        LONGS_EQUAL(1, static_cast<long>(total));
+        STRCMP_EQUAL("var_4p_sp_leg1", rows[0].gameId.c_str());
+
+        ArchiveFilter fBad;
+        fBad.variant = "BOGUS_VARIANT";
+        CHECK_FALSE(env->store.listArchivedGames(fBad, rows, &total));
+    }
+
+    /* 2. HTTP /api/v1/archive/games broad mode= vs exact variant= and exact mode= */
+    Reply rBroad2p = http().get("/api/v1/archive/games?mode=2P");
+    EXPECT_STATUS(200, rBroad2p);
+    CHECK_EQUAL(5, rBroad2p.json.value("total", 0));
+
+    Reply rBroad4p = http().get("/api/v1/archive/games?mode=4P");
+    EXPECT_STATUS(200, rBroad4p);
+    CHECK_EQUAL(4, rBroad4p.json.value("total", 0));
+
+    Reply rBroadOfk = http().get("/api/v1/archive/games?mode=OFK");
+    EXPECT_STATUS(200, rBroadOfk);
+    CHECK_EQUAL(1, rBroadOfk.json.value("total", 0));
+    STRCMP_EQUAL("OFK", rBroadOfk.json["games"][0].value("variant", "").c_str());
+
+    Reply rExact4p = http().get("/api/v1/archive/games?variant=4P");
+    EXPECT_STATUS(200, rExact4p);
+    CHECK_EQUAL(2, rExact4p.json.value("total", 0));
+    STRCMP_EQUAL("var_4p_leg1", rExact4p.json["games"][0].value("game_id", "").c_str());
+    STRCMP_EQUAL("4P", rExact4p.json["games"][0].value("variant", "").c_str());
+    STRCMP_EQUAL("var_4p_std3", rExact4p.json["games"][1].value("game_id", "").c_str());
+    STRCMP_EQUAL("4P", rExact4p.json["games"][1].value("variant", "").c_str());
+
+    Reply rExactViaMode = http().get("/api/v1/archive/games?mode=2p_1b_ed");
+    EXPECT_STATUS(200, rExactViaMode);
+    CHECK_EQUAL(1, rExactViaMode.json.value("total", 0));
+    STRCMP_EQUAL("var_2p_1b_ed", rExactViaMode.json["games"][0].value("game_id", "").c_str());
+    STRCMP_EQUAL("2P_1B_ED", rExactViaMode.json["games"][0].value("variant", "").c_str());
+
+    Reply rExact2p3b = http().get("/api/v1/archive/games?variant=2P_3B");
+    EXPECT_STATUS(200, rExact2p3b);
+    CHECK_EQUAL(1, rExact2p3b.json.value("total", 0));
+    STRCMP_EQUAL("2P_3B", rExact2p3b.json["games"][0].value("variant", "").c_str());
+
+    Reply rEmptyVar = http().get("/api/v1/archive/games?variant=2P_3B_ED");
+    EXPECT_STATUS(200, rEmptyVar);
+    CHECK_EQUAL(0, rEmptyVar.json.value("total", 0));
+
+    EXPECT_ERROR(400, "INVALID_ARGUMENT", http().get("/api/v1/archive/games?variant=INVALID"));
+    EXPECT_ERROR(400, "INVALID_ARGUMENT", http().get("/api/v1/archive/games?mode=INVALID"));
+
+    /* 3. HTTP /api/v1/archive/export with mode= and variant= */
+    auto countNdjsonLines = [](const std::string &body, std::vector<std::string> &idsOut) {
+        idsOut.clear();
+        std::stringstream ss(body);
+        std::string line;
+        while (std::getline(ss, line)) {
+            if (line.empty()) {
+                continue;
+            }
+            Json j = Json::parse(line);
+            idsOut.push_back(j.value("game_id", ""));
+        }
+        return static_cast<int>(idsOut.size());
+    };
+
+    std::vector<std::string> expIds;
+    Reply rExpExact4p = http().get("/api/v1/archive/export?variant=4P");
+    EXPECT_STATUS(200, rExpExact4p);
+    CHECK_EQUAL(2, countNdjsonLines(rExpExact4p.body, expIds));
+    STRCMP_EQUAL("var_4p_leg1", expIds[0].c_str());
+    STRCMP_EQUAL("var_4p_std3", expIds[1].c_str());
+
+    Reply rExpBroad4p = http().get("/api/v1/archive/export?mode=4P");
+    EXPECT_STATUS(200, rExpBroad4p);
+    CHECK_EQUAL(4, countNdjsonLines(rExpBroad4p.body, expIds));
+
+    Reply rExpModeExact = http().get("/api/v1/archive/export?mode=2p_1b_sped");
+    EXPECT_STATUS(200, rExpModeExact);
+    CHECK_EQUAL(1, countNdjsonLines(rExpModeExact.body, expIds));
+    STRCMP_EQUAL("var_2p_1b_sped", expIds[0].c_str());
+
+    EXPECT_ERROR(400, "INVALID_ARGUMENT", http().get("/api/v1/archive/export?variant=INVALID"));
+
+    /* 4. "variant" on archive detail, user recent_games, robot recent_games, table & room views */
+    Reply rDetail = http().get("/api/v1/archive/games/var_4p_leg1");
+    EXPECT_STATUS(200, rDetail);
+    STRCMP_EQUAL("4P", rDetail.json.value("variant", "").c_str());
+
+    Reply rUser = http().get("/api/v1/users/" + alice.uuid);
+    EXPECT_STATUS(200, rUser);
+    CHECK_TRUE(rUser.json.contains("recent_games") && rUser.json["recent_games"].is_array());
+    bool sawUserLeg4p = false;
+    for (size_t i = 0; i < rUser.json["recent_games"].size(); ++i) {
+        const Json &rg = rUser.json["recent_games"][i];
+        CHECK_FALSE(rg.value("variant", "").empty());
+        if (rg.value("game_id", "") == "var_4p_leg1") {
+            STRCMP_EQUAL("4P", rg.value("variant", "").c_str());
+            sawUserLeg4p = true;
+        }
+    }
+    CHECK_TRUE(sawUserLeg4p);
+
+    Reply rRobotProf = http().get("/api/v1/robots/profile/" + botUuid);
+    EXPECT_STATUS(200, rRobotProf);
+    CHECK_TRUE(rRobotProf.json.contains("recent_games") && rRobotProf.json["recent_games"].is_array());
+    bool sawBotLeg4p = false;
+    bool sawBot2p3bSp = false;
+    for (size_t i = 0; i < rRobotProf.json["recent_games"].size(); ++i) {
+        const Json &rg = rRobotProf.json["recent_games"][i];
+        if (rg.value("game_id", "") == "var_4p_leg1") {
+            STRCMP_EQUAL("4P", rg.value("variant", "").c_str());
+            sawBotLeg4p = true;
+        } else if (rg.value("game_id", "") == "var_2p_3b_sp") {
+            STRCMP_EQUAL("2P_3B_SP", rg.value("variant", "").c_str());
+            sawBot2p3bSp = true;
+        }
+    }
+    CHECK_TRUE(sawBotLeg4p);
+    CHECK_TRUE(sawBot2p3bSp);
+
+    std::string roomId = createTable(alice, Json{
+        {"mode", "2P"},
+        {"bases", 1},
+        {"super_prongs", true},
+        {"edgeless", false}
+    });
+    Reply rTables = http().get("/api/v1/tables");
+    EXPECT_STATUS(200, rTables);
+    CHECK_EQUAL(1, static_cast<int>(rTables.json["tables"].size()));
+    STRCMP_EQUAL("2P_1B_SP", rTables.json["tables"][0].value("variant", "").c_str());
+
+    Reply rLobby = http().get("/api/v1/lobby/state");
+    EXPECT_STATUS(200, rLobby);
+    CHECK_EQUAL(1, static_cast<int>(rLobby.json["tables"].size()));
+    STRCMP_EQUAL("2P_1B_SP", rLobby.json["tables"][0].value("variant", "").c_str());
+
+    Json rView = view(roomId, alice.token);
+    STRCMP_EQUAL("2P_1B_SP", rView.value("variant", "").c_str());
+
+    /* 5. /api/v1/archive/stats "by_variant" counts (legacy 4P bases=1 aggregated into "4P") */
+    Reply rStats = http().get("/api/v1/archive/stats");
+    EXPECT_STATUS(200, rStats);
+    CHECK_EQUAL(10, rStats.json.value("total_games", 0));
+    CHECK_TRUE(rStats.json.contains("by_variant") && rStats.json["by_variant"].is_object());
+    const Json &bv = rStats.json["by_variant"];
+    CHECK_EQUAL(13, static_cast<int>(bv.size()));
+    CHECK_EQUAL(1, bv.value("2P_3B", -1));
+    CHECK_EQUAL(1, bv.value("2P_3B_SP", -1));
+    CHECK_EQUAL(0, bv.value("2P_3B_ED", -1));
+    CHECK_EQUAL(0, bv.value("2P_3B_SPED", -1));
+    CHECK_EQUAL(1, bv.value("2P_1B", -1));
+    CHECK_EQUAL(0, bv.value("2P_1B_SP", -1));
+    CHECK_EQUAL(1, bv.value("2P_1B_ED", -1));
+    CHECK_EQUAL(1, bv.value("2P_1B_SPED", -1));
+    CHECK_EQUAL(2, bv.value("4P", -1));
+    CHECK_EQUAL(1, bv.value("4P_SP", -1));
+    CHECK_EQUAL(0, bv.value("4P_ED", -1));
+    CHECK_EQUAL(1, bv.value("4P_SPED", -1));
+    CHECK_EQUAL(1, bv.value("OFK", -1));
+
+    /* 6. OctiNetworkClient round-trip for 13-variant archive queries & model fields */
+    auto cli = OctiNetworkClient::createForLoopbackTest(env->server->port());
+    auto resExact4p = cli->listArchivedGames("4P");
+    CHECK_TRUE(resExact4p.ok);
+    LONGS_EQUAL(2, static_cast<long>(resExact4p.data.games.size()));
+    STRCMP_EQUAL("4P", resExact4p.data.games[0].variant.c_str());
+    STRCMP_EQUAL("4P", resExact4p.data.games[0].variantCode().c_str());
+
+    auto resBroad4p = cli->listArchivedGames("4P_ALL");
+    CHECK_TRUE(resBroad4p.ok);
+    LONGS_EQUAL(4, static_cast<long>(resBroad4p.data.games.size()));
+
+    auto resBroad2p = cli->listArchivedGames("2P");
+    CHECK_TRUE(resBroad2p.ok);
+    LONGS_EQUAL(5, static_cast<long>(resBroad2p.data.games.size()));
+
+    auto resExact2p1bEd = cli->listArchivedGames("2P_1B_ED");
+    CHECK_TRUE(resExact2p1bEd.ok);
+    LONGS_EQUAL(1, static_cast<long>(resExact2p1bEd.data.games.size()));
+    STRCMP_EQUAL("2P_1B_ED", resExact2p1bEd.data.games[0].variant.c_str());
+
+    auto resTables = cli->listTables();
+    CHECK_TRUE(resTables.ok);
+    LONGS_EQUAL(1, static_cast<long>(resTables.data.size()));
+    STRCMP_EQUAL("2P_1B_SP", resTables.data[0].variant.c_str());
+    STRCMP_EQUAL("2P_1B_SP", resTables.data[0].variantCode().c_str());
+
+    auto resRoom = cli->fetchGameView(roomId);
+    CHECK_TRUE(resRoom.ok);
+    STRCMP_EQUAL("2P_1B_SP", resRoom.data.variant.c_str());
+    STRCMP_EQUAL("2P_1B_SP", resRoom.data.variantCode().c_str());
+
+    /* 7. Web UI HTML #ar-mode <optgroup> + 13 exact options + formatVariantCode */
+    Reply rRoot = http().get("/");
+    EXPECT_STATUS(200, rRoot);
+    CHECK_TRUE(rRoot.body.find("<optgroup") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("2P (All)") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("4P (All)") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("formatVariantCode") != std::string::npos);
+    for (const auto &code : octi::allOctiVariantCodes()) {
+        std::string optNeedle = "value=\"" + code + "\"";
+        CHECK_TRUE_TEXT(rRoot.body.find(optNeedle) != std::string::npos,
+                        optNeedle.c_str());
+    }
+}
+
+TEST(OctiHttpServerIntegrationTest, DualPoolLeaderboardUsersArenaDirectoryAndWebUi)
+{
+    User alice = signIn("google", "sub-dp-alice", "Alice Dual");
+    User bob = signIn("apple", "sub-dp-bob", "Bob Dual");
+    User carol = signIn("microsoft", "sub-dp-carol", "Carol Dual");
+
+    /* 1. /api/v1/leaderboard rejects 4P (400) and serves 2P_3B, 2P_1B, OFK, and legacy 2P alias */
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/leaderboard?mode=4P"));
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/leaderboard?ladder=4P"));
+    EXPECT_STATUS(200, http().get("/api/v1/leaderboard?mode=2P_3B"));
+    EXPECT_STATUS(200, http().get("/api/v1/leaderboard?mode=2P_1B"));
+    EXPECT_STATUS(200, http().get("/api/v1/leaderboard?mode=OFK"));
+    EXPECT_STATUS(200, http().get("/api/v1/leaderboard?mode=2P"));
+    EXPECT_STATUS(200, http().get("/api/v1/leaderboard?ladder=2P_1B"));
+
+    /* 2. Casual variants clamp rated=false on POST /api/v1/tables */
+    Reply t4p = http().post("/api/v1/tables", alice.token,
+                            Json{{"mode", "4P"}, {"rated", true}});
+    EXPECT_STATUS(201, t4p);
+    std::string r4pId = t4p.json.value("room_id", "");
+    CHECK_FALSE(view(r4pId).value("rated", true));
+    EXPECT_STATUS(200, http().post("/api/v1/tables/" + r4pId + "/leave",
+                                   alice.token, Json::object()));
+
+    Reply tSp = http().post("/api/v1/tables", alice.token,
+                            Json{{"mode", "2P"}, {"bases", 3},
+                                 {"super_prongs", true}, {"rated", true}});
+    EXPECT_STATUS(201, tSp);
+    std::string rSpId = tSp.json.value("room_id", "");
+    CHECK_FALSE(view(rSpId).value("rated", true));
+    EXPECT_STATUS(200, http().post("/api/v1/tables/" + rSpId + "/leave",
+                                   alice.token, Json::object()));
+
+    /* 3. Pool 1 Human-vs-Human 2P_1B rated game (8 plies + resign) */
+    std::vector<User> ab = {alice, bob};
+    std::string room1b = startGame(ab, Json{{"mode", "2P"}, {"bases", 1}, {"rated", true}});
+    CHECK_EQUAL(8, playPlies(room1b, ab, GAME_MODE_2, 8, Json{{"bases", 1}}));
+    EXPECT_STATUS(200, http().post("/api/v1/games/" + room1b + "/resign",
+                                   bob.token, Json::object()));
+
+    Reply lb1b = http().get("/api/v1/leaderboard?mode=2P_1B");
+    EXPECT_STATUS(200, lb1b);
+    STRCMP_EQUAL(alice.uuid.c_str(),
+                 lb1b.json["entries"][0].value("uuid", "").c_str());
+    CHECK_EQUAL(1216, lb1b.json["entries"][0].value("elo", 0));
+
+    /* 2P_3B ladder remains 1200 for Alice */
+    Reply lb3b = http().get("/api/v1/leaderboard?mode=2P_3B");
+    EXPECT_STATUS(200, lb3b);
+    for (size_t i = 0; i < lb3b.json["entries"].size(); ++i) {
+        if (lb3b.json["entries"][i].value("uuid", "") == alice.uuid) {
+            CHECK_EQUAL(1200, lb3b.json["entries"][i].value("elo", 0));
+        }
+    }
+
+    /* 4. Pool 2 Cross-Owner Human-vs-Robot 2P_3B rated game (Alice vs Carol's bot) */
+    Reply createBot = http().post("/api/v1/robots", carol.token,
+                                  Json{{"robot_name", "CarolArenaBot"},
+                                       {"description", "Carol Arena Bot"}});
+    EXPECT_STATUS(201, createBot);
+    std::string botToken = createBot.json.value("robot_token", "");
+    std::string botUuid = createBot.json.value("robot_uuid", "");
+    CHECK_FALSE(botToken.empty());
+
+    User botUser;
+    botUser.uuid = botUuid;
+    botUser.handle = "CarolArenaBot";
+    botUser.token = botToken;
+
+    Reply hostArena = http().post("/api/v1/tables", alice.token,
+                                  Json{{"mode", "2P"}, {"bases", 3},
+                                       {"rated", true}, {"allow_robots", true}});
+    EXPECT_STATUS(201, hostArena);
+    std::string arenaRoom = hostArena.json.value("room_id", "");
+    EXPECT_STATUS(200, http().post("/api/v1/tables/" + arenaRoom + "/join",
+                                   botToken, Json{{"seat", 2}}));
+
+    std::vector<User> aliceAndBot = {alice, botUser};
+    CHECK_EQUAL(8, playPlies(arenaRoom, aliceAndBot, GAME_MODE_2, 8, Json{{"bases", 3}}));
+    EXPECT_STATUS(200, http().post("/api/v1/games/" + arenaRoom + "/resign",
+                                   botToken, Json::object()));
+
+    /* Archive summary exposes rated and elo_pool */
+    Reply archList = http().get("/api/v1/archive/games?limit=10");
+    EXPECT_STATUS(200, archList);
+    bool sawPool1 = false;
+    bool sawPool2 = false;
+    for (size_t i = 0; i < archList.json["games"].size(); ++i) {
+        const Json &gm = archList.json["games"][i];
+        if (gm.value("game_id", "") == room1b) {
+            CHECK_TRUE(gm.value("rated", false));
+            CHECK_EQUAL(1, gm.value("elo_pool", -1));
+            sawPool1 = true;
+        } else if (gm.value("game_id", "") == arenaRoom) {
+            CHECK_TRUE(gm.value("rated", false));
+            CHECK_EQUAL(2, gm.value("elo_pool", -1));
+            sawPool2 = true;
+        }
+    }
+    CHECK_TRUE(sawPool1);
+    CHECK_TRUE(sawPool2);
+
+    /* 5. /api/v1/users, /api/v1/users/:id, /api/v1/robots/profile/:id, /api/v1/robots */
+    Reply uSort1b = http().get("/api/v1/users?sort=elo_2p_1b&order=desc");
+    EXPECT_STATUS(200, uSort1b);
+    STRCMP_EQUAL(alice.uuid.c_str(),
+                 uSort1b.json["users"][0].value("uuid", "").c_str());
+    CHECK_EQUAL(1200, uSort1b.json["users"][0].value("elo_2p_3b", 0));
+    CHECK_EQUAL(1216, uSort1b.json["users"][0].value("elo_2p_1b", 0));
+    CHECK_EQUAL(1200, uSort1b.json["users"][0].value("elo_ofk", 0));
+    CHECK_EQUAL(1216, uSort1b.json["users"][0].value("arena_elo_2p_3b", 0));
+    CHECK_EQUAL(1, uSort1b.json["users"][0].value("arena_games_played", 0));
+
+    Reply aliceDetail = http().get("/api/v1/users/" + alice.uuid);
+    EXPECT_STATUS(200, aliceDetail);
+    CHECK_EQUAL(1200, aliceDetail.json.value("elo_2p_3b", 0));
+    CHECK_EQUAL(1216, aliceDetail.json.value("elo_2p_1b", 0));
+    CHECK_EQUAL(1216, aliceDetail.json.value("arena_elo_2p_3b", 0));
+    CHECK_EQUAL(1, aliceDetail.json.value("arena_games_played", 0));
+
+    Reply botProf = http().get("/api/v1/robots/profile/" + botUuid);
+    EXPECT_STATUS(200, botProf);
+    CHECK_EQUAL(1184, botProf.json.value("elo_2p_3b", 0));
+    CHECK_EQUAL(1200, botProf.json.value("elo_2p_1b", 0));
+    CHECK_EQUAL(1200, botProf.json.value("elo_ofk", 0));
+    CHECK_EQUAL(1, botProf.json.value("games_played", 0));
+
+    Reply carolBots = http().get("/api/v1/robots", carol.token);
+    EXPECT_STATUS(200, carolBots);
+    CHECK_EQUAL(1184, carolBots.json["robots"][0].value("elo_2p_3b", 0));
+
+    /* 6. /api/v1/robots/directory merged Arena standings: all | robots | humans */
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/robots/directory?participant_type=invalid"));
+
+    Reply dirAll = http().get("/api/v1/robots/directory?participant_type=all&sort=elo_2p_3b&order=desc");
+    EXPECT_STATUS(200, dirAll);
+    CHECK_EQUAL(2, dirAll.json.value("total", 0));
+    CHECK_EQUAL(2, static_cast<int>(dirAll.json["entries"].size()));
+    CHECK_EQUAL(2, static_cast<int>(dirAll.json["robots"].size()));
+    STRCMP_EQUAL("human", dirAll.json["entries"][0].value("entry_type", "").c_str());
+    STRCMP_EQUAL(alice.uuid.c_str(), dirAll.json["entries"][0].value("uuid", "").c_str());
+    CHECK_EQUAL(1216, dirAll.json["entries"][0].value("elo_2p_3b", 0));
+    STRCMP_EQUAL("robot", dirAll.json["entries"][1].value("entry_type", "").c_str());
+    STRCMP_EQUAL(botUuid.c_str(), dirAll.json["entries"][1].value("robot_uuid", "").c_str());
+    CHECK_EQUAL(1184, dirAll.json["entries"][1].value("elo_2p_3b", 0));
+
+    Reply dirRobots = http().get("/api/v1/robots/directory?participant_type=robots");
+    EXPECT_STATUS(200, dirRobots);
+    CHECK_EQUAL(1, dirRobots.json.value("total", 0));
+    STRCMP_EQUAL("robot", dirRobots.json["entries"][0].value("entry_type", "").c_str());
+
+    Reply dirHumans = http().get("/api/v1/robots/directory?participant_type=humans");
+    EXPECT_STATUS(200, dirHumans);
+    CHECK_EQUAL(1, dirHumans.json.value("total", 0));
+    STRCMP_EQUAL("human", dirHumans.json["entries"][0].value("entry_type", "").c_str());
+
+    /* 7. OctiNetworkClient Dual-Pool parsing & directory filtering */
+    auto cli = OctiNetworkClient::createForLoopbackTest(env->server->port());
+    auto cli4p = cli->fetchLeaderboard("4P");
+    CHECK_FALSE(cli4p.ok);
+    CHECK_EQUAL(400, cli4p.httpStatus);
+
+    auto cli1b = cli->fetchLeaderboard("2P_1B");
+    CHECK_TRUE(cli1b.ok);
+    CHECK_EQUAL(1216, cli1b.data[0].elo);
+
+    auto cliAlice = cli->fetchPlayerProfile(alice.uuid);
+    CHECK_TRUE(cliAlice.ok);
+    CHECK_EQUAL(1200, cliAlice.data.elo2p3b);
+    CHECK_EQUAL(1216, cliAlice.data.elo2p1b);
+    CHECK_EQUAL(1216, cliAlice.data.arenaElo2p3b);
+    CHECK_EQUAL(1, cliAlice.data.arenaGamesPlayed);
+
+    auto cliDirAll = cli->listRobotsDirectory("", "all", "elo_2p_3b", false);
+    CHECK_TRUE(cliDirAll.ok);
+    CHECK_EQUAL(2, static_cast<int>(cliDirAll.data.size()));
+    STRCMP_EQUAL("human", cliDirAll.data[0].entryType.c_str());
+    CHECK_EQUAL(1216, cliDirAll.data[0].elo2p3b);
+    STRCMP_EQUAL("robot", cliDirAll.data[1].entryType.c_str());
+    CHECK_EQUAL(1184, cliDirAll.data[1].elo2p3b);
+
+    auto cliDirHumans = cli->listRobotsDirectory("", "humans", "elo_2p_3b", false);
+    CHECK_TRUE(cliDirHumans.ok);
+    CHECK_EQUAL(1, static_cast<int>(cliDirHumans.data.size()));
+    STRCMP_EQUAL("human", cliDirHumans.data[0].entryType.c_str());
+
+    /* 8. Web UI HTML Dual-Pool markers + zero duplicate DOM IDs */
+    Reply ui = http().get("/");
+    EXPECT_STATUS(200, ui);
+    CHECK_TRUE(ui.body.find("id=\"robots-participant-type\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("value=\"elo_2p_3b\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("value=\"elo_2p_1b\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("Only 2P_3B, 2P_1B, and OFK are rated; 4P / SP / ED are casual.") !=
+               std::string::npos);
+    CHECK_TRUE(ui.body.find("Rating Pools") != std::string::npos);
+}
+
+TEST(OctiHttpServerIntegrationTest, IllustratedRulebookAssetsEndpointAndTabParity)
+{
+    /* 1. Embedded rulebook PNG descriptors & HTTP /assets/rulebook/:file parity */
+    const std::vector<std::string> files = octi::rulebookImageFileNames();
+    LONGS_EQUAL(static_cast<long>(octi::OCTI_RULEBOOK_IMAGE_COUNT),
+                static_cast<long>(files.size()));
+    LONGS_EQUAL(12, static_cast<long>(files.size()));
+
+    const std::filesystem::path testFilePath(__FILE__);
+    const std::filesystem::path repoRoot = testFilePath.parent_path().parent_path().parent_path();
+    const std::filesystem::path repoRulebookDir = repoRoot / "assets" / "rulebook";
+    const std::filesystem::path wwwRulebookDir =
+        repoRoot.parent_path() / "www" / "octi" / "html" / "assets" / "rulebook";
+
+    static const std::uint8_t kPngSig[8] = {
+        0x89u, 0x50u, 0x4Eu, 0x47u, 0x0Du, 0x0Au, 0x1Au, 0x0Au
+    };
+
+    std::size_t totalBytes = 0u;
+    for (const std::string &fileName : files) {
+        std::size_t pngSize = 0u;
+        const std::uint8_t *pngBytes = octi::rulebookImageBytes(fileName, pngSize);
+        CHECK_TRUE(pngBytes != nullptr);
+        CHECK_TRUE(pngSize >= 1024u);
+        CHECK_TRUE(pngSize <= 80u * 1024u);
+        CHECK_EQUAL(0, std::memcmp(pngBytes, kPngSig, sizeof(kPngSig)));
+        totalBytes += pngSize;
+
+        Reply rImg = http().get("/assets/rulebook/" + fileName);
+        EXPECT_STATUS(200, rImg);
+        CHECK_TRUE(rImg.contentType.find("image/png") != std::string::npos);
+        STRCMP_EQUAL("public, max-age=86400", rImg.header("Cache-Control").c_str());
+        LONGS_EQUAL(static_cast<long>(pngSize), static_cast<long>(rImg.body.size()));
+        CHECK_EQUAL(0, std::memcmp(rImg.body.data(), pngBytes, pngSize));
+
+        /* Disk parity with canonical repo assets/rulebook/<fileName> */
+        const std::filesystem::path diskPath = repoRulebookDir / fileName;
+        CHECK_TRUE(std::filesystem::exists(diskPath));
+        std::ifstream ifs(diskPath, std::ios::binary);
+        std::string diskBytes((std::istreambuf_iterator<char>(ifs)),
+                              std::istreambuf_iterator<char>());
+        LONGS_EQUAL(static_cast<long>(pngSize), static_cast<long>(diskBytes.size()));
+        CHECK_EQUAL(0, std::memcmp(diskBytes.data(), pngBytes, pngSize));
+
+        if (std::filesystem::exists(wwwRulebookDir)) {
+            const std::filesystem::path wwwPath = wwwRulebookDir / fileName;
+            CHECK_TRUE(std::filesystem::exists(wwwPath));
+            std::ifstream wfs(wwwPath, std::ios::binary);
+            std::string wwwBytes((std::istreambuf_iterator<char>(wfs)),
+                                 std::istreambuf_iterator<char>());
+            LONGS_EQUAL(static_cast<long>(pngSize), static_cast<long>(wwwBytes.size()));
+            CHECK_EQUAL(0, std::memcmp(wwwBytes.data(), pngBytes, pngSize));
+        }
+    }
+    CHECK_TRUE(totalBytes < 1024u * 1024u);
+
+    /* 2. Strict allowlist & path-traversal rejection */
+    std::size_t badSize = 99u;
+    CHECK_TRUE(octi::rulebookImageBytes("nonexistent.png", badSize) == nullptr);
+    LONGS_EQUAL(0, static_cast<long>(badSize));
+    CHECK_TRUE(octi::rulebookImageBytes("../sounds/pod_place.wav", badSize) == nullptr);
+
+    EXPECT_ERROR(404, "NOT_FOUND", http().get("/assets/rulebook/nonexistent.png"));
+    EXPECT_ERROR(404, "NOT_FOUND", http().get("/assets/rulebook/..%2fetc%2fpasswd"));
+    EXPECT_ERROR(404, "NOT_FOUND", http().get("/assets/rulebook/rule_01_2p_3b_setup.svg"));
+    EXPECT_STATUS(404, http().get("/assets/rulebook/.."));
+    EXPECT_STATUS(404, http().get("/assets/rulebook/"));
+
+    /* 3. Web UI #tab-rules, nav button, 7 chapters, 13 variants, and #tab-home upgrade */
+    Reply rUi = http().get("/");
+    EXPECT_STATUS(200, rUi);
+    CHECK_TRUE(rUi.body.find("id=\"nav-rules-btn\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("data-tab=\"rules\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"tab-rules\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"home-cta-rules\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("Chapter 1") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("Chapter 2") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("Chapter 3") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("Chapter 4") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("Chapter 5") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("Chapter 6") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("Chapter 7") != std::string::npos);
+
+    for (const std::string &fileName : files) {
+        CHECK_TRUE(rUi.body.find("/assets/rulebook/" + fileName) != std::string::npos);
+    }
+    for (const std::string &vCode : octi::allOctiVariantCodes()) {
+        CHECK_TRUE(rUi.body.find(vCode) != std::string::npos);
+    }
+
+    /* 4. Engine legality verification of featured Rulebook FENs & moves */
+    {
+        OctiBoard b5;
+        b5.fromPositionString(
+            "2:3:0:0:P:A:-:0:3,0,21,0:3,0,23,0:A33abd,A53,A73,A44h,B56e,B66c,B37,B77");
+        b5.getGame()->move("33abd-55-57x-75x");
+
+        OctiBoard b6a;
+        b6a.fromPositionString(
+            "2:3:0:0:P:A:-:0:2,0,20,0:3,0,23,0:A53,A73,A44a,A44beg,A54c,B55e,B65e,B37,B77");
+        b6a.getGame()->move("44a-45,44beg-34");
+
+        OctiBoard b6b;
+        b6b.fromPositionString(
+            "2:3:0:0:P:A:-:0:2,0,20,0:3,0,23,0:A53,A73,A44a,A44beg,A54c,B55e,B65e,B37,B77");
+        b6b.getGame()->move("44beg-66x-64x-44");
+
+        OctiBoard b7;
+        b7.fromPositionString(
+            "2:3:0:0:P:A:-:0:3,1,22,0:3,0,23,0:A53a,A73,B36e,B76e,B37,A57ab,B77");
+        b7.getGame()->move("53*");
+
+        OctiBoard b8;
+        b8.fromPositionString(
+            "2:3:0:1:P:A:-:0:3,0,23,0:3,0,24,0:A53,A73,A15g,B37,B57,B77,A97b,B18e");
+        b8.getGame()->move("97b-29x");
+
+        OctiBoard b9;
+        b9.fromPositionString(
+            "2:3:1:0:P:A:-:0:4,0,23,0:4,0,24,0:A53,A73,A44ab!,B55e!,B37,B77");
+        b9.getGame()->move("44ab!-66x;66ab!-67");
+
+        OctiBoard b11;
+        b11.fromPositionString(
+            "OFK:1:0:0:P:A:-:0:0,0,10,0:0,0,10,0:A22,A42b,A52,A34a,B35e,B45e,B26,B56");
+        b11.getGame()->move("34a-36x");
+        CHECK_TRUE(b11.getGame()->isGameOver());
+        CHECK_EQUAL(PLAYER_A, b11.getGame()->getWinner());
+    }
 }
 
 int main(int argc, char **argv)

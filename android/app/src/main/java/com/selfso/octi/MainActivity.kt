@@ -96,6 +96,7 @@ import com.selfso.octi.ui.OctiTelemetryConsentDialog
 import com.selfso.octi.ui.OctiTelemetrySettingsDialog
 import com.selfso.octi.ui.OctiThinkingDialog
 import com.selfso.octi.ui.PlyConfirmDialog
+import com.selfso.octi.ui.RulebookDialog
 import com.selfso.octi.ui.SsoSignInDialog
 import com.selfso.octi.ui.StartMatchOverlayDialog
 import com.selfso.octi.ui.SuperProngBonusDialog
@@ -343,6 +344,7 @@ fun OctiMainAppContent(
     val apkSha256Prefix = remember(context) { OctiAppViewModel.computeInstalledApkSha256Prefix(context, 12) }
     var showSplash by remember { mutableStateOf(true) }
     var splashLoopIndefinitely by remember { mutableStateOf(false) }
+    var showRulebookDialog by remember { mutableStateOf(false) }
     var showTopMenu by remember { mutableStateOf(false) }
     var pendingPasscodeSeat by remember { mutableStateOf<Int?>(null) }
     var joinSeatPasscodeInput by remember { mutableStateOf("") }
@@ -456,7 +458,7 @@ fun OctiMainAppContent(
                                     onClick = {
                                         showTopMenu = false
                                         viewModel.selectTab(OctiAppViewModel.AppTab.ARCHIVE_LEADERBOARD)
-                                        viewModel.refreshLeaderboardAsync("2P", 50)
+                                        viewModel.refreshLeaderboardAsync("2P_3B", 50)
                                         viewModel.refreshArchivedGamesAsync("", "", 20, 0)
                                     }
                                 )
@@ -501,6 +503,13 @@ fun OctiMainAppContent(
                                     onClick = {
                                         showTopMenu = false
                                         viewModel.setShowTelemetrySettingsDialog(true)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Rulebook") },
+                                    onClick = {
+                                        showTopMenu = false
+                                        showRulebookDialog = true
                                     }
                                 )
                                 DropdownMenuItem(
@@ -642,7 +651,7 @@ fun OctiMainAppContent(
                             } else ""
                             val rawRoomId = activeRoomId.ifEmpty { activeGameView?.roomId ?: "" }
                             val shortRoomId = if (rawRoomId.length > 16) rawRoomId.take(16) else rawRoomId
-                            val modeTag = activeGameView?.mode ?: "2P"
+                            val modeTag = activeGameView?.variantCode() ?: "2P_3B"
                             val statusText = if (isWaiting) {
                                 "Table #$shortRoomId ($modeTag) • Waiting$ttlStr"
                             } else {
@@ -1265,6 +1274,10 @@ fun OctiMainAppContent(
                     }
                 }
             )
+        }
+
+        if (showRulebookDialog) {
+            RulebookDialog(onDismiss = { showRulebookDialog = false })
         }
     }
 }

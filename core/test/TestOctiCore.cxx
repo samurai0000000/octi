@@ -16,6 +16,7 @@
 #include "OctiOpeningBookData.hxx"
 #include "OctiCrypto.hxx"
 #include "OctiNetworkClient.hxx"
+#include "OctiRulebook.hxx"
 #include "OctiSoundCue.hxx"
 #include "Version.hxx"
 #include <algorithm>
@@ -10182,6 +10183,56 @@ TEST(OctiVariantTuningParams, MultiBaseAndSingleBaseParametersIsolateByBaseCount
                     octi::OctiBotEngine::evaluatePosition(threeNeeded2P, octi::PLAYER_A, pMid));
         CHECK_EQUAL(penOfk,
                     octi::OctiBotEngine::evaluatePosition(ofkBoard, octi::PLAYER_A, pMid));
+    }
+}
+
+TEST_GROUP(OctiRulebookTest)
+{
+};
+
+TEST(OctiRulebookTest, EmbeddedPngAssetsSectionsAndDesktopHtml)
+{
+    const std::vector<std::string> files = octi::rulebookImageFileNames();
+    LONGS_EQUAL(static_cast<long>(octi::OCTI_RULEBOOK_IMAGE_COUNT),
+                static_cast<long>(files.size()));
+
+    static const std::uint8_t kPngMagic[8] = {
+        0x89u, 0x50u, 0x4Eu, 0x47u, 0x0Du, 0x0Au, 0x1Au, 0x0Au
+    };
+
+    std::size_t totalBytes = 0u;
+    for (const std::string &fn : files) {
+        std::size_t sz = 0u;
+        const std::uint8_t *bytes = octi::rulebookImageBytes(fn, sz);
+        CHECK_TRUE(bytes != nullptr);
+        CHECK_TRUE(sz >= 1024u);
+        CHECK_TRUE(sz <= 80u * 1024u);
+        CHECK_EQUAL(0, std::memcmp(bytes, kPngMagic, sizeof(kPngMagic)));
+        totalBytes += sz;
+    }
+    CHECK_TRUE(totalBytes < 1024u * 1024u);
+
+    std::size_t badSz = 42u;
+    CHECK_TRUE(octi::rulebookImageBytes("../etc/passwd", badSz) == nullptr);
+    LONGS_EQUAL(0, static_cast<long>(badSz));
+    CHECK_TRUE(octi::rulebookImageBytes("unknown.png", badSz) == nullptr);
+
+    const std::vector<octi::RulebookSection> &sections = octi::rulebookSections();
+    LONGS_EQUAL(static_cast<long>(octi::OCTI_RULEBOOK_CHAPTER_COUNT),
+                static_cast<long>(sections.size()));
+
+    const std::string darkHtml = octi::buildDesktopRulebookHtml(false);
+    const std::string lightHtml = octi::buildDesktopRulebookHtml(true);
+    CHECK_TRUE(darkHtml != lightHtml);
+    CHECK_TRUE(darkHtml.find("<table") != std::string::npos);
+    CHECK_TRUE(darkHtml.find("display:grid") == std::string::npos);
+    CHECK_TRUE(darkHtml.find("display:flex") == std::string::npos);
+    for (const std::string &fn : files) {
+        CHECK_TRUE(darkHtml.find("octi://rulebook/" + fn) != std::string::npos);
+        CHECK_TRUE(lightHtml.find("octi://rulebook/" + fn) != std::string::npos);
+    }
+    for (const std::string &vCode : octi::allOctiVariantCodes()) {
+        CHECK_TRUE(darkHtml.find(vCode) != std::string::npos);
     }
 }
 

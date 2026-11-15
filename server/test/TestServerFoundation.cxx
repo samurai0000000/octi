@@ -293,6 +293,152 @@ TEST(ServerFoundationTest, ProtocolVersionMatchesReadme)
     LONGS_EQUAL(octi::OCTI_PROTOCOL_VERSION, protoVal);
 }
 
+TEST(ServerFoundationTest, Canonical13VariantCodeBijectiveRoundTrip)
+{
+    const std::vector<std::string> expected = {
+        "2P_3B",    "2P_3B_SP", "2P_3B_ED", "2P_3B_SPED",
+        "2P_1B",    "2P_1B_SP", "2P_1B_ED", "2P_1B_SPED",
+        "4P",       "4P_SP",    "4P_ED",    "4P_SPED",
+        "OFK"
+    };
+
+    const auto &codes = octi::allOctiVariantCodes();
+    LONGS_EQUAL(13, static_cast<long>(codes.size()));
+    for (size_t i = 0; i < expected.size(); ++i) {
+        STRCMP_EQUAL(expected[i].c_str(), codes[i].c_str());
+    }
+
+    std::vector<std::string> seenTuples;
+    for (size_t i = 0; i < codes.size(); ++i) {
+        const std::string &code = codes[i];
+        CHECK_TRUE(octi::isValidOctiVariantCode(code));
+
+        std::string lowerCode = code;
+        for (size_t c = 0; c < lowerCode.size(); ++c) {
+            if (lowerCode[c] >= 'A' && lowerCode[c] <= 'Z') {
+                lowerCode[c] = static_cast<char>(lowerCode[c] - 'A' + 'a');
+            }
+        }
+        CHECK_TRUE(octi::isValidOctiVariantCode(lowerCode));
+
+        octi::OctiGameMode mode = octi::GAME_MODE_2;
+        int bases = 0;
+        bool sp = false;
+        bool ed = false;
+        CHECK_TRUE(octi::parseOctiVariantCode(code, mode, bases, sp, ed));
+
+        octi::OctiGameMode modeLower = octi::GAME_MODE_2;
+        int basesLower = 0;
+        bool spLower = false;
+        bool edLower = false;
+        CHECK_TRUE(octi::parseOctiVariantCode(lowerCode, modeLower, basesLower,
+                                              spLower, edLower));
+        LONGS_EQUAL(static_cast<long>(mode), static_cast<long>(modeLower));
+        LONGS_EQUAL(bases, basesLower);
+        CHECK_EQUAL(sp, spLower);
+        CHECK_EQUAL(ed, edLower);
+
+        octi::OctiGameMode modeEnum = octi::GAME_MODE_2;
+        octi::OctiGameBases basesEnum = octi::GAME_BASES_3;
+        bool spEnum = false;
+        bool edEnum = false;
+        CHECK_TRUE(octi::parseOctiVariantCode(code, modeEnum, basesEnum,
+                                              spEnum, edEnum));
+        LONGS_EQUAL(bases, static_cast<int>(basesEnum));
+
+        STRCMP_EQUAL(code.c_str(),
+                     octi::octiVariantCode(mode, bases, sp, ed).c_str());
+        STRCMP_EQUAL(code.c_str(),
+                     octi::octiVariantCode(modeEnum, basesEnum, spEnum, edEnum)
+                         .c_str());
+
+        const char *modeStr = (mode == octi::GAME_MODE_OFK) ? "OFK"
+                            : (mode == octi::GAME_MODE_4)   ? "4P"
+                                                            : "2P";
+        STRCMP_EQUAL(code.c_str(),
+                     octi::octiVariantCodeFromModeStr(modeStr, bases, sp, ed)
+                         .c_str());
+        STRCMP_EQUAL(code.c_str(),
+                     octi::octiVariantCodeFromModeStr(code, bases, sp, ed)
+                         .c_str());
+        STRCMP_EQUAL(code.c_str(),
+                     octi::octiVariantCodeFromModeStr(lowerCode, bases, sp, ed)
+                         .c_str());
+
+        std::string tupleKey = std::to_string(static_cast<int>(mode)) + ":" +
+                               std::to_string(bases) + ":" +
+                               (sp ? "1" : "0") + ":" + (ed ? "1" : "0");
+        for (size_t k = 0; k < seenTuples.size(); ++k) {
+            CHECK_TRUE(seenTuples[k] != tupleKey);
+        }
+        seenTuples.push_back(tupleKey);
+    }
+    LONGS_EQUAL(13, static_cast<long>(seenTuples.size()));
+
+    /* OFK normalizes to "OFK" regardless of bases or superProngs/edgeless */
+    STRCMP_EQUAL("OFK",
+                 octi::octiVariantCode(octi::GAME_MODE_OFK, 1, false, false).c_str());
+    STRCMP_EQUAL("OFK",
+                 octi::octiVariantCode(octi::GAME_MODE_OFK, 3, true, true).c_str());
+    STRCMP_EQUAL("OFK",
+                 octi::octiVariantCodeFromModeStr("OFK", 3, true, true).c_str());
+    STRCMP_EQUAL("OFK",
+                 octi::octiVariantCodeFromModeStr("ofk", 1, true, false).c_str());
+
+    /* 4P* normalizes regardless of legacy bases (1 or 3) */
+    STRCMP_EQUAL("4P",
+                 octi::octiVariantCode(octi::GAME_MODE_4, 1, false, false).c_str());
+    STRCMP_EQUAL("4P_SP",
+                 octi::octiVariantCode(octi::GAME_MODE_4, 1, true, false).c_str());
+    STRCMP_EQUAL("4P_ED",
+                 octi::octiVariantCode(octi::GAME_MODE_4, 1, false, true).c_str());
+    STRCMP_EQUAL("4P_SPED",
+                 octi::octiVariantCode(octi::GAME_MODE_4, 1, true, true).c_str());
+    STRCMP_EQUAL("4P",
+                 octi::octiVariantCodeFromModeStr("4P", 1, false, false).c_str());
+    STRCMP_EQUAL("4P_SP",
+                 octi::octiVariantCodeFromModeStr("4P", 1, true, false).c_str());
+    STRCMP_EQUAL("4P_ED",
+                 octi::octiVariantCodeFromModeStr("4", 1, false, true).c_str());
+    STRCMP_EQUAL("4P_SPED",
+                 octi::octiVariantCodeFromModeStr("4", 1, true, true).c_str());
+
+    /* Reject non-canonical / broad / malformed variant codes */
+    const std::vector<std::string> invalid = {
+        "", "2P", "2P_ALL", "4P_ALL", "3P", "2P_2B",
+        "4P_1B", "4P_3B", "OFK_SP", "OFK_ED", "OFK_SPED", "BOGUS"
+    };
+    for (size_t i = 0; i < invalid.size(); ++i) {
+        octi::OctiGameMode m = octi::GAME_MODE_2;
+        int b = 3;
+        bool sp = false;
+        bool ed = false;
+        CHECK_FALSE(octi::isValidOctiVariantCode(invalid[i]));
+        CHECK_FALSE(octi::parseOctiVariantCode(invalid[i], m, b, sp, ed));
+    }
+
+    /* Official rated variants: strictly 2P_3B, 2P_1B, and OFK */
+    for (size_t i = 0; i < codes.size(); ++i) {
+        const std::string &code = codes[i];
+        bool wantRated = (code == "2P_3B" || code == "2P_1B" || code == "OFK");
+        CHECK_EQUAL(wantRated, octi::isOfficialRatedVariantCode(code));
+
+        octi::OctiGameMode m = octi::GAME_MODE_2;
+        int b = 3;
+        bool sp = false;
+        bool ed = false;
+        CHECK_TRUE(octi::parseOctiVariantCode(code, m, b, sp, ed));
+        CHECK_EQUAL(wantRated, octi::isOfficialRatedVariant(m, b, sp, ed));
+    }
+    CHECK_TRUE(octi::isOfficialRatedVariantCode("2p_3b"));
+    CHECK_TRUE(octi::isOfficialRatedVariantCode("2p_1b"));
+    CHECK_TRUE(octi::isOfficialRatedVariantCode("ofk"));
+    CHECK_TRUE(octi::isOfficialRatedVariant(octi::GAME_MODE_OFK, 3, false, false));
+    CHECK_FALSE(octi::isOfficialRatedVariant(octi::GAME_MODE_4, 1, false, false));
+    CHECK_FALSE(octi::isOfficialRatedVariantCode("2P"));
+    CHECK_FALSE(octi::isOfficialRatedVariantCode(""));
+}
+
 int main(int argc, char **argv)
 {
     return CommandLineTestRunner::RunAllTests(argc, argv);
