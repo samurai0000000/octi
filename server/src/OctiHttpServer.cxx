@@ -810,6 +810,9 @@ Json profileJson(const PlayerProfile &p, bool includeSeen)
     j["elo_2p_1b"] = p.elo2p1b;
     j["elo_4p"] = p.elo4p;
     j["elo_ofk"] = p.eloOfk;
+    j["games_2p_3b"] = p.games2p3b;
+    j["games_2p_1b"] = p.games2p1b;
+    j["games_ofk"] = p.gamesOfk;
     j["games_played"] = p.gamesPlayed;
     j["wins"] = p.wins;
     j["losses"] = p.losses;
@@ -817,6 +820,9 @@ Json profileJson(const PlayerProfile &p, bool includeSeen)
     j["arena_elo_2p_3b"] = p.arenaElo2p3b;
     j["arena_elo_2p_1b"] = p.arenaElo2p1b;
     j["arena_elo_ofk"] = p.arenaEloOfk;
+    j["arena_games_2p_3b"] = p.arenaGames2p3b;
+    j["arena_games_2p_1b"] = p.arenaGames2p1b;
+    j["arena_games_ofk"] = p.arenaGamesOfk;
     j["arena_games_played"] = p.arenaGamesPlayed;
     j["arena_wins"] = p.arenaWins;
     j["arena_losses"] = p.arenaLosses;
@@ -1205,6 +1211,7 @@ struct OctiHttpServer::Impl {
     void handleArchiveUpload(const Request &req, Response &res);
     void handleArchiveDeleteInstall(const Request &req, Response &res);
     void handleArchivePurgeGame(const Request &req, Response &res);
+    void handleAdminRecomputeRatings(const Request &req, Response &res);
     void handleArchiveList(const Request &req, Response &res);
     void handleArchiveGet(const Request &req, Response &res);
     void handleArchiveTranscript(const Request &req, Response &res);
@@ -3349,6 +3356,9 @@ void OctiHttpServer::Impl::handleUsersList(const Request &req, Response &res)
         uj["elo_2p_1b"] = e.profile.elo2p1b;
         uj["elo_4p"] = e.profile.elo4p;
         uj["elo_ofk"] = e.profile.eloOfk;
+        uj["games_2p_3b"] = e.profile.games2p3b;
+        uj["games_2p_1b"] = e.profile.games2p1b;
+        uj["games_ofk"] = e.profile.gamesOfk;
         uj["games_played"] = e.profile.gamesPlayed;
         uj["wins"] = e.profile.wins;
         uj["losses"] = e.profile.losses;
@@ -3356,6 +3366,9 @@ void OctiHttpServer::Impl::handleUsersList(const Request &req, Response &res)
         uj["arena_elo_2p_3b"] = e.profile.arenaElo2p3b;
         uj["arena_elo_2p_1b"] = e.profile.arenaElo2p1b;
         uj["arena_elo_ofk"] = e.profile.arenaEloOfk;
+        uj["arena_games_2p_3b"] = e.profile.arenaGames2p3b;
+        uj["arena_games_2p_1b"] = e.profile.arenaGames2p1b;
+        uj["arena_games_ofk"] = e.profile.arenaGamesOfk;
         uj["arena_games_played"] = e.profile.arenaGamesPlayed;
         uj["arena_wins"] = e.profile.arenaWins;
         uj["arena_losses"] = e.profile.arenaLosses;
@@ -3397,6 +3410,9 @@ Json OctiHttpServer::Impl::buildRobotProfilePayload(const RobotRecord &r)
     rj["elo_2p_3b"] = r.elo2p3b;
     rj["elo_2p_1b"] = r.elo2p1b;
     rj["elo_ofk"] = r.eloOfk;
+    rj["games_2p_3b"] = r.games2p3b;
+    rj["games_2p_1b"] = r.games2p1b;
+    rj["games_ofk"] = r.gamesOfk;
     rj["games_played"] = r.gamesPlayed;
     rj["wins"] = r.wins;
     rj["losses"] = r.losses;
@@ -3542,6 +3558,9 @@ void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
         rj["elo_2p_3b"] = r.elo2p3b;
         rj["elo_2p_1b"] = r.elo2p1b;
         rj["elo_ofk"] = r.eloOfk;
+        rj["games_2p_3b"] = r.games2p3b;
+        rj["games_2p_1b"] = r.games2p1b;
+        rj["games_ofk"] = r.gamesOfk;
         rj["games_played"] = r.gamesPlayed;
         rj["wins"] = r.wins;
         rj["losses"] = r.losses;
@@ -3695,6 +3714,9 @@ void OctiHttpServer::Impl::handleRobotsDirectory(const Request &req, Response &r
         rj["elo_2p_3b"] = e.elo2p3b;
         rj["elo_2p_1b"] = e.elo2p1b;
         rj["elo_ofk"] = e.eloOfk;
+        rj["games_2p_3b"] = e.games2p3b;
+        rj["games_2p_1b"] = e.games2p1b;
+        rj["games_ofk"] = e.gamesOfk;
         rj["games_played"] = e.gamesPlayed;
         rj["wins"] = e.wins;
         rj["losses"] = e.losses;
@@ -3788,6 +3810,9 @@ void OctiHttpServer::Impl::handleRobotsList(const Request &req, Response &res)
         rj["elo_2p_3b"] = r.elo2p3b;
         rj["elo_2p_1b"] = r.elo2p1b;
         rj["elo_ofk"] = r.eloOfk;
+        rj["games_2p_3b"] = r.games2p3b;
+        rj["games_2p_1b"] = r.games2p1b;
+        rj["games_ofk"] = r.gamesOfk;
         rj["games_played"] = r.gamesPlayed;
         rj["wins"] = r.wins;
         rj["losses"] = r.losses;
@@ -3868,6 +3893,9 @@ void OctiHttpServer::Impl::handleRobotCreate(const Request &req, Response &res)
         j["elo_2p_3b"] = cr.robot.elo2p3b;
         j["elo_2p_1b"] = cr.robot.elo2p1b;
         j["elo_ofk"] = cr.robot.eloOfk;
+        j["games_2p_3b"] = cr.robot.games2p3b;
+        j["games_2p_1b"] = cr.robot.games2p1b;
+        j["games_ofk"] = cr.robot.gamesOfk;
         j["revoked"] = cr.robot.revoked;
         sendJson(res, 201, j);
         return;
@@ -4254,6 +4282,34 @@ void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
                   "mode must be 2P_3B, 2P_1B or OFK");
         return;
     }
+    const std::string ladder = (mode == "2P") ? "2P_3B" : mode;
+
+    std::string pool = "human";
+    if (req.has_param("pool")) {
+        pool = lower(req.get_param_value("pool"));
+    }
+    if (pool != "human" && pool != "arena") {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "pool must be human or arena");
+        return;
+    }
+
+    std::string participantType = "all";
+    if (req.has_param("participant_type")) {
+        participantType = lower(req.get_param_value("participant_type"));
+    }
+    if (participantType != "all" && participantType != "robots" &&
+        participantType != "humans") {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "participant_type must be all, robots or humans");
+        return;
+    }
+    if (pool == "human" && participantType == "robots") {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "participant_type=robots is not supported for pool=human");
+        return;
+    }
+
     int64_t limit = 50;
     if (req.has_param("limit") &&
         (!parseUnsignedClamped(req.get_param_value("limit"),
@@ -4263,29 +4319,106 @@ void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
                   "limit must be a positive integer");
         return;
     }
-    std::vector<LeaderboardEntry> rows;
-    if (!store.leaderboard(mode, static_cast<int>(limit), rows)) {
-        sendError(res, 500, "INTERNAL_ERROR", "leaderboard query failed");
-        return;
-    }
+
+    int64_t total = 0;
     Json arr = Json::array();
-    for (size_t i = 0; i < rows.size(); ++i) {
-        Json e;
-        e["rank"] = rows[i].rank;
-        e["uuid"] = rows[i].uuid;
-        e["handle"] = rows[i].handle;
-        e["display_name"] = rows[i].displayName;
-        e["avatar_url"] = rows[i].avatarUrl;
-        e["elo"] = rows[i].elo;
-        e["games_played"] = rows[i].gamesPlayed;
-        e["wins"] = rows[i].wins;
-        e["losses"] = rows[i].losses;
-        e["draws"] = rows[i].draws;
-        arr.push_back(e);
+    if (pool == "arena") {
+        ArenaStandingsFilter af;
+        af.participantType = participantType;
+        af.limit = static_cast<int>(limit);
+        af.offset = 0;
+        af.sortAsc = false;
+        if (ladder == "2P_1B") {
+            af.sortField = "elo_2p_1b";
+        } else if (ladder == "OFK") {
+            af.sortField = "elo_ofk";
+        } else {
+            af.sortField = "elo_2p_3b";
+        }
+        std::vector<ArenaStandingEntry> arenaRows;
+        if (!store.listArenaStandings(af, arenaRows, &total)) {
+            sendError(res, 500, "INTERNAL_ERROR", "arena leaderboard query failed");
+            return;
+        }
+        int rankedCount = 0;
+        for (size_t i = 0; i < arenaRows.size(); ++i) {
+            const ArenaStandingEntry &row = arenaRows[i];
+            int ladderGames = row.games2p3b;
+            int ladderElo = row.elo2p3b;
+            if (ladder == "2P_1B") {
+                ladderGames = row.games2p1b;
+                ladderElo = row.elo2p1b;
+            } else if (ladder == "OFK") {
+                ladderGames = row.gamesOfk;
+                ladderElo = row.eloOfk;
+            }
+            const bool ranked = (ladderGames > 0);
+            const bool isRobot = (row.entryType == "robot");
+            Json e;
+            e["rank"] = ranked ? (++rankedCount) : 0;
+            e["ranked"] = ranked;
+            e["entry_type"] = row.entryType;
+            e["is_robot"] = isRobot;
+            e["uuid"] = row.uuid;
+            e["robot_uuid"] = isRobot ? row.robotUuid : "";
+            e["user_uuid"] = isRobot ? "" : row.uuid;
+            e["handle"] = row.name;
+            e["name"] = row.name;
+            e["robot_name"] = isRobot ? row.name : "";
+            e["display_name"] = row.displayName;
+            e["avatar_url"] = row.avatarUrl;
+            e["owner_uuid"] = row.ownerUuid;
+            e["owner_handle"] = row.ownerHandle;
+            e["elo"] = ranked ? ladderElo : 1200;
+            e["elo_2p_3b"] = row.elo2p3b;
+            e["elo_2p_1b"] = row.elo2p1b;
+            e["elo_ofk"] = row.eloOfk;
+            e["ladder_games"] = ladderGames;
+            e["games_2p_3b"] = row.games2p3b;
+            e["games_2p_1b"] = row.games2p1b;
+            e["games_ofk"] = row.gamesOfk;
+            e["games_played"] = row.gamesPlayed;
+            e["wins"] = row.wins;
+            e["losses"] = row.losses;
+            e["draws"] = row.draws;
+            e["win_rate"] = row.winRate;
+            e["revoked"] = row.revoked;
+            arr.push_back(e);
+        }
+    } else {
+        std::vector<LeaderboardEntry> rows;
+        if (!store.leaderboard(mode, static_cast<int>(limit), rows)) {
+            sendError(res, 500, "INTERNAL_ERROR", "leaderboard query failed");
+            return;
+        }
+        total = static_cast<int64_t>(rows.size());
+        for (size_t i = 0; i < rows.size(); ++i) {
+            const bool ranked = (rows[i].ladderGames > 0);
+            Json e;
+            e["rank"] = ranked ? rows[i].rank : 0;
+            e["ranked"] = ranked;
+            e["entry_type"] = "human";
+            e["is_robot"] = false;
+            e["uuid"] = rows[i].uuid;
+            e["user_uuid"] = rows[i].uuid;
+            e["handle"] = rows[i].handle;
+            e["display_name"] = rows[i].displayName;
+            e["avatar_url"] = rows[i].avatarUrl;
+            e["elo"] = ranked ? rows[i].elo : 1200;
+            e["ladder_games"] = rows[i].ladderGames;
+            e["games_played"] = rows[i].gamesPlayed;
+            e["wins"] = rows[i].wins;
+            e["losses"] = rows[i].losses;
+            e["draws"] = rows[i].draws;
+            arr.push_back(e);
+        }
     }
     Json j;
+    j["pool"] = pool;
+    j["participant_type"] = participantType;
     j["mode"] = mode;
-    j["ladder"] = (mode == "2P") ? "2P_3B" : mode;
+    j["ladder"] = ladder;
+    j["total"] = total;
     j["entries"] = arr;
     sendJson(res, 200, j);
 }
@@ -5884,6 +6017,41 @@ void OctiHttpServer::Impl::handleArchivePurgeGame(const Request &req, Response &
     sendJson(res, 200, j);
 }
 
+void OctiHttpServer::Impl::handleAdminRecomputeRatings(const Request &req,
+                                                       Response &res)
+{
+    Auth auth;
+    if (!requireAuth(req, res, auth)) {
+        return;
+    }
+    if (auth.isRobot || !store.isPlayerAdmin(auth.playerId)) {
+        sendError(res, 403, "FORBIDDEN", "admin privileges required");
+        return;
+    }
+    if (!req.body.empty()) {
+        Json body;
+        if (!readJsonBody(req, res, body, true)) {
+            return;
+        }
+    }
+    RecomputeRatingsResult result;
+    std::string err;
+    if (!store.recomputeAllRatings(result, err)) {
+        sendError(res, 500, "INTERNAL_ERROR",
+                  "failed to recompute ratings: " + err);
+        return;
+    }
+    rooms.refreshCachedPlayerStats();
+    Json j;
+    j["ok"] = true;
+    j["games_scanned"] = result.gamesScanned;
+    j["pool1_games_rated"] = result.pool1GamesRated;
+    j["pool2_games_rated"] = result.pool2GamesRated;
+    j["players_updated"] = result.playersUpdated;
+    j["robots_updated"] = result.robotsUpdated;
+    sendJson(res, 200, j);
+}
+
 void OctiHttpServer::Impl::handleArchiveList(const Request &req,
                                              Response &res)
 {
@@ -6831,6 +6999,7 @@ void OctiHttpServer::Impl::registerRoutes()
         {"POST", "/api/v1/archive/upload", &Impl::handleArchiveUpload},
         {"DELETE", "/api/v1/archive/install/:installId", &Impl::handleArchiveDeleteInstall},
         {"DELETE", "/api/v1/archive/games/:id", &Impl::handleArchivePurgeGame},
+        {"POST", "/api/v1/admin/recompute-ratings", &Impl::handleAdminRecomputeRatings},
         {"GET", "/api/v1/archive/games", &Impl::handleArchiveList},
         {"GET", "/api/v1/archive/games/:id", &Impl::handleArchiveGet},
         {"GET", "/api/v1/archive/games/:id/transcript", &Impl::handleArchiveTranscript},

@@ -29,6 +29,7 @@
 #include "OctiSoundCue.hxx"
 #include "OidcVerifier.hxx"
 #include "ServerApp.hxx"
+#include "WebUi.hxx"
 
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -8962,34 +8963,72 @@ TEST(OctiHttpServerIntegrationTest, DualPoolLeaderboardUsersArenaDirectoryAndWeb
     CHECK_TRUE(sawPool1);
     CHECK_TRUE(sawPool2);
 
-    /* 5. /api/v1/users, /api/v1/users/:id, /api/v1/robots/profile/:id, /api/v1/robots */
+    /* 5. /api/v1/profile/me, /api/v1/users, /api/v1/users/:id, /api/v1/robots/profile/:id, /api/v1/robots */
+    Reply aliceMe = http().get("/api/v1/profile/me", alice.token);
+    EXPECT_STATUS(200, aliceMe);
+    CHECK_EQUAL(0, aliceMe.json.value("games_2p_3b", -1));
+    CHECK_EQUAL(1, aliceMe.json.value("games_2p_1b", -1));
+    CHECK_EQUAL(0, aliceMe.json.value("games_ofk", -1));
+    CHECK_EQUAL(1, aliceMe.json.value("arena_games_2p_3b", -1));
+    CHECK_EQUAL(0, aliceMe.json.value("arena_games_2p_1b", -1));
+    CHECK_EQUAL(0, aliceMe.json.value("arena_games_ofk", -1));
+
     Reply uSort1b = http().get("/api/v1/users?sort=elo_2p_1b&order=desc");
     EXPECT_STATUS(200, uSort1b);
     STRCMP_EQUAL(alice.uuid.c_str(),
                  uSort1b.json["users"][0].value("uuid", "").c_str());
+    STRCMP_EQUAL(bob.uuid.c_str(),
+                 uSort1b.json["users"][1].value("uuid", "").c_str());
+    STRCMP_EQUAL(carol.uuid.c_str(),
+                 uSort1b.json["users"][2].value("uuid", "").c_str());
     CHECK_EQUAL(1200, uSort1b.json["users"][0].value("elo_2p_3b", 0));
     CHECK_EQUAL(1216, uSort1b.json["users"][0].value("elo_2p_1b", 0));
     CHECK_EQUAL(1200, uSort1b.json["users"][0].value("elo_ofk", 0));
+    CHECK_EQUAL(0, uSort1b.json["users"][0].value("games_2p_3b", -1));
+    CHECK_EQUAL(1, uSort1b.json["users"][0].value("games_2p_1b", -1));
+    CHECK_EQUAL(0, uSort1b.json["users"][0].value("games_ofk", -1));
     CHECK_EQUAL(1216, uSort1b.json["users"][0].value("arena_elo_2p_3b", 0));
+    CHECK_EQUAL(1, uSort1b.json["users"][0].value("arena_games_2p_3b", -1));
+    CHECK_EQUAL(0, uSort1b.json["users"][0].value("arena_games_2p_1b", -1));
+    CHECK_EQUAL(0, uSort1b.json["users"][0].value("arena_games_ofk", -1));
     CHECK_EQUAL(1, uSort1b.json["users"][0].value("arena_games_played", 0));
 
     Reply aliceDetail = http().get("/api/v1/users/" + alice.uuid);
     EXPECT_STATUS(200, aliceDetail);
     CHECK_EQUAL(1200, aliceDetail.json.value("elo_2p_3b", 0));
     CHECK_EQUAL(1216, aliceDetail.json.value("elo_2p_1b", 0));
+    CHECK_EQUAL(0, aliceDetail.json.value("games_2p_3b", -1));
+    CHECK_EQUAL(1, aliceDetail.json.value("games_2p_1b", -1));
+    CHECK_EQUAL(0, aliceDetail.json.value("games_ofk", -1));
     CHECK_EQUAL(1216, aliceDetail.json.value("arena_elo_2p_3b", 0));
+    CHECK_EQUAL(1, aliceDetail.json.value("arena_games_2p_3b", -1));
+    CHECK_EQUAL(0, aliceDetail.json.value("arena_games_2p_1b", -1));
+    CHECK_EQUAL(0, aliceDetail.json.value("arena_games_ofk", -1));
     CHECK_EQUAL(1, aliceDetail.json.value("arena_games_played", 0));
+
+    Reply carolDetail = http().get("/api/v1/users/" + carol.uuid);
+    EXPECT_STATUS(200, carolDetail);
+    CHECK_EQUAL(1, static_cast<int>(carolDetail.json["robots"].size()));
+    CHECK_EQUAL(1, carolDetail.json["robots"][0].value("games_2p_3b", -1));
+    CHECK_EQUAL(0, carolDetail.json["robots"][0].value("games_2p_1b", -1));
+    CHECK_EQUAL(0, carolDetail.json["robots"][0].value("games_ofk", -1));
 
     Reply botProf = http().get("/api/v1/robots/profile/" + botUuid);
     EXPECT_STATUS(200, botProf);
     CHECK_EQUAL(1184, botProf.json.value("elo_2p_3b", 0));
     CHECK_EQUAL(1200, botProf.json.value("elo_2p_1b", 0));
     CHECK_EQUAL(1200, botProf.json.value("elo_ofk", 0));
+    CHECK_EQUAL(1, botProf.json.value("games_2p_3b", -1));
+    CHECK_EQUAL(0, botProf.json.value("games_2p_1b", -1));
+    CHECK_EQUAL(0, botProf.json.value("games_ofk", -1));
     CHECK_EQUAL(1, botProf.json.value("games_played", 0));
 
     Reply carolBots = http().get("/api/v1/robots", carol.token);
     EXPECT_STATUS(200, carolBots);
     CHECK_EQUAL(1184, carolBots.json["robots"][0].value("elo_2p_3b", 0));
+    CHECK_EQUAL(1, carolBots.json["robots"][0].value("games_2p_3b", -1));
+    CHECK_EQUAL(0, carolBots.json["robots"][0].value("games_2p_1b", -1));
+    CHECK_EQUAL(0, carolBots.json["robots"][0].value("games_ofk", -1));
 
     /* 6. /api/v1/robots/directory merged Arena standings: all | robots | humans */
     EXPECT_ERROR(400, "INVALID_ARGUMENT",
@@ -9003,9 +9042,15 @@ TEST(OctiHttpServerIntegrationTest, DualPoolLeaderboardUsersArenaDirectoryAndWeb
     STRCMP_EQUAL("human", dirAll.json["entries"][0].value("entry_type", "").c_str());
     STRCMP_EQUAL(alice.uuid.c_str(), dirAll.json["entries"][0].value("uuid", "").c_str());
     CHECK_EQUAL(1216, dirAll.json["entries"][0].value("elo_2p_3b", 0));
+    CHECK_EQUAL(1, dirAll.json["entries"][0].value("games_2p_3b", -1));
+    CHECK_EQUAL(0, dirAll.json["entries"][0].value("games_2p_1b", -1));
+    CHECK_EQUAL(0, dirAll.json["entries"][0].value("games_ofk", -1));
     STRCMP_EQUAL("robot", dirAll.json["entries"][1].value("entry_type", "").c_str());
     STRCMP_EQUAL(botUuid.c_str(), dirAll.json["entries"][1].value("robot_uuid", "").c_str());
     CHECK_EQUAL(1184, dirAll.json["entries"][1].value("elo_2p_3b", 0));
+    CHECK_EQUAL(1, dirAll.json["entries"][1].value("games_2p_3b", -1));
+    CHECK_EQUAL(0, dirAll.json["entries"][1].value("games_2p_1b", -1));
+    CHECK_EQUAL(0, dirAll.json["entries"][1].value("games_ofk", -1));
 
     Reply dirRobots = http().get("/api/v1/robots/directory?participant_type=robots");
     EXPECT_STATUS(200, dirRobots);
@@ -9016,6 +9061,88 @@ TEST(OctiHttpServerIntegrationTest, DualPoolLeaderboardUsersArenaDirectoryAndWeb
     EXPECT_STATUS(200, dirHumans);
     CHECK_EQUAL(1, dirHumans.json.value("total", 0));
     STRCMP_EQUAL("human", dirHumans.json["entries"][0].value("entry_type", "").c_str());
+
+    /* 6b. GET /api/v1/leaderboard Pool 1 & Pool 2 (pool=arena) + fault cases + POST /api/v1/admin/recompute-ratings */
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/leaderboard?mode=2P_3B&pool=invalid"));
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/leaderboard?mode=2P_3B&pool=arena&participant_type=invalid"));
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/leaderboard?mode=2P_3B&pool=human&participant_type=robots"));
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/leaderboard?mode=4P&pool=arena"));
+
+    Reply lbHuman1b = http().get("/api/v1/leaderboard?mode=2P_1B&pool=human");
+    EXPECT_STATUS(200, lbHuman1b);
+    STRCMP_EQUAL("human", lbHuman1b.json.value("pool", "").c_str());
+    CHECK_EQUAL(3, static_cast<int>(lbHuman1b.json["entries"].size()));
+    STRCMP_EQUAL(alice.uuid.c_str(), lbHuman1b.json["entries"][0].value("uuid", "").c_str());
+    CHECK_EQUAL(1, lbHuman1b.json["entries"][0].value("rank", -1));
+    CHECK_EQUAL(1, lbHuman1b.json["entries"][0].value("ladder_games", -1));
+    CHECK_TRUE(lbHuman1b.json["entries"][0].value("ranked", false));
+    STRCMP_EQUAL(bob.uuid.c_str(), lbHuman1b.json["entries"][1].value("uuid", "").c_str());
+    CHECK_EQUAL(2, lbHuman1b.json["entries"][1].value("rank", -1));
+    CHECK_EQUAL(1, lbHuman1b.json["entries"][1].value("ladder_games", -1));
+    CHECK_TRUE(lbHuman1b.json["entries"][1].value("ranked", false));
+    STRCMP_EQUAL(carol.uuid.c_str(), lbHuman1b.json["entries"][2].value("uuid", "").c_str());
+    CHECK_EQUAL(0, lbHuman1b.json["entries"][2].value("rank", -1));
+    CHECK_EQUAL(0, lbHuman1b.json["entries"][2].value("ladder_games", -1));
+    CHECK_FALSE(lbHuman1b.json["entries"][2].value("ranked", true));
+
+    Reply lbArena3b = http().get("/api/v1/leaderboard?mode=2P_3B&pool=arena&participant_type=all");
+    EXPECT_STATUS(200, lbArena3b);
+    STRCMP_EQUAL("arena", lbArena3b.json.value("pool", "").c_str());
+    STRCMP_EQUAL("all", lbArena3b.json.value("participant_type", "").c_str());
+    CHECK_EQUAL(2, lbArena3b.json.value("total", 0));
+    CHECK_EQUAL(2, static_cast<int>(lbArena3b.json["entries"].size()));
+    STRCMP_EQUAL("human", lbArena3b.json["entries"][0].value("entry_type", "").c_str());
+    CHECK_FALSE(lbArena3b.json["entries"][0].value("is_robot", true));
+    STRCMP_EQUAL(alice.uuid.c_str(), lbArena3b.json["entries"][0].value("user_uuid", "").c_str());
+    CHECK_EQUAL(1, lbArena3b.json["entries"][0].value("rank", -1));
+    CHECK_EQUAL(1, lbArena3b.json["entries"][0].value("ladder_games", -1));
+    CHECK_TRUE(lbArena3b.json["entries"][0].value("ranked", false));
+    CHECK_EQUAL(1216, lbArena3b.json["entries"][0].value("elo", 0));
+    STRCMP_EQUAL("robot", lbArena3b.json["entries"][1].value("entry_type", "").c_str());
+    CHECK_TRUE(lbArena3b.json["entries"][1].value("is_robot", false));
+    STRCMP_EQUAL(botUuid.c_str(), lbArena3b.json["entries"][1].value("robot_uuid", "").c_str());
+    CHECK_EQUAL(2, lbArena3b.json["entries"][1].value("rank", -1));
+    CHECK_EQUAL(1, lbArena3b.json["entries"][1].value("ladder_games", -1));
+    CHECK_TRUE(lbArena3b.json["entries"][1].value("ranked", false));
+    CHECK_EQUAL(1184, lbArena3b.json["entries"][1].value("elo", 0));
+
+    Reply lbArenaRobots = http().get("/api/v1/leaderboard?mode=2P_3B&pool=arena&participant_type=robots");
+    EXPECT_STATUS(200, lbArenaRobots);
+    CHECK_EQUAL(1, static_cast<int>(lbArenaRobots.json["entries"].size()));
+    STRCMP_EQUAL("robot", lbArenaRobots.json["entries"][0].value("entry_type", "").c_str());
+
+    Reply lbArenaHumans = http().get("/api/v1/leaderboard?mode=2P_3B&pool=arena&participant_type=humans");
+    EXPECT_STATUS(200, lbArenaHumans);
+    CHECK_EQUAL(1, static_cast<int>(lbArenaHumans.json["entries"].size()));
+    STRCMP_EQUAL("human", lbArenaHumans.json["entries"][0].value("entry_type", "").c_str());
+
+    Reply lbArenaOfk = http().get("/api/v1/leaderboard?mode=OFK&pool=arena");
+    EXPECT_STATUS(200, lbArenaOfk);
+    CHECK_EQUAL(2, static_cast<int>(lbArenaOfk.json["entries"].size()));
+    for (size_t i = 0; i < lbArenaOfk.json["entries"].size(); ++i) {
+        CHECK_EQUAL(0, lbArenaOfk.json["entries"][i].value("rank", -1));
+        CHECK_EQUAL(0, lbArenaOfk.json["entries"][i].value("ladder_games", -1));
+        CHECK_FALSE(lbArenaOfk.json["entries"][i].value("ranked", true));
+        CHECK_EQUAL(1200, lbArenaOfk.json["entries"][i].value("elo", 0));
+    }
+
+    /* Admin recompute-ratings endpoint auth & execution */
+    EXPECT_STATUS(401, http().post("/api/v1/admin/recompute-ratings", "", Json::object()));
+    EXPECT_STATUS(403, http().post("/api/v1/admin/recompute-ratings", bob.token, Json::object()));
+    EXPECT_STATUS(403, http().post("/api/v1/admin/recompute-ratings", botToken, Json::object()));
+    env->store.setAdminGoogleIdentities({"sub-dp-alice"});
+    Reply recomputeOk = http().post("/api/v1/admin/recompute-ratings", alice.token, Json::object());
+    EXPECT_STATUS(200, recomputeOk);
+    CHECK_TRUE(recomputeOk.json.value("ok", false));
+    CHECK_EQUAL(2, recomputeOk.json.value("games_scanned", -1));
+    CHECK_EQUAL(1, recomputeOk.json.value("pool1_games_rated", -1));
+    CHECK_EQUAL(1, recomputeOk.json.value("pool2_games_rated", -1));
+    CHECK_EQUAL(2, recomputeOk.json.value("players_updated", -1));
+    CHECK_EQUAL(1, recomputeOk.json.value("robots_updated", -1));
 
     /* 7. OctiNetworkClient Dual-Pool parsing & directory filtering */
     auto cli = OctiNetworkClient::createForLoopbackTest(env->server->port());
@@ -9047,15 +9174,70 @@ TEST(OctiHttpServerIntegrationTest, DualPoolLeaderboardUsersArenaDirectoryAndWeb
     CHECK_EQUAL(1, static_cast<int>(cliDirHumans.data.size()));
     STRCMP_EQUAL("human", cliDirHumans.data[0].entryType.c_str());
 
-    /* 8. Web UI HTML Dual-Pool markers + zero duplicate DOM IDs */
+    /* 8. Web UI HTML Dual-Pool markers + zero duplicate DOM IDs + www/octi parity */
     Reply ui = http().get("/");
     EXPECT_STATUS(200, ui);
+    CHECK_TRUE(ui.body == std::string(octi::webUiHtml()));
+    CHECK_TRUE(ui.body.find("OCTIUI") == std::string::npos);
+    CHECK_TRUE(ui.body.find("OCTI v2.5.4") != std::string::npos);
     CHECK_TRUE(ui.body.find("id=\"robots-participant-type\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"elo_2p_3b\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"elo_2p_1b\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("id=\"lb-human-panel\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("id=\"lb-arena-panel\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("id=\"lb-arena-type\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("id=\"lb-arena-msg\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("id=\"lb-arena-table\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("id=\"btn-admin-recompute-ratings\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("id=\"admin-recompute-msg\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("function fmtElo(elo, gamesCount)") != std::string::npos);
+    CHECK_TRUE(ui.body.find("/api/v1/admin/recompute-ratings") != std::string::npos);
+    CHECK_TRUE(ui.body.find("pool=arena") != std::string::npos);
     CHECK_TRUE(ui.body.find("Only 2P_3B, 2P_1B, and OFK are rated; 4P / SP / ED are casual.") !=
                std::string::npos);
     CHECK_TRUE(ui.body.find("Rating Pools") != std::string::npos);
+
+    {
+        std::set<std::string> seenDomIds;
+        std::size_t pos = 0u;
+        while ((pos = ui.body.find("id=\"", pos)) != std::string::npos) {
+            if (pos > 0u) {
+                const char prev = ui.body[pos - 1u];
+                if (prev != ' ' && prev != '\t' && prev != '\n' && prev != '\r') {
+                    pos += 4u;
+                    continue;
+                }
+            }
+            const std::size_t valStart = pos + 4u;
+            const std::size_t valEnd = ui.body.find('"', valStart);
+            CHECK_TRUE(valEnd != std::string::npos);
+            const std::string domId = ui.body.substr(valStart, valEnd - valStart);
+            CHECK_FALSE(domId.empty());
+            const bool inserted = seenDomIds.insert(domId).second;
+            if (!inserted) {
+                FAIL(("Duplicate DOM id in WebUi.cxx: " + domId).c_str());
+            }
+            pos = valEnd + 1u;
+        }
+        CHECK_TRUE(seenDomIds.size() >= 340u);
+    }
+
+    {
+        const std::filesystem::path testFilePath(__FILE__);
+        const std::filesystem::path repoRoot =
+            testFilePath.parent_path().parent_path().parent_path();
+        const std::filesystem::path wwwIndexHtml =
+            repoRoot.parent_path() / "www" / "octi" / "html" / "index.html";
+        if (std::filesystem::exists(wwwIndexHtml)) {
+            std::ifstream wfs(wwwIndexHtml, std::ios::binary);
+            std::string wwwBytes((std::istreambuf_iterator<char>(wfs)),
+                                 std::istreambuf_iterator<char>());
+            CHECK_TRUE(wwwBytes.find("OCTIUI") == std::string::npos);
+            LONGS_EQUAL(static_cast<long>(ui.body.size()),
+                        static_cast<long>(wwwBytes.size()));
+            CHECK_EQUAL(0, std::memcmp(ui.body.data(), wwwBytes.data(), ui.body.size()));
+        }
+    }
 }
 
 TEST(OctiHttpServerIntegrationTest, IllustratedRulebookAssetsEndpointAndTabParity)

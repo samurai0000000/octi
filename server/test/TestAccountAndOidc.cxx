@@ -5,6 +5,7 @@
  */
 
 #include "AccountStore.hxx"
+#include "EloCalculator.hxx"
 #include "OctiBoard.hxx"
 #include "OctiGame.hxx"
 #include "OidcVerifier.hxx"
@@ -3841,20 +3842,27 @@ TEST(AccountStoreTest, DualPoolThreeLadderMigrationStandingsAndPairCap)
     std::vector<octi::ArenaStandingEntry> standings;
     int64_t totalStandings = 0;
     CHECK_TRUE(store->listArenaStandings(asf, standings, &totalStandings));
-    /* Expected: h1 (human, arenaGamesPlayed=3, elo2p3b=1212), b2 (1-game robot, elo2p3b=1200),
-     * b1 (4-game robot, elo2p3b=1188). Excluded: h2 (arenaGamesPlayed=0), h3 (banned),
-     * bZero (0 games), bBannedOwner (owner h3 banned). */
+    /* Expected: h1 (human, 3 rated + 1 unrated vs-bot game -> gamesPlayed=4, games2p3b=3, elo2p3b=1212),
+     * b1 (4-game robot with 3 rated 2P_3B games, games2p3b=3, elo2p3b=1188),
+     * b2 (casual-only 1-game robot with 0 rated 2P_3B games, games2p3b=0, elo2p3b=1200 sorted after ranked!).
+     * Excluded: h2 (0 vs-bot games), h3 (banned), bZero (0 games), bBannedOwner (owner h3 banned). */
     CHECK_EQUAL(3, (int)totalStandings);
     CHECK_EQUAL(3, (int)standings.size());
     STRCMP_EQUAL("human", standings[0].entryType.c_str());
     STRCMP_EQUAL("HumanOne", standings[0].name.c_str());
     CHECK_EQUAL(1212, standings[0].elo2p3b);
+    CHECK_EQUAL(3, standings[0].games2p3b);
+    CHECK_EQUAL(4, standings[0].gamesPlayed);
+    CHECK_EQUAL(3, standings[0].wins);
+    CHECK_EQUAL(1, standings[0].losses);
     STRCMP_EQUAL("robot", standings[1].entryType.c_str());
-    STRCMP_EQUAL("ArenaBotBeta", standings[1].name.c_str());
-    CHECK_EQUAL(1200, standings[1].elo2p3b);
+    STRCMP_EQUAL("ArenaBotAlpha", standings[1].name.c_str());
+    CHECK_EQUAL(1188, standings[1].elo2p3b);
+    CHECK_EQUAL(3, standings[1].games2p3b);
     STRCMP_EQUAL("robot", standings[2].entryType.c_str());
-    STRCMP_EQUAL("ArenaBotAlpha", standings[2].name.c_str());
-    CHECK_EQUAL(1188, standings[2].elo2p3b);
+    STRCMP_EQUAL("ArenaBotBeta", standings[2].name.c_str());
+    CHECK_EQUAL(1200, standings[2].elo2p3b);
+    CHECK_EQUAL(0, standings[2].games2p3b);
 
     asf.participantType = "robots";
     CHECK_TRUE(store->listArenaStandings(asf, standings, &totalStandings));
@@ -3868,6 +3876,306 @@ TEST(AccountStoreTest, DualPoolThreeLadderMigrationStandingsAndPairCap)
     CHECK_EQUAL(1, (int)totalStandings);
     STRCMP_EQUAL("human", standings[0].entryType.c_str());
     STRCMP_EQUAL("HumanOne", standings[0].name.c_str());
+    CHECK_EQUAL(4, standings[0].gamesPlayed);
+}
+
+TEST(AccountStoreTest, ArenaVsRobotUnratedHumans1v1And4pAndCasualBotCounts)
+{
+    int64_t owner = newPlayer("g-vb-owner", "BotOwner");
+    int64_t h1v1 = newPlayer("g-vb-1v1", "Unrated1v1Human");
+    int64_t h4pOpp1 = newPlayer("g-vb-4p1", "Team13HumanA");
+    int64_t h4pOpp3 = newPlayer("g-vb-4p3", "Team13HumanC");
+    int64_t h4pAlly4 = newPlayer("g-vb-4p4", "Team24AllyOfBot");
+
+    CreateRobotResult botRes = store->createRobot(owner, "CasualAnd4pBot", "Bot");
+    CHECK_EQUAL((int)octi::RobotStatus::OK, (int)botRes.status);
+    int64_t botId = botRes.robot.robotId;
+
+    std::string err;
+    /* 1. Unrated 1v1 game (casual 2P_3B_SP) between h1v1 (seat 1) and botId (seat 2) */
+    GameRecord g1v1 = record("g-vb-unrated-1v1", clockNow + 10, h1v1, 0, "2P");
+    g1v1.gameBases = 3;
+    g1v1.superProngs = true;
+    g1v1.p2RobotId = botId;
+    g1v1.p2Handle = botRes.robot.robotName;
+    g1v1.rated = 0;
+    g1v1.eloPool = 0;
+    g1v1.result = "P1_WIN";
+    g1v1.winnerSeat = 1;
+    g1v1.winner = "A";
+    CHECK_EQUAL((int)ArchiveStatus::OK,
+                (int)store->archiveGameWithRatings(
+                    g1v1, {}, {{botId, GameOutcome::LOSS}}, err));
+
+    /* 2. 4P partnership game: Team (1,3) = (h4pOpp1, h4pOpp3) vs Team (2,4) = (botId, h4pAlly4).
+     *    Seats 1 and 3 oppose robot seat 2; seat 4 is partnered WITH robot seat 2 and opposes only humans! */
+    GameRecord g4p = record("g-vb-4p-match", clockNow + 20, h4pOpp1, 0, "4P");
+    g4p.gameBases = 3;
+    g4p.p2RobotId = botId;
+    g4p.p2Handle = botRes.robot.robotName;
+    g4p.p3PlayerId = h4pOpp3;
+    g4p.p3Handle = "Team13HumanC";
+    g4p.p4PlayerId = h4pAlly4;
+    g4p.p4Handle = "Team24AllyOfBot";
+    g4p.rated = 0;
+    g4p.eloPool = 0;
+    g4p.result = "TEAM_13_WIN";
+    g4p.winnerSeat = 1;
+    g4p.winner = "A";
+    CHECK_EQUAL((int)ArchiveStatus::OK,
+                (int)store->archiveGameWithRatings(
+                    g4p, {}, {{botId, GameOutcome::LOSS}}, err));
+
+    /* Casual-only bot has gamesPlayed == 2, elo2p3b == 1200, and games2p3b/1b/ofk == 0 */
+    RobotRecord rGot;
+    CHECK_TRUE(store->getRobotById(botId, rGot));
+    CHECK_EQUAL(2, rGot.gamesPlayed);
+    CHECK_EQUAL(1200, rGot.elo2p3b);
+    CHECK_EQUAL(0, rGot.games2p3b);
+    CHECK_EQUAL(0, rGot.games2p1b);
+    CHECK_EQUAL(0, rGot.gamesOfk);
+
+    octi::ArenaStandingsFilter asf;
+    asf.participantType = "humans";
+    asf.sortField = "games_played";
+    std::vector<octi::ArenaStandingEntry> humans;
+    int64_t totalHumans = 0;
+    CHECK_TRUE(store->listArenaStandings(asf, humans, &totalHumans));
+    /* h1v1, h4pOpp1, and h4pOpp3 opposed a robot seat; owner and h4pAlly4 did NOT */
+    CHECK_EQUAL(3, (int)totalHumans);
+    std::set<std::string> seenHandles;
+    for (size_t i = 0; i < humans.size(); ++i) {
+        seenHandles.insert(humans[i].name);
+        CHECK_EQUAL(1, humans[i].gamesPlayed);
+        CHECK_EQUAL(1, humans[i].wins);
+        CHECK_EQUAL(0, humans[i].losses);
+        CHECK_EQUAL(0, humans[i].games2p3b);
+    }
+    CHECK_TRUE(seenHandles.count("Unrated1v1Human") == 1);
+    CHECK_TRUE(seenHandles.count("Team13HumanA") == 1);
+    CHECK_TRUE(seenHandles.count("Team13HumanC") == 1);
+    CHECK_TRUE(seenHandles.count("Team24AllyOfBot") == 0);
+}
+
+TEST(AccountStoreTest, RankedFirstSortingAcrossLeaderboardArenaAndListUsers)
+{
+    int64_t pUnplayed = newPlayer("g-rf-unplayed", "Unplayed1200");
+    int64_t pActiveHigh = newPlayer("g-rf-high", "Active1216");
+    int64_t pActiveLow = newPlayer("g-rf-low", "Active1184");
+    (void)pUnplayed;
+
+    std::string err;
+    GameRecord g1 = record("g-rf-p1", clockNow + 10, pActiveHigh, pActiveLow, "2P");
+    g1.gameBases = 3;
+    g1.rated = 1;
+    g1.eloPool = 1;
+    std::vector<octi::RatingUpdate> u1 = {
+        {pActiveHigh, 0, 1216, GameOutcome::WIN},
+        {pActiveLow, 0, 1184, GameOutcome::LOSS}
+    };
+    CHECK_EQUAL((int)ArchiveStatus::OK,
+                (int)store->archiveGameWithRatings(g1, u1, {}, err));
+
+    /* 1. Pool 1 leaderboard("2P_3B") puts both ranked players (1216, 1184) ahead of unplayed 1200 (rank=0) */
+    std::vector<octi::LeaderboardEntry> lb;
+    CHECK_TRUE(store->leaderboard("2P_3B", 10, lb));
+    CHECK_EQUAL(3, (int)lb.size());
+    STRCMP_EQUAL("Active1216", lb[0].handle.c_str());
+    CHECK_EQUAL(1, lb[0].rank);
+    CHECK_EQUAL(1, lb[0].ladderGames);
+    STRCMP_EQUAL("Active1184", lb[1].handle.c_str());
+    CHECK_EQUAL(2, lb[1].rank);
+    CHECK_EQUAL(1, lb[1].ladderGames);
+    STRCMP_EQUAL("Unplayed1200", lb[2].handle.c_str());
+    CHECK_EQUAL(0, lb[2].rank);
+    CHECK_EQUAL(0, lb[2].ladderGames);
+    CHECK_EQUAL(1200, lb[2].elo);
+
+    /* 2. listUsers DESC and ASC both keep ranked players ahead of 0-game 1200 */
+    octi::UserDirectoryFilter uf;
+    uf.sortField = "elo_2p_3b";
+    uf.sortAsc = false;
+    std::vector<octi::UserDirectoryEntry> usersDesc;
+    CHECK_TRUE(store->listUsers(uf, usersDesc, nullptr));
+    CHECK_EQUAL(3, (int)usersDesc.size());
+    STRCMP_EQUAL("Active1216", usersDesc[0].profile.handle.c_str());
+    STRCMP_EQUAL("Active1184", usersDesc[1].profile.handle.c_str());
+    STRCMP_EQUAL("Unplayed1200", usersDesc[2].profile.handle.c_str());
+    CHECK_EQUAL(1, usersDesc[0].profile.games2p3b);
+    CHECK_EQUAL(1, usersDesc[1].profile.games2p3b);
+    CHECK_EQUAL(0, usersDesc[2].profile.games2p3b);
+
+    uf.sortAsc = true;
+    std::vector<octi::UserDirectoryEntry> usersAsc;
+    CHECK_TRUE(store->listUsers(uf, usersAsc, nullptr));
+    CHECK_EQUAL(3, (int)usersAsc.size());
+    STRCMP_EQUAL("Active1184", usersAsc[0].profile.handle.c_str());
+    STRCMP_EQUAL("Active1216", usersAsc[1].profile.handle.c_str());
+    STRCMP_EQUAL("Unplayed1200", usersAsc[2].profile.handle.c_str());
+}
+
+TEST(AccountStoreTest, RecomputeAllRatingsAndPurgeArchivedGameReconciliation)
+{
+    int64_t h1 = newPlayer("g-rc-h1", "RecompH1");
+    int64_t h2 = newPlayer("g-rc-h2", "RecompH2");
+
+    CreateRobotResult b1aRes = store->createRobot(h1, "RecompBot1A", "Owner1 Bot A");
+    CreateRobotResult b1bRes = store->createRobot(h1, "RecompBot1B", "Owner1 Bot B");
+    CreateRobotResult b2Res = store->createRobot(h2, "RecompBot2", "Owner2 Bot");
+    CHECK_EQUAL((int)octi::RobotStatus::OK, (int)b1aRes.status);
+    CHECK_EQUAL((int)octi::RobotStatus::OK, (int)b1bRes.status);
+    CHECK_EQUAL((int)octi::RobotStatus::OK, (int)b2Res.status);
+    int64_t b1a = b1aRes.robot.robotId;
+    int64_t b1b = b1bRes.robot.robotId;
+    int64_t b2 = b2Res.robot.robotId;
+
+    std::string err;
+    int64_t tBase = clockNow - 500000; /* Well in the past relative to wall clock */
+
+    /* 1. Pool 1 2P_3B rated game (h1 beats h2 at tBase + 100) */
+    GameRecord gP1 = record("g-rc-pool1-3b", tBase + 100, h1, h2, "2P");
+    gP1.gameBases = 3;
+    gP1.rated = 1;
+    gP1.eloPool = 0; /* Simulate legacy/unrecomputed row */
+    gP1.plyCount = 12;
+    gP1.result = "P1_WIN";
+    gP1.winnerSeat = 1;
+    gP1.winner = "A";
+    CHECK_EQUAL((int)ArchiveStatus::OK, (int)store->archiveGame(gP1, err));
+
+    /* 2. Early resignation (< 8 plies) with rated = 1 -> must stay eloPool = 0 */
+    GameRecord gEarly = record("g-rc-early-resign", tBase + 200, h1, h2, "2P");
+    gEarly.gameBases = 3;
+    gEarly.rated = 1;
+    gEarly.eloPool = 1; /* Even if previously marked 1, recompute resets and skips < 8 ply resignation */
+    gEarly.status = "RESIGNED";
+    gEarly.termination = "RESIGNATION";
+    gEarly.plyCount = 6;
+    gEarly.result = "P2_WIN";
+    gEarly.winnerSeat = 2;
+    gEarly.winner = "B";
+    CHECK_EQUAL((int)ArchiveStatus::OK, (int)store->archiveGame(gEarly, err));
+
+    /* 3. Human-vs-Bot (h1 vs b2 on 2P_1B): 5 games within 24h -> ALL 5 rated (K = 32, unlimited!) */
+    for (int i = 0; i < 5; ++i) {
+        GameRecord gHB = record("g-rc-hb-" + std::to_string(i), tBase + 300 + i * 60, h1, 0, "2P");
+        gHB.gameBases = 1;
+        gHB.p2RobotId = b2;
+        gHB.p2Handle = b2Res.robot.robotName;
+        gHB.rated = 1;
+        gHB.eloPool = 0;
+        gHB.plyCount = 10;
+        gHB.result = "P1_WIN";
+        gHB.winnerSeat = 1;
+        gHB.winner = "A";
+        CHECK_EQUAL((int)ArchiveStatus::OK, (int)store->archiveGame(gHB, err));
+    }
+
+    /* 4. Same-owner Bot-vs-Bot (b1a vs b1b on OFK): K = 16 */
+    GameRecord gSameOwner = record("g-rc-bb-same", tBase + 1000, 0, 0, "OFK");
+    gSameOwner.gameBases = 1;
+    gSameOwner.p1RobotId = b1a;
+    gSameOwner.p1Handle = b1aRes.robot.robotName;
+    gSameOwner.p2RobotId = b1b;
+    gSameOwner.p2Handle = b1bRes.robot.robotName;
+    gSameOwner.rated = 1;
+    gSameOwner.eloPool = 0;
+    gSameOwner.plyCount = 10;
+    gSameOwner.result = "P1_WIN";
+    gSameOwner.winnerSeat = 1;
+    gSameOwner.winner = "A";
+    CHECK_EQUAL((int)ArchiveStatus::OK, (int)store->archiveGame(gSameOwner, err));
+
+    /* 5. Cross-owner Bot-vs-Bot (b1a vs b2 on 2P_3B): 5 games within 86400s + 1 game at +86401s */
+    for (int i = 0; i < 5; ++i) {
+        bool swap = (i % 2 == 1);
+        GameRecord gBB = record("g-rc-bb-" + std::to_string(i), tBase + 2000 + i * 100, 0, 0, "2P");
+        gBB.gameBases = 3;
+        gBB.p1RobotId = swap ? b2 : b1a;
+        gBB.p1Handle = swap ? b2Res.robot.robotName : b1aRes.robot.robotName;
+        gBB.p2RobotId = swap ? b1a : b2;
+        gBB.p2Handle = swap ? b1aRes.robot.robotName : b2Res.robot.robotName;
+        gBB.rated = 1;
+        gBB.eloPool = 0;
+        gBB.plyCount = 12;
+        /* b1a always wins */
+        gBB.result = swap ? "P2_WIN" : "P1_WIN";
+        gBB.winnerSeat = swap ? 2 : 1;
+        gBB.winner = swap ? "B" : "A";
+        CHECK_EQUAL((int)ArchiveStatus::OK, (int)store->archiveGame(gBB, err));
+    }
+    GameRecord gBBAfterWindow = record("g-rc-bb-after-24h", tBase + 2400 + 86401, 0, 0, "2P");
+    gBBAfterWindow.gameBases = 3;
+    gBBAfterWindow.p1RobotId = b1a;
+    gBBAfterWindow.p1Handle = b1aRes.robot.robotName;
+    gBBAfterWindow.p2RobotId = b2;
+    gBBAfterWindow.p2Handle = b2Res.robot.robotName;
+    gBBAfterWindow.rated = 1;
+    gBBAfterWindow.eloPool = 0;
+    gBBAfterWindow.plyCount = 12;
+    gBBAfterWindow.result = "P1_WIN";
+    gBBAfterWindow.winnerSeat = 1;
+    gBBAfterWindow.winner = "A";
+    CHECK_EQUAL((int)ArchiveStatus::OK, (int)store->archiveGame(gBBAfterWindow, err));
+
+    octi::RecomputeRatingsResult rRes;
+    CHECK_TRUE_TEXT(store->recomputeAllRatings(rRes, err), err.c_str());
+    /* Scanned: 1 (gP1) + 1 (gEarly) + 5 (gHB) + 1 (gSameOwner) + 6 (gBB) = 14 */
+    CHECK_EQUAL(14, rRes.gamesScanned);
+    CHECK_EQUAL(1, rRes.pool1GamesRated);
+    /* Pool 2 rated: 5 (gHB) + 1 (gSameOwner) + 4 (first 4 gBB) + 1 (gBBAfterWindow) = 11 */
+    CHECK_EQUAL(11, rRes.pool2GamesRated);
+    CHECK_EQUAL(2, rRes.playersUpdated);
+    CHECK_EQUAL(3, rRes.robotsUpdated);
+
+    /* Verify early resignation and 5th Bot-vs-Bot game within 24h have eloPool == 0 */
+    GameRecord chkEarly, chkBB3, chkBB4, chkBBAfter;
+    CHECK_TRUE(store->getArchivedGame("g-rc-early-resign", chkEarly));
+    CHECK_EQUAL(0, chkEarly.eloPool);
+    CHECK_TRUE(store->getArchivedGame("g-rc-bb-3", chkBB3));
+    CHECK_EQUAL(2, chkBB3.eloPool);
+    CHECK_TRUE(store->getArchivedGame("g-rc-bb-4", chkBB4));
+    CHECK_EQUAL(0, chkBB4.eloPool);
+    CHECK_TRUE(store->getArchivedGame("g-rc-bb-after-24h", chkBBAfter));
+    CHECK_EQUAL(2, chkBBAfter.eloPool);
+
+    /* Verify Pool 1 Elo & elo_2p mirror + Same-Owner K=16 on OFK */
+    PlayerProfile pH1, pH2;
+    CHECK_TRUE(store->getProfileById(h1, pH1));
+    CHECK_TRUE(store->getProfileById(h2, pH2));
+    CHECK_EQUAL(1216, pH1.elo2p3b);
+    CHECK_EQUAL(1216, pH1.elo2p);
+    CHECK_EQUAL(1, pH1.games2p3b);
+    CHECK_EQUAL(1, pH1.gamesPlayed);
+    CHECK_EQUAL(5, pH1.arenaGames2p1b);
+    CHECK_EQUAL(5, pH1.arenaGamesPlayed);
+    CHECK_EQUAL(1184, pH2.elo2p3b);
+    CHECK_EQUAL(1184, pH2.elo2p);
+
+    RobotRecord rB1a, rB1b;
+    CHECK_TRUE(store->getRobotById(b1a, rB1a));
+    CHECK_TRUE(store->getRobotById(b1b, rB1b));
+    CHECK_EQUAL(1208, rB1a.eloOfk);
+    CHECK_EQUAL(1192, rB1b.eloOfk);
+    CHECK_EQUAL(1, rB1a.gamesOfk);
+    CHECK_EQUAL(5, rB1a.games2p3b);
+    CHECK_EQUAL(7, rB1a.gamesPlayed); /* 1 OFK + 6 2P_3B (5 rated + 1 capped) */
+
+    /* Purging g-rc-bb-0 promotes g-rc-bb-4 into the 4/24h rated window on replay! */
+    CHECK_TRUE_TEXT(store->purgeArchivedGame("g-rc-bb-0", err), err.c_str());
+    CHECK_TRUE(store->getArchivedGame("g-rc-bb-4", chkBB4));
+    CHECK_EQUAL(2, chkBB4.eloPool);
+    CHECK_TRUE(store->getRobotById(b1a, rB1a));
+    CHECK_EQUAL(6, rB1a.gamesPlayed);
+    CHECK_EQUAL(5, rB1a.games2p3b);
+
+    /* Purging g-rc-pool1-3b resets Pool 1 Elos back to 1200 and games_played to 0 */
+    CHECK_TRUE_TEXT(store->purgeArchivedGame("g-rc-pool1-3b", err), err.c_str());
+    CHECK_TRUE(store->getProfileById(h1, pH1));
+    CHECK_EQUAL(1200, pH1.elo2p3b);
+    CHECK_EQUAL(1200, pH1.elo2p);
+    CHECK_EQUAL(0, pH1.games2p3b);
+    CHECK_EQUAL(0, pH1.gamesPlayed);
 }
 
 int main(int argc, char **argv)

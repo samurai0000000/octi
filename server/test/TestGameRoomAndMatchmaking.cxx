@@ -4586,7 +4586,7 @@ TEST(GameRoomManagerTest, DualPoolRoutingFairnessGuardsAndUnratedVariantClamping
         CHECK_EQUAL(1, b3Rec.gamesPlayed);
     }
 
-    /* 4. Same-Owner Human-vs-Own-Robot -> eloPool = 0 (unrated), robot W/L/D = 1 */
+    /* 4. Same-Owner Human-vs-Own-Robot -> Pool 2 rated with K = 32 (1216 / 1184), robot W/L/D = 1 */
     {
         GameTableConfig hc = cfg(GAME_MODE_2);
         hc.bases = GAME_BASES_1;
@@ -4601,16 +4601,17 @@ TEST(GameRoomManagerTest, DualPoolRoutingFairnessGuardsAndUnratedVariantClamping
         }
         GameRecord recOwn = archived(hr.roomId);
         CHECK_EQUAL(1, recOwn.rated);
-        CHECK_EQUAL(0, recOwn.eloPool);
-        CHECK_EQUAL(1200, profile(p[0]).arenaElo2p1b);
+        CHECK_EQUAL(2, recOwn.eloPool);
+        CHECK_EQUAL(1216, profile(p[0]).arenaElo2p1b);
+        CHECK_EQUAL(2, profile(p[0]).arenaGamesPlayed);
         RobotRecord b0a;
         CHECK_TRUE(store->getRobotById(botP0A.robot.robotId, b0a));
-        CHECK_EQUAL(1200, b0a.elo2p1b);
+        CHECK_EQUAL(1184, b0a.elo2p1b);
         CHECK_EQUAL(1, b0a.gamesPlayed);
         CHECK_EQUAL(1, b0a.losses);
     }
 
-    /* 5. Same-Owner Bot-vs-Bot -> Pool 2 rated with K = 16 (1208 / 1192) + single-tx W/L/D */
+    /* 5. Same-Owner Bot-vs-Bot -> Pool 2 rated with K = 16 (1184 -> 1192 / 1200 -> 1192) + single-tx W/L/D */
     {
         GameTableConfig bc = cfg(GAME_MODE_2);
         bc.bases = GAME_BASES_1;
@@ -4629,66 +4630,81 @@ TEST(GameRoomManagerTest, DualPoolRoutingFairnessGuardsAndUnratedVariantClamping
         RobotRecord b0a, b0b;
         CHECK_TRUE(store->getRobotById(botP0A.robot.robotId, b0a));
         CHECK_TRUE(store->getRobotById(botP0B.robot.robotId, b0b));
-        CHECK_EQUAL(1208, b0a.elo2p1b);
+        CHECK_EQUAL(1192, b0a.elo2p1b);
         CHECK_EQUAL(1192, b0b.elo2p1b);
         CHECK_EQUAL(2, b0a.gamesPlayed);
         CHECK_EQUAL(1, b0b.gamesPlayed);
     }
 
-    /* 6. Pairwise 4 rated games / 24h rolling cap (p[2] vs botP3 on OFK) */
+    /* 6. Human-vs-Bot unlimited + Bot-vs-Bot 4 rated games / 24h rolling cap per unordered bot pair */
     {
-        auto playOfkVsBot = [&](int64_t humanActor, bool swapSeats) -> GameRecord {
+        auto playOfkDuel = [&](int64_t actorA, int64_t actorB, bool swapSeats) -> GameRecord {
             GameTableConfig oc = cfg(GAME_MODE_OFK);
             oc.rated = true;
             oc.allowRobots = true;
-            if (swapSeats) {
-                RoomResult bHost = mgr->createTable(actBot3, oc);
-                CHECK_TRUE_TEXT(bHost.ok(), bHost.message.c_str());
-                EXPECT_OK(mgr->joinTable(bHost.roomId, humanActor, 2, ""));
-                for (size_t i = 0; i < kOfkWin.size(); ++i) {
-                    int64_t mover = (i % 2 == 0) ? actBot3 : humanActor;
-                    EXPECT_OK(mgr->submitMove(bHost.roomId, mover, kOfkWin[i]));
-                }
-                return archived(bHost.roomId);
-            }
-            RoomResult orc = mgr->createTable(humanActor, oc);
+            int64_t s1 = swapSeats ? actorB : actorA;
+            int64_t s2 = swapSeats ? actorA : actorB;
+            RoomResult orc = mgr->createTable(s1, oc);
             CHECK_TRUE_TEXT(orc.ok(), orc.message.c_str());
-            EXPECT_OK(mgr->joinTable(orc.roomId, actBot3, 2, ""));
+            EXPECT_OK(mgr->joinTable(orc.roomId, s2, 2, ""));
             for (size_t i = 0; i < kOfkWin.size(); ++i) {
-                int64_t mover = (i % 2 == 0) ? humanActor : actBot3;
+                int64_t mover = (i % 2 == 0) ? s1 : s2;
                 EXPECT_OK(mgr->submitMove(orc.roomId, mover, kOfkWin[i]));
             }
             return archived(orc.roomId);
         };
 
+        /* 6a. Human-vs-Bot (p[2] vs botP3 on OFK): 5th+ game within 24h stays rated (eloPool = 2) */
         for (int gIdx = 0; gIdx < 4; ++gIdx) {
             wall += 60;
-            GameRecord gr = playOfkVsBot(p[2], (gIdx % 2) == 1);
+            GameRecord gr = playOfkDuel(p[2], actBot3, (gIdx % 2) == 1);
             CHECK_EQUAL(2, gr.eloPool);
         }
-        int eloAfter4 = profile(p[2]).arenaEloOfk;
-        RobotRecord b3After4;
-        CHECK_TRUE(store->getRobotById(botP3.robot.robotId, b3After4));
+        int humanEloAfter4 = profile(p[2]).arenaEloOfk;
+        RobotRecord b3AfterHuman4;
+        CHECK_TRUE(store->getRobotById(botP3.robot.robotId, b3AfterHuman4));
 
-        /* 5th game within 24h between same pair -> eloPool = 0 (capped!), W/L/D still increments */
         wall += 60;
-        GameRecord gr5 = playOfkVsBot(p[2], true);
-        CHECK_EQUAL(1, gr5.rated);
-        CHECK_EQUAL(0, gr5.eloPool);
-        CHECK_EQUAL(eloAfter4, profile(p[2]).arenaEloOfk);
-        RobotRecord b3After5;
-        CHECK_TRUE(store->getRobotById(botP3.robot.robotId, b3After5));
-        CHECK_EQUAL(b3After4.eloOfk, b3After5.eloOfk);
-        CHECK_EQUAL(b3After4.gamesPlayed + 1, b3After5.gamesPlayed);
+        GameRecord grHuman5 = playOfkDuel(p[2], actBot3, false);
+        CHECK_EQUAL(1, grHuman5.rated);
+        CHECK_EQUAL(2, grHuman5.eloPool);
+        CHECK_TRUE(profile(p[2]).arenaEloOfk > humanEloAfter4);
+        RobotRecord b3AfterHuman5;
+        CHECK_TRUE(store->getRobotById(botP3.robot.robotId, b3AfterHuman5));
+        CHECK_TRUE(b3AfterHuman5.eloOfk < b3AfterHuman4.eloOfk);
+        CHECK_EQUAL(b3AfterHuman4.gamesPlayed + 1, b3AfterHuman5.gamesPlayed);
 
-        /* Different opponent p[4] vs botP3 is NOT capped -> eloPool = 2 */
+        /* 6b. Bot-vs-Bot (actBot0A vs actBot3 on OFK): 4 rated games / 24h per unordered bot pair */
+        for (int gIdx = 0; gIdx < 4; ++gIdx) {
+            wall += 60;
+            GameRecord gr = playOfkDuel(actBot0A, actBot3, (gIdx % 2) == 1);
+            CHECK_EQUAL(2, gr.eloPool);
+        }
+        RobotRecord b0aAfter4, b3AfterBot4;
+        CHECK_TRUE(store->getRobotById(botP0A.robot.robotId, b0aAfter4));
+        CHECK_TRUE(store->getRobotById(botP3.robot.robotId, b3AfterBot4));
+
+        /* 5th game within 24h between same bot pair (seat-swapped) -> eloPool = 0 (capped!), W/L/D still increments */
         wall += 60;
-        GameRecord grOther = playOfkVsBot(p[4], false);
-        CHECK_EQUAL(2, grOther.eloPool);
+        GameRecord grBot5 = playOfkDuel(actBot0A, actBot3, true);
+        CHECK_EQUAL(1, grBot5.rated);
+        CHECK_EQUAL(0, grBot5.eloPool);
+        RobotRecord b0aAfter5, b3AfterBot5;
+        CHECK_TRUE(store->getRobotById(botP0A.robot.robotId, b0aAfter5));
+        CHECK_TRUE(store->getRobotById(botP3.robot.robotId, b3AfterBot5));
+        CHECK_EQUAL(b0aAfter4.eloOfk, b0aAfter5.eloOfk);
+        CHECK_EQUAL(b3AfterBot4.eloOfk, b3AfterBot5.eloOfk);
+        CHECK_EQUAL(b0aAfter4.gamesPlayed + 1, b0aAfter5.gamesPlayed);
+        CHECK_EQUAL(b3AfterBot4.gamesPlayed + 1, b3AfterBot5.gamesPlayed);
 
-        /* Advance past 24h window -> p[2] vs botP3 is rated again! */
+        /* Distinct 3rd bot (actBot0B vs actBot3) is NOT capped -> eloPool = 2 */
+        wall += 60;
+        GameRecord grOtherBot = playOfkDuel(actBot0B, actBot3, false);
+        CHECK_EQUAL(2, grOtherBot.eloPool);
+
+        /* Advance past 24h window -> actBot0A vs actBot3 is rated again! */
         wall += 86401;
-        GameRecord grAfterWindow = playOfkVsBot(p[2], false);
+        GameRecord grAfterWindow = playOfkDuel(actBot0A, actBot3, false);
         CHECK_EQUAL(2, grAfterWindow.eloPool);
     }
 }

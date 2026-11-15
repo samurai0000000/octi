@@ -5,6 +5,7 @@
  */
 
 #include "AccountStore.hxx"
+#include "EloCalculator.hxx"
 #include "OctiDefs.hxx"
 
 #include <nlohmann/json.hpp>
@@ -25,6 +26,7 @@
 #include <cmath>
 #include <csetjmp>
 #include <cstring>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <set>
@@ -732,6 +734,129 @@ void readProfile(const Stmt &s, PlayerProfile &p)
     p.arenaDraws = static_cast<int>(s.colInt(26));
 }
 
+void populatePlayerLadderCountsLocked(sqlite3 *db, PlayerProfile &p)
+{
+    p.games2p3b = 0;
+    p.games2p1b = 0;
+    p.gamesOfk = 0;
+    p.arenaGames2p3b = 0;
+    p.arenaGames2p1b = 0;
+    p.arenaGamesOfk = 0;
+    if (!db || p.playerId <= 0) {
+        return;
+    }
+    Stmt s(db,
+           "SELECT"
+           " COALESCE(SUM(CASE WHEN g.elo_pool = 1 AND g.super_prongs = 0 AND g.edgeless = 0"
+           "                   AND COALESCE(g.p3_player_id, 0) = 0 AND COALESCE(g.p4_player_id, 0) = 0"
+           "                   AND COALESCE(g.p3_robot_id, 0) = 0 AND COALESCE(g.p4_robot_id, 0) = 0"
+           "                   AND UPPER(g.game_mode) = '2P' AND g.game_bases = 3 THEN 1 ELSE 0 END), 0),"
+           " COALESCE(SUM(CASE WHEN g.elo_pool = 1 AND g.super_prongs = 0 AND g.edgeless = 0"
+           "                   AND COALESCE(g.p3_player_id, 0) = 0 AND COALESCE(g.p4_player_id, 0) = 0"
+           "                   AND COALESCE(g.p3_robot_id, 0) = 0 AND COALESCE(g.p4_robot_id, 0) = 0"
+           "                   AND UPPER(g.game_mode) = '2P' AND g.game_bases = 1 THEN 1 ELSE 0 END), 0),"
+           " COALESCE(SUM(CASE WHEN g.elo_pool = 1 AND g.super_prongs = 0 AND g.edgeless = 0"
+           "                   AND COALESCE(g.p3_player_id, 0) = 0 AND COALESCE(g.p4_player_id, 0) = 0"
+           "                   AND COALESCE(g.p3_robot_id, 0) = 0 AND COALESCE(g.p4_robot_id, 0) = 0"
+           "                   AND UPPER(g.game_mode) = 'OFK' THEN 1 ELSE 0 END), 0),"
+           " COALESCE(SUM(CASE WHEN g.elo_pool = 2 AND g.super_prongs = 0 AND g.edgeless = 0"
+           "                   AND COALESCE(g.p3_player_id, 0) = 0 AND COALESCE(g.p4_player_id, 0) = 0"
+           "                   AND COALESCE(g.p3_robot_id, 0) = 0 AND COALESCE(g.p4_robot_id, 0) = 0"
+           "                   AND UPPER(g.game_mode) = '2P' AND g.game_bases = 3 THEN 1 ELSE 0 END), 0),"
+           " COALESCE(SUM(CASE WHEN g.elo_pool = 2 AND g.super_prongs = 0 AND g.edgeless = 0"
+           "                   AND COALESCE(g.p3_player_id, 0) = 0 AND COALESCE(g.p4_player_id, 0) = 0"
+           "                   AND COALESCE(g.p3_robot_id, 0) = 0 AND COALESCE(g.p4_robot_id, 0) = 0"
+           "                   AND UPPER(g.game_mode) = '2P' AND g.game_bases = 1 THEN 1 ELSE 0 END), 0),"
+           " COALESCE(SUM(CASE WHEN g.elo_pool = 2 AND g.super_prongs = 0 AND g.edgeless = 0"
+           "                   AND COALESCE(g.p3_player_id, 0) = 0 AND COALESCE(g.p4_player_id, 0) = 0"
+           "                   AND COALESCE(g.p3_robot_id, 0) = 0 AND COALESCE(g.p4_robot_id, 0) = 0"
+           "                   AND UPPER(g.game_mode) = 'OFK' THEN 1 ELSE 0 END), 0)"
+           " FROM games g"
+           " WHERE g.source = 'online'"
+           "   AND g.elo_pool IN (1, 2)"
+           "   AND ((g.p1_player_id = ?1 AND COALESCE(g.p1_robot_id, 0) = 0)"
+           "     OR (g.p2_player_id = ?1 AND COALESCE(g.p2_robot_id, 0) = 0))");
+    s.bindInt(1, p.playerId);
+    int raw1_3b = 0;
+    int raw1_1b = 0;
+    int raw1_ofk = 0;
+    int raw2_3b = 0;
+    int raw2_1b = 0;
+    int raw2_ofk = 0;
+    if (s.step() == SQLITE_ROW) {
+        raw1_3b = static_cast<int>(s.colInt(0));
+        raw1_1b = static_cast<int>(s.colInt(1));
+        raw1_ofk = static_cast<int>(s.colInt(2));
+        raw2_3b = static_cast<int>(s.colInt(3));
+        raw2_1b = static_cast<int>(s.colInt(4));
+        raw2_ofk = static_cast<int>(s.colInt(5));
+    }
+    if (raw1_3b + raw1_1b + raw1_ofk == 0) {
+        p.games2p3b = (p.elo2p3b != 1200) ? std::max(1, p.gamesPlayed) : 0;
+        p.games2p1b = (p.elo2p1b != 1200) ? std::max(1, p.gamesPlayed) : 0;
+        p.gamesOfk = (p.eloOfk != 1200) ? std::max(1, p.gamesPlayed) : 0;
+    } else {
+        p.games2p3b = raw1_3b;
+        p.games2p1b = raw1_1b;
+        p.gamesOfk = raw1_ofk;
+    }
+    if (raw2_3b + raw2_1b + raw2_ofk == 0) {
+        p.arenaGames2p3b = (p.arenaElo2p3b != 1200) ? 1 : 0;
+        p.arenaGames2p1b = (p.arenaElo2p1b != 1200) ? 1 : 0;
+        p.arenaGamesOfk = (p.arenaEloOfk != 1200) ? 1 : 0;
+    } else {
+        p.arenaGames2p3b = raw2_3b;
+        p.arenaGames2p1b = raw2_1b;
+        p.arenaGamesOfk = raw2_ofk;
+    }
+}
+
+void populateRobotLadderCountsLocked(sqlite3 *db, RobotRecord &r)
+{
+    r.games2p3b = 0;
+    r.games2p1b = 0;
+    r.gamesOfk = 0;
+    if (!db || r.robotId <= 0) {
+        return;
+    }
+    Stmt s(db,
+           "SELECT"
+           " COALESCE(SUM(CASE WHEN g.super_prongs = 0 AND g.edgeless = 0"
+           "                   AND COALESCE(g.p3_player_id, 0) = 0 AND COALESCE(g.p4_player_id, 0) = 0"
+           "                   AND COALESCE(g.p3_robot_id, 0) = 0 AND COALESCE(g.p4_robot_id, 0) = 0"
+           "                   AND UPPER(g.game_mode) = '2P' AND g.game_bases = 3 THEN 1 ELSE 0 END), 0),"
+           " COALESCE(SUM(CASE WHEN g.super_prongs = 0 AND g.edgeless = 0"
+           "                   AND COALESCE(g.p3_player_id, 0) = 0 AND COALESCE(g.p4_player_id, 0) = 0"
+           "                   AND COALESCE(g.p3_robot_id, 0) = 0 AND COALESCE(g.p4_robot_id, 0) = 0"
+           "                   AND UPPER(g.game_mode) = '2P' AND g.game_bases = 1 THEN 1 ELSE 0 END), 0),"
+           " COALESCE(SUM(CASE WHEN g.super_prongs = 0 AND g.edgeless = 0"
+           "                   AND COALESCE(g.p3_player_id, 0) = 0 AND COALESCE(g.p4_player_id, 0) = 0"
+           "                   AND COALESCE(g.p3_robot_id, 0) = 0 AND COALESCE(g.p4_robot_id, 0) = 0"
+           "                   AND UPPER(g.game_mode) = 'OFK' THEN 1 ELSE 0 END), 0)"
+           " FROM games g"
+           " WHERE g.source = 'online'"
+           "   AND g.elo_pool = 2"
+           "   AND (g.p1_robot_id = ?1 OR g.p2_robot_id = ?1)");
+    s.bindInt(1, r.robotId);
+    int raw3b = 0;
+    int raw1b = 0;
+    int rawOfk = 0;
+    if (s.step() == SQLITE_ROW) {
+        raw3b = static_cast<int>(s.colInt(0));
+        raw1b = static_cast<int>(s.colInt(1));
+        rawOfk = static_cast<int>(s.colInt(2));
+    }
+    if (raw3b + raw1b + rawOfk == 0) {
+        r.games2p3b = (r.elo2p3b != 1200) ? 1 : 0;
+        r.games2p1b = (r.elo2p1b != 1200) ? 1 : 0;
+        r.gamesOfk = (r.eloOfk != 1200) ? 1 : 0;
+    } else {
+        r.games2p3b = raw3b;
+        r.games2p1b = raw1b;
+        r.gamesOfk = rawOfk;
+    }
+}
+
 bool loadProfileById(sqlite3 *db, int64_t playerId, PlayerProfile &out)
 {
     std::string sql = std::string("SELECT ") + kProfileCols +
@@ -742,6 +867,7 @@ bool loadProfileById(sqlite3 *db, int64_t playerId, PlayerProfile &out)
         return false;
     }
     readProfile(s, out);
+    populatePlayerLadderCountsLocked(db, out);
     return true;
 }
 
@@ -1601,6 +1727,393 @@ void reconcileRobotStatsLocked(sqlite3 *db)
                 "     AND (g.result = 'DRAW' OR (g.winner_seat = 0 AND g.winner = 'NONE'))"
                 " );");
     execSql(db, "UPDATE robots SET losses = CASE WHEN games_played >= wins + draws THEN games_played - wins - draws ELSE 0 END;");
+}
+
+bool recomputeAllRatingsInTxLocked(sqlite3 *db,
+                                   RecomputeRatingsResult &outResult,
+                                   std::string &errorOut)
+{
+    outResult = RecomputeRatingsResult();
+    if (!db) {
+        errorOut = "db_closed";
+        return false;
+    }
+
+    reconcileRobotStatsLocked(db);
+
+    if (!execSql(db,
+                 "UPDATE players SET"
+                 " elo_2p = 1200, elo_2p_3b = 1200, elo_2p_1b = 1200,"
+                 " elo_4p = 1200, elo_ofk = 1200,"
+                 " games_played = 0, wins = 0, losses = 0, draws = 0,"
+                 " arena_elo_2p_3b = 1200, arena_elo_2p_1b = 1200, arena_elo_ofk = 1200,"
+                 " arena_games_played = 0, arena_wins = 0, arena_losses = 0, arena_draws = 0;")) {
+        errorOut = sqlite3_errmsg(db);
+        return false;
+    }
+    if (!execSql(db,
+                 "UPDATE robots SET"
+                 " elo_2p_3b = 1200, elo_2p_1b = 1200, elo_ofk = 1200,"
+                 " games_played = 0, wins = 0, losses = 0, draws = 0;")) {
+        errorOut = sqlite3_errmsg(db);
+        return false;
+    }
+    if (!execSql(db, "UPDATE games SET elo_pool = 0 WHERE elo_pool != 0;")) {
+        errorOut = sqlite3_errmsg(db);
+        return false;
+    }
+
+    struct ReplayPlayerState {
+        int elo2p3b = 1200;
+        int elo2p1b = 1200;
+        int eloOfk = 1200;
+        int games = 0;
+        int wins = 0;
+        int losses = 0;
+        int draws = 0;
+        int arenaElo2p3b = 1200;
+        int arenaElo2p1b = 1200;
+        int arenaEloOfk = 1200;
+        int arenaGames = 0;
+        int arenaWins = 0;
+        int arenaLosses = 0;
+        int arenaDraws = 0;
+    };
+    struct ReplayRobotState {
+        int64_t ownerPlayerId = 0;
+        int elo2p3b = 1200;
+        int elo2p1b = 1200;
+        int eloOfk = 1200;
+    };
+
+    std::map<int64_t, ReplayPlayerState> playersMap;
+    {
+        Stmt sp(db, "SELECT player_id FROM players");
+        while (sp.step() == SQLITE_ROW) {
+            playersMap[sp.colInt(0)] = ReplayPlayerState();
+        }
+    }
+
+    std::map<int64_t, ReplayRobotState> robotsMap;
+    {
+        Stmt sr(db, "SELECT robot_id, owner_player_id FROM robots");
+        while (sr.step() == SQLITE_ROW) {
+            ReplayRobotState rs;
+            rs.ownerPlayerId = sr.colInt(1);
+            robotsMap[sr.colInt(0)] = rs;
+        }
+    }
+
+    struct ScannedGameRow {
+        int64_t rowId = 0;
+        std::string gameMode;
+        int gameBases = 3;
+        bool superProngs = false;
+        bool edgeless = false;
+        std::string status;
+        std::string termination;
+        std::string result;
+        int winnerSeat = 0;
+        std::string winner;
+        int plyCount = 0;
+        int64_t p1 = 0;
+        int64_t p2 = 0;
+        int64_t p3 = 0;
+        int64_t p4 = 0;
+        int64_t r1 = 0;
+        int64_t r2 = 0;
+        int64_t r3 = 0;
+        int64_t r4 = 0;
+        int64_t startedAt = 0;
+        int64_t endedAt = 0;
+    };
+
+    std::vector<ScannedGameRow> rows;
+    {
+        Stmt sg(db,
+                "SELECT rowid, game_mode, game_bases, super_prongs, edgeless,"
+                " status, termination, result, winner_seat, winner, ply_count,"
+                " COALESCE(p1_player_id, 0), COALESCE(p2_player_id, 0),"
+                " COALESCE(p3_player_id, 0), COALESCE(p4_player_id, 0),"
+                " COALESCE(p1_robot_id, 0), COALESCE(p2_robot_id, 0),"
+                " COALESCE(p3_robot_id, 0), COALESCE(p4_robot_id, 0),"
+                " started_at, ended_at"
+                " FROM games"
+                " WHERE source = 'online' AND rated != 0"
+                " ORDER BY ended_at ASC, started_at ASC, rowid ASC");
+        while (sg.step() == SQLITE_ROW) {
+            ScannedGameRow g;
+            g.rowId = sg.colInt(0);
+            g.gameMode = sg.colText(1);
+            g.gameBases = static_cast<int>(sg.colInt(2));
+            g.superProngs = sg.colInt(3) != 0;
+            g.edgeless = sg.colInt(4) != 0;
+            g.status = sg.colText(5);
+            g.termination = sg.colText(6);
+            g.result = sg.colText(7);
+            g.winnerSeat = static_cast<int>(sg.colInt(8));
+            g.winner = sg.colText(9);
+            g.plyCount = static_cast<int>(sg.colInt(10));
+            g.p1 = sg.colInt(11);
+            g.p2 = sg.colInt(12);
+            g.p3 = sg.colInt(13);
+            g.p4 = sg.colInt(14);
+            g.r1 = sg.colInt(15);
+            g.r2 = sg.colInt(16);
+            g.r3 = sg.colInt(17);
+            g.r4 = sg.colInt(18);
+            g.startedAt = sg.colInt(19);
+            g.endedAt = sg.colInt(20);
+            rows.push_back(std::move(g));
+        }
+    }
+
+    std::map<std::pair<int64_t, int64_t>, std::deque<int64_t>> botPairRatedEndedAt;
+    std::vector<std::pair<int64_t, int>> gamePoolUpdates;
+
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const ScannedGameRow &g = rows[i];
+        ++outResult.gamesScanned;
+
+        std::string ladder = octiVariantCodeFromModeStr(
+            g.gameMode, g.gameBases, g.superProngs, g.edgeless);
+        if (ladder != "2P_3B" && ladder != "2P_1B" && ladder != "OFK") {
+            continue;
+        }
+        if (g.p3 != 0 || g.p4 != 0 || g.r3 != 0 || g.r4 != 0) {
+            continue;
+        }
+        const int64_t effP1 = (g.r1 > 0) ? 0 : g.p1;
+        const int64_t effP2 = (g.r2 > 0) ? 0 : g.p2;
+        if (((effP1 > 0) == (g.r1 > 0)) || ((effP2 > 0) == (g.r2 > 0))) {
+            continue;
+        }
+        if (g.r1 > 0) {
+            if (robotsMap.find(g.r1) == robotsMap.end()) {
+                continue;
+            }
+        } else {
+            if (playersMap.find(effP1) == playersMap.end()) {
+                continue;
+            }
+        }
+        if (g.r2 > 0) {
+            if (robotsMap.find(g.r2) == robotsMap.end()) {
+                continue;
+            }
+        } else {
+            if (playersMap.find(effP2) == playersMap.end()) {
+                continue;
+            }
+        }
+
+        if (g.status == "RESIGNED" && g.termination == "RESIGNATION" &&
+            g.plyCount < 8) {
+            continue;
+        }
+
+        EloOutcome outcome = EloOutcome::DRAW;
+        if (g.result == "DRAW" || (g.winnerSeat == 0 && g.winner == "NONE")) {
+            outcome = EloOutcome::DRAW;
+        } else if (g.result == "P1_WIN" || g.winnerSeat == 1 ||
+                   (g.winnerSeat == 0 && g.winner == "A")) {
+            outcome = EloOutcome::FIRST_WINS;
+        } else if (g.result == "P2_WIN" || g.winnerSeat == 2 ||
+                   (g.winnerSeat == 0 && g.winner == "B")) {
+            outcome = EloOutcome::SECOND_WINS;
+        } else {
+            continue;
+        }
+
+        if (g.r1 == 0 && g.r2 == 0) {
+            if (effP1 == effP2) {
+                continue;
+            }
+            ReplayPlayerState &ps1 = playersMap[effP1];
+            ReplayPlayerState &ps2 = playersMap[effP2];
+            int &elo1 = (ladder == "2P_1B")
+                            ? ps1.elo2p1b
+                            : ((ladder == "OFK") ? ps1.eloOfk : ps1.elo2p3b);
+            int &elo2 = (ladder == "2P_1B")
+                            ? ps2.elo2p1b
+                            : ((ladder == "OFK") ? ps2.eloOfk : ps2.elo2p3b);
+            EloCalculator::DuelUpdate up =
+                EloCalculator::updateDuel(elo1, elo2, outcome, 32);
+            elo1 = up.newRating1;
+            elo2 = up.newRating2;
+            ++ps1.games;
+            ++ps2.games;
+            if (outcome == EloOutcome::FIRST_WINS) {
+                ++ps1.wins;
+                ++ps2.losses;
+            } else if (outcome == EloOutcome::SECOND_WINS) {
+                ++ps1.losses;
+                ++ps2.wins;
+            } else {
+                ++ps1.draws;
+                ++ps2.draws;
+            }
+            gamePoolUpdates.push_back(std::make_pair(g.rowId, 1));
+            ++outResult.pool1GamesRated;
+        } else {
+            if (g.r1 > 0 && g.r2 > 0 && g.r1 == g.r2) {
+                continue;
+            }
+            int kFactor = 32;
+            if (g.r1 > 0 && g.r2 > 0) {
+                std::pair<int64_t, int64_t> pairKey(
+                    std::min(g.r1, g.r2), std::max(g.r1, g.r2));
+                std::deque<int64_t> &dq = botPairRatedEndedAt[pairKey];
+                const int64_t cutoff = g.endedAt - 86400;
+                while (!dq.empty() && dq.front() < cutoff) {
+                    dq.pop_front();
+                }
+                if (dq.size() >= 4) {
+                    continue;
+                }
+                dq.push_back(g.endedAt);
+                const ReplayRobotState &bs1 = robotsMap[g.r1];
+                const ReplayRobotState &bs2 = robotsMap[g.r2];
+                if (bs1.ownerPlayerId > 0 &&
+                    bs1.ownerPlayerId == bs2.ownerPlayerId) {
+                    kFactor = 16;
+                }
+            }
+
+            auto getArenaEloRef = [&](int64_t pid, int64_t rid) -> int & {
+                if (rid > 0) {
+                    ReplayRobotState &rs = robotsMap[rid];
+                    return (ladder == "2P_1B")
+                               ? rs.elo2p1b
+                               : ((ladder == "OFK") ? rs.eloOfk : rs.elo2p3b);
+                }
+                ReplayPlayerState &ps = playersMap[pid];
+                return (ladder == "2P_1B")
+                           ? ps.arenaElo2p1b
+                           : ((ladder == "OFK") ? ps.arenaEloOfk : ps.arenaElo2p3b);
+            };
+
+            int &elo1 = getArenaEloRef(effP1, g.r1);
+            int &elo2 = getArenaEloRef(effP2, g.r2);
+            EloCalculator::DuelUpdate up =
+                EloCalculator::updateDuel(elo1, elo2, outcome, kFactor);
+            elo1 = up.newRating1;
+            elo2 = up.newRating2;
+
+            if (g.r1 == 0) {
+                ReplayPlayerState &ps1 = playersMap[effP1];
+                ++ps1.arenaGames;
+                if (outcome == EloOutcome::FIRST_WINS) {
+                    ++ps1.arenaWins;
+                } else if (outcome == EloOutcome::SECOND_WINS) {
+                    ++ps1.arenaLosses;
+                } else {
+                    ++ps1.arenaDraws;
+                }
+            }
+            if (g.r2 == 0) {
+                ReplayPlayerState &ps2 = playersMap[effP2];
+                ++ps2.arenaGames;
+                if (outcome == EloOutcome::SECOND_WINS) {
+                    ++ps2.arenaWins;
+                } else if (outcome == EloOutcome::FIRST_WINS) {
+                    ++ps2.arenaLosses;
+                } else {
+                    ++ps2.arenaDraws;
+                }
+            }
+
+            gamePoolUpdates.push_back(std::make_pair(g.rowId, 2));
+            ++outResult.pool2GamesRated;
+        }
+    }
+
+    for (size_t i = 0; i < gamePoolUpdates.size(); ++i) {
+        Stmt ug(db, "UPDATE games SET elo_pool = ?1 WHERE rowid = ?2");
+        ug.bindInt(1, gamePoolUpdates[i].second);
+        ug.bindInt(2, gamePoolUpdates[i].first);
+        if (ug.step() != SQLITE_DONE) {
+            errorOut = sqlite3_errmsg(db);
+            return false;
+        }
+    }
+
+    for (std::map<int64_t, ReplayPlayerState>::const_iterator it =
+             playersMap.begin();
+         it != playersMap.end(); ++it) {
+        const int64_t pid = it->first;
+        const ReplayPlayerState &ps = it->second;
+        const bool modified =
+            (ps.games > 0 || ps.arenaGames > 0 || ps.elo2p3b != 1200 ||
+             ps.elo2p1b != 1200 || ps.eloOfk != 1200 ||
+             ps.arenaElo2p3b != 1200 || ps.arenaElo2p1b != 1200 ||
+             ps.arenaEloOfk != 1200);
+        if (!modified) {
+            continue;
+        }
+        Stmt up(db,
+                "UPDATE players SET"
+                " elo_2p = ?1, elo_2p_3b = ?1, elo_2p_1b = ?2, elo_ofk = ?3,"
+                " games_played = ?4, wins = ?5, losses = ?6, draws = ?7,"
+                " arena_elo_2p_3b = ?8, arena_elo_2p_1b = ?9, arena_elo_ofk = ?10,"
+                " arena_games_played = ?11, arena_wins = ?12, arena_losses = ?13, arena_draws = ?14"
+                " WHERE player_id = ?15");
+        up.bindInt(1, ps.elo2p3b);
+        up.bindInt(2, ps.elo2p1b);
+        up.bindInt(3, ps.eloOfk);
+        up.bindInt(4, ps.games);
+        up.bindInt(5, ps.wins);
+        up.bindInt(6, ps.losses);
+        up.bindInt(7, ps.draws);
+        up.bindInt(8, ps.arenaElo2p3b);
+        up.bindInt(9, ps.arenaElo2p1b);
+        up.bindInt(10, ps.arenaEloOfk);
+        up.bindInt(11, ps.arenaGames);
+        up.bindInt(12, ps.arenaWins);
+        up.bindInt(13, ps.arenaLosses);
+        up.bindInt(14, ps.arenaDraws);
+        up.bindInt(15, pid);
+        if (up.step() != SQLITE_DONE) {
+            errorOut = sqlite3_errmsg(db);
+            return false;
+        }
+        ++outResult.playersUpdated;
+    }
+
+    for (std::map<int64_t, ReplayRobotState>::const_iterator it =
+             robotsMap.begin();
+         it != robotsMap.end(); ++it) {
+        const int64_t rid = it->first;
+        const ReplayRobotState &rs = it->second;
+        if (rs.elo2p3b == 1200 && rs.elo2p1b == 1200 && rs.eloOfk == 1200) {
+            continue;
+        }
+        Stmt ur(db,
+                "UPDATE robots SET elo_2p_3b = ?1, elo_2p_1b = ?2, elo_ofk = ?3"
+                " WHERE robot_id = ?4");
+        ur.bindInt(1, rs.elo2p3b);
+        ur.bindInt(2, rs.elo2p1b);
+        ur.bindInt(3, rs.eloOfk);
+        ur.bindInt(4, rid);
+        if (ur.step() != SQLITE_DONE) {
+            errorOut = sqlite3_errmsg(db);
+            return false;
+        }
+    }
+
+    reconcileRobotStatsLocked(db);
+
+    {
+        Stmt rc(db,
+                "SELECT COUNT(*) FROM robots"
+                " WHERE games_played > 0 OR elo_2p_3b != 1200"
+                "    OR elo_2p_1b != 1200 OR elo_ofk != 1200");
+        if (rc.step() == SQLITE_ROW) {
+            outResult.robotsUpdated = static_cast<int>(rc.colInt(0));
+        }
+    }
+
+    return true;
 }
 
 } // namespace
@@ -2825,6 +3338,7 @@ bool AccountStore::getProfileByUuid(const std::string &uuid, PlayerProfile &out)
         return false;
     }
     readProfile(s, out);
+    populatePlayerLadderCountsLocked(_db, out);
     out.isAdmin = isPlayerAdminLocked(out.playerId);
     return true;
 }
@@ -2843,6 +3357,7 @@ bool AccountStore::getProfileByHandle(const std::string &handle, PlayerProfile &
         return false;
     }
     readProfile(s, out);
+    populatePlayerLadderCountsLocked(_db, out);
     out.isAdmin = isPlayerAdminLocked(out.playerId);
     return true;
 }
@@ -3348,33 +3863,34 @@ bool AccountStore::listUsers(const UserDirectoryFilter &filter,
         *total = cStmt.colInt(0);
     }
 
-    std::string orderCol = "p.elo_2p_3b";
+    std::string dir = filter.sortAsc ? "ASC" : "DESC";
+    std::string orderBy;
     if (filter.sortField == "handle") {
-        orderCol = "p.handle COLLATE NOCASE";
+        orderBy = "handle COLLATE NOCASE " + dir + ", player_id ASC";
     } else if (filter.sortField == "display_name") {
-        orderCol = "p.display_name COLLATE NOCASE";
-    } else if (filter.sortField == "elo_2p" || filter.sortField == "elo_2p_3b") {
-        orderCol = "p.elo_2p_3b";
+        orderBy = "display_name COLLATE NOCASE " + dir + ", player_id ASC";
     } else if (filter.sortField == "elo_2p_1b") {
-        orderCol = "p.elo_2p_1b";
+        orderBy = "(games_2p_1b > 0) DESC, elo_2p_1b " + dir + ", games_2p_1b DESC, games_played DESC, player_id ASC";
     } else if (filter.sortField == "elo_ofk") {
-        orderCol = "p.elo_ofk";
+        orderBy = "(games_ofk > 0) DESC, elo_ofk " + dir + ", games_ofk DESC, games_played DESC, player_id ASC";
     } else if (filter.sortField == "arena_elo_2p_3b") {
-        orderCol = "p.arena_elo_2p_3b";
+        orderBy = "(arena_games_2p_3b > 0) DESC, arena_elo_2p_3b " + dir + ", arena_games_2p_3b DESC, arena_games_played DESC, player_id ASC";
     } else if (filter.sortField == "arena_elo_2p_1b") {
-        orderCol = "p.arena_elo_2p_1b";
+        orderBy = "(arena_games_2p_1b > 0) DESC, arena_elo_2p_1b " + dir + ", arena_games_2p_1b DESC, arena_games_played DESC, player_id ASC";
     } else if (filter.sortField == "arena_elo_ofk") {
-        orderCol = "p.arena_elo_ofk";
+        orderBy = "(arena_games_ofk > 0) DESC, arena_elo_ofk " + dir + ", arena_games_ofk DESC, arena_games_played DESC, player_id ASC";
     } else if (filter.sortField == "arena_games_played") {
-        orderCol = "p.arena_games_played";
+        orderBy = "arena_games_played " + dir + ", player_id ASC";
     } else if (filter.sortField == "games_played") {
-        orderCol = "p.games_played";
+        orderBy = "games_played " + dir + ", player_id ASC";
     } else if (filter.sortField == "wins") {
-        orderCol = "p.wins";
+        orderBy = "wins " + dir + ", player_id ASC";
     } else if (filter.sortField == "created_at") {
-        orderCol = "p.created_at";
+        orderBy = "created_at " + dir + ", player_id ASC";
     } else if (filter.sortField == "last_seen_at") {
-        orderCol = "p.last_seen_at";
+        orderBy = "last_seen_at " + dir + ", player_id ASC";
+    } else {
+        orderBy = "(games_2p_3b > 0) DESC, elo_2p_3b " + dir + ", games_2p_3b DESC, games_played DESC, player_id ASC";
     }
 
     int limit = filter.limit <= 0 ? kDefaultUsersPageLimit : filter.limit;
@@ -3383,17 +3899,84 @@ bool AccountStore::listUsers(const UserDirectoryFilter &filter,
     }
     int offset = std::max(0, filter.offset);
 
-    std::string sql = "SELECT p.player_id, p.uuid, p.handle, p.display_name, p.avatar_url,"
-                      " p.bio, p.location, p.banned, p.elo_2p, p.elo_4p, p.elo_ofk,"
-                      " p.games_played, p.wins, p.losses, p.draws, p.created_at, p.last_seen_at,"
-                      " p.handle_changed_at, p.elo_2p_3b, p.elo_2p_1b,"
-                      " p.arena_elo_2p_3b, p.arena_elo_2p_1b, p.arena_elo_ofk,"
-                      " p.arena_games_played, p.arena_wins, p.arena_losses, p.arena_draws,"
-                      " (SELECT COUNT(*) FROM robots r WHERE r.owner_player_id = p.player_id AND r.revoked = 0) AS active_robots"
-                      " FROM players p" + whereClause +
-                      " ORDER BY " + orderCol + (filter.sortAsc ? " ASC" : " DESC") +
-                      ", p.player_id ASC LIMIT ?" + (hasQuery ? "2" : "1") +
-                      " OFFSET ?" + (hasQuery ? "3" : "2");
+    std::string sql =
+        "WITH pool1_human_counts AS ("
+        "  SELECT player_id,"
+        "         SUM(CASE WHEN UPPER(game_mode) = '2P' AND game_bases = 3 THEN 1 ELSE 0 END) AS g_2p_3b,"
+        "         SUM(CASE WHEN UPPER(game_mode) = '2P' AND game_bases = 1 THEN 1 ELSE 0 END) AS g_2p_1b,"
+        "         SUM(CASE WHEN UPPER(game_mode) = 'OFK' THEN 1 ELSE 0 END) AS g_ofk,"
+        "         COUNT(*) AS g_total"
+        "  FROM ("
+        "    SELECT p1_player_id AS player_id, game_mode, game_bases FROM games"
+        "    WHERE source = 'online' AND elo_pool = 1 AND super_prongs = 0 AND edgeless = 0"
+        "      AND COALESCE(p3_player_id, 0) = 0 AND COALESCE(p4_player_id, 0) = 0"
+        "      AND COALESCE(p3_robot_id, 0) = 0 AND COALESCE(p4_robot_id, 0) = 0"
+        "      AND COALESCE(p1_player_id, 0) > 0 AND COALESCE(p1_robot_id, 0) = 0"
+        "    UNION ALL"
+        "    SELECT p2_player_id AS player_id, game_mode, game_bases FROM games"
+        "    WHERE source = 'online' AND elo_pool = 1 AND super_prongs = 0 AND edgeless = 0"
+        "      AND COALESCE(p3_player_id, 0) = 0 AND COALESCE(p4_player_id, 0) = 0"
+        "      AND COALESCE(p3_robot_id, 0) = 0 AND COALESCE(p4_robot_id, 0) = 0"
+        "      AND COALESCE(p2_player_id, 0) > 0 AND COALESCE(p2_robot_id, 0) = 0"
+        "  )"
+        "  GROUP BY player_id"
+        "),"
+        "pool2_human_counts AS ("
+        "  SELECT player_id,"
+        "         SUM(CASE WHEN UPPER(game_mode) = '2P' AND game_bases = 3 THEN 1 ELSE 0 END) AS g_2p_3b,"
+        "         SUM(CASE WHEN UPPER(game_mode) = '2P' AND game_bases = 1 THEN 1 ELSE 0 END) AS g_2p_1b,"
+        "         SUM(CASE WHEN UPPER(game_mode) = 'OFK' THEN 1 ELSE 0 END) AS g_ofk,"
+        "         COUNT(*) AS g_total"
+        "  FROM ("
+        "    SELECT p1_player_id AS player_id, game_mode, game_bases FROM games"
+        "    WHERE source = 'online' AND elo_pool = 2 AND super_prongs = 0 AND edgeless = 0"
+        "      AND COALESCE(p3_player_id, 0) = 0 AND COALESCE(p4_player_id, 0) = 0"
+        "      AND COALESCE(p3_robot_id, 0) = 0 AND COALESCE(p4_robot_id, 0) = 0"
+        "      AND COALESCE(p1_player_id, 0) > 0 AND COALESCE(p1_robot_id, 0) = 0"
+        "    UNION ALL"
+        "    SELECT p2_player_id AS player_id, game_mode, game_bases FROM games"
+        "    WHERE source = 'online' AND elo_pool = 2 AND super_prongs = 0 AND edgeless = 0"
+        "      AND COALESCE(p3_player_id, 0) = 0 AND COALESCE(p4_player_id, 0) = 0"
+        "      AND COALESCE(p3_robot_id, 0) = 0 AND COALESCE(p4_robot_id, 0) = 0"
+        "      AND COALESCE(p2_player_id, 0) > 0 AND COALESCE(p2_robot_id, 0) = 0"
+        "  )"
+        "  GROUP BY player_id"
+        "),"
+        "users_ext AS ("
+        "  SELECT p.player_id, p.uuid, p.handle, p.display_name, p.avatar_url,"
+        "         p.bio, p.location, p.banned, p.elo_2p, p.elo_4p, p.elo_ofk,"
+        "         p.games_played, p.wins, p.losses, p.draws, p.created_at, p.last_seen_at,"
+        "         p.handle_changed_at, p.elo_2p_3b, p.elo_2p_1b,"
+        "         p.arena_elo_2p_3b, p.arena_elo_2p_1b, p.arena_elo_ofk,"
+        "         p.arena_games_played, p.arena_wins, p.arena_losses, p.arena_draws,"
+        "         (SELECT COUNT(*) FROM robots r WHERE r.owner_player_id = p.player_id AND r.revoked = 0) AS active_robots,"
+        "         CASE WHEN COALESCE(hc1.g_2p_3b, 0) > 0 THEN hc1.g_2p_3b"
+        "              WHEN COALESCE(hc1.g_total, 0) = 0 AND p.elo_2p_3b != 1200 THEN MAX(1, p.games_played)"
+        "              ELSE 0 END AS games_2p_3b,"
+        "         CASE WHEN COALESCE(hc1.g_2p_1b, 0) > 0 THEN hc1.g_2p_1b"
+        "              WHEN COALESCE(hc1.g_total, 0) = 0 AND p.elo_2p_1b != 1200 THEN MAX(1, p.games_played)"
+        "              ELSE 0 END AS games_2p_1b,"
+        "         CASE WHEN COALESCE(hc1.g_ofk, 0) > 0 THEN hc1.g_ofk"
+        "              WHEN COALESCE(hc1.g_total, 0) = 0 AND p.elo_ofk != 1200 THEN MAX(1, p.games_played)"
+        "              ELSE 0 END AS games_ofk,"
+        "         CASE WHEN COALESCE(hc2.g_2p_3b, 0) > 0 THEN hc2.g_2p_3b"
+        "              WHEN COALESCE(hc2.g_total, 0) = 0 AND p.arena_elo_2p_3b != 1200 THEN MAX(1, p.arena_games_played)"
+        "              ELSE 0 END AS arena_games_2p_3b,"
+        "         CASE WHEN COALESCE(hc2.g_2p_1b, 0) > 0 THEN hc2.g_2p_1b"
+        "              WHEN COALESCE(hc2.g_total, 0) = 0 AND p.arena_elo_2p_1b != 1200 THEN MAX(1, p.arena_games_played)"
+        "              ELSE 0 END AS arena_games_2p_1b,"
+        "         CASE WHEN COALESCE(hc2.g_ofk, 0) > 0 THEN hc2.g_ofk"
+        "              WHEN COALESCE(hc2.g_total, 0) = 0 AND p.arena_elo_ofk != 1200 THEN MAX(1, p.arena_games_played)"
+        "              ELSE 0 END AS arena_games_ofk"
+        "  FROM players p"
+        "  LEFT JOIN pool1_human_counts hc1 ON hc1.player_id = p.player_id"
+        "  LEFT JOIN pool2_human_counts hc2 ON hc2.player_id = p.player_id" +
+        whereClause +
+        ") "
+        "SELECT * FROM users_ext"
+        " ORDER BY " + orderBy +
+        " LIMIT ?" + (hasQuery ? "2" : "1") +
+        " OFFSET ?" + (hasQuery ? "3" : "2");
 
     Stmt s(_db, sql.c_str());
     int paramIdx = 1;
@@ -3409,6 +3992,12 @@ bool AccountStore::listUsers(const UserDirectoryFilter &filter,
         readProfile(s, entry.profile);
         entry.profile.isAdmin = isPlayerAdminLocked(entry.profile.playerId);
         entry.activeRobotsCount = static_cast<int>(s.colInt(27));
+        entry.profile.games2p3b = static_cast<int>(s.colInt(28));
+        entry.profile.games2p1b = static_cast<int>(s.colInt(29));
+        entry.profile.gamesOfk = static_cast<int>(s.colInt(30));
+        entry.profile.arenaGames2p3b = static_cast<int>(s.colInt(31));
+        entry.profile.arenaGames2p1b = static_cast<int>(s.colInt(32));
+        entry.profile.arenaGamesOfk = static_cast<int>(s.colInt(33));
         out.push_back(entry);
     }
     return rc == SQLITE_DONE;
@@ -3592,6 +4181,7 @@ static bool loadRobotByIdLocked(sqlite3 *db, int64_t robotId, RobotRecord &out)
     out.elo2p3b = static_cast<int>(s.colInt(20));
     out.elo2p1b = static_cast<int>(s.colInt(21));
     out.eloOfk = static_cast<int>(s.colInt(22));
+    populateRobotLadderCountsLocked(db, out);
     return true;
 }
 
@@ -3835,6 +4425,7 @@ bool AccountStore::listRobots(int64_t ownerPlayerId, std::vector<RobotRecord> &o
         r.elo2p3b = static_cast<int>(s.colInt(20));
         r.elo2p1b = static_cast<int>(s.colInt(21));
         r.eloOfk = static_cast<int>(s.colInt(22));
+        populateRobotLadderCountsLocked(_db, r);
         out.push_back(r);
     }
     return rc == SQLITE_DONE;
@@ -3885,6 +4476,7 @@ bool AccountStore::listPublicRobotsByOwner(int64_t ownerPlayerId, std::vector<Ro
         r.elo2p3b = static_cast<int>(s.colInt(18));
         r.elo2p1b = static_cast<int>(s.colInt(19));
         r.eloOfk = static_cast<int>(s.colInt(20));
+        populateRobotLadderCountsLocked(_db, r);
         out.push_back(r);
     }
     return rc == SQLITE_DONE;
@@ -4046,6 +4638,7 @@ RobotTokenValidation AccountStore::validateRobotToken(const std::string &rawToke
     res.robot.elo2p3b = static_cast<int>(s.colInt(20));
     res.robot.elo2p1b = static_cast<int>(s.colInt(21));
     res.robot.eloOfk = static_cast<int>(s.colInt(22));
+    populateRobotLadderCountsLocked(_db, res.robot);
 
     if (!loadProfileById(_db, res.robot.ownerPlayerId, res.owner)) {
         return res;
@@ -4106,6 +4699,7 @@ bool AccountStore::getRobotByUuid(const std::string &robotUuid, RobotRecord &out
     out.elo2p3b = static_cast<int>(s.colInt(20));
     out.elo2p1b = static_cast<int>(s.colInt(21));
     out.eloOfk = static_cast<int>(s.colInt(22));
+    populateRobotLadderCountsLocked(_db, out);
     return true;
 }
 
@@ -4152,6 +4746,7 @@ bool AccountStore::getRobotByName(const std::string &robotName, RobotRecord &out
     out.elo2p3b = static_cast<int>(s.colInt(18));
     out.elo2p1b = static_cast<int>(s.colInt(19));
     out.eloOfk = static_cast<int>(s.colInt(20));
+    populateRobotLadderCountsLocked(_db, out);
     return true;
 }
 
@@ -4263,6 +4858,7 @@ bool AccountStore::listPublicRobotsDirectory(const RobotDirectoryFilter &filter,
         r.elo2p3b = static_cast<int>(s.colInt(18));
         r.elo2p1b = static_cast<int>(s.colInt(19));
         r.eloOfk = static_cast<int>(s.colInt(20));
+        populateRobotLadderCountsLocked(_db, r);
         out.push_back(r);
     }
     return rc == SQLITE_DONE;
@@ -4308,19 +4904,17 @@ bool AccountStore::leaderboard(const std::string &mode, int limit,
                                std::vector<LeaderboardEntry> &out)
 {
     std::string ladder = canonicalRatedLadder(mode);
-    const char *sql = nullptr;
+    std::string eloCol;
+    std::string modeCond;
     if (ladder == "2P_3B") {
-        sql = "SELECT uuid, handle, display_name, elo_2p_3b, games_played, wins,"
-              " losses, draws, avatar_url FROM players WHERE banned = 0"
-              " ORDER BY elo_2p_3b DESC, games_played DESC, player_id ASC LIMIT ?1";
+        eloCol = "p.elo_2p_3b";
+        modeCond = "UPPER(game_mode) = '2P' AND game_bases = 3";
     } else if (ladder == "2P_1B") {
-        sql = "SELECT uuid, handle, display_name, elo_2p_1b, games_played, wins,"
-              " losses, draws, avatar_url FROM players WHERE banned = 0"
-              " ORDER BY elo_2p_1b DESC, games_played DESC, player_id ASC LIMIT ?1";
+        eloCol = "p.elo_2p_1b";
+        modeCond = "UPPER(game_mode) = '2P' AND game_bases = 1";
     } else if (ladder == "OFK") {
-        sql = "SELECT uuid, handle, display_name, elo_ofk, games_played, wins,"
-              " losses, draws, avatar_url FROM players WHERE banned = 0"
-              " ORDER BY elo_ofk DESC, games_played DESC, player_id ASC LIMIT ?1";
+        eloCol = "p.elo_ofk";
+        modeCond = "UPPER(game_mode) = 'OFK'";
     } else {
         return false;
     }
@@ -4334,14 +4928,48 @@ bool AccountStore::leaderboard(const std::string &mode, int limit,
     if (!_db) {
         return false;
     }
-    Stmt s(_db, sql);
+    std::string sql =
+        "WITH pool1_counts AS ("
+        "  SELECT player_id,"
+        "         SUM(CASE WHEN " + modeCond + " THEN 1 ELSE 0 END) AS g_ladder,"
+        "         COUNT(*) AS g_total"
+        "  FROM ("
+        "    SELECT p1_player_id AS player_id, game_mode, game_bases FROM games"
+        "    WHERE source = 'online' AND elo_pool = 1 AND super_prongs = 0 AND edgeless = 0"
+        "      AND COALESCE(p3_player_id, 0) = 0 AND COALESCE(p4_player_id, 0) = 0"
+        "      AND COALESCE(p3_robot_id, 0) = 0 AND COALESCE(p4_robot_id, 0) = 0"
+        "      AND COALESCE(p1_player_id, 0) > 0 AND COALESCE(p1_robot_id, 0) = 0"
+        "    UNION ALL"
+        "    SELECT p2_player_id AS player_id, game_mode, game_bases FROM games"
+        "    WHERE source = 'online' AND elo_pool = 1 AND super_prongs = 0 AND edgeless = 0"
+        "      AND COALESCE(p3_player_id, 0) = 0 AND COALESCE(p4_player_id, 0) = 0"
+        "      AND COALESCE(p3_robot_id, 0) = 0 AND COALESCE(p4_robot_id, 0) = 0"
+        "      AND COALESCE(p2_player_id, 0) > 0 AND COALESCE(p2_robot_id, 0) = 0"
+        "  )"
+        "  GROUP BY player_id"
+        "),"
+        "lb AS ("
+        "  SELECT p.player_id, p.uuid, p.handle, p.display_name,"
+        "         " + eloCol + " AS elo,"
+        "         p.games_played, p.wins, p.losses, p.draws, p.avatar_url,"
+        "         CASE WHEN COALESCE(c.g_ladder, 0) > 0 THEN c.g_ladder"
+        "              WHEN COALESCE(c.g_total, 0) = 0 AND " + eloCol + " != 1200 THEN MAX(1, p.games_played)"
+        "              ELSE 0 END AS ladder_games"
+        "  FROM players p"
+        "  LEFT JOIN pool1_counts c ON c.player_id = p.player_id"
+        "  WHERE p.banned = 0"
+        ") "
+        "SELECT uuid, handle, display_name, elo, games_played, wins, losses, draws, avatar_url, ladder_games"
+        " FROM lb"
+        " ORDER BY (ladder_games > 0) DESC, elo DESC, ladder_games DESC, games_played DESC, player_id ASC"
+        " LIMIT ?1";
+    Stmt s(_db, sql.c_str());
     s.bindInt(1, limit);
     out.clear();
     int rc;
-    int rank = 0;
+    int rankedCount = 0;
     while ((rc = s.step()) == SQLITE_ROW) {
         LeaderboardEntry e;
-        e.rank = ++rank;
         e.uuid = s.colText(0);
         e.handle = s.colText(1);
         e.displayName = s.colText(2);
@@ -4351,6 +4979,13 @@ bool AccountStore::leaderboard(const std::string &mode, int limit,
         e.losses = static_cast<int>(s.colInt(6));
         e.draws = static_cast<int>(s.colInt(7));
         e.avatarUrl = s.colText(8);
+        e.ladderGames = static_cast<int>(s.colInt(9));
+        if (e.ladderGames > 0) {
+            e.rank = ++rankedCount;
+        } else {
+            e.rank = 0;
+            e.elo = 1200;
+        }
         out.push_back(e);
     }
     return rc == SQLITE_DONE;
@@ -4495,6 +5130,99 @@ bool AccountStore::listArenaStandings(const ArenaStandingsFilter &filter,
         return false;
     }
 
+    const std::string ctePrefix =
+        "WITH pool2_robot_counts AS ("
+        "  SELECT robot_id,"
+        "         SUM(CASE WHEN UPPER(game_mode) = '2P' AND game_bases = 3 THEN 1 ELSE 0 END) AS g_2p_3b,"
+        "         SUM(CASE WHEN UPPER(game_mode) = '2P' AND game_bases = 1 THEN 1 ELSE 0 END) AS g_2p_1b,"
+        "         SUM(CASE WHEN UPPER(game_mode) = 'OFK' THEN 1 ELSE 0 END) AS g_ofk,"
+        "         COUNT(*) AS g_total"
+        "  FROM ("
+        "    SELECT p1_robot_id AS robot_id, game_mode, game_bases FROM games"
+        "    WHERE source = 'online' AND elo_pool = 2 AND super_prongs = 0 AND edgeless = 0"
+        "      AND COALESCE(p3_player_id, 0) = 0 AND COALESCE(p4_player_id, 0) = 0"
+        "      AND COALESCE(p3_robot_id, 0) = 0 AND COALESCE(p4_robot_id, 0) = 0"
+        "      AND COALESCE(p1_robot_id, 0) > 0"
+        "    UNION ALL"
+        "    SELECT p2_robot_id AS robot_id, game_mode, game_bases FROM games"
+        "    WHERE source = 'online' AND elo_pool = 2 AND super_prongs = 0 AND edgeless = 0"
+        "      AND COALESCE(p3_player_id, 0) = 0 AND COALESCE(p4_player_id, 0) = 0"
+        "      AND COALESCE(p3_robot_id, 0) = 0 AND COALESCE(p4_robot_id, 0) = 0"
+        "      AND COALESCE(p2_robot_id, 0) > 0"
+        "  )"
+        "  GROUP BY robot_id"
+        "),"
+        "pool2_human_counts AS ("
+        "  SELECT player_id,"
+        "         SUM(CASE WHEN UPPER(game_mode) = '2P' AND game_bases = 3 THEN 1 ELSE 0 END) AS g_2p_3b,"
+        "         SUM(CASE WHEN UPPER(game_mode) = '2P' AND game_bases = 1 THEN 1 ELSE 0 END) AS g_2p_1b,"
+        "         SUM(CASE WHEN UPPER(game_mode) = 'OFK' THEN 1 ELSE 0 END) AS g_ofk,"
+        "         COUNT(*) AS g_total"
+        "  FROM ("
+        "    SELECT p1_player_id AS player_id, game_mode, game_bases FROM games"
+        "    WHERE source = 'online' AND elo_pool = 2 AND super_prongs = 0 AND edgeless = 0"
+        "      AND COALESCE(p3_player_id, 0) = 0 AND COALESCE(p4_player_id, 0) = 0"
+        "      AND COALESCE(p3_robot_id, 0) = 0 AND COALESCE(p4_robot_id, 0) = 0"
+        "      AND COALESCE(p1_player_id, 0) > 0 AND COALESCE(p1_robot_id, 0) = 0"
+        "    UNION ALL"
+        "    SELECT p2_player_id AS player_id, game_mode, game_bases FROM games"
+        "    WHERE source = 'online' AND elo_pool = 2 AND super_prongs = 0 AND edgeless = 0"
+        "      AND COALESCE(p3_player_id, 0) = 0 AND COALESCE(p4_player_id, 0) = 0"
+        "      AND COALESCE(p3_robot_id, 0) = 0 AND COALESCE(p4_robot_id, 0) = 0"
+        "      AND COALESCE(p2_player_id, 0) > 0 AND COALESCE(p2_robot_id, 0) = 0"
+        "  )"
+        "  GROUP BY player_id"
+        "),"
+        "vs_bot_stats AS ("
+        "  SELECT player_id,"
+        "         COUNT(*) AS vs_games,"
+        "         SUM(is_win) AS vs_wins,"
+        "         SUM(is_loss) AS vs_losses,"
+        "         SUM(is_draw) AS vs_draws"
+        "  FROM ("
+        "    SELECT p1_player_id AS player_id,"
+        "           CASE WHEN result = 'DRAW' OR (COALESCE(winner_seat, 0) = 0 AND COALESCE(winner, '') IN ('', 'NONE')) THEN 0"
+        "                WHEN result IN ('P1_WIN', 'TEAM_13_WIN') OR winner_seat = 1 OR winner = 'A' THEN 1 ELSE 0 END AS is_win,"
+        "           CASE WHEN result = 'DRAW' OR (COALESCE(winner_seat, 0) = 0 AND COALESCE(winner, '') IN ('', 'NONE')) THEN 0"
+        "                WHEN result IN ('P1_WIN', 'TEAM_13_WIN') OR winner_seat = 1 OR winner = 'A' THEN 0 ELSE 1 END AS is_loss,"
+        "           CASE WHEN result = 'DRAW' OR (COALESCE(winner_seat, 0) = 0 AND COALESCE(winner, '') IN ('', 'NONE')) THEN 1 ELSE 0 END AS is_draw"
+        "    FROM games"
+        "    WHERE source = 'online' AND COALESCE(p1_player_id, 0) > 0 AND COALESCE(p1_robot_id, 0) = 0"
+        "      AND (COALESCE(p2_robot_id, 0) > 0 OR (UPPER(game_mode) = '4P' AND COALESCE(p4_robot_id, 0) > 0))"
+        "    UNION ALL"
+        "    SELECT p2_player_id AS player_id,"
+        "           CASE WHEN result = 'DRAW' OR (COALESCE(winner_seat, 0) = 0 AND COALESCE(winner, '') IN ('', 'NONE')) THEN 0"
+        "                WHEN result IN ('P2_WIN', 'TEAM_24_WIN') OR winner_seat = 2 OR winner = 'B' THEN 1 ELSE 0 END AS is_win,"
+        "           CASE WHEN result = 'DRAW' OR (COALESCE(winner_seat, 0) = 0 AND COALESCE(winner, '') IN ('', 'NONE')) THEN 0"
+        "                WHEN result IN ('P2_WIN', 'TEAM_24_WIN') OR winner_seat = 2 OR winner = 'B' THEN 0 ELSE 1 END AS is_loss,"
+        "           CASE WHEN result = 'DRAW' OR (COALESCE(winner_seat, 0) = 0 AND COALESCE(winner, '') IN ('', 'NONE')) THEN 1 ELSE 0 END AS is_draw"
+        "    FROM games"
+        "    WHERE source = 'online' AND COALESCE(p2_player_id, 0) > 0 AND COALESCE(p2_robot_id, 0) = 0"
+        "      AND (COALESCE(p1_robot_id, 0) > 0 OR (UPPER(game_mode) = '4P' AND COALESCE(p3_robot_id, 0) > 0))"
+        "    UNION ALL"
+        "    SELECT p3_player_id AS player_id,"
+        "           CASE WHEN result = 'DRAW' OR (COALESCE(winner_seat, 0) = 0 AND COALESCE(winner, '') IN ('', 'NONE')) THEN 0"
+        "                WHEN result = 'TEAM_13_WIN' OR winner_seat IN (1, 3) OR winner IN ('A', 'C') THEN 1 ELSE 0 END AS is_win,"
+        "           CASE WHEN result = 'DRAW' OR (COALESCE(winner_seat, 0) = 0 AND COALESCE(winner, '') IN ('', 'NONE')) THEN 0"
+        "                WHEN result = 'TEAM_13_WIN' OR winner_seat IN (1, 3) OR winner IN ('A', 'C') THEN 0 ELSE 1 END AS is_loss,"
+        "           CASE WHEN result = 'DRAW' OR (COALESCE(winner_seat, 0) = 0 AND COALESCE(winner, '') IN ('', 'NONE')) THEN 1 ELSE 0 END AS is_draw"
+        "    FROM games"
+        "    WHERE source = 'online' AND UPPER(game_mode) = '4P' AND COALESCE(p3_player_id, 0) > 0 AND COALESCE(p3_robot_id, 0) = 0"
+        "      AND (COALESCE(p2_robot_id, 0) > 0 OR COALESCE(p4_robot_id, 0) > 0)"
+        "    UNION ALL"
+        "    SELECT p4_player_id AS player_id,"
+        "           CASE WHEN result = 'DRAW' OR (COALESCE(winner_seat, 0) = 0 AND COALESCE(winner, '') IN ('', 'NONE')) THEN 0"
+        "                WHEN result = 'TEAM_24_WIN' OR winner_seat IN (2, 4) OR winner IN ('B', 'D') THEN 1 ELSE 0 END AS is_win,"
+        "           CASE WHEN result = 'DRAW' OR (COALESCE(winner_seat, 0) = 0 AND COALESCE(winner, '') IN ('', 'NONE')) THEN 0"
+        "                WHEN result = 'TEAM_24_WIN' OR winner_seat IN (2, 4) OR winner IN ('B', 'D') THEN 0 ELSE 1 END AS is_loss,"
+        "           CASE WHEN result = 'DRAW' OR (COALESCE(winner_seat, 0) = 0 AND COALESCE(winner, '') IN ('', 'NONE')) THEN 1 ELSE 0 END AS is_draw"
+        "    FROM games"
+        "    WHERE source = 'online' AND UPPER(game_mode) = '4P' AND COALESCE(p4_player_id, 0) > 0 AND COALESCE(p4_robot_id, 0) = 0"
+        "      AND (COALESCE(p1_robot_id, 0) > 0 OR COALESCE(p3_robot_id, 0) > 0)"
+        "  )"
+        "  GROUP BY player_id"
+        ") ";
+
     const std::string robotsSelect =
         "SELECT 1 AS is_robot,"
         " r.robot_id AS entity_id,"
@@ -4518,9 +5246,19 @@ bool AccountStore::listArenaStandings(const ArenaStandingsFilter &filter,
         " r.revoked AS revoked,"
         " r.token_deleted AS token_deleted,"
         " r.created_at AS created_at,"
-        " 0 AS last_seen_at"
+        " 0 AS last_seen_at,"
+        " CASE WHEN COALESCE(rc.g_2p_3b, 0) > 0 THEN rc.g_2p_3b"
+        "      WHEN COALESCE(rc.g_total, 0) = 0 AND r.elo_2p_3b != 1200 THEN 1"
+        "      ELSE 0 END AS games_2p_3b,"
+        " CASE WHEN COALESCE(rc.g_2p_1b, 0) > 0 THEN rc.g_2p_1b"
+        "      WHEN COALESCE(rc.g_total, 0) = 0 AND r.elo_2p_1b != 1200 THEN 1"
+        "      ELSE 0 END AS games_2p_1b,"
+        " CASE WHEN COALESCE(rc.g_ofk, 0) > 0 THEN rc.g_ofk"
+        "      WHEN COALESCE(rc.g_total, 0) = 0 AND r.elo_ofk != 1200 THEN 1"
+        "      ELSE 0 END AS games_ofk"
         " FROM robots r"
         " LEFT JOIN players p ON p.player_id = r.owner_player_id"
+        " LEFT JOIN pool2_robot_counts rc ON rc.robot_id = r.robot_id"
         " WHERE COALESCE(p.banned, 0) = 0 AND r.games_played > 0";
 
     const std::string humansSelect =
@@ -4539,16 +5277,27 @@ bool AccountStore::listArenaStandings(const ArenaStandingsFilter &filter,
         " p.arena_elo_2p_3b AS elo_2p_3b,"
         " p.arena_elo_2p_1b AS elo_2p_1b,"
         " p.arena_elo_ofk AS elo_ofk,"
-        " p.arena_games_played AS games_played,"
-        " p.arena_wins AS wins,"
-        " p.arena_losses AS losses,"
-        " p.arena_draws AS draws,"
+        " CASE WHEN p.arena_games_played >= COALESCE(vb.vs_games, 0) THEN p.arena_games_played ELSE COALESCE(vb.vs_games, 0) END AS games_played,"
+        " CASE WHEN p.arena_games_played >= COALESCE(vb.vs_games, 0) THEN p.arena_wins ELSE COALESCE(vb.vs_wins, 0) END AS wins,"
+        " CASE WHEN p.arena_games_played >= COALESCE(vb.vs_games, 0) THEN p.arena_losses ELSE COALESCE(vb.vs_losses, 0) END AS losses,"
+        " CASE WHEN p.arena_games_played >= COALESCE(vb.vs_games, 0) THEN p.arena_draws ELSE COALESCE(vb.vs_draws, 0) END AS draws,"
         " 0 AS revoked,"
         " 0 AS token_deleted,"
         " p.created_at AS created_at,"
-        " p.last_seen_at AS last_seen_at"
+        " p.last_seen_at AS last_seen_at,"
+        " CASE WHEN COALESCE(hc.g_2p_3b, 0) > 0 THEN hc.g_2p_3b"
+        "      WHEN COALESCE(hc.g_total, 0) = 0 AND p.arena_elo_2p_3b != 1200 THEN 1"
+        "      ELSE 0 END AS games_2p_3b,"
+        " CASE WHEN COALESCE(hc.g_2p_1b, 0) > 0 THEN hc.g_2p_1b"
+        "      WHEN COALESCE(hc.g_total, 0) = 0 AND p.arena_elo_2p_1b != 1200 THEN 1"
+        "      ELSE 0 END AS games_2p_1b,"
+        " CASE WHEN COALESCE(hc.g_ofk, 0) > 0 THEN hc.g_ofk"
+        "      WHEN COALESCE(hc.g_total, 0) = 0 AND p.arena_elo_ofk != 1200 THEN 1"
+        "      ELSE 0 END AS games_ofk"
         " FROM players p"
-        " WHERE p.banned = 0 AND p.arena_games_played > 0";
+        " LEFT JOIN pool2_human_counts hc ON hc.player_id = p.player_id"
+        " LEFT JOIN vs_bot_stats vb ON vb.player_id = p.player_id"
+        " WHERE p.banned = 0 AND (p.arena_games_played > 0 OR COALESCE(vb.vs_games, 0) > 0)";
 
     std::string unionSubquery;
     if (ptype == "robots") {
@@ -4572,7 +5321,7 @@ bool AccountStore::listArenaStandings(const ArenaStandingsFilter &filter,
     }
 
     if (total != nullptr) {
-        std::string countSql = "SELECT COUNT(*) FROM (" + unionSubquery + ") a" + whereClause;
+        std::string countSql = ctePrefix + "SELECT COUNT(*) FROM (" + unionSubquery + ") a" + whereClause;
         Stmt cStmt(_db, countSql.c_str());
         if (hasQuery) {
             cStmt.bindText(1, qLike);
@@ -4586,9 +5335,9 @@ bool AccountStore::listArenaStandings(const ArenaStandingsFilter &filter,
     std::string dir = filter.sortAsc ? "ASC" : "DESC";
     std::string orderBy;
     if (filter.sortField == "elo_2p_1b") {
-        orderBy = " ORDER BY elo_2p_1b " + dir + ", games_played DESC, wins DESC, is_robot DESC, entity_id ASC";
+        orderBy = " ORDER BY (games_2p_1b > 0) DESC, elo_2p_1b " + dir + ", games_2p_1b DESC, games_played DESC, wins DESC, is_robot DESC, entity_id ASC";
     } else if (filter.sortField == "elo_ofk") {
-        orderBy = " ORDER BY elo_ofk " + dir + ", games_played DESC, wins DESC, is_robot DESC, entity_id ASC";
+        orderBy = " ORDER BY (games_ofk > 0) DESC, elo_ofk " + dir + ", games_ofk DESC, games_played DESC, wins DESC, is_robot DESC, entity_id ASC";
     } else if (filter.sortField == "wins") {
         orderBy = " ORDER BY wins " + dir + ", games_played DESC, elo_2p_3b DESC, is_robot DESC, entity_id ASC";
     } else if (filter.sortField == "games_played") {
@@ -4601,7 +5350,7 @@ bool AccountStore::listArenaStandings(const ArenaStandingsFilter &filter,
     } else if (filter.sortField == "created_at") {
         orderBy = " ORDER BY created_at " + dir + ", is_robot DESC, entity_id ASC";
     } else {
-        orderBy = " ORDER BY elo_2p_3b " + dir + ", games_played DESC, wins DESC, is_robot DESC, entity_id ASC";
+        orderBy = " ORDER BY (games_2p_3b > 0) DESC, elo_2p_3b " + dir + ", games_2p_3b DESC, games_played DESC, wins DESC, is_robot DESC, entity_id ASC";
     }
 
     int limit = filter.limit <= 0 ? kDefaultUsersPageLimit : filter.limit;
@@ -4610,10 +5359,12 @@ bool AccountStore::listArenaStandings(const ArenaStandingsFilter &filter,
     }
     int offset = std::max(0, filter.offset);
 
-    std::string sql = "SELECT is_robot, entity_id, uuid, handle, display_name, description,"
+    std::string sql = ctePrefix +
+                      "SELECT is_robot, entity_id, uuid, handle, display_name, description,"
                       " avatar_url, robot_url, name_changed_at, owner_uuid, owner_handle, owner_avatar_url,"
                       " elo_2p_3b, elo_2p_1b, elo_ofk, games_played, wins, losses, draws,"
-                      " revoked, token_deleted, created_at, last_seen_at"
+                      " revoked, token_deleted, created_at, last_seen_at,"
+                      " games_2p_3b, games_2p_1b, games_ofk"
                       " FROM (" + unionSubquery + ") a" + whereClause + orderBy +
                       " LIMIT ?" + (hasQuery ? "2" : "1") +
                       " OFFSET ?" + (hasQuery ? "3" : "2");
@@ -4659,6 +5410,9 @@ bool AccountStore::listArenaStandings(const ArenaStandingsFilter &filter,
         e.tokenDeleted = s.colInt(20) != 0;
         e.createdAt = s.colInt(21);
         e.lastSeenAt = s.colInt(22);
+        e.games2p3b = static_cast<int>(s.colInt(23));
+        e.games2p1b = static_cast<int>(s.colInt(24));
+        e.gamesOfk = static_cast<int>(s.colInt(25));
         out.push_back(e);
     }
     return rc == SQLITE_DONE;
@@ -4700,6 +5454,30 @@ int AccountStore::countRecentArenaRatedPairGames(int64_t p1PlayerId,
     return static_cast<int>(s.colInt(0));
 }
 
+bool AccountStore::recomputeAllRatings(RecomputeRatingsResult &outResult,
+                                       std::string &errorOut)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    errorOut.clear();
+    if (!_db) {
+        errorOut = "db_closed";
+        return false;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        errorOut = "tx_begin_failed";
+        return false;
+    }
+    if (!recomputeAllRatingsInTxLocked(_db, outResult, errorOut)) {
+        return false;
+    }
+    if (!tx.commit()) {
+        errorOut = "tx_commit_failed";
+        return false;
+    }
+    return true;
+}
+
 bool AccountStore::purgeArchivedGame(const std::string &gameId,
                                      std::string &errorOut)
 {
@@ -4714,37 +5492,13 @@ bool AccountStore::purgeArchivedGame(const std::string &gameId,
         errorOut = "tx_begin_failed";
         return false;
     }
-    int64_t pIds[5] = {0, 0, 0, 0, 0};
-    int64_t rIds[5] = {0, 0, 0, 0, 0};
-    std::string result;
-    int winnerSeat = 0;
-    std::string winner;
-    std::string source;
     {
-        Stmt checkStmt(_db,
-            "SELECT COALESCE(p1_player_id, 0), COALESCE(p2_player_id, 0),"
-            " COALESCE(p3_player_id, 0), COALESCE(p4_player_id, 0),"
-            " COALESCE(p1_robot_id, 0), COALESCE(p2_robot_id, 0),"
-            " COALESCE(p3_robot_id, 0), COALESCE(p4_robot_id, 0),"
-            " result, winner_seat, winner, source"
-            " FROM games WHERE game_id = ?1");
+        Stmt checkStmt(_db, "SELECT 1 FROM games WHERE game_id = ?1");
         checkStmt.bindText(1, gameId);
         if (checkStmt.step() != SQLITE_ROW) {
             errorOut = "game_not_found";
             return false;
         }
-        pIds[1] = checkStmt.colInt(0);
-        pIds[2] = checkStmt.colInt(1);
-        pIds[3] = checkStmt.colInt(2);
-        pIds[4] = checkStmt.colInt(3);
-        rIds[1] = checkStmt.colInt(4);
-        rIds[2] = checkStmt.colInt(5);
-        rIds[3] = checkStmt.colInt(6);
-        rIds[4] = checkStmt.colInt(7);
-        result = checkStmt.colText(8);
-        winnerSeat = static_cast<int>(checkStmt.colInt(9));
-        winner = checkStmt.colText(10);
-        source = checkStmt.colText(11);
     }
     {
         Stmt delStmt(_db, "DELETE FROM games WHERE game_id = ?1");
@@ -4754,53 +5508,10 @@ bool AccountStore::purgeArchivedGame(const std::string &gameId,
             return false;
         }
     }
-    reconcileRobotStatsLocked(_db);
-
-    bool hasRobot = (rIds[1] > 0 || rIds[2] > 0 || rIds[3] > 0 || rIds[4] > 0);
-    if (!hasRobot && source == "online") {
-        for (int seat = 1; seat <= 4; ++seat) {
-            int64_t pid = pIds[seat];
-            if (pid <= 0) {
-                continue;
-            }
-            bool isDraw = (result == "DRAW" || (winnerSeat == 0 && winner == "NONE"));
-            bool isWin = false;
-            if (!isDraw) {
-                if (result == "TEAM_13_WIN") {
-                    isWin = (seat == 1 || seat == 3);
-                } else if (result == "TEAM_24_WIN") {
-                    isWin = (seat == 2 || seat == 4);
-                } else if (result == "P1_WIN") {
-                    isWin = (seat == 1);
-                } else if (result == "P2_WIN") {
-                    isWin = (seat == 2);
-                } else if (winnerSeat > 0) {
-                    isWin = (seat == winnerSeat);
-                } else if (winner == "A") {
-                    isWin = (seat == 1);
-                } else if (winner == "B") {
-                    isWin = (seat == 2);
-                } else if (winner == "C") {
-                    isWin = (seat == 3);
-                } else if (winner == "D") {
-                    isWin = (seat == 4);
-                }
-            }
-            Stmt updPlayer(_db,
-                "UPDATE players SET"
-                " games_played = MAX(0, games_played - 1),"
-                " wins = MAX(0, wins - ?1),"
-                " losses = MAX(0, losses - ?2),"
-                " draws = MAX(0, draws - ?3)"
-                " WHERE player_id = ?4");
-            updPlayer.bindInt(1, (!isDraw && isWin) ? 1 : 0);
-            updPlayer.bindInt(2, (!isDraw && !isWin) ? 1 : 0);
-            updPlayer.bindInt(3, isDraw ? 1 : 0);
-            updPlayer.bindInt(4, pid);
-            updPlayer.step();
-        }
+    RecomputeRatingsResult dummy;
+    if (!recomputeAllRatingsInTxLocked(_db, dummy, errorOut)) {
+        return false;
     }
-
     if (!tx.commit()) {
         errorOut = "tx_commit_failed";
         return false;

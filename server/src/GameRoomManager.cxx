@@ -3437,19 +3437,13 @@ bool GameRoomManager::archiveLocked(Room &r)
                 }
             }
 
-            const bool sameOwnerHumanBot =
-                (!seatIsRobot[1] && seatIsRobot[2] &&
-                 rob[2].ownerPlayerId == r.seatPlayer[1]) ||
-                (seatIsRobot[1] && !seatIsRobot[2] &&
-                 rob[1].ownerPlayerId == r.seatPlayer[2]);
-
             const bool pairCapReached =
-                !sameOwnerHumanBot &&
+                seatIsRobot[1] && seatIsRobot[2] &&
                 (_store.countRecentArenaRatedPairGames(
                      rec.p1PlayerId, rec.p1RobotId, rec.p2PlayerId,
                      rec.p2RobotId, 24LL * 3600) >= 4);
 
-            if (!sameOwnerHumanBot && !pairCapReached) {
+            if (!pairCapReached) {
                 int kFactor = 32;
                 if (seatIsRobot[1] && seatIsRobot[2] &&
                     rob[1].ownerPlayerId > 0 &&

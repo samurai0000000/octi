@@ -211,6 +211,9 @@ struct PlayerProfile {
     int elo2p1b = 1200;
     int elo4p = 1200;
     int eloOfk = 1200;
+    int games2p3b = 0;
+    int games2p1b = 0;
+    int gamesOfk = 0;
     int gamesPlayed = 0;
     int wins = 0;
     int losses = 0;
@@ -218,6 +221,9 @@ struct PlayerProfile {
     int arenaElo2p3b = 1200;
     int arenaElo2p1b = 1200;
     int arenaEloOfk = 1200;
+    int arenaGames2p3b = 0;
+    int arenaGames2p1b = 0;
+    int arenaGamesOfk = 0;
     int arenaGamesPlayed = 0;
     int arenaWins = 0;
     int arenaLosses = 0;
@@ -324,6 +330,7 @@ struct RobotOutcomeUpdate {
 
 struct LeaderboardEntry {
     int rank = 0;
+    int ladderGames = 0;
     std::string uuid;
     std::string handle;
     std::string displayName;
@@ -490,6 +497,9 @@ struct RobotRecord {
     int elo2p3b = 1200;
     int elo2p1b = 1200;
     int eloOfk = 1200;
+    int games2p3b = 0;
+    int games2p1b = 0;
+    int gamesOfk = 0;
     int64_t createdAt = 0;
     bool revoked = false;
     int64_t revokedAt = 0;
@@ -533,6 +543,9 @@ struct ArenaStandingEntry {
     int elo2p3b = 1200;
     int elo2p1b = 1200;
     int eloOfk = 1200;
+    int games2p3b = 0;
+    int games2p1b = 0;
+    int gamesOfk = 0;
     int gamesPlayed = 0;
     int wins = 0;
     int losses = 0;
@@ -576,6 +589,14 @@ struct LobbyChatLogRow {
     std::string senderHandle;
     std::string text;
     int64_t createdAtMs = 0;
+};
+
+struct RecomputeRatingsResult {
+    int gamesScanned = 0;
+    int pool1GamesRated = 0;
+    int pool2GamesRated = 0;
+    int playersUpdated = 0;
+    int robotsUpdated = 0;
 };
 
 class AccountStore {
@@ -708,6 +729,8 @@ public:
     bool getRobotByName(const std::string &robotName, RobotRecord &out);
     bool recordRobotGameOutcome(int64_t robotId, GameOutcome outcome);
     bool reconcileRobotStats();
+    bool recomputeAllRatings(RecomputeRatingsResult &outResult,
+                             std::string &errorOut);
 
     /* mode: '2P' | '4P' | 'OFK'; limit clamped to 1..kMaxLeaderboardLimit. */
     bool leaderboard(const std::string &mode, int limit,

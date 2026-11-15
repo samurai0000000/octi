@@ -338,13 +338,12 @@
     Tracks exclusively online rated Human-vs-Human matches using standard Elo factor <code>K = 32</code>. Human-Only ratings are 100% insulated from bot matches.
   </div>
   <div class="callout tip">
-    <strong>Pool 2 &mdash; Open Bot &amp; Human Arena (Robots Directory):</strong><br>
-    Tracks rated online matches involving at least one registered AI robot (Human-vs-Robot and Robot-vs-Robot) on a unified competitive scale with four anti-farming safeguards:
+    <strong>Pool 2 &mdash; Open Bot &amp; Human Arena (Leaderboard &amp; Robots Directory):</strong><br>
+    Tracks rated online matches involving at least one registered AI robot (Human-vs-Robot and Robot-vs-Robot) on a unified competitive scale with three anti-farming safeguards:
     <ul>
-      <li><strong>Cross-Owner Matches:</strong> Standard <code>K = 32</code>.</li>
-      <li><strong>Same-Owner Bot-vs-Bot Self-Testing:</strong> Allowed at reduced <code>K = 16</code>.</li>
-      <li><strong>Human-vs-Own-Robot Exclusion:</strong> Always forced <strong>unrated</strong> to prevent manual point transfers.</li>
-      <li><strong>Pairwise Frequency &amp; Early-Resign Guards:</strong> At most <strong>4 rated games per rolling 24-hour window</strong> between any unordered participant pair (5th+ auto-downgrades to casual), and resignations before <strong>8 plies</strong> record 0 Elo delta.</li>
+      <li><strong>Human-vs-Robot Matches:</strong> Unlimited rated play at standard <code>K = 32</code> (including against your own robots).</li>
+      <li><strong>Bot-vs-Bot K-Factors:</strong> Cross-owner matches use standard <code>K = 32</code>; same-owner self-testing uses reduced <code>K = 16</code>.</li>
+      <li><strong>Bot-vs-Bot Pair Cap &amp; Early-Resign Guards:</strong> Bot-vs-Bot matches are capped at <strong>4 rated games per rolling 24-hour window</strong> between any unordered bot pair (5th+ auto-downgrades to casual; no daily cap across distinct opponent bots), and resignations before <strong>8 plies</strong> record 0 Elo delta.</li>
     </ul>
   </div>
 </div>

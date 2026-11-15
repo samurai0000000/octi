@@ -1172,6 +1172,7 @@ TEST(DesktopAppIntegrationTest, WindowsBundleAndNsisInstallerMatchReadmeVersion)
         "octi.exe",
         "Qt6Core.dll",
         "Qt6Gui.dll",
+        "Qt6Svg.dll",
         "Qt6Widgets.dll",
         "libstdc++-6.dll",
         "libgcc_s_seh-1.dll",
@@ -1180,6 +1181,7 @@ TEST(DesktopAppIntegrationTest, WindowsBundleAndNsisInstallerMatchReadmeVersion)
         "platforms/qdirect2d.dll",
         "platforms/qminimal.dll",
         "platforms/qoffscreen.dll",
+        "imageformats/qsvg.dll",
         "styles/qmodernwindowsstyle.dll",
         installerName,
     };

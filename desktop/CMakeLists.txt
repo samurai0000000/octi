@@ -150,6 +150,7 @@ if(WIN32)
     set(OCTI_WIN_QT_DLLS
         Qt6Core.dll
         Qt6Gui.dll
+        Qt6Svg.dll
         Qt6Widgets.dll
     )
     set(OCTI_WIN_MINGW_DLLS

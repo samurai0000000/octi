@@ -46,7 +46,7 @@ if(NOT EXISTS "${OCTI_QT_MINGW_ROOT}/include/QtCore/qconfig.h")
         COMMAND "${AQT_EXECUTABLE}" install-qt windows desktop
                 "${OCTI_QT_WIN_VERSION}" "${OCTI_QT_WIN_ARCH}"
                 -O "${OCTI_QT_PREBUILT_ROOT}"
-                --archives qtbase icu
+                --archives qtbase icu qtsvg
                 -m qtimageformats
         RESULT_VARIABLE _aqt_rc
     )
@@ -74,6 +74,29 @@ if(NOT EXISTS "${OCTI_QT_MINGW_ROOT}/plugins/imageformats/qwebp.dll")
         if(NOT _aqt_img_rc EQUAL 0)
             message(WARNING "Failed to install qtimageformats via aqt: ${_aqt_img_rc}")
         endif()
+    endif()
+endif()
+
+if(NOT EXISTS "${OCTI_QT_MINGW_ROOT}/plugins/imageformats/qsvg.dll")
+    if(NOT AQT_EXECUTABLE)
+        find_program(AQT_EXECUTABLE NAMES aqt PATHS
+            "$ENV{HOME}/work/aimon/build/.venv-aqt/bin"
+            "$ENV{HOME}/.local/bin"
+        )
+    endif()
+    if(NOT AQT_EXECUTABLE)
+        message(FATAL_ERROR "aqt executable not found to install missing qtsvg archive")
+    endif()
+    message(STATUS "Installing qtsvg for Windows Qt ${OCTI_QT_WIN_VERSION} (${OCTI_QT_WIN_ARCH})...")
+    execute_process(
+        COMMAND "${AQT_EXECUTABLE}" install-qt windows desktop
+                "${OCTI_QT_WIN_VERSION}" "${OCTI_QT_WIN_ARCH}"
+                -O "${OCTI_QT_PREBUILT_ROOT}"
+                --archives qtsvg
+        RESULT_VARIABLE _aqt_svg_rc
+    )
+    if(NOT _aqt_svg_rc EQUAL 0)
+        message(FATAL_ERROR "Failed to install qtsvg via aqt: ${_aqt_svg_rc}")
     endif()
 endif()
 

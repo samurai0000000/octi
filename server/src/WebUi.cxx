@@ -1873,8 +1873,8 @@ tr.active-ply {
           <div class="dim" style="margin-top:4px;">Pure Human-vs-Human rated online matches (<code>K = 32</code>). Completely insulated from robot games.</div>
         </div>
         <div style="flex:1;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px;">
-          <strong>Pool 2 &mdash; Open Bot &amp; Human Arena (<a href="#robots">#robots</a>)</strong>
-          <div class="dim" style="margin-top:4px;">Rated online matches with at least one registered robot (<code>K = 32</code>; same-owner Bot-vs-Bot <code>K = 16</code>; Human-vs-Own-Robot unrated; max 4 rated games / 24h per pair; &lt; 8 ply resignation unrated).</div>
+          <strong>Pool 2 &mdash; Open Bot &amp; Human Arena (<a href="#board">#board</a>, <a href="#robots">#robots</a>)</strong>
+          <div class="dim" style="margin-top:4px;">Rated online matches with at least one registered robot (Human-vs-Robot unlimited at <code>K = 32</code>; Bot-vs-Bot max 4 rated games / 24h per unordered bot pair, <code>K = 32</code> cross-owner / <code>K = 16</code> same-owner; &lt; 8 ply resignation unrated).</div>
         </div>
       </div>
     </div>
@@ -2410,20 +2410,44 @@ tr.active-ply {
   </div>
 </section>
 
-<!-- Tab 5: Leaderboard (Pool 1 Human-Only Ladders) -->
+<!-- Tab 5: Leaderboard (Pool 1 Human-Only & Pool 2 Open Arena Ladders) -->
 <section id="tab-board" class="tab">
-  <div class="panel">
-    <div class="row">
-      <label>Ladder <select id="lb-mode">
-        <option value="2P_3B" selected>2P_3B (9x9 3-Base)</option>
-        <option value="2P_1B">2P_1B (9x9 1-Base)</option>
-        <option value="OFK">OFK (6x7 Kids)</option></select></label>
-      <button type="button" class="btn" id="lb-go">Refresh</button>
-      <span class="dim" style="font-size:12.5px;">Pool 1 Human-Only Ladders (pure Human-vs-Human)</span>
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="row" style="align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin:0;">
+      <div class="row" style="align-items:center;gap:10px;margin:0;">
+        <label style="font-weight:700;">Ladder <select id="lb-mode">
+          <option value="2P_3B" selected>2P_3B (9x9 3-Base)</option>
+          <option value="2P_1B">2P_1B (9x9 1-Base)</option>
+          <option value="OFK">OFK (6x7 Kids)</option></select></label>
+        <button type="button" class="btn" id="lb-go">Refresh</button>
+      </div>
+      <span class="dim" style="font-size:12.5px;">Official 1v1 Competitive Ladders &bull; Unplayed ladders display <code>-</code> and sort below ranked participants</span>
     </div>
-    <div id="lb-msg" class="dim"></div>
+  </div>
+
+  <div class="panel" id="lb-human-panel" style="margin-bottom:18px;">
+    <div class="row" style="align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+      <h3 style="margin:0;">Pool 1 &mdash; Human-Only Ladder (Pure Human-vs-Human, K = 32)</h3>
+      <span class="dim" style="font-size:12.5px;">100% insulated from robot matches</span>
+    </div>
+    <div id="lb-msg" class="dim" style="margin-bottom:8px;"></div>
     <table id="lb-table"><thead><tr><th>#</th><th>Player</th><th>Elo</th>
       <th>Games</th><th>W</th><th>L</th><th>D</th></tr></thead>
+      <tbody></tbody></table>
+  </div>
+
+  <div class="panel" id="lb-arena-panel">
+    <div class="row" style="align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
+      <h3 style="margin:0;">Pool 2 &mdash; Open Arena Ladder (Humans + Robots)</h3>
+      <label style="font-size:13px;">Filter <select id="lb-arena-type">
+        <option value="all" selected>All (Humans + Robots)</option>
+        <option value="robots">Robots Only</option>
+        <option value="humans">Humans Only</option></select></label>
+    </div>
+    <div class="dim" style="font-size:12.5px;margin-bottom:10px;">Human-vs-Robot unlimited (K = 32) &bull; Bot-vs-Bot max 4 rated / 24h per unordered bot pair (K = 32 cross-owner, K = 16 same-owner)</div>
+    <div id="lb-arena-msg" class="dim" style="margin-bottom:8px;"></div>
+    <table id="lb-arena-table"><thead><tr><th>#</th><th>Participant</th><th>Type</th><th>Elo</th>
+      <th>Games</th><th>W</th><th>L</th><th>D</th><th>Win Rate</th></tr></thead>
       <tbody></tbody></table>
   </div>
 </section>
@@ -2814,6 +2838,13 @@ tr.active-ply {
           <span>Show Purge Buttons</span>
         </label>
       </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #fecaca;">
+        <div class="row" style="align-items:center;justify-content:space-between;gap:12px;margin:0;flex-wrap:wrap;">
+          <div class="dim" style="font-size:12.5px;">Chronologically replay all archived online games to recompute Pool 1 (Human) and Pool 2 (Arena) Elo ratings and W/L/D counters.</div>
+          <button type="button" class="btn" id="btn-admin-recompute-ratings">Recompute All Ratings &amp; Stats</button>
+        </div>
+        <div id="admin-recompute-msg" class="dim" style="font-size:12.5px;margin-top:6px;"></div>
+      </div>
     </div>
   </div>
 </section>
@@ -3027,13 +3058,12 @@ tr.active-ply {
           Tracks exclusively online rated Human-vs-Human matches using standard Elo factor <code>K = 32</code>. Human-Only ratings are 100% insulated from robot matches.
         </div>
         <div class="rb-callout" style="border-left-color:#10b981;">
-          <strong>Pool 2 &mdash; Open Bot &amp; Human Arena (<a href="#robots">Robots Directory</a>):</strong><br>
-          Tracks rated online matches involving at least one registered AI robot (Human-vs-Robot and Robot-vs-Robot) on a unified competitive scale with four anti-farming safeguards:
+          <strong>Pool 2 &mdash; Open Bot &amp; Human Arena (<a href="#board">Leaderboard</a> &amp; <a href="#robots">Robots Directory</a>):</strong><br>
+          Tracks rated online matches involving at least one registered AI robot (Human-vs-Robot and Robot-vs-Robot) on a unified competitive scale with three anti-farming safeguards:
           <ul style="margin-top:6px;margin-bottom:0;">
-            <li><strong>Cross-Owner Matches:</strong> Standard <code>K = 32</code>.</li>
-            <li><strong>Same-Owner Bot-vs-Bot Self-Testing:</strong> Allowed at reduced <code>K = 16</code>.</li>
-            <li><strong>Human-vs-Own-Robot Exclusion:</strong> Always forced <strong>unrated</strong> to prevent manual point transfers.</li>
-            <li><strong>Pairwise Cap &amp; Early-Resign Guard:</strong> Maximum <strong>4 rated games per rolling 24-hour window</strong> between any unordered participant pair (5th+ auto-downgrades to casual), and resignations before <strong>8 plies</strong> record 0 Elo delta.</li>
+            <li><strong>Human-vs-Robot Matches:</strong> Unlimited rated play at standard <code>K = 32</code> (including against your own robots).</li>
+            <li><strong>Bot-vs-Bot K-Factors:</strong> Cross-owner matches use standard <code>K = 32</code>; same-owner self-testing uses reduced <code>K = 16</code>.</li>
+            <li><strong>Bot-vs-Bot Pair Cap &amp; Early-Resign Guard:</strong> Bot-vs-Bot matches are capped at <strong>4 rated games per rolling 24-hour window</strong> between any unordered bot pair (5th+ auto-downgrades to casual; no daily cap across distinct opponent bots), and resignations before <strong>8 plies</strong> record 0 Elo delta.</li>
           </ul>
         </div>
       </article>
@@ -3278,6 +3308,10 @@ function fmtTime(sec) {
   function pad2(n) { return n < 10 ? "0" + n : "" + n; }
   return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) +
          " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+}
+
+function fmtElo(elo, gamesCount) {
+  return (Number(gamesCount) > 0) ? String(elo !== undefined ? elo : 1200) : "-";
 }
 
 function cellRow(tr, values) {
@@ -42547,6 +42581,7 @@ function renderGuestState() {
   if ($("account-profile-card")) $("account-profile-card").style.display = "none";
   if ($("account-admin-controls")) $("account-admin-controls").style.display = "none";
   if ($("web-admin-purge-toggle")) $("web-admin-purge-toggle").checked = false;
+  if ($("admin-recompute-msg")) $("admin-recompute-msg").textContent = "";
   if ($("robots-guest-card")) $("robots-guest-card").style.display = "block";
   if ($("robots-owner-card")) $("robots-owner-card").style.display = "none";
 
@@ -42653,6 +42688,49 @@ if ($("web-admin-purge-toggle")) {
     if (arLoaded) {
       arSearch(arOffset);
     }
+  });
+}
+
+if ($("btn-admin-recompute-ratings")) {
+  $("btn-admin-recompute-ratings").addEventListener("click", function () {
+    showConfirmModal(
+      "Recompute All Ratings & Stats",
+      "Reset and replay all Pool 1 (Human) and Pool 2 (Arena) Elo ratings and W/L/D counters chronologically from archived online games?",
+      "Recompute Now",
+      function () {
+        var btn = $("btn-admin-recompute-ratings");
+        var msgEl = $("admin-recompute-msg");
+        if (btn) btn.disabled = true;
+        if (msgEl) {
+          msgEl.textContent = "Recomputing all ratings and stats...";
+          msgEl.style.color = "var(--dim)";
+        }
+        api("/api/v1/admin/recompute-ratings", { method: "POST", body: {} }).then(function (res) {
+          if (btn) btn.disabled = false;
+          var summary = "Recomputed " + (res.games_scanned || 0) + " online games (Pool 1: " +
+            (res.pool1_games_rated || 0) + ", Pool 2: " + (res.pool2_games_rated || 0) + "; " +
+            (res.players_updated || 0) + " players, " + (res.robots_updated || 0) + " robots).";
+          if (msgEl) {
+            msgEl.textContent = summary;
+            msgEl.style.color = "#10b981";
+          }
+          showToast(summary, "success");
+          loadMyProfile();
+          loadMyRobots();
+          if (typeof lbLoad === "function") lbLoad();
+          if (typeof loadRobotsDirectory === "function" && robotsLoaded) loadRobotsDirectory(robotsOffset || 0);
+          if (typeof usersSearch === "function" && usersLoaded) usersSearch(usersOffset || 0);
+        }).catch(function (e) {
+          if (btn) btn.disabled = false;
+          var errMsg = e.message || "Failed to recompute ratings.";
+          if (msgEl) {
+            msgEl.textContent = "Error: " + errMsg;
+            msgEl.style.color = "#ef4444";
+          }
+          showToast(errMsg, "error");
+        });
+      }
+    );
   });
 }
 
@@ -43317,9 +43395,9 @@ function loadMyRobots() {
       var gp = r.games_played || (w + l + d);
       var tdRecord = el("td", w + "W - " + l + "L - " + d + "D");
       tdRecord.title = gp + " games | Arena ELO: " +
-        (r.elo_2p_3b !== undefined ? r.elo_2p_3b : 1200) + " / " +
-        (r.elo_2p_1b !== undefined ? r.elo_2p_1b : 1200) + " / " +
-        (r.elo_ofk !== undefined ? r.elo_ofk : 1200);
+        fmtElo(r.elo_2p_3b, r.games_2p_3b) + " / " +
+        fmtElo(r.elo_2p_1b, r.games_2p_1b) + " / " +
+        fmtElo(r.elo_ofk, r.games_ofk);
 
       /* Secret Token with Show/Hide & Copy */
       var tdTok = el("td");
@@ -43506,9 +43584,9 @@ function usersSearch(offset) {
       var elo3b = u.elo_2p_3b !== undefined ? u.elo_2p_3b : (u.elo_2p !== undefined ? u.elo_2p : 1200);
       var elo1b = u.elo_2p_1b !== undefined ? u.elo_2p_1b : 1200;
       var eloOfk = u.elo_ofk !== undefined ? u.elo_ofk : 1200;
-      var tdElo3b = el("td", elo3b);
-      var tdElo1b = el("td", elo1b);
-      var tdEloOfk = el("td", eloOfk);
+      var tdElo3b = el("td", fmtElo(elo3b, u.games_2p_3b));
+      var tdElo1b = el("td", fmtElo(elo1b, u.games_2p_1b));
+      var tdEloOfk = el("td", fmtElo(eloOfk, u.games_ofk));
       var wld = (u.wins || 0) + "-" + (u.losses || 0) + "-" + (u.draws || 0);
       var tdGames = el("td", wld);
       var tdRobots = el("td", u.active_robots_count !== undefined ? u.active_robots_count : 0);
@@ -43617,19 +43695,22 @@ function openUserProfile(id) {
     var uElo1b = u.elo_2p_1b !== undefined ? u.elo_2p_1b : 1200;
     var uEloOfk = u.elo_ofk !== undefined ? u.elo_ofk : 1200;
     var statItems = [
-      ["2P_3B Elo", uElo3b],
-      ["2P_1B Elo", uElo1b],
-      ["OFK Elo", uEloOfk],
+      ["2P_3B Elo", fmtElo(uElo3b, u.games_2p_3b)],
+      ["2P_1B Elo", fmtElo(uElo1b, u.games_2p_1b)],
+      ["OFK Elo", fmtElo(uEloOfk, u.games_ofk)],
       ["Games", u.games_played || 0],
       ["Wins", u.wins || 0],
       ["Losses", u.losses || 0],
       ["Draws", u.draws || 0],
       ["Win Rate", (u.games_played ? ((u.wins / u.games_played) * 100).toFixed(1) + "%" : "0.0%")]
     ];
-    if ((u.arena_games_played || 0) > 0) {
-      statItems.push(["Arena 2P_3B", u.arena_elo_2p_3b !== undefined ? u.arena_elo_2p_3b : 1200]);
-      statItems.push(["Arena 2P_1B", u.arena_elo_2p_1b !== undefined ? u.arena_elo_2p_1b : 1200]);
-      statItems.push(["Arena OFK", u.arena_elo_ofk !== undefined ? u.arena_elo_ofk : 1200]);
+    if ((u.arena_games_played || 0) > 0 ||
+        (u.arena_games_2p_3b || 0) > 0 ||
+        (u.arena_games_2p_1b || 0) > 0 ||
+        (u.arena_games_ofk || 0) > 0) {
+      statItems.push(["Arena 2P_3B", fmtElo(u.arena_elo_2p_3b, u.arena_games_2p_3b)]);
+      statItems.push(["Arena 2P_1B", fmtElo(u.arena_elo_2p_1b, u.arena_games_2p_1b)]);
+      statItems.push(["Arena OFK", fmtElo(u.arena_elo_ofk, u.arena_games_ofk)]);
       statItems.push(["Arena W-L-D", (u.arena_wins || 0) + "-" + (u.arena_losses || 0) + "-" + (u.arena_draws || 0)]);
     }
     statItems.forEach(function (it) {
@@ -43666,9 +43747,9 @@ function openUserProfile(id) {
           tdName.textContent = rb.robot_name;
         }
         rtr.appendChild(tdName);
-        var rbEloStr = (rb.elo_2p_3b !== undefined ? rb.elo_2p_3b : 1200) + " / " +
-          (rb.elo_2p_1b !== undefined ? rb.elo_2p_1b : 1200) + " / " +
-          (rb.elo_ofk !== undefined ? rb.elo_ofk : 1200);
+        var rbEloStr = fmtElo(rb.elo_2p_3b, rb.games_2p_3b) + " / " +
+          fmtElo(rb.elo_2p_1b, rb.games_2p_1b) + " / " +
+          fmtElo(rb.elo_ofk, rb.games_ofk);
         rtr.appendChild(el("td", rbEloStr));
         rtr.appendChild(el("td", rb.description || "-"));
         var tdUrl = el("td");
@@ -43860,9 +43941,9 @@ function loadRobotsDirectory(offset) {
         }
 
         // Pool 2 Arena 3-Ladder Elos
-        var tdElo3b = el("td", String(r.elo_2p_3b !== undefined ? r.elo_2p_3b : 1200));
-        var tdElo1b = el("td", String(r.elo_2p_1b !== undefined ? r.elo_2p_1b : 1200));
-        var tdEloOfk = el("td", String(r.elo_ofk !== undefined ? r.elo_ofk : 1200));
+        var tdElo3b = el("td", fmtElo(r.elo_2p_3b, r.games_2p_3b));
+        var tdElo1b = el("td", fmtElo(r.elo_2p_1b, r.games_2p_1b));
+        var tdEloOfk = el("td", fmtElo(r.elo_ofk, r.games_ofk));
 
         // Status Badge
         var tdStatus = el("td");
@@ -43974,9 +44055,9 @@ function viewRobotProfile(id) {
         urlRow.style.display = "none";
       }
     }
-    if ($("robot-kpi-elo-3b")) $("robot-kpi-elo-3b").textContent = String(r.elo_2p_3b !== undefined ? r.elo_2p_3b : 1200);
-    if ($("robot-kpi-elo-1b")) $("robot-kpi-elo-1b").textContent = String(r.elo_2p_1b !== undefined ? r.elo_2p_1b : 1200);
-    if ($("robot-kpi-elo-ofk")) $("robot-kpi-elo-ofk").textContent = String(r.elo_ofk !== undefined ? r.elo_ofk : 1200);
+    if ($("robot-kpi-elo-3b")) $("robot-kpi-elo-3b").textContent = fmtElo(r.elo_2p_3b, r.games_2p_3b);
+    if ($("robot-kpi-elo-1b")) $("robot-kpi-elo-1b").textContent = fmtElo(r.elo_2p_1b, r.games_2p_1b);
+    if ($("robot-kpi-elo-ofk")) $("robot-kpi-elo-ofk").textContent = fmtElo(r.elo_ofk, r.games_ofk);
     if ($("robot-kpi-games")) $("robot-kpi-games").textContent = String(r.games_played || 0);
     if ($("robot-kpi-record")) $("robot-kpi-record").textContent = (r.wins || 0) + " - " + (r.losses || 0) + " - " + (r.draws || 0);
     if ($("robot-kpi-winrate")) $("robot-kpi-winrate").textContent = (r.win_rate !== undefined ? r.win_rate : 0) + "%";
@@ -51304,15 +51385,18 @@ window.addEventListener("keydown", function (ev) {
 });
 
 /* ---- leaderboard ---- */
-function lbLoad() {
-  api("/api/v1/leaderboard?mode=" + encodeURIComponent($("lb-mode").value) +
+function lbLoadHuman() {
+  var mode = $("lb-mode") ? $("lb-mode").value : "2P_3B";
+  return api("/api/v1/leaderboard?mode=" + encodeURIComponent(mode) +
       "&limit=50").then(function (j) {
     var body = $("lb-table").querySelector("tbody");
     clear(body);
-    $("lb-msg").textContent = j.entries.length ? "" : "No ranked players yet.";
-    j.entries.forEach(function (e) {
+    var entries = j.entries || [];
+    $("lb-msg").textContent = entries.length ? "" : "No ranked players yet.";
+    entries.forEach(function (e) {
       var tr = el("tr", null, "click");
-      tr.appendChild(el("td", e.rank));
+      var rankStr = (e.rank && Number(e.rank) > 0) ? String(e.rank) : "-";
+      tr.appendChild(el("td", rankStr));
 
       var tdPlayer = el("td");
       var pWrap = el("div");
@@ -51348,7 +51432,9 @@ function lbLoad() {
       tdPlayer.appendChild(pWrap);
       tr.appendChild(tdPlayer);
 
-      [e.elo, e.games_played, e.wins, e.losses, e.draws].forEach(function (v) {
+      var ladderGames = (e.ladder_games !== undefined) ? e.ladder_games : e.games_played;
+      var eloStr = fmtElo(e.elo, ladderGames);
+      [eloStr, e.games_played, e.wins, e.losses, e.draws].forEach(function (v) {
         tr.appendChild(el("td", v));
       });
       tr.addEventListener("click", function () {
@@ -51360,8 +51446,145 @@ function lbLoad() {
   }).catch(function (e) { $("lb-msg").textContent = "Error: " + e.message; });
 }
 
+function lbLoadArena() {
+  var arenaTable = $("lb-arena-table");
+  if (!arenaTable) return Promise.resolve();
+  var mode = $("lb-mode") ? $("lb-mode").value : "2P_3B";
+  var ptype = $("lb-arena-type") ? $("lb-arena-type").value : "all";
+  return api("/api/v1/leaderboard?mode=" + encodeURIComponent(mode) +
+      "&pool=arena&participant_type=" + encodeURIComponent(ptype) +
+      "&limit=100").then(function (j) {
+    var body = arenaTable.querySelector("tbody");
+    clear(body);
+    var entries = j.entries || [];
+    if ($("lb-arena-msg")) {
+      $("lb-arena-msg").textContent = entries.length ? "" : "No Open Arena participants yet.";
+    }
+    entries.forEach(function (e) {
+      var isRobot = Boolean(e.is_robot || e.entry_type === "robot");
+      var tr = el("tr", null, "click");
+      var rankStr = (e.rank && Number(e.rank) > 0) ? String(e.rank) : "-";
+      tr.appendChild(el("td", rankStr));
+
+      var tdPart = el("td");
+      var pWrap = el("div");
+      pWrap.style.display = "inline-flex";
+      pWrap.style.alignItems = "center";
+      pWrap.style.gap = "10px";
+      var rawHandle = e.handle || e.name || e.robot_name || "P";
+      pWrap.appendChild(createAvatarEl(e.avatar_url, rawHandle, 28));
+
+      var nameCol = el("div");
+      nameCol.style.display = "inline-flex";
+      nameCol.style.alignItems = "baseline";
+      nameCol.style.gap = "6px";
+      nameCol.style.flexWrap = "wrap";
+
+      var pLink = el("a");
+      pLink.style.fontWeight = "600";
+      pLink.style.color = "var(--acc-bright)";
+      pLink.style.textDecoration = "none";
+
+      if (isRobot) {
+        var botId = e.robot_uuid || e.uuid || e.robot_name || e.name || "";
+        var botLabel = e.robot_name || e.name || e.handle || "";
+        pLink.href = "#robots/" + encodeURIComponent(botId);
+        pLink.textContent = botLabel;
+        pLink.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          switchTab("robots");
+          viewRobotProfile(botId);
+        });
+        nameCol.appendChild(pLink);
+        if (e.owner_handle) {
+          var ownerWrap = el("span", "by ", "dim");
+          ownerWrap.style.fontSize = "12px";
+          var ownerTarget = e.owner_uuid || e.owner_handle;
+          var ownerLink = el("a", "@" + e.owner_handle);
+          ownerLink.href = "#users/" + encodeURIComponent(ownerTarget);
+          ownerLink.style.color = "var(--dim)";
+          ownerLink.addEventListener("click", function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            switchTab("users");
+            openUserProfile(ownerTarget);
+          });
+          ownerWrap.appendChild(ownerLink);
+          nameCol.appendChild(ownerWrap);
+        }
+      } else {
+        var userId = e.user_uuid || e.uuid || e.handle || e.name || "";
+        var userHandle = e.handle || e.name || "";
+        var primaryLabel = e.display_name || ("@" + userHandle);
+        pLink.href = "#users/" + encodeURIComponent(userId);
+        pLink.appendChild(el("span", primaryLabel));
+        if (e.display_name && userHandle && e.display_name !== userHandle) {
+          var uSub = el("span", "@" + userHandle, "dim");
+          uSub.style.fontSize = "12px";
+          uSub.style.fontWeight = "400";
+          uSub.style.marginLeft = "6px";
+          pLink.appendChild(uSub);
+        }
+        pLink.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          switchTab("users");
+          openUserProfile(userId);
+        });
+        nameCol.appendChild(pLink);
+      }
+
+      pWrap.appendChild(nameCol);
+      tdPart.appendChild(pWrap);
+      tr.appendChild(tdPart);
+
+      var tdType = el("td");
+      tdType.appendChild(el("span", isRobot ? "BOT" : "HUMAN", isRobot ? "badge badge-active" : "badge"));
+      if (isRobot && (e.retired || e.status === "retired" || e.revoked || e.token_deleted)) {
+        var retBadge = el("span", "Retired", "badge badge-revoked");
+        retBadge.style.marginLeft = "6px";
+        tdType.appendChild(retBadge);
+      }
+      tr.appendChild(tdType);
+
+      var eloStr = fmtElo(e.elo, e.ladder_games);
+      var wrStr = (e.win_rate !== undefined ? Number(e.win_rate).toFixed(1) : "0.0") + "%";
+      [eloStr, e.games_played || 0, e.wins || 0, e.losses || 0, e.draws || 0, wrStr].forEach(function (v) {
+        tr.appendChild(el("td", v));
+      });
+
+      tr.addEventListener("click", function () {
+        if (isRobot) {
+          var bId = e.robot_uuid || e.uuid || e.robot_name || e.name || "";
+          switchTab("robots");
+          viewRobotProfile(bId);
+        } else {
+          var uId = e.user_uuid || e.uuid || e.handle || e.name || "";
+          switchTab("users");
+          openUserProfile(uId);
+        }
+      });
+      body.appendChild(tr);
+    });
+  }).catch(function (e) {
+    if ($("lb-arena-msg")) $("lb-arena-msg").textContent = "Error: " + e.message;
+  });
+}
+
+function lbLoad() {
+  lbLoadHuman();
+  lbLoadArena();
+}
+
 $("lb-go").addEventListener("click", lbLoad);
 $("lb-mode").addEventListener("change", lbLoad);
+if ($("lb-arena-type")) {
+  $("lb-arena-type").addEventListener("change", lbLoadArena);
+}
+window.fmtElo = fmtElo;
+window.lbLoad = lbLoad;
+window.lbLoadArena = lbLoadArena;
 
 
 /* =========================================================================
