@@ -25,7 +25,7 @@ endif()
 option(OCTI_SERVER_SANITIZE "Build with AddressSanitizer and UBSan" OFF)
 option(OCTI_SERVER_BUILD_TESTS "Build octi_server executable and test suite" ON)
 if(OCTI_SERVER_SANITIZE AND NOT MSVC)
-    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer
+    add_compile_options(-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
                         -fno-sanitize-recover=undefined)
     add_link_options(-fsanitize=address,undefined)
 endif()

@@ -778,7 +778,7 @@ private:
  *     (or eligible friendly home square for Reserve Pod / Liberation).
  *     Provides pod stack strip for >= 2 pods, move all matching stack toggle,
  *     interactive 320x320 zoomed octagonal pod canvas with 8 directional sockets,
- *     prong dispenser tray for dragging / repositioning prongs,
+ *     prong dispenser tray for dragging / adding prongs,
  *     and "Move / Jump This Pod" action button.
  */
 class ZoomedSquareDialog : public QDialog {
@@ -855,16 +855,13 @@ private:
         SUPER
     };
     SelectedProngType _selectedProngType;
-    OctiDir _selectedProngSocketForReposition;
 
     enum class ZoomDragKind {
         NONE,
         ADD_NORMAL_PRONG,
-        ADD_SUPERPRONG,
-        REPOSITION_PRONG
+        ADD_SUPERPRONG
     };
     ZoomDragKind _dragKind;
-    OctiDir _dragSrcProngDir;
     OctiDir _hoverProngDir;
     QPointF _dragCursorPos;
 };

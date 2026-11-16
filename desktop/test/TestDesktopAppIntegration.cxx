@@ -945,11 +945,27 @@ TEST(DesktopAppIntegrationTest,
     /* Capture Full-Window Screenshot 3: Online Lobby View */
     win.setTheme(ThemeId::OBSIDIAN_BRASS);
     LobbyStateData sampleLobby;
-    sampleLobby.players = {
-        {"u-1", "Alice_GM", "PLAYING", "g-20261022-0001"},
-        {"u-2", "Bob_Challenger", "PLAYING", "g-20261022-0001"},
-        {"u-3", "MasterChen", "IN_LOBBY", ""},
-    };
+    {
+        LobbyPlayerInfo p1;
+        p1.playerUuid = "u-1";
+        p1.handle = "Alice_GM";
+        p1.status = "PLAYING";
+        p1.roomId = "g-20261022-0001";
+        sampleLobby.players.push_back(p1);
+
+        LobbyPlayerInfo p2;
+        p2.playerUuid = "u-2";
+        p2.handle = "Bob_Challenger";
+        p2.status = "PLAYING";
+        p2.roomId = "g-20261022-0001";
+        sampleLobby.players.push_back(p2);
+
+        LobbyPlayerInfo p3;
+        p3.playerUuid = "u-3";
+        p3.handle = "MasterChen";
+        p3.status = "IN_LOBBY";
+        sampleLobby.players.push_back(p3);
+    }
     TableSummaryInfo t1;
     t1.roomId = "g-20261022-0001";
     t1.mode = "2P";
@@ -960,10 +976,23 @@ TEST(DesktopAppIntegrationTest,
     t1.seatsTotal = 2;
     t1.hostHandle = "Alice_GM";
     sampleLobby.tables.push_back(t1);
-    sampleLobby.recentChat = {
-        {1, 1000, "u-1", "Alice_GM", "Welcome to the OCTI Grandmaster Lobby!"},
-        {2, 2000, "u-3", "MasterChen", "Anyone up for a 4P partnership match?"},
-    };
+    {
+        LobbyChatEntry c1;
+        c1.seq = 1;
+        c1.atMs = 1000;
+        c1.playerUuid = "u-1";
+        c1.handle = "Alice_GM";
+        c1.text = "Welcome to the OCTI Grandmaster Lobby!";
+        sampleLobby.recentChat.push_back(c1);
+
+        LobbyChatEntry c2;
+        c2.seq = 2;
+        c2.atMs = 2000;
+        c2.playerUuid = "u-3";
+        c2.handle = "MasterChen";
+        c2.text = "Anyone up for a 4P partnership match?";
+        sampleLobby.recentChat.push_back(c2);
+    }
     win.lobbyView()->refreshFromLobbyState(sampleLobby);
     win.showLobbyView();
     QImage shotLobby = win.renderWindowToImage(1440, 900);
@@ -2537,6 +2566,10 @@ TEST(DesktopAppIntegrationTest, ProfileAndAvatarEditorFullParityAndInstallIdAttr
     CHECK_FALSE(dlg.avatarPreviewLabel()->pixmap().isNull());
     win.pumpUiEvents();
     CHECK_FALSE(win.profileAvatarLabel()->pixmap().isNull());
+#elif QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    CHECK_FALSE(dlg.avatarPreviewLabel()->pixmap(Qt::ReturnByValue).isNull());
+    win.pumpUiEvents();
+    CHECK_FALSE(win.profileAvatarLabel()->pixmap(Qt::ReturnByValue).isNull());
 #else
     CHECK_TRUE(dlg.avatarPreviewLabel()->pixmap() != nullptr);
     CHECK_FALSE(dlg.avatarPreviewLabel()->pixmap()->isNull());
@@ -2648,6 +2681,8 @@ TEST(DesktopAppIntegrationTest, StartupProfileAndAvatarSyncWithAuthenticatedSess
     CHECK_TRUE(win.profileAvatarLabel() != nullptr);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     CHECK_FALSE(win.profileAvatarLabel()->pixmap().isNull());
+#elif QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    CHECK_FALSE(win.profileAvatarLabel()->pixmap(Qt::ReturnByValue).isNull());
 #else
     CHECK_TRUE(win.profileAvatarLabel()->pixmap() != nullptr);
     CHECK_FALSE(win.profileAvatarLabel()->pixmap()->isNull());
@@ -4583,6 +4618,17 @@ TEST(DesktopAppIntegrationTest,
         ZoomedSquareDialog dlg34(win.board(), win.moveComposer(), 3, 4,
                                  win.boardRotation(), win.theme());
         dlg34.renderToImage(560, 530);
+        // R1: Clicking occupied DIR_E ('c') socket does not trigger reposition
+        QPointF ePt = dlg34.socketCenters().at(DIR_E);
+        QMouseEvent ePress(QEvent::MouseButtonPress, ePt, ePt, ePt,
+                           Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&dlg34, &ePress);
+        QMouseEvent eRel(QEvent::MouseButtonRelease, ePt, ePt, ePt,
+                         Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(&dlg34, &eRel);
+        CHECK_FALSE(dlg34.actionCompleted());
+        STRCMP_EQUAL("33a!c-34", win.moveComposer()->stagedMoveNotation().c_str());
+
         QPointF nePt = dlg34.socketCenters().at(DIR_NE);
         QMouseEvent sPress(QEvent::MouseButtonPress, nePt, nePt, nePt,
                            Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
@@ -4603,6 +4649,21 @@ TEST(DesktopAppIntegrationTest,
     LONGS_EQUAL(2, zoomOpens);
     LONGS_EQUAL(3, lastX);
     LONGS_EQUAL(4, lastY);
+
+    // 5. R4 + R5 in MainWindow composer: composite clear-out allows loop-back
+    {
+        win.board()->fromPositionString(
+            "2:3:0:0:P:A:-:1:2,2,10,0:2,2,10,0:A44beg,A44a,B55,B65,B54,B37");
+        win.moveComposer()->cancelAndRollback();
+        CHECK_TRUE(win.moveComposer()->stageOrCommitPodMoveOrJump(4, 4, 1, 4, 5));
+        CHECK_TRUE(win.moveComposer()->stageOrCommitPodMoveOrJump(4, 4, 0, 6, 6));
+        CHECK_TRUE(win.moveComposer()->stageOrCommitPodMoveOrJump(6, 6, 0, 6, 4));
+        CHECK_TRUE(win.moveComposer()->stageOrCommitPodMoveOrJump(6, 4, 0, 4, 4));
+        CHECK_TRUE(win.moveComposer()->setCaptureAtSquare(5, 4, false));
+        STRCMP_EQUAL("44a-45,44beg-66x-64x-44",
+                     win.moveComposer()->stagedMoveNotation().c_str());
+        CHECK_TRUE(win.moveComposer()->commitStagedMove());
+    }
 
     win.hide();
     std::remove(cfgPath.c_str());

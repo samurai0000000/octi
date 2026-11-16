@@ -1845,14 +1845,14 @@ tr.active-ply {
           <img src="/assets/rulebook/rule_03_prongs_8dir.png" loading="lazy" alt="8 Compass Prong Directions">
         </div>
         <h4>2. Prongs &amp; 8 Compass Vectors</h4>
-        <p>Insert prongs into perimeter sockets <code>a</code>&ndash;<code>h</code> (North clockwise to North-West) or reposition existing prongs to construct movement vectors.</p>
+        <p>Insert prongs from your reserve into perimeter sockets <code>a</code>&ndash;<code>h</code> (North clockwise to North-West) to construct permanent movement vectors on your pods.</p>
       </div>
       <div class="rule-box">
         <div class="rule-diagram-wrap">
           <img src="/assets/rulebook/rule_04_step_vs_jump.png" loading="lazy" alt="Step, Jump, and Optional Capture">
         </div>
         <h4>3. Step, Multi-Hop Jump &amp; Capture</h4>
-        <p>Step 1 empty square or chain 2-square jumps over occupied squares along installed prongs. Capturing jumped enemies (<code>x</code>) plunders all their prongs.</p>
+        <p>Step 1 empty square or chain 2-square jumps over occupied squares along installed prongs. Capturing jumped enemy stacks (<code>x</code>) plunders all their prongs.</p>
       </div>
       <div class="rule-box">
         <div class="rule-diagram-wrap">
@@ -2870,7 +2870,7 @@ tr.active-ply {
       <a href="#rules-ch1">1. Setup, Pods &amp; Prongs</a>
       <a href="#rules-ch2">2. Complete Turn Actions</a>
       <a href="#rules-ch3">3. Stacking &amp; Appendix A</a>
-      <a href="#rules-ch4">4. Victory &amp; 4P Revival</a>
+      <a href="#rules-ch4">4. Victory &amp; 4P Elimination</a>
       <a href="#rules-ch5">5. 13-Variant Matrix</a>
       <a href="#rules-ch6">6. Notation &amp; OCTI-FEN</a>
       <a href="#rules-ch7">7. Dual-Pool Elo Rules</a>
@@ -2896,7 +2896,7 @@ tr.active-ply {
           </div>
           <div class="rb-fig">
             <img src="/assets/rulebook/rule_03_prongs_8dir.png" loading="lazy" alt="8 Compass Prong Directions">
-            <div class="rb-fig-cap"><strong>Figure 3:</strong> The 8 compass sockets <code>a</code>&ndash;<code>h</code> around pod <code>A55acg</code>, supply insertion (<code>55acg+b</code>), and zero-cost reposition (<code>33b+a-b</code>).</div>
+            <div class="rb-fig-cap"><strong>Figure 3:</strong> The 8 compass sockets <code>a</code>&ndash;<code>h</code> around pod <code>A55acg</code> and supply prong insertion (<code>55acg+b</code>) into an empty perimeter socket.</div>
           </div>
         </div>
       </article>
@@ -2905,19 +2905,18 @@ tr.active-ply {
         <h2>Chapter 2 &mdash; Complete Turn Actions</h2>
         <p>Player A moves first and turns alternate strictly (in <code>4P</code>, turn order rotates <code>A &rarr; B &rarr; C &rarr; D</code>, skipping eliminated seats). Passing is forbidden; on your turn you must execute <strong>exactly one</strong> regular turn action:</p>
         <ol>
-          <li><strong>Insert a Prong (<code>xy&lt;cfg&gt;+&lt;dir&gt;</code>):</strong> Take 1 prong from your free supply and insert it into an empty socket on one of your pods on the board (e.g., <code>55acg+b</code>; or <code>33+b!</code> for a gold SuperProng).</li>
-          <li><strong>Reposition a Normal Prong (<code>xy&lt;cfg&gt;+&lt;add&gt;-&lt;rm&gt;</code>):</strong> Move an existing normal prong on one of your pods to another empty socket on that <em>same</em> pod (e.g., <code>33b+a-b</code>). Costs 0 supply prongs. <em>Forbidden on SuperProngs (<code>!</code>) and forbidden in OCTI for Kids (<code>OFK</code>).</em></li>
+          <li><strong>Insert a Prong (<code>xy&lt;cfg&gt;+&lt;dir&gt;</code>):</strong> Take 1 prong from your free supply and insert it into an empty socket on one of your pods on the board (e.g., <code>55acg+b</code>; or <code>33+b!</code> for a gold SuperProng). Once inserted, prongs are permanent on that pod&mdash;repositioning an installed prong to another socket is never allowed in any variant.</li>
           <li><strong>1-Square Step (<code>xy&lt;cfg&gt;-x'y'</code>):</strong> Move a pod 1 square along one of its installed prong directions onto an empty square or a friendly/allied stack (e.g., <code>44ab-45</code>). Steps <strong>never capture</strong> and cannot enter an enemy-occupied square.</li>
           <li><strong>2-Square Jump &amp; Multi-Hop Chain (<code>xy&lt;cfg&gt;-x1y1[x]-x2y2[x]...</code>):</strong> Jump 2 squares along an installed prong direction over an adjacent occupied square (friendly or enemy) onto an empty square beyond it. You may chain additional jumps with that same pod along any of its installed prongs (pivoting mid-chain) and stop early after any legal hop.</li>
-          <li><strong>Deploy Reserve Pod (<code>xy</code>) or Liberate Captured Pod (<code>xy*</code>):</strong> Place 1 reserve pod onto a non-enemy-occupied own home base (or an enemy base you already occupy), or liberate 1 of your captured pods (<code>xy*</code>) onto an OCTI square you already occupy when eligible.</li>
+          <li><strong>Deploy Reserve Pod (<code>xy</code>) or Liberate Captured Pod (<code>xy*</code>):</strong> Place 1 reserve pod onto a non-enemy-occupied own home base (or an enemy base you already occupy), or&mdash;in 3-Base (<code>2P_3B*</code>) and 4-Player (<code>4P*</code>) games&mdash;liberate 1 of your own captured pods (<code>xy*</code>) onto an OCTI square you already occupy when eligible (liberation does not apply to 1-Base sudden-death variants or <code>OFK</code>).</li>
         </ol>
         <div class="rb-callout">
-          <strong>Optional Capture &amp; Prong Plunder:</strong> Jumping over an enemy square makes capture <strong>optional</strong> (append <code>x</code> to capture, e.g., <code>44ab-66x</code>, or omit <code>x</code> to leave the jumped enemy stack intact, e.g., <code>44ab-66</code>). Captured enemy pods are removed at the end of the turn into their owner's <code>capturedPods</code> pool, while <strong>all prongs attached to them transfer immediately into the capturing player's free prong supply</strong>! Friendly/allied pods can be vaulted freely and are never captured.
+          <strong>Optional Whole-Stack Capture &amp; Prong Plunder:</strong> Jumping over an occupied square makes capture <strong>optional</strong>: append <code>x</code> (e.g., <code>44ab-66x</code>) to capture <strong>all pods in the jumped stack</strong> (whole-stack capture&mdash;selective or partial stack capture is never allowed), or omit <code>x</code> (e.g., <code>44ab-66</code>) to leave the jumped stack intact. During regular single or composite moves, captured stacks are removed at the end of the turn into each pod owner's <code>capturedPods</code> pool while <strong>all prongs attached to them transfer into the capturing player's free prong supply</strong>! Friendly/allied pods may be vaulted freely without capture.
         </div>
         <div class="rb-fig-grid">
           <div class="rb-fig">
             <img src="/assets/rulebook/rule_04_step_vs_jump.png" loading="lazy" alt="Step vs Jump and Capture">
-            <div class="rb-fig-cap"><strong>Figure 4:</strong> Pod <code>A44ab</code> stepping 1 square North (<code>44ab-45</code>) vs. jumping 2 squares NE over <code>B55e</code> with optional capture (<code>44ab-66x</code>).</div>
+            <div class="rb-fig-cap"><strong>Figure 4:</strong> Pod <code>A44ab</code> stepping 1 square North (<code>44ab-45</code>) vs. jumping 2 squares NE over <code>B55e</code> with optional whole-stack capture (<code>44ab-66x</code>).</div>
           </div>
           <div class="rb-fig">
             <img src="/assets/rulebook/rule_05_multihop_chain.png" loading="lazy" alt="Multi-Hop Chain Jump">
@@ -2925,7 +2924,7 @@ tr.active-ply {
           </div>
           <div class="rb-fig">
             <img src="/assets/rulebook/rule_07_reserve_liberate.png" loading="lazy" alt="Reserve Pod Deployment vs Liberation">
-            <div class="rb-fig-cap"><strong>Figure 7:</strong> Deploying a free reserve pod onto empty home base <code>33</code> vs. liberating a captured pod (<code>53*</code> or <code>57*</code>) while <code>A57ab</code> holds an enemy base.</div>
+            <div class="rb-fig-cap"><strong>Figure 7:</strong> Deploying a free reserve pod onto empty home base <code>33</code> vs. liberating an own captured pod (<code>53*</code> or <code>57*</code>) in <code>2P_3B*</code> and <code>4P*</code> once an enemy (or neutral 4P) OCTI square is occupied.</div>
           </div>
         </div>
       </article>
@@ -2933,17 +2932,17 @@ tr.active-ply {
       <article class="rb-chapter" id="rules-ch3">
         <h2>Chapter 3 &mdash; Stacking, Composite Moves &amp; Appendix A Edge Cases</h2>
         <ul>
-          <li><strong>Friendly Stacking &amp; Composite Multi-Pod Moves (<code>,</code>):</strong> Multiple friendly pods (and diagonal-partner pods in <code>4P</code>) may stack on the same square (forbidden in <code>OFK</code>). Any subset of your own pods that <strong>start the turn on the same square</strong> may move together or split along independent step/jump paths in a single turn, joined by commas (e.g., <code>44a-45,44beg-34</code>). Pod placement and prong edits never combine with movement.</li>
-          <li><strong>End-of-Turn Capture Removal:</strong> Enemy stacks jumped with <code>x</code> remain physically on the board as jumpable fulcrums for remaining composite stack-mates during the same turn and are removed together at turn end. However, a single pod may <strong>never jump over the exact same square twice</strong> during one hop chain.</li>
-          <li><strong>Appendix A.1 &mdash; Starting-Square Vacancy &amp; Loop-Back Jumps:</strong> During a single or composite move from square <code>S</code>, all pods initially on <code>S</code> (including stationary stack-mates!) are treated as vacated for jump geometry: a jumping pod from <code>S</code> <strong>cannot jump over <code>S</code></strong>, yet <strong>can legally land back onto <code>S</code></strong> at the end of a multi-hop loop (e.g., <code>44beg-66x-64x-44</code> rejoining stationary <code>A44a</code> on <code>44</code>!).</li>
-          <li><strong>Liberation Clearance Exact Conditions:</strong> Liberating a captured pod (<code>xy*</code>) always requires the target OCTI square to be <strong>already occupied by at least one of your own pods</strong> (never an empty base!). In <code>2P</code>, liberating onto your own home base additionally requires occupying at least one enemy base; liberating directly onto an enemy base you already occupy requires only <code>capturedPods &gt; 0</code>. In <code>4P</code>, liberating onto your own or active partner's base requires personally occupying a neutral (<code>53</code>/<code>57</code>) or enemy OCTI square.</li>
+          <li><strong>Friendly Stacking &amp; Composite Multi-Pod Moves (<code>,</code>):</strong> Multiple friendly pods (and diagonal-partner pods in <code>4P</code>) may stack on the same square (forbidden in <code>OFK</code>). Any subset of your own pods that <strong>start the turn on the same square</strong> may move together or split along independent step/jump paths in a single turn, joined by commas (e.g., <code>44a-45,44beg-34</code>). Pod placement and prong insertion never combine with movement.</li>
+          <li><strong>Whole-Stack Capture &amp; End-of-Turn Removal:</strong> Jumping over an occupied square with <code>x</code> captures <strong>every pod in that square's stack</strong>. In regular single and composite moves, stacks jumped with <code>x</code> remain physically on the board as jumpable fulcrums for remaining composite stack-mates during the same turn and are removed together at turn end. A single pod may <strong>never jump over the exact same square twice</strong> during one hop chain.</li>
+          <li><strong>Appendix A.1 &mdash; Starting-Square Vacancy, Loop-Back Jumps &amp; Stacked-Pod Non-Jumping:</strong> For the duration of its jump chain, a jumping pod <strong>cannot jump over its starting square <code>S</code> or any pod with which it started stacked</strong> (so an Edgeless <code>_ED</code> wraparound jump such as <code>44bcd-66-86-16-34-54</code> over stationary <code>A44a</code> on <code>44</code> is illegal). Furthermore, a jumping pod may <strong>land back onto <code>S</code></strong> at the end of a multi-hop loop <strong>only when all pods that started the turn on <code>S</code> vacate <code>S</code></strong> during the move (for example, composite clear-out <code>44a-45,44beg-66x-64x-44</code> is legal because <code>44</code> is completely vacated, whereas single <code>44beg-66x-64x-44</code> leaving stationary <code>A44a</code> on <code>44</code> is illegal).</li>
+          <li><strong>Pod Liberation Scope &amp; Clearance (<code>2P_3B*</code> &amp; <code>4P*</code>):</strong> Liberating a captured pod (<code>xy*</code>) applies exclusively to <strong>3-Base (<code>2P_3B*</code>) and 4-Player (<code>4P*</code>)</strong> games (never 1-Base sudden death or <code>OFK</code>), always liberates 1 of <strong>your own</strong> captured pods (<code>capturedPods &gt; 0</code>), and always requires the target OCTI square to be <strong>already occupied by at least one of your own pods</strong> (never an empty or partner-only square). In <code>2P_3B*</code>, liberating onto your own home base additionally requires occupying at least one enemy base; liberating directly onto an enemy base you already occupy requires only <code>capturedPods &gt; 0</code>. In <code>4P*</code>, liberating onto your own or partner's corner base requires personally occupying a neutral (<code>53</code>/<code>57</code>) or enemy OCTI square (even if your partner is eliminated, <code>xy*</code> on their corner base liberates your own pod and never revives your partner).</li>
           <li><strong>Edgeless Torus Wrapping (<code>_ED</code>):</strong> Column <code>1</code> wraps to column <code>9</code> and row <code>1</code> wraps to row <code>9</code> (including diagonals) for both 1-square steps (<code>15g-95</code>) and 2-square jumps (<code>97b-29x</code> jumping <code>B18e</code>).</li>
-          <li><strong>SuperProngs &amp; Bonus Preludes (<code>_SP</code>, <code>;</code>):</strong> A gold SuperProng (<code>!</code>) is permanent once inserted. Before your regular turn action, you may execute <strong>1 or 2 bonus prelude moves</strong> delimited by semicolons (e.g., <code>44ab!-66x;66ab!-67</code>). Each prelude moves along a single SuperProng socket, and its captures resolve <em>immediately</em> before the next segment! The exact same SuperProng socket on the exact same pod cannot be fired twice in two preludes on the same turn.</li>
+          <li><strong>SuperProngs &amp; Bonus Preludes (<code>_SP</code>, <code>;</code>):</strong> A gold SuperProng (<code>!</code>) is permanent once inserted. Before your regular turn action, you may execute <strong>1 bonus prelude move per SuperProng you control on the board</strong> (up to <strong>2</strong> in <code>2P_SP</code> and up to <strong>4</strong> in <code>4P_SP</code> when enemy SuperProngs are captured), delimited by semicolons (e.g., <code>44ab!-66x;66ab!-67</code>). Each prelude moves 1 pod strictly in a <strong>straight line</strong> (1-square step or collinear jump chain, no pivoting) along a distinct SuperProng socket that has not yet fired a bonus prelude this turn. Stacks jumped with <code>x</code> during a SuperProng bonus prelude are <strong>removed immediately</strong> after that prelude before the next SuperProng prelude or regular action begins! A pod that moved in a bonus prelude may still use <strong>any</strong> of its prongs in the regular turn phase, and <strong>victory is checked only at completion of the full turn</strong>.</li>
         </ul>
         <div class="rb-fig-grid">
           <div class="rb-fig">
             <img src="/assets/rulebook/rule_06_stack_split_loop.png" loading="lazy" alt="Stack Split and Appendix A.1 Loop">
-            <div class="rb-fig-cap"><strong>Figure 6:</strong> Stack <code>[A44a, A44beg]</code> splitting via <code>44a-45,44beg-34</code> or looping back onto stationary <code>A44a</code> via <code>44beg-66x-64x-44</code> (Appendix A.1).</div>
+            <div class="rb-fig-cap"><strong>Figure 6:</strong> Stack <code>[A44a, A44beg]</code> splitting via <code>44a-45,44beg-34</code> or clearing out <code>44</code> completely via <code>44a-45,44beg-66x-64x-44</code> so <code>A44beg</code> lands legally on vacated <code>44</code> (Appendix A.1).</div>
           </div>
           <div class="rb-fig">
             <img src="/assets/rulebook/rule_08_edgeless_wrap.png" loading="lazy" alt="Edgeless Torus Wrap-Around">
@@ -2951,7 +2950,7 @@ tr.active-ply {
           </div>
           <div class="rb-fig">
             <img src="/assets/rulebook/rule_09_superprongs.png" loading="lazy" alt="SuperProng Bonus Prelude">
-            <div class="rb-fig-cap"><strong>Figure 9:</strong> Gold SuperProng bonus prelude <code>44ab!-66x;</code> capturing <code>B55e!</code> immediately before regular step <code>66ab!-67</code>.</div>
+            <div class="rb-fig-cap"><strong>Figure 9:</strong> Gold SuperProng straight-line bonus prelude <code>44ab!-66x;</code> (1 bonus move per SuperProng controlled on the board) removing captured <code>B55e!</code> immediately before regular step <code>66ab!-67</code>, with victory checked at full turn completion.</div>
           </div>
         </div>
       </article>
@@ -2959,12 +2958,12 @@ tr.active-ply {
       <article class="rb-chapter" id="rules-ch4">
         <h2>Chapter 4 &mdash; Victory, Elimination &amp; Stalemate Conditions</h2>
         <ul>
-          <li><strong><code>2P_3B</code> Family (3-Base Standard):</strong> Win immediately at the end of your turn if your pods simultaneously occupy <strong>all 3</strong> enemy home bases (<code>37</code>, <code>57</code>, <code>77</code> for A; <code>33</code>, <code>53</code>, <code>73</code> for B).</li>
-          <li><strong><code>2P_1B</code> Family (1-Base Blitz):</strong> Win immediately when your pod occupies <strong>any 1</strong> of the 3 enemy home bases.</li>
+          <li><strong><code>2P_3B</code> Family (3-Base Standard):</strong> Win at the completion of your full turn if your pods simultaneously occupy <strong>all 3</strong> enemy home bases (<code>37</code>, <code>57</code>, <code>77</code> for A; <code>33</code>, <code>53</code>, <code>73</code> for B).</li>
+          <li><strong><code>2P_1B</code> Family (1-Base Blitz):</strong> Win at the completion of your full turn when your pod occupies <strong>any 1</strong> of the 3 enemy home bases.</li>
           <li><strong><code>OFK</code> (OCTI for Kids, 6&times;7):</strong> Win immediately when your pod occupies <strong>any 1</strong> of the 4 enemy home bases (<code>26, 36, 46, 56</code> for A; <code>22, 32, 42, 52</code> for B).</li>
-          <li><strong><code>4P</code> Partnership Family (Team A&amp;C vs. Team B&amp;D):</strong> Diagonal partners win together when allied pods simultaneously occupy <strong>both enemy corner bases</strong> (<code>37</code> and <code>73</code> for Team A&amp;C; <code>33</code> and <code>77</code> for Team B&amp;D).</li>
-          <li><strong>4-Player Base-Capture Elimination &amp; Teammate Revival:</strong> In <code>4P</code>, if an enemy pod ends its turn on your corner home base (or you have zero pods on the board and zero legal placements), you are <strong>eliminated</strong>: all of your remaining board pods move into your <code>capturedPods</code> pool and their prongs transfer to the capturing side. Your surviving partner plays on and can <strong>revive</strong> you by moving one of their own pods onto your corner base (once clear of enemies) and playing <code>xy*</code> (e.g., <code>77*</code>)!</li>
-          <li><strong>Total Wipeout / Stalemate:</strong> If the next player (or both enemy seats in <code>4P</code>) has <strong>zero legal moves</strong>, the player/team who just moved wins immediately. Timed games also end on clock flag forfeit or resignation.</li>
+          <li><strong><code>4P</code> Partnership Family (Team A&amp;C vs. Team B&amp;D):</strong> Diagonal partners win together at the completion of a full turn when allied pods simultaneously occupy <strong>both enemy corner bases</strong> (<code>37</code> and <code>73</code> for Team A&amp;C; <code>33</code> and <code>77</code> for Team B&amp;D).</li>
+          <li><strong>4-Player Permanent Base-Capture Elimination:</strong> In <code>4P</code>, if an enemy pod ends its full turn on your corner home base (or you have zero pods on the board and zero legal placements), you are <strong>permanently eliminated</strong> for the remainder of the game (there is no partner revival): all of your remaining board pods are swept into your <code>capturedPods</code> pool, and <strong>all prongs (normal and SuperProngs) from your swept board pods transfer to the capturing enemy player</strong>. Eliminated seats are skipped in turn rotation while a surviving partner plays on.</li>
+          <li><strong>Total Wipeout / Stalemate:</strong> Because prong repositioning is forbidden, a player with zero reserve pods and zero reserve prongs whose board pods are completely boxed in has <strong>zero legal moves</strong>. If the next player in <code>2P</code> / <code>OFK</code> (or both enemy seats in <code>4P</code>) has zero legal moves, the player/team who just moved wins immediately (in <code>4P</code>, a stalemated player whose partner still has a legal move has their turn skipped). Timed games also end on clock flag forfeit or resignation.</li>
         </ul>
         <div class="rb-fig-grid">
           <div class="rb-fig">
@@ -3000,18 +2999,18 @@ tr.active-ply {
             </thead>
             <tbody>
               <tr><td><code>2P_3B</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>25 / 0</td><td>Standard rules; occupy all 3 enemy bases</td><td><strong>Yes</strong> (Pool 1 &amp; 2)</td></tr>
-              <tr><td><code>2P_3B_SP</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>24 / 1</td><td>SuperProng <code>!</code> + <code>;</code> bonus preludes; 3 bases</td><td>Casual</td></tr>
+              <tr><td><code>2P_3B_SP</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>24 / 1</td><td>SuperProng <code>!</code> + <code>;</code> straight bonus preludes (&le;2); 3 bases</td><td>Casual</td></tr>
               <tr><td><code>2P_3B_ED</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>25 / 0</td><td>Edgeless torus wrap-around; 3 bases</td><td>Casual</td></tr>
-              <tr><td><code>2P_3B_SPED</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>24 / 1</td><td>SuperProng + Edgeless wrap-around; 3 bases</td><td>Casual</td></tr>
+              <tr><td><code>2P_3B_SPED</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>24 / 1</td><td>SuperProng (&le;2 preludes) + Edgeless wrap-around; 3 bases</td><td>Casual</td></tr>
               <tr><td><code>2P_1B</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>25 / 0</td><td>Sudden-death blitz; occupy any 1 enemy base</td><td><strong>Yes</strong> (Pool 1 &amp; 2)</td></tr>
-              <tr><td><code>2P_1B_SP</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>24 / 1</td><td>SuperProng + 1-base sudden death</td><td>Casual</td></tr>
+              <tr><td><code>2P_1B_SP</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>24 / 1</td><td>SuperProng (&le;2 preludes) + 1-base sudden death</td><td>Casual</td></tr>
               <tr><td><code>2P_1B_ED</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>25 / 0</td><td>Edgeless wrap-around + 1-base sudden death</td><td>Casual</td></tr>
-              <tr><td><code>2P_1B_SPED</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>24 / 1</td><td>SuperProng + Edgeless + 1-base sudden death</td><td>Casual</td></tr>
-              <tr><td><code>4P</code></td><td>9&times;9</td><td>4 (A&amp;C vs B&amp;D)</td><td>1 + 3</td><td>12 / 0</td><td>Neutral <code>53/57</code>, base elimination &amp; revival; 2 enemy bases</td><td>Casual</td></tr>
-              <tr><td><code>4P_SP</code></td><td>9&times;9</td><td>4 (A&amp;C vs B&amp;D)</td><td>1 + 3</td><td>11 / 1</td><td>4P Partnership + SuperProng bonus preludes</td><td>Casual</td></tr>
+              <tr><td><code>2P_1B_SPED</code></td><td>9&times;9</td><td>2 (1v1)</td><td>3 + 4</td><td>24 / 1</td><td>SuperProng (&le;2 preludes) + Edgeless + 1-base sudden death</td><td>Casual</td></tr>
+              <tr><td><code>4P</code></td><td>9&times;9</td><td>4 (A&amp;C vs B&amp;D)</td><td>1 + 3</td><td>12 / 0</td><td>Neutral <code>53/57</code>, permanent base elimination; 2 enemy bases</td><td>Casual</td></tr>
+              <tr><td><code>4P_SP</code></td><td>9&times;9</td><td>4 (A&amp;C vs B&amp;D)</td><td>1 + 3</td><td>11 / 1</td><td>4P Partnership + SuperProng straight bonus preludes (&le;4)</td><td>Casual</td></tr>
               <tr><td><code>4P_ED</code></td><td>9&times;9</td><td>4 (A&amp;C vs B&amp;D)</td><td>1 + 3</td><td>12 / 0</td><td>4P Partnership + Edgeless torus wrap-around</td><td>Casual</td></tr>
-              <tr><td><code>4P_SPED</code></td><td>9&times;9</td><td>4 (A&amp;C vs B&amp;D)</td><td>1 + 3</td><td>11 / 1</td><td>4P Partnership + SuperProng + Edgeless</td><td>Casual</td></tr>
-              <tr><td><code>OFK</code></td><td>6&times;7</td><td>2 (1v1)</td><td>4 + 0</td><td>12 / 0</td><td>4 bases/side, no stacking, no reposition, no composite; 1 base wins</td><td><strong>Yes</strong> (Pool 1 &amp; 2)</td></tr>
+              <tr><td><code>4P_SPED</code></td><td>9&times;9</td><td>4 (A&amp;C vs B&amp;D)</td><td>1 + 3</td><td>11 / 1</td><td>4P Partnership + SuperProng (&le;4 preludes) + Edgeless</td><td>Casual</td></tr>
+              <tr><td><code>OFK</code></td><td>6&times;7</td><td>2 (1v1)</td><td>4 + 0</td><td>12 / 0</td><td>4 bases/side, 0 reserves, no stacking, no composite; 1 base wins</td><td><strong>Yes</strong> (Pool 1 &amp; 2)</td></tr>
             </tbody>
           </table>
         </div>
@@ -3027,14 +3026,13 @@ tr.active-ply {
             </thead>
             <tbody>
               <tr><td><code>xy</code></td><td>Deploy free reserve pod onto OCTI square</td><td><code>33</code></td></tr>
-              <tr><td><code>xy*</code></td><td>Liberate captured pod (or revive eliminated 4P partner)</td><td><code>53*</code>, <code>57*</code>, <code>77*</code></td></tr>
+              <tr><td><code>xy*</code></td><td>Liberate own captured pod onto occupied OCTI square (<code>2P_3B*</code> &amp; <code>4P*</code> only)</td><td><code>53*</code>, <code>57*</code></td></tr>
               <tr><td><code>xy&lt;cfg&gt;+&lt;d&gt;</code></td><td>Insert normal prong in socket <code>d &isin; {a..h}</code></td><td><code>55acg+b</code></td></tr>
               <tr><td><code>xy&lt;cfg&gt;+&lt;d&gt;!</code></td><td>Insert gold SuperProng in socket <code>d</code></td><td><code>33+b!</code></td></tr>
-              <tr><td><code>xy&lt;cfg&gt;+&lt;add&gt;-&lt;rm&gt;</code></td><td>Reposition normal prong on same pod (<code>-&lt;rm&gt;+&lt;add&gt;</code> also accepted)</td><td><code>33b+a-b</code></td></tr>
               <tr><td><code>xy&lt;cfg&gt;-x'y'</code></td><td>1-square non-capturing step</td><td><code>44ab-45</code></td></tr>
-              <tr><td><code>xy&lt;cfg&gt;-x1y1[x]-...</code></td><td>Single or multi-hop jump chain (<code>x</code> = optional capture)</td><td><code>33abd-55-57x-75x</code></td></tr>
-              <tr><td><code>op1,op2[,...]</code></td><td>Composite move splitting pods from the same origin square</td><td><code>44a-45,44beg-34</code></td></tr>
-              <tr><td><code>pre1;[pre2;]reg</code></td><td>1&ndash;2 SuperProng bonus preludes followed by regular turn</td><td><code>44ab!-66x;66ab!-67</code></td></tr>
+              <tr><td><code>xy&lt;cfg&gt;-x1y1[x]-...</code></td><td>Single or multi-hop jump chain (<code>x</code> = optional whole-stack capture)</td><td><code>33abd-55-57x-75x</code></td></tr>
+              <tr><td><code>op1,op2[,...]</code></td><td>Composite move splitting pods from the same origin square</td><td><code>44a-45,44beg-66x-64x-44</code></td></tr>
+              <tr><td><code>pre1;[pre2;...]reg</code></td><td>1&ndash;4 straight SuperProng bonus preludes (1 per SP on board; immediate <code>x</code> removal) + regular turn</td><td><code>44ab!-66x;66ab!-67</code></td></tr>
             </tbody>
           </table>
         </div>
@@ -4277,7 +4275,7 @@ function extractModifiedSquaresFromMove(moveStr) {
     }
   }
   if (!moveStr || moveStr.charAt(0) === "(") { return out; }
-  moveStr.split(",").forEach(function (op) {
+  moveStr.split(/[;,]/).forEach(function (op) {
     var clean = op.trim();
     if (!clean) { return; }
     if (clean.indexOf("-") !== -1) {
@@ -5413,14 +5411,6 @@ function canLiberateOnSquare(state, x, y, side) {
 
   if (state.mode === "4" || state.mode === "4P") {
     var partnerIdx = partnerIndex(state.mode, pIdx);
-    var isPartnerRevival = (state.elimMask & (1 << partnerIdx)) !== 0 &&
-                           isPartnerHome(state.mode, partnerIdx, x, y);
-    if (isPartnerRevival) {
-      return state.reserves[partnerIdx] &&
-             state.reserves[partnerIdx].capturedPods > 0 &&
-             isSquareOccupiedBy(state, x, y, side);
-    }
-
     if (!res || res.capturedPods <= 0) return false;
 
     if ((x === 5 && y === 3) || (x === 5 && y === 7)) {
@@ -5539,7 +5529,20 @@ function dfsJumpChains(s, startX, startY, curX, curY, pod, jumpedSquares, curren
   var savedOriginPods = null;
   if (jumpedSquares.length === 0 && s.map[startKey]) {
     savedOriginPods = s.map[startKey];
-    delete s.map[startKey];
+    var remOrig = [];
+    var removedOne = false;
+    for (var si = 0; si < savedOriginPods.length; si++) {
+      if (!removedOne && savedOriginPods[si] === pod) {
+        removedOne = true;
+        continue;
+      }
+      remOrig.push(savedOriginPods[si]);
+    }
+    if (remOrig.length > 0) {
+      s.map[startKey] = remOrig;
+    } else {
+      delete s.map[startKey];
+    }
   }
   var oppBases = getOpponentBases(s.mode, pod.owner, s.bases);
 
@@ -5556,6 +5559,8 @@ function dfsJumpChains(s, startX, startY, curX, curY, pod, jumpedSquares, curren
       if (jx < 1 || jx > s.gw || jy < 1 || jy > s.gh) continue;
       if (landX < 1 || landX > s.gw || landY < 1 || landY > s.gh) continue;
     }
+
+    if (jx === startX && jy === startY) continue;
 
     var alreadyJumped = jumpedSquares.some(function (j) { return j.x === jx && j.y === jy; });
     if (alreadyJumped) continue;
@@ -5603,7 +5608,7 @@ function dfsJumpChains(s, startX, startY, curX, curY, pod, jumpedSquares, curren
   }
 }
 
-function dfsSuperBonusJumps(s, startX, startY, origStartCount, curX, curY, pod, dirIdx, jumpedSquares, currentMoveStr, hasEnemySoFar, oppBases, outPreludes) {
+function dfsSuperBonusJumps(s, startX, startY, origStartCount, curX, curY, pod, dirIdx, jumpedSquares, currentMoveStr, hasEnemySoFar, oppBases, outPreludes, srcPodIdx, curCaptures) {
   if (jumpedSquares.length >= 16) return;
   var dx = DIR_DELTAS[dirIdx][0], dy = DIR_DELTAS[dirIdx][1];
   var jx = curX + dx, jy = curY + dy;
@@ -5617,12 +5622,13 @@ function dfsSuperBonusJumps(s, startX, startY, origStartCount, curX, curY, pod, 
     if (landX < 1 || landX > s.gw || landY < 1 || landY > s.gh) return;
   }
 
+  if (jx === startX && jy === startY) return;
+
   var alreadyJumped = jumpedSquares.some(function (j) { return j.x === jx && j.y === jy; });
   if (alreadyJumped) return;
 
   var jStack = s.map[jx + "," + jy];
-  var jumpedEmpty = (jx === startX && jy === startY) ? (origStartCount <= 1) : (!jStack || !jStack.length);
-  if (jumpedEmpty) return;
+  if (!jStack || !jStack.length) return;
 
   var landStack = s.map[landX + "," + landY];
   var landingEmpty = (landX === startX && landY === startY) ? (origStartCount <= 1) : (!landStack || !landStack.length);
@@ -5635,36 +5641,42 @@ function dfsSuperBonusJumps(s, startX, startY, origStartCount, curX, curY, pod, 
     ? (startX + "" + startY + cfgStr + "-" + landX + "" + landY)
     : (currentMoveStr + "-" + landX + "" + landY);
   var nextJumped = jumpedSquares.concat([{ x: jx, y: jy }]);
+  var capsSoFar = Array.isArray(curCaptures) ? curCaptures.slice() : [];
 
   outPreludes.push({
     moveStr: hopPrefix,
     startX: startX,
     startY: startY,
+    srcPodIdx: (srcPodIdx !== undefined) ? srcPodIdx : 0,
     endX: landX,
     endY: landY,
     podCfg: cfgStr,
     dir: dirIdx,
     superDir: dirIdx,
+    captures: capsSoFar,
     isTactical: hasEnemySoFar || isBaseEntry
   });
-  dfsSuperBonusJumps(s, startX, startY, origStartCount, landX, landY, pod, dirIdx, nextJumped, hopPrefix, hasEnemySoFar, oppBases, outPreludes);
+  dfsSuperBonusJumps(s, startX, startY, origStartCount, landX, landY, pod, dirIdx, nextJumped, hopPrefix, hasEnemySoFar, oppBases, outPreludes, srcPodIdx, capsSoFar);
 
+  var capsWithThis = capsSoFar.concat([{ x: jx, y: jy }]);
   var capTactical = hasEnemySoFar || hasEnemy || isBaseEntry;
   outPreludes.push({
     moveStr: hopPrefix + "x",
     startX: startX,
     startY: startY,
+    srcPodIdx: (srcPodIdx !== undefined) ? srcPodIdx : 0,
     endX: landX,
     endY: landY,
     podCfg: cfgStr,
     dir: dirIdx,
     superDir: dirIdx,
+    captures: capsWithThis,
     isTactical: capTactical
   });
-  dfsSuperBonusJumps(s, startX, startY, origStartCount, landX, landY, pod, dirIdx, nextJumped, hopPrefix + "x", hasEnemySoFar || hasEnemy, oppBases, outPreludes);
+  dfsSuperBonusJumps(s, startX, startY, origStartCount, landX, landY, pod, dirIdx, nextJumped, hopPrefix + "x", hasEnemySoFar || hasEnemy, oppBases, outPreludes, srcPodIdx, capsWithThis);
 }
 
-function enumerateSuperBonusPreludes(s, player) {
+function enumerateSuperBonusPreludes(s, player, usedMasksMap) {
   var outPreludes = [];
   if (!s || !s.superProngs || !s.map) return outPreludes;
   var oppBases = getUncapturedOpponentBases(s, player);
@@ -5673,7 +5685,8 @@ function enumerateSuperBonusPreludes(s, player) {
       var k = px + "," + py;
       var stack = s.map[k] || [];
       if (!stack.length) continue;
-      var seenCfgs = {};
+      var sqMasks = (usedMasksMap && usedMasksMap[k]) ? usedMasksMap[k] : null;
+      var seenCfgMasks = {};
       for (var p = 0; p < stack.length; p++) {
         var pod = stack[p];
         if (pod.owner !== player || !pod.cfg || !pod.cfg.prongs) continue;
@@ -5683,11 +5696,14 @@ function enumerateSuperBonusPreludes(s, player) {
         }
         if (!hasSuper) continue;
         var cfgStr = formatProngConfig(pod.cfg.prongs);
-        if (seenCfgs[cfgStr]) continue;
-        seenCfgs[cfgStr] = true;
+        var podMask = (sqMasks && sqMasks[p] !== undefined) ? sqMasks[p] : 0;
+        var cfgMaskKey = cfgStr + "#" + podMask;
+        if (seenCfgMasks[cfgMaskKey]) continue;
+        seenCfgMasks[cfgMaskKey] = true;
 
         for (var d = 0; d < 8; d++) {
           if (pod.cfg.prongs[d] !== 2) continue;
+          if ((podMask & (1 << d)) !== 0) continue;
           var dx = DIR_DELTAS[d][0], dy = DIR_DELTAS[d][1];
           var nx = px + dx, ny = py + dy;
           var inBounds = true;
@@ -5702,15 +5718,17 @@ function enumerateSuperBonusPreludes(s, player) {
               moveStr: px + "" + py + cfgStr + "-" + nx + "" + ny,
               startX: px,
               startY: py,
+              srcPodIdx: p,
               endX: nx,
               endY: ny,
               podCfg: cfgStr,
               dir: d,
               superDir: d,
+              captures: [],
               isTactical: isBaseStep
             });
           }
-          dfsSuperBonusJumps(s, px, py, stack.length, px, py, pod, d, [], "", false, oppBases, outPreludes);
+          dfsSuperBonusJumps(s, px, py, stack.length, px, py, pod, d, [], "", false, oppBases, outPreludes, p, []);
         }
       }
     }
@@ -5743,7 +5761,7 @@ function generateBaseMoves(s, player, onlyTactical) {
     });
   }
 
-  /* 2. Per-square Prong additions, Repositions, Steps, and Recursive Jumps in C++ (y, x) order */
+  /* 2. Per-square Prong additions, Steps, and Recursive Jumps in C++ (y, x) order */
   for (var py = 1; py <= s.gh; py++) {
     for (var px = 1; px <= s.gw; px++) {
       var k = px + "," + py;
@@ -5770,20 +5788,6 @@ function generateBaseMoves(s, player, onlyTactical) {
                 if (s.superProngs && res.freeSuper > 0) {
                   var addSupMove = px + "" + py + cfgText + "+" + DIR_CHARS[d] + "!";
                   if (!seenMap[addSupMove]) { seenMap[addSupMove] = true; moves.push(addSupMove); }
-                }
-              }
-            }
-          }
-
-          // Prong repositions
-          if (s.mode !== "OFK" && pod.cfg.count > 0) {
-            for (var src = 0; src < 8; src++) {
-              if (pod.cfg.prongs[src] === 1) {
-                for (var dst = 0; dst < 8; dst++) {
-                  if (!pod.cfg.prongs[dst]) {
-                    var repoMove = px + "" + py + cfgText + "+" + DIR_CHARS[dst] + "-" + DIR_CHARS[src];
-                    if (!seenMap[repoMove]) { seenMap[repoMove] = true; moves.push(repoMove); }
-                  }
                 }
               }
             }
@@ -5867,6 +5871,35 @@ function generateMoves(s, player, onlyTactical) {
   var rawBaseMoves = generateBaseMoves(s, player, onlyTactical);
   if (!s || !s.superProngs) return rawBaseMoves;
 
+  var controlledSpSockets = 0;
+  Object.keys(s.map).forEach(function (k) {
+    var st = s.map[k] || [];
+    for (var i = 0; i < st.length; i++) {
+      if (st[i].owner === player && st[i].cfg && st[i].cfg.prongs) {
+        for (var d = 0; d < 8; d++) {
+          if (st[i].cfg.prongs[d] === 2) controlledSpSockets++;
+        }
+      }
+    }
+  });
+
+  var origHas4pEnemyOnHome = false;
+  if (onlyTactical && (s.mode === "4" || s.mode === "4P")) {
+    var home4 = [
+      { seat: "A", x: 3, y: 3 },
+      { seat: "B", x: 3, y: 7 },
+      { seat: "C", x: 7, y: 7 },
+      { seat: "D", x: 7, y: 3 }
+    ];
+    for (var hi = 0; hi < 4; hi++) {
+      if (squareHasEnemyOf(s, home4[hi].x, home4[hi].y, home4[hi].seat)) {
+        origHas4pEnemyOnHome = true;
+        break;
+      }
+    }
+  }
+  var canRestrictWhenPreludeClean = Boolean(onlyTactical && !origHas4pEnemyOnHome);
+
   var moves = [];
   var seenPostStates = {};
   for (var bm = 0; bm < rawBaseMoves.length; bm++) {
@@ -5879,92 +5912,120 @@ function generateMoves(s, player, onlyTactical) {
     }
   }
 
-  var preludes1 = enumerateSuperBonusPreludes(s, player);
-  if (!preludes1.length) return moves;
+  var maxPreludes = Math.min(4, controlledSpSockets);
+  if (maxPreludes <= 0) return moves;
 
-  // 1-prelude moves
-  for (var i = 0; i < preludes1.length; i++) {
-    var p1 = preludes1[i];
-    var s1 = cloneState(s);
-    applySingleHopChain(s1, p1.moveStr, player);
-
-    var restrict1 = !!(onlyTactical && !p1.isTactical);
-    var reg1 = generateBaseMoves(s1, player, restrict1);
-    for (var r1 = 0; r1 < reg1.length; r1++) {
-      var post1 = cloneState(s1);
-      applyRegularMoveOpNoTurn(post1, reg1[r1], player);
-      var key1 = canonicalPostMoveStateKey(post1);
-      if (!seenPostStates[key1]) {
-        seenPostStates[key1] = true;
-        moves.push(p1.moveStr + ";" + reg1[r1]);
-      }
+  var initMasks = {};
+  Object.keys(s.map).forEach(function (k) {
+    var len = (s.map[k] || []).length;
+    if (len > 0) {
+      var arr = [];
+      for (var i = 0; i < len; i++) arr.push(0);
+      initMasks[k] = arr;
     }
+  });
+
+  function cloneMasksMap(m) {
+    var out = {};
+    var ks = Object.keys(m);
+    for (var i = 0; i < ks.length; i++) {
+      out[ks[i]] = m[ks[i]].slice();
+    }
+    return out;
   }
 
-  // 2-prelude moves
-  for (var i2 = 0; i2 < preludes1.length; i2++) {
-    var p1b = preludes1[i2];
-    var s1NoCap = cloneState(s);
-    var defCaps1 = [];
-    applySingleHopChain(s1NoCap, p1b.moveStr, player, defCaps1);
-
-    var sameCfgCountAfterP1 = 0;
-    var p1LandStack = s1NoCap.map[p1b.endX + "," + p1b.endY] || [];
-    for (var li = 0; li < p1LandStack.length; li++) {
-      if (p1LandStack[li].owner === player &&
-          formatProngConfig(p1LandStack[li].cfg.prongs) === p1b.podCfg) {
-        sameCfgCountAfterP1++;
-      }
+  function applyPreludeImmediate(curState, curMasks, cand) {
+    var nextS = cloneState(curState);
+    var nextM = cloneMasksMap(curMasks);
+    var fromK = cand.startX + "," + cand.startY;
+    var endK = cand.endX + "," + cand.endY;
+    var fromStack = nextS.map[fromK] || [];
+    var fromMasks = nextM[fromK] || [];
+    var idx = (cand.srcPodIdx !== undefined && cand.srcPodIdx >= 0 && cand.srcPodIdx < fromStack.length)
+      ? cand.srcPodIdx
+      : 0;
+    var movingPod = fromStack.splice(idx, 1)[0];
+    var movingMask = (idx < fromMasks.length) ? fromMasks.splice(idx, 1)[0] : 0;
+    if (!fromStack.length) {
+      delete nextS.map[fromK];
+      delete nextM[fromK];
     }
 
-    var preludes2 = enumerateSuperBonusPreludes(s1NoCap, player);
-    for (var j = 0; j < preludes2.length; j++) {
-      var p2 = preludes2[j];
-      if (sameCfgCountAfterP1 < 2 &&
-          p2.startX === p1b.endX &&
-          p2.startY === p1b.endY &&
-          p2.podCfg === p1b.podCfg &&
-          p2.dir === p1b.dir) {
-        continue;
-      }
+    var nextPodMask = movingMask | (1 << cand.superDir);
+    if (!nextS.map[endK]) nextS.map[endK] = [];
+    if (!nextM[endK]) nextM[endK] = [];
+    nextS.map[endK].push(movingPod);
+    nextM[endK].push(nextPodMask);
 
-      var s2 = cloneState(s);
-      var defCapsBoth = [];
-      applySingleHopChain(s2, p1b.moveStr, player, defCapsBoth);
-      applySingleHopChain(s2, p2.moveStr, player, defCapsBoth);
+    if (cand.captures && cand.captures.length > 0) {
       var pIdx = playerIndex(player);
-      var res = s2.reserves[pIdx];
-      for (var dc = 0; dc < defCapsBoth.length; dc++) {
-        var midK = defCapsBoth[dc];
-        if (s2.map[midK] && s2.map[midK].length) {
-          for (var v = 0; v < s2.map[midK].length; v++) {
-            var vPod = s2.map[midK][v];
+      var res = nextS.reserves[pIdx];
+      var seenCapK = {};
+      for (var ci = 0; ci < cand.captures.length; ci++) {
+        var capK = cand.captures[ci].x + "," + cand.captures[ci].y;
+        if (seenCapK[capK]) continue;
+        seenCapK[capK] = true;
+        var capStack = nextS.map[capK];
+        if (capStack && capStack.length) {
+          for (var v = 0; v < capStack.length; v++) {
+            var vPod = capStack[v];
             var vIdx = playerIndex(vPod.owner);
-            s2.reserves[vIdx].capturedPods++;
+            nextS.reserves[vIdx].capturedPods++;
             for (var d = 0; d < 8; d++) {
               if (vPod.cfg.prongs[d] === 1) res.freeProngs++;
               else if (vPod.cfg.prongs[d] === 2) {
-                if (s2.superProngs) res.freeSuper++;
+                if (nextS.superProngs) res.freeSuper++;
                 else res.freeProngs++;
               }
             }
           }
-          delete s2.map[midK];
-        }
-      }
-
-      var restrict2 = !!(onlyTactical && !p1b.isTactical && !p2.isTactical);
-      var reg2 = generateBaseMoves(s2, player, restrict2);
-      for (var r2 = 0; r2 < reg2.length; r2++) {
-        var post2 = cloneState(s2);
-        applyRegularMoveOpNoTurn(post2, reg2[r2], player);
-        var key2 = canonicalPostMoveStateKey(post2);
-        if (!seenPostStates[key2]) {
-          seenPostStates[key2] = true;
-          moves.push(p1b.moveStr + ";" + p2.moveStr + ";" + reg2[r2]);
+          delete nextS.map[capK];
+          delete nextM[capK];
         }
       }
     }
+
+    return { state: nextS, masks: nextM };
+  }
+
+  // Iteratively deepen targetDepth = 1..maxPreludes so seenPostStates always retains
+  // the canonical shortest-prelude sequence for any reachable final board state.
+  var hadAnyDepth0Preludes = false;
+  function enumerateAtDepth(curState, curMasks, curDepth, targetDepth, prefixStr, anyCapOrBaseSoFar) {
+    var cands = enumerateSuperBonusPreludes(curState, player, curMasks);
+    if (!cands.length) return;
+    if (curDepth === 0) hadAnyDepth0Preludes = true;
+
+    for (var ci = 0; ci < cands.length; ci++) {
+      var cand = cands[ci];
+      var nextStep = applyPreludeImmediate(curState, curMasks, cand);
+      var nextPrefix = prefixStr ? (prefixStr + ";" + cand.moveStr) : cand.moveStr;
+      var nextHasCapOrBase = anyCapOrBaseSoFar ||
+        Boolean(cand.isTactical) ||
+        Boolean(cand.captures && cand.captures.length > 0);
+
+      if (curDepth + 1 === targetDepth) {
+        var restrictReg = canRestrictWhenPreludeClean && !nextHasCapOrBase;
+        var regMoves = generateBaseMoves(nextStep.state, player, restrictReg);
+        for (var rIdx = 0; rIdx < regMoves.length; rIdx++) {
+          var postS = cloneState(nextStep.state);
+          applyRegularMoveOpNoTurn(postS, regMoves[rIdx], player);
+          var postKey = canonicalPostMoveStateKey(postS);
+          if (!seenPostStates[postKey]) {
+            seenPostStates[postKey] = true;
+            moves.push(nextPrefix + ";" + regMoves[rIdx]);
+          }
+        }
+      } else {
+        enumerateAtDepth(nextStep.state, nextStep.masks, curDepth + 1, targetDepth, nextPrefix, nextHasCapOrBase);
+      }
+    }
+  }
+
+  for (var targetDepth = 1; targetDepth <= maxPreludes; targetDepth++) {
+    hadAnyDepth0Preludes = false;
+    enumerateAtDepth(s, initMasks, 0, targetDepth, "", false);
+    if (!hadAnyDepth0Preludes) break;
   }
 
   return moves;
@@ -5974,85 +6035,555 @@ function generateMovesForState(s) {
   return Array.from(generateMoves(s, s.turn, false));
 }
 
-function applySingleHopChain(s, move, player, deferCapturesList, deferLandingsList) {
+function findStepDeltaJs(x0, y0, x1, y1, edgeless, bw, bh) {
+  if (!edgeless) {
+    return { ok: true, dx: x1 - x0, dy: y1 - y0 };
+  }
+  for (var tryDx = -2; tryDx <= 2; tryDx++) {
+    for (var tryDy = -2; tryDy <= 2; tryDy++) {
+      if (tryDx === 0 && tryDy === 0) continue;
+      if (wrapCoord(x0 + tryDx, bw) === x1 && wrapCoord(y0 + tryDy, bh) === y1) {
+        return { ok: true, dx: tryDx, dy: tryDy };
+      }
+    }
+  }
+  return { ok: false, dx: 0, dy: 0 };
+}
+
+function parseSubOp(rawStr) {
+  if (typeof rawStr !== "string") {
+    throw new Error("invalid move operation");
+  }
+  var s = rawStr.trim();
+  if (s.length < 2) {
+    throw new Error("move operation too short");
+  }
+  var c0 = s.charCodeAt(0);
+  var c1 = s.charCodeAt(1);
+  if (c0 < 49 || c0 > 57 || c1 < 49 || c1 > 57) {
+    throw new Error("invalid start coordinate digits");
+  }
+
+  var op = {
+    x0: c0 - 48,
+    y0: c1 - 48,
+    addPod: false,
+    liberate: false,
+    addProngDir: -1,
+    superProng: false,
+    prongs: [0, 0, 0, 0, 0, 0, 0, 0],
+    podConfig: "",
+    hops: [],
+    isSuperProngBonusMove: false
+  };
+
+  if (s.length === 2) {
+    op.addPod = true;
+    op.liberate = false;
+    return op;
+  }
+  if (s.length === 3 && s.charAt(2) === "*") {
+    op.addPod = true;
+    op.liberate = true;
+    return op;
+  }
+
+  var idx = 2;
+  var seenDir = [false, false, false, false, false, false, false, false];
+  while (idx < s.length) {
+    var ch = s.charAt(idx);
+    var lower = ch.toLowerCase();
+    var d = DIR_CHARS.indexOf(lower);
+    if (d < 0) break;
+    if (seenDir[d]) {
+      throw new Error("duplicate direction in pod configuration");
+    }
+    seenDir[d] = true;
+    idx++;
+    var isSup = (ch >= "A" && ch <= "H");
+    if (idx < s.length && s.charAt(idx) === "!") {
+      isSup = true;
+      idx++;
+    }
+    op.prongs[d] = isSup ? 2 : 1;
+  }
+  op.podConfig = formatProngConfig(op.prongs);
+
+  if (idx >= s.length) {
+    throw new Error("incomplete move syntax after pod config");
+  }
+
+  var action = s.charAt(idx);
+  if (action === "+") {
+    idx++;
+    if (idx >= s.length) {
+      throw new Error("expected direction after '+'");
+    }
+    var addCh = s.charAt(idx);
+    var addDir = DIR_CHARS.indexOf(addCh.toLowerCase());
+    if (addDir < 0) {
+      throw new Error("invalid direction after '+'");
+    }
+    idx++;
+    var addSuper = (addCh >= "A" && addCh <= "H");
+    if (idx < s.length && s.charAt(idx) === "!") {
+      addSuper = true;
+      idx++;
+    }
+    if (idx === s.length) {
+      if (op.prongs[addDir] !== 0) {
+        throw new Error("cannot add prong that already exists");
+      }
+      op.addProngDir = addDir;
+      op.superProng = addSuper;
+      return op;
+    }
+    if (s.charAt(idx) === "-") {
+      throw new Error("prong repositioning is not allowed");
+    }
+    throw new Error("unexpected character after prong add direction");
+  }
+
+  if (action === "-") {
+    idx++;
+    if (idx >= s.length) {
+      throw new Error("unexpected end of string after '-'");
+    }
+    var nextCh = s.charAt(idx);
+    if ((nextCh >= "a" && nextCh <= "h") || (nextCh >= "A" && nextCh <= "H")) {
+      throw new Error("prong repositioning is not allowed");
+    }
+    var nc = nextCh.charCodeAt(0);
+    if (nc >= 49 && nc <= 57) {
+      while (true) {
+        if (idx + 1 >= s.length) {
+          throw new Error("truncated hop destination coordinate");
+        }
+        var hx = s.charCodeAt(idx);
+        var hy = s.charCodeAt(idx + 1);
+        if (hx < 49 || hx > 57 || hy < 49 || hy > 57) {
+          throw new Error("invalid hop destination coordinate digits");
+        }
+        var hopX = hx - 48;
+        var hopY = hy - 48;
+        idx += 2;
+        var cap = false;
+        if (idx < s.length && (s.charAt(idx) === "x" || s.charAt(idx) === "X")) {
+          cap = true;
+          idx++;
+          if (idx < s.length && (s.charAt(idx) === "x" || s.charAt(idx) === "X")) {
+            throw new Error("duplicate capture marker");
+          }
+        }
+        op.hops.push({ x: hopX, y: hopY, capture: cap });
+        if (idx >= s.length) break;
+        if (s.charAt(idx) !== "-") {
+          throw new Error("unexpected character in hop chain");
+        }
+        idx++;
+      }
+      if (!op.hops.length) {
+        throw new Error("hop chain has no hops");
+      }
+      return op;
+    }
+    throw new Error("invalid character following '-'");
+  }
+
+  throw new Error("unrecognized move operation character");
+}
+
+function parseTurnMove(rawMove) {
+  if (typeof rawMove !== "string" || rawMove.indexOf("\0") !== -1) {
+    throw new Error("invalid move string");
+  }
+  var trimmed = rawMove.trim();
+  if (!trimmed) {
+    throw new Error("empty move string");
+  }
+
+  var semiParts = trimmed.split(";");
+  if (semiParts.length > 5) {
+    throw new Error("more than 4 superprong prelude operations");
+  }
+  for (var i = 0; i < semiParts.length; i++) {
+    semiParts[i] = semiParts[i].trim();
+    if (!semiParts[i]) {
+      throw new Error("empty segment around ';'");
+    }
+  }
+
+  var bonusOps = [];
+  for (var b = 0; b + 1 < semiParts.length; b++) {
+    if (semiParts[b].indexOf(",") !== -1) {
+      throw new Error("superprong prelude move cannot be composite");
+    }
+    var preOp = parseSubOp(semiParts[b]);
+    if (!preOp.hops.length || preOp.addPod || preOp.addProngDir >= 0) {
+      throw new Error("superprong bonus move must be a hop chain");
+    }
+    preOp.isSuperProngBonusMove = true;
+    bonusOps.push(preOp);
+  }
+
+  var regularOps = [];
+  var regPart = semiParts[semiParts.length - 1];
+  if (regPart.indexOf(",") !== -1) {
+    var commaParts = regPart.split(",");
+    var commonX0 = -1, commonY0 = -1;
+    for (var c = 0; c < commaParts.length; c++) {
+      var sub = commaParts[c].trim();
+      if (!sub) {
+        throw new Error("empty sub-operation in composite move");
+      }
+      var subOp = parseSubOp(sub);
+      if (!subOp.hops.length || subOp.addPod || subOp.addProngDir >= 0) {
+        throw new Error("composite moves must consist solely of hop chains");
+      }
+      if (c === 0) {
+        commonX0 = subOp.x0;
+        commonY0 = subOp.y0;
+      } else if (subOp.x0 !== commonX0 || subOp.y0 !== commonY0) {
+        throw new Error("composite regular moves must share the same starting coordinate");
+      }
+      subOp.isSuperProngBonusMove = false;
+      regularOps.push(subOp);
+    }
+  } else {
+    var regOp = parseSubOp(regPart);
+    regOp.isSuperProngBonusMove = false;
+    regularOps.push(regOp);
+  }
+
+  return { bonusOps: bonusOps, regularOps: regularOps };
+}
+
+function executeSuperProngPreludesOnState(s, bonusOps, player) {
+  if (!bonusOps || !bonusOps.length) return s;
+  if (!s || !s.superProngs) {
+    throw new Error("superprong bonus move not allowed when superprongs disabled");
+  }
+  if (bonusOps.length > 4) {
+    throw new Error("at most four superprong bonus preludes allowed");
+  }
+
   var pIdx = playerIndex(player);
   var res = s.reserves[pIdx];
-  var hops = move.split("-");
-  var origM = /^([1-9])([1-9])([a-zA-Z!]*)/.exec(hops[0]);
-  if (!origM) return;
-  var curX = parseInt(origM[1], 10);
-  var curY = parseInt(origM[2], 10);
-  var fromK = curX + "," + curY;
-  var rawCfgMatch = origM[3] || "";
-  var normCfgMatch = rawCfgMatch ? formatProngConfig(parseProngConfig(rawCfgMatch).prongs) : "";
 
-  if (!s.map[fromK] || !s.map[fromK].length) return;
+  function sortMaskEntries(arr) {
+    arr.sort(function (a, b) {
+      if (a.cfg !== b.cfg) return a.cfg < b.cfg ? -1 : 1;
+      return a.usedMask - b.usedMask;
+    });
+  }
 
-  var podIdx = -1;
-  for (var pi = 0; pi < s.map[fromK].length; pi++) {
-    if (s.map[fromK][pi].owner === player) {
-      var pText = formatProngConfig(s.map[fromK][pi].cfg.prongs);
-      if (pText === normCfgMatch || s.map[fromK][pi].cfg.text === rawCfgMatch) {
+  function cloneMaskState(st) {
+    var copy = {};
+    var ks = Object.keys(st);
+    for (var i = 0; i < ks.length; i++) {
+      copy[ks[i]] = st[ks[i]].map(function (e) {
+        return { cfg: e.cfg, usedMask: e.usedMask };
+      });
+    }
+    return copy;
+  }
+
+  function serializeMaskState(st) {
+    var ks = Object.keys(st).sort();
+    var parts = [];
+    for (var i = 0; i < ks.length; i++) {
+      var arr = st[ks[i]];
+      if (!arr || !arr.length) continue;
+      parts.push(ks[i] + "=" + arr.map(function (e) { return e.cfg + "#" + e.usedMask; }).join(","));
+    }
+    return parts.join("|");
+  }
+
+  var initMaskState = {};
+  Object.keys(s.map).forEach(function (k) {
+    var sqPods = s.map[k] || [];
+    var entries = [];
+    for (var i = 0; i < sqPods.length; i++) {
+      if (sqPods[i].owner === player) {
+        var cfgTxt = (sqPods[i].cfg && sqPods[i].cfg.prongs)
+          ? formatProngConfig(sqPods[i].cfg.prongs)
+          : "";
+        entries.push({ cfg: cfgTxt, usedMask: 0 });
+      }
+    }
+    if (entries.length > 0) {
+      sortMaskEntries(entries);
+      initMaskState[k] = entries;
+    }
+  });
+
+  var maskStates = [initMaskState];
+
+  for (var bIdx = 0; bIdx < bonusOps.length; bIdx++) {
+    var bOp = (typeof bonusOps[bIdx] === "string") ? parseSubOp(bonusOps[bIdx]) : bonusOps[bIdx];
+    if (!bOp || !bOp.hops || !bOp.hops.length || bOp.addPod || bOp.addProngDir >= 0) {
+      throw new Error("invalid superprong bonus prelude");
+    }
+    if (bOp.x0 < 1 || bOp.x0 > s.gw || bOp.y0 < 1 || bOp.y0 > s.gh) {
+      throw new Error("superprong bonus starting square out of bounds");
+    }
+
+    var fromK = bOp.x0 + "," + bOp.y0;
+    var fromStack = s.map[fromK];
+    if (!fromStack || !fromStack.length) {
+      throw new Error("pod for superprong bonus move not found");
+    }
+
+    var podIdx = -1;
+    for (var pi = 0; pi < fromStack.length; pi++) {
+      if (fromStack[pi].owner === player &&
+          formatProngConfig(fromStack[pi].cfg.prongs) === bOp.podConfig) {
         podIdx = pi;
         break;
       }
     }
-  }
-  if (podIdx === -1) {
-    for (var pi2 = 0; pi2 < s.map[fromK].length; pi2++) {
-      if (s.map[fromK][pi2].owner === player) { podIdx = pi2; break; }
-    }
-  }
-  if (podIdx === -1) return;
-
-  var movingPod = s.map[fromK].splice(podIdx, 1)[0];
-  if (!s.map[fromK].length) delete s.map[fromK];
-
-  for (var h = 1; h < hops.length; h++) {
-    var hopM = /^([1-9])([1-9])(x?)/.exec(hops[h]);
-    if (!hopM) break;
-    var toX = parseInt(hopM[1], 10);
-    var toY = parseInt(hopM[2], 10);
-    var isCap = (hopM[3] === "x");
-
-    var dx = toX - curX, dy = toY - curY;
-    if (s.edgeless) {
-      if (dx > s.gw / 2) dx -= s.gw;
-      else if (dx < -s.gw / 2) dx += s.gw;
-      if (dy > s.gh / 2) dy -= s.gh;
-      else if (dy < -s.gh / 2) dy += s.gh;
+    if (podIdx === -1) {
+      throw new Error("pod for superprong bonus move not found");
     }
 
-    if (isCap || Math.abs(dx) === 2 || Math.abs(dy) === 2) {
-      var midX = curX + dx / 2, midY = curY + dy / 2;
-      if (s.edgeless) {
-        midX = wrapCoord(midX, s.gw);
-        midY = wrapCoord(midY, s.gh);
+    var movingPod = fromStack.splice(podIdx, 1)[0];
+    if (!fromStack.length) delete s.map[fromK];
+    var opCfg = formatProngConfig(movingPod.cfg.prongs);
+    var cx = bOp.x0, cy = bOp.y0;
+    var opSuperDir = -1;
+    var jumpedInOp = {};
+    var preludeCaptures = [];
+
+    for (var hIdx = 0; hIdx < bOp.hops.length; hIdx++) {
+      var hop = bOp.hops[hIdx];
+      if (hop.x < 1 || hop.x > s.gw || hop.y < 1 || hop.y > s.gh) {
+        throw new Error("superprong bonus hop coordinate out of bounds");
       }
-      var midK = midX + "," + midY;
+      var delta = findStepDeltaJs(cx, cy, hop.x, hop.y, s.edgeless, s.gw, s.gh);
+      if (!delta.ok) {
+        throw new Error("invalid displacement in superprong bonus move");
+      }
+      var dx = delta.dx, dy = delta.dy;
+      var isDist1 = (Math.max(Math.abs(dx), Math.abs(dy)) === 1 &&
+                     (Math.abs(dx) === 1 || Math.abs(dy) === 1));
+      if (isDist1) {
+        if (bOp.hops.length !== 1 || hop.capture) {
+          throw new Error("invalid distance-1 superprong bonus hop");
+        }
+        var stepDir = deltaToDirIndex(dx, dy);
+        if (stepDir < 0 || movingPod.cfg.prongs[stepDir] !== 2) {
+          throw new Error("superprong bonus move must follow superprong direction");
+        }
+        opSuperDir = stepDir;
+        if (squareHasEnemyOf(s, hop.x, hop.y, player) ||
+            (s.mode === "OFK" && s.map[hop.x + "," + hop.y] && s.map[hop.x + "," + hop.y].length > 0)) {
+          throw new Error("cannot step onto blocked square in superprong bonus move");
+        }
+        cx = hop.x;
+        cy = hop.y;
+      } else {
+        var validJump = (Math.abs(dx) === 0 || Math.abs(dx) === 2) &&
+                        (Math.abs(dy) === 0 || Math.abs(dy) === 2) &&
+                        (Math.abs(dx) === 2 || Math.abs(dy) === 2);
+        if (!validJump) {
+          throw new Error("invalid jump geometry in superprong bonus move");
+        }
+        var jumpDir = deltaToDirIndex(dx / 2, dy / 2);
+        if (jumpDir < 0 || movingPod.cfg.prongs[jumpDir] !== 2) {
+          throw new Error("superprong bonus jump must follow superprong direction");
+        }
+        if (hIdx === 0) {
+          opSuperDir = jumpDir;
+        } else if (jumpDir !== opSuperDir) {
+          throw new Error("superprong bonus jump must follow single straight superprong direction");
+        }
+        var jx = s.edgeless ? wrapCoord(cx + dx / 2, s.gw) : (cx + dx / 2);
+        var jy = s.edgeless ? wrapCoord(cy + dy / 2, s.gh) : (cy + dy / 2);
+        var midK = jx + "," + jy;
+        if (jumpedInOp[midK]) {
+          throw new Error("cannot jump same square twice in superprong bonus move");
+        }
+        jumpedInOp[midK] = true;
+        if ((jx === bOp.x0 && jy === bOp.y0) || !s.map[midK] || !s.map[midK].length) {
+          throw new Error("cannot jump empty or starting square in superprong bonus move");
+        }
+        if (hop.capture && preludeCaptures.indexOf(midK) === -1) {
+          preludeCaptures.push(midK);
+        }
+        var toK = hop.x + "," + hop.y;
+        if (s.map[toK] && s.map[toK].length) {
+          throw new Error("landing square must be empty in superprong bonus move");
+        }
+        cx = hop.x;
+        cy = hop.y;
+      }
+    }
 
-      if (isCap) {
-        if (deferCapturesList) {
-          if (deferCapturesList.indexOf(midK) === -1) deferCapturesList.push(midK);
-        } else if (s.map[midK] && s.map[midK].length) {
-          for (var v = 0; v < s.map[midK].length; v++) {
-            var vPod = s.map[midK][v];
-            var vIdx = playerIndex(vPod.owner);
-            s.reserves[vIdx].capturedPods++;
-            for (var d = 0; d < 8; d++) {
-              if (vPod.cfg.prongs[d] === 1) {
-                res.freeProngs++;
-              } else if (vPod.cfg.prongs[d] === 2) {
-                if (s.superProngs) res.freeSuper++;
-                else res.freeProngs++;
-              }
-            }
+    var dirBit = 1 << opSuperDir;
+    var endK = cx + "," + cy;
+    var nextMaskStates = [];
+    var seenNextKeys = {};
+
+    for (var msi = 0; msi < maskStates.length; msi++) {
+      var st = maskStates[msi];
+      var srcVec = st[fromK] || [];
+      for (var i = 0; i < srcVec.length; i++) {
+        if (srcVec[i].cfg !== opCfg || (srcVec[i].usedMask & dirBit) !== 0) continue;
+        var dupMask = false;
+        for (var j = 0; j < i; j++) {
+          if (srcVec[j].cfg === opCfg && srcVec[j].usedMask === srcVec[i].usedMask) {
+            dupMask = true;
+            break;
           }
-          delete s.map[midK];
+        }
+        if (dupMask) continue;
+
+        var nextSt = cloneMaskState(st);
+        nextSt[fromK].splice(i, 1);
+        if (!nextSt[fromK].length) delete nextSt[fromK];
+        if (!nextSt[endK]) nextSt[endK] = [];
+        nextSt[endK].push({ cfg: opCfg, usedMask: srcVec[i].usedMask | dirBit });
+        sortMaskEntries(nextSt[endK]);
+        for (var pci = 0; pci < preludeCaptures.length; pci++) {
+          delete nextSt[preludeCaptures[pci]];
+        }
+        var sigKey = serializeMaskState(nextSt);
+        if (!seenNextKeys[sigKey]) {
+          seenNextKeys[sigKey] = true;
+          nextMaskStates.push(nextSt);
         }
       }
     }
-    curX = toX; curY = toY;
+
+    if (!nextMaskStates.length) {
+      throw new Error("superprong socket already used in bonus prelude");
+    }
+    maskStates = nextMaskStates;
+
+    if (!s.map[endK]) s.map[endK] = [];
+    s.map[endK].push(movingPod);
+
+    // R5: Immediately remove captured stacks before the next SP prelude or regular move begins
+    for (var dc = 0; dc < preludeCaptures.length; dc++) {
+      var capK = preludeCaptures[dc];
+      if (s.map[capK] && s.map[capK].length) {
+        for (var v = 0; v < s.map[capK].length; v++) {
+          var vPod = s.map[capK][v];
+          var vIdx = playerIndex(vPod.owner);
+          s.reserves[vIdx].capturedPods++;
+          for (var d = 0; d < 8; d++) {
+            if (vPod.cfg.prongs[d] === 1) res.freeProngs++;
+            else if (vPod.cfg.prongs[d] === 2) {
+              if (s.superProngs) res.freeSuper++;
+              else res.freeProngs++;
+            }
+          }
+        }
+        delete s.map[capK];
+      }
+    }
+  }
+
+  return s;
+}
+
+function applySingleHopChain(s, move, player, deferCapturesList, deferLandingsList) {
+  var pIdx = playerIndex(player);
+  var res = s.reserves[pIdx];
+  var op = (typeof move === "string") ? parseSubOp(move) : move;
+  if (!op || !op.hops || !op.hops.length) {
+    throw new Error("movement operation must contain at least one hop");
+  }
+  var origX = op.x0;
+  var origY = op.y0;
+  var fromK = origX + "," + origY;
+  var fromStack = s.map[fromK];
+  if (!fromStack || !fromStack.length) {
+    throw new Error("matching pod not found in starting stack");
+  }
+
+  var podIdx = -1;
+  for (var pi = 0; pi < fromStack.length; pi++) {
+    if (fromStack[pi].owner === player &&
+        formatProngConfig(fromStack[pi].cfg.prongs) === op.podConfig) {
+      podIdx = pi;
+      break;
+    }
+  }
+  if (podIdx === -1) {
+    throw new Error("matching pod not found in starting stack");
+  }
+
+  var movingPod = fromStack.splice(podIdx, 1)[0];
+  if (!fromStack.length) delete s.map[fromK];
+
+  var curX = origX, curY = origY;
+  var immediateCaps = [];
+  var jumpedInChain = {};
+
+  for (var h = 0; h < op.hops.length; h++) {
+    var hop = op.hops[h];
+    var toX = hop.x, toY = hop.y;
+    var isCap = Boolean(hop.capture);
+    var delta = findStepDeltaJs(curX, curY, toX, toY, s.edgeless, s.gw, s.gh);
+    if (!delta.ok) {
+      throw new Error("invalid displacement for hop");
+    }
+    var dx = delta.dx, dy = delta.dy;
+    var isDist1 = (Math.max(Math.abs(dx), Math.abs(dy)) === 1 &&
+                   (Math.abs(dx) === 1 || Math.abs(dy) === 1));
+
+    if (isDist1) {
+      if (op.hops.length !== 1 || isCap) {
+        throw new Error("invalid distance-1 hop");
+      }
+      var sDir = deltaToDirIndex(dx, dy);
+      if (sDir < 0 || !movingPod.cfg.prongs[sDir]) {
+        throw new Error("pod lacks prong in distance-1 move direction");
+      }
+      var destStack = s.map[toX + "," + toY];
+      if (s.mode === "OFK") {
+        if (destStack && destStack.length) {
+          throw new Error("pod stacking forbidden in OCTI for Kids");
+        }
+      } else if (squareHasEnemyOf(s, toX, toY, player)) {
+        throw new Error("cannot move onto enemy square");
+      }
+    } else {
+      var validJump = (Math.abs(dx) === 0 || Math.abs(dx) === 2) &&
+                      (Math.abs(dy) === 0 || Math.abs(dy) === 2) &&
+                      (Math.abs(dx) === 2 || Math.abs(dy) === 2);
+      if (!validJump) {
+        throw new Error("invalid jump geometry");
+      }
+      var jDir = deltaToDirIndex(dx / 2, dy / 2);
+      if (jDir < 0 || !movingPod.cfg.prongs[jDir]) {
+        throw new Error("pod lacks prong in jump direction");
+      }
+      var midX = s.edgeless ? wrapCoord(curX + dx / 2, s.gw) : (curX + dx / 2);
+      var midY = s.edgeless ? wrapCoord(curY + dy / 2, s.gh) : (curY + dy / 2);
+      var midK = midX + "," + midY;
+      if (jumpedInChain[midK]) {
+        throw new Error("cannot jump same square twice in single pod chain");
+      }
+      jumpedInChain[midK] = true;
+      if ((midX === origX && midY === origY) || !s.map[midK] || !s.map[midK].length) {
+        throw new Error("cannot jump square without stationary pods");
+      }
+      var landStack = s.map[toX + "," + toY];
+      if (landStack && landStack.length) {
+        throw new Error("landing square must be empty of stationary pods");
+      }
+      if (isCap) {
+        if (deferCapturesList) {
+          if (deferCapturesList.indexOf(midK) === -1) deferCapturesList.push(midK);
+        } else if (immediateCaps.indexOf(midK) === -1) {
+          immediateCaps.push(midK);
+        }
+      }
+    }
+    curX = toX;
+    curY = toY;
   }
 
   var toK = curX + "," + curY;
@@ -6061,6 +6592,27 @@ function applySingleHopChain(s, move, player, deferCapturesList, deferLandingsLi
   } else {
     if (!s.map[toK]) s.map[toK] = [];
     s.map[toK].push(movingPod);
+  }
+
+  if (!deferCapturesList && immediateCaps.length > 0) {
+    for (var ic = 0; ic < immediateCaps.length; ic++) {
+      var capK = immediateCaps[ic];
+      if (s.map[capK] && s.map[capK].length) {
+        for (var v = 0; v < s.map[capK].length; v++) {
+          var vPod = s.map[capK][v];
+          var vIdx = playerIndex(vPod.owner);
+          s.reserves[vIdx].capturedPods++;
+          for (var d = 0; d < 8; d++) {
+            if (vPod.cfg.prongs[d] === 1) res.freeProngs++;
+            else if (vPod.cfg.prongs[d] === 2) {
+              if (s.superProngs) res.freeSuper++;
+              else res.freeProngs++;
+            }
+          }
+        }
+        delete s.map[capK];
+      }
+    }
   }
 }
 
@@ -6217,14 +6769,9 @@ function hasAnyLegalMove(s, player) {
       if (cnt < 8 && res && (res.freeProngs > 0 || (s.superProngs && res.freeSuper > 0))) {
         return true;
       }
-      if (s.mode !== "OFK" && cnt > 0 && cnt < 8 && pod.cfg && pod.cfg.prongs) {
-        for (var d = 0; d < 8; d++) {
-          if (pod.cfg.prongs[d] === 1) return true;
-        }
-      }
     }
   }
-  return generateMoves(s, player).length > 0;
+  return generateBaseMoves(s, player, false).length > 0;
 }
 
 function advanceTurn(s, player) {
@@ -6272,178 +6819,270 @@ function deltaToDirIndex(dx, dy) {
   return -1;
 }
 
-function applyRegularMoveOpNoTurn(s, move, player) {
+function applyRegularMoveOpNoTurn(s, moveOrOps, player) {
+  var regularOps;
+  if (Array.isArray(moveOrOps)) {
+    regularOps = moveOrOps;
+  } else {
+    var parsedMove = parseTurnMove(moveOrOps);
+    if (parsedMove.bonusOps.length > 0) {
+      throw new Error("bonus preludes not permitted in applyRegularMoveOpNoTurn");
+    }
+    regularOps = parsedMove.regularOps;
+  }
+
+  if (!regularOps || !regularOps.length) {
+    throw new Error("no regular move operations");
+  }
+  if (s.mode === "OFK" && regularOps.length > 1) {
+    throw new Error("composite moves not allowed in OCTI for Kids");
+  }
+
   var pIdx = playerIndex(player);
   var res = s.reserves[pIdx];
 
-  // Composite move: e.g. "37df-46,37e-36"
-  if (move.indexOf(",") !== -1 && move.indexOf("-") !== -1) {
-    var subMoves = move.split(",");
-    var deferredCaps = [];
-    var deferredLandings = [];
-    for (var sm = 0; sm < subMoves.length; sm++) {
-      var singleMove = subMoves[sm].trim();
-      if (singleMove) applySingleHopChain(s, singleMove, player, deferredCaps, deferredLandings);
+  // 1. Pod placement or liberation (R6: zero 4P partner revival; partnerHome & NEUTRAL_OCTI require '*')
+  if (regularOps[0].addPod) {
+    if (regularOps.length !== 1) {
+      throw new Error("pod placement cannot be combined with other actions");
     }
-    for (var dl = 0; dl < deferredLandings.length; dl++) {
-      var land = deferredLandings[dl];
-      if (!s.map[land.toK]) s.map[land.toK] = [];
-      s.map[land.toK].push(land.pod);
+    if (s.mode === "OFK") {
+      throw new Error("pod placement is not allowed in OCTI for Kids");
     }
-    for (var dc = 0; dc < deferredCaps.length; dc++) {
-      var midK = deferredCaps[dc];
-      if (s.map[midK] && s.map[midK].length) {
-        for (var v = 0; v < s.map[midK].length; v++) {
-          var vPod = s.map[midK][v];
-          var vIdx = playerIndex(vPod.owner);
-          s.reserves[vIdx].capturedPods++;
-          for (var d = 0; d < 8; d++) {
-            if (vPod.cfg.prongs[d] === 1) res.freeProngs++;
-            else if (vPod.cfg.prongs[d] === 2) {
-              if (s.superProngs) res.freeSuper++;
-              else res.freeProngs++;
-            }
-          }
-        }
-        delete s.map[midK];
+    var op = regularOps[0];
+    if (op.x0 < 1 || op.x0 > s.gw || op.y0 < 1 || op.y0 > s.gh) {
+      throw new Error("pod placement coordinate out of bounds");
+    }
+    var k = op.x0 + "," + op.y0;
+    if (op.liberate) {
+      if (!canLiberateOnSquare(s, op.x0, op.y0, player)) {
+        throw new Error("illegal pod liberation");
+      }
+      res.capturedPods--;
+    } else if (canPlaceReservePodOnSquare(s, op.x0, op.y0, player)) {
+      res.freePods--;
+    } else {
+      var isPartnerOrNeutral4P = (s.mode === "4" || s.mode === "4P") &&
+        (isPartnerHome(s.mode, partnerIndex(s.mode, pIdx), op.x0, op.y0) ||
+         (op.x0 === 5 && (op.y0 === 3 || op.y0 === 7)));
+      if (!isPartnerOrNeutral4P && res && res.freePods === 0 && canLiberateOnSquare(s, op.x0, op.y0, player)) {
+        res.capturedPods--;
+      } else {
+        throw new Error("illegal pod placement");
       }
     }
+    if (!s.map[k]) s.map[k] = [];
+    s.map[k].push({
+      owner: player,
+      cfg: { prongs: [0, 0, 0, 0, 0, 0, 0, 0], count: 0, text: "" }
+    });
     if (s.mode === "4" || s.mode === "4P") {
       check4PlayerElimination(s, player);
     }
     return s;
   }
 
-  // Regular Move:
-  // 1. Pod placement: 33 or 33*
-  var mPlace = /^\(?([1-9])([1-9])\)?(\*?)$/.exec(move);
-  if (mPlace && move.indexOf("-") === -1 && move.indexOf("+") === -1) {
-    var x = parseInt(mPlace[1], 10);
-    var y = parseInt(mPlace[2], 10);
-    var isLib = (mPlace[3] === "*");
-    var k = x + "," + y;
-    if (!s.map[k]) s.map[k] = [];
-
-    var partnerIdx = partnerIndex(s.mode, pIdx);
-    var isPartnerRevival = (s.mode === "4" || s.mode === "4P") &&
-                           (s.elimMask & (1 << partnerIdx)) !== 0 &&
-                           isPartnerHome(s.mode, partnerIdx, x, y);
-
-    if (isPartnerRevival) {
-      if (s.reserves[partnerIdx]) {
-        s.reserves[partnerIdx].capturedPods = Math.max(0, s.reserves[partnerIdx].capturedPods - 1);
+  // 2. Prong addition (R1: prong repositioning is forbidden and rejected by parseSubOp)
+  if (regularOps[0].addProngDir >= 0) {
+    if (regularOps.length !== 1) {
+      throw new Error("prong addition cannot be combined with other actions");
+    }
+    var addOp = regularOps[0];
+    if (addOp.x0 < 1 || addOp.x0 > s.gw || addOp.y0 < 1 || addOp.y0 > s.gh) {
+      throw new Error("prong addition square out of bounds");
+    }
+    var mk = addOp.x0 + "," + addOp.y0;
+    var stack = s.map[mk];
+    if (!stack || !stack.length) {
+      throw new Error("no pod on prong addition square");
+    }
+    var foundPod = null;
+    for (var p = 0; p < stack.length; p++) {
+      var cand = stack[p];
+      if (cand.owner === player &&
+          formatProngConfig(cand.cfg.prongs) === addOp.podConfig &&
+          !cand.cfg.prongs[addOp.addProngDir]) {
+        foundPod = cand;
+        break;
       }
-      s.elimMask &= ~(1 << partnerIdx);
-      s.map[k].push({
-        owner: ["A", "B", "C", "D"][partnerIdx],
-        cfg: { prongs: [0, 0, 0, 0, 0, 0, 0, 0], count: 0, text: "" }
-      });
-    } else if (isLib || (res && res.freePods === 0 && res.capturedPods > 0)) {
-      if (res) res.capturedPods = Math.max(0, res.capturedPods - 1);
-      s.map[k].push({
-        owner: player,
-        cfg: { prongs: [0, 0, 0, 0, 0, 0, 0, 0], count: 0, text: "" }
-      });
+    }
+    if (!foundPod) {
+      throw new Error("matching friendly pod with empty socket not found");
+    }
+    if (addOp.superProng) {
+      if (!s.superProngs) {
+        throw new Error("superprongs are disabled in this game");
+      }
+      if (!res || res.freeSuper <= 0) {
+        throw new Error("no free superprongs in reserve");
+      }
+      res.freeSuper--;
+      foundPod.cfg.prongs[addOp.addProngDir] = 2;
     } else {
-      if (res) res.freePods = Math.max(0, res.freePods - 1);
-      s.map[k].push({
-        owner: player,
-        cfg: { prongs: [0, 0, 0, 0, 0, 0, 0, 0], count: 0, text: "" }
-      });
+      if (!res || res.freeProngs <= 0) {
+        throw new Error("no free prongs in reserve");
+      }
+      res.freeProngs--;
+      foundPod.cfg.prongs[addOp.addProngDir] = 1;
     }
+    foundPod.cfg.count++;
+    foundPod.cfg.text = formatProngConfig(foundPod.cfg.prongs);
+    if (s.mode === "4" || s.mode === "4P") {
+      check4PlayerElimination(s, player);
+    }
+    return s;
   }
-  // 2. Prong repositioning
-  else if (move.indexOf("+") !== -1 && move.indexOf("-") !== -1) {
-    var mRepo = /^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])-([a-hA-H])(!?)$/.exec(move) ||
-                /^([1-9])([1-9])([a-hA-H!]*)-([a-hA-H])\+([a-hA-H])(!?)$/.exec(move);
-    if (mRepo) {
-      var mx = mRepo[1], my = mRepo[2], rawRepoCfg = mRepo[3] || "";
-      var normRepoCfg = rawRepoCfg ? formatProngConfig(parseProngConfig(rawRepoCfg).prongs) : "";
-      var addCh = (move.indexOf("+") < move.indexOf("-")) ? mRepo[4].toLowerCase() : mRepo[5].toLowerCase();
-      var remCh = (move.indexOf("+") < move.indexOf("-")) ? mRepo[5].toLowerCase() : mRepo[4].toLowerCase();
-      var addIdx = DIR_CHARS.indexOf(addCh), remIdx = DIR_CHARS.indexOf(remCh);
-      var mk = mx + "," + my;
-      if (s.map[mk] && s.map[mk].length && remIdx >= 0 && addIdx >= 0) {
-        var foundPod = null;
-        for (var p = 0; p < s.map[mk].length; p++) {
-          var cand = s.map[mk][p];
-          if (cand.owner === player && cand.cfg.prongs[remIdx] && !cand.cfg.prongs[addIdx]) {
-            var candText = formatProngConfig(cand.cfg.prongs);
-            if (candText === normRepoCfg || cand.cfg.text === rawRepoCfg) {
-              foundPod = cand;
-              break;
-            }
-          }
-        }
-        if (!foundPod) {
-          for (var p2 = 0; p2 < s.map[mk].length; p2++) {
-            var cand2 = s.map[mk][p2];
-            if (cand2.owner === player && cand2.cfg.prongs[remIdx] && !cand2.cfg.prongs[addIdx]) {
-              foundPod = cand2;
-              break;
-            }
-          }
-        }
-        if (foundPod) {
-          var pt = foundPod.cfg.prongs[remIdx];
-          foundPod.cfg.prongs[remIdx] = 0;
-          foundPod.cfg.prongs[addIdx] = pt;
-          foundPod.cfg.text = formatProngConfig(foundPod.cfg.prongs);
-        }
-      }
-    }
+
+  // 3. Single or composite pod movement / jump chains (R4: vacate only moving pods from starting square)
+  var sx = regularOps[0].x0;
+  var sy = regularOps[0].y0;
+  if (sx < 1 || sx > s.gw || sy < 1 || sy > s.gh) {
+    throw new Error("movement starting coordinate out of bounds");
   }
-  // 3. Prong addition
-  else if (move.indexOf("+") !== -1 || /^([1-9])([1-9])([a-hA-H])$/.test(move)) {
-    var mx, my, rawAddCfg = "", addCh = "", isSuper = false;
-    var mAdd = /^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])(!?)$/.exec(move);
-    if (mAdd) {
-      mx = mAdd[1]; my = mAdd[2]; rawAddCfg = mAdd[3] || ""; addCh = mAdd[4].toLowerCase();
-      isSuper = (mAdd[5] === "!" || mAdd[4] === mAdd[4].toUpperCase());
-    } else {
-      var mAddShort = /^([1-9])([1-9])([a-hA-H])$/.exec(move);
-      if (mAddShort) {
-        mx = mAddShort[1]; my = mAddShort[2]; addCh = mAddShort[3].toLowerCase();
-      }
-    }
-    var normAddCfg = rawAddCfg ? formatProngConfig(parseProngConfig(rawAddCfg).prongs) : "";
-    var dIdx = DIR_CHARS.indexOf(addCh);
-    var mk = mx + "," + my;
-    if (mx && s.map[mk] && s.map[mk].length && dIdx >= 0) {
-      var foundPod = null;
-      for (var p = 0; p < s.map[mk].length; p++) {
-        var cand = s.map[mk][p];
-        if (cand.owner === player && !cand.cfg.prongs[dIdx]) {
-          var candText = formatProngConfig(cand.cfg.prongs);
-          if (candText === normAddCfg || cand.cfg.text === rawAddCfg) {
-            foundPod = cand;
-            break;
-          }
-        }
-      }
-      if (!foundPod) {
-        for (var p2 = 0; p2 < s.map[mk].length; p2++) {
-          var cand2 = s.map[mk][p2];
-          if (cand2.owner === player && !cand2.cfg.prongs[dIdx]) {
-            foundPod = cand2;
-            break;
-          }
-        }
-      }
-      if (foundPod) {
-        foundPod.cfg.prongs[dIdx] = isSuper ? 2 : 1;
-        foundPod.cfg.count++;
-        foundPod.cfg.text = formatProngConfig(foundPod.cfg.prongs);
-        if (res) {
-          if (isSuper && s.superProngs && res.freeSuper > 0) res.freeSuper--;
-          else res.freeProngs = Math.max(0, res.freeProngs - 1);
-        }
-      }
-    }
+  var startK = sx + "," + sy;
+  var startStack = s.map[startK];
+  if (!startStack || !startStack.length) {
+    throw new Error("starting square has no pods");
   }
-  // 4. Pod moves / jumps
-  else if (move.indexOf("-") !== -1) {
-    applySingleHopChain(s, move, player);
+
+  var podClaimed = [];
+  for (var ci = 0; ci < startStack.length; ci++) podClaimed.push(false);
+  var movingPods = [];
+
+  for (var oi = 0; oi < regularOps.length; oi++) {
+    var mOp = regularOps[oi];
+    if (!mOp.hops || !mOp.hops.length || mOp.addPod || mOp.addProngDir >= 0) {
+      throw new Error("composite operations must all be hop chains");
+    }
+    if (mOp.x0 !== sx || mOp.y0 !== sy) {
+      throw new Error("all composite hop chains must start on the same square");
+    }
+    var matchedIdx = -1;
+    for (var si = 0; si < startStack.length; si++) {
+      if (!podClaimed[si] &&
+          startStack[si].owner === player &&
+          formatProngConfig(startStack[si].cfg.prongs) === mOp.podConfig) {
+        podClaimed[si] = true;
+        matchedIdx = si;
+        break;
+      }
+    }
+    if (matchedIdx < 0) {
+      throw new Error("matching unclaimed pod not found in starting stack");
+    }
+    movingPods.push(startStack[matchedIdx]);
+  }
+
+  // Remove ONLY claimed moving pods from starting square; stationary stack-mates remain (R4)
+  var remainingStart = [];
+  for (var ri = 0; ri < startStack.length; ri++) {
+    if (!podClaimed[ri]) remainingStart.push(startStack[ri]);
+  }
+  if (remainingStart.length > 0) {
+    s.map[startK] = remainingStart;
+  } else {
+    delete s.map[startK];
+  }
+
+  var deferredCaps = [];
+  var deferredLandings = [];
+
+  for (var mi = 0; mi < regularOps.length; mi++) {
+    var curOp = regularOps[mi];
+    var movingPod = movingPods[mi];
+    var curX = sx, curY = sy;
+    var jumpedInChain = {};
+
+    for (var hi = 0; hi < curOp.hops.length; hi++) {
+      var hop = curOp.hops[hi];
+      if (hop.x < 1 || hop.x > s.gw || hop.y < 1 || hop.y > s.gh) {
+        throw new Error("hop destination coordinate out of bounds");
+      }
+      var delta = findStepDeltaJs(curX, curY, hop.x, hop.y, s.edgeless, s.gw, s.gh);
+      if (!delta.ok) {
+        throw new Error("invalid displacement for hop");
+      }
+      var dx = delta.dx, dy = delta.dy;
+      var isDist1 = (Math.max(Math.abs(dx), Math.abs(dy)) === 1 &&
+                     (Math.abs(dx) === 1 || Math.abs(dy) === 1));
+      if (isDist1) {
+        if (curOp.hops.length !== 1 || hop.capture) {
+          throw new Error("invalid distance-1 hop");
+        }
+        var sDir = deltaToDirIndex(dx, dy);
+        if (sDir < 0 || !movingPod.cfg.prongs[sDir]) {
+          throw new Error("pod lacks prong in distance-1 move direction");
+        }
+        var destStack = s.map[hop.x + "," + hop.y];
+        if (s.mode === "OFK") {
+          if (destStack && destStack.length) {
+            throw new Error("pod stacking forbidden in OCTI for Kids");
+          }
+        } else if (squareHasEnemyOf(s, hop.x, hop.y, player)) {
+          throw new Error("cannot move onto enemy square");
+        }
+      } else {
+        var validJump = (Math.abs(dx) === 0 || Math.abs(dx) === 2) &&
+                        (Math.abs(dy) === 0 || Math.abs(dy) === 2) &&
+                        (Math.abs(dx) === 2 || Math.abs(dy) === 2);
+        if (!validJump) {
+          throw new Error("invalid jump geometry");
+        }
+        var jDir = deltaToDirIndex(dx / 2, dy / 2);
+        if (jDir < 0 || !movingPod.cfg.prongs[jDir]) {
+          throw new Error("pod lacks prong in jump direction");
+        }
+        var midX = s.edgeless ? wrapCoord(curX + dx / 2, s.gw) : (curX + dx / 2);
+        var midY = s.edgeless ? wrapCoord(curY + dy / 2, s.gh) : (curY + dy / 2);
+        var midK = midX + "," + midY;
+        if (jumpedInChain[midK]) {
+          throw new Error("cannot jump same square twice in single pod chain");
+        }
+        jumpedInChain[midK] = true;
+        if ((midX === sx && midY === sy) || !s.map[midK] || !s.map[midK].length) {
+          throw new Error("cannot jump square without stationary pods or starting square");
+        }
+        var landStack = s.map[hop.x + "," + hop.y];
+        if (landStack && landStack.length) {
+          throw new Error("landing square must be empty of stationary pods");
+        }
+        if (hop.capture && deferredCaps.indexOf(midK) === -1) {
+          deferredCaps.push(midK);
+        }
+      }
+      curX = hop.x;
+      curY = hop.y;
+    }
+
+    deferredLandings.push({ toK: curX + "," + curY, pod: movingPod });
+  }
+
+  for (var dl = 0; dl < deferredLandings.length; dl++) {
+    var land = deferredLandings[dl];
+    if (s.mode === "OFK" && s.map[land.toK] && s.map[land.toK].length) {
+      throw new Error("pod stacking forbidden in OCTI for Kids");
+    }
+    if (!s.map[land.toK]) s.map[land.toK] = [];
+    s.map[land.toK].push(land.pod);
+  }
+
+  for (var dc = 0; dc < deferredCaps.length; dc++) {
+    var capK = deferredCaps[dc];
+    if (s.map[capK] && s.map[capK].length) {
+      for (var v = 0; v < s.map[capK].length; v++) {
+        var vPod = s.map[capK][v];
+        var vIdx = playerIndex(vPod.owner);
+        s.reserves[vIdx].capturedPods++;
+        for (var d = 0; d < 8; d++) {
+          if (vPod.cfg.prongs[d] === 1) res.freeProngs++;
+          else if (vPod.cfg.prongs[d] === 2) {
+            if (s.superProngs) res.freeSuper++;
+            else res.freeProngs++;
+          }
+        }
+      }
+      delete s.map[capK];
+    }
   }
 
   if (s.mode === "4" || s.mode === "4P") {
@@ -6453,196 +7092,17 @@ function applyRegularMoveOpNoTurn(s, move, player) {
 }
 
 function applyMoveToState(s, move, player) {
-  var pIdx = playerIndex(player);
-  var res = s.reserves[pIdx];
-
-  // Super-prelude: e.g. "33a!-34;34a!+b"
-  if (move.indexOf(";") !== -1) {
-    if (!s || !s.superProngs) {
-      throw new Error("Superprong bonus move not allowed when superprongs disabled");
-    }
-    var parts = move.split(";");
-    if (parts.length > 3) {
-      throw new Error("At most two superprong bonus preludes allowed");
-    }
-    var regMove = parts[parts.length - 1].trim();
-    if (!regMove) {
-      throw new Error("Move must include a regular turn action");
-    }
-
-    var preludeDeferredCaps = [];
-    var p1EndX = -1, p1EndY = -1, p1Cfg = "", p1SuperDir = -1, sameCfgCountAfterP1 = 0;
-
-    for (var sp = 0; sp < parts.length - 1; sp++) {
-      var preMove = parts[sp].trim();
-      if (!preMove || preMove.indexOf(",") !== -1 || preMove.indexOf("+") !== -1 ||
-          preMove.indexOf("*") !== -1 || preMove.indexOf("-") === -1) {
-        throw new Error("Invalid superprong bonus prelude");
-      }
-      var hops = preMove.split("-");
-      if (hops.length < 2) {
-        throw new Error("Superprong bonus prelude must contain hops");
-      }
-      var origM = /^([1-9])([1-9])([a-hA-H!]*)$/.exec(hops[0]);
-      if (!origM) {
-        throw new Error("Invalid superprong bonus prelude origin");
-      }
-      var startX = parseInt(origM[1], 10);
-      var startY = parseInt(origM[2], 10);
-      var rawCfgMatch = origM[3] || "";
-      var normCfgMatch = rawCfgMatch ? formatProngConfig(parseProngConfig(rawCfgMatch).prongs) : "";
-      var fromK = startX + "," + startY;
-      var fromStack = s.map[fromK];
-      if (!fromStack || !fromStack.length) {
-        throw new Error("Pod for superprong bonus move not found");
-      }
-
-      var podIdx = -1;
-      for (var pi = 0; pi < fromStack.length; pi++) {
-        if (fromStack[pi].owner === player) {
-          var pText = formatProngConfig(fromStack[pi].cfg.prongs);
-          if (pText === normCfgMatch || fromStack[pi].cfg.text === rawCfgMatch) {
-            podIdx = pi;
-            break;
-          }
-        }
-      }
-      if (podIdx === -1) {
-        throw new Error("Pod for superprong bonus move not found");
-      }
-
-      var movingPod = fromStack.splice(podIdx, 1)[0];
-      if (!fromStack.length) delete s.map[fromK];
-      var opCfg = formatProngConfig(movingPod.cfg.prongs);
-      var curX = startX, curY = startY;
-      var opSuperDir = -1;
-      var jumpedInOp = {};
-
-      for (var h = 1; h < hops.length; h++) {
-        var hopM = /^([1-9])([1-9])(x?)$/.exec(hops[h]);
-        if (!hopM) {
-          throw new Error("Invalid hop in superprong bonus prelude");
-        }
-        var toX = parseInt(hopM[1], 10);
-        var toY = parseInt(hopM[2], 10);
-        var isCap = (hopM[3] === "x");
-        var dx = toX - curX, dy = toY - curY;
-        if (s.edgeless) {
-          if (dx > s.gw / 2) dx -= s.gw;
-          else if (dx < -s.gw / 2) dx += s.gw;
-          if (dy > s.gh / 2) dy -= s.gh;
-          else if (dy < -s.gh / 2) dy += s.gh;
-        }
-
-        var isDist1 = (Math.max(Math.abs(dx), Math.abs(dy)) === 1 &&
-                       (Math.abs(dx) === 1 || Math.abs(dy) === 1));
-        if (isDist1) {
-          if (hops.length !== 2 || isCap) {
-            throw new Error("Invalid distance-1 superprong bonus hop");
-          }
-          var stepDir = deltaToDirIndex(dx, dy);
-          if (stepDir < 0 || movingPod.cfg.prongs[stepDir] !== 2) {
-            throw new Error("Superprong bonus move must follow superprong direction");
-          }
-          opSuperDir = stepDir;
-          if (sp === 1 && startX === p1EndX && startY === p1EndY &&
-              opCfg === p1Cfg && opSuperDir === p1SuperDir && sameCfgCountAfterP1 < 2) {
-            throw new Error("Superprong socket already used in bonus prelude");
-          }
-          if (squareHasEnemyOf(s, toX, toY, player) ||
-              (s.mode === "OFK" && s.map[toX + "," + toY] && s.map[toX + "," + toY].length > 0)) {
-            throw new Error("Cannot step onto blocked square in superprong bonus move");
-          }
-          curX = toX;
-          curY = toY;
-        } else {
-          var validJump = (Math.abs(dx) === 0 || Math.abs(dx) === 2) &&
-                          (Math.abs(dy) === 0 || Math.abs(dy) === 2) &&
-                          (Math.abs(dx) === 2 || Math.abs(dy) === 2);
-          if (!validJump) {
-            throw new Error("Invalid jump geometry in superprong bonus move");
-          }
-          var jumpDir = deltaToDirIndex(dx / 2, dy / 2);
-          if (jumpDir < 0 || movingPod.cfg.prongs[jumpDir] !== 2) {
-            throw new Error("Superprong bonus jump must follow superprong direction");
-          }
-          if (h === 1) {
-            opSuperDir = jumpDir;
-            if (sp === 1 && startX === p1EndX && startY === p1EndY &&
-                opCfg === p1Cfg && opSuperDir === p1SuperDir && sameCfgCountAfterP1 < 2) {
-              throw new Error("Superprong socket already used in bonus prelude");
-            }
-          } else if (jumpDir !== opSuperDir) {
-            throw new Error("Superprong bonus jump must follow single straight superprong direction");
-          }
-          var midX = curX + dx / 2, midY = curY + dy / 2;
-          if (s.edgeless) {
-            midX = wrapCoord(midX, s.gw);
-            midY = wrapCoord(midY, s.gh);
-          }
-          var midK = midX + "," + midY;
-          if (jumpedInOp[midK]) {
-            throw new Error("Cannot jump same square twice in superprong bonus move");
-          }
-          jumpedInOp[midK] = true;
-          if (!s.map[midK] || !s.map[midK].length) {
-            throw new Error("Cannot jump empty square in superprong bonus move");
-          }
-          var toK = toX + "," + toY;
-          if (s.map[toK] && s.map[toK].length) {
-            throw new Error("Landing square must be empty in superprong bonus move");
-          }
-          if (isCap && preludeDeferredCaps.indexOf(midK) === -1) {
-            preludeDeferredCaps.push(midK);
-          }
-          curX = toX;
-          curY = toY;
-        }
-      }
-
-      var endK = curX + "," + curY;
-      if (!s.map[endK]) s.map[endK] = [];
-      s.map[endK].push(movingPod);
-
-      if (sp === 0) {
-        p1EndX = curX;
-        p1EndY = curY;
-        p1Cfg = opCfg;
-        p1SuperDir = opSuperDir;
-        sameCfgCountAfterP1 = 0;
-        var landPods = s.map[endK] || [];
-        for (var lpi = 0; lpi < landPods.length; lpi++) {
-          if (landPods[lpi].owner === player &&
-              formatProngConfig(landPods[lpi].cfg.prongs) === p1Cfg) {
-            sameCfgCountAfterP1++;
-          }
-        }
-      }
-    }
-
-    for (var dc = 0; dc < preludeDeferredCaps.length; dc++) {
-      var capK = preludeDeferredCaps[dc];
-      if (s.map[capK] && s.map[capK].length) {
-        for (var v = 0; v < s.map[capK].length; v++) {
-          var vPod = s.map[capK][v];
-          var vIdx = playerIndex(vPod.owner);
-          s.reserves[vIdx].capturedPods++;
-          for (var d = 0; d < 8; d++) {
-            if (vPod.cfg.prongs[d] === 1) res.freeProngs++;
-            else if (vPod.cfg.prongs[d] === 2) {
-              if (s.superProngs) res.freeSuper++;
-              else res.freeProngs++;
-            }
-          }
-        }
-        delete s.map[capK];
-      }
-    }
-
-    move = regMove;
+  if (!s || s.status !== "P") {
+    throw new Error("cannot make move when game is not in progress");
   }
-
-  applyRegularMoveOpNoTurn(s, move, player);
+  if (player !== s.turn) {
+    throw new Error("move player does not match active turn");
+  }
+  var parsed = parseTurnMove(move);
+  if (parsed.bonusOps.length > 0) {
+    executeSuperProngPreludesOnState(s, parsed.bonusOps, player);
+  }
+  applyRegularMoveOpNoTurn(s, parsed.regularOps, player);
   checkWinner(s);
   if (s.status === "O") return s;
   advanceTurn(s, player);
@@ -6960,7 +7420,17 @@ function evaluateJumpThreatDfs(s, curX, curY, startX, startY, depth, podOwner, p
   var savedOriginPods = null;
   if (depth === 0 && s.map[startKey]) {
     savedOriginPods = s.map[startKey];
-    delete s.map[startKey];
+    var remOrig = [];
+    var removedOne = false;
+    for (var si = 0; si < savedOriginPods.length; si++) {
+      if (!removedOne && savedOriginPods[si] === pod) {
+        removedOne = true;
+        continue;
+      }
+      remOrig.push(savedOriginPods[si]);
+    }
+    if (remOrig.length > 0) s.map[startKey] = remOrig;
+    else delete s.map[startKey];
   }
 
   for (var d = 0; d < 8; d++) {
@@ -6976,6 +7446,7 @@ function evaluateJumpThreatDfs(s, curX, curY, startX, startY, depth, podOwner, p
       if (destX < 1 || destX > s.gw || destY < 1 || destY > s.gh) continue;
     }
 
+    if (jx === startX && jy === startY) continue;
     var jKey = jx + "," + jy;
     if (jumpedMap[jKey]) continue;
 
@@ -7742,24 +8213,7 @@ function orderMoves(a1, a2, a3, a4, a5, a6, a7) {
       var hasPlus = (clause.indexOf("+") !== -1);
       var hasDash = (clause.indexOf("-") !== -1);
 
-      // 1. Prong reposition: e.g. 53a+b-a
-      if (hasPlus && hasDash) {
-        sc += 60;
-        var repoM = /^([1-9])([1-9])[a-hA-H!]*\+([a-hA-H])-([a-hA-H])/.exec(clause);
-        if (repoM) {
-          var rx = parseInt(repoM[1], 10), ry = parseInt(repoM[2], 10);
-          var addD = DIR_CHARS.indexOf(repoM[3].toLowerCase());
-          var rmD = DIR_CHARS.indexOf(repoM[4].toLowerCase());
-          if (addD >= 0 && rmD >= 0) {
-            var addDist = minChebyshevToTargets(rx + DIR_DELTAS[addD][0], ry + DIR_DELTAS[addD][1], targets, s.gw, s.gh, s.edgeless);
-            var rmDist = minChebyshevToTargets(rx + DIR_DELTAS[rmD][0], ry + DIR_DELTAS[rmD][1], targets, s.gw, s.gh, s.edgeless);
-            if (addDist < rmDist) sc += 200;
-          }
-        }
-        continue;
-      }
-
-      // 2. Prong addition: e.g. 53+a or 53a+b!
+      // 1. Prong addition: e.g. 53+a or 53a+b!
       if (hasPlus && !hasDash) {
         sc += 650;
         if (clause.indexOf("!") !== -1) sc += 200;
@@ -8254,22 +8708,8 @@ function mirrorMoveNotation(moveStr, boardW) {
   var move = moveStr.trim();
   if (!move) return "";
 
-  // 1. Prong reposition: e.g. 33bc+d-b or 33bc-b+d
-  if (move.indexOf("+") !== -1 && move.indexOf("-") !== -1) {
-    var mRepo = /^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])(!?)-([a-hA-H])(!?)$/.exec(move);
-    if (mRepo) {
-      var mx = (boardW + 1) - parseInt(mRepo[1], 10);
-      return mx + "" + mRepo[2] + mirrorProngStr(mRepo[3]) + "+" + mirrorDirCharHorizontal(mRepo[4]) + mRepo[5] + "-" + mirrorDirCharHorizontal(mRepo[6]) + mRepo[7];
-    }
-    var mRepo2 = /^([1-9])([1-9])([a-hA-H!]*)-([a-hA-H])(!?)\+([a-hA-H])(!?)$/.exec(move);
-    if (mRepo2) {
-      var mx2 = (boardW + 1) - parseInt(mRepo2[1], 10);
-      return mx2 + "" + mRepo2[2] + mirrorProngStr(mRepo2[3]) + "-" + mirrorDirCharHorizontal(mRepo2[4]) + mRepo2[5] + "+" + mirrorDirCharHorizontal(mRepo2[6]) + mRepo2[7];
-    }
-  }
-
-  // 2. Prong addition: e.g. 33+b, 33bc+d, 33+b!
-  if (move.indexOf("+") !== -1) {
+  // 1. Prong addition: e.g. 33+b, 33bc+d, 33+b!
+  if (move.indexOf("+") !== -1 && move.indexOf("-") === -1) {
     var mAdd = /^([1-9])([1-9])([a-hA-H!]*)\+([a-hA-H])(!?)$/.exec(move);
     if (mAdd) {
       var ax = (boardW + 1) - parseInt(mAdd[1], 10);
@@ -42206,6 +42646,10 @@ function initBotWorker() {
         enumerateSuperBonusPreludes.toString(),
         generateBaseMoves.toString(),
         generateMoves.toString(),
+        findStepDeltaJs.toString(),
+        parseSubOp.toString(),
+        parseTurnMove.toString(),
+        executeSuperProngPreludesOnState.toString(),
         applySingleHopChain.toString(),
         deltaToDirIndex.toString(),
         applyRegularMoveOpNoTurn.toString(),
@@ -44525,28 +44969,12 @@ var OctiWebSoundSynth = (function () {
       var addDir = charToDirIdx(s.charAt(idx));
       if (addDir < 0) return null;
       idx++;
-      var addSuper = false;
       if (idx < s.length && s.charAt(idx) === "!") {
-        addSuper = true;
         idx++;
       }
       if (idx === s.length) {
         if (prongs[addDir] !== 0) return null;
         op.addProng = true;
-        return op;
-      }
-      if (s.charAt(idx) === "-") {
-        idx++;
-        if (idx >= s.length) return null;
-        var rmDir = charToDirIdx(s.charAt(idx));
-        if (rmDir < 0) return null;
-        idx++;
-        if (addSuper || idx !== s.length || addDir === rmDir ||
-            prongs[rmDir] !== 1 || prongs[addDir] !== 0) {
-          return null;
-        }
-        op.addProng = true;
-        op.rmProng = true;
         return op;
       }
       return null;
@@ -44556,23 +44984,6 @@ var OctiWebSoundSynth = (function () {
       idx++;
       if (idx >= s.length) return null;
       var nextCh = s.charAt(idx);
-      var rmDir2 = charToDirIdx(nextCh);
-      if (rmDir2 >= 0) {
-        idx++;
-        if (idx >= s.length || s.charAt(idx) !== "+") return null;
-        idx++;
-        if (idx >= s.length) return null;
-        var addDir2 = charToDirIdx(s.charAt(idx));
-        if (addDir2 < 0) return null;
-        idx++;
-        if (idx !== s.length || addDir2 === rmDir2 ||
-            prongs[rmDir2] !== 1 || prongs[addDir2] !== 0) {
-          return null;
-        }
-        op.addProng = true;
-        op.rmProng = true;
-        return op;
-      }
       var nc = nextCh.charCodeAt(0);
       if (nc >= 49 && nc <= 57) {
         while (true) {
@@ -44617,7 +45028,7 @@ var OctiWebSoundSynth = (function () {
     var s = rawStr.trim();
     if (!s) return null;
     var semiParts = s.split(";");
-    if (semiParts.length > 3) return null;
+    if (semiParts.length > 5) return null;
     for (var i = 0; i < semiParts.length; i++) {
       semiParts[i] = semiParts[i].trim();
       if (!semiParts[i]) return null;
@@ -45247,41 +45658,17 @@ WebMoveComposer.prototype.applyUncommittedPreludesToState = function (baseState,
   var s = cloneState(baseState);
   if (!preludeOps || !preludeOps.length) return s;
 
-  var preludeDeferredCaps = [];
+  var preStrs = [];
   for (var i = 0; i < preludeOps.length; i++) {
-    var op = preludeOps[i];
-    var preStr = this.formatOpNotation(op);
-    if (preStr) {
-      applySingleHopChain(s, preStr, s.turn, preludeDeferredCaps);
-    }
+    var preStr = this.formatOpNotation(preludeOps[i]);
+    if (!preStr) return null;
+    preStrs.push(preStr);
   }
-
-  var capturerIdx = playerIndex(s.turn);
-  var res = s.reserves[capturerIdx];
-  for (var dc = 0; dc < preludeDeferredCaps.length; dc++) {
-    var midK = preludeDeferredCaps[dc];
-    var jStack = s.map[midK];
-    if (jStack && jStack.length) {
-      for (var v = 0; v < jStack.length; v++) {
-        var vPod = jStack[v];
-        var vIdx = playerIndex(vPod.owner);
-        if (s.reserves[vIdx]) s.reserves[vIdx].capturedPods++;
-        for (var pi = 0; pi < 8; pi++) {
-          if (vPod.cfg.prongs[pi] === 1) {
-            if (res) res.freeProngs++;
-          } else if (vPod.cfg.prongs[pi] === 2) {
-            if (s.superProngs) {
-              if (res) res.freeSuper++;
-            } else {
-              if (res) res.freeProngs++;
-            }
-          }
-        }
-      }
-      delete s.map[midK];
-    }
+  try {
+    executeSuperProngPreludesOnState(s, preStrs, s.turn);
+  } catch (e) {
+    return null;
   }
-
   return s;
 };
 
@@ -45301,11 +45688,15 @@ WebMoveComposer.prototype._getPostPreludesBoard = function () {
 WebMoveComposer.prototype.canPromoteToSuperProngPreludes = function () {
   var baseState = this._getPreTurnBoard();
   if (!baseState || !baseState.superProngs) return false;
-  if (!this._stagedOps || this._stagedOps.length === 0 || this._stagedOps.length > 2) return false;
+  if (!this._stagedOps || this._stagedOps.length === 0 || this._stagedOps.length > 4) return false;
 
+  var unpromotedCount = 0;
+  var preStrs = [];
   for (var i = 0; i < this._stagedOps.length; i++) {
     var op = this._stagedOps[i];
     if (!op || op.type !== "move" || !op.hops || op.hops.length === 0) return false;
+    if (!op.isSuperProngBonusMove) unpromotedCount++;
+    if (unpromotedCount > 1) return false;
     if (!op.pod || !op.pod.cfg || !op.pod.cfg.prongs) return false;
     var dir0 = op.hops[0].dir;
     if (dir0 === undefined || dir0 < 0 || op.pod.cfg.prongs[dir0] !== 2) return false;
@@ -45316,38 +45707,19 @@ WebMoveComposer.prototype.canPromoteToSuperProngPreludes = function () {
         if (!op.hops[h].isJump || op.hops[h].dir !== dir0) return false;
       }
     }
+    var opNot = this.formatOpNotation(op);
+    if (!opNot) return false;
+    preStrs.push(opNot);
   }
 
-  if (this._stagedOps.length === 2) {
-    var op1 = this._stagedOps[0];
-    var op2 = this._stagedOps[1];
-    var p1End = op1.hops[op1.hops.length - 1];
-    var p1Cfg = formatProngConfig(op1.pod.cfg.prongs);
-    var p2Cfg = formatProngConfig(op2.pod.cfg.prongs);
-    var p1Dir = op1.hops[0].dir;
-    var p2Dir = op2.hops[0].dir;
-
-    var sAfterP1 = cloneState(baseState);
-    var defCaps1 = [];
-    applySingleHopChain(sAfterP1, this.formatOpNotation(op1), baseState.turn, defCaps1);
-    var sameCfgCountAfterP1 = 0;
-    var landStack = sAfterP1.map[p1End.x + "," + p1End.y] || [];
-    for (var li = 0; li < landStack.length; li++) {
-      if (landStack[li].owner === baseState.turn &&
-          formatProngConfig(landStack[li].cfg.prongs) === p1Cfg) {
-        sameCfgCountAfterP1++;
-      }
-    }
-    if (op2.x0 === p1End.x && op2.y0 === p1End.y &&
-        p2Cfg === p1Cfg && p2Dir === p1Dir && sameCfgCountAfterP1 < 2) {
-      return false;
-    }
+  try {
+    var postState = cloneState(baseState);
+    executeSuperProngPreludesOnState(postState, preStrs, baseState.turn);
+    var nextMoves = generateBaseMoves(postState, baseState.turn, false);
+    return nextMoves.length > 0;
+  } catch (e) {
+    return false;
   }
-
-  var postState = this.applyUncommittedPreludesToState(baseState, this._stagedOps);
-  if (!postState) return false;
-  var nextMoves = generateBaseMoves(postState, baseState.turn, false);
-  return nextMoves.length > 0;
 };
 
 WebMoveComposer.prototype.isAwaitingSuperProngBonusMove = function () {
@@ -45867,48 +46239,6 @@ WebMoveComposer.addProng = function (x, y, dir, isSuper, podIdx) {
   return false;
 };
 
-WebMoveComposer.prototype.stageRepositionProng = function (x, y, podIdx, srcDirIdx, dstDirIdx) {
-  var needPromote = false;
-  if (this._stagedOps.length > 0) {
-    if (!this.isAwaitingSuperProngBonusMove()) {
-      return false;
-    }
-    needPromote = true;
-  } else {
-    this.reset();
-  }
-
-  var s = needPromote
-    ? this.applyUncommittedPreludesToState(this._getPreTurnBoard(), this._stagedOps)
-    : this._getPostPreludesBoard();
-  if (!s) return false;
-  if (s.mode === "OFK") return false;
-  var turn = s.turn;
-  var k = x + "," + y;
-  var stack = s.map[k];
-  if (!stack || podIdx < 0 || podIdx >= stack.length) return false;
-  var pod = stack[podIdx];
-  if (pod.owner !== turn || pod.cfg.prongs[srcDirIdx] !== 1 || pod.cfg.prongs[dstDirIdx]) return false;
-
-  if (needPromote) {
-    this.promoteStagedOpsToSuperProngPreludes();
-  }
-
-  var prevCfg = formatProngConfig(pod.cfg.prongs);
-  var srcCh = DIR_CHARS[srcDirIdx];
-  var dstCh = DIR_CHARS[dstDirIdx];
-  var not = x + "" + y + prevCfg + "+" + dstCh + "-" + srcCh;
-  this._stagedOps.push({ type: "reposition_prong", notation: not, isSuperProngBonusMove: false });
-  this.populatePreviewBoard();
-
-  OctiWebSoundSynth.play("PRONG_SNAP");
-  this.isAwaitingConfirmation = true;
-  this.updateUi();
-  renderPlayBoardCanvas();
-  renderAllWebReserves();
-  return true;
-};
-
 WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, chainJumped, originSq) {
   var dests = [];
   if (!state || !state.map || !pod || !pod.cfg) return dests;
@@ -45918,7 +46248,45 @@ WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, 
   var origK = orig.x + "," + orig.y;
   var savedOriginPods = state.map[origK];
   if (savedOriginPods) {
-    delete state.map[origK];
+    var vacateIndices = [];
+    if (this.guidedOriginSquare &&
+        this.guidedOriginSquare.x === orig.x &&
+        this.guidedOriginSquare.y === orig.y &&
+        this._claimedStartPods && this._claimedStartPods.length) {
+      for (var ci = 0; ci < this._claimedStartPods.length; ci++) {
+        if (vacateIndices.indexOf(this._claimedStartPods[ci]) === -1) {
+          vacateIndices.push(this._claimedStartPods[ci]);
+        }
+      }
+    }
+    var activeIdx = savedOriginPods.indexOf(pod);
+    if (activeIdx >= 0) {
+      if (vacateIndices.indexOf(activeIdx) === -1) {
+        vacateIndices.push(activeIdx);
+      }
+    } else {
+      var wantCfg = pod.cfg.prongs ? formatProngConfig(pod.cfg.prongs) : (pod.cfg.text || "");
+      for (var si = 0; si < savedOriginPods.length; si++) {
+        if (vacateIndices.indexOf(si) !== -1) continue;
+        var sp = savedOriginPods[si];
+        var spCfg = (sp && sp.cfg && sp.cfg.prongs) ? formatProngConfig(sp.cfg.prongs) : "";
+        if (sp && sp.owner === pod.owner && spCfg === wantCfg) {
+          vacateIndices.push(si);
+          break;
+        }
+      }
+    }
+    var remainingOrig = [];
+    for (var oi = 0; oi < savedOriginPods.length; oi++) {
+      if (vacateIndices.indexOf(oi) === -1) {
+        remainingOrig.push(savedOriginPods[oi]);
+      }
+    }
+    if (remainingOrig.length > 0) {
+      state.map[origK] = remainingOrig;
+    } else {
+      delete state.map[origK];
+    }
   }
 
   for (var d = 0; d < 8; d++) {
@@ -45944,13 +46312,14 @@ WebMoveComposer.prototype.computeLegalDestsForPod = function (state, x, y, pod, 
       }
     }
 
-    // Jumps: distance 2 over adjacent occupied square
+    // Jumps: distance 2 over adjacent occupied square (R4: never jump over starting square)
     var jx = x + dx, jy = y + dy;
     var landX = x + dx * 2, landY = y + dy * 2;
     if (edgeless) {
       jx = wrapCoord(jx, gw); jy = wrapCoord(jy, gh);
       landX = wrapCoord(landX, gw); landY = wrapCoord(landY, gh);
     }
+    if (jx === orig.x && jy === orig.y) continue;
     if (jx >= 1 && jx <= gw && jy >= 1 && jy <= gh &&
         landX >= 1 && landX <= gw && landY >= 1 && landY <= gh) {
       var jumpedK = jx + "," + jy;
@@ -47081,7 +47450,6 @@ function renderPlayBoardCanvas() {
 var zoomSq = null;
 var zoomSelectedPodIdx = 0;
 var zoomHoverDir = null;
-var zoomSelectedRepositionDir = null;
 
 function getZoomSquareStateAndStack(x, y) {
   var preview = (moveComposer && moveComposer.previewState) ? moveComposer.previewState : activePlayState;
@@ -47131,7 +47499,6 @@ function openZoomedSquare(x, y) {
     }
   }
   zoomHoverDir = null;
-  zoomSelectedRepositionDir = null;
   var stackCb = document.getElementById("zoom-move-stack-cb");
   if (stackCb) stackCb.checked = false;
 
@@ -47150,7 +47517,6 @@ function closeZoomedSquare() {
   var overlay = document.getElementById("web-zoom-overlay");
   if (overlay) overlay.style.display = "none";
   zoomSq = null;
-  zoomSelectedRepositionDir = null;
 }
 
 function updateZoomOverlayControls() {
@@ -47195,7 +47561,6 @@ function updateZoomOverlayControls() {
       btn.appendChild(lbl);
       btn.addEventListener("click", function () {
         zoomSelectedPodIdx = pIdx;
-        zoomSelectedRepositionDir = null;
         updateZoomOverlayControls();
         renderZoomCanvas();
       });
@@ -47326,32 +47691,16 @@ function renderZoomCanvas() {
     drawOctagonalPod(ctx, aRect, activePod.owner, activePod.cfg, pal, rotDeg, true, activePod.owner);
     ctx.restore();
 
-    // Highlight selected reposition source prong if active
-    if (zoomSelectedRepositionDir !== null && activePod.cfg.prongs[zoomSelectedRepositionDir] === 1) {
-      var angRad = ((zoomSelectedRepositionDir * 45 + rotDeg - 90) * Math.PI) / 180;
-      var hx = cx + Math.cos(angRad) * (podR * 1.18);
-      var hy = cy + Math.sin(angRad) * (podR * 1.18);
-      ctx.save();
-      ctx.strokeStyle = "#38BDF8";
-      ctx.lineWidth = 2.5;
-      ctx.setLineDash([4, 3]);
-      ctx.beginPath();
-      ctx.arc(hx, hy, 14, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
-
     // 3. Draw hover preview blade if hovering empty socket on own pod during turn
     if (isTurn && !info.isOriginComposite && activePod.owner === s.turn && zoomHoverDir !== null && !activePod.cfg.prongs[zoomHoverDir]) {
       var pIdxTurn = playerIndex(s.turn);
       var resTurn = s.reserves[pIdxTurn];
       var isSuperSelected = s.superProngs && document.getElementById("zoom-well-super") &&
         document.getElementById("zoom-well-super").classList.contains("active");
-      var canPreview = (zoomSelectedRepositionDir !== null) ||
-        (isSuperSelected ? (resTurn && resTurn.freeSuper > 0) : (resTurn && resTurn.freeProngs > 0));
+      var canPreview = isSuperSelected ? (resTurn && resTurn.freeSuper > 0) : (resTurn && resTurn.freeProngs > 0);
       if (canPreview) {
         var mockCfg = { prongs: [0, 0, 0, 0, 0, 0, 0, 0] };
-        mockCfg.prongs[zoomHoverDir] = (zoomSelectedRepositionDir !== null) ? 1 : (isSuperSelected ? 2 : 1);
+        mockCfg.prongs[zoomHoverDir] = isSuperSelected ? 2 : 1;
         ctx.save();
         ctx.globalAlpha = 0.72;
         drawProngs(ctx, cx, cy, podR, mockCfg, pal, rotDeg);
@@ -47408,13 +47757,11 @@ var zoomWellNormal = document.getElementById("zoom-well-normal");
 var zoomWellSuper = document.getElementById("zoom-well-super");
 if (zoomWellNormal && zoomWellSuper) {
   zoomWellNormal.addEventListener("click", function () {
-    zoomSelectedRepositionDir = null;
     zoomWellNormal.classList.add("active");
     zoomWellSuper.classList.remove("active");
     renderZoomCanvas();
   });
   zoomWellSuper.addEventListener("click", function () {
-    zoomSelectedRepositionDir = null;
     zoomWellSuper.classList.add("active");
     zoomWellNormal.classList.remove("active");
     renderZoomCanvas();
@@ -47471,29 +47818,7 @@ if (zoomCanvas) {
     var pod = stack[pIdx];
     if (!pod || pod.owner !== s.turn) return;
 
-    // 1. Clicking an existing normal prong in 2P/4P selects/deselects it for repositioning
-    if (pod.cfg.prongs[dir] === 1 && s.mode !== "OFK") {
-      if (zoomSelectedRepositionDir === dir) {
-        zoomSelectedRepositionDir = null;
-      } else {
-        zoomSelectedRepositionDir = dir;
-      }
-      renderZoomCanvas();
-      return;
-    }
-
-    // 2. Clicking an empty socket while a reposition source prong is selected repositions it
-    if (!pod.cfg.prongs[dir] && zoomSelectedRepositionDir !== null) {
-      var srcDir = zoomSelectedRepositionDir;
-      zoomSelectedRepositionDir = null;
-      var okRepo = moveComposer.stageRepositionProng(sqX, sqY, pIdx, srcDir, dir);
-      if (okRepo) {
-        closeZoomedSquare();
-      }
-      return;
-    }
-
-    // 3. Otherwise add a reserve prong to the empty socket
+    // R1: Prongs are never repositioned; clicking an empty socket adds a reserve prong
     if (!pod.cfg.prongs[dir]) {
       var isSuper = s.superProngs && zoomWellSuper && zoomWellSuper.classList.contains("active");
       var ok = moveComposer.stageAddProng(sqX, sqY, pIdx, dir, isSuper);
@@ -48010,7 +48335,7 @@ function handlePlaySquareClick(x, y, ptX, ptY, shiftKey) {
       openZoomedSquare(x, y);
       return;
     }
-    // GDB-07.1: Prongs are added/repositioned exclusively inside ZoomedSquareDialog.
+    // GDB-07.1: Prongs are added exclusively inside ZoomedSquareDialog.
     // Begin guided move for 1-pod friendly square (or open ZoomedSquareDialog if 0 legal moves).
     moveComposer.beginGuidedPodMove(x, y, bestFriendlyIdx, moveAll);
     if (!moveComposer.guidedLegalDests || moveComposer.guidedLegalDests.length === 0) {

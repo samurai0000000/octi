@@ -313,9 +313,13 @@ TEST(OctiMoveComposerTest, SmartAutoCommitProngAddPodDropStepAndConfirmAll)
     CHECK_TRUE(composer.stageOrCommitAddProng(3, 7, 0, DIR_S, false));
     STRCMP_EQUAL("37+e", committedMoves.back().c_str());
 
-    // 5. A repositions prong on (3,4) from DIR_N ('a') to DIR_NE ('b') -> auto-commits
-    CHECK_TRUE(composer.stageOrCommitRepositionProng(3, 4, 0, DIR_N, DIR_NE));
-    STRCMP_EQUAL("34a+b-a", committedMoves.back().c_str());
+    // 5. A adds a second prong on (3,4) in DIR_NE ('b') -> auto-commits ("34a+b")
+    CHECK_TRUE(composer.stageOrCommitAddProng(3, 4, 0, DIR_NE, false));
+    STRCMP_EQUAL("34a+b", committedMoves.back().c_str());
+
+    // 6. R1: Prong repositioning syntax is rejected across all variants
+    CHECK_THROWS(IllegalMoveSyntaxException, OctiMove("34ab+c-a"));
+    CHECK_THROWS(IllegalMoveSyntaxException, OctiMove("34ab-a+c"));
 }
 
 TEST(OctiMoveComposerTest, MultiHopJumpSelectiveCaptureAndLiberation)
@@ -867,7 +871,7 @@ TEST(OctiBoardCanvasRenderTest, CanvasSimulateDragAndEscapeRollback)
     CHECK_TRUE(canvas.simulateDragFromReserveToSquare(DragKind::ADD_POD_FROM_RESERVE, 5, 7));
     CHECK_TRUE(canvas.simulateDragPodToSquare(3, 3, 0, 3, 4, false));
     CHECK_TRUE(canvas.simulateDragProngToPod(3, 7, 0, DIR_S, false));
-    CHECK_TRUE(canvas.simulateRepositionProngOnPod(3, 4, 0, DIR_N, DIR_NE));
+    CHECK_TRUE(canvas.simulateDragProngToPod(3, 4, 0, DIR_NE, false));
 
     // Confirm-All mode + Escape key rollback
     composer.setConfirmAllMoves(true);
@@ -2816,7 +2820,7 @@ TEST(OctiOfkUsabilityTestSuite, GameOverDialogDescribeTerminationReason6x7)
 
 TEST(OctiMoveComposerTest, FourPlayerPodPlacementAndEliminatedPartnerRevival)
 {
-    OctiBoard board(GAME_MODE_4, false, false, GAME_BASES_1);
+    OctiBoard board(GAME_MODE_4, false, false, GAME_BASES_3);
     board.getGame()->start(PLAYER_A);
     OctiMoveComposer composer(&board);
 
@@ -2831,8 +2835,9 @@ TEST(OctiMoveComposerTest, FourPlayerPodPlacementAndEliminatedPartnerRevival)
     // A can place reserve pod on A's own base (3, 3)
     CHECK_TRUE(composer.canPlaceReservePodAt(3, 3));
 
-    // 2. Clear partner C's home base (6, 6) (1-based 7, 7), occupy it with an A pod,
-    // and set partner C as eliminated with 1 captured pod.
+    // 2. R6: Clear partner C's home base (6, 6) (1-based 7, 7), occupy it with an A pod,
+    // and set partner C as eliminated with 1 captured pod while A has 0 captured pods.
+    // Eliminated partner revival is permanently forbidden!
     board.squareAt(6, 6).clear();
     board.squareAt(6, 6).addPod(OctiPod(A_POD));
 
@@ -2843,19 +2848,44 @@ TEST(OctiMoveComposerTest, FourPlayerPodPlacementAndEliminatedPartnerRevival)
     snap.players[PLAYER_C].capturedPods = 1;
     board.getGame()->restoreSnapshot(snap);
 
-    CHECK_TRUE(composer.canRevivePartnerPodAt(7, 7));
-    CHECK_TRUE(composer.canLiberateCapturedPodAt(7, 7));
-    // Placing reserve pod is still strictly forbidden on partner's home base
+    CHECK_FALSE(composer.canLiberateCapturedPodAt(7, 7));
     CHECK_FALSE(composer.canPlaceReservePodAt(7, 7));
+    CHECK_FALSE(composer.stageOrCommitAddPod(7, 7, true));
+    CHECK_TRUE(composer.legalPodDropSquares(true).empty());
 
-    // Staging liberation on (7, 7) stages partner revival "77*"
+    // Also verify empty partner home square (7, 7) rejects 77* and reserve placement
+    board.squareAt(6, 6).clear();
+    CHECK_FALSE(composer.canLiberateCapturedPodAt(7, 7));
+    CHECK_FALSE(composer.stageOrCommitAddPod(7, 7, true));
+
+    // 3. R6 preservation: If surviving PLAYER_A occupies partnerHome (7, 7), has liberation
+    // clearance (e.g. an A pod occupying enemy base (3, 7)), and holds capturedPods(PLAYER_A) > 0,
+    // PLAYER_A can liberate PLAYER_A's OWN captured pod onto partnerHome (7, 7) while partner C
+    // remains permanently eliminated!
+    board.squareAt(6, 6).addPod(OctiPod(A_POD));
+    board.squareAt(2, 6).clear();
+    board.squareAt(2, 6).addPod(OctiPod(A_POD));
+    snap = board.getGame()->captureSnapshot();
+    snap.turn = PLAYER_A;
+    snap.players[PLAYER_A].capturedPods = 1;
+    snap.players[PLAYER_C].eliminated = true;
+    snap.players[PLAYER_C].capturedPods = 1;
+    board.getGame()->restoreSnapshot(snap);
+
+    CHECK_TRUE(composer.canLiberateCapturedPodAt(7, 7));
+    ZoomedSquareDialog dlg77(&board, &composer, 7, 7, BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+    dlg77.renderToImage(560, 530);
+    CHECK_FALSE(dlg77.liberateBtnRect().isEmpty());
+
     CHECK_TRUE(composer.stageOrCommitAddPod(7, 7, true));
     STRCMP_EQUAL("77*", composer.stagedMoveNotation().c_str());
     CHECK_TRUE(composer.commitStagedMove());
 
-    // Partner C is revived!
-    CHECK_FALSE(board.getGame()->isPlayerEliminated(PLAYER_C));
-    LONGS_EQUAL(0, board.getGame()->getCapturedPods(PLAYER_C));
+    // Partner C remains eliminated with 1 captured pod; A's own captured pod was liberated onto (7, 7)!
+    CHECK_TRUE(board.getGame()->isPlayerEliminated(PLAYER_C));
+    LONGS_EQUAL(1, board.getGame()->getCapturedPods(PLAYER_C));
+    LONGS_EQUAL(0, board.getGame()->getCapturedPods(PLAYER_A));
+    LONGS_EQUAL(2, board.squareAt(6, 6).getNumPods());
 }
 
 TEST(OctiBoardCanvasIndicatorTestSuite, GuidedModeFriendlyJumpSelfCaptureToggle)
@@ -3256,7 +3286,8 @@ TEST(SuperProngPreludeAndStackInspectorTest,
         LONGS_EQUAL(1, board.squareAt(2, 3).getNumPods());
     }
 
-    // 5. Staging prong reposition after prelude produces "33a!c-34;34a!c+b-c"
+    // 5. R1: Clicking existing normal prong in ZoomedSquareDialog does NOT reposition;
+    //    clicking an empty socket after prelude stages "33a!c-34;34a!c+b"
     {
         OctiBoard board(GAME_MODE_2, true, true, GAME_BASES_3);
         board.fromPositionString("2:3:1:1:P:A:-:1:2,2,10,1:2,2,10,1:A33a!c,B37");
@@ -3264,10 +3295,197 @@ TEST(SuperProngPreludeAndStackInspectorTest,
         composer.setConfirmAllMoves(true);
 
         CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4));
-        CHECK_TRUE(composer.stageOrCommitRepositionProng(3, 4, 0, DIR_E, DIR_NE));
-        STRCMP_EQUAL("33a!c-34;34a!c+b-c", composer.stagedMoveNotation().c_str());
+        ZoomedSquareDialog dlg34(&board, &composer, 3, 4, BoardRotation::ROT_0, ThemeId::OBSIDIAN_BRASS);
+        dlg34.renderToImage(560, 530);
+        // Click occupied DIR_E ('c') socket -> ignored (no reposition state)
+        QPointF ePt = dlg34.socketCenters().at(DIR_E);
+        QMouseEvent ePress(QEvent::MouseButtonPress, ePt, ePt, ePt,
+                           Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QMouseEvent eRel(QEvent::MouseButtonRelease, ePt, ePt, ePt,
+                         Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(&dlg34, &ePress);
+        QApplication::sendEvent(&dlg34, &eRel);
+        CHECK_FALSE(dlg34.actionCompleted());
+        STRCMP_EQUAL("33a!c-34", composer.stagedMoveNotation().c_str());
+
+        // Click empty DIR_NE ('b') socket -> stages prong addition "+b", never "+b-c"
+        QPointF nePt = dlg34.socketCenters().at(DIR_NE);
+        QMouseEvent nePress(QEvent::MouseButtonPress, nePt, nePt, nePt,
+                            Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QMouseEvent neRel(QEvent::MouseButtonRelease, nePt, nePt, nePt,
+                          Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(&dlg34, &nePress);
+        QApplication::sendEvent(&dlg34, &neRel);
+        CHECK_TRUE(dlg34.actionCompleted());
+        STRCMP_EQUAL("33a!c-34;34a!c+b", composer.stagedMoveNotation().c_str());
         CHECK_FALSE(composer.isAwaitingSuperProngBonusMove());
         CHECK_TRUE(composer.commitStagedMove());
+    }
+}
+
+TEST(SuperProngPreludeAndStackInspectorTest,
+     StartingSquareVacancyLoopBackAndEdgelessHopOverGuard)
+{
+    auto containsSquare = [](const std::vector<std::pair<int, int>> &list, int x, int y) {
+        return std::find(list.begin(), list.end(), std::make_pair(x, y)) != list.end();
+    };
+
+    // 1. R4 Fault Injection: Stationary pod A44a remaining on (4, 4) blocks A44beg from
+    //    looping back to land on (4, 4) via 44beg-66x-64x-44
+    {
+        OctiBoard board(GAME_MODE_2, false, false, GAME_BASES_3);
+        board.fromPositionString(
+            "2:3:0:0:P:A:-:1:2,2,10,0:2,2,10,0:A44beg,A44a,B55,B65,B54,B37");
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(true);
+
+        // Pod 0 is A44beg (3 prongs), Pod 1 is A44a (1 prong)
+        CHECK_TRUE(composer.beginGuidedPodMove(4, 4, 0));
+        CHECK_TRUE(composer.selectGuidedDestination(6, 6));
+        CHECK_TRUE(composer.selectGuidedDestination(6, 4));
+        STRCMP_EQUAL("44beg-66x-64x", composer.stagedMoveNotation().c_str());
+
+        // From (6, 4), landing back on (4, 4) is illegal because A44a is stationary on (4, 4)
+        CHECK_FALSE(containsSquare(composer.guidedNextSquares(), 4, 4));
+        CHECK_FALSE(containsSquare(composer.legalDestinationsFrom(6, 4, 0), 4, 4));
+        CHECK_FALSE(composer.selectGuidedDestination(4, 4));
+        CHECK_FALSE(composer.stageOrCommitPodMoveOrJump(6, 4, 0, 4, 4));
+        STRCMP_EQUAL("44beg-66x-64x", composer.stagedMoveNotation().c_str());
+    }
+
+    // 2. R4 Nominal: Composite full-stack clear-out (44a-45,44beg-66x-64x-44) vacates (4, 4)
+    //    completely so A44beg CAN loop back and land on (4, 4)
+    {
+        OctiBoard board(GAME_MODE_2, false, false, GAME_BASES_3);
+        board.fromPositionString(
+            "2:3:0:0:P:A:-:1:2,2,10,0:2,2,10,0:A44beg,A44a,B55,B65,B54,B37");
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(true);
+
+        // First move A44a (pod index 1) from (4, 4) to (4, 5)
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(4, 4, 1, 4, 5));
+        STRCMP_EQUAL("44a-45", composer.stagedMoveNotation().c_str());
+
+        // Now move A44beg (pod index 0) from (4, 4) -> (6, 6) -> (6, 4)
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(4, 4, 0, 6, 6));
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(6, 6, 0, 6, 4));
+        STRCMP_EQUAL("44a-45,44beg-66x-64x", composer.stagedMoveNotation().c_str());
+
+        // Because all pods starting on (4, 4) have vacated (4, 4), (4, 4) is a legal landing target!
+        CHECK_TRUE( composer.isGuidedMoveActive() );
+        CHECK_TRUE(containsSquare(composer.guidedNextSquares(), 4, 4));
+        CHECK_TRUE(containsSquare(composer.legalDestinationsFrom(6, 4, 0), 4, 4));
+        CHECK_TRUE(composer.selectGuidedDestination(4, 4));
+        STRCMP_EQUAL("44a-45,44beg-66x-64x-44x", composer.stagedMoveNotation().c_str());
+
+        // Toggle optional capture on (5, 4) off -> "44a-45,44beg-66x-64x-44"
+        CHECK_TRUE(composer.setCaptureAtSquare(5, 4, false));
+        STRCMP_EQUAL("44a-45,44beg-66x-64x-44", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.canCommitStagedMove());
+        CHECK_TRUE(composer.commitStagedMove());
+        LONGS_EQUAL(1, board.squareAt(3, 4).getNumPods()); // A44a at 45
+        LONGS_EQUAL(1, board.squareAt(3, 3).getNumPods()); // A44beg landed back at 44
+    }
+
+    // 3. R4 Fault Injection (_ED wraparound hop-over ban per uid:119195):
+    //    44bcd-66-86-16-34-54 jumping over stationary A44a on starting square (4, 4) is illegal
+    {
+        OctiBoard board(GAME_MODE_2, false, true, GAME_BASES_3);
+        board.fromPositionString(
+            "2:3:0:1:P:A:-:1:2,2,10,0:2,2,10,0:A44bcd,A44a,B55,B76,B96,B25,B37");
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(true);
+
+        CHECK_TRUE(composer.beginGuidedPodMove(4, 4, 0));
+        CHECK_TRUE(composer.selectGuidedDestination(6, 6));
+        CHECK_TRUE(composer.selectGuidedDestination(8, 6));
+        CHECK_TRUE(composer.selectGuidedDestination(1, 6));
+        CHECK_TRUE(composer.selectGuidedDestination(3, 4));
+
+        // At (3, 4), jumping East over starting square (4, 4) to (5, 4) is unconditionally forbidden!
+        CHECK_FALSE(containsSquare(composer.guidedNextSquares(), 5, 4));
+        CHECK_FALSE(containsSquare(composer.legalDestinationsFrom(3, 4, 0), 5, 4));
+        CHECK_FALSE(composer.selectGuidedDestination(5, 4));
+        CHECK_FALSE(composer.stageOrCommitPodMoveOrJump(3, 4, 0, 5, 4));
+    }
+}
+
+TEST(SuperProngPreludeAndStackInspectorTest,
+     SuperProngUpToFourPreludesAndImmediateCaptureRemoval)
+{
+    // 1. R5 Immediate Capture Removal: SP1 (33a!-35x) immediately removes B34 so SP2 (54g!-34x)
+    //    can jump over B44 and land on the newly vacated (3, 4) square!
+    {
+        OctiBoard board(GAME_MODE_2, true, false, GAME_BASES_3);
+        board.fromPositionString(
+            "2:3:1:0:P:A:-:1:2,2,10,0:2,2,10,0:A33a!,A54g!,B34,B44,B37");
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(true);
+
+        // Stage SP1: 33a!-35x
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 5));
+        STRCMP_EQUAL("33a!-35x", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+
+        // Preview board must already have (3, 4) empty
+        OctiBoard preview1;
+        CHECK_TRUE(composer.populatePreviewBoard(preview1));
+        CHECK_TRUE(preview1.squareAt(2, 3).isEmpty());
+
+        // SP2: A54g! at (5, 4) can now jump West over B44 at (4, 4) to land on vacated (3, 4)!
+        auto dests54 = composer.legalDestinationsFrom(5, 4, 0);
+        CHECK_TRUE(std::find(dests54.begin(), dests54.end(), std::make_pair(3, 4)) != dests54.end());
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(5, 4, 0, 3, 4));
+        STRCMP_EQUAL("33a!-35x;54g!-34x", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+
+        // Regular turn move: add prong +b to A35a! at (3, 5)
+        CHECK_TRUE(composer.stageOrCommitAddProng(3, 5, 0, DIR_NE, false));
+        STRCMP_EQUAL("33a!-35x;54g!-34x;35a!+b", composer.stagedMoveNotation().c_str());
+        CHECK_FALSE(composer.isAwaitingSuperProngBonusMove());
+        CHECK_TRUE(composer.canCommitStagedMove());
+        CHECK_TRUE(composer.commitStagedMove());
+        LONGS_EQUAL(1, board.squareAt(2, 3).getNumPods()); // A54g! landed on 34
+        LONGS_EQUAL(1, board.squareAt(2, 4).getNumPods()); // A33a!+b on 35
+    }
+
+    // 2. R5 4P_SP 3 and 4 Preludes: Player A controls 4 SuperProngs on the board (A33a!, A43a!, A53a!, A63a!)
+    //    and stages 4 SP bonus preludes followed by a regular turn action
+    {
+        OctiBoard board(GAME_MODE_4, true, false, GAME_BASES_3);
+        board.fromPositionString(
+            "4:3:1:0:P:A:-:1:0,0,10,0:2,0,10,0:2,0,10,0:2,0,10,0:A33a!,A43a!,A53a!,A63a!,B37,C77,D73");
+        OctiMoveComposer composer(&board);
+        composer.setConfirmAllMoves(true);
+
+        // Prelude 1: 33a!-34
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4));
+        STRCMP_EQUAL("33a!-34", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+
+        // Prelude 2: 43a!-44
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(4, 3, 0, 4, 4));
+        STRCMP_EQUAL("33a!-34;43a!-44", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+
+        // Prelude 3: 53a!-54
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(5, 3, 0, 5, 4));
+        STRCMP_EQUAL("33a!-34;43a!-44;53a!-54", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+
+        // Prelude 4: 63a!-64
+        CHECK_TRUE(composer.stageOrCommitPodMoveOrJump(6, 3, 0, 6, 4));
+        STRCMP_EQUAL("33a!-34;43a!-44;53a!-54;63a!-64", composer.stagedMoveNotation().c_str());
+        CHECK_TRUE(composer.isAwaitingSuperProngBonusMove());
+
+        // Regular Turn Move (5th sub-op): 64a!+b
+        CHECK_TRUE(composer.stageOrCommitAddProng(6, 4, 0, DIR_NE, false));
+        STRCMP_EQUAL("33a!-34;43a!-44;53a!-54;63a!-64;64a!+b",
+                     composer.stagedMoveNotation().c_str());
+        CHECK_FALSE(composer.isAwaitingSuperProngBonusMove());
+        CHECK_TRUE(composer.canCommitStagedMove());
+        CHECK_TRUE(composer.commitStagedMove());
+        LONGS_EQUAL(static_cast<int>(PLAYER_B), static_cast<int>(board.getGame()->getTurn()));
     }
 }
 

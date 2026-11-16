@@ -4781,9 +4781,9 @@ TEST(OctiHttpServerIntegrationTest, ArchiveUploadFourPlayerAttributionAndValidat
     EXPECT_STATUS(200, http().patch("/api/v1/profile/me", u4.token, Json{{"handle", "dave_4p"}}));
 
     const std::vector<std::string> kMoves = {
-        "33+a",   "37+h",    "77+e",    "73+b",    "33a-34",  "37h+f-h",
-        "77e-76", "73b-84",  "34a-35",  "37f-26",  "76e-75",  "84b+g",
-        "35a-36", "26f+a",   "75e-74",  "84bg+h",  "36a-37",  "74e-73"
+        "33+a",   "37+f",    "77+e",    "73+b",    "33a-34",  "37f+h",
+        "77e-76", "73b-84",  "34a-35",  "37fh-26", "76e-75",  "84b+g",
+        "35a-36", "26fh+a",  "75e-74",  "84bg+h",  "36a-37",  "74e-73"
     };
 
     octi::OctiBoard b(octi::GAME_MODE_4, false, false, octi::GAME_BASES_3);
@@ -4937,7 +4937,7 @@ TEST(OctiHttpServerIntegrationTest, WebPlayerBotProfilesQuiescenceAndRulesValida
 var assert = require("assert");
 var fs = require("fs");
 
-// Test 1: WebMoveComposer human moves advance turn, support reposition, jump capture toggle, and botSearch reply
+// Test 1: WebMoveComposer human moves advance turn, reject prong reposition (R1), support jump capture toggle, and botSearch reply
 var activeState = parseOctiFen("2:1:0:0:P:A:-:0:4,0,25,0:4,0,25,0:A33,A53,A73,B37,B57,B77");
 var committedMoves = [];
 moveComposer = new WebMoveComposer(function() { return activeState; }, function(not, newSt) {
@@ -4971,10 +4971,20 @@ assert.strictEqual(capRes.bestMove, "54a-56x", "Level 2 bot must jump-capture ha
 var hangRes = botSearch("2:3:0:0:P:A:-:0:4,0,23,0:3,0,23,0:A33,A54a,A73,B37,B56e,B57,B77", 2, "2P", "A", null, 800);
 assert.notStrictEqual(hangRes.bestMove, "54a-55", "Level 2 bot must not blunder sole armed pod into (5,5)");
 
-// Test prong repositioning on A's pod at (3,3): 33a+b-a
+// R1: Prong repositioning removed from WebMoveComposer and rejected by applyMoveToState
+assert.strictEqual(typeof moveComposer.stageRepositionProng, "undefined",
+                   "stageRepositionProng must be removed under R1");
+assert.throws(function() {
+  applyMoveToState(cloneState(activeState), "33a+b-a", "A");
+}, /reposition/i, "applyMoveToState must reject +add-rm reposition syntax");
+assert.throws(function() {
+  applyMoveToState(cloneState(activeState), "33a-a+b", "A");
+}, /reposition/i, "applyMoveToState must reject -rm+add reposition syntax");
+
+// Stage & commit second normal prong addition on A's pod at (3,3): 33a+b
 var podIdxA = 0;
-assert.strictEqual(moveComposer.stageRepositionProng(3, 3, podIdxA, 0, 1), true);
-assert.strictEqual(moveComposer.stagedNotation, "33a+b-a");
+assert.strictEqual(moveComposer.stageAddProng(3, 3, podIdxA, 1, false), true);
+assert.strictEqual(moveComposer.stagedNotation, "33a+b");
 assert.strictEqual(moveComposer.commitStagedMove(), true);
 assert.strictEqual(activeState.turn, "B");
 
@@ -5039,9 +5049,9 @@ fs.writeFileSync(process.argv[2], JSON.stringify(tr2p));
 // Build a full 4P victory transcript using JS engine and write to disk for C++ server validation
 var s4p = parseOctiFen("4:3:0:0:P:A:-:0:3,0,12,0:3,0,12,0:3,0,12,0:3,0,12,0:A33,D73,B37,C77");
 var moves4p = [
-  "33+a", "37+h", "77+e", "73+b", "33a-34", "37h+f-h",
-  "77e-76", "73b-84", "34a-35", "37f-26", "76e-75", "84b+g",
-  "35a-36", "26f+a", "75e-74", "84bg+h", "36a-37", "74e-73"
+  "33+a", "37+f", "77+e", "73+b", "33a-34", "37f+h",
+  "77e-76", "73b-84", "34a-35", "37fh-26", "76e-75", "84b+g",
+  "35a-36", "26fh+a", "75e-74", "84bg+h", "36a-37", "74e-73"
 ];
 var plies4p = [];
 for (var j = 0; j < moves4p.length; j++) {
@@ -5108,11 +5118,11 @@ TEST(OctiHttpServerIntegrationTest, DatabaseArchiveCorpusReplayAndInvalidGameRej
 {
     User uCorpus = signIn("google", "sub-corpus-replay", "CorpusValidator");
 
-    // 1. Validate all 19 real valid database games through C++ OctiBoard::deserializeGame
-    //    and POST /api/v1/archive/upload
+    // 1. Validate all 8 post-R1 reposition-free real database games through C++
+    //    OctiBoard::deserializeGame and POST /api/v1/archive/upload
     const size_t numValid = sizeof(octi::test::kValidArchiveCorpusGames) /
                             sizeof(octi::test::kValidArchiveCorpusGames[0]);
-    CHECK_EQUAL(19, static_cast<int>(numValid));
+    CHECK_EQUAL(8, static_cast<int>(numValid));
 
     for (size_t i = 0; i < numValid; ++i) {
         const auto &entry = octi::test::kValidArchiveCorpusGames[i];
@@ -5143,8 +5153,25 @@ TEST(OctiHttpServerIntegrationTest, DatabaseArchiveCorpusReplayAndInvalidGameRej
         }
     }
 
-    // 2. Verify all 8 invalid database games (7 premature TOTAL_CAPTURE while freePods > 0
-    //    and 1 corrupted reserve/captured pod liberation game) are rejected by the server
+    // 1b. Verify all 11 pre-R1 historical games containing prong reposition plies
+    //     are deterministically rejected under R1 with IllegalMoveSyntaxException / 400 INVALID_GAME
+    const size_t numLegacyRepo = sizeof(octi::test::kLegacyRepositionRejectedCorpusGames) /
+                                 sizeof(octi::test::kLegacyRepositionRejectedCorpusGames[0]);
+    CHECK_EQUAL(11, static_cast<int>(numLegacyRepo));
+
+    for (size_t i = 0; i < numLegacyRepo; ++i) {
+        const auto &entry = octi::test::kLegacyRepositionRejectedCorpusGames[i];
+        octi::OctiBoard replayBoard;
+        CHECK_THROWS(octi::IllegalMoveSyntaxException,
+                     replayBoard.deserializeGame(entry.transcriptJson));
+
+        Reply rRepo = http().post("/api/v1/archive/upload", uCorpus.token,
+                                  Json{{"transcript", std::string(entry.transcriptJson)}});
+        EXPECT_STATUS(400, rRepo);
+        STRCMP_EQUAL("INVALID_GAME", rRepo.json.value("error", "").c_str());
+    }
+
+    // 2. Verify all 8 invalid database games are rejected by the server
     const size_t numInvalid = sizeof(octi::test::kInvalidArchiveCorpusGames) /
                               sizeof(octi::test::kInvalidArchiveCorpusGames[0]);
     CHECK_EQUAL(8, static_cast<int>(numInvalid));
@@ -5157,8 +5184,8 @@ TEST(OctiHttpServerIntegrationTest, DatabaseArchiveCorpusReplayAndInvalidGameRej
         STRCMP_EQUAL(entry.expectedErrorCode, rBad.json.value("error", "").c_str());
     }
 
-    // 3. Replay all 19 valid games and all 8 invalid games through the Web JS engine
-    //    (WebUi.cxx) in Node.js to verify 100% host-side C++/JS parity
+    // 3. Replay all 8 valid games, 11 legacy-reposition games, and 8 invalid games
+    //    through the Web JS engine (WebUi.cxx) in Node.js to verify 100% C++/JS parity
     Reply rUi = http().get("/");
     EXPECT_STATUS(200, rUi);
     size_t scStart = rUi.body.find("<script>");
@@ -5180,6 +5207,14 @@ TEST(OctiHttpServerIntegrationTest, DatabaseArchiveCorpusReplayAndInvalidGameRej
             {"expectedWinner", entry.expectedWinner},
             {"expectedRuleTermination", entry.expectedRuleTermination},
             {"finalFen", entry.finalFen},
+            {"transcript", Json::parse(entry.transcriptJson)}
+        });
+    }
+    corpusPayload["legacyRepositionRejected"] = Json::array();
+    for (size_t i = 0; i < numLegacyRepo; ++i) {
+        const auto &entry = octi::test::kLegacyRepositionRejectedCorpusGames[i];
+        corpusPayload["legacyRepositionRejected"].push_back(Json{
+            {"gameId", entry.gameId},
             {"transcript", Json::parse(entry.transcriptJson)}
         });
     }
@@ -5227,7 +5262,8 @@ function makeInitialFen(mode, bases, sp, ed, startP) {
 }
 
 var payload = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-assert.strictEqual(payload.valid.length, 19);
+assert.strictEqual(payload.valid.length, 8);
+assert.strictEqual(payload.legacyRepositionRejected.length, 11);
 assert.strictEqual(payload.invalid.length, 8);
 
 for (var i = 0; i < payload.valid.length; i++) {
@@ -5250,20 +5286,46 @@ for (var i = 0; i < payload.valid.length; i++) {
   assert.strictEqual(serializeOctiFen(st), item.finalFen, "Final FEN mismatch for " + item.gameId);
 }
 
+for (var lr = 0; lr < payload.legacyRepositionRejected.length; lr++) {
+  var legItem = payload.legacyRepositionRejected[lr];
+  var lt = legItem.transcript;
+  var lst = parseOctiFen(makeInitialFen(lt.mode, lt.bases, !!lt.superProngs, !!lt.edgeless, lt.startPlayer || "A"));
+  var threwRepo = false;
+  try {
+    for (var lpIdx = 0; lpIdx < lt.plies.length; lpIdx++) {
+      var lply = lt.plies[lpIdx];
+      lst = applyMoveToState(lst, lply.move, lst.turn);
+    }
+  } catch (err) {
+    threwRepo = true;
+    assert.ok(/reposition/i.test(String(err && err.message ? err.message : err)),
+              "Expected reposition rejection error on " + legItem.gameId + ", got: " + err);
+  }
+  assert.strictEqual(threwRepo, true, "Legacy reposition game " + legItem.gameId + " must throw in JS applyMoveToState");
+}
+
 for (var j = 0; j < payload.invalid.length; j++) {
   var bad = payload.invalid[j];
   var bt = bad.transcript;
   var bst = parseOctiFen(makeInitialFen(bt.mode, bt.bases, !!bt.superProngs, !!bt.edgeless, bt.startPlayer || "A"));
-  for (var bpIdx = 0; bpIdx < bt.plies.length; bpIdx++) {
-    var bply = bt.plies[bpIdx];
-    bst = applyMoveToState(bst, bply.move, bst.turn);
+  var threwIllegal = false;
+  try {
+    for (var bpIdx = 0; bpIdx < bt.plies.length; bpIdx++) {
+      var bply = bt.plies[bpIdx];
+      bst = applyMoveToState(bst, bply.move, bst.turn);
+    }
+  } catch (err) {
+    threwIllegal = true;
   }
   if (bad.expectedErrorCode === "GAME_NOT_COMPLETED") {
+    assert.strictEqual(threwIllegal, false, "Prematurely terminated game " + bad.gameId + " must not throw");
     assert.strictEqual(bst.status, "P", "Prematurely terminated game " + bad.gameId + " must still be in progress (freePods > 0)");
     var remLegal = generateMoves(bst, bst.turn, false);
     assert.ok(remLegal.length > 0, "Side with reserve pods in " + bad.gameId + " must have legal reserve placement moves");
   } else {
-    assert.notStrictEqual(serializeOctiFen(bst), bad.finalFen, "Corrupted FEN game " + bad.gameId + " must not match claimed finalFen");
+    assert.strictEqual(bad.expectedErrorCode, "INVALID_GAME");
+    assert.ok(threwIllegal || serializeOctiFen(bst) !== bad.finalFen,
+              "Invalid game " + bad.gameId + " must throw or mismatch claimed finalFen");
   }
 }
 
@@ -6984,12 +7046,16 @@ function markStep(name) {
   assert.strictEqual(synth.classifyMoveCue("57"), "POD_PLACE");
   assert.strictEqual(synth.classifyMoveCue("57*"), "POD_PLACE");
   assert.strictEqual(synth.classifyMoveCue("57+e"), "PRONG_SNAP");
-  assert.strictEqual(synth.classifyMoveCue("57e+f-e"), "PRONG_SNAP");
+  assert.strictEqual(synth.classifyMoveCue("57e+f-e"), "POD_PLACE");
+  assert.strictEqual(synth.classifyMoveCue("57e-e+f"), "POD_PLACE");
   assert.strictEqual(synth.classifyMoveCue("57e-56"), "POD_STEP");
   assert.strictEqual(synth.classifyMoveCue("57e-55"), "POD_JUMP");
   assert.strictEqual(synth.classifyMoveCue("57e-55x"), "POD_CAPTURE");
   assert.strictEqual(synth.classifyMoveCue("33A-34;34+b"), "PRONG_SNAP");
   assert.strictEqual(synth.classifyMoveCue("33A-35x;35+b"), "POD_CAPTURE");
+  assert.strictEqual(synth.classifyMoveCue("33a!c!e!-34;34a!c!e!-44;44a!c!e!-43;43a!c!e!+b"), "PRONG_SNAP");
+  assert.strictEqual(synth.classifyMoveCue("33a!c!e!g!-34;34a!c!e!g!-44;44a!c!e!g!-43;43a!c!e!g!-33;33a!c!e!g!+b"), "PRONG_SNAP");
+  assert.strictEqual(synth.classifyMoveCue("33a!-34;34a!-35;35a!-36;36a!-37;37a!-38;38a!+b"), "POD_PLACE");
   assert.strictEqual(synth.classifyMoveCue("15g-85", { edgeless: true, gw: 9, gh: 9 }), "POD_JUMP");
   assert.strictEqual(synth.classifyMoveCue(""), "POD_PLACE");
 
@@ -7310,7 +7376,7 @@ TEST(OctiHttpServerIntegrationTest, SuperProngJsEngineComposerStagingAndStackIns
         CHECK_TRUE(strippedUi.find("<iframe") == std::string::npos);
     }
 
-    /* 2. Compute authoritative C++ OctiGame::generateLegalMoves sets across all required superprong positions */
+    /* 2. Compute authoritative C++ OctiGame::generateLegalMoves sets across R1, R4, R5, and R6 positions */
     struct ParityFixture {
         const char *label;
         const char *fen;
@@ -7324,7 +7390,33 @@ TEST(OctiHttpServerIntegrationTest, SuperProngJsEngineComposerStagingAndStackIns
         {"stacked_jump_over_B34_A33a_bang_A33a_bang", "2:3:1:0:P:A:-:0:2,0,0,0:2,0,12,2:A33a!,A33a!,B34e,B57"},
         {"pre_existing_dest_A33a_bang_A34a_bang", "2:3:1:0:P:A:-:0:2,0,10,0:3,0,12,2:A33a!,A34a!,B57"},
         {"edgeless_wrap_A15g_bang", "2:3:1:1:P:A:-:0:3,0,10,1:3,0,12,2:A15g!,B57"},
-        {"edgeless_wrap_jump_A15g_bang", "2:3:1:1:P:A:-:0:3,0,10,1:2,0,12,2:A15g!,B95c,B57"}
+        {"edgeless_wrap_jump_A15g_bang", "2:3:1:1:P:A:-:0:3,0,10,1:2,0,12,2:A15g!,B95c,B57"},
+        /* R1: zero reposition moves & boxed-in 0-reserve stalemate */
+        {"r1_2p_no_repositions", "2:3:0:0:P:A:-:0:2,0,4,0:2,0,4,0:A33ab,A53,B37ef,B57"},
+        {"r1_boxed_in_zero_legal_moves", "2:3:0:0:P:A:-:0:0,0,0,0:0,0,0,0:A11a,B12,B13,B57"},
+        /* R4: stationary stack-mate blocks loop-back landing & _ED hop-over S */
+        {"r4_stationary_stack_mate_blocks_loopback",
+         "2:3:0:0:P:A:-:0:2,0,20,0:3,0,23,0:A53,A73,A44a,A44beg,A54c,B55e,B65e,B37,B77"},
+        {"r4_single_pod_allows_loopback",
+         "2:3:0:0:P:A:-:0:3,0,21,0:3,0,23,0:A53,A73,A44beg,A54c,B55e,B65e,B37,B77"},
+        {"r4_edgeless_forbids_hop_over_stationary_S",
+         "2:3:0:1:P:A:-:0:1,0,10,0:1,0,10,0:A44a,A44bcd,B55,B76,B96,B25,B57"},
+        {"r4_sp_edgeless_forbids_hop_over_stationary_S",
+         "2:3:1:1:P:A:-:0:1,0,10,0:0,0,10,0:A44a,A44b!,B55,B77,B99,B22,B57"},
+        /* R5: 3 & 4 SP preludes in 4P_SP + immediate capture clearing + friendly SP self-capture */
+        {"r5_4p_sp_three_preludes_single_pod",
+         "4:3:1:0:P:A:-:0:0,0,2,0:0,0,2,0:0,0,2,0:0,0,2,0:A33a!c!e!,B37,C77,D73"},
+        {"r5_4p_sp_four_preludes_single_pod",
+         "4:3:1:0:P:A:-:0:0,0,1,0:0,0,1,0:0,0,1,0:0,0,1,0:A44a!c!e!g!,B37,C77,D73"},
+        {"r5_sp_immediate_capture_clears_square_for_sp2",
+         "2:3:1:0:P:A:-:0:1,0,2,0:1,0,2,0:A31a!,A12c!,B22,B32e,B57"},
+        {"r5_sp_friendly_self_capture_removes_sp2_socket",
+         "2:3:1:0:P:A:-:0:1,0,1,0:2,0,2,0:A31a!,A32c!,B57"},
+        /* R6: 4P eliminated partner revival forbidden vs surviving own-pod liberation on partnerHome */
+        {"r6_4p_no_partner_revival_when_own_captured_zero",
+         "4:3:0:0:P:A:-:4:0,0,2,0:1,0,2,0:0,2,0,0:1,0,2,0:A53,A77a,B37,D73"},
+        {"r6_4p_surviving_own_liberation_on_partner_home",
+         "4:3:0:0:P:A:-:4:0,1,2,0:1,0,2,0:0,2,0,0:1,0,2,0:A53,A77a,B37,D73"}
     };
 
     Json parityCases = Json::array();
@@ -7344,16 +7436,69 @@ TEST(OctiHttpServerIntegrationTest, SuperProngJsEngineComposerStagingAndStackIns
         });
     }
 
-    /* Authoritative post-move FEN for stacked deferred capture across p1 and p2 */
-    const std::string stackedDeferredStartFen =
+    /* Authoritative post-move FENs under R4, R5 (immediate capture removal), and R6 */
+    const std::string stackedImmediateStartFen =
         "2:3:1:0:P:A:-:0:2,0,0,0:1,0,12,2:A31a!,A31a!,B32e,B34,B57";
-    const std::string stackedDeferredMove = "31a!-33x-35;31a!-33x;33a!+b";
-    std::string stackedDeferredAfterFen;
+    {
+        /* SP1 capturing B32e with 'x' removes B32e immediately, so SP2 jumping over B32 throws! */
+        octi::OctiBoard badBoard;
+        badBoard.fromPositionString(stackedImmediateStartFen);
+        CHECK_THROWS(octi::IllegalMoveException,
+                     badBoard.getGame()->move("31a!-33x-35;31a!-33x;33a!+b"));
+    }
+    const std::string stackedVaultThenCaptureMove = "31a!-33-35;31a!-33x;33a!+b";
+    std::string stackedVaultThenCaptureAfterFen;
     {
         octi::OctiBoard board;
-        board.fromPositionString(stackedDeferredStartFen);
-        board.getGame()->move(stackedDeferredMove);
-        stackedDeferredAfterFen = board.toPositionString();
+        board.fromPositionString(stackedImmediateStartFen);
+        board.getGame()->move(stackedVaultThenCaptureMove);
+        stackedVaultThenCaptureAfterFen = board.toPositionString();
+    }
+
+    const std::string spImmediateClearStartFen =
+        "2:3:1:0:P:A:-:0:1,0,2,0:1,0,2,0:A31a!,A12c!,B22,B32e,B57";
+    const std::string spImmediateClearMove = "31a!-33x;12c!-32;33a!+b";
+    std::string spImmediateClearAfterFen;
+    {
+        octi::OctiBoard board;
+        board.fromPositionString(spImmediateClearStartFen);
+        board.getGame()->move(spImmediateClearMove);
+        spImmediateClearAfterFen = board.toPositionString();
+    }
+
+    const std::string r4CompositeLoopStartFen =
+        "2:3:0:0:P:A:-:0:2,0,20,0:3,0,23,0:A53,A73,A44a,A44beg,A54c,B55e,B65e,B37,B77";
+    const std::string r4CompositeLoopMove = "44a-45,44beg-66x-64x-44";
+    std::string r4CompositeLoopAfterFen;
+    {
+        octi::OctiBoard board;
+        board.fromPositionString(r4CompositeLoopStartFen);
+        board.getGame()->move(r4CompositeLoopMove);
+        r4CompositeLoopAfterFen = board.toPositionString();
+    }
+
+    const std::string r6OwnLibPartnerHomeStartFen =
+        "4:3:0:0:P:A:-:4:0,1,2,0:1,0,2,0:0,2,0,0:1,0,2,0:A53,A77a,B37,D73";
+    const std::string r6OwnLibPartnerHomeMove = "77*";
+    std::string r6OwnLibPartnerHomeAfterFen;
+    {
+        octi::OctiBoard board;
+        board.fromPositionString(r6OwnLibPartnerHomeStartFen);
+        board.getGame()->move(r6OwnLibPartnerHomeMove);
+        r6OwnLibPartnerHomeAfterFen = board.toPositionString();
+    }
+
+    const std::string r1StalemateWinStartFen =
+        "2:3:0:0:P:A:-:0:2,0,4,0:0,0,0,0:A53a,B11e,A12,A21,A22,A13,A31,A33";
+    const std::string r1StalemateWinMove = "53a-54";
+    std::string r1StalemateWinAfterFen;
+    {
+        octi::OctiBoard board;
+        board.fromPositionString(r1StalemateWinStartFen);
+        board.getGame()->move(r1StalemateWinMove);
+        CHECK_TRUE(board.getGame()->isGameOver());
+        CHECK_EQUAL(octi::PLAYER_A, board.getGame()->getWinner());
+        r1StalemateWinAfterFen = board.toPositionString();
     }
 
     size_t scStart = rUi.body.find("<script>");
@@ -7375,9 +7520,21 @@ TEST(OctiHttpServerIntegrationTest, SuperProngJsEngineComposerStagingAndStackIns
         Json cfg;
         cfg["port"] = http().port();
         cfg["parityCases"] = parityCases;
-        cfg["stackedDeferredStartFen"] = stackedDeferredStartFen;
-        cfg["stackedDeferredMove"] = stackedDeferredMove;
-        cfg["stackedDeferredAfterFen"] = stackedDeferredAfterFen;
+        cfg["stackedImmediateStartFen"] = stackedImmediateStartFen;
+        cfg["stackedVaultThenCaptureMove"] = stackedVaultThenCaptureMove;
+        cfg["stackedVaultThenCaptureAfterFen"] = stackedVaultThenCaptureAfterFen;
+        cfg["spImmediateClearStartFen"] = spImmediateClearStartFen;
+        cfg["spImmediateClearMove"] = spImmediateClearMove;
+        cfg["spImmediateClearAfterFen"] = spImmediateClearAfterFen;
+        cfg["r4CompositeLoopStartFen"] = r4CompositeLoopStartFen;
+        cfg["r4CompositeLoopMove"] = r4CompositeLoopMove;
+        cfg["r4CompositeLoopAfterFen"] = r4CompositeLoopAfterFen;
+        cfg["r6OwnLibPartnerHomeStartFen"] = r6OwnLibPartnerHomeStartFen;
+        cfg["r6OwnLibPartnerHomeMove"] = r6OwnLibPartnerHomeMove;
+        cfg["r6OwnLibPartnerHomeAfterFen"] = r6OwnLibPartnerHomeAfterFen;
+        cfg["r1StalemateWinStartFen"] = r1StalemateWinStartFen;
+        cfg["r1StalemateWinMove"] = r1StalemateWinMove;
+        cfg["r1StalemateWinAfterFen"] = r1StalemateWinAfterFen;
         std::ofstream cfs(cfgJsonPath);
         cfs << cfg.dump();
     }
@@ -7745,7 +7902,7 @@ for (const pc of cfg.parityCases) {
   );
 }
 
-/* applyMoveToState rejections */
+/* applyMoveToState rejections & R1/R4/R5/R6 C++/JS post-move FEN parity */
 assert.throws(() => {
   const s = t.parseOctiFen("2:3:1:0:P:A:-:0:3,0,10,1:3,0,12,2:A33a!,B57");
   t.applyMoveToState(s, "33a!-34;34a!-35;35a!+b", "A");
@@ -7756,25 +7913,116 @@ assert.throws(() => {
   t.applyMoveToState(s, "31a!c!-33-53;53a!c!+b", "A");
 }, "Mid-prelude bend must be rejected");
 
-assert.throws(() => {
-  const s = t.parseOctiFen("2:3:1:0:P:A:-:0:3,0,10,0:3,0,12,2:A33a!c!e!,B57");
-  t.applyMoveToState(s, "33a!c!e!-34;34a!c!e!-44;44a!c!e!-43;43a!c!e!+b", "A");
-}, ">2 preludes must be rejected");
+{
+  /* 3 and 4 controlled SPs on board succeed; >4 preludes or reusing SP socket throws */
+  const s3 = t.parseOctiFen("4:3:1:0:P:A:-:0:0,0,2,0:0,0,2,0:0,0,2,0:0,0,2,0:A33a!c!e!,B37,C77,D73");
+  const after3 = t.applyMoveToState(s3, "33a!c!e!-34;34a!c!e!-44;44a!c!e!-43;43a!c!e!+b", "A");
+  assert.strictEqual(after3.turn, "B", "3 distinct SP preludes must advance turn cleanly");
+
+  const s4 = t.parseOctiFen("4:3:1:0:P:A:-:0:0,0,1,0:0,0,1,0:0,0,1,0:0,0,1,0:A44a!c!e!g!,B37,C77,D73");
+  const after4 = t.applyMoveToState(s4, "44a!c!e!g!-45;45a!c!e!g!-55;55a!c!e!g!-54;54a!c!e!g!-44;44a!c!e!g!+b", "A");
+  assert.strictEqual(after4.turn, "B", "4 distinct SP preludes must advance turn cleanly");
+
+  assert.throws(() => {
+    const sReuse = t.parseOctiFen("4:3:1:0:P:A:-:0:0,0,2,0:0,0,2,0:0,0,2,0:0,0,2,0:A33a!c!e!,B37,C77,D73");
+    t.applyMoveToState(sReuse, "33a!c!e!-34;34a!c!e!-44;44a!c!e!-45;45a!c!e!+b", "A");
+  }, "Reusing socket a! in prelude 3 after prelude 1 must be rejected");
+
+  assert.throws(() => {
+    const s5 = t.parseOctiFen("4:3:1:0:P:A:-:0:0,0,1,0:0,0,1,0:0,0,1,0:0,0,1,0:A44a!b!c!e!g!,B37,C77,D73");
+    t.applyMoveToState(s5, "44a!b!c!e!g!-45;45a!b!c!e!g!-56;56a!b!c!e!g!-66;66a!b!c!e!g!-65;65a!b!c!e!g!-55;55a!b!c!e!g!+d", "A");
+  }, ">4 SP preludes must be rejected");
+}
 
 assert.throws(() => {
   const s = t.parseOctiFen("2:3:0:0:P:A:-:0:3,0,10,0:3,0,12,0:A33a,B57");
   t.applyMoveToState(s, "33a-34;34a+b", "A");
 }, "Semicolon superprong prelude must be rejected when !s.superProngs");
 
-/* Shared preludeDeferredCaps across p1 and p2 on stacked A33a!,A33a! over B34e */
+/* R5: Immediate per-prelude capture removal */
+assert.throws(() => {
+  const sImmBad = t.parseOctiFen(cfg.stackedImmediateStartFen);
+  t.applyMoveToState(sImmBad, "31a!-33x-35;31a!-33x;33a!+b", "A");
+}, "SP1 capture removes B32e immediately so SP2 cannot jump over vacated (3,2)");
+
 {
-  const sDef = t.parseOctiFen(cfg.stackedDeferredStartFen);
-  const afterDef = t.applyMoveToState(sDef, cfg.stackedDeferredMove, "A");
+  const sVault = t.parseOctiFen(cfg.stackedImmediateStartFen);
+  const afterVault = t.applyMoveToState(sVault, cfg.stackedVaultThenCaptureMove, "A");
   assert.strictEqual(
-    t.serializeOctiFen(afterDef),
-    cfg.stackedDeferredAfterFen,
-    "Deferred capture across p1 and p2 must match C++ OctiBoard::toPositionString()"
+    t.serializeOctiFen(afterVault),
+    cfg.stackedVaultThenCaptureAfterFen,
+    "SP1 vault + SP2 capture must match C++ OctiBoard::toPositionString()"
   );
+
+  const sClear = t.parseOctiFen(cfg.spImmediateClearStartFen);
+  const afterClear = t.applyMoveToState(sClear, cfg.spImmediateClearMove, "A");
+  assert.strictEqual(
+    t.serializeOctiFen(afterClear),
+    cfg.spImmediateClearAfterFen,
+    "Immediate SP1 capture clearing landing square for SP2 must match C++ FEN"
+  );
+
+  /* SP prelude landing on final enemy base then stepping off in regular move does NOT win */
+  const sEndWin = t.parseOctiFen("2:1:1:0:P:A:-:0:3,0,10,0:3,0,10,0:A36a!e,B77");
+  const afterStepOff = t.applyMoveToState(sEndWin, "36a!e-37;37a!e-36", "A");
+  assert.strictEqual(afterStepOff.status, "P", "Victory must only be evaluated at end of full turn");
+  const sEndWin2 = t.parseOctiFen("2:1:1:0:P:A:-:0:3,0,10,0:3,0,10,0:A36a!e,B77");
+  const afterStay = t.applyMoveToState(sEndWin2, "36a!e-37;37a!e+b", "A");
+  assert.strictEqual(afterStay.status, "O");
+  assert.strictEqual(afterStay.winner, "A");
+}
+
+/* R4: Stationary stack-mate blocks loop-back & _ED hop-over S; full clear-out succeeds */
+assert.throws(() => {
+  const sLoopBad = t.parseOctiFen(cfg.r4CompositeLoopStartFen);
+  t.applyMoveToState(sLoopBad, "44beg-66x-64x-44", "A");
+}, "Loop-back onto stationary A44a on (4,4) must throw");
+
+assert.throws(() => {
+  const sEdHopBad = t.parseOctiFen("2:3:0:1:P:A:-:0:1,0,10,0:1,0,10,0:A44a,A44bcd,B55,B76,B96,B25,B57");
+  t.applyMoveToState(sEdHopBad, "44bcd-66-86-16-34-54", "A");
+}, "_ED hop-over stationary A44a on starting square (4,4) must throw");
+
+{
+  const sCompOk = t.parseOctiFen(cfg.r4CompositeLoopStartFen);
+  const afterCompOk = t.applyMoveToState(sCompOk, cfg.r4CompositeLoopMove, "A");
+  assert.strictEqual(
+    t.serializeOctiFen(afterCompOk),
+    cfg.r4CompositeLoopAfterFen,
+    "Composite clear-out loop-back 44a-45,44beg-66x-64x-44 must match C++ FEN"
+  );
+}
+
+/* R6 & R1: No 4P partner revival; surviving own-pod liberation on partnerHome; boxed-in stalemate */
+assert.throws(() => {
+  const sRevBad = t.parseOctiFen("4:3:0:0:P:A:-:4:0,0,2,0:1,0,2,0:0,2,0,0:1,0,2,0:A53,A77a,B37,D73");
+  t.applyMoveToState(sRevBad, "77*", "A");
+}, "4P teammate revival 77* must be rejected");
+
+assert.throws(() => {
+  const sEmptyRevBad = t.parseOctiFen("4:3:0:0:P:A:-:4:0,1,2,0:1,0,2,0:0,2,0,0:1,0,2,0:A53,B37,D73");
+  t.applyMoveToState(sEmptyRevBad, "77*", "A");
+}, "Liberating onto unoccupied partner home 77* must be rejected");
+
+{
+  const sOwnLib = t.parseOctiFen(cfg.r6OwnLibPartnerHomeStartFen);
+  const afterOwnLib = t.applyMoveToState(sOwnLib, cfg.r6OwnLibPartnerHomeMove, "A");
+  assert.strictEqual(
+    t.serializeOctiFen(afterOwnLib),
+    cfg.r6OwnLibPartnerHomeAfterFen,
+    "Surviving player liberating own pod on partnerHome must keep partner eliminated and match C++ FEN"
+  );
+  assert.strictEqual((afterOwnLib.elimMask & 4) !== 0, true, "Eliminated partner C must stay eliminated");
+
+  const sStale = t.parseOctiFen(cfg.r1StalemateWinStartFen);
+  const afterStale = t.applyMoveToState(sStale, cfg.r1StalemateWinMove, "A");
+  assert.strictEqual(
+    t.serializeOctiFen(afterStale),
+    cfg.r1StalemateWinAfterFen,
+    "Boxed-in 0-reserve armed pod stalemate must match C++ FEN"
+  );
+  assert.strictEqual(afterStale.status, "O");
+  assert.strictEqual(afterStale.winner, "A");
 }
 
 /* ============================================================================
@@ -7913,6 +8161,71 @@ function makeComposerForFen(fen, committedOut) {
   assert.deepStrictEqual(committed, ["33a!-35x;35a!+b"]);
   assert.strictEqual(getState().status, "O");
   assert.strictEqual(getState().winner, "A");
+}
+
+/* 2.6: WebMoveComposer 3 & 4 SP preludes (4P_SP) + immediate capture clearing between SP1 & SP2 + R4 composite clear-out */
+{
+  /* 4 SP preludes on A44a!c!e!g! + regular +b */
+  const committed4 = [];
+  const c4 = makeComposerForFen("4:3:1:0:P:A:-:0:0,0,1,0:0,0,1,0:0,0,1,0:0,0,1,0:A44a!c!e!g!,B37,C77,D73", committed4);
+  assert.strictEqual(c4.comp.stageMoveOrJump(4, 4, 4, 5), true);
+  assert.strictEqual(c4.comp.isAwaitingSuperProngBonusMove(), true);
+  assert.strictEqual(c4.comp.stageMoveOrJump(4, 5, 5, 5), true);
+  assert.strictEqual(c4.comp.isAwaitingSuperProngBonusMove(), true);
+  assert.strictEqual(c4.comp.stageMoveOrJump(5, 5, 5, 4), true);
+  assert.strictEqual(c4.comp.isAwaitingSuperProngBonusMove(), true);
+  assert.strictEqual(c4.comp.stageMoveOrJump(5, 4, 4, 4), true);
+  assert.strictEqual(c4.comp.isAwaitingSuperProngBonusMove(), true);
+  assert.strictEqual(c4.comp.stageAddProng(4, 4, 0, 1, false), true);
+  assert.strictEqual(c4.comp.stagedNotation, "44a!c!e!g!-45;45a!c!e!g!-55;55a!c!e!g!-54;54a!c!e!g!-44;44a!c!e!g!+b");
+  assert.strictEqual(c4.comp.isAwaitingSuperProngBonusMove(), false);
+  assert.strictEqual(c4.comp.commitStagedMove(), true);
+  assert.deepStrictEqual(committed4, ["44a!c!e!g!-45;45a!c!e!g!-55;55a!c!e!g!-54;54a!c!e!g!-44;44a!c!e!g!+b"]);
+
+  /* Immediate capture removal in composer: SP1 31a!-33x removes B32e so SP2 12c!-32x / 12c!-32 can land on (3,2) */
+  const committedImm = [];
+  const cImm = makeComposerForFen(cfg.spImmediateClearStartFen, committedImm);
+  assert.strictEqual(cImm.comp.stageMoveOrJump(3, 1, 3, 3), true);
+  assert.strictEqual(cImm.comp.stagedNotation, "31a!-33x");
+  assert.strictEqual(cImm.comp.stageMoveOrJump(1, 2, 3, 2), true);
+  assert.strictEqual(cImm.comp.stagedNotation, "31a!-33x;12c!-32x");
+  assert.strictEqual(cImm.comp.toggleCaptureAtSquare(2, 2), true);
+  assert.strictEqual(cImm.comp.stagedNotation, "31a!-33x;12c!-32");
+  assert.strictEqual(cImm.comp.stageAddProng(3, 3, 0, 1, false), true);
+  assert.strictEqual(cImm.comp.stagedNotation, cfg.spImmediateClearMove);
+  assert.strictEqual(cImm.comp.commitStagedMove(), true);
+  assert.strictEqual(t.serializeOctiFen(cImm.getState()), cfg.spImmediateClearAfterFen);
+
+  /* R4 composer: stationary A44a blocks 44beg loop-back onto 44, whereas staging 44a-45 first enables 44beg-66x-64x-44 */
+  const cLoopBlocked = makeComposerForFen(cfg.r4CompositeLoopStartFen);
+  assert.strictEqual(cLoopBlocked.comp.beginGuidedPodMove(4, 4, 1), true);
+  assert.strictEqual(cLoopBlocked.comp.selectGuidedDestination(6, 6), true);
+  assert.strictEqual(cLoopBlocked.comp.selectGuidedDestination(6, 4), true);
+  assert.strictEqual(cLoopBlocked.comp.selectGuidedDestination(4, 4), false,
+                     "Stationary A44a on (4,4) must block loop-back destination in WebMoveComposer");
+
+  const committedLoop = [];
+  const cLoopOk = makeComposerForFen(cfg.r4CompositeLoopStartFen, committedLoop);
+  assert.strictEqual(cLoopOk.comp.beginGuidedPodMove(4, 4, 0), true);
+  assert.strictEqual(cLoopOk.comp.selectGuidedDestination(4, 5), true);
+  assert.strictEqual(cLoopOk.comp.beginGuidedPodMove(4, 4, 1), true);
+  assert.strictEqual(cLoopOk.comp.selectGuidedDestination(6, 6), true);
+  assert.strictEqual(cLoopOk.comp.selectGuidedDestination(6, 4), true);
+  assert.strictEqual(cLoopOk.comp.selectGuidedDestination(4, 4), true,
+                     "After 44a-45 vacates (4,4), 44beg must be allowed to loop back onto (4,4)");
+  assert.strictEqual(cLoopOk.comp.stagedNotation, "44a-45,44beg-66x-64x-44");
+  assert.strictEqual(cLoopOk.comp.commitStagedMove(), true);
+  assert.strictEqual(t.serializeOctiFen(cLoopOk.getState()), cfg.r4CompositeLoopAfterFen);
+
+  /* R4 _ED composer: stationary A44a on (4,4) blocks jumping over (4,4) on wraparound */
+  const cEdBlocked = makeComposerForFen("2:3:0:1:P:A:-:0:1,0,10,0:1,0,10,0:A44a,A44bcd,B55,B76,B96,B25,B57");
+  assert.strictEqual(cEdBlocked.comp.beginGuidedPodMove(4, 4, 1), true);
+  assert.strictEqual(cEdBlocked.comp.selectGuidedDestination(6, 6), true);
+  assert.strictEqual(cEdBlocked.comp.selectGuidedDestination(8, 6), true);
+  assert.strictEqual(cEdBlocked.comp.selectGuidedDestination(1, 6), true);
+  assert.strictEqual(cEdBlocked.comp.selectGuidedDestination(3, 4), true);
+  assert.strictEqual(cEdBlocked.comp.selectGuidedDestination(5, 4), false,
+                     "Jumping over starting square (4,4) must be blocked in WebMoveComposer");
 }
 
 /* ============================================================================
@@ -9322,6 +9635,11 @@ TEST(OctiHttpServerIntegrationTest, IllustratedRulebookAssetsEndpointAndTabParit
     CHECK_TRUE(rUi.body.find("Chapter 5") != std::string::npos);
     CHECK_TRUE(rUi.body.find("Chapter 6") != std::string::npos);
     CHECK_TRUE(rUi.body.find("Chapter 7") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("4. Victory &amp; 4P Elimination") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("44a-45,44beg-66x-64x-44") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("4. Victory &amp; 4P Revival") == std::string::npos);
+    CHECK_TRUE(rUi.body.find("Teammate Revival") == std::string::npos);
+    CHECK_TRUE(rUi.body.find("33b+a-b") == std::string::npos);
 
     for (const std::string &fileName : files) {
         CHECK_TRUE(rUi.body.find("/assets/rulebook/" + fileName) != std::string::npos);
@@ -9345,7 +9663,8 @@ TEST(OctiHttpServerIntegrationTest, IllustratedRulebookAssetsEndpointAndTabParit
         OctiBoard b6b;
         b6b.fromPositionString(
             "2:3:0:0:P:A:-:0:2,0,20,0:3,0,23,0:A53,A73,A44a,A44beg,A54c,B55e,B65e,B37,B77");
-        b6b.getGame()->move("44beg-66x-64x-44");
+        CHECK_THROWS(IllegalMoveException, b6b.getGame()->move("44beg-66x-64x-44"));
+        b6b.getGame()->move("44a-45,44beg-66x-64x-44");
 
         OctiBoard b7;
         b7.fromPositionString(

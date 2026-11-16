@@ -4334,9 +4334,7 @@ ZoomedSquareDialog::ZoomedSquareDialog(OctiBoard *board,
     , _actionCompleted(false)
     , _socketRadius(18.0)
     , _selectedProngType(SelectedProngType::NORMAL)
-    , _selectedProngSocketForReposition(DIR_UNDEF)
     , _dragKind(ZoomDragKind::NONE)
-    , _dragSrcProngDir(DIR_UNDEF)
     , _hoverProngDir(DIR_UNDEF)
     , _dragCursorPos()
 {
@@ -4516,10 +4514,8 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         hasFriendly = (!isEmptySquare && turn != PLAYER_UNDEF && sq.isOccupiedBy(turn));
     }
 
-    bool isPartnerRevivalHead = (_composer && isTurn &&
-                                 _composer->canRevivePartnerPodAt(_squareX, _squareY));
     bool readOnlyInspect = (!_composer || !isTurn || hasEnemy ||
-                            (!isEmptySquare && !hasFriendly && !isPartnerRevivalHead));
+                            (!isEmptySquare && !hasFriendly));
 
     QFont modeFont("SansSerif", 10, QFont::Medium);
     p.setFont(modeFont);
@@ -4654,13 +4650,9 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
             _socketCenters[dir] = sc;
 
             bool isHovered = (dir == _hoverProngDir);
-            bool isRepositionSrc = (dir == _selectedProngSocketForReposition);
             OctiProngType pt = pod.prongAt(dir);
 
-            if (isRepositionSrc) {
-                p.setPen(QPen(pal.prongSuperGold, 2.5));
-                p.setBrush(pal.prongSuperGold.darker(160));
-            } else if (isHovered) {
+            if (isHovered) {
                 p.setPen(QPen(pal.legalStepGuide, 2.2));
                 p.setBrush(pal.legalStepGuide.darker(160));
             } else if (pt == NORMAL_PRONG) {
@@ -4681,7 +4673,7 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
             if (pt == NORMAL_PRONG || pt == SUPER_PRONG) {
                 p.setPen(QColor(11, 15, 23));
             } else {
-                p.setPen((isHovered || isRepositionSrc) ? pal.prongSuperGold : pal.accentBrass);
+                p.setPen(isHovered ? pal.prongSuperGold : pal.accentBrass);
             }
             char letter = static_cast<char>('a' + (d - DIR_N));
             p.drawText(QRectF(sc.x() - 10, sc.y() - 10, 20, 20),
@@ -4759,10 +4751,7 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
             pod.prongAt(_hoverProngDir) == NO_PRONG) {
             bool canPreview = false;
             bool previewSuper = false;
-            if (_selectedProngSocketForReposition != DIR_UNDEF) {
-                canPreview = true;
-                previewSuper = (pod.prongAt(_selectedProngSocketForReposition) == SUPER_PRONG);
-            } else if (_selectedProngType == SelectedProngType::SUPER && freeSuper > 0) {
+            if (_selectedProngType == SelectedProngType::SUPER && freeSuper > 0) {
                 canPreview = true;
                 previewSuper = true;
             } else if (_selectedProngType == SelectedProngType::NORMAL && freeProngs > 0) {
@@ -4890,7 +4879,6 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
 
     bool canPlaceReserve = !readOnlyInspect && _composer && _composer->canPlaceReservePodAt(_squareX, _squareY);
     bool canLiberatePod = !readOnlyInspect && _composer && _composer->canLiberateCapturedPodAt(_squareX, _squareY);
-    bool isPartnerRevival = !readOnlyInspect && _composer && _composer->canRevivePartnerPodAt(_squareX, _squareY);
 
     bool canShowPodPlacement = !readOnlyInspect && _board &&
                                _board->getGameMode() != GAME_MODE_OFK &&
@@ -4914,10 +4902,8 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
             p.setBrush(canLiberatePod ? pal.accentBrass.darker(140) : pal.panelCardBg.darker(130));
             p.drawRoundedRect(_liberateBtnRect, 6.0, 6.0);
             p.setPen(canLiberatePod ? pal.prongSuperGold : pal.textSecondary);
-            QString libText = isPartnerRevival ? "Liberate Partner's Captured Pod" : "Liberate Captured Pod";
-            int libFontSz = isPartnerRevival ? std::max(7, fontSize - 2) : fontSize;
-            p.setFont(QFont("SansSerif", libFontSz, QFont::Bold));
-            p.drawText(_liberateBtnRect, Qt::AlignCenter, libText);
+            p.setFont(QFont("SansSerif", fontSize, QFont::Bold));
+            p.drawText(_liberateBtnRect, Qt::AlignCenter, "Liberate Captured Pod");
         }
     };
 
@@ -4929,7 +4915,7 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
             } else if (canPlaceReserve) {
                 drawPlaceAndLiberate(QRectF(120, 482, 320, 32), QRectF(), 10);
             } else {
-                drawPlaceAndLiberate(QRectF(), QRectF(120, 482, 320, 32), isPartnerRevival ? 8 : 9);
+                drawPlaceAndLiberate(QRectF(), QRectF(120, 482, 320, 32), 9);
             }
         } else {
             _movePodBtnRect = QRectF(120, 460, 320, 38);
@@ -4952,7 +4938,7 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
         } else if (canPlaceReserve) {
             drawPlaceAndLiberate(QRectF(120, 460, 320, 38), QRectF(), 10);
         } else {
-            drawPlaceAndLiberate(QRectF(), QRectF(120, 460, 320, 38), isPartnerRevival ? 8 : 9);
+            drawPlaceAndLiberate(QRectF(), QRectF(120, 460, 320, 38), 9);
         }
     } else if (readOnlyInspect) {
         QFont roFont("SansSerif", 10, QFont::Medium);
@@ -4977,8 +4963,6 @@ QImage ZoomedSquareDialog::renderToImage(int width, int height)
             paintProngGlyph(p, dragRect, false, pal);
         } else if (_dragKind == ZoomDragKind::ADD_SUPERPRONG) {
             paintProngGlyph(p, dragRect, true, pal);
-        } else if (_dragKind == ZoomDragKind::REPOSITION_PRONG) {
-            paintProngGlyph(p, dragRect, false, pal);
         }
     }
 
@@ -5079,7 +5063,6 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
     // 5. Check Prong Trays (GUI2-04 toggle selection and start drag)
     if (!_normalProngTrayRect.isEmpty() && _normalProngTrayRect.contains(pos)) {
         _selectedProngType = SelectedProngType::NORMAL;
-        _selectedProngSocketForReposition = DIR_UNDEF;
         _dragKind = ZoomDragKind::ADD_NORMAL_PRONG;
         _dragCursorPos = pos;
         update();
@@ -5087,7 +5070,6 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
     }
     if (!_superProngTrayRect.isEmpty() && _superProngTrayRect.contains(pos)) {
         _selectedProngType = SelectedProngType::SUPER;
-        _selectedProngSocketForReposition = DIR_UNDEF;
         _dragKind = ZoomDragKind::ADD_SUPERPRONG;
         _dragCursorPos = pos;
         update();
@@ -5108,37 +5090,14 @@ void ZoomedSquareDialog::mousePressEvent(QMouseEvent *event)
             double socketDist = podR * 0.76;
             OctiDir hitDir = hitTestSocketOrBladeAt(pos, pod, pc, podR, socketDist);
             bool isOfk = (_board && _board->getGame() && _board->getGame()->getMode() == GAME_MODE_OFK);
-            if (hitDir != DIR_UNDEF) {
-                if (!isOfk && pod.prongAt(hitDir) == NORMAL_PRONG) {
-                    // Existing normal prong clicked: select for reposition / start drag
-                    _selectedProngSocketForReposition = hitDir;
-                    _dragKind = ZoomDragKind::REPOSITION_PRONG;
-                    _dragSrcProngDir = hitDir;
-                    _dragCursorPos = pos;
-                    update();
+            if (hitDir != DIR_UNDEF && pod.prongAt(hitDir) == NO_PRONG) {
+                // Add new prong to this empty socket!
+                bool isSuper = !isOfk && (_selectedProngType == SelectedProngType::SUPER);
+                if (_composer->stageOrCommitAddProng(
+                        _squareX, _squareY, _selectedPodIndex, hitDir, isSuper)) {
+                    _actionCompleted = true;
+                    accept();
                     return;
-                } else if (pod.prongAt(hitDir) == NO_PRONG) {
-                    // Empty socket clicked
-                    if (!isOfk && _selectedProngSocketForReposition != DIR_UNDEF &&
-                        _selectedProngSocketForReposition != hitDir) {
-                        // Reposition previously selected prong to this socket!
-                        if (_composer->stageOrCommitRepositionProng(
-                                _squareX, _squareY, _selectedPodIndex,
-                                _selectedProngSocketForReposition, hitDir)) {
-                            _actionCompleted = true;
-                            accept();
-                            return;
-                        }
-                    } else {
-                        // Add new prong to this socket!
-                        bool isSuper = !isOfk && (_selectedProngType == SelectedProngType::SUPER);
-                        if (_composer->stageOrCommitAddProng(
-                                _squareX, _squareY, _selectedPodIndex, hitDir, isSuper)) {
-                            _actionCompleted = true;
-                            accept();
-                            return;
-                        }
-                    }
                 }
             }
         }
@@ -5229,6 +5188,7 @@ void ZoomedSquareDialog::mouseReleaseEvent(QMouseEvent *event)
             }
         }
         const bool isOfk = (_board && _board->getGame() && _board->getGame()->getMode() == GAME_MODE_OFK);
+        (void)isOfk;
         OctiDir targetDir = DIR_UNDEF;
         if (activeBoard && activeBoard->isValidCoord(_squareX - 1, _squareY - 1)) {
             const OctiSquare &sq = activeBoard->squareAt(_squareX - 1, _squareY - 1);
@@ -5254,19 +5214,11 @@ void ZoomedSquareDialog::mouseReleaseEvent(QMouseEvent *event)
                     accept();
                     return;
                 }
-            } else if (!isOfk && _dragKind == ZoomDragKind::REPOSITION_PRONG && targetDir != _dragSrcProngDir) {
-                if (_composer->stageOrCommitRepositionProng(_squareX, _squareY, _selectedPodIndex,
-                                                            _dragSrcProngDir, targetDir)) {
-                    _actionCompleted = true;
-                    accept();
-                    return;
-                }
             }
         }
     }
 
     _dragKind = ZoomDragKind::NONE;
-    _dragSrcProngDir = DIR_UNDEF;
     update();
 }
 

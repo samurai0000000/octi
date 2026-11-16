@@ -2566,7 +2566,7 @@ void OctiMainWindow::showHint()
         const OctiMoveOp &op = move.getOps().front();
         if (op.addPod) {
             _composer.stageOrCommitAddPod(op.x0 + 1, op.y0 + 1, op.liberate);
-        } else if (op.addProngDir != DIR_UNDEF && op.rmProngDir == DIR_UNDEF) {
+        } else if (op.addProngDir != DIR_UNDEF) {
             int podIdx = -1;
             const OctiSquare &sq = _board.squareAt(op.x0, op.y0);
             for (int i = 0; i < sq.getNumPods(); ++i) {
@@ -2579,19 +2579,6 @@ void OctiMainWindow::showHint()
                 podIdx = 0;
             }
             _composer.stageOrCommitAddProng(op.x0 + 1, op.y0 + 1, podIdx, op.addProngDir, op.superProng);
-        } else if (op.addProngDir != DIR_UNDEF && op.rmProngDir != DIR_UNDEF) {
-            int podIdx = -1;
-            const OctiSquare &sq = _board.squareAt(op.x0, op.y0);
-            for (int i = 0; i < sq.getNumPods(); ++i) {
-                if (sq.getPodAt(i) == op.pod) {
-                    podIdx = i;
-                    break;
-                }
-            }
-            if (podIdx < 0) {
-                podIdx = 0;
-            }
-            _composer.stageOrCommitRepositionProng(op.x0 + 1, op.y0 + 1, podIdx, op.rmProngDir, op.addProngDir);
         } else if (!op.hops.empty()) {
             int podIdx = -1;
             const OctiSquare &sq = _board.squareAt(op.x0, op.y0);

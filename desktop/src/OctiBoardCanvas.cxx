@@ -36,7 +36,6 @@ OctiBoardCanvas::OctiBoardCanvas(QWidget *parent)
     , _dragStartX(-1)
     , _dragStartY(-1)
     , _dragPodIndex(-1)
-    , _dragSrcProngDir(DIR_UNDEF)
     , _dragHoverProngDir(DIR_UNDEF)
     , _dragShiftHeld(false)
     , _wasOriginSquareBeforePress(false)
@@ -470,7 +469,6 @@ bool OctiBoardCanvas::finishExternalReserveDrop(const QPointF &canvasPos)
     _dragStartX = -1;
     _dragStartY = -1;
     _dragPodIndex = -1;
-    _dragSrcProngDir = DIR_UNDEF;
     _dragHoverProngDir = DIR_UNDEF;
     if (isVisible() && _composer && _composer->isAwaitingConfirmation()) {
         presentPlyConfirmationIfNeeded();
@@ -566,22 +564,6 @@ bool OctiBoardCanvas::simulateDragPodToSquare(int fromX, int fromY,
                 _soundSynth->triggerCue(SoundCue::POD_STEP);
             }
         }
-    }
-    update();
-    return ok;
-}
-
-bool OctiBoardCanvas::simulateRepositionProngOnPod(int x, int y,
-                                                   int podIndex,
-                                                   OctiDir srcDir,
-                                                   OctiDir tgtDir)
-{
-    if (!_interactiveEnabled || !_composer) {
-        return false;
-    }
-    bool ok = _composer->stageOrCommitRepositionProng(x, y, podIndex, srcDir, tgtDir);
-    if (ok && _soundSynth) {
-        _soundSynth->triggerCue(SoundCue::PRONG_SNAP);
     }
     update();
     return ok;
@@ -2068,7 +2050,6 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
             _dragStartY = gy;
             _dragPodIndex = _composer->selectedStackPodIndex(gx, gy);
             _dragKind = DragKind::MOVE_OR_JUMP_POD;
-            _dragSrcProngDir = DIR_UNDEF;
             update();
             return;
         }
@@ -2147,7 +2128,6 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
             _dragStartY = sy;
             _dragPodIndex = clickedPodIdx;
             _dragKind = DragKind::MOVE_OR_JUMP_POD;
-            _dragSrcProngDir = DIR_UNDEF;
             // For 1-pod squares, start 0-hop guided move on 1st click (2nd click opens inspector);
             // for multi-pod stacks (numPods >= 2), stationary 1st click opens inspector while
             // press-drag-release moves directly!
@@ -2182,7 +2162,6 @@ void OctiBoardCanvas::mousePressEvent(QMouseEvent *event)
             _dragStartY = sy;
             _dragPodIndex = -1;
             _dragKind = DragKind::NONE;
-            _dragSrcProngDir = DIR_UNDEF;
         }
 
         update();
@@ -2454,7 +2433,6 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
     _dragStartX = -1;
     _dragStartY = -1;
     _dragPodIndex = -1;
-    _dragSrcProngDir = DIR_UNDEF;
     if (isVisible() && _composer && _composer->isAwaitingConfirmation()) {
         presentPlyConfirmationIfNeeded();
     }

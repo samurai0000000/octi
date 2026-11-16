@@ -26,8 +26,7 @@ enum class DragKind {
     LIBERATE_POD_FROM_RESERVE   = 2,
     ADD_PRONG_FROM_RESERVE      = 3,
     ADD_SUPERPRONG_FROM_RESERVE = 4,
-    REPOSITION_PRONG_ON_POD     = 5,
-    MOVE_OR_JUMP_POD            = 6,
+    MOVE_OR_JUMP_POD            = 5,
 };
 
 struct CaptureChoice {
@@ -66,9 +65,7 @@ public:
     bool placePod(int targetX, int targetY, bool liberate) { return stageOrCommitAddPod(targetX, targetY, liberate); }
     bool canPlaceReservePodAt(int x, int y) const;
     bool canLiberateCapturedPodAt(int x, int y) const;
-    bool canRevivePartnerPodAt(int x, int y) const;
     bool stageOrCommitAddProng(int x, int y, int podIndex, OctiDir dir, bool superProng);
-    bool stageOrCommitRepositionProng(int x, int y, int podIndex, OctiDir srcDir, OctiDir tgtDir);
     bool stageOrCommitPodMoveOrJump(int fromX, int fromY, int podIndex,
                                     int toX, int toY,
                                     bool moveAllMatchingStack = false);

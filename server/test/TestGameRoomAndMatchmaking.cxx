@@ -130,9 +130,9 @@ const std::vector<std::string> kOfkWin = {"32+a",  "56+a",   "32a-33", "36+e",
 const std::vector<std::string> kTwoPlayerWin = {
     "73+a", "77+e", "73a-74", "77e-76", "74a-75", "57+h", "75a-77"};
 const std::vector<std::string> kFourPlayerWin = {
-    "33+a",   "37+h",    "77+e",    "73+b",    "33a-34",  "37h+f-h",
-    "77e-76", "73b-84",  "34a-35",  "37f-26",  "76e-75",  "84b+g",
-    "35a-36", "26f+a",   "75e-74",  "84bg+h",  "36a-37",  "74e-73"};
+    "33+a",   "37+f",    "77+e",    "73+b",    "33a-34",  "37f+h",
+    "77e-76", "73b-84",  "34a-35",  "37fh-26", "76e-75",  "84b+g",
+    "35a-36", "26fh+a",  "75e-74",  "84bg+h",  "36a-37",  "74e-73"};
 
 } // namespace
 

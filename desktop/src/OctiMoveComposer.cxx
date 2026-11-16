@@ -82,7 +82,7 @@ bool findJumpPathBfs(const OctiBoard *board,
                      int curX, int curY,
                      int targetX, int targetY,
                      const OctiPod &pod,
-                     const std::vector<OctiPod> &ghostPods,
+                     const std::vector<OctiPod> &vacatedPods,
                      const std::vector<std::pair<int, int>> &initialJumped,
                      std::vector<OctiHop> &outHops,
                      std::vector<std::pair<int, int>> &outJumpedCoords)
@@ -127,17 +127,17 @@ bool findJumpPathBfs(const OctiBoard *board,
                 continue;
             }
 
+            if (jx == startX && jy == startY) {
+                continue;
+            }
             const OctiSquare &jumpedSq = board->squareAt(jx, jy);
-            bool jumpedEmpty = (jx == startX && jy == startY)
-                ? jumpedSq.isEmptyWithout(ghostPods)
-                : jumpedSq.isEmpty();
-            if (jumpedEmpty) {
+            if (jumpedSq.isEmpty()) {
                 continue;
             }
 
             const OctiSquare &landSq = board->squareAt(lx, ly);
             bool landEmpty = (lx == startX && ly == startY)
-                ? landSq.isEmptyWithout(ghostPods)
+                ? landSq.isEmptyWithout(vacatedPods)
                 : landSq.isEmpty();
             if (!landEmpty) {
                 continue;
@@ -164,6 +164,24 @@ bool findJumpPathBfs(const OctiBoard *board,
     }
 
     return false;
+}
+
+std::vector<OctiPod> collectVacatedPodsAtStart(
+    const std::vector<OctiMoveOp> &ops,
+    int startBx, int startBy,
+    const OctiPod *extraMovingPod = nullptr)
+{
+    std::vector<OctiPod> vacated;
+    for (const auto &op : ops) {
+        if (!op.isSuperProngBonusMove && !op.hops.empty() &&
+            op.x0 == startBx && op.y0 == startBy) {
+            vacated.push_back(op.pod);
+        }
+    }
+    if (extraMovingPod) {
+        vacated.push_back(*extraMovingPod);
+    }
+    return vacated;
 }
 
 } // namespace
@@ -395,7 +413,7 @@ bool OctiMoveComposer::buildPostPreludeBoard(
     if (!game->isGameStarted() || game->isGameOver() || !game->useSuperProngs()) {
         return false;
     }
-    if (_stagedOps.empty() || _stagedOps.size() > 2) {
+    if (_stagedOps.empty() || _stagedOps.size() > 4) {
         return false;
     }
     for (const auto &op : _stagedOps) {
@@ -502,11 +520,11 @@ bool OctiMoveComposer::hasContinuationJumpFrom(
             continue;
         }
 
+        if (jx == startBx && jy == startBy) {
+            continue;
+        }
         const OctiSquare &jumpedSq = activeBoard->squareAt(jx, jy);
-        bool jumpedEmpty = (jx == startBx && jy == startBy)
-            ? jumpedSq.isEmptyWithout(ghostPods)
-            : jumpedSq.isEmpty();
-        if (jumpedEmpty) {
+        if (jumpedSq.isEmpty()) {
             continue;
         }
 
@@ -566,12 +584,10 @@ void OctiMoveComposer::syncPreparedStateToGame()
     for (const auto &op : _stagedOps) {
         if (op.addPod) {
             game->prepareAddPod(op.x0, op.y0, op.liberate);
-        } else if (op.addProngDir != DIR_UNDEF && op.rmProngDir == DIR_UNDEF) {
+        } else if (op.addProngDir != DIR_UNDEF) {
             game->prepareAddProng(op.x0, op.y0, op.pod, op.addProngDir, op.superProng);
-        } else if (op.addProngDir != DIR_UNDEF && op.rmProngDir != DIR_UNDEF) {
-            game->prepareReposition(op.x0, op.y0, op.pod, op.rmProngDir, op.addProngDir);
         } else if (!op.hops.empty()) {
-            game->prepareHops(op.x0, op.y0, op.pod, op.hops);
+            game->prepareHops(op.x0, op.y0, op.pod, op.hops, op.isSuperProngBonusMove);
         }
     }
 }
@@ -629,47 +645,6 @@ bool OctiMoveComposer::canPlaceReservePodAt(int x, int y) const
     return validateOpsOnScratch(prefixOps);
 }
 
-bool OctiMoveComposer::canRevivePartnerPodAt(int x, int y) const
-{
-    if (!_board || !_board->getGame() || _board->getGameMode() != GAME_MODE_4) {
-        return false;
-    }
-    OctiGame *game = _board->getGame();
-    if (!game->isGameStarted() || game->isGameOver()) {
-        return false;
-    }
-    int bx = x - 1;
-    int by = y - 1;
-    if (!_board->isValidCoord(bx, by)) {
-        return false;
-    }
-
-    std::vector<OctiMoveOp> prefixOps;
-    OctiBoard postBoard;
-    const OctiBoard *activeBoard = _board;
-    if (!_stagedOps.empty()) {
-        if (!buildPostPreludeBoard(prefixOps, postBoard)) {
-            return false;
-        }
-        activeBoard = &postBoard;
-    }
-
-    OctiPlayer turn = activeBoard->getGame()->getTurn();
-    OctiPlayer partner = (turn == PLAYER_A ? PLAYER_C :
-                          turn == PLAYER_C ? PLAYER_A :
-                          turn == PLAYER_B ? PLAYER_D : PLAYER_B);
-    OctiSquareType partnerHome = (partner == PLAYER_A ? A_HOME_SQUARE :
-                                  partner == PLAYER_B ? B_HOME_SQUARE :
-                                  partner == PLAYER_C ? C_HOME_SQUARE : D_HOME_SQUARE);
-    const OctiSquare &sq = activeBoard->squareAt(bx, by);
-    if (sq.getType() != partnerHome) {
-        return false;
-    }
-    return activeBoard->getGame()->isPlayerEliminated(partner) &&
-           activeBoard->getGame()->getCapturedPods(partner) > 0 &&
-           sq.isOccupiedBy(turn);
-}
-
 bool OctiMoveComposer::canLiberateCapturedPodAt(int x, int y) const
 {
     if (!_board || !_board->getGame()) {
@@ -691,9 +666,6 @@ bool OctiMoveComposer::canLiberateCapturedPodAt(int x, int y) const
         return false;
     }
 
-    if (canRevivePartnerPodAt(x, y)) {
-        return true;
-    }
     OctiMoveOp op;
     op.x0 = bx;
     op.y0 = by;
@@ -840,90 +812,6 @@ bool OctiMoveComposer::stageOrCommitAddProng(int x, int y,
     return true;
 }
 
-bool OctiMoveComposer::stageOrCommitRepositionProng(int x, int y,
-                                                    int podIndex,
-                                                    OctiDir srcDir,
-                                                    OctiDir tgtDir)
-{
-    if (!_board || !_board->getGame()) {
-        return false;
-    }
-    OctiGame *game = _board->getGame();
-    if (!game->isGameStarted() || game->isGameOver()) {
-        return false;
-    }
-    if (_board->getGameMode() == GAME_MODE_OFK) {
-        return false;
-    }
-    if (srcDir < DIR_N || srcDir > DIR_NW ||
-        tgtDir < DIR_N || tgtDir > DIR_NW ||
-        srcDir == tgtDir) {
-        return false;
-    }
-
-    int bx = x - 1;
-    int by = y - 1;
-    if (!_board->isValidCoord(bx, by)) {
-        return false;
-    }
-
-    std::vector<OctiMoveOp> candidateOps;
-    OctiBoard postBoard;
-    const OctiBoard *activeBoard = _board;
-    int removedFromSq = 0;
-    if (!_stagedOps.empty()) {
-        if (!buildPostPreludeBoard(candidateOps, postBoard)) {
-            return false;
-        }
-        activeBoard = &postBoard;
-        for (const auto &pOp : candidateOps) {
-            if (pOp.x0 == bx && pOp.y0 == by) {
-                ++removedFromSq;
-            }
-        }
-    }
-
-    OctiPlayer turn = game->getTurn();
-    const OctiSquare &sq = activeBoard->squareAt(bx, by);
-    int resolvedIdx = resolvePodIndexOnBoard(
-        sq, x, y, podIndex, turn, false, removedFromSq);
-    if (resolvedIdx < 0) {
-        return false;
-    }
-
-    const OctiPod &pod = sq.getPodAt(resolvedIdx);
-    if (pod.prongAt(srcDir) != NORMAL_PRONG || pod.prongAt(tgtDir) != NO_PRONG) {
-        return false;
-    }
-
-    OctiMoveOp op;
-    op.x0 = bx;
-    op.y0 = by;
-    op.pod = pod;
-    op.rmProngDir = srcDir;
-    op.addProngDir = tgtDir;
-    op.superProng = false;
-    candidateOps.push_back(op);
-
-    if (!validateOpsOnScratch(candidateOps)) {
-        return false;
-    }
-
-    _stagedOps = std::move(candidateOps);
-    _claimedStartPods.clear();
-    _activeJumpHasChain = false;
-    _guidedMoveActive = false;
-    _guidedMidHop = false;
-    _awaitingSuperProngBonusMove = false;
-    _awaitingConfirmation = true;
-    syncPreparedStateToGame();
-
-    if (!_confirmAllMoves && _stagedOps.size() <= 1) {
-        return commitStagedMove();
-    }
-    return true;
-}
-
 bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
                                                   int podIndex,
                                                   int toX, int toY,
@@ -965,9 +853,8 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
         }
 
         OctiMoveOp &activeOp = _stagedOps.back();
-        const OctiSquare &startSq =
-            activeChainBoard->squareAt(_activeJumpStartBx, _activeJumpStartBy);
-        std::vector<OctiPod> ghostPods = startSq.pods();
+        std::vector<OctiPod> vacatedPods = collectVacatedPodsAtStart(
+            _stagedOps, _activeJumpStartBx, _activeJumpStartBy);
 
         std::vector<OctiHop> extraHops;
         std::vector<std::pair<int, int>> nextJumped;
@@ -975,7 +862,7 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
             activeChainBoard, edgeless, turn,
             _activeJumpStartBx, _activeJumpStartBy,
             _activeJumpCurBx, _activeJumpCurBy,
-            tbx, tby, activeOp.pod, ghostPods,
+            tbx, tby, activeOp.pod, vacatedPods,
             _activeJumpedCoords, extraHops, nextJumped);
 
         if (chainJumpFound) {
@@ -1057,7 +944,7 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
 
                 bool hasContinuation = hasContinuationJumpFrom(
                     activeChainBoard, tbx, tby, activeOp.pod,
-                    _activeJumpStartBx, _activeJumpStartBy, ghostPods, nextJumped);
+                    _activeJumpStartBx, _activeJumpStartBy, vacatedPods, nextJumped);
                 if (hasContinuation) {
                     _guidedMidHop = true;
                     _guidedMoveActive = true;
@@ -1125,7 +1012,10 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
         }
 
         const OctiPod &movingPod = startSq.getPodAt(resolvedIdx);
-        std::vector<OctiPod> ghostPods = startSq.pods();
+        std::vector<OctiPod> initialVacatedPods =
+            (moveStack && refBoard->getGameMode() != GAME_MODE_OFK)
+                ? startSq.pods()
+                : collectVacatedPodsAtStart(prefixOps, fbx, fby, &movingPod);
 
         int dx = 0, dy = 0;
         bool hasDirectDelta = computeDisplacement(fbx, fby, tbx, tby, edgeless, w, h, dx, dy);
@@ -1149,7 +1039,7 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
         } else {
             if (!findJumpPathBfs(refBoard, edgeless, turn,
                                  fbx, fby, fbx, fby, tbx, tby,
-                                 movingPod, ghostPods, {},
+                                 movingPod, initialVacatedPods, {},
                                  chosenHops, chosenJumped)) {
                 return false;
             }
@@ -1207,13 +1097,15 @@ bool OctiMoveComposer::stageOrCommitPodMoveOrJump(int fromX, int fromY,
             return false;
         }
 
+        std::vector<OctiPod> vacatedPods = collectVacatedPodsAtStart(candidateOps, fbx, fby);
+
         outPlan.refBoard = refBoard;
         outPlan.prefixOps = prefixOps;
         outPlan.fullOps = std::move(candidateOps);
         outPlan.podIndicesToMove = std::move(podIndicesToMove);
         outPlan.chosenHops = std::move(chosenHops);
         outPlan.chosenJumped = std::move(chosenJumped);
-        outPlan.ghostPods = std::move(ghostPods);
+        outPlan.ghostPods = std::move(vacatedPods);
         outPlan.movingPod = movingPod;
         outPlan.resolvedIdx = resolvedIdx;
         outPlan.isDist1 = isDist1;
@@ -1535,7 +1427,8 @@ std::vector<std::pair<int, int>> OctiMoveComposer::guidedNextSquares() const
         if (pod.getType() != playerToPodType(turn)) {
             return;
         }
-        std::vector<OctiPod> ghostPods = startSq.pods();
+        std::vector<OctiPod> vacatedPods =
+            collectVacatedPodsAtStart(prefixOps, originBx, originBy, &pod);
 
         // 1. Distance-1 steps
         for (int d = DIR_N; d <= DIR_NW; ++d) {
@@ -1587,14 +1480,15 @@ std::vector<std::pair<int, int>> OctiMoveComposer::guidedNextSquares() const
             if (!refBoard->isValidCoord(jx, jy) || !refBoard->isValidCoord(lx, ly)) {
                 continue;
             }
+            if (jx == originBx && jy == originBy) {
+                continue;
+            }
             const OctiSquare &jumpedSq = refBoard->squareAt(jx, jy);
-            bool jumpedEmpty = (jx == originBx && jy == originBy)
-                ? jumpedSq.isEmptyWithout(ghostPods) : jumpedSq.isEmpty();
-            if (jumpedEmpty) continue;
+            if (jumpedSq.isEmpty()) continue;
 
             const OctiSquare &landSq = refBoard->squareAt(lx, ly);
             bool landEmpty = (lx == originBx && ly == originBy)
-                ? landSq.isEmptyWithout(ghostPods) : landSq.isEmpty();
+                ? landSq.isEmptyWithout(vacatedPods) : landSq.isEmpty();
             if (!landEmpty) continue;
 
             OctiHop hop; hop.x = lx; hop.y = ly;
@@ -1672,9 +1566,8 @@ std::vector<std::pair<int, int>> OctiMoveComposer::guidedNextSquares() const
 
         const OctiMoveOp &curOp = _stagedOps.back();
         const OctiPod &pod = curOp.pod;
-        const OctiSquare &startSq =
-            activeChainBoard->squareAt(_guidedOriginBx, _guidedOriginBy);
-        std::vector<OctiPod> ghostPods = startSq.pods();
+        std::vector<OctiPod> vacatedPods =
+            collectVacatedPodsAtStart(_stagedOps, _guidedOriginBx, _guidedOriginBy);
 
         for (int d = DIR_N; d <= DIR_NW; ++d) {
             OctiDir dir = static_cast<OctiDir>(d);
@@ -1697,14 +1590,15 @@ std::vector<std::pair<int, int>> OctiMoveComposer::guidedNextSquares() const
                           std::make_pair(jx, jy)) != _activeJumpedCoords.end()) {
                 continue;
             }
+            if (jx == _guidedOriginBx && jy == _guidedOriginBy) {
+                continue;
+            }
             const OctiSquare &jumpedSq = activeChainBoard->squareAt(jx, jy);
-            bool jumpedEmpty = (jx == _guidedOriginBx && jy == _guidedOriginBy)
-                ? jumpedSq.isEmptyWithout(ghostPods) : jumpedSq.isEmpty();
-            if (jumpedEmpty) continue;
+            if (jumpedSq.isEmpty()) continue;
 
             const OctiSquare &landSq = activeChainBoard->squareAt(lx, ly);
             bool landEmpty = (lx == _guidedOriginBx && ly == _guidedOriginBy)
-                ? landSq.isEmptyWithout(ghostPods) : landSq.isEmpty();
+                ? landSq.isEmptyWithout(vacatedPods) : landSq.isEmpty();
             if (!landEmpty) continue;
 
             std::vector<OctiMoveOp> cand = _stagedOps;
@@ -2058,9 +1952,8 @@ std::vector<std::pair<int, int>> OctiMoveComposer::legalDestinationsFrom(
         }
 
         const OctiPod &pod = _stagedOps.back().pod;
-        const OctiSquare &startSq =
-            activeChainBoard->squareAt(_activeJumpStartBx, _activeJumpStartBy);
-        std::vector<OctiPod> ghostPods = startSq.pods();
+        std::vector<OctiPod> vacatedPods = collectVacatedPodsAtStart(
+            _stagedOps, _activeJumpStartBx, _activeJumpStartBy);
 
         for (int ty = 0; ty < h; ++ty) {
             for (int tx = 0; tx < w; ++tx) {
@@ -2069,7 +1962,7 @@ std::vector<std::pair<int, int>> OctiMoveComposer::legalDestinationsFrom(
                 if (findJumpPathBfs(activeChainBoard, edgeless, turn,
                                     _activeJumpStartBx, _activeJumpStartBy,
                                     _activeJumpCurBx, _activeJumpCurBy,
-                                    tx, ty, pod, ghostPods,
+                                    tx, ty, pod, vacatedPods,
                                     _activeJumpedCoords, extraHops, nextJumped)) {
                     std::pair<int, int> dest(tx + 1, ty + 1);
                     if (seen.insert(dest).second) {
@@ -2269,17 +2162,7 @@ std::vector<std::pair<int, int>> OctiMoveComposer::legalPodDropSquares(bool libe
     if (liberate) {
         bool canLibOwn = (activeGame->getCapturedPods(turn) > 0 &&
                           activeBoard->canLiberate(turn));
-        bool canRevive = false;
-        if (activeBoard->getGameMode() == GAME_MODE_4) {
-            OctiPlayer partner = (turn == PLAYER_A ? PLAYER_C :
-                                  turn == PLAYER_C ? PLAYER_A :
-                                  turn == PLAYER_B ? PLAYER_D : PLAYER_B);
-            if (activeGame->isPlayerEliminated(partner) &&
-                activeGame->getCapturedPods(partner) > 0) {
-                canRevive = true;
-            }
-        }
-        if (!canLibOwn && !canRevive) {
+        if (!canLibOwn) {
             return result;
         }
     } else {

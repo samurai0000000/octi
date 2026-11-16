@@ -114,8 +114,6 @@ public:
     bool simulateDragProngToPod(int x, int y, int podIndex, OctiDir dir, bool superProng);
     bool simulateDragPodToSquare(int fromX, int fromY, int podIndex,
                                  int toX, int toY, bool moveAllStack = false);
-    bool simulateRepositionProngOnPod(int x, int y, int podIndex,
-                                      OctiDir srcDir, OctiDir tgtDir);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -161,7 +159,6 @@ private:
     int _dragStartX;
     int _dragStartY;
     int _dragPodIndex;
-    OctiDir _dragSrcProngDir;
     OctiDir _dragHoverProngDir;
     QPointF _dragCursorPos;
     bool _dragShiftHeld;
