@@ -9492,7 +9492,7 @@ TEST(OctiHttpServerIntegrationTest, DualPoolLeaderboardUsersArenaDirectoryAndWeb
     EXPECT_STATUS(200, ui);
     CHECK_TRUE(ui.body == std::string(octi::webUiHtml()));
     CHECK_TRUE(ui.body.find("OCTIUI") == std::string::npos);
-    CHECK_TRUE(ui.body.find("OCTI v2.5.4") != std::string::npos);
+    CHECK_TRUE(ui.body.find("OCTI v2.6.0") != std::string::npos);
     CHECK_TRUE(ui.body.find("id=\"robots-participant-type\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"elo_2p_3b\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"elo_2p_1b\"") != std::string::npos);
