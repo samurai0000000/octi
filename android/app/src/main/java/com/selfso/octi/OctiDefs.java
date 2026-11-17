@@ -17,6 +17,9 @@ public final class OctiDefs {
     public static final int OCTI_PROTOCOL_VERSION = 1;
     public static final int OCTI_MIN_PROTOCOL_VERSION = 1;
 
+    public static final int OCTI_NO_PROGRESS_DRAW_PLIES_2P = 30;
+    public static final int OCTI_NO_PROGRESS_DRAW_PLIES_4P = 60;
+
     private OctiDefs() {
     }
 }

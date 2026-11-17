@@ -108,7 +108,7 @@ A single ply (turn) executed by a player is represented by `<ply>`:
      - Distance-1 single step: `"33a-34"` (pod at `33` with prong `a` moves North to `34`). Captures are forbidden on distance-1 steps.
      - Single jump with whole-stack capture: `"33a-35x"` (pod jumps over intermediate stack at `34` landing on empty square `35`, capturing **all** pods in the jumped stack on `34`).
      - Multi-jump chain: `"33ac-35x-55"` (jumps over `34` landing on `35` with whole-stack capture, then jumps over `45` landing on `55` without capture).
-     - Starting-square `S` vacancy & non-jumping (Appendix A.1): A jumping pod can never jump over its starting square `S` (`jx == sx && jy == sy` is always forbidden, including on `_ED` wraparound paths such as `"44bcd-66-86-16-34-54"`), and may land back on `S` only if all pods starting on `S` vacate `S` during the move (e.g. `"44a-45,44beg-66x-64x-44"`).
+     - Starting-square `S` vacancy & non-jumping (Appendix A.1): A jumping pod can never jump over its starting square `S` (`jx == sx && jy == sy` is always forbidden, including on `_ED` wraparound paths such as `"44bcd-66-86-16-34-54"`), and may land back on `S` only if all pods starting on `S` vacate `S` during the move (e.g. `"44a-45,44beg-66x-64x-44"`). Non-capturing circular multi-hop jumps (`S -> ... -> S` when `S` is completely vacated) remain legal and count as movement-only plies (`+1` toward `noProgressPlies`).
 4. **Composite Multi-Pod Stack Moves (`<composite-hops>`)**:
    - `<hop-chain> { "," <hop-chain> }` (e.g. `"37df-46,37e-36"` or `"44a-45,44beg-66x-64x-44"`): Multiple pods belonging to the same starting stack move or jump in different directions on the same turn. All hop-chains in a composite move **must share the same starting coordinate** `(x0, y0)`.
 5. **SuperProng Prelude Moves (`<super-prelude> ";"`)**:
@@ -172,7 +172,7 @@ Any additional `KEY: VALUE` headers appearing before `MOVES:` are formally valid
 - `ROUND`: Round number.
 - `PLAYER_A`, `PLAYER_B`, `PLAYER_C`, `PLAYER_D`: Player usernames or ratings.
 - `TIME_CONTROL`: Clock specification (e.g. `600+5` for 10 min + 5 sec increment).
-- `RESULT_REASON`: Explanation of termination (e.g. `BASE_OCCUPATION`, `TOTAL_CAPTURE`, `TIMEOUT`, `RESIGNATION`).
+- `RESULT_REASON`: Explanation of termination (e.g. `BASE_OCCUPATION`, `TOTAL_CAPTURE`, `STALEMATE`, `NO_PROGRESS_DRAW`, `AGREED_DRAW`, `TIMEOUT`, `RESIGNATION`). When a game ends via Rule R7 (`30` consecutive non-progress plies in `2P*`/`OFK` or `60` in `4P*`), `STATUS: GAME_OVER`, `WINNER: NONE`, and `RESULT_REASON: NO_PROGRESS_DRAW` are emitted.
 
 ### 6.2 Move Section
 Following `MOVES: <N>`, each ply is listed on its own line. Both minimal and rich annotated formats are supported:
@@ -201,7 +201,7 @@ OCTI-FEN encodes the complete, unambiguous Markov state of an OCTI game in a sin
 ### 7.1 Schema
 
 ```text
-<mode>:<bases>:<super>:<edgeless>:<status>:<turn>:<winner>:<elimMask>:<p1Res>:<p2Res>[:<p3Res>:<p4Res>]:<squares>
+<mode>:<bases>:<super>:<edgeless>:<status>:<turn>:<winner>:<elimMask>:<p1Res>:<p2Res>[:<p3Res>:<p4Res>]:<squares>[:<noProgressPlies>]
 ```
 
 ### 7.2 Field Definitions
@@ -213,10 +213,10 @@ OCTI-FEN encodes the complete, unambiguous Markov state of an OCTI game in a sin
 5. `<status>`:
    - `N`: Not started
    - `P`: Playing / In Progress
-   - `O`: Game Over (decided by rules)
+   - `O`: Game Over (decided by rules, including `NO_PROGRESS_DRAW` when `<winner>` is `-`)
    - `R`: Resigned
 6. `<turn>`: Active player `A`, `B`, `C`, `D`, or `-` if game is over/not started.
-7. `<winner>`: Winner player `A`, `B`, `C`, `D`, or `-` if none.
+7. `<winner>`: Winner player `A`, `B`, `C`, `D`, or `-` if none (in progress or rule draw `NO_PROGRESS_DRAW`).
 8. `<elimMask>`: 4-bit integer mask indicating eliminated players in 4-Player mode (`1` = A, `2` = B, `4` = C, `8` = D; `0` in 2P and OFK).
 9. `<pNRes>`: Comma-separated resource tuple for each active player:
    `freePods,capPods,freeProngs,freeSuperProngs`
@@ -229,6 +229,10 @@ OCTI-FEN encodes the complete, unambiguous Markov state of an OCTI game in a sin
     - `<X><Y>`: Coordinate digits.
     - `<config>`: Pod prongs in canonical sorted order.
     - If the board has no pods, `<squares>` is empty or `-`.
+11. `<noProgressPlies>` *(Optional `(expectedTokens + 1)`th extension token: 12th token in `2`/`OFK`, 14th token in `4`)*:
+    - Non-negative integer in `[0, 1000]` tracking the number of consecutive movement-only plies completed without any progress event (pod capture `x` including `_SP` bonus preludes, reserve pod deployment `xy` or liberation `xy*`, prong/SuperProng insertion `+d`/`+d!`, or new `4P` permanent player elimination).
+    - **Canonical Serialization (`toPositionString()`)**: Always emits the canonical `11`-token (`2P`/`OFK`) or `13`-token (`4P`) string for 100% archive and golden-corpus compatibility. When Rule R7 triggers (`noProgressPlies >= 30` in `2P*`/`OFK` or `>= 60` in `4P*`, evaluated at turn completion after base-occupation victory, total capture wipeout, and zero-legal-move stalemate checks), `toPositionString()` emits `<status> = O`, `<turn> = -`, `<winner> = -`.
+    - **Deserialization (`fromPositionString()` / `parseOctiFen()`)**: Accepts both `expectedTokens` (`11`/`13`) and `expectedTokens + 1` (`12`/`14`). When `:noProgressPlies` is provided, sets `noProgressPlies` to that integer (`0..1000`); when omitted on an in-progress string, defaults `noProgressPlies = 0` (or defaults `noProgressPlies` to `getNoProgressDrawLimit()`—`30` in `2P*`/`OFK`, `60` in `4P*`—when `<status> == O` and `<winner> == -`).
 
 ### 7.3 Canonical Examples
 

@@ -954,7 +954,7 @@ public class OctiAndroidBoardAndComposerTest {
     @Test
     public void testOctiAppVersionAndProtocolConstants() {
         assertEquals(BuildConfig.VERSION_NAME, OctiDefs.OCTI_APP_VERSION);
-        assertEquals("2.6.0", OctiDefs.OCTI_APP_VERSION);
+        assertEquals("2.6.1", OctiDefs.OCTI_APP_VERSION);
         assertEquals(1, OctiDefs.OCTI_PROTOCOL_VERSION);
         assertEquals(3714, OctiOpeningBookData.ENTRIES.length);
 
@@ -1953,6 +1953,549 @@ public class OctiAndroidBoardAndComposerTest {
         assertTrue(c4p.commitMove());
         assertTrue(b4p.getGame().isPlayerEliminated(OctiPlayer.PLAYER_B));
         assertEquals(0, b4p.getGame().getCapturedPods(OctiPlayer.PLAYER_D));
+    }
+
+    @Test
+    public void testR7NoProgressDrawThirtyPlyTriggerIn2PAndOfk() throws Exception {
+        assertEquals(30, OctiDefs.OCTI_NO_PROGRESS_DRAW_PLIES_2P);
+        assertEquals(60, OctiDefs.OCTI_NO_PROGRESS_DRAW_PLIES_4P);
+
+        // 1. 2P_3B: 30 consecutive non-progress plies trigger NO_PROGRESS_DRAW
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+            OctiGame game = board.getGame();
+            game.start(OctiPlayer.PLAYER_A);
+            assertEquals(30, game.getNoProgressDrawLimit());
+            assertFalse(game.isNoProgressDraw());
+
+            game.move("33+a");
+            game.move("37+a");
+            game.move("33a+e");
+            game.move("37a+e");
+            assertEquals(0, game.getNoProgressPlies());
+
+            for (int round = 0; round < 15; round++) {
+                boolean even = (round % 2 == 0);
+                game.move(even ? "33ae-34" : "34ae-33");
+                assertEquals(round * 2 + 1, game.getNoProgressPlies());
+                assertFalse(game.isGameOver());
+                assertFalse(game.isNoProgressDraw());
+
+                game.move(even ? "37ae-36" : "36ae-37");
+                assertEquals(round * 2 + 2, game.getNoProgressPlies());
+                if (round < 14) {
+                    assertFalse(game.isGameOver());
+                    assertFalse(game.isNoProgressDraw());
+                }
+            }
+
+            assertEquals(30, game.getNoProgressPlies());
+            assertTrue(game.isGameOver());
+            assertFalse(game.isGameResigned());
+            assertEquals(OctiPlayer.PLAYER_UNDEF, game.getWinner());
+            assertEquals(OctiPlayer.PLAYER_UNDEF, game.getTurn());
+            assertTrue(game.isNoProgressDraw());
+            assertEquals("NO_PROGRESS_DRAW", game.deduceTermination());
+            assertEquals("Draw by No-Progress Rule (30 Plies without Capture, Prong, or Pod)",
+                    com.selfso.octi.ui.OctiDialogs.describeTerminationReason(board));
+
+            org.json.JSONObject root = new org.json.JSONObject(game.serializeJson());
+            assertEquals("GAME_OVER", root.getString("status"));
+            assertEquals("NONE", root.getString("winner"));
+            assertEquals("NO_PROGRESS_DRAW", root.getString("termination"));
+            assertEquals(30, root.getInt("noProgressPlies"));
+
+            OctiBoard replay = new OctiBoard();
+            replay.deserializeGame(board.serializeGame());
+            assertTrue(replay.getGame().isGameOver());
+            assertTrue(replay.getGame().isNoProgressDraw());
+            assertEquals(OctiPlayer.PLAYER_UNDEF, replay.getGame().getWinner());
+            assertEquals(30, replay.getGame().getNoProgressPlies());
+        }
+
+        // 2. 2P_1B: 30 consecutive non-progress plies trigger NO_PROGRESS_DRAW
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_1);
+            board.fromPositionString("2:1:0:0:P:A:-:0:4,0,23,0:4,0,23,0:A33ae,B37ae");
+            OctiGame game = board.getGame();
+            assertEquals(30, game.getNoProgressDrawLimit());
+
+            for (int round = 0; round < 15; round++) {
+                boolean even = (round % 2 == 0);
+                game.move(even ? "33ae-34" : "34ae-33");
+                game.move(even ? "37ae-36" : "36ae-37");
+            }
+            assertTrue(game.isGameOver());
+            assertTrue(game.isNoProgressDraw());
+            assertEquals(OctiPlayer.PLAYER_UNDEF, game.getWinner());
+        }
+
+        // 3. OFK: 30 consecutive non-progress plies trigger NO_PROGRESS_DRAW
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_OFK);
+            board.fromPositionString(
+                    "OFK:1:0:0:P:A:-:0:0,0,10,0:0,0,10,0:A22ae,A32,A42,A52,B26ae,B36,B46,B56");
+            OctiGame game = board.getGame();
+            assertEquals(30, game.getNoProgressDrawLimit());
+
+            for (int round = 0; round < 15; round++) {
+                boolean even = (round % 2 == 0);
+                game.move(even ? "22ae-23" : "23ae-22");
+                assertFalse(game.isGameOver());
+                game.move(even ? "26ae-25" : "25ae-26");
+                if (round < 14) {
+                    assertFalse(game.isGameOver());
+                }
+            }
+            assertEquals(30, game.getNoProgressPlies());
+            assertTrue(game.isGameOver());
+            assertTrue(game.isNoProgressDraw());
+            assertEquals(OctiPlayer.PLAYER_UNDEF, game.getWinner());
+            assertEquals("Draw by No-Progress Rule (30 Plies without Capture, Prong, or Pod)",
+                    com.selfso.octi.ui.OctiDialogs.describeTerminationReason(board));
+        }
+    }
+
+    @Test
+    public void testR7NoProgressDrawSixtyPlyTriggerIn4PIncludingEliminatedSeats() {
+        // Full 4-seat 4P: does NOT draw at ply 30; draws at ply 60
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_4);
+            board.fromPositionString(
+                    "4:3:0:0:P:A:-:0:3,0,10,0:3,0,10,0:3,0,10,0:3,0,10,0:A33ae,B37ae,C77ae,D73ae");
+            OctiGame game = board.getGame();
+            assertEquals(60, game.getNoProgressDrawLimit());
+
+            for (int round = 0; round < 15; round++) {
+                boolean even = (round % 2 == 0);
+                game.move(even ? "33ae-34" : "34ae-33");
+                game.move(even ? "37ae-36" : "36ae-37");
+                if (round == 7) {
+                    assertEquals(30, game.getNoProgressPlies());
+                    assertFalse(game.isGameOver());
+                    assertFalse(game.isNoProgressDraw());
+                }
+                game.move(even ? "77ae-76" : "76ae-77");
+                if (round == 14) {
+                    assertEquals(59, game.getNoProgressPlies());
+                    assertFalse(game.isGameOver());
+                }
+                game.move(even ? "73ae-74" : "74ae-73");
+            }
+
+            assertEquals(60, game.getNoProgressPlies());
+            assertTrue(game.isGameOver());
+            assertTrue(game.isNoProgressDraw());
+            assertEquals(OctiPlayer.PLAYER_UNDEF, game.getWinner());
+            assertEquals(OctiPlayer.PLAYER_UNDEF, game.getTurn());
+            assertEquals("NO_PROGRESS_DRAW", game.deduceTermination());
+            assertEquals("Draw by No-Progress Rule (60 Plies without Capture, Prong, or Pod)",
+                    com.selfso.octi.ui.OctiDialogs.describeTerminationReason(board));
+        }
+
+        // 4P with seat B already eliminated: threshold remains 60 plies
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_4);
+            board.fromPositionString(
+                    "4:3:0:0:P:A:-:2:3,0,10,0:0,1,0,0:3,0,10,0:3,0,10,0:A33ae,C77ae,D73ae");
+            OctiGame game = board.getGame();
+            assertEquals(60, game.getNoProgressDrawLimit());
+
+            for (int round = 0; round < 20; round++) {
+                boolean even = (round % 2 == 0);
+                game.move(even ? "33ae-34" : "34ae-33");
+                game.move(even ? "77ae-76" : "76ae-77");
+                game.move(even ? "73ae-74" : "74ae-73");
+                if (round < 19) {
+                    assertFalse(game.isGameOver());
+                }
+            }
+            assertEquals(60, game.getNoProgressPlies());
+            assertTrue(game.isGameOver());
+            assertTrue(game.isNoProgressDraw());
+        }
+    }
+
+    @Test
+    public void testR7NoProgressDrawNonCapturingCircularJumpsRemainLegalAndCountAsNoProgress() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+        board.fromPositionString(
+                "2:3:0:0:P:A:-:0:0,0,5,0:0,0,5,0:"
+                + "A44bdfh,A45,A47,A65,A67,B35,B37,B54bdfh,B55,B57");
+        OctiGame game = board.getGame();
+
+        boolean foundCircular = false;
+        for (OctiMove m : game.generateLegalMoves()) {
+            if ("44bdfh-66-48-26-44".equals(m.asString())) {
+                foundCircular = true;
+                break;
+            }
+        }
+        assertTrue(foundCircular);
+
+        for (int ply = 1; ply <= 30; ply++) {
+            if (ply % 2 == 1) {
+                game.move("44bdfh-66-48-26-44");
+            } else {
+                game.move("54bdfh-76-58-36-54");
+            }
+            assertEquals(ply, game.getNoProgressPlies());
+            if (ply < 30) {
+                assertFalse(game.isGameOver());
+            }
+        }
+        assertTrue(game.isGameOver());
+        assertTrue(game.isNoProgressDraw());
+        assertEquals(OctiPlayer.PLAYER_UNDEF, game.getWinner());
+
+        OctiBoard compBoard = new OctiBoard(OctiGameMode.GAME_MODE_2);
+        compBoard.fromPositionString(
+                "2:3:0:0:P:A:-:0:0,0,5,0:0,0,5,0:A44a,A44bdfh,B35,B37,B55,B57:10");
+        compBoard.getGame().move("44a-45,44bdfh-66-48-26-44");
+        assertEquals(11, compBoard.getGame().getNoProgressPlies());
+        assertEquals(1, compBoard.squareAt(3, 3).getNumPods());
+    }
+
+    @Test
+    public void testR7NoProgressDrawAllFourProgressEventsResetCounterAndBaseStepsDoNot() {
+        // 1a. Regular jump capture (x) resets counter
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+            board.fromPositionString("2:3:0:0:P:A:-:0:0,0,5,0:0,0,5,0:A33a,B34,B77e:29");
+            assertEquals(29, board.getGame().getNoProgressPlies());
+            board.getGame().move("33a-35x");
+            assertFalse(board.getGame().isGameOver());
+            assertEquals(0, board.getGame().getNoProgressPlies());
+        }
+
+        // 1b. SuperProng bonus prelude capture (x) followed by regular step resets counter
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, true, false, OctiGameBases.GAME_BASES_3);
+            board.fromPositionString("2:3:1:0:P:A:-:0:0,0,5,0:0,0,5,0:A44a!c,B45,B77e:29");
+            assertEquals(29, board.getGame().getNoProgressPlies());
+            board.getGame().move("44a!c-46x;46a!c-56");
+            assertFalse(board.getGame().isGameOver());
+            assertEquals(0, board.getGame().getNoProgressPlies());
+        }
+
+        // 2a & 2b. Reserve pod deployment (53) and captured pod liberation (33*) reset counter
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+            board.fromPositionString("2:3:0:0:P:A:-:0:2,0,5,0:2,0,5,0:A33a,B37e:29");
+            board.getGame().move("53");
+            assertFalse(board.getGame().isGameOver());
+            assertEquals(0, board.getGame().getNoProgressPlies());
+
+            OctiBoard libBoard = new OctiBoard(OctiGameMode.GAME_MODE_2);
+            libBoard.fromPositionString("2:3:0:0:P:A:-:0:0,1,5,0:2,0,5,0:A33a,A37a,B77e:29");
+            libBoard.getGame().move("33*");
+            assertFalse(libBoard.getGame().isGameOver());
+            assertEquals(0, libBoard.getGame().getNoProgressPlies());
+        }
+
+        // 3a & 3b. Normal prong (+c) and SuperProng (+g!) insertions reset counter
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, true, false, OctiGameBases.GAME_BASES_3);
+            board.fromPositionString("2:3:1:0:P:A:-:0:0,0,5,1:0,0,5,1:A33a,B37e:29");
+            board.getGame().move("33a+c");
+            assertEquals(0, board.getGame().getNoProgressPlies());
+
+            board.getGame().setNoProgressPlies(29);
+            board.getGame().move("37e+g!");
+            assertFalse(board.getGame().isGameOver());
+            assertEquals(0, board.getGame().getNoProgressPlies());
+        }
+
+        // 4. 4P permanent base elimination resets counter; re-entering eliminated base does NOT
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_4);
+            board.fromPositionString(
+                    "4:3:0:0:P:A:-:0:1,0,5,0:1,0,5,0:1,0,5,0:1,0,5,0:A36ae,B44e,C77ae,D73ae:59");
+            OctiGame game = board.getGame();
+            assertEquals(59, game.getNoProgressPlies());
+
+            game.move("36ae-37");
+            assertTrue(game.isPlayerEliminated(OctiPlayer.PLAYER_B));
+            assertFalse(game.isGameOver());
+            assertEquals(0, game.getNoProgressPlies());
+
+            game.move("77ae-76");
+            game.move("73ae-74");
+            game.move("37ae-36");
+            game.move("76ae-77");
+            game.move("74ae-73");
+            game.move("36ae-37");
+            assertEquals(6, game.getNoProgressPlies());
+        }
+
+        // 5. Stepping onto/off enemy or neutral bases without capture does NOT reset counter
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+            board.fromPositionString(
+                    "2:3:0:0:P:A:-:0:0,0,5,0:0,0,5,0:A36ae,A56a,A57a,B77ae:10");
+            OctiGame game = board.getGame();
+            game.move("36ae-37");
+            assertEquals(11, game.getNoProgressPlies());
+            game.move("77ae-76");
+            assertEquals(12, game.getNoProgressPlies());
+            game.move("37ae-36");
+            assertEquals(13, game.getNoProgressPlies());
+            game.move("76ae-77");
+            assertEquals(14, game.getNoProgressPlies());
+            game.move("56a-57");
+            assertEquals(15, game.getNoProgressPlies());
+        }
+    }
+
+    @Test
+    public void testR7NoProgressDrawVictoryAndStalematePrecedenceUndoRedoAndOctiFen() {
+        // 1. 2P_3B base-occupation victory on ply 30 wins instead of drawing
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+            board.fromPositionString("2:3:0:0:P:A:-:0:0,0,5,0:0,0,5,0:A37a,A57a,A76a,B33e:29");
+            board.getGame().move("76a-77");
+            assertEquals(30, board.getGame().getNoProgressPlies());
+            assertTrue(board.getGame().isGameOver());
+            assertEquals(OctiPlayer.PLAYER_A, board.getGame().getWinner());
+            assertFalse(board.getGame().isNoProgressDraw());
+            assertEquals("BASE_OCCUPATION", board.getGame().deduceTermination());
+        }
+
+        // 2. 4P base-occupation victory on ply 60 wins instead of drawing
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_4);
+            board.fromPositionString(
+                    "4:3:0:0:P:C:-:2:0,0,5,0:0,1,0,0:0,0,5,0:0,0,5,0:A37a,C72a,D55e:59");
+            board.getGame().move("72a-73");
+            assertTrue(board.getGame().isGameOver());
+            assertEquals(OctiPlayer.PLAYER_A, board.getGame().getWinner());
+            assertFalse(board.getGame().isNoProgressDraw());
+        }
+
+        // 3. Stalemate win on ply 30 wins instead of drawing
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+            board.fromPositionString("2:3:0:0:P:A:-:0:0,0,5,0:0,0,0,0:A28a,A39a,B19c:29");
+            board.getGame().move("28a-29");
+            assertEquals(30, board.getGame().getNoProgressPlies());
+            assertTrue(board.getGame().isGameOver());
+            assertEquals(OctiPlayer.PLAYER_A, board.getGame().getWinner());
+            assertFalse(board.getGame().isNoProgressDraw());
+            assertEquals("STALEMATE", board.getGame().deduceTermination());
+        }
+
+        // 4. Undo & Redo restore noProgressPlies and R7 draw state cleanly
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
+            board.fromPositionString("2:3:0:0:P:A:-:0:0,0,5,0:0,0,5,0:A33ae,B37ae:28");
+            OctiGame game = board.getGame();
+            game.move("33ae-34");
+            assertEquals(29, game.getNoProgressPlies());
+            assertFalse(game.isGameOver());
+
+            game.move("37ae-36");
+            assertEquals(30, game.getNoProgressPlies());
+            assertTrue(game.isGameOver());
+            assertTrue(game.isNoProgressDraw());
+            assertEquals(OctiPlayer.PLAYER_UNDEF, game.getWinner());
+
+            game.undo();
+            assertEquals(29, game.getNoProgressPlies());
+            assertFalse(game.isGameOver());
+            assertFalse(game.isNoProgressDraw());
+            assertEquals(OctiPlayer.PLAYER_B, game.getTurn());
+            assertEquals("", game.deduceTermination());
+
+            game.redo();
+            assertEquals(30, game.getNoProgressPlies());
+            assertTrue(game.isGameOver());
+            assertTrue(game.isNoProgressDraw());
+            assertEquals("NO_PROGRESS_DRAW", game.deduceTermination());
+
+            game.undo();
+            game.move("37ae+c");
+            assertEquals(0, game.getNoProgressPlies());
+            assertFalse(game.isGameOver());
+        }
+
+        // 5. OCTI-FEN optional 12th/14th token & canonical 11/13-token toPositionString()
+        {
+            OctiBoard b2 = new OctiBoard();
+            String fen2Canon = "2:3:0:0:P:A:-:0:4,0,23,0:4,0,23,0:A33ae,B37ae";
+            b2.fromPositionString(fen2Canon + ":27");
+            assertEquals(27, b2.getGame().getNoProgressPlies());
+            assertEquals(fen2Canon, b2.toPositionString());
+            assertEquals(11, b2.toPositionString().split(":", -1).length);
+
+            OctiBoard b4 = new OctiBoard(OctiGameMode.GAME_MODE_4);
+            String fen4Canon = "4:3:0:0:P:A:-:0:3,0,10,0:3,0,10,0:3,0,10,0:3,0,10,0:A33ae,D73ae,B37ae,C77ae";
+            b4.fromPositionString(fen4Canon + ":58");
+            assertEquals(58, b4.getGame().getNoProgressPlies());
+            assertEquals(fen4Canon, b4.toPositionString());
+            assertEquals(13, b4.toPositionString().split(":", -1).length);
+
+            // Terminal 'O' + '-' defaults to getNoProgressDrawLimit()
+            b2.fromPositionString("2:3:0:0:O:-:-:0:4,0,23,0:4,0,23,0:A34ae,B36ae");
+            assertEquals(30, b2.getGame().getNoProgressPlies());
+            assertTrue(b2.getGame().isNoProgressDraw());
+
+            b4.fromPositionString("4:3:0:0:O:-:-:0:3,0,10,0:3,0,10,0:3,0,10,0:3,0,10,0:A34ae,B36ae,C76ae,D74ae");
+            assertEquals(60, b4.getGame().getNoProgressPlies());
+            assertTrue(b4.getGame().isNoProgressDraw());
+
+            for (String badSuffix : new String[]{":-1", ":abc", ":1001", ":", ":5:0"}) {
+                try {
+                    b2.fromPositionString(fen2Canon + badSuffix);
+                    fail("Expected IllegalMoveSyntaxException for " + badSuffix);
+                } catch (IllegalMoveSyntaxException expected) {
+                    // expected
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testR7NoProgressDrawOctiBotEngineSeeksDrawWhenLosingAndAvoidsDrawWhenWinningAtPly29() {
+        OctiBotEngine bot = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL, 0x20261117L);
+        OctiBotEngine.BotTuningProfile prof = bot.tuningProfile();
+        prof.useOpeningBook = false;
+        prof.rootScoreJitter = 0;
+        prof.maxSearchDepth = 4;
+        prof.lazySmpThreads = 1;
+        prof.timeBudgetMs = 2000;
+        bot.setTuningProfile(prof);
+
+        // 1. Losing side at noProgressPlies = 29 forces an immediate R7 draw (score == 0)
+        //    First search at noProgressPlies = 0 on the SAME bot instance to verify TT horizon salting!
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_1);
+            String losingFen = "2:1:0:0:P:A:-:0:0,0,1,0:0,0,5,0:A19ce,B29,B34e,B54e";
+            board.fromPositionString(losingFen);
+            OctiBotEngine.BotSearchStats statsLow = new OctiBotEngine.BotSearchStats();
+            bot.chooseMove(board, statsLow);
+            assertTrue("At ply 0, position is losing: " + statsLow.bestScore, statsLow.bestScore < -900000);
+
+            board.getGame().setNoProgressPlies(29);
+            OctiBotEngine.BotSearchStats statsDraw = new OctiBotEngine.BotSearchStats();
+            String chosen = bot.chooseMove(board, statsDraw);
+            assertFalse(chosen.isEmpty());
+            assertEquals(0, statsDraw.bestScore);
+
+            board.getGame().move(chosen);
+            assertTrue(board.getGame().isGameOver());
+            assertTrue(board.getGame().isNoProgressDraw());
+            assertEquals(OctiPlayer.PLAYER_UNDEF, board.getGame().getWinner());
+        }
+
+        // 2. Winning side at noProgressPlies = 29 avoids R7 draw and plays progress move 36+a to win!
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_1);
+            String winningFen = "2:1:0:0:P:A:-:0:0,0,1,0:0,0,0,0:A36,A19ce,B79g";
+            board.fromPositionString(winningFen);
+            OctiBotEngine.BotSearchStats statsLow = new OctiBotEngine.BotSearchStats();
+            bot.chooseMove(board, statsLow);
+
+            board.getGame().setNoProgressPlies(29);
+            OctiBotEngine.BotSearchStats statsWin = new OctiBotEngine.BotSearchStats();
+            String chosen = bot.chooseMove(board, statsWin);
+            assertEquals("36+a", chosen);
+            assertTrue("Winning move must beat 0 draw score: " + statsWin.bestScore, statsWin.bestScore > 900000);
+
+            board.getGame().move(chosen);
+            assertFalse(board.getGame().isGameOver());
+            assertFalse(board.getGame().isNoProgressDraw());
+            assertEquals(0, board.getGame().getNoProgressPlies());
+        }
+
+        // 3. Lazy SMP helper threads propagate noProgressPlies and score R7 draw as 0
+        {
+            OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_1);
+            board.fromPositionString("2:1:0:0:P:A:-:0:0,0,1,0:0,0,5,0:A19ce,B29,B34e,B54e:29");
+
+            for (boolean diversify : new boolean[]{false, true}) {
+                OctiBotEngine.BotTuningProfile smpProf = new OctiBotEngine.BotTuningProfile(prof);
+                smpProf.lazySmpThreads = 2;
+                smpProf.lazySmpDiversifyHelpers = diversify;
+                smpProf.qsearchUseTt = true;
+                smpProf.timeBudgetMs = 600;
+                smpProf.maxSearchDepth = 3;
+                bot.setTuningProfile(smpProf);
+
+                OctiBotEngine.BotSearchStats smpStats = new OctiBotEngine.BotSearchStats();
+                String smpMove = bot.chooseMove(board, smpStats);
+                assertFalse(smpMove.isEmpty());
+                assertEquals(0, smpStats.bestScore);
+            }
+        }
+    }
+
+    @Test
+    public void testR7NoProgressDrawOnlineViewModelSyncAndUiStrings() throws Exception {
+        File tmpCfg = File.createTempFile("octi_r7_vm_", ".json");
+        tmpCfg.deleteOnExit();
+        Files.write(tmpCfg.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
+        ClientConfigStore configStore = new ClientConfigStore(tmpCfg);
+
+        try (OctiNetworkClient client = OctiNetworkClient.forHermeticTest(1)) {
+            try (com.selfso.octi.ui.OctiAppViewModel vm =
+                    new com.selfso.octi.ui.OctiAppViewModel(configStore, client)) {
+                vm.setAsyncBotThinkingEnabled(false);
+
+                // 1. Live 2P room sync restores noProgressPlies from GameViewData
+                vm.enterOnlineRoom("room-r7-live");
+                OctiNetworkClient.GameViewData gvLive = new OctiNetworkClient.GameViewData();
+                gvLive.roomId = "room-r7-live";
+                gvLive.mode = "2P";
+                gvLive.bases = 3;
+                gvLive.phase = "IN_PROGRESS";
+                gvLive.fen = "2:3:0:0:P:A:-:0:4,0,21,0:4,0,21,0:A33ae,B37ae";
+                gvLive.noProgressPlies = 17;
+                vm.applyGameView(gvLive);
+                assertEquals(17, vm.getBoard().getGame().getNoProgressPlies());
+                assertEquals(17, vm.getDisplayBoard().getGame().getNoProgressPlies());
+
+                // Non-move SSE refresh also preserves gv.noProgressPlies
+                gvLive.noProgressPlies = 23;
+                vm.applyGameView(gvLive);
+                assertEquals(23, vm.getBoard().getGame().getNoProgressPlies());
+                assertEquals(23, vm.getDisplayBoard().getGame().getNoProgressPlies());
+
+                // 2. Finished 2P NO_PROGRESS_DRAW room reports dynamic 30-ply reason & banner
+                OctiNetworkClient.GameViewData gvDraw2p = new OctiNetworkClient.GameViewData();
+                gvDraw2p.roomId = "room-r7-live";
+                gvDraw2p.mode = "2P";
+                gvDraw2p.bases = 3;
+                gvDraw2p.phase = "FINISHED";
+                gvDraw2p.result = "DRAW";
+                gvDraw2p.winnerSeat = 0;
+                gvDraw2p.termination = "NO_PROGRESS_DRAW";
+                gvDraw2p.fen = "2:3:0:0:O:-:-:0:4,0,21,0:4,0,21,0:A34ae,B36ae";
+                gvDraw2p.noProgressPlies = 30;
+                vm.applyGameView(gvDraw2p);
+                assertTrue(vm.isOnlineGameOver());
+                assertEquals("DRAW — NO PROGRESS", vm.describeOnlineGameOverBanner());
+                assertEquals("Draw by No-Progress Rule (30 Plies without Capture, Prong, or Pod)",
+                        vm.describeOnlineTerminationReason());
+
+                // 3. Finished 4P NO_PROGRESS_DRAW room reports dynamic 60-ply reason & banner
+                vm.enterOnlineRoom("room-r7-4p");
+                OctiNetworkClient.GameViewData gvDraw4p = new OctiNetworkClient.GameViewData();
+                gvDraw4p.roomId = "room-r7-4p";
+                gvDraw4p.mode = "4P";
+                gvDraw4p.bases = 3;
+                gvDraw4p.phase = "FINISHED";
+                gvDraw4p.result = "DRAW";
+                gvDraw4p.winnerSeat = 0;
+                gvDraw4p.termination = "NO_PROGRESS_DRAW";
+                gvDraw4p.fen = "4:3:0:0:O:-:-:0:3,0,10,0:3,0,10,0:3,0,10,0:3,0,10,0:A34ae,B36ae,C76ae,D74ae";
+                gvDraw4p.noProgressPlies = 60;
+                vm.applyGameView(gvDraw4p);
+                assertTrue(vm.isOnlineGameOver());
+                assertEquals("DRAW — NO PROGRESS", vm.describeOnlineGameOverBanner());
+                assertEquals("Draw by No-Progress Rule (60 Plies without Capture, Prong, or Pod)",
+                        vm.describeOnlineTerminationReason());
+            }
+        }
     }
 
     private static void writeLe32(byte[] buf, int offset, int value) {

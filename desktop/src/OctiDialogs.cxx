@@ -3389,7 +3389,8 @@ QString GameOverDialog::describeWinnerBanner(const OctiBoard *board)
     if (!board || !board->getGame()) {
         return QString::fromUtf8("GAME OVER");
     }
-    OctiPlayer winner = board->getGame()->getWinner();
+    const OctiGame *game = board->getGame();
+    OctiPlayer winner = game->getWinner();
     if (board->getGameMode() == GAME_MODE_4) {
         if (winner == PLAYER_A || winner == PLAYER_C) {
             return QString::fromUtf8("VICTORY \xE2\x80\x94 TEAM A+C WINS!");
@@ -3410,6 +3411,9 @@ QString GameOverDialog::describeWinnerBanner(const OctiBoard *board)
         if (winner == PLAYER_D) {
             return QString::fromUtf8("VICTORY \xE2\x80\x94 PLAYER D WINS!");
         }
+    }
+    if (game->isNoProgressDraw() || winner == PLAYER_UNDEF) {
+        return QString::fromUtf8("DRAW \xE2\x80\x94 NO PROGRESS");
     }
     return QString::fromUtf8("DRAW / STALEMATE");
 }
@@ -3521,6 +3525,10 @@ QString GameOverDialog::describeTerminationReason(const OctiBoard *board)
         }
 
         return QStringLiteral("Victory by Stalemate (Opponent Has No Legal Moves)");
+    }
+    if (board->getGame()->isNoProgressDraw() || winner == PLAYER_UNDEF) {
+        return QString("Draw by No-Progress Rule (%1 Plies without Capture, Prong, or Pod)")
+            .arg(board->getGame()->getNoProgressDrawLimit());
     }
     return QStringLiteral("Match Concluded");
 }

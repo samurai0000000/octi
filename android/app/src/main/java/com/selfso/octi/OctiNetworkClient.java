@@ -610,6 +610,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         public String fen = "";
         public int turnSeat = 0;
         public int plyCount = 0;
+        public int noProgressPlies = 0;
         public List<String> moves = new ArrayList<>();
         public String result = "";
         public String termination = "";
@@ -3797,6 +3798,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         v.fen = OctiMiniJson.getString(j, "fen", "");
         v.turnSeat = OctiMiniJson.getInt(j, "turn_seat", 0);
         v.plyCount = OctiMiniJson.getInt(j, "ply_count", 0);
+        v.noProgressPlies = OctiMiniJson.getInt(j, "no_progress_plies", 0);
         List<Object> movesArr = OctiMiniJson.getArray(j, "moves");
         if (movesArr != null) {
             for (Object item : movesArr) {

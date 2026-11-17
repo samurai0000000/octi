@@ -283,6 +283,7 @@ struct RoomView {
     std::string fen;
     int turnSeat = 0;               // 0 when no one is to move
     int plyCount = 0;
+    int noProgressPlies = 0;
     std::vector<std::string> moves;
     std::string result;             // archive vocabulary, empty while live
     std::string termination;

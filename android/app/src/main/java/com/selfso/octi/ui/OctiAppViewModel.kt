@@ -3667,14 +3667,18 @@ class OctiAppViewModel @JvmOverloads constructor(
                     if (!replayOk || (gv.fen.isNotEmpty() && board.toPositionString() != gv.fen)) {
                         if (gv.fen.isNotEmpty()) {
                             board.fromPositionString(gv.fen)
+                            board.game?.noProgressPlies = gv.noProgressPlies
                             if (_fenHistory.isEmpty() || _fenHistory.last() != gv.fen) {
                                 _fenHistory.add(gv.fen)
                             }
                         }
+                    } else if (gv.noProgressPlies > 0) {
+                        board.game?.noProgressPlies = gv.noProgressPlies
                     }
 
                     _viewingPly.value = livePlyCount()
                     displayBoard.fromPositionString(board.toPositionString())
+                    displayBoard.game?.noProgressPlies = board.game?.noProgressPlies ?: gv.noProgressPlies
                     composer.attachBoard(board)
                     composer.setConfirmAllMoves(_confirmAllMoves.value)
 
@@ -3696,7 +3700,9 @@ class OctiAppViewModel @JvmOverloads constructor(
                     if (gv.fen.isNotEmpty()) {
                         try {
                             board.fromPositionString(gv.fen)
+                            board.game?.noProgressPlies = gv.noProgressPlies
                             displayBoard.fromPositionString(gv.fen)
+                            displayBoard.game?.noProgressPlies = gv.noProgressPlies
                             composer.attachBoard(board)
                             composer.setConfirmAllMoves(_confirmAllMoves.value)
                         } catch (ignored: RuntimeException) {
@@ -3940,7 +3946,10 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     fun formatGameOverBanner(winner: OctiPlayer?): String {
         if (winner == null || winner == OctiPlayer.PLAYER_UNDEF) {
-            return "Game Over — Stalemate"
+            if (board.game?.isNoProgressDraw == true || board.game?.isGameOver == true) {
+                return "DRAW — NO PROGRESS"
+            }
+            return "DRAW — NO PROGRESS"
         }
         return if (board.gameMode == OctiGameMode.GAME_MODE_4) {
             if (winner == OctiPlayer.PLAYER_A || winner == OctiPlayer.PLAYER_C) {
@@ -3980,6 +3989,8 @@ class OctiAppViewModel @JvmOverloads constructor(
                 } else {
                     "Winner: $tag"
                 }
+            } else if (gv.termination == "NO_PROGRESS_DRAW") {
+                return "DRAW — NO PROGRESS"
             } else if (gv.result == "DRAW") {
                 return "Match Drawn"
             } else {
@@ -3989,7 +4000,10 @@ class OctiAppViewModel @JvmOverloads constructor(
         val game = board.game
         val winner = game?.winner
         if (winner == null || winner == OctiPlayer.PLAYER_UNDEF) {
-            return "Game Over — Stalemate"
+            if (game?.isNoProgressDraw == true || game?.isGameOver == true) {
+                return "DRAW — NO PROGRESS"
+            }
+            return "DRAW — NO PROGRESS"
         }
         return if (board.gameMode == OctiGameMode.GAME_MODE_4) {
             if (winner == OctiPlayer.PLAYER_A || winner == OctiPlayer.PLAYER_C) {
@@ -4006,13 +4020,20 @@ class OctiAppViewModel @JvmOverloads constructor(
         val gv = _activeGameView.value
         if (_matchType.value == MatchType.ONLINE_ROOM && gv?.phase == "FINISHED") {
             val term = gv.termination.ifEmpty { "CONCLUDED" }
+            val drawLimit = if (gv.mode == "4P" || gv.mode == "4") {
+                OctiDefs.OCTI_NO_PROGRESS_DRAW_PLIES_4P
+            } else {
+                board.game?.noProgressDrawLimit ?: OctiDefs.OCTI_NO_PROGRESS_DRAW_PLIES_2P
+            }
             return when (term) {
                 "RESIGNATION" -> "Match concluded by resignation"
                 "AGREED_DRAW" -> "Draw agreed by mutual consent"
+                "NO_PROGRESS_DRAW" -> "Draw by No-Progress Rule ($drawLimit Plies without Capture, Prong, or Pod)"
                 "DISCONNECT_FORFEIT" -> "Opponent forfeited by disconnection"
                 "TIMEOUT" -> "Match concluded by time expiration"
                 "BASE_OCCUPATION" -> "Winning base occupied"
-                "POD_ELIMINATION" -> "All opponent pods captured"
+                "POD_ELIMINATION", "TOTAL_CAPTURE" -> "All opponent pods captured"
+                "STALEMATE" -> "Victory by Stalemate (Opponent Has No Legal Moves)"
                 else -> term.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }
             }
         }

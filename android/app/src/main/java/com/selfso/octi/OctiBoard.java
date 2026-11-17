@@ -376,6 +376,24 @@ public class OctiBoard {
         return sb.toString();
     }
 
+    private static int parseStrictNonNegativeInt(String s, int maxVal) {
+        if (s == null || s.isEmpty()) {
+            throw new IllegalMoveSyntaxException("empty integer token in position string");
+        }
+        long val = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c < '0' || c > '9') {
+                throw new IllegalMoveSyntaxException("invalid integer token in position string");
+            }
+            val = val * 10 + (c - '0');
+            if (val > maxVal) {
+                throw new IllegalMoveSyntaxException("integer token out of range in position string");
+            }
+        }
+        return (int) val;
+    }
+
     public void fromPositionString(String pos) {
         if (pos == null) {
             throw new IllegalMoveSyntaxException("null position string");
@@ -399,7 +417,7 @@ public class OctiBoard {
         }
 
         int expectedTokens = (newMode == OctiGameMode.GAME_MODE_4) ? 13 : 11;
-        if (tokens.length != expectedTokens) {
+        if (tokens.length != expectedTokens && tokens.length != expectedTokens + 1) {
             throw new IllegalMoveSyntaxException("token count mismatch in position string");
         }
 
@@ -479,6 +497,15 @@ public class OctiBoard {
         snap.gameOver = (statusChar == 'O' || statusChar == 'R');
         snap.turn = turn;
         snap.winner = winner;
+        if (tokens.length == expectedTokens + 1) {
+            snap.noProgressPlies = parseStrictNonNegativeInt(tokens[expectedTokens], 1000);
+        } else if (statusChar == 'O' && winner == OctiPlayer.PLAYER_UNDEF) {
+            snap.noProgressPlies = (newMode == OctiGameMode.GAME_MODE_4)
+                    ? OctiDefs.OCTI_NO_PROGRESS_DRAW_PLIES_4P
+                    : OctiDefs.OCTI_NO_PROGRESS_DRAW_PLIES_2P;
+        } else {
+            snap.noProgressPlies = 0;
+        }
 
         if (newMode == OctiGameMode.GAME_MODE_4) {
             snap.players[OctiPlayer.PLAYER_A.getValue()].eliminated = ((elimMask & 1) != 0);
@@ -508,7 +535,7 @@ public class OctiBoard {
         }
 
         // 10. Squares
-        String squaresStr = tokens[tokens.length - 1];
+        String squaresStr = tokens[expectedTokens - 1];
         if (!squaresStr.isEmpty() && !"-".equals(squaresStr)) {
             String[] podTokens = squaresStr.split(",", -1);
             for (String podToken : podTokens) {

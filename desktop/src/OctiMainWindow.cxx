@@ -3092,6 +3092,9 @@ void OctiMainWindow::applyGameViewData(const GameViewData &view)
             if (!view.fen.empty()) {
                 try {
                     _board.fromPositionString(view.fen);
+                    if (_board.getGame() && view.noProgressPlies > 0) {
+                        _board.getGame()->setNoProgressPlies(view.noProgressPlies);
+                    }
                 } catch (...) {
                 }
             }
@@ -4706,7 +4709,13 @@ void OctiMainWindow::checkAndPresentGameOver()
     if (isVisible()) {
         if (onlineGameOver && !localGameOver) {
             std::string banner = "Match Complete";
-            if (_onlineGameView.winnerSeat > 0) {
+            std::string termReason = _onlineGameView.termination;
+            if (_onlineGameView.termination == "NO_PROGRESS_DRAW") {
+                banner = "DRAW \xE2\x80\x94 NO PROGRESS";
+                int limit = g ? g->getNoProgressDrawLimit() : OCTI_NO_PROGRESS_DRAW_PLIES_2P;
+                termReason = "Draw by No-Progress Rule (" + std::to_string(limit) +
+                             " Plies without Capture, Prong, or Pod)";
+            } else if (_onlineGameView.winnerSeat > 0) {
                 std::string winHandle = "Seat " + std::to_string(_onlineGameView.winnerSeat);
                 for (const auto &s : _onlineGameView.seats) {
                     if (s.seat == _onlineGameView.winnerSeat && !s.handle.empty()) {
@@ -4718,7 +4727,7 @@ void OctiMainWindow::checkAndPresentGameOver()
             } else if (_onlineGameView.result == "DRAW") {
                 banner = "Match Drawn";
             }
-            GameOverDialog dlg(banner, _onlineGameView.termination,
+            GameOverDialog dlg(banner, termReason,
                                static_cast<int>(_appliedOnlineMoves.size()),
                                exportCurrentOctiTranscript(), _theme, this);
             dlg.exec();

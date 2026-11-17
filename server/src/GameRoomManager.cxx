@@ -2492,6 +2492,9 @@ int countPods(const OctiBoard &b, OctiPlayer p)
 std::string classifyRuleTermination(const OctiBoard &b, const OctiGame &g)
 {
     OctiPlayer w = g.getWinner();
+    if (w == PLAYER_UNDEF) {
+        return "NO_PROGRESS_DRAW";
+    }
     if (g.getMode() == GAME_MODE_2) {
         const int xs[3] = {2, 4, 6};
         int y = (w == PLAYER_A) ? 6 : 2;
@@ -2683,7 +2686,10 @@ RoomResult GameRoomManager::submitMove(const std::string &roomId,
 
     if (g->isGameOver()) {
         std::string term = classifyRuleTermination(*r->board, *g);
-        finishGameLocked(*r, now, term, static_cast<int>(g->getWinner()), playerId);
+        int winSeat = (g->getWinner() == PLAYER_UNDEF)
+                          ? 0
+                          : static_cast<int>(g->getWinner());
+        finishGameLocked(*r, now, term, winSeat, playerId);
         res.gameOver = true;
     } else {
         r->turnStartedMs = now;
@@ -3923,6 +3929,7 @@ void GameRoomManager::fillView(const Room &r, int64_t viewerId, int64_t now,
                        ? static_cast<int>(g->getTurn())
                        : 0;
     out.plyCount = static_cast<int>(r.plies.size());
+    out.noProgressPlies = (g != nullptr) ? g->getNoProgressPlies() : 0;
     for (size_t i = 0; i < r.plies.size(); ++i) {
         out.moves.push_back(r.plies[i].move);
     }
@@ -4163,8 +4170,12 @@ void GameRoomManager::saveRoomLocked(const Room &r)
     // board fen position snapshot
     if (r.board) {
         j["fen"] = r.board->toPositionString();
+        j["noProgressPlies"] = r.board->getGame()
+                                   ? r.board->getGame()->getNoProgressPlies()
+                                   : 0;
     } else {
         j["fen"] = "";
+        j["noProgressPlies"] = 0;
     }
 
     // observers
@@ -4494,6 +4505,10 @@ bool GameRoomManager::restoreFromStoreLocked()
                 if (replayFailed && !fen.empty()) {
                     try {
                         r->board->fromPositionString(fen);
+                        if (j.contains("noProgressPlies") &&
+                            j["noProgressPlies"].is_number_integer()) {
+                            g->setNoProgressPlies(j["noProgressPlies"].get<int>());
+                        }
                     } catch (...) {}
                 }
                 if (r->phase == RoomPhase::FINISHED && !g->isGameOver()) {

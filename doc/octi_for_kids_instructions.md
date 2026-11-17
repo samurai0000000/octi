@@ -89,13 +89,14 @@ Players alternate turns, beginning with Player A. On each turn, a player must ch
 
 ---
 
-## 4. Victory Conditions
+## 4. Victory, Stalemate & No-Progress Draw Conditions
 
 A player wins immediately when any of the following conditions is met:
 
 1. **Base Occupation (1-Base Victory)**: A player moves or jumps a friendly pod onto **any one** of the opponent's 4 OCTI squares (e.g. Player A occupies `26`, `36`, `46`, or `56`; or Player B occupies `22`, `32`, `42`, or `52`).
 2. **Elimination by Capture**: A player captures all 4 of the opponent's pods.
 3. **No Legal Moves**: The opponent has no legal moves available on their turn (e.g., all remaining opponent pods are immobilized and their prong supply is exhausted).
+4. **Universal No-Progress Draw (`NO_PROGRESS_DRAW`, 30 Plies / 15 Turns per Player)**: If **30 consecutive plies (`15` full turns per player)** complete without any **progress event**—either a **pod capture (`x`)** or a **prong insertion (`+d`)**—the game terminates automatically in a draw (`NO_PROGRESS_DRAW`, `noProgressPlies == 30`). Base-occupation victory, total capture wipeout, and zero-legal-move stalemate are evaluated before the 30-ply draw check, so winning on the 30th non-progress ply still wins immediately.
 
 ---
 
@@ -116,4 +117,25 @@ A player wins immediately when any of the following conditions is met:
 | **Superprongs Supported** | Yes (`<= 2` bonus preludes, 1 per SP) | Yes (`<= 4` bonus preludes, 1 per SP) | No |
 | **Edgeless Board Variant** | Yes (optional variant) | Yes (optional variant) | No |
 | **Turn Options Count** | 4 distinct turn options | 4 distinct turn options | 3 distinct turn options |
+| **No-Progress Draw Limit** | 30 plies (15 turns per player) | 60 plies (15 full 4-seat rounds) | 30 plies (15 turns per player) |
 | **Victory Condition** | Occupy 3 bases (or 1 for short game) | Occupy opponents' 2 team bases | Occupy any 1 opponent base |
+
+---
+
+## 6. Appendix A: OCTI Project Interpretations
+
+Where the classic rules require formalization for edge cases, Don Green's November 2026 review establishes the exact rules enforced across C++ `octi_core`, the Web JS engine, Desktop Qt6, and the Android Java engine below.
+
+### A.1 Starting-Square Vacancy & Loop-Back Jumps
+
+- In OCTI for Kids (`OFK`), pod stacking is forbidden, so a jumping pod's starting square `S` is always vacated when the pod jumps out of `S`.
+- A jumping pod can never jump over `S` during its jump chain, and a multi-hop loop (`S -> ... -> S`) that lands back on `S` is legal. Non-capturing circular multi-hop jumps (`S -> ... -> S`) count as movement-only plies (`+1` toward the 30-ply no-progress draw threshold).
+
+### A.2 Universal No-Progress Draw (Don Green, November 2026)
+
+1. **Universal No-Progress Draw (`NO_PROGRESS_DRAW`, `noProgressPlies`):** A match in `OFK` (or any `2P*` variant, `OCTI_NO_PROGRESS_DRAW_PLIES_2P = 30`) terminates automatically in a draw (`NO_PROGRESS_DRAW`) when **`30` consecutive plies (`15` full turns per player)** complete without any **progress event** (in `4P*` variants, the threshold is **`60` consecutive plies / `15` full rounds**, `OCTI_NO_PROGRESS_DRAW_PLIES_4P = 60`).
+2. **Progress Events in `OFK` (Reset `noProgressPlies = 0`):** Because `OFK` has 0 reserve pods and no liberation mechanic, `noProgressPlies` resets to `0` on any turn that:
+   - **Captures a pod (`x`)** during a single or multi-hop jump, or
+   - **Inserts a prong (`+d`)** from the player's supply into a friendly pod.
+3. **Movement-Only Plies (`noProgressPlies += 1`):** Every 1-square step and every non-capturing single, multi-hop, or circular jump (`S -> ... -> S`) increments `noProgressPlies` by `+1`.
+4. **Evaluation Precedence (Victory & Stalemate First):** Base-occupation victory, total capture wipeout, and zero-legal-move stalemate are evaluated at turn completion **before** checking `noProgressPlies >= 30` (so winning or stalemating the opponent on ply `30` still wins).

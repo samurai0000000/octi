@@ -1153,8 +1153,9 @@ bool applyRobotOutcomesLocked(sqlite3 *db,
 bool validTermination(const std::string &t)
 {
     return t == "BASE_CAPTURE" || t == "BASE_OCCUPATION" || t == "TOTAL_CAPTURE" ||
-           t == "ELIMINATION" || t == "STALEMATE" || t == "RESIGNATION" ||
-           t == "TIMEOUT" || t == "DISCONNECT_FORFEIT" || t == "AGREED_DRAW";
+           t == "ELIMINATION" || t == "STALEMATE" || t == "NO_PROGRESS_DRAW" ||
+           t == "RESIGNATION" || t == "TIMEOUT" ||
+           t == "DISCONNECT_FORFEIT" || t == "AGREED_DRAW";
 }
 
 bool validResult(const std::string &r)

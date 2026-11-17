@@ -874,6 +874,9 @@ public class OctiBotEngine {
                         testBoard.suppressBoardUpdateNotification(true);
                         testBoard.fromPositionString(board.toPositionString());
                         if (testBoard.getGame() != null) {
+                            if (board.getGame() != null) {
+                                testBoard.getGame().setNoProgressPlies(board.getGame().getNoProgressPlies());
+                            }
                             testBoard.getGame().setSearchMode(true);
                             testBoard.getGame().move(parsed);
                             isLegal = true;
@@ -2905,6 +2908,11 @@ public class OctiBotEngine {
         if (useQsearchTt) {
             ctx.qsearchTtProbes++;
             hashKey = computePositionHash(scratchBoard);
+            int qNpp = game.getNoProgressPlies();
+            int qDrawLimit = game.getNoProgressDrawLimit();
+            if (qNpp + profile.maxQuiesceDepth >= qDrawLimit || qNpp >= qDrawLimit / 2) {
+                hashKey ^= ((long) qNpp) * 0x9E3779B97F4A7C15L;
+            }
             ttIdx = (int) (hashKey & TT_MASK);
             ttLock = ttLocks[ttIdx & TT_LOCK_MASK];
             synchronized (ttLock) {
@@ -2995,9 +3003,10 @@ public class OctiBotEngine {
             int val;
             if (game.isGameOver()) {
                 OctiPlayer w = game.getWinner();
-                val = OctiPlayer.areAllied(mode, w, turn)
-                        ? (WIN_SCORE - (ply + 1))
-                        : (-WIN_SCORE + (ply + 1));
+                val = (w == OctiPlayer.PLAYER_UNDEF) ? 0
+                        : (OctiPlayer.areAllied(mode, w, turn)
+                                ? (WIN_SCORE - (ply + 1))
+                                : (-WIN_SCORE + (ply + 1)));
             } else {
                 OctiPlayer nextTurn = game.getTurn();
                 boolean sameTeamNext = OctiPlayer.areAllied(mode, turn, nextTurn);
@@ -3082,7 +3091,12 @@ public class OctiBotEngine {
                 || profile.useKillers
                 || profile.useHistory
                 || profile.lmrMinDepth > 0);
-        long hashKey = computePositionHash(scratchBoard);
+        long rawHashKey = computePositionHash(scratchBoard);
+        int npp = game.getNoProgressPlies();
+        int drawLimit = game.getNoProgressDrawLimit();
+        long hashKey = (npp + depth >= drawLimit || npp >= drawLimit / 2)
+                ? (rawHashKey ^ (((long) npp) * 0x9E3779B97F4A7C15L))
+                : rawHashKey;
         int ttIdx = (int) (hashKey & TT_MASK);
         Object ttLock = ttLocks[ttIdx & TT_LOCK_MASK];
         String ttMove = "";
@@ -3165,9 +3179,10 @@ public class OctiBotEngine {
             int val;
             if (game.isGameOver()) {
                 OctiPlayer w = game.getWinner();
-                val = OctiPlayer.areAllied(mode, w, turn)
-                        ? (WIN_SCORE - (ply + 1))
-                        : (-WIN_SCORE + (ply + 1));
+                val = (w == OctiPlayer.PLAYER_UNDEF) ? 0
+                        : (OctiPlayer.areAllied(mode, w, turn)
+                                ? (WIN_SCORE - (ply + 1))
+                                : (-WIN_SCORE + (ply + 1)));
             } else {
                 OctiPlayer nextTurn = game.getTurn();
                 boolean sameTeamNext = OctiPlayer.areAllied(mode, turn, nextTurn);
@@ -3332,9 +3347,10 @@ public class OctiBotEngine {
         int score;
         if (game.isGameOver()) {
             OctiPlayer w = game.getWinner();
-            score = OctiPlayer.areAllied(mode, w, rootTurn)
-                    ? (WIN_SCORE - 1)
-                    : (-WIN_SCORE + 1);
+            score = (w == OctiPlayer.PLAYER_UNDEF) ? 0
+                    : (OctiPlayer.areAllied(mode, w, rootTurn)
+                            ? (WIN_SCORE - 1)
+                            : (-WIN_SCORE + 1));
         } else {
             OctiPlayer nextTurn = game.getTurn();
             boolean sameTeamNext = OctiPlayer.areAllied(mode, rootTurn, nextTurn);
@@ -3400,6 +3416,7 @@ public class OctiBotEngine {
             return "";
         }
         final String rootPositionFen;
+        final int rootNoProgressPlies;
         synchronized (board) {
             OctiGame srcGame = board.getGame();
             if (srcGame == null || !srcGame.isGameStarted() || srcGame.isGameOver()
@@ -3407,6 +3424,7 @@ public class OctiBotEngine {
                 return "";
             }
             rootPositionFen = board.toPositionString();
+            rootNoProgressPlies = srcGame.getNoProgressPlies();
         }
 
         long startMs = steadyClockMs();
@@ -3419,6 +3437,7 @@ public class OctiBotEngine {
         if (game == null) {
             return "";
         }
+        game.setNoProgressPlies(rootNoProgressPlies);
         game.setSearchMode(true);
 
         List<OctiMove> legalMoves = game.generateLegalMoves();
@@ -3516,6 +3535,7 @@ public class OctiBotEngine {
                         if (hGame == null || initialCandidates.isEmpty()) {
                             return;
                         }
+                        hGame.setNoProgressPlies(rootNoProgressPlies);
                         hGame.setSearchMode(true);
 
                         if (!diversifyHelpers) {

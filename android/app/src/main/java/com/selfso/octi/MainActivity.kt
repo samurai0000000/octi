@@ -597,6 +597,8 @@ fun OctiMainAppContent(
                                 ) {
                                     val titleText = if (isOnlineRoom) {
                                         viewModel.describeOnlineGameOverBanner()
+                                    } else if (viewModel.board.game?.winner == null || viewModel.board.game?.winner == OctiPlayer.PLAYER_UNDEF) {
+                                        "DRAW — NO PROGRESS"
                                     } else {
                                         "GAME OVER — Winner: ${viewModel.board.game?.winner}"
                                     }

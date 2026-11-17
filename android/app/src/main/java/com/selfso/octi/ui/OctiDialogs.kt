@@ -270,6 +270,7 @@ object OctiDialogs {
         return out
     }
 
+    @JvmStatic
     fun describeTerminationReason(board: OctiBoard?): String {
         if (board == null || board.game == null) {
             return "Match Concluded"
@@ -279,12 +280,18 @@ object OctiDialogs {
             return "Victory by Resignation"
         }
         val term = game.deduceTermination()
+        val drawLimit = game.noProgressDrawLimit
         return when (term) {
             "RESIGNATION" -> "Victory by Resignation"
             "BASE_OCCUPATION" -> "Captured Enemy Home Base"
             "TOTAL_CAPTURE" -> "Eliminated All Opponent Pods"
             "STALEMATE" -> "Victory by Stalemate (Opponent Has No Legal Moves)"
-            else -> "Match Concluded"
+            "NO_PROGRESS_DRAW" -> "Draw by No-Progress Rule ($drawLimit Plies without Capture, Prong, or Pod)"
+            else -> if (game.isNoProgressDraw || (game.isGameOver && game.winner == OctiPlayer.PLAYER_UNDEF)) {
+                "Draw by No-Progress Rule ($drawLimit Plies without Capture, Prong, or Pod)"
+            } else {
+                "Match Concluded"
+            }
         }
     }
 
@@ -2210,6 +2217,7 @@ fun GameOverDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 val titleText = customTitle ?: when {
+                    winner == OctiPlayer.PLAYER_UNDEF -> "DRAW — NO PROGRESS"
                     gameMode == OctiGameMode.GAME_MODE_4 -> {
                         if (winner == OctiPlayer.PLAYER_A || winner == OctiPlayer.PLAYER_C) {
                             "Team A & C Wins!"

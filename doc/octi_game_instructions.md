@@ -177,8 +177,22 @@ Where the classic rules require formalization for edge cases, Don Green's Novemb
 
 **Ruling (Don Green, November 2026).**
 1. **No Jumping Over Starting Stack-Mates (`jx == sx && jy == sy` Forbidden):** You cannot jump other pods with which you started stacked for the duration of your jump. Therefore, a jumping pod can **never jump over its starting square `S`** during its jump chain—even on an Edgeless (`_ED`) wraparound trajectory (for example, `44bcd-66-86-16-34-54` jumping over stationary `A44a` on `44` is illegal).
-2. **Landing Back on `S` Requires Full Stack Clear-Out:** A jumping pod may **land back on its starting square `S`** at the end of a loop **only when all pods that started the turn on `S` vacate `S`** during the move. For example, composite clear-out `44a-45,44beg-66x-64x-44` is legal because `A44a` steps off `44` so `44` is completely empty when `A44beg` lands back on `44`; conversely, single move `44beg-66x-64x-44` while `A44a` remains stationary on `44` is illegal.
+2. **Landing Back on `S` Requires Full Stack Clear-Out:** A jumping pod may **land back on its starting square `S`** at the end of a loop **only when all pods that started the turn on `S` vacate `S`** during the move. For example, composite clear-out `44a-45,44beg-66x-64x-44` is legal because `A44a` steps off `44` so `44` is completely empty when `A44beg` lands back on `44`; conversely, single move `44beg-66x-64x-44` while `A44a` remains stationary on `44` is illegal. Non-capturing circular multi-hop jumps (`S -> ... -> S` when `S` is completely vacated) remain legal and count as movement-only plies (`+1` toward the no-progress draw threshold).
 
 **Scope.**
 - Every square is judged by physical vacancy: only pods that actually move out of `S` vacate `S` for landing, and `S` can never be jumped over during the chain.
 - In OCTI for Kids (`OFK`), stacking is forbidden, so no stack-mates exist on `S`.
+
+### A.2 Universal No-Progress Draw (Don Green, November 2026)
+
+**Situation.** Late-game positions or mutual maneuvering loops where players repeatedly step or jump without advancing material or board state.
+
+**Ruling (Don Green, November 2026).**
+1. **Universal No-Progress Draw (`NO_PROGRESS_DRAW`, `noProgressPlies`):** A match terminates automatically in a draw (`NO_PROGRESS_DRAW`) when **`30` consecutive plies (`15` full turns per player)** in any `2P*` (`OCTI_NO_PROGRESS_DRAW_PLIES_2P = 30`) or `OFK` variant—or **`60` consecutive plies (`15` full 4-seat rounds)** in any `4P*` (`OCTI_NO_PROGRESS_DRAW_PLIES_4P = 60`) variant—complete without any **progress event**.
+2. **Progress Events (Reset `noProgressPlies = 0`):** A turn is a progress turn if and only if at least one of the following occurs during that full turn:
+   - **Pod Capture (`x`):** Any pod stack is captured during a regular single/composite jump or a SuperProng (`_SP`) bonus prelude jump.
+   - **Pod Deployment or Liberation (`xy` / `xy*`):** A reserve pod is deployed onto an OCTI square (`xy`) or an own captured pod is liberated (`xy*`).
+   - **Prong or SuperProng Insertion (`+d` / `+d!`):** A normal prong (`+a..h`) or gold SuperProng (`+a!..h!`) is inserted into a friendly pod.
+   - **4-Player Permanent Elimination (`4P*` only):** An enemy seat is newly and permanently eliminated at turn end (by corner home-base occupation or total pod/placement wipeout).
+3. **Movement-Only Plies (`noProgressPlies += 1`):** All other turns—1-square steps, non-capturing single/multi-hop jumps, non-capturing circular loop-back jumps (`S -> ... -> S`), composite movements without `x`, and stepping onto or off an enemy/neutral base without `x` and without a new `4P` elimination—increment `noProgressPlies` by `+1`.
+4. **Evaluation Precedence (Victory & Stalemate First):** At full turn completion, base-occupation victory, total capture wipeout victory, and zero-legal-move stalemate victory are evaluated **before** checking `noProgressPlies >= limit`. Therefore, occupying the winning enemy base or stalemating the opponent on ply `30` (`2P*`/`OFK`) or ply `60` (`4P*`) still **wins** immediately rather than drawing.

@@ -2818,6 +2818,62 @@ TEST(OctiOfkUsabilityTestSuite, GameOverDialogDescribeTerminationReason6x7)
     }
 }
 
+TEST(OctiOfkUsabilityTestSuite, GameOverDialogDescribeNoProgressDraw2POfkAnd4P)
+{
+    // 1. 2P_3B: 30-ply R7 draw
+    {
+        OctiBoard board(GAME_MODE_2, false, false, GAME_BASES_3);
+        board.fromPositionString("2:3:0:0:P:A:-:0:4,0,21,0:4,0,21,0:A33ae,B37ae:29");
+        board.getGame()->move("33ae-34");
+        CHECK_TRUE(board.getGame()->isGameOver());
+        CHECK_TRUE(board.getGame()->isNoProgressDraw());
+        LONGS_EQUAL(OCTI_NO_PROGRESS_DRAW_PLIES_2P, board.getGame()->getNoProgressPlies());
+
+        STRCMP_EQUAL("DRAW \xE2\x80\x94 NO PROGRESS",
+                     GameOverDialog::describeWinnerBanner(&board).toUtf8().constData());
+        STRCMP_EQUAL("Draw by No-Progress Rule (30 Plies without Capture, Prong, or Pod)",
+                     GameOverDialog::describeTerminationReason(&board).toUtf8().constData());
+
+        GameOverDialog dlg(&board, ThemeId::OBSIDIAN_BRASS);
+        STRCMP_EQUAL("DRAW \xE2\x80\x94 NO PROGRESS",
+                     dlg.winnerBannerText().toUtf8().constData());
+        STRCMP_EQUAL("Termination: Draw by No-Progress Rule (30 Plies without Capture, Prong, or Pod)",
+                     dlg.terminationText().toUtf8().constData());
+    }
+
+    // 2. OFK: 30-ply R7 draw
+    {
+        OctiBoard board(GAME_MODE_OFK);
+        board.fromPositionString(
+            "OFK:1:0:0:P:A:-:0:0,0,10,0:0,0,10,0:A22ae,A32,A42,A52,B26ae,B36,B46,B56:29");
+        board.getGame()->move("22ae-23");
+        CHECK_TRUE(board.getGame()->isGameOver());
+        CHECK_TRUE(board.getGame()->isNoProgressDraw());
+        LONGS_EQUAL(OCTI_NO_PROGRESS_DRAW_PLIES_2P, board.getGame()->getNoProgressPlies());
+
+        STRCMP_EQUAL("DRAW \xE2\x80\x94 NO PROGRESS",
+                     GameOverDialog::describeWinnerBanner(&board).toUtf8().constData());
+        STRCMP_EQUAL("Draw by No-Progress Rule (30 Plies without Capture, Prong, or Pod)",
+                     GameOverDialog::describeTerminationReason(&board).toUtf8().constData());
+    }
+
+    // 3. 4P: 60-ply R7 draw
+    {
+        OctiBoard board(GAME_MODE_4);
+        board.fromPositionString(
+            "4:3:0:0:P:D:-:0:3,0,10,0:3,0,10,0:3,0,10,0:3,0,10,0:A34ae,B36ae,C76ae,D73ae:59");
+        board.getGame()->move("73ae-74");
+        CHECK_TRUE(board.getGame()->isGameOver());
+        CHECK_TRUE(board.getGame()->isNoProgressDraw());
+        LONGS_EQUAL(OCTI_NO_PROGRESS_DRAW_PLIES_4P, board.getGame()->getNoProgressPlies());
+
+        STRCMP_EQUAL("DRAW \xE2\x80\x94 NO PROGRESS",
+                     GameOverDialog::describeWinnerBanner(&board).toUtf8().constData());
+        STRCMP_EQUAL("Draw by No-Progress Rule (60 Plies without Capture, Prong, or Pod)",
+                     GameOverDialog::describeTerminationReason(&board).toUtf8().constData());
+    }
+}
+
 TEST(OctiMoveComposerTest, FourPlayerPodPlacementAndEliminatedPartnerRevival)
 {
     OctiBoard board(GAME_MODE_4, false, false, GAME_BASES_3);

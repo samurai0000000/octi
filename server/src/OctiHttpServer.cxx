@@ -1854,6 +1854,7 @@ Json OctiHttpServer::Impl::roomViewJson(const RoomView &v)
     j["fen"] = v.fen;
     j["turn_seat"] = v.turnSeat;
     j["ply_count"] = v.plyCount;
+    j["no_progress_plies"] = v.noProgressPlies;
     j["moves"] = v.moves;
     j["result"] = v.result;
     j["termination"] = v.termination;
@@ -5188,6 +5189,9 @@ static int countPods(const OctiBoard &b, OctiPlayer player)
 static std::string classifyRuleTermination(const OctiBoard &b, const OctiGame &g)
 {
     OctiPlayer w = g.getWinner();
+    if (w == PLAYER_UNDEF) {
+        return "NO_PROGRESS_DRAW";
+    }
     if (g.getMode() == GAME_MODE_2) {
         const int xs[3] = {2, 4, 6};
         int y = (w == PLAYER_A) ? 6 : 2;
@@ -5825,7 +5829,7 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
             term = ruleTerm;
         } else if (term == "BASE_CAPTURE" || term == "BASE_OCCUPATION" ||
                    term == "TOTAL_CAPTURE" || term == "ELIMINATION" ||
-                   term == "STALEMATE") {
+                   term == "STALEMATE" || term == "NO_PROGRESS_DRAW") {
             if (ruleTerm == "BASE_CAPTURE" && (term == "BASE_CAPTURE" || term == "BASE_OCCUPATION")) {
                 // Keep client's preferred BASE_CAPTURE / BASE_OCCUPATION synonym
             } else if (ruleTerm == "TOTAL_CAPTURE" && (term == "TOTAL_CAPTURE" || term == "ELIMINATION")) {
@@ -5837,7 +5841,8 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
     }
     if (term != "BASE_CAPTURE" && term != "BASE_OCCUPATION" &&
         term != "TOTAL_CAPTURE" && term != "ELIMINATION" &&
-        term != "STALEMATE" && term != "RESIGNATION" &&
+        term != "STALEMATE" && term != "NO_PROGRESS_DRAW" &&
+        term != "RESIGNATION" &&
         term != "TIMEOUT" && term != "DISCONNECT_FORFEIT" &&
         term != "AGREED_DRAW") {
         term = (statusStr == "RESIGNED" ? "RESIGNATION" : classifyRuleTermination(board, *game));

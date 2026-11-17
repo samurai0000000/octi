@@ -9492,7 +9492,7 @@ TEST(OctiHttpServerIntegrationTest, DualPoolLeaderboardUsersArenaDirectoryAndWeb
     EXPECT_STATUS(200, ui);
     CHECK_TRUE(ui.body == std::string(octi::webUiHtml()));
     CHECK_TRUE(ui.body.find("OCTIUI") == std::string::npos);
-    CHECK_TRUE(ui.body.find("OCTI v2.6.0") != std::string::npos);
+    CHECK_TRUE(ui.body.find("OCTI v2.6.1") != std::string::npos);
     CHECK_TRUE(ui.body.find("id=\"robots-participant-type\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"elo_2p_3b\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"elo_2p_1b\"") != std::string::npos);
@@ -9743,6 +9743,609 @@ TEST(OctiHttpServerIntegrationTest, IllustratedRulebookAssetsEndpointAndTabParit
         CHECK_TRUE(b11.getGame()->isGameOver());
         CHECK_EQUAL(PLAYER_A, b11.getGame()->getWinner());
     }
+}
+
+TEST(OctiHttpServerIntegrationTest, LiveRoomNoProgressDrawRatedEloRestartAndArchiveUpload)
+{
+    User alice = signIn("google", "sub-r7-alice", "Alice R7");
+    User bob = signIn("apple", "sub-r7-bob", "Bob R7");
+    User carol = signIn("microsoft", "sub-r7-carol", "Carol R7");
+    std::vector<User> ab = {alice, bob};
+
+    /* 1. Seed unequal Pool 1 ratings (Alice 1216, Bob 1184) so a 0.5 Elo draw visibly moves both ratings. */
+    std::string seedRoom = startGame(ab, Json{{"mode", "2P"}, {"bases", 3}, {"rated", true}});
+    CHECK_EQUAL(8, playPlies(seedRoom, ab, GAME_MODE_2, 8, Json{{"bases", 3}}));
+    EXPECT_STATUS(200, http().post("/api/v1/games/" + seedRoom + "/resign",
+                                   bob.token, Json::object()));
+    CHECK_EQUAL(1216, http().get("/api/v1/profile/me", alice.token).json.value("elo_2p_3b", 0));
+    CHECK_EQUAL(1184, http().get("/api/v1/profile/me", bob.token).json.value("elo_2p_3b", 0));
+
+    /* 2. Play a live rated 2P_3B game through 4 prong-add plies + 30 pure step plies (with mid-game SQLite restart). */
+    std::string room = startGame(ab, Json{{"mode", "2P"}, {"bases", 3}, {"rated", true}});
+    CHECK_EQUAL(0, view(room).value("no_progress_plies", -1));
+
+    const char *setupMoves[4] = {"33+a", "37+e", "33a+e", "37e+a"};
+    for (int i = 0; i < 4; ++i) {
+        Reply mr = http().post("/api/v1/games/" + room + "/move",
+                               ab[static_cast<size_t>(i % 2)].token,
+                               Json{{"move", setupMoves[i]}});
+        EXPECT_STATUS(200, mr);
+        CHECK_FALSE(mr.json.value("game_over", true));
+        CHECK_EQUAL(0, view(room).value("no_progress_plies", -1));
+    }
+
+    const char *stepCycle[4] = {"33ae-34", "37ae-36", "34ae-33", "36ae-37"};
+    for (int i = 0; i < 30; ++i) {
+        if (i == 14) {
+            CHECK_TRUE(env->rooms->checkpointToStore());
+            CHECK_TRUE(env->rooms->restoreFromStore());
+            Json restoredView = view(room);
+            STRCMP_EQUAL("IN_PROGRESS", restoredView.value("phase", "").c_str());
+            CHECK_EQUAL(14, restoredView.value("no_progress_plies", -1));
+        }
+        Reply mr = http().post("/api/v1/games/" + room + "/move",
+                               ab[static_cast<size_t>(i % 2)].token,
+                               Json{{"move", stepCycle[i % 4]}});
+        EXPECT_STATUS(200, mr);
+        if (i < 29) {
+            CHECK_FALSE(mr.json.value("game_over", true));
+            Json vMid = view(room);
+            STRCMP_EQUAL("IN_PROGRESS", vMid.value("phase", "").c_str());
+            CHECK_EQUAL(i + 1, vMid.value("no_progress_plies", -1));
+        } else {
+            CHECK_TRUE(mr.json.value("game_over", false));
+        }
+    }
+
+    Json vEnd = view(room);
+    STRCMP_EQUAL("FINISHED", vEnd.value("phase", "").c_str());
+    STRCMP_EQUAL("DRAW", vEnd.value("result", "").c_str());
+    STRCMP_EQUAL("", vEnd.value("winner", "").c_str());
+    CHECK_EQUAL(0, vEnd.value("winner_seat", -1));
+    STRCMP_EQUAL("NO_PROGRESS_DRAW", vEnd.value("termination", "").c_str());
+    CHECK_EQUAL(30, vEnd.value("no_progress_plies", -1));
+    CHECK_TRUE(vEnd.value("archived", false));
+
+    std::vector<Json> goEvs = ofType(events(room, ""), "GAME_OVER");
+    CHECK_EQUAL(1, static_cast<int>(goEvs.size()));
+    STRCMP_EQUAL("NO_PROGRESS_DRAW", goEvs[0].value("termination", "").c_str());
+    STRCMP_EQUAL("DRAW", goEvs[0].value("result", "").c_str());
+    CHECK_EQUAL(0, goEvs[0].value("winner_seat", -1));
+
+    /* Verify Pool 1 0.5 Elo draw: Alice (1216) drops to 1215, Bob (1184) rises to 1185, draws == 1. */
+    Json aliceProf = http().get("/api/v1/profile/me", alice.token).json;
+    Json bobProf = http().get("/api/v1/profile/me", bob.token).json;
+    CHECK_EQUAL(1215, aliceProf.value("elo_2p_3b", 0));
+    CHECK_EQUAL(1185, bobProf.value("elo_2p_3b", 0));
+    CHECK_EQUAL(1, aliceProf.value("draws", 0));
+    CHECK_EQUAL(1, bobProf.value("draws", 0));
+
+    /* Verify SQLite archive record and stored JSON v3 transcript. */
+    Reply rArch = http().get("/api/v1/archive/games/" + room);
+    EXPECT_STATUS(200, rArch);
+    STRCMP_EQUAL("DRAW", rArch.json.value("result", "").c_str());
+    STRCMP_EQUAL("NO_PROGRESS_DRAW", rArch.json.value("termination", "").c_str());
+    CHECK_EQUAL(0, rArch.json.value("winner_seat", -1));
+    STRCMP_EQUAL("NONE", rArch.json.value("winner", "").c_str());
+    STRCMP_EQUAL("GAME_OVER", rArch.json.value("status", "").c_str());
+    CHECK_TRUE(rArch.json.value("rated", false));
+    CHECK_EQUAL(1, rArch.json.value("elo_pool", -1));
+
+    Reply rTr = http().get("/api/v1/archive/games/" + room + "/transcript");
+    EXPECT_STATUS(200, rTr);
+    Json storedTr = Json::parse(rTr.body);
+    STRCMP_EQUAL("NO_PROGRESS_DRAW", storedTr.value("termination", "").c_str());
+    STRCMP_EQUAL("NONE", storedTr.value("winner", "").c_str());
+    CHECK_EQUAL(30, storedTr.value("noProgressPlies", -1));
+
+    /* 3. Verify Pool 2 (Human vs Robot) rated 2P_3B 30-ply NO_PROGRESS_DRAW + recompute-ratings parity. */
+    Reply rBot = http().post("/api/v1/robots", carol.token,
+                             Json{{"robot_name", "CarolR7Bot"},
+                                  {"description", "R7 draw test bot"}});
+    EXPECT_STATUS(201, rBot);
+    std::string botToken = rBot.json.value("robot_token", "");
+    std::string botUuid = rBot.json.value("robot_uuid", "");
+    User botUser{botToken, botUuid, "CarolR7Bot"};
+
+    Reply hostArena = http().post("/api/v1/tables", alice.token,
+                                  Json{{"mode", "2P"}, {"bases", 3},
+                                       {"rated", true}, {"allow_robots", true}});
+    EXPECT_STATUS(201, hostArena);
+    std::string arenaRoom = hostArena.json.value("room_id", "");
+    EXPECT_STATUS(200, http().post("/api/v1/tables/" + arenaRoom + "/join",
+                                   botToken, Json{{"seat", 2}}));
+    std::vector<User> aliceAndBot = {alice, botUser};
+    for (int i = 0; i < 4; ++i) {
+        EXPECT_STATUS(200, http().post("/api/v1/games/" + arenaRoom + "/move",
+                                       aliceAndBot[static_cast<size_t>(i % 2)].token,
+                                       Json{{"move", setupMoves[i]}}));
+    }
+    for (int i = 0; i < 30; ++i) {
+        EXPECT_STATUS(200, http().post("/api/v1/games/" + arenaRoom + "/move",
+                                       aliceAndBot[static_cast<size_t>(i % 2)].token,
+                                       Json{{"move", stepCycle[i % 4]}}));
+    }
+    Json vArena = view(arenaRoom);
+    STRCMP_EQUAL("FINISHED", vArena.value("phase", "").c_str());
+    STRCMP_EQUAL("NO_PROGRESS_DRAW", vArena.value("termination", "").c_str());
+    CHECK_EQUAL(30, vArena.value("no_progress_plies", -1));
+
+    Json aliceProf2 = http().get("/api/v1/profile/me", alice.token).json;
+    CHECK_EQUAL(1, aliceProf2.value("arena_draws", 0));
+    CHECK_EQUAL(1200, aliceProf2.value("arena_elo_2p_3b", 0));
+    Json botProf = http().get("/api/v1/robots/profile/" + botUuid).json;
+    CHECK_EQUAL(1, botProf.value("draws", 0));
+    CHECK_EQUAL(1200, botProf.value("elo_2p_3b", 0));
+
+    env->store.setAdminGoogleIdentities({"sub-r7-alice"});
+    Reply recompute = http().post("/api/v1/admin/recompute-ratings", alice.token, Json::object());
+    EXPECT_STATUS(200, recompute);
+    CHECK_EQUAL(1215, http().get("/api/v1/profile/me", alice.token).json.value("elo_2p_3b", 0));
+    CHECK_EQUAL(1185, http().get("/api/v1/profile/me", bob.token).json.value("elo_2p_3b", 0));
+
+    /* 4. Offline archive upload of an OFK 30-ply NO_PROGRESS_DRAW transcript succeeds. */
+    OctiBoard ofkBoard(GAME_MODE_OFK, false, false, GAME_BASES_1);
+    ofkBoard.getGame()->start(PLAYER_A);
+    const char *ofkSetup[4] = {"22+a", "26+e", "22a+e", "26e+a"};
+    const char *ofkSteps[4] = {"22ae-23", "26ae-25", "23ae-22", "25ae-26"};
+    for (int i = 0; i < 4; ++i) {
+        ofkBoard.getGame()->move(ofkSetup[i]);
+    }
+    for (int i = 0; i < 30; ++i) {
+        ofkBoard.getGame()->move(ofkSteps[i % 4]);
+    }
+    CHECK_TRUE(ofkBoard.getGame()->isNoProgressDraw());
+    OctiGameMetadata upMeta;
+    upMeta.players = {
+        {1, PLAYER_A, "HUMAN", "Alice", 0},
+        {2, PLAYER_B, "AI", "AI_L4", 4}
+    };
+    std::string ofkTr = ofkBoard.serializeJson(upMeta);
+    Reply rUpOfk = http().post("/api/v1/archive/upload", alice.token,
+                               Json{{"transcript", ofkTr}});
+    EXPECT_STATUS(200, rUpOfk);
+    std::string upGid = rUpOfk.json.value("game_id", "");
+    CHECK_FALSE(upGid.empty());
+    Reply rGetOfk = http().get("/api/v1/archive/games/" + upGid);
+    EXPECT_STATUS(200, rGetOfk);
+    STRCMP_EQUAL("DRAW", rGetOfk.json.value("result", "").c_str());
+    STRCMP_EQUAL("NO_PROGRESS_DRAW", rGetOfk.json.value("termination", "").c_str());
+    STRCMP_EQUAL("NONE", rGetOfk.json.value("winner", "").c_str());
+}
+
+TEST(OctiHttpServerIntegrationTest, WebJsNoProgressDrawEngineWorkerAndUiParity)
+{
+    Reply rUi = http().get("/");
+    EXPECT_STATUS(200, rUi);
+
+    const std::string openTag = "<script>";
+    const std::string closeTag = "</script>";
+    const std::size_t sIdx = rUi.body.find(openTag);
+    const std::size_t eIdx = rUi.body.rfind(closeTag);
+    CHECK_TRUE(sIdx != std::string::npos);
+    CHECK_TRUE(eIdx != std::string::npos && eIdx > sIdx);
+    const std::string webJsRaw =
+        rUi.body.substr(sIdx + openTag.size(), eIdx - (sIdx + openTag.size()));
+
+    const std::string tmpBase = env->dir + "/r7_web_js_parity";
+    const std::string webJsPath = tmpBase + "_webui.js";
+    const std::string runnerJsPath = tmpBase + "_runner.js";
+
+    {
+        std::ofstream ofs(webJsPath, std::ios::binary | std::ios::trunc);
+        ofs << webJsRaw;
+    }
+
+    {
+        std::ofstream ofs(runnerJsPath, std::ios::binary | std::ios::trunc);
+        ofs << R"NODEJS(
+const fs = require("fs");
+const vm = require("vm");
+const assert = require("assert");
+const crypto = require("crypto");
+
+const webJsRaw = fs.readFileSync(process.argv[2], "utf8");
+const iifeClose = webJsRaw.lastIndexOf("})();");
+assert.ok(iifeClose > 0, "Expected closing })(); in WebUi script");
+
+const instrumentedJs =
+  webJsRaw.slice(0, iifeClose) +
+  "\nwindow.__octiR7Test = {\n" +
+  "  parseOctiFen: parseOctiFen,\n" +
+  "  serializeOctiFen: serializeOctiFen,\n" +
+  "  cloneState: cloneState,\n" +
+  "  check4PlayerElimination: check4PlayerElimination,\n" +
+  "  check4PElimination: (typeof check4PElimination === 'function') ? check4PElimination : check4PlayerElimination,\n" +
+  "  applyMoveToState: applyMoveToState,\n" +
+  "  generateMoves: generateMoves,\n" +
+  "  botSearch: botSearch,\n" +
+  "  getWorkerCode: function() { return (typeof workerCode === 'string') ? workerCode : ''; },\n" +
+  "  getBotWorker: function() { return botWorker; },\n" +
+  "  setActivePlayState: function(st) { activePlayState = st; matchStarted = true; activeOnlineGameId = ''; },\n" +
+  "  getActivePlayState: function() { return activePlayState; },\n" +
+  "  onLocalMoveCommitted: onLocalMoveCommitted,\n" +
+  "  moveComposer: moveComposer,\n" +
+  "  triggerAiBotTurn: triggerAiBotTurn,\n" +
+  "  openOnlineRoomForTest: function(rid) { activeOnlineGameId = rid; activeOnlineTableRoomId = rid; activeOnlineLastSyncedFen = ''; activeOnlineLastSyncedPlyCount = -1; activeOnlinePrevFinished = false; syncOnlineGameRoom(rid, true); },\n" +
+  "  setLocalBotMode: function() { localMatchConfig.playMode = 'bot'; localMatchConfig.humanSeat = 'B'; localMatchConfig.botDifficulty = 2; }\n" +
+  "};\n})();\n";
+
+let capturedBlobText = "";
+class CapturingBlob {
+  constructor(parts, opts) {
+    this.parts = Array.isArray(parts) ? parts : [];
+    this.type = (opts && opts.type) || "";
+    this.text = this.parts.map((p) => String(p)).join("");
+    if (this.text.includes("self.onmessage")) {
+      capturedBlobText = this.text;
+    }
+  }
+}
+
+class MockWorker {
+  constructor(url) {
+    this.url = url;
+    this.terminated = false;
+    this.posted = [];
+  }
+  postMessage(msg) { this.posted.push(msg); }
+  terminate() { this.terminated = true; }
+}
+
+class MockNode {}
+const elements = {};
+function makeElement(id) {
+  let _innerHTML = "";
+  const elObj = Object.assign(new MockNode(), {
+    id: id || "",
+    tagName: "DIV",
+    textContent: "",
+    value: "",
+    checked: false,
+    disabled: false,
+    className: "",
+    width: 760,
+    height: 760,
+    clientWidth: 760,
+    clientHeight: 760,
+    offsetWidth: 760,
+    offsetHeight: 760,
+    scrollHeight: 0,
+    scrollTop: 0,
+    children: [],
+    style: {
+      setProperty(k, v) { this[k] = v; },
+      removeProperty(k) { delete this[k]; },
+      getPropertyValue(k) { return this[k] || ""; }
+    },
+    dataset: {},
+    listeners: {},
+    addEventListener(ev, fn, opts) {
+      if (!this.listeners[ev]) this.listeners[ev] = [];
+      this.listeners[ev].push({ fn, opts });
+    },
+    removeEventListener() {},
+    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+    appendChild(ch) { if (ch) this.children.push(ch); return ch; },
+    insertBefore(ch) { return this.appendChild(ch); },
+    removeChild(ch) { return ch; },
+    replaceChild(ch) { return ch; },
+    cloneNode() { return makeElement(""); },
+    focus() {},
+    blur() {},
+    select() {},
+    scrollIntoView() {},
+    contains() { return false; },
+    getAttribute() { return null; },
+    setAttribute() {},
+    removeAttribute() {},
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+    getBoundingClientRect() { return { left: 0, top: 0, right: 760, bottom: 760, width: 760, height: 760 }; },
+    getContext() {
+      return new Proxy({
+        createLinearGradient: () => ({ addColorStop() {} }),
+        createRadialGradient: () => ({ addColorStop() {} }),
+        createPattern: () => ({}),
+        measureText: () => ({ width: 20 })
+      }, {
+        get(target, prop) { return prop in target ? target[prop] : function () {}; },
+        set(target, prop, val) { target[prop] = val; return true; }
+      });
+    }
+  });
+  Object.defineProperty(elObj, "innerHTML", {
+    get() { return _innerHTML; },
+    set(v) { _innerHTML = String(v || ""); elObj.children = []; }
+  });
+  return elObj;
+}
+
+const storageMap = new Map();
+let mockRoomResponse = null;
+const sandbox = {
+  console, Date, Math, JSON, Array, Object, String, Number, Boolean, RegExp, Error,
+  Map, Set, BigInt, Promise, Uint8Array, Int16Array, Float32Array, ArrayBuffer, DataView,
+  URL: Object.assign(function (u, b) { return new URL(u, b); }, {
+    createObjectURL() { return "blob:octi-r7-worker"; },
+    revokeObjectURL() {}
+  }),
+  URLSearchParams, Blob: CapturingBlob, Worker: MockWorker, FormData, Headers, AbortController,
+  crypto, Node: MockNode, parseInt, parseFloat, isNaN, isFinite, encodeURIComponent, decodeURIComponent,
+  atob: (b64) => Buffer.from(b64, "base64").toString("binary"),
+  btoa: (bin) => Buffer.from(bin, "binary").toString("base64"),
+  localStorage: {
+    getItem(k) { return storageMap.has(k) ? storageMap.get(k) : null; },
+    setItem(k, v) { storageMap.set(String(k), String(v)); },
+    removeItem(k) { storageMap.delete(k); },
+    clear() { storageMap.clear(); }
+  },
+  location: { hash: "", pathname: "/", search: "", origin: "http://127.0.0.1:6874", href: "http://127.0.0.1:6874/" },
+  history: { replaceState() {}, pushState() {} },
+  navigator: { clipboard: { writeText: () => Promise.resolve() }, userAgent: "OctiR7Test/1.0" },
+  devicePixelRatio: 1, innerWidth: 1280, innerHeight: 800,
+  AudioContext: function () { this.state = "running"; this.destination = {}; },
+  Audio: function () { this.play = () => Promise.resolve(); },
+  EventSource: function () { this.close = function () {}; },
+  Image: function () {},
+  alert() {}, confirm() { return true; }, prompt() { return ""; }, open() { return null; },
+  requestAnimationFrame() { return 0; }, setTimeout() { return 1; }, clearTimeout() {},
+  setInterval() { return 1; }, clearInterval() {}, addEventListener() {}, removeEventListener() {},
+  fetch() {
+    if (mockRoomResponse) {
+      const payload = mockRoomResponse;
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(payload)), json: () => Promise.resolve(payload) });
+    }
+    return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve("{}"), json: () => Promise.resolve({}) });
+  },
+  document: {
+    body: makeElement("body"),
+    documentElement: makeElement("html"),
+    activeElement: null,
+    hidden: false,
+    visibilityState: "visible",
+    getElementById(id) {
+      if (!elements[id]) elements[id] = makeElement(id);
+      return elements[id];
+    },
+    createElement(tag) { const e = makeElement(""); e.tagName = String(tag || "DIV").toUpperCase(); return e; },
+    createElementNS(ns, tag) { const e = makeElement(""); e.tagName = String(tag || "SVG").toUpperCase(); return e; },
+    createTextNode(txt) { return Object.assign(new MockNode(), { nodeType: 3, textContent: String(txt || "") }); },
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+    addEventListener() {},
+    removeEventListener() {}
+  }
+};
+sandbox.window = sandbox;
+sandbox.self = sandbox;
+
+vm.runInNewContext(instrumentedJs, sandbox, { filename: "WebUi.js", timeout: 5000 });
+const t = sandbox.window.__octiR7Test;
+assert.ok(t, "__octiR7Test must exist");
+
+/* 1. FEN 11/12 & 13/14 token parsing + canonical 11/13 serializeOctiFen preservation */
+const base2pFen = "2:3:0:0:P:A:-:0:4,0,23,0:4,0,23,0:A33ae,A53,A73,B37ae,B57,B77";
+const s11 = t.parseOctiFen(base2pFen);
+assert.strictEqual(s11.noProgressPlies, 0);
+const s12 = t.parseOctiFen(base2pFen + ":27");
+assert.strictEqual(s12.noProgressPlies, 27);
+assert.strictEqual(t.cloneState(s12).noProgressPlies, 27);
+assert.strictEqual(t.serializeOctiFen(s12), base2pFen, "serializeOctiFen must remain 11 tokens");
+
+const base4pFen = "4:3:0:0:P:A:-:0:3,0,10,0:3,0,10,0:3,0,10,0:3,0,10,0:A33ae,D73ae,B37ae,C77ae";
+const s14 = t.parseOctiFen(base4pFen + ":58");
+assert.strictEqual(s14.noProgressPlies, 58);
+assert.strictEqual(t.serializeOctiFen(s14), base4pFen, "serializeOctiFen must remain 13 tokens");
+
+const sTermDraw = t.parseOctiFen("2:3:0:0:O:-:-:0:4,0,23,0:4,0,23,0:A34ae,A53,A73,B36ae,B57,B77");
+assert.strictEqual(sTermDraw.noProgressPlies, 30);
+assert.strictEqual(sTermDraw.termination, "NO_PROGRESS_DRAW");
+
+/* 2. 2P_3B 30-ply non-progress draw & progress resets (+d, +d!, pod deploy, liberate, capture, _SP bonus capture) */
+let s2p = t.parseOctiFen(base2pFen);
+const stepCycle2p = ["33ae-34", "37ae-36", "34ae-33", "36ae-37"];
+for (let i = 0; i < 30; i++) {
+  s2p = t.applyMoveToState(t.cloneState(s2p), stepCycle2p[i % 4], s2p.turn);
+  assert.strictEqual(s2p.noProgressPlies, i + 1);
+  if (i < 29) {
+    assert.strictEqual(s2p.status, "P");
+  }
+}
+assert.strictEqual(s2p.status, "O");
+assert.strictEqual(s2p.turn, "-");
+assert.strictEqual(s2p.winner, "-");
+assert.strictEqual(s2p.termination, "NO_PROGRESS_DRAW");
+
+/* Stepping onto/off an unoccupied enemy base in 2P_3B without capture does NOT reset counter */
+let sBaseStep = t.parseOctiFen("2:3:0:0:P:A:-:0:4,0,23,0:4,0,24,0:A36ae,A53,A73,B57,B77:12");
+sBaseStep = t.applyMoveToState(t.cloneState(sBaseStep), "36ae-37", "A");
+assert.strictEqual(sBaseStep.noProgressPlies, 13, "Stepping onto enemy base without capture must not reset counter");
+
+/* Prong add, pod deploy, pod liberate, and _SP bonus prelude capture all reset counter to 0 */
+let sProng = t.parseOctiFen(base2pFen + ":19");
+sProng = t.applyMoveToState(t.cloneState(sProng), "53+a", "A");
+assert.strictEqual(sProng.noProgressPlies, 0);
+
+let sDeploy = t.parseOctiFen(base2pFen + ":19");
+sDeploy = t.applyMoveToState(t.cloneState(sDeploy), "53", "A");
+assert.strictEqual(sDeploy.noProgressPlies, 0);
+
+let sLib = t.parseOctiFen("2:3:0:0:P:A:-:0:0,1,20,0:4,0,24,0:A33,A37a,B77:19");
+sLib = t.applyMoveToState(t.cloneState(sLib), "33*", "A");
+assert.strictEqual(sLib.noProgressPlies, 0);
+
+let sSp = t.parseOctiFen("2:3:1:0:P:A:-:0:4,0,22,0:4,0,24,0:A44ab!,A53,A73,B55,B37,B77:21");
+sSp = t.applyMoveToState(t.cloneState(sSp), "44ab!-66x;66ab!-67", "A");
+assert.strictEqual(sSp.noProgressPlies, 0, "_SP bonus prelude capture must reset noProgressPlies to 0");
+
+/* 3. Non-capturing circular jump (S -> ... -> S) remains legal and increments noProgressPlies by +1 */
+let sCirc = t.parseOctiFen("2:3:0:0:P:A:-:0:4,0,20,0:4,0,24,0:A44bdfh,B35,B55,B37,B57:10");
+const circMoves = t.generateMoves(sCirc, "A", false);
+assert.ok(circMoves.includes("44bdfh-66-48-26-44"), "Circular non-capturing jump must be generated");
+sCirc = t.applyMoveToState(t.cloneState(sCirc), "44bdfh-66-48-26-44", "A");
+assert.strictEqual(sCirc.noProgressPlies, 11);
+assert.strictEqual(sCirc.status, "P");
+
+/* 4. 4P: 60-ply threshold (does NOT draw at 30, draws at 60) + 4P base elimination resets to 0 */
+let s4pElim = t.parseOctiFen("4:3:0:0:P:A:-:0:3,0,11,0:3,0,12,0:3,0,12,0:3,0,12,0:A36a,B47,C77,D73:25");
+s4pElim = t.applyMoveToState(t.cloneState(s4pElim), "36a-37", "A");
+assert.strictEqual(s4pElim.elimMask & 2, 2);
+assert.strictEqual(s4pElim.noProgressPlies, 0, "New 4P permanent elimination must reset noProgressPlies to 0");
+
+let s4p = t.parseOctiFen(base4pFen);
+const cycle4p = [
+  "33ae-34", "37ae-36", "77ae-76", "73ae-74",
+  "34ae-33", "36ae-37", "76ae-77", "74ae-73"
+];
+for (let i = 0; i < 60; i++) {
+  s4p = t.applyMoveToState(t.cloneState(s4p), cycle4p[i % 8], s4p.turn);
+  assert.strictEqual(s4p.noProgressPlies, i + 1);
+  if (i === 29) {
+    assert.strictEqual(s4p.status, "P", "4P must NOT draw at 30 plies");
+  }
+}
+assert.strictEqual(s4p.status, "O");
+assert.strictEqual(s4p.winner, "-");
+assert.strictEqual(s4p.termination, "NO_PROGRESS_DRAW");
+
+/* 5. Ply-30 base victory precedence over R7 draw */
+let sWin30 = t.parseOctiFen("2:1:0:0:P:A:-:0:4,0,23,0:4,0,24,0:A36a,B77:29");
+sWin30 = t.applyMoveToState(t.cloneState(sWin30), "36a-37", "A");
+assert.strictEqual(sWin30.noProgressPlies, 30);
+assert.strictEqual(sWin30.status, "O");
+assert.strictEqual(sWin30.winner, "A");
+assert.strictEqual(sWin30.termination, "BASE_CAPTURE");
+
+/* 6. Web Worker & botSearch draw seeking (when losing) and draw avoidance (when winning) at ply 29 */
+const workerCode = capturedBlobText || t.getWorkerCode();
+assert.ok(workerCode.length > 1000);
+const workerMessages = [];
+const workerSandbox = {
+  console, Date, Math, JSON, Array, Object, String, Number, Boolean, RegExp, Error,
+  Map, Set, BigInt, parseInt, parseFloat, isNaN, isFinite,
+  postMessage(msg) { workerMessages.push(msg); }
+};
+workerSandbox.self = workerSandbox;
+vm.runInNewContext(workerCode, workerSandbox, { filename: "botWorker.js", timeout: 5000 });
+
+/* Losing position: A has 11c-21 (R7 draw = 0) vs 11c+<dir> (resets counter -> B wins 34e-33 next ply) */
+workerMessages.length = 0;
+workerSandbox.self.onmessage({
+  data: {
+    type: "search",
+    searchId: 901,
+    fen: "2:1:0:0:P:A:-:0:0,0,1,0:0,0,0,0:A11c,B34e",
+    noProgressPlies: 29,
+    difficulty: 2,
+    mode: "2P",
+    botSide: "A",
+    budgetMs: 500
+  }
+});
+const doneLose = workerMessages.find((m) => m && m.type === "done");
+assert.ok(doneLose, "Worker must emit done for losing R7 position");
+assert.strictEqual(doneLose.bestMove, "11c-21", "Losing bot at ply 29 must force R7 draw via 11c-21");
+assert.strictEqual(doneLose.score, 0, "Forced R7 draw must evaluate to 0");
+
+/* Winning position: A has 36a-37 (ply-30 base win) vs 11c-21 (ply-30 R7 draw) */
+workerMessages.length = 0;
+workerSandbox.self.onmessage({
+  data: {
+    type: "search",
+    searchId: 902,
+    fen: "2:1:0:0:P:A:-:0:0,0,0,0:0,0,0,0:A36a,A11c,B99g",
+    noProgressPlies: 29,
+    difficulty: 2,
+    mode: "2P",
+    botSide: "A",
+    budgetMs: 500
+  }
+});
+const doneWin = workerMessages.find((m) => m && m.type === "done");
+assert.ok(doneWin, "Worker must emit done for winning R7 position");
+assert.strictEqual(doneWin.bestMove, "36a-37", "Winning bot at ply 29 must take base victory over R7 draw");
+assert.ok(doneWin.score >= 999000);
+
+/* Verify triggerAiBotTurn posts noProgressPlies to Worker */
+const stBotTurn = t.parseOctiFen("2:1:0:0:P:A:-:0:0,0,1,0:0,0,0,0:A11c,B34e:29");
+t.setActivePlayState(stBotTurn);
+t.setLocalBotMode();
+t.triggerAiBotTurn();
+const bw = t.getBotWorker();
+assert.ok(bw && bw.posted.length > 0);
+assert.strictEqual(bw.posted[bw.posted.length - 1].noProgressPlies, 29, "triggerAiBotTurn must send noProgressPlies to Worker");
+
+/* 7. WebMoveComposer + onLocalMoveCommitted UI game-over banners for R7 draw */
+const stUi29 = t.parseOctiFen("2:3:0:0:P:A:-:0:4,0,23,0:4,0,23,0:A33ae,A53,A73,B37ae,B57,B77:29");
+t.setActivePlayState(stUi29);
+assert.strictEqual(t.moveComposer.stageMoveOrJump(3, 3, 3, 4, 0, false), true);
+assert.strictEqual(t.moveComposer.commitStagedMove(), true);
+const postUi = t.getActivePlayState();
+assert.strictEqual(postUi.status, "O");
+assert.strictEqual(postUi.winner, "-");
+assert.strictEqual(postUi.termination, "NO_PROGRESS_DRAW");
+assert.strictEqual(postUi.noProgressPlies, 30);
+assert.ok(elements["web-gameover-title"].textContent.includes("DRAW"), "Expected DRAW in gameover title, got: " + elements["web-gameover-title"].textContent);
+assert.ok(!elements["web-gameover-title"].textContent.includes("PLAYER -"), "Must not display PLAYER - WINS");
+assert.ok(elements["web-play-turn-badge"].textContent.includes("Draw"), "Expected Draw in turn badge, got: " + elements["web-play-turn-badge"].textContent);
+
+/* 8. syncOnlineGameRoom syncs room.no_progress_plies and renders NO_PROGRESS_DRAW banner */
+(async () => {
+  mockRoomResponse = {
+    ok: true,
+    room_id: "r7-live-sync",
+    phase: "IN_PROGRESS",
+    mode: "2P",
+    bases: 3,
+    super_prongs: false,
+    edgeless: false,
+    fen: "2:3:0:0:P:A:-:0:4,0,23,0:4,0,23,0:A33ae,A53,A73,B37ae,B57,B77",
+    no_progress_plies: 17,
+    ply_count: 21,
+    moves: [],
+    seats: [{ seat: 1, handle: "alice" }, { seat: 2, handle: "bob" }]
+  };
+  t.openOnlineRoomForTest("r7-live-sync");
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  assert.strictEqual(t.getActivePlayState().noProgressPlies, 17, "Online sync must populate noProgressPlies from room.no_progress_plies");
+
+  mockRoomResponse = {
+    ok: true,
+    room_id: "r7-fin-sync",
+    phase: "FINISHED",
+    mode: "2P",
+    bases: 3,
+    super_prongs: false,
+    edgeless: false,
+    fen: "2:3:0:0:O:-:-:0:4,0,23,0:4,0,23,0:A34ae,A53,A73,B36ae,B57,B77",
+    no_progress_plies: 30,
+    ply_count: 34,
+    result: "DRAW",
+    termination: "NO_PROGRESS_DRAW",
+    winner_seat: 0,
+    moves: [],
+    seats: [{ seat: 1, handle: "alice" }, { seat: 2, handle: "bob" }]
+  };
+  t.openOnlineRoomForTest("r7-fin-sync");
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  assert.strictEqual(t.getActivePlayState().noProgressPlies, 30);
+  assert.strictEqual(elements["web-gameover-title"].textContent, "DRAW \u2014 NO PROGRESS");
+  assert.ok(elements["web-gameover-subtitle"].textContent.includes("No-Progress Rule"));
+  process.exit(0);
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
+)NODEJS";
+    }
+
+    int rcNode = std::system(("timeout -k 2 20 node " + runnerJsPath + " " + webJsPath).c_str());
+    std::remove(webJsPath.c_str());
+    std::remove(runnerJsPath.c_str());
+    CHECK_EQUAL(0, rcNode);
 }
 
 int main(int argc, char **argv)

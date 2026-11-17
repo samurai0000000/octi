@@ -2934,7 +2934,7 @@ tr.active-ply {
         <ul>
           <li><strong>Friendly Stacking &amp; Composite Multi-Pod Moves (<code>,</code>):</strong> Multiple friendly pods (and diagonal-partner pods in <code>4P</code>) may stack on the same square (forbidden in <code>OFK</code>). Any subset of your own pods that <strong>start the turn on the same square</strong> may move together or split along independent step/jump paths in a single turn, joined by commas (e.g., <code>44a-45,44beg-34</code>). Pod placement and prong insertion never combine with movement.</li>
           <li><strong>Whole-Stack Capture &amp; End-of-Turn Removal:</strong> Jumping over an occupied square with <code>x</code> captures <strong>every pod in that square's stack</strong>. In regular single and composite moves, stacks jumped with <code>x</code> remain physically on the board as jumpable fulcrums for remaining composite stack-mates during the same turn and are removed together at turn end. A single pod may <strong>never jump over the exact same square twice</strong> during one hop chain.</li>
-          <li><strong>Appendix A.1 &mdash; Starting-Square Vacancy, Loop-Back Jumps &amp; Stacked-Pod Non-Jumping:</strong> For the duration of its jump chain, a jumping pod <strong>cannot jump over its starting square <code>S</code> or any pod with which it started stacked</strong> (so an Edgeless <code>_ED</code> wraparound jump such as <code>44bcd-66-86-16-34-54</code> over stationary <code>A44a</code> on <code>44</code> is illegal). Furthermore, a jumping pod may <strong>land back onto <code>S</code></strong> at the end of a multi-hop loop <strong>only when all pods that started the turn on <code>S</code> vacate <code>S</code></strong> during the move (for example, composite clear-out <code>44a-45,44beg-66x-64x-44</code> is legal because <code>44</code> is completely vacated, whereas single <code>44beg-66x-64x-44</code> leaving stationary <code>A44a</code> on <code>44</code> is illegal).</li>
+          <li><strong>Appendix A.1 &mdash; Starting-Square Vacancy, Loop-Back Jumps &amp; Stacked-Pod Non-Jumping:</strong> For the duration of its jump chain, a jumping pod <strong>cannot jump over its starting square <code>S</code> or any pod with which it started stacked</strong> (so an Edgeless <code>_ED</code> wraparound jump such as <code>44bcd-66-86-16-34-54</code> over stationary <code>A44a</code> on <code>44</code> is illegal). Furthermore, a jumping pod may <strong>land back onto <code>S</code></strong> at the end of a multi-hop loop <strong>only when all pods that started the turn on <code>S</code> vacate <code>S</code></strong> during the move (for example, composite clear-out <code>44a-45,44beg-66x-64x-44</code> is legal because <code>44</code> is completely vacated, whereas single <code>44beg-66x-64x-44</code> leaving stationary <code>A44a</code> on <code>44</code> is illegal). Non-capturing circular multi-hop jumps (<code>S &rarr; ... &rarr; S</code> when <code>S</code> is completely vacated) remain legal and count as movement-only plies (<code>+1</code> toward the no-progress draw threshold).</li>
           <li><strong>Pod Liberation Scope &amp; Clearance (<code>2P_3B*</code> &amp; <code>4P*</code>):</strong> Liberating a captured pod (<code>xy*</code>) applies exclusively to <strong>3-Base (<code>2P_3B*</code>) and 4-Player (<code>4P*</code>)</strong> games (never 1-Base sudden death or <code>OFK</code>), always liberates 1 of <strong>your own</strong> captured pods (<code>capturedPods &gt; 0</code>), and always requires the target OCTI square to be <strong>already occupied by at least one of your own pods</strong> (never an empty or partner-only square). In <code>2P_3B*</code>, liberating onto your own home base additionally requires occupying at least one enemy base; liberating directly onto an enemy base you already occupy requires only <code>capturedPods &gt; 0</code>. In <code>4P*</code>, liberating onto your own or partner's corner base requires personally occupying a neutral (<code>53</code>/<code>57</code>) or enemy OCTI square (even if your partner is eliminated, <code>xy*</code> on their corner base liberates your own pod and never revives your partner).</li>
           <li><strong>Edgeless Torus Wrapping (<code>_ED</code>):</strong> Column <code>1</code> wraps to column <code>9</code> and row <code>1</code> wraps to row <code>9</code> (including diagonals) for both 1-square steps (<code>15g-95</code>) and 2-square jumps (<code>97b-29x</code> jumping <code>B18e</code>).</li>
           <li><strong>SuperProngs &amp; Bonus Preludes (<code>_SP</code>, <code>;</code>):</strong> A gold SuperProng (<code>!</code>) is permanent once inserted. Before your regular turn action, you may execute <strong>1 bonus prelude move per SuperProng you control on the board</strong> (up to <strong>2</strong> in <code>2P_SP</code> and up to <strong>4</strong> in <code>4P_SP</code> when enemy SuperProngs are captured), delimited by semicolons (e.g., <code>44ab!-66x;66ab!-67</code>). Each prelude moves 1 pod strictly in a <strong>straight line</strong> (1-square step or collinear jump chain, no pivoting) along a distinct SuperProng socket that has not yet fired a bonus prelude this turn. Stacks jumped with <code>x</code> during a SuperProng bonus prelude are <strong>removed immediately</strong> after that prelude before the next SuperProng prelude or regular action begins! A pod that moved in a bonus prelude may still use <strong>any</strong> of its prongs in the regular turn phase, and <strong>victory is checked only at completion of the full turn</strong>.</li>
@@ -2956,7 +2956,7 @@ tr.active-ply {
       </article>
 
       <article class="rb-chapter" id="rules-ch4">
-        <h2>Chapter 4 &mdash; Victory, Elimination &amp; Stalemate Conditions</h2>
+        <h2>Chapter 4 &mdash; Victory, Elimination, Stalemate &amp; No-Progress Draw Conditions</h2>
         <ul>
           <li><strong><code>2P_3B</code> Family (3-Base Standard):</strong> Win at the completion of your full turn if your pods simultaneously occupy <strong>all 3</strong> enemy home bases (<code>37</code>, <code>57</code>, <code>77</code> for A; <code>33</code>, <code>53</code>, <code>73</code> for B).</li>
           <li><strong><code>2P_1B</code> Family (1-Base Blitz):</strong> Win at the completion of your full turn when your pod occupies <strong>any 1</strong> of the 3 enemy home bases.</li>
@@ -2964,6 +2964,7 @@ tr.active-ply {
           <li><strong><code>4P</code> Partnership Family (Team A&amp;C vs. Team B&amp;D):</strong> Diagonal partners win together at the completion of a full turn when allied pods simultaneously occupy <strong>both enemy corner bases</strong> (<code>37</code> and <code>73</code> for Team A&amp;C; <code>33</code> and <code>77</code> for Team B&amp;D).</li>
           <li><strong>4-Player Permanent Base-Capture Elimination:</strong> In <code>4P</code>, if an enemy pod ends its full turn on your corner home base (or you have zero pods on the board and zero legal placements), you are <strong>permanently eliminated</strong> for the remainder of the game (there is no partner revival): all of your remaining board pods are swept into your <code>capturedPods</code> pool, and <strong>all prongs (normal and SuperProngs) from your swept board pods transfer to the capturing enemy player</strong>. Eliminated seats are skipped in turn rotation while a surviving partner plays on.</li>
           <li><strong>Total Wipeout / Stalemate:</strong> Because prong repositioning is forbidden, a player with zero reserve pods and zero reserve prongs whose board pods are completely boxed in has <strong>zero legal moves</strong>. If the next player in <code>2P</code> / <code>OFK</code> (or both enemy seats in <code>4P</code>) has zero legal moves, the player/team who just moved wins immediately (in <code>4P</code>, a stalemated player whose partner still has a legal move has their turn skipped). Timed games also end on clock flag forfeit or resignation.</li>
+          <li><strong>Universal No-Progress Draw (<code>NO_PROGRESS_DRAW</code>, <code>noProgressPlies</code>):</strong> A match terminates automatically in a <strong>draw (<code>NO_PROGRESS_DRAW</code>)</strong> when <strong><code>30</code> consecutive plies (<code>15</code> full turns per player)</strong> in any <code>2P*</code> or <code>OFK</code> variant&mdash;or <strong><code>60</code> consecutive plies (<code>15</code> full rounds)</strong> in any <code>4P*</code> variant&mdash;complete without any <strong>progress event</strong>: pod capture (<code>x</code>, including <code>_SP</code> bonus preludes), reserve pod deployment (<code>xy</code>) or liberation (<code>xy*</code>), prong/SuperProng insertion (<code>+d</code>/<code>+d!</code>), or permanent <code>4P</code> player elimination. Evaluated at turn completion <strong>after</strong> base-occupation victory, total capture wipeout, and zero-legal-move stalemate checks (so winning on ply <code>30</code>/<code>60</code> still wins).</li>
         </ul>
         <div class="rb-fig-grid">
           <div class="rb-fig">
@@ -3038,13 +3039,14 @@ tr.active-ply {
         </div>
         <h3>OCTI-FEN Position String Format</h3>
         <p>Board states serialize into colon-separated <strong>OCTI-FEN</strong> strings (11 tokens for <code>2</code> / <code>OFK</code>; 13 tokens for <code>4</code>):</p>
-        <p><code>mode:bases:super:edgeless:status:turn:winner:elimMask:resA:resB[:resC:resD]:squares</code></p>
+        <p><code>mode:bases:super:edgeless:status:turn:winner:elimMask:resA:resB[:resC:resD]:squares[:noProgressPlies]</code></p>
         <ul>
           <li><code>mode</code>: <code>2</code>, <code>4</code>, or <code>OFK</code> &bull; <code>bases</code>: <code>3</code> or <code>1</code> &bull; <code>super</code> / <code>edgeless</code>: <code>0</code> or <code>1</code>.</li>
           <li><code>status</code>: <code>N</code> (not started), <code>P</code> (in progress), <code>O</code> (game over), <code>R</code> (resigned).</li>
           <li><code>turn</code> / <code>winner</code>: <code>A</code>, <code>B</code>, <code>C</code>, <code>D</code>, or <code>-</code> &bull; <code>elimMask</code>: 4P elimination bitmask (<code>A=1, B=2, C=4, D=8</code>).</li>
           <li><code>resP</code>: <code>freePods,capturedPods,freeProngs,freeSuperProngs</code> (e.g., <code>4,0,25,0</code>).</li>
           <li><code>squares</code>: comma-separated pods in row-major order <code>&lt;Owner&gt;&lt;x&gt;&lt;y&gt;&lt;prongs&gt;</code> (e.g., <code>A44ab!,B55e!</code>), or <code>-</code> if empty.</li>
+          <li><code>noProgressPlies</code> (optional trailing 12th/14th token): consecutive non-progress plies (<code>0..1000</code>, defaults to <code>0</code> when omitted; canonical <code>toPositionString()</code> emits the 11/13-token string).</li>
         </ul>
       </article>
 
@@ -4222,6 +4224,19 @@ function parseOctiFen(fen) {
   var gw = (mode === "OFK") ? 6 : 9;
   var gh = (mode === "OFK") ? 7 : 9;
   var numPlayers = (mode === "4" || mode === "4P") ? 4 : 2;
+  var expectedLen = 9 + numPlayers;
+  if (f.length !== expectedLen && f.length !== expectedLen + 1) { return null; }
+  var statusVal = f[4] || "P";
+  var winnerVal = f[6] || "-";
+  var noProgressPlies = 0;
+  if (f.length === expectedLen + 1) {
+    if (!/^\d+$/.test(f[expectedLen])) { return null; }
+    var parsedNpp = parseInt(f[expectedLen], 10);
+    if (isNaN(parsedNpp) || parsedNpp < 0 || parsedNpp > 1000) { return null; }
+    noProgressPlies = parsedNpp;
+  } else if (statusVal === "O" && (!winnerVal || winnerVal === "-")) {
+    noProgressPlies = (mode === "4" || mode === "4P") ? 60 : 30;
+  }
   var reserves = [];
   var seatLetters = ["A", "B", "C", "D"];
   for (var p = 0; p < numPlayers; p++) {
@@ -4253,10 +4268,12 @@ function parseOctiFen(fen) {
     bases: parseInt(f[1] || "3", 10),
     superProngs: f[2] === "1",
     edgeless: f[3] === "1",
-    status: f[4] || "P",
+    status: statusVal,
     turn: f[5] || "-",
-    winner: f[6] || "-",
+    winner: winnerVal,
     elimMask: parseInt(f[7] || "0", 10),
+    noProgressPlies: noProgressPlies,
+    termination: (statusVal === "O" && (!winnerVal || winnerVal === "-")) ? "NO_PROGRESS_DRAW" : "",
     reserves: reserves,
     gw: gw,
     gh: gh,
@@ -4955,7 +4972,7 @@ function drawBoardState(state) {
 
     var winTxt = parsed.winner && parsed.winner !== "-"
       ? ("VICTORY: PLAYER " + parsed.winner + (parsed.status === "R" ? " (BY RESIGNATION)" : ""))
-      : "GAME OVER";
+      : (parsed.status === "O" ? "DRAW \u2014 NO PROGRESS" : "GAME OVER");
     ctx.font = "bold 13px 'Segoe UI', sans-serif";
     ctx.fillStyle = pal.prongSuperGold;
     ctx.textAlign = "center";
@@ -5239,6 +5256,8 @@ function cloneState(s) {
     turn: s.turn,
     winner: s.winner,
     elimMask: s.elimMask,
+    noProgressPlies: s.noProgressPlies || 0,
+    termination: s.termination || "",
     reserves: newRes,
     gw: s.gw,
     gh: s.gh,
@@ -6617,7 +6636,8 @@ function applySingleHopChain(s, move, player, deferCapturesList, deferLandingsLi
 }
 
 function check4PlayerElimination(s, player) {
-  if (s.mode !== "4" && s.mode !== "4P") return;
+  if (s.mode !== "4" && s.mode !== "4P") return false;
+  var anyNewElim = false;
   var homeCoords = [{x:3,y:3}, {x:3,y:7}, {x:7,y:7}, {x:7,y:3}];
   var pIdx = playerIndex(player);
   var res = s.reserves[pIdx];
@@ -6628,6 +6648,7 @@ function check4PlayerElimination(s, player) {
       var seatOwner = ["A", "B", "C", "D"][pl];
       if (squareHasEnemyOf(s, hCoord.x, hCoord.y, seatOwner)) {
         s.elimMask |= (1 << pl);
+        anyNewElim = true;
         Object.keys(s.map).forEach(function (mk) {
           var keep = [];
           (s.map[mk] || []).forEach(function (sqPod) {
@@ -6650,7 +6671,9 @@ function check4PlayerElimination(s, player) {
       }
     }
   }
+  return anyNewElim;
 }
+var check4PElimination = check4PlayerElimination;
 
 function checkWinner(s) {
   if (s.mode === "4" || s.mode === "4P") {
@@ -7091,6 +7114,29 @@ function applyRegularMoveOpNoTurn(s, moveOrOps, player) {
   return s;
 }
 
+function moveOpsHaveProgressJs(parsed, anyNewElim) {
+  if (anyNewElim) return true;
+  if (parsed.regularOps && parsed.regularOps.length > 0) {
+    var r0 = parsed.regularOps[0];
+    if (r0.addPod || r0.addProngDir >= 0) return true;
+  }
+  var bOps = parsed.bonusOps || [];
+  for (var bi = 0; bi < bOps.length; bi++) {
+    var bh = bOps[bi].hops || [];
+    for (var bhi = 0; bhi < bh.length; bhi++) {
+      if (bh[bhi].capture) return true;
+    }
+  }
+  var rOps = parsed.regularOps || [];
+  for (var ri = 0; ri < rOps.length; ri++) {
+    var rh = rOps[ri].hops || [];
+    for (var rhi = 0; rhi < rh.length; rhi++) {
+      if (rh[rhi].capture) return true;
+    }
+  }
+  return false;
+}
+
 function applyMoveToState(s, move, player) {
   if (!s || s.status !== "P") {
     throw new Error("cannot make move when game is not in progress");
@@ -7098,14 +7144,26 @@ function applyMoveToState(s, move, player) {
   if (player !== s.turn) {
     throw new Error("move player does not match active turn");
   }
+  var prevElimMask = s.elimMask || 0;
   var parsed = parseTurnMove(move);
   if (parsed.bonusOps.length > 0) {
     executeSuperProngPreludesOnState(s, parsed.bonusOps, player);
   }
   applyRegularMoveOpNoTurn(s, parsed.regularOps, player);
+  var anyNewElim = ((s.elimMask || 0) !== prevElimMask);
+  var madeProgress = moveOpsHaveProgressJs(parsed, anyNewElim);
+  s.noProgressPlies = madeProgress ? 0 : ((s.noProgressPlies || 0) + 1);
   checkWinner(s);
   if (s.status === "O") return s;
   advanceTurn(s, player);
+  if (s.status === "O") return s;
+  var drawLimit = (s.mode === "4" || s.mode === "4P") ? 60 : 30;
+  if (s.noProgressPlies >= drawLimit) {
+    s.status = "O";
+    s.turn = "-";
+    s.winner = "-";
+    s.termination = "NO_PROGRESS_DRAW";
+  }
   return s;
 }
 
@@ -8418,16 +8476,17 @@ function quiesce(s, qDepth, ply, alpha, beta, botSide, curPlayer, ctx, prof) {
     maybeEmitSearchProgress(ctx, false);
   }
   if (s.status === "O") {
+    if (!s.winner || s.winner === "-") return 0;
     if (s.winner === botSide || areAllied(s.mode, s.winner, botSide)) return 1000000 - ply;
-    if (s.winner && s.winner !== "-") return -1000000 + ply;
-    return 0;
+    return -1000000 + ply;
   }
 
   var qFenKey = null;
   var origAlpha = alpha;
   var origBeta = beta;
   if (ctx && ctx.qttMap) {
-    qFenKey = serializeOctiFen(s);
+    var qNpp = s.noProgressPlies || 0;
+    qFenKey = (qNpp >= 16) ? (serializeOctiFen(s) + ":" + qNpp) : serializeOctiFen(s);
     var qEntry = ctx.qttMap[qFenKey];
     if (qEntry && qEntry.depth >= qDepth) {
       if (qEntry.flag === "EXACT") return qEntry.score;
@@ -8515,9 +8574,9 @@ function alphaBeta(s, depth, ply, alpha, beta, botSide, curPlayer, ctx, prof, tt
     maybeEmitSearchProgress(ctx, false);
   }
   if (s.status === "O") {
+    if (!s.winner || s.winner === "-") return 0;
     if (s.winner === botSide || areAllied(s.mode, s.winner, botSide)) return 1000000 - ply;
-    if (s.winner && s.winner !== "-") return -1000000 + ply;
-    return 0;
+    return -1000000 + ply;
   }
   if (depth <= 0) {
     if (prof.maxQuiesceDepth > 0) {
@@ -8529,7 +8588,9 @@ function alphaBeta(s, depth, ply, alpha, beta, botSide, curPlayer, ctx, prof, tt
   var fenKey = null;
   var ttBestMove = null;
   if (ttMap) {
-    fenKey = serializeOctiFen(s);
+    var drawLim = (s.mode === "4" || s.mode === "4P") ? 60 : 30;
+    var npp = s.noProgressPlies || 0;
+    fenKey = (npp + depth >= drawLim || npp >= 16) ? (serializeOctiFen(s) + ":" + npp) : serializeOctiFen(s);
     var entry = ttMap[fenKey];
     if (entry) {
       ttBestMove = entry.bestMove || null;
@@ -42384,9 +42445,12 @@ function probeOpeningBook(s, moves, prof) {
   };
 }
 
-function botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs) {
+function botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs, noProgressPlies) {
   var s = parseOctiFen(fen);
   if (!s) return { bestMove: null, score: 0, nodes: 0, depth: 0 };
+  if (typeof noProgressPlies === "number" && !isNaN(noProgressPlies)) {
+    s.noProgressPlies = Math.max(0, noProgressPlies | 0);
+  }
   var diff = parseInt(difficulty, 10) || 2;
   var prof = getBotProfile(diff);
 
@@ -42431,7 +42495,7 @@ function botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs) {
   }
 
   // 2. Precomputed Zobrist opening playbook lookup
-  if (prof.useOpeningBook !== false) {
+  if (prof.useOpeningBook !== false && (s.noProgressPlies || 0) < 16) {
     var bookHit = probeOpeningBook(s, moves, prof);
     if (bookHit) {
       return {
@@ -42495,12 +42559,12 @@ function botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs) {
 
         var sc;
         if (nextS.status === "O") {
-          if (nextS.winner === botSide || areAllied(s.mode, nextS.winner, botSide)) {
-            sc = 1000000 - 1;
-          } else if (nextS.winner && nextS.winner !== "-") {
-            sc = -1000000 + 1;
-          } else {
+          if (!nextS.winner || nextS.winner === "-") {
             sc = 0;
+          } else if (nextS.winner === botSide || areAllied(s.mode, nextS.winner, botSide)) {
+            sc = 1000000 - 1;
+          } else {
+            sc = -1000000 + 1;
           }
         } else if (d <= 1 && prof.maxQuiesceDepth === 0) {
           sc = evaluateState(nextS, botSide, prof);
@@ -42579,8 +42643,8 @@ function botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs) {
   };
 }
 
-function computeBestMove(fen, difficulty, mode, botSide, progressCb, customBudgetMs) {
-  return botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs);
+function computeBestMove(fen, difficulty, mode, botSide, progressCb, customBudgetMs, noProgressPlies) {
+  return botSearch(fen, difficulty, mode, botSide, progressCb, customBudgetMs, noProgressPlies);
 }
 
 /* Inline Web Worker Initialization */
@@ -42604,7 +42668,7 @@ function initBotWorker() {
         "    var botSide = d.botSide || d.side;",
         "    var res = (" + botSearch.toString() + ")(d.fen, diff, d.mode, botSide, function (prog) {",
         "      self.postMessage(Object.assign({ type: 'progress', searchId: d.searchId }, prog));",
-        "    }, d.budgetMs);",
+        "    }, d.budgetMs, d.noProgressPlies);",
         "    var elapsed = Date.now() - t0;",
         "    self.postMessage({",
         "      type: 'done',",
@@ -42654,9 +42718,11 @@ function initBotWorker() {
         deltaToDirIndex.toString(),
         applyRegularMoveOpNoTurn.toString(),
         check4PlayerElimination.toString(),
+        "var check4PElimination = check4PlayerElimination;",
         checkWinner.toString(),
         hasAnyLegalMove.toString(),
         advanceTurn.toString(),
+        moveOpsHaveProgressJs.toString(),
         applyMoveToState.toString(),
         torusDist.toString(),
         chebyshevDist.toString(),
@@ -45508,6 +45574,7 @@ function WebMoveComposer(stateGetter, onCommitCb) {
   this.getState = stateGetter;
   this.onCommit = onCommitCb;
   this._preTurnSnap = "";
+  this._preTurnNoProgressPlies = 0;
   this._stagedOps = [];
   this.stagedOps = this._stagedOps;
   this.ops = this._stagedOps;
@@ -45566,6 +45633,7 @@ WebMoveComposer.prototype.cancel = function () {
 
 WebMoveComposer.prototype.reset = function () {
   this._preTurnSnap = "";
+  this._preTurnNoProgressPlies = 0;
   this._stagedOps = [];
   this.stagedOps = this._stagedOps;
   this.ops = this._stagedOps;
@@ -45626,6 +45694,7 @@ WebMoveComposer.prototype._ensurePreTurnSnap = function () {
     var base = this.getState ? this.getState() : null;
     if (base) {
       this._preTurnSnap = serializeOctiFen(base);
+      this._preTurnNoProgressPlies = base.noProgressPlies || 0;
     }
   }
 };
@@ -45633,7 +45702,11 @@ WebMoveComposer.prototype._ensurePreTurnSnap = function () {
 WebMoveComposer.prototype._getPreTurnBoard = function () {
   this._ensurePreTurnSnap();
   if (this._preTurnSnap) {
-    return parseOctiFen(this._preTurnSnap);
+    var st = parseOctiFen(this._preTurnSnap);
+    if (st) {
+      st.noProgressPlies = this._preTurnNoProgressPlies || 0;
+    }
+    return st;
   }
   var base = this.getState ? this.getState() : null;
   return base ? cloneState(base) : null;
@@ -47432,13 +47505,22 @@ function renderPlayBoardCanvas() {
     ctx.fillStyle = "#FDE047";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    var wLabel = "PLAYER " + (s.winner || "A") + " WINS";
-    if (s.mode === "4" || s.mode === "4P") {
-      wLabel = (s.winner === "A" || s.winner === "C" || s.winner === "TEAM_13_WIN")
-        ? "TEAM A & C WINS" : "TEAM B & D WINS";
+    var winMsg = "";
+    if (!s.winner || s.winner === "-" || s.termination === "NO_PROGRESS_DRAW" || s.termination === "AGREED_DRAW" || s.termination === "DRAW") {
+      if (s.termination === "NO_PROGRESS_DRAW" || (s.status === "O" && (!s.winner || s.winner === "-"))) {
+        winMsg = "DRAW \u2014 NO PROGRESS (" + ((s.mode === "4" || s.mode === "4P") ? "60 PLIES" : "30 PLIES") + ")";
+      } else {
+        winMsg = "GAME DRAW \u2014 MUTUAL AGREEMENT";
+      }
+    } else {
+      var wLabel = "PLAYER " + (s.winner || "A") + " WINS";
+      if (s.mode === "4" || s.mode === "4P") {
+        wLabel = (s.winner === "A" || s.winner === "C" || s.winner === "TEAM_13_WIN")
+          ? "TEAM A & C WINS" : "TEAM B & D WINS";
+      }
+      var reasonStr = (s.status === "R") ? "RESIGNATION" : (s.termination ? s.termination.replace(/_/g, " ") : "BASE OCCUPATION");
+      winMsg = wLabel + " \u2014 VICTORY BY " + reasonStr;
     }
-    var reasonStr = (s.status === "R") ? "RESIGNATION" : (s.termination ? s.termination.replace("_", " ") : "BASE OCCUPATION");
-    var winMsg = wLabel + " — VICTORY BY " + reasonStr;
     ctx.fillText(winMsg, geom.grid.x + geom.grid.w / 2, geom.grid.y + 31);
     ctx.restore();
   }
@@ -48923,15 +49005,23 @@ function updatePlaySidebar() {
       D: { bg: "#78350F", fg: "#FDE047" }
     };
     if (s.status === "O" || s.status === "R") {
-      var winLabel = "Player " + s.winner;
-      if (is4p) {
-        winLabel = (s.winner === "A" || s.winner === "C" || s.winner === "TEAM_13_WIN")
-          ? "Team A & C" : "Team B & D";
+      if (!s.winner || s.winner === "-" || s.termination === "NO_PROGRESS_DRAW" || s.termination === "AGREED_DRAW" || s.termination === "DRAW") {
+        turnBadge.textContent = (s.termination === "NO_PROGRESS_DRAW" || (s.status === "O" && (!s.winner || s.winner === "-")))
+          ? "Draw \u2014 No Progress"
+          : "Game Draw";
+        turnBadge.style.background = "#1E293B";
+        turnBadge.style.color = "#E2E8F0";
+      } else {
+        var winLabel = "Player " + s.winner;
+        if (is4p) {
+          winLabel = (s.winner === "A" || s.winner === "C" || s.winner === "TEAM_13_WIN")
+            ? "Team A & C" : "Team B & D";
+        }
+        turnBadge.textContent = "Winner: " + winLabel;
+        var wSt = turnStyles[s.winner === "A" || s.winner === "TEAM_13_WIN" ? "A" : "B"];
+        turnBadge.style.background = wSt.bg;
+        turnBadge.style.color = wSt.fg;
       }
-      turnBadge.textContent = "Winner: " + winLabel;
-      var wSt = turnStyles[s.winner === "A" || s.winner === "TEAM_13_WIN" ? "A" : "B"];
-      turnBadge.style.background = wSt.bg;
-      turnBadge.style.color = wSt.fg;
     } else {
       turnBadge.textContent = "Player " + s.turn + " Turn";
       var tSt = turnStyles[s.turn] || turnStyles.A;
@@ -48994,6 +49084,14 @@ function showPlayVcrPly(idx) {
   playVcrIndex = idx;
   var pl = playMatchPlies[idx];
   activePlayState = parseOctiFen(pl.fenAfter);
+  if (activePlayState) {
+    if (typeof pl.noProgressPlies === "number") {
+      activePlayState.noProgressPlies = pl.noProgressPlies;
+    }
+    if (pl.termination) {
+      activePlayState.termination = pl.termination;
+    }
+  }
   lastMoveHighlightSquares = extractModifiedSquaresFromMove(pl.move);
   lastMoveSetAtMs = Date.now();
   updatePlaySidebar();
@@ -49143,8 +49241,9 @@ function generateOctiTranscriptV3() {
     edgeless: !!s.edgeless,
     startPlayer: "A",
     status: (s.status === "R" ? "RESIGNED" : (s.status === "O" ? "GAME_OVER" : "IN_PROGRESS")),
-    termination: s.termination || (s.status === "R" ? "RESIGN" : (s.status === "O" ? "BASE_CAPTURE" : "NONE")),
+    termination: s.termination || (s.status === "R" ? "RESIGN" : (s.status === "O" ? ((!s.winner || s.winner === "-") ? "NO_PROGRESS_DRAW" : "BASE_CAPTURE") : "NONE")),
     winner: winnerStr,
+    noProgressPlies: s.noProgressPlies || 0,
     finalFen: fenStr,
     final_fen: fenStr,
     players: playersArr,
@@ -49210,7 +49309,9 @@ function onLocalMoveCommitted(notation, newState, aiMeta) {
     plyIndex: plyIdx,
     player: prevTurn,
     move: notation,
-    fenAfter: serializeOctiFen(activePlayState)
+    fenAfter: serializeOctiFen(activePlayState),
+    noProgressPlies: activePlayState.noProgressPlies || 0,
+    termination: activePlayState.termination || ""
   };
   if (aiMeta) {
     var diff = localMatchConfig.botDifficulty || 2;
@@ -49264,14 +49365,18 @@ function onLocalMoveCommitted(notation, newState, aiMeta) {
     var goTitle = document.getElementById("web-gameover-title");
     var goSub = document.getElementById("web-gameover-subtitle");
     if (goOverlay && goTitle && goSub) {
-      if (activePlayState.mode === "4" || activePlayState.mode === "4P") {
+      if (!activePlayState.winner || activePlayState.winner === "-" || activePlayState.termination === "NO_PROGRESS_DRAW") {
+        goTitle.textContent = "DRAW \u2014 NO PROGRESS";
+        goSub.textContent = "Draw by No-Progress Rule (" + ((activePlayState.mode === "4" || activePlayState.mode === "4P") ? "60 Plies" : "30 Plies") + " without Capture, Prong, or Pod)";
+      } else if (activePlayState.mode === "4" || activePlayState.mode === "4P") {
         var w = activePlayState.winner;
         var teamStr = (w === "A" || w === "C" || w === "TEAM_13_WIN") ? "TEAM A & C" : "TEAM B & D";
         goTitle.textContent = teamStr + " VICTORIOUS!";
+        goSub.textContent = (activePlayState.termination || "VICTORY BY BASE OCCUPATION");
       } else {
         goTitle.textContent = "PLAYER " + activePlayState.winner + " WINS!";
+        goSub.textContent = (activePlayState.termination || "VICTORY BY BASE OCCUPATION");
       }
-      goSub.textContent = (activePlayState.termination || "VICTORY BY BASE OCCUPATION");
       goOverlay.style.display = "flex";
     }
     if (activeBoardContextMode === "local") saveLocalPlayContext();
@@ -49348,6 +49453,7 @@ function triggerAiBotTurn() {
   }
   var s = activePlayState;
   var fen = serializeOctiFen(s);
+  var curNoProgressPlies = s.noProgressPlies || 0;
   var diff = localMatchConfig.botDifficulty || 2;
   var side = s.turn;
   var mode = s.mode;
@@ -49418,7 +49524,7 @@ function triggerAiBotTurn() {
         latestProg.elapsedMs = prog.elapsedMs !== undefined ? prog.elapsedMs : (Date.now() - searchStartedAtMs);
         latestProg.budgetMs = prog.budgetMs || defaultBudgetMs;
         updateThinkingProgressUi(latestProg);
-      }, defaultBudgetMs);
+      }, defaultBudgetMs, curNoProgressPlies);
       finishAiMove(r);
     };
     worker.onmessage = function (e) {
@@ -49441,6 +49547,7 @@ function triggerAiBotTurn() {
       type: "search",
       searchId: searchId,
       fen: fen,
+      noProgressPlies: curNoProgressPlies,
       depth: diff,
       difficulty: diff,
       mode: mode,
@@ -49460,7 +49567,7 @@ function triggerAiBotTurn() {
         latestProg.elapsedMs = prog.elapsedMs !== undefined ? prog.elapsedMs : (Date.now() - searchStartedAtMs);
         latestProg.budgetMs = prog.budgetMs || defaultBudgetMs;
         updateThinkingProgressUi(latestProg);
-      }, defaultBudgetMs);
+      }, defaultBudgetMs, curNoProgressPlies);
       finishAiMove(r);
     }, 50);
   }
@@ -49489,6 +49596,10 @@ if (btnUndo) {
         playMatchPlies.pop();
         var topPl = playMatchPlies[playMatchPlies.length - 1];
         var topSt = parseOctiFen(topPl.fenAfter);
+        if (topSt) {
+          if (typeof topPl.noProgressPlies === "number") topSt.noProgressPlies = topPl.noProgressPlies;
+          if (topPl.termination) topSt.termination = topPl.termination;
+        }
         if (topSt && topSt.turn === localMatchConfig.humanSeat) {
           activePlayState = topSt;
           break;
@@ -49514,6 +49625,10 @@ if (btnUndo) {
     playMatchPlies.pop();
     var lastPl = playMatchPlies[playMatchPlies.length - 1];
     activePlayState = parseOctiFen(lastPl.fenAfter);
+    if (activePlayState) {
+      if (typeof lastPl.noProgressPlies === "number") activePlayState.noProgressPlies = lastPl.noProgressPlies;
+      if (lastPl.termination) activePlayState.termination = lastPl.termination;
+    }
     playVcrIndex = playMatchPlies.length - 1;
     lastMoveHighlightSquares = lastPl && playVcrIndex > 0 ? extractModifiedSquaresFromMove(lastPl.move) : [];
     lastMoveSetAtMs = Date.now();
@@ -49949,6 +50064,9 @@ function formatRoomEventForChat(ev) {
     } else if (ev.termination === "AGREED_DRAW") {
       base.handle = ev.handle || "table";
       base.text = "Game ended in a draw by mutual agreement";
+    } else if (ev.termination === "NO_PROGRESS_DRAW") {
+      base.handle = ev.handle || "table";
+      base.text = "Game ended in a draw by the no-progress rule";
     } else if (ev.termination === "TIMEOUT") {
       base.handle = ev.handle || "player";
       base.text = "ran out of time" + (ev.winner_seat ? (" \u2014 Player " + seatLetterOf(ev.winner_seat) + " wins!") : "");
@@ -50193,12 +50311,24 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
           plyIndex: mi + 1,
           player: mover,
           move: mvStr,
-          fenAfter: (mi === srvMoves.length - 1 && srvFen) ? srvFen : (replayState ? serializeOctiFen(replayState) : srvFen)
+          fenAfter: (mi === srvMoves.length - 1 && srvFen) ? srvFen : (replayState ? serializeOctiFen(replayState) : srvFen),
+          noProgressPlies: replayState ? (replayState.noProgressPlies || 0) : 0,
+          termination: replayState ? (replayState.termination || "") : ""
         });
       }
       playMatchPlies = builtPlies;
       playVcrIndex = playMatchPlies.length - 1;
       activePlayState = srvFen ? parseOctiFen(srvFen) : replayState;
+      if (activePlayState) {
+        if (typeof res.no_progress_plies === "number") {
+          activePlayState.noProgressPlies = res.no_progress_plies;
+        } else if (replayState && typeof replayState.noProgressPlies === "number") {
+          activePlayState.noProgressPlies = replayState.noProgressPlies;
+        }
+        if (res.termination) {
+          activePlayState.termination = res.termination;
+        }
+      }
       matchStarted = (res.phase === "IN_PROGRESS");
 
       if (srvMoves.length > 0) {
@@ -50218,12 +50348,20 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
         if (goOverlay && goTitle && goSub) {
           var winSeat = res.winner_seat || 0;
           var winLetter = winSeat > 0 ? seatLetterOf(winSeat) : (activePlayState ? activePlayState.winner : "");
-          if (winLetter && winLetter !== "-") {
+          var effTerm = res.termination || (activePlayState && activePlayState.termination) || "";
+          if (effTerm === "NO_PROGRESS_DRAW" || (!winSeat && (!winLetter || winLetter === "-") && res.result === "DRAW" && effTerm !== "AGREED_DRAW")) {
+            goTitle.textContent = "DRAW \u2014 NO PROGRESS";
+            goSub.textContent = "Draw by No-Progress Rule (" + ((activePlayState && (activePlayState.mode === "4" || activePlayState.mode === "4P")) ? "60 Plies" : "30 Plies") + " without Capture, Prong, or Pod)";
+          } else if (effTerm === "AGREED_DRAW") {
+            goTitle.textContent = "GAME DRAW";
+            goSub.textContent = "Draw by Mutual Agreement";
+          } else if (winLetter && winLetter !== "-") {
             goTitle.textContent = "PLAYER " + winLetter + " WINS!";
+            goSub.textContent = effTerm || "MATCH FINISHED";
           } else {
             goTitle.textContent = res.result || "GAME OVER";
+            goSub.textContent = effTerm || "MATCH FINISHED";
           }
-          goSub.textContent = res.termination || (activePlayState && activePlayState.termination) || "MATCH FINISHED";
           goOverlay.style.display = "flex";
         }
       } else if (goOverlay) {

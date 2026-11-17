@@ -311,6 +311,25 @@ public class OctiGame {
         return winner;
     }
 
+    public int getNoProgressPlies() {
+        return _noProgressPlies;
+    }
+
+    public void setNoProgressPlies(int plies) {
+        this._noProgressPlies = (plies > 0) ? plies : 0;
+    }
+
+    public int getNoProgressDrawLimit() {
+        return (mode == OctiGameMode.GAME_MODE_4)
+                ? OctiDefs.OCTI_NO_PROGRESS_DRAW_PLIES_4P
+                : OctiDefs.OCTI_NO_PROGRESS_DRAW_PLIES_2P;
+    }
+
+    public boolean isNoProgressDraw() {
+        return gameOver && !gameResigned && winner == OctiPlayer.PLAYER_UNDEF
+                && _noProgressPlies >= getNoProgressDrawLimit();
+    }
+
     public boolean isPlayerEliminated(OctiPlayer p) {
         if (p == null || p.getValue() < 1 || p.getValue() > 4) {
             return false;
@@ -355,6 +374,7 @@ public class OctiGame {
 
     private boolean searchMode = false;
     private int searchPlyOffset = 0;
+    private int _noProgressPlies = 0;
 
     public void setSearchMode(boolean searchMode) {
         this.searchMode = searchMode;
@@ -398,6 +418,10 @@ public class OctiGame {
         gameOver = false;
         gameResigned = false;
         searchPlyOffset = 0;
+        _noProgressPlies = 0;
+        if (gameMetadata != null) {
+            gameMetadata.termination = "";
+        }
         turn = OctiPlayer.PLAYER_UNDEF;
         winner = OctiPlayer.PLAYER_UNDEF;
         hasPreparedMove = false;
@@ -484,6 +508,10 @@ public class OctiGame {
         this.gameOver = false;
         this.gameResigned = false;
         this.winner = OctiPlayer.PLAYER_UNDEF;
+        this._noProgressPlies = 0;
+        if (this.gameMetadata != null) {
+            this.gameMetadata.termination = "";
+        }
 
         notifyGameUpdated();
         notifyUndoRedoStatusChanged();
@@ -572,6 +600,30 @@ public class OctiGame {
         executeMoveInternal(m, false);
     }
 
+    private static boolean moveOpsHaveProgress(List<OctiMoveOp> ops, boolean anyNewElim) {
+        if (anyNewElim) {
+            return true;
+        }
+        if (ops == null) {
+            return false;
+        }
+        boolean checkedFirstRegular = false;
+        for (OctiMoveOp op : ops) {
+            if (!op.isSuperProngBonusMove && !checkedFirstRegular) {
+                checkedFirstRegular = true;
+                if (op.addPod || op.addProngDir != OctiDir.DIR_UNDEF) {
+                    return true;
+                }
+            }
+            for (OctiHop hop : op.hops) {
+                if (hop.capture) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private void executeMoveInternal(OctiMove m, boolean isRedo) {
         if (!gameStarted) {
             throw new IllegalMoveException("game has not started");
@@ -589,7 +641,9 @@ public class OctiGame {
         if (searchMode) {
             OctiPlayer mover = turn;
             applyMoveOps(m.getOps());
-            check4PlayerElimination();
+            boolean anyNewElim = check4PlayerElimination(mover);
+            boolean madeProgress = moveOpsHaveProgress(m.getOps(), anyNewElim);
+            _noProgressPlies = madeProgress ? 0 : (_noProgressPlies + 1);
             searchPlyOffset++;
             updateGameOverAndWinner();
             if (!gameOver) {
@@ -613,15 +667,21 @@ public class OctiGame {
                         gameMetadata.termination = "STALEMATE";
                     }
                 }
+                if (!gameOver && _noProgressPlies >= getNoProgressDrawLimit()) {
+                    gameOver = true;
+                    winner = OctiPlayer.PLAYER_UNDEF;
+                    turn = OctiPlayer.PLAYER_UNDEF;
+                }
             }
             return;
         }
 
         OctiGameSnapshot snapBefore = captureSnapshot();
+        boolean anyNewElim = false;
 
         try {
             applyMoveOps(m.getOps());
-            check4PlayerElimination();
+            anyNewElim = check4PlayerElimination(turn);
         } catch (Throwable t) {
             restoreSnapshot(snapBefore);
             if (t instanceof RuntimeException) {
@@ -629,6 +689,9 @@ public class OctiGame {
             }
             throw new RuntimeException(t);
         }
+
+        boolean madeProgress = moveOpsHaveProgress(m.getOps(), anyNewElim);
+        _noProgressPlies = madeProgress ? 0 : (_noProgressPlies + 1);
 
         if (!isRedo) {
             snapBefore.lastMove = m;
@@ -663,6 +726,12 @@ public class OctiGame {
                             ? OctiPlayer.PLAYER_A : OctiPlayer.PLAYER_B;
                     gameMetadata.termination = "STALEMATE";
                 }
+            }
+            if (!gameOver && _noProgressPlies >= getNoProgressDrawLimit()) {
+                gameOver = true;
+                winner = OctiPlayer.PLAYER_UNDEF;
+                turn = OctiPlayer.PLAYER_UNDEF;
+                gameMetadata.termination = "NO_PROGRESS_DRAW";
             }
         }
 
@@ -1596,11 +1665,12 @@ public class OctiGame {
         }
     }
 
-    private void check4PlayerElimination() {
+    private boolean check4PlayerElimination(OctiPlayer moverTurn) {
         if (mode != OctiGameMode.GAME_MODE_4) {
-            return;
+            return false;
         }
 
+        boolean anyNewElim = false;
         final int[][] homeCoords = {
             {-1, -1}, {2, 2}, {2, 6}, {6, 6}, {6, 2}
         };
@@ -1611,6 +1681,7 @@ public class OctiGame {
                 OctiSquare hsq = board.squareAt(homeCoords[p][0], homeCoords[p][1]);
                 if (hsq.isCaptured()) {
                     players[p].eliminated = true;
+                    anyNewElim = true;
                     int bw = board.getBoardWidth();
                     int bh = board.getBoardHeight();
                     for (int x = 0; x < bw; x++) {
@@ -1620,8 +1691,8 @@ public class OctiGame {
                             for (int pi = 0; pi < s.getNumPods(); pi++) {
                                 OctiPod pod = s.getPodAt(pi);
                                 if (pod.getType().toPlayer() == player) {
-                                    players[turn.getValue()].freeProngs += pod.getNumNormalProngs();
-                                    players[turn.getValue()].freeSuperProngs += pod.getNumSuperProngs();
+                                    players[moverTurn.getValue()].freeProngs += pod.getNumNormalProngs();
+                                    players[moverTurn.getValue()].freeSuperProngs += pod.getNumSuperProngs();
                                     players[p].capturedPods++;
                                 } else {
                                     keep.add(pod);
@@ -1636,6 +1707,7 @@ public class OctiGame {
                 }
             }
         }
+        return anyNewElim;
     }
 
     private void updateGameOverAndWinner() {
@@ -3154,6 +3226,7 @@ public class OctiGame {
                 }
             }
             root.put("termination", term);
+            root.put("noProgressPlies", _noProgressPlies);
             root.put("timeControl", (m.timeControl != null && !m.timeControl.isEmpty()) ? m.timeControl : "untimed");
             root.put("finalFen", board != null ? board.toPositionString() : "");
 
@@ -3235,6 +3308,9 @@ public class OctiGame {
         }
         if (gameMetadata != null && gameMetadata.termination != null && !gameMetadata.termination.isEmpty()) {
             return gameMetadata.termination;
+        }
+        if (gameOver && winner == OctiPlayer.PLAYER_UNDEF) {
+            return "NO_PROGRESS_DRAW";
         }
 
         if (mode == OctiGameMode.GAME_MODE_2) {
@@ -3381,6 +3457,7 @@ public class OctiGame {
         snap.gameOver = gameOver;
         snap.gameResigned = gameResigned;
         snap.searchPlyOffset = searchPlyOffset;
+        snap.noProgressPlies = _noProgressPlies;
         if (!searchMode) {
             snap.plyMetadata = new ArrayList<>();
             for (OctiPlyMetadata pm : plyMetadata) {
@@ -3431,6 +3508,10 @@ public class OctiGame {
         this.gameOver = snap.gameOver;
         this.gameResigned = snap.gameResigned;
         this.searchPlyOffset = snap.searchPlyOffset;
+        this._noProgressPlies = snap.noProgressPlies;
+        if (!this.gameOver && !searchMode && this.gameMetadata != null) {
+            this.gameMetadata.termination = "";
+        }
         if (!searchMode && snap.plyMetadata != null) {
             this.plyMetadata.clear();
             for (OctiPlyMetadata pm : snap.plyMetadata) {

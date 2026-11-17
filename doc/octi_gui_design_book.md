@@ -279,7 +279,8 @@ During the active player's interactive turn (when viewing the live ply):
   `AI Thinking (Seat B) • Depth D • N nodes • X.Xs / Y.Ys (P%)`
 
 ### `GDB-09.3` Endgame Summary Banner & Modal
-- When a game concludes (`status == COMPLETED` or `isGameOver()`), displays the winner (`Player A Wins!`, `Team A+C Wins!`, `Draw`), the exact reason (`Base Captured`, `Opponent Eliminated`, `Resignation`, `Mutual Draw`, `Timeout`), and buttons for **`Review Board`** (dismisses modal to inspect final position & VCR), **`Export Moves`**, and **`New Game`** / **`Return to Lobby`**.
+- When a game concludes (`status == COMPLETED` or `isGameOver()`), displays the winner (`Player A Wins!`, `Team A+C Wins!`, `Draw` / `DRAW — NO PROGRESS`), the exact reason (`Base Captured`, `Opponent Eliminated`, `Stalemate`, `Draw by No-Progress Rule (30 Plies without Capture, Prong, or Pod)` / `60 Plies` in `4P` for `NO_PROGRESS_DRAW`, `Resignation`, `Mutual Draw`, `Timeout`), and buttons for **`Review Board`** (dismisses modal to inspect final position & VCR), **`Export Moves`**, and **`New Game`** / **`Return to Lobby`**.
+- **Rule R7 (`NO_PROGRESS_DRAW`) Termination State**: When `noProgressPlies` reaches `30` (`OCTI_NO_PROGRESS_DRAW_PLIES_2P = 30` in `2P*`/`OFK`) or `60` (`OCTI_NO_PROGRESS_DRAW_PLIES_4P = 60` in `4P*`) at turn completion after base-occupation victory, total capture wipeout, and zero-legal-move stalemate checks, the game transitions to `status = GAME_OVER` (`'O'`), `winner = PLAYER_UNDEF` (`'-'` / `""`), and `termination = "NO_PROGRESS_DRAW"`. Web (`WebUi.cxx`), Desktop (`OctiDialogs.cxx`), and Android (`OctiAppViewModel.kt`, `OctiDialogs.kt`) must explicitly recognize `NO_PROGRESS_DRAW` / `isNoProgressDraw()` and display the no-progress draw banner and reason rather than falling through to stalemate or winner messages.
 
 ---
 
