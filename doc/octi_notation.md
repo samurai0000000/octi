@@ -70,19 +70,15 @@ A single ply (turn) executed by a player is represented by `<ply>`:
 ```ebnf
 <ply>              ::= [ <super-prelude> ";" ] <regular-move>
 
-<super-prelude>    ::= <hop-chain> [ ";" <hop-chain> ]
+<super-prelude>    ::= <hop-chain> { ";" <hop-chain> }   (* 1..4 preludes: 1 per controlled SP on board *)
 
 <regular-move>     ::= <pod-place>
                      | <prong-add>
-                     | <prong-reposition>
                      | <composite-hops>
 
 <pod-place>        ::= <sq> [ "*" ]
 
 <prong-add>        ::= <sq> <config> "+" <dir-spec>
-
-<prong-reposition> ::= <sq> <config> "+" <dir> "-" <dir>
-                     | <sq> <config> "-" <dir> "+" <dir>
 
 <composite-hops>   ::= <hop-chain> { "," <hop-chain> }
 
@@ -103,21 +99,20 @@ A single ply (turn) executed by a player is represented by `<ply>`:
 
 1. **Pod Placement & Disambiguation (`<pod-place>`)**:
    - `<sq>` (e.g. `"33"`): Brings a reserve pod onto square `XY` (`freePods--`). May be placed on any friendly OCTI square (empty or occupied), or on any enemy OCTI square currently occupied by the player (`sq.isOccupiedBy(turn)`). For backward compatibility, if `freePods == 0` and the player qualifies to liberate a captured pod, this liberates a captured pod onto `XY` (`capturedPods--`), provided `XY` is an OCTI square occupied by the player (`sq.isOccupiedBy(turn)`).
-   - `<sq>*` (e.g. `"37*"`, `"33*"`): Explicitly designates a **liberation move** onto square `XY`, bringing one captured pod back onto the board (`capturedPods--`). Liberating a captured pod strictly requires the active player to occupy an enemy OCTI square (`canLiberate(turn)`), have at least one captured pod (`capturedPods > 0`), and the destination OCTI square `XY` must be **occupied by the active player** (`sq.isOccupiedBy(turn)`). Throws `IllegalMoveException` if any of these conditions are not met. Canonical move generation emits `<sq>*` for liberation moves and bare `<sq>` for reserve pod placements.
+   - `<sq>*` (e.g. `"53*"`, `"57*"`): Explicitly designates a **liberation move** in 3-Base (`2P_3B*`) and 4-Player (`4P*`) games onto square `XY`, bringing one of the active player's **own** captured pods back onto the board (`capturedPods--`). Liberating a captured pod strictly requires `canLiberate(turn)` (occupying an enemy OCTI square in `2P_3B*`, or an enemy/neutral OCTI square in `4P*`), `capturedPods > 0`, and destination OCTI square `XY` **occupied by the active player** (`sq.isOccupiedBy(turn)`). Liberation never revives an eliminated 4P partner and never applies to 1-Base sudden-death variants (`2P_1B*`) or `OFK`. Throws `IllegalMoveException` if any condition is not met. Canonical move generation emits `<sq>*` for liberation moves and bare `<sq>` for reserve pod placements.
 2. **Prong Insertion (`<prong-add>`)**:
-   - `<sq><config>+<dir>[!]` (e.g. `"33+b"`, `"33b+a!"`): Inserts a prong in direction `<dir>` (or superprong `<dir>!`) into the friendly pod matching `<config>` located at `<sq>`.
-3. **Prong Repositioning (`<prong-reposition>`)**:
-   - `<sq><config>+<addDir>-<rmDir>` or `<sq><config>-<rmDir>+<addDir>` (e.g. `"33a+b-a"` or `"33a-a+b"`): Moves a normal prong from `<rmDir>` to `<addDir>` on the pod matching `<config>` at `<sq>`.
-   - Repositioning a superprong, or adding a superprong during a reposition, is strictly forbidden and throws `IllegalMoveException`.
-4. **Movement and Jumps (`<hop-chain>`)**:
+   - `<sq><config>+<dir>[!]` (e.g. `"33+b"`, `"33b+a!"`): Inserts a prong in direction `<dir>` (or SuperProng `<dir>!`) into the friendly pod matching `<config>` located at `<sq>`.
+   - **No Prong Repositioning**: Once inserted, prongs are permanent on that pod across all variants. Any reposition syntax (`+<add>-<rm>` or `-<rm>+<add>`) is rejected immediately by the parser with `IllegalMoveSyntaxException`.
+3. **Movement and Jumps (`<hop-chain>`)**:
    - `<sq><config>-<sq>[x]{-<sq>[x]}`:
      - Distance-1 single step: `"33a-34"` (pod at `33` with prong `a` moves North to `34`). Captures are forbidden on distance-1 steps.
-     - Single jump with capture: `"33a-35x"` (pod jumps over intermediate pod at `34` landing on empty square `35`, capturing the jumped pod).
-     - Multi-jump chain: `"33ac-35x-55"` (jumps over `34` landing on `35` with capture, then jumps over `45` landing on `55` without capture).
-5. **Composite Multi-Pod Stack Moves (`<composite-hops>`)**:
-   - `<hop-chain> { "," <hop-chain> }` (e.g. `"37df-46,37e-36"`): Multiple pods belonging to the same starting stack move or jump in different directions on the same turn. All hop-chains in a composite move **must share the same starting coordinate** `(x0, y0)`.
-6. **Superprong Prelude Moves (`<super-prelude> ";"`)**:
-   - A player with superprongs may execute one (or two, if possessing two superprongs) extra move or jump in the superprong direction prior to their regular turn action (e.g. `"33a!-34;34a!+b"`: moves North via superprong to `34`, then adds prong `b`).
+     - Single jump with whole-stack capture: `"33a-35x"` (pod jumps over intermediate stack at `34` landing on empty square `35`, capturing **all** pods in the jumped stack on `34`).
+     - Multi-jump chain: `"33ac-35x-55"` (jumps over `34` landing on `35` with whole-stack capture, then jumps over `45` landing on `55` without capture).
+     - Starting-square `S` vacancy & non-jumping (Appendix A.1): A jumping pod can never jump over its starting square `S` (`jx == sx && jy == sy` is always forbidden, including on `_ED` wraparound paths such as `"44bcd-66-86-16-34-54"`), and may land back on `S` only if all pods starting on `S` vacate `S` during the move (e.g. `"44a-45,44beg-66x-64x-44"`).
+4. **Composite Multi-Pod Stack Moves (`<composite-hops>`)**:
+   - `<hop-chain> { "," <hop-chain> }` (e.g. `"37df-46,37e-36"` or `"44a-45,44beg-66x-64x-44"`): Multiple pods belonging to the same starting stack move or jump in different directions on the same turn. All hop-chains in a composite move **must share the same starting coordinate** `(x0, y0)`.
+5. **SuperProng Prelude Moves (`<super-prelude> ";"`)**:
+   - A player in `_SP` variants may execute **1 bonus prelude move per SuperProng controlled on the board** (up to `2` in `2P_SP` and up to `4` in `4P_SP`) prior to their regular turn action (e.g. `"44ab!-66x;66ab!-67"`). Each prelude moves 1 pod strictly in a straight line (1-step or collinear jump chain) along a distinct SuperProng socket that has not yet fired a prelude this turn, and any stack jumped with `x` is **removed immediately** after that prelude before the next prelude or regular move begins. Victory and 4P base elimination are checked only at completion of the full turn.
 
 ---
 
@@ -129,17 +124,14 @@ When generating, transmitting, or comparing moves, implementations must emit the
    Any uppercase characters are converted to lowercase, and directions are sorted clockwise `'a'..'h'`, keeping `'!'` attached to its direction token:
    - Input `"33ba"` $\to$ Canonical `"33ab"`
    - Input `"33eA!"` $\to$ Canonical `"33a!e"`
-2. **Reposition Operation Ordering**:
-   Regardless of whether the input specifies addition first (`+b-a`) or removal first (`-a+b`), the canonical serializer emits `+<addDir>-<rmDir>`:
-   - Input `"33a-a+b"` $\to$ Canonical `"33a+b-a"`
-3. **Capture Marker**:
+2. **Capture Marker**:
    The capture indicator must always be lowercase `'x'`:
    - Input `"33a-35X"` $\to$ Canonical `"33a-35x"`
-4. **Explicit Liberation Marker**:
+3. **Explicit Liberation Marker**:
    Move generators and parsers designate pod liberation with the trailing `'*'` marker (`<sq>*`), while reserve pod placement uses bare `<sq>`. When an op has `liberate == true`, the trailing `'*'` is preserved and the canonical serializer emits `<sq>*`:
-   - Input `"37*"` $\to$ Canonical `"37*"`
-5. **Separators**:
-   - Superprong prelude moves are separated from each other and from the regular move by a semicolon `';'`.
+   - Input `"53*"` $\to$ Canonical `"53*"`
+4. **Separators**:
+   - SuperProng prelude moves (`1..4`) are separated from each other and from the regular move by a semicolon `';'`.
    - Composite stack hops within the regular move are separated by a comma `','`.
 
 ---
@@ -264,11 +256,12 @@ An engine implementing this specification must strictly enforce:
    - `nullptr` or empty/whitespace strings.
    - Out-of-bounds coordinates (digits outside `'1'..'9'`, or outside `'1'..'6'` / `'1'..'7'` for OFK).
    - Duplicate direction tokens in `<config>` (e.g. `"33aa+b"`).
+   - Prong repositioning syntax (`+<add>-<rm>` or `-<rm>+<add>`) or more than 4 `;`-delimited SuperProng preludes (`semiParts.size() > 5`).
    - Illegal characters outside the grammar.
    - Any violation must immediately throw `IllegalMoveSyntaxException`.
 2. **Rejection of Semantic Invariants**:
-   - Repositioning with identical source and destination (`"33a+a-a"`).
-   - Removing a prong that does not exist on the pod (`"33a+b-c"`).
-   - Removing or repositioning a superprong (`"33a!+b-a"`).
+   - Adding a prong to a socket that already holds a prong (`"33a+a"`).
+   - Jumping over starting square `S` (`jx == sx && jy == sy`) or landing back on `S` when any pod from `S` remains on `S`.
+   - Firing more SuperProng bonus preludes than controlled SuperProngs on the board or reusing the same SuperProng socket twice in bonus preludes on the same turn.
    - Composite moves whose component hops do not share the exact same `(x0, y0)`.
    - Any semantic rule violation must immediately throw `IllegalMoveException`.

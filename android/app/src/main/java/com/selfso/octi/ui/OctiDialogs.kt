@@ -1498,7 +1498,6 @@ fun ZoomedSquareDialog(
     onDismiss: () -> Unit,
     onBeginGuidedMove: (podIndex: Int, moveAllStack: Boolean) -> Unit,
     onAddProng: (podIndex: Int, dir: OctiDir, superProng: Boolean) -> Unit,
-    onRepositionProng: (podIndex: Int, srcDir: OctiDir, dstDir: OctiDir) -> Unit,
     onPlaceReservePod: (liberate: Boolean) -> Unit
 ) {
     val displayBoard = if (composer.isAwaitingConfirmation && board === composer.board) {
@@ -1531,31 +1530,6 @@ fun ZoomedSquareDialog(
     val hasEnemy = sq?.hasEnemyOf(turn) == true
     val isOwnOccupied = sq?.isOccupiedBy(turn) == true
     val isFriendlyTurn = isTurn && !isEmptySquare && isOwnOccupied
-    val freePods = displayGame?.getFreePods(turn) ?: 0
-    val capPods = displayGame?.getCapturedPods(turn) ?: 0
-
-    val is4P = displayBoard.gameMode == OctiGameMode.GAME_MODE_4
-    val partner = if (is4P) {
-        when (turn) {
-            OctiPlayer.PLAYER_A -> OctiPlayer.PLAYER_C
-            OctiPlayer.PLAYER_C -> OctiPlayer.PLAYER_A
-            OctiPlayer.PLAYER_B -> OctiPlayer.PLAYER_D
-            OctiPlayer.PLAYER_D -> OctiPlayer.PLAYER_B
-            else -> null
-        }
-    } else null
-    val partnerHome = if (is4P && partner != null) {
-        when (partner) {
-            OctiPlayer.PLAYER_A -> OctiSquareType.A_HOME_SQUARE
-            OctiPlayer.PLAYER_B -> OctiSquareType.B_HOME_SQUARE
-            OctiPlayer.PLAYER_C -> OctiSquareType.C_HOME_SQUARE
-            OctiPlayer.PLAYER_D -> OctiSquareType.D_HOME_SQUARE
-            else -> null
-        }
-    } else null
-    val isRevivingPartner = is4P && partner != null && (sq?.type == partnerHome) &&
-        (displayGame?.isPlayerEliminated(partner) == true) && isOwnOccupied &&
-        ((displayGame?.getCapturedPods(partner) ?: 0) > 0)
 
     val canPlaceReserve = isTurn && composer.canPlaceReservePodAt(squareX, squareY)
     val canLiberateHere = isTurn && composer.canLiberateCapturedPodAt(squareX, squareY)
@@ -1569,7 +1543,6 @@ fun ZoomedSquareDialog(
     var selectedProngTray by remember(squareX, squareY) {
         mutableStateOf<String?>(if (isFriendlyTurn && freeProngs > 0) "NORMAL" else null)
     }
-    var selectedRepositionSrcDir by remember(squareX, squareY) { mutableStateOf<OctiDir?>(null) }
     var hoverSocketDir by remember(squareX, squareY) { mutableStateOf(-1) }
     var podBoxPxSize by remember { mutableStateOf(IntSize(480, 480)) }
 
@@ -1666,7 +1639,6 @@ fun ZoomedSquareDialog(
                                         if (isTurn) {
                                             composer.selectStackPodIndex(squareX, squareY, spec.podIndex)
                                         }
-                                        selectedRepositionSrcDir = null
                                     },
                                     leadingIcon = if (podObj != null) {
                                         {
@@ -1708,7 +1680,6 @@ fun ZoomedSquareDialog(
                                 selected = selectedProngTray == "NORMAL",
                                 onClick = {
                                     selectedProngTray = "NORMAL"
-                                    selectedRepositionSrcDir = null
                                 },
                                 enabled = freeProngs > 0,
                                 label = { Text("Normal Prong ($freeProngs)") }
@@ -1718,28 +1689,21 @@ fun ZoomedSquareDialog(
                                     selected = selectedProngTray == "SUPER",
                                     onClick = {
                                         selectedProngTray = if (selectedProngTray == "SUPER") null else "SUPER"
-                                        selectedRepositionSrcDir = null
                                     },
                                     enabled = freeSuper > 0,
                                     label = { Text("Superprong (!) ($freeSuper)") }
                                 )
                             }
                         }
-                        if (selectedRepositionSrcDir != null) {
+                        if (selectedProngTray != null) {
                             Text(
-                                text = "Reposition prong: Tap or drag to empty socket",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = OctiTheme.colors.accentBrass
-                            )
-                        } else if (selectedProngTray != null) {
-                            Text(
-                                text = "Tap socket (a..h) or drag outward from center to add $selectedProngTray prong",
+                                text = "Tap empty socket (a..h) or drag outward from center to add $selectedProngTray prong",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = OctiTheme.colors.legalStep
                             )
                         } else {
                             Text(
-                                text = "Tap any socket to select/add, or select from tray above",
+                                text = "Tap any empty socket to add a prong, or select from tray above",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = OctiTheme.colors.textSecondary
                             )
@@ -1754,7 +1718,7 @@ fun ZoomedSquareDialog(
                                     podBoxPxSize = newSize
                                 }
                             }
-                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize, squareX, squareY, freeProngs, freeSuper, displayBoard.gameMode) {
+                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, podBoxPxSize, squareX, squareY, freeProngs, freeSuper, displayBoard.gameMode) {
                                 detectTapGestures(
                                     onTap = { offset ->
                                         if (!isFriendlyTurn || sq == null) return@detectTapGestures
@@ -1763,35 +1727,17 @@ fun ZoomedSquareDialog(
                                         val wPx = podBoxPxSize.width.toFloat()
                                         val hPx = podBoxPxSize.height.toFloat()
                                         val hitDir = hitTestZoomedSocket(wPx, hPx, offset.x, offset.y, rotation)
-                                        if (hitDir != OctiDir.DIR_UNDEF) {
-                                            val pt = pod.prongAt(hitDir)
-                                            if (selectedRepositionSrcDir != null) {
-                                                if (pt == OctiProngType.NO_PRONG) {
-                                                    onRepositionProng(selectedPodIndex, selectedRepositionSrcDir!!, hitDir)
-                                                    selectedRepositionSrcDir = null
-                                                    hoverSocketDir = -1
-                                                } else {
-                                                    selectedRepositionSrcDir = hitDir
-                                                    hoverSocketDir = hitDir.index
-                                                }
-                                            } else if (pt == OctiProngType.NORMAL_PRONG) {
-                                                if (displayBoard.gameMode != OctiGameMode.GAME_MODE_OFK) {
-                                                    selectedRepositionSrcDir = hitDir
-                                                    hoverSocketDir = hitDir.index
-                                                }
-                                            } else if (pt == OctiProngType.NO_PRONG) {
-                                                if (selectedProngTray == "SUPER" && freeSuper > 0) {
-                                                    onAddProng(selectedPodIndex, hitDir, true)
-                                                } else if ((selectedProngTray == "NORMAL" || selectedProngTray == null) && freeProngs > 0) {
-                                                    onAddProng(selectedPodIndex, hitDir, false)
-                                                }
+                                        if (hitDir != OctiDir.DIR_UNDEF && pod.prongAt(hitDir) == OctiProngType.NO_PRONG) {
+                                            if (selectedProngTray == "SUPER" && freeSuper > 0) {
+                                                onAddProng(selectedPodIndex, hitDir, true)
+                                            } else if ((selectedProngTray == "NORMAL" || selectedProngTray == null) && freeProngs > 0) {
+                                                onAddProng(selectedPodIndex, hitDir, false)
                                             }
                                         }
                                     }
                                 )
                             }
-                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, selectedRepositionSrcDir, podBoxPxSize, sortedPodIndices, squareX, squareY, freeProngs, freeSuper, displayBoard.gameMode) {
-                                var isRepositionDrag = false
+                            .pointerInput(selectedPodIndex, rotation, isFriendlyTurn, selectedProngTray, podBoxPxSize, sortedPodIndices, squareX, squareY, freeProngs, freeSuper, displayBoard.gameMode) {
                                 var verticalSlideAccumPx = 0f
                                 val density = this
                                 val stepThresholdPx = with(density) { 36.dp.toPx() }
@@ -1799,45 +1745,17 @@ fun ZoomedSquareDialog(
                                 detectDragGestures(
                                     onDragStart = { startOffset ->
                                         verticalSlideAccumPx = 0f
-                                        isRepositionDrag = false
                                         if (sq == null) return@detectDragGestures
-                                        val pIdx = Math.max(0, Math.min(sq.numPods - 1, selectedPodIndex))
-                                        val pod = sq.getPodAt(pIdx)
                                         val wPx = podBoxPxSize.width.toFloat()
                                         val hPx = podBoxPxSize.height.toFloat()
                                         val hitDir = hitTestZoomedSocket(wPx, hPx, startOffset.x, startOffset.y, rotation)
                                         if (hitDir != OctiDir.DIR_UNDEF) {
                                             hoverSocketDir = hitDir.index
                                         }
-                                        if (isFriendlyTurn && hitDir != OctiDir.DIR_UNDEF && pod.prongAt(hitDir) == OctiProngType.NORMAL_PRONG && displayBoard.gameMode != OctiGameMode.GAME_MODE_OFK) {
-                                            selectedRepositionSrcDir = hitDir
-                                            isRepositionDrag = true
-                                        }
                                     },
                                     onDrag = { change, dragAmount ->
                                         if (sq == null) return@detectDragGestures
-                                        if (isRepositionDrag) {
-                                            val wPx = podBoxPxSize.width.toFloat()
-                                            val hPx = podBoxPxSize.height.toFloat()
-                                            val hitDir = hitTestZoomedSocket(wPx, hPx, change.position.x, change.position.y, rotation)
-                                            if (hitDir != OctiDir.DIR_UNDEF) {
-                                                hoverSocketDir = hitDir.index
-                                            } else {
-                                                val cx = wPx * 0.5f
-                                                val cy = hPx * 0.5f
-                                                val sizeMin = min(wPx, hPx)
-                                                val podR = sizeMin * 0.30f
-                                                val geo = OctiBoardGeometry(480, 480, 9, 9, rotation)
-                                                val sectorDir = geo.hitTestCompassSector(
-                                                    cx.toDouble(), cy.toDouble(),
-                                                    (podR * 0.4).toDouble(), (podR * 2.4).toDouble(),
-                                                    change.position.x.toDouble(), change.position.y.toDouble()
-                                                )
-                                                if (sectorDir != OctiDir.DIR_UNDEF) {
-                                                    hoverSocketDir = sectorDir.index
-                                                }
-                                            }
-                                        } else if (numPods >= 2 && Math.abs(dragAmount.y) > Math.abs(dragAmount.x) * 1.15f) {
+                                        if (numPods >= 2 && Math.abs(dragAmount.y) > Math.abs(dragAmount.x) * 1.15f) {
                                             verticalSlideAccumPx += dragAmount.y
                                             if (Math.abs(verticalSlideAccumPx) >= stepThresholdPx && sortedPodIndices.isNotEmpty()) {
                                                 val curRank = sortedPodIndices.indexOf(selectedPodIndex).let { if (it >= 0) it else 0 }
@@ -1846,7 +1764,6 @@ fun ZoomedSquareDialog(
                                                 val newPodIdx = sortedPodIndices[nextRank]
                                                 selectedPodIndex = newPodIdx
                                                 composer.selectStackPodIndex(squareX, squareY, newPodIdx)
-                                                selectedRepositionSrcDir = null
                                                 if (verticalSlideAccumPx < 0f) {
                                                     verticalSlideAccumPx += stepThresholdPx
                                                 } else {
@@ -1879,7 +1796,6 @@ fun ZoomedSquareDialog(
                                     onDragCancel = {
                                         hoverSocketDir = -1
                                         verticalSlideAccumPx = 0f
-                                        isRepositionDrag = false
                                     },
                                     onDragEnd = {
                                         verticalSlideAccumPx = 0f
@@ -1888,11 +1804,7 @@ fun ZoomedSquareDialog(
                                             val pod = sq.getPodAt(pIdx)
                                             val dropDir = if (hoverSocketDir in 0 until OctiDir.DIR_MAX) OctiDir.fromIndex(hoverSocketDir) else OctiDir.DIR_UNDEF
                                             if (dropDir != OctiDir.DIR_UNDEF && pod.prongAt(dropDir) == OctiProngType.NO_PRONG) {
-                                                if (selectedRepositionSrcDir != null && selectedRepositionSrcDir != dropDir) {
-                                                    onRepositionProng(selectedPodIndex, selectedRepositionSrcDir!!, dropDir)
-                                                    selectedRepositionSrcDir = null
-                                                    hoverSocketDir = -1
-                                                } else if (selectedProngTray == "SUPER" && freeSuper > 0) {
+                                                if (selectedProngTray == "SUPER" && freeSuper > 0) {
                                                     onAddProng(selectedPodIndex, dropDir, true)
                                                     hoverSocketDir = -1
                                                 } else if ((selectedProngTray == "NORMAL" || selectedProngTray == null) && freeProngs > 0) {
@@ -1902,7 +1814,6 @@ fun ZoomedSquareDialog(
                                             }
                                         }
                                         hoverSocketDir = -1
-                                        isRepositionDrag = false
                                     }
                                 )
                             }
@@ -1940,11 +1851,7 @@ fun ZoomedSquareDialog(
                     }
 
                     if (canShowPodPlacement) {
-                        val libButtonLabel = if (isRevivingPartner) {
-                            "Liberate Partner's Captured Pod (${squareX}${squareY}*)"
-                        } else {
-                            "Liberate Captured Pod (*)"
-                        }
+                        val libButtonLabel = "Liberate Captured Pod (*)"
                         if (canPlaceReserve && canLiberateHere) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),

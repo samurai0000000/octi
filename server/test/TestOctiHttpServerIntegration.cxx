@@ -9637,9 +9637,64 @@ TEST(OctiHttpServerIntegrationTest, IllustratedRulebookAssetsEndpointAndTabParit
     CHECK_TRUE(rUi.body.find("Chapter 7") != std::string::npos);
     CHECK_TRUE(rUi.body.find("4. Victory &amp; 4P Elimination") != std::string::npos);
     CHECK_TRUE(rUi.body.find("44a-45,44beg-66x-64x-44") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("44bcd-66-86-16-34-54") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("whole-stack capture") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("2P_3B*") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("1 bonus prelude move per SuperProng") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("permanently eliminated") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("capturing enemy player") != std::string::npos);
     CHECK_TRUE(rUi.body.find("4. Victory &amp; 4P Revival") == std::string::npos);
     CHECK_TRUE(rUi.body.find("Teammate Revival") == std::string::npos);
+    CHECK_TRUE(rUi.body.find("Reposition a Normal Prong") == std::string::npos);
+    CHECK_TRUE(rUi.body.find("revive eliminated 4P partner") == std::string::npos);
     CHECK_TRUE(rUi.body.find("33b+a-b") == std::string::npos);
+
+    /* Cross-surface R1-R6 parity with Desktop OctiRulebook.cxx, Android rulebook_mobile.html, and doc/*.md */
+    {
+        const std::string desktopHtml = octi::buildDesktopRulebookHtml(false);
+        const std::filesystem::path mobileHtmlPath = repoRulebookDir / "rulebook_mobile.html";
+        CHECK_TRUE(std::filesystem::exists(mobileHtmlPath));
+        std::ifstream mfs(mobileHtmlPath, std::ios::binary);
+        const std::string mobileHtml((std::istreambuf_iterator<char>(mfs)),
+                                     std::istreambuf_iterator<char>());
+
+        for (const std::string *surfPtr : { &desktopHtml, &mobileHtml }) {
+            const std::string &surf = *surfPtr;
+            CHECK_TRUE(surf.find("4. Victory &amp; 4P Elimination") != std::string::npos);
+            CHECK_TRUE(surf.find("44a-45,44beg-66x-64x-44") != std::string::npos);
+            CHECK_TRUE(surf.find("44bcd-66-86-16-34-54") != std::string::npos);
+            CHECK_TRUE(surf.find("whole-stack capture") != std::string::npos);
+            CHECK_TRUE(surf.find("2P_3B*") != std::string::npos);
+            CHECK_TRUE(surf.find("1 bonus prelude move per SuperProng") != std::string::npos);
+            CHECK_TRUE(surf.find("permanently eliminated") != std::string::npos);
+            CHECK_TRUE(surf.find("capturing enemy player") != std::string::npos);
+            CHECK_TRUE(surf.find("4. Victory &amp; 4P Revival") == std::string::npos);
+            CHECK_TRUE(surf.find("Teammate Revival") == std::string::npos);
+            CHECK_TRUE(surf.find("Reposition a Normal Prong") == std::string::npos);
+            CHECK_TRUE(surf.find("revive eliminated 4P partner") == std::string::npos);
+            CHECK_TRUE(surf.find("33b+a-b") == std::string::npos);
+        }
+
+        const char *const kDocFiles[] = {
+            "octi_game_instructions.md",
+            "octi_notation.md",
+            "octi_gui_design_book.md",
+            "octi_for_kids_instructions.md"
+        };
+        for (const char *docName : kDocFiles) {
+            const std::filesystem::path docPath = repoRoot / "doc" / docName;
+            CHECK_TRUE(std::filesystem::exists(docPath));
+            std::ifstream dfs(docPath, std::ios::binary);
+            const std::string docText((std::istreambuf_iterator<char>(dfs)),
+                                      std::istreambuf_iterator<char>());
+            CHECK_TRUE(docText.find("33b+a-b") == std::string::npos);
+            CHECK_TRUE(docText.find("33a+b-a") == std::string::npos);
+            CHECK_TRUE(docText.find("33a-a+b") == std::string::npos);
+            CHECK_TRUE(docText.find("Teammate Revival") == std::string::npos);
+            CHECK_TRUE(docText.find("liberated player may then play normally") == std::string::npos);
+            CHECK_TRUE(docText.find("whole starting stack counts as vacated") == std::string::npos);
+        }
+    }
 
     for (const std::string &fileName : files) {
         CHECK_TRUE(rUi.body.find("/assets/rulebook/" + fileName) != std::string::npos);

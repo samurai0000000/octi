@@ -48,18 +48,21 @@ public class OctiMove {
                 throw new IllegalMoveSyntaxException("op coordinate out of bounds");
             }
 
+            if (op.rmProngDir != OctiDir.DIR_UNDEF) {
+                throw new IllegalMoveSyntaxException("prong repositioning is not allowed");
+            }
+
             if (op.isSuperProngBonusMove) {
                 if (seenRegular) {
                     throw new IllegalMoveSyntaxException(
                             "superprong bonus move cannot appear after regular move");
                 }
                 bonusCount++;
-                if (bonusCount > 2) {
+                if (bonusCount > 4) {
                     throw new IllegalMoveSyntaxException("too many superprong bonus moves");
                 }
                 if (op.hops.isEmpty() || op.addPod
-                        || op.addProngDir != OctiDir.DIR_UNDEF
-                        || op.rmProngDir != OctiDir.DIR_UNDEF) {
+                        || op.addProngDir != OctiDir.DIR_UNDEF) {
                     throw new IllegalMoveSyntaxException(
                             "superprong bonus move must be a hop chain");
                 }
@@ -75,8 +78,7 @@ public class OctiMove {
                                 "composite regular moves must share the same starting coordinate");
                     }
                     if (op.hops.isEmpty() || op.addPod
-                            || op.addProngDir != OctiDir.DIR_UNDEF
-                            || op.rmProngDir != OctiDir.DIR_UNDEF) {
+                            || op.addProngDir != OctiDir.DIR_UNDEF) {
                         throw new IllegalMoveSyntaxException(
                                 "composite moves must consist solely of hop chains");
                     }
@@ -84,23 +86,8 @@ public class OctiMove {
             }
 
             if (op.addPod) {
-                if (!op.hops.isEmpty() || op.addProngDir != OctiDir.DIR_UNDEF
-                        || op.rmProngDir != OctiDir.DIR_UNDEF) {
+                if (!op.hops.isEmpty() || op.addProngDir != OctiDir.DIR_UNDEF) {
                     throw new IllegalMoveSyntaxException("invalid pod placement op structure");
-                }
-            } else if (op.addProngDir != OctiDir.DIR_UNDEF
-                    && op.rmProngDir != OctiDir.DIR_UNDEF) {
-                if (op.addProngDir == op.rmProngDir || op.superProng
-                        || !op.hops.isEmpty()) {
-                    throw new IllegalMoveSyntaxException("invalid reposition op structure");
-                }
-                if (op.pod.prongAt(op.rmProngDir) != OctiProngType.NORMAL_PRONG) {
-                    throw new IllegalMoveSyntaxException(
-                            "cannot reposition non-existent or superprong");
-                }
-                if (op.pod.prongAt(op.addProngDir) != OctiProngType.NO_PRONG) {
-                    throw new IllegalMoveSyntaxException(
-                            "cannot reposition to already occupied prong slot");
                 }
             } else if (op.addProngDir != OctiDir.DIR_UNDEF) {
                 if (!op.hops.isEmpty()) {
@@ -249,44 +236,7 @@ public class OctiMove {
             }
 
             if (s.charAt(idx) == '-') {
-                idx++;
-                if (idx >= s.length()) {
-                    throw new IllegalMoveSyntaxException("expected direction after '-' in reposition");
-                }
-                OctiDir rmDir = OctiDir.charToDir(s.charAt(idx));
-                if (rmDir == OctiDir.DIR_UNDEF) {
-                    throw new IllegalMoveSyntaxException("invalid remove direction in reposition");
-                }
-                idx++;
-
-                if (idx < s.length() && s.charAt(idx) == '!') {
-                    throw new IllegalMoveSyntaxException("superprong cannot be removed in reposition");
-                }
-                if (addSuper) {
-                    throw new IllegalMoveSyntaxException("superprong cannot be added in reposition");
-                }
-                if (idx != s.length()) {
-                    throw new IllegalMoveSyntaxException("extra trailing characters after reposition");
-                }
-
-                if (addDir == rmDir) {
-                    throw new IllegalMoveSyntaxException(
-                            "reposition with identical add and remove directions");
-                }
-                if (op.pod.prongAt(rmDir) == OctiProngType.NO_PRONG) {
-                    throw new IllegalMoveSyntaxException("cannot remove prong that does not exist");
-                }
-                if (op.pod.prongAt(rmDir) == OctiProngType.SUPER_PRONG) {
-                    throw new IllegalMoveSyntaxException("cannot reposition a superprong");
-                }
-                if (op.pod.prongAt(addDir) != OctiProngType.NO_PRONG) {
-                    throw new IllegalMoveSyntaxException("cannot add prong that already exists");
-                }
-
-                op.addProngDir = addDir;
-                op.rmProngDir = rmDir;
-                op.superProng = false;
-                return op;
+                throw new IllegalMoveSyntaxException("prong repositioning is not allowed");
             }
 
             throw new IllegalMoveSyntaxException("unexpected character after prong add direction");
@@ -300,54 +250,7 @@ public class OctiMove {
 
             char nextC = s.charAt(idx);
             if ((nextC >= 'A' && nextC <= 'H') || (nextC >= 'a' && nextC <= 'h')) {
-                OctiDir rmDir = OctiDir.charToDir(nextC);
-                if (rmDir == OctiDir.DIR_UNDEF) {
-                    throw new IllegalMoveSyntaxException("invalid remove direction in reposition");
-                }
-                idx++;
-
-                if (idx < s.length() && s.charAt(idx) == '!') {
-                    throw new IllegalMoveSyntaxException("superprong cannot be removed in reposition");
-                }
-                if (idx >= s.length() || s.charAt(idx) != '+') {
-                    throw new IllegalMoveSyntaxException("expected '+' after remove direction in reposition");
-                }
-                idx++;
-
-                if (idx >= s.length()) {
-                    throw new IllegalMoveSyntaxException("expected add direction after '+' in reposition");
-                }
-                OctiDir addDir = OctiDir.charToDir(s.charAt(idx));
-                if (addDir == OctiDir.DIR_UNDEF) {
-                    throw new IllegalMoveSyntaxException("invalid add direction in reposition");
-                }
-                idx++;
-
-                if (idx < s.length() && s.charAt(idx) == '!') {
-                    throw new IllegalMoveSyntaxException("superprong cannot be added in reposition");
-                }
-                if (idx != s.length()) {
-                    throw new IllegalMoveSyntaxException("extra trailing characters after reposition");
-                }
-
-                if (addDir == rmDir) {
-                    throw new IllegalMoveSyntaxException(
-                            "reposition with identical add and remove directions");
-                }
-                if (op.pod.prongAt(rmDir) == OctiProngType.NO_PRONG) {
-                    throw new IllegalMoveSyntaxException("cannot remove prong that does not exist");
-                }
-                if (op.pod.prongAt(rmDir) == OctiProngType.SUPER_PRONG) {
-                    throw new IllegalMoveSyntaxException("cannot reposition a superprong");
-                }
-                if (op.pod.prongAt(addDir) != OctiProngType.NO_PRONG) {
-                    throw new IllegalMoveSyntaxException("cannot add prong that already exists");
-                }
-
-                op.addProngDir = addDir;
-                op.rmProngDir = rmDir;
-                op.superProng = false;
-                return op;
+                throw new IllegalMoveSyntaxException("prong repositioning is not allowed");
             }
 
             if (nextC >= '1' && nextC <= '9') {
@@ -431,8 +334,8 @@ public class OctiMove {
             start = pos + 1;
         }
 
-        if (semiParts.size() > 3) {
-            throw new IllegalMoveSyntaxException("more than 2 superprong prelude operations");
+        if (semiParts.size() > 5) {
+            throw new IllegalMoveSyntaxException("more than 4 superprong prelude operations");
         }
 
         for (int i = 0; i < semiParts.size(); i++) {
@@ -510,13 +413,6 @@ public class OctiMove {
                 if (op.liberate) {
                     result.append('*');
                 }
-            } else if (op.addProngDir != OctiDir.DIR_UNDEF
-                    && op.rmProngDir != OctiDir.DIR_UNDEF) {
-                result.append(op.pod.getConfigString());
-                result.append('+');
-                result.append(op.addProngDir.toChar());
-                result.append('-');
-                result.append(op.rmProngDir.toChar());
             } else if (op.addProngDir != OctiDir.DIR_UNDEF) {
                 result.append(op.pod.getConfigString());
                 result.append('+');

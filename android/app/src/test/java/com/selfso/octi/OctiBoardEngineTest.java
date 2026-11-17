@@ -380,20 +380,19 @@ public class OctiBoardEngineTest {
     }
 
     @Test
-    public void testOctiMoveParseProngRepositionCanonicalAndReversed() {
-        OctiMove m1 = new OctiMove("33a+b-a");
-        assertEquals(1, m1.size());
-        OctiMoveOp op1 = m1.getOps().get(0);
-        assertEquals(OctiDir.DIR_NE, op1.addProngDir);
-        assertEquals(OctiDir.DIR_N, op1.rmProngDir);
-        assertEquals("33a+b-a", m1.asString());
+    public void testOctiMoveRejectProngRepositionCanonicalAndReversed() {
+        assertThrowsIllegalMoveSyntax(() -> new OctiMove("33a+b-a"));
+        assertThrowsIllegalMoveSyntax(() -> new OctiMove("33a-a+b"));
+        assertThrowsIllegalMoveSyntax(() -> new OctiMove("55acg+b-a"));
+        assertThrowsIllegalMoveSyntax(() -> new OctiMove("55acg-a+b"));
 
-        OctiMove m2 = new OctiMove("33a-a+b");
-        assertEquals(1, m2.size());
-        OctiMoveOp op2 = m2.getOps().get(0);
-        assertEquals(OctiDir.DIR_NE, op2.addProngDir);
-        assertEquals(OctiDir.DIR_N, op2.rmProngDir);
-        assertEquals("33a+b-a", m2.asString());
+        OctiMoveOp repoOp = new OctiMoveOp();
+        repoOp.x0 = 2;
+        repoOp.y0 = 2;
+        repoOp.pod.addProng(OctiDir.DIR_N, false);
+        repoOp.addProngDir = OctiDir.DIR_NE;
+        repoOp.rmProngDir = OctiDir.DIR_N;
+        assertThrowsIllegalMoveSyntax(() -> new OctiMove(Collections.singletonList(repoOp)));
     }
 
     @Test
@@ -454,6 +453,22 @@ public class OctiBoardEngineTest {
         assertTrue(m2.getOps().get(1).isSuperProngBonusMove);
         assertFalse(m2.getOps().get(2).isSuperProngBonusMove);
         assertEquals("33a!-34;34a!-35;35a+c", m2.asString());
+
+        OctiMove m3 = new OctiMove("33a!-34;53a!-54;73a!-74;34a!+b");
+        assertEquals(4, m3.size());
+        assertTrue(m3.getOps().get(0).isSuperProngBonusMove);
+        assertTrue(m3.getOps().get(1).isSuperProngBonusMove);
+        assertTrue(m3.getOps().get(2).isSuperProngBonusMove);
+        assertFalse(m3.getOps().get(3).isSuperProngBonusMove);
+        assertEquals("33a!-34;53a!-54;73a!-74;34a!+b", m3.asString());
+
+        OctiMove m4 = new OctiMove("33a!-34;53a!-54;73a!-74;44a!-45;34a!+b");
+        assertEquals(5, m4.size());
+        for (int i = 0; i < 4; i++) {
+            assertTrue(m4.getOps().get(i).isSuperProngBonusMove);
+        }
+        assertFalse(m4.getOps().get(4).isSuperProngBonusMove);
+        assertEquals("33a!-34;53a!-54;73a!-74;44a!-45;34a!+b", m4.asString());
     }
 
     @Test
@@ -519,7 +534,7 @@ public class OctiBoardEngineTest {
     public void testOctiMoveFaultSuperprongPreludeSyntaxErrors() {
         assertThrowsIllegalMoveSyntax(() -> new OctiMove(";33+b"));
         assertThrowsIllegalMoveSyntax(() -> new OctiMove("33a!-34;"));
-        assertThrowsIllegalMoveSyntax(() -> new OctiMove("33a!-34;34a!-35;35a!-36;36a+b"));
+        assertThrowsIllegalMoveSyntax(() -> new OctiMove("33a!-34;34a!-35;35a!-36;36a!-37;37a!-38;38a+b"));
     }
 
     // -------------------------------------------------------------------------
@@ -656,16 +671,55 @@ public class OctiBoardEngineTest {
     }
 
     @Test
-    public void testOcti2PlayerGameTurnOptionII_RepositionNormalProng() {
+    public void testOcti2PlayerGameRejectProngRepositionAndBoxedInStalemate() {
         OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_2);
         OctiGame game = board.getGame();
         game.start(OctiPlayer.PLAYER_A);
 
         game.move("33+b");
         game.move("37+e");
-        game.move("33b+c-b");
-        assertEquals(OctiProngType.NO_PRONG, board.squareAt(2, 2).getPodAt(0).prongAt(OctiDir.DIR_NE));
-        assertEquals(OctiProngType.NORMAL_PRONG, board.squareAt(2, 2).getPodAt(0).prongAt(OctiDir.DIR_E));
+        assertThrowsIllegalMoveSyntax(() -> game.move("33b+c-b"));
+        assertThrowsIllegalMoveSyntax(() -> game.move("33b-b+c"));
+
+        // Verify zero reposition moves generated across 2P, 4P, SP, ED, and OFK
+        OctiBoard[] checkBoards = new OctiBoard[] {
+            board,
+            new OctiBoard(OctiGameMode.GAME_MODE_2, true, true, OctiGameBases.GAME_BASES_3),
+            new OctiBoard(OctiGameMode.GAME_MODE_4, true, false, OctiGameBases.GAME_BASES_3),
+            new OctiBoard(OctiGameMode.GAME_MODE_OFK)
+        };
+        for (int idx = 1; idx < checkBoards.length; idx++) {
+            checkBoards[idx].getGame().start(OctiPlayer.PLAYER_A);
+            if (idx != 3) {
+                checkBoards[idx].getGame().move("33+a");
+            } else {
+                checkBoards[idx].getGame().move("22+a");
+            }
+        }
+        for (OctiBoard cb : checkBoards) {
+            for (OctiMove m : cb.getGame().generateLegalMoves()) {
+                for (OctiMoveOp op : m.getOps()) {
+                    assertEquals(OctiDir.DIR_UNDEF, op.rmProngDir);
+                }
+            }
+        }
+
+        // Boxed-in stalemate in 2P when Player B has 0 freePods, 0 freeProngs, and sole armed pod B11a is blocked
+        OctiBoard stale2p = new OctiBoard(OctiGameMode.GAME_MODE_2);
+        stale2p.fromPositionString("2:3:0:0:P:A:-:0:1,0,5,0:0,0,0,0:B11a,A12,A13,A53");
+        stale2p.getGame().move("53+a");
+        assertTrue("Boxed-in B11a with 0 reserves must trigger stalemate game over",
+                stale2p.getGame().isGameOver());
+        assertEquals(OctiPlayer.PLAYER_A, stale2p.getGame().getWinner());
+        assertEquals("STALEMATE", stale2p.getGame().deduceTermination());
+
+        // In 4P, boxed-in B11a with 0 reserves skips seat B and advances turn to C when partner D can still move
+        OctiBoard stale4p = new OctiBoard(OctiGameMode.GAME_MODE_4);
+        stale4p.fromPositionString("4:3:0:0:P:A:-:0:1,0,5,0:0,0,0,0:1,0,5,0:1,0,5,0:B11a,A12,A13,A33,C77,D73");
+        stale4p.getGame().move("33+a");
+        assertFalse(stale4p.getGame().isGameOver());
+        assertEquals("Boxed-in seat B in 4P must be skipped to seat C",
+                OctiPlayer.PLAYER_C, stale4p.getGame().getTurn());
     }
 
     @Test
@@ -901,7 +955,7 @@ public class OctiBoardEngineTest {
 
         game.move("22+a");
         game.move("26+e");
-        assertThrowsIllegalMove(() -> game.move("22a+b-a"));
+        assertThrowsIllegalMoveSyntax(() -> game.move("22a+b-a"));
     }
 
     @Test
@@ -1645,14 +1699,40 @@ public class OctiBoardEngineTest {
     }
 
     @Test
-    public void testPartnerRevivalOnPartnerHome() {
-        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_4);
+    public void testPermanent4PEliminationProngTransferAndSurvivingOwnPodLiberationOnPartnerHome() {
+        OctiBoard board = new OctiBoard(OctiGameMode.GAME_MODE_4, true, false, OctiGameBases.GAME_BASES_3);
         OctiGame game = board.getGame();
         game.start(OctiPlayer.PLAYER_A);
 
+        // 1. Base-capture elimination is permanent and transfers swept normal & super prongs to capturing enemy
+        board.clear();
+        OctiPod aAttacker = new OctiPod(OctiPodType.A_POD);
+        aAttacker.addProng(OctiDir.DIR_N, false);
+        board.squareAt(2, 5).addPod(aAttacker); // A36a
+        OctiPod bSwept = new OctiPod(OctiPodType.B_POD);
+        bSwept.addProng(OctiDir.DIR_E, false);
+        bSwept.addProng(OctiDir.DIR_S, true);
+        board.squareAt(4, 4).addPod(bSwept); // B55ce!
+        board.squareAt(6, 6).addPod(new OctiPod(OctiPodType.C_POD));
+        board.squareAt(6, 2).addPod(new OctiPod(OctiPodType.D_POD));
+
+        int aProngsBefore = game.getFreeProngs(OctiPlayer.PLAYER_A);
+        int aSuperBefore = game.getFreeSuperProngs(OctiPlayer.PLAYER_A);
+        game.move("36a-37"); // A infiltrates B's corner base 37!
+
+        assertTrue("B must be permanently eliminated", game.isPlayerEliminated(OctiPlayer.PLAYER_B));
+        assertEquals("Swept B55ce! must be moved into B's capturedPods",
+                1, game.getCapturedPods(OctiPlayer.PLAYER_B));
+        assertEquals("Capturing enemy A must receive swept normal prong",
+                aProngsBefore + 1, game.getFreeProngs(OctiPlayer.PLAYER_A));
+        assertEquals("Capturing enemy A must receive swept SuperProng",
+                aSuperBefore + 1, game.getFreeSuperProngs(OctiPlayer.PLAYER_A));
+        assertTrue(board.squareAt(4, 4).isEmpty());
+
+        // 2. Partner D occupying eliminated partner B's home (3,7) CANNOT revive B via 37* when D has 0 capturedPods
         board.squareAt(2, 6).clear();
         board.squareAt(2, 6).addPod(new OctiPod(OctiPodType.D_POD));
-
+        board.squareAt(4, 2).addPod(new OctiPod(OctiPodType.D_POD)); // D occupies neutral OCTI 53 -> canLiberate(D) == true
         OctiGameSnapshot snap = game.captureSnapshot();
         snap.turn = OctiPlayer.PLAYER_D;
         snap.players[OctiPlayer.PLAYER_B.getValue()].eliminated = true;
@@ -1660,20 +1740,32 @@ public class OctiBoardEngineTest {
         snap.players[OctiPlayer.PLAYER_D.getValue()].capturedPods = 0;
         game.restoreSnapshot(snap);
 
-        boolean has37Star = false;
+        for (OctiMove m : game.generateLegalMoves()) {
+            assertFalse("Partner revival 37* must NEVER be generated", "37*".equals(m.asString()));
+        }
+        assertThrowsIllegalMove(() -> game.move("37*"));
+
+        // 3. When surviving D holds D.capturedPods > 0 and occupies partnerHome (3,7) with liberation clearance,
+        // 37* liberates D's OWN pod while B remains permanently eliminated!
+        snap = game.captureSnapshot();
+        snap.players[OctiPlayer.PLAYER_D.getValue()].capturedPods = 1;
+        game.restoreSnapshot(snap);
+
+        boolean hasOwnLib37Star = false;
         for (OctiMove m : game.generateLegalMoves()) {
             if ("37*".equals(m.asString())) {
-                has37Star = true;
+                hasOwnLib37Star = true;
                 break;
             }
         }
-        assertTrue("Partner revival must generate 37*", has37Star);
-
+        assertTrue("Surviving player D must still be able to liberate D's own pod on partnerHome 37", hasOwnLib37Star);
         game.move("37*");
-        assertFalse(game.isPlayerEliminated(OctiPlayer.PLAYER_B));
-        assertEquals(1, game.getCapturedPods(OctiPlayer.PLAYER_B));
+        assertTrue("Partner B must remain permanently eliminated after D's own liberation on 37",
+                game.isPlayerEliminated(OctiPlayer.PLAYER_B));
+        assertEquals(2, game.getCapturedPods(OctiPlayer.PLAYER_B));
+        assertEquals(0, game.getCapturedPods(OctiPlayer.PLAYER_D));
         assertEquals(2, board.squareAt(2, 6).getNumPods());
-        assertEquals(OctiPodType.B_POD, board.squareAt(2, 6).getPodAt(1).getType());
+        assertEquals(OctiPodType.D_POD, board.squareAt(2, 6).getPodAt(1).getType());
     }
 
     @Test
@@ -2076,6 +2168,153 @@ public class OctiBoardEngineTest {
     }
 
     @Test
+    public void testAllOpeningBookEntriesAndCandidatesExecuteLegally() throws Exception {
+        assertEquals(3714, OctiOpeningBookData.ENTRIES.length);
+
+        java.nio.file.Path javaBookPath = java.nio.file.Paths.get(
+                "src/main/java/com/selfso/octi/OctiOpeningBookData.java");
+        if (!java.nio.file.Files.exists(javaBookPath)) {
+            javaBookPath = java.nio.file.Paths.get(
+                    "app/src/main/java/com/selfso/octi/OctiOpeningBookData.java");
+        }
+        assertTrue("OctiOpeningBookData.java must exist", java.nio.file.Files.exists(javaBookPath));
+
+        List<String> lines = java.nio.file.Files.readAllLines(
+                javaBookPath, java.nio.charset.StandardCharsets.UTF_8);
+        List<String> variantLabels = new ArrayList<>(3714);
+        List<String[]> prefixMovesList = new ArrayList<>(3714);
+
+        for (String rawLine : lines) {
+            String trimmed = rawLine.trim();
+            if (!trimmed.startsWith("// ")) {
+                continue;
+            }
+            String comment = trimmed.substring(3).trim();
+            int plyPos = comment.indexOf(" ply ");
+            int parenOpen = comment.indexOf(" (");
+            if (plyPos < 0 || parenOpen <= plyPos + 5 || !comment.endsWith(")")) {
+                continue;
+            }
+            String vLabel = comment.substring(0, plyPos);
+            int ply = Integer.parseInt(comment.substring(plyPos + 5, parenOpen));
+            String inner = comment.substring(parenOpen + 2, comment.length() - 1);
+            String[] pms;
+            if ("initial".equals(inner)) {
+                pms = new String[0];
+            } else {
+                assertTrue(inner.startsWith("after "));
+                pms = inner.substring(6).trim().split("\\s+");
+            }
+            assertEquals(ply, pms.length);
+            variantLabels.add(vLabel);
+            prefixMovesList.add(pms);
+        }
+
+        assertEquals(OctiOpeningBookData.ENTRIES.length, variantLabels.size());
+
+        int prefixMovesExecuted = 0;
+        int candidateMovesExecuted = 0;
+        boolean[] mirroredFlag = new boolean[1];
+
+        for (int i = 0; i < OctiOpeningBookData.ENTRIES.length; i++) {
+            OctiBotEngine.OpeningBookEntry entry = OctiOpeningBookData.ENTRIES[i];
+            String v = variantLabels.get(i);
+            String[] pms = prefixMovesList.get(i);
+
+            OctiBoard board;
+            switch (v) {
+                case "2P 3-Base":
+                    board = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_3);
+                    break;
+                case "2P 1-Base":
+                    board = new OctiBoard(OctiGameMode.GAME_MODE_2, false, false, OctiGameBases.GAME_BASES_1);
+                    break;
+                case "2P_3B_SP":
+                    board = new OctiBoard(OctiGameMode.GAME_MODE_2, true, false, OctiGameBases.GAME_BASES_3);
+                    break;
+                case "2P_3B_ED":
+                    board = new OctiBoard(OctiGameMode.GAME_MODE_2, false, true, OctiGameBases.GAME_BASES_3);
+                    break;
+                case "2P_3B_SPED":
+                    board = new OctiBoard(OctiGameMode.GAME_MODE_2, true, true, OctiGameBases.GAME_BASES_3);
+                    break;
+                case "2P_1B_SP":
+                    board = new OctiBoard(OctiGameMode.GAME_MODE_2, true, false, OctiGameBases.GAME_BASES_1);
+                    break;
+                case "2P_1B_ED":
+                    board = new OctiBoard(OctiGameMode.GAME_MODE_2, false, true, OctiGameBases.GAME_BASES_1);
+                    break;
+                case "2P_1B_SPED":
+                    board = new OctiBoard(OctiGameMode.GAME_MODE_2, true, true, OctiGameBases.GAME_BASES_1);
+                    break;
+                case "4P":
+                    board = new OctiBoard(OctiGameMode.GAME_MODE_4, false, false, OctiGameBases.GAME_BASES_1);
+                    break;
+                case "4P_SP":
+                    board = new OctiBoard(OctiGameMode.GAME_MODE_4, true, false, OctiGameBases.GAME_BASES_1);
+                    break;
+                case "4P_ED":
+                    board = new OctiBoard(OctiGameMode.GAME_MODE_4, false, true, OctiGameBases.GAME_BASES_1);
+                    break;
+                case "4P_SPED":
+                    board = new OctiBoard(OctiGameMode.GAME_MODE_4, true, true, OctiGameBases.GAME_BASES_1);
+                    break;
+                case "OFK":
+                    board = new OctiBoard(OctiGameMode.GAME_MODE_OFK);
+                    break;
+                default:
+                    fail("Unknown opening book variant label: " + v);
+                    return;
+            }
+
+            OctiGame game = board.getGame();
+            game.start(OctiPlayer.PLAYER_A);
+            for (String pm : pms) {
+                game.move(pm);
+                prefixMovesExecuted++;
+            }
+
+            mirroredFlag[0] = false;
+            long canon = OctiBotEngine.computeCanonicalOpeningHash(board, mirroredFlag);
+            assertEquals("Canonical hash mismatch at entry " + i, entry.canonicalKey, canon);
+            assertTrue(entry.candidates.length >= 1 && entry.candidates.length <= 3);
+
+            List<OctiMove> legalMoves = game.generateLegalMoves();
+            assertFalse(legalMoves.isEmpty());
+            java.util.HashSet<String> legalSet = new java.util.HashSet<>(legalMoves.size() * 2);
+            for (OctiMove lm : legalMoves) {
+                legalSet.add(lm.asString());
+            }
+
+            String posStr = board.toPositionString();
+            int w = board.getBoardWidth();
+
+            for (OctiBotEngine.OpeningBookCandidate cand : entry.candidates) {
+                assertNotNull(cand.move);
+                assertFalse(cand.move.isEmpty());
+                String actualMove = mirroredFlag[0]
+                        ? OctiBotEngine.mirrorMoveNotation(cand.move, w)
+                        : cand.move;
+                assertFalse(actualMove.isEmpty());
+                OctiMove parsed = new OctiMove(actualMove);
+                String canonicalStr = parsed.asString();
+                if (parsed.getOps().size() == 1 || board.getGameMode() == OctiGameMode.GAME_MODE_OFK) {
+                    assertTrue("Candidate not in generateLegalMoves at entry " + i + ": " + canonicalStr,
+                            legalSet.contains(canonicalStr));
+                }
+
+                OctiBoard testBoard = new OctiBoard(OctiGameMode.GAME_MODE_2);
+                testBoard.fromPositionString(posStr);
+                testBoard.getGame().move(parsed);
+                candidateMovesExecuted++;
+            }
+        }
+
+        assertEquals(13337, prefixMovesExecuted);
+        assertEquals(11142, candidateMovesExecuted);
+    }
+
+    @Test
     public void testFourPlayerSeatCDProngDirectionSymmetry() {
         OctiBoard b4 = new OctiBoard(OctiGameMode.GAME_MODE_4);
         b4.getGame().start(OctiPlayer.PLAYER_A);
@@ -2317,6 +2556,117 @@ public class OctiBoardEngineTest {
         assertEquals(1, board.getGame().getCapturedPods(OctiPlayer.PLAYER_B));
         assertEquals(1, board.getGame().getFreeProngs(OctiPlayer.PLAYER_A));
         assertEquals(1, board.getGame().getFreeSuperProngs(OctiPlayer.PLAYER_A));
+    }
+
+    @Test
+    public void testStartingSquareVacancyCompositeClearOutAndEdgelessHopOverBan() {
+        // R4(a): Loop-back onto S (44) is illegal if stationary A44a remains on 44,
+        // and legal in composite clear-out 44a-45,44beg-66x-64x-44
+        OctiBoard bLoop = new OctiBoard();
+        bLoop.fromPositionString("2:3:0:0:P:A:-:0:2,0,20,0:3,0,23,0:A53,A73,A44a,A44beg,A54c,B55e,B65e,B37,B77");
+        java.util.Set<String> legalLoop = legalMoveStrings(bLoop);
+        assertFalse("Single-pod loop-back onto stationary A44a must NOT be generated",
+                legalLoop.contains("44beg-66x-64x-44"));
+        assertFalse("Single-pod non-capturing loop-back onto stationary A44a must NOT be generated",
+                legalLoop.contains("44beg-66-64-44"));
+        assertThrowsIllegalMove(() -> bLoop.getGame().move("44beg-66x-64x-44"));
+
+        bLoop.getGame().move("44a-45,44beg-66x-64x-44");
+        assertEquals(1, bLoop.squareAt(3, 4).getNumPods()); // A45a
+        assertEquals(1, bLoop.squareAt(3, 3).getNumPods()); // A44beg landed back on vacated 44
+        assertEquals(0, bLoop.squareAt(4, 4).getNumPods()); // B55e captured
+        assertEquals(0, bLoop.squareAt(5, 4).getNumPods()); // B65e captured
+
+        // R4(b): Edgeless wraparound hop-over stationary stack-mate on S (44bcd-66-86-16-34-54 over A44a) is illegal
+        OctiBoard bEd = new OctiBoard();
+        bEd.fromPositionString("2:3:0:1:P:A:-:0:2,0,20,0:3,0,20,0:A44a,A44bcd,B55,B76,B96,B25,B77");
+        java.util.Set<String> legalEd = legalMoveStrings(bEd);
+        for (String s : legalEd) {
+            assertFalse("Generator must never hop over stationary S=44 in _ED: " + s,
+                    s.startsWith("44bcd-66") && s.contains("-34") && s.contains("-54"));
+        }
+        assertThrowsIllegalMove(() -> bEd.getGame().move("44bcd-66-86-16-34-54"));
+
+        // R4(c): Straight-line SuperProng _ED wraparound over stationary A44a on S=44 is also illegal
+        OctiBoard bEdSp = new OctiBoard();
+        bEdSp.fromPositionString("2:3:1:1:P:A:-:0:2,0,20,0:3,0,20,0:A44a,A44c!,B54,B74,B94,B24,B77");
+        java.util.Set<String> legalEdSp = legalMoveStrings(bEdSp);
+        assertTrue("4-hop SP prelude stopping at 34 before S=44 is legal",
+                legalEdSp.contains("44c!-64-84-14-34;34c!+b"));
+        for (String s : legalEdSp) {
+            String firstSeg = s.split(";")[0];
+            assertFalse("SP generator must never hop over stationary S=44 in _ED: " + s,
+                    firstSeg.startsWith("44c!-64") && firstSeg.contains("-34") && firstSeg.contains("-54"));
+        }
+        assertThrowsIllegalMove(() -> bEdSp.getGame().move("44c!-64-84-14-34-54;54c!+a"));
+        assertThrowsIllegalMove(() -> bEdSp.getGame().move("44c!-64-84-14-34-54"));
+    }
+
+    @Test
+    public void testSuperProngUpToFourPreludesImmediateCaptureRemovalRollbackAndEndOfTurnWin() {
+        // 1. 4P_SP with 3 controlled SPs allows 3 preludes and rejects 4th prelude
+        OctiBoard b3Sp = new OctiBoard();
+        b3Sp.fromPositionString("4:3:1:0:P:A:-:0:0,0,10,0:2,0,10,0:2,0,10,0:2,0,10,0:A33a!,A53a!,A73a!,B37,C77,D73");
+        java.util.Set<String> legal3 = legalMoveStrings(b3Sp);
+        assertTrue("3 controlled SPs must generate 3-prelude move",
+                legal3.contains("33a!-34;53a!-54;73a!-74;34a!+b"));
+        assertThrowsIllegalMove(() -> b3Sp.getGame().move("33a!-34;53a!-54;73a!-74;34a!-35;35a!+b"));
+        b3Sp.getGame().move("33a!-34;53a!-54;73a!-74;34a!+b");
+        assertEquals(OctiPlayer.PLAYER_B, b3Sp.getGame().getTurn());
+
+        // 2. 4P_SP with 4 controlled SPs allows 4 preludes + regular move, and OctiBotEngine searches cleanly
+        OctiBoard b4Sp = new OctiBoard();
+        b4Sp.fromPositionString("4:3:1:0:P:A:-:0:0,0,10,0:2,0,10,0:2,0,10,0:2,0,10,0:A33a!,A53a!,A73a!,A44a!,B37,C77,D73");
+        java.util.Set<String> legal4 = legalMoveStrings(b4Sp);
+        assertTrue("4 controlled SPs must generate 4-prelude move",
+                legal4.contains("33a!-34;53a!-54;73a!-74;44a!-45;34a!+b"));
+        OctiBotEngine bot4 = new OctiBotEngine(OctiBotEngine.BotDifficulty.TACTICAL);
+        bot4.setTimeBudgetMs(100);
+        String botMove4 = bot4.chooseMove(b4Sp);
+        assertNotNull(botMove4);
+        assertFalse(botMove4.isEmpty());
+        b4Sp.getGame().move("33a!-34;53a!-54;73a!-74;44a!-45;34a!+b");
+        assertEquals(OctiPlayer.PLAYER_B, b4Sp.getGame().getTurn());
+
+        // 3. Immediate capture removal after SP1 allows SP2 to land on the square vacated by SP1's 'x' capture
+        OctiBoard bImm = new OctiBoard();
+        bImm.fromPositionString("2:3:1:0:P:A:-:0:2,0,10,0:2,0,10,0:A33a!,B34e,A14c!,B24e,B77");
+        java.util.Set<String> legalImm = legalMoveStrings(bImm);
+        assertTrue("SP2 must be able to land on 34 immediately vacated by SP1 33a!-35x",
+                legalImm.contains("33a!-35x;14c!-34x;35a!+b"));
+        // Without 'x' on SP1, 34 is still occupied so 14c!-34x is illegal
+        assertThrowsIllegalMove(() -> bImm.getGame().move("33a!-35;14c!-34x;35a!+b"));
+        bImm.getGame().move("33a!-35x;14c!-34x;35a!+b");
+        assertEquals(2, bImm.getGame().getCapturedPods(OctiPlayer.PLAYER_B));
+
+        // 4. Friendly SP captured by SP1 with 'x' is removed immediately and cannot fire in SP2
+        OctiBoard bSelfCapSp = new OctiBoard();
+        bSelfCapSp.fromPositionString("2:3:1:0:P:A:-:0:2,0,10,0:2,0,10,0:A33a!,A34c!,B77");
+        java.util.Set<String> legalSelfCap = legalMoveStrings(bSelfCapSp);
+        assertFalse("Captured friendly SP A34c! must not fire in SP2",
+                legalSelfCap.contains("33a!-35x;34c!-44;35a!+b"));
+        assertThrowsIllegalMove(() -> bSelfCapSp.getGame().move("33a!-35x;34c!-44;35a!+b"));
+
+        // 5. Failed SP2 rolls back SP1's immediate capture and prong credits atomically
+        OctiBoard bRollback = new OctiBoard();
+        bRollback.fromPositionString("2:3:1:0:P:A:-:0:2,0,10,0:2,0,10,0:A33a!,B34ef!,A14c!,B77");
+        String fenBeforeFail = bRollback.toPositionString();
+        assertThrowsIllegalMove(() -> bRollback.getGame().move("33a!-35x;14c!-16x;35a!+b"));
+        assertEquals("Failed SP2 must atomically restore pre-turn FEN and reserves",
+                fenBeforeFail, bRollback.toPositionString());
+
+        // 6. Victory is checked ONLY at completion of the full turn (not mid-prelude)
+        OctiBoard bEndWin = new OctiBoard();
+        bEndWin.fromPositionString("2:3:1:0:P:A:-:0:2,0,10,0:2,0,10,0:A37,A57,A75a!e,B76,B33");
+        bEndWin.getGame().move("75a!e-77x;77a!e-76"); // SP1 lands on 3rd base 77, regular action steps off 77!
+        assertFalse("Stepping off final enemy base in regular phase must NOT win mid-prelude",
+                bEndWin.getGame().isGameOver());
+
+        OctiBoard bStayWin = new OctiBoard();
+        bStayWin.fromPositionString("2:3:1:0:P:A:-:0:2,0,10,0:2,0,10,0:A37,A57,A75a!e,B76,B33");
+        bStayWin.getGame().move("75a!e-77x;77a!e+b"); // Stays on 77 at end of turn -> wins!
+        assertTrue(bStayWin.getGame().isGameOver());
+        assertEquals(OctiPlayer.PLAYER_A, bStayWin.getGame().getWinner());
     }
 
     // -------------------------------------------------------------------------

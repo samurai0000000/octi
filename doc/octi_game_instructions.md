@@ -25,16 +25,14 @@ The winner is the first player to occupy all three enemy OCTI squares at the sam
 OCTI is a game of options. Players, in turn, must do one and only one of the following:
 
 1. **I.** Insert a prong into a friendly pod.
-2. **II.** Reposition a prong in a friendly pod.
-3. **III.** Move a friendly pod (or pods if more than one occupy the same square).
-4. **IV.** Jump other pods, capturing them if desired.
-5. **V.** Bring a reserve or captured pod onto the board.
+2. **II.** Move a friendly pod (or pods if more than one occupy the same square).
+3. **III.** Jump other pods, capturing them if desired.
+4. **IV.** Bring a reserve or captured pod onto the board.
 
 When exercising one of these options, keep the following guidelines in mind:
 
 - Pods may only move or jump in the direction of their prongs.
-- A prong may only be added to your own pod.
-- To conserve your supply of prongs, a prong may be repositioned in the same pod.
+- A prong may only be added to your own pod. Once inserted, prongs are permanent and cannot be repositioned to another socket.
 - Some or all of the pods that occupy a square may move or jump in a single turn.
 - Pods stacked together in a single square may move or jump in separate directions.
 - Pods move only to adjacent squares (unless jumping).
@@ -45,13 +43,13 @@ When exercising one of these options, keep the following guidelines in mind:
 - Any pod that is jumped may be captured at the conclusion of the turn.
 - Captured pods are removed from the board and kept separate from reserve pods.
 - Pods are not required to jump, and capturing is optional.
-- If jumped, all pods in a stack may be captured.
+- If jumped with capture (`x`), **all pods in the jumped stack are captured** (whole-stack capture; partial stack capture is never allowed).
 - Pods stacked together may not jump each other.
 - A stack may jump to the same destination.
 - Players seize all prongs from pods that they capture.
 - A reserve pod may be brought onto any friendly OCTI square.
 - A reserve pod may be brought onto any enemy OCTI square you occupy.
-- If you occupy an enemy OCTI square, you may liberate one of your captured pods; this liberated pod is stacked on any OCTI square that you occupy.
+- In 3-Base (`2P_3B*`) and 4-Player (`4P*`) games, if you occupy an enemy (or neutral 4P) OCTI square, you may liberate one of your own captured pods (`xy*`); this liberated pod is stacked on any OCTI square that you already occupy (liberation does not apply to 1-Base sudden-death variants or `OFK`).
 - OCTI squares do not affect movement or capture. They are not "safe" squares.
 
 ---
@@ -137,11 +135,10 @@ When exercising one of these options, keep the following guidelines in mind:
 
 Above game rules apply except:
 
-- Victory is achieved by occupying the opponents' two home bases.
-- If an enemy pod occupies a player's home base at the end of a turn, all of that player's pieces on the board are captured, and that player is out of the game.
+- Victory is achieved by occupying the opponents' two home bases at the completion of a full turn.
+- If an enemy pod occupies a player's home base at the end of a full turn, all of that player's pieces on the board are swept to their captured pool, **all prongs from those swept pods transfer to the capturing enemy player**, and that player is **permanently eliminated** for the remainder of the game (there is no partner revival).
 - Partners cannot share pods or prongs, but allied pieces may stack together.
-- A player who occupies the home base of an eliminated teammate may use a turn to liberate an allied pod on that square. The liberated player may then play normally.
-- One may liberate captured pods on any occupied enemy or neutral OCTI square.
+- A surviving player who personally occupies an enemy or neutral (`53`/`57`) OCTI square may liberate one of their **own** captured pods (`xy*`) onto any OCTI square that they personally occupy (including an eliminated partner's corner base if occupied by the surviving player).
 
 ---
 
@@ -149,11 +146,12 @@ Above game rules apply except:
 
 **Edgeless Board.** Increase the range of strategic possibilities by allowing pods to exit the edge of the board and return at the opposite end.
 
-**Superprongs.** Players receive 25 prongs, one of which is a light color. A superprong entitles a player to an extra move. Before the start of the regular turn, you may move or jump your pod in the direction of its superprong. You may now start the regular part of your turn, moving or building.
+**Superprongs.** Players receive 25 prongs, one of which is a light color (gold SuperProng). Each SuperProng you control on the board entitles you to **1 bonus prelude move per turn** (up to 2 in `2P_SP` and up to 4 in `4P_SP`). Before the start of the regular turn, you may move 1 square or execute a straight-line (collinear) jump chain in the direction of each distinct SuperProng socket. You may now start the regular part of your turn, moving (using any prong on any pod) or building.
 
-- Once placed in a pod, superprongs may not be repositioned.
-- Superprongs may be captured from friendly or enemy pods.
-- A player with two superprongs (one friendly, one captured) is entitled to two extra moves.
+- Once placed in a pod, SuperProngs (like normal prongs) are permanent and may not be repositioned.
+- SuperProngs may be captured from friendly or enemy pods.
+- Stacks jumped with capture (`x`) during a SuperProng bonus prelude are **removed immediately** after that prelude before the next SuperProng prelude or regular turn action begins.
+- Victory and 4-Player base-capture elimination are evaluated **only at the completion of the full turn**.
 
 The superprong version is best when played on an edgeless board.
 
@@ -171,16 +169,16 @@ Visit our website: www.OCTI.net
 
 ## Appendix A: OCTI Project Interpretations
 
-The rule text above is reproduced verbatim from the original rule book. Where it is silent or ambiguous, this project's engines (C++ `octi_core` and the Android Java engine) apply the interpretations below.
+Where the classic rules require formalization for edge cases, Don Green's November 2026 review establishes the exact rules enforced across C++ `octi_core`, the Web JS engine, Desktop Qt6, and the Android Java engine below.
 
-### A.1 Looping jump onto the starting square
+### A.1 Starting-Square Vacancy, Loop-Back Jumps & Stacked-Pod Non-Jumping
 
-**Situation.** A pod jumps in a multi-jump chain that lands back on the square it started from, while other pods of the same stack remain on that square (stationary stack-mates).
+**Situation.** A pod starts a multi-jump chain on square `S` where one or more friendly pods are stacked.
 
-**Ambiguity.** "A jumping pod must land in an empty square immediately behind the jumped pod" can be read literally, in which case the starting square is not empty while a stack-mate remains on it. Other rules point the other way: "any number of friendly pods may stack together", "A stack may jump to the same destination", and "Stacked pods ignore each other when moving or jumping".
-
-**Interpretation.** Pods in the same stack ignore each other. For the jumping pod, the whole starting stack counts as vacated on the starting square only, so the pod may land back there and rejoin the pods that stayed. This applies to the jump-landing check and to the check that a jumped square holds a stationary pod.
+**Ruling (Don Green, November 2026).**
+1. **No Jumping Over Starting Stack-Mates (`jx == sx && jy == sy` Forbidden):** You cannot jump other pods with which you started stacked for the duration of your jump. Therefore, a jumping pod can **never jump over its starting square `S`** during its jump chain—even on an Edgeless (`_ED`) wraparound trajectory (for example, `44bcd-66-86-16-34-54` jumping over stationary `A44a` on `44` is illegal).
+2. **Landing Back on `S` Requires Full Stack Clear-Out:** A jumping pod may **land back on its starting square `S`** at the end of a loop **only when all pods that started the turn on `S` vacate `S`** during the move. For example, composite clear-out `44a-45,44beg-66x-64x-44` is legal because `A44a` steps off `44` so `44` is completely empty when `A44beg` lands back on `44`; conversely, single move `44beg-66x-64x-44` while `A44a` remains stationary on `44` is illegal.
 
 **Scope.**
-- Every other square is judged by plain emptiness. A friendly pod elsewhere on the board, even one with identical prongs, is never treated as vacated.
-- In OCTI for Kids, stacking is forbidden, so no stack-mates exist and this case cannot arise.
+- Every square is judged by physical vacancy: only pods that actually move out of `S` vacate `S` for landing, and `S` can never be jumped over during the chain.
+- In OCTI for Kids (`OFK`), stacking is forbidden, so no stack-mates exist on `S`.

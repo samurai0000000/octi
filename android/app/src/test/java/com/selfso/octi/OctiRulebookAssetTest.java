@@ -106,6 +106,53 @@ public class OctiRulebookAssetTest {
             assertTrue("Missing variant code in mobile HTML: " + v, html.contains(v));
         }
         assertFalse("External http:// forbidden in offline rulebook HTML", html.contains("http://"));
+
+        // Verify R1-R6 revisions in mobile rulebook HTML
+        assertTrue("Missing 4. Victory & 4P Elimination TOC/section",
+            html.contains("4. Victory &amp; 4P Elimination"));
+        assertTrue("Missing composite clear-out loop-back example 44a-45,44beg-66x-64x-44",
+            html.contains("44a-45,44beg-66x-64x-44"));
+        assertTrue("Missing _ED hop-over stationary S example 44bcd-66-86-16-34-54",
+            html.contains("44bcd-66-86-16-34-54"));
+        assertTrue("Missing whole-stack capture clarification",
+            html.contains("whole-stack capture"));
+        assertTrue("Missing 2P_3B* liberation scope",
+            html.contains("2P_3B*"));
+        assertTrue("Missing 1 bonus prelude move per SuperProng rule",
+            html.contains("1 bonus prelude move per SuperProng"));
+        assertTrue("Missing permanent 4P elimination rule",
+            html.contains("permanently eliminated"));
+        assertTrue("Missing capturing enemy player prong transfer rule",
+            html.contains("capturing enemy player"));
+
+        assertFalse("Stale reposition example 33b+a-b must be removed",
+            html.contains("33b+a-b"));
+        assertFalse("Stale Reposition a Normal Prong turn option must be removed",
+            html.contains("Reposition a Normal Prong"));
+        assertFalse("Stale Teammate Revival heading/text must be removed",
+            html.contains("Teammate Revival"));
+        assertFalse("Stale 4. Victory & 4P Revival TOC must be removed",
+            html.contains("4. Victory &amp; 4P Revival"));
+        assertFalse("Stale partner revival notation must be removed",
+            html.contains("revive eliminated 4P partner"));
+
+        // Verify cross-surface R1-R6 parity across core/src/OctiRulebook.cxx and doc/*.md
+        File octiRoot = repoDir.getParentFile().getParentFile();
+        File cppRulebook = new File(octiRoot, "core/src/OctiRulebook.cxx");
+        assertTrue("Missing core/src/OctiRulebook.cxx", cppRulebook.isFile());
+        String cppText = new String(Files.readAllBytes(cppRulebook.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(cppText.contains("4. Victory &amp; 4P Elimination"));
+        assertTrue(cppText.contains("44a-45,44beg-66x-64x-44"));
+        assertTrue(cppText.contains("44bcd-66-86-16-34-54"));
+        assertTrue(cppText.contains("whole-stack capture"));
+        assertTrue(cppText.contains("2P_3B*"));
+        assertTrue(cppText.contains("1 bonus prelude move per SuperProng"));
+        assertTrue(cppText.contains("permanently eliminated"));
+        assertTrue(cppText.contains("capturing enemy player"));
+        assertFalse(cppText.contains("33b+a-b"));
+        assertFalse(cppText.contains("Reposition a Normal Prong"));
+        assertFalse(cppText.contains("Teammate Revival"));
+        assertFalse(cppText.contains("revive eliminated 4P partner"));
     }
 
     @Test

@@ -1012,27 +1012,6 @@ fun OctiMainAppContent(
                         viewModel.notifyComposerUpdated()
                     }
                 },
-                onRepositionProng = { podIndex, srcDir, dstDir ->
-                    viewModel.clearLastMoveIndicators()
-                    if (viewModel.composer.isAwaitingConfirmation) {
-                        if (viewModel.composer.isAwaitingSuperProngBonusMove) {
-                            if (viewModel.composer.isGuidedMoveActive) {
-                                viewModel.composer.finishGuidedMoveHere()
-                            }
-                        } else {
-                            viewModel.composer.cancelAndRollback()
-                        }
-                    }
-                    viewModel.composer.selectStackPodIndex(zx, zy, podIndex)
-                    viewModel.composer.beginRepositionProng(zx, zy, podIndex, srcDir)
-                    if (viewModel.composer.dropOnCompassSector(zx, zy, podIndex, dstDir)) {
-                        if (viewModel.composer.isAwaitingConfirmation) {
-                            OctiSoundSynth.playCue(OctiSoundSynth.Cue.PRONG_SNAP, !viewModel.sfxMuted.value)
-                        }
-                        viewModel.closeZoomedSquare()
-                        viewModel.notifyComposerUpdated()
-                    }
-                },
                 onPlaceReservePod = { liberate ->
                     viewModel.clearLastMoveIndicators()
                     if (viewModel.composer.isAwaitingConfirmation) {

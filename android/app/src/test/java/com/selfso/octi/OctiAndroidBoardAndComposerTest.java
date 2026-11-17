@@ -331,12 +331,18 @@ public class OctiAndroidBoardAndComposerTest {
         assertEquals("57", lastCommitted.get());
         assertEquals(OctiPlayer.PLAYER_A, game.getTurn());
 
-        // 3. Reposition prong on (3,3) from N (a) to NE (b) under Smart Auto-Commit
+        // 3. Prong repositioning is forbidden across all variants; add NE (b) prong from reserve under Smart Auto-Commit
+        try {
+            new OctiMove("33a+b-a");
+            fail("Expected IllegalMoveSyntaxException on prong reposition");
+        } catch (IllegalMoveSyntaxException expected) {
+            // expected
+        }
         composer.setConfirmAllMoves(false);
         lastCommitted.set(null);
-        assertTrue(composer.beginRepositionProng(3, 3, 0, OctiDir.DIR_N));
+        assertTrue(composer.beginAddProngFromReserve(false));
         assertTrue(composer.dropOnCompassSector(3, 3, 0, OctiDir.DIR_NE));
-        assertTrue(lastCommitted.get().contains("+b") && lastCommitted.get().contains("-a"));
+        assertEquals("33a+b", lastCommitted.get());
         assertEquals(OctiPlayer.PLAYER_B, game.getTurn());
 
         // 4. Single step by Player A after Player B adds a prong
@@ -906,9 +912,8 @@ public class OctiAndroidBoardAndComposerTest {
                     composer.dropOnSquare(tx, ty);
                 }
             } else if (action == 3) {
-                if (composer.beginRepositionProng(rx, ry, 0, rDir)) {
-                    OctiDir dstDir = allDirs[rng.nextInt(allDirs.length)];
-                    composer.dropOnCompassSector(rx, ry, 0, dstDir);
+                if (composer.beginLiberatePodFromReserve()) {
+                    composer.dropOnSquare(rx, ry);
                 }
             } else {
                 composer.rollbackMove();
@@ -1266,14 +1271,14 @@ public class OctiAndroidBoardAndComposerTest {
         assertTrue(composer.stageOrCommitAddProng(3, 7, 0, OctiDir.DIR_S, false));
         assertTrue(composer.commitStagedMove());
 
-        // 2. Repositioning prong resets guidedMoveActive
+        // 2. Pod step/jump staging resets guidedMoveActive
         assertTrue(composer.beginGuidedPodMove(3, 3, 0, false));
         assertTrue(composer.isGuidedMoveActive());
         assertFalse(composer.isAwaitingConfirmation());
 
-        assertTrue(composer.stageOrCommitRepositionProng(3, 3, 0, OctiDir.DIR_N, OctiDir.DIR_W));
-        assertFalse("stageOrCommitRepositionProng must reset guidedMoveActive", composer.isGuidedMoveActive());
-        assertTrue("stageOrCommitRepositionProng must set awaitingConfirmation", composer.isAwaitingConfirmation());
+        assertTrue(composer.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4, false));
+        assertFalse("stageOrCommitPodMoveOrJump must reset guidedMoveActive on single step", composer.isGuidedMoveActive());
+        assertTrue("stageOrCommitPodMoveOrJump must set awaitingConfirmation", composer.isAwaitingConfirmation());
         assertTrue(composer.commitStagedMove());
 
         // B's turn: B adds prong and commits
@@ -1281,7 +1286,7 @@ public class OctiAndroidBoardAndComposerTest {
         assertTrue(composer.commitStagedMove());
 
         // 3. Adding pod resets guidedMoveActive
-        assertTrue(composer.beginGuidedPodMove(3, 3, 0, false));
+        assertTrue(composer.beginGuidedPodMove(3, 4, 0, false));
         assertTrue(composer.isGuidedMoveActive());
         assertFalse(composer.isAwaitingConfirmation());
 
@@ -1559,15 +1564,36 @@ public class OctiAndroidBoardAndComposerTest {
         assertEquals("33a!-34;33", cAddPod.stagedMoveNotation());
         assertTrue(cAddPod.commitMove());
 
-        // 4. Continuing after 33a!c-34 with prong reposition produces "33a!c-34;34a!c+b-c"
-        OctiBoard bRepo = new OctiBoard();
-        bRepo.fromPositionString("2:3:1:0:P:A:-:0:0,0,0,0:3,0,20,2:A33a!c,B77");
-        OctiMoveComposer cRepo = new OctiMoveComposer(bRepo);
-        cRepo.setConfirmAllMoves(true);
-        assertTrue(cRepo.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4, false));
-        assertTrue(cRepo.stageOrCommitRepositionProng(3, 4, 0, OctiDir.DIR_E, OctiDir.DIR_NE));
-        assertEquals("33a!c-34;34a!c+b-c", cRepo.stagedMoveNotation());
-        assertTrue(cRepo.commitMove());
+        // 4. Immediate capture removal between SP1 and SP2 in composer: SP1 33a!-35x vacates 34 so SP2 14c!-34x lands on 34!
+        OctiBoard bImmSp = new OctiBoard();
+        bImmSp.fromPositionString("2:3:1:0:P:A:-:0:2,0,10,0:2,0,10,0:A33a!,B34e,A14c!,B24e,B77");
+        OctiMoveComposer cImmSp = new OctiMoveComposer(bImmSp);
+        cImmSp.setConfirmAllMoves(true);
+        assertTrue(cImmSp.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 5, false));
+        assertEquals("33a!-35x", cImmSp.stagedMoveNotation());
+        assertTrue(cImmSp.isAwaitingSuperProngBonusMove());
+        assertTrue("SP2 must stage landing on 34 vacated immediately by SP1 capture",
+                cImmSp.stageOrCommitPodMoveOrJump(1, 4, 0, 3, 4, false));
+        assertEquals("33a!-35x;14c!-34x", cImmSp.stagedMoveNotation());
+        assertTrue(cImmSp.stageOrCommitAddProng(3, 5, 0, OctiDir.DIR_NE, false));
+        assertEquals("33a!-35x;14c!-34x;35a!+b", cImmSp.stagedMoveNotation());
+        assertTrue(cImmSp.commitMove());
+
+        // 4b. 4P_SP 4-prelude staging across 4 controlled SuperProngs: 33a!-34;53a!-54;73a!-74;44a!-45;34a!+b
+        OctiBoard bFourSp = new OctiBoard();
+        bFourSp.fromPositionString("4:3:1:0:P:A:-:0:0,0,10,0:2,0,10,0:2,0,10,0:2,0,10,0:A33a!,A53a!,A73a!,A44a!,B37,C77,D73");
+        OctiMoveComposer cFourSp = new OctiMoveComposer(bFourSp);
+        cFourSp.setConfirmAllMoves(true);
+        assertTrue(cFourSp.stageOrCommitPodMoveOrJump(3, 3, 0, 3, 4, false));
+        assertTrue(cFourSp.stageOrCommitPodMoveOrJump(5, 3, 0, 5, 4, false));
+        assertTrue(cFourSp.stageOrCommitPodMoveOrJump(7, 3, 0, 7, 4, false));
+        assertTrue(cFourSp.stageOrCommitPodMoveOrJump(4, 4, 0, 4, 5, false));
+        assertTrue("4th SP prelude must still await regular turn action",
+                cFourSp.isAwaitingSuperProngBonusMove());
+        assertTrue(cFourSp.stageOrCommitAddProng(3, 4, 0, OctiDir.DIR_NE, false));
+        assertEquals("33a!-34;53a!-54;73a!-74;44a!-45;34a!+b", cFourSp.stagedMoveNotation());
+        assertFalse(cFourSp.isAwaitingSuperProngBonusMove());
+        assertTrue(cFourSp.commitMove());
 
         // 5. Continuing after 33a!-34 with 34 -> 35 produces "33a!-34;34a!-35" with isAwaitingSuperProngBonusMove == false (blocks 3rd move!)
         OctiBoard bTwoSteps = new OctiBoard();
@@ -1805,6 +1831,10 @@ public class OctiAndroidBoardAndComposerTest {
         assertEquals(OctiSoundSynth.SoundCue.PRONG_SNAP,
                 OctiSoundSynth.classifyMoveNotationSoundCue("33+a!", false, 9, 9));
         assertEquals(OctiSoundSynth.SoundCue.PRONG_SNAP,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33b+a", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.PRONG_SNAP,
+                OctiSoundSynth.classifyMoveNotationSoundCue("33a!-34;53a!-54;73a!-74;44a!-45;34a!+b", false, 9, 9));
+        assertEquals(OctiSoundSynth.SoundCue.POD_PLACE,
                 OctiSoundSynth.classifyMoveNotationSoundCue("33a+b-a", false, 9, 9));
         assertEquals(OctiSoundSynth.SoundCue.POD_STEP,
                 OctiSoundSynth.classifyMoveNotationSoundCue("33a-34", false, 9, 9));
@@ -1844,6 +1874,85 @@ public class OctiAndroidBoardAndComposerTest {
                 OctiSoundSynth.classifyMoveNotationSoundCue("not-a-move", false, 9, 9));
         assertEquals(OctiSoundSynth.SoundCue.POD_PLACE,
                 OctiSoundSynth.classifyMoveNotationSoundCue("33\0+a", false, 9, 9));
+    }
+
+    @Test
+    public void testComposerStartingSquareVacancyAnd4PPartnerRevivalRemoval() {
+        // 1. R4 in OctiMoveComposer: single pod 44beg CANNOT loop back onto stationary A44a at (4,4),
+        // whereas staging 44a-45 first vacates (4,4) so 44a-45,44beg-66x-64x-44 succeeds!
+        OctiBoard bLoop = new OctiBoard();
+        bLoop.fromPositionString("2:3:0:0:P:A:-:0:2,0,20,0:3,0,23,0:A53,A73,A44a,A44beg,A54c,B55e,B65e,B37,B77");
+        OctiMoveComposer cSingle = new OctiMoveComposer(bLoop);
+        cSingle.setConfirmAllMoves(true);
+        assertTrue(cSingle.beginGuidedPodMove(4, 4, 1, false));
+        assertTrue(cSingle.selectGuidedDestination(6, 6));
+        assertTrue(cSingle.selectGuidedDestination(6, 4));
+        assertFalse("Stationary A44a on (4,4) must block guided loop-back onto (4,4)",
+                cSingle.isGuidedLegalDestination(4, 4));
+        assertFalse("Stationary A44a on (4,4) must block direct loop-back jump onto (4,4)",
+                cSingle.stageOrCommitPodMoveOrJump(6, 4, -1, 4, 4, false));
+        cSingle.cancelAndRollback();
+
+        // Now clear out A44a first (44a-45), then jump A44beg -> 66 -> 64 -> 44!
+        assertTrue(cSingle.stageOrCommitPodMoveOrJump(4, 4, 0, 4, 5, false));
+        assertEquals("44a-45", cSingle.stagedMoveNotation());
+        assertTrue(cSingle.beginGuidedPodMove(4, 4, 1, false));
+        assertTrue(cSingle.selectGuidedDestination(6, 6));
+        assertTrue(cSingle.selectGuidedDestination(6, 4));
+        assertTrue("Once 44a-45 vacates (4,4), (4,4) must be a legal guided loop-back destination",
+                cSingle.isGuidedLegalDestination(4, 4));
+        assertTrue(cSingle.selectGuidedDestination(4, 4));
+        assertEquals("44a-45,44beg-66x-64x-44", cSingle.stagedMoveNotation());
+        assertTrue(cSingle.commitMove());
+        assertEquals(1, bLoop.squareAt(3, 3).getNumPods());
+        assertEquals(1, bLoop.squareAt(3, 4).getNumPods());
+
+        // 2. R4 in _ED composer: cannot jump OVER stationary A44a on starting square (4,4)
+        OctiBoard bEd = new OctiBoard();
+        bEd.fromPositionString("2:3:0:1:P:A:-:0:2,0,20,0:3,0,20,0:A44a,A44bcd,B55,B76,B96,B25,B77");
+        OctiMoveComposer cEd = new OctiMoveComposer(bEd);
+        cEd.setConfirmAllMoves(true);
+        assertTrue(cEd.beginGuidedPodMove(4, 4, 1, false));
+        assertTrue(cEd.selectGuidedDestination(6, 6));
+        assertTrue(cEd.selectGuidedDestination(8, 6));
+        assertTrue(cEd.selectGuidedDestination(1, 6));
+        assertTrue(cEd.selectGuidedDestination(3, 4));
+        assertFalse("Composer must forbid jumping over starting square (4,4) to (5,4)",
+                cEd.isGuidedLegalDestination(5, 4));
+        assertFalse(cEd.stageOrCommitPodMoveOrJump(3, 4, -1, 5, 4, false));
+
+        // 3. R6 in OctiMoveComposer: eliminated partner revival is forbidden; surviving own-pod liberation on partnerHome works
+        OctiBoard b4p = new OctiBoard(OctiGameMode.GAME_MODE_4);
+        b4p.getGame().start(OctiPlayer.PLAYER_A);
+        b4p.squareAt(2, 6).clear();
+        b4p.squareAt(2, 6).addPod(new OctiPod(OctiPodType.D_POD));
+        b4p.squareAt(4, 2).addPod(new OctiPod(OctiPodType.D_POD)); // neutral OCTI 53 -> canLiberate(D)
+        OctiGameSnapshot snap = b4p.getGame().captureSnapshot();
+        snap.turn = OctiPlayer.PLAYER_D;
+        snap.players[OctiPlayer.PLAYER_B.getValue()].eliminated = true;
+        snap.players[OctiPlayer.PLAYER_B.getValue()].capturedPods = 2;
+        snap.players[OctiPlayer.PLAYER_D.getValue()].capturedPods = 0;
+        b4p.getGame().restoreSnapshot(snap);
+
+        OctiMoveComposer c4p = new OctiMoveComposer(b4p);
+        assertFalse("Cannot begin liberation when D has 0 captured pods even if eliminated partner B has 2",
+                c4p.beginLiberatePodFromReserve());
+        assertFalse("Cannot liberate eliminated partner B at (3,7)",
+                c4p.canLiberateCapturedPodAt(3, 7));
+        assertFalse(c4p.stageOrCommitAddPod(3, 7, true));
+
+        // Give D 1 own captured pod -> D can liberate D's own pod on partnerHome (3,7) while B stays eliminated
+        snap = b4p.getGame().captureSnapshot();
+        snap.players[OctiPlayer.PLAYER_D.getValue()].capturedPods = 1;
+        b4p.getGame().restoreSnapshot(snap);
+        c4p.refreshLegalMoves();
+        assertTrue(c4p.beginLiberatePodFromReserve());
+        assertTrue(c4p.canLiberateCapturedPodAt(3, 7));
+        assertTrue(c4p.dropOnSquare(3, 7));
+        assertEquals("37*", c4p.stagedMoveNotation());
+        assertTrue(c4p.commitMove());
+        assertTrue(b4p.getGame().isPlayerEliminated(OctiPlayer.PLAYER_B));
+        assertEquals(0, b4p.getGame().getCapturedPods(OctiPlayer.PLAYER_D));
     }
 
     private static void writeLe32(byte[] buf, int offset, int value) {

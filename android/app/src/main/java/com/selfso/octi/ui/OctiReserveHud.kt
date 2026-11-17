@@ -532,24 +532,10 @@ fun OctiReserveHud(
                         }
                         val capPodsHeld = game?.getCapturedPods(oppForCap) ?: 0
                         val ownCapPods = game?.getCapturedPods(p) ?: 0
-                        val is4P = game?.mode == OctiGameMode.GAME_MODE_4
-                        val partner = if (is4P) {
-                            when (turn) {
-                                OctiPlayer.PLAYER_A -> OctiPlayer.PLAYER_C
-                                OctiPlayer.PLAYER_C -> OctiPlayer.PLAYER_A
-                                OctiPlayer.PLAYER_B -> OctiPlayer.PLAYER_D
-                                OctiPlayer.PLAYER_D -> OctiPlayer.PLAYER_B
-                                else -> null
-                            }
-                        } else null
-                        val partnerRevivable = is4P && partner != null && (p == partner) &&
-                            (game?.isPlayerEliminated(partner) == true) &&
-                            ((game?.getCapturedPods(partner) ?: 0) > 0)
                         val activePlayerTurn = !isGameOver && (p == turn) && !viewModel.isViewingHistory() && isInteractiveTurn
                         val canActiveLiberateFromThisCard = !isGameOver && !viewModel.isViewingHistory() && isInteractiveTurn &&
                             (((oppForCap == turn) && (capPodsHeld > 0)) ||
-                             ((p == turn) && ((game?.getCapturedPods(turn) ?: 0) > 0)) ||
-                             partnerRevivable)
+                             ((p == turn) && ((game?.getCapturedPods(turn) ?: 0) > 0)))
                         val resolvedSeat = activeGameView?.seats?.firstOrNull { it.seat == p.value }
                         val seatLetter = p.name.removePrefix("PLAYER_")
                         val seatLabel = if (matchType == OctiAppViewModel.MatchType.ONLINE_ROOM && resolvedSeat != null && resolvedSeat.handle.isNotEmpty()) {

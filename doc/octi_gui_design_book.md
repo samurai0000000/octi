@@ -201,9 +201,9 @@ When multiple pods occupy the same square, the visual stacking order is intentio
 
 ## 7. Square Selection, Pod Placement, Guided Moves & `ZoomedSquareDialog` (`GDB-07`)
 
-### `GDB-07.1` Zoom-Only Prong Addition & Repositioning
-- **Strict Rule**: Prongs and superprongs are **never** added or repositioned directly on the small squares of the main board.
-- All prong additions (`+a..h`, `!`) and prong repositionings (`+dst-src`, disallowed in OFK) are performed **exclusively inside `ZoomedSquareDialog`**.
+### `GDB-07.1` Zoom-Only Prong Addition
+- **Strict Rule**: Prongs and superprongs are **never** added directly on the small squares of the main board.
+- All prong additions (`+a..h`, `!`) are performed **exclusively inside `ZoomedSquareDialog`**. Once inserted, prongs are permanent on that pod (prong repositioning is forbidden across all variants).
 
 ### `GDB-07.2` Single-Click / Single-Tap Behavior on the Main Board
 During the active player's interactive turn (when viewing the live ply):
@@ -238,7 +238,7 @@ During the active player's interactive turn (when viewing the live ply):
    - The active pod is rendered as a large octagon with 8 directional prong sockets (`N, NE, E, SE, S, SW, W, NW`) rotated to match the current `boardRotationDeg`.
    - Hovering or touching an empty prong socket previews a semi-transparent metallic prong blade (`alpha = 0.72`).
    - Clicking/tapping an empty socket stages adding a prong (`+a..h`), **automatically closes `ZoomedSquareDialog`**, and activates the non-blocking `Cancel` / `Commit` bar so the user sees the updated pod on the board.
-   - In 2P/4P (never in OFK), dragging an existing prong from one socket to an empty socket on the same pod stages a prong reposition (`+dst-src`) and closes `ZoomedSquareDialog`.
+   - Existing occupied prong sockets are permanent and cannot be dragged or repositioned to another socket.
 3. **3D Translucent Stack Underlay & Pod Cycling**:
    - When multiple pods occupy the square, the pod with the **most prongs is selected on top by default (`GDB-04.2b`)**, and the remaining pods in the stack are drawn underneath with a `12px` diagonal 3D offset at `alpha = 0.28`.
    - **Desktop & Web**: Scrolling the mouse wheel up/down inside `ZoomedSquareDialog` (or clicking the pod stack tabs) cycles which pod in the stack is inspected/edited.
@@ -250,7 +250,7 @@ During the active player's interactive turn (when viewing the live ply):
 
 ### `GDB-08.1` Mandatory Two-Button Non-Blocking Confirmation (`Cancel` & `Commit`)
 1. **Universal Preview State**:
-   - Every complete or partial ply action (placing a pod, liberating a pod, adding/repositioning a prong, moving, or jumping) enters a staged preview state (`awaitingPlyConfirmation = true`) on the board before being sent to the engine or server.
+   - Every complete or partial ply action (placing a pod, liberating an own captured pod in `2P_3B*`/`4P*`, adding a prong, moving, or jumping) enters a staged preview state (`awaitingPlyConfirmation = true`) on the board before being sent to the engine or server.
 2. **Strictly Two Buttons (`Cancel [Esc]` and `Commit [Enter]`)**:
    - The confirmation bar/banner displays **only**:
      - **`Cancel [Esc]`**: Discards the staged ply and restores the board to the start of the turn.
@@ -374,7 +374,7 @@ Every release and GUI modification must pass automated end-to-end verification a
 | `CHK-03` | **Auto-Rotate Board (`180°` for Seat B, `0°/90°/180°/270°` in 4P)** immediately upon sitting at an online seat or starting as Seat B (`GDB-06.1`) | Required | Required | Required |
 | `CHK-04` | **Single-Click / Single-Tap on Empty Friendly Home Square** immediately stages placing a reserve pod (`<sq>`) (`GDB-07.2`) | Required | Required | Required |
 | `CHK-05` | **Single-Click / Single-Tap on 0-Move (0-Prong) Friendly Pod** immediately opens `ZoomedSquareDialog` (`GDB-07.2`) | Required | Required | Required |
-| `CHK-06` | **Zoom-Only Prong Addition/Repositioning** (no direct outer-ring prong addition on main board) (`GDB-07.1`) | Required | Required | Required |
+| `CHK-06` | **Zoom-Only Prong Addition** (no direct outer-ring prong addition on main board; prongs are permanent once inserted) (`GDB-07.1`) | Required | Required | Required |
 | `CHK-07` | **Inverse Pod Stack Sorting**: Most-prongs-at-bottom on Main Board (`GDB-04.2a`); Most-prongs-on-top in `ZoomedSquareDialog` (`GDB-04.2b`) | Required | Required | Required |
 | `CHK-08` | **Dark Recessed Home Squares (`#0A0E16`)** with Player-POV rotated `"OCTI"` label (`GDB-04.1`) | Required | Required | Required |
 | `CHK-09` | **Orange (`#FF8C00`) Last-Move Square Orbit** with `5000 ms` auto-timeout & instant clear on interaction (`GDB-05.2`) | Required | Required | Required |

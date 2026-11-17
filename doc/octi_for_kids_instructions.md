@@ -66,7 +66,7 @@ Players alternate turns, beginning with Player A. On each turn, a player must ch
 ### Option 1: Insert 1 Prong into a Friendly Pod
 
 - The player inserts 1 prong from their personal supply into any of the 8 prong slots of a friendly pod currently on the board.
-- **Permanent Placement**: Unlike standard 9×9 OCTI, **prongs cannot be repositioned** once inserted in OCTI for Kids. Once a prong is placed in a pod, it remains in that slot for the duration of the pod's life on the board.
+- **Permanent Placement**: Across all OCTI variants (including OCTI for Kids), **prongs cannot be repositioned** once inserted. Once a prong is placed in a pod, it remains in that slot for the duration of the pod's life on the board.
 - A single pod may hold up to 8 prongs (one in each of the 8 compass directions: N, NE, E, SE, S, SW, W, NW).
 
 ### Option 2: Move 1 Friendly Pod One Square
@@ -110,10 +110,10 @@ A player wins immediately when any of the following conditions is met:
 | **Total Pods in Game** | 14 pods | 16 pods | 8 pods |
 | **Prongs per Player** | 25 prongs (or 24 + 1 superprong) | 12 prongs | 12 prongs |
 | **Pod Stacking** | Allowed (up to 7 pods) | Allowed (allied pods up to 8) | **Forbidden** (strictly 1 pod/square) |
-| **Prong Repositioning** | Allowed (Turn Option II) | Allowed (Turn Option II) | **Forbidden** (prongs are permanent) |
+| **Prong Repositioning** | **Forbidden** (prongs are permanent) | **Forbidden** (prongs are permanent) | **Forbidden** (prongs are permanent) |
 | **Reserve Pod Placement** | Allowed on friendly/occupied base | Allowed on friendly/occupied base | **None** (0 reserve pods) |
-| **Captured Pod Liberation** | Allowed when occupying enemy base | Allowed on teammate base or enemy base | **Forbidden** (captures are permanent) |
-| **Superprongs Supported** | Yes (optional variant) | Yes (optional variant) | No |
+| **Captured Pod Liberation** | Allowed in `2P_3B*` when occupying enemy base | Allowed in `4P*` when occupying enemy/neutral base | **Forbidden** (captures are permanent) |
+| **Superprongs Supported** | Yes (`<= 2` bonus preludes, 1 per SP) | Yes (`<= 4` bonus preludes, 1 per SP) | No |
 | **Edgeless Board Variant** | Yes (optional variant) | Yes (optional variant) | No |
-| **Turn Options Count** | 5 distinct turn options | 5 distinct turn options | 3 distinct turn options |
+| **Turn Options Count** | 4 distinct turn options | 4 distinct turn options | 3 distinct turn options |
 | **Victory Condition** | Occupy 3 bases (or 1 for short game) | Occupy opponents' 2 team bases | Occupy any 1 opponent base |

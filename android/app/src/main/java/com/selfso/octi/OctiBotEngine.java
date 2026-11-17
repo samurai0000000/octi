@@ -746,9 +746,6 @@ public class OctiBotEngine {
                 if (op.addProngDir != OctiDir.DIR_UNDEF) {
                     op.addProngDir = mirrorDirHorizontal(op.addProngDir);
                 }
-                if (op.rmProngDir != OctiDir.DIR_UNDEF) {
-                    op.rmProngDir = mirrorDirHorizontal(op.rmProngDir);
-                }
                 for (OctiHop h : op.hops) {
                     int mhx = (boardWidth - 1) - h.x;
                     if (mhx < 0 || mhx >= boardWidth) {
@@ -1876,7 +1873,7 @@ public class OctiBotEngine {
                         }
                     }
                 }
-            } else if (op.addProngDir != OctiDir.DIR_UNDEF && op.rmProngDir == OctiDir.DIR_UNDEF) {
+            } else if (op.addProngDir != OctiDir.DIR_UNDEF) {
                 score += 650;
                 if (op.superProng) {
                     score += 200;
@@ -1922,8 +1919,6 @@ public class OctiBotEngine {
                         score += 150;
                     }
                 }
-            } else if (op.rmProngDir != OctiDir.DIR_UNDEF) {
-                score += 60;
             }
         }
         return score;
@@ -2088,20 +2083,18 @@ public class OctiBotEngine {
 
         Map<Long, Integer> quietProngCountByPrelude = new HashMap<>();
         Map<Long, Integer> quietStepCountByPrelude = new HashMap<>();
-        Map<Long, Integer> twoPreludeQuietCount = new HashMap<>();
+        Map<Long, Integer> multiPreludeQuietCount = new HashMap<>();
         List<Integer> deferredIndices = new ArrayList<>();
 
         for (int i = 0; i < n && result.size() < limit; i++) {
             int mIdx = scored[i][1];
             OctiMove m = moves.get(mIdx);
             List<OctiMoveOp> ops = m.getOps();
-            int numPreludes = 0;
-            for (OctiMoveOp op : ops) {
-                if (op.isSuperProngBonusMove) {
-                    numPreludes++;
-                }
+            int bonusCount = 0;
+            while (bonusCount < ops.size() && ops.get(bonusCount).isSuperProngBonusMove) {
+                bonusCount++;
             }
-            if (numPreludes == 0) {
+            if (bonusCount == 0 || ops.size() <= bonusCount) {
                 result.add(m);
                 continue;
             }
@@ -2126,10 +2119,10 @@ public class OctiBotEngine {
                     | (((long) (p0End.y & 0xFF)) << 24)
                     | ((p0Cap ? 1L : 0L) << 32);
 
-            if (numPreludes >= 2) {
-                int cnt = twoPreludeQuietCount.getOrDefault(pKey, 0);
+            if (bonusCount >= 2) {
+                int cnt = multiPreludeQuietCount.getOrDefault(pKey, 0);
                 if (cnt < 2) {
-                    twoPreludeQuietCount.put(pKey, cnt + 1);
+                    multiPreludeQuietCount.put(pKey, cnt + 1);
                     result.add(m);
                 } else {
                     deferredIndices.add(mIdx);

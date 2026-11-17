@@ -2894,6 +2894,176 @@ TEST(OctiBotEngineCoreTest, LazySmpAggregatesAllHelperThreadNodes)
     }
 }
 
+TEST(OctiBotEngineCoreTest, AllOpeningBookEntriesAndCandidatesExecuteLegally)
+{
+    CHECK_EQUAL(3714u, octi::g_openingBookEntryCount);
+
+    std::filesystem::path coreRoot =
+        std::filesystem::path(__FILE__).parent_path().parent_path();
+    std::filesystem::path hxxPath =
+        coreRoot / "include" / "OctiOpeningBookData.hxx";
+    CHECK_TRUE(std::filesystem::exists(hxxPath));
+
+    std::ifstream in(hxxPath);
+    CHECK_TRUE(in.good());
+
+    struct ParsedBookLine {
+        std::string variantLabel;
+        int ply = 0;
+        std::vector<std::string> prefixMoves;
+    };
+    std::vector<ParsedBookLine> parsedLines;
+    parsedLines.reserve(octi::g_openingBookEntryCount);
+
+    std::string line;
+    while (std::getline(in, line)) {
+        std::size_t slashPos = line.find("// ");
+        if (slashPos == std::string::npos) {
+            continue;
+        }
+        std::string comment = line.substr(slashPos + 3);
+        while (!comment.empty() &&
+               (comment.back() == '\r' || comment.back() == ' ')) {
+            comment.pop_back();
+        }
+        std::size_t plyPos = comment.find(" ply ");
+        std::size_t parenOpen = comment.find(" (");
+        if (plyPos == std::string::npos || parenOpen == std::string::npos ||
+            parenOpen <= plyPos + 5 || comment.back() != ')') {
+            continue;
+        }
+        ParsedBookLine pl;
+        pl.variantLabel = comment.substr(0, plyPos);
+        pl.ply = std::stoi(
+            comment.substr(plyPos + 5, parenOpen - (plyPos + 5)));
+        std::string inner = comment.substr(
+            parenOpen + 2, comment.size() - (parenOpen + 3));
+        if (inner != "initial") {
+            CHECK_EQUAL(0u, inner.find("after "));
+            std::istringstream iss(inner.substr(6));
+            std::string mv;
+            while (iss >> mv) {
+                pl.prefixMoves.push_back(mv);
+            }
+        }
+        CHECK_EQUAL(static_cast<std::size_t>(pl.ply), pl.prefixMoves.size());
+        parsedLines.push_back(std::move(pl));
+    }
+
+    CHECK_EQUAL(octi::g_openingBookEntryCount, parsedLines.size());
+
+    auto makeVariantBoard = [](const std::string &v) -> octi::OctiBoard {
+        if (v == "2P 3-Base") {
+            return octi::OctiBoard(octi::GAME_MODE_2, false, false, octi::GAME_BASES_3);
+        }
+        if (v == "2P 1-Base") {
+            return octi::OctiBoard(octi::GAME_MODE_2, false, false, octi::GAME_BASES_1);
+        }
+        if (v == "2P_3B_SP") {
+            return octi::OctiBoard(octi::GAME_MODE_2, true, false, octi::GAME_BASES_3);
+        }
+        if (v == "2P_3B_ED") {
+            return octi::OctiBoard(octi::GAME_MODE_2, false, true, octi::GAME_BASES_3);
+        }
+        if (v == "2P_3B_SPED") {
+            return octi::OctiBoard(octi::GAME_MODE_2, true, true, octi::GAME_BASES_3);
+        }
+        if (v == "2P_1B_SP") {
+            return octi::OctiBoard(octi::GAME_MODE_2, true, false, octi::GAME_BASES_1);
+        }
+        if (v == "2P_1B_ED") {
+            return octi::OctiBoard(octi::GAME_MODE_2, false, true, octi::GAME_BASES_1);
+        }
+        if (v == "2P_1B_SPED") {
+            return octi::OctiBoard(octi::GAME_MODE_2, true, true, octi::GAME_BASES_1);
+        }
+        if (v == "4P") {
+            return octi::OctiBoard(octi::GAME_MODE_4, false, false, octi::GAME_BASES_1);
+        }
+        if (v == "4P_SP") {
+            return octi::OctiBoard(octi::GAME_MODE_4, true, false, octi::GAME_BASES_1);
+        }
+        if (v == "4P_ED") {
+            return octi::OctiBoard(octi::GAME_MODE_4, false, true, octi::GAME_BASES_1);
+        }
+        if (v == "4P_SPED") {
+            return octi::OctiBoard(octi::GAME_MODE_4, true, true, octi::GAME_BASES_1);
+        }
+        if (v == "OFK") {
+            return octi::OctiBoard(octi::GAME_MODE_OFK, false, false, octi::GAME_BASES_1);
+        }
+        FAIL(("Unknown opening book variant label: " + v).c_str());
+        return octi::OctiBoard(octi::GAME_MODE_2);
+    };
+
+    std::size_t prefixMovesExecuted = 0;
+    std::size_t candidateMovesExecuted = 0;
+
+    for (std::size_t i = 0; i < octi::g_openingBookEntryCount; ++i) {
+        const octi::OpeningBookEntry &entry = octi::g_openingBookEntries[i];
+        const ParsedBookLine &pl = parsedLines[i];
+
+        octi::OctiBoard board = makeVariantBoard(pl.variantLabel);
+        board.suppressBoardUpdateNotification(true);
+        octi::OctiGame *game = board.getGame();
+        CHECK_TRUE(game != nullptr);
+        game->setSearchMode(true);
+        game->start(octi::PLAYER_A);
+
+        for (const std::string &pm : pl.prefixMoves) {
+            game->move(pm);
+            ++prefixMovesExecuted;
+        }
+
+        bool mirrored = false;
+        std::uint64_t canonHash =
+            octi::OctiBotEngine::computeCanonicalOpeningHash(board, &mirrored);
+        CHECK_EQUAL(entry.canonicalKey, canonHash);
+        CHECK_TRUE(entry.numCandidates >= 1 && entry.numCandidates <= 3);
+
+        std::vector<octi::OctiMove> legalMoves = game->generateLegalMoves();
+        CHECK_FALSE(legalMoves.empty());
+        std::unordered_set<std::string> legalStrs;
+        legalStrs.reserve(legalMoves.size());
+        for (const octi::OctiMove &lm : legalMoves) {
+            legalStrs.insert(lm.asString());
+        }
+
+        const std::string posStr = board.toPositionString();
+        const int w = board.getBoardWidth();
+
+        for (std::uint8_t c = 0; c < entry.numCandidates; ++c) {
+            const char *rawMove = entry.candidates[c].move;
+            CHECK_TRUE(rawMove != nullptr && rawMove[0] != '\0');
+            std::string actualMove = mirrored
+                ? octi::OctiBotEngine::mirrorMoveNotation(rawMove, w)
+                : std::string(rawMove);
+            CHECK_FALSE(actualMove.empty());
+
+            octi::OctiMove parsed(actualMove);
+            std::string canonicalStr = parsed.asString();
+            if (parsed.getOps().size() == 1 ||
+                board.getGameMode() == octi::GAME_MODE_OFK) {
+                CHECK_TRUE_TEXT(
+                    legalStrs.count(canonicalStr) > 0,
+                    ("Candidate not in generateLegalMoves at entry " +
+                     std::to_string(i) + ": " + canonicalStr).c_str());
+            }
+
+            octi::OctiBoard testBoard;
+            testBoard.suppressBoardUpdateNotification(true);
+            testBoard.fromPositionString(posStr);
+            CHECK_TRUE(testBoard.getGame() != nullptr);
+            testBoard.getGame()->setSearchMode(true);
+            testBoard.getGame()->move(parsed);
+            ++candidateMovesExecuted;
+        }
+    }
+
+    CHECK_EQUAL(13337u, prefixMovesExecuted);
+    CHECK_EQUAL(11142u, candidateMovesExecuted);
+}
+
 TEST(OctiBotEngineCoreTest, DepthOneDeadlineFallbackAndPartialRootGuard)
 {
     octi::OctiBoard board(octi::GAME_MODE_2);
@@ -10347,6 +10517,11 @@ TEST(OctiRulebookTest, EmbeddedPngAssetsSectionsAndDesktopHtml)
     const std::vector<octi::RulebookSection> &sections = octi::rulebookSections();
     LONGS_EQUAL(static_cast<long>(octi::OCTI_RULEBOOK_CHAPTER_COUNT),
                 static_cast<long>(sections.size()));
+    for (const auto &sec : sections) {
+        CHECK_TRUE(std::string(sec.title).find("Revival") == std::string::npos);
+        CHECK_TRUE(std::string(sec.summary).find("revival") == std::string::npos);
+        CHECK_TRUE(std::string(sec.summary).find("reposition") == std::string::npos);
+    }
 
     const std::string darkHtml = octi::buildDesktopRulebookHtml(false);
     const std::string lightHtml = octi::buildDesktopRulebookHtml(true);
@@ -10360,6 +10535,25 @@ TEST(OctiRulebookTest, EmbeddedPngAssetsSectionsAndDesktopHtml)
     }
     for (const std::string &vCode : octi::allOctiVariantCodes()) {
         CHECK_TRUE(darkHtml.find(vCode) != std::string::npos);
+    }
+
+    // Verify R1-R6 revisions in embedded Desktop rulebook HTML (dark & light)
+    for (const std::string *htmlPtr : { &darkHtml, &lightHtml }) {
+        const std::string &html = *htmlPtr;
+        CHECK_TRUE(html.find("4. Victory &amp; 4P Elimination") != std::string::npos);
+        CHECK_TRUE(html.find("44a-45,44beg-66x-64x-44") != std::string::npos);
+        CHECK_TRUE(html.find("44bcd-66-86-16-34-54") != std::string::npos);
+        CHECK_TRUE(html.find("whole-stack capture") != std::string::npos);
+        CHECK_TRUE(html.find("2P_3B*") != std::string::npos);
+        CHECK_TRUE(html.find("1 bonus prelude move per SuperProng") != std::string::npos);
+        CHECK_TRUE(html.find("permanently eliminated") != std::string::npos);
+        CHECK_TRUE(html.find("capturing enemy player") != std::string::npos);
+
+        CHECK_TRUE(html.find("33b+a-b") == std::string::npos);
+        CHECK_TRUE(html.find("Reposition a Normal Prong") == std::string::npos);
+        CHECK_TRUE(html.find("Teammate Revival") == std::string::npos);
+        CHECK_TRUE(html.find("revive eliminated 4P partner") == std::string::npos);
+        CHECK_TRUE(html.find("4. Victory &amp; 4P Revival") == std::string::npos);
     }
 }
 
@@ -10600,7 +10794,7 @@ TEST(OctiSearchMoveGenAndSubclassHooksTest, OctiBotEngineSubclassHooksAreNonSlic
     prof.rootScoreJitter = 0;
     subEngine.setTuningProfile(prof);
 
-    // Call resetSearchState through a base OctiBotEngine& reference (as OctiTeacher does)
+    // Call resetSearchState through a base OctiBotEngine& reference (as polymorphic callers do)
     // and verify dynamic type, customMarker, and tuning profile are preserved without slicing.
     octi::OctiBotEngine &baseRef = subEngine;
     baseRef.resetSearchState(0x12345678ULL);
